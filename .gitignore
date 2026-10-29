@@ -1,0 +1,35 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+*.iml
+
+# iOS / macOS
+**/Pods/
+**/.symlinks/
+**/xcuserdata/
+**/DerivedData/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# Android
+**/.gradle/
+**/local.properties
+**/captures/
+*.jks
+*.keystore
+
+# native build artifacts
+natives/build/
+natives/**/target/
+natives/**/*.a
+natives/**/*.so
+natives/**/*.dylib
+natives/**/*.xcframework/
+
+# local probe output
+/tmp-probe/
+*.log
+.DS_Store

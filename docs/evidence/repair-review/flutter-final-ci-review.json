@@ -1,0 +1,11 @@
+{
+  "reviewDate": "2026-10-30",
+  "sourceCommit": "c27535d3ed7174ad7b722d9e086ee59e9db11f5d",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435",
+  "independentGithubStatus": "completed/success",
+  "codeReview": "Local git -c autocrlf=false/eol=lf limits line-ending behavior to candidate patch application; does not edit user/global config. SDK footer metadata now separately disclosed. Renderer patch unchanged.",
+  "independentToolGuardTests": 5,
+  "artifactInventoryEvidence": "../flutter/repair-e216eb1/final-c27535d-ci.json",
+  "downloadScope": "Earlier e216eb1 Mac archive independently downloaded/hash inspected. New five packages not individually re-downloaded in this review.",
+  "deviceGuiRun": false
+}

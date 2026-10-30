@@ -1,0 +1,24 @@
+{
+  "sourceCommit": "e216eb1db83e562cbff5c128cc9eedcc293203cf",
+  "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993758160/job/123862387769",
+  "stage": "candidate materialization before pub get/build",
+  "excerpt": [
+    "2026-10-30T02:50:25.0944169Z Traceback (most recent call last):",
+    "2026-10-30T02:50:25.0945427Z   File \"D:\\a\\herdr-pocket\\herdr-pocket\\validation\\flutter\\tool\\candidate.py\", line 127, in <module>",
+    "2026-10-30T02:50:25.0946781Z     (apply if args.command == 'apply' else verify_lock)(args.destination)",
+    "2026-10-30T02:50:25.0947991Z   File \"D:\\a\\herdr-pocket\\herdr-pocket\\validation\\flutter\\tool\\candidate.py\", line 68, in apply",
+    "2026-10-30T02:50:25.0949126Z     raise ValueError('Unexpected patched source: ' + name)",
+    "2026-10-30T02:50:25.0950126Z ValueError: Unexpected patched source: lib/src/ui/painter.dart",
+    "2026-10-30T02:50:25.1195972Z ##[error]Process completed with exit code 1.",
+    "2026-10-30T02:50:25.1465185Z Post job cleanup."
+  ],
+  "localReproduction": {
+    "method": "Fresh private temporary source copy and git -c core.autocrlf=true apply; both with and without a Git repository",
+    "actualPainterSha256": "dc19f101e7cc865375a2c0dff5a2aa7c578c81df6395a4ab72b953db28cdda99",
+    "expectedPainterSha256": "f009096d4685c374936c962d4200517e00af097013fd0c8042168c488d0460a3",
+    "CRLFCount": 779,
+    "normalizingCRLFMatchedExpected": true
+  },
+  "repair": "Per-invocation git -c core.autocrlf=false -c core.eol=lf; no global configuration mutation",
+  "repairCommit": "c27535d3ed7174ad7b722d9e086ee59e9db11f5d"
+}

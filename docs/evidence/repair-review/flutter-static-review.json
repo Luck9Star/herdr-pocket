@@ -1,0 +1,16 @@
+{
+  "reviewDate": "2026-10-30",
+  "patchSha256": "2d0fb1d7283b034eb8161651f5c1cee0343df2877ebd6863e6639782ad8e5833",
+  "filesVerified": {
+    "lib/src/ui/painter.dart": {
+      "beforeSha256": "3d482e223a21ec62cb690006b46178c1c58b7a95ff5747d13479dfa82af00258",
+      "afterSha256": "f009096d4685c374936c962d4200517e00af097013fd0c8042168c488d0460a3"
+    },
+    "lib/src/ui/render.dart": {
+      "beforeSha256": "c1584eb282e5f9ee243ef6b42ca988caa341cb6f7d4d7494ab688383454f46fc",
+      "afterSha256": "a3baef20bcc5e5094a61898051348fc6eff88b5573e2c6c9887bca1ce70da9a5"
+    }
+  },
+  "review": "Patch applies cleanly to matching pristine source, every resulting digest matches manifest. Ordinary ASCII run ends before a combining suffix; selection/cursor paths forward combined content. Runtime regression tests pending.",
+  "execution": "Temporary files only; no Flutter SDK or native app run."
+}

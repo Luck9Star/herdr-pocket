@@ -1,0 +1,202 @@
+{
+  "sourceCommit": "e216eb1db83e562cbff5c128cc9eedcc293203cf",
+  "scope": "Flutter test engine, pinned font; NFC is only a reference, input remains decomposed. Not whole Unicode, device IME or native clipboard validation.",
+  "comparisons": [
+    {
+      "id": "three-accents",
+      "matchesReferencePixels": true,
+      "bufferCodepoints": [
+        101,
+        769,
+        32,
+        65,
+        778,
+        32,
+        110,
+        771
+      ],
+      "expectedCodepoints": [
+        101,
+        769,
+        32,
+        65,
+        778,
+        32,
+        110,
+        771
+      ],
+      "cursorX": 5,
+      "expectedColumns": 5,
+      "nontransparentPixels": 169
+    },
+    {
+      "id": "ascii-neighbors",
+      "matchesReferencePixels": true,
+      "bufferCodepoints": [
+        65,
+        66,
+        101,
+        769,
+        67,
+        68
+      ],
+      "expectedCodepoints": [
+        65,
+        66,
+        101,
+        769,
+        67,
+        68
+      ],
+      "cursorX": 5,
+      "expectedColumns": 5,
+      "nontransparentPixels": 258
+    },
+    {
+      "id": "wide-neighbors",
+      "matchesReferencePixels": true,
+      "bufferCodepoints": [
+        20013,
+        101,
+        769,
+        25991,
+        110,
+        771,
+        90
+      ],
+      "expectedCodepoints": [
+        20013,
+        101,
+        769,
+        25991,
+        110,
+        771,
+        90
+      ],
+      "cursorX": 7,
+      "expectedColumns": 7,
+      "nontransparentPixels": 568
+    },
+    {
+      "id": "sgr-bold-red",
+      "matchesReferencePixels": true,
+      "bufferCodepoints": [
+        65,
+        101,
+        769,
+        66,
+        20013,
+        110,
+        771,
+        90
+      ],
+      "expectedCodepoints": [
+        65,
+        101,
+        769,
+        66,
+        20013,
+        110,
+        771,
+        90
+      ],
+      "cursorX": 7,
+      "expectedColumns": 7,
+      "nontransparentPixels": 524
+    },
+    {
+      "id": "sgr-inverse",
+      "matchesReferencePixels": true,
+      "bufferCodepoints": [
+        65,
+        778,
+        90
+      ],
+      "expectedCodepoints": [
+        65,
+        778,
+        90
+      ],
+      "cursorX": 2,
+      "expectedColumns": 2,
+      "nontransparentPixels": 189
+    },
+    {
+      "id": "ordinary-ascii",
+      "matchesReferencePixels": true,
+      "bufferCodepoints": [
+        65,
+        66,
+        67,
+        32,
+        120,
+        121,
+        122,
+        32,
+        48,
+        49,
+        50,
+        51
+      ],
+      "expectedCodepoints": [
+        65,
+        66,
+        67,
+        32,
+        120,
+        121,
+        122,
+        32,
+        48,
+        49,
+        50,
+        51
+      ],
+      "cursorX": 12,
+      "expectedColumns": 12,
+      "nontransparentPixels": 465
+    },
+    {
+      "id": "cache-after-suffix",
+      "matchesReferencePixels": true,
+      "bufferCodepoints": [
+        101,
+        769
+      ],
+      "expectedCodepoints": [
+        101,
+        769
+      ],
+      "cursorX": 1,
+      "expectedColumns": 1,
+      "nontransparentPixels": 53
+    },
+    {
+      "id": "cache-repeated",
+      "matchesReferencePixels": true,
+      "bufferCodepoints": [
+        101,
+        769
+      ],
+      "expectedCodepoints": [
+        101,
+        769
+      ],
+      "cursorX": 1,
+      "expectedColumns": 1,
+      "nontransparentPixels": 53
+    },
+    {
+      "id": "focused-block-cursor",
+      "matchesReferencePixels": true,
+      "whiteBackgroundPixels": 59,
+      "blackForegroundPixels": 6
+    },
+    {
+      "id": "selection-foreground",
+      "matchesReferencePixels": true,
+      "whiteBackgroundPixels": 59,
+      "blackForegroundPixels": 6
+    }
+  ]
+}

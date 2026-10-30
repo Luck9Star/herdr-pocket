@@ -1,0 +1,93 @@
+{
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435",
+  "sourceCommit": "c27535d3ed7174ad7b722d9e086ee59e9db11f5d",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "patch-and-test",
+      "conclusion": "success",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/job/123864369379"
+    },
+    {
+      "name": "build (linux, ubuntu-24.04)",
+      "conclusion": "success",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/job/123864766322"
+    },
+    {
+      "name": "build (android, ubuntu-24.04)",
+      "conclusion": "success",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/job/123864766329"
+    },
+    {
+      "name": "macos-render-check",
+      "conclusion": "success",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/job/123864766352"
+    },
+    {
+      "name": "build (ios, macos-14)",
+      "conclusion": "success",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/job/123864766356"
+    },
+    {
+      "name": "build (macos, macos-14)",
+      "conclusion": "success",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/job/123864766366"
+    },
+    {
+      "name": "build (windows, windows-2022)",
+      "conclusion": "success",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/job/123864766427"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "flutter-candidate-android-c27535d3ed7174ad7b722d9e086ee59e9db11f5d",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/artifacts/12951265597",
+      "expired": false,
+      "bytes": 71501447
+    },
+    {
+      "name": "flutter-candidate-ios-c27535d3ed7174ad7b722d9e086ee59e9db11f5d",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/artifacts/12951095829",
+      "expired": false,
+      "bytes": 34623336
+    },
+    {
+      "name": "flutter-candidate-linux-c27535d3ed7174ad7b722d9e086ee59e9db11f5d",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/artifacts/12951081074",
+      "expired": false,
+      "bytes": 32327802
+    },
+    {
+      "name": "flutter-candidate-macos-render-c27535d3ed7174ad7b722d9e086ee59e9db11f5d",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/artifacts/12950807413",
+      "expired": false,
+      "bytes": 28638
+    },
+    {
+      "name": "flutter-candidate-windows-c27535d3ed7174ad7b722d9e086ee59e9db11f5d",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/artifacts/12950752905",
+      "expired": false,
+      "bytes": 35888339
+    },
+    {
+      "name": "flutter-candidate-lock-c27535d3ed7174ad7b722d9e086ee59e9db11f5d",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/artifacts/12950697787",
+      "expired": false,
+      "bytes": 1913
+    },
+    {
+      "name": "flutter-candidate-evidence-c27535d3ed7174ad7b722d9e086ee59e9db11f5d",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/artifacts/12950677906",
+      "expired": false,
+      "bytes": 28892
+    },
+    {
+      "name": "flutter-candidate-macos-c27535d3ed7174ad7b722d9e086ee59e9db11f5d",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435/artifacts/12950327959",
+      "expired": false,
+      "bytes": 36999391
+    }
+  ],
+  "scope": "Five target builds; Ubuntu safety plus actual painter regressions and macOS headless painter checks. No GUI/device run, native mobile IME, runtime networking or production signing."
+}

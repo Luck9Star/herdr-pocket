@@ -1,0 +1,56 @@
+{
+  "reviewDate": "2026-10-30",
+  "sourceCommit": "d60b8d0a5def48a4af27b6544c48baea1bbf810f",
+  "patchSha256": "c6cf73a5e26bab665c226f37c81d55671f801e84d67d340bd18dc670529b06a4",
+  "platforms": [
+    {
+      "platform": "Linux",
+      "arch": "x86_64",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952/job/123862454223",
+      "jobIndependentlyRead": "completed/success",
+      "artifactFilesRehashed": 31,
+      "resultSha256": "caeb6187c4090a31201fb62ae6a3a8eb4168d53df069c118747a40b12649f634",
+      "provenanceMatchesTracked": true,
+      "originalHeelerLockIdentical": true,
+      "check": "passed",
+      "embeddedOfflineTests": 9,
+      "link": "passed",
+      "abiLoad": "five symbols resolved; invalid close returns -6",
+      "existingRuntime": "FFI test returns -10 without nested block_on",
+      "sigpipe": "default-signal raw-send positive control and safe closed-peer path passed",
+      "libraryDigestRecordedByRunner": {
+        "bytes": 352412248,
+        "sha256": "7ea3495cea9816d4cd8075bf58268244702fae15a399be0c4cde98e6bf390f51"
+      },
+      "libraryBinaryIncludedInEvidence": false,
+      "overlayRuntime": "not run",
+      "guiDevice": "not run"
+    },
+    {
+      "platform": "Darwin",
+      "arch": "arm64",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952/job/123862454373",
+      "jobIndependentlyRead": "completed/success",
+      "artifactFilesRehashed": 31,
+      "resultSha256": "d9d826c6c5e16d8bd44df4769d46e8068748e624350bf3c67253ea3926f88da5",
+      "provenanceMatchesTracked": true,
+      "originalHeelerLockIdentical": true,
+      "check": "passed",
+      "embeddedOfflineTests": 9,
+      "link": "passed",
+      "abiLoad": "five symbols resolved; invalid close returns -6",
+      "existingRuntime": "FFI test returns -10 without nested block_on",
+      "sigpipe": "default-signal raw-send positive control and safe closed-peer path passed",
+      "libraryDigestRecordedByRunner": {
+        "bytes": 66867576,
+        "sha256": "6ffc2313007057f5f532db597444e747e3fc057282bf3d2bb28d1b122bbd22f8"
+      },
+      "libraryBinaryIncludedInEvidence": false,
+      "overlayRuntime": "not run",
+      "guiDevice": "not run"
+    }
+  ],
+  "windows": "pending; no pass inferred",
+  "verdict": "Linux compilation blocker removed for exact patched source; Linux/macOS check, embedded loopback, cdylib link/load verified. Not overlay support.",
+  "legacyLinuxFd": "Caller still must use MSG_NOSIGNAL or equivalent; safe portable path result does not repair plain POSIX write callers."
+}

@@ -1,0 +1,339 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "d60b8d0a5def48a4af27b6544c48baea1bbf810f",
+  "platform": "Linux",
+  "arch": "x86_64",
+  "runnerImage": "20261026.354.1",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952",
+  "status": "passed",
+  "check": "passed",
+  "link": "passed",
+  "load": "passed",
+  "loopbackTests": "passed",
+  "overlayNodesStarted": false,
+  "overlayDial": "not run",
+  "deviceValidation": "not run",
+  "scope": "Candidate Heeler source check/link, exact embedded portable stream loopback tests, ABI load only. No start/join, identities, overlay traffic or GUI binding.",
+  "details": {
+    "provider": "easytier-candidate",
+    "commands": [
+      {
+        "label": "reference-init",
+        "argv": [
+          "git",
+          "init",
+          "/home/runner/work/_temp/herdr-native-candidate-40993901952/reference"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-01-reference-init.log",
+        "seconds": 0.004
+      },
+      {
+        "label": "reference-line-endings",
+        "argv": [
+          "git",
+          "config",
+          "core.autocrlf",
+          "false"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-02-reference-line-endings.log",
+        "seconds": 0.003
+      },
+      {
+        "label": "reference-remote",
+        "argv": [
+          "git",
+          "remote",
+          "add",
+          "origin",
+          "https://github.com/Ylarod/heeler-overlay-natives.git"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-03-reference-remote.log",
+        "seconds": 0.003
+      },
+      {
+        "label": "reference-fetch",
+        "argv": [
+          "git",
+          "fetch",
+          "--depth=1",
+          "origin",
+          "6a2817fc02aeb552df251d9478753c22fd4738bb"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-04-reference-fetch.log",
+        "seconds": 0.415
+      },
+      {
+        "label": "reference-checkout",
+        "argv": [
+          "git",
+          "checkout",
+          "--detach",
+          "FETCH_HEAD"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-05-reference-checkout.log",
+        "seconds": 0.017
+      },
+      {
+        "label": "easytier-source-init",
+        "argv": [
+          "git",
+          "init",
+          "/home/runner/work/_temp/herdr-native-candidate-40993901952/reference/native/easytier/vendor/easytier"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-06-easytier-source-init.log",
+        "seconds": 0.003
+      },
+      {
+        "label": "easytier-source-line-endings",
+        "argv": [
+          "git",
+          "config",
+          "core.autocrlf",
+          "false"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-07-easytier-source-line-endings.log",
+        "seconds": 0.001
+      },
+      {
+        "label": "easytier-source-remote",
+        "argv": [
+          "git",
+          "remote",
+          "add",
+          "origin",
+          "https://github.com/EasyTier/EasyTier"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-08-easytier-source-remote.log",
+        "seconds": 0.003
+      },
+      {
+        "label": "easytier-source-fetch",
+        "argv": [
+          "git",
+          "fetch",
+          "--depth=1",
+          "origin",
+          "728ba94b5029240add6204eed591f22e4e039e6b"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-09-easytier-source-fetch.log",
+        "seconds": 1.016
+      },
+      {
+        "label": "easytier-source-checkout",
+        "argv": [
+          "git",
+          "checkout",
+          "--detach",
+          "FETCH_HEAD"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-10-easytier-source-checkout.log",
+        "seconds": 0.164
+      },
+      {
+        "label": "patch-check",
+        "argv": [
+          "git",
+          "apply",
+          "--check",
+          "/home/runner/work/_temp/herdr-native-candidate-40993901952/reference/patches/easytier/0001-outbound-only-packet-proxy.patch"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-11-patch-check.log",
+        "seconds": 0.004
+      },
+      {
+        "label": "patch-apply",
+        "argv": [
+          "git",
+          "apply",
+          "/home/runner/work/_temp/herdr-native-candidate-40993901952/reference/patches/easytier/0001-outbound-only-packet-proxy.patch"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-12-patch-apply.log",
+        "seconds": 0.003
+      },
+      {
+        "label": "patch-check",
+        "argv": [
+          "git",
+          "apply",
+          "--check",
+          "/home/runner/work/_temp/herdr-native-candidate-40993901952/reference/patches/easytier/0002-web-client-backend.patch"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-13-patch-check.log",
+        "seconds": 0.003
+      },
+      {
+        "label": "patch-apply",
+        "argv": [
+          "git",
+          "apply",
+          "/home/runner/work/_temp/herdr-native-candidate-40993901952/reference/patches/easytier/0002-web-client-backend.patch"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-14-patch-apply.log",
+        "seconds": 0.003
+      },
+      {
+        "label": "patch-check",
+        "argv": [
+          "git",
+          "apply",
+          "--check",
+          "/home/runner/work/_temp/herdr-native-candidate-40993901952/reference/patches/easytier/0003-websocket-verify-server-certificates.patch"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-15-patch-check.log",
+        "seconds": 0.003
+      },
+      {
+        "label": "patch-apply",
+        "argv": [
+          "git",
+          "apply",
+          "/home/runner/work/_temp/herdr-native-candidate-40993901952/reference/patches/easytier/0003-websocket-verify-server-certificates.patch"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-16-patch-apply.log",
+        "seconds": 0.003
+      },
+      {
+        "label": "protoc-version",
+        "argv": [
+          "/home/runner/work/_temp/herdr-native-candidate-40993901952/protoc/bin/protoc",
+          "--version"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-17-protoc-version.log",
+        "seconds": 0.002
+      },
+      {
+        "label": "rust-version",
+        "argv": [
+          "rustc",
+          "+1.95.0",
+          "--version"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-18-rust-version.log",
+        "seconds": 0.016
+      },
+      {
+        "label": "candidate-patch-check",
+        "argv": [
+          "git",
+          "apply",
+          "--check",
+          "/home/runner/work/herdr-pocket/herdr-pocket/validation/native/patches/0001-portable-stream-handles.patch"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-19-candidate-patch-check.log",
+        "seconds": 0.004
+      },
+      {
+        "label": "candidate-patch-apply",
+        "argv": [
+          "git",
+          "apply",
+          "/home/runner/work/herdr-pocket/herdr-pocket/validation/native/patches/0001-portable-stream-handles.patch"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-20-candidate-patch-apply.log",
+        "seconds": 0.003
+      },
+      {
+        "label": "candidate-check",
+        "argv": [
+          "cargo",
+          "+1.95.0",
+          "check",
+          "--locked",
+          "--lib"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-21-candidate-check.log",
+        "seconds": 104.852
+      },
+      {
+        "label": "candidate-loopback-tests",
+        "argv": [
+          "cargo",
+          "+1.95.0",
+          "test",
+          "--locked",
+          "--lib",
+          "pocket",
+          "--",
+          "--nocapture"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-22-candidate-loopback-tests.log",
+        "seconds": 135.503
+      },
+      {
+        "label": "candidate-shared-build",
+        "argv": [
+          "cargo",
+          "+1.95.0",
+          "build",
+          "--locked",
+          "--lib"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-23-candidate-shared-build.log",
+        "seconds": 37.747
+      },
+      {
+        "label": "candidate-shared-load",
+        "argv": [
+          "/usr/bin/python",
+          "-c",
+          "import ctypes,sys\nlib=ctypes.CDLL(sys.argv[1])\nfor symbol in ['heeler_et_stream_connect','heeler_et_stream_read','heeler_et_stream_write','heeler_et_stream_shutdown_write','heeler_et_stream_close']:\n    getattr(lib,symbol)\nclose=lib.heeler_et_stream_close;close.argtypes=[ctypes.c_uint64,ctypes.c_void_p,ctypes.c_size_t];close.restype=ctypes.c_int\nassert close(0,None,0)==-6\nprint('five portable ABI symbols resolved; invalid close rejected; no node started')\n",
+          "/home/runner/work/_temp/herdr-native-candidate-40993901952/reference/native/easytier/target/debug/libheeler_easytier.so"
+        ],
+        "exitCode": 0,
+        "log": "easytier-candidate-24-candidate-shared-load.log",
+        "seconds": 0.064
+      }
+    ],
+    "sources": [
+      {
+        "repository": "https://github.com/Ylarod/heeler-overlay-natives.git",
+        "commit": "6a2817fc02aeb552df251d9478753c22fd4738bb"
+      },
+      {
+        "repository": "https://github.com/EasyTier/EasyTier",
+        "commit": "728ba94b5029240add6204eed591f22e4e039e6b"
+      }
+    ],
+    "patches": [
+      {
+        "file": "0001-outbound-only-packet-proxy.patch",
+        "sha256": "462f50093b32092c411c0584280dffccdc71cc528a55fddbbb0b46dd5d15c425"
+      },
+      {
+        "file": "0002-web-client-backend.patch",
+        "sha256": "efbb6003277fb3a835ed12537be8e719b3c41f97a638cf5dfdfdfbbbd87ed45b"
+      },
+      {
+        "file": "0003-websocket-verify-server-certificates.patch",
+        "sha256": "7d2d9822a1c411644cec3f393c7f07d17e43325217187ee6caad0ae7feb84fa5"
+      }
+    ]
+  },
+  "library": {
+    "bytes": 352412248,
+    "sha256": "7ea3495cea9816d4cd8075bf58268244702fae15a399be0c4cde98e6bf390f51"
+  }
+}

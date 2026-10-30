@@ -27,3 +27,5 @@ Context7 已执行 russh `library` → `/eugeny/russh` → `docs`，核查 `chec
 ## 实际运行记录
 
 [首轮 40984387108](https://github.com/Luck9Star/herdr-pocket/actions/runs/40984387108)，源 `be3a585186eb06b6557a83ae75f9b1d85cbe73e4`：固定客户端编译成功，错误 host key 确实进入比较回调并被拒绝；随后临时公钥认证失败，streamlocal、输入、observe、重连均未执行。ERROR 级 sshd 日志未给出原因。下一轮临时 sshd 使用 PAM account/session 检查并提高到 VERBOSE，以核查 CI 系统账户认证；密码与交互认证仍关闭，授权文件仍为本次临时文件。不把这一配置调整当根因已经确认。
+
+[第二轮 40985036883](https://github.com/Luck9Star/herdr-pocket/actions/runs/40985036883)，源 `e254d6d3fa71783325925bfa25c9a8c12f6965e6`：错误 key 拒绝和正确 pin + 临时公钥认证通过；Unix socket channel 被 sshd 拒绝，未发输入。Context7 `library OpenSSH` → `/openssh/openssh-portable` → `docs` 查明 [session.c](https://github.com/openssh/openssh-portable/blob/master/session.c) 的 `AllowTcpForwarding no` 会关闭 local admin permission，[channels.c](https://github.com/openssh/openssh-portable/blob/master/channels.c) 的 `channel_connect_to_path` 同样检查它。下一轮只在临时 loopback sshd 改 `AllowTcpForwarding local`，客户端仍只使用显式 fixture Unix socket，没有 TCP 转发调用；不修改系统 sshd 配置。

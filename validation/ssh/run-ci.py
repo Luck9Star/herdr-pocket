@@ -65,7 +65,7 @@ PermitRootLogin no
 AllowUsers {user}
 PermitTTY no
 AllowAgentForwarding no
-AllowTcpForwarding no
+AllowTcpForwarding local
 AllowStreamLocalForwarding yes
 X11Forwarding no
 PrintMotd no

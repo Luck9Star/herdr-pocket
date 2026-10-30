@@ -37,6 +37,36 @@ jobs:
           path: ${{ runner.temp }}/flutter-probe/pubspec.lock
           if-no-files-found: error
           retention-days: 14
+  render-characterization:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    needs: lock-and-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install pinned Flutter in runner only
+        run: python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+      - name: Prepare isolated fixture app
+        run: python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: flutter-resolved-lock-${{ github.sha }}
+          path: ${{ runner.temp }}/flutter-probe
+      - name: Characterize candidate combining glyph rendering
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/flutter-probe"
+          flutter pub get --enforce-lockfile
+          flutter test diagnostic/combining_render_test.dart --reporter expanded
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: flutter-render-characterization-${{ github.sha }}
+          path: ${{ runner.temp }}/flutter-probe/probe-results
+          if-no-files-found: error
+          retention-days: 14
   build:
     if: startsWith(github.ref, 'refs/heads/codex/')
     needs: lock-and-test

@@ -39,6 +39,7 @@ def prepare(destination):
         (destination / 'pubspec.lock').unlink(missing_ok=True)
     shutil.copytree(source / 'lib', destination / 'lib', dirs_exist_ok=True)
     shutil.copytree(source / 'test', destination / 'test', dirs_exist_ok=True)
+    shutil.copytree(source / 'diagnostic', destination / 'diagnostic', dirs_exist_ok=True)
     (destination / 'analysis_options.yaml').write_text('analyzer:\n  errors:\n    todo: ignore\n')
     shared = ROOT / 'validation/shared'
     fixture = json.loads((shared / 'fixture.json').read_text(encoding='utf-8'))

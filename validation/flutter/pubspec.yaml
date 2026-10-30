@@ -1,0 +1,25 @@
+name: herdr_flutter_probe
+description: Isolated terminal correctness probe; no SSH or overlay credentials.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: '>=3.11.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  terminal_view: 0.5.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/shared/fixture.json
+    - assets/shared/load-chunk.txt
+    - assets/shared/SHA256SUMS
+    - assets/shared/fonts/LICENSE-JetBrainsMono.txt
+    - assets/shared/fonts/LICENSE-Nerd-Fonts.txt
+  fonts:
+    - family: ProbeNerd
+      fonts:
+        - asset: assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf

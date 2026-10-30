@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>herdr-pocket · Tauri terminal probe</title></head><body>
+<header><div><span class="eyebrow">HERDR POCKET / A–B LAB</span><h1>终端验证壳 <small>Tauri + xterm.js</small></h1></div><span class="badge">离线 fixture · 没有 SSH 连接</span></header>
+<main>
+<p class="notice">仅记录本地输入字节。Nerd Font、中文、IME、触控与真机性能均需实测；终端固定 80 × 24，窗口与键盘变化只影响本地视口。</p>
+<nav aria-label="终端标签"><button id="tab-a" aria-pressed="true">A · build-lab / Tailscale</button><button id="tab-b" aria-pressed="false">B · review-lab / EasyTier</button><button id="split" aria-pressed="false">桌面分屏</button></nav>
+<section id="workspace" aria-label="独立终端视图"></section>
+<section class="controls" aria-label="输入控制">
+<div class="row"><label>当前模式 <select id="mode"><option value="observe">观察</option><option value="direct">逐键输入</option><option value="draft">草稿</option></select></label><button id="keyboard">展开键盘 / 聚焦终端</button><button id="blur">收起键盘</button></div>
+<div class="row" id="keys"><button data-key="esc">Esc</button><button data-key="tab">Tab</button><button data-key="ctrl-c">Ctrl+C</button><button data-key="up">↑</button><button data-key="down">↓</button><button data-key="left">←</button><button data-key="right">→</button><button data-key="enter">Enter</button></div>
+<label id="draft-label">目标独立草稿（发送不追加回车）<textarea id="draft" rows="3" maxlength="4096" placeholder="内容仅在本地捕获；不要输入秘密"></textarea></label><button id="send-draft">预览并发送草稿</button>
+<div class="row"><button id="copy">复制终端选区</button><button id="paste">粘贴预览</button><button id="restore">新一轮全量画面</button><button id="verified">已核实原目标结果</button><button id="unknown">注入发送结果未知</button><button id="late">注入迟到帧</button><button id="load">1 MiB 有界负载</button><button id="tui">切换 fixture TUI</button></div>
+<p id="status" role="status" aria-live="polite"></p>
+</section>
+<details open><summary>输入与诊断记录（最多 100 项；不自动重放）</summary><pre id="log"></pre></details>
+<footer id="versions"></footer>
+</main>
+<dialog id="paste-dialog"><form method="dialog"><h2>核对发送目标与文本</h2><p id="paste-target"></p><textarea id="paste-text" rows="6" maxlength="4096"></textarea><p>不会自动追加回车；确认后只尝试一次。</p><button value="cancel">取消</button><button id="confirm-paste" value="send">发送到当前目标</button></form></dialog>
+<script type="module" src="/src/main.js"></script></body></html>

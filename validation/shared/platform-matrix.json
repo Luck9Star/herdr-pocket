@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-30",
+  "scope": "Each cell needs its own real device, provider route and SSH/herdr evidence. Build or pure model tests do not pass any cell.",
+  "platforms": [
+    {
+      "platform": "ios",
+      "singleProviders": {
+        "tailscale": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "easytier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "zerotier": {
+          "status": "unverified",
+          "evidence": null
+        }
+      },
+      "concurrency": {
+        "tailscale+easytier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "tailscale+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "easytier+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "tailscale+easytier+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        }
+      },
+      "overlappingAddressIsolation": "unverified"
+    },
+    {
+      "platform": "android",
+      "singleProviders": {
+        "tailscale": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "easytier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "zerotier": {
+          "status": "unverified",
+          "evidence": null
+        }
+      },
+      "concurrency": {
+        "tailscale+easytier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "tailscale+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "easytier+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "tailscale+easytier+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        }
+      },
+      "overlappingAddressIsolation": "unverified"
+    },
+    {
+      "platform": "windows",
+      "singleProviders": {
+        "tailscale": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "easytier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "zerotier": {
+          "status": "unverified",
+          "evidence": null
+        }
+      },
+      "concurrency": {
+        "tailscale+easytier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "tailscale+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "easytier+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "tailscale+easytier+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        }
+      },
+      "overlappingAddressIsolation": "unverified"
+    },
+    {
+      "platform": "macos",
+      "singleProviders": {
+        "tailscale": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "easytier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "zerotier": {
+          "status": "unverified",
+          "evidence": null
+        }
+      },
+      "concurrency": {
+        "tailscale+easytier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "tailscale+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "easytier+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "tailscale+easytier+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        }
+      },
+      "overlappingAddressIsolation": "unverified"
+    },
+    {
+      "platform": "linux",
+      "singleProviders": {
+        "tailscale": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "easytier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "zerotier": {
+          "status": "unverified",
+          "evidence": null
+        }
+      },
+      "concurrency": {
+        "tailscale+easytier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "tailscale+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "easytier+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        },
+        "tailscale+easytier+zerotier": {
+          "status": "unverified",
+          "evidence": null
+        }
+      },
+      "overlappingAddressIsolation": "unverified"
+    }
+  ]
+}

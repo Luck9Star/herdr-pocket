@@ -1,0 +1,7 @@
+# Hashes describe exact bytes on every host, including Windows checkouts.
+* -text
+fonts/** -text
+# CRLF is intentional terminal input, not source-code whitespace.
+load-chunk.txt -diff
+# Preserve upstream license bytes, including their trailing spaces.
+fonts/LICENSE-*.txt whitespace=-blank-at-eol

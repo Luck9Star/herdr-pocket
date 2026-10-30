@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "route": null,
+  "sourceSHA": null,
+  "artifactSHA256": null,
+  "fixtureSHA256": null,
+  "fontSHA256": null,
+  "device": {
+    "model": null,
+    "os": null,
+    "architecture": null,
+    "webView": null,
+    "keyboard": null,
+    "ime": null,
+    "textScale": null
+  },
+  "viewport": {
+    "width": null,
+    "height": null,
+    "keyboardVisible": null
+  },
+  "terminal": {
+    "cols": 80,
+    "rows": 24,
+    "fontSize": 14,
+    "scrollback": 2000
+  },
+  "checks": [
+    {
+      "id": "install",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "direct-input",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "ime-composition",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "ime-focus-change",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "keys",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "tui",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "cjk",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "nerd-font",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "emoji",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "combining",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "ansi",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "cursor-columns",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "touch-scroll",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "selection-copy",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "paste-preview",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "keyboard-viewport",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "tabs",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "split-focus",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "background-full",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "late-data",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "bounded-buffer",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "host-key",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "session-binding",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "cancel",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    },
+    {
+      "id": "reconnect-no-replay",
+      "status": "unverified",
+      "evidence": null,
+      "notes": null
+    }
+  ],
+  "performance": {
+    "status": "not-run-correctness-first",
+    "inputLatencyP50Ms": null,
+    "inputLatencyP95Ms": null,
+    "frameP95Ms": null,
+    "appPeakRssBytes": null
+  },
+  "limitations": []
+}

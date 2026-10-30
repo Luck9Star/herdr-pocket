@@ -68,6 +68,13 @@ jobs:
           cd "$RUNNER_TEMP/flutter-remote-probe"
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-remote-probe"
+      - name: Analyze and compile Dart CLI before creating credentials
+        id: dart_cli
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/flutter-remote-probe"
+          dart analyze lib/remote_adapter.dart tool/remote_probe.dart
+          dart compile exe tool/remote_probe.dart -o "$RUNNER_TEMP/remote-dart-probe"
       - name: Run both actual adapters against one isolated SSH and herdr target
         id: probe
         run: python3 validation/remote-harness/run-ci.py --flutter-app "$RUNNER_TEMP/flutter-remote-probe" --output "$RUNNER_TEMP/mobile-remote-artifacts/probe"
@@ -76,6 +83,7 @@ jobs:
         env:
           RUST_OUTCOME: ${{ steps.rust.outcome }}
           DART_OUTCOME: ${{ steps.dart.outcome }}
+          DART_CLI_OUTCOME: ${{ steps.dart_cli.outcome }}
           PROBE_OUTCOME: ${{ steps.probe.outcome }}
         run: |
           python3 - <<'PY'
@@ -83,7 +91,7 @@ jobs:
           from pathlib import Path
           out = Path(os.environ['RUNNER_TEMP']) / 'mobile-remote-artifacts'
           out.mkdir(exist_ok=True)
-          value = {'sourceSHA': os.environ['GITHUB_SHA'], 'rustBuildAndTest': os.environ['RUST_OUTCOME'], 'dartResolveAndLock': os.environ['DART_OUTCOME'], 'actualAdapters': os.environ['PROBE_OUTCOME']}
+          value = {'sourceSHA': os.environ['GITHUB_SHA'], 'rustBuildAndTest': os.environ['RUST_OUTCOME'], 'dartResolveAndLock': os.environ['DART_OUTCOME'], 'dartAnalyzeAndCompile': os.environ['DART_CLI_OUTCOME'], 'actualAdapters': os.environ['PROBE_OUTCOME']}
           (out / 'stage-outcomes.json').write_text(json.dumps(value, indent=2) + '\n')
           (out / 'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + str(p.relative_to(out)) + '\n' for p in sorted(out.rglob('*')) if p.is_file() and p != out / 'SHA256SUMS'))
           PY

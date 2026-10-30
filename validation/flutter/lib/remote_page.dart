@@ -103,6 +103,22 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     } finally { if (mounted) fields['privateKeyPem']!.clear(); }
   }
 
+  Future<void> pastePrivateKey() async {
+    if (busy) return;
+    final ticket = request;
+    ClipboardData? data;
+    try { data = await Clipboard.getData(Clipboard.kTextPlain); } catch (_) {
+      if (mounted && ticket == request) setState(() { status = '系统剪贴板不可用，可手动输入临时私钥'; });
+      return;
+    }
+    if (!mounted || busy || ticket != request || data?.text == null) return;
+    if (data!.text!.length > 16384) {
+      setState(() { status = '临时私钥超过大小限制，未粘贴'; }); return;
+    }
+    fields['privateKeyPem']!.text = data.text!.replaceAll('\r\n','\n').replaceAll('\n',r'\n');
+    setState(() { reviewed = false; request++; });
+  }
+
   Widget input(String name,String label,{bool secret=false,String? hint}) => Padding(
     padding:const EdgeInsets.only(bottom:14),child:TextField(
       key:ValueKey('remote-$name'),controller:fields[name],enabled:!busy,
@@ -111,8 +127,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       keyboardType:name == 'port' ? TextInputType.number : TextInputType.text,
       maxLength:secret ? 16384 : name == 'expectedHostKey' ? 4096 : 1024,
       maxLines:1,decoration:InputDecoration(labelText:label,hintText:hint,counterText:'',
-        helperText:secret ? '仅内存使用，连接/取消后清空；尚未实现设备安全存储' : null),
-      onChanged:(_) { if (reviewed) setState(() { reviewed = false; }); },
+        helperText:secret ? '仅内存使用，连接/取消后清空；尚未实现设备安全存储' : null,
+        suffixIcon:secret ? IconButton(tooltip:'粘贴临时私钥',onPressed:busy ? null : pastePrivateKey,
+          icon:const Icon(Icons.content_paste)) : null),
+      onChanged:(_) { request++; if (reviewed) setState(() { reviewed = false; }); },
     ));
 
   @override

@@ -1,5 +1,5 @@
 name: herdr_flutter_probe
-description: Isolated terminal correctness probe; no SSH or overlay credentials.
+description: Isolated terminal fixture and explicitly reviewed read-only SSH snapshot probe.
 publish_to: none
 version: 0.1.0+1
 environment:

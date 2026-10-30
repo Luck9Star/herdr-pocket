@@ -397,10 +397,20 @@ pub struct FullSnapshot {
     pub rows: u16,
 }
 fn snapshot_terminal(value: &Value, pane: &str) -> Result<String> {
-    if value["id"] != "pocket-readonly" || value.get("error").is_some_and(|v| !v.is_null()) {
+    if value["id"] != "pocket-readonly"
+        || value["ok"] == false
+        || value.get("error").is_some_and(|v| !v.is_null())
+    {
         return Err("snapshot_rejected");
     }
-    let result = value.get("result").ok_or("invalid_snapshot")?;
+    let envelope = value.get("result").ok_or("invalid_snapshot")?;
+    if envelope["type"] != "session_snapshot" {
+        return Err("invalid_snapshot");
+    }
+    let result = envelope
+        .get("snapshot")
+        .filter(|v| v.is_object())
+        .ok_or("invalid_snapshot")?;
     if result["version"] != "0.9.5" || result["protocol"] != 22 {
         return Err("unsupported_protocol");
     }
@@ -718,14 +728,35 @@ mod tests {
     }
     #[test]
     fn snapshot_needs_id_version_and_unique_target() {
-        let v = json!({"id":"pocket-readonly","result":{"version":"0.9.5","protocol":22,"panes":[{"pane_id":"pane:1","terminal_id":"term_123"}]}});
+        // Fixed upstream ResponseResult is an internally tagged enum, not a flat snapshot.
+        let v = json!({"id":"pocket-readonly","result":{"type":"session_snapshot","snapshot":{"version":"0.9.5","protocol":22,"panes":[{"pane_id":"pane:1","terminal_id":"term_123"}]}}});
         assert_eq!(snapshot_terminal(&v, "pane:1").unwrap(), "term_123");
         assert_eq!(snapshot_terminal(&v, "pane:2"), Err("pane_missing"));
         let mut wrong = v.clone();
         wrong["id"] = json!("other");
         assert!(snapshot_terminal(&wrong, "pane:1").is_err());
+        wrong = v.clone();
+        wrong["ok"] = json!(false);
+        assert_eq!(
+            snapshot_terminal(&wrong, "pane:1"),
+            Err("snapshot_rejected")
+        );
+        wrong = v.clone();
+        wrong["result"] = v["result"]["snapshot"].clone();
+        assert_eq!(snapshot_terminal(&wrong, "pane:1"), Err("invalid_snapshot"));
+        wrong = v.clone();
+        wrong["result"]["type"] = json!("pong");
+        assert_eq!(snapshot_terminal(&wrong, "pane:1"), Err("invalid_snapshot"));
+        for (field, invalid) in [("version", json!("0.9.6")), ("protocol", json!(21))] {
+            wrong = v.clone();
+            wrong["result"]["snapshot"][field] = invalid;
+            assert_eq!(
+                snapshot_terminal(&wrong, "pane:1"),
+                Err("unsupported_protocol")
+            );
+        }
         wrong = v;
-        wrong["result"]["panes"]
+        wrong["result"]["snapshot"]["panes"]
             .as_array_mut()
             .unwrap()
             .push(json!({"pane_id":"pane:1","terminal_id":"term_456"}));

@@ -113,6 +113,7 @@ class _Attempt {
   final cancelled = Completer<void>();
   final failed = Completer<RemoteFailure>();
   bool closed = false;
+  Future<void>? closing;
   SSHSocket? socket;
   SSHClient? client;
   SSHForwardChannel? forward;
@@ -143,11 +144,15 @@ class RemoteReadOnlyAdapter {
       a.failed.future.then<T>((failure) => throw failure)])
       .timeout(const Duration(seconds:10),onTimeout:() => throw const RemoteFailure('timeout'));
   }
-  Future<void> _close(_Attempt a) async {
+  Future<void> _close(_Attempt a) => a.closing ??= _closeResources(a);
+  Future<void> _closeResources(_Attempt a) async {
     a.closed = true;
-    a.observe?.close(); a.forward?.destroy(); a.socket?.destroy();
+    // Destroy owned channels synchronously; SSHSession.close discards a Future
+    // in dartssh2 4.1.0. Let the client finish before destroying its socket.
+    a.observe?.channel.destroy(); a.forward?.destroy();
     try { await a.stderr?.cancel(); } catch (_) { /* discarded remote stream */ }
-    try { await a.client?.close().timeout(const Duration(seconds:2)); } catch (_) { /* closed socket owns cleanup */ }
+    try { await a.client?.close().timeout(const Duration(seconds:2)); } catch (_) { /* socket cleanup below */ }
+    finally { a.socket?.destroy(); }
   }
   Future<void> cancel() async {
     generation++;
@@ -158,11 +163,37 @@ class RemoteReadOnlyAdapter {
     await _close(a);
   }
 
-  Future<RemoteSnapshot> read(RemoteConfig config, {RemoteProgress? onProgress}) async {
+  Future<RemoteSnapshot> read(RemoteConfig config, {RemoteProgress? onProgress}) {
+    final result = Completer<RemoteSnapshot>();
+    _Attempt? owned;
+    // An SSH transport can report an error from an internally detached Future.
+    // Contain it within this attempt, never expose raw remote error text, and
+    // make the same adapter fail safely in both GUI and command-line callers.
+    runZonedGuarded(() async {
+      try {
+        result.complete(await _read(config,onProgress:onProgress,onAttempt:(a) { owned = a; }));
+      } catch (error,stack) { result.completeError(error,stack); }
+    }, (error,stack) {
+      final a = owned;
+      final failure = RemoteFailure(error is SSHStateError ? 'async_ssh_state_error' :
+        error is StateError ? 'async_state_error' : 'async_transport_failed');
+      if (a == null) {
+        if (!result.isCompleted) result.completeError(failure,stack);
+      } else if (!result.isCompleted) {
+        a.evidence.errorCode ??= failure.code;
+        if (!a.failed.isCompleted) a.failed.complete(failure);
+      }
+    });
+    return result.future;
+  }
+
+  Future<RemoteSnapshot> _read(RemoteConfig config, {RemoteProgress? onProgress,
+      required void Function(_Attempt) onAttempt}) async {
     if (_activeRead || _dialPending) throw const RemoteFailure('connection_busy');
     _activeRead = true;
     if (_attempt != null) await cancel();
     final a = _Attempt(++generation,RemoteEvidence());
+    onAttempt(a);
     _attempt = a; final e = a.evidence; evidence = e; e.generation = generation;
     RemoteSnapshot? completed;
     void phase(String name) { _check(a); onProgress?.call(a.generation,name); _check(a); }
@@ -210,14 +241,14 @@ class RemoteReadOnlyAdapter {
       final terminalId = validateSnapshotTarget(config,Map<String,dynamic>.from(rpc['result'] as Map));
       channel.destroy(); a.forward = null;
       phase('snapshot_received');
-      final observe = await _wait(a,client.execute(config.observeCommand(terminalId)),disposeLate:(s) => s.close());
+      final observe = await _wait(a,client.execute(config.observeCommand(terminalId)),disposeLate:(s) => s.channel.destroy());
       a.observe = observe;
       final budget = ObserveByteBudget();
       a.stderr = observe.stderr.listen((chunk) {
         try { budget.add(chunk.length,stderr:true); } on RemoteFailure catch (error) {
           e.errorCode = error.code;
           if (!a.failed.isCompleted) a.failed.complete(error);
-          observe.close();
+          observe.channel.destroy();
         }
       },onError:(Object _) {});
       phase('observing');
@@ -236,7 +267,8 @@ class RemoteReadOnlyAdapter {
     if (a.generation != generation || !identical(a,_attempt)) {
       e.errorCode = 'cancelled'; e.lateEventsIgnored++; throw const RemoteFailure('cancelled');
     }
-    return completed!;
+    if (a.failed.isCompleted) throw await a.failed.future;
+    return completed;
   }
 }
 
@@ -250,8 +282,12 @@ String validateSnapshotTarget(RemoteConfig config, Map<String,dynamic> result) {
   // v0.9.5 does not echo session identity. Require the named socket layout and
   // derive the same XDG config root for exec; server bytes remain untrusted.
   config.configRoot;
-  if (result['version'] != '0.9.5' || result['protocol'] != 22) throw const RemoteFailure('unsupported_protocol');
-  final panes = result['panes'];
+  // ResponseResult is serde tagged; SessionSnapshot lives inside snapshot.
+  // Reject flat historical test shapes instead of treating them as a server reply.
+  final snapshot = result['snapshot'];
+  if (result['type'] != 'session_snapshot' || snapshot is! Map ||
+      snapshot['version'] != '0.9.5' || snapshot['protocol'] != 22) throw const RemoteFailure('unsupported_protocol');
+  final panes = snapshot['panes'];
   if (panes is! List) throw const RemoteFailure('pane_missing');
   final matches = panes.where((p) => p is Map && p['pane_id'] == config.paneId).toList();
   if (matches.length != 1) throw const RemoteFailure('pane_missing');
@@ -286,8 +322,8 @@ Stream<String> boundedLines(Stream<Uint8List> source, {int maxTotal = 2097152}) 
 Future<String> firstFullFrame(Stream<Uint8List> source) async {
   await for (final line in boundedLines(source)) {
     final frame = _decodeObject(line);
-    if (frame['type'] != 'terminal.frame') continue;
-    if (frame['full'] != true || frame['encoding'] != 'ansi' || frame['width'] != 80 ||
+    // Pinned herdr CLI emits no ready metadata; the first record must be full.
+    if (frame['type'] != 'terminal.frame' || frame['full'] != true || frame['encoding'] != 'ansi' || frame['width'] != 80 ||
         frame['height'] != 24 || frame['seq'] is! int || (frame['seq'] as int) < 0 || frame['bytes'] is! String) {
       throw const RemoteFailure('invalid_first_frame');
     }

@@ -34,10 +34,12 @@
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s validation/remote-harness -p 'test_*.py' -v
 ```
 
-2026-10-30 本地已执行 7 项 guard 测试通过、3 个 Python 文件语法解析通过。这些只证明隔离门禁和结果分类，不证明 SSH 用例已经执行。
+2026-10-30 首版 7 项 guard 测试通过，加入有限协议诊断后为 8 项全部通过；3 个 Python 文件语法解析通过。这些只证明隔离门禁和结果分类，不证明 SSH 用例已经执行。
 
 云端工作流：[mobile-remote-validation.yml](../../.github/workflows/mobile-remote-validation.yml)。它使用 Rust 1.96.0 和已有固定 Flutter 3.47.9/c197ca5 来源，在 runner 构建两适配器。候选 terminal 包首次 hosted→path 转换按既有 `pub get` + `candidate.py verify-lock` 执行，除候选本体外不得漂移。源锁与实际阶段结果在编译失败时也上传，实际协议结果在 `probe/manifest.json`；缺失该文件表示未进入完整协议探针，不能算通过。
 
 真实协议来源仍固定 herdr v0.9.5 / `2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01`，Linux x86_64 二进制 SHA256 `14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d`。新 workflow 保留 14 天测试 artifact，不创建 Release、不提交商店、不合并主分支。
 
 2026-10-30 已按 Context7 `library OpenSSH` → `docs /openssh/openssh-portable` 核查 `AuthorizedKeysFile`、`AllowStreamLocalForwarding local`、`AllowTcpForwarding local` 与 `PermitTTY no`。依据[官方 sshd_config 文档](https://github.com/openssh/openssh-portable/blob/master/sshd_config.5)及 [streamlocal 服务端处理](https://github.com/openssh/openssh-portable/blob/master/serverloop.c)；固定 runner 的实际 OpenSSH 版本应随云端执行记录核对。
+
+首轮实际 [41046472357](../../docs/evidence/mobile-remote/41046472357/README.md) 为 2/12 通过、10/12 失败；仅两端错误 pin 拒绝通过。后续增加 readiness snapshot 的 version/protocol 类型与受限值诊断、CLI 退出码和报告长度，仍不输出原始响应或错误。实际版本记录为 OpenSSH 9.6p1 Ubuntu-3ubuntu13.20。

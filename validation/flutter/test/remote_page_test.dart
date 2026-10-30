@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
@@ -64,6 +65,35 @@ void main() {
     expect(field('connect').hitTestable(),findsOneWidget);
     expect(tester.getSize(field('connect')).height,greaterThanOrEqualTo(44));
     expect(tester.widget<TextField>(field('privateKeyPem')).obscureText,isTrue);
+    expect(tester.takeException(),isNull);
+  });
+  testWidgets('explicit masked paste is 44px and late clipboard replies cannot refill after edits or leaving', (tester) async {
+    final adapter = PendingAdapter();
+    await prepare(tester,adapter,const Size(360,780));
+    final clipboard = <Completer<Object?>>[];
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform,(call) {
+      if (call.method == 'Clipboard.getData') {
+        final reply = Completer<Object?>(); clipboard.add(reply); return reply.future;
+      }
+      return Future<Object?>.value();
+    });
+    addTearDown(() { messenger.setMockMethodCallHandler(SystemChannels.platform,null); });
+    final paste = find.byTooltip('粘贴临时私钥');
+    await tester.ensureVisible(paste); await tester.pumpAndSettle();
+    expect(tester.getSize(paste).height,greaterThanOrEqualTo(44));
+    await tester.tap(paste); await tester.pump();
+    clipboard.last.complete({'text':'synthetic-not-a-key\nsecond-line'}); await tester.pump();
+    final secret = tester.widget<TextField>(field('privateKeyPem'));
+    expect(secret.obscureText,isTrue);
+    expect(secret.controller!.text,r'synthetic-not-a-key\nsecond-line');
+    await tester.tap(paste); await tester.pump();
+    await tester.ensureVisible(field('host')); await tester.enterText(field('host'),'another-fixture'); await tester.pump();
+    clipboard.last.complete({'text':'LATE INVALID CLIPBOARD'}); await tester.pump();
+    expect(secret.controller!.text,r'synthetic-not-a-key\nsecond-line');
+    await tester.ensureVisible(paste); await tester.tap(paste); await tester.pump();
+    await tester.pumpWidget(const SizedBox());
+    clipboard.last.complete({'text':'AFTER DISPOSE'}); await tester.pump();
     expect(tester.takeException(),isNull);
   });
 }

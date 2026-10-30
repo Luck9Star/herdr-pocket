@@ -71,7 +71,7 @@
     "remoteWrites": 0
   },
   "commands": {
-    "snapshot": "one direct-streamlocal channel, one session.snapshot RPC, validate response id and result, then close",
+    "snapshot": "one direct-streamlocal channel, one session.snapshot RPC, validate response id, ok/error and result.type=session_snapshot, read result.snapshot, then close",
     "observe": "fixed /usr/bin/env with only shell-quoted XDG_CONFIG_HOME derived from canonical socketPath; shell-quoted herdrPath --session session terminal session observe resolvedTerminalId --cols 80 --rows 24; no SSH PTY/control/takeover/resize; close after validated full frame"
   },
   "lifecycle": [
@@ -123,7 +123,7 @@
     "production credentials"
   ],
   "binding": {
-    "snapshot": "exact selected paneId must exist and resolve to nonempty terminal_id matching ^term_[0-9a-f]+$",
+    "snapshot": "exact selected paneId must exist uniquely in result.snapshot.panes and resolve to terminal_id matching ^term_[0-9a-f]+$",
     "observe": "use that resolved terminal_id as CLI target, never reuse paneId as fallback; force the same derived config root and named session",
     "boundary": "herdr 0.9.5 snapshot/frame do not echo session identity; binding relies on pinned server path and terminal resolver semantics, not a frame identity field"
   },

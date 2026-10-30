@@ -35,12 +35,15 @@ void main() {
   test('snapshot binds pane, stable terminal id and derived XDG root, not another same-name pane', () {
     final config = RemoteConfig.fromJson(fixtureConfig());
     final snapshot = {'version':'0.9.5','protocol':22,'panes':[{'pane_id':'w1:p1','terminal_id':'term_abcd'}]};
-    expect(validateSnapshotTarget(config,snapshot),'term_abcd');
+    final envelope = {'type':'session_snapshot','snapshot':snapshot};
+    expect(validateSnapshotTarget(config,envelope),'term_abcd');
     expect(config.observeCommand('term_abcd'),
       "/usr/bin/env 'XDG_CONFIG_HOME=/tmp/fixture-config' '/tmp/fixture/herdr' --session 'probe' terminal session observe 'term_abcd' --cols 80 --rows 24");
-    expect(() => validateSnapshotTarget(RemoteConfig.fromJson({...fixtureConfig(),'session':'other'}),snapshot),throwsA(failure('session_mismatch')));
-    expect(() => validateSnapshotTarget(config,{'version':'0.9.5','protocol':22,'panes':[]}),throwsA(failure('pane_missing')));
-    expect(() => validateSnapshotTarget(config,{...snapshot,'protocol':23}),throwsA(failure('unsupported_protocol')));
+    expect(() => validateSnapshotTarget(RemoteConfig.fromJson({...fixtureConfig(),'session':'other'}),envelope),throwsA(failure('session_mismatch')));
+    expect(() => validateSnapshotTarget(config,{'type':'session_snapshot','snapshot':{...snapshot,'panes':[]}}),throwsA(failure('pane_missing')));
+    expect(() => validateSnapshotTarget(config,{'type':'session_snapshot','snapshot':{...snapshot,'protocol':23}}),throwsA(failure('unsupported_protocol')));
+    expect(() => validateSnapshotTarget(config,snapshot),throwsA(failure('unsupported_protocol')));
+    expect(() => validateSnapshotTarget(config,{...envelope,'type':'another_result'}),throwsA(failure('unsupported_protocol')));
     expect(() => config.observeCommand('term_x;touch /tmp/no'),throwsA(failure('invalid_terminal_id')));
     expect(shellQuote("/tmp/a'b;echo no"),"'/tmp/a'\\''b;echo no'");
   });
@@ -54,6 +57,7 @@ void main() {
     Stream<Uint8List> frame(Map<String,Object?> data) => Stream.value(Uint8List.fromList(utf8.encode('${jsonEncode(data)}\n')));
     final valid = <String,Object?>{'type':'terminal.frame','seq':0,'full':true,'encoding':'ansi','width':80,'height':24,'bytes':base64Encode(utf8.encode('中文 é'))};
     expect(await firstFullFrame(frame(valid)),'中文 é');
+    await expectLater(firstFullFrame(frame({...valid,'type':'terminal.closed'})),throwsA(failure('invalid_first_frame')));
     await expectLater(firstFullFrame(frame({...valid,'full':false})),throwsA(failure('invalid_first_frame')));
     await expectLater(firstFullFrame(frame({...valid,'seq':-1})),throwsA(failure('invalid_first_frame')));
     await expectLater(firstFullFrame(frame({...valid,'width':81})),throwsA(failure('invalid_first_frame')));
@@ -81,5 +85,19 @@ void main() {
     expect(adapter.evidence.lateEventsIgnored,greaterThan(0));
     await expectLater(adapter.read(RemoteConfig.fromJson(fixtureConfig())),throwsA(failure('synthetic_connection')));
     expect(calls,2);
+  });
+  test('detached transport errors fail the attempt without escaping or releasing a pending dial', () async {
+    final pending = Completer<SSHSocket>();
+    final adapter = RemoteReadOnlyAdapter(connector:(host,port) {
+      scheduleMicrotask(() { throw StateError('synthetic secret must never be reported'); });
+      return pending.future;
+    });
+    await expectLater(adapter.read(RemoteConfig.fromJson(fixtureConfig())),throwsA(failure('async_state_error')));
+    expect(adapter.evidence.errorCode,'async_state_error');
+    expect(adapter.evidence.fullFrameReceived,isFalse);
+    await expectLater(adapter.read(RemoteConfig.fromJson(fixtureConfig())),throwsA(failure('connection_busy')));
+    final late = FakeSocket(); pending.complete(late);
+    await Future<void>.delayed(Duration.zero);
+    expect(late.destroyed,isTrue);
   });
 }

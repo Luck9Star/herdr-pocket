@@ -92,6 +92,34 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + '\n')
 
 
+def protocol_diagnostics(result):
+    """Only fixed release-version/protocol fields; never arbitrary snapshot data."""
+    diagnostics = {}
+    for name in ('version', 'protocol'):
+        value = result.get(name)
+        item = {'present': name in result, 'type': type(value).__name__}
+        if type(value) is int and 0 <= value <= 1_000_000:
+            item['value'] = value
+        elif isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9 .+_()-]{1,96}', value):
+            item['value'] = value
+        elif value is None:
+            item['value'] = None
+        # Distinguish structured version objects without dumping arbitrary keys.
+        if isinstance(value, dict):
+            item['nestedKnownFields'] = protocol_diagnostics({k: value[k] for k in ('version', 'protocol')
+                                                            if k in value and not isinstance(value[k], dict)})
+        diagnostics[name] = item
+    return diagnostics
+
+
+def snapshot_diagnostics(result):
+    snapshot = result.get('snapshot')
+    return {'resultType': result.get('type') if result.get('type') == 'session_snapshot' else 'other_or_missing',
+            'flatKnownFields': protocol_diagnostics(result),
+            'snapshotPresent': 'snapshot' in result, 'snapshotType': type(snapshot).__name__,
+            'nestedKnownFields': protocol_diagnostics(snapshot) if isinstance(snapshot, dict) else None}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--flutter-app', type=Path, required=True)
@@ -168,7 +196,9 @@ def main():
                         if not chunk:
                             break
                         data.extend(chunk)
-                    if len(data) <= 1_048_576 and isinstance(json.loads(data.split(b'\n', 1)[0]).get('result'), dict):
+                    value = json.loads(data.split(b'\n', 1)[0]) if len(data) <= 1_048_576 else None
+                    if isinstance(value, dict) and isinstance(value.get('result'), dict):
+                        report.setdefault('readinessSnapshot', {})[name] = snapshot_diagnostics(value['result'])
                         return sock
             except (OSError, ValueError):
                 pass
@@ -275,9 +305,13 @@ LogLevel VERBOSE
                 try:
                     if not (root / 'capture-running').exists():
                         raise ProbeFailure('readonly_receiver_stopped')
+                    started = time.monotonic()
                     completed = subprocess.run(prefix + ['--config', str(cfg_path), '--case', case,
                                                '--output', str(result_path)], env=env, cwd=cwd,
                                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+                    item['processExitCode'] = completed.returncode
+                    item['elapsedMs'] = round((time.monotonic() - started) * 1000)
+                    item['reportBytes'] = result_path.stat().st_size if result_path.is_file() else 0
                     if not result_path.is_file() or result_path.stat().st_size > 65536:
                         raise ProbeFailure('adapter_report_missing_or_large')
                     result = safe_report(json.loads(result_path.read_text()), case)

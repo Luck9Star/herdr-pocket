@@ -67,6 +67,24 @@ class HarnessGuards(unittest.TestCase):
             with self.assertRaises(harness.ProbeFailure):
                 harness.validate_evidence(result(**{field: False}), 'positive')
 
+    def test_protocol_diagnostics_exclude_remote_content_and_arbitrary_fields(self):
+        data = {'version': '0.9.5+build-1', 'protocol': 22, 'panes': [{'private': 'never'}],
+                'privateKeyPem': 'never'}
+        safe = harness.protocol_diagnostics(data)
+        self.assertEqual(set(safe), {'version', 'protocol'})
+        self.assertEqual(safe['protocol']['value'], 22)
+        self.assertNotIn('value', harness.protocol_diagnostics({'version': 'line\nsecret'})['version'])
+        self.assertFalse(harness.protocol_diagnostics({})['protocol']['present'])
+        nested = harness.protocol_diagnostics({'protocol': {'version': 22, 'arbitrary': 'never'}})
+        self.assertEqual(nested['protocol']['nestedKnownFields']['version']['value'], 22)
+        self.assertNotIn('arbitrary', str(nested))
+        wrapper = harness.snapshot_diagnostics({'type':'session_snapshot', 'snapshot':data})
+        self.assertEqual(wrapper['resultType'], 'session_snapshot')
+        self.assertTrue(wrapper['snapshotPresent'])
+        self.assertEqual(wrapper['nestedKnownFields']['protocol']['value'], 22)
+        self.assertNotIn('panes', str(wrapper))
+        self.assertFalse(wrapper['flatKnownFields']['protocol']['present'])
+
 
 if __name__ == '__main__':
     unittest.main()

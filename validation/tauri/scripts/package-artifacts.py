@@ -24,6 +24,8 @@ manifest = {
     'scope':'Offline renderer/IPC probe; no SSH, herdr or overlay connections; build does not verify devices.',
     'fixtureSHA256':sha(repo/'validation/shared/fixture.json'),
     'fontSHA256':sha(repo/'validation/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'),
+    'designTokensSHA256':sha(repo/'validation/shared/design-tokens-v2.json'),
+    'visualBaseline':'herdr-pocket-v2-tech-indigo; shared 16 ANSI colors; fixed 80x24 fixture',
     'artifacts':[]}
 if platform.system()=='Darwin': manifest['toolchains']['xcode']=version(['xcodebuild','-version'])
 if os.getenv('PROBE_PLATFORM')=='android':

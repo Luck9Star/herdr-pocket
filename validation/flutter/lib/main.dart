@@ -3,13 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'probe_gate.dart';
+import 'design_tokens.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final fixture = jsonDecode(await rootBundle.loadString('assets/shared/fixture.json')) as Map<String, dynamic>;
   final load = await rootBundle.loadString('assets/shared/load-chunk.txt');
-  runApp(MaterialApp(debugShowCheckedModeBanner: false, theme: ThemeData.dark(useMaterial3: true),
-      home: ProbePage(fixture: fixture, load: load)));
+  final tokens = await DesignTokens.load();
+  runApp(MaterialApp(debugShowCheckedModeBanner: false, theme: tokens.theme,
+      home: ProbePage(fixture: fixture, load: load, tokens: tokens)));
 }
 
 class ProbePane {
@@ -23,9 +25,10 @@ class ProbePane {
 }
 
 class ProbePage extends StatefulWidget {
-  const ProbePage({super.key, required this.fixture, required this.load});
+  const ProbePage({super.key, required this.fixture, required this.load, required this.tokens});
   final Map<String, dynamic> fixture;
   final String load;
+  final DesignTokens tokens;
   @override
   State<ProbePage> createState() => _ProbePageState();
 }
@@ -80,7 +83,7 @@ class _ProbePageState extends State<ProbePage> with WidgetsBindingObserver {
   void select(int i) {
     setState(() {
       for (final p in panes) { p.focusNode.unfocus(); p.gate.select(false); }
-      if (!split && i != selected) panes[selected].gate.hide();
+      if (!(split && wideLayout) && i != selected) panes[selected].gate.hide();
       selected = i;
       active.gate.select(true);
       if (!active.gate.visible) {
@@ -162,73 +165,170 @@ class _ProbePageState extends State<ProbePage> with WidgetsBindingObserver {
     setState(() { p.gate.send(p.gate.ticket, bytes, InputMode.direct); });
   }
 
+  DesignTokens get tokens => widget.tokens;
+
+  Widget statusPanel(ProbeGate gate) {
+    final blocked = gate.unknownResult || !gate.fresh || !gate.connected;
+    final message = gate.unknownResult
+        ? '发送结果待核实 · 输入已锁定，旧输入不会重放'
+        : !gate.fresh || !gate.connected
+            ? '旧画面仅供参考 · 取得新画面后再显式输入'
+            : gate.mode == InputMode.direct
+                ? '逐键输入 · 按键只进入当前目标的本地记录器'
+                : gate.mode == InputMode.draft
+                    ? '本地草稿 · 预览确认后发送，不附加回车'
+                    : '观察模式 · 终端只读，任务不受本地视图影响';
+    return Semantics(liveRegion: blocked, child: Container(
+      width: double.infinity, margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: tokens.color(blocked ? 'warningSoft' : 'brandSoft'),
+        borderRadius: BorderRadius.circular(8)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(message, style: TextStyle(fontSize: 12,
+          color: tokens.color(blocked ? 'warningText' : 'brandHover'))),
+        if (gate.unknownResult && gate.fresh) TextButton(
+          key: const ValueKey('acknowledge-unknown'),
+          onPressed: () => setState(gate.acknowledgeUnknown),
+          child: const Text('人工核实未知')),
+      ])));
+  }
+
   Widget terminal(ProbePane p) => Expanded(child: GestureDetector(
     onTap: () { if (p != active) select(panes.indexOf(p)); },
-    child: Container(margin: const EdgeInsets.all(4), decoration: BoxDecoration(
-      border: Border.all(color: p == active ? Colors.cyanAccent : Colors.grey, width: 2)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(padding: const EdgeInsets.all(6), child: Text('${p.gate.target} · ${p.gate.fresh ? "fixture full" : "旧画面 / 等待 full"}')),
+    child: Container(margin: const EdgeInsets.symmetric(horizontal: 6), clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(color: tokens.color('termBg'), borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: tokens.color(p == active ? 'brand' : 'termBorder'), width: 2)),
+      child: LayoutBuilder(builder: (context, constraints) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (constraints.maxHeight > 96) Container(color: tokens.color('termSurface'), padding: const EdgeInsets.all(10),
+          child: Text('${p == active ? "输入焦点 · " : "非活动 · "}${p.gate.target}\n'
+            '${p.gate.fresh ? "示例画面" : "旧画面 / 等待 full"} · 80×24',
+            style: TextStyle(color: tokens.color('termText'), fontSize: 11))),
         Expanded(child: TerminalPane(
           key: ValueKey('${p.gate.target}:${p.gate.generation}:${p.gate.epoch}:${p.gate.focus}'),
-          pane: p, full: full, scrollback: (widget.fixture['terminal'] as Map)['scrollback'] as int, enabled: p == active && p.gate.canInput && p.gate.mode == InputMode.direct,
+          pane: p, full: full, theme: tokens.terminalTheme,
+          scrollback: (widget.fixture['terminal'] as Map)['scrollback'] as int,
+          enabled: p == active && p.gate.canInput && p.gate.mode == InputMode.direct,
           onPaste: paste, onSent: () { if (mounted) setState(() {}); })),
-      ]))));
+      ])))));
+
+  Widget hosts() => Container(width: 228, margin: const EdgeInsets.only(right: 6),
+    decoration: BoxDecoration(color: tokens.color('card'),
+      border: Border(right: BorderSide(color: tokens.color('border')))),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Padding(padding: EdgeInsets.all(20), child: Text('主机与会话',
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+      for (var i = 0; i < panes.length; i++) Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        child: Material(color: tokens.color(i == selected ? 'brandSoft' : 'cardSubtle'),
+          borderRadius: BorderRadius.circular(10), child: ListTile(
+            key: ValueKey('host-$i'), selected: i == selected,
+            leading: Icon(Icons.dns_outlined, color: tokens.color('brand')),
+            title: Text(i == 0 ? 'demo-ts' : 'demo-et'),
+            subtitle: Text('${i == 0 ? "Tailscale" : "EasyTier"} · 本地示例\n${i == 0 ? "session-a" : "session-b"}'),
+            onTap: () => select(i)))),
+      const Spacer(),
+      Padding(padding: const EdgeInsets.all(16), child: Text(
+        '网络名称为测试目标标识。\n此壳没有建立真实网络或 SSH 连接。',
+        style: TextStyle(fontSize: 12, color: tokens.color('textSecondary')))),
+    ]));
+
+  Future<void> diagnostics() async {
+    final p = active, gate = p.gate;
+    await showModalBottomSheet<void>(context: context, isScrollControlled: true,
+      builder: (context) => SafeArea(child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('本地验证工具', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          SelectableText('$info\n目标 ${gate.target}\n'
+            'queue ${gate.queuedBytes}/${gate.maxQueuedBytes} · peak ${gate.peakQueuedBytes}\n'
+            'sink ${gate.inputCount} · rejected ${gate.rejectedInputs}\n'
+            'UTF8 ${gate.inputHex.isEmpty ? "—" : gate.inputHex.last}'),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, children: [
+            for (var i = 1; i < (widget.fixture['frames'] as List).length; i++) TextButton(
+              onPressed: () {
+                final data = (widget.fixture['frames'] as List)[i]['data'] as String;
+                if (gate.enqueue(Frame(gate.ticket, data))) {
+                  final f = gate.consume(); if (f != null) p.render?.call(f.data);
+                }
+                Navigator.pop(context); setState(() {});
+              }, child: Text((widget.fixture['frames'] as List)[i]['id'] as String)),
+            TextButton(onPressed: loading ? null : () { Navigator.pop(context); load(burst: false); }, child: const Text('1 MiB paced')),
+            TextButton(onPressed: loading ? null : () { Navigator.pop(context); load(burst: true); }, child: const Text('慢消费者 / 溢出')),
+            TextButton(key: const ValueKey('inject-unknown'), onPressed: () {
+              Navigator.pop(context); setState(() { gate.markUnknown(); p.focusNode.unfocus(); });
+            }, child: const Text('注入未知 / 断线')),
+          ]),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('关闭')),
+        ]))));
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = active, gate = active.gate;
     final wide = MediaQuery.sizeOf(context).width >= 960;
     final canSend = gate.canInput;
-    return Scaffold(appBar: AppBar(title: const Text('Flutter · terminal_view 0.5.0')),
-      body: SafeArea(child: Column(children: [
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(info, style: const TextStyle(color: Colors.amberAccent))),
-        Row(children: [for (var i = 0; i < panes.length; i++) Expanded(child: TextButton(
-          onPressed: () => select(i), child: Text('${i == selected ? "● " : ""}${i == 0 ? "Tailscale 示例" : "EasyTier 示例"}'))),
-          if (wide) IconButton(tooltip: '本地分屏；不调整远端 PTY', icon: const Icon(Icons.vertical_split), onPressed: () {
-            setState(() { split = !split; for (final other in panes) { if (other != active) { if (split) { other.gate.visible = true; } else { other.gate.hide(); } } } });
-          })]),
-        Wrap(spacing: 8, children: [for (final mode in InputMode.values) ChoiceChip(
-          label: Text(['观察', '逐键', '草稿'][mode.index]), selected: gate.mode == mode,
-          onSelected: mode == InputMode.observe || canSend ? (_) => setMode(mode) : null),
-          IconButton(tooltip: '收起键盘', onPressed: () { p.focusNode.unfocus(); SystemChannels.textInput.invokeMethod<void>('TextInput.hide'); }, icon: const Icon(Icons.keyboard_hide)),
-          TextButton(onPressed: restore, child: const Text('获取新 full'))]),
-        Expanded(child: Row(children: split && wide ? panes.map(terminal).toList() : [terminal(p)])),
-        if (gate.mode == InputMode.draft) Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Row(children: [
-          Expanded(child: TextField(controller: p.draft, minLines: 1, maxLines: 3, maxLength: 4096,
-            decoration: const InputDecoration(labelText: '本地草稿（不自动回车）'))),
-          TextButton(onPressed: canSend ? () => preview(p.draft.text, draft: true) : null, child: const Text('预览发送'))])),
-        SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
-          for (final entry in {'Esc':'\u001b','Tab':'\t','↑':'\u001b[A','↓':'\u001b[B','←':'\u001b[D','→':'\u001b[C','Ctrl-C':'\u0003','Ctrl-D':'\u0004','Enter':'\r'}.entries)
-            TextButton(onPressed: canSend && gate.mode == InputMode.direct ? () => auxiliary(entry.value) : null, child: Text(entry.key)),
-          TextButton(onPressed: canSend && gate.mode != InputMode.observe ? paste : null, child: const Text('粘贴')),
-          TextButton(onPressed: () => p.copy?.call(), child: const Text('复制选区')),
+    return Scaffold(appBar: AppBar(title: const Text('herdr pocket'),
+      actions: [Padding(padding: const EdgeInsets.only(right: 16), child: Center(
+        child: Text('Flutter · 本地验证', style: TextStyle(color: tokens.color('textSecondary'), fontSize: 12))))]),
+      body: SafeArea(child: Row(children: [
+        if (wide) hosts(),
+        Expanded(child: Column(children: [
+          if (MediaQuery.viewInsetsOf(context).bottom == 0) Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Row(children: [Icon(Icons.science_outlined, size: 16, color: tokens.color('brand')),
+              const SizedBox(width: 6), Expanded(child: Text('离线 fixture · 配对 / SSH / 三网络尚未接入',
+                style: TextStyle(color: tokens.color('textSecondary'), fontSize: 11)))])),
+          Row(children: [for (var i = 0; i < panes.length; i++) Expanded(child: TextButton(
+            key: ValueKey('tab-$i'), onPressed: () => select(i),
+            style: TextButton.styleFrom(backgroundColor: i == selected ? tokens.color('brandSoft') : null),
+            child: Text('${i == selected ? "● " : ""}${i == 0 ? "Tailscale · A" : "EasyTier · B"}'))),
+            if (wide) IconButton(key: const ValueKey('split-toggle'),
+              tooltip: '本地分屏；不调整远端 PTY', icon: const Icon(Icons.vertical_split), onPressed: () {
+                setState(() { split = !split; for (final other in panes) { if (other != active) { if (split) { other.gate.visible = true; } else { other.gate.hide(); } } } });
+              })]),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+            for (final mode in InputMode.values) Padding(padding: const EdgeInsets.only(right: 4), child: ChoiceChip(
+              key: ValueKey('mode-${mode.name}'),
+              label: Text(['观察', '逐键', '草稿'][mode.index]), selected: gate.mode == mode,
+              onSelected: mode == InputMode.observe || canSend ? (_) => setMode(mode) : null)),
+            IconButton(tooltip: '收起键盘', onPressed: () { p.focusNode.unfocus(); SystemChannels.textInput.invokeMethod<void>('TextInput.hide'); }, icon: const Icon(Icons.keyboard_hide)),
+            IconButton(key: const ValueKey('restore-full'), tooltip: '获取新 full', onPressed: restore, icon: const Icon(Icons.refresh)),
+          ]))),
+          statusPanel(gate),
+          Expanded(child: Row(children: split && wide ? panes.map(terminal).toList() : [terminal(p)])),
+          if (gate.mode == InputMode.draft) Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 0), child: Row(children: [
+            Expanded(child: TextField(controller: p.draft, minLines: 1, maxLines: 2, maxLength: 4096,
+              decoration: const InputDecoration(labelText: '本地草稿（不自动回车）'))),
+            Column(mainAxisSize: MainAxisSize.min, children: [
+              TextButton(onPressed: canSend ? paste : null, child: const Text('粘贴')),
+              TextButton(onPressed: canSend ? () => preview(p.draft.text, draft: true) : null, child: const Text('预览发送')),
+            ])])),
+          if (gate.mode != InputMode.draft) SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+            for (final entry in {'Esc':'\u001b','Tab':'\t','↑':'\u001b[A','↓':'\u001b[B','←':'\u001b[D','→':'\u001b[C','Ctrl-C':'\u0003','Ctrl-D':'\u0004','Enter':'\r'}.entries)
+              TextButton(onPressed: canSend && gate.mode == InputMode.direct ? () => auxiliary(entry.value) : null, child: Text(entry.key)),
+            TextButton(onPressed: canSend && gate.mode != InputMode.observe ? paste : null, child: const Text('粘贴')),
+            TextButton(onPressed: () => p.copy?.call(), child: const Text('复制选区')),
+          ])),
+          Container(decoration: BoxDecoration(border: Border(top: BorderSide(color: tokens.color('border')))),
+            child: Row(children: [Expanded(child: Padding(padding: const EdgeInsets.only(left: 12),
+              child: Text('80×24 · 本地接收 ${gate.inputCount}', key: const ValueKey('input-count'),
+                style: TextStyle(fontSize: 11, color: tokens.color('textSecondary'))))),
+              TextButton(key: const ValueKey('diagnostics'), onPressed: diagnostics, child: const Text('验证工具'))])),
         ])),
-        SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
-          PopupMenuButton<int>(tooltip: '共享 ANSI / TUI fixture', onSelected: (i) {
-            final data = (widget.fixture['frames'] as List)[i]['data'] as String;
-            if (gate.enqueue(Frame(gate.ticket, data))) { final f = gate.consume(); if (f != null) p.render?.call(f.data); }
-            setState(() {});
-          }, itemBuilder: (_) => [for (var i = 1; i < (widget.fixture['frames'] as List).length; i++) PopupMenuItem(value: i, child: Text((widget.fixture['frames'] as List)[i]['id'] as String))], child: const Padding(padding: EdgeInsets.all(12), child: Text('ANSI / TUI'))),
-          TextButton(onPressed: loading ? null : () => load(burst: false), child: const Text('1 MiB paced')),
-          TextButton(onPressed: loading ? null : () => load(burst: true), child: const Text('慢消费者 / 溢出')),
-          TextButton(onPressed: () => setState(() { gate.markUnknown(); p.focusNode.unfocus(); }), child: const Text('注入未知 / 断线')),
-          TextButton(onPressed: gate.unknownResult && gate.fresh ? () => setState(gate.acknowledgeUnknown) : null, child: const Text('人工核实未知')),
-        ])),
-        Padding(padding: const EdgeInsets.all(6), child: SelectableText(
-          '80×24 · 14px · queue ${gate.queuedBytes}/${gate.maxQueuedBytes} · peak ${gate.peakQueuedBytes}\n'
-          'sink ${gate.inputCount} · rejected ${gate.rejectedInputs} · UTF8 ${gate.inputHex.isEmpty ? "—" : gate.inputHex.last}', maxLines: 3)),
       ])));
   }
+
 }
 
 /// A fresh widget/input connection is created for each mode/focus epoch.
 /// Its captured ticket cannot send late composition into the next focus epoch.
 class TerminalPane extends StatefulWidget {
-  const TerminalPane({super.key, required this.pane, required this.full, required this.scrollback, required this.enabled, required this.onPaste, required this.onSent});
+  const TerminalPane({super.key, required this.pane, required this.full, required this.scrollback, required this.enabled, required this.onPaste, required this.onSent, this.theme = TerminalThemes.defaultTheme});
   final ProbePane pane;
   final String full;
   final int scrollback;
   final bool enabled;
+  final TerminalTheme theme;
   final VoidCallback onPaste, onSent;
   @override
   State<TerminalPane> createState() => _TerminalPaneState();
@@ -265,7 +365,7 @@ class _TerminalPaneState extends State<TerminalPane> {
   }
   @override
   Widget build(BuildContext context) => TerminalView(terminal,
-    controller: widget.pane.selection, focusNode: widget.pane.focusNode,
+    controller: widget.pane.selection, focusNode: widget.pane.focusNode, theme: widget.theme,
     autoResize: false, readOnly: !widget.enabled, simulateScroll: widget.enabled,
     keyboardType: TextInputType.text, textStyle: const TerminalStyle(fontFamily: 'ProbeNerd', fontSize: 14),
     shortcuts: const {},

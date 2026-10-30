@@ -97,6 +97,8 @@ def package(destination, platform, output):
         'toolchains': {'flutter': version([flutter(), '--version']), 'xcode': version(['xcodebuild', '-version']) if host_platform.system() == 'Darwin' else 'not applicable', 'java': version(['java', '-version']) if platform == 'android' else 'not applicable', 'installedNdkVersions': ndk_versions},
         'flutterVersion': VERSION, 'flutterCommit': COMMIT, 'platform': platform,
         'artifactSha256': hashlib.sha256(archive.read_bytes()).hexdigest(),
+        'designTokensSha256': hashlib.sha256((ROOT / 'validation/shared/design-tokens-v2.json').read_bytes()).hexdigest(),
+        'visualScheme': 'Penpot v2 Tech Indigo and Slate; offline shell adaptation',
         'fixtureSha256': hashlib.sha256((ROOT / 'validation/shared/fixture.json').read_bytes()).hexdigest(),
         'lockSha256': hashlib.sha256((destination / 'pubspec.lock').read_bytes()).hexdigest(),
         'scope': 'compile only; local fixture sink; SSH/overlays/device validation NOT RUN',

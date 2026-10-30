@@ -100,7 +100,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           'timeout' => '连接或读取超时 · 未自动重试',
           _ => '读取失败（$code）· 请检查资料，再主动连接',
         }; });
-    } finally { if (mounted) fields['privateKeyPem']!.clear(); }
+    } finally { if (mounted && ticket == request) fields['privateKeyPem']!.clear(); }
   }
 
   Future<void> pastePrivateKey() async {

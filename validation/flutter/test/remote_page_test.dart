@@ -49,8 +49,11 @@ void main() {
     expect(tester.widget<TextField>(field('privateKeyPem')).controller!.text,isEmpty);
     expect(tester.widget<TextField>(field('host')).enabled,isFalse);
     await tester.ensureVisible(field('cancel')); await tester.tap(field('cancel')); await tester.pump();
+    await tester.ensureVisible(field('privateKeyPem'));
+    await tester.enterText(field('privateKeyPem'),'NEXT ATTEMPT SYNTHETIC TEXT'); await tester.pump();
     adapter.pending.complete(const RemoteSnapshot(1,'probe','w1:p1','LATE PRIVATE OUTPUT'));
     await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field('privateKeyPem')).controller!.text,'NEXT ATTEMPT SYNTHETIC TEXT');
     expect(find.textContaining('LATE PRIVATE OUTPUT'),findsNothing);
     expect(find.textContaining('只读快照 · 连接已关闭'),findsNothing);
     expect(tester.takeException(),isNull);

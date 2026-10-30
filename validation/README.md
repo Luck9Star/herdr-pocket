@@ -1,5 +1,7 @@
 # herdr-pocket 验证入口
 
+2026-10-30 后续的 Penpot v2、两壳视觉接线、CI 与设备结果集中在 [UI v2 记录](../docs/11-ui-v2-integration.md)。下方前阶段测试包和结果保留各自源码版本，不能当作新版已验收。
+
 > 修复测试请先看[最新候选与验收记录](../docs/10-blocker-repair.md)。原baseline包保留原结果；带组合重音修复的是本项目experimental-patched候选，并非官方terminal_view发布，也不代表已经选定UI框架。
 
 2026-10-30：这是并行验证区，不是首版应用。Flutter 与 Tauri 都是候选，未根据原型或编译成功提前选型。

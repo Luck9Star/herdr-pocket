@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-30",
+  "initial": {"boards": 7, "interactions": 18, "tokens": 48, "componentsV2": 0},
+  "failures": [
+    {"stage": "extension", "error": "resize received color as dimension", "effect": "S08-S14 headings and first S08 boxes created", "recovery": "Read exact partial shape state; corrected argument and resumed after existing content"},
+    {"stage": "extension resume", "error": "invalid shape name from multiline text", "effect": "one temporary rectangle and one orphan text", "recovery": "Sanitized names; resumed; removed only the two exact current-run orphan IDs"},
+    {"stage": "hidden supplement", "error": "invalid token from unescaped multiline script string", "effect": "no writes", "recovery": "Escaped script and executed successfully"}
+  ],
+  "verification": "Browser reload plus new MCP readback; design/evidence/v2-after-reload.json",
+  "notVerified": ["real networking", "mobile IME", "screen reader", "all 91 prototype edges by manual clicks"]
+}

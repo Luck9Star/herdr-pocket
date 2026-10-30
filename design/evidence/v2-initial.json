@@ -1,0 +1,526 @@
+{
+  "result": {
+    "page": "7a22df08-251d-8016-8008-de03541c11da",
+    "boards": [
+      {
+        "id": "00000000-0000-0000-0000-000000000000",
+        "name": "Root Frame",
+        "x": 0,
+        "y": 0,
+        "w": 0.01,
+        "h": 0.01
+      },
+      {
+        "id": "7a22df08-251d-8016-8008-de045ec11db9",
+        "name": "S01 · 手机看板 · 现代化主机与会话管理",
+        "x": 0,
+        "y": 0,
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "7a22df08-251d-8016-8008-de04a20d928d",
+        "name": "S02 · 终端观察模式 · 安全只读与画面监控",
+        "x": 450,
+        "y": 0,
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "name": "S03 · 逐键输入模式 · 辅助键盘与实时发键",
+        "x": 900,
+        "y": 0,
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "name": "S04 · 草稿编辑模式 · 多行输入与安全发送",
+        "x": 1350,
+        "y": 0,
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "name": "S05 · 扫码配对 · 主机资料核对与安全授权",
+        "x": 1800,
+        "y": 0,
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "e6d238f0-ac08-8028-8008-de092a3fab18",
+        "name": "S06 · 桌面工作台 · 双分屏终端与单输入焦点",
+        "x": 0,
+        "y": 920,
+        "w": 1439.9999618530273,
+        "h": 900
+      },
+      {
+        "id": "e6d238f0-ac08-8028-8008-de099c80f00a",
+        "name": "S07 · 设计规范与工程组件库 · 视觉变量与开发落地架构",
+        "x": 1500,
+        "y": 920,
+        "w": 1200,
+        "h": 900
+      }
+    ],
+    "sets": [
+      {
+        "name": "herdr-pocket/semantic",
+        "active": true,
+        "tokens": [
+          {
+            "name": "color.surface",
+            "type": "color",
+            "value": "#F6F7F8"
+          },
+          {
+            "name": "color.panel",
+            "type": "color",
+            "value": "#FFFFFF"
+          },
+          {
+            "name": "color.ink",
+            "type": "color",
+            "value": "#15252B"
+          },
+          {
+            "name": "color.muted",
+            "type": "color",
+            "value": "#4D626B"
+          },
+          {
+            "name": "color.line",
+            "type": "color",
+            "value": "#D5DEE2"
+          },
+          {
+            "name": "color.accent",
+            "type": "color",
+            "value": "#176859"
+          },
+          {
+            "name": "color.accentSoft",
+            "type": "color",
+            "value": "#E6F3EF"
+          },
+          {
+            "name": "color.warning",
+            "type": "color",
+            "value": "#714A0A"
+          },
+          {
+            "name": "color.warningSoft",
+            "type": "color",
+            "value": "#FFF3D7"
+          },
+          {
+            "name": "color.danger",
+            "type": "color",
+            "value": "#A52F35"
+          },
+          {
+            "name": "color.dangerSoft",
+            "type": "color",
+            "value": "#FCECEE"
+          },
+          {
+            "name": "color.terminal",
+            "type": "color",
+            "value": "#142329"
+          },
+          {
+            "name": "color.terminalInk",
+            "type": "color",
+            "value": "#D8E5E7"
+          },
+          {
+            "name": "color.focus",
+            "type": "color",
+            "value": "#007D70"
+          },
+          {
+            "name": "space.xs",
+            "type": "spacing",
+            "value": "4"
+          },
+          {
+            "name": "space.sm",
+            "type": "spacing",
+            "value": "8"
+          },
+          {
+            "name": "space.md",
+            "type": "spacing",
+            "value": "16"
+          },
+          {
+            "name": "space.lg",
+            "type": "spacing",
+            "value": "24"
+          },
+          {
+            "name": "space.xl",
+            "type": "spacing",
+            "value": "32"
+          },
+          {
+            "name": "space.touch",
+            "type": "spacing",
+            "value": "48"
+          },
+          {
+            "name": "type.caption",
+            "type": "fontSizes",
+            "value": "12"
+          },
+          {
+            "name": "type.body",
+            "type": "fontSizes",
+            "value": "14"
+          },
+          {
+            "name": "type.title",
+            "type": "fontSizes",
+            "value": "24"
+          },
+          {
+            "name": "radius.control",
+            "type": "borderRadius",
+            "value": "8"
+          },
+          {
+            "name": "focus.width",
+            "type": "borderWidth",
+            "value": "2"
+          }
+        ]
+      },
+      {
+        "name": "herdr-pocket/tokens-v2",
+        "active": true,
+        "tokens": [
+          {
+            "name": "v2.color.bg.canvas",
+            "type": "color",
+            "value": "#F8FAFC"
+          },
+          {
+            "name": "v2.color.bg.card",
+            "type": "color",
+            "value": "#FFFFFF"
+          },
+          {
+            "name": "v2.color.bg.cardSubtle",
+            "type": "color",
+            "value": "#F1F5F9"
+          },
+          {
+            "name": "v2.color.border.subtle",
+            "type": "color",
+            "value": "#E2E8F0"
+          },
+          {
+            "name": "v2.color.border.strong",
+            "type": "color",
+            "value": "#CBD5E1"
+          },
+          {
+            "name": "v2.color.text.primary",
+            "type": "color",
+            "value": "#0F172A"
+          },
+          {
+            "name": "v2.color.text.secondary",
+            "type": "color",
+            "value": "#475569"
+          },
+          {
+            "name": "v2.color.text.muted",
+            "type": "color",
+            "value": "#94A3B8"
+          },
+          {
+            "name": "v2.color.brand.primary",
+            "type": "color",
+            "value": "#4F46E5"
+          },
+          {
+            "name": "v2.color.brand.hover",
+            "type": "color",
+            "value": "#4338CA"
+          },
+          {
+            "name": "v2.color.brand.soft",
+            "type": "color",
+            "value": "#EEF2FF"
+          },
+          {
+            "name": "v2.color.brand.border",
+            "type": "color",
+            "value": "#C7D2FE"
+          },
+          {
+            "name": "v2.color.status.online",
+            "type": "color",
+            "value": "#10B981"
+          },
+          {
+            "name": "v2.color.status.onlineBg",
+            "type": "color",
+            "value": "#ECFDF5"
+          },
+          {
+            "name": "v2.color.status.warning",
+            "type": "color",
+            "value": "#F59E0B"
+          },
+          {
+            "name": "v2.color.status.warningBg",
+            "type": "color",
+            "value": "#FEF3C7"
+          },
+          {
+            "name": "v2.color.status.danger",
+            "type": "color",
+            "value": "#F43F5E"
+          },
+          {
+            "name": "v2.color.status.dangerBg",
+            "type": "color",
+            "value": "#FFF1F2"
+          },
+          {
+            "name": "v2.color.terminal.bg",
+            "type": "color",
+            "value": "#0B0F17"
+          },
+          {
+            "name": "v2.color.terminal.surface",
+            "type": "color",
+            "value": "#111827"
+          },
+          {
+            "name": "v2.color.terminal.border",
+            "type": "color",
+            "value": "#1F2937"
+          },
+          {
+            "name": "v2.color.terminal.text",
+            "type": "color",
+            "value": "#E6EDF3"
+          },
+          {
+            "name": "v2.color.terminal.muted",
+            "type": "color",
+            "value": "#7D8B99"
+          },
+          {
+            "name": "v2.color.terminal.accent",
+            "type": "color",
+            "value": "#38BDF8"
+          },
+          {
+            "name": "v2.color.terminal.success",
+            "type": "color",
+            "value": "#34D399"
+          },
+          {
+            "name": "v2.color.terminal.cursor",
+            "type": "color",
+            "value": "#818CF8"
+          },
+          {
+            "name": "v2.color.terminal.keyBg",
+            "type": "color",
+            "value": "#1E293B"
+          },
+          {
+            "name": "v2.color.terminal.keyActive",
+            "type": "color",
+            "value": "#4F46E5"
+          },
+          {
+            "name": "v2.space.4",
+            "type": "spacing",
+            "value": "4"
+          },
+          {
+            "name": "v2.space.8",
+            "type": "spacing",
+            "value": "8"
+          },
+          {
+            "name": "v2.space.12",
+            "type": "spacing",
+            "value": "12"
+          },
+          {
+            "name": "v2.space.16",
+            "type": "spacing",
+            "value": "16"
+          },
+          {
+            "name": "v2.space.20",
+            "type": "spacing",
+            "value": "20"
+          },
+          {
+            "name": "v2.space.24",
+            "type": "spacing",
+            "value": "24"
+          },
+          {
+            "name": "v2.space.32",
+            "type": "spacing",
+            "value": "32"
+          },
+          {
+            "name": "v2.type.micro",
+            "type": "fontSizes",
+            "value": "11"
+          },
+          {
+            "name": "v2.type.caption",
+            "type": "fontSizes",
+            "value": "12"
+          },
+          {
+            "name": "v2.type.bodySm",
+            "type": "fontSizes",
+            "value": "13"
+          },
+          {
+            "name": "v2.type.body",
+            "type": "fontSizes",
+            "value": "14"
+          },
+          {
+            "name": "v2.type.bodyLg",
+            "type": "fontSizes",
+            "value": "16"
+          },
+          {
+            "name": "v2.type.subhead",
+            "type": "fontSizes",
+            "value": "18"
+          },
+          {
+            "name": "v2.type.title",
+            "type": "fontSizes",
+            "value": "22"
+          },
+          {
+            "name": "v2.type.display",
+            "type": "fontSizes",
+            "value": "28"
+          },
+          {
+            "name": "v2.radius.xs",
+            "type": "borderRadius",
+            "value": "4"
+          },
+          {
+            "name": "v2.radius.sm",
+            "type": "borderRadius",
+            "value": "6"
+          },
+          {
+            "name": "v2.radius.md",
+            "type": "borderRadius",
+            "value": "10"
+          },
+          {
+            "name": "v2.radius.lg",
+            "type": "borderRadius",
+            "value": "16"
+          },
+          {
+            "name": "v2.radius.full",
+            "type": "borderRadius",
+            "value": "999"
+          }
+        ]
+      }
+    ],
+    "components": [
+      {
+        "id": "c1974894-3caf-8067-8008-ddd4294882c2",
+        "name": "current"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd428b13e64",
+        "name": "primary"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd429bf94cd",
+        "name": "paused"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd428d9e7d3",
+        "name": "disabled"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd429b10a7f",
+        "name": "focused"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd42935d476",
+        "name": "waiting"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd428ebc942",
+        "name": "live"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd429241a71",
+        "name": "ready"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd429e4aef2",
+        "name": "impact"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd4297eb47d",
+        "name": "draft"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd4299e1b42",
+        "name": "latched"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd428c6b6d5",
+        "name": "secondary"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd42910dcaa",
+        "name": "blocked"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd4296c4e87",
+        "name": "direct"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd4298db279",
+        "name": "released"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd429cfe256",
+        "name": "invalid"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd428fe5a72",
+        "name": "stale"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd42959c50c",
+        "name": "observe"
+      }
+    ],
+    "shapes": 630
+  },
+  "log": ""
+}

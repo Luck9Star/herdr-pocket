@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-30",
+  "scope": "Independent parent-agent live MCP readback and review of saved evidence; not device or network proof",
+  "penpot": {
+    "fileId": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "pageId": "7a22df08-251d-8016-8008-de03541c11da",
+    "visibleBoards": 16,
+    "texts": 462,
+    "interactions": 91,
+    "dangling": [],
+    "v1": {
+      "visibleBoards": 57,
+      "interactions": 205
+    },
+    "orphanShapes": []
+  },
+  "penpotTokens": {
+    "herdr-pocket/semantic": 25,
+    "herdr-pocket/tokens-v2": 53
+  },
+  "v2Components": 4,
+  "rawReadbackSHA256": "bfaafaa3b42f2c0a992aa3ff1092b85681f80ef359df92ed29360ce4a2cb9fd8",
+  "tauriEvidenceFilesVerified": 11,
+  "tauriEvidenceSource": "45b96d60290015b8327a678f2d7344f84edcb534",
+  "designTokensSHA256": "23579f1c87d0e2bcd1679d42a343b118cc95cfec6a7ec8ea1c57179bd132a0e5",
+  "visualReview": [
+    "Penpot S07 engineering contract",
+    "Penpot S08 unknown result",
+    "Tauri 390px browser page"
+  ],
+  "findings": [
+    "S07 now keeps both five-platform candidates and remote-only SSH/herdr",
+    "S08 offers restore/read-only record and no replay",
+    "Tauri narrow-screen desktop split control fixed by CSS in source 224d143; earlier browser screenshots preserved",
+    "S13 helper output corrected after this full readback to request-bound response; separately verified in design/evidence/v2-request-binding-readback.json"
+  ],
+  "rawReadbackFile": "penpot-independent-readback.json",
+  "rawTextArchives": [
+    {
+      "path": "docs/evidence/tauri/v2-20261030/unknown-state.txt.gz",
+      "rawSHA256": "f2e16f353236927245d4598c4938ab41b88a5079f08849e98ad703d9f7fab308",
+      "archiveSHA256": "2f3d183e44110e45f386ff90d273b07c619aa2527b6eaf56e88b61d595d21a06"
+    },
+    {
+      "path": "docs/evidence/ui-v2/macos/tauri-native-ax.txt.gz",
+      "rawSHA256": "a4ea722daacfddbad474e9e751d46925e7e7bb39086d379b8369caa60164ab3d",
+      "archiveSHA256": "9bc1ad953c876f41eb8c035d42f581631db3230a4b2aac4b17e193f1d5c4c2cb"
+    }
+  ]
+}

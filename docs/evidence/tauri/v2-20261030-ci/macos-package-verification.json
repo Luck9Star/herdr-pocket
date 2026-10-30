@@ -1,0 +1,31 @@
+{
+  "sourceSHA": "224d143f1a545fc64257f6cc46a2ba177c675237",
+  "runId": 41014249412,
+  "jobId": 123926958205,
+  "artifactId": 12958494516,
+  "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412/artifacts/12958494516",
+  "verifiedFiles": {
+    "browser-preview.zip": "c2e02469b6d7b6e3cfdab88b2af7364cbd7080a70ef13cf991921cc87a17f8b3",
+    "build-manifest.json": "1679715573d47900a4e6532ddf08309681e0d3a63f1be2c24dbd1383a335ba72",
+    "core-Cargo.lock": "7445550bff5bfee1bf5e2fd86d7597dfabf3592e536efacafd442abc2da910ca",
+    "herdr-pocket-tauri-probe.app.zip": "ab123527b9f57ca89e9a07aba549af0fc1d40499fc1f7b9f7946108f28625c67",
+    "shared/README.md": "bddcd312c04669f5627e7ac951acb0de75d95d4871428e0cfc0b4ac65f10871f",
+    "shared/design-tokens-v2.json": "23579f1c87d0e2bcd1679d42a343b118cc95cfec6a7ec8ea1c57179bd132a0e5",
+    "shared/fixture.json": "ad2eca3667445764d501ecb6ab53079232850c913626f433b167d1cdb97d7ab3",
+    "shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+    "shared/fonts/LICENSE-JetBrainsMono.txt": "30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad",
+    "shared/fonts/LICENSE-Nerd-Fonts.txt": "1f6ad4edae6479aaace3112ede5279a23284ae54b2a34db66357aef5f64df160",
+    "shared/load-chunk.txt": "2a3b22f4933885f0b1bedf391ee859ec0348733e349194aae3c71afdc9f697b8",
+    "shared/platform-matrix.json": "ad7064d9e6476f8c7a9096949d2fb3a90cffb571cc464cfa186effc80fe3c065",
+    "shared/result-template.json": "6f917108e49dee358ddcd70f3bf37ad2817944aeec7c2524f412fa54b327a9f9",
+    "src-tauri-Cargo.lock": "1a131afae0bd6c2aa7a589ad7095a89a8b383cedf612ff39e67114bce495037f",
+    "tauri-package-lock.json": "44f29651818b66a0999fa8be850eae259a86c4144d98d797402b036115bfbece"
+  },
+  "verifiedFileCount": 15,
+  "packageSHA256": "ab123527b9f57ca89e9a07aba549af0fc1d40499fc1f7b9f7946108f28625c67",
+  "appPath": "/tmp/herdr-tauri-v2-224d143.Zp5Eav/unpacked/herdr-pocket-tauri-probe.app",
+  "executable": "/tmp/herdr-tauri-v2-224d143.Zp5Eav/unpacked/herdr-pocket-tauri-probe.app/Contents/MacOS/herdr-pocket-tauri-probe: Mach-O 64-bit executable arm64",
+  "sourceFixturesAndTokens": "all match exact Git source SHA",
+  "launchStatus": "not launched by verification agent",
+  "deviceResult": "unverified"
+}

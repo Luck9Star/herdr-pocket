@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "224d143f1a545fc64257f6cc46a2ba177c675237",
+  "route": "tauri",
+  "platform": "macos",
+  "buildOutcome": "success",
+  "deviceResult": "unverified",
+  "signing": "unsigned-test-only",
+  "runner": {
+    "os": "macOS-15.8.2-arm64-arm-64bit-Mach-O",
+    "architecture": "arm64",
+    "imageVersion": "20261028.0489.1",
+    "imageOS": "macos15"
+  },
+  "toolchains": {
+    "node": "v22.22.2",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
+    "xcode": "Xcode 16.4\nBuild version 16F6"
+  },
+  "versions": {
+    "tauriCore": "2.12.5",
+    "tauriBuild": "2.7.4",
+    "tauriAPI": "2.12.4",
+    "tauriCLI": "2.12.4",
+    "xterm": "6.0.0"
+  },
+  "scope": "Offline renderer/IPC probe; no SSH, herdr or overlay connections; build does not verify devices.",
+  "fixtureSHA256": "ad2eca3667445764d501ecb6ab53079232850c913626f433b167d1cdb97d7ab3",
+  "fontSHA256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+  "designTokensSHA256": "23579f1c87d0e2bcd1679d42a343b118cc95cfec6a7ec8ea1c57179bd132a0e5",
+  "visualBaseline": "herdr-pocket-v2-tech-indigo; shared 16 ANSI colors; fixed 80x24 fixture",
+  "artifacts": [
+    {
+      "file": "browser-preview.zip",
+      "bytes": 1485872,
+      "sha256": "c2e02469b6d7b6e3cfdab88b2af7364cbd7080a70ef13cf991921cc87a17f8b3"
+    },
+    {
+      "file": "core-Cargo.lock",
+      "bytes": 160,
+      "sha256": "7445550bff5bfee1bf5e2fd86d7597dfabf3592e536efacafd442abc2da910ca"
+    },
+    {
+      "file": "herdr-pocket-tauri-probe.app.zip",
+      "bytes": 4249501,
+      "sha256": "ab123527b9f57ca89e9a07aba549af0fc1d40499fc1f7b9f7946108f28625c67"
+    },
+    {
+      "file": "src-tauri-Cargo.lock",
+      "bytes": 104082,
+      "sha256": "1a131afae0bd6c2aa7a589ad7095a89a8b383cedf612ff39e67114bce495037f"
+    },
+    {
+      "file": "tauri-package-lock.json",
+      "bytes": 33808,
+      "sha256": "44f29651818b66a0999fa8be850eae259a86c4144d98d797402b036115bfbece"
+    }
+  ],
+  "nativeArtifactStatus": "present-unverified"
+}

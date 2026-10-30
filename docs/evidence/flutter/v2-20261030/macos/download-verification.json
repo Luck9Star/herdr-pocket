@@ -1,0 +1,89 @@
+{
+  "sourceCommit": "7daa8a2341a0bc4270a962c3cc9aeb4906084b8f",
+  "filesSha256": {
+    "candidate-macos-render.log": "36c5e60ab2ff013b40ab3c34dd2710f726a140c57d6d95f0e072d7852fa9b06f",
+    "candidate-manifest.json": "3b42cbd9d35e0bb53b13656375627ccbce99043812b03fb3a8e0e6c2dc8444e0",
+    "probe-results/ascii-base.png": "3ec29169e3ef661ce7eaa6d6d81260d6f9018ffab26533de226b2b725014eedf",
+    "probe-results/ascii-combining.png": "e32438d75e8a01c9afd732a7b4829e4eb1b7cf787f4a51aa9d97dda1cecdb509",
+    "probe-results/combining-render.json": "3fce9f3c3a25036901cdca85c2ce87fd002ab5c4c9d2da9dae1cc4160e481978",
+    "probe-results/regression/ascii-actual.png": "cad2049980fef29fa3af6ef5b5f80a767d5d6d00afd4fd81c8899b3994d9bea2",
+    "probe-results/regression/ascii-neighbors-actual.png": "1140f3c847cd3d0634909216cee0c89786b66fe6de0dcedd59cb3bba0870a9fa",
+    "probe-results/regression/ascii-neighbors-nfc-reference.png": "1140f3c847cd3d0634909216cee0c89786b66fe6de0dcedd59cb3bba0870a9fa",
+    "probe-results/regression/ascii-textpainter-reference.png": "cad2049980fef29fa3af6ef5b5f80a767d5d6d00afd4fd81c8899b3994d9bea2",
+    "probe-results/regression/cache-base-first.png": "77b4fc41664279b078d8a06646f52be33ad54efbd9acfe71dbd5fc237861fdea",
+    "probe-results/regression/cache-base-recorded.png": "77b4fc41664279b078d8a06646f52be33ad54efbd9acfe71dbd5fc237861fdea",
+    "probe-results/regression/cache-nfc-reference.png": "7f39b7fc097608e09f214db07d1977068ccadb4fa768a107eb560f9cba4da160",
+    "probe-results/regression/cache-repeated.png": "7f39b7fc097608e09f214db07d1977068ccadb4fa768a107eb560f9cba4da160",
+    "probe-results/regression/cache-updated.png": "7f39b7fc097608e09f214db07d1977068ccadb4fa768a107eb560f9cba4da160",
+    "probe-results/regression/focused-block-cursor-actual.png": "de57d2f0eec238c97ee7f2f9bcdd2c0f7ca5e3558e01749632c0de9a5119ff3c",
+    "probe-results/regression/focused-block-cursor-nfc-reference.png": "de57d2f0eec238c97ee7f2f9bcdd2c0f7ca5e3558e01749632c0de9a5119ff3c",
+    "probe-results/regression/results.json": "3de8f27876f81670c3b3e8ec3f5b1ac46e881cdf7e11579a61fe24101e5a5c99",
+    "probe-results/regression/selection-foreground-actual.png": "de57d2f0eec238c97ee7f2f9bcdd2c0f7ca5e3558e01749632c0de9a5119ff3c",
+    "probe-results/regression/selection-foreground-nfc-reference.png": "de57d2f0eec238c97ee7f2f9bcdd2c0f7ca5e3558e01749632c0de9a5119ff3c",
+    "probe-results/regression/sgr-bold-red-actual.png": "5a04ec1c605c7ec9c5b46fe34a3ca953233953ba97bd066ca6a4ed61f5bcdc09",
+    "probe-results/regression/sgr-bold-red-nfc-reference.png": "5a04ec1c605c7ec9c5b46fe34a3ca953233953ba97bd066ca6a4ed61f5bcdc09",
+    "probe-results/regression/sgr-inverse-actual.png": "cc18eb5789df71acb6edc2f08eff49b36a46400bc276799901ea63cc65fd4b74",
+    "probe-results/regression/sgr-inverse-nfc-reference.png": "cc18eb5789df71acb6edc2f08eff49b36a46400bc276799901ea63cc65fd4b74",
+    "probe-results/regression/three-accents-actual.png": "e32438d75e8a01c9afd732a7b4829e4eb1b7cf787f4a51aa9d97dda1cecdb509",
+    "probe-results/regression/three-accents-nfc-reference.png": "e32438d75e8a01c9afd732a7b4829e4eb1b7cf787f4a51aa9d97dda1cecdb509",
+    "probe-results/regression/wide-neighbors-actual.png": "51d5d742fcfb8872a8512c4848769a053a79c43392f5605e465ad8d9759e83fa",
+    "probe-results/regression/wide-neighbors-nfc-reference.png": "51d5d742fcfb8872a8512c4848769a053a79c43392f5605e465ad8d9759e83fa",
+    "probe-results/ui-v2/desktop-split.png": "9d134214f49d94126fee5f47648919f595d02ba287e5cb196dc20cc21f624f08",
+    "probe-results/ui-v2/mobile-observe.png": "575bcb5ba77471254708da35f4806f39c83323db5c17939f1c821f760255d69c",
+    "probe-results/ui-v2/mobile-unknown.png": "51e907b47cd99f0aa4ddf95a593470df9683982f2d460a27a7480d25a5302378",
+    "probe-results/ui-v2/small-mobile-keyboard-draft.png": "b9fda67feebdf2366c3d6664c3aea0a8eb1b2a83baff0cfce0db8a547318ef4a"
+  },
+  "pngReferencePairs": [
+    {
+      "actual": "ascii-actual.png",
+      "reference": "ascii-textpainter-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "ascii-neighbors-actual.png",
+      "reference": "ascii-neighbors-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "focused-block-cursor-actual.png",
+      "reference": "focused-block-cursor-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "selection-foreground-actual.png",
+      "reference": "selection-foreground-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "sgr-bold-red-actual.png",
+      "reference": "sgr-bold-red-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "sgr-inverse-actual.png",
+      "reference": "sgr-inverse-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "three-accents-actual.png",
+      "reference": "three-accents-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "wide-neighbors-actual.png",
+      "reference": "wide-neighbors-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "cache-updated.png",
+      "reference": "cache-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "cache-repeated.png",
+      "reference": "cache-nfc-reference.png",
+      "shaEqual": true
+    }
+  ],
+  "scope": "Downloaded CI evidence; UI headless fallback not native visual/IME acceptance"
+}

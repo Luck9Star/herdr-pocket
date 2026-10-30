@@ -1,0 +1,32 @@
+{
+  "reason": "Preserve original runner log bytes containing trailing whitespace without editing log contents. Download verification manifests continue to describe the original downloaded bytes.",
+  "archives": [
+    {
+      "originalPath": "baseline-7daa8a2-failed.log",
+      "storedPath": "baseline-7daa8a2-failed.log.gz",
+      "originalSha256": "62a911bf73e8ea97de3e356d7644ea502a67b5c43ef54d411a91cec47105b5a1",
+      "gzipSha256": "bbfe9944d32caca8d01dd43bd010ca1076d7c1af6d2c91a8424d741302751c14",
+      "originalBytes": 31255,
+      "gzipBytes": 8739,
+      "roundTripByteIdentical": true
+    },
+    {
+      "originalPath": "cancelled-68db4a0.log",
+      "storedPath": "cancelled-68db4a0.log.gz",
+      "originalSha256": "80e7ec43386310b167e49db5973cbf2c2e520732d41ffc4cc7c01915e1babf53",
+      "gzipSha256": "499721f9e017173387efe46b086f513ab355e7767cf49f40c809c93a525c12f1",
+      "originalBytes": 55288,
+      "gzipBytes": 9546,
+      "roundTripByteIdentical": true
+    },
+    {
+      "originalPath": "ubuntu/candidate-analyze.log",
+      "storedPath": "ubuntu/candidate-analyze.log.gz",
+      "originalSha256": "1bccfe6bb5cfb652f1161361f21d5b9242104601ec056132affb95b73b6683f9",
+      "gzipSha256": "f7c0f76a84e902177b831dbb513e72e5a520b9b4ce8c421f343b411c2482a381",
+      "originalBytes": 96,
+      "gzipBytes": 81,
+      "roundTripByteIdentical": true
+    }
+  ]
+}

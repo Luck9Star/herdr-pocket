@@ -1,0 +1,3291 @@
+{
+  "result": {
+    "fileId": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "pageId": "7a22df08-251d-8016-8008-de03541c11da",
+    "date": "2026-10-30",
+    "boards": [
+      {
+        "id": "7a22df08-251d-8016-8008-de045ec11db9",
+        "name": "S01 · 手机看板 · 现代化主机与会话管理",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "7a22df08-251d-8016-8008-de04a20d928d",
+        "name": "S02 · 终端观察模式 · 安全只读与画面监控",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "name": "S03 · 逐键输入模式 · 辅助键盘与实时发键",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "name": "S04 · 草稿编辑模式 · 多行输入与安全发送",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "name": "S05 · 扫码配对 · 主机资料核对与安全授权",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "e6d238f0-ac08-8028-8008-de092a3fab18",
+        "name": "S06 · 桌面工作台 · 双分屏终端与单输入焦点",
+        "w": 1439.9999618530273,
+        "h": 900
+      },
+      {
+        "id": "e6d238f0-ac08-8028-8008-de099c80f00a",
+        "name": "S07 · 设计规范与工程组件库 · 视觉变量与开发落地架构",
+        "w": 1200,
+        "h": 900
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de215d48f293",
+        "name": "S08 · 发送结果待核实",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de215d5d9029",
+        "name": "S09 · 画面已恢复 · 输入仍锁定",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de215d689c01",
+        "name": "S10 · 主机指纹发生变化",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de215d727761",
+        "name": "S11 · 窄窗口 · 单输入焦点",
+        "w": 719.9999809265137,
+        "h": 900
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de215d7cb45c",
+        "name": "S12 · 已授权 · 尚未验证连接",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de215d8656a9",
+        "name": "S13 · 主机辅助确认与撤销",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de215d8f5309",
+        "name": "S14 · 审查即将发送的内容",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de21c3445a1c",
+        "name": "S15 · 组件状态与可访问性",
+        "w": 1200,
+        "h": 900
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de2255dcbada",
+        "name": "S16 · B 标签 · 从暂停恢复观察",
+        "w": 390.00000953674316,
+        "h": 843.9999580383301
+      }
+    ],
+    "visibleBoards": 16,
+    "texts": 462,
+    "interactions": 91,
+    "edges": [
+      {
+        "source": "7a22df08-251d-8016-8008-de045eed3204",
+        "name": "button / primary",
+        "board": "7a22df08-251d-8016-8008-de045ec11db9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+      },
+      {
+        "source": "7a22df08-251d-8016-8008-de045ef0143f",
+        "name": "+ 配对添加",
+        "board": "7a22df08-251d-8016-8008-de045ec11db9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+      },
+      {
+        "source": "7a22df08-251d-8016-8008-de045f4a224a",
+        "name": "button / secondary",
+        "board": "7a22df08-251d-8016-8008-de045ec11db9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "7a22df08-251d-8016-8008-de045f4c3e63",
+        "name": "👁️ 观察模式",
+        "board": "7a22df08-251d-8016-8008-de045ec11db9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "7a22df08-251d-8016-8008-de045f4f99a0",
+        "name": "button / primary",
+        "board": "7a22df08-251d-8016-8008-de045ec11db9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "7a22df08-251d-8016-8008-de045f516b5b",
+        "name": "⌨️ 终端输入",
+        "board": "7a22df08-251d-8016-8008-de045ec11db9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220d3f858b",
+        "name": "hitarea-7a22df08-251d-8016-8008-de045ef0143f",
+        "board": "7a22df08-251d-8016-8008-de045ec11db9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220d46b8dd",
+        "name": "hitarea-7a22df08-251d-8016-8008-de045f4c3e63",
+        "board": "7a22df08-251d-8016-8008-de045ec11db9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220d4d01bf",
+        "name": "hitarea-7a22df08-251d-8016-8008-de045f516b5b",
+        "board": "7a22df08-251d-8016-8008-de045ec11db9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "7a22df08-251d-8016-8008-de04a2229cc5",
+        "name": "‹ 看板",
+        "board": "7a22df08-251d-8016-8008-de04a20d928d",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "7a22df08-251d-8016-8008-de04a24d55ea",
+        "name": "⌨️ 逐键输入",
+        "board": "7a22df08-251d-8016-8008-de04a20d928d",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "7a22df08-251d-8016-8008-de04a2528911",
+        "name": "✍️ 草稿模式",
+        "board": "7a22df08-251d-8016-8008-de04a20d928d",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+      },
+      {
+        "source": "7a22df08-251d-8016-8008-de04a2a68242",
+        "name": "button / primary",
+        "board": "7a22df08-251d-8016-8008-de04a20d928d",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "7a22df08-251d-8016-8008-de04a2a8737c",
+        "name": "⌨️ 切换至逐键输入模式 (Direct)",
+        "board": "7a22df08-251d-8016-8008-de04a20d928d",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220d5ba4e7",
+        "name": "hitarea-7a22df08-251d-8016-8008-de04a2229cc5",
+        "board": "7a22df08-251d-8016-8008-de04a20d928d",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220d6019ea",
+        "name": "hitarea-7a22df08-251d-8016-8008-de04a24d55ea",
+        "board": "7a22df08-251d-8016-8008-de04a20d928d",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220d64c4cf",
+        "name": "hitarea-7a22df08-251d-8016-8008-de04a2528911",
+        "board": "7a22df08-251d-8016-8008-de04a20d928d",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220d69fe49",
+        "name": "hitarea-7a22df08-251d-8016-8008-de04a2a8737c",
+        "board": "7a22df08-251d-8016-8008-de04a20d928d",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07eaef0f40",
+        "name": "‹ 看板",
+        "board": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07eb07d5df",
+        "name": "👁️ 观察模式",
+        "board": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07eb11e37e",
+        "name": "✍️ 草稿模式",
+        "board": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07ebe771f9",
+        "name": "key-draft",
+        "board": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07ebe8faad",
+        "name": "draft-label",
+        "board": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21c0633a81",
+        "name": "演示：发送时断线 → 核实结果",
+        "board": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d48f293"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220d9dcfe4",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de07eaef0f40",
+        "board": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220da69b8b",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de07eb07d5df",
+        "board": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220db0f7f4",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de07eb11e37e",
+        "board": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220db95dd6",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de07ebe8faad",
+        "board": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220dc166fe",
+        "name": "hitarea-feb2a821-b263-8097-8008-de21c0633a81",
+        "board": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d48f293"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07ebf49010",
+        "name": "‹ 看板",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07ec095892",
+        "name": "👁️ 观察模式",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07ec0bfafe",
+        "name": "⌨️ 逐键输入",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07ec57610f",
+        "name": "button-primary",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8f5309"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07ec593600",
+        "name": "button-label",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8f5309"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07ec60d89f",
+        "name": "button-secondary",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de07ec6255d0",
+        "name": "button-label",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220df96d75",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de07ebf49010",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220e014f16",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de07ec095892",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220e0b8223",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de07ec0bfafe",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220e11e38b",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de07ec593600",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8f5309"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220e188f4e",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de07ec6255d0",
+        "board": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de087537e060",
+        "name": "✕ 取消",
+        "board": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de0875b3fbf5",
+        "name": "button-primary",
+        "board": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d7cb45c"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de0875b59307",
+        "name": "button-label",
+        "board": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d7cb45c"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de0875b899bb",
+        "name": "button-secondary",
+        "board": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de0875ba4152",
+        "name": "button-label",
+        "board": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de0875bd233c",
+        "name": "button-danger",
+        "board": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+      },
+      {
+        "source": "e6d238f0-ac08-8028-8008-de0875bed5b1",
+        "name": "button-label",
+        "board": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220e4f243d",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de087537e060",
+        "board": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220e55192a",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de0875b59307",
+        "board": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d7cb45c"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220e5a9683",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de0875ba4152",
+        "board": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220e5ff50f",
+        "name": "hitarea-e6d238f0-ac08-8028-8008-de0875bed5b1",
+        "board": "e6d238f0-ac08-8028-8008-de087525a40f",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21c068ab6f",
+        "name": "窄窗口与隐藏标签恢复 →",
+        "board": "e6d238f0-ac08-8028-8008-de092a3fab18",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d727761"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de220ee934a8",
+        "name": "hitarea-feb2a821-b263-8097-8008-de21c068ab6f",
+        "board": "e6d238f0-ac08-8028-8008-de092a3fab18",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d727761"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de22561c88e9",
+        "name": "组件状态与可访问性 →",
+        "board": "e6d238f0-ac08-8028-8008-de099c80f00a",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de21c3445a1c"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b771b3e9",
+        "name": "action · 恢复可信连接并获取当前画面",
+        "board": "feb2a821-b263-8097-8008-de215d48f293",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d5d9029"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b773ef06",
+        "name": "恢复可信连接并获取当前画面",
+        "board": "feb2a821-b263-8097-8008-de215d48f293",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d5d9029"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b77a1207",
+        "name": "action · 返回看板",
+        "board": "feb2a821-b263-8097-8008-de215d48f293",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b77c7435",
+        "name": "返回看板",
+        "board": "feb2a821-b263-8097-8008-de215d48f293",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b7a3b5de",
+        "name": "action · 已核实目标与结果，继续输入",
+        "board": "feb2a821-b263-8097-8008-de215d5d9029",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b7a6c1d1",
+        "name": "已核实目标与结果，继续输入",
+        "board": "feb2a821-b263-8097-8008-de215d5d9029",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b7acdf15",
+        "name": "action · 保持观察",
+        "board": "feb2a821-b263-8097-8008-de215d5d9029",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b7afe205",
+        "name": "保持观察",
+        "board": "feb2a821-b263-8097-8008-de215d5d9029",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b7cc9aca",
+        "name": "action · 返回配对资料审查",
+        "board": "feb2a821-b263-8097-8008-de215d689c01",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b7cecc33",
+        "name": "返回配对资料审查",
+        "board": "feb2a821-b263-8097-8008-de215d689c01",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b7d494f3",
+        "name": "action · 取消连接，保留旧信任",
+        "board": "feb2a821-b263-8097-8008-de215d689c01",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b7d69325",
+        "name": "取消连接，保留旧信任",
+        "board": "feb2a821-b263-8097-8008-de215d689c01",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b8813022",
+        "name": "action · 切回宽屏分屏",
+        "board": "feb2a821-b263-8097-8008-de215d727761",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de092a3fab18"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b8837efb",
+        "name": "切回宽屏分屏",
+        "board": "feb2a821-b263-8097-8008-de215d727761",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de092a3fab18"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b888de63",
+        "name": "action · 演示：隐藏标签恢复核验",
+        "board": "feb2a821-b263-8097-8008-de215d727761",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de2255dcbada"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b88b0b77",
+        "name": "演示：隐藏标签恢复核验",
+        "board": "feb2a821-b263-8097-8008-de215d727761",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de2255dcbada"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b7f72417",
+        "name": "action · 演示：三项验证通过 → 看板",
+        "board": "feb2a821-b263-8097-8008-de215d7cb45c",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b7f96cec",
+        "name": "演示：三项验证通过 → 看板",
+        "board": "feb2a821-b263-8097-8008-de215d7cb45c",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b7feac09",
+        "name": "action · 演示：指纹变化 → 阻止连接",
+        "board": "feb2a821-b263-8097-8008-de215d7cb45c",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d689c01"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b8009b87",
+        "name": "演示：指纹变化 → 阻止连接",
+        "board": "feb2a821-b263-8097-8008-de215d7cb45c",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d689c01"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b80653b9",
+        "name": "action · 网络未就绪，保留资料待处理",
+        "board": "feb2a821-b263-8097-8008-de215d7cb45c",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b808bff0",
+        "name": "网络未就绪，保留资料待处理",
+        "board": "feb2a821-b263-8097-8008-de215d7cb45c",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b82564e6",
+        "name": "action · 演示：主机已确认 → 手机扫码",
+        "board": "feb2a821-b263-8097-8008-de215d8656a9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b827ed54",
+        "name": "演示：主机已确认 → 手机扫码",
+        "board": "feb2a821-b263-8097-8008-de215d8656a9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b839a5c7",
+        "name": "action · 返回看板",
+        "board": "feb2a821-b263-8097-8008-de215d8656a9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b83bd26d",
+        "name": "返回看板",
+        "board": "feb2a821-b263-8097-8008-de215d8656a9",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b8539fcb",
+        "name": "action · 演示：仅发送一次 → 返回观察",
+        "board": "feb2a821-b263-8097-8008-de215d8f5309",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b85608f9",
+        "name": "演示：仅发送一次 → 返回观察",
+        "board": "feb2a821-b263-8097-8008-de215d8f5309",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b85b549d",
+        "name": "action · 演示：发送中断 → 结果待核实",
+        "board": "feb2a821-b263-8097-8008-de215d8f5309",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d48f293"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b85da869",
+        "name": "演示：发送中断 → 结果待核实",
+        "board": "feb2a821-b263-8097-8008-de215d8f5309",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d48f293"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b8631595",
+        "name": "action · 返回继续编辑",
+        "board": "feb2a821-b263-8097-8008-de215d8f5309",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21b8654888",
+        "name": "返回继续编辑",
+        "board": "feb2a821-b263-8097-8008-de215d8f5309",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21c37e3b3b",
+        "name": "action · 返回手机看板",
+        "board": "feb2a821-b263-8097-8008-de21c3445a1c",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de21c3808f7c",
+        "name": "返回手机看板",
+        "board": "feb2a821-b263-8097-8008-de21c3445a1c",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de22560c645c",
+        "name": "action · 返回工作台，选择输入目标",
+        "board": "feb2a821-b263-8097-8008-de2255dcbada",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d727761"
+      },
+      {
+        "source": "feb2a821-b263-8097-8008-de22560ee378",
+        "name": "返回工作台，选择输入目标",
+        "board": "feb2a821-b263-8097-8008-de2255dcbada",
+        "trigger": "click",
+        "type": "navigate-to",
+        "destination": "feb2a821-b263-8097-8008-de215d727761"
+      }
+    ],
+    "dangling": [],
+    "components": [
+      {
+        "id": "c1974894-3caf-8067-8008-ddd4294882c2",
+        "name": "current",
+        "path": "target / target"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd428b13e64",
+        "name": "primary",
+        "path": "action / action"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd429bf94cd",
+        "name": "paused",
+        "path": "tab / tab"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd428d9e7d3",
+        "name": "disabled",
+        "path": "action / action"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd429b10a7f",
+        "name": "focused",
+        "path": "tab / tab"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd42935d476",
+        "name": "waiting",
+        "path": "network / network"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd428ebc942",
+        "name": "live",
+        "path": "status / status"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd429241a71",
+        "name": "ready",
+        "path": "network / network"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd429e4aef2",
+        "name": "impact",
+        "path": "review / review"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd4297eb47d",
+        "name": "draft",
+        "path": "mode / mode"
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de21c371be52",
+        "name": "Host key changed · 停止",
+        "path": "v2"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd4299e1b42",
+        "name": "latched",
+        "path": "key / key"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd428c6b6d5",
+        "name": "secondary",
+        "path": "action / action"
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de21c36a276f",
+        "name": "Unknown · 输入锁定",
+        "path": "v2"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd42910dcaa",
+        "name": "blocked",
+        "path": "status / status"
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de21c35b49b5",
+        "name": "Primary · 操作",
+        "path": "v2"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd4296c4e87",
+        "name": "direct",
+        "path": "mode / mode"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd4298db279",
+        "name": "released",
+        "path": "key / key"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd429cfe256",
+        "name": "invalid",
+        "path": "field / field"
+      },
+      {
+        "id": "feb2a821-b263-8097-8008-de21c363205b",
+        "name": "Success · 在线",
+        "path": "v2"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd428fe5a72",
+        "name": "stale",
+        "path": "status / status"
+      },
+      {
+        "id": "c1974894-3caf-8067-8008-ddd42959c50c",
+        "name": "observe",
+        "path": "mode / mode"
+      }
+    ],
+    "tokenSets": [
+      {
+        "name": "herdr-pocket/semantic",
+        "count": 25,
+        "tokens": [
+          {
+            "name": "color.surface",
+            "type": "color",
+            "value": "#F6F7F8"
+          },
+          {
+            "name": "color.panel",
+            "type": "color",
+            "value": "#FFFFFF"
+          },
+          {
+            "name": "color.ink",
+            "type": "color",
+            "value": "#15252B"
+          },
+          {
+            "name": "color.muted",
+            "type": "color",
+            "value": "#4D626B"
+          },
+          {
+            "name": "color.line",
+            "type": "color",
+            "value": "#D5DEE2"
+          },
+          {
+            "name": "color.accent",
+            "type": "color",
+            "value": "#176859"
+          },
+          {
+            "name": "color.accentSoft",
+            "type": "color",
+            "value": "#E6F3EF"
+          },
+          {
+            "name": "color.warning",
+            "type": "color",
+            "value": "#714A0A"
+          },
+          {
+            "name": "color.warningSoft",
+            "type": "color",
+            "value": "#FFF3D7"
+          },
+          {
+            "name": "color.danger",
+            "type": "color",
+            "value": "#A52F35"
+          },
+          {
+            "name": "color.dangerSoft",
+            "type": "color",
+            "value": "#FCECEE"
+          },
+          {
+            "name": "color.terminal",
+            "type": "color",
+            "value": "#142329"
+          },
+          {
+            "name": "color.terminalInk",
+            "type": "color",
+            "value": "#D8E5E7"
+          },
+          {
+            "name": "color.focus",
+            "type": "color",
+            "value": "#007D70"
+          },
+          {
+            "name": "space.xs",
+            "type": "spacing",
+            "value": "4"
+          },
+          {
+            "name": "space.sm",
+            "type": "spacing",
+            "value": "8"
+          },
+          {
+            "name": "space.md",
+            "type": "spacing",
+            "value": "16"
+          },
+          {
+            "name": "space.lg",
+            "type": "spacing",
+            "value": "24"
+          },
+          {
+            "name": "space.xl",
+            "type": "spacing",
+            "value": "32"
+          },
+          {
+            "name": "space.touch",
+            "type": "spacing",
+            "value": "48"
+          },
+          {
+            "name": "type.caption",
+            "type": "fontSizes",
+            "value": "12"
+          },
+          {
+            "name": "type.body",
+            "type": "fontSizes",
+            "value": "14"
+          },
+          {
+            "name": "type.title",
+            "type": "fontSizes",
+            "value": "24"
+          },
+          {
+            "name": "radius.control",
+            "type": "borderRadius",
+            "value": "8"
+          },
+          {
+            "name": "focus.width",
+            "type": "borderWidth",
+            "value": "2"
+          }
+        ]
+      },
+      {
+        "name": "herdr-pocket/tokens-v2",
+        "count": 53,
+        "tokens": [
+          {
+            "name": "v2.color.bg.canvas",
+            "type": "color",
+            "value": "#F8FAFC"
+          },
+          {
+            "name": "v2.color.bg.card",
+            "type": "color",
+            "value": "#FFFFFF"
+          },
+          {
+            "name": "v2.color.bg.cardSubtle",
+            "type": "color",
+            "value": "#F1F5F9"
+          },
+          {
+            "name": "v2.color.border.subtle",
+            "type": "color",
+            "value": "#E2E8F0"
+          },
+          {
+            "name": "v2.color.border.strong",
+            "type": "color",
+            "value": "#CBD5E1"
+          },
+          {
+            "name": "v2.color.text.primary",
+            "type": "color",
+            "value": "#0F172A"
+          },
+          {
+            "name": "v2.color.text.secondary",
+            "type": "color",
+            "value": "#475569"
+          },
+          {
+            "name": "v2.color.text.muted",
+            "type": "color",
+            "value": "#94A3B8"
+          },
+          {
+            "name": "v2.color.brand.primary",
+            "type": "color",
+            "value": "#4F46E5"
+          },
+          {
+            "name": "v2.color.brand.hover",
+            "type": "color",
+            "value": "#4338CA"
+          },
+          {
+            "name": "v2.color.brand.soft",
+            "type": "color",
+            "value": "#EEF2FF"
+          },
+          {
+            "name": "v2.color.brand.border",
+            "type": "color",
+            "value": "#C7D2FE"
+          },
+          {
+            "name": "v2.color.status.online",
+            "type": "color",
+            "value": "#10B981"
+          },
+          {
+            "name": "v2.color.status.onlineBg",
+            "type": "color",
+            "value": "#ECFDF5"
+          },
+          {
+            "name": "v2.color.status.warning",
+            "type": "color",
+            "value": "#F59E0B"
+          },
+          {
+            "name": "v2.color.status.warningBg",
+            "type": "color",
+            "value": "#FEF3C7"
+          },
+          {
+            "name": "v2.color.status.danger",
+            "type": "color",
+            "value": "#F43F5E"
+          },
+          {
+            "name": "v2.color.status.dangerBg",
+            "type": "color",
+            "value": "#FFF1F2"
+          },
+          {
+            "name": "v2.color.terminal.bg",
+            "type": "color",
+            "value": "#0B0F17"
+          },
+          {
+            "name": "v2.color.terminal.surface",
+            "type": "color",
+            "value": "#111827"
+          },
+          {
+            "name": "v2.color.terminal.border",
+            "type": "color",
+            "value": "#1F2937"
+          },
+          {
+            "name": "v2.color.terminal.text",
+            "type": "color",
+            "value": "#E6EDF3"
+          },
+          {
+            "name": "v2.color.terminal.muted",
+            "type": "color",
+            "value": "#7D8B99"
+          },
+          {
+            "name": "v2.color.terminal.accent",
+            "type": "color",
+            "value": "#38BDF8"
+          },
+          {
+            "name": "v2.color.terminal.success",
+            "type": "color",
+            "value": "#34D399"
+          },
+          {
+            "name": "v2.color.terminal.cursor",
+            "type": "color",
+            "value": "#818CF8"
+          },
+          {
+            "name": "v2.color.terminal.keyBg",
+            "type": "color",
+            "value": "#1E293B"
+          },
+          {
+            "name": "v2.color.terminal.keyActive",
+            "type": "color",
+            "value": "#4F46E5"
+          },
+          {
+            "name": "v2.space.4",
+            "type": "spacing",
+            "value": "4"
+          },
+          {
+            "name": "v2.space.8",
+            "type": "spacing",
+            "value": "8"
+          },
+          {
+            "name": "v2.space.12",
+            "type": "spacing",
+            "value": "12"
+          },
+          {
+            "name": "v2.space.16",
+            "type": "spacing",
+            "value": "16"
+          },
+          {
+            "name": "v2.space.20",
+            "type": "spacing",
+            "value": "20"
+          },
+          {
+            "name": "v2.space.24",
+            "type": "spacing",
+            "value": "24"
+          },
+          {
+            "name": "v2.space.32",
+            "type": "spacing",
+            "value": "32"
+          },
+          {
+            "name": "v2.type.micro",
+            "type": "fontSizes",
+            "value": "11"
+          },
+          {
+            "name": "v2.type.caption",
+            "type": "fontSizes",
+            "value": "12"
+          },
+          {
+            "name": "v2.type.bodySm",
+            "type": "fontSizes",
+            "value": "13"
+          },
+          {
+            "name": "v2.type.body",
+            "type": "fontSizes",
+            "value": "14"
+          },
+          {
+            "name": "v2.type.bodyLg",
+            "type": "fontSizes",
+            "value": "16"
+          },
+          {
+            "name": "v2.type.subhead",
+            "type": "fontSizes",
+            "value": "18"
+          },
+          {
+            "name": "v2.type.title",
+            "type": "fontSizes",
+            "value": "22"
+          },
+          {
+            "name": "v2.type.display",
+            "type": "fontSizes",
+            "value": "28"
+          },
+          {
+            "name": "v2.radius.xs",
+            "type": "borderRadius",
+            "value": "4"
+          },
+          {
+            "name": "v2.radius.sm",
+            "type": "borderRadius",
+            "value": "6"
+          },
+          {
+            "name": "v2.radius.md",
+            "type": "borderRadius",
+            "value": "10"
+          },
+          {
+            "name": "v2.radius.lg",
+            "type": "borderRadius",
+            "value": "16"
+          },
+          {
+            "name": "v2.radius.full",
+            "type": "borderRadius",
+            "value": "999"
+          },
+          {
+            "name": "v2.color.text.mutedReadable",
+            "type": "color",
+            "value": "#64748B"
+          },
+          {
+            "name": "v2.color.text.successReadable",
+            "type": "color",
+            "value": "#047857"
+          },
+          {
+            "name": "v2.color.text.warningReadable",
+            "type": "color",
+            "value": "#92400E"
+          },
+          {
+            "name": "v2.color.text.dangerReadable",
+            "type": "color",
+            "value": "#BE123C"
+          },
+          {
+            "name": "v2.color.text.infoReadable",
+            "type": "color",
+            "value": "#0369A1"
+          }
+        ]
+      }
+    ],
+    "v1": {
+      "visibleBoards": 57,
+      "interactions": 205
+    },
+    "orphanShapes": [],
+    "textsByBoard": [
+      {
+        "name": "S01 · 手机看板 · 现代化主机与会话管理",
+        "texts": [
+          {
+            "id": "7a22df08-251d-8016-8008-de045ed3384b",
+            "text": "16:40"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045edc28ff",
+            "text": "5G  100%"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045ee29ea7",
+            "text": "HP"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045ee65752",
+            "text": "Herdr Pocket"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045ee98a80",
+            "text": "2 台在线主机 · 3 个活跃 Session"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045ef0143f",
+            "text": "+ 配对添加"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045ef8ee05",
+            "text": "全部主机 3"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f017734",
+            "text": "待处理 1"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f093f48",
+            "text": "运行中 2"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f114d68",
+            "text": "网络"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f1b0c89",
+            "text": "工作站 · Workstation-01"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f1f7e3d",
+            "text": "Tailscale 100.86.12.4 · 24ms · Ubuntu"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f260d82",
+            "text": "在线"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f2fbbf8",
+            "text": "design-session / agent-a"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f3ea599",
+            "text": "待输入 Awaiting"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f441d05",
+            "text": "› agent-a: task completed. review needed"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f479a85",
+            "text": "› git status: +124 -18 in src/core/session.rs ▍"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f4c3e63",
+            "text": "👁️ 观察模式"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f516b5b",
+            "text": "⌨️ 终端输入"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f552f2b",
+            "text": "build-session / agent-b"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f5bc5ee",
+            "text": "运行中"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f61a1df",
+            "text": "cargo test --workspace [42/42 passed] · 16:39:50"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f6baf40",
+            "text": "实验机 · Lab-Node-02"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f7055fd",
+            "text": "EasyTier 10.144.1.5 · 18ms · macOS"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f779b6f",
+            "text": "已就绪"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f7fbf47",
+            "text": "test-session / agent-c"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f86a71e",
+            "text": "就绪 Idle"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f8b945c",
+            "text": "上次运行 16:30:10 · 待机中"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f92305b",
+            "text": "查看会话"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f9ba884",
+            "text": "备用机 · Backup-03"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045f9fdb41",
+            "text": "ZeroTier · 节点未入网"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fa6f908",
+            "text": "等待授权"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fae802e",
+            "text": "查看网络入网指引与修复建议"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fb630d9",
+            "text": "默认观察 · 输入显式发送 · 布局不改变远端尺寸"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fc6f26d",
+            "text": "⬡"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fca6ba9",
+            "text": "看板"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fcdde96",
+            "text": "⌨"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fd13171",
+            "text": "终端"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fd58d9e",
+            "text": "2"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fd8e93c",
+            "text": "🌐"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fdc3f90",
+            "text": "网络"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fdf68b7",
+            "text": "⚙"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de045fe2474e",
+            "text": "设置"
+          }
+        ]
+      },
+      {
+        "name": "S02 · 终端观察模式 · 安全只读与画面监控",
+        "texts": [
+          {
+            "id": "7a22df08-251d-8016-8008-de04a2151fda",
+            "text": "16:40"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a21e0d6c",
+            "text": "5G  100%"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a2229cc5",
+            "text": "‹ 看板"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a225f707",
+            "text": "workstation / agent-a"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a22b01b1",
+            "text": "● 已连接"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a233e795",
+            "text": "● agent-a"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a23918c5",
+            "text": "○ agent-b"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a23e30ee",
+            "text": "+"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a2484ba6",
+            "text": "👁️ 观察模式"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a24d55ea",
+            "text": "⌨️ 逐键输入"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a2528911",
+            "text": "✍️ 草稿模式"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a259f308",
+            "text": "🛡️ 观察模式：按键不会发送到远端 PTY · 触控仅在本地滚动"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a2688e22",
+            "text": "agent-a @ workstation · 80x24"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a26d7d9b",
+            "text": "⤢"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a27209bd",
+            "text": "❯ herdr session attach --target agent-a"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a276d754",
+            "text": "[2026-10-30 16:40:02] Connected via Tailscale (24ms)"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a27ae52b",
+            "text": "[HERDR] Session state: WAITING_FOR_INPUT"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a27f3c9e",
+            "text": "[AGENT] Task completed. Waiting for developer review."
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a28344cc",
+            "text": "[DIFF] Changes in src/core/session.rs (+142, -18):"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a28793ff",
+            "text": "  + pub struct SessionHandler { pty: PtyHandle }"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a28b931c",
+            "text": "  + impl Stream for SessionHandler { ... }"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a28fa071",
+            "text": "  - legacy_unbuffered_write(data);"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a29d0106",
+            "text": "› Run regression tests before merging."
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a2a08e82",
+            "text": "› Press Enter or type command in Direct mode..."
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a2a3e25e",
+            "text": "› ▍"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a2a8737c",
+            "text": "⌨️ 切换至逐键输入模式 (Direct)"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a2ad0f1a",
+            "text": "📋 复制画面文本"
+          },
+          {
+            "id": "7a22df08-251d-8016-8008-de04a2b20c14",
+            "text": "⚙️ 终端字体与诊断"
+          }
+        ]
+      },
+      {
+        "name": "S03 · 逐键输入模式 · 辅助键盘与实时发键",
+        "texts": [
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eae4a794",
+            "text": "16:40"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eaeb9103",
+            "text": "5G  100%"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eaef0f40",
+            "text": "‹ 看板"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eaf1b1c1",
+            "text": "workstation / agent-a"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eaf61162",
+            "text": "● 实时输入"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eafc35cc",
+            "text": "● agent-a"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eafefd81",
+            "text": "○ agent-b"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb021100",
+            "text": "+"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb07d5df",
+            "text": "👁️ 观察模式"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb0e5fb3",
+            "text": "⌨️ 逐键输入"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb11e37e",
+            "text": "✍️ 草稿模式"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb168567",
+            "text": "⌨️ 实时发送至 agent-a · IME 组合字在本地合成后提交"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb20a553",
+            "text": "agent-a · PTY 80x12 · UTF-8 · FOCUS"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb239c34",
+            "text": "❯ cargo check --workspace"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb266a11",
+            "text": "   Compiling herdr-core v0.1.0 (/app)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb289c13",
+            "text": "   Finished dev in 1.42s"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb2ace62",
+            "text": "❯ herdr-pocket agent-a input:"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb2d6caf",
+            "text": "› git commit -m \"fix(session): pty buffer\" █"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb312b6b",
+            "text": "Esc"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb35664e",
+            "text": "Tab"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb390ff7",
+            "text": "Ctrl ✓"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb3d4232",
+            "text": "Alt"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb416761",
+            "text": "~"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb45c407",
+            "text": "/"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb4a1f46",
+            "text": "|"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb4ed70a",
+            "text": ":"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb5324c6",
+            "text": "↑"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb577d4a",
+            "text": "↓"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb5bc785",
+            "text": "←"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb5ffb85",
+            "text": "→"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb64430b",
+            "text": "⏎ 换行"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb68ac83",
+            "text": "📋 粘贴预览"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb6e3793",
+            "text": "Q"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb71fa6a",
+            "text": "W"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb75ae7b",
+            "text": "E"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb79c3f4",
+            "text": "R"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb7d6a8f",
+            "text": "T"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb818b45",
+            "text": "Y"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb856298",
+            "text": "U"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb896f7e",
+            "text": "I"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb8d6bbf",
+            "text": "O"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb919ab8",
+            "text": "P"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb95f19e",
+            "text": "A"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb9999d4",
+            "text": "S"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eb9dd1b1",
+            "text": "D"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eba1b6c3",
+            "text": "F"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eba5700d",
+            "text": "G"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07eba99138",
+            "text": "H"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebad8d4a",
+            "text": "J"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebb190c6",
+            "text": "K"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebb5427e",
+            "text": "L"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebb96ba3",
+            "text": "⇧"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebbd0a15",
+            "text": "Z"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebc10225",
+            "text": "X"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebc569a4",
+            "text": "C"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebc93688",
+            "text": "V"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebcd20bd",
+            "text": "B"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebd0c230",
+            "text": "N"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebd4e1d5",
+            "text": "M"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebd89fad",
+            "text": "⌫"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebdcb085",
+            "text": "123"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebe0f85a",
+            "text": "空格 (Space)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebe487e1",
+            "text": "收起键盘"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebe8faad",
+            "text": "改用草稿"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21c0633a81",
+            "text": "演示：发送时断线 → 核实结果"
+          }
+        ]
+      },
+      {
+        "name": "S04 · 草稿编辑模式 · 多行输入与安全发送",
+        "texts": [
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebee5728",
+            "text": "16:40"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebf2307c",
+            "text": "5G  100%"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebf49010",
+            "text": "‹ 看板"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebf6ba26",
+            "text": "workstation / agent-a"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ebfaef21",
+            "text": "● 已连接"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec007324",
+            "text": "● agent-a"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec02c3f6",
+            "text": "○ agent-b"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec057b56",
+            "text": "+"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec095892",
+            "text": "👁️ 观察模式"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec0bfafe",
+            "text": "⌨️ 逐键输入"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec10af07",
+            "text": "✍️ 草稿模式"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec14b60d",
+            "text": "远端上下文 (Terminal Output)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec1778c9",
+            "text": "› agent-a: task completed. waiting for review."
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec197b07",
+            "text": "› diff: 4 files changed. Ready for next command."
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec1d3cea",
+            "text": "本地草稿编辑区"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec215ef2",
+            "text": "UTF-8 · 5 行"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec23d76e",
+            "text": "安全模式：输入内容保留在本地，显式点击后单次发送"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec27c197",
+            "text": "1"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec2aeb74",
+            "text": "# 1. 运行回归测试并生成报告"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec2d3859",
+            "text": "2"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec2f6901",
+            "text": "python3 -m unittest discover -s validation-helper -v"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec31e0d7",
+            "text": "3"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec344a2b",
+            "text": "# 2. 检查 git 工作区与最新修改"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec36de44",
+            "text": "4"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec390e43",
+            "text": "git status --short"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec3b8578",
+            "text": "5"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec3e3966",
+            "text": "echo \"All pre-flight checks passed.\""
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec41b25b",
+            "text": "✓"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec445eda",
+            "text": "不添加末尾回车；原有换行仍可能执行"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec49686a",
+            "text": "✓"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec4d399a",
+            "text": "发送后转为记录，不自动回填待发草稿"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec5407aa",
+            "text": "🎯 发送目标锁定: workstation - design-session - agent-a"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec593600",
+            "text": "🚀 审查并安全发送到 PTY (Send)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec5daf15",
+            "text": "✕ 清空草稿"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de07ec6255d0",
+            "text": "👁️ 返回观察模式"
+          }
+        ]
+      },
+      {
+        "name": "S05 · 扫码配对 · 主机资料核对与安全授权",
+        "texts": [
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08752c253a",
+            "text": "16:40"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875346f32",
+            "text": "5G  100%"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de087537e060",
+            "text": "✕ 取消"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08753b5945",
+            "text": "添加新手机配对"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de087541901f",
+            "text": "步骤 3/4"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08754a07e3",
+            "text": "✓"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08754dd029",
+            "text": "生成公钥"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875526c9d",
+            "text": "✓"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08755551de",
+            "text": "主机确认"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08755985d7",
+            "text": "3"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08755c422a",
+            "text": "扫码核对"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875604e57",
+            "text": "4"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875632fc9",
+            "text": "完成连接"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de087574ca3e",
+            "text": "⬚ QR"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875792c01",
+            "text": "对准主机终端输出的 herdr-pair 一次性二维码"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08757fed44",
+            "text": "✓"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de087582f631",
+            "text": "已核实主机响应资料"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875874f2f",
+            "text": "待连接核验"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08758a0422",
+            "text": "主机辅助命令一次性响应通过校验"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08758e177f",
+            "text": "目标主机"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de087590fff1",
+            "text": "workstation-01.local"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875953cc3",
+            "text": "Ubuntu 24"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de087597c7ab",
+            "text": "网络通道"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08759aa8f5",
+            "text": "Tailscale 100.86.12.4"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de08759f7cff",
+            "text": "未验证"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875a20e37",
+            "text": "SSH 指纹"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875a52975",
+            "text": "SHA256:7mP0eK...9qXw1A"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875a78f42",
+            "text": "授权账户"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875aa18b0",
+            "text": "ubuntu（主机端已确认）"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875ae80dd",
+            "text": "⚠️ 安全提示：扫码仅完成资料交换，入网与 SSH 认证仍将独立执行；随时可单独撤销本次授权。"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875b150a7",
+            "text": "本次配对设备: herdr-pocket-iphone-15 (新生成公钥)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875b59307",
+            "text": "保存资料并开始连接验证"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875ba4152",
+            "text": "查看主机确认步骤"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de0875bed5b1",
+            "text": "取消与撤销指引"
+          }
+        ]
+      },
+      {
+        "name": "S06 · 桌面工作台 · 双分屏终端与单输入焦点",
+        "texts": [
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a56fef7",
+            "text": "HP"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a5aeb59",
+            "text": "Herdr Pocket Desktop"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a5faf4b",
+            "text": "🔍 搜索主机、Session、Agent 或输入命令 (Cmd + K)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a64aab1",
+            "text": "Tailscale 24ms"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a69d5b6",
+            "text": "EasyTier 18ms"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a6efaf2",
+            "text": "+ 新增"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a74eecc",
+            "text": "主机与会话导航 (HOSTS & SESSIONS)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a7c9b0e",
+            "text": "过滤会话 (Filter)..."
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a816bdc",
+            "text": "▼ 工作站 · Workstation-01"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a876034",
+            "text": "Tailscale 100.86.12.4 · 24ms"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a929692",
+            "text": "● design-session"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092a9bc737",
+            "text": "待输入"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092aa19136",
+            "text": "agent-a · 16:40:12 · PTY 120x36"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092aa8fcc7",
+            "text": "○ build-session"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ab111a8",
+            "text": "运行中"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ab60727",
+            "text": "agent-b · cargo test passing"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ac45aee",
+            "text": "▼ 实验机 · Lab-Node-02"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ac7ca32",
+            "text": "EasyTier 10.144.1.5 · 18ms"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092accc548",
+            "text": "○ test-session"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ad225e0",
+            "text": "就绪"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ad55c8b",
+            "text": "agent-c · 待机中"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ad82af0",
+            "text": "▶ 备用机 · Backup-03"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092adb38af",
+            "text": "ZeroTier · 等待入网授权"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ae0018f",
+            "text": "安全与加密通道状态"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ae353f6",
+            "text": "● SSH Ed25519 端到端隔离"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ae63ba8",
+            "text": "● 独立 PTY 缓存与会话隔离"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ae91023",
+            "text": "无命令注入 · 无未授权隧道"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092aefdaeb",
+            "text": "● A · workstation / agent-a"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092af2fd24",
+            "text": "✕"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092af7fbfb",
+            "text": "○ B · lab-node / agent-b"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092afbc66d",
+            "text": "✕"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b01051e",
+            "text": "+"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b0bda97",
+            "text": "⬚ 双分屏 1:1"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b158664",
+            "text": "设置"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b2af696",
+            "text": "PANE A · workstation / design-session / agent-a"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b333532",
+            "text": "● FOCUS · 逐键输入"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b38aca8",
+            "text": "120x36 PTY"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b3d1f79",
+            "text": "❯ herdr session attach --session design-session --target agent-a"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b4253da",
+            "text": "[2026-10-30 16:40:02] Connected via Tailscale (100.86.12.4:22, latency 24ms)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b478910",
+            "text": "[HERDR] Session state: WAITING_FOR_INPUT · Single focus assigned to Pane A"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b4c9074",
+            "text": "[AGENT] Refactored network and terminal architecture successfully."
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b5a0d1f",
+            "text": "[DIFF] Changes in src/core/session.rs (+142, -18 lines):"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b5df6f5",
+            "text": "  + pub struct SessionHandler { pty: PtyHandle, stream: Mutex<Stream> }"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b611e34",
+            "text": "  + impl Stream for SessionHandler { fn poll_next() -> Poll<Item> }"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b6429f3",
+            "text": "  - legacy_unbuffered_blocking_write(data);"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b66e008",
+            "text": "› Run regression tests and confirm commit before merging."
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b69bb7c",
+            "text": "❯ herdr agent-a input: cargo check --workspace --tests █"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b6f7d18",
+            "text": "模式切换 (Mode):"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b747306",
+            "text": "👁️ 观察"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b798bb5",
+            "text": "⌨️ 逐键输入 ✓"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b7ff147",
+            "text": "✍️ 草稿"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b836c7d",
+            "text": "IME: 本地合成"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b918183",
+            "text": "PANE B · lab-node / build-session / agent-b"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092b9b49be",
+            "text": "○ BACKGROUND · 观察"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ba2684b",
+            "text": "120x36 PTY"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092ba7bd0c",
+            "text": "❯ cargo test --workspace --package herdr-protocol"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092badd81d",
+            "text": "   Compiling herdr-protocol v0.1.0 (/app)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092bb3e17c",
+            "text": "   Running tests/unit_tests.rs (42 tests)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092bb8c6f8",
+            "text": "test core::session_lifecycle ... ok"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092bbdcd04",
+            "text": "test pty::buffer_flush_and_resize ... ok"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092bc2a85c",
+            "text": "test protocol::pairing_handshake ... ok"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092bc750cb",
+            "text": "test security::fingerprint_verification ... ok"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092bcbd1d7",
+            "text": "test failover::network_route_recovery ... ok"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092bd089eb",
+            "text": "test result: ok. 42 passed; 0 failed; 0 ignored in 1.48s"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092bd606b7",
+            "text": "[BUILD COMPLETE] Waiting for next trigger or observer command."
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092bdaef3a",
+            "text": "› ▍"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092be25a39",
+            "text": "模式切换 (Mode):"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092bf34067",
+            "text": "👁️ 观察 ✓"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092bfb472f",
+            "text": "⌨️ 逐键输入"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092c0130a9",
+            "text": "✍️ 草稿"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092c04b25f",
+            "text": "点击面板获取焦点"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092c0a1153",
+            "text": "当前输入焦点: workstation / design-session / agent-a (Pane A)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092c0da896",
+            "text": "🔒 单输入焦点架构保证：所有键盘输入仅定向发送至高亮面板 · 后台会话安全保持"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de092c110071",
+            "text": "UTF-8 · LF · PTY 120x36"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21c068ab6f",
+            "text": "窄窗口与隐藏标签恢复 →"
+          }
+        ]
+      },
+      {
+        "name": "S07 · 设计规范与工程组件库 · 视觉变量与开发落地架构",
+        "texts": [
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099c8c9980",
+            "text": "HP"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099c913e3a",
+            "text": "Herdr Pocket · UI 设计规范与工程化交付规范"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099c950b62",
+            "text": "Design Tokens, Typography, Radius, Layout & Component Architecture · Flutter / Tauri 1:1 映射"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099c9b0776",
+            "text": "v2 · 验证候选"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ca2f029",
+            "text": "1. Design Tokens 基础视觉变量"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ca6cc71",
+            "text": "COLOR PALETTE (语义化色彩系统)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099caca7c1",
+            "text": "brand.primary"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099cb003cf",
+            "text": "Herdr 科技主色 (Tech Indigo) (Tech Indigo 600)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099cb4f720",
+            "text": "brand.soft"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099cb7ee42",
+            "text": "品牌高亮浅底 (Indigo 50)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099cbd246e",
+            "text": "surface.canvas"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099cc07963",
+            "text": "应用画布底色 (Slate 50)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099cc50b03",
+            "text": "surface.card"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099cc84424",
+            "text": "卡片纯白表面 (Card Surface)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099cd0446d",
+            "text": "border.default"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099cd885fa",
+            "text": "标准边框线条 (Slate 200)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ce2bf07",
+            "text": "text.primary"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ce84933",
+            "text": "正文主要墨色 (Slate 900)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099cf1aca9",
+            "text": "text.muted"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099cf77ed7",
+            "text": "辅助弱化字色 (Slate 400)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d005c7f",
+            "text": "status.online"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d0598bf",
+            "text": "在线/成功 (Emerald 500)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d0d83d7",
+            "text": "status.warning"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d12ad49",
+            "text": "待处理/告警 (Amber 500)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d23a619",
+            "text": "status.danger"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d276522",
+            "text": "错误/危险 (Rose 500)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d2cd512",
+            "text": "terminal.bg"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d30befb",
+            "text": "终端黑曜石背景 (Deep Obsidian)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d35ce23",
+            "text": "terminal.prompt"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d3903f1",
+            "text": "终端命令高亮 (Sky 400)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d3f7688",
+            "text": "terminal.cursor"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d42b027",
+            "text": "终端光标指示 (Indigo Block)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d474245",
+            "text": "RADIUS & SPACING (圆角与间距系统)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d4b3fa9",
+            "text": "radius.xs (4px)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d4e4fb3",
+            "text": "复选框、微型 Tag"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d51759f",
+            "text": "radius.sm (6px)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d5449cf",
+            "text": "终端按键、Segmented Pill"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d578f0d",
+            "text": "radius.md (10px)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d5acf16",
+            "text": "标准按钮、代码编辑区"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d5da1d5",
+            "text": "radius.lg (16px)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d6178a7",
+            "text": "主机卡片、会话容器"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d64b267",
+            "text": "radius.xl (20px)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d6835b3",
+            "text": "屏幕画板外壳、抽屉 Sheet"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d6fbee3",
+            "text": "radius.full (999px)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d76a9e3",
+            "text": "状态徽章、胶囊药丸"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d7fe59f",
+            "text": "TYPOGRAPHY (字体家族规范)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d86f91d",
+            "text": "• UI 界面: Inter / Noto Sans SC (400, 500, 600, 700)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d8ce6b0",
+            "text": "• 终端字体仅示意；实际固定 Nerd Font A/B 验证"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d956c9e",
+            "text": "2. Component Specs 可复用工程组件"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099d9ab010",
+            "text": "BUTTON VARIANTS (按钮规范)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099da3427e",
+            "text": "主要操作 (Primary)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099dad0274",
+            "text": "次要操作 (Secondary)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099db65c45",
+            "text": "危险操作 (Danger)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099dbf0f1f",
+            "text": "幽灵按钮 (Ghost)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099dce658c",
+            "text": "STATUS BADGES (状态徽章与药丸)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099dd51867",
+            "text": "● 在线"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ddb88e8",
+            "text": "◷ 等待输入"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099de1be6d",
+            "text": "! 结果待核实"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099de7a556",
+            "text": "Tailscale 24ms"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099dedf8d2",
+            "text": "PTY 120x36"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099df39003",
+            "text": "就绪 Idle"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099df7588c",
+            "text": "MODE SELECTOR (三模切换器 Segmented Control)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099dff1d54",
+            "text": "👁️ 观察模式"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e032165",
+            "text": "⌨️ 逐键输入"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e06976e",
+            "text": "✍️ 草稿模式"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e0aed5e",
+            "text": "TERMINAL ACCESSORY KEYS (移动端辅助键位)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e109b45",
+            "text": "Esc"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e16acf8",
+            "text": "Tab"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e1be3f7",
+            "text": "Ctrl ✓"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e219e73",
+            "text": "Alt"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e2b0aef",
+            "text": "⏎"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e36ab74",
+            "text": "📋 粘贴"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e3d553b",
+            "text": "HOST & SESSION CARD PATTERN (主机与会话卡片范式)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e4bef4f",
+            "text": "工作站 · Workstation-01"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e557e8f",
+            "text": "在线"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e5b8655",
+            "text": "Tailscale 100.86.12.4 · 24ms"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e6375b8",
+            "text": "design-session / agent-a"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e6d3f01",
+            "text": "待输入"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e72c2cf",
+            "text": "› task completed · 16:40:12 · PTY 120x36"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e7b2ef8",
+            "text": "3. Engineering Delivery 开发工程契约"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e8023f6",
+            "text": "CROSS-PLATFORM MAPPING (跨端开发框架映射)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e93dfd2",
+            "text": "Flutter + terminal_view（五端 A/B 候选）"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e9823cf",
+            "text": "• Scaffold + CustomScrollView + SliverList (看板卡片流)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e9b88bc",
+            "text": "• 使用受控绘制补丁候选；不启动本地 PTY"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099e9ec067",
+            "text": "• 软键盘与 Accessory Bar 避让 (MediaQuery.viewInsets)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ea24c22",
+            "text": "• IME 本地组合提交后发送一次；真机仍待验"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ea8210a",
+            "text": "Tauri + xterm.js + Rust（五端 A/B 候选）"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099eaca815",
+            "text": "• Rust 管理远端 SSH/herdr 流和目标生命周期"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099eafe6f5",
+            "text": "• 前端使用 CSS Grid / Flexbox 1:1 实现双分屏布局"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099eb31169",
+            "text": "• 输入按活动目标隔离，快捷键不得绕过输入锁"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099eb60628",
+            "text": "• 窗口 resize 仅调整本地视口，不静默改变远端 PTY 规格"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ebb88c6",
+            "text": "安全与网络契约 (Security & Network Contract)"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ebf38dc",
+            "text": "• 扫码配对仅交换公钥与指纹，不等于自动入网/SSH授权"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ec27186",
+            "text": "• 结果待核实 (P4-unknown) 严格禁止自动重试或补发"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ec5742e",
+            "text": "• 草稿模式 (Draft) 单次安全发送，不附带多余回车符"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ec89e91",
+            "text": "• 撤销授权仅限当前配对公钥，不中断已有外部 SSH 连接"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ed1a1fa",
+            "text": "验收与回归核验标准"
+          },
+          {
+            "id": "e6d238f0-ac08-8028-8008-de099ed8c434",
+            "text": "对应 P1–P7 / D1–D2；S 系列由 verify-v2.js 核验。原型与运行证据分开记录。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de22561c88e9",
+            "text": "组件状态与可访问性 →"
+          }
+        ]
+      },
+      {
+        "name": "S08 · 发送结果待核实",
+        "texts": [
+          {
+            "id": "feb2a821-b263-8097-8008-de215d51b722",
+            "text": "HERDR POCKET  /  交互原型"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de215d586ceb",
+            "text": "发送结果待核实"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de215d99f0ab",
+            "text": "输入已停止"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de215d9d5352",
+            "text": "发送时连接中断。服务端是否收到未知；恢复画面也不会补发这次输入。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de215da29129",
+            "text": "原目标与发送记录"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de215da5e59a",
+            "text": "workstation-01 / design-session\nagent-a · epoch 7 · 16:40:12\n原始内容保留为只读记录，不回填草稿。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b76bfbf2",
+            "text": "上次画面 · 16:40:10\n❯ 等待最新 full snapshot…\n输入锁定 / 无重试按钮"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b773ef06",
+            "text": "恢复可信连接并获取当前画面"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b77c7435",
+            "text": "返回看板"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7811aad",
+            "text": "此处模拟未知结果；不执行 SSH 或发送命令。"
+          }
+        ]
+      },
+      {
+        "name": "S09 · 画面已恢复 · 输入仍锁定",
+        "texts": [
+          {
+            "id": "feb2a821-b263-8097-8008-de215d5ffa37",
+            "text": "HERDR POCKET  /  交互原型"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de215d63b2ea",
+            "text": "画面已恢复 · 输入仍锁定"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7876727",
+            "text": "已取得新全量画面"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b78b5fa4",
+            "text": "主机身份、session 绑定与当前目标已核对。连接恢复不等于旧输入执行成功。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b79217bf",
+            "text": "workstation-01 / design-session\nagent-a · 新连接 epoch 8\n\n❯ 最新画面（原型示意）\n历史未知发送仍保留记录"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b79a929b",
+            "text": "请先核实结果"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b79f616f",
+            "text": "检查原目标的输出与实际状态。只有明确点击下方按钮，才重新进入输入模式。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7a6c1d1",
+            "text": "已核实目标与结果，继续输入"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7afe205",
+            "text": "保持观察"
+          }
+        ]
+      },
+      {
+        "name": "S10 · 主机指纹发生变化",
+        "texts": [
+          {
+            "id": "feb2a821-b263-8097-8008-de215d6a8053",
+            "text": "HERDR POCKET  /  交互原型"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de215d6e47f0",
+            "text": "主机指纹发生变化"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7b851ea",
+            "text": "已阻止连接与输入"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7bd0000",
+            "text": "实际 SSH host key 与已保存身份不同。不会自动接受新指纹，也不会继续认证或补发输入。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7c42235",
+            "text": "通过独立可信渠道核验"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7c7acad",
+            "text": "旧：SHA256:example-old…（示意）\n新：SHA256:example-new…（示意）\n目标：workstation-01 / ubuntu\n联系主机操作者确认变更原因。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7cecc33",
+            "text": "返回配对资料审查"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7d69325",
+            "text": "取消连接，保留旧信任"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7dc01ec",
+            "text": "本页没有“忽略变化继续”出口。\n示例指纹不能用于真实主机身份核验。"
+          }
+        ]
+      },
+      {
+        "name": "S11 · 窄窗口 · 单输入焦点",
+        "texts": [
+          {
+            "id": "feb2a821-b263-8097-8008-de215d749953",
+            "text": "HERDR POCKET  /  交互原型"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de215d785559",
+            "text": "窄窗口 · 单输入焦点"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b870b770",
+            "text": "A · Tailscale    B · EasyTier（观察已暂停）"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b87677a2",
+            "text": "A / workstation / design-session / agent-a"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b87a706e",
+            "text": "唯一输入焦点：A\n\n❯ 终端内容（示意）\n\n窄窗口只收纳本地面板。\n远端 PTY 保持既有尺寸，横向内容可滚动。\n\nB 标签保留状态与草稿，隐藏期间暂停渲染。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b8837efb",
+            "text": "切回宽屏分屏"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b88b0b77",
+            "text": "演示：隐藏标签恢复核验"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b88ffcb3",
+            "text": "Tab 焦点顺序：标签 → 模式 → 终端 → 辅助键 → 诊断。\n标签/分屏切换释放组合键并取消未提交 IME，草稿按目标保留。\n所有交互目标至少 44×44；输入焦点同时有边框与文字标记。"
+          }
+        ]
+      },
+      {
+        "name": "S12 · 已授权 · 尚未验证连接",
+        "texts": [
+          {
+            "id": "feb2a821-b263-8097-8008-de215d7ecbe1",
+            "text": "HERDR POCKET  /  交互原型"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de215d820773",
+            "text": "已授权 · 尚未验证连接"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7e38bb6",
+            "text": "先确认三项独立条件"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7e87e0b",
+            "text": "1 · 组网授权和目标地址可达\n2 · 实际 SSH host key 与预期一致\n3 · SSH 认证成功及 herdr 能力可用"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7ef962b",
+            "text": "不会自动授权或自动输入"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7f39956",
+            "text": "扫码只提供本次请求绑定的资料。主机 helper 已经明确确认过公钥；手机仍需主动发起连接验证。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b7f96cec",
+            "text": "演示：三项验证通过 → 看板"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b8009b87",
+            "text": "演示：指纹变化 → 阻止连接"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b808bff0",
+            "text": "网络未就绪，保留资料待处理"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b80ea9c6",
+            "text": "这是可点击原型分支，不代表实际连通成功。"
+          }
+        ]
+      },
+      {
+        "name": "S13 · 主机辅助确认与撤销",
+        "texts": [
+          {
+            "id": "feb2a821-b263-8097-8008-de215d885ff1",
+            "text": "HERDR POCKET  /  交互原型"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de215d8bacf6",
+            "text": "主机辅助确认与撤销"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b8147d02",
+            "text": "一次性 helper · 主机端确认"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b8196a73",
+            "text": "手机先生成独立公钥请求，经可信方式交给主机操作者。主机核对账号、请求与公钥指纹后，明确批准本次追加。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b81f9e41",
+            "text": "[示意输出 / 不可执行]\n账户 ubuntu · 设备 phone-demo\n追加一条手机专属 SSH 公钥？\n主机操作者：确认\n生成一次性响应码后退出"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b827ed54",
+            "text": "演示：主机已确认 → 手机扫码"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b830ef82",
+            "text": "撤销须在主机端执行"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b83526b2",
+            "text": "拒绝或取消手机连接不会删除授权。主机 helper 仅移除本次新增记录，不承诺断开已有 SSH 会话。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b83bd26d",
+            "text": "返回看板"
+          }
+        ]
+      },
+      {
+        "name": "S14 · 审查即将发送的内容",
+        "texts": [
+          {
+            "id": "feb2a821-b263-8097-8008-de215d9157b7",
+            "text": "HERDR POCKET  /  交互原型"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de215d946e80",
+            "text": "审查即将发送的内容"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b8432ad5",
+            "text": "目标固定 · 原始换行保留"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b847fa59",
+            "text": "workstation-01 / design-session / agent-a\n这次发送不自动添加末尾回车。\n多行内容自带的换行仍可能触发命令。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b84e47d0",
+            "text": "# 示例草稿（原型）\npython3 -m unittest discover\ngit status --short\n\n末尾无额外 Enter / CR"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b85608f9",
+            "text": "演示：仅发送一次 → 返回观察"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b85da869",
+            "text": "演示：发送中断 → 结果待核实"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b8654888",
+            "text": "返回继续编辑"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21b86a6724",
+            "text": "目标或连接代次变化时预览失效，需重新审查。成功文案只表示服务端已接收，不表示命令完成。"
+          }
+        ]
+      },
+      {
+        "name": "S15 · 组件状态与可访问性",
+        "texts": [
+          {
+            "id": "feb2a821-b263-8097-8008-de21c347a9ab",
+            "text": "HERDR POCKET  /  交互原型"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21c34c18f8",
+            "text": "组件状态与可访问性"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21c3504520",
+            "text": "既有靛蓝操作色与绿色状态色保留。文字使用深色语义变体；状态同时显示文字。\n这是工程交付约束；终端读屏、手机输入法与触控仍需设备验收。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21c35731de",
+            "text": "Primary · 操作"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21c35e8a84",
+            "text": "Success · 在线"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21c3662262",
+            "text": "Unknown · 输入锁定"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21c36d5da1",
+            "text": "Host key changed · 停止"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21c37254fc",
+            "text": "正常文字对比度目标 ≥ 4.5:1；指示色不能独自传达状态。\n触控命中区 ≥ 44×44；键盘焦点可见，标签与终端仅一个输入目标。\n窄窗口收纳侧栏与分屏；保持远端 PTY 尺寸，不自动发送 resize。\n恢复取得 full snapshot 后仍需人工核实未知发送，不能出现重试或补发按钮。\n扫码配对先有请求和主机确认，再审查响应；保存资料不能当作连接成功。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21c3789127",
+            "text": "验证壳读取同一 design-tokens-v2.json；Terminal ANSI 16 色为共同测试基线。\nPenpot 终端字体仅示意，实际继续固定现有 Nerd Font / fixture / 80×24。\n两种 UI 框架都覆盖五端验证，不按手机与桌面提前拆成两个技术栈。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de21c3808f7c",
+            "text": "返回手机看板"
+          }
+        ]
+      },
+      {
+        "name": "S16 · B 标签 · 从暂停恢复观察",
+        "texts": [
+          {
+            "id": "feb2a821-b263-8097-8008-de2255e0b127",
+            "text": "HERDR POCKET  /  交互原型"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de2255e76864",
+            "text": "B 标签 · 从暂停恢复观察"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de2255ef57f9",
+            "text": "新画面已取得 · 仅观察"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de2255f3f3af",
+            "text": "B / Lab-Node-02 / test-session / agent-c\nEasyTier · 目标与连接代次已核验\n隐藏期间没有持续渲染，也没有发送输入。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de2255fb7c37",
+            "text": "B · 最新 full snapshot\n\n❯ agent-c: waiting\n\n当前仅观察；不继承 A 的输入模式。\n暂停期间完整历史不保证补齐。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de225603adaa",
+            "text": "草稿与组合键分别处理"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de2256089354",
+            "text": "B 草稿按目标保留；A 的组合键和未提交 IME 已释放。取回全量画面不触发输入重放。"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de22560ee378",
+            "text": "返回工作台，选择输入目标"
+          },
+          {
+            "id": "feb2a821-b263-8097-8008-de22561609a2",
+            "text": "当前页没有输入动作；设备生命周期仍待实测。"
+          }
+        ]
+      }
+    ]
+  },
+  "log": ""
+}

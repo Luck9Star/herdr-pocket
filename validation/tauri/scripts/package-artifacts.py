@@ -30,7 +30,7 @@ if os.getenv('PROBE_PLATFORM')=='android':
     manifest['toolchains']['java']=version(['java','-version']); manifest['toolchains']['ndk']='28.2.13676358'; manifest['toolchains']['androidPlatform']='android-35'
 for f in [root/'package-lock.json',root/'src-tauri/Cargo.lock',root/'core/Cargo.lock']:
     if f.exists(): shutil.copy2(f,out/f'{f.parent.name}-{f.name}')
-shutil.copytree(repo/'validation/shared',out/'shared',dirs_exist_ok=True)
+shutil.copytree(repo/'validation/shared',out/'shared',dirs_exist_ok=True,ignore=shutil.ignore_patterns('.gitattributes'))
 if (root/'dist').exists(): zip_tree(root/'dist',out/'browser-preview.zip')
 for pattern in ['src-tauri/target/release/bundle/deb/*.deb','src-tauri/target/release/bundle/nsis/*.exe','src-tauri/gen/android/app/build/outputs/apk/**/*.apk']:
     for f in root.glob(pattern): shutil.copy2(f,out/f.name)

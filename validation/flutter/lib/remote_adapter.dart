@@ -176,7 +176,12 @@ class RemoteReadOnlyAdapter {
     }, (error,stack) {
       final a = owned;
       final failure = RemoteFailure(error is SSHStateError ? 'async_ssh_state_error' :
-        error is StateError ? 'async_state_error' : 'async_transport_failed');
+        error is StateError ? switch (error.message) {
+          'StreamSink is bound to a stream' => 'async_sink_bound',
+          'Stream has already been listened to.' => 'async_stream_listened',
+          'Cannot add new events after calling close' || 'Cannot add event after closing' => 'async_sink_closed',
+          _ => 'async_state_error',
+        } : 'async_transport_failed');
       if (a == null) {
         if (!result.isCompleted) result.completeError(failure,stack);
       } else if (!result.isCompleted) {
@@ -231,7 +236,10 @@ class RemoteReadOnlyAdapter {
       a.forward = channel;
       final id = 'pocket-readonly-${a.generation}';
       channel.sink.add(utf8.encode('${jsonEncode({'id':id,'method':'session.snapshot','params':<String,Object?>{}})}\n'));
-      await _wait(a,channel.flush());
+      // The channel upload loop writes asynchronously. Its flush() forwards
+      // directly to the transport's IOSink and is not a channel write barrier.
+      // The matching RPC response is the acknowledgement; do not race flush
+      // against the SSH transport's other writes on the same socket.
       final rpcLine = await _wait(a,boundedLines(channel.stream,maxTotal:1048576).first);
       final rpc = _decodeObject(rpcLine);
       if (rpc['id'] != id || rpc['error'] != null || rpc['ok'] == false || rpc['result'] is! Map) {

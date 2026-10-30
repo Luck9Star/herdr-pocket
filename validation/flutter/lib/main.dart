@@ -273,7 +273,7 @@ class _ProbePageState extends State<ProbePage> with WidgetsBindingObserver {
       actions: [TextButton.icon(label: const Text('远端只读'), icon: const Icon(Icons.link), onPressed: () {
         for (final pane in panes) { pane.focusNode.unfocus(); pane.gate.invalidate(disconnect: true); }
         Navigator.push<void>(context, MaterialPageRoute(builder: (_) => RemotePage(tokens: tokens))).then((_) { if (mounted) setState(() {}); });
-      }), Padding(padding: const EdgeInsets.only(right: 16), child: Center(
+      }), if (wide) Padding(padding: const EdgeInsets.only(right: 16), child: Center(
         child: Text('Flutter · 本地验证', style: TextStyle(color: tokens.color('textSecondary'), fontSize: 12))))]),
       body: SafeArea(child: Row(children: [
         if (wide) hosts(),
@@ -287,7 +287,7 @@ class _ProbePageState extends State<ProbePage> with WidgetsBindingObserver {
           return SingleChildScrollView(child: SizedBox(height: height, child: Column(children: [
           if (MediaQuery.viewInsetsOf(context).bottom == 0) Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Row(children: [Icon(Icons.science_outlined, size: 16, color: tokens.color('brand')),
-              const SizedBox(width: 6), Expanded(child: Text('离线 fixture · 配对 / SSH / 三网络尚未接入',
+              const SizedBox(width: 6), Expanded(child: Text('离线 fixture · 远端只读请用顶部入口，配对 / 三网络尚未接入',
                 style: TextStyle(color: tokens.color('textSecondary'), fontSize: 11)))])),
           Row(children: [for (var i = 0; i < panes.length; i++) Expanded(child: TextButton(
             key: ValueKey('tab-$i'), onPressed: () => select(i),

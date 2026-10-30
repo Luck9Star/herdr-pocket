@@ -40,6 +40,7 @@ def prepare(destination):
     shutil.copytree(source / 'lib', destination / 'lib', dirs_exist_ok=True)
     shutil.copytree(source / 'test', destination / 'test', dirs_exist_ok=True)
     shutil.copytree(source / 'diagnostic', destination / 'diagnostic', dirs_exist_ok=True)
+    shutil.copytree(source / 'regression', destination / 'regression', dirs_exist_ok=True)
     (destination / 'analysis_options.yaml').write_text('analyzer:\n  errors:\n    todo: ignore\n')
     shared = ROOT / 'validation/shared'
     fixture = json.loads((shared / 'fixture.json').read_text(encoding='utf-8'))
@@ -47,6 +48,8 @@ def prepare(destination):
     if hashlib.sha256(font.read_bytes()).hexdigest() != fixture['font']['sha256']:
         raise SystemExit('Shared font checksum mismatch')
     shutil.copytree(shared, destination / 'assets/shared')
+    (destination / '.herdr-generated-probe.json').write_text(
+        json.dumps({'kind': 'herdr-flutter-validation', 'sourceCommit': os.environ.get('GITHUB_SHA')}), encoding='utf-8')
 
 
 def package(destination, platform, output):
@@ -99,6 +102,13 @@ def package(destination, platform, output):
         'scope': 'compile only; local fixture sink; SSH/overlays/device validation NOT RUN',
         'signing': 'iOS unsigned, not installable on device' if platform == 'ios' else 'development test build; no production signing/notarization',
     }
+    candidate_manifest = destination / 'candidate-manifest.json'
+    if candidate_manifest.exists():
+        provenance = json.loads(candidate_manifest.read_text(encoding='utf-8'))
+        manifest['terminalCandidate'] = provenance
+        shutil.copy2(candidate_manifest, output / 'candidate-manifest.json')
+        for name in ['LICENSE', 'NOTICE']:
+            shutil.copy2(destination / 'candidate/terminal_view' / name, output / ('terminal_view-' + name))
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     (output / 'SHA256SUMS').write_text(manifest['artifactSha256'] + '  ' + archive.name + '\n')
 

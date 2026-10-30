@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "milestone": "M1a-mobile-readonly",
+  "sourceSHA": "b88a0ad9b2a173ac743568ec5ce479f22b6844ca",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41046472357",
+  "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+  "runnerImage": {
+    "imageOS": "ubuntu24",
+    "imageVersion": "20261026.354.1"
+  },
+  "herdr": {
+    "version": "0.9.5",
+    "sourceCommit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+    "asset": "https://github.com/herdrdev/herdr/releases/download/v0.9.5/herdr-linux-x86_64",
+    "sha256": "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d"
+  },
+  "status": "failed",
+  "checks": [
+    {
+      "adapter": "rust",
+      "testId": "positive",
+      "status": "failed",
+      "result": {
+        "status": "failed",
+        "case": "positive",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "unsupported_protocol"
+      },
+      "errorCode": "adapter_case_failed"
+    },
+    {
+      "adapter": "rust",
+      "testId": "wrong-pin",
+      "status": "passed",
+      "result": {
+        "status": "passed",
+        "case": "wrong-pin",
+        "hostKeyChecked": true,
+        "hostKeyMatched": false,
+        "authStarted": false,
+        "snapshotReceived": false,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "host_key_mismatch"
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "rust",
+      "testId": "missing-session",
+      "status": "failed",
+      "result": {
+        "status": "failed",
+        "case": "missing-session",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "unsupported_protocol"
+      },
+      "errorCode": "adapter_case_failed"
+    },
+    {
+      "adapter": "rust",
+      "testId": "cross-session",
+      "status": "failed",
+      "result": {
+        "status": "failed",
+        "case": "missing-session",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "unsupported_protocol"
+      },
+      "errorCode": "adapter_case_failed"
+    },
+    {
+      "adapter": "rust",
+      "testId": "cancel",
+      "status": "failed",
+      "result": {
+        "status": "failed",
+        "case": "cancel",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "unsupported_protocol"
+      },
+      "errorCode": "adapter_case_failed"
+    },
+    {
+      "adapter": "rust",
+      "testId": "reconnect",
+      "status": "failed",
+      "result": {
+        "status": "failed",
+        "case": "positive",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "unsupported_protocol"
+      },
+      "errorCode": "adapter_case_failed"
+    },
+    {
+      "adapter": "dart",
+      "testId": "positive",
+      "status": "failed",
+      "errorCode": "adapter_report_missing_or_large"
+    },
+    {
+      "adapter": "dart",
+      "testId": "wrong-pin",
+      "status": "passed",
+      "result": {
+        "status": "passed",
+        "case": "wrong-pin",
+        "hostKeyChecked": true,
+        "hostKeyMatched": false,
+        "authStarted": false,
+        "snapshotReceived": false,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "host_key_mismatch"
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "dart",
+      "testId": "missing-session",
+      "status": "failed",
+      "errorCode": "adapter_report_missing_or_large"
+    },
+    {
+      "adapter": "dart",
+      "testId": "cross-session",
+      "status": "failed",
+      "errorCode": "adapter_report_missing_or_large"
+    },
+    {
+      "adapter": "dart",
+      "testId": "cancel",
+      "status": "failed",
+      "errorCode": "adapter_report_missing_or_large"
+    },
+    {
+      "adapter": "dart",
+      "testId": "reconnect",
+      "status": "failed",
+      "errorCode": "adapter_report_missing_or_large"
+    }
+  ],
+  "scope": "Actual GUI adapter code in command-line runners; not a GUI click, phone, overlay or continuous observe acceptance",
+  "cancelScope": "Actual SSH after-snapshot cancellation before observe full; adapter unit tests separately check stale generation publication",
+  "unverified": [
+    "mobile touch",
+    "real mobile IME",
+    "camera pairing",
+    "protected key storage",
+    "overlays",
+    "remote input",
+    "continuous observe",
+    "production credentials"
+  ],
+  "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+  "crossSessionFixture": {
+    "bothSessionsExist": true,
+    "samePaneId": true,
+    "expected": "reject mismatched socket/session before publishing full"
+  },
+  "receivedInputBytes": 0,
+  "fixtureSharedBetweenAdapters": true,
+  "cleanup": {
+    "ownedProcessesStopped": true,
+    "ephemeralKeysRemoved": true,
+    "userAuthorizationFilesTouched": false,
+    "rawLogsUploaded": false
+  }
+}

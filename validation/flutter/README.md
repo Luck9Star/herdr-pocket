@@ -1,6 +1,6 @@
 # Flutter 终端验证壳
 
-2026-10-30：验证壳包含本地 fixture 和新增的 **M1a 手动只读 SSH 快照实验入口**，尚非完整产品。实际编译结果以 [Flutter Actions](https://github.com/Luck9Star/herdr-pocket/actions/workflows/flutter-validation.yml) 对应提交为准；真机字体、IME、选择、性能、真实 SSH 与三网络均未验证。
+2026-10-30：验证壳包含本地 fixture 和新增的 **M1a 手动只读 SSH 快照实验入口**，尚非完整产品。实际编译结果以 [Flutter Actions](https://github.com/Luck9Star/herdr-pocket/actions/workflows/flutter-validation.yml) 对应提交为准；手机字体、IME、选择、性能与三网络仍未验证；同一只读适配器的真实 SSH 证据限于下述云端隔离 loopback，不代表手机或 GUI 远端验收。
 
 ## 固定输入与边界
 
@@ -14,7 +14,7 @@
 
 ## 云端构建
 
-工作流先在 Ubuntu 上生成临时平台工程、解析一次依赖锁并运行 analyze/tests，再让五端构建任务下载**同一个 lock**并使用 `--enforce-lockfile`。应用 `pubspec.lock` 已从 run 40982743142 取回并核对 terminal_view 归档 hash 后落库；构建脚本使用该锁并 `--enforce-lockfile`。原离线基线锁 SHA256 为 `5b3979bec9c6487bb79f9bba82e66908fe735248923aeced14568cb101c9fa99`；M1a 新增依赖锁仍需首轮云 `--enforce-lockfile` 确认，不能把手工固定元数据视为已解析通过。首轮错误模板锁已排除，见来源记录。
+工作流先在 Ubuntu 上生成临时平台工程、解析一次依赖锁并运行 analyze/tests，再让五端构建任务下载**同一个 lock**并使用 `--enforce-lockfile`。应用 `pubspec.lock` 已从 run 40982743142 取回并核对 terminal_view 归档 hash 后落库；构建脚本使用该锁并 `--enforce-lockfile`。原离线基线锁 SHA256 为 `5b3979bec9c6487bb79f9bba82e66908fe735248923aeced14568cb101c9fa99`；M1a 新增依赖锁已在 [run 41046472225](https://github.com/Luck9Star/herdr-pocket/actions/runs/41046472225) 的准备／解析步骤通过，并在 [run 41048094396](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396) 继续使用同一锁与候选逐依赖校验。首轮错误模板锁已排除，见来源记录。
 
 平台脚手架只在 runner 临时目录生成，未将完整 SDK/平台模板安装到本机。`ci.py bootstrap` 在非 GitHub Actions 环境拒绝执行。
 
@@ -84,8 +84,10 @@ Mac GUI smoke 发现分解重音 `e\u0301 A\u030a n\u0303` 看起来只有基字
 
 `remote_adapter.dart` 与 `tool/remote_probe.dart` 使用同一纯 Dart 适配器。固定 `dartssh2 4.1.0`（MIT）和 `pointycastle 4.0.0`，新增传递包锁为 `asn1lib 1.5.8`、`pinenacl 0.6.0`；归档、hash、原始许可证见 [`remote-dependencies.json`](remote-dependencies.json)、`licenses/`。Context7 先 `library dartssh2` 再 `/vicajilau/dartssh2` 文档；PointyCastle同样先解析后 `/bcgit/pc-dart` 文档。4.1.0实际源码 `ssh_transport.dart:40-50` 明确回调 fingerprint 是 UTF-8 `SHA256:<无padding base64>`，并非原始32字节digest。禁止省略回调、跳过签名或退回其他认证方法。
 
-目标绑定限于已核实 herdr 0.9.5 / protocol22：reviewed socket 必须符合 `/<XDG_CONFIG_HOME>/herdr/sessions/<显式非default会话>/herdr.sock`，只读 `session.snapshot` 核对RPC ID、版本、唯一 pane ID 和稳定 terminal ID；固定 exec 使用从socket派生且严格shellquote的 XDG root、herdr绝对路径、同一session和snapshot解析的terminal ID。不存在会话或错误socket绑定立即拒绝，不回退默认会话。协议frame不echo目标身份，绑定依据是snapshot与上述固定命令，不宣称另有服务端目标签名。
+目标绑定限于已核实 herdr 0.9.5 / protocol22：reviewed socket 必须符合 `/<XDG_CONFIG_HOME>/herdr/sessions/<显式非default会话>/herdr.sock`，只读 `session.snapshot` 核对RPC ID、`result.type=session_snapshot` 与嵌套 `result.snapshot` 的版本、唯一 pane ID 和稳定 terminal ID；固定 exec 使用从socket派生且严格shellquote的 XDG root、herdr绝对路径、同一session和snapshot解析的terminal ID。不存在会话或错误socket绑定立即拒绝，不回退默认会话。协议frame不echo目标身份，绑定依据是snapshot与上述固定命令，不宣称另有服务端目标签名。
 
-仅打开 direct-streamlocal 并发送 `session.snapshot`；observe不申请SSH PTY，不使用shell、控制、takeover或任意命令入口。首frame必须full／ANSI／80×24／非负seq／有效base64和UTF-8；RPC单行上限1MiB，observe单行1MiB，stdout＋stderr合计2MiB、stderr另限64KiB。没有远端输出到系统标题、剪贴板、URL或输入的回调。原始连接future占用单一拨号预算，取消不能提前释放；迟到socket销毁、generation旧结果不发布。
+仅打开 direct-streamlocal 并发送 `session.snapshot`；observe不申请SSH PTY或交互式SSH shell，也不暴露控制、takeover或任意命令入口。首frame必须full／ANSI／80×24／非负seq／有效base64和UTF-8；RPC单行上限1MiB，observe单行1MiB，stdout＋stderr合计2MiB、stderr另限64KiB。没有远端输出到系统标题、剪贴板、URL或输入的回调。原始连接future占用单一拨号预算，取消不能提前释放；迟到socket销毁、generation旧结果不发布。
 
-CI CLI只允许运行器本次 `/tmp/hp-mobile-<run>-...` 中的合成配置、loopback非特权端口，报告只有布尔检查、计数和稳定错误码；配置和keys不能打包。由独立 `validation/remote-harness` 验证同一adapter，不安装本机SDK或连接真实主机。当前新增Dart单元／Widget与真实协议检查等待首轮CI；未经执行不能标通过。
+CI CLI只允许运行器本次 `/tmp/hp-mobile-<run>-...` 中的合成配置、loopback非特权端口，报告只有布尔检查、计数和稳定错误码；配置和keys不能打包。由独立 `validation/remote-harness` 验证同一adapter，不安装本机SDK或连接真实主机。[第三轮候选 run 41048094396](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396) 的20项常规测试、Linux与macOS headless绘制诊断已通过；[真实只读链路 run 41048094519](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094519) 已成功，设备、GUI实际远端操作和正式凭据仍未验证。构建与下载验SHA见[Flutter结果记录](../../docs/evidence/mobile-remote/flutter-builds/README.md)。前两轮失败保留；第三轮移除与异步SSH上传并发的 `channel.flush()` 后真实RPC通过，原始异常文本没有采集，不能声称已证实其具体消息。
+
+在4.1.0中，channel flush只转发到底层transport flush，并不等待channel上传循环完成；本适配器以匹配RPC响应作为请求已送达的证据。取消后的迟到结果、剪贴板回复和旧cleanup均不得更新新页面状态。意外的库异步错误在独立Dart error zone内转为固定错误码，未知错误仍失败，不输出远端文本。相关API已按Context7先library后docs核对 [runZonedGuarded](https://api.dart.dev/stable/latest/dart-async/runZonedGuarded.html) 和 [IOSink](https://api.dart.dev/stable/latest/dart-io/IOSink-class.html)。

@@ -24,7 +24,9 @@ cargo check --locked --manifest-path validation/tauri/src-tauri/Cargo.toml
 
 2026-10-30 本机 Mac 上 9 项 Rust unit tests 通过，Tauri native `cargo check --locked` 通过。包括真实自建 loopback TCP 的取消/EOF、pin 格式、目标路径/quote、帧结构和 generation 隔离。这些检查没有创建 SSH 授权文件、没有连接用户主机；不能代替 SSH/herdr CI 或设备运行结果。
 
-首轮真实 [SSH/herdr CI 41046472357](https://github.com/Luck9Star/herdr-pocket/actions/runs/41046472357) 在 `b88a0ad` 失败：wrong-pin 真实拒绝通过；其余 Rust case 已完成 pin/auth/snapshot，但错误地读取扁平 `result.version`，报告 `unsupported_protocol`。已依据固定源码修正 `result.snapshot` envelope，并在原 unit 中加入旧扁平形状、错误 type、版本/protocol 与 `ok:false` 的拒绝断言；后续真实 CI 未通过前不能宣称远端快照读取成功。固定 observe CLI 仅输出 `terminal.frame` 或 `terminal.closed` JSON，其他协议消息在 CLI 内忽略，因此适配器不跳过任意 stdout 前导行。
+首轮真实 [SSH/herdr CI 41046472357](https://github.com/Luck9Star/herdr-pocket/actions/runs/41046472357) 在 `b88a0ad` 失败：wrong-pin 真实拒绝通过；其余 Rust case 已完成 pin/auth/snapshot，但错误地读取扁平 `result.version`，报告 `unsupported_protocol`。已依据固定源码修正 `result.snapshot` envelope，并在原 unit 中加入旧扁平形状、错误 type、版本/protocol 与 `ok:false` 的拒绝断言；第二轮 [CI 41047398465](https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398465)（`4b78b6b`）的 Rust 路线 6/6 通过：positive/reconnect 得到 full，wrong-pin 在认证前拒绝，missing/cross-session 在真实 snapshot 后拒绝绑定，cancel 在 snapshot 后取消；接收端输入总数 0，临时进程/密钥清理通过。该 run 整体仍因 Dart 路线失败，不能将整条工作流写成通过；[按来源归档的证据](../../docs/evidence/mobile-remote/41047398465/README.md)区分两条路线。结果只覆盖 Ubuntu loopback SSH/herdr，不代表 GUI 操作或手机实测。固定 observe CLI 仅输出 `terminal.frame` 或 `terminal.closed` JSON，其他协议消息在 CLI 内忽略，因此适配器不跳过任意 stdout 前导行。
+
+第三轮 [CI 41048094519](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094519)（`d15da12`）中 Rust 与 Dart 各 6/6、整体 12/12 通过，接收端输入 0，清理通过；[第三轮证据](../../docs/evidence/mobile-remote/41048094519/README.md)单独归档。该轮 Rust adapter 源文件与 Tauri 测试包的 `4b78b6b` 完全一致；Tauri 平台包仍按自己的源 SHA 与构建记录验收。
 
 第三代理负责的 [隔离 CI driver](../remote-harness/README.md) 调用：
 

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "name": "terminal_view-0.5.0-combining-experiment",
+  "version": "0.5.0",
+  "archiveUrl": "https://pub.dev/api/archives/terminal_view-0.5.0.tar.gz",
+  "archiveSha256": "5f8cf2e999b9b98224430b7ef2a32d378062073fa4e566f1f52d89ac9d9ac9cf",
+  "patch": "terminal_view-0.5.0-combining.patch",
+  "patchSha256": "2d0fb1d7283b034eb8161651f5c1cee0343df2877ebd6863e6639782ad8e5833",
+  "files": {
+    "lib/src/ui/painter.dart": {
+      "beforeSha256": "3d482e223a21ec62cb690006b46178c1c58b7a95ff5747d13479dfa82af00258",
+      "afterSha256": "f009096d4685c374936c962d4200517e00af097013fd0c8042168c488d0460a3"
+    },
+    "lib/src/ui/render.dart": {
+      "beforeSha256": "c1584eb282e5f9ee243ef6b42ca988caa341cb6f7d4d7494ab688383454f46fc",
+      "afterSha256": "a3baef20bcc5e5094a61898051348fc6eff88b5573e2c6c9887bca1ce70da9a5"
+    }
+  },
+  "license": "MIT; upstream LICENSE and NOTICE retained inside candidate tree",
+  "scope": "Experimental renderer-only patch; no normalization or parser/width changes; not a framework selection.",
+  "sourceCommit": "d15da12a4fc7d60313b3c253a315c001e7290b5e",
+  "variant": "experimental-patched",
+  "baselineLockSha256": "58f7cc3fd81236889bda05d601c92119e4904085404792e966df9ca6ccda4f51",
+  "candidateLockSha256": "1440de0189f3920cd44a4bcdbdcc031e6b295833edeeb92f7b0f8b986ad0f9ac",
+  "transitiveLockComparison": "package blocks identical except terminal_view explicit path source; SDK footer recorded separately",
+  "sdkConstraintComparison": {
+    "baseline": "  dart: \">=3.11.0 <4.0.0\"\n  flutter: \">=3.19.0\"\n",
+    "candidate": "  dart: \">=3.11.0 <4.0.0\"\n  flutter: \">=3.18.0-18.0.pre.54\"\n",
+    "identical": false,
+    "actualFlutterVersionPinned": "3.47.9"
+  }
+}

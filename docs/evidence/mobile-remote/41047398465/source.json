@@ -1,0 +1,10 @@
+{
+  "sourceSHA": "4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398465",
+  "scope": "Source provenance only, not execution evidence",
+  "sourceFiles": {
+    "validation/transport-rust/Cargo.lock": "93aa257dea821ad18b8d9eba6d0fc4d7ea71421ba73b27fdd4307d42998a55c1",
+    "validation/flutter/pubspec.lock": "58f7cc3fd81236889bda05d601c92119e4904085404792e966df9ca6ccda4f51",
+    "validation/shared/remote-contract.json": "f28233bf34e2ddf64e0eda4e8f3966f4044b83bcf552d60f36af58185f94dfbb"
+  }
+}

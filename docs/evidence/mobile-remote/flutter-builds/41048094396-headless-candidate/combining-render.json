@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "d15da12a4fc7d60313b3c253a315c001e7290b5e",
+  "terminalVersion": "0.5.0",
+  "scope": "Pinned shared font; real Terminal buffer and TerminalPainter in Flutter test engine. Not native clipboard, device IME or whole GUI validation.",
+  "input": "é Å ñ",
+  "inputCodepoints": [
+    "U+0065",
+    "U+0301",
+    "U+0020",
+    "U+0041",
+    "U+030a",
+    "U+0020",
+    "U+006e",
+    "U+0303"
+  ],
+  "copyApiText": "é Å ñ",
+  "copyApiCodepoints": [
+    "U+0065",
+    "U+0301",
+    "U+0020",
+    "U+0041",
+    "U+030a",
+    "U+0020",
+    "U+006e",
+    "U+0303"
+  ],
+  "bufferPreservesMarks": true,
+  "cursorX": 5,
+  "baseAndCombiningPixelsEqual": false,
+  "baseNontransparentPixels": 138,
+  "markedNontransparentPixels": 169,
+  "combiningVisibleCriterion": "passed",
+  "images": [
+    "ascii-base.png",
+    "ascii-combining.png"
+  ]
+}

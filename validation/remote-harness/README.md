@@ -43,3 +43,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s validation/remote-harn
 2026-10-30 已按 Context7 `library OpenSSH` → `docs /openssh/openssh-portable` 核查 `AuthorizedKeysFile`、`AllowStreamLocalForwarding local`、`AllowTcpForwarding local` 与 `PermitTTY no`。依据[官方 sshd_config 文档](https://github.com/openssh/openssh-portable/blob/master/sshd_config.5)及 [streamlocal 服务端处理](https://github.com/openssh/openssh-portable/blob/master/serverloop.c)；固定 runner 的实际 OpenSSH 版本应随云端执行记录核对。
 
 首轮实际 [41046472357](../../docs/evidence/mobile-remote/41046472357/README.md) 为 2/12 通过、10/12 失败；仅两端错误 pin 拒绝通过。后续增加 readiness snapshot 的 version/protocol 类型与受限值诊断、CLI 退出码和报告长度，仍不输出原始响应或错误。实际版本记录为 OpenSSH 9.6p1 Ubuntu-3ubuntu13.20。
+
+第二轮 [41047398465](../../docs/evidence/mobile-remote/41047398465/README.md) 为 7/12 通过：Rust 6/6；Dart 仅错误 pin 通过，其余认证后、snapshot 前发生安全报告中的 `async_state_error`。真实 readiness 确认 tagged `result.snapshot` 与 0.9.5 / protocol 22。接收器 0 bytes，cleanup 通过；Dart 修复仍需后续实际 run。
+
+第三轮 [41048094519](../../docs/evidence/mobile-remote/41048094519/README.md) 在源码 `d15da12` 上 **12/12 通过**，Rust、Dart 各 6/6；移除 Dart channel 的竞争 `flush()` 后，实际正向 full、snapshot 后取消和显式重连均通过。接收器 0 bytes，cleanup 通过；脱敏 artifact 的两层 SHA 已下载复核。这里的 reconnect 是新 CLI 调用，missing-session 是有效 socket 返回 snapshot 后的名称绑定拒绝；不外推到 GUI 连续恢复或真正不存在 socket 的观察命令。elapsedMs 包含进程启动／JIT，不作为公平性能排名。

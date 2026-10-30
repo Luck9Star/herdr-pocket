@@ -1,0 +1,31 @@
+{
+  "sourceSHA": "d15da12a4fc7d60313b3c253a315c001e7290b5e",
+  "runId": 41048094396,
+  "downloads": [
+    {
+      "platform": "macos",
+      "artifactId": 12973502337,
+      "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12973502337",
+      "zipDigestVerified": "sha256:2ac296caf21c5598ca9605fb6b3b4b0f07a7c3e37439bf7ac5e809aa5a5d5338",
+      "bundleDigestVerified": "1c01ff844a6400cbb89d76f00b37cc673e199f2358a810d5ee19ac068e82f964",
+      "allPackageHashEntriesVerified": 1,
+      "sourceFontFixtureTokensContractPatchVerified": true,
+      "localArtifactPath": "/tmp/herdr-flutter-m1a-d15da12/flutter-candidate-macos-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+      "deviceValidation": "not performed by this build verification; macOS UI smoke recorded separately"
+    },
+    {
+      "platform": "android",
+      "artifactId": 12974335322,
+      "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12974335322",
+      "zipDigestVerified": "sha256:96ee14da5fb2a4ff8a581ecdb629605507688649886dd6828f922368b4965d44",
+      "bundleDigestVerified": "671caad67426f106e2877d9e714685a88dd0f26090de1c4a381899d23064b4f4",
+      "allPackageHashEntriesVerified": 1,
+      "sourceFontFixtureTokensContractPatchVerified": true,
+      "localArtifactPath": "/tmp/herdr-flutter-m1a-d15da12/flutter-candidate-android-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+      "deviceValidation": "not performed by this build verification; macOS UI smoke recorded separately",
+      "apkPath": "/tmp/herdr-flutter-m1a-d15da12/android-unpacked/app-debug.apk",
+      "apkSha256": "b7df7bc1555b37795a041e7bcb904205c4ca4b7029bb9f0999d86dc1c0f613cb"
+    }
+  ],
+  "scope": "Verified candidate macOS and Android package bytes only. Other platform artifacts are recorded from GitHub metadata, not downloaded locally."
+}

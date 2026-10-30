@@ -1,0 +1,6 @@
+{
+  "sourceSHA": "b88a0ad9b2a173ac743568ec5ce479f22b6844ca",
+  "rustBuildAndTest": "success",
+  "dartResolveAndLock": "success",
+  "actualAdapters": "failure"
+}

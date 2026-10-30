@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "d15da12a4fc7d60313b3c253a315c001e7290b5e",
+  "verifiedAtUTC": "2026-10-30T11:36:00.546414+00:00",
+  "runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 41048094396,
+      "headSha": "d15da12a4fc7d60313b3c253a315c001e7290b5e",
+      "jobs": [
+        {
+          "databaseId": 124037074315,
+          "name": "patch-and-test",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/job/124037074315",
+          "startedAt": "2026-10-30T11:26:28Z",
+          "completedAt": "2026-10-30T11:27:41Z"
+        },
+        {
+          "databaseId": 124037569713,
+          "name": "build (windows, windows-2022)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/job/124037569713",
+          "startedAt": "2026-10-30T11:27:43Z",
+          "completedAt": "2026-10-30T11:30:26Z"
+        },
+        {
+          "databaseId": 124037569787,
+          "name": "macos-render-check",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/job/124037569787",
+          "startedAt": "2026-10-30T11:27:43Z",
+          "completedAt": "2026-10-30T11:28:32Z"
+        },
+        {
+          "databaseId": 124037569805,
+          "name": "build (linux, ubuntu-24.04)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/job/124037569805",
+          "startedAt": "2026-10-30T11:27:43Z",
+          "completedAt": "2026-10-30T11:29:31Z"
+        },
+        {
+          "databaseId": 124037569824,
+          "name": "build (android, ubuntu-24.04)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/job/124037569824",
+          "startedAt": "2026-10-30T11:27:43Z",
+          "completedAt": "2026-10-30T11:33:21Z"
+        },
+        {
+          "databaseId": 124037569856,
+          "name": "build (macos, macos-14)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/job/124037569856",
+          "startedAt": "2026-10-30T11:27:43Z",
+          "completedAt": "2026-10-30T11:29:30Z"
+        },
+        {
+          "databaseId": 124037569883,
+          "name": "build (ios, macos-14)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/job/124037569883",
+          "startedAt": "2026-10-30T11:27:43Z",
+          "completedAt": "2026-10-30T11:29:33Z"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396",
+      "artifacts": [
+        {
+          "id": 12974335322,
+          "name": "flutter-candidate-android-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:96ee14da5fb2a4ff8a581ecdb629605507688649886dd6828f922368b4965d44",
+          "size_in_bytes": 73298503,
+          "expires_at": "2026-11-13T11:33:14Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12974335322"
+        },
+        {
+          "id": 12974065194,
+          "name": "flutter-candidate-ios-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:6e5a4dafbbb849497167ef125b10d9efd681655c65af4dbb7cbe786485f94476",
+          "size_in_bytes": 36234589,
+          "expires_at": "2026-11-13T11:29:26Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12974065194"
+        },
+        {
+          "id": 12973776064,
+          "name": "flutter-candidate-windows-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:1ca87537f20f566e05e4e7ca73ca291ff7c6794653eb194e1950428a42de1e19",
+          "size_in_bytes": 37513513,
+          "expires_at": "2026-11-13T11:30:16Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12973776064"
+        },
+        {
+          "id": 12973502337,
+          "name": "flutter-candidate-macos-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:2ac296caf21c5598ca9605fb6b3b4b0f07a7c3e37439bf7ac5e809aa5a5d5338",
+          "size_in_bytes": 38622385,
+          "expires_at": "2026-11-13T11:29:25Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12973502337"
+        },
+        {
+          "id": 12973008626,
+          "name": "flutter-candidate-evidence-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:3140d53354d2579bbd3c8459fe7eef12bbc43981e7da704a1dc48d298141d26d",
+          "size_in_bytes": 152644,
+          "expires_at": "2026-11-13T11:27:36Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12973008626"
+        },
+        {
+          "id": 12972923691,
+          "name": "flutter-candidate-lock-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:9abb41ba201e4bdc7aee4da0811dea7ca88f17c346c81e52078a9fa4b16cf132",
+          "size_in_bytes": 2137,
+          "expires_at": "2026-11-13T11:27:35Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12972923691"
+        },
+        {
+          "id": 12972704575,
+          "name": "flutter-candidate-linux-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:811ef4de42265d5ca227145dce081d43364a7e871615584dfbf780d34abc4f12",
+          "size_in_bytes": 33953497,
+          "expires_at": "2026-11-13T11:29:26Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12972704575"
+        },
+        {
+          "id": 12972579783,
+          "name": "flutter-candidate-macos-render-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:caad2359758a999700443897129dee0cb441ca5f8255de93f8103ca14d8bbbe4",
+          "size_in_bytes": 178597,
+          "expires_at": "2026-11-13T11:28:28Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12972579783"
+        }
+      ]
+    },
+    {
+      "conclusion": "failure",
+      "databaseId": 41048094630,
+      "headSha": "d15da12a4fc7d60313b3c253a315c001e7290b5e",
+      "jobs": [
+        {
+          "databaseId": 124037074818,
+          "name": "lock-and-test",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/job/124037074818",
+          "startedAt": "2026-10-30T11:26:28Z",
+          "completedAt": "2026-10-30T11:27:49Z"
+        },
+        {
+          "databaseId": 124037622923,
+          "name": "render-characterization",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/job/124037622923",
+          "startedAt": "2026-10-30T11:27:51Z",
+          "completedAt": "2026-10-30T11:28:59Z"
+        },
+        {
+          "databaseId": 124037622991,
+          "name": "build (macos, macos-14)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/job/124037622991",
+          "startedAt": "2026-10-30T11:27:51Z",
+          "completedAt": "2026-10-30T11:29:38Z"
+        },
+        {
+          "databaseId": 124037623041,
+          "name": "build (ios, macos-14)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/job/124037623041",
+          "startedAt": "2026-10-30T11:27:51Z",
+          "completedAt": "2026-10-30T11:29:43Z"
+        },
+        {
+          "databaseId": 124037623089,
+          "name": "build (linux, ubuntu-24.04)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/job/124037623089",
+          "startedAt": "2026-10-30T11:27:51Z",
+          "completedAt": "2026-10-30T11:29:26Z"
+        },
+        {
+          "databaseId": 124037623154,
+          "name": "build (android, ubuntu-24.04)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/job/124037623154",
+          "startedAt": "2026-10-30T11:27:51Z",
+          "completedAt": "2026-10-30T11:34:26Z"
+        },
+        {
+          "databaseId": 124037623222,
+          "name": "build (windows, windows-2022)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/job/124037623222",
+          "startedAt": "2026-10-30T11:27:52Z",
+          "completedAt": "2026-10-30T11:30:33Z"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630",
+      "artifacts": [
+        {
+          "id": 12974095307,
+          "name": "flutter-macos-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:602ebf86486d6a49e48c5d9043608c3b42f6ab037b4d70681f40b9cf96b3c9c5",
+          "size_in_bytes": 38618166,
+          "expires_at": "2026-11-13T11:29:30Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/artifacts/12974095307"
+        },
+        {
+          "id": 12974085529,
+          "name": "flutter-windows-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:01b770933b1b152088933b6d08a62b90f0f50dac963e6e8f922b265063f5d033",
+          "size_in_bytes": 37510280,
+          "expires_at": "2026-11-13T11:30:24Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/artifacts/12974085529"
+        },
+        {
+          "id": 12973965315,
+          "name": "flutter-render-characterization-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:d31b2e17540dcd82ca11eb36e343e71c585a95c828d89d64d680557da187a953",
+          "size_in_bytes": 2213,
+          "expires_at": "2026-11-13T11:28:54Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/artifacts/12973965315"
+        },
+        {
+          "id": 12973692016,
+          "name": "flutter-android-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:231c15378516774d43200f0b2f316b3dd1d664994e377bcb67cae0a331e46f21",
+          "size_in_bytes": 73295207,
+          "expires_at": "2026-11-13T11:34:18Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/artifacts/12973692016"
+        },
+        {
+          "id": 12973392652,
+          "name": "flutter-ios-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:937c947bda5ab94c07aef6053e01ebc4a39bd88b7c143b6901f3335e9e46857f",
+          "size_in_bytes": 36233406,
+          "expires_at": "2026-11-13T11:29:36Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/artifacts/12973392652"
+        },
+        {
+          "id": 12973143294,
+          "name": "flutter-resolved-lock-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:0a19cb5afe1d8ff7dedcc7f66cd32906981efd59c726accc7ca4c532a5329ebe",
+          "size_in_bytes": 2135,
+          "expires_at": "2026-11-13T11:27:44Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/artifacts/12973143294"
+        },
+        {
+          "id": 12972874081,
+          "name": "flutter-linux-d15da12a4fc7d60313b3c253a315c001e7290b5e",
+          "digest": "sha256:64665f02173a71d3b70fe8a362fbf537ce2b85e2ec3172f37265182df189fb5f",
+          "size_in_bytes": 33948811,
+          "expires_at": "2026-11-13T11:29:20Z",
+          "expired": false,
+          "downloadUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094630/artifacts/12972874081"
+        }
+      ]
+    }
+  ],
+  "tests": {
+    "candidateRegular": {
+      "passed": 20,
+      "failed": 0
+    },
+    "candidateLinuxRenderer": {
+      "passed": 10,
+      "failed": 0
+    },
+    "candidateMacosRendererAndUI": {
+      "passed": 14,
+      "failed": 0
+    },
+    "baseline": {
+      "regularAndLockJob": "passed",
+      "rendererCharacterization": "failed",
+      "bufferPreservesMarks": true,
+      "baseAndCombiningPixelsEqual": true
+    }
+  },
+  "scope": "Cloud builds and headless tests. Mobile devices, real mobile IME, GUI remote operation, overlays and production credentials remain unverified. Only the explicit experimental terminal_view candidate has the renderer patch.",
+  "macosNativeEvidence": "../macos/flutter-verification.json",
+  "remoteAdapterEvidence": "../41048094519/probe/manifest.json"
+}

@@ -61,7 +61,8 @@ def apply(destination):
         if digest((target / name).read_bytes()) != hashes['beforeSha256']:
             raise ValueError('Unexpected upstream source: ' + name)
     for check in [True, False]:
-        subprocess.run(['git', 'apply', *(['--check'] if check else []), str(patch)],
+        subprocess.run(['git', '-c', 'core.autocrlf=false', '-c', 'core.eol=lf',
+                        'apply', *(['--check'] if check else []), str(patch)],
                        cwd=target, check=True)
     for name, hashes in metadata['files'].items():
         if digest((target / name).read_bytes()) != hashes['afterSha256']:
@@ -114,7 +115,15 @@ def verify_lock(destination):
     manifest_file = destination / 'candidate-manifest.json'
     metadata = json.loads(manifest_file.read_text(encoding='utf-8'))
     metadata['candidateLockSha256'] = digest((destination / 'pubspec.lock').read_bytes())
-    metadata['transitiveLockComparison'] = 'identical except terminal_view explicit path source'
+    metadata['transitiveLockComparison'] = 'package blocks identical except terminal_view explicit path source; SDK footer recorded separately'
+    def sdk_footer(path):
+        text = path.read_text(encoding='utf-8')
+        return text.split('\nsdks:\n', 1)[1] if '\nsdks:\n' in text else ''
+    before_sdk = sdk_footer(SOURCE / 'pubspec.lock')
+    after_sdk = sdk_footer(destination / 'pubspec.lock')
+    metadata['sdkConstraintComparison'] = {'baseline': before_sdk, 'candidate': after_sdk,
+                                           'identical': before_sdk == after_sdk,
+                                           'actualFlutterVersionPinned': '3.47.9'}
     manifest_file.write_text(json.dumps(metadata, indent=2) + '\n', encoding='utf-8')
     print('Candidate lock verified; every other dependency block unchanged')
 

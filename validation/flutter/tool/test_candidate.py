@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import tarfile
 import unittest
 from unittest.mock import patch
 
@@ -65,6 +66,31 @@ class CandidateTests(unittest.TestCase):
         (self.app / 'pubspec.lock').write_text(drift)
         with self.assertRaises(ValueError):
             candidate.verify_lock(self.app)
+
+    def test_patch_keeps_lf_even_with_inherited_git_autocrlf(self):
+        source = self.base / 'source'
+        patches = source / 'patches'
+        patches.mkdir(parents=True)
+        before, after = b'base\n', b'fixed\n'
+        patch_bytes = b'--- a/source.txt\n+++ b/source.txt\n@@ -1 +1 @@\n-base\n+fixed\n'
+        (patches / 'probe.patch').write_bytes(patch_bytes)
+        archive = io.BytesIO()
+        with tarfile.open(fileobj=archive, mode='w:gz') as bundle:
+            entry = tarfile.TarInfo('source.txt')
+            entry.size = len(before)
+            bundle.addfile(entry, io.BytesIO(before))
+        blob = archive.getvalue()
+        (source / 'pubspec.lock').write_text(self.baseline)
+        (patches / 'manifest.json').write_text(json.dumps({
+            'patch': 'probe.patch', 'patchSha256': candidate.digest(patch_bytes),
+            'archiveUrl': 'https://invalid.example/fixture', 'archiveSha256': candidate.digest(blob),
+            'files': {'source.txt': {'beforeSha256': candidate.digest(before), 'afterSha256': candidate.digest(after)}},
+        }))
+        git_env = {'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'core.autocrlf', 'GIT_CONFIG_VALUE_0': 'true'}
+        with patch.object(candidate, 'SOURCE', source), patch.dict(os.environ, git_env), \
+                patch.object(candidate.urllib.request, 'urlopen', return_value=io.BytesIO(blob)):
+            candidate.apply(self.app)
+        self.assertEqual((self.app / 'candidate/terminal_view/source.txt').read_bytes(), after)
 
 
 if __name__ == '__main__':

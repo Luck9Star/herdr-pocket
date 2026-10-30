@@ -1,0 +1,9 @@
+{
+  "scope": "fixture-only",
+  "confirmed": true,
+  "bytesChanged": 103,
+  "revokeSimulation": true,
+  "emptyAfterRevoke": true,
+  "realAuthorization": "not-implemented",
+  "network": "not-implemented"
+}

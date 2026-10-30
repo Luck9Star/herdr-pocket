@@ -61,6 +61,7 @@ def run(label, argv, cwd=None, timeout=1200, env=None):
 
 def checkout(url, commit, destination, label):
     run(label + '-init', ['git', 'init', destination], timeout=60)
+    run(label + '-line-endings', ['git', 'config', 'core.autocrlf', 'false'], cwd=destination, timeout=60)
     run(label + '-remote', ['git', 'remote', 'add', 'origin', url], cwd=destination, timeout=60)
     run(label + '-fetch', ['git', 'fetch', '--depth=1', 'origin', commit], cwd=destination, timeout=300)
     run(label + '-checkout', ['git', 'checkout', '--detach', 'FETCH_HEAD'], cwd=destination, timeout=60)
@@ -158,7 +159,7 @@ def zerotier(reference, lock):
     run('cmake-version', ['cmake', '--version'], timeout=30)
     run('cmake-configure', ['cmake', '-S', target, '-B', build, '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
                           '-DBUILD_STATIC_LIB=OFF', '-DBUILD_SHARED_LIB=ON', '-DBUILD_HOST_SELFTEST=OFF',
-                          '-DBUILD_HOST_EXAMPLES=OFF', '-DZTS_DISABLE_CENTRAL_API=ON'], timeout=300)
+                          '-DBUILD_HOST_EXAMPLES=OFF', '-DALLOW_INSTALL_TARGET=OFF', '-DZTS_DISABLE_CENTRAL_API=ON'], timeout=300)
     run('build-shared', ['cmake', '--build', build, '--config', 'Release', '--target', 'zt-shared', '--parallel', '2'], timeout=1200)
     suffix = {'Windows': '.dll', 'Darwin': '.dylib', 'Linux': '.so'}[platform.system()]
     libraries = [p for p in build.rglob('*') if p.is_file() and p.suffix == suffix and 'zt' in p.name]

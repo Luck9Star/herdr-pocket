@@ -1,0 +1,43 @@
+name: Isolated SSH and herdr protocol probe
+on:
+  push:
+    branches: ['codex/**']
+    paths: ['validation/ssh/**', 'validation/tauri/core/**', '.github/workflows/ssh-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ssh-probe-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  linux-fixture:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Pin Rust and install runner-only SSH server
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+          sudo apt-get update
+          sudo apt-get install -y openssh-server
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            validation/ssh/target
+          key: ssh-linux-rust196-${{ hashFiles('validation/ssh/Cargo.lock') }}
+      - name: Compile pinned client
+        run: cargo build --locked --manifest-path validation/ssh/Cargo.toml
+      - name: Run isolated host-key, session, observe and reconnect cases
+        run: python3 validation/ssh/run-ci.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: ssh-fixture-${{ github.sha }}
+          path: validation/ssh/artifacts/
+          if-no-files-found: error
+          retention-days: 14

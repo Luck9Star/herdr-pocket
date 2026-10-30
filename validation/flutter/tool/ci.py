@@ -41,7 +41,7 @@ def prepare(destination):
     shutil.copytree(source / 'test', destination / 'test', dirs_exist_ok=True)
     (destination / 'analysis_options.yaml').write_text('analyzer:\n  errors:\n    todo: ignore\n')
     shared = ROOT / 'validation/shared'
-    fixture = json.loads((shared / 'fixture.json').read_text())
+    fixture = json.loads((shared / 'fixture.json').read_text(encoding='utf-8'))
     font = shared / fixture['font']['file']
     if hashlib.sha256(font.read_bytes()).hexdigest() != fixture['font']['sha256']:
         raise SystemExit('Shared font checksum mismatch')
@@ -78,7 +78,7 @@ def package(destination, platform, output):
             bundle.write(destination / 'pubspec.lock', 'pubspec.lock')
     def version(command):
         try:
-            return subprocess.check_output(command, cwd=destination, text=True, stderr=subprocess.STDOUT, timeout=60).strip()
+            return subprocess.check_output(command, cwd=destination, text=True, encoding='utf-8', errors='replace', stderr=subprocess.STDOUT, timeout=60).strip()
         except Exception as exc:
             return type(exc).__name__
     shared = ROOT / 'validation/shared'
@@ -112,10 +112,10 @@ if a.command == 'bootstrap':
     if os.environ.get('GITHUB_ACTIONS') != 'true':
         raise SystemExit('SDK bootstrap is CI-only; local SDK installation is not authorized')
     run(['git', 'clone', '--depth=1', '--branch=' + VERSION, 'https://github.com/flutter/flutter.git', a.destination])
-    actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=a.destination, text=True).strip()
+    actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=a.destination, text=True, encoding='utf-8').strip()
     if actual != COMMIT:
         raise SystemExit('Flutter tag does not match locked source commit')
-    with open(os.environ['GITHUB_PATH'], 'a') as f:
+    with open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8') as f:
         f.write(str(a.destination / 'bin') + '\n')
 elif a.command == 'prepare':
     prepare(a.destination)

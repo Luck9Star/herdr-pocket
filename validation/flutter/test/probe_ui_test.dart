@@ -106,6 +106,9 @@ void main() {
     expect(view.autoResize, isFalse);
     expect(view.terminal.viewWidth, 80);
     expect(view.terminal.viewHeight, 24);
+    await tester.ensureVisible(find.text('预览发送'));
+    await tester.pumpAndSettle();
+    expect(find.text('预览发送').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
     await saveView(tester, 'small-mobile-keyboard-draft');
   });

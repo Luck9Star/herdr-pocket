@@ -1,0 +1,42 @@
+name: Helper fixture validation
+on:
+  push:
+    branches: ['codex/**']
+    paths: ['validation/helper/**', '.github/workflows/helper-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: helper-fixture-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  fixture:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Run isolated fixture tests
+        shell: bash
+        run: |
+          mkdir -p helper-artifacts
+          python3 --version > helper-artifacts/python-version.txt
+          python3 -m unittest discover -s validation/helper -v > helper-artifacts/tests.txt 2>&1
+          python3 validation/helper/fixture_helper.py --demo > helper-artifacts/default-demo.json
+          python3 validation/helper/fixture_helper.py --demo --confirm-fixture 'AUTHORIZE FIXTURE' > helper-artifacts/confirmed-demo.json
+          python3 -c "import json,os,platform; print(json.dumps({'sourceSHA':os.environ['GITHUB_SHA'],'scope':'fixture-only','realAuthorization':'not-implemented','os':platform.platform(),'python':platform.python_version()}))" > helper-artifacts/manifest.json
+          cp validation/helper/fixture_helper.py validation/helper/README.md helper-artifacts/
+          python3 -c "import hashlib,pathlib; p=pathlib.Path('helper-artifacts'); (p/'SHA256SUMS').write_text(''.join(hashlib.sha256(f.read_bytes()).hexdigest()+'  '+f.name+'\n' for f in sorted(p.iterdir()) if f.is_file()))"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: helper-fixture-${{ matrix.os }}-${{ github.sha }}
+          path: helper-artifacts/
+          retention-days: 14
+          if-no-files-found: error

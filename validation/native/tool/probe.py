@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Collect genuine provider compilation failures without skipping other probes."""
-import ctypes
 import hashlib
 import json
 import os
@@ -8,6 +7,7 @@ from pathlib import Path
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -21,7 +21,8 @@ WORK = Path(os.environ.get('RUNNER_TEMP', '/tmp')) / ('herdr-native-' + os.envir
 REPORT = {'schemaVersion': 1, 'sourceCommit': os.environ.get('GITHUB_SHA', 'local'),
           'runUrl': 'https://github.com/' + os.environ.get('GITHUB_REPOSITORY', '') + '/actions/runs/' + os.environ.get('GITHUB_RUN_ID', ''),
           'platform': platform.system(), 'architecture': platform.machine(),
-          'runnerImage': os.environ.get('ImageVersion'), 'scope': CONFIG['scope'], 'providers': {}}
+          'runnerImage': os.environ.get('ImageVersion'), 'scope': CONFIG['scope'],
+          'providers': {name: {'provider': name, 'status': 'not run', 'networkValidation': 'not run', 'deviceValidation': 'not run', 'commands': []} for name in ['tailscale', 'easytier', 'zerotier']}}
 CURRENT = None
 
 
@@ -37,10 +38,20 @@ def run(label, argv, cwd=None, timeout=1200, env=None):
     started = time.monotonic()
     try:
         with logfile.open('w') as f:
-            result = subprocess.run(entry['argv'], cwd=cwd, env=env, stdout=f, stderr=subprocess.STDOUT, timeout=timeout)
-        entry['exitCode'] = result.returncode
-        if result.returncode != 0:
-            raise RuntimeError(label + ' exited ' + str(result.returncode))
+            options = {'start_new_session': True} if os.name != 'nt' else {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+            process = subprocess.Popen(entry['argv'], cwd=cwd, env=env, stdout=f, stderr=subprocess.STDOUT, **options)
+            try:
+                code = process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                if os.name == 'nt':
+                    subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], stdout=f, stderr=subprocess.STDOUT, check=False)
+                else:
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+                raise
+        entry['exitCode'] = code
+        if code != 0:
+            raise RuntimeError(label + ' exited ' + str(code))
     except subprocess.TimeoutExpired:
         entry['exitCode'] = 124
         raise RuntimeError(label + ' exceeded ' + str(timeout) + ' seconds')
@@ -100,10 +111,7 @@ def tsnet(reference, lock):
     env = dict(os.environ, CGO_ENABLED='1', GOTOOLCHAIN='local')
     run('go-version', ['go', 'version'], cwd=probe, env=env)
     run('compile-c-abi', ['go', 'build', '-mod=readonly', '-buildmode=c-shared', '-o', library, '.'], cwd=probe, env=env)
-    loaded = ctypes.CDLL(str(library))
-    version = loaded.hp_probe_abi_version
-    version.restype = ctypes.c_int
-    if version() != 1: raise RuntimeError('Probe ABI returned wrong version')
+    run('load-c-abi', [sys.executable, '-c', 'import ctypes,sys; library=ctypes.CDLL(sys.argv[1]); version=library.hp_probe_abi_version; version.restype=ctypes.c_int; assert version()==1; print("probe ABI v1 loaded; node never started")', library], timeout=30)
     CURRENT['library'] = {'sha256': sha(library), 'bytes': library.stat().st_size, 'load': 'passed', 'nodeStarted': False}
     CURRENT['tested'] = 'tsnet import + Dial(context)/Close type check + c-shared ABI build/load; no tsnet dial executed'
 
@@ -117,7 +125,10 @@ def easytier(reference, lock):
     licenses('heeler-easytier', reference / 'native/easytier')
     protoc = CONFIG['protoc'][platform.system()]
     archive = WORK / protoc['file']
-    urllib.request.urlretrieve('https://github.com/protocolbuffers/protobuf/releases/download/v36.2/' + protoc['file'], archive)
+    with urllib.request.urlopen('https://github.com/protocolbuffers/protobuf/releases/download/v36.2/' + protoc['file'], timeout=60) as response:
+        content = response.read(32 * 1024 * 1024 + 1)
+    if len(content) > 32 * 1024 * 1024: raise RuntimeError('protoc archive exceeds 32 MiB budget')
+    archive.write_bytes(content)
     if sha(archive) != protoc['sha256']: raise RuntimeError('protoc checksum mismatch')
     tools = WORK / 'protoc'
     with zipfile.ZipFile(archive) as z: z.extractall(tools)
@@ -144,6 +155,7 @@ def zerotier(reference, lock):
     patches(reference, 'libzt', lock['ZEROTIER_PATCHES'], target)
     licenses('libzt', target)
     build = WORK / 'libzt-build'
+    run('cmake-version', ['cmake', '--version'], timeout=30)
     run('cmake-configure', ['cmake', '-S', target, '-B', build, '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
                           '-DBUILD_STATIC_LIB=OFF', '-DBUILD_SHARED_LIB=ON', '-DBUILD_HOST_SELFTEST=OFF',
                           '-DBUILD_HOST_EXAMPLES=OFF', '-DZTS_DISABLE_CENTRAL_API=ON'], timeout=300)
@@ -152,9 +164,7 @@ def zerotier(reference, lock):
     libraries = [p for p in build.rglob('*') if p.is_file() and p.suffix == suffix and 'zt' in p.name]
     if len(libraries) != 1: raise RuntimeError('Expected one libzt shared library, found ' + str(len(libraries)))
     library = libraries[0]
-    loaded = ctypes.CDLL(str(library))
-    for symbol in ['zts_node_start', 'zts_bsd_socket', 'zts_bsd_connect', 'zts_bsd_close']:
-        getattr(loaded, symbol)  # Resolve only; never call node/network functions.
+    run('load-and-resolve', [sys.executable, '-c', 'import ctypes,sys; library=ctypes.CDLL(sys.argv[1]); [getattr(library,s) for s in ["zts_node_start","zts_bsd_socket","zts_bsd_connect","zts_bsd_close"]]; print("four symbols resolved; node never started")', library], timeout=30)
     CURRENT['library'] = {'sha256': sha(library), 'bytes': library.stat().st_size, 'load': 'passed', 'nodeStarted': False}
     CURRENT['tested'] = 'Patched libzt shared library compiled/loaded; four symbols resolved, never invoked'
 

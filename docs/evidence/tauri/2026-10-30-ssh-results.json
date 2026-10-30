@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40985722900/artifacts/12946711960",
+  "download": "completed",
+  "sha256Sums": "all listed files verified",
+  "sourceFiles": {
+    "manifest.json": {
+      "sha256": "6744f41a9fbd1604c3b5ca8b64bca82610c1dd46b75d157f001e5eca95727120",
+      "content": {
+        "schemaVersion": 1,
+        "sourceSHA": "ed35d84046c269169f1b72176ab769b398e6cca5",
+        "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40985722900",
+        "platform": "Ubuntu 24.04 x86_64 loopback fixture",
+        "herdr": {
+          "version": "0.9.5",
+          "sourceCommit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+          "asset": "https://github.com/herdrdev/herdr/releases/download/v0.9.5/herdr-linux-x86_64",
+          "sha256": "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d"
+        },
+        "status": "passed",
+        "scope": "Separate Linux integration harness; GUI binding, overlay routing, mobile and real-user credentials are unverified."
+      }
+    },
+    "ssh-results.json": {
+      "sha256": "395492269d82616ee208fecec9e44db82a99564c5b79fcf9d951727e0cc7c872",
+      "content": {
+        "checks": [
+          {
+            "id": "host-key-mismatch-before-auth",
+            "status": "passed"
+          },
+          {
+            "id": "pinned-key-temporary-publickey-auth",
+            "status": "passed"
+          },
+          {
+            "id": "direct-streamlocal-real-herdr-snapshot",
+            "status": "passed"
+          },
+          {
+            "expectedHex": "41e4b8ade69687 1b5b41 03 0d",
+            "id": "real-input-utf8-keys-target",
+            "pane": "w1:p1",
+            "receivedBytes": 12,
+            "rpcWriteAttempts": 2,
+            "status": "passed"
+          },
+          {
+            "frameKeys": [
+              "bytes",
+              "encoding",
+              "full",
+              "height",
+              "seq",
+              "type",
+              "width"
+            ],
+            "id": "explicit-session-observe-full-no-pty",
+            "status": "passed"
+          },
+          {
+            "id": "missing-session-no-default-fallback",
+            "status": "passed"
+          },
+          {
+            "id": "cancel-reconnect-fresh-full-no-replayed-bytes",
+            "receivedBytesAfterReconnect": 12,
+            "rpcWriteAttempts": 2,
+            "status": "passed"
+          }
+        ],
+        "schemaVersion": 1,
+        "scope": "Linux loopback OpenSSH + real herdr 0.9.5; separate harness, GUI integration and overlays unverified"
+      }
+    },
+    "received-bytes.json": {
+      "sha256": "de91d702a5de5dbd3d2ede2d5c9ce622ada8720ed545c6ac21ae2c5134008968",
+      "content": {
+        "hex": "41e4b8ade696871b5b41030d",
+        "bytes": 12,
+        "target": "pocket-probe test pane only"
+      }
+    }
+  },
+  "boundary": "Separate Linux loopback OpenSSH/herdr 0.9.5 test harness only. GUI glue, overlays, mobile and real-user hosts not tested."
+}

@@ -1,0 +1,1396 @@
+[
+  {
+    "id": "P1-empty",
+    "title": "随时接住下一步",
+    "subtitle": "远端工作，留在原来的主机",
+    "body": [
+      "还没有主机",
+      "手机为自己生成独立 SSH 密钥。",
+      "通过可信渠道把公钥请求交给主机操作者。"
+    ],
+    "actions": [
+      {
+        "label": "开始配对",
+        "to": "P2-request"
+      },
+      {
+        "label": "手动配置",
+        "to": "P2-manual"
+      },
+      {
+        "label": "浏览演示看板",
+        "to": "P1-dashboard"
+      }
+    ],
+    "family": "P1",
+    "kind": "empty"
+  },
+  {
+    "id": "P2-request",
+    "title": "添加这台手机",
+    "subtitle": "配对 1 / 4 · 手机端",
+    "body": [
+      "设备：旅途手机（示例）",
+      "请求：req-demo-01 · 10 分钟有效",
+      "公钥指纹：DEMO-PHONE-7C2A",
+      "仅复制公钥请求，经现有可信渠道交给主机。私钥留在手机。"
+    ],
+    "actions": [
+      {
+        "label": "查看主机端步骤",
+        "to": "P2-helper"
+      },
+      {
+        "label": "已有 SSH 凭据",
+        "to": "P2-manual"
+      },
+      {
+        "label": "取消配对",
+        "to": "P1-empty"
+      }
+    ],
+    "family": "P2",
+    "kind": "pair"
+  },
+  {
+    "id": "P2-helper",
+    "title": "核对后授权",
+    "subtitle": "配对 2 / 4 · 主机 helper",
+    "body": [
+      "目标账号：dev@workstation-demo",
+      "待添加设备：旅途手机",
+      "请求：req-demo-01",
+      "公钥：DEMO-PHONE-7C2A",
+      "拟追加：此手机专属授权项",
+      "确认仅影响本次授权。取消不写入。"
+    ],
+    "actions": [
+      {
+        "label": "主机端明确确认",
+        "to": "P2-authorized"
+      },
+      {
+        "label": "拒绝授权",
+        "to": "P2-denied"
+      }
+    ],
+    "family": "P2",
+    "kind": "helper",
+    "width": 760,
+    "height": 640
+  },
+  {
+    "id": "P2-authorized",
+    "title": "主机已添加公钥",
+    "subtitle": "主机 helper · 生成响应后退出",
+    "body": [
+      "响应绑定请求、手机公钥、SSH 账号和预期 host key。",
+      "将响应码展示给手机扫描。无需同一局域网，不启动常驻监听。",
+      "主机授权已生效；二维码到期不撤销公钥。"
+    ],
+    "actions": [
+      {
+        "label": "手机扫描响应码",
+        "to": "P2-scan"
+      },
+      {
+        "label": "查看撤销说明",
+        "to": "P2-revoke"
+      }
+    ],
+    "family": "P2",
+    "kind": "helper",
+    "width": 760,
+    "height": 640
+  },
+  {
+    "id": "P2-scan",
+    "title": "扫描主机响应码",
+    "subtitle": "配对 3 / 4 · 手机端",
+    "body": [
+      "将主机显示的响应码放入框内",
+      "原型二维码占位，不包含可用授权信息。",
+      "相机权限只用于扫码；拒绝后仍可手工输入。"
+    ],
+    "actions": [
+      {
+        "label": "模拟扫描响应",
+        "to": "P2-review"
+      },
+      {
+        "label": "相机不可用",
+        "to": "P2-camera"
+      },
+      {
+        "label": "模拟错配或过期",
+        "to": "P2-invalid"
+      }
+    ],
+    "family": "P2",
+    "kind": "scan"
+  },
+  {
+    "id": "P2-review",
+    "title": "先确认是谁",
+    "subtitle": "配对 3 / 4 · 审查连接资料",
+    "body": [
+      "主机：工作站 · dev@workstation-demo",
+      "网络：Tailscale / 工作网络",
+      "请求、公钥和账号：与本机待配对项匹配",
+      "预期 host key：DEMO-HOST-A41C",
+      "请通过可信主机终端核对来源。扫码不会自动信任或连接。"
+    ],
+    "actions": [
+      {
+        "label": "已核对来源，保存资料",
+        "to": "P2-ready"
+      },
+      {
+        "label": "指纹与来源不符",
+        "to": "P4-fingerprint"
+      },
+      {
+        "label": "取消并保留授权说明",
+        "to": "P2-unverified"
+      }
+    ],
+    "family": "P2",
+    "kind": "review"
+  },
+  {
+    "id": "P2-ready",
+    "title": "资料已保存",
+    "subtitle": "配对 4 / 4 · 主动验证连接",
+    "body": [
+      "SSH 授权：主机已确认",
+      "网络：设备入网授权待完成",
+      "主机信任：参考指纹已核对，连接时仍核验实际 key",
+      "herdr：等待 SSH 成功后检查能力"
+    ],
+    "actions": [
+      {
+        "label": "完成网络授权",
+        "to": "P5-auth"
+      },
+      {
+        "label": "主动连接（演示）",
+        "to": "P2-success"
+      },
+      {
+        "label": "目标不可达",
+        "to": "P2-unverified"
+      }
+    ],
+    "family": "P2",
+    "kind": "checks"
+  },
+  {
+    "id": "P2-success",
+    "title": "连接验证完成",
+    "subtitle": "演示结果 · 尚非真实 SSH 测试",
+    "body": [
+      "实际 host key：与已核验参考值匹配",
+      "SSH 认证：演示成功",
+      "herdr session：design-session",
+      "当前快照：演示已取得"
+    ],
+    "actions": [
+      {
+        "label": "进入主机会话看板",
+        "to": "P1-dashboard"
+      }
+    ],
+    "family": "P2",
+    "kind": "checks"
+  },
+  {
+    "id": "P2-unverified",
+    "title": "已授权，尚未验证",
+    "subtitle": "主机可能已添加手机公钥",
+    "body": [
+      "没有完成实际 SSH 认证。",
+      "请检查所选网络与目标路径，再主动连接。",
+      "取消或响应过期不会撤销主机上的长期公钥。"
+    ],
+    "actions": [
+      {
+        "label": "检查网络",
+        "to": "P5-networks"
+      },
+      {
+        "label": "查看撤销方式",
+        "to": "P2-revoke"
+      },
+      {
+        "label": "返回接入资料",
+        "to": "P2-ready"
+      }
+    ],
+    "family": "P2",
+    "kind": "warning"
+  },
+  {
+    "id": "P2-revoke",
+    "title": "只撤销这次授权",
+    "subtitle": "主机端手动确认后执行",
+    "body": [
+      "在原主机可信终端运行 helper 撤销入口。",
+      "核对设备公钥指纹及本次新增记录。",
+      "仅移除本次实际新增项；此前已有的相同公钥不删除。",
+      "撤销限制后续认证，不代表现有 SSH 连接已断开。"
+    ],
+    "actions": [
+      {
+        "label": "模拟主机确认撤销",
+        "to": "P2-denied"
+      },
+      {
+        "label": "保留授权并返回",
+        "to": "P2-unverified"
+      }
+    ],
+    "family": "P2",
+    "kind": "helper",
+    "width": 760,
+    "height": 640
+  },
+  {
+    "id": "P2-camera",
+    "title": "相机暂不可用",
+    "subtitle": "未改变任何 SSH 授权",
+    "body": [
+      "可以在系统设置中允许相机后重试。",
+      "也可从可信主机终端手动输入响应资料。"
+    ],
+    "actions": [
+      {
+        "label": "手动输入",
+        "to": "P2-manual"
+      },
+      {
+        "label": "重试相机",
+        "to": "P2-scan"
+      }
+    ],
+    "family": "P2",
+    "kind": "warning"
+  },
+  {
+    "id": "P2-invalid",
+    "title": "无法使用这份响应",
+    "subtitle": "请求错配 / 已过期 / 已完成",
+    "body": [
+      "响应与当前待处理请求不一致。",
+      "不保存资料，不信任指纹，不连接。",
+      "若主机已经添加公钥，可查看撤销指引。"
+    ],
+    "actions": [
+      {
+        "label": "重新取得正确响应",
+        "to": "P2-scan"
+      },
+      {
+        "label": "查看授权清理",
+        "to": "P2-revoke"
+      }
+    ],
+    "family": "P2",
+    "kind": "warning"
+  },
+  {
+    "id": "P2-denied",
+    "title": "本次配对未完成",
+    "subtitle": "没有继续连接",
+    "body": [
+      "拒绝授权不会添加公钥。",
+      "若这里来自撤销演示，只代表本次新增项已移除。",
+      "可以稍后重新发起或使用已有凭据。"
+    ],
+    "actions": [
+      {
+        "label": "返回主机入口",
+        "to": "P1-empty"
+      }
+    ],
+    "family": "P2",
+    "kind": "warning"
+  },
+  {
+    "id": "P2-manual",
+    "title": "手动添加主机",
+    "subtitle": "仅保存资料，不自动连接",
+    "body": [
+      "名称：工作站（示例）",
+      "地址 / 端口：workstation-demo / 22",
+      "SSH 账号：dev",
+      "网络配置：工作网络 · Tailscale",
+      "参考 host key：DEMO-HOST-A41C",
+      "凭据从独立受保护入口提供；不进入资料码。"
+    ],
+    "actions": [
+      {
+        "label": "审查并保存",
+        "to": "P2-ready"
+      },
+      {
+        "label": "返回扫码",
+        "to": "P2-scan"
+      }
+    ],
+    "family": "P2",
+    "kind": "form"
+  },
+  {
+    "id": "P1-dashboard",
+    "title": "今天的远端工作",
+    "subtitle": "按主机分组 · 最近同步 16:40:12",
+    "body": [
+      "工作站 · Tailscale · 已连接",
+      "design-session / agent-a · 待处理",
+      "实验机 · EasyTier · 已连接",
+      "build-session / agent-b · 处理中",
+      "备用机 · ZeroTier · 等待入网授权"
+    ],
+    "actions": [
+      {
+        "label": "打开待处理终端",
+        "to": "P3-observe"
+      },
+      {
+        "label": "网络与主机",
+        "to": "P5-networks"
+      },
+      {
+        "label": "桌面工作台",
+        "to": "D1-workspace"
+      }
+    ],
+    "family": "P1",
+    "kind": "dashboard"
+  },
+  {
+    "id": "P1-stale",
+    "title": "主机状态待确认",
+    "subtitle": "上次同步 16:40:12 · 已失联",
+    "body": [
+      "工作站 · Tailscale · 目标不可达",
+      "agent-a · 上次状态：待处理",
+      "主机不可达，不等于没有 agent。",
+      "恢复后重新取得当前状态与全量画面。"
+    ],
+    "actions": [
+      {
+        "label": "主动重新连接",
+        "to": "P4-recovering"
+      },
+      {
+        "label": "查看网络状态",
+        "to": "P5-networks"
+      },
+      {
+        "label": "返回看板",
+        "to": "P1-dashboard"
+      }
+    ],
+    "family": "P1",
+    "kind": "warning"
+  },
+  {
+    "id": "P3-observe",
+    "title": "先观察，再输入",
+    "subtitle": "工作站 / design-session / agent-a",
+    "body": [
+      "观察 · 新全量画面 16:40:12",
+      "终端只是交互示意。字体、IME、列宽与性能必须在验证壳实测。"
+    ],
+    "actions": [
+      {
+        "label": "进入逐键输入",
+        "to": "P3-direct"
+      },
+      {
+        "label": "编辑草稿",
+        "to": "P3-draft"
+      },
+      {
+        "label": "选择与粘贴",
+        "to": "P3-selection"
+      }
+    ],
+    "family": "P3",
+    "kind": "terminal",
+    "mode": "观察"
+  },
+  {
+    "id": "P3-direct",
+    "title": "输入指向 agent-a",
+    "subtitle": "工作站 / design-session / agent-a",
+    "body": [
+      "逐键输入 · 已提交文字立即发送",
+      "中文组合阶段留在本地，提交后发送一次。"
+    ],
+    "actions": [
+      {
+        "label": "收起键盘",
+        "to": "P3-keyboard-closed"
+      },
+      {
+        "label": "改用草稿",
+        "to": "P3-draft"
+      },
+      {
+        "label": "演示发送中断",
+        "to": "P4-unknown"
+      }
+    ],
+    "family": "P3",
+    "kind": "terminal",
+    "mode": "逐键输入",
+    "keyboard": true
+  },
+  {
+    "id": "P3-small",
+    "title": "小屏也能看清目标",
+    "subtitle": "360 × 800 · 键盘展开",
+    "body": [
+      "工作站 / design-session / agent-a",
+      "终端本地视口变化，不发送远端 resize。"
+    ],
+    "actions": [
+      {
+        "label": "收起键盘",
+        "to": "P3-keyboard-closed"
+      },
+      {
+        "label": "回到标准手机",
+        "to": "P3-direct"
+      }
+    ],
+    "family": "P3",
+    "kind": "terminal",
+    "mode": "逐键输入",
+    "keyboard": true,
+    "width": 360,
+    "height": 800
+  },
+  {
+    "id": "P3-keyboard-closed",
+    "title": "键盘已收起",
+    "subtitle": "工作站 / design-session / agent-a",
+    "body": [
+      "逐键模式保留 · 软键盘关闭",
+      "辅助键仅在目标实时、模式明确时可用。",
+      "窗口或键盘变化不隐式改变共享 PTY 尺寸。"
+    ],
+    "actions": [
+      {
+        "label": "展开键盘",
+        "to": "P3-direct"
+      },
+      {
+        "label": "组合键辅助",
+        "to": "P3-combo"
+      },
+      {
+        "label": "跨网络标签",
+        "to": "P4-tabs"
+      }
+    ],
+    "family": "P3",
+    "kind": "terminal",
+    "mode": "逐键输入"
+  },
+  {
+    "id": "P3-draft",
+    "title": "先把话写完整",
+    "subtitle": "工作站 / design-session / agent-a",
+    "body": [
+      "草稿仅属于这个目标",
+      "请先运行回归测试，再汇报失败项。",
+      "发送文本不额外追加回车。切换标签会保留本地草稿。"
+    ],
+    "actions": [
+      {
+        "label": "预览草稿",
+        "to": "P3-draft-preview"
+      },
+      {
+        "label": "回到观察",
+        "to": "P3-observe"
+      },
+      {
+        "label": "切换标签",
+        "to": "P4-tabs"
+      }
+    ],
+    "family": "P3",
+    "kind": "draft",
+    "mode": "草稿编辑",
+    "keyboard": true,
+    "width": 430,
+    "height": 932
+  },
+  {
+    "id": "P3-draft-preview",
+    "title": "检查要发送的内容",
+    "subtitle": "目标：工作站 / design-session / agent-a",
+    "body": [
+      "请先运行回归测试，再汇报失败项。",
+      "文本发送不会附加回车。",
+      "目标、session 或连接代际改变后，这次确认失效。"
+    ],
+    "actions": [
+      {
+        "label": "发送这段文本",
+        "to": "P4-sending"
+      },
+      {
+        "label": "继续编辑",
+        "to": "P3-draft"
+      },
+      {
+        "label": "取消发送",
+        "to": "P3-observe"
+      }
+    ],
+    "family": "P3",
+    "kind": "review"
+  },
+  {
+    "id": "P3-selection",
+    "title": "选择、复制与粘贴",
+    "subtitle": "保持明确的输入目标",
+    "body": [
+      "选区只改变本地选择，不发送按键。",
+      "复制：选中的终端文本",
+      "粘贴：先看多行内容、控制字符与目标。",
+      "观察模式粘贴不会直接送往远端。"
+    ],
+    "actions": [
+      {
+        "label": "预览多行粘贴",
+        "to": "P3-paste"
+      },
+      {
+        "label": "复制后返回",
+        "to": "P3-observe"
+      }
+    ],
+    "family": "P3",
+    "kind": "terminal",
+    "mode": "观察"
+  },
+  {
+    "id": "P3-paste",
+    "title": "确认粘贴到哪里",
+    "subtitle": "目标：工作站 / design-session / agent-a",
+    "body": [
+      "第一行：检查当前分支",
+      "第二行：运行测试",
+      "包含换行 · 不自动添加末尾回车",
+      "这是示例文字；不生成一键批准。"
+    ],
+    "actions": [
+      {
+        "label": "明确发送粘贴内容",
+        "to": "P4-sending"
+      },
+      {
+        "label": "放入本地草稿",
+        "to": "P3-draft"
+      },
+      {
+        "label": "取消粘贴",
+        "to": "P3-selection"
+      }
+    ],
+    "family": "P3",
+    "kind": "review"
+  },
+  {
+    "id": "P3-combo",
+    "title": "组合键已准备",
+    "subtitle": "Ctrl 保持 · 下一个键送往 agent-a",
+    "body": [
+      "点按 Ctrl 进入一次性组合状态。",
+      "点按 C 明确发送 Ctrl+C 后释放。",
+      "切换标签、失联、退出输入时释放辅助修饰键。"
+    ],
+    "actions": [
+      {
+        "label": "发送 Ctrl+C（演示）",
+        "to": "P4-received"
+      },
+      {
+        "label": "取消组合键",
+        "to": "P3-direct"
+      },
+      {
+        "label": "小屏键盘变体",
+        "to": "P3-small"
+      }
+    ],
+    "family": "P3",
+    "kind": "terminal",
+    "mode": "逐键输入",
+    "keyboard": true
+  },
+  {
+    "id": "P4-sending",
+    "title": "正在发送",
+    "subtitle": "目标仍是工作站 / agent-a",
+    "body": [
+      "本次内容已开始发送。",
+      "此时断线不能假设未收到，不能排队重试。"
+    ],
+    "actions": [
+      {
+        "label": "演示服务端接收",
+        "to": "P4-received"
+      },
+      {
+        "label": "演示结果未知",
+        "to": "P4-unknown"
+      },
+      {
+        "label": "演示明确未发送",
+        "to": "P4-not-sent"
+      }
+    ],
+    "family": "P4",
+    "kind": "warning"
+  },
+  {
+    "id": "P4-received",
+    "title": "服务端已接收",
+    "subtitle": "不是命令完成或审批通过",
+    "body": [
+      "继续观察终端反馈及刷新后的状态。",
+      "客户端收到接收结果，不等于远端任务成功。"
+    ],
+    "actions": [
+      {
+        "label": "返回实时观察",
+        "to": "P3-observe"
+      },
+      {
+        "label": "切换另一网络标签",
+        "to": "P4-tabs"
+      }
+    ],
+    "family": "P4",
+    "kind": "checks"
+  },
+  {
+    "id": "P4-not-sent",
+    "title": "明确未发送",
+    "subtitle": "本次发送尚未开始",
+    "body": [
+      "可以返回原目标草稿重新检查。",
+      "只有明确未发出的内容保留为待发送草稿。"
+    ],
+    "actions": [
+      {
+        "label": "返回原目标草稿",
+        "to": "P3-draft"
+      },
+      {
+        "label": "回到观察",
+        "to": "P3-observe"
+      }
+    ],
+    "family": "P4",
+    "kind": "warning"
+  },
+  {
+    "id": "P4-unknown",
+    "title": "发送结果待核实",
+    "subtitle": "工作站 / design-session / agent-a",
+    "body": [
+      "16:40:18 · 发送期间连接中断",
+      "已发送内容可能被远端接收。",
+      "不自动重试，不回填为未发送草稿。",
+      "恢复后先检查原目标实际状态。"
+    ],
+    "actions": [
+      {
+        "label": "主动恢复并核实",
+        "to": "P4-recovering"
+      },
+      {
+        "label": "查看连接诊断",
+        "to": "P5-networks"
+      }
+    ],
+    "family": "P4",
+    "kind": "danger"
+  },
+  {
+    "id": "P4-recovering",
+    "title": "正在恢复当前画面",
+    "subtitle": "旧画面只作参考 · 输入已关闭",
+    "body": [
+      "1 重新验证主机身份",
+      "2 核对 herdr session 与目标",
+      "3 获取当前状态与新全量画面",
+      "不会自动重放任何输入。"
+    ],
+    "actions": [
+      {
+        "label": "模拟新全量到达",
+        "to": "P4-restored"
+      },
+      {
+        "label": "模拟指纹改变",
+        "to": "P4-fingerprint"
+      },
+      {
+        "label": "模拟目标已退出",
+        "to": "P4-target-gone"
+      }
+    ],
+    "family": "P4",
+    "kind": "warning"
+  },
+  {
+    "id": "P4-restored",
+    "title": "当前画面已恢复",
+    "subtitle": "新全量 16:41:02 · 默认观察",
+    "body": [
+      "原目标：design-session / agent-a",
+      "暂停期间终端历史可能不完整。",
+      "先核实未知发送的实际影响，再决定是否继续。"
+    ],
+    "actions": [
+      {
+        "label": "核对后进入逐键",
+        "to": "P3-direct"
+      },
+      {
+        "label": "继续观察",
+        "to": "P3-observe"
+      },
+      {
+        "label": "返回看板",
+        "to": "P1-dashboard"
+      }
+    ],
+    "family": "P4",
+    "kind": "terminal",
+    "mode": "观察"
+  },
+  {
+    "id": "P4-fingerprint",
+    "title": "主机指纹发生变化",
+    "subtitle": "连接已阻止 · 未发送认证凭据",
+    "body": [
+      "已信任参考：DEMO-HOST-A41C",
+      "本次主机：DEMO-HOST-B93D",
+      "请通过已有可信渠道核对重装、换机或路径问题。",
+      "不提供忽略并继续按钮。"
+    ],
+    "actions": [
+      {
+        "label": "查看原主机资料",
+        "to": "P2-manual"
+      },
+      {
+        "label": "取消连接",
+        "to": "P1-stale"
+      }
+    ],
+    "family": "P4",
+    "kind": "danger"
+  },
+  {
+    "id": "P4-target-gone",
+    "title": "原目标已失效",
+    "subtitle": "同名 agent 不能继承发送动作",
+    "body": [
+      "原 session / target 已退出或身份改变。",
+      "本地草稿可复制，但不会转发到同名新目标。"
+    ],
+    "actions": [
+      {
+        "label": "复制草稿并回看板",
+        "to": "P1-dashboard"
+      },
+      {
+        "label": "查看原目标旧画面",
+        "to": "P1-stale"
+      }
+    ],
+    "family": "P4",
+    "kind": "warning"
+  },
+  {
+    "id": "P4-tabs",
+    "title": "三个网络，三个上下文",
+    "subtitle": "手机多标签 · 前台并发设计",
+    "body": [
+      "A 工作站 / agent-a · Tailscale · 当前",
+      "B 实验机 / agent-b · EasyTier · 观察暂停 16:39",
+      "C 备用机 / agent-c · ZeroTier · 等待授权",
+      "切换先释放键盘与修饰键；隐藏标签不必持续渲染。"
+    ],
+    "actions": [
+      {
+        "label": "打开暂停的 B 标签",
+        "to": "P4-hidden"
+      },
+      {
+        "label": "返回 A 终端",
+        "to": "P3-observe"
+      },
+      {
+        "label": "查看并发网络",
+        "to": "P5-networks"
+      }
+    ],
+    "family": "P4",
+    "kind": "tabs"
+  },
+  {
+    "id": "P4-hidden",
+    "title": "标签 B 正在刷新",
+    "subtitle": "实验机 / build-session / agent-b",
+    "body": [
+      "观察暂停 · 上次画面 16:39",
+      "暂停观察不会停止远端任务。",
+      "获得当前状态和新全量前，输入不可用。"
+    ],
+    "actions": [
+      {
+        "label": "模拟 B 新全量到达",
+        "to": "P4-b-ready"
+      },
+      {
+        "label": "保持暂停返回 A",
+        "to": "P3-observe"
+      }
+    ],
+    "family": "P4",
+    "kind": "warning"
+  },
+  {
+    "id": "P4-b-ready",
+    "title": "当前焦点：agent-b",
+    "subtitle": "实验机 / build-session / agent-b",
+    "body": [
+      "EasyTier · 新全量 16:41:08",
+      "A 的草稿和输入动作没有转入 B。"
+    ],
+    "actions": [
+      {
+        "label": "回到 A 标签",
+        "to": "P3-observe"
+      },
+      {
+        "label": "桌面分屏查看",
+        "to": "D1-workspace"
+      }
+    ],
+    "family": "P4",
+    "kind": "terminal",
+    "mode": "观察"
+  },
+  {
+    "id": "P5-networks",
+    "title": "连接各有状态",
+    "subtitle": "主机连接与网络节点分别显示",
+    "body": [
+      "Tailscale · 工作网络 · 节点已就绪",
+      "EasyTier · 实验网络 · 已连接",
+      "ZeroTier · 备用网络 · 等待授权",
+      "前台可并发设计：TS + ET；完整三网仍须逐平台实测。"
+    ],
+    "actions": [
+      {
+        "label": "Tailscale 配置",
+        "to": "P5-ts"
+      },
+      {
+        "label": "EasyTier 配置",
+        "to": "P5-et"
+      },
+      {
+        "label": "ZeroTier 配置",
+        "to": "P5-zt"
+      }
+    ],
+    "family": "P5",
+    "kind": "networks",
+    "extraLinks": [
+      [
+        "停用影响范围",
+        "P5-impact"
+      ],
+      [
+        "重叠地址限制",
+        "P5-overlap"
+      ],
+      [
+        "返回看板",
+        "P1-dashboard"
+      ]
+    ]
+  },
+  {
+    "id": "P5-ts",
+    "title": "Tailscale 配置",
+    "subtitle": "工作网络 · 身份只保存在本机",
+    "body": [
+      "控制端：默认 / 自定义 HTTPS",
+      "设备入网：由用户明确登录授权",
+      "状态：节点已就绪；不代表 SSH 已成功",
+      "工作站路径引用这个 profile。"
+    ],
+    "actions": [
+      {
+        "label": "查看待授权状态",
+        "to": "P5-auth"
+      },
+      {
+        "label": "查看停用影响",
+        "to": "P5-impact"
+      },
+      {
+        "label": "返回网络列表",
+        "to": "P5-networks"
+      }
+    ],
+    "family": "P5",
+    "kind": "form"
+  },
+  {
+    "id": "P5-et",
+    "title": "EasyTier 配置",
+    "subtitle": "实验网络 · 认证项分开保存",
+    "body": [
+      "网络名称 / 标识：lab-demo",
+      "发现节点：tcp://peer.example.invalid:11010",
+      "共享 secret：受保护入口提供，不展示值",
+      "状态：节点未就绪 / 已连接分别呈现"
+    ],
+    "actions": [
+      {
+        "label": "演示节点未就绪",
+        "to": "P5-node"
+      },
+      {
+        "label": "停用前预览影响",
+        "to": "P5-impact"
+      },
+      {
+        "label": "返回网络列表",
+        "to": "P5-networks"
+      }
+    ],
+    "family": "P5",
+    "kind": "form"
+  },
+  {
+    "id": "P5-zt",
+    "title": "ZeroTier 配置",
+    "subtitle": "备用网络 · 同期集成目标",
+    "body": [
+      "网络 ID：示例占位，不可用于入网",
+      "节点身份：本机独立生成",
+      "状态：等待网络管理员授权",
+      "同一进程节点及网络定向能力待实测"
+    ],
+    "actions": [
+      {
+        "label": "查看授权状态",
+        "to": "P5-auth"
+      },
+      {
+        "label": "查看地址隔离限制",
+        "to": "P5-overlap"
+      },
+      {
+        "label": "返回网络列表",
+        "to": "P5-networks"
+      }
+    ],
+    "family": "P5",
+    "kind": "form"
+  },
+  {
+    "id": "P5-auth",
+    "title": "等待网络授权",
+    "subtitle": "授权完成前不尝试 SSH 输入",
+    "body": [
+      "网络身份授权与 SSH 公钥授权是两件事。",
+      "仅展示 provider 能证明的原因。",
+      "授权成功后仍需用户主动连接主机。"
+    ],
+    "actions": [
+      {
+        "label": "模拟授权完成，回接入",
+        "to": "P2-ready"
+      },
+      {
+        "label": "保留待授权并返回",
+        "to": "P5-networks"
+      }
+    ],
+    "family": "P5",
+    "kind": "warning"
+  },
+  {
+    "id": "P5-node",
+    "title": "网络节点未就绪",
+    "subtitle": "原因待确认",
+    "body": [
+      "已有证据：连接超时，尚未获得可用路径。",
+      "未知原因不会显示为密码错误。",
+      "这个 profile 的错误不会主动关闭其他有效网络。"
+    ],
+    "actions": [
+      {
+        "label": "重新检查配置",
+        "to": "P5-et"
+      },
+      {
+        "label": "查看其他网络",
+        "to": "P5-networks"
+      }
+    ],
+    "family": "P5",
+    "kind": "warning"
+  },
+  {
+    "id": "P5-impact",
+    "title": "停用前看影响",
+    "subtitle": "网络：工作网络 / Tailscale",
+    "body": [
+      "将关闭：工作站上的 A、D 两个标签连接",
+      "将停止：这些连接的自动重试",
+      "保留：实验网络 EasyTier 的 B 标签",
+      "停用、退出网络、清除身份是独立操作。"
+    ],
+    "actions": [
+      {
+        "label": "确认停用此网络（演示）",
+        "to": "P1-stale"
+      },
+      {
+        "label": "取消并保留连接",
+        "to": "P5-networks"
+      }
+    ],
+    "family": "P5",
+    "kind": "review"
+  },
+  {
+    "id": "P5-overlap",
+    "title": "这个并发组合暂不可用",
+    "subtitle": "底层尚不能证明重叠地址定向",
+    "body": [
+      "两个 profile 的虚拟地址存在重叠。",
+      "配置名称不能证明网络隔离。",
+      "拒绝不安全组合；显式切换只是降级，不算并发通过。"
+    ],
+    "actions": [
+      {
+        "label": "返回网络选择",
+        "to": "P5-networks"
+      }
+    ],
+    "family": "P5",
+    "kind": "danger"
+  },
+  {
+    "id": "P6-export",
+    "title": "选择加密导出范围",
+    "subtitle": "本地迁移 · 无云账号",
+    "body": [
+      "包含：主机资料、非秘密网络字段、界面偏好",
+      "排除：设备 SSH 私钥、密码、overlay identity、入网秘密、终端内容、草稿",
+      "目标设备仍需独立授权。"
+    ],
+    "actions": [
+      {
+        "label": "设置口令并导出（演示）",
+        "to": "P6-file"
+      },
+      {
+        "label": "取消",
+        "to": "P1-dashboard"
+      }
+    ],
+    "family": "P6",
+    "kind": "form"
+  },
+  {
+    "id": "P6-file",
+    "title": "配置文件已准备",
+    "subtitle": "演示结果 · 未实现真实加密",
+    "body": [
+      "只在本地生成加密文件。",
+      "口令不进入文件或日志。",
+      "将文件交给另一设备后，先审查再导入。"
+    ],
+    "actions": [
+      {
+        "label": "演示另一设备导入",
+        "to": "P6-import"
+      },
+      {
+        "label": "返回看板",
+        "to": "P1-dashboard"
+      }
+    ],
+    "family": "P6",
+    "kind": "checks"
+  },
+  {
+    "id": "P6-import",
+    "title": "先审查，再写入",
+    "subtitle": "导入不会自动连接或继承信任",
+    "body": [
+      "新增：备用机 · 缺少 SSH 凭据",
+      "冲突：工作站 · 地址不同",
+      "冲突：工作网络 · 同名不自动借用秘密",
+      "选择：新增 / 保留 / 明确替换"
+    ],
+    "actions": [
+      {
+        "label": "保留现有，导入新增",
+        "to": "P6-done"
+      },
+      {
+        "label": "预览替换在用项",
+        "to": "P6-conflict"
+      },
+      {
+        "label": "模拟无法解密",
+        "to": "P6-invalid"
+      }
+    ],
+    "family": "P6",
+    "kind": "review"
+  },
+  {
+    "id": "P6-conflict",
+    "title": "替换会停止哪些连接",
+    "subtitle": "受影响：工作站 / A、D 标签",
+    "body": [
+      "相关连接代际失效，关闭连接并停止重试。",
+      "新配置不会自动覆盖已信任指纹。",
+      "提交后等待重新核验和主动连接。",
+      "提交失败也不能静默重连。"
+    ],
+    "actions": [
+      {
+        "label": "确认替换并停止连接",
+        "to": "P6-done"
+      },
+      {
+        "label": "保留现有配置",
+        "to": "P6-import"
+      }
+    ],
+    "family": "P6",
+    "kind": "warning"
+  },
+  {
+    "id": "P6-invalid",
+    "title": "无法验证或解密",
+    "subtitle": "没有导入任何条目",
+    "body": [
+      "可能为错误口令、文件损坏或不兼容格式。",
+      "不猜测来源；不部分导入；不降级明文。",
+      "解析前限制文件大小及 KDF 资源参数。"
+    ],
+    "actions": [
+      {
+        "label": "重新选择文件",
+        "to": "P6-import"
+      },
+      {
+        "label": "取消导入",
+        "to": "P1-dashboard"
+      }
+    ],
+    "family": "P6",
+    "kind": "danger"
+  },
+  {
+    "id": "P6-done",
+    "title": "配置已保存，等待核验",
+    "subtitle": "缺少认证的主机仍需独立授权",
+    "body": [
+      "没有复制设备私钥或网络身份。",
+      "没有自动建立连接、信任主机或发送输入。"
+    ],
+    "actions": [
+      {
+        "label": "审查主机再主动连接",
+        "to": "P2-ready"
+      },
+      {
+        "label": "返回看板",
+        "to": "P1-dashboard"
+      }
+    ],
+    "family": "P6",
+    "kind": "checks"
+  },
+  {
+    "id": "P7-font",
+    "title": "字体与字符格诊断",
+    "subtitle": "实测反馈 · 需修复后重验",
+    "body": [
+      "macOS：terminal_view 0.5.0 ASCII组合重音未绘出",
+      "Tauri同机目视存在；不据此选框架",
+      "对照原字节、复制与渲染，修复后重验",
+      "手机IME、Powerlevel10k、Oh My Posh真实主题均未验证"
+    ],
+    "actions": [
+      {
+        "label": "查看手机终端示意",
+        "to": "P3-observe"
+      },
+      {
+        "label": "返回看板",
+        "to": "P1-dashboard"
+      }
+    ],
+    "family": "P7",
+    "kind": "terminal",
+    "mode": "诊断示意"
+  },
+  {
+    "id": "D1-workspace",
+    "title": "远端工作台",
+    "subtitle": "宽桌面 · 单一输入焦点",
+    "body": [
+      "工作站 / agent-a · Tailscale",
+      "实验机 / agent-b · EasyTier",
+      "分屏只调整本地视口，不接管共享 PTY。"
+    ],
+    "actions": [
+      {
+        "label": "把输入焦点移至 B",
+        "to": "D1-focus-b"
+      },
+      {
+        "label": "收窄窗口",
+        "to": "D2-narrow"
+      },
+      {
+        "label": "模拟 A 断线",
+        "to": "P4-unknown"
+      }
+    ],
+    "family": "D1",
+    "kind": "desktop",
+    "width": 1360,
+    "height": 860,
+    "focus": "A"
+  },
+  {
+    "id": "D1-focus-b",
+    "title": "输入焦点在 B",
+    "subtitle": "实验机 / build-session / agent-b",
+    "body": [
+      "A 保持观察，不接受 B 的键盘与 IME 提交。",
+      "切焦点时取消旧目标组合态。",
+      "应用快捷键不绕过目标、粘贴与发送校验。"
+    ],
+    "actions": [
+      {
+        "label": "焦点回到 A",
+        "to": "D1-workspace"
+      },
+      {
+        "label": "查看窄窗口",
+        "to": "D2-narrow"
+      },
+      {
+        "label": "恢复手机标签布局",
+        "to": "P4-tabs"
+      }
+    ],
+    "family": "D1",
+    "kind": "desktop",
+    "width": 1360,
+    "height": 860,
+    "focus": "B"
+  },
+  {
+    "id": "D2-narrow",
+    "title": "窄窗口，保留上下文",
+    "subtitle": "800 × 860 · 单列工作区",
+    "body": [
+      "主机侧栏收纳为可达入口。",
+      "分屏空间不足时显示当前目标，另一个保留为标签。",
+      "拖拽和窗口变化均不发送远端 resize。"
+    ],
+    "actions": [
+      {
+        "label": "展开主机侧栏",
+        "to": "P1-dashboard"
+      },
+      {
+        "label": "恢复宽桌面分屏",
+        "to": "D1-workspace"
+      },
+      {
+        "label": "切换活动标签",
+        "to": "P4-tabs"
+      }
+    ],
+    "family": "D2",
+    "kind": "desktop",
+    "width": 800,
+    "height": 860,
+    "focus": "A"
+  },
+  {
+    "id": "P1-loading",
+    "title": "正在获取当前状态",
+    "subtitle": "主机已连接 · 会话尚未同步",
+    "body": [
+      "网络在线不代表看板已刷新。",
+      "正在校验 herdr 能力并获取当前 session 快照。",
+      "旧状态保留时间戳；没有快照时显示状态待确认。"
+    ],
+    "actions": [
+      {
+        "label": "模拟快照到达",
+        "to": "P1-dashboard"
+      },
+      {
+        "label": "模拟失联",
+        "to": "P1-stale"
+      }
+    ],
+    "family": "P1",
+    "kind": "warning"
+  },
+  {
+    "id": "P6-commit-failed",
+    "title": "配置提交失败",
+    "subtitle": "配置完整回滚 · 连接保持关闭",
+    "body": [
+      "没有部分写入新增或替换条目。",
+      "相关连接已停止，提交失败不自动恢复或重连。",
+      "保留原配置后仍需用户主动核验连接。"
+    ],
+    "actions": [
+      {
+        "label": "回到导入审查",
+        "to": "P6-import"
+      },
+      {
+        "label": "查看原主机配置",
+        "to": "P2-manual"
+      }
+    ],
+    "family": "P6",
+    "kind": "danger"
+  }
+]

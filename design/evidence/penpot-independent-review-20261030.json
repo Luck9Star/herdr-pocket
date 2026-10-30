@@ -1,0 +1,154 @@
+{
+  "result": {
+    "reviewer": "independent-flutter-probe",
+    "readOnly": true,
+    "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "page": "b55064db-d93d-80f9-8008-ddd22e6d3990",
+    "penpotVersion": "2.19.0",
+    "visibleBoards": 57,
+    "interactions": 205,
+    "componentCount": 18,
+    "tokenCount": 25,
+    "editableTextNodes": 650,
+    "flows": [
+      {
+        "name": "J1 · 手机配对",
+        "start": "P1-empty"
+      },
+      {
+        "name": "J2 · 终端与输入",
+        "start": "P3-observe"
+      },
+      {
+        "name": "J3 · 多标签与恢复",
+        "start": "P4-tabs"
+      },
+      {
+        "name": "P5 · 三网络配置",
+        "start": "P5-networks"
+      },
+      {
+        "name": "P6 · 配置导入导出",
+        "start": "P6-export"
+      },
+      {
+        "name": "00 · 原型导航",
+        "start": "START"
+      },
+      {
+        "name": "Flow 1",
+        "start": "P6-commit-failed"
+      }
+    ],
+    "journeys": {
+      "J1": [
+        {
+          "from": "START",
+          "to": "P1-empty",
+          "present": true
+        },
+        {
+          "from": "P1-empty",
+          "to": "P2-request",
+          "present": true
+        },
+        {
+          "from": "P2-request",
+          "to": "P2-helper",
+          "present": true
+        },
+        {
+          "from": "P2-helper",
+          "to": "P2-authorized",
+          "present": true
+        },
+        {
+          "from": "P2-authorized",
+          "to": "P2-scan",
+          "present": true
+        },
+        {
+          "from": "P2-scan",
+          "to": "P2-review",
+          "present": true
+        },
+        {
+          "from": "P2-review",
+          "to": "P2-ready",
+          "present": true
+        },
+        {
+          "from": "P2-ready",
+          "to": "P2-success",
+          "present": true
+        },
+        {
+          "from": "P2-success",
+          "to": "P1-loading",
+          "present": true
+        },
+        {
+          "from": "P1-loading",
+          "to": "P1-dashboard",
+          "present": true
+        }
+      ],
+      "J2": [
+        {
+          "from": "P1-dashboard",
+          "to": "P3-observe",
+          "present": true
+        },
+        {
+          "from": "P3-observe",
+          "to": "P3-direct",
+          "present": true
+        },
+        {
+          "from": "P3-direct",
+          "to": "P4-unknown",
+          "present": true
+        }
+      ],
+      "J3": [
+        {
+          "from": "START",
+          "to": "P4-tabs",
+          "present": true
+        },
+        {
+          "from": "P4-tabs",
+          "to": "P4-hidden",
+          "present": true
+        },
+        {
+          "from": "P4-hidden",
+          "to": "P4-b-ready",
+          "present": true
+        }
+      ]
+    },
+    "dangling": [],
+    "unknownExits": [
+      {
+        "shape": "action / primary / 主动恢复并核实",
+        "type": "navigate-to",
+        "to": "P4-recovering",
+        "destinationId": "c1974894-3caf-8067-8008-ddd46ab0427d"
+      },
+      {
+        "shape": "action / secondary / 查看连接诊断",
+        "type": "navigate-to",
+        "to": "P5-networks",
+        "destinationId": "c1974894-3caf-8067-8008-ddd479907157"
+      },
+      {
+        "shape": "交互原型 · 虚构数据 · 运行能力未验证",
+        "type": "navigate-to",
+        "to": "START",
+        "destinationId": "c1974894-3caf-8067-8008-ddd4b0a14f71"
+      }
+    ]
+  },
+  "log": ""
+}

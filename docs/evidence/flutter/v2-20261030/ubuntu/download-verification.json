@@ -1,0 +1,93 @@
+{
+  "sourceCommit": "7daa8a2341a0bc4270a962c3cc9aeb4906084b8f",
+  "filesSha256": {
+    "candidate/terminal_view/LICENSE": "fa9c766d83aeeaca6e8994be904afcc1940ece6b10cd9754919ee09bc0aa3530",
+    "candidate/terminal_view/NOTICE": "c307f60f6ada98062e4fd2634497e7e335741e09545f3caa54d48155621871a3",
+    "candidate-analyze.log": "1bccfe6bb5cfb652f1161361f21d5b9242104601ec056132affb95b73b6683f9",
+    "candidate-manifest.json": "3b42cbd9d35e0bb53b13656375627ccbce99043812b03fb3a8e0e6c2dc8444e0",
+    "candidate-render-tests.log": "f184323c4551f01ca3c4d3e79ed798f869b403371764a67f439a09c58bdd50b9",
+    "candidate-safety-tests.log": "de4f7db6e3c4fc2bc3899dc04a1bc999a1b912e5c180377bfab00657ca7b65a9",
+    "probe-results/ascii-base.png": "0faf2a8446a0c0b62d0f4442048367910242f99f14c06aa5b22ca1f42ff74cd7",
+    "probe-results/ascii-combining.png": "58ec65d6fbb0bab48b413fde40388f9dd3f078b014853f673d69177414141662",
+    "probe-results/combining-render.json": "06a19d1e299ad0bb0ad0af9e9af29e4679232db5d70fe194eaa960576ba261f2",
+    "probe-results/regression/ascii-actual.png": "d8191ce8b5c1acfa0303b4356c195fc933e58add076b3c83dd3992a1af19da55",
+    "probe-results/regression/ascii-neighbors-actual.png": "204cc8829f7ccd1e7e96d8a1c97f162c9bee47e950a369aa437aee265e2087d8",
+    "probe-results/regression/ascii-neighbors-nfc-reference.png": "204cc8829f7ccd1e7e96d8a1c97f162c9bee47e950a369aa437aee265e2087d8",
+    "probe-results/regression/ascii-textpainter-reference.png": "d8191ce8b5c1acfa0303b4356c195fc933e58add076b3c83dd3992a1af19da55",
+    "probe-results/regression/cache-base-first.png": "dbf5c7ee0d92b36006dede3fb5fff07cb309a906a3f906a353e4471aa37ef298",
+    "probe-results/regression/cache-base-recorded.png": "dbf5c7ee0d92b36006dede3fb5fff07cb309a906a3f906a353e4471aa37ef298",
+    "probe-results/regression/cache-nfc-reference.png": "c6d3559a122b6486433316ab1037666d8698700d5e86d86aa345d996926f3d75",
+    "probe-results/regression/cache-repeated.png": "c6d3559a122b6486433316ab1037666d8698700d5e86d86aa345d996926f3d75",
+    "probe-results/regression/cache-updated.png": "c6d3559a122b6486433316ab1037666d8698700d5e86d86aa345d996926f3d75",
+    "probe-results/regression/focused-block-cursor-actual.png": "facb5378c20a4b2010e56372c8c8c951c7b3b9b0d46faf2499528d3c410b57ba",
+    "probe-results/regression/focused-block-cursor-nfc-reference.png": "facb5378c20a4b2010e56372c8c8c951c7b3b9b0d46faf2499528d3c410b57ba",
+    "probe-results/regression/results.json": "170ac01059ced5a99e3b54e6191f29b1806acd87a7d3299eaee0aa578d25d518",
+    "probe-results/regression/selection-foreground-actual.png": "facb5378c20a4b2010e56372c8c8c951c7b3b9b0d46faf2499528d3c410b57ba",
+    "probe-results/regression/selection-foreground-nfc-reference.png": "facb5378c20a4b2010e56372c8c8c951c7b3b9b0d46faf2499528d3c410b57ba",
+    "probe-results/regression/sgr-bold-red-actual.png": "8fb9452c22f55359f98d7e6c7180b698b9a20bb376a49d6796d1fe2ce9ea6def",
+    "probe-results/regression/sgr-bold-red-nfc-reference.png": "8fb9452c22f55359f98d7e6c7180b698b9a20bb376a49d6796d1fe2ce9ea6def",
+    "probe-results/regression/sgr-inverse-actual.png": "b6005a93b6c5eb7f32eb0c7b7f80905726410452c59c75b8367b663b1f64da8a",
+    "probe-results/regression/sgr-inverse-nfc-reference.png": "b6005a93b6c5eb7f32eb0c7b7f80905726410452c59c75b8367b663b1f64da8a",
+    "probe-results/regression/three-accents-actual.png": "58ec65d6fbb0bab48b413fde40388f9dd3f078b014853f673d69177414141662",
+    "probe-results/regression/three-accents-nfc-reference.png": "58ec65d6fbb0bab48b413fde40388f9dd3f078b014853f673d69177414141662",
+    "probe-results/regression/wide-neighbors-actual.png": "0216d2883f3983583161948be94da84b2848538066eddd70ddaf73c4ebd93925",
+    "probe-results/regression/wide-neighbors-nfc-reference.png": "0216d2883f3983583161948be94da84b2848538066eddd70ddaf73c4ebd93925",
+    "probe-results/ui-v2/desktop-split.png": "89ae310e53c73c6e3868d564dba2d2dd5b29d0ce6c7614074b24bdb3222eb03c",
+    "probe-results/ui-v2/mobile-observe.png": "947790700be2ef4af0ef8af2a751f2493270174c28aa4432ef233b9bc50ef527",
+    "probe-results/ui-v2/mobile-unknown.png": "b82a8c96c2085c88f1550f8de698e3a6750133d57f30a521b665a64e86179f10",
+    "probe-results/ui-v2/small-mobile-keyboard-draft.png": "fa54a7508508d3c6e500e489bd20085ce6ce791aa555e545f878d4f07abf6ec6"
+  },
+  "pngReferencePairs": [
+    {
+      "actual": "ascii-actual.png",
+      "reference": "ascii-textpainter-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "ascii-neighbors-actual.png",
+      "reference": "ascii-neighbors-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "focused-block-cursor-actual.png",
+      "reference": "focused-block-cursor-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "selection-foreground-actual.png",
+      "reference": "selection-foreground-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "sgr-bold-red-actual.png",
+      "reference": "sgr-bold-red-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "sgr-inverse-actual.png",
+      "reference": "sgr-inverse-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "three-accents-actual.png",
+      "reference": "three-accents-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "wide-neighbors-actual.png",
+      "reference": "wide-neighbors-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "cache-updated.png",
+      "reference": "cache-nfc-reference.png",
+      "shaEqual": true
+    },
+    {
+      "actual": "cache-repeated.png",
+      "reference": "cache-nfc-reference.png",
+      "shaEqual": true
+    }
+  ],
+  "scope": "Downloaded CI evidence; UI headless fallback not native visual/IME acceptance"
+}

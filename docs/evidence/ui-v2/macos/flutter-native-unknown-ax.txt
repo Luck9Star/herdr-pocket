@@ -1,0 +1,55 @@
+Window: "herdr_flutter_probe", App: herdr_flutter_probe.
+0 standard window herdr_flutter_probe, Secondary Actions: Raise
+	1 container herdr_flutter_probe
+		2 container (settable)
+			3 container (settable) herdr pocket
+			4 text (settable) Flutter · 本地验证
+			5 text (settable) 主机与会话
+			6 button (settable) demo-ts
+Tailscale · 本地示例
+session-a
+			7 button (settable) demo-et
+EasyTier · 本地示例
+session-b
+			8 text (settable) 网络名称为测试目标标识。
+此壳没有建立真实网络或 SSH 连接。
+			9 text (settable) 离线 fixture · 配对 / SSH / 三网络尚未接入
+			10 button (settable) ● Tailscale · A
+			11 button (settable) EasyTier · B
+			12 button (settable)
+			13 container (settable)
+				14 button (settable) 观察
+				15 button (settable) 逐键
+				16 button (settable) 草稿
+				17 button (settable)
+				18 button (settable)
+			19 container (settable) 发送结果待核实 · 输入已锁定，旧输入不会重放
+				20 button (settable) 人工核实未知
+			21 container (settable) 输入焦点 · demo-ts/session-a/pane-1
+示例画面 · 80×24
+			22 container (settable)
+				23 button (settable) Esc
+				24 button (settable) Tab
+				25 button (settable) ↑
+				26 button (settable) ↓
+				27 button (settable) ←
+				28 button (settable) →
+				29 button (settable) Ctrl-C
+				30 button (settable) Ctrl-D
+				31 button (settable) Enter
+				32 button (settable) 粘贴
+				33 button (settable) 复制选区
+			34 text (settable) 80×24 · 本地接收 1
+			35 button (settable) 验证工具
+	36 close button
+	37 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	38 minimize button
+	39 text herdr_flutter_probe
+40 menu bar
+	41 herdr_flutter_probe
+	42 Edit
+	43 View
+	44 Window
+	45 Help
+
+The focused UI element is 1 container herdr_flutter_probe

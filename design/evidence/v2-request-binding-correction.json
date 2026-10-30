@@ -1,0 +1,11 @@
+{
+  "result": {
+    "fileId": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "pageId": "7a22df08-251d-8016-8008-de03541c11da",
+    "shapeId": "feb2a821-b263-8097-8008-de21b81f9e41",
+    "before": "[示意输出 / 不可执行]\n账户 ubuntu · 设备 phone-demo\n追加一条手机专属 SSH 公钥？\n主机操作者：确认\n生成一次性响应码后退出",
+    "after": "[示意输出 / 不可执行]\n账户 ubuntu · 设备 phone-demo\n追加一条手机专属 SSH 公钥？\n主机操作者：确认\n生成本次请求绑定的响应码后退出",
+    "changedOnly": "characters"
+  },
+  "log": ""
+}

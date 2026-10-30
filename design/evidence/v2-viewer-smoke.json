@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-30",
+  "method": "Real Chrome Penpot viewer clicks via cua_repl; each destination checked in viewer current-frame accessibility tree",
+  "flows": [
+    {
+      "start": "S01",
+      "clicked": [
+        "S01 -> S13",
+        "S13 -> S05",
+        "S05 -> S12",
+        "S12 -> S10"
+      ],
+      "result": "passed prototype navigation only"
+    },
+    {
+      "start": "S08 (direct navigation)",
+      "clicked": [
+        "S08 -> S09",
+        "S09 explicit verification -> S03"
+      ],
+      "result": "passed prototype navigation only"
+    }
+  ],
+  "notClaimed": [
+    "all91edges manually clicked",
+    "actual pairing",
+    "SSH",
+    "remote input",
+    "device accessibility"
+  ],
+  "cleanup": "Agent-created viewer tab803366694 closed; original editor tab803366221 retained; MCP panel closed; own bridge process session99801 stopped by Ctrl-C with exit130; lsof4400/4401/4402 reports no listeners"
+}

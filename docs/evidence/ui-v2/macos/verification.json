@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-30",
+  "scope": "Mac native fixture smoke, not performance or real SSH/overlay/IME acceptance",
+  "applicationsClosed": true,
+  "temporaryPortsWithoutListeners": [
+    1421,
+    4400,
+    4401,
+    4402
+  ],
+  "files": [
+    {
+      "file": "flutter-native-bytes-ax.txt",
+      "sha256": "76f2b2da21227b3400a631fb129e3c3d1692add94135f2dd8e7f4f66dc6a69c2"
+    },
+    {
+      "file": "flutter-native-split-ax.txt",
+      "sha256": "32a97d079202f4f7ef95bb401698f958e409e8f7a077c004672e106bc82b280b"
+    },
+    {
+      "file": "flutter-native-split.png",
+      "sha256": "8522823105f3e463f3f810a4e34ebf9d202088f7e5488a5141dcead052270ab8"
+    },
+    {
+      "file": "flutter-native-unknown-ax.txt",
+      "sha256": "9a5c745dd800cb225b3c34f5cb83e733ee0f851072c4b453ae0ace81dce66036"
+    },
+    {
+      "file": "flutter-native.md",
+      "sha256": "58c898409cc9c05c25da17652d5b836135c526901d74ce80052202ba9deb85e7"
+    },
+    {
+      "file": "tauri-native-ax.txt.gz",
+      "sha256": "9bc1ad953c876f41eb8c035d42f581631db3230a4b2aac4b17e193f1d5c4c2cb"
+    },
+    {
+      "file": "tauri-native-split.png",
+      "sha256": "1a779aa50f621c65984a0b596bff6e96f2c12b02cee0ea33f535f04ae8efaaab"
+    },
+    {
+      "file": "tauri-native.md",
+      "sha256": "8adcd11dad98a6e0a285a26f11038f0869ce0f036df794c86d37c7a1a25300b0"
+    }
+  ],
+  "rawAXDigests": {
+    "tauri-native-ax.txt": "a4ea722daacfddbad474e9e751d46925e7e7bb39086d379b8369caa60164ab3d"
+  }
+}

@@ -1,0 +1,18 @@
+The following is a diff from the previous accessibility tree for Window: "herdr_flutter_probe" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 48-56, 58-69
+~			47 container (settable)
++				48 text (settable) 本地验证工具
++				49 text (settable) 本地 fixture sink 已接收；不是远端执行结果
+目标 demo-ts/session-a/pane-1
+queue 0/65536 · peak 530
+sink 2 · rejected 0
+UTF8 74657374
++				50 button (settable) positioned-delta
++				51 button (settable) alternate-screen
++				52 button (settable) alternate-exit
++				53 button (settable) 1 MiB paced
++				54 button (settable) 慢消费者 / 溢出
++				55 button (settable) 注入未知 / 断线
++				56 button (settable) 关闭
+~			57 text (settable) Scrim
+The focused UI element is 1 container herdr_flutter_probe

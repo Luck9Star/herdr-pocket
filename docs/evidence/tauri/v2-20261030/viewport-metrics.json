@@ -1,0 +1,56 @@
+[
+  {
+    "documentWidth": 390,
+    "terminalWidths": [
+      680
+    ],
+    "viewport": [
+      390,
+      844
+    ],
+    "visiblePanels": [
+      "a"
+    ]
+  },
+  {
+    "documentWidth": 360,
+    "terminalWidths": [
+      680
+    ],
+    "viewport": [
+      360,
+      740
+    ],
+    "visiblePanels": [
+      "a"
+    ]
+  },
+  {
+    "documentWidth": 720,
+    "terminalWidths": [
+      680
+    ],
+    "viewport": [
+      720,
+      900
+    ],
+    "visiblePanels": [
+      "a"
+    ]
+  },
+  {
+    "documentWidth": 1440,
+    "terminalWidths": [
+      680,
+      680
+    ],
+    "viewport": [
+      1440,
+      900
+    ],
+    "visiblePanels": [
+      "a",
+      "b"
+    ]
+  }
+]

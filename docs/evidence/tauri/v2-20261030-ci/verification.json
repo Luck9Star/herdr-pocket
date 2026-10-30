@@ -1,0 +1,136 @@
+{
+  "sourceSHA": "224d143f1a545fc64257f6cc46a2ba177c675237",
+  "runId": 41014249412,
+  "runURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412",
+  "conclusion": "success",
+  "platforms": [
+    {
+      "platform": "android",
+      "jobId": 123926957967,
+      "jobURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412/job/123926957967",
+      "conclusion": "success",
+      "jsTests": 18,
+      "rustCoreTests": 6,
+      "artifactId": 12958971702,
+      "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412/artifacts/12958971702",
+      "artifactBytes": 41714456,
+      "expired": false,
+      "expiresAt": "2026-11-13T06:34:51Z",
+      "artifactDigest": "sha256:ea4b852a73ef4f5d4cc57e16c2ef4f26a8c8f1b2b54e03f5083e8f4d59665d54",
+      "packageDownloadedAndVerified": false,
+      "runtimeStatus": "unverified in this CI audit"
+    },
+    {
+      "platform": "windows",
+      "jobId": 123926958148,
+      "jobURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412/job/123926958148",
+      "conclusion": "success",
+      "jsTests": 18,
+      "rustCoreTests": 6,
+      "artifactId": 12958723079,
+      "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412/artifacts/12958723079",
+      "artifactBytes": 6158863,
+      "expired": false,
+      "expiresAt": "2026-11-13T06:31:36Z",
+      "artifactDigest": "sha256:7fe9574be39aa312bf0e91242be67e01ea94b0de4006ac419f84c59dd559abbd",
+      "packageDownloadedAndVerified": false,
+      "runtimeStatus": "unverified in this CI audit"
+    },
+    {
+      "platform": "macos",
+      "jobId": 123926958205,
+      "jobURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412/job/123926958205",
+      "conclusion": "success",
+      "jsTests": 18,
+      "rustCoreTests": 6,
+      "artifactId": 12958494516,
+      "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412/artifacts/12958494516",
+      "artifactBytes": 7154753,
+      "expired": false,
+      "expiresAt": "2026-11-13T06:29:08Z",
+      "artifactDigest": "sha256:c733b7fd7493761d0de3aa983f749d6e203a45d15111450e6578c84f7e9fc518",
+      "packageDownloadedAndVerified": true,
+      "runtimeStatus": "unverified in this CI audit"
+    },
+    {
+      "platform": "ios-simulator",
+      "jobId": 123926958214,
+      "jobURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412/job/123926958214",
+      "conclusion": "success",
+      "jsTests": 18,
+      "rustCoreTests": 6,
+      "artifactId": 12958861638,
+      "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412/artifacts/12958861638",
+      "artifactBytes": 21540105,
+      "expired": false,
+      "expiresAt": "2026-11-13T06:32:21Z",
+      "artifactDigest": "sha256:d76cc2393518c990c8369a5cfc873c6570752b30eeaf7d874f6d988ed9ed242f",
+      "packageDownloadedAndVerified": false,
+      "runtimeStatus": "unverified in this CI audit"
+    },
+    {
+      "platform": "linux",
+      "jobId": 123926958270,
+      "jobURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412/job/123926958270",
+      "conclusion": "success",
+      "jsTests": 18,
+      "rustCoreTests": 6,
+      "artifactId": 12958693305,
+      "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41014249412/artifacts/12958693305",
+      "artifactBytes": 7242123,
+      "expired": false,
+      "expiresAt": "2026-11-13T06:30:41Z",
+      "artifactDigest": "sha256:6091f7d766ef7071ce73d6cfb9218dea798c9be3b4b487d85bfab81a5c519a9a",
+      "packageDownloadedAndVerified": false,
+      "runtimeStatus": "unverified in this CI audit"
+    }
+  ],
+  "scope": "Test-only builds and unit tests; only macOS artifact downloaded and content hashes independently verified here. No native app launched by this agent.",
+  "cancelledPredecessor": {
+    "sourceSHA": "45b96d60290015b8327a678f2d7344f84edcb534",
+    "runId": 41013966910,
+    "conclusion": "cancelled"
+  },
+  "files": {
+    "README.md": "c4dd75a9905c7554adbccc3ce06af3f4deb058a7c9ac2cf90e3c5d9f9b9cb1cf",
+    "android-job.log.gz": "6704a5697067df183919a88c72406c5251713d4aad27d2a6d7df15dac609697a",
+    "artifacts-in-progress.json": "df1f9ceea1e7d5e6df2ec341186eba4c9965f2f9b900030ed21f0737ce249d74",
+    "artifacts-initial.json": "34582d734209a9734af1c576c200952699a3cf825ffde070325ae921c06c9823",
+    "artifacts.json": "d2e9a1bc3b0cf0c9e7db14e6ac1216d22637559e0f2cc3ebb1ba31f5bf8f6115",
+    "ios-simulator-job.log.gz": "511b2b1a2e4e120b6022a327c411ff251dcc65e0fb1c6a71158be087f2309c25",
+    "linux-job.log.gz": "539744ff18b7666ea1ac5124aadfe220722b7e3d7b7f482561b1fc9242313b04",
+    "macos-SHA256SUMS": "3a8f062f4739f6a951dc91fd545906707837f9c88e7374695d82fb6dab1bed5e",
+    "macos-build-manifest.json": "1679715573d47900a4e6532ddf08309681e0d3a63f1be2c24dbd1383a335ba72",
+    "macos-job.log.gz": "5536e4d3137eea0ad57d5113ade0812dfe9506fb6af3708ae985080a0da13026",
+    "macos-package-verification.json": "3b2a864729796004f2a7fcfa707067fa1a9a9e81a7d7ff714e1f49f9974219d6",
+    "run.json": "7d5c26a2ce76e240b8615155dbadbd7ffd14fd68e828af34706beed492060bd0",
+    "windows-job.log.gz": "69e6424710bdd1fba0a422b0b25e3841643d3f7c2d44641a08ff1b939126f9ab"
+  },
+  "rawLogDigests": {
+    "android-job.log": {
+      "sha256": "1ad6365b13df1579b88534993a494cf80c620ebdfc3d9a4c1eb7b89418089051",
+      "bytes": 70912,
+      "archive": "android-job.log.gz"
+    },
+    "windows-job.log": {
+      "sha256": "97300f323c3b121605a6902e5f3af039b63188db93c98f04477b977d243ae58b",
+      "bytes": 41115,
+      "archive": "windows-job.log.gz"
+    },
+    "ios-simulator-job.log": {
+      "sha256": "ca48ca7925f941a44bc70c2e9a3c9f11edb6a323f11509342184b9e41661a538",
+      "bytes": 62744,
+      "archive": "ios-simulator-job.log.gz"
+    },
+    "linux-job.log": {
+      "sha256": "327879d7de8194c80ce5f633726f5a81035e90527a868f44a527ef53a3f91879",
+      "bytes": 150108,
+      "archive": "linux-job.log.gz"
+    },
+    "macos-job.log": {
+      "sha256": "33edab4e759be3e72cc0ffe194f3fbf8e856d11bd87f17b60f55730b5bcaa50e",
+      "bytes": 40879,
+      "archive": "macos-job.log.gz"
+    }
+  }
+}

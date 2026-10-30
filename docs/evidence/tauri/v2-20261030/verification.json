@@ -1,0 +1,61 @@
+{
+  "sourceSHA": "45b96d60290015b8327a678f2d7344f84edcb534",
+  "date": "2026-10-30",
+  "scope": "Local Chromium browser preview and isolated unit tests; no native device or real network pass implied",
+  "node": "v24.22.2",
+  "fixtureSHA256": "ad2eca3667445764d501ecb6ab53079232850c913626f433b167d1cdb97d7ab3",
+  "fontSHA256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+  "designTokensSHA256": "23579f1c87d0e2bcd1679d42a343b118cc95cfec6a7ec8ea1c57179bd132a0e5",
+  "checks": {
+    "jsTests": {
+      "passed": 18,
+      "failed": 0
+    },
+    "rustCoreTests": {
+      "passed": 6,
+      "failed": 0
+    },
+    "viteBuild": "passed",
+    "browserCtrlC": "03",
+    "browserDraft": "6563686f20e4b8ade69687",
+    "unknownRecovery": "locked after full; explicit acknowledgement required; still observe",
+    "targetDraftIsolation": "A preserved; B empty",
+    "consoleWarningsOrErrors": [],
+    "readableButtonHeightPx": 44
+  },
+  "cleanup": {
+    "headlessSession": "closed",
+    "iabTab": "closed",
+    "viewportOverride": "reset",
+    "vite1421": "stopped; no listener",
+    "nativeAppOpened": false
+  },
+  "unverified": [
+    "real IME",
+    "mobile touch and software keyboard",
+    "Tauri native WebView this subtask",
+    "real SSH/herdr and overlays",
+    "full accessibility audit"
+  ],
+  "files": {
+    "desktop-split.png": "df5ee117fedbf59d910e1e7575ef1ab6fd10b5ac0ef4d5b545c974e03aac0f36",
+    "phone-unknown.png": "370994f1a000582f07f3061f5f80b18b81b6523a8cf18ac2e71a9055864077b5",
+    "viewport-1440.png": "a7328796365c1e6edf13c129815806ebeb0d08f48a9e93147534270c890fa329",
+    "viewport-360.png": "657cff49abc72ebe07b96f5a0b846203bbdd0a694a94140e40337a7760f4837d",
+    "viewport-390.png": "a688c4421137dfd507f37f952909551e489d4785b7007c755b20b1913ecbfedd",
+    "viewport-720.png": "a4e336438f58e559483a18d8b561287ef7556bbc55c7a0acb3ab014eee63b4dd",
+    "viewport-metrics.json": "c5f46535d0580b1b0165c1f4ee68f0b39dcdbd025d88dd7998ebe97b3544f302",
+    "unknown-state.txt.gz": "2f3d183e44110e45f386ff90d273b07c619aa2527b6eaf56e88b61d595d21a06",
+    "build.log.gz": "ff77518e834a695636c78ff5730da75a9ce89e02444776f4be6b6ab4be0da162",
+    "unit-tests.log.gz": "c18f7757e30aa2f59694f864cd30fdc1a7e5eb4675a4e07aabc27c65046eb224",
+    "rust-core-tests.log.gz": "551a437ec4846423f9425d0d2b88babc24183f39c67dae85e930ef223a4ad0e2"
+  },
+  "rawTextDigests": {
+    "unknown-state.txt": "f2e16f353236927245d4598c4938ab41b88a5079f08849e98ad703d9f7fab308"
+  },
+  "rawLogDigests": {
+    "build.log": "a84544b61d141aead990c6f80004e491e7b84d390aa46a0dfd0f4da7967fea9a",
+    "unit-tests.log": "a245c00ad46f7909e08ec08c4ce897c0fd1f7c3716d7fbb908115024d50a000d",
+    "rust-core-tests.log": "6f5e42b68ae4f58577f63be88bffd568166299a53e6f8874ddf5f1292395e2f8"
+  }
+}

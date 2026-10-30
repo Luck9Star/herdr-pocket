@@ -1,0 +1,20 @@
+test_atomic_replace_failure_keeps_original (test_fixture_helper.FileTests.test_atomic_replace_failure_keeps_original) ... ok
+test_comment_and_misplaced_key_are_not_authorization (test_fixture_helper.FileTests.test_comment_and_misplaced_key_are_not_authorization) ... ok
+test_confirm_add_idempotence_and_revoke (test_fixture_helper.FileTests.test_confirm_add_idempotence_and_revoke) ... ok
+test_forged_receipt_and_reused_request (test_fixture_helper.FileTests.test_forged_receipt_and_reused_request) ... ok
+test_hardlink_and_permission_refused (test_fixture_helper.FileTests.test_hardlink_and_permission_refused) ... ok
+test_no_final_newline_is_restored_exactly (test_fixture_helper.FileTests.test_no_final_newline_is_restored_exactly) ... ok
+test_preserve_existing_same_key (test_fixture_helper.FileTests.test_preserve_existing_same_key) ... ok
+test_preserve_other_lines (test_fixture_helper.FileTests.test_preserve_other_lines) ... ok
+test_size_limit (test_fixture_helper.FileTests.test_size_limit) ... ok
+test_stale_snapshot_refused (test_fixture_helper.FileTests.test_stale_snapshot_refused) ... ok
+test_symlink_refused (test_fixture_helper.FileTests.test_symlink_refused) ... ok
+test_demo_default_has_no_change (test_fixture_helper.ProtocolTests.test_demo_default_has_no_change) ... ok
+test_key_injection_rejected (test_fixture_helper.ProtocolTests.test_key_injection_rejected) ... ok
+test_request_bounds (test_fixture_helper.ProtocolTests.test_request_bounds) ... ok
+test_response_binding_expiry_consumption (test_fixture_helper.ProtocolTests.test_response_binding_expiry_consumption) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.008s
+
+OK

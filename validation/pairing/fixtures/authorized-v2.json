@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "type": "pairing-binding-response",
+  "request_id": "0123456789abcdef0123456789abcdef",
+  "fingerprint": "SHA256:4V/FjwrFL8r/hGtIA8qxCiwFQ2yp3dWx8DKNAtpNPQk",
+  "account": "fixture-user",
+  "host_key": "SHA256:9WOqD3VXiX0D+j+466A6EDaEGM0il3zyvp4XrS+1ZxE",
+  "issued_at": 101,
+  "expires_at": 700,
+  "status": "authorized",
+  "authorization_added": true
+}

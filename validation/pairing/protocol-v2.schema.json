@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:herdr-pocket:pairing:2",
+  "title": "Offline public pairing v2",
+  "description": "Maximum UTF-8 wire size 2048 bytes. Runtime additionally rejects duplicate fields, validates SSH public keys with cryptography, and checks issued_at <= now < expires_at and TTL <= 600 seconds. Binding is not source authentication.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/response"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "type",
+        "request_id",
+        "account",
+        "host_key",
+        "issued_at",
+        "expires_at",
+        "device",
+        "public_key"
+      ],
+      "properties": {
+        "version": {
+          "const": 2
+        },
+        "type": {
+          "const": "pairing-public-key-request"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}$"
+        },
+        "account": {
+          "type": "string",
+          "pattern": "^[a-z_][a-z0-9_-]{0,31}$"
+        },
+        "host_key": {
+          "type": "string",
+          "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+        },
+        "issued_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expires_at": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "device": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9 -]{1,48}$"
+        },
+        "public_key": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^ssh-ed25519 [A-Za-z0-9+/]+={0,2}$"
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "type",
+        "request_id",
+        "account",
+        "host_key",
+        "issued_at",
+        "expires_at",
+        "fingerprint",
+        "status",
+        "authorization_added"
+      ],
+      "properties": {
+        "version": {
+          "const": 2
+        },
+        "type": {
+          "const": "pairing-binding-response"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}$"
+        },
+        "account": {
+          "type": "string",
+          "pattern": "^[a-z_][a-z0-9_-]{0,31}$"
+        },
+        "host_key": {
+          "type": "string",
+          "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+        },
+        "issued_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expires_at": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+        },
+        "status": {
+          "enum": [
+            "authorized",
+            "revoked"
+          ]
+        },
+        "authorization_added": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

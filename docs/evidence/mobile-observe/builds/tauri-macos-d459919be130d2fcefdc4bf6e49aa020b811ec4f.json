@@ -1,0 +1,23 @@
+{
+  "sourceSHA": "d459919be130d2fcefdc4bf6e49aa020b811ec4f",
+  "workflow": "Tauri validation shells",
+  "runId": 41062065682,
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41062065682",
+  "runConclusionAtCapture": "in_progress",
+  "jobId": 124084724433,
+  "job": "build (macos, macos-15)",
+  "jobConclusion": "success",
+  "artifactId": 12980576230,
+  "artifactName": "tauri-macos-d459919be130d2fcefdc4bf6e49aa020b811ec4f",
+  "artifactDirectory": "/tmp/herdr-mobile-observe-d459/tauri-macos-d459919be130d2fcefdc4bf6e49aa020b811ec4f/",
+  "manifest": "/tmp/herdr-mobile-observe-d459/tauri-macos-d459919be130d2fcefdc4bf6e49aa020b811ec4f/build-manifest.json",
+  "manifestSHA256": "037438584d3b235094b058ff87aceb54c83b4d14c6411950b82b2f731de03cb3",
+  "package": "/tmp/herdr-mobile-observe-d459/tauri-macos-d459919be130d2fcefdc4bf6e49aa020b811ec4f/herdr-pocket-tauri-probe.app.zip",
+  "packageSHA256": "67fc71215c85ad6b0e1b02201137acb3cc27f2d75f0307c39fdc96392f7281a3",
+  "extractedApp": "/tmp/herdr-mobile-observe-d459/tauri-macos-d459919be130d2fcefdc4bf6e49aa020b811ec4f/extracted/herdr-pocket-tauri-probe.app",
+  "buildOutcome": "success",
+  "deviceResult": "unverified",
+  "packageWasRun": false,
+  "observationPhase": "artifact verification before later limited GUI smoke",
+  "subsequentRuntimeEvidence": "../macos/verification.json"
+}

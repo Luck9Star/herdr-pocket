@@ -1,0 +1,19 @@
+{
+  "scope": "fixture-only",
+  "confirmed": false,
+  "fixtureBytesChanged": 0,
+  "states": [
+    "awaiting-host"
+  ],
+  "preview": {
+    "account": "fixture-user",
+    "device": "Fixture phone",
+    "fingerprint": "SHA256:1h9saCEbHprNtGGdWhqg9eeBxuJioWaNzn+DlYuUCmM",
+    "host_key": "SHA256:DCB7V4osq4N+dGqzmS6LopV6NddFaVtFmLBilWufKGw",
+    "proposed_change": "append one public key to a new temporary authorization.fixture",
+    "confirmation": "AUTHORIZE FIXTURE",
+    "real_authorization": false
+  },
+  "systemKeychainCalls": 0,
+  "sshConnections": 0
+}

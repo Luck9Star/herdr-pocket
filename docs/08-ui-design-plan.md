@@ -124,3 +124,5 @@ Penpot 能力依据：[组件](https://help.penpot.app/user-guide/design-systems
 已在独立 herdr-pocket Penpot 文件保存 56 状态 + 1 导航画板、205 条原生交互、18 个组件、25 个语义 tokens。重载后数量一致，预览实际走通 J1 主链、J2 逐键进入未知状态、J3 隐藏标签恢复。补充了 P1 loading 与配置提交失败完整回滚；未知输入没有重放出口。小／中／大手机、宽／窄桌面及无障碍规格已标注。
 
 本轮是交互验证；终端、三网络、授权与加密画面均为虚构示例。真实平台结果独立记录，待正确性证据齐备再收敛高保真与组件实现，不因 macOS 单端结果外推其他平台。
+
+后续已保存用户认可的 v2 靛蓝／Slate 候选，原生对象和覆盖见[v2记录](../design/v2-coverage.md)。当前手机实现推进至[会话看板与持续观察](13-mobile-dashboard-observe.md)：先明确选pane，停止后显示陈旧并重新审查；配对公开响应仍需绑定与独立连通验证。窄屏实看修正了看板误用终端深色容器的问题，应用卡片使用card/textPrimary/textSecondary tokens，终端另用term tokens。390/360/320px布景、Mac有限原生检查与云端SSH18项分别记录；字体、IME、触控、系统密钥存储仍须真实设备验证。这些工程反馈已落文档，本轮未重存Penpot画板或宣布高保真定稿。

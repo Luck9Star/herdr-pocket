@@ -2,11 +2,11 @@
 
 > 面向 herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
-状态：**M0.5 并行验证阶段，尚非正式产品**。2026-10-30 已保存 Penpot 核心交互原型，新增 Flutter/Tauri 离线验证壳与实际云构建测试产物，并完成 macOS 有限原生 smoke。完整远端交互闭环、手机 IME、三网络运行及跨平台支持仍待验证。见[实际证据与完整矩阵](docs/09-prototype-validation.md)、[验证入口](validation/README.md)。
+状态：**M0.5 并行验证阶段，尚非正式产品**。2026-10-30 已保存 Penpot 核心交互原型，新增 Flutter/Tauri 离线验证壳与实际云构建测试产物，并完成 [macOS 有限原生 smoke](docs/evidence/mobile-observe/macos/verification.json)。完整远端交互闭环、手机 IME、三网络运行及跨平台支持仍待验证。见[实际证据与完整矩阵](docs/09-prototype-validation.md)、[验证入口](validation/README.md)。
 
 新版视觉沿用用户认可的 Penpot 靛蓝／Slate 方案，已补恢复与核验状态，并接入两条验证壳；本轮结果及后续集成顺序见[UI v2 接线记录](docs/11-ui-v2-integration.md)。视觉确认不等于框架定案。
 
-当前按手机优先推进[远端只读接入](docs/12-mobile-remote-readonly.md)：两条适配器已在同一云端临时 SSH/herdr 目标完成 **12/12** 项真实对照，取得明确 session/pane 的一帧快照，且远端输入为 0。手机界面布局和 Mac 原生启动另有检查；GUI 真实凭据成功路径、持续观察与手机设备运行仍未验证，完整终端目标不变。
+当前按手机优先推进[会话看板与持续观察](docs/13-mobile-dashboard-observe.md)：两条适配器已在同一云端临时 SSH/herdr 目标完成 **18/18** 项真实对照，覆盖显式 pane 选择后的 full/delta、主动停止和手动再次连接，远端输入为 0。配对 v2 契约、Apple 内存签名探针与 Android 桥编译同步推进。手机界面布景、真实 SSH CLI、原生包构建分别记录；GUI 真实接入、设备密钥存储、手机运行与完整输入仍待验证。
 
 ## 首版做什么
 
@@ -32,6 +32,7 @@ Heeler 已有三网络的源码实现可供按许可移植：EasyTier 使用 no-
 
 | 文件 | 内容 |
 | --- | --- |
+| [`docs/13-mobile-dashboard-observe.md`](docs/13-mobile-dashboard-observe.md) | 当前手机看板、持续观察、配对／设备密钥、CI 与下载 |
 | [`docs/05-product-design.md`](docs/05-product-design.md) | 首版用户、核心流程、交互状态与范围 |
 | [`docs/08-ui-design-plan.md`](docs/08-ui-design-plan.md) | Penpot 关键流程、状态画板与并行验证交付计划 |
 | [`docs/06-technology-evaluation.md`](docs/06-technology-evaluation.md) | 框架候选、官方依据与手机终端 A/B 关口 |

@@ -1,0 +1,20 @@
+{
+  "sourceSHA": "c276c95fc3796b6f6de1ce3b6978195b5573a541",
+  "workflow": "Flutter validation shells",
+  "runId": 41061177552,
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41061177552",
+  "runConclusion": "failure",
+  "runFailureScope": "separate original terminal_view combining-glyph characterization",
+  "jobId": 124081592896,
+  "job": "build (macos, macos-14)",
+  "jobConclusion": "success",
+  "artifactId": 12978893676,
+  "artifactName": "flutter-macos-c276c95fc3796b6f6de1ce3b6978195b5573a541",
+  "package": "/tmp/herdr-mobile-observe-c276/flutter-shell-macos/flutter-macos-debug.tar.gz",
+  "packageSHA256": "726d70aea3eb2c5a68b97b28d19fc52b5811ff144172fbdd80dfb99b35cb2e5c",
+  "manifest": "/tmp/herdr-mobile-observe-c276/flutter-shell-macos/manifest.json",
+  "manifestSHA256": "b3af66619509e3b1b80765c87423d884490c851d061bd9cf2d1316cb66a017a6",
+  "buildOutcome": "success",
+  "deviceResult": "unverified",
+  "packageWasRun": false
+}

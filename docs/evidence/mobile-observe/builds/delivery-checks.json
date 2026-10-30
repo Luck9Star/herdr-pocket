@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "asOfUTC": "2026-10-30T13:38:27Z",
+  "latestUiSource": "d459919be130d2fcefdc4bf6e49aa020b811ec4f",
+  "remoteAdapterSource": "73ce2f8794a65c82975cf014d257ca339a283bdc",
+  "flutterCandidateSource": "c276c95fc3796b6f6de1ce3b6978195b5573a541",
+  "pairingSource": "c276c95fc3796b6f6de1ce3b6978195b5573a541",
+  "runs": [
+    {
+      "workflow": "Tauri validation shells",
+      "sourceSHA": "d459919be130d2fcefdc4bf6e49aa020b811ec4f",
+      "runId": 41062065682,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41062065682",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {"id": 124084724429, "name": "build (android, ubuntu-24.04)", "status": "completed", "conclusion": "success", "artifactId": 12980657085},
+        {"id": 124084724433, "name": "build (macos, macos-15)", "status": "completed", "conclusion": "success", "artifactId": 12980576230},
+        {"id": 124084724032, "name": "build (linux, ubuntu-24.04)", "status": "completed", "conclusion": "success", "artifactId": 12981335575},
+        {"id": 124084724591, "name": "build (ios-simulator, macos-15)", "status": "completed", "conclusion": "success", "artifactId": 12978843825},
+        {"id": 124084724431, "name": "build (windows, windows-2025)", "status": "completed", "conclusion": "success", "artifactId": 12981802286}
+      ],
+      "artifactKinds": "App build packages and provenance; no device result implied."
+    },
+    {
+      "workflow": "Flutter experimental terminal candidate",
+      "sourceSHA": "c276c95fc3796b6f6de1ce3b6978195b5573a541",
+      "runId": 41061177588,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41061177588",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {"id": 124081010592, "name": "patch-and-test", "status": "completed", "conclusion": "success"},
+        {"id": 124081768842, "name": "macos-render-check", "status": "completed", "conclusion": "success"},
+        {"id": 124081769023, "name": "build (android, ubuntu-24.04)", "status": "completed", "conclusion": "success", "artifactId": 12979242829},
+        {"id": 124081768959, "name": "build (macos, macos-14)", "status": "completed", "conclusion": "success", "artifactId": 12980005671},
+        {"id": 124081768923, "name": "build (linux, ubuntu-24.04)", "status": "completed", "conclusion": "success", "artifactId": 12979940766},
+        {"id": 124081768930, "name": "build (windows, windows-2022)", "status": "completed", "conclusion": "success", "artifactId": 12979013262},
+        {"id": 124081769217, "name": "build (ios, macos-14)", "status": "completed", "conclusion": "success", "artifactId": 12978943348}
+      ],
+      "renderEvidenceArtifactIds": [12979565966, 12979142270],
+      "artifactKinds": "Five app build packages are separate from candidate-macos-render and candidate-evidence artifacts."
+    },
+    {
+      "workflow": "Flutter validation shells",
+      "sourceSHA": "c276c95fc3796b6f6de1ce3b6978195b5573a541",
+      "runId": 41061177552,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41061177552",
+      "status": "completed",
+      "conclusion": "failure",
+      "jobs": [
+        {"id": 124081010455, "name": "lock-and-test", "status": "completed", "conclusion": "success"},
+        {"id": 124081592761, "name": "render-characterization", "status": "completed", "conclusion": "failure", "scope": "Known original terminal_view 0.5.0 combining-glyph baseline diagnostic"},
+        {"id": 124081592822, "name": "build (android, ubuntu-24.04)", "status": "completed", "conclusion": "success"},
+        {"id": 124081592896, "name": "build (macos, macos-14)", "status": "completed", "conclusion": "success"},
+        {"id": 124081592906, "name": "build (windows, windows-2022)", "status": "completed", "conclusion": "success"},
+        {"id": 124081592908, "name": "build (linux, ubuntu-24.04)", "status": "completed", "conclusion": "success"},
+        {"id": 124081592985, "name": "build (ios, macos-14)", "status": "completed", "conclusion": "success"}
+      ],
+      "interpretation": "The overall workflow failure is the separate original-renderer characterization; it is not a failure of the experimental patched candidate."
+    },
+    {
+      "workflow": "Mobile-first read-only remote adapters",
+      "sourceSHA": "73ce2f8794a65c82975cf014d257ca339a283bdc",
+      "runId": 41060251076,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41060251076",
+      "status": "completed",
+      "conclusion": "success",
+      "job": {"id": 124077898796, "name": "shared-loopback", "conclusion": "success", "artifactId": 12978263519},
+      "checks": {"passed": 18, "failed": 0, "adapters": ["rust", "dart"], "remoteInputBytes": 0},
+      "evidencePath": "../41060251076/",
+      "sha256SumsVerified": true
+    },
+    {
+      "workflow": "Pairing and device-key validation",
+      "sourceSHA": "c276c95fc3796b6f6de1ce3b6978195b5573a541",
+      "runId": 41061177628,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41061177628",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {"id": 124081010836, "name": "contract (macos-15)", "conclusion": "success", "artifactId": 12979191327},
+        {"id": 124081011234, "name": "contract (ubuntu-24.04)", "conclusion": "success", "artifactId": 12979620563},
+        {"id": 124081011246, "name": "android-bridge-compile", "conclusion": "success", "artifactId": 12978623344}
+      ],
+      "contractTests": {"pairingPerOS": 21, "helperPerOS": 15},
+      "deviceStorageAndRealAuthorization": "not executed",
+      "evidencePath": "../41061177628/"
+    },
+    {
+      "workflow": "Tauri validation shells",
+      "sourceSHA": "73ce2f8794a65c82975cf014d257ca339a283bdc",
+      "runId": 41060251058,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41060251058",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "reason": "Superseded by d459919 push with workflow concurrency cancel-in-progress.",
+      "jobs": [
+        {"id": 124077898954, "name": "build (android, ubuntu-24.04)", "conclusion": "success", "artifactId": 12979946788},
+        {"id": 124077898962, "name": "build (macos, macos-15)", "conclusion": "success", "artifactId": 12977759185},
+        {"id": 124077899013, "name": "build (linux, ubuntu-24.04)", "conclusion": "success", "artifactId": 12978897910},
+        {"id": 124077899084, "name": "build (ios-simulator, macos-15)", "conclusion": "success", "artifactId": 12977619672},
+        {"id": 124077898685, "name": "build (windows, windows-2025)", "conclusion": "cancelled", "artifactId": null}
+      ]
+    },
+    {
+      "workflow": "Flutter validation shells",
+      "sourceSHA": "73ce2f8794a65c82975cf014d257ca339a283bdc",
+      "runId": 41060251057,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41060251057",
+      "status": "completed",
+      "conclusion": "failure",
+      "job": {"id": 124077898583, "name": "lock-and-test", "conclusion": "failure"},
+      "failure": "Flutter widget test lifecycle assertion: AppLifecycleState.hidden -> AppLifecycleState.resumed; analyzer had no issues."
+    },
+    {
+      "workflow": "Flutter experimental terminal candidate",
+      "sourceSHA": "73ce2f8794a65c82975cf014d257ca339a283bdc",
+      "runId": 41060251060,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41060251060",
+      "status": "completed",
+      "conclusion": "failure",
+      "job": {"id": 124077898826, "name": "patch-and-test", "conclusion": "failure"},
+      "failure": "Flutter widget test lifecycle assertion: AppLifecycleState.hidden -> AppLifecycleState.resumed; flutter analyze passed."
+    }
+  ],
+  "locallyVerifiedPackages": [
+    {"sourceSHA": "d459919be130d2fcefdc4bf6e49aa020b811ec4f", "platform": "macos", "metadata": "tauri-macos-d459919be130d2fcefdc4bf6e49aa020b811ec4f.json", "packageWasRun": false, "subsequentRuntimeEvidence": "../macos/verification.json"},
+    {"sourceSHA": "d459919be130d2fcefdc4bf6e49aa020b811ec4f", "platform": "android", "metadata": "tauri-android-d459919be130d2fcefdc4bf6e49aa020b811ec4f.json", "packageWasRun": false},
+    {"sourceSHA": "c276c95fc3796b6f6de1ce3b6978195b5573a541", "platform": "macos", "metadata": "flutter-candidate-macos-c276c95fc3796b6f6de1ce3b6978195b5573a541.json", "packageWasRun": false, "subsequentRuntimeEvidence": "../macos/verification.json"},
+    {"sourceSHA": "c276c95fc3796b6f6de1ce3b6978195b5573a541", "platform": "android", "metadata": "flutter-candidate-android-c276c95fc3796b6f6de1ce3b6978195b5573a541.json", "packageWasRun": false},
+    {"sourceSHA": "c276c95fc3796b6f6de1ce3b6978195b5573a541", "platform": "macos", "metadata": "flutter-shell-macos-c276c95fc3796b6f6de1ce3b6978195b5573a541.json", "packageWasRun": false}
+  ],
+  "validationBoundaries": [
+    "CI package build success is not device install or runtime proof.",
+    "The Flutter experimental renderer patch is a local candidate, not an upstream terminal_view fix or framework selection.",
+    "Tauri d459919 changes the Tauri CSS presentation; it does not rerun or invalidate the 73ce2f8 remote adapter evidence.",
+    "Real mobile touch, Chinese IME, camera pairing, protected device storage, production credentials, GUI remote success, and lifecycle recovery remain unverified."
+  ]
+}

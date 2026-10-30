@@ -1,5 +1,7 @@
 # 手机优先：远端只读接入
 
+本页保留M1a一次性快照的实现与历史验收。后续看板、持续观察、配对及最新测试包见[M1b记录](13-mobile-dashboard-observe.md)，下方旧包不包含后续增量。
+
 2026-10-30。沿用已认可的 Penpot v2 视觉与手机优先顺序，开始 M1 的首个有限步骤。M0.5 的手机 IME、触控、完整终端与框架 A/B 门槛仍未完成；本步骤不将 M1 整体标为完成，不据此选定 Flutter 或 Tauri。
 
 ## 这一小步的范围
@@ -60,7 +62,7 @@ Flutter `d15da12` 候选包也已下载校验并实际打开：远端入口、�
 | --- | --- | --- | --- |
 | Android | [构建通过 · 测试 APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12974335322) | [构建通过 · arm64 测试 APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/artifacts/12973202706) | 两包已下载验 SHA；未安装真机 |
 | iOS | [构建通过 · 未签名构建](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12974065194) | [构建通过 · 模拟器构建](https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/artifacts/12973266398) | 不能作为真机可安装包；运行未验证 |
-| macOS | [构建通过 · 测试 App](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12972579783) | [构建通过 · 测试 App](https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/artifacts/12973041926) | 两包已下载验 SHA，并完成有限原生表单检查；GUI 真实接入未验证 |
+| macOS | [构建通过 · 测试 App](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12973502337) | [构建通过 · 测试 App](https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/artifacts/12973041926) | 两包已下载验 SHA，并完成有限原生表单检查；GUI 真实接入未验证 |
 | Windows | [构建通过 · 测试 bundle](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12973776064) | [构建通过 · 测试安装器](https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/artifacts/12973871407) | 云端构建通过；安装／运行未验证 |
 | Linux | [构建通过 · 测试 bundle](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396/artifacts/12972704575) | [构建通过 · 测试包](https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/artifacts/12972044909) | 云端构建通过；安装／运行未验证 |
 

@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "milestone": "M1b-mobile-dashboard-observe",
+  "scope": "Reviewed SSH access to one explicit named remote herdr session; real snapshot pane dashboard, explicit pane selection and bounded continuous read-only full/delta observe. Original one-shot remains supported.",
+  "config": {
+    "schemaVersion": {
+      "type": "integer",
+      "value": 1
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "policy": "DNS name or IP only, no whitespace/control characters or URL"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "username": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "policy": "no whitespace/control characters"
+    },
+    "expectedHostKey": {
+      "type": "string",
+      "maxLength": 4096,
+      "policy": "ssh-ed25519 and canonical base64 SSH public-key wire blob; parse type/length, compare before authentication; reject extra lines/options"
+    },
+    "privateKeyPem": {
+      "type": "string",
+      "maxLength": 16384,
+      "policy": "explicit in-memory experimental OpenSSH Ed25519 key only; no discovery, persistence, diagnostics, artifact or clipboard capture"
+    },
+    "socketPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "policy": "absolute canonical remote path <configRoot>/herdr/sessions/<session>/herdr.sock; no control characters, dot/dotdot or empty interior segments; derive fixed XDG_CONFIG_HOME from this path"
+    },
+    "herdrPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "policy": "absolute remote executable path; shell-quote as data, no arbitrary command"
+    },
+    "session": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "policy": "explicit named session only; reserved default is unsupported in this step"
+    },
+    "paneId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9:_-]{0,128}$",
+      "policy": "Empty only for dashboard discovery in continuous mode; one-shot and actual observe require an explicit valid pane selected from the current authenticated snapshot. No default or first-pane fallback in GUI."
+    },
+    "reviewConfirmed": {
+      "type": "boolean",
+      "value": true,
+      "policy": "explicit review of source, target and expected host key; never inferred from import/scan"
+    }
+  },
+  "bounds": {
+    "configUtf8Bytes": 32768,
+    "rpcResponseBytes": 1048576,
+    "observeLineBytes": 1048576,
+    "totalObserveBytes": 2097152,
+    "columns": 80,
+    "rows": 24,
+    "remoteWrites": 0,
+    "totalObserveBytesPolicy": "2 MiB applies to original one-shot only; continuous mode uses the bounded frame/consumer pipeline below, never an unbounded history."
+  },
+  "commands": {
+    "snapshot": "one direct-streamlocal channel, one session.snapshot RPC, validate response id, ok/error and result.type=session_snapshot, read result.snapshot, then close",
+    "observe": "fixed /usr/bin/env with only shell-quoted XDG_CONFIG_HOME derived from canonical socketPath; shell-quoted herdrPath --session session terminal session observe resolvedTerminalId --cols 80 --rows 24; no SSH PTY/control/takeover/resize; close after validated full frame",
+    "continuousObserve": "fixed /usr/bin/env with only shell-quoted XDG_CONFIG_HOME derived from canonical socketPath; shell-quoted herdrPath --session session terminal session observe resolvedTerminalId --cols 80 --rows 24; no SSH PTY/control/takeover/resize; await consumer acknowledgement for each full/delta frame until explicit cancel, EOF or protocol/size error"
+  },
+  "lifecycle": [
+    "Every attempt owns an internal generation; cancellation or target change invalidates it before transport cleanup.",
+    "Late frames and completions cannot replace newer UI state.",
+    "One-shot snapshot is labelled read-only and not realtime; refreshing is explicit.",
+    "No automatic retry, reconnect, credential fallback, trust acceptance or replay.",
+    "Authentication starts only after actual SSH host key comparison succeeds.",
+    "No remote write methods are exposed by this adapter, including from terminal callbacks.",
+    "Continuous mode publishes an authenticated dashboard before explicit pane selection; canonical socket/session binding is checked before publication.",
+    "First frame must be full; every later sequence must equal the previous sequence plus one, including full frames. Duplicate/gap/malformed data ends observation; stale display is labelled and never silently repaired.",
+    "No-data idle is valid after first full. Background, route leave, explicit stop and target edit invalidate the generation and close the owned transport; resume requires a new reviewed connection and new full.",
+    "Native IPC has one frame in flight and waits for GUI render acknowledgement; stale selection/ack commands cannot affect a newer generation."
+  ],
+  "cli": {
+    "arguments": [
+      "--config",
+      "TEMP_CONFIG_PATH",
+      "--case",
+      "positive|wrong-pin|missing-session|cancel|observe-positive|observe-cancel|observe-reconnect",
+      "--output",
+      "SAFE_REPORT_PATH"
+    ],
+    "cases": [
+      "positive",
+      "wrong-pin",
+      "missing-session",
+      "cancel",
+      "observe-positive",
+      "observe-cancel",
+      "observe-reconnect"
+    ],
+    "reportFields": [
+      "status",
+      "case",
+      "hostKeyChecked",
+      "hostKeyMatched",
+      "authStarted",
+      "snapshotReceived",
+      "fullFrameReceived",
+      "generation",
+      "lateEventsIgnored",
+      "errorCode",
+      "paneCount",
+      "frameCount",
+      "deltaFrames",
+      "lastSeq",
+      "connectionCount",
+      "bufferHighWaterBytes"
+    ],
+    "negativeEvidence": "wrong-pin must reach the actual key callback, fail comparison and never start authentication; transport timeout/refusal does not pass this case",
+    "secrets": "config and keys live only in the self-created CI temporary fixture; outputs contain no config, credentials, raw server messages or raw stdout/stderr",
+    "observeEvidence": "positive: >=3 frames and >=1 delta, then active cancellation; cancel: exactly first full then active cancellation; reconnect: two explicitly initiated observe calls in one CLI process, each full+delta. All require actual pin/auth/snapshot and errorCode=cancelled. Decoded single-frame high-water <=65536 is not whole-process memory or SSH buffer evidence."
+  },
+  "unverified": [
+    "phone touch",
+    "real mobile IME",
+    "camera pairing",
+    "device protected key storage",
+    "overlay transport",
+    "remote terminal input",
+    "GUI/phone continuous observe and lifecycle",
+    "production credentials"
+  ],
+  "binding": {
+    "snapshot": "exact selected paneId must exist uniquely in result.snapshot.panes and resolve to terminal_id matching ^term_[0-9a-f]+$",
+    "observe": "use that resolved terminal_id as CLI target, never reuse paneId as fallback; force the same derived config root and named session",
+    "boundary": "herdr 0.9.5 snapshot/frame do not echo session identity; binding relies on pinned server path and terminal resolver semantics, not a frame identity field",
+    "dashboard": "Parse only the current named session snapshot, at most 256 unique pane_id/terminal_id pairs; reject duplicate identifiers. Empty panes is a real empty dashboard, not network failure. No cross-session discovery is claimed."
+  },
+  "protocol": {
+    "herdrVersion": "0.9.5",
+    "wireProtocol": 22,
+    "unsupportedVersions": "fail closed; no fallback"
+  },
+  "continuousBounds": {
+    "decodedFrameBytes": 65536,
+    "observeLineBytes": 1048576,
+    "stderrBytes": 65536,
+    "snapshotPanes": 256,
+    "framesInFlight": 1,
+    "firstFullTimeoutSeconds": 10,
+    "idleTimeout": null,
+    "seqMaximum": 9007199254740991,
+    "history": "No cumulative raw frame history; both remote views retain only the fixed 80x24 screen (no scrollback). bufferHighWaterBytes measures one decoded frame, not JSON line, SSH buffers or whole-process memory."
+  }
+}

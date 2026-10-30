@@ -1,0 +1,16 @@
+{
+  "sourceSHA": "d459919be130d2fcefdc4bf6e49aa020b811ec4f",
+  "scope": "Browser UI only; production sources copied unchanged; temporary @tauri-apps/api/core alias; synthetic panes/frames and invalid input; never SSH/device proof",
+  "sourceHashes": {
+    "validation/tauri/index.html": "81bb5f783fae77a4ebad93fce8a8faabad77efa65a247c4f7c4cc84159308363",
+    "validation/tauri/src/remote.js": "1e4ec23d65e0200c4eed9fdba1f6a8043d5c7c5e090a704384f5b1f0d6ef2a6d",
+    "validation/tauri/src/remote-key.js": "cf2812153e53b10384a19e060c3408a8053dda42500916c9f4382d5bab300135",
+    "validation/tauri/src/theme.js": "fc708286236bda3cadbebe03abb78d5b13b6231b75500179cdc31eabc5f22b78",
+    "validation/tauri/src/main.js": "9c8561e7290721202dcd87d0c9195b3c6d52343b1d374ad12e45525f1865411f",
+    "validation/tauri/src/remote-state.js": "adfed138301dd34a05c8ea5f0156dfc0e8fa096825de73b9741a1675caa787fc",
+    "validation/tauri/src/style.css": "2eb7b4a5bb9df92401f3f533a776cad90fff3c7ef818d797d6dc87d4a8aca104",
+    "validation/tauri/src/view-state.js": "0983e97489913f8c8dd0f9c13eecf47613c9fc4c148ca436d11dd55983f1e661",
+    "validation/tauri/src/gate.js": "ffb983f470a940b527187752a7871de023de31f3cc5ed20867c20f30740f9eda"
+  },
+  "mockSHA256": "771597d100147544f8444e8498af5736098e66a785bcd89e2237e1fa6fa750a1"
+}

@@ -1,0 +1,26 @@
+test_atomic_write_failure_has_no_consumption_or_key (test_pairing.PairingTests.test_atomic_write_failure_has_no_consumption_or_key) ... ok
+test_cancel_after_authorization_preserves_cleanup_and_late_ssh_ignored (test_pairing.PairingTests.test_cancel_after_authorization_preserves_cleanup_and_late_ssh_ignored) ... ok
+test_cancel_before_authorization_rejects_late_response (test_pairing.PairingTests.test_cancel_before_authorization_rejects_late_response) ... ok
+test_confirmation_and_bad_request_cannot_write (test_pairing.PairingTests.test_confirmation_and_bad_request_cannot_write) ... ok
+test_connection_event_rejects_truthy_nonboolean (test_pairing.PairingTests.test_connection_event_rejects_truthy_nonboolean) ... ok
+test_expiry_bound_future_times_and_boolean_integers (test_pairing.PairingTests.test_expiry_bound_future_times_and_boolean_integers) ... ok
+test_expiry_not_host_revocation (test_pairing.PairingTests.test_expiry_not_host_revocation) ... ok
+test_host_idempotence_phone_duplicate_and_revoked_tombstone (test_pairing.PairingTests.test_host_idempotence_phone_duplicate_and_revoked_tombstone) ... ok
+test_host_preview_is_public_and_readonly (test_pairing.PairingTests.test_host_preview_is_public_and_readonly) ... ok
+test_mature_generated_key_sign_verify_and_fingerprint (test_pairing.PairingTests.test_mature_generated_key_sign_verify_and_fingerprint) ... ok
+test_no_export_and_locked_unavailable_deleted_fail_closed (test_pairing.PairingTests.test_no_export_and_locked_unavailable_deleted_fail_closed) ... ok
+test_offline_authorization_wait_retry_connected_revoke (test_pairing.PairingTests.test_offline_authorization_wait_retry_connected_revoke) ... ok
+test_old_generation_cannot_complete_new_attempt (test_pairing.PairingTests.test_old_generation_cannot_complete_new_attempt) ... ok
+test_preexisting_key_is_preserved_and_not_claimed_revoked (test_pairing.PairingTests.test_preexisting_key_is_preserved_and_not_claimed_revoked) ... ok
+test_private_key_options_comments_and_wrong_key_formats_rejected (test_pairing.PairingTests.test_private_key_options_comments_and_wrong_key_formats_rejected) ... ok
+test_public_fixtures (test_pairing.PairingTests.test_public_fixtures) ... ok
+test_response_target_mismatch_not_consumed (test_pairing.PairingTests.test_response_target_mismatch_not_consumed) ... ok
+test_schema_fields_agree_with_runtime (test_pairing.PairingTests.test_schema_fields_agree_with_runtime) ... ok
+test_source_not_authenticated_by_binding (test_pairing.PairingTests.test_source_not_authenticated_by_binding) ... ok
+test_unknown_authorization_accepts_reviewed_revoke_after_cancel_or_expiry (test_pairing.PairingTests.test_unknown_authorization_accepts_reviewed_revoke_after_cancel_or_expiry) ... ok
+test_wire_rejects_utf16_utf32_and_utf8_bom (test_pairing.PairingTests.test_wire_rejects_utf16_utf32_and_utf8_bom) ... ok
+
+----------------------------------------------------------------------
+Ran 21 tests in 0.085s
+
+OK

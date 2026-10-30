@@ -15,7 +15,7 @@ python3 -m unittest discover -s validation/helper -v
 
 CLI 不接受任意路径、账号、host、公私钥或请求文件；每次运行创建全新 private 临时 fixture。默认demo先展示 `preview` 的fixture账号／手机指纹／拟议变更，没有确认不写授权；确认只写 `FixtureStore` 自己创建的 `authorization.fixture`，退出即销毁。demo 的撤销是隔离情景，不会撤销真实设备。私钥仅存在临时进程内存，既不序列化到 fixture，也不打印或上传；Python／Swift 的托管内存不保证所有历史副本可靠清零。
 
-已执行记录见[本地证据](../../docs/evidence/pairing/README.md)。[工作流](../../.github/workflows/pairing-validation.yml)可在云端运行契约、Apple compile/memory probe、iOS simulator typecheck 与 Android API35 编译；**本轮未推送／触发，云端 job 结果尚未验证**。本机不安装完整 Android／iOS SDK。
+已执行记录见[本地证据](../../docs/evidence/pairing/README.md)。[工作流](../../.github/workflows/pairing-validation.yml)可在云端运行契约、Apple compile/memory probe、iOS simulator typecheck 与 Android API35 编译；已在 [run 41061177628](../../docs/evidence/mobile-observe/41061177628/README.md) 的 `c276c95` 源码上三job通过：Ubuntu/Mac各21项配对与15项helper检查、Apple内存probe/iOS simulator typecheck、Android API35编译；这些都不等于系统设备存储运行。本机不安装完整 Android／iOS SDK。
 
 ## v2 wire 与两个 GUI 的接线点
 
@@ -58,10 +58,10 @@ App-facing稳定接口是 `create()→localHandle`、`public(handle)→OpenSSH p
 
 **iOS 路径**：`CryptoKit.Curve25519.Signing.PrivateKey` 生成／签名 Ed25519；32-byte raw seed 作为 Keychain generic-password 存放，限定 service/account、`kSecAttrSynchronizable=false`、`WhenUnlockedThisDeviceOnly`，不迁移到其他设备；读操作 `LAContext.interactionNotAllowed`，锁定／权限错误直接失败。Apple 公开 Secure Enclave 路径仅P-256，不能把此 Ed25519 seed说成Secure Enclave不可导出key。签名时seed出现在应用内存，Keychain保护的是静态存储。当前策略为解锁可用，不额外声称每次签名有生物识别确认。[Apple Keychain可访问性](https://developer.apple.com/documentation/security/ksecattraccessiblewhenunlockedthisdeviceonly)、[Secure Enclave限制](https://developer.apple.com/documentation/security/protecting-keys-with-the-secure-enclave)、[CryptoKit Ed25519](https://developer.apple.com/documentation/cryptokit/curve25519/signing/privatekey)
 
-[Swift实现](native/apple/DeviceKeys.swift)已在Mac真实编译，`MemoryStoreProbe`只注入内存backend执行CryptoKit签名／验证、锁定拒绝、删除后拒绝；系统backend编译但**未实例化／未调用**。没有本机系统keychain写入。iOS编译、签名安装、设备Keychain、锁屏、备份恢复、entitlement与SSH signer集成均未验证；Mac内存probe不能替代它们。
+[Swift实现](native/apple/DeviceKeys.swift)已在Mac真实编译，`MemoryStoreProbe`只注入内存backend执行CryptoKit签名／验证、锁定拒绝、删除后拒绝；系统backend编译但**未实例化／未调用**。没有本机系统keychain写入。iOS simulator typecheck已在上述云端job通过；签名安装、设备Keychain、锁屏、备份恢复、entitlement与SSH signer集成均未验证；Mac内存probe不能替代它们。
 
 **Android 路径**：不假设系统标准 provider 的Ed25519就能在AndroidKeyStore硬件中签名。采用native内成熟Ed25519库生成／签名，seed由AndroidKeyStore生成的AES-256-GCM key封装；固定61-byte envelope（版本1+12-byte随机IV+32-byte密文+16-byte tag），AAD绑定本机handle，密文只存App `noBackupFilesDir`。解封只在native受限callback中签名，尽快清理临时seed，GUI不接触seed。Keystore的AES key不可导出不等于Ed25519私钥永不进应用内存；硬件等级须实际检查KeyInfo，不作默认硬件承诺。[Android Keystore官方能力](https://developer.android.com/privacy-and-security/keystore)
 
-[Java封装桥](native/android/AndroidSeedEnvelope.java)只覆盖AES封装／解封／删除和missing拒绝，未实现Android Ed25519库选择／生成／SSH签名／原子envelope保存，未接入GUI。它显式拒绝API<35：Android官方记录API31–34的`setUnlockedDeviceRequired`问题，API35起修复；这只是最小验证基线，不是产品最低Android版本决定。没有在本机编译或执行Android bridge，云编译job尚未运行；锁屏／失效／重装／备份／硬件KeyInfo及GCM篡改拒绝的设备行为仍待验证。[API与已知限制](https://developer.android.com/reference/android/security/keystore/KeyGenParameterSpec.Builder#setUnlockedDeviceRequired(boolean))
+[Java封装桥](native/android/AndroidSeedEnvelope.java)只覆盖AES封装／解封／删除和missing拒绝，未实现Android Ed25519库选择／生成／SSH签名／原子envelope保存，未接入GUI。它显式拒绝API<35：Android官方记录API31–34的`setUnlockedDeviceRequired`问题，API35起修复；这只是最小验证基线，不是产品最低Android版本决定。没有在本机编译或执行Android bridge，云端API35编译已通过；锁屏／失效／重装／备份／硬件KeyInfo及GCM篡改拒绝的设备行为仍待验证。[API与已知限制](https://developer.android.com/reference/android/security/keystore/KeyGenParameterSpec.Builder#setUnlockedDeviceRequired(boolean))
 
 成熟库固定版本及来源见[sources](sources.json)。固定依赖只是复验基线，不表示依赖安全审计或原生产品已验收。下一步应在具备授权的测试设备上将两GUI映射到native四方法接口，使用新生成测试身份完成SSH signer与Keychain/Keystore运行验证；本轮不索取真实设备凭据或向真实主机授权。

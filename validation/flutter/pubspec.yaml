@@ -8,6 +8,8 @@ dependencies:
   flutter:
     sdk: flutter
   terminal_view: 0.5.0
+  dartssh2: 4.1.0
+  pointycastle: 4.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

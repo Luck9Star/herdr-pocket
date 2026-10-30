@@ -39,6 +39,18 @@ def prepare(destination):
         (destination / 'pubspec.lock').unlink(missing_ok=True)
     shutil.copytree(source / 'lib', destination / 'lib', dirs_exist_ok=True)
     shutil.copytree(source / 'test', destination / 'test', dirs_exist_ok=True)
+    (destination / 'tool').mkdir(exist_ok=True)
+    shutil.copy2(source / 'tool/remote_probe.dart', destination / 'tool/remote_probe.dart')
+    # Native socket permission only; no background service or identity entitlement.
+    for name in ['DebugProfile.entitlements', 'Release.entitlements']:
+        entitlements = destination / 'macos/Runner' / name
+        text = entitlements.read_text()
+        if 'com.apple.security.network.client' not in text:
+            entitlements.write_text(text.replace('</dict>', '<key>com.apple.security.network.client</key><true/>\n</dict>'))
+    manifest = destination / 'android/app/src/main/AndroidManifest.xml'
+    text = manifest.read_text()
+    if 'android.permission.INTERNET' not in text:
+        manifest.write_text(text.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1))
     shutil.copytree(source / 'diagnostic', destination / 'diagnostic', dirs_exist_ok=True)
     shutil.copytree(source / 'regression', destination / 'regression', dirs_exist_ok=True)
     (destination / 'analysis_options.yaml').write_text('analyzer:\n  errors:\n    todo: ignore\n')
@@ -87,6 +99,8 @@ def package(destination, platform, output):
             return type(exc).__name__
     shared = ROOT / 'validation/shared'
     shutil.copytree(shared, output / 'shared', dirs_exist_ok=True)
+    shutil.copytree(ROOT / 'validation/flutter/licenses', output / 'remote-dependency-licenses', dirs_exist_ok=True)
+    shutil.copy2(ROOT / 'validation/flutter/remote-dependencies.json', output / 'remote-dependencies.json')
     sdk = os.environ.get('ANDROID_HOME', '')
     ndk_versions = sorted(p.name for p in (Path(sdk) / 'ndk').glob('*') if p.is_dir()) if sdk else []
     manifest = {
@@ -101,7 +115,8 @@ def package(destination, platform, output):
         'visualScheme': 'Penpot v2 Tech Indigo and Slate; offline shell adaptation',
         'fixtureSha256': hashlib.sha256((ROOT / 'validation/shared/fixture.json').read_bytes()).hexdigest(),
         'lockSha256': hashlib.sha256((destination / 'pubspec.lock').read_bytes()).hexdigest(),
-        'scope': 'compile only; local fixture sink; SSH/overlays/device validation NOT RUN',
+        'scope': 'compile only; isolated offline input fixture plus explicit manual read-only SSH snapshot adapter; device/overlays NOT RUN',
+        'remoteAdapter': {'ssh': 'dartssh2 4.1.0', 'input': 'disabled', 'storage': 'memory-only experimental', 'contractSha256': hashlib.sha256((ROOT / 'validation/shared/remote-contract.json').read_bytes()).hexdigest()},
         'signing': 'iOS unsigned, not installable on device' if platform == 'ios' else 'development test build; no production signing/notarization',
     }
     candidate_manifest = destination / 'candidate-manifest.json'

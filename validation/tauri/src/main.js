@@ -5,6 +5,7 @@ import './style.css';
 import { ViewGate, byteLength, readBoundClipboard, WaitRegistry } from './gate.js';
 import { viewState } from './view-state.js';
 import { readTheme } from './theme.js';
+import { initRemote } from './remote.js';
 
 const $ = id => document.getElementById(id);
 const fixture = await fetch('/shared/fixture.json').then(r => { if (!r.ok) throw Error('fixture missing'); return r.json(); });
@@ -50,7 +51,7 @@ function capture(p, text, token, draft=false) {
   if (!result.accepted) { log(`拒绝 ${p.id}: ${result.reason}`); return false; }
   const hex=[...result.bytes].map(x=>x.toString(16).padStart(2,'0')).join(' ');
   log(`本地捕获 ${p.id} g${result.generation}/e${result.epoch}: ${result.bytes.length} bytes [${hex}]`);
-  // There is deliberately no SSH transport or retry queue in this renderer probe.
+  // Offline fixture capture is isolated from the read-only remote adapter.
   return true;
 }
 function write(p, kind, data, token) {
@@ -183,4 +184,5 @@ for(const p of Object.values(panels))buildTerminal(p);
 panels.a.gate.focus(true); panels.b.gate.hide();
 await restore(panels.a);update();
 $('versions').textContent=`${designTokens.name} · xterm.js 6.0.0 · Tauri core 2.12.5 / API+CLI 2.12.4 · ${native?'原生壳':'浏览器预览（不代表 Tauri / 手机结果）'} · fixture ${fixture.id} · font SHA256 ${fixture.font.sha256} · ${navigator.userAgent}`;
-log('固定 80×24；对远端没有连接、命令、重放或 resize。');
+log('离线实验室固定 80×24；这里的输入不发送到远端。');
+initRemote({native,theme,onFixture:()=>{update();}});

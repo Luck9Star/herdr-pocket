@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'probe_gate.dart';
 import 'design_tokens.dart';
+import 'remote_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -269,7 +270,10 @@ class _ProbePageState extends State<ProbePage> with WidgetsBindingObserver {
     final wide = MediaQuery.sizeOf(context).width >= 960;
     final canSend = gate.canInput;
     return Scaffold(appBar: AppBar(title: const Text('herdr pocket'),
-      actions: [Padding(padding: const EdgeInsets.only(right: 16), child: Center(
+      actions: [TextButton.icon(label: const Text('远端只读'), icon: const Icon(Icons.link), onPressed: () {
+        for (final pane in panes) { pane.focusNode.unfocus(); pane.gate.invalidate(disconnect: true); }
+        Navigator.push<void>(context, MaterialPageRoute(builder: (_) => RemotePage(tokens: tokens))).then((_) { if (mounted) setState(() {}); });
+      }), Padding(padding: const EdgeInsets.only(right: 16), child: Center(
         child: Text('Flutter · 本地验证', style: TextStyle(color: tokens.color('textSecondary'), fontSize: 12))))]),
       body: SafeArea(child: Row(children: [
         if (wide) hosts(),

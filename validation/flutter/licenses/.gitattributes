@@ -1,0 +1,2 @@
+# Preserve the exact license bytes from verified upstream package archives.
+*-LICENSE -whitespace

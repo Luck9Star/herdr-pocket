@@ -1,11 +1,37 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>herdr-pocket · Tauri terminal probe</title></head><body>
-<header class="app-header"><div class="brand-lockup"><span class="brand-mark" aria-hidden="true">›_</span><div><span class="eyebrow">HERDR POCKET</span><h1>终端工作台 <small>Tauri + xterm.js</small></h1></div></div><span class="badge">离线验证 · 尚未连接 SSH</span></header>
-<main class="app-grid">
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>herdr-pocket · 远端只读验证</title></head><body>
+<header class="app-header"><div class="brand-lockup"><span class="brand-mark" aria-hidden="true">›_</span><div><span class="eyebrow">HERDR POCKET</span><h1>终端工作台 <small>Tauri + xterm.js</small></h1></div></div><span class="badge">M1a · 实验测试包</span></header>
+<nav class="route-tabs" aria-label="验证入口"><button id="show-remote" aria-pressed="true">远端只读</button><button id="show-fixture" aria-pressed="false">离线终端实验室</button></nav>
+<main id="remote-page" class="remote-page">
+<section class="remote-intro"><span class="eyebrow">REMOTE · READ ONLY</span><h2>查看远端终端</h2><p>手动核验一个明确的会话和 pane，读取一次完整画面。远端输入、扫码配对与三网络集成仍未开放。</p></section>
+<p id="remote-native-note" class="mode-message" data-tone="warning">浏览器预览没有原生 SSH 适配器。真实读取仅在测试安装包中可用，预览不会伪造连接成功。</p>
+<form id="remote-form" autocomplete="off">
+<fieldset id="remote-fields"><legend>1. 审查目标与来源</legend>
+<p class="remote-help">从独立可信渠道核对主机公钥与路径。本轮仅支持 release herdr 0.9.5 的非 default 命名会话。</p>
+<div class="remote-fields-grid">
+<label>主机地址<input id="remote-host" type="text" required maxlength="253" placeholder="主机 IP 或域名" spellcheck="false" autocapitalize="none" autocomplete="off"></label>
+<label>SSH 端口<input id="remote-port" type="number" required min="1" max="65535" value="22" inputmode="numeric"></label>
+<label>SSH 用户名<input id="remote-user" type="text" required maxlength="128" spellcheck="false" autocapitalize="none" autocomplete="off"></label>
+<label>命名会话<input id="remote-session" type="text" required maxlength="64" pattern="[A-Za-z0-9_-]+" placeholder="work" spellcheck="false" autocapitalize="none"></label>
+<label>pane 标识<input id="remote-pane" type="text" required maxlength="128" pattern="[A-Za-z0-9:_-]+" placeholder="pane:1" spellcheck="false" autocapitalize="none"></label>
+<label>herdr 可执行文件<input id="remote-herdr" type="text" required maxlength="1024" placeholder="/usr/local/bin/herdr" spellcheck="false" autocapitalize="none"></label>
+<label class="full-width">API socket 绝对路径<input id="remote-socket" type="text" required maxlength="1024" placeholder="/配置根/herdr/sessions/work/herdr.sock" spellcheck="false" autocapitalize="none"></label>
+<label class="full-width">预期 SSH 主机公钥<textarea id="remote-pin" required rows="3" maxlength="4096" placeholder="ssh-ed25519 AAAA…（仅两字段）" spellcheck="false" autocapitalize="none" autocomplete="off"></textarea></label>
+</div>
+<div class="remote-key-section"><h3>2. 临时凭据 · 实验功能</h3><p class="remote-help">仅本次内存使用的未加密 OpenSSH Ed25519 私钥。没有设备安全存储；不要使用生产凭据。提交、取消或进入后台后会清空表单，JavaScript 内存不具备可靠擦除保证。</p>
+<label>实验私钥<input id="remote-private-key" type="password" required maxlength="16384" placeholder="粘贴实验用 OpenSSH 私钥" spellcheck="false" autocapitalize="none" autocorrect="off" autocomplete="off" data-1p-ignore data-lpignore="true"></label></div>
+<label class="review-check"><input id="remote-review" type="checkbox"><span>我已核对资料来源、目标会话、pane 与预期主机公钥，并确认仅使用实验凭据。</span></label>
+</fieldset>
+<div class="remote-actions"><button id="remote-connect" type="submit" class="primary" disabled>核验并读取一次</button><button id="remote-cancel" type="button" disabled>取消读取</button><button id="remote-hide-keyboard" type="button">收起键盘</button><button id="remote-clear-key" type="button">清除临时私钥</button></div>
+</form>
+<p id="remote-status" class="remote-status" role="status" aria-live="polite"></p>
+<section id="remote-result" class="remote-result" hidden aria-label="远端只读快照"><div class="remote-result-heading"><strong>只读快照 · 非实时</strong><p id="remote-captured"></p></div><div class="term-scroll"><div id="remote-terminal" class="terminal-host"></div></div><p>可横向滚动查看完整 80 列。没有输入、粘贴发送或远端 PTY resize；窗口与键盘变化仅影响本地视口。</p></section>
+</main>
+<main id="fixture-workbench" class="app-grid" hidden>
 <aside class="sidebar" aria-label="测试主机"><div class="section-heading"><h2>主机</h2><span class="count">2</span></div><p class="sidebar-note">共享 fixture 的两个独立目标</p>
 <button class="host-card" data-target="a" aria-pressed="true"><span class="host-icon" aria-hidden="true">⌘</span><span><strong>build-lab</strong><small>Tailscale · 示例路径</small></span><span class="host-focus">A</span></button>
 <button class="host-card" data-target="b" aria-pressed="false"><span class="host-icon" aria-hidden="true">⌘</span><span><strong>review-lab</strong><small>EasyTier · 示例路径</small></span><span class="host-focus">B</span></button>
-<div class="sidebar-foot"><strong>测试边界</strong><p>网络标签用于目标区分，不代表已经入网。SSH、扫码授权及真实主机接入仍未连接。</p></div></aside>
+<div class="sidebar-foot"><strong>测试边界</strong><p>网络标签用于目标区分，不代表已经入网。本页仅离线输入实验；远端只读入口独立，输入记录不会发往远端。</p></div></aside>
 <div class="workspace-main">
 <div class="workspace-heading"><div><span class="eyebrow">WORKSPACE</span><h2>完整终端</h2></div><button id="split" aria-pressed="false">桌面分屏</button></div>
 <p class="notice">终端固定 80 × 24；窗口和键盘变化仅改变本地视口。输入只记录在本机，不自动重放。</p>

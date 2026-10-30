@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-30",
+  "source": "pub.dev version API and dartssh2 archive exact source after SHA verification; lock prepared from pinned metadata, must pass pub --enforce-lockfile in CI",
+  "newPackages": [
+    {
+      "name": "asn1lib",
+      "version": "1.5.8",
+      "archiveSha256": "4bae5ae63e6d6dd17c4aac8086f3dec26c0236f6a0f03416c6c19d830c367cf5"
+    },
+    {
+      "name": "dartssh2",
+      "version": "4.1.0",
+      "archiveSha256": "39359aceafcf5940b868249e3c9c6d86e4e0f989eec7417d033c943157c84c51"
+    },
+    {
+      "name": "pinenacl",
+      "version": "0.6.0",
+      "archiveSha256": "57e907beaacbc3c024a098910b6240758e899674de07d6949a67b52fd984cbdf"
+    },
+    {
+      "name": "pointycastle",
+      "version": "4.0.0",
+      "archiveSha256": "92aa3841d083cc4b0f4709b5c74fd6409a3e6ba833ffc7dc6a8fee096366acf5"
+    }
+  ],
+  "dartssh2License": "MIT",
+  "upstream": "https://github.com/vicajilau/dartssh2",
+  "documentation": "Context7 library dartssh2 then docs /vicajilau/dartssh2; forwardLocalUnix, explicit host key callback and no-PTY execute checked against 4.1.0 archive",
+  "licenses": [
+    {
+      "name": "dartssh2",
+      "version": "4.1.0",
+      "archiveSha256": "39359aceafcf5940b868249e3c9c6d86e4e0f989eec7417d033c943157c84c51",
+      "licenseFile": "licenses/dartssh2-4.1.0-LICENSE",
+      "licenseSha256": "465afc358e3c3520109a7fd728d333e3101c71ad32d143181313bf406232808b"
+    },
+    {
+      "name": "pointycastle",
+      "version": "4.0.0",
+      "archiveSha256": "92aa3841d083cc4b0f4709b5c74fd6409a3e6ba833ffc7dc6a8fee096366acf5",
+      "licenseFile": "licenses/pointycastle-4.0.0-LICENSE",
+      "licenseSha256": "3a7bb295473da049a1c6edd2f8c41b9e526a4e80f200c0200cc5600b2634df3f"
+    },
+    {
+      "name": "pinenacl",
+      "version": "0.6.0",
+      "archiveSha256": "57e907beaacbc3c024a098910b6240758e899674de07d6949a67b52fd984cbdf",
+      "licenseFile": "licenses/pinenacl-0.6.0-LICENSE",
+      "licenseSha256": "14cd126a80ee0e99ebd6e46ac5b8c7f929fecdcb1a01b8a0542552ea1f96589e"
+    },
+    {
+      "name": "asn1lib",
+      "version": "1.5.8",
+      "archiveSha256": "4bae5ae63e6d6dd17c4aac8086f3dec26c0236f6a0f03416c6c19d830c367cf5",
+      "licenseFile": "licenses/asn1lib-1.5.8-LICENSE",
+      "licenseSha256": "b0db8d3a93ea33f852d2b6dfa9c38fc57d33a51c31b47ca528df6d02700f2a42"
+    }
+  ]
+}

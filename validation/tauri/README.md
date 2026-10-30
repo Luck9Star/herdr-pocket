@@ -1,12 +1,22 @@
 # Tauri + xterm.js 验证壳
 
-状态：2026-10-30，最小**离线终端/原生 IPC 验证壳**。使用真实 xterm.js 6.0.0 组件和 Tauri 2.12.5 Rust 后端，输入只到本地字节记录；没有读取 SSH 凭据或连接真实主机。纯 Rust `SessionGuard` 测试不是 SSH 握手、herdr 或 overlay 验收。
+状态：2026-10-30，包含独立的 **M1a 远端一次性只读入口**与**离线终端/原生 IPC 实验室**。使用 xterm.js 6.0.0、Tauri 2.12.5 与固定 russh 0.65.0；没有设备安全存储、远端输入或 overlay 接线。当前实际云端/设备验收以 evidence 记录为准；编译或纯 Rust `SessionGuard` 测试不是 SSH 握手、herdr 或手机验收。
+
+## 手机优先的远端只读入口
+
+默认页按手机顺序审查目标、核验主机公钥、提供实验临时凭据，然后显式读取一次。控件至少 44 px，360/390 px 单列，键盘仅改变本地视口。未提供任意命令、远端 resize、自动重试或输入发送。浏览器预览明确显示原生 SSH 不可用，并禁用连接，不返回假快照。
+
+配置字段、host key 与凭据只保留内存；私钥采用 `type=password` 语义输入，禁用自动填充建议，提交时重建被单行控件移除的 OpenSSH PEM 换行。没有“显示私钥”按钮或私钥日志。编辑任意资料会清除核验勾选；连接中字段锁定。取消、切换到离线页或进入后台先失效 generation，再取消原生读取、清除私钥和旧画面。JavaScript/IPC 内存不提供可靠擦除保证，明确只用于实验凭据，不声称安全存储完成。
+
+[共享 Rust 适配器](../transport-rust/README.md) 对真实 key exchange 做 pin-before-auth，再经 direct-streamlocal 查询 snapshot，绑定配置根、命名会话和解析出的 terminal ID，读取首个 80×24 full ANSI 帧并关闭连接。视图标为“只读快照 · 非实时”，记录本地获取时间。remote xterm `disableStdin`，没有 onData 发送处理；OSC 52、OSC 8 被消费，链接激活无操作。与离线 fixture 输入/草稿/日志完全隔离。
+
+本轮本机已执行前端单元测试/build、Rust transport tests 与 Mac native cargo check。只有独立 CI driver 的实际运行可证明 loopback SSH/herdr 正负例；手机触控、IME、安装、相机、三网络和远端完整输入仍未验证。
 
 ## Penpot v2 视觉接入
 
 2026-10-30 将用户认可的 Tech Indigo / Slate 配色接入本壳：主操作、选中标签和活动焦点用靛蓝，终端背景使用 `#0B0F17`。从 `../shared/design-tokens-v2.json` 读取语义颜色、组件圆角与固定 16 色 ANSI 工程基线；与 Flutter 使用同一字节 fixture、字体、80×24 网格和选择高亮透明度。ANSI 16 色是共享比较约定，不宣称是 Penpot 导出值。
 
-桌面侧栏与双分屏、窄屏单目标、三模式切换、草稿预览和未知结果恢复已有可操作布局。`view-state.js` 只控制可见状态和禁用原因，实际输入仍经 `ViewGate` 核验。获取新全量画面不会解开未知结果锁定；核实后仍需显式选择输入模式。验证工具默认折叠，页面始终标注离线边界。配对和真实网络仍未接线。
+离线实验室的桌面侧栏与双分屏、窄屏单目标、三模式切换、草稿预览和未知结果恢复已有可操作布局。`view-state.js` 只控制可见状态和禁用原因，实际输入仍经 `ViewGate` 核验。获取新全量画面不会解开未知结果锁定；核实后仍需显式选择输入模式。验证工具默认折叠，实验室始终标注离线边界。扫码配对与三网络仍未接线。
 
 [本轮浏览器验收](../../docs/evidence/tauri/2026-10-30-ui-v2.md)覆盖共享四视口和核心安全交互；这些截图来自 Mac 上的 Chromium 浏览器预览，不是 Android、iOS、Tauri 系统 WebView 或手机触控证据。
 
@@ -21,6 +31,7 @@ npm ci
 npm test
 npm run build
 cargo test --locked --manifest-path core/Cargo.toml
+cargo test --locked --manifest-path ../transport-rust/Cargo.toml
 npm run dev
 ```
 
@@ -32,7 +43,7 @@ npm run dev
 - 手机标签、桌面双视图、明确单输入焦点。窄于 900 logical px 退为单可见目标；字体/网格保持固定，横向滚动查看。未实现自动拟合字号，布局和软键盘从不发远端 resize。
 - 旧 generation/epoch、迟到 IME 目标、隐藏恢复、结果未知与 UTF-8 输入上限在 gate 中检查；隐藏/回前台后需主动取得 full，并回到观察。原生键盘/IME 是否在每个系统按预期发事件仍需真机。
 - 1 MiB 负载在浏览器走同一字节 fixture，在原生壳通过 Rust `Channel<Response>` 发送原始二进制，xterm write 消费回调后才 ack。每流 65,536 bytes、总计最多两个流；取消旧 lease。
-- Rust 不提供文件、shell、凭据、任意远端网络或 PTY resize 命令，前端不加载远端页面/字体。此限制适用于验证壳，不是完整产品已实现的声明。
+- Rust 不向 JavaScript 提供通用文件、shell、SSH agent 或 PTY resize 命令，前端不加载远端页面/字体。新增 `remote_read_once`/`remote_cancel` 仅用于经显式审查的 SSH 只读目标；固定可执行路径和协议边界见适配器说明。
 
 输入记录限最近 100 条，仅供测试；不要在验证壳中粘贴真实秘密。记录“本地捕获”不代表服务端接收。草稿为内存状态，退出不保存；真实安全存储、加密配置迁移与配对 helper 尚未接入。
 
@@ -48,7 +59,7 @@ npm run dev
 | Windows x64 | 未签名 NSIS 安装器 | 需 WebView2；签名信誉/目标系统运行未验 |
 | Ubuntu 24.04 x64 | `.deb` | 需相应 WebKitGTK 运行依赖；不外推其他发行版 |
 
-每个 artifact 同带 `build-manifest.json`、`SHA256SUMS`、共享fixture/字体许可及锁文件；v2 manifest 另记录 `designTokensSHA256` 和视觉基线名称。工作流失败仍上传诊断材料；**必须看 manifest 的 buildOutcome 和真实安装文件，不能把存在 artifact 当构建成功**。保留 14 天，下载需要 GitHub 仓库读取权限。
+每个 artifact 同带 `build-manifest.json`、`SHA256SUMS`、共享fixture/字体许可及锁文件；v2 manifest 另记录 `designTokensSHA256` 和视觉基线名称，M1a 另含 `remoteContractSHA256`、`transportSourceSHA256`、transport Cargo.lock 与只读行为边界。工作流失败仍上传诊断材料；**必须看 manifest 的 buildOutcome 和真实安装文件，不能把存在 artifact 当构建成功**。保留 14 天，下载需要 GitHub 仓库读取权限。
 
 ## 验收与已知缺口
 
@@ -57,3 +68,5 @@ npm run dev
 终端 full 恢复会销毁并重建 xterm 实例，以隔离旧异步写入；此壳不保存完整滚动历史或隐藏期间历史。移动系统可能缺少 `navigator.clipboard` 权限，预览框支持系统粘贴；这不是已完成的五端剪贴板适配。native Channel 延迟/吞吐和整 App 内存必须在原生包中测，不使用浏览器数字判胜负。
 
 来源与本地执行证据：[2026-10-30 核查](../../docs/evidence/tauri/2026-10-30-sources.md)。
+
+M1a 新查询：Context7 `library xterm.js` → `/xtermjs/xterm.js` → `docs` 核实 read-only、`parser.registerOscHandler` 与 `linkHandler`，再核对已安装固定 xterm 6.0.0 的公开实现；parser API 不需要启用 proposed API。Rust/herdr 固定来源见[适配器记录](../transport-rust/README.md#api-与协议来源)。

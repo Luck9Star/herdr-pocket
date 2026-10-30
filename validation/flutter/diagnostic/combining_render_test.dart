@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -14,6 +13,14 @@ import 'package:terminal_view/terminal_view.dart';
 
 List<String> codepoints(String text) => text.runes
     .map((rune) => 'U+${rune.toRadixString(16).padLeft(4, '0')}').toList();
+
+int visiblePixels(Uint8List rgba) {
+  var count = 0;
+  for (var offset = 3; offset < rgba.length; offset += 4) {
+    if (rgba[offset] > 0) count++;
+  }
+  return count;
+}
 
 Future<Uint8List> raster(String text, String name, Directory output) async {
   final terminal = Terminal()..resize(80, 24)..write(text);
@@ -51,6 +58,8 @@ void main() {
       final plainPixels = await raster(plain, 'ascii-base', output);
       final markedPixels = await raster(marked, 'ascii-combining', output);
       final equalPixels = listEquals(plainPixels, markedPixels);
+      final baseVisible = visiblePixels(plainPixels);
+      final markedVisible = visiblePixels(markedPixels);
       final report = {
         'schemaVersion': 1,
         'sourceCommit': Platform.environment['GITHUB_SHA'],
@@ -61,13 +70,18 @@ void main() {
         'bufferPreservesMarks': copyApiText == marked,
         'cursorX': terminal.buffer.cursorX,
         'baseAndCombiningPixelsEqual': equalPixels,
-        'combiningVisibleCriterion': equalPixels ? 'failed' : 'passed',
+        'baseNontransparentPixels': baseVisible,
+        'markedNontransparentPixels': markedVisible,
+        'combiningVisibleCriterion': baseVisible == 0 || markedVisible == 0
+            ? 'invalid probe' : equalPixels ? 'failed' : 'passed',
         'images': ['ascii-base.png', 'ascii-combining.png'],
       };
       await File('${output.path}/combining-render.json')
           .writeAsString('${const JsonEncoder.withIndent('  ').convert(report)}\n');
       expect(copyApiText, marked, reason: 'Parser/storage must preserve codepoints');
       expect(terminal.buffer.cursorX, 5, reason: 'Marks must not add terminal columns');
+      expect(baseVisible, greaterThan(0), reason: 'Blank output is an invalid renderer probe');
+      expect(markedVisible, greaterThan(0), reason: 'Blank output is an invalid renderer probe');
       expect(equalPixels, isFalse,
         reason: 'Visible accents must change rendered pixels. The unpatched 0.5.0 ASCII batch path is suspected to discard combined marks. See attached report and PNGs.');
     });

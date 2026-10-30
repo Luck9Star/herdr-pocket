@@ -78,9 +78,23 @@ LogLevel VERBOSE
     server=spawn([herdr,'--session','pocket-probe','server'],'herdr-server.log')
     sock=ROOT/'config/herdr/sessions/pocket-probe/herdr.sock'
     deadline=time.monotonic()+20
-    while not sock.exists():
+    while True:
         if server.poll() is not None: raise RuntimeError('isolated herdr server exited before socket creation')
-        if time.monotonic()>deadline: raise RuntimeError('isolated named-session socket timeout')
+        # Path creation precedes accept readiness. Probe only a read-only RPC;
+        # never retry workspace creation, input, or any mutating request.
+        try:
+            with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as ready:
+                ready.settimeout(.5);ready.connect(str(sock))
+                ready.sendall(b'{"id":"readiness","method":"session.snapshot","params":{}}\n')
+                data=bytearray()
+                while b'\n' not in data and len(data)<=1048576:
+                    chunk=ready.recv(4096)
+                    if not chunk:break
+                    data.extend(chunk)
+                if len(data)<=1048576 and isinstance(json.loads(data.split(b'\n',1)[0]).get('result'),dict):break
+        except (OSError,ValueError):
+            pass
+        if time.monotonic()>deadline: raise RuntimeError('isolated named-session read-only readiness timeout')
         time.sleep(.1)
     created=json.loads(run([herdr,'--session','pocket-probe','workspace','create','--cwd',ROOT,'--label','ssh-fixture'],'workspace-create.json'))
     pane=created['result']['root_pane']['pane_id']

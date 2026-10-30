@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 1,
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40983432877",
+  "sourceCommit": "015153e8c687d2998ae4714086507a8c182b498f",
+  "scope": "Cloud desktop compile/load probes only; no nodes started, network join/dial or provider concurrency executed. Android/iOS not tested by this workflow.",
+  "platforms": {
+    "Linux": {
+      "architecture": "x86_64",
+      "runnerImage": "20261026.354.1",
+      "originalResultSha256": "51428cb3ed2ade231e11b541a9ca261c1c60ea6be9dc66ce7da371792ab977c0",
+      "providers": {
+        "tailscale": {
+          "status": "passed",
+          "tested": "tsnet import + Dial(context)/Close type check + c-shared ABI build/load; no tsnet dial executed",
+          "library": {
+            "sha256": "7e4c8da6799c6d95586bce0bc99cbee1a640dbec16ce4402b96852c73cead3d3",
+            "bytes": 30927368,
+            "load": "passed",
+            "nodeStarted": false
+          },
+          "networkValidation": "not run",
+          "deviceValidation": "not run",
+          "commands": [
+            {
+              "label": "compile-c-abi",
+              "exitCode": 0,
+              "log": "tailscale-02-compile-c-abi.log",
+              "seconds": 83.838
+            },
+            {
+              "label": "load-c-abi",
+              "exitCode": 0,
+              "log": "tailscale-03-load-c-abi.log",
+              "seconds": 0.032
+            }
+          ]
+        },
+        "easytier": {
+          "status": "failed",
+          "error": "check-c-abi-library exited 101",
+          "networkValidation": "not run",
+          "deviceValidation": "not run",
+          "commands": [
+            {
+              "label": "check-c-abi-library",
+              "exitCode": 101,
+              "log": "easytier-14-check-c-abi-library.log",
+              "seconds": 103.213
+            }
+          ],
+          "diagnosis": "E0425: pinned Heeler bridge src/lib.rs:490 references libc::SO_NOSIGPIPE unconditionally; symbol absent on Linux."
+        },
+        "zerotier": {
+          "status": "passed",
+          "tested": "Patched libzt shared library compiled/loaded; four symbols resolved, never invoked",
+          "library": {
+            "sha256": "f0a3adfdc93cfd93c6c4a51bea75d414106315c6200f443ac11ed909e6551029",
+            "bytes": 4708704,
+            "load": "passed",
+            "nodeStarted": false
+          },
+          "networkValidation": "not run",
+          "deviceValidation": "not run",
+          "commands": [
+            {
+              "label": "cmake-configure",
+              "exitCode": 0,
+              "log": "zerotier-30-cmake-configure.log",
+              "seconds": 1.817
+            },
+            {
+              "label": "build-shared",
+              "exitCode": 0,
+              "log": "zerotier-31-build-shared.log",
+              "seconds": 30.951
+            },
+            {
+              "label": "load-and-resolve",
+              "exitCode": 0,
+              "log": "zerotier-32-load-and-resolve.log",
+              "seconds": 0.032
+            }
+          ]
+        }
+      }
+    },
+    "Darwin": {
+      "architecture": "arm64",
+      "runnerImage": "20260831.0302.1",
+      "originalResultSha256": "6ce624175424a60bea0ba8deec4a29bc2489cd29264a77607d6dd3b1cdc8492d",
+      "providers": {
+        "tailscale": {
+          "status": "passed",
+          "tested": "tsnet import + Dial(context)/Close type check + c-shared ABI build/load; no tsnet dial executed",
+          "library": {
+            "sha256": "7a72d44ac25b6baf5666365bc7cc184d1945e2592d7a5acffe268a829797a8f2",
+            "bytes": 19922434,
+            "load": "passed",
+            "nodeStarted": false
+          },
+          "networkValidation": "not run",
+          "deviceValidation": "not run",
+          "commands": [
+            {
+              "label": "compile-c-abi",
+              "exitCode": 0,
+              "log": "tailscale-02-compile-c-abi.log",
+              "seconds": 37.716
+            },
+            {
+              "label": "load-c-abi",
+              "exitCode": 0,
+              "log": "tailscale-03-load-c-abi.log",
+              "seconds": 0.049
+            }
+          ]
+        },
+        "easytier": {
+          "status": "passed",
+          "tested": "Real patched heeler-easytier library cargo check only; no linking, network node or TCP dial",
+          "networkValidation": "not run",
+          "deviceValidation": "not run",
+          "commands": [
+            {
+              "label": "check-c-abi-library",
+              "exitCode": 0,
+              "log": "easytier-14-check-c-abi-library.log",
+              "seconds": 100.448
+            }
+          ]
+        },
+        "zerotier": {
+          "status": "passed",
+          "tested": "Patched libzt shared library compiled/loaded; four symbols resolved, never invoked",
+          "library": {
+            "sha256": "d8e0c675037b02a21b898eb2cbf4a5d39b5cbddeaecff48b163df72932c7c42c",
+            "bytes": 3978488,
+            "load": "passed",
+            "nodeStarted": false
+          },
+          "networkValidation": "not run",
+          "deviceValidation": "not run",
+          "commands": [
+            {
+              "label": "cmake-configure",
+              "exitCode": 0,
+              "log": "zerotier-30-cmake-configure.log",
+              "seconds": 2.228
+            },
+            {
+              "label": "build-shared",
+              "exitCode": 0,
+              "log": "zerotier-31-build-shared.log",
+              "seconds": 18.021
+            },
+            {
+              "label": "load-and-resolve",
+              "exitCode": 0,
+              "log": "zerotier-32-load-and-resolve.log",
+              "seconds": 0.035
+            }
+          ]
+        }
+      }
+    },
+    "Windows": {
+      "architecture": "AMD64",
+      "runnerImage": "20261026.347.1",
+      "originalResultSha256": "59ca9dc8281e38e587054bd744963de80da568eabe342b792728169b3a686216",
+      "providers": {
+        "tailscale": {
+          "status": "passed",
+          "tested": "tsnet import + Dial(context)/Close type check + c-shared ABI build/load; no tsnet dial executed",
+          "library": {
+            "sha256": "1f178e1513e1d82397d501292407e8854f10efa0b8cd914c7ae49469d1ad2b27",
+            "bytes": 40219728,
+            "load": "passed",
+            "nodeStarted": false
+          },
+          "networkValidation": "not run",
+          "deviceValidation": "not run",
+          "commands": [
+            {
+              "label": "compile-c-abi",
+              "exitCode": 0,
+              "log": "tailscale-02-compile-c-abi.log",
+              "seconds": 119.266
+            },
+            {
+              "label": "load-c-abi",
+              "exitCode": 0,
+              "log": "tailscale-03-load-c-abi.log",
+              "seconds": 0.344
+            }
+          ]
+        },
+        "easytier": {
+          "status": "failed",
+          "error": "check-c-abi-library exited 101",
+          "networkValidation": "not run",
+          "deviceValidation": "not run",
+          "commands": [
+            {
+              "label": "check-c-abi-library",
+              "exitCode": 101,
+              "log": "easytier-14-check-c-abi-library.log",
+              "seconds": 332.359
+            }
+          ],
+          "diagnosis": "Seven compiler errors: std/tokio UnixStream unavailable, SOL_SOCKET/SO_NOSIGPIPE/socklen_t missing, setsockopt fd expected usize but i32. No port patch applied."
+        },
+        "zerotier": {
+          "status": "passed",
+          "tested": "Patched libzt shared library compiled/loaded; four symbols resolved, never invoked",
+          "library": {
+            "sha256": "bc745b2e324659f00332ab00e8dd56d628d663f9044cb6c9e23bbf846c6d078e",
+            "bytes": 1154048,
+            "load": "passed",
+            "nodeStarted": false
+          },
+          "networkValidation": "not run",
+          "deviceValidation": "not run",
+          "commands": [
+            {
+              "label": "cmake-configure",
+              "exitCode": 0,
+              "log": "zerotier-30-cmake-configure.log",
+              "seconds": 12.125
+            },
+            {
+              "label": "build-shared",
+              "exitCode": 0,
+              "log": "zerotier-31-build-shared.log",
+              "seconds": 75.313
+            },
+            {
+              "label": "load-and-resolve",
+              "exitCode": 0,
+              "log": "zerotier-32-load-and-resolve.log",
+              "seconds": 0.047
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -33,3 +33,18 @@ artifact 包含：
 本轮 Context7 分别执行 library→docs：`/tailscale/tailscale`、`/easytier/easytier`、`/zerotier/docs`。Tailscale 文档明确 Start/Dial 可能隐式启动与登录，因此本探针只做类型检查和无副作用 ABI；EasyTier 官方编译指南不能证明 Heeler glue 可跨平台；ZeroTier docs 中的 node/socket 示例只用来查 API，不在本次执行真实网络流程。精确 API/补丁/许可证仍以固定来源代码为准。
 
 后续先解决实际编译错误，再加临时隔离网络中的字节流、取消/迟到清理与身份持久化测试，最后才接真实 SSH/herdr 和五端十五格/并发矩阵。不得用当前三桌面构建格替代产品支持矩阵。
+
+## 首轮真实结果与修复
+
+[run 40982743095](https://github.com/Luck9Star/herdr-pocket/actions/runs/40982743095)，源提交 `9583570f82fe25ac7723ccc9e189e183cbb2262a`：macOS tsnet c-shared 编译/加载成功，EasyTier cargo check 成功；ZeroTier CMake 配置因关闭 static 后安装目标仍引用 zt-static 失败，已增加 `ALLOW_INSTALL_TARGET=OFF`。Windows 在编译前因 Git 自动 CRLF 转换导致 go.mod/补丁 hash 不匹配；修复为每个临时源码 checkout 设置 `core.autocrlf=false`，保留全部 hash 检查，未将其解释为原生库不支持 Windows。修复后须另看新 run。初次记录见 [evidence JSON](evidence/2026-10-30-initial.json)，原始命令与日志保留在该 run artifact。
+# 已取得的三桌面结果（2026-10-30）
+
+[运行 40983432877](https://github.com/Luck9Star/herdr-pocket/actions/runs/40983432877)，源码 `015153e8c687d2998ae4714086507a8c182b498f`，原始日志与来源锁可从该次 Actions artifacts 获取。[精简结果及原始 JSON 校验和](evidence/2026-10-30-desktop-matrix.json)保留各命令退出码。
+
+| 探针 | Linux x86_64 | macOS arm64 | Windows x86_64 |
+|---|---|---|---|
+| tsnet import/Dial 类型检查，C ABI 编译、加载并调用版本函数 | 通过 | 通过 | 通过 |
+| Heeler EasyTier C ABI `cargo check --locked --lib` | 失败：`SO_NOSIGPIPE` 无平台条件 | 通过（没有链接） | 失败：UnixStream、socket 常量及句柄类型不兼容 |
+| 打补丁的 libzt 共享库编译、加载并解析 4 个符号 | 通过 | 通过 | 通过 |
+
+所有节点均未启动，没有入网、拨号、三网并发、性能或设备验证。此矩阵不能作为产品平台支持声明。EasyTier 的 Linux/Windows 失败是固定来源的实际移植阻断；下一步需要平台 socket/字节流适配和 SIGPIPE/取消/关闭回归，不能直接删去 `setsockopt` 后宣称可用。Android/iOS 原生桥仍未验证。

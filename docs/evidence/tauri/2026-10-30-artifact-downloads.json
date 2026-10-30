@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "checkedOn": "2026-10-30",
+  "scope": "Actual cloud artifact download and byte integrity; not installation, input/IME correctness or performance. Flutter APK extracted from its verified inner zip.",
+  "records": [
+    {
+      "route": "tauri",
+      "platform": "android",
+      "sourceSHA": "a2ecd24edf6277407c77c991f3c81d792d8e7dcc",
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40983116129",
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40983116129/artifacts/12946301580",
+      "artifactId": 12946301580,
+      "download": "completed",
+      "sha256Sums": "all listed files verified",
+      "checkedFiles": [
+        {
+          "file": "app-universal-debug.apk",
+          "sha256": "249f939df5b169da4fc51b370c1a1e0a688f0ceb7c0de7fd456f9bb05b6df4fe"
+        },
+        {
+          "file": "browser-preview.zip",
+          "sha256": "418475d60018afa44ae0e7998bbe9db7f863001e45e9f3d872ee552683624d24"
+        },
+        {
+          "file": "build-manifest.json",
+          "sha256": "fc7e57bfa5aec979afdf34da455d64cc628f46ec579599ba8a5c6c4e5f1f3834"
+        },
+        {
+          "file": "core-Cargo.lock",
+          "sha256": "7445550bff5bfee1bf5e2fd86d7597dfabf3592e536efacafd442abc2da910ca"
+        },
+        {
+          "file": "shared/README.md",
+          "sha256": "bddcd312c04669f5627e7ac951acb0de75d95d4871428e0cfc0b4ac65f10871f"
+        },
+        {
+          "file": "shared/fixture.json",
+          "sha256": "ad2eca3667445764d501ecb6ab53079232850c913626f433b167d1cdb97d7ab3"
+        },
+        {
+          "file": "shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf",
+          "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c"
+        },
+        {
+          "file": "shared/fonts/LICENSE-JetBrainsMono.txt",
+          "sha256": "30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad"
+        },
+        {
+          "file": "shared/fonts/LICENSE-Nerd-Fonts.txt",
+          "sha256": "1f6ad4edae6479aaace3112ede5279a23284ae54b2a34db66357aef5f64df160"
+        },
+        {
+          "file": "shared/load-chunk.txt",
+          "sha256": "2a3b22f4933885f0b1bedf391ee859ec0348733e349194aae3c71afdc9f697b8"
+        },
+        {
+          "file": "shared/platform-matrix.json",
+          "sha256": "ad7064d9e6476f8c7a9096949d2fb3a90cffb571cc464cfa186effc80fe3c065"
+        },
+        {
+          "file": "shared/result-template.json",
+          "sha256": "6f917108e49dee358ddcd70f3bf37ad2817944aeec7c2524f412fa54b327a9f9"
+        },
+        {
+          "file": "src-tauri-Cargo.lock",
+          "sha256": "1a131afae0bd6c2aa7a589ad7095a89a8b383cedf612ff39e67114bce495037f"
+        },
+        {
+          "file": "tauri-package-lock.json",
+          "sha256": "44f29651818b66a0999fa8be850eae259a86c4144d98d797402b036115bfbece"
+        }
+      ],
+      "apk": [
+        {
+          "file": "app-universal-debug.apk",
+          "bytes": 123911176,
+          "sha256": "249f939df5b169da4fc51b370c1a1e0a688f0ceb7c0de7fd456f9bb05b6df4fe"
+        }
+      ],
+      "deviceInstallation": "not performed",
+      "deviceCorrectness": "unverified"
+    },
+    {
+      "route": "flutter",
+      "platform": "android",
+      "sourceSHA": "c8d70abf45972a5e4d715117213916ba6df7f190",
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40983264890",
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40983264890/artifacts/12945822669",
+      "artifactId": 12945822669,
+      "download": "completed",
+      "sha256Sums": "all listed files verified",
+      "checkedFiles": [
+        {
+          "file": "flutter-android-debug.zip",
+          "sha256": "647f6613e1201ede2f3f4c3dadbea5338ad178f9840ebab09eecd0b2331f7c9c"
+        }
+      ],
+      "apk": [
+        {
+          "file": "app-debug.apk",
+          "bytes": 152284772,
+          "sha256": "f03eb792fc8a0fc406ada97d765d9a7b6fb5fe2fc53275958cd44cc0907e7955"
+        }
+      ],
+      "deviceInstallation": "not performed",
+      "deviceCorrectness": "unverified"
+    }
+  ]
+}

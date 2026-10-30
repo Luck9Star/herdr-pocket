@@ -1,0 +1,59 @@
+{
+  "run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40982743095",
+  "sourceCommit": "9583570f82fe25ac7723ccc9e189e183cbb2262a",
+  "scope": "compile/load only; no real overlay or device validation",
+  "platforms": {
+    "macOS": {
+      "source": {
+        "status": "passed"
+      },
+      "tailscale": {
+        "networkValidation": "not run",
+        "deviceValidation": "not run",
+        "library": {
+          "sha256": "df8a77eba2ebc2ff762b7e3dc06f20931b5557c55f021b10e3f6c1525390880f",
+          "bytes": 19922434,
+          "load": "passed",
+          "nodeStarted": false
+        },
+        "tested": "tsnet import + Dial(context)/Close type check + c-shared ABI build/load; no tsnet dial executed",
+        "status": "passed"
+      },
+      "easytier": {
+        "networkValidation": "not run",
+        "deviceValidation": "not run",
+        "tested": "Real patched heeler-easytier library cargo check only; no linking, network node or TCP dial",
+        "status": "passed"
+      },
+      "zerotier": {
+        "networkValidation": "not run",
+        "deviceValidation": "not run",
+        "status": "failed",
+        "error": "cmake-configure exited 1"
+      }
+    },
+    "Windows": {
+      "source": {
+        "status": "passed"
+      },
+      "tailscale": {
+        "networkValidation": "not run",
+        "deviceValidation": "not run",
+        "status": "failed",
+        "error": "go.mod lock checksum mismatch"
+      },
+      "easytier": {
+        "networkValidation": "not run",
+        "deviceValidation": "not run",
+        "status": "failed",
+        "error": "Patch digest mismatch: 0001-outbound-only-packet-proxy.patch"
+      },
+      "zerotier": {
+        "networkValidation": "not run",
+        "deviceValidation": "not run",
+        "status": "failed",
+        "error": "Patch digest mismatch: 0001-independent-root-sets.patch"
+      }
+    }
+  }
+}

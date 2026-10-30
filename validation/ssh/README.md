@@ -23,3 +23,7 @@ Context7 已执行 russh `library` → `/eugeny/russh` → `docs`，核查 `chec
 每通过一项写增量 `ssh-results.json`，后续失败不抹去已执行事实。最终 `manifest.json` 的总体状态、日志和 `received-bytes.json` 与 partial checks 一起读取。所有keys/fixture认证配置均不上传；只保存合成输入接收结果、schema、锁和构建来源。
 
 本机轻量检查仅 `cargo check --locked --manifest-path validation/ssh/Cargo.toml`（已执行通过）与Python语法，不本机启动sshd或herdr。工作流只在codex分支，构建与测试产物不发布Release/商店。移动端、overlay、GUI绑定、真实用户凭据与设备结果继续标未验证。
+
+## 实际运行记录
+
+[首轮 40984387108](https://github.com/Luck9Star/herdr-pocket/actions/runs/40984387108)，源 `be3a585186eb06b6557a83ae75f9b1d85cbe73e4`：固定客户端编译成功，错误 host key 确实进入比较回调并被拒绝；随后临时公钥认证失败，streamlocal、输入、observe、重连均未执行。ERROR 级 sshd 日志未给出原因。下一轮临时 sshd 使用 PAM account/session 检查并提高到 VERBOSE，以核查 CI 系统账户认证；密码与交互认证仍关闭，授权文件仍为本次临时文件。不把这一配置调整当根因已经确认。

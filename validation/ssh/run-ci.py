@@ -56,7 +56,7 @@ HostKey {ROOT}/host
 PidFile {ROOT}/sshd.pid
 AuthorizedKeysFile {ROOT}/authorized_keys
 StrictModes no
-UsePAM no
+UsePAM yes
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PubkeyAuthentication yes
@@ -69,7 +69,7 @@ AllowTcpForwarding no
 AllowStreamLocalForwarding yes
 X11Forwarding no
 PrintMotd no
-LogLevel ERROR
+LogLevel VERBOSE
 '''
     (ROOT/'sshd_config').write_text(config)
     run(['sudo','mkdir','-p','/run/sshd'])

@@ -1,0 +1,308 @@
+diff --git a/native/easytier/Cargo.toml b/native/easytier/Cargo.toml
+index ba0703c..5e23aa2 100644
+--- a/native/easytier/Cargo.toml
++++ b/native/easytier/Cargo.toml
+@@ -17,7 +17,7 @@ license = "LGPL-3.0-or-later"
+ publish = false
+ 
+ [lib]
+-crate-type = ["staticlib", "rlib"]
++crate-type = ["staticlib", "rlib", "cdylib"]
+ 
+ [dependencies]
+ # vendor/easytier is EasyTier commit 728ba94b (submodule upstream/EasyTier,
+@@ -39,7 +39,7 @@ easytier-core = { path = "vendor/easytier/easytier-core", default-features = fal
+     "proxy-smoltcp-stack",
+     "dhcp-ipv4",
+ ] }
+-tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "sync"] }
++tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "sync", "macros"] }
+ libc = "0.2"
+ anyhow = "1"
+ serde_json = "1"
+diff --git a/native/easytier/include/heeler_easytier.h b/native/easytier/include/heeler_easytier.h
+index efbd92c..dc3d22d 100644
+--- a/native/easytier/include/heeler_easytier.h
++++ b/native/easytier/include/heeler_easytier.h
+@@ -121,13 +121,50 @@ void heeler_et_web_stop(const char *key);
+  * fail with HEELER_ET_ERR_AMBIGUOUS, none with HEELER_ET_ERR_UNRESOLVED. A
+  * peer's advertised subnets (proxy_cidrs) never select a network.
+  *
+- * Returns a connected, non-blocking AF_UNIX descriptor with SO_NOSIGPIPE set,
++ * Unix-only legacy API: returns a connected, non-blocking AF_UNIX descriptor.
++ * Apple sets SO_NOSIGPIPE; Linux callers MUST send with MSG_NOSIGNAL (or an
++ * equivalent safe socket writer). A plain POSIX write may still raise SIGPIPE.
++ * Windows returns an error; a SOCKET is never cast into this int ABI.
++ * New callers should use the bounded portable stream ABI below. The fd is
+  * owned by the caller (closing it ends the stream), or a negative
+  * HEELER_ET_ERR_* code (HEELER_ET_ERR_NOT_RUNNING for an empty key or a
+  * session with no running network). */
+ int heeler_et_tcp_connect_fd(const char *key, const char *network, const char *host, uint16_t port,
+                              uint32_t timeout_ms, char *err, size_t errlen);
+ 
++/* Additive herdr-pocket portable ABI; not an OS fd or Windows SOCKET.
++ * Dedicated non-UI, non-Tokio worker threads only. Existing-runtime calls
++ * return BUSY rather than nesting block_on. At most 32 live/pending handles;
++ * failed connects retain their handle until explicitly closed. Handles never
++ * reuse IDs; zero is invalid, and exhaustion refuses allocation.
++ * Each direction has a 64 KiB in-process queue; copy pumps add bounded 8 KiB
++ * buffers per direction. No public/local proxy listener is created.
++ * Connect returns a pending handle. Read/write wait for readiness up to their
++ * deadline. read=0 is EOF; positive write is LOCAL acceptance only, not remote
++ * acknowledgement. A partial write reports its accepted prefix; never replay
++ * that prefix. UNKNOWN on write timeout/cancellation/error means the delivery
++ * outcome needs user resolution; DO NOT automatically resend the whole input.
++ * One reader and one writer run concurrently; extra calls wait within deadline.
++ * shutdown_write is a half-close. close removes the capability, cancels pending
++ * dial and pump, settles ownership, and leaves other handles untouched. Old or
++ * twice-closed handles return INVALID; late connection completion is dropped.
++ * Caller buffers must remain valid until synchronous calls return. */
++#define HEELER_ET_STREAM_ABI_VERSION 1
++#define HEELER_ET_STREAM_MAX_IO 65536
++#define HEELER_ET_STREAM_MAX_HANDLES 32
++#define HEELER_ET_ERR_INVALID_HANDLE (-6)
++#define HEELER_ET_ERR_CLOSED (-7)
++#define HEELER_ET_ERR_UNKNOWN_WRITE (-8)
++#define HEELER_ET_ERR_CAPACITY (-9)
++#define HEELER_ET_ERR_BUSY_RUNTIME (-10)
++int heeler_et_stream_connect(const char *key, const char *network, const char *host, uint16_t port,
++                            uint32_t timeout_ms, uint64_t *out_handle, char *err, size_t errlen);
++int heeler_et_stream_read(uint64_t handle, uint8_t *buf, size_t len, uint32_t timeout_ms, char *err, size_t errlen);
++int heeler_et_stream_write(uint64_t handle, const uint8_t *buf, size_t len, uint32_t timeout_ms, char *err, size_t errlen);
++int heeler_et_stream_shutdown_write(uint64_t handle, uint32_t timeout_ms, char *err, size_t errlen);
++int heeler_et_stream_close(uint64_t handle, char *err, size_t errlen);
++
++
+ /* Writes key's status as NUL-terminated JSON. A manual network:
+  *   {"mode":"manual","network_name":string,"running":bool,
+  *    "ipv4":string|null,"ipv4_prefix":int|null,"hostname":string,
+diff --git a/native/easytier/src/lib.rs b/native/easytier/src/lib.rs
+index 619ece4..06a09ca 100644
+--- a/native/easytier/src/lib.rs
++++ b/native/easytier/src/lib.rs
+@@ -28,6 +28,12 @@
+ // listeners, subnet proxies, port forwards, SOCKS5 or VPN portals.
+ 
+ mod web;
++mod pocket_stream;
++
++#[cfg(unix)]
++use std::os::fd::IntoRawFd;
++#[cfg(target_vendor = "apple")]
++use std::os::fd::AsRawFd;
+ 
+ pub use web::MAX_WEB_NETWORKS;
+ 
+@@ -35,7 +41,6 @@ use std::{
+     collections::HashMap,
+     ffi::{CStr, c_char, c_int},
+     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+-    os::fd::{AsRawFd, IntoRawFd},
+     panic::{AssertUnwindSafe, catch_unwind},
+     sync::{Arc, Mutex, MutexGuard, OnceLock},
+     time::Duration,
+@@ -480,6 +485,7 @@ async fn peer_addresses(instance: &NativeCoreInstance) -> Vec<(String, Option<Ip
+         .collect()
+ }
+ 
++#[cfg(target_vendor = "apple")]
+ fn set_nosigpipe(fd: c_int) -> std::io::Result<()> {
+     let one: c_int = 1;
+     // SAFETY: `fd` is an open socket and `one` outlives the call.
+@@ -506,9 +512,8 @@ fn not_running() -> Failure {
+     Failure::new(HEELER_ET_ERR_NOT_RUNNING, "EasyTier is not running")
+ }
+ 
+-fn tcp_connect(key: &str, network: Option<&str>, host: &str, port: u16, timeout_ms: u32) -> Result<c_int, Failure> {
+-    let rt = runtime()?;
+-    let source = with_slots(|slots| match slots.get(key) {
++fn dial_source(key: &str) -> Result<DialSource, Failure> {
++    with_slots(|slots| match slots.get(key) {
+         Some(Slot::Manual(running)) => Some(DialSource::Manual {
+             instance: running.instance.clone(),
+             network_name: running.network_name.clone(),
+@@ -516,16 +521,17 @@ fn tcp_connect(key: &str, network: Option<&str>, host: &str, port: u16, timeout_
+         Some(Slot::Web(session)) => Some(DialSource::Web(session.state())),
+         None => None,
+     })
+-    .ok_or_else(not_running)?;
+-    let timeout = Duration::from_millis(u64::from(timeout_ms));
++    .ok_or_else(not_running)
++}
+ 
+-    rt.block_on(async move {
++async fn dial_overlay(source: DialSource, network: Option<String>, host: String, port: u16, timeout: Duration)
++    -> Result<impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static, Failure> {
+         // Exactly one instance carries the stream: the key's own network, or
+         // one of its session's networks. Hostnames resolve in that
+         // instance's route table only.
+         let instance = match source {
+             DialSource::Manual { instance, network_name } => {
+-                if let Some(wanted) = network
++                if let Some(wanted) = network.as_deref()
+                     && wanted != network_name
+                 {
+                     return Err(Failure::new(
+@@ -535,12 +541,12 @@ fn tcp_connect(key: &str, network: Option<&str>, host: &str, port: u16, timeout_
+                 }
+                 instance
+             }
+-            DialSource::Web(state) => web::select(&state, network, host).await?,
++            DialSource::Web(state) => web::select(&state, network.as_deref(), &host).await?,
+         };
+         if !is_live(&instance) {
+             return Err(not_running());
+         }
+-        let address = resolve(&instance, host).await?;
++        let address = resolve(&instance, &host).await?;
+         let destination = SocketAddr::V4(SocketAddrV4::new(address, port));
+         let stream = instance
+             .data_plane_tcp_connect(destination, timeout)
+@@ -554,9 +560,22 @@ fn tcp_connect(key: &str, network: Option<&str>, host: &str, port: u16, timeout_
+                 Failure::new(code, format!("cannot connect to {destination}: {error}"))
+             })?;
+ 
++        Ok(stream)
++}
++
++fn tcp_connect(key: &str, network: Option<&str>, host: &str, port: u16, timeout_ms: u32) -> Result<c_int, Failure> {
++    let source = dial_source(key)?;
++    #[cfg(not(unix))]
++    { let _ = (source, network, host, port, timeout_ms); Err(Failure::generic("legacy Unix fd API unsupported; use portable stream handle ABI")) }
++    #[cfg(unix)]
++    { let rt = stream_runtime()?;
++      rt.block_on(async move {
++        let stream = dial_overlay(source, network.map(str::to_owned), host.to_owned(), port,
++            Duration::from_millis(u64::from(timeout_ms.max(1)))).await?;
+         let (ours, theirs) = std::os::unix::net::UnixStream::pair()?;
+         for end in [&ours, &theirs] {
+             end.set_nonblocking(true)?;
++            #[cfg(target_vendor = "apple")]
+             set_nosigpipe(end.as_raw_fd())?;
+         }
+         let ours = tokio::net::UnixStream::from_std(ours)?;
+@@ -567,7 +586,8 @@ fn tcp_connect(key: &str, network: Option<&str>, host: &str, port: u16, timeout_
+             let _ = tokio::io::copy_bidirectional(&mut overlay, &mut local).await;
+         });
+         Ok(theirs.into_raw_fd())
+-    })
++      })
++    }
+ }
+ 
+ /// One peer as `heeler_et_status_json` reports it.
+@@ -852,6 +872,114 @@ pub unsafe extern "C" fn heeler_et_tcp_connect_fd(
+     })
+ }
+ 
++// herdr-pocket additive portable stream ABI v1. No OS descriptors cross this boundary.
++fn streams() -> &'static pocket_stream::Registry {
++    static STREAMS: OnceLock<pocket_stream::Registry> = OnceLock::new();
++    STREAMS.get_or_init(pocket_stream::Registry::default)
++}
++fn stream_runtime() -> Result<&'static Runtime, Failure> {
++    if tokio::runtime::Handle::try_current().is_ok() {
++        return Err(Failure::new(-10, "stream FFI must run on a dedicated non-Tokio worker thread"));
++    }
++    runtime()
++}
++fn stream_failure(error: pocket_stream::Error) -> Failure {
++    use pocket_stream::Error::*;
++    let code = match &error {
++        Invalid => -6, Closed => -7, UnknownWrite => -8, Capacity => -9,
++        Busy => -10, Timeout => HEELER_ET_ERR_TIMEOUT, Failed(_) => HEELER_ET_ERR,
++    };
++    Failure::new(code, error.to_string())
++}
++
++/// Returns a pending opaque handle; readiness is observed by read/write with deadlines.
++/// # Safety
++/// Strings are NUL-terminated, out_handle is writable, err follows ffi_call's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn heeler_et_stream_connect(
++    key: *const c_char, network: *const c_char, host: *const c_char, port: u16,
++    timeout_ms: u32, out_handle: *mut u64, err: *mut c_char, errlen: usize,
++) -> c_int {
++    ffi_call(err, errlen, || {
++        if out_handle.is_null() {return Err(Failure::generic("out_handle is null"));}
++        unsafe {*out_handle=0;}
++        let rt=stream_runtime()?;
++        let key=check_key(unsafe {borrowed_str(key,"instance key")}? )?;
++        let source=dial_source(key)?;
++        let network=if network.is_null(){None}else{
++            Some(unsafe{borrowed_str(network,"network")}? .to_owned()).filter(|s|!s.is_empty())};
++        let host=unsafe{borrowed_str(host,"host")}? .to_owned();
++        let timeout=Duration::from_millis(u64::from(timeout_ms.max(1)));
++        let id=streams().reserve().map_err(stream_failure)?;
++        let entered=rt.enter();
++        let started=streams().spawn_dial(id,async move {
++            match tokio::time::timeout(timeout,dial_overlay(source,network,host,port,timeout)).await {
++                Ok(Ok(stream))=>{let _=streams().complete(id,stream);},
++                Ok(Err(error))=>streams().fail(id,error.message),
++                Err(_)=>streams().fail(id,"connect deadline elapsed".into()),
++            }
++        });
++        drop(entered);
++        if let Err(error)=started {let _=rt.block_on(streams().close(id));return Err(stream_failure(error));}
++        unsafe {*out_handle=id;}
++        Ok(HEELER_ET_OK)
++    })
++}
++
++/// # Safety
++/// buf points at len writable bytes until return; err is null or errlen writable bytes.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn heeler_et_stream_read(id:u64,buf:*mut u8,len:usize,timeout_ms:u32,err:*mut c_char,errlen:usize)->c_int {
++    ffi_call(err,errlen,||{
++        if buf.is_null() || len==0 || len>pocket_stream::MAX_IO{return Err(stream_failure(pocket_stream::Error::Invalid));}
++        let rt=stream_runtime()?;let bytes=unsafe{std::slice::from_raw_parts_mut(buf,len)};
++        rt.block_on(streams().read(id,bytes,Duration::from_millis(u64::from(timeout_ms.max(1)))))
++            .map(|n|n as c_int).map_err(stream_failure)
++    })
++}
++
++/// Positive byte counts mean local queue acceptance, never remote receipt/command success.
++/// # Safety
++/// buf points at len readable bytes until return; err follows ffi_call's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn heeler_et_stream_write(id:u64,buf:*const u8,len:usize,timeout_ms:u32,err:*mut c_char,errlen:usize)->c_int {
++    ffi_call(err,errlen,||{
++        if buf.is_null() || len==0 || len>pocket_stream::MAX_IO{return Err(stream_failure(pocket_stream::Error::Invalid));}
++        let rt=stream_runtime()?;let bytes=unsafe{std::slice::from_raw_parts(buf,len)};
++        rt.block_on(streams().write(id,bytes,Duration::from_millis(u64::from(timeout_ms.max(1)))))
++            .map(|n|n as c_int).map_err(stream_failure)
++    })
++}
++
++/// # Safety
++/// err is null or errlen writable bytes, and remains valid until return.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn heeler_et_stream_shutdown_write(id:u64,timeout_ms:u32,err:*mut c_char,errlen:usize)->c_int {
++    ffi_call(err,errlen,|| stream_runtime()?.block_on(streams().shutdown_write(id,Duration::from_millis(u64::from(timeout_ms.max(1)))))
++        .map(|()|HEELER_ET_OK).map_err(stream_failure))
++}
++
++/// # Safety
++/// err is null or errlen writable bytes, and remains valid until return.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn heeler_et_stream_close(id:u64,err:*mut c_char,errlen:usize)->c_int {
++    ffi_call(err,errlen,||stream_runtime()?.block_on(streams().close(id)).map(|()|HEELER_ET_OK).map_err(stream_failure))
++}
++
++#[cfg(test)]
++mod pocket_ffi_tests {
++    use super::*;
++    #[test]
++    fn invalid_handle_and_nested_runtime_fail_without_panics() {
++        let mut byte=0;let mut err=[0 as c_char;128];
++        assert_eq!(unsafe{heeler_et_stream_read(0,&mut byte,1,1,err.as_mut_ptr(),err.len())},-6);
++        tokio::runtime::Runtime::new().unwrap().block_on(async {
++            assert_eq!(unsafe{heeler_et_stream_read(0,&mut byte,1,1,err.as_mut_ptr(),err.len())},-10);
++            assert_eq!(unsafe{heeler_et_stream_close(0,err.as_mut_ptr(),err.len())},-10);
++        });
++    }
++}
++
+ /// Writes `key`'s status as a NUL-terminated JSON object (see the header).
+ /// Returns the JSON length excluding the terminator; a result `>= len` means
+ /// the buffer was too small and the output was not written. Returns -1 on

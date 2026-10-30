@@ -1,0 +1,3 @@
+patches/** -text
+patches/*.patch whitespace=-blank-at-eol
+portable-stream/** -text

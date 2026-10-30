@@ -1,0 +1,15 @@
+[package]
+name = "herdr-portable-stream-probe"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+license = "LGPL-3.0-or-later"
+
+[dependencies]
+tokio = { version = "=1.53.1", features = ["rt-multi-thread", "net", "io-util", "time", "sync", "macros"] }
+
+[target.'cfg(unix)'.dev-dependencies]
+libc = "=0.2.189"
+
+[workspace]

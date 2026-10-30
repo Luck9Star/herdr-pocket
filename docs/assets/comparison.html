@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>herdr 移动客户端全景对比 & Flutter 自建方案</title>
+<title>herdr 客户端历史对比与五端方案评估</title>
 <script>
   (function () {
     try {
@@ -121,29 +121,31 @@
 
 <header>
   <div>
-    <h1>herdr 移动客户端全景对比<br>与 Flutter 自建方案</h1>
-    <p class="sub">调研快照 · herdr 0.9.5 · 2026-10-29 · 小黑整理给天哥</p>
+    <h1>herdr 客户端历史参考<br>与五端统一 GUI</h1>
+    <p class="sub">历史调研快照 · 2026-10-29 比较基线 · 后续原型进展见验证记录</p>
   </div>
   <button class="toggle" id="t" aria-label="切换主题">◐ 主题</button>
 </header>
 
-<p class="lead">
-一句话结论：<strong>「跨平台统一 UI + 三网内置穿透」目前是真空白的。</strong>
-跨平台 UI 已有 3 个活样本（Flutter / React Native / PWA），三网穿透只有 Heeler 一家做了、而且只有 iOS。
-你要做的东西不是重复造轮子，是<strong>把两半拼起来</strong>；而拼接所需的协议面，已经被 herdr 自己的
-<code>terminal session observe</code> 和 <code>api schema</code> 铺好了。</p>
+<p class="lead"><strong>当前目标：公开开源的 iOS / Android / Windows / macOS / Linux 统一 GUI。</strong>
+手机优先、桌面紧随，五端首版都连接远端 herdr；桌面本机接入后置。首版支持前台跨 provider 并发、多终端标签（手机切换、桌面分屏），按平台适配触控和键鼠。
+此页保留 12 个移动使用场景参考客户端的历史调查，未补完整桌面生态调查；不证明首创或唯一。
+本项目列保留 2026-10-29 的设计意图，当时尚无应用实现或真机验收。2026-10-30 已有验证壳、测试 CI 与有限 macOS 原生运行结果，尚非正式产品；手机输入法、真实网络和五端运行支持仍待验证，见
+<a href="../09-prototype-validation.md">当前验证记录</a>。当前规范见
+<a href="../05-product-design.md">产品设计</a>、<a href="../06-technology-evaluation.md">技术评估</a>、<a href="../02-architecture.md">架构</a>与<a href="../04-roadmap.md">路线图</a>。</p>
 
 <div class="anchor-list">
   <a href="#matrix">① 功能矩阵</a>
   <a href="#impl">② 实现对比</a>
   <a href="#design">③ 各自的设计取向</a>
-  <a href="#flutter">④ Flutter 方案</a>
+  <a href="#flutter">④ 当前方案</a>
   <a href="#plan">⑤ 里程碑</a>
   <a href="#risk">⑥ 风险与许可</a>
 </div>
 
-<h2 id="matrix"><span class="num">01</span>功能矩阵（13 个客户端 × 17 项能力）</h2>
-<p class="small">✅ 有 / ◐ 部分或受限 / — 无 / ? 未能从公开资料核实。<code>overlay</code> 指「App 进程内自带穿透」，不等同于「能用系统 VPN」。</p>
+<h2 id="matrix"><span class="num">01</span>历史功能矩阵（12 个参考客户端 + 本项目计划）</h2>
+<p class="small">竞品：✅ 原记录称有 / ◐ 原记录称部分或受限 / — 原记录未列出 / ? 未核实。来源未逐项固定，本轮未重新逐格验证。<code>overlay</code> 指「App 进程内自带穿透」，不等同于「能用系统 VPN」。</p>
+<p class="small">本轮新增核对 Heeler 三网络源码与 native v1.0.3：三条 TCP 路径均存在，EasyTier 为直接 no-TUN TCP 桥；现成产物只有 iOS arm64 真机 / 模拟器。<a href="../00-research.md#23-heeler-三网络源码复核">查看固定来源与复用边界</a>。</p>
 
 <div class="scroll">
 <table>
@@ -162,36 +164,35 @@
   <th>0cv relay<br><span class="small">PWA</span></th>
   <th>Roamgate<br><span class="small">浏览器</span></th>
   <th>Moshi<br><span class="small">商业</span></th>
-  <th>本方案<br><span class="small">Flutter</span></th>
+  <th>本方案<br><span class="small">五端目标·框架待验</span></th>
 </tr>
 </thead>
 <tbody>
-<tr><td class="n">多机 / 多会话</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅ crew</td><td class="y">✅</td><td class="y">✅ 合并</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td></tr>
-<tr><td class="n">Agent 看板<br><span class="small">blocked 置顶</span></td><td class="y">✅</td><td class="part">◐ TUI</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td></tr>
-<tr><td class="n">实时终端</td><td class="y">✅ libghostty</td><td class="y">✅ herdr TUI</td><td class="y">✅ SwiftTerm</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅ 原生模块</td><td class="part">◐ 轮询为主</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅ xterm3</td></tr>
-<tr><td class="n">终端尺寸协商<br><span class="small">按手机宽度重排 TUI</span></td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td></tr>
-<tr><td class="n">修饰键 / 快捷键条</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td></tr>
-<tr><td class="n">结构化审批<br><span class="small">点选而非敲 y</span></td><td class="y">✅</td><td class="q">?</td><td class="y">✅</td><td class="y">✅ 两击</td><td class="y">✅</td><td class="y">✅ 屏幕解析</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td></tr>
-<tr><td class="n">会话历史 / Chat 视图</td><td class="y">✅ transcript</td><td class="q">?</td><td class="part">◐ 尾部输出</td><td class="part">◐ 终端滚回</td><td class="part">◐</td><td class="y">✅ ACP + keeper</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅ chat 优先</td><td class="y">✅</td><td class="y">✅ 会话智能</td><td class="y">✅</td><td class="y">✅</td></tr>
-<tr><td class="n">文件浏览 / 预览</td><td class="part">◐ 仅贴图</td><td class="q">?</td><td class="q">?</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅ SFTP</td><td class="y">✅</td><td class="y">✅ 上传</td><td class="part">◐</td><td class="q">?</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td></tr>
-<tr><td class="n">Git diff / worktree</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="q">?</td><td class="y">✅ 只读</td><td class="part">◐</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td></tr>
-<tr><td class="n">建 workspace / tab</td><td class="part">◐</td><td class="part">◐</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td></tr>
-<tr><td class="n">推送通知</td><td class="y">✅ APNs+中继</td><td class="y">✅</td><td class="part">◐ 需 fork</td><td class="y">✅ 端上生成</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅ Web Push</td><td class="y">✅</td><td class="q">?</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅ FCM+APNs</td></tr>
-<tr><td class="n">后台保活</td><td class="part">◐ 靠推送</td><td class="part">◐</td><td class="part">◐</td><td class="y">✅ 前台服务</td><td class="part">◐</td><td class="part">◐</td><td class="part">◐</td><td class="y">✅ 服务端</td><td class="y">✅ 服务端</td><td class="y">✅ 服务端</td><td class="y">✅ 服务端</td><td class="part">◐</td><td class="part">◐ 推送兜底</td></tr>
-<tr><td class="n">二维码配对</td><td class="y">✅ 插件</td><td class="y">✅ 继承</td><td class="q">?</td><td class="q">?</td><td class="y">✅ 导入</td><td class="part">◐</td><td class="part">◐ relay URL</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="q">?</td><td class="y">✅ 插件</td></tr>
-<tr><td class="n">Host key 固定</td><td class="y">✅ TOFU</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅ 固定</td><td class="y">✅</td><td class="part">◐</td><td class="part">◐ TLS</td><td class="part">◐</td><td class="part">◐</td><td class="part">◐ 设备凭据</td><td class="part">◐ TLS</td><td class="y">✅</td><td class="y">✅ 绑 Host</td></tr>
-<tr><td class="n">生物锁 / 语音输入</td><td class="part">◐ 语音</td><td class="part">◐</td><td class="q">?</td><td class="y">✅ 两者</td><td class="part">◐</td><td class="part">◐</td><td class="n2">—</td><td class="y">✅ 语音</td><td class="part">◐</td><td class="n2">—</td><td class="n2">—</td><td class="part">◐</td><td class="y">✅ 两者</td></tr>
-<tr><td class="n"><strong>内置内网穿透</strong></td><td class="y">✅ 三种</td><td class="y">✅ 继承</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="y">✅ 三种</td></tr>
-<tr><td class="n">许可</td><td>Apache-2.0</td><td>Apache-2.0</td><td>闭源上架</td><td class="tag bad">GPL-3.0</td><td>MIT</td><td class="tag bad">GPL-3.0</td><td>MIT</td><td>MIT</td><td>MIT</td><td class="q">待核</td><td>MIT</td><td>商业</td><td>自定</td></tr>
+<tr><td class="n">多机 / 多会话</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅ crew</td><td class="y">✅</td><td class="y">✅ 合并</td><td class="y">✅</td><td class="y">✅</td><td class="q">计划</td></tr>
+<tr><td class="n">Agent 看板<br><span class="small">blocked 置顶</span></td><td class="y">✅</td><td class="part">◐ TUI</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="q">计划</td></tr>
+<tr><td class="n">实时终端</td><td class="y">✅ libghostty</td><td class="y">✅ herdr TUI</td><td class="y">✅ SwiftTerm</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅ 原生模块</td><td class="part">◐ 轮询为主</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="q">计划：候选待测</td></tr>
+<tr><td class="n">终端尺寸协商<br><span class="small">按手机宽度重排 TUI</span></td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="q">计划：observe视图</td></tr>
+<tr><td class="n">修饰键 / 快捷键条</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="q">计划</td></tr>
+<tr><td class="n">审批 / 选项输入 UI<br><span class="small">不证明结构化授权协议</span></td><td class="y">✅</td><td class="q">?</td><td class="y">✅</td><td class="y">✅ 两击</td><td class="y">✅</td><td class="y">✅ 屏幕解析</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="q">后置辅助；首版手动输入</td></tr>
+<tr><td class="n">会话历史 / Chat 视图</td><td class="y">✅ transcript</td><td class="q">?</td><td class="part">◐ 尾部输出</td><td class="part">◐ 终端滚回</td><td class="part">◐</td><td class="y">✅ ACP + keeper</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅ chat 优先</td><td class="y">✅</td><td class="y">✅ 会话智能</td><td class="y">✅</td><td class="q">后置</td></tr>
+<tr><td class="n">文件浏览 / 预览</td><td class="part">◐ 仅贴图</td><td class="q">?</td><td class="q">?</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅ SFTP</td><td class="y">✅</td><td class="y">✅ 上传</td><td class="part">◐</td><td class="q">?</td><td class="y">✅</td><td class="part">◐</td><td class="q">后置</td></tr>
+<tr><td class="n">Git diff / worktree</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="q">?</td><td class="y">✅ 只读</td><td class="part">◐</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="part">◐</td><td class="q">后置</td></tr>
+<tr><td class="n">建 workspace / tab</td><td class="part">◐</td><td class="part">◐</td><td class="part">◐</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="q">后置</td></tr>
+<tr><td class="n">推送通知</td><td class="y">✅ APNs+中继</td><td class="y">✅</td><td class="part">◐ 需 fork</td><td class="y">✅ 端上生成</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅ Web Push</td><td class="y">✅</td><td class="q">?</td><td class="y">✅</td><td class="part">◐</td><td class="y">✅</td><td class="q">后置</td></tr>
+<tr><td class="n">后台保活</td><td class="part">◐ 靠推送</td><td class="part">◐</td><td class="part">◐</td><td class="y">✅ 前台服务</td><td class="part">◐</td><td class="part">◐</td><td class="part">◐</td><td class="y">✅ 服务端</td><td class="y">✅ 服务端</td><td class="y">✅ 服务端</td><td class="y">✅ 服务端</td><td class="part">◐</td><td class="q">不承诺后台长连</td></tr>
+<tr><td class="n">二维码配对</td><td class="y">✅ 插件</td><td class="y">✅ 继承</td><td class="q">?</td><td class="q">?</td><td class="y">✅ 导入</td><td class="part">◐</td><td class="part">◐ relay URL</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅</td><td class="q">?</td><td class="q">首版计划·手机必需</td></tr>
+<tr><td class="n">Host key 固定</td><td class="y">✅ TOFU</td><td class="y">✅</td><td class="y">✅</td><td class="y">✅ 固定</td><td class="y">✅</td><td class="part">◐</td><td class="part">◐ TLS</td><td class="part">◐</td><td class="part">◐</td><td class="part">◐ 设备凭据</td><td class="part">◐ TLS</td><td class="y">✅</td><td class="q">计划：验证后固定</td></tr>
+<tr><td class="n">生物锁 / 语音输入</td><td class="part">◐ 语音</td><td class="part">◐</td><td class="q">?</td><td class="y">✅ 两者</td><td class="part">◐</td><td class="part">◐</td><td class="n2">—</td><td class="y">✅ 语音</td><td class="part">◐</td><td class="n2">—</td><td class="n2">—</td><td class="part">◐</td><td class="q">后置</td></tr>
+<tr><td class="n"><strong>内置内网穿透</strong></td><td class="y">✅ 三种</td><td class="y">✅ 继承</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="n2">—</td><td class="q">计划：三种；正式支持至少 TS+ET</td></tr>
+<tr><td class="n">许可</td><td>根 Apache-2.0；native 另计</td><td>Apache-2.0</td><td>闭源上架</td><td>GPL-3.0</td><td>MIT</td><td>GPL-3.0</td><td>MIT</td><td>MIT</td><td>MIT</td><td class="q">待核</td><td>MIT</td><td>商业</td><td class="q">待定</td></tr>
 </tbody>
 </table>
 </div>
 
-<div class="note">
-<strong>矩阵读出来的三件事。</strong>
-① 看板 + 实时终端 + 审批 这三件已经是「标配」，不构成差异化；
-② <strong>文件/预览、Git diff/worktree、会话历史</strong> 是分水岭——SSH 直连型客户端普遍缺，relay/bridge 型普遍有（因为有服务端进程可以跑 git 和读文件）；
-③ 内置穿透只有 Heeler 家族有。所以你真正要补的差异化，是「SSH 直连的隐私/无依赖」+「bridge 型的功能丰富度」+「自带穿透」，三件同时做到。
+<div class="note"><strong>如何使用这张矩阵。</strong>
+它用于发现可参考的交互与工程取舍，不是已通过测试的对比评测。
+首版聚焦可靠查看与输入；文件、diff 和会话历史后置。
+SSH 也能通过 SFTP / 按需 exec 提供文件和 Git 能力，不能把这些功能视为 relay 独占。
 </div>
 
 <h2 id="impl"><span class="num">02</span>实现对比：它们各自选了哪条路</h2>
@@ -202,18 +203,18 @@
 <th>项目</th><th>UI 栈</th><th>传输路径</th><th>终端渲染</th><th>状态/事件</th><th>通知</th><th>主机侧依赖</th><th>体量</th>
 </tr></thead>
 <tbody>
-<tr><td class="n">Heeler</td><td>SwiftUI（iOS 18+）</td><td>SSH <code>direct-streamlocal</code> 直连 socket；一请求一 channel + 一条常驻 events channel + PTY channel</td><td>libghostty（Metal）</td><td><code>events.subscribe</code> + 屏幕/transcript 解析</td><td>插件 hook → 加密 → relay → APNs；锁屏 Live Activity</td><td>只要 sshd</td><td>3,076 commits / 677★</td></tr>
-<tr><td class="n">Kelpie</td><td>SwiftUI（Heeler fork）</td><td>同上</td><td>把 herdr 自己的 TUI 直接铺屏</td><td>herdr TUI 原生</td><td>继承</td><td>只要 sshd</td><td>fork / 3★</td></tr>
+<tr><td class="n">Heeler</td><td>SwiftUI（iOS 18+）</td><td>SSH <code>direct-streamlocal</code> 直连 socket；一请求一 channel + 一条常驻 events channel + PTY channel</td><td>libghostty（Metal）</td><td><code>events.subscribe</code> + 屏幕/transcript 解析</td><td>插件 hook → 加密 → relay → APNs；锁屏 Live Activity</td><td>sshd（完整前提待核）</td><td>3,076 commits / 677★</td></tr>
+<tr><td class="n">Kelpie</td><td>SwiftUI（Heeler fork）</td><td>同上</td><td>把 herdr 自己的 TUI 直接铺屏</td><td>herdr TUI 原生</td><td>继承</td><td>sshd（完整前提待核）</td><td>fork / 3★</td></tr>
 <tr><td class="n">herdrup</td><td>SwiftUI</td><td>SSH + herdr JSON API</td><td>SwiftTerm</td><td><code>events_v2</code>（否则 5s 轮询）</td><td>需 herdr fork 提供 push</td><td>sshd（+fork）</td><td>闭源上架</td></tr>
-<tr><td class="n">Sherpr</td><td>Kotlin + Compose</td><td>SSH（Ed25519 + 固定 host key）</td><td>自绘终端 + 修饰键条</td><td>SSH 事件流</td><td><strong>端上生成</strong>（勿需推送服务）；前台服务保活</td><td>只要 sshd</td><td>F-Droid 22MB</td></tr>
-<tr><td class="n">wooloo</td><td>Kotlin + Compose</td><td>SSH + herdr 协议</td><td>自绘 live pane</td><td>herdr 状态</td><td>告警</td><td>只要 sshd</td><td>Play 内测</td></tr>
+<tr><td class="n">Sherpr</td><td>Kotlin + Compose</td><td>SSH（Ed25519 + 固定 host key）</td><td>自绘终端 + 修饰键条</td><td>SSH 事件流</td><td><strong>端上生成</strong>（勿需推送服务）；前台服务保活</td><td>sshd（完整前提待核）</td><td>F-Droid 22MB</td></tr>
+<tr><td class="n">wooloo</td><td>Kotlin + Compose</td><td>SSH + herdr 协议</td><td>自绘 live pane</td><td>herdr 状态</td><td>告警</td><td>sshd（完整前提待核）</td><td>Play 内测</td></tr>
 <tr><td class="n">herdr mobile<br><span class="small">tuan3w</span></td><td><strong>Flutter</strong> + worker isolate</td><td>SSH exec + <strong>主机 python3 mux 脚本</strong>（每 channel 一段）</td><td>Flutter 终端</td><td>mux + events 脚本；ACP keeper 管 agent</td><td>—</td><td>python3</td><td>GPL / 18★</td></tr>
 <tr><td class="n">Herdr Mobile<br><span class="small">benkraus</span></td><td><strong>React Native (Expo)</strong></td><td>HTTPS REST + WebSocket → 主机 relay 插件（Bun，127.0.0.1:8787）→ unix socket</td><td>iOS/Android 各写原生终端模块</td><td>WS 结构事件 + 终端帧</td><td>Web Push</td><td><strong>Bun + relay 常驻</strong></td><td>MIT / 60★</td></tr>
 <tr><td class="n">Collie</td><td>TS web (PWA)</td><td>bridge 进程 + <code>events.subscribe</code>；<strong>轮询为主</strong>（herdr 无原始输出事件）</td><td>web 终端（网格快照）</td><td>轮询 + 事件唤醒</td><td>Web Push</td><td>bridge + tailscale serve</td><td>MIT / 1.5k★</td></tr>
 <tr><td class="n">Ovis</td><td>TS web + Mac app</td><td>本地/relay 桥接</td><td>web 终端（shell pane）</td><td>chat 优先</td><td>—</td><td>常驻进程</td><td>MIT / 1.6k★</td></tr>
 <tr><td class="n">0cv relay</td><td>Go relay + web</td><td><strong>社区 WebRTC 网关</strong> 或 Cloudflare Tunnel；per-device 凭据 + 加密传输</td><td>web 终端</td><td>relay 合并多机</td><td>Web Push</td><td>relay 常驻</td><td>—</td></tr>
 <tr><td class="n">Roamgate</td><td>TS 单二进制</td><td>本地 socket 或 SSH 桥接</td><td>web 终端</td><td>结构事件</td><td>—</td><td>常驻二进制</td><td>MIT / 321★</td></tr>
-<tr><td class="n">Moshi</td><td>双原生商业</td><td>SSH / mosh + 自建探测</td><td>自绘</td><td>herdr 状态识别</td><td>推送 + 锁屏跳转</td><td>只要 sshd</td><td>订阅制</td></tr>
+<tr><td class="n">Moshi</td><td>双原生商业</td><td>SSH / mosh + 自建探测</td><td>自绘</td><td>herdr 状态识别</td><td>推送 + 锁屏跳转</td><td>sshd（完整前提待核）</td><td>订阅制</td></tr>
 </tbody>
 </table>
 </div>
@@ -223,9 +224,9 @@
 <table>
 <thead><tr><th>路径</th><th>怎么做</th><th>主机依赖</th><th>优点</th><th>代价</th></tr></thead>
 <tbody>
-<tr><td class="n">A. SSH streamlocal<br><span class="small">Heeler / 本方案</span></td><td>SSH 开 <code>direct-streamlocal@openssh.com</code> channel 指向 <code>~/.config/herdr/herdr.sock</code></td><td>无（只要 AllowStreamLocalForwarding）</td><td>零安装、隐私最好、延迟最低、不需要额外鉴权层</td><td>服务器禁用 socket 转发就废；一次连接只服务一个请求，要自己做多路复用</td></tr>
+<tr><td class="n">A. SSH streamlocal<br><span class="small">Heeler / 本方案</span></td><td>SSH 开 <code>direct-streamlocal@openssh.com</code> channel 指向 <code>~/.config/herdr/herdr.sock</code></td><td>已有 herdr / sshd、转发权限与 socket 权限</td><td>不增加常驻转发器；仍需正确 SSH 信任、身份认证与主机权限</td><td>服务器必须允许相应转发；普通 RPC 每请求新开 channel，不在同一 socket 自行复用</td></tr>
 <tr><td class="n">B. SSH exec + 主机脚本</td><td><code>ssh host socat - UNIX-CONNECT:…</code> 或每次发一段 python mux</td><td>socat / python3</td><td>兼容老 SSH 库</td><td>依赖主机工具链；每请求一次进程启动</td></tr>
-<tr><td class="n">C. 主机 relay</td><td>常驻 Bun/Go 进程把 socket 翻成 HTTPS + WS</td><td>常驻服务 + 端口</td><td>功能最丰富（文件、git、多设备）；PWA 也能用</td><td>多一层攻击面和运维；要自己解决公网可达（tailscale serve / CF tunnel / WebRTC）</td></tr>
+<tr><td class="n">C. 主机 relay</td><td>常驻 Bun/Go 进程把 socket 翻成 HTTPS + WS</td><td>常驻服务 + 端口</td><td>便于集中提供文件、git、多设备能力；PWA 可连接</td><td>多一层攻击面和运维；要自己解决公网可达（tailscale serve / CF tunnel / WebRTC）</td></tr>
 </tbody>
 </table>
 </div>
@@ -233,140 +234,37 @@
 <h2 id="design"><span class="num">03</span>各自的设计取向：一句话读一个产品</h2>
 
 <div class="cards">
-  <div class="card"><h4>Heeler · 「agent 控制台，顺便带终端」</h4><p>把「谁在等你」做成主界面，终端是二级页。所有复杂度压在传输与穿透层（libssh2 + 三个 userspace 网络栈），UI 保持极简。可移植性最好：Apache-2.0、ADR 写得像教科书。</p></div>
-  <div class="card"><h4>Kelpie · 「不做抽象，把 herdr 铺上去」</h4><p>放弃原生看板，直接把 herdr TUI 当终端画面。开发成本最低，但手机上的信息密度和手势体验全靠 herdr 自己的窄屏布局。</p></div>
+  <div class="card"><h4>Heeler · 「agent 控制台，顺便带终端」</h4><p>终端是二级页。三网络 glue、pump 与生命周期已有源码，可按具体许可移植；Swift / iOS 原生产物须适配所选客户端框架与其他平台。EasyTier wrapper 另有 LGPL 义务。</p></div>
+  <div class="card"><h4>Kelpie · 「不做抽象，把 herdr 铺上去」</h4><p>放弃原生看板，直接把 herdr TUI 当终端画面。手机上的信息密度和手势体验依赖 herdr 自己的窄屏布局。</p></div>
   <div class="card"><h4>herdrup · 「pane 和 agent 是 UI 对象，不是像素」</h4><p>这句话直接否掉了通用 SSH 终端路线。代价是必须紧跟 herdr JSON API 演进，且推送要 fork 服务端。</p></div>
-  <div class="card"><h4>Sherpr · 「不要云、不要推送服务」</h4><p>通知在设备上从 SSH 事件流生成，前台服务保活，语音用端上 whisper.cpp。隐私最彻底，代价是 Android 专属、耗电、iOS 走不通。</p></div>
+  <div class="card"><h4>Sherpr · 「不要云、不要推送服务」</h4><p>通知在设备上从 SSH 事件流生成，前台服务保活，语音用端上 whisper.cpp。减少云侧通知依赖；实际耗电和后台行为需按平台验证。</p></div>
   <div class="card"><h4>wooloo / Herdroid · 「Compose 原生，先做能用」</h4><p>小而完整：spaces → agent → 终端的经典三层。适合作为 Android 端的 UI 参照物。</p></div>
-  <div class="card"><h4>herdr mobile (tuan3w) · 「Flutter 已验证可行，但传输笨」</h4><p>唯一先例证明 Flutter + isolate 能跑 herdr。它没享受到 dartssh2 4.x 的 streamlocal，才用 python mux 脚本补，这点你不要继承。</p></div>
-  <div class="card"><h4>Herdr Mobile (benkraus) · 「用 relay 换跨平台」</h4><p>RN + 主机 relay 让两端 UI 基本一致，功能也最全（文件、diff、只读设备）。但它把「内网可达」外包给了系统 Tailscale，正是你要补的那块。</p></div>
-  <div class="card"><h4>Collie / Ovis / 0cv / Roamgate · 「手机只是显示器」</h4><p>都把重活放主机：轮询、桥接、WebRTC 网关。好处是零安装、跨端一致；坏处是永远做不到自带穿透，且实时终端要么轮询要么另造帧协议。</p></div>
+  <div class="card"><h4>herdr mobile (tuan3w) · Flutter 参考路径</h4><p>提供 Flutter + isolate 的参考。原记录称其使用 python mux，选择原因未核实；dartssh2 在 2.14.0 已加入 streamlocal。</p></div>
+  <div class="card"><h4>Herdr Mobile (benkraus) · 「用 relay 换跨平台」</h4><p>RN + 主机 relay 让两端 UI 基本一致，原记录列出文件、diff、只读设备等功能。但它把「内网可达」外包给了系统 Tailscale，正是你要补的那块。</p></div>
+  <div class="card"><h4>Collie / Ovis / 0cv / Roamgate · 「手机只是显示器」</h4><p>都把重活放主机：轮询、桥接、WebRTC 网关。浏览器侧可免安装、跨端一致；坏处是普通浏览器不能直接运行原生 overlay；主机 bridge 仍可提供 herdr 的实时终端帧。</p></div>
   <div class="card"><h4>Moshi · 「把 herdr 当 tmux 之上的一个能力」</h4><p>商业终端的思路：workspace 级 picker、锁屏事件直达 tab、快捷键前缀对齐。值得抄的是「事件 → 精确位置」的跳转语义。</p></div>
 </div>
 
-<h2 id="flutter"><span class="num">04</span>Flutter 方案：怎么拼</h2>
-
-<h3>4.1 分层</h3>
-<div class="layers">
-  <div class="layer"><b>UI</b><span>看板 / Agent 页 / 终端页 / 会话历史 / 文件 / 设置 · Flutter Widgets + xterm3</span></div>
-  <div class="layer"><b>状态与领域</b><span>Riverpod（或 Bloc）· Host / Route / Workspace / Tab / Pane / Agent 六层模型 · 每机一个 Repository</span></div>
-  <div class="layer"><b>协议</b><span>NDJSON JSON-RPC 客户端（方法名与 schema 从 <code>herdr api schema --json</code> 生成）· <code>terminal.frame</code> 解码器 · 事件流 <code>events.subscribe</code></span></div>
-  <div class="layer"><b>传输</b><span>每机一个 worker isolate：<code>SSHClient</code>（dartssh2 4.x）· rpc channel（按请求开）· events channel（常驻）· observe channel（按 pane 开）· SFTP</span></div>
-  <div class="layer"><b>穿透</b><span><code>OverlayNode</code> 抽象 + 三实现（Tailscale / EasyTier / ZeroTier）· FFI → tsnet(Go) / EasyTier(Rust, smoltcp no-TUN) / libzt(C++)</span></div>
-  <div class="layer"><b>平台</b><span>secure storage（keychain / keystore）· FCM + APNs · 深链接 · 生物锁 · 后台策略</span></div>
+<h2 id="flutter"><span class="num">04</span>当前设计决策</h2>
+<div class="cards">
+  <div class="card"><h4>框架候选与共用协议</h4><p>Flutter 是第一验证候选，Tauri 2 + xterm.js + Rust 是手机终端 A/B 主要挑战者。五端首版只连接远端主机；SSH streamlocal、observe 与原生桥接不是 Flutter 独占，最终框架待实证。</p></div>
+  <div class="card"><h4>三种内置网络</h4><p>Tailscale、EasyTier、ZeroTier 都进入集成目标；每端正式支持至少通过 TS+ET，完整三网逐格验收。Heeler 的 iOS 桥是参考来源，非五端现成 SDK；系统 VPN 不计作内置支持。</p></div>
+  <div class="card"><h4>可信连接</h4><p>收到 host key 不代表连接获胜。必须完成预期主机身份验证、认证与目标 session 能力检查，失败分支释放资源。身份异常不可自动换密钥。</p></div>
+  <div class="card"><h4>可靠输入</h4><p>observe 只负责显示。输入绑定明确目标并由用户发送；写入结果未知时不自动重放，不把 SSH 成功或终端回显当成任务完成。</p></div>
+  <div class="card"><h4>状态恢复</h4><p>断线后缓存标为过期；重新订阅并读取权威快照。事件用于触发重读，不能当作可重放的完整日志。首版提供前台状态，后台通知后置，不承诺后台常连。</p></div>
+  <div class="card"><h4>手机先行、五端分别验证</h4><p>五端首版均有完整终端，手机增加任务入口与输入辅助；相同真机与 fixture 先验证逐键、IME、触控、Nerd Font、TUI 和恢复，再比较性能。衍生改动继续开源的立场已定，具体许可证经依赖审查后确定。</p></div>
 </div>
+<p>框架依据见 <a href="../06-technology-evaluation.md">技术评估</a>；详细契约以 <a href="../02-architecture.md">架构文档</a>、<a href="../adr/0004-mvp-reliability-boundaries.md">ADR-0004</a>、<a href="../adr/0005-unified-mobile-desktop.md">ADR-0005</a> 与 <a href="../adr/0006-three-overlay-providers.md">ADR-0006</a> 为准，此页不复制接口定义。</p>
 
-<h3>4.2 关键选型</h3>
-<div class="scroll">
-<table>
-<thead><tr><th>层</th><th>选型</th><th>为什么</th><th>风险</th></tr></thead>
-<tbody>
-<tr><td class="n">SSH</td><td><code>dartssh2</code> 4.x</td><td>纯 Dart；已支持 <code>forwardLocalUnix</code>（内部就是 <code>direct-streamlocal</code>），可提供自定义 <code>SSHSocket</code>；MIT</td><td>4.0 起默认干掉 SHA-1/CBC，老服务器要显式开算法</td></tr>
-<tr><td class="n">终端</td><td><code>xterm3</code> 或 <code>terminal_view</code></td><td>xterm3 纯 ASCII 写入 113 MiB/s（vs 原版 15.8）；terminal_view 是移动端按帧批量写入的 fork</td><td>不如 libghostty（Metal）；超大吞吐 + 复杂 TUI 需实测</td></tr>
-<tr><td class="n">终端数据源</td><td><code>herdr terminal session observe</code></td><td>NDJSON <code>terminal.frame</code>：base64 ANSI，首帧 <code>full:true</code> 快照、后续增量、帧带 width/height。无需 PTY，无需逆向二进制协议</td><td>只读；输入要另走 <code>pane.send_text</code></td></tr>
-<tr><td class="n">RPC</td><td>JSON over streamlocal</td><td>socket 一次连接一请求 → 每请求开 channel，或单 channel 上自己帧化；schema 直接生成模型</td><td>channel 开闭有 RTT，高频快照要合并</td></tr>
-<tr><td class="n">事件</td><td><code>events.subscribe</code> 常驻</td><td>Blocked/Done 状态靠它驱动看板；后台被挂起后由推送补位</td><td>无原始输出流事件 → 终端不能只靠它</td></tr>
-<tr><td class="n">Tailscale</td><td><code>package:tailscale</code>（tsnet FFI）或自建 Go c-archive</td><td>userspace gVisor 栈，一个网络一个 state 目录，<code>Dial()</code> 出 TCP</td><td>0.9.0、下载量低、unverified publisher → 必须自己 spike</td></tr>
-<tr><td class="n">EasyTier</td><td>Rust crate + C ABI（smoltcp，<strong>no TUN</strong>）</td><td>可一进程多实例；LGPL 可闭源调用（静态链接需提供可重链接物）</td><td>要自己写 NDK + xcframework 构建管线</td></tr>
-<tr><td class="n">ZeroTier</td><td><code>libzt</code>（android-aar / iphoneos-framework）</td><td>进程内 sockets over ZeroTier，一进程一身份</td><td><strong>BSL 1.1</strong>：闭源商业需授权 → 自用/开源才做</td></tr>
-<tr><td class="n">通知</td><td>herdr 插件 hook → 加密 POST → relay → FCM / APNs</td><td>移动端后台没有长连接，这是唯一可靠通道</td><td>relay 要自己托管；Android 可退化成 Sherpr 式端上生成</td></tr>
-<tr><td class="n">配对</td><td>herdr 插件（Node）在 popup 出二维码</td><td>候选地址 + port + user + host key 指纹 + 一次性 bootstrap key（2 分钟 TTL）+ 强制命令注册</td><td>插件是两端共用的服务端代码，先做它性价比最高</td></tr>
-</tbody>
-</table>
-</div>
+<h2 id="plan"><span class="num">05</span>里程碑</h2>
+<p>构建采用云端 CI 优先、本地轻量：三网 native 基础产物、五端 GUI 与 Unix 主机 helper 分层，下载测试包后仍须真机/目标系统验收。构建、自动化、签名、分发与运行结果分开，源码与重建材料保留。2026-10-29 比较基线尚无工作流或安装包；2026-10-30 已有实际测试 CI、候选包与有限 macOS 运行记录，不能据此宣称正式发布或五端设备验收通过。规则见 <a href="../07-build-and-release.md">构建与发布</a>，实际结果见 <a href="../09-prototype-validation.md">验证记录</a>。</p>
+<p>M0.5 先做手机终端 A/B，Windows 原生桥同步验证，再完成多标签/桌面分屏、五端终端及三网络字节流验证。三网共 15 个单网格，另验前台跨 provider 并发；正式平台至少通过 TS+ET 单网与二者并发。手机扫码（手动兜底）及本地加密配置迁移进入 M1，通知与文件后置，不引入云账号/自动同步。阶段与验收统一维护在 <a href="../04-roadmap.md">路线图</a>，不把旧工期估算当交付承诺。</p>
 
-<h3>4.3 穿透层的真实工程细节（Flutter 特有的坑）</h3>
-<p>Heeler 在 Swift 里能把 overlay dial 出来的 <strong>fd 直接交给 libssh2</strong>。Dart 没有 <code>Socket.fromFd</code>，所以有两条等效路径：</p>
-<div class="grid2">
-  <div class="card"><h4>A. 实现 <code>SSHSocket</code>（推荐）</h4><p>dartssh2 的传输层接受自定义 <code>SSHSocket</code>（stream + sink）。用 FFI 调原生节点的 <code>read/write</code>，包成一个 Stream/Sink 交给 SSH 层。没有本地端口、没有额外拷贝，语义最接近 Heeler。</p></div>
-  <div class="card"><h4>B. 回环监听</h4><p>原生侧在 <code>127.0.0.1</code> 开一个 listener 转发到 mesh 目标，Dart 侧正常连 localhost。实现最省事，但多一次拷贝、要管端口生命周期和本地暴露面。</p></div>
-</div>
-<p class="small">选 A；A 的阻塞读写必须放在 isolate 里，否则掉帧。三个 overlay 共用同一个 <code>OverlayNode</code> 契约：</p>
-<pre><code>abstract class OverlayNode {
-  OverlayKind get kind;
-  Future&lt;void&gt; start();
-  Stream&lt;OverlayStatus&gt; get status;          // 在线 / 直连或中继 / 延迟 / 对端列表
-  Future&lt;HerdrSocket&gt; dial(String host, int port);  // 返回可直接当 SSHSocket 用的字节流
-  Future&lt;void&gt; stop();
-}</code></pre>
-
-<h3>4.4 Host / Route 竞速（照抄 ADR-0022 的设计，别自己发明）</h3>
-<pre><code>Host { name, user, auth, session, routes[] }
-Route { address, port, jump?, overlayId? }
-
-连接时：
-  直连 Route        → 立刻发起
-  overlay / jump Route → 延迟 400ms，或所有直连都失败时立刻
-  先握到 host key 的赢 → 取消其余
-  host key 信任绑在 Host 上（不是地址）→ 换网络不误报</code></pre>
-<p class="small">为什么重要：同一台机器在家走 LAN、在外走 tailnet。不做竞速，就要么每次等超时，要么让用户手动切地址。Heeler 把这套写进了 ADR，直接按它的语义实现即可。</p>
-
-<h3>4.5 状态与输入的分层（最容易做错的地方）</h3>
-<div class="scroll">
-<table>
-<thead><tr><th>动作</th><th>用什么</th><th>注意</th></tr></thead>
-<tbody>
-<tr><td class="n">看列表</td><td><code>workspace.list</code> / <code>pane.list</code> / <code>agent.list</code></td><td>配合 <code>events.subscribe</code>，后台再 30s 兜底刷新</td></tr>
-<tr><td class="n">看终端</td><td><code>terminal session observe --cols --rows</code></td><td>转屏/分屏就重开 observe，以帧里的 width/height 为准</td></tr>
-<tr><td class="n">打字</td><td><code>pane.send_text</code> / <code>pane.send_input</code></td><td>对任何 pane 有效，不抢 PTY 尺寸</td></tr>
-<tr><td class="n">按键</td><td><code>pane.send_keys</code></td><td>只吃按键名；普通 shell pane 用不了 <code>agent.*</code> 系列（会 <code>agent_not_found</code>）</td></tr>
-<tr><td class="n">审批</td><td><code>agent.prompt</code>（可带 wait）</td><td>已 blocked 时调用会返回 <code>agent_blocked</code>，先展示选项再发</td></tr>
-<tr><td class="n">接管尺寸</td><td><code>terminal session control --takeover</code></td><td>会与桌面端抢 PTY 尺寸，只在用户明确「我要接管」时用</td></tr>
-</tbody>
-</table>
-</div>
-
-<h2 id="plan"><span class="num">05</span>里程碑与验收标准</h2>
-<div class="scroll">
-<table>
-<thead><tr><th>阶段</th><th>内容</th><th>验收（必须真的跑出来）</th><th>估时</th></tr></thead>
-<tbody>
-<tr><td class="n">P0</td><td>先用现成方案跑一周（Collie 或 Ovis + 系统 Tailscale）</td><td>能列出「我每天真正用到的 5 个动作」，确认不是 UI 焦虑</td><td>0.5 天</td></tr>
-<tr><td class="n">P1</td><td>协议层：Dart 侧 SSH streamlocal + JSON RPC + observe 帧 → 命令行 demo</td><td>Linux 上 <code>dart run</code> 能列出 agent、打印实时终端字节、发文本并看到回显</td><td>3–5 天</td></tr>
-<tr><td class="n">P2</td><td>Flutter UI 最小闭环：多机 → 看板 → 终端 → 输入</td><td>真机（iOS + Android）上 60fps 滚终端，打字不丢键</td><td>1–2 周</td></tr>
-<tr><td class="n">P3</td><td>Overlay：先 Tailscale（tsnet），再 EasyTier（Rust no-TUN）</td><td>关掉系统 VPN，仅靠 App 内节点连上 CGNAT 后的主机</td><td>2–4 周</td></tr>
-<tr><td class="n">P4</td><td>配对插件 + FCM/APNs 中继</td><td>扫码 30 秒配对成功；手机锁屏能收到 blocked 通知并直达对应 pane</td><td>1–2 周</td></tr>
-<tr><td class="n">P5</td><td>Route 竞速、文件/预览、diff、生物锁、多语言</td><td>换网络不重配；断线 5 秒内自愈</td><td>按需</td></tr>
-</tbody>
-</table>
-</div>
-<p class="small">粗略总量：单人 + AI 助手，做到「自己每天能用」约 6–8 周；做到「能给别人用」再加 4–6 周（签名、审核、崩溃上报、i18n、更新通道）。</p>
-
-<h2 id="risk"><span class="num">06</span>风险、许可与不确定项</h2>
-
-<h3>6.1 许可（能直接否掉一条线）</h3>
-<div class="scroll">
-<table>
-<thead><tr><th>组件</th><th>许可</th><th>结论</th></tr></thead>
-<tbody>
-<tr><td class="n">Tailscale tsnet / libtailscale</td><td><span class="tag ok">BSD-3</span></td><td>随便用，含商业闭源</td></tr>
-<tr><td class="n">EasyTier 核心</td><td><span class="tag warn">LGPL-3.0</span></td><td>可闭源调用；静态链接要提供可重链接物 + 安装信息。做法：natives 独立仓库固定版本 + 指向该 tag 的构建说明</td></tr>
-<tr><td class="n">ZeroTier libzt</td><td><span class="tag bad">BSL 1.1</span></td><td>闭源商业内置需 ZeroTier 商业授权；<strong>自用/开源无碍</strong></td></tr>
-<tr><td class="n">Heeler</td><td><span class="tag ok">Apache-2.0</span></td><td>设计可抄、代码可移植，保留声明</td></tr>
-<tr><td class="n">herdr mobile (tuan3w) / Sherpr</td><td><span class="tag bad">GPL-3.0</span></td><td>只能读设计，代码不能进闭源产品</td></tr>
-<tr><td class="n">Collie / Ovis / Herdr Mobile (RN) / wooloo</td><td><span class="tag ok">MIT</span></td><td>可参考代码</td></tr>
-</tbody>
-</table>
-</div>
-
-<h3>6.2 未核实 / 必须在开工前打掉的假设</h3>
-<ol>
-  <li><code>package:tailscale</code> 在 iOS 静态链接 + 后台切换下的真实表现（0.9.0，下载量低）。→ 先写 200 行 spike。</li>
-  <li>libghostty 的 Android 支持：没找到可靠结论，所以按 xterm3 估；如果终端体验是核心，双原生 + 共享 Rust core 的上限更高。</li>
-  <li>userspace 网络栈的耗电与 Doze 存活：没有公开实测。Android 需要前台服务或 WorkManager 保活策略。</li>
-  <li>iOS 审核对「App 内自带 userspace VPN」的态度：Heeler 已上架说明走得通，但它是把 overlay 作为可选功能；宣传口径别写成「VPN」。</li>
-  <li>herdr 插件生态的 API 还在演进（plugin v1 无原生 UI 注册），配对/推送插件要跟着 <code>min_herdr_version</code> 走。</li>
-  <li>Play 上的 <code>dev.herdr.mobile</code> 与 benkraus 仓库的对应关系是「包名一致」推断，未 100% 核实。</li>
-</ol>
-
-<div class="note">
-<strong>一句话建议。</strong>先做 P1（协议层）——它是整件事里唯一「一次投入、两端复用、且不依赖任何第三方库成熟度」的部分。协议层跑通后，UI 用 Flutter 堆是体力活，穿透是分包活。
-反过来，如果先做 UI，八周后你手里会是一个和 Sherpr 差不多、但少了 token 的安卓 App。
-</div>
-
-<footer>
-证据来源：本机 herdr 0.9.5 实测（<code>terminal session observe</code> 帧格式、<code>herdr api schema</code>、socket 路径）；各项目 README / docs/adr（Heeler ADR-0011/0021/0022、benkraus relay 架构）；<code>gh search code</code> 核实 dartssh2 / russh 的 streamlocal 支持；各仓库许可证字段。未核实项已在 6.2 单列。
-</footer>
+<h2 id="risk"><span class="num">06</span>证据与许可</h2>
+<p>2026-10-29 复核已确认 dartssh2 的自定义 SSHSocket / streamlocal 接口、herdr 的 observe 与事件恢复规则；未执行本项目真机集成。历史竞品矩阵没有逐项重新复核。</p>
+<p>可以按许可复用 Heeler 代码：根 Apache-2.0 不覆盖全部 native 组件，EasyTier wrapper 为 LGPL-3.0-or-later，需对应源码及重构建 / 安装等资料。已核对的 libzt 版本于 2026-01-01 转为 Apache-2.0，ZeroTierOne core 及补丁仍须保留 MPL 等义务。实际分发物逐项核对，不凭开源或 BSL 标签直接判定。</p>
+<p>其他 App 的发布记录不能证明本项目必然获批；本轮未确认历史记录中的商店状态。源码与测试渠道先行、逐步正式上架的节奏已定，仍须满足签名、安装与平台规则；具体许可证经依赖审查后确定。发布前补齐源码构建、依赖声明、逐平台支持与产物来源，不能把开源仓库等同于五端可安装产品。</p>
+<footer>关键来源、精确 commit、历史记录边界与待验证项见 <a href="../00-research.md">调研依据与复核</a>。本页能力矩阵为 2026-10-29 计划基线；后续测试产物、有限 macOS 结果与未验证范围见 <a href="../09-prototype-validation.md">当前验证记录</a>。尚无整 App 公平性能结论或三网络运行支持声明。</footer>
 </div>
 
 <script>

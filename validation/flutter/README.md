@@ -70,7 +70,7 @@ Mac GUI smoke 发现分解重音 `e\u0301 A\u030a n\u0303` 看起来只有基字
 
 验证壳现在读取两路线共享的 [`design-tokens-v2.json`](../shared/design-tokens-v2.json)：靛蓝操作色、浅色应用面板、深色终端，以及独立的状态文字色。桌面增加主机／会话侧栏，手机保留标签与模式入口；诊断操作集中到“验证工具”，发送结果未知的锁定和人工核实入口保持常显。此处是已认可视觉方案的离线适配，不是完整手机看板、配对或远端产品闭环。
 
-两壳显式使用相同 16 色 ANSI 工程基线；JSON 将它与 Penpot 实际 tokens 分开记录。fixture 字节、固定 Nerd Font、14px 和 80×24 不变。布局收窄时只保留当前目标，隐藏的分屏标签恢复仍需要新 full；布局和键盘不发送远端 resize。包 manifest 新增视觉 token 文件 SHA256。
+两壳显式使用相同 16 色 ANSI 工程基线；JSON 将它与 Penpot 实际 tokens 分开记录。fixture 字节、固定 Nerd Font、14px 和 80×24 不变。布局收窄时只保留当前目标，隐藏的分屏标签恢复仍需要新 full；布局和键盘不发送远端 resize。极小或键盘占用后的视口允许工作区整体垂直滚动，保留终端与发送控件可达，不通过负尺寸 Flex 或远端 resize 硬塞布局。包 manifest 新增视觉 token 文件 SHA256。
 
 新增 `test/probe_ui_test.dart` 从实际控件驱动未知恢复、隐藏标签与窄屏切换，并检查 320×640／键盘 260px／1.3 倍 UI 字号下的布局和真实 terminal 几何。CI 保存的 `probe-results/ui-v2` 是 **headless widget 布局证据**，系统文字可能使用测试 fallback 字体，不能代替原生 App 视觉、真实输入法或触控验收。候选工作流继续生成带受控 terminal_view 修复的五端测试包；普通 baseline 工作流仍使用未补丁的官方 0.5.0，其已知组合绘制失败不可与候选包混用。
 

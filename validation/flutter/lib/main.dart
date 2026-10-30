@@ -273,7 +273,14 @@ class _ProbePageState extends State<ProbePage> with WidgetsBindingObserver {
         child: Text('Flutter · 本地验证', style: TextStyle(color: tokens.color('textSecondary'), fontSize: 12))))]),
       body: SafeArea(child: Row(children: [
         if (wide) hosts(),
-        Expanded(child: Column(children: [
+        Expanded(child: LayoutBuilder(builder: (context, constraints) {
+          // A small keyboard-reduced viewport scrolls the local workbench.
+          // Keep the terminal's 80x24 buffer unchanged, with room for controls
+          // and a useful terminal viewport instead of a negative Flex extent.
+          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+          final minimumHeight = (gate.mode == InputMode.draft ? 600.0 : 520.0) * scale;
+          final height = constraints.maxHeight < minimumHeight ? minimumHeight : constraints.maxHeight;
+          return SingleChildScrollView(child: SizedBox(height: height, child: Column(children: [
           if (MediaQuery.viewInsetsOf(context).bottom == 0) Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Row(children: [Icon(Icons.science_outlined, size: 16, color: tokens.color('brand')),
               const SizedBox(width: 6), Expanded(child: Text('离线 fixture · 配对 / SSH / 三网络尚未接入',
@@ -314,7 +321,8 @@ class _ProbePageState extends State<ProbePage> with WidgetsBindingObserver {
               child: Text('80×24 · 本地接收 ${gate.inputCount}', key: const ValueKey('input-count'),
                 style: TextStyle(fontSize: 11, color: tokens.color('textSecondary'))))),
               TextButton(key: const ValueKey('diagnostics'), onPressed: diagnostics, child: const Text('验证工具'))])),
-        ])),
+        ])));
+        })),
       ])));
   }
 

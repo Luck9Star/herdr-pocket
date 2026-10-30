@@ -2,6 +2,8 @@
 
 本目录提供独立 Linux 协议探针，**尚未接入 Flutter/Tauri GUI**。实际状态以 [SSH Actions](https://github.com/Luck9Star/herdr-pocket/actions/workflows/ssh-validation.yml) 的源提交与 artifact 为准，不把编译或模型测试当真实链路通过。
 
+第四轮 [40985722900](https://github.com/Luck9Star/herdr-pocket/actions/runs/40985722900)，源 `ed35d84046c269169f1b72176ab769b398e6cca5`：以下 7 项真实协议检查全部通过，[artifact](https://github.com/Luck9Star/herdr-pocket/actions/runs/40985722900/artifacts/12946711960) 已下载并逐一核验全部 SHA256SUMS。目标 `w1:p1` 接收 `41e4b8ade696871b5b41030d` 共 12 bytes，重连后接收器仍活且字节未增加。保存的 [manifest、分项结果与收件记录](../../docs/evidence/tauri/2026-10-30-ssh-results.json) 只证明该隔离 harness，不延伸为 GUI 输入或组网通过。下面保留前三轮失败，方便复现边界。
+
 `run-ci.py` 仅允许在 GitHub runner 执行。它在新建 `/tmp/hp-ssh-RUN_ID` 内生成一次性 Ed25519 host/client keys、配置和专用授权文件，只启动 `127.0.0.1` 的临时 sshd；不读取 SSH agent、`~/.ssh`、真实节点身份或真实主机。herdr 通过独立 XDG 目录运行 `pocket-probe` session；测试结束只终止本次启动的进程组和删除已知临时keys，不修改 runner 用户授权或系统 sshd 配置。
 
 固定来源：

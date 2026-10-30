@@ -1,0 +1,6 @@
+if(penpot.currentFile?.id!=='b55064db-d93d-80f9-8008-ddd22e6d398f')throw new Error('Wrong file');
+const page=penpot.currentPage;const all=penpotUtils.findShapes(()=>true,page.root);
+const boards=page.root.children.filter(s=>s.type==='board'&&s.showInViewMode);
+const interactions=all.flatMap(s=>s.interactions.map(i=>({shape:s.name,action:i.action?.type,destination:i.action?.destination?.id})));
+const unknown=boards.find(b=>b.name.startsWith('P4-unknown'));
+return {verifiedAt:'2026-10-30',file:penpot.currentFile.id,page:page.id,penpotVersion:penpot.version,boards:Object.fromEntries(boards.map(b=>[b.name.split(' · ')[0],b.id])),screenCount:boards.length,interactionCount:interactions.length,danglingDestinations:interactions.filter(i=>i.action==='navigate-to'&&!boards.some(b=>b.id===i.destination)),components:penpot.library.local.components.map(c=>c.name),tokenCount:penpot.library.local.tokens.sets.reduce((n,s)=>n+s.tokens.length,0),flows:page.flows.map(f=>({name:f.name,board:f.startingBoard.id})),unknownActions:penpotUtils.findShapes(s=>s.interactions.length>0,unknown).map(s=>s.name),p7Feedback:penpotUtils.findShapes(s=>s.type==='text'&&s.characters.startsWith('macOS 实测：'),boards.find(b=>b.name.startsWith('P7-font'))).map(s=>s.characters),editableTextNodes:all.filter(s=>s.type==='text').length};

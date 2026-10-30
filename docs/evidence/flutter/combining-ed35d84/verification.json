@@ -1,0 +1,12 @@
+{
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40985723032",
+  "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40985723032/job/123836544791",
+  "sourceCommit": "ed35d84046c269169f1b72176ab769b398e6cca5",
+  "jobConclusion": "failure",
+  "cause": "Expected pixel difference, actual equality; buffers preserve combining codepoints and cursor width; both images have 138 nontransparent pixels.",
+  "files": {
+    "ascii-base.png": "0faf2a8446a0c0b62d0f4442048367910242f99f14c06aa5b22ca1f42ff74cd7",
+    "ascii-combining.png": "0faf2a8446a0c0b62d0f4442048367910242f99f14c06aa5b22ca1f42ff74cd7",
+    "combining-render.json": "692f5f260423994fe1b49f33284a646c8b49796e3ce9fe302666d4356546ddf2"
+  }
+}

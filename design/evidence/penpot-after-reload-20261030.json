@@ -1,0 +1,121 @@
+{
+  "result": {
+    "verifiedAt": "2026-10-30",
+    "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "page": "b55064db-d93d-80f9-8008-ddd22e6d3990",
+    "penpotVersion": "2.19.0",
+    "boards": {
+      "P1-empty": "c1974894-3caf-8067-8008-ddd44dc0e8ed",
+      "P2-request": "c1974894-3caf-8067-8008-ddd44e177910",
+      "P2-helper": "c1974894-3caf-8067-8008-ddd44e7f1eb0",
+      "P2-authorized": "c1974894-3caf-8067-8008-ddd44ed411c1",
+      "P2-scan": "c1974894-3caf-8067-8008-ddd44f2134e1",
+      "P2-review": "c1974894-3caf-8067-8008-ddd44f89bfed",
+      "P2-ready": "c1974894-3caf-8067-8008-ddd45213467f",
+      "P2-success": "c1974894-3caf-8067-8008-ddd452e22e19",
+      "P2-unverified": "c1974894-3caf-8067-8008-ddd45396dfef",
+      "P2-revoke": "c1974894-3caf-8067-8008-ddd454399f27",
+      "P2-camera": "c1974894-3caf-8067-8008-ddd454d40ada",
+      "P2-invalid": "c1974894-3caf-8067-8008-ddd455725ca8",
+      "P2-denied": "c1974894-3caf-8067-8008-ddd4583e90aa",
+      "P2-manual": "c1974894-3caf-8067-8008-ddd458987050",
+      "P1-dashboard": "c1974894-3caf-8067-8008-ddd45924c3e5",
+      "P1-stale": "c1974894-3caf-8067-8008-ddd459ad3cd5",
+      "P3-observe": "c1974894-3caf-8067-8008-ddd45a0c0c5e",
+      "P3-direct": "c1974894-3caf-8067-8008-ddd45a7ecc04",
+      "P3-small": "c1974894-3caf-8067-8008-ddd45ea38427",
+      "P3-keyboard-closed": "c1974894-3caf-8067-8008-ddd45fcd3bc2",
+      "P3-draft": "c1974894-3caf-8067-8008-ddd46055be1f",
+      "P3-draft-preview": "c1974894-3caf-8067-8008-ddd46134e79c",
+      "P3-selection": "c1974894-3caf-8067-8008-ddd461abd6dd",
+      "P3-paste": "c1974894-3caf-8067-8008-ddd46230c412",
+      "P3-combo": "c1974894-3caf-8067-8008-ddd46779caaf",
+      "P4-sending": "c1974894-3caf-8067-8008-ddd468a2edff",
+      "P4-received": "c1974894-3caf-8067-8008-ddd469051845",
+      "P4-not-sent": "c1974894-3caf-8067-8008-ddd4697cee96",
+      "P4-unknown": "c1974894-3caf-8067-8008-ddd46a03a67b",
+      "P4-recovering": "c1974894-3caf-8067-8008-ddd46ab0427d",
+      "P4-restored": "c1974894-3caf-8067-8008-ddd46f6a8fe1",
+      "P4-fingerprint": "c1974894-3caf-8067-8008-ddd470199c8c",
+      "P4-target-gone": "c1974894-3caf-8067-8008-ddd470bcdeb5",
+      "P4-tabs": "c1974894-3caf-8067-8008-ddd4712df609",
+      "P4-hidden": "c1974894-3caf-8067-8008-ddd471d395eb",
+      "P4-b-ready": "c1974894-3caf-8067-8008-ddd47241a21c",
+      "P5-networks": "c1974894-3caf-8067-8008-ddd479907157",
+      "P5-ts": "c1974894-3caf-8067-8008-ddd47aa8cdf6",
+      "P5-et": "c1974894-3caf-8067-8008-ddd47b8ae134",
+      "P5-zt": "c1974894-3caf-8067-8008-ddd47c66caaf",
+      "P5-auth": "c1974894-3caf-8067-8008-ddd47d6f802f",
+      "P5-node": "c1974894-3caf-8067-8008-ddd47e225548",
+      "P5-impact": "c1974894-3caf-8067-8008-ddd485e2e354",
+      "P5-overlap": "c1974894-3caf-8067-8008-ddd486e4266d",
+      "P6-export": "c1974894-3caf-8067-8008-ddd48798589d",
+      "P6-file": "c1974894-3caf-8067-8008-ddd4885316b3",
+      "P6-import": "c1974894-3caf-8067-8008-ddd4891bf4ef",
+      "P6-conflict": "c1974894-3caf-8067-8008-ddd48a1e6426",
+      "P6-invalid": "c1974894-3caf-8067-8008-ddd49284305b",
+      "P6-done": "c1974894-3caf-8067-8008-ddd4934f1dcb",
+      "P7-font": "c1974894-3caf-8067-8008-ddd4942b0b9b",
+      "D1-workspace": "c1974894-3caf-8067-8008-ddd495104b88",
+      "D1-focus-b": "c1974894-3caf-8067-8008-ddd4966743b1",
+      "D2-narrow": "c1974894-3caf-8067-8008-ddd497cb9d0e",
+      "START": "c1974894-3caf-8067-8008-ddd4b0a14f71"
+    },
+    "screenCount": 55,
+    "interactionCount": 198,
+    "components": [
+      "current",
+      "primary",
+      "paused",
+      "disabled",
+      "focused",
+      "waiting",
+      "live",
+      "ready",
+      "impact",
+      "draft",
+      "latched",
+      "secondary",
+      "blocked",
+      "direct",
+      "released",
+      "invalid",
+      "stale",
+      "observe"
+    ],
+    "tokenCount": 25,
+    "flows": [
+      {
+        "name": "J1 · 手机配对",
+        "board": "c1974894-3caf-8067-8008-ddd44dc0e8ed"
+      },
+      {
+        "name": "J2 · 终端与输入",
+        "board": "c1974894-3caf-8067-8008-ddd45a0c0c5e"
+      },
+      {
+        "name": "J3 · 多标签与恢复",
+        "board": "c1974894-3caf-8067-8008-ddd4712df609"
+      },
+      {
+        "name": "P5 · 三网络配置",
+        "board": "c1974894-3caf-8067-8008-ddd479907157"
+      },
+      {
+        "name": "P6 · 配置导入导出",
+        "board": "c1974894-3caf-8067-8008-ddd48798589d"
+      },
+      {
+        "name": "00 · 原型导航",
+        "board": "c1974894-3caf-8067-8008-ddd4b0a14f71"
+      }
+    ],
+    "unknownActions": [
+      "action / primary / 主动恢复并核实",
+      "action / secondary / 查看连接诊断",
+      "交互原型 · 虚构数据 · 运行能力未验证"
+    ],
+    "editableTextNodes": 631
+  },
+  "log": ""
+}

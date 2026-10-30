@@ -1,3 +1,4 @@
 artifacts/
+candidate-artifacts/
 __pycache__/
 *.pyc

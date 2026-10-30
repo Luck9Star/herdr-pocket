@@ -1,0 +1,31 @@
+/* Additive herdr-pocket portable ABI; not an OS fd or Windows SOCKET.
+ * Dedicated non-UI, non-Tokio worker threads only. Existing-runtime calls
+ * return BUSY rather than nesting block_on. At most 32 live/pending handles;
+ * failed connects retain their handle until explicitly closed. Handles never
+ * reuse IDs; zero is invalid, and exhaustion refuses allocation.
+ * Each direction has a 64 KiB in-process queue; copy pumps add bounded 8 KiB
+ * buffers per direction. No public/local proxy listener is created.
+ * Connect returns a pending handle. Read/write wait for readiness up to their
+ * deadline. read=0 is EOF; positive write is LOCAL acceptance only, not remote
+ * acknowledgement. A partial write reports its accepted prefix; never replay
+ * that prefix. UNKNOWN on write timeout/cancellation/error means the delivery
+ * outcome needs user resolution; DO NOT automatically resend the whole input.
+ * One reader and one writer run concurrently; extra calls wait within deadline.
+ * shutdown_write is a half-close. close removes the capability, cancels pending
+ * dial and pump, settles ownership, and leaves other handles untouched. Old or
+ * twice-closed handles return INVALID; late connection completion is dropped.
+ * Caller buffers must remain valid until synchronous calls return. */
+#define HEELER_ET_STREAM_ABI_VERSION 1
+#define HEELER_ET_STREAM_MAX_IO 65536
+#define HEELER_ET_STREAM_MAX_HANDLES 32
+#define HEELER_ET_ERR_INVALID_HANDLE (-6)
+#define HEELER_ET_ERR_CLOSED (-7)
+#define HEELER_ET_ERR_UNKNOWN_WRITE (-8)
+#define HEELER_ET_ERR_CAPACITY (-9)
+#define HEELER_ET_ERR_BUSY_RUNTIME (-10)
+int heeler_et_stream_connect(const char *key, const char *network, const char *host, uint16_t port,
+                            uint32_t timeout_ms, uint64_t *out_handle, char *err, size_t errlen);
+int heeler_et_stream_read(uint64_t handle, uint8_t *buf, size_t len, uint32_t timeout_ms, char *err, size_t errlen);
+int heeler_et_stream_write(uint64_t handle, const uint8_t *buf, size_t len, uint32_t timeout_ms, char *err, size_t errlen);
+int heeler_et_stream_shutdown_write(uint64_t handle, uint32_t timeout_ms, char *err, size_t errlen);
+int heeler_et_stream_close(uint64_t handle, char *err, size_t errlen);

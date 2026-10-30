@@ -1,0 +1,43 @@
+name: Native portable stream candidate
+on:
+  push:
+    branches: ['codex/**']
+    paths: ['validation/native/**', '.github/workflows/native-candidate-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-candidate-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  portable:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Pin runner Rust
+        shell: bash
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Linux link prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config libssl-dev
+      - name: Test independently locked portable module
+        shell: bash
+        run: cargo +1.95.0 test --locked --manifest-path validation/native/portable-stream/Cargo.toml -- --nocapture
+      - name: Compile, link and test exact patched Heeler source
+        shell: bash
+        run: python validation/native/tool/portable_candidate.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: native-candidate-${{ matrix.os }}-${{ github.sha }}
+          path: validation/native/candidate-artifacts/
+          if-no-files-found: error
+          retention-days: 14

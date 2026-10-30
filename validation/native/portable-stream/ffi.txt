@@ -1,0 +1,107 @@
+// herdr-pocket additive portable stream ABI v1. No OS descriptors cross this boundary.
+fn streams() -> &'static pocket_stream::Registry {
+    static STREAMS: OnceLock<pocket_stream::Registry> = OnceLock::new();
+    STREAMS.get_or_init(pocket_stream::Registry::default)
+}
+fn stream_runtime() -> Result<&'static Runtime, Failure> {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return Err(Failure::new(-10, "stream FFI must run on a dedicated non-Tokio worker thread"));
+    }
+    runtime()
+}
+fn stream_failure(error: pocket_stream::Error) -> Failure {
+    use pocket_stream::Error::*;
+    let code = match &error {
+        Invalid => -6, Closed => -7, UnknownWrite => -8, Capacity => -9,
+        Busy => -10, Timeout => HEELER_ET_ERR_TIMEOUT, Failed(_) => HEELER_ET_ERR,
+    };
+    Failure::new(code, error.to_string())
+}
+
+/// Returns a pending opaque handle; readiness is observed by read/write with deadlines.
+/// # Safety
+/// Strings are NUL-terminated, out_handle is writable, err follows ffi_call's contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn heeler_et_stream_connect(
+    key: *const c_char, network: *const c_char, host: *const c_char, port: u16,
+    timeout_ms: u32, out_handle: *mut u64, err: *mut c_char, errlen: usize,
+) -> c_int {
+    ffi_call(err, errlen, || {
+        if out_handle.is_null() {return Err(Failure::generic("out_handle is null"));}
+        unsafe {*out_handle=0;}
+        let rt=stream_runtime()?;
+        let key=check_key(unsafe {borrowed_str(key,"instance key")}? )?;
+        let source=dial_source(key)?;
+        let network=if network.is_null(){None}else{
+            Some(unsafe{borrowed_str(network,"network")}? .to_owned()).filter(|s|!s.is_empty())};
+        let host=unsafe{borrowed_str(host,"host")}? .to_owned();
+        let timeout=Duration::from_millis(u64::from(timeout_ms.max(1)));
+        let id=streams().reserve().map_err(stream_failure)?;
+        let entered=rt.enter();
+        let started=streams().spawn_dial(id,async move {
+            match tokio::time::timeout(timeout,dial_overlay(source,network,host,port,timeout)).await {
+                Ok(Ok(stream))=>{let _=streams().complete(id,stream);},
+                Ok(Err(error))=>streams().fail(id,error.message),
+                Err(_)=>streams().fail(id,"connect deadline elapsed".into()),
+            }
+        });
+        drop(entered);
+        if let Err(error)=started {let _=rt.block_on(streams().close(id));return Err(stream_failure(error));}
+        unsafe {*out_handle=id;}
+        Ok(HEELER_ET_OK)
+    })
+}
+
+/// # Safety
+/// buf points at len writable bytes until return; err is null or errlen writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn heeler_et_stream_read(id:u64,buf:*mut u8,len:usize,timeout_ms:u32,err:*mut c_char,errlen:usize)->c_int {
+    ffi_call(err,errlen,||{
+        if buf.is_null() || len==0 || len>pocket_stream::MAX_IO{return Err(stream_failure(pocket_stream::Error::Invalid));}
+        let rt=stream_runtime()?;let bytes=unsafe{std::slice::from_raw_parts_mut(buf,len)};
+        rt.block_on(streams().read(id,bytes,Duration::from_millis(u64::from(timeout_ms.max(1)))))
+            .map(|n|n as c_int).map_err(stream_failure)
+    })
+}
+
+/// Positive byte counts mean local queue acceptance, never remote receipt/command success.
+/// # Safety
+/// buf points at len readable bytes until return; err follows ffi_call's contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn heeler_et_stream_write(id:u64,buf:*const u8,len:usize,timeout_ms:u32,err:*mut c_char,errlen:usize)->c_int {
+    ffi_call(err,errlen,||{
+        if buf.is_null() || len==0 || len>pocket_stream::MAX_IO{return Err(stream_failure(pocket_stream::Error::Invalid));}
+        let rt=stream_runtime()?;let bytes=unsafe{std::slice::from_raw_parts(buf,len)};
+        rt.block_on(streams().write(id,bytes,Duration::from_millis(u64::from(timeout_ms.max(1)))))
+            .map(|n|n as c_int).map_err(stream_failure)
+    })
+}
+
+/// # Safety
+/// err is null or errlen writable bytes, and remains valid until return.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn heeler_et_stream_shutdown_write(id:u64,timeout_ms:u32,err:*mut c_char,errlen:usize)->c_int {
+    ffi_call(err,errlen,|| stream_runtime()?.block_on(streams().shutdown_write(id,Duration::from_millis(u64::from(timeout_ms.max(1)))))
+        .map(|()|HEELER_ET_OK).map_err(stream_failure))
+}
+
+/// # Safety
+/// err is null or errlen writable bytes, and remains valid until return.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn heeler_et_stream_close(id:u64,err:*mut c_char,errlen:usize)->c_int {
+    ffi_call(err,errlen,||stream_runtime()?.block_on(streams().close(id)).map(|()|HEELER_ET_OK).map_err(stream_failure))
+}
+
+#[cfg(test)]
+mod pocket_ffi_tests {
+    use super::*;
+    #[test]
+    fn invalid_handle_and_nested_runtime_fail_without_panics() {
+        let mut byte=0;let mut err=[0 as c_char;128];
+        assert_eq!(unsafe{heeler_et_stream_read(0,&mut byte,1,1,err.as_mut_ptr(),err.len())},-6);
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            assert_eq!(unsafe{heeler_et_stream_read(0,&mut byte,1,1,err.as_mut_ptr(),err.len())},-10);
+            assert_eq!(unsafe{heeler_et_stream_close(0,err.as_mut_ptr(),err.len())},-10);
+        });
+    }
+}

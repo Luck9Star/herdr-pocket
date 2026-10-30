@@ -117,7 +117,7 @@ def tsnet(reference, lock):
     CURRENT['tested'] = 'tsnet import + Dial(context)/Close type check + c-shared ABI build/load; no tsnet dial executed'
 
 
-def easytier(reference, lock):
+def easytier(reference, lock, check=True):
     target = reference / 'native/easytier/vendor/easytier'
     target.parent.mkdir(parents=True)
     checkout(lock['EASYTIER_REPO'], lock['EASYTIER_COMMIT'], target, 'easytier-source')
@@ -138,8 +138,10 @@ def easytier(reference, lock):
     env = dict(os.environ, PROTOC=str(compiler), CARGO_BUILD_JOBS='2')
     run('protoc-version', [compiler, '--version'], env=env)
     run('rust-version', ['rustc', '+1.95.0', '--version'], env=env)
-    run('check-c-abi-library', ['cargo', '+1.95.0', 'check', '--locked', '--lib'], cwd=reference / 'native/easytier', env=env, timeout=1800)
-    CURRENT['tested'] = 'Real patched heeler-easytier library cargo check only; no linking, network node or TCP dial'
+    if check:
+        run('check-c-abi-library', ['cargo', '+1.95.0', 'check', '--locked', '--lib'], cwd=reference / 'native/easytier', env=env, timeout=1800)
+        CURRENT['tested'] = 'Real patched heeler-easytier library cargo check only; no linking, network node or TCP dial'
+    return env
 
 
 def zerotier(reference, lock):
@@ -170,34 +172,35 @@ def zerotier(reference, lock):
     CURRENT['tested'] = 'Patched libzt shared library compiled/loaded; four symbols resolved, never invoked'
 
 
-if os.environ.get('GITHUB_ACTIONS') != 'true':
-    raise SystemExit('Native toolchain/build execution is CI-only; no local SDK installation or identity access')
-OUT.mkdir(parents=True, exist_ok=True)
-if WORK.exists(): raise SystemExit('Refusing to overwrite previous probe workspace')
-WORK.mkdir(parents=True)
-CURRENT = {'provider': 'source', 'commands': []}
-REPORT['providers']['source'] = CURRENT
-reference = WORK / 'reference'
-try:
-    checkout(CONFIG['reference']['repository'], CONFIG['reference']['commit'], reference, 'reference')
-    lock = lock_values(reference)
-    shutil.copy2(reference / 'sources.lock', OUT / 'upstream-sources.lock')
-    licenses('reference', reference)
-    CURRENT['status'] = 'passed'
-    for name, probe in [('tailscale', tsnet), ('easytier', easytier), ('zerotier', zerotier)]:
-        CURRENT = {'provider': name, 'commands': [], 'networkValidation': 'not run', 'deviceValidation': 'not run'}
-        REPORT['providers'][name] = CURRENT
-        try:
-            probe(reference, lock)
-            CURRENT['status'] = 'passed'
-        except Exception as exc:
-            CURRENT['status'] = 'failed'
-            CURRENT['error'] = str(exc)
+if __name__ == '__main__':
+    if os.environ.get('GITHUB_ACTIONS') != 'true':
+        raise SystemExit('Native toolchain/build execution is CI-only; no local SDK installation or identity access')
+    OUT.mkdir(parents=True, exist_ok=True)
+    if WORK.exists(): raise SystemExit('Refusing to overwrite previous probe workspace')
+    WORK.mkdir(parents=True)
+    CURRENT = {'provider': 'source', 'commands': []}
+    REPORT['providers']['source'] = CURRENT
+    reference = WORK / 'reference'
+    try:
+        checkout(CONFIG['reference']['repository'], CONFIG['reference']['commit'], reference, 'reference')
+        lock = lock_values(reference)
+        shutil.copy2(reference / 'sources.lock', OUT / 'upstream-sources.lock')
+        licenses('reference', reference)
+        CURRENT['status'] = 'passed'
+        for name, probe in [('tailscale', tsnet), ('easytier', easytier), ('zerotier', zerotier)]:
+            CURRENT = {'provider': name, 'commands': [], 'networkValidation': 'not run', 'deviceValidation': 'not run'}
+            REPORT['providers'][name] = CURRENT
+            try:
+                probe(reference, lock)
+                CURRENT['status'] = 'passed'
+            except Exception as exc:
+                CURRENT['status'] = 'failed'
+                CURRENT['error'] = str(exc)
+            (OUT / 'results.json').write_text(json.dumps(REPORT, indent=2) + '\n')
+    except Exception as exc:
+        CURRENT['status'] = 'failed'; CURRENT['error'] = str(exc)
+    finally:
         (OUT / 'results.json').write_text(json.dumps(REPORT, indent=2) + '\n')
-except Exception as exc:
-    CURRENT['status'] = 'failed'; CURRENT['error'] = str(exc)
-finally:
-    (OUT / 'results.json').write_text(json.dumps(REPORT, indent=2) + '\n')
-    (OUT / 'SHA256SUMS').write_text(''.join(sha(p) + '  ' + str(p.relative_to(OUT)) + '\n' for p in sorted(OUT.rglob('*')) if p.is_file() and p.name != 'SHA256SUMS'))
-print(json.dumps({name: {'status': row.get('status'), 'error': row.get('error')} for name, row in REPORT['providers'].items()}))
-sys.exit(1 if any(row.get('status') != 'passed' for row in REPORT['providers'].values()) else 0)
+        (OUT / 'SHA256SUMS').write_text(''.join(sha(p) + '  ' + str(p.relative_to(OUT)) + '\n' for p in sorted(OUT.rglob('*')) if p.is_file() and p.name != 'SHA256SUMS'))
+    print(json.dumps({name: {'status': row.get('status'), 'error': row.get('error')} for name, row in REPORT['providers'].items()}))
+    sys.exit(1 if any(row.get('status') != 'passed' for row in REPORT['providers'].values()) else 0)

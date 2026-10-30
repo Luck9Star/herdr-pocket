@@ -33,6 +33,10 @@ def prepare(destination):
     shutil.copy2(source / 'pubspec.yaml', destination / 'pubspec.yaml')
     if (source / 'pubspec.lock').exists():
         shutil.copy2(source / 'pubspec.lock', destination / 'pubspec.lock')
+    else:
+        # flutter create can seed its own template lock even with --no-pub.
+        # It is not this probe's dependency lock and must not be enforced.
+        (destination / 'pubspec.lock').unlink(missing_ok=True)
     shutil.copytree(source / 'lib', destination / 'lib', dirs_exist_ok=True)
     shutil.copytree(source / 'test', destination / 'test', dirs_exist_ok=True)
     (destination / 'analysis_options.yaml').write_text('analyzer:\n  errors:\n    todo: ignore\n')

@@ -15,12 +15,17 @@ Future<void> mount(WidgetTester tester, Size size, {double keyboard = 0, double 
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
   tester.view.viewInsets = FakeViewPadding(bottom: keyboard);
-  final font = FontLoader('ProbeNerd')..addFont(rootBundle.load(
-    'assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'));
-  await font.load();
-  final tokens = await DesignTokens.load();
-  final fixture = jsonDecode(await rootBundle.loadString('assets/shared/fixture.json')) as Map<String, dynamic>;
-  final load = await rootBundle.loadString('assets/shared/load-chunk.txt');
+  // Font loading crosses the real engine/asset I/O boundary; it must run
+  // outside testWidgets' fake clock, as in the existing painter regressions.
+  final (tokens, fixture, load) = (await tester.runAsync(() async {
+    final font = FontLoader('ProbeNerd')..addFont(rootBundle.load(
+      'assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'));
+    await font.load();
+    final tokens = await DesignTokens.load();
+    final fixture = jsonDecode(await rootBundle.loadString('assets/shared/fixture.json')) as Map<String, dynamic>;
+    final load = await rootBundle.loadString('assets/shared/load-chunk.txt');
+    return (tokens, fixture, load);
+  }))!;
   await tester.pumpWidget(RepaintBoundary(key: captureKey, child: MaterialApp(
     debugShowCheckedModeBanner: false, theme: tokens.theme,
     builder: (context, child) => MediaQuery(data: MediaQuery.of(context).copyWith(

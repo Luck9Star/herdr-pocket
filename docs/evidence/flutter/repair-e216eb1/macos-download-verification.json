@@ -1,0 +1,12 @@
+{
+  "sourceCommit": "e216eb1db83e562cbff5c128cc9eedcc293203cf",
+  "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993758160/artifacts/12950213273",
+  "archive": "flutter-macos-debug.tar.gz",
+  "archiveSha256": "c20d9377ea277f16f66ad29467613735ee403853d0ca853e50fdf347ff31c502",
+  "matchesManifest": true,
+  "containsAppExecutable": true,
+  "guiLaunched": false,
+  "installedOrDeviceSmoke": "not run",
+  "upstreamLicenseIncluded": true,
+  "upstreamNoticeIncluded": true
+}

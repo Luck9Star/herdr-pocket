@@ -1,0 +1,39 @@
+{
+  "reviewDate": "2026-10-30",
+  "sourceCommit": "e216eb1db83e562cbff5c128cc9eedcc293203cf",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993758160",
+  "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993758160/job/123861998310",
+  "githubJobIndependentlyRead": "completed/success; source SHA matched",
+  "patchSha256": "2d0fb1d7283b034eb8161651f5c1cee0343df2877ebd6863e6639782ad8e5833",
+  "candidateArchiveSha256": "5f8cf2e999b9b98224430b7ef2a32d378062073fa4e566f1f52d89ac9d9ac9cf",
+  "evidenceFilesHashVerified": 30,
+  "otherDependencyPackageBlocksIdentical": true,
+  "sdkConstraintDifference": {
+    "flutterBefore": ">=3.19.0",
+    "flutterAfter": ">=3.18.0-18.0.pre.54",
+    "actualPinnedToolchain": "Flutter 3.47.9 unchanged",
+    "scope": "Metadata minimum differs; do not describe entire lockfile as unchanged except terminal_view."
+  },
+  "candidateLockSha256": "8061fdb6e4fb277952fe6b987de4740fac7bc9db7532e6feeba78e6e08eb9ba0",
+  "diagnostic": {
+    "bufferPreservesMarks": true,
+    "cursorX": 5,
+    "basePixels": 138,
+    "markedPixels": 169
+  },
+  "regressionTests": 9,
+  "independentPngReferenceHashPairs": 10,
+  "visibleReview": [
+    "ascii-combining has acute/ring/tilde in expected cells",
+    "ascii-neighbors maintains ABéCD",
+    "focused-block-cursor and selection preserve visible accent on white cell"
+  ],
+  "verdict": "PASS for fixed-font tested combining-render cases in Ubuntu Flutter test engine",
+  "notValidated": [
+    "original baseline remains FAIL and unmodified",
+    "official terminal_view 0.5.0 is unpatched",
+    "native app/IME/clipboard",
+    "all Unicode and themes",
+    "framework selection"
+  ]
+}

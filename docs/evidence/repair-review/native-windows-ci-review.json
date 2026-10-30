@@ -1,0 +1,30 @@
+{
+  "reviewDate": "2026-10-30",
+  "sourceCommit": "d60b8d0a5def48a4af27b6544c48baea1bbf810f",
+  "platform": "Windows",
+  "arch": "AMD64",
+  "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952/job/123862454366",
+  "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952/artifacts/12950937623",
+  "independentGithubStatus": "completed/success",
+  "artifactFilesRehashed": 31,
+  "pathNormalization": "Windows backslash normalized only for local path lookup; file bytes unchanged",
+  "resultSha256": "fff07c4727616552fd33506f7ffc2e773006f02c10182929ecb00bcbe3587f34",
+  "provenanceMatchesTracked": true,
+  "originalHeelerLockIdentical": true,
+  "patchSha256": "c6cf73a5e26bab665c226f37c81d55671f801e84d67d340bd18dc670529b06a4",
+  "check": "passed",
+  "embeddedOfflineTests": 8,
+  "link": "passed",
+  "abiLoad": "five symbols resolved; invalid close returns -6",
+  "existingRuntime": "FFI test returns -10 without nested block_on",
+  "sigpipe": "Unix-only test not applicable and not counted",
+  "libraryDigestRecordedByRunner": {
+    "bytes": 32708096,
+    "sha256": "1dc59d9a2b53ce992a62039771a514cdad58b0f2f8d583c38bb5a1cca7116cc2"
+  },
+  "libraryBinaryIncludedInEvidence": false,
+  "verdict": "PASS for exact new portable ABI candidate compile/offline tests/link/load on Windows",
+  "compatibility": "New handle API; legacy Unix fd API remains unsupported on Windows, not a drop-in change",
+  "overlayRuntime": "not run",
+  "guiDevice": "not run"
+}

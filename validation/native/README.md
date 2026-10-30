@@ -48,3 +48,7 @@ artifact 包含：
 | 打补丁的 libzt 共享库编译、加载并解析 4 个符号 | 通过 | 通过 | 通过 |
 
 所有节点均未启动，没有入网、拨号、三网并发、性能或设备验证。此矩阵不能作为产品平台支持声明。EasyTier 的 Linux/Windows 失败是固定来源的实际移植阻断；下一步需要平台 socket/字节流适配和 SIGPIPE/取消/关闭回归，不能直接删去 `setsockopt` 后宣称可用。Android/iOS 原生桥仍未验证。
+
+## 实验性移植修复
+
+后续独立 [portable stream 候选](portable-stream/README.md) 保留上述原始来源失败，新增 `uint64_t` handle 字节流 ABI，避免把 Windows SOCKET 作为 Unix fd。候选源码 `d60b8d0` 在 [run 40993901952](https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952) 三桌面完成真实 Heeler check、嵌入 loopback／取消测试、cdylib 链接及有限符号加载验证；具体 hash 与范围见该目录。仍无任何节点入网或真实 overlay TCP 结果，也尚未接入 GUI。

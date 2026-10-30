@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "d60b8d0a5def48a4af27b6544c48baea1bbf810f",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952",
+  "scope": "Patched exact Heeler source compile/link + embedded loopback/core tests + ABI load only; no overlay nodes/dial, GUI binding or mobile runtime.",
+  "platforms": {
+    "linux": {
+      "status": "passed",
+      "check": "passed",
+      "link": "passed",
+      "load": "passed",
+      "embeddedTests": 9,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952/artifacts/12951090259",
+      "download": "verified all SHA256SUMS",
+      "verifiedFiles": 31,
+      "sourceFilesSHA256": {
+        "results.json": "caeb6187c4090a31201fb62ae6a3a8eb4168d53df069c118747a40b12649f634",
+        "candidate-provenance.json": "88004ad2c2556d9b460868e074541f5c023b52bee0c190f4865393a11e640436",
+        "Heeler-Cargo.lock": "798efa9e1f2e82515c8e4970fd05a8f6a5dd26972720dad4bc8162e617650476"
+      },
+      "library": {
+        "bytes": 352412248,
+        "sha256": "7ea3495cea9816d4cd8075bf58268244702fae15a399be0c4cde98e6bf390f51"
+      }
+    },
+    "macos": {
+      "status": "passed",
+      "check": "passed",
+      "link": "passed",
+      "load": "passed",
+      "embeddedTests": 9,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952/artifacts/12950123050",
+      "download": "verified all SHA256SUMS",
+      "verifiedFiles": 31,
+      "sourceFilesSHA256": {
+        "results.json": "d9d826c6c5e16d8bd44df4769d46e8068748e624350bf3c67253ea3926f88da5",
+        "candidate-provenance.json": "88004ad2c2556d9b460868e074541f5c023b52bee0c190f4865393a11e640436",
+        "Heeler-Cargo.lock": "798efa9e1f2e82515c8e4970fd05a8f6a5dd26972720dad4bc8162e617650476"
+      },
+      "library": {
+        "bytes": 66867576,
+        "sha256": "6ffc2313007057f5f532db597444e747e3fc057282bf3d2bb28d1b122bbd22f8"
+      }
+    },
+    "windows": {
+      "status": "passed",
+      "check": "passed",
+      "link": "passed",
+      "load": "passed",
+      "embeddedTests": 8,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952/artifacts/12950937623",
+      "download": "verified all SHA256SUMS; Windows path separators normalized when locating files on macOS",
+      "verifiedFiles": 31,
+      "sourceFilesSHA256": {
+        "results.json": "fff07c4727616552fd33506f7ffc2e773006f02c10182929ecb00bcbe3587f34",
+        "candidate-provenance.json": "4ff72c598e95aa36a237a8fec14dcc113608561df9bbf21f532008e477384acc",
+        "Heeler-Cargo.lock": "798efa9e1f2e82515c8e4970fd05a8f6a5dd26972720dad4bc8162e617650476"
+      },
+      "library": {
+        "bytes": 32708096,
+        "sha256": "1dc59d9a2b53ce992a62039771a514cdad58b0f2f8d583c38bb5a1cca7116cc2"
+      }
+    }
+  }
+}

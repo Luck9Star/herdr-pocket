@@ -29,4 +29,10 @@
 
 loopback TCP 只在测试中构造自有两端，并核对两侧地址，作为 synthetic remote；生产候选 ABI 使用内存 duplex，不打开该测试 listener。测试覆盖双向字节、半关／EOF、背压、超时 UNKNOWN、取消锁等待、pending/late connect、32 上限／ID 溢出及多连接隔离。没有以这些测试冒充 EasyTier overlay dial、真实网络恢复或五端并发验证。
 
-当前待云端结果；GUI 调用方适配、overlay 实际拨号、系统后台、Android/iOS、15 格单网络及 20 格并发矩阵仍未验证。候选代码遵循 Heeler glue 的 LGPL-3.0-or-later 来源边界，最终项目许可证与分发义务另行审查。
+## 已取得的候选结果
+
+[run 40993901952](https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952)，源码 `d60b8d0a5def48a4af27b6544c48baea1bbf810f`：三桌面独立模块测试通过；真实固定 Heeler 加补丁后 check、嵌入测试、cdylib 链接、加载均通过。Linux/macOS 各 9 项嵌入测试，Windows 8 项（没有 POSIX SIGPIPE 项）；均含新 FFI 的已有 runtime 返回 `-10`。加载检查解析 5 个新符号并验证无效 close 返回 `-6`。
+
+三份 artifact 已实际下载并逐项核验 SHA256SUMS。原始结果、补丁／模块来源与库 hash 见 [三桌面结果](../../../docs/evidence/native/2026-10-30-portable-candidate.json)。Windows 清单使用反斜杠；在 Mac 校验时仅规范化查找路径，原始字节与 hash 保留。
+
+这些结果解除本候选的 Linux／Windows 编译阻断并证明选定的本地字节流与生命周期合同。GUI 调用方适配、overlay 实际拨号、系统后台、Android/iOS、15 格单网络及 20 格并发矩阵仍未验证。候选代码遵循 Heeler glue 的 LGPL-3.0-or-later 来源边界，最终项目许可证与分发义务另行审查。

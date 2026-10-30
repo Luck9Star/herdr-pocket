@@ -1,0 +1,30 @@
+{
+  "reviewDate": "2026-10-30",
+  "scope": "Independent static review plus Mac loopback core tests, not actual EasyTier network or whole Heeler C ABI runtime.",
+  "localRust": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "command": "CARGO_TARGET_DIR=/tmp/herdr-portable-review-target cargo test --offline --locked --manifest-path validation/native/portable-stream/Cargo.toml",
+  "result": {
+    "testsPassed": 8,
+    "testsFailed": 0,
+    "docTests": 0
+  },
+  "reviewedSha256": {
+    "validation/native/portable-stream/src/lib.rs": "2fa47339bacac80d6b4a16af56b500e89fcabe560e5ccddfdb0eb2e418e07c36",
+    "validation/native/portable-stream/src/tests.rs": "f369f6b7c28dbe0b7d28519891524d574f0a87e5af896e6955816fed78b85a2f",
+    "validation/native/portable-stream/ffi.txt": "bbd972f0d11ebe305b5f7144da08430cc175445ccb902d8ad3cadcb573aa5242",
+    "validation/native/portable-stream/header.txt": "5d8215169b6f0df220d1b25f835146ab8eca1faeaf1368cccfbc9a0d56fbaf9b"
+  },
+  "resolvedReviewItems": [
+    "spawn_dial starts and registers under lifecycle lock; close can abort and await the owned task",
+    "fail only transitions pending entries",
+    "opaque u64 avoids Windows SOCKET truncation; legacy Unix fd API unsupported on Windows",
+    "new -6 to -10 error codes do not overlap existing -1 to -5",
+    "C ABI refuses existing Tokio runtime before block_on; requires dedicated worker thread"
+  ],
+  "pending": [
+    "Three desktop pinned-toolchain CI",
+    "Actual Heeler link/load and embedded FFI tests",
+    "EasyTier node start/join/dial and GUI integration",
+    "Legacy Unix fd Linux callers still require MSG_NOSIGNAL or equivalent safe writes"
+  ]
+}

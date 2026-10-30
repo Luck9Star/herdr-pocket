@@ -1,6 +1,6 @@
 # terminal_view 0.5.0 组合重音实验补丁
 
-2026-10-30。当前是固定来源的候选补丁，未改变默认依赖，也没有选择 UI 框架。云端结果取得前，下面仅说明实现、可追溯性和已执行的本地脚本检查。
+2026-10-30。当前是固定来源的候选补丁，未改变默认依赖，也没有选择 UI 框架。Ubuntu 与 macOS 云端绘制回归已通过，来源、修复范围和实际验证边界见下文。
 
 ## 来源与修复范围
 
@@ -28,3 +28,22 @@
 所有用例保留输入与 buffer 原码点/列宽，并输出实际图像。CJK 邻接用例只证明该 test-engine 的两参考布局一致，不证明 CJK fallback 具体字形正确；可能使用相同缺字方框。原生系统剪贴板、设备 IME、触控、性能、复杂 emoji/全部 grapheme 和全 Unicode 支持仍未验证。此次不会启动 GUI 应用。
 
 已执行：Python 脚本语法检查；4 项路径/覆盖拒绝、archive hash 拒绝和 transitive lock 漂移拒绝测试通过；在私有临时目录完成官方 archive 的真实补丁应用，修改后文件 hash 全部匹配，原 lock 字节未变。没有本地 Flutter SDK，因此不把这些检查称为 Dart 编译或绘制通过。
+
+## 实测结果：Ubuntu 与 macOS 无界面绘制通过
+
+[候选运行 40993758160](https://github.com/Luck9Star/herdr-pocket/actions/runs/40993758160)，源码 `e216eb1db83e562cbff5c128cc9eedcc293203cf`：Ubuntu 的 archive/patch/锁检查、分析、原有6测试、原始真实painter诊断以及9项新增回归全部通过；macOS云runner使用相同候选锁再次运行原诊断与9回归，也全部通过。9回归包含10组图像比较（缓存用例比较两帧）。五端包构建结果需另外判断。
+
+- [Ubuntu 原始报告与校验](repair-e216eb1/ubuntu/verification.json)：原始诊断 base=138、marked=169 非透明像素；所有 NFC/独立 TextPainter 图像比较一致，原码点与列宽保持，光标/选区各有59个白底和6个黑字像素。
+- [macOS 原始报告与校验](repair-e216eb1/macos/verification.json)：base=155、marked=193；10组比较同样一致，光标/选区各有49个白底和7个黑字像素。跨操作系统抗锯齿不同，不要求两OS的PNG完全相同。
+- Ubuntu candidate 组合PNG SHA256 `58ec65d6fbb0bab48b413fde40388f9dd3f078b014853f673d69177414141662`；原始未修复PNG `0faf2a8446a0c0b62d0f4442048367910242f99f14c06aa5b22ca1f42ff74cd7` 保留。已人工查看 candidate 重音与光标图片，没有打开GUI App。
+- candidate lock SHA256 `8061fdb6e4fb277952fe6b987de4740fac7bc9db7532e6feeba78e6e08eb9ba0`。除 terminal_view 的显式 path 来源外，所有**package blocks**与基线一致；SDK footer 的 Flutter 最低约束从 `>=3.19.0` 变成 `>=3.18.0-18.0.pre.54`。实际使用的 Flutter 仍精确固定3.47.9，候选package自身pubspec没有修改。这是pub重新解析path override后观察到的锁文件元数据差异；未查明内部聚合原因，不声称整个lock只有单一差异。
+
+2026-10-30 Context7 查询官方 Dart 文档确认 [dependency override 会更新锁中的来源](https://dart.dev/tools/pub/dependencies#dependency-overrides)、[Flutter SDK 约束定义](https://dart.dev/tools/pub/pubspec#flutter-sdk-constraints)。后续manifest已收窄措辞为packages-only，并显式保留SDK footer比较；原始下载manifest保持原样，独立verification说明上述差异。
+
+Windows首轮在补丁应用后的文件hash检查失败，尚未执行构建：继承的 `core.autocrlf=true` 导致 git apply 输出 CRLF。在本机私有临时目录复现相同779处CRLF后，归一化hash正好等于预期，确认是材料化脚本问题。修复为仅在该次git调用加 `-c core.autocrlf=false -c core.eol=lf`，不修改任何全局配置、补丁或已验证绘制代码；新增真实Git回归后5项脚本测试通过。Windows修复效果仍以随后CI结果为准。
+
+已下载并核验 [e216eb1 macOS候选包](https://github.com/Luck9Star/herdr-pocket/actions/runs/40993758160/artifacts/12950213273)：archive SHA256 `c20d9377ea277f16f66ad29467613735ee403853d0ca853e50fdf347ff31c502` 与manifest一致；含App可执行文件、候选来源与上游LICENSE/NOTICE。仅检查archive，没有启动、安装或做本机GUI smoke。[下载核验](repair-e216eb1/macos-download-verification.json)
+
+Windows材料化修复提交 `c27535d3ed7174ad7b722d9e086ee59e9db11f5d` 的[复跑 40994503435](https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435)已通过Windows归档/补丁hash核验及完整构建；Ubuntu常规与绘制回归、Mac无界面回归也再次通过。[该次candidate manifest](repair-e216eb1/candidate-manifest-c27535d.json)真实包含package-only比较与SDK footer差异，补丁hash及候选lock hash均未变。其余包以对应job最终结果为准。
+
+最终复跑已全部结束：[40994503435 / c27535d](https://github.com/Luck9Star/herdr-pocket/actions/runs/40994503435) 的 Ubuntu补丁与测试gate、macOS无界面绘制检查以及 **iOS unsigned、Android、Windows、macOS、Linux 五个候选构建全部成功**。八个artifact（含锁、两份绘制证据及五端包）已由API确认存在、未过期；[完整job及下载链接](repair-e216eb1/final-c27535d-ci.json)。这些通过项不扩展为手机IME/触控、真实GUI重新验收、完整Unicode或远端链路通过。

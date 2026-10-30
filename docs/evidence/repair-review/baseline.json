@@ -1,0 +1,12 @@
+{
+  "reviewDate": "2026-10-30",
+  "phase": "baseline-read-only",
+  "head": "0e1cedba01cef926d61b4dc7a61993fdae014390",
+  "readEvidence": {
+    "docs/evidence/flutter/combining-ed35d84/combining-render.json": "692f5f260423994fe1b49f33284a646c8b49796e3ce9fe302666d4356546ddf2",
+    "validation/native/evidence/2026-10-30-desktop-matrix.json": "2214ec95d88372203b163f4662bbea213a1e12760c9ace0a9cafd7678914d8c4",
+    "validation/native/sources.json": "97c1181f296976088fec17452935ef8d3fa483e380128ca9d35b09ae9f8ef35a",
+    "validation/flutter/pubspec.lock": "5b3979bec9c6487bb79f9bba82e66908fe735248923aeced14568cb101c9fa99"
+  },
+  "scope": "Acceptance criteria only. No patch reviewed or runtime success claimed yet."
+}

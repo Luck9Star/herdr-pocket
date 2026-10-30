@@ -1,0 +1,27 @@
+{
+  "checked_at": "2026-10-30",
+  "cryptography": {
+    "version": "46.0.3",
+    "source": "https://github.com/pyca/cryptography/tree/46.0.3",
+    "api": "https://cryptography.io/en/46.0.3/hazmat/primitives/asymmetric/ed25519/",
+    "serialization": "https://cryptography.io/en/46.0.3/hazmat/primitives/asymmetric/serialization/",
+    "license": "Apache-2.0 OR BSD-3-Clause",
+    "context7": {"library": "/pyca/cryptography", "commands": 2, "result": "generate/sign/load_ssh_public_key documented; version checked against fixed official 46.0.3 docs"}
+  },
+  "apple": {
+    "api_baseline": "iOS 15 compile target; macOS SDK 26.0 local compile only",
+    "keychain": "https://developer.apple.com/documentation/security/ksecattraccessiblewhenunlockedthisdeviceonly",
+    "secure_enclave": "https://developer.apple.com/documentation/security/protecting-keys-with-the-secure-enclave",
+    "cryptokit": "https://developer.apple.com/documentation/cryptokit/curve25519/signing/privatekey",
+    "context7": {"library": "/apple/swift-crypto", "commands": 2, "result": "CryptoKit re-export on Apple; raw representation/signature APIs; official Apple JSON docs independently checked for storage limits"},
+    "runtime": "CryptoKit memory backend probe only; system Keychain not instantiated"
+  },
+  "android": {
+    "api_baseline": 35,
+    "keystore": "https://developer.android.com/privacy-and-security/keystore",
+    "unlocked_device": "https://developer.android.com/reference/android/security/keystore/KeyGenParameterSpec.Builder#setUnlockedDeviceRequired(boolean)",
+    "context7": {"library": "/websites/developer_android_develop", "commands": 3, "result": "retrieval insufficient; official Android primary docs checked for Keystore and API31-34 limitations"},
+    "runtime": "not executed; API35 compile job authored but not run"
+  },
+  "scope": "No private keys or encrypted private key envelopes are shipped. No real system keychain/host authorization/network identity modified. Native source is a validation bridge, not GUI-integrated production storage."
+}

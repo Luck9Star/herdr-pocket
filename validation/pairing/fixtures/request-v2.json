@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "type": "pairing-public-key-request",
+  "request_id": "0123456789abcdef0123456789abcdef",
+  "device": "Fixture phone",
+  "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIATo2OvTPINLt4t5kUMdeae6gcmPUyf5knz1yNTuqW3r",
+  "account": "fixture-user",
+  "host_key": "SHA256:9WOqD3VXiX0D+j+466A6EDaEGM0il3zyvp4XrS+1ZxE",
+  "issued_at": 100,
+  "expires_at": 700
+}

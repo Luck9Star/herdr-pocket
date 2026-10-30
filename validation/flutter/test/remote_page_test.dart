@@ -27,6 +27,18 @@ class PendingAdapter extends RemoteReadOnlyAdapter {
 }
 Finder field(String name) => find.byKey(ValueKey('remote-$name'));
 
+void restoreResumedLifecycle(WidgetTester tester) {
+  // Direct test binding calls do not synthesize omitted lifecycle states.
+  final path = switch (tester.binding.lifecycleState) {
+    AppLifecycleState.paused => const [AppLifecycleState.hidden,AppLifecycleState.inactive,AppLifecycleState.resumed],
+    AppLifecycleState.hidden => const [AppLifecycleState.inactive,AppLifecycleState.resumed],
+    AppLifecycleState.inactive => const [AppLifecycleState.resumed],
+    AppLifecycleState.resumed => const <AppLifecycleState>[],
+    _ => const [AppLifecycleState.resumed],
+  };
+  for (final state in path) { tester.binding.handleAppLifecycleStateChanged(state); }
+}
+
 Future<void> prepare(WidgetTester tester,PendingAdapter adapter,Size size) async {
   tester.view.devicePixelRatio = 1; tester.view.physicalSize = size;
   addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
@@ -136,10 +148,16 @@ void main() {
     adapter.publish(empty:true); await tester.pump();
     expect(find.textContaining('没有 pane'),findsOneWidget);
     expect(adapter.selected,isNull);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden); await tester.pump();
+    addTearDown(() { restoreResumedLifecycle(tester); });
+    restoreResumedLifecycle(tester);
+    final observedGeneration = adapter.generation;
+    for (final state in [AppLifecycleState.inactive,AppLifecycleState.hidden,AppLifecycleState.paused]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
     expect(adapter.cancels,greaterThan(0));
-    adapter.frame!(adapter.generation-1,'w1:p1',const RemoteFrame(7,true,'LATE FULL'));
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pump();
+    adapter.frame!(observedGeneration,'w1:p1',const RemoteFrame(7,true,'LATE FULL'));
+    restoreResumedLifecycle(tester); await tester.pump();
+    expect(tester.binding.lifecycleState,AppLifecycleState.resumed);
     expect(adapter.calls,1); expect(find.textContaining('只读观察中'),findsNothing);
     expect(find.textContaining('应用已暂停'),findsOneWidget);
     expect(tester.takeException(),isNull);

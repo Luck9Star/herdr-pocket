@@ -1,0 +1,21 @@
+{
+  "sourceSHA": "d459919be130d2fcefdc4bf6e49aa020b811ec4f",
+  "workflow": "Tauri validation shells",
+  "runId": 41062065682,
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41062065682",
+  "runConclusionAtCapture": "in_progress",
+  "jobId": 124084724429,
+  "job": "build (android, ubuntu-24.04)",
+  "jobConclusion": "success",
+  "artifactId": 12980657085,
+  "artifactName": "tauri-android-d459919be130d2fcefdc4bf6e49aa020b811ec4f",
+  "artifactDirectory": "/tmp/herdr-mobile-observe-d459/tauri-android-d459919be130d2fcefdc4bf6e49aa020b811ec4f/",
+  "manifest": "/tmp/herdr-mobile-observe-d459/tauri-android-d459919be130d2fcefdc4bf6e49aa020b811ec4f/build-manifest.json",
+  "manifestSHA256": "a40fb626d5c3dadc91259ac0b7bf51cba0dbdcd3f5e6a341f21bd07e3f71f81e",
+  "package": "/tmp/herdr-mobile-observe-d459/tauri-android-d459919be130d2fcefdc4bf6e49aa020b811ec4f/app-universal-debug.apk",
+  "packageSHA256": "efda0f32c67bf2e839343e99c6bf7f7894806ebcc3d1184fcfc1613861537466",
+  "buildOutcome": "success",
+  "signing": "ephemeral-debug-key",
+  "deviceResult": "unverified",
+  "packageWasRun": false
+}

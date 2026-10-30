@@ -1,14 +1,14 @@
 # Tauri + xterm.js 验证壳
 
-状态：2026-10-30，包含独立的 **M1a 远端一次性只读入口**与**离线终端/原生 IPC 实验室**。使用 xterm.js 6.0.0、Tauri 2.12.5 与固定 russh 0.65.0；没有设备安全存储、远端输入或 overlay 接线。当前实际云端/设备验收以 evidence 记录为准；编译或纯 Rust `SessionGuard` 测试不是 SSH 握手、herdr 或手机验收。
+状态：2026-10-30，包含独立的 **M1b 远端看板／持续只读入口（保留 M1a 一次性 CLI）**与**离线终端/原生 IPC 实验室**。使用 xterm.js 6.0.0、Tauri 2.12.5 与固定 russh 0.65.0；没有设备安全存储、远端输入或 overlay 接线。当前实际云端/设备验收以 evidence 记录为准；编译或纯 Rust `SessionGuard` 测试不是 SSH 握手、herdr 或手机验收。
 
 ## 手机优先的远端只读入口
 
-默认页按手机顺序审查目标、核验主机公钥、提供实验临时凭据，然后显式读取一次。控件至少 44 px，360/390 px 单列，键盘仅改变本地视口。未提供任意命令、远端 resize、自动重试或输入发送。浏览器预览明确显示原生 SSH 不可用，并禁用连接，不返回假快照。
+默认页按手机顺序审查目标、核验主机公钥、提供实验临时凭据，然后显式读取当前会话看板并选择pane持续观察。控件至少 44 px，360/390 px 单列，键盘仅改变本地视口。未提供任意命令、远端 resize、自动重试或输入发送。浏览器预览明确显示原生 SSH 不可用，并禁用连接，不返回假快照。
 
-配置字段、host key 与凭据只保留内存；私钥采用 `type=password` 语义输入，禁用自动填充建议，提交时重建被单行控件移除的 OpenSSH PEM 换行。没有“显示私钥”按钮或私钥日志。编辑任意资料会清除核验勾选；连接中字段锁定。取消、切换到离线页或进入后台先失效 generation，再取消原生读取、清除私钥和旧画面。JavaScript/IPC 内存不提供可靠擦除保证，明确只用于实验凭据，不声称安全存储完成。
+配置字段、host key 与凭据只保留内存；私钥采用 `type=password` 语义输入，禁用自动填充建议，提交时重建被单行控件移除的 OpenSSH PEM 换行。没有“显示私钥”按钮或私钥日志。编辑任意资料会清除核验勾选；连接中字段锁定。取消、切换到离线页或进入后台先失效 generation，再取消原生读取、清除私钥；保留的画面标记陈旧。JavaScript/IPC 内存不提供可靠擦除保证，明确只用于实验凭据，不声称安全存储完成。
 
-[共享 Rust 适配器](../transport-rust/README.md) 对真实 key exchange 做 pin-before-auth，再经 direct-streamlocal 查询 snapshot，绑定配置根、命名会话和解析出的 terminal ID，读取首个 80×24 full ANSI 帧并关闭连接。视图标为“只读快照 · 非实时”，记录本地获取时间。remote xterm `disableStdin`，没有 onData 发送处理；OSC 52、OSC 8 被消费，链接激活无操作。与离线 fixture 输入/草稿/日志完全隔离。
+[共享 Rust 适配器](../transport-rust/README.md) 对真实 key exchange 做 pin-before-auth，再经 direct-streamlocal 查询 snapshot，绑定配置根、命名会话和用户选择的稳定 terminal ID，读取80×24 full及连续delta。视图记录本地更新时间与观察状态，停止后明确陈旧；保留的M1a CLI在首full后关闭。remote xterm `disableStdin`，没有 onData 发送处理；OSC 52、OSC 8 被消费，链接激活无操作。与离线 fixture 输入/草稿/日志完全隔离。
 
 本轮本机已执行前端单元测试/build、Rust transport tests 与 Mac native cargo check。只有独立 CI driver 的实际运行可证明 loopback SSH/herdr 正负例；手机触控、IME、安装、相机、三网络和远端完整输入仍未验证。
 
@@ -43,7 +43,7 @@ npm run dev
 - 手机标签、桌面双视图、明确单输入焦点。窄于 900 logical px 退为单可见目标；字体/网格保持固定，横向滚动查看。未实现自动拟合字号，布局和软键盘从不发远端 resize。
 - 旧 generation/epoch、迟到 IME 目标、隐藏恢复、结果未知与 UTF-8 输入上限在 gate 中检查；隐藏/回前台后需主动取得 full，并回到观察。原生键盘/IME 是否在每个系统按预期发事件仍需真机。
 - 1 MiB 负载在浏览器走同一字节 fixture，在原生壳通过 Rust `Channel<Response>` 发送原始二进制，xterm write 消费回调后才 ack。每流 65,536 bytes、总计最多两个流；取消旧 lease。
-- Rust 不向 JavaScript 提供通用文件、shell、SSH agent 或 PTY resize 命令，前端不加载远端页面/字体。新增 `remote_read_once`/`remote_cancel` 仅用于经显式审查的 SSH 只读目标；固定可执行路径和协议边界见适配器说明。
+- Rust 不向 JavaScript 提供通用文件、shell、SSH agent 或 PTY resize 命令，前端不加载远端页面/字体。`remote_read_once`、`remote_observe`、`remote_select`、`remote_ack`、`remote_cancel` 仅用于经显式审查的 SSH 只读目标；固定可执行路径和协议边界见适配器说明。
 
 输入记录限最近 100 条，仅供测试；不要在验证壳中粘贴真实秘密。记录“本地捕获”不代表服务端接收。草稿为内存状态，退出不保存；真实安全存储、加密配置迁移与配对 helper 尚未接入。
 
@@ -73,4 +73,4 @@ M1a 新查询：Context7 `library xterm.js` → `/xtermjs/xterm.js` → `docs` �
 
 ## M1b 持续观察候选
 
-远端入口在核验后只列出同一次 snapshot 的 pane/terminal ID；用户选择后启动只读观察。首 full 后的每帧需严格连续，原生到页面一次仅允许一帧，xterm 渲染完成后才发送 ack；异常、断线、停止或后台进入后标记画面陈旧，不自动恢复。80×24 是本地观察视口，窗口尺寸变化不发共享 PTY resize。当前新增检查是本地 Rust/JS 和构建验证；隔离云端连续流、手机触控/IME 与真实设备运行需另列证据。
+远端入口在核验后只列出同一次 snapshot 的 pane/terminal ID；用户选择后启动只读观察。首 full 后的每帧需严格连续，原生到页面一次仅允许一帧，xterm 渲染完成后才发送 ack；异常、断线、停止或后台进入后标记画面陈旧，不自动恢复。80×24 是本地观察视口，窗口尺寸变化不发共享 PTY resize。隔离云端真实SSH连续流已18/18通过（两路线各9项），浏览器布景检查另记；对应源码、最新构建与未验范围见[M1b记录](../../docs/13-mobile-dashboard-observe.md)。手机触控/IME、原生GUI实际远端接入和设备生命周期仍未验证。

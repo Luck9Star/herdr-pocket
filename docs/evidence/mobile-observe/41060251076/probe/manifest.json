@@ -1,0 +1,526 @@
+{
+  "schemaVersion": 1,
+  "milestone": "M1b-mobile-dashboard-observe",
+  "sourceSHA": "73ce2f8794a65c82975cf014d257ca339a283bdc",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41060251076",
+  "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+  "runnerImage": {
+    "imageOS": "ubuntu24",
+    "imageVersion": "20261026.354.1"
+  },
+  "herdr": {
+    "version": "0.9.5",
+    "sourceCommit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+    "asset": "https://github.com/herdrdev/herdr/releases/download/v0.9.5/herdr-linux-x86_64",
+    "sha256": "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d"
+  },
+  "status": "passed",
+  "checks": [
+    {
+      "adapter": "rust",
+      "testId": "positive",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 2182,
+      "reportBytes": 373,
+      "result": {
+        "status": "passed",
+        "case": "positive",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": null
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "rust",
+      "testId": "wrong-pin",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 119,
+      "reportBytes": 393,
+      "result": {
+        "status": "passed",
+        "case": "wrong-pin",
+        "hostKeyChecked": true,
+        "hostKeyMatched": false,
+        "authStarted": false,
+        "snapshotReceived": false,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "host_key_mismatch"
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "rust",
+      "testId": "missing-session",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 370,
+      "reportBytes": 395,
+      "result": {
+        "status": "passed",
+        "case": "missing-session",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "session_mismatch"
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "rust",
+      "testId": "cross-session",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 264,
+      "reportBytes": 395,
+      "result": {
+        "status": "passed",
+        "case": "missing-session",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "session_mismatch"
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "rust",
+      "testId": "cancel",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 264,
+      "reportBytes": 379,
+      "result": {
+        "status": "passed",
+        "case": "cancel",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "cancelled"
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "rust",
+      "testId": "reconnect",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 365,
+      "reportBytes": 373,
+      "result": {
+        "status": "passed",
+        "case": "positive",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": null
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "rust",
+      "testId": "observe-positive",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 816,
+      "reportBytes": 388,
+      "result": {
+        "status": "passed",
+        "case": "observe-positive",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "cancelled",
+        "paneCount": 1,
+        "frameCount": 3,
+        "deltaFrames": 2,
+        "connectionCount": 1,
+        "bufferHighWaterBytes": 2572,
+        "lastSeq": 3
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "rust",
+      "testId": "observe-cancel",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 315,
+      "reportBytes": 386,
+      "result": {
+        "status": "passed",
+        "case": "observe-cancel",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "cancelled",
+        "paneCount": 1,
+        "frameCount": 1,
+        "deltaFrames": 0,
+        "connectionCount": 1,
+        "bufferHighWaterBytes": 2572,
+        "lastSeq": 1
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "rust",
+      "testId": "observe-reconnect",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 1266,
+      "reportBytes": 389,
+      "result": {
+        "status": "passed",
+        "case": "observe-reconnect",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "cancelled",
+        "paneCount": 1,
+        "frameCount": 4,
+        "deltaFrames": 2,
+        "connectionCount": 2,
+        "bufferHighWaterBytes": 2572,
+        "lastSeq": 2
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "dart",
+      "testId": "positive",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 3689,
+      "reportBytes": 309,
+      "result": {
+        "status": "passed",
+        "case": "positive",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": null
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "dart",
+      "testId": "wrong-pin",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 3333,
+      "reportBytes": 329,
+      "result": {
+        "status": "passed",
+        "case": "wrong-pin",
+        "hostKeyChecked": true,
+        "hostKeyMatched": false,
+        "authStarted": false,
+        "snapshotReceived": false,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "host_key_mismatch"
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "dart",
+      "testId": "missing-session",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 3735,
+      "reportBytes": 331,
+      "result": {
+        "status": "passed",
+        "case": "missing-session",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "session_mismatch"
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "dart",
+      "testId": "cross-session",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 3631,
+      "reportBytes": 331,
+      "result": {
+        "status": "passed",
+        "case": "missing-session",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": false,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": "session_mismatch"
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "dart",
+      "testId": "cancel",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 3586,
+      "reportBytes": 315,
+      "result": {
+        "status": "passed",
+        "case": "cancel",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": false,
+        "generation": 2,
+        "lateEventsIgnored": 1,
+        "errorCode": "cancelled"
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "dart",
+      "testId": "reconnect",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 3885,
+      "reportBytes": 309,
+      "result": {
+        "status": "passed",
+        "case": "positive",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true,
+        "generation": 1,
+        "lateEventsIgnored": 0,
+        "errorCode": null
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "dart",
+      "testId": "observe-positive",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 4236,
+      "reportBytes": 324,
+      "result": {
+        "status": "passed",
+        "case": "observe-positive",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true,
+        "generation": 2,
+        "lateEventsIgnored": 1,
+        "errorCode": "cancelled",
+        "paneCount": 1,
+        "frameCount": 3,
+        "deltaFrames": 2,
+        "connectionCount": 1,
+        "bufferHighWaterBytes": 2572,
+        "lastSeq": 3
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "dart",
+      "testId": "observe-cancel",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 3838,
+      "reportBytes": 322,
+      "result": {
+        "status": "passed",
+        "case": "observe-cancel",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true,
+        "generation": 2,
+        "lateEventsIgnored": 1,
+        "errorCode": "cancelled",
+        "paneCount": 1,
+        "frameCount": 1,
+        "deltaFrames": 0,
+        "connectionCount": 1,
+        "bufferHighWaterBytes": 2572,
+        "lastSeq": 1
+      },
+      "receivedInputBytes": 0
+    },
+    {
+      "adapter": "dart",
+      "testId": "observe-reconnect",
+      "status": "passed",
+      "processExitCode": 0,
+      "elapsedMs": 4588,
+      "reportBytes": 325,
+      "result": {
+        "status": "passed",
+        "case": "observe-reconnect",
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true,
+        "generation": 5,
+        "lateEventsIgnored": 1,
+        "errorCode": "cancelled",
+        "paneCount": 1,
+        "frameCount": 4,
+        "deltaFrames": 2,
+        "connectionCount": 2,
+        "bufferHighWaterBytes": 2572,
+        "lastSeq": 2
+      },
+      "receivedInputBytes": 0
+    }
+  ],
+  "scope": "Actual GUI adapter code in CLI runners, including continuous full/delta receive; not GUI click, phone, overlay or lifecycle device acceptance",
+  "cancelScope": "M1a after-snapshot cancel plus M1b after-full active cancel; stale publication and invalid-frame injection are separate unit tests",
+  "unverified": [
+    "mobile touch",
+    "real mobile IME",
+    "camera pairing",
+    "protected key storage",
+    "overlays",
+    "remote input",
+    "GUI continuous observe and lifecycle",
+    "production credentials"
+  ],
+  "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+  "readinessSnapshot": {
+    "pocket-probe": {
+      "resultType": "session_snapshot",
+      "flatKnownFields": {
+        "version": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        },
+        "protocol": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        }
+      },
+      "snapshotPresent": true,
+      "snapshotType": "dict",
+      "nestedKnownFields": {
+        "version": {
+          "present": true,
+          "type": "str",
+          "value": "0.9.5"
+        },
+        "protocol": {
+          "present": true,
+          "type": "int",
+          "value": 22
+        }
+      }
+    },
+    "pocket-other": {
+      "resultType": "session_snapshot",
+      "flatKnownFields": {
+        "version": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        },
+        "protocol": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        }
+      },
+      "snapshotPresent": true,
+      "snapshotType": "dict",
+      "nestedKnownFields": {
+        "version": {
+          "present": true,
+          "type": "str",
+          "value": "0.9.5"
+        },
+        "protocol": {
+          "present": true,
+          "type": "int",
+          "value": 22
+        }
+      }
+    }
+  },
+  "crossSessionFixture": {
+    "bothSessionsExist": true,
+    "samePaneId": true,
+    "expected": "reject mismatched socket/session before publishing full"
+  },
+  "receivedInputBytes": 0,
+  "fixtureSharedBetweenAdapters": true,
+  "observeFixture": {
+    "syntheticTickIntervalMs": 200,
+    "changedTerminalRow": 23,
+    "selection": "CLI explicitly chooses reviewed config pane from current snapshot; GUI selection is separate",
+    "backpressureScope": "decoded single-frame byte high-water only, not JSON line, SSH buffers or whole-process memory"
+  },
+  "cleanup": {
+    "ownedProcessesStopped": true,
+    "ephemeralKeysRemoved": true,
+    "userAuthorizationFilesTouched": false,
+    "rawLogsUploaded": false
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-30",
+  "scope": "Browser UI with explicitly labelled mock IPC; no real SSH/keys/phone runtime",
+  "sourceSHA": "d459919be130d2fcefdc4bf6e49aa020b811ec4f",
+  "checks": {
+    "dashboardExplicitPaneSelection": true,
+    "noFirstPaneAutoSelection": true,
+    "selectedSecondPaneDisplayed": true,
+    "fullAndDeltaRendered": true,
+    "stopMarksStale": true,
+    "stoppedSyntheticFrameCounterUnchangedAcrossResize": true,
+    "reviewClearedAfterStop": true,
+    "secretFieldClearedAtSubmitAndStop": true,
+    "reconnectRequiresNewReview": true,
+    "terminalInputModeNone": true,
+    "wholePageHorizontalOverflow": false,
+    "paneButtonMinimumHeightPx": 44,
+    "actionMinimumHeightPx": 44,
+    "viewports": [
+      [
+        390,
+        844
+      ],
+      [
+        360,
+        740
+      ],
+      [
+        320,
+        380
+      ]
+    ],
+    "dashboardColors": {
+      "background": "#ffffff",
+      "title": "#0f172a",
+      "caption": "#475569"
+    }
+  },
+  "unverified": [
+    "real GUI SSH path",
+    "mobile touch",
+    "soft keyboard",
+    "real IME",
+    "device lifecycle",
+    "screen-reader announcements"
+  ],
+  "cleanup": {
+    "tabClosed": true,
+    "viewportReset": true,
+    "serverTerminationRequested": true,
+    "serverStopped": true,
+    "port1422NoListener": true
+  }
+}

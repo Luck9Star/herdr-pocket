@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-30",
+  "host": "macOS 26.6.2 arm64",
+  "scope": "Downloaded app launch and invalid synthetic form inputs only. No real SSH credentials, valid network connection, system key store or host authorization was used.",
+  "tauri": {
+    "sourceSHA": "d459919be130d2fcefdc4bf6e49aa020b811ec4f",
+    "runId": 41062065682,
+    "artifactId": 12980576230,
+    "packageSHA256": "67fc71215c85ad6b0e1b02201137acb3cc27f2d75f0307c39fdc96392f7281a3",
+    "checks": {
+      "launched": true,
+      "M1bRemoteEntry": true,
+      "nativeSecureTextField": true,
+      "targetEditClearsReview": true,
+      "invalidSyntheticConfigRejected": true,
+      "secretClearedAfterSubmission": true,
+      "reviewClearedAfterSubmission": true,
+      "quitViaCmdQ": true,
+      "processGone": true
+    }
+  },
+  "flutterCandidate": {
+    "sourceSHA": "c276c95fc3796b6f6de1ce3b6978195b5573a541",
+    "runId": 41061177588,
+    "packageSHA256": "0a92833b81a487c21552f84df11f90f480231ed0c087c7744b91b4d6831ddb9f",
+    "checks": {
+      "launched": true,
+      "M1bRemoteEntry": true,
+      "formScrollReachable": true,
+      "invalidSyntheticPrivateKeyRejected": true,
+      "secretClearedAfterSubmission": true,
+      "reviewClearedAfterSubmission": true,
+      "quitViaCmdQ": true,
+      "processGone": true
+    },
+    "accessibility": "AX export text fields lack labels and text values can be stale; visible UI used for targeting. Screen-reader behavior is not accepted."
+  },
+  "unverified": [
+    "GUI actual SSH success and dashboard",
+    "continuous native GUI receive",
+    "mobile lifecycle",
+    "mobile touch and IME",
+    "system Keychain and Keystore"
+  ],
+  "cleanup": {
+    "ownedTestAppsClosed": true,
+    "ownedProcessesRemaining": []
+  }
+}

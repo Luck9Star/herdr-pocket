@@ -1,8 +1,8 @@
-# 手机优先 M1a：两条真实只读适配器对照
+# 手机优先 M1a／M1b：两条真实只读适配器对照
 
 此目录把 Flutter/DartSSH2 与 Tauri/russh 所用适配代码放进同一个临时 OpenSSH + herdr 目标验证。它不是 UI 自动点击或手机运行证据；工作流结果、源码 SHA 和下载 manifest 必须对应后，才能记实际通过。
 
-范围：手动资料审查／预期 host key → SSH 公钥认证 → 每请求一个 streamlocal `session.snapshot` → 明确 session/pane 的首个 full → 关闭。远端输入、连续观察、扫码、受保护凭据存储、三网和手机 IME 均不在本轮通过范围。
+当前 M1b：资料审查／预期 host key → SSH 公钥认证 → streamlocal `session.snapshot` → 明确选择当前 pane → full/delta 连续只读 → 主动停止或显式再连。保留 M1a 首个 full 后关闭路径。远端输入、GUI 点击、扫码、安全存储、三网和手机 IME 不在本探针范围。
 
 ## 隔离边界
 
@@ -25,6 +25,9 @@
 | cross-session | 第二个真实 session 确有相同 pane ID，socket/session 错配仍被拒绝，不发布其他 session 的画面 |
 | cancel | 实际 SSH 已完成 snapshot 后取消，无 full；开始前取消不能代替本项。迟到结果发布另由适配器单测检查 |
 | reconnect | 显式再次执行 positive，取得新 full；输入计数仍为 0，没有自动重试或重放 |
+| observe-positive | 同一连接至少3帧、至少1个delta后主动取消；必须确认cancelled |
+| observe-cancel | 第一张full后主动取消，恰好1帧、0delta |
+| observe-reconnect | 同一CLI显式调用两次观察，每次新full和delta，总计至少4帧、2delta、2连接 |
 
 ## 执行与产物
 
@@ -47,3 +50,6 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s validation/remote-harn
 第二轮 [41047398465](../../docs/evidence/mobile-remote/41047398465/README.md) 为 7/12 通过：Rust 6/6；Dart 仅错误 pin 通过，其余认证后、snapshot 前发生安全报告中的 `async_state_error`。真实 readiness 确认 tagged `result.snapshot` 与 0.9.5 / protocol 22。接收器 0 bytes，cleanup 通过；Dart 修复仍需后续实际 run。
 
 第三轮 [41048094519](../../docs/evidence/mobile-remote/41048094519/README.md) 在源码 `d15da12` 上 **12/12 通过**，Rust、Dart 各 6/6；移除 Dart channel 的竞争 `flush()` 后，实际正向 full、snapshot 后取消和显式重连均通过。接收器 0 bytes，cleanup 通过；脱敏 artifact 的两层 SHA 已下载复核。这里的 reconnect 是新 CLI 调用，missing-session 是有效 socket 返回 snapshot 后的名称绑定拒绝；不外推到 GUI 连续恢复或真正不存在 socket 的观察命令。elapsedMs 包含进程启动／JIT，不作为公平性能排名。
+
+
+M1b [run 41060251076](../../docs/evidence/mobile-observe/41060251076/README.md) 在源码 `73ce2f8` 上 **18/18 通过**，两路线各9项。full/delta来自同一个每200ms更新的合成终端；输入计数0、cleanup通过。新三项分别取得3/2、1/0、4/2张总帧/delta，最后一项连接数2。`bufferHighWaterBytes=2572` 只统计解码单帧，不能当SSH缓冲或全进程内存。当前10项harness guard检查通过；不是手机或GUI持续运行证明。

@@ -1,0 +1,161 @@
+name: Flutter experimental terminal candidate
+on:
+  push:
+    branches: ['codex/**']
+    paths: ['validation/flutter/**', 'validation/shared/**', '.github/workflows/flutter-candidate-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: flutter-candidate-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  patch-and-test:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check isolation and lock guards
+        run: python3 -m unittest discover -s validation/flutter/tool -p 'test_candidate.py' -v
+      - name: Install pinned Flutter in runner only
+        run: python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+      - name: Prepare isolated fixture app
+        run: python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
+      - name: Materialize verified experimental candidate
+        run: python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
+      - name: Resolve candidate without transitive drift
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/flutter-probe"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
+      - name: Analyze and verify original safety tests
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/flutter-probe"
+          flutter analyze 2>&1 | tee candidate-analyze.log
+          flutter test --reporter expanded 2>&1 | tee candidate-safety-tests.log
+      - name: Verify actual combining render and regression references
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/flutter-probe"
+          flutter test diagnostic/combining_render_test.dart regression/combining_patch_test.dart --reporter expanded 2>&1 | tee candidate-render-tests.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: flutter-candidate-lock-${{ github.sha }}
+          path: ${{ runner.temp }}/flutter-probe/pubspec.lock
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: flutter-candidate-evidence-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/flutter-probe/candidate-manifest.json
+            ${{ runner.temp }}/flutter-probe/candidate-*.log
+            ${{ runner.temp }}/flutter-probe/probe-results
+            ${{ runner.temp }}/flutter-probe/candidate/terminal_view/LICENSE
+            ${{ runner.temp }}/flutter-probe/candidate/terminal_view/NOTICE
+          if-no-files-found: error
+          retention-days: 14
+  macos-render-check:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    needs: patch-and-test
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install pinned Flutter in runner only
+        run: python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+      - name: Prepare isolated fixture app
+        run: python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
+      - name: Materialize the same verified experimental candidate
+        run: python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: flutter-candidate-lock-${{ github.sha }}
+          path: ${{ runner.temp }}/flutter-probe
+      - name: Verify lock and run headless renderer tests
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/flutter-probe"
+          flutter pub get --enforce-lockfile
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
+          flutter test diagnostic/combining_render_test.dart regression/combining_patch_test.dart --reporter expanded 2>&1 | tee candidate-macos-render.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: flutter-candidate-macos-render-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/flutter-probe/candidate-manifest.json
+            ${{ runner.temp }}/flutter-probe/candidate-macos-render.log
+            ${{ runner.temp }}/flutter-probe/probe-results
+          if-no-files-found: error
+          retention-days: 14
+  build:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    needs: patch-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {platform: android, os: ubuntu-24.04}
+          - {platform: linux, os: ubuntu-24.04}
+          - {platform: windows, os: windows-2022}
+          - {platform: macos, os: macos-14}
+          - {platform: ios, os: macos-14}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Linux desktop prerequisites
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        if: matrix.platform == 'android'
+        with:
+          distribution: temurin
+          java-version: '17.0.16+8'
+      - name: Install pinned Flutter in runner only
+        shell: bash
+        run: python validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+      - name: Prepare isolated fixture app
+        shell: bash
+        run: python validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
+      - name: Materialize verified experimental candidate
+        shell: bash
+        run: python validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: flutter-candidate-lock-${{ github.sha }}
+          path: ${{ runner.temp }}/flutter-probe
+      - name: Build test package
+        shell: bash
+        env:
+          PROBE_PLATFORM: ${{ matrix.platform }}
+        run: |
+          cd "$RUNNER_TEMP/flutter-probe"
+          flutter pub get --enforce-lockfile
+          python "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
+          case "$PROBE_PLATFORM" in
+            android) flutter build apk --debug ;;
+            ios) flutter build ios --debug --no-codesign ;;
+            *) flutter build "$PROBE_PLATFORM" --debug ;;
+          esac
+      - name: Collect package and source-linked manifest
+        shell: bash
+        run: python validation/flutter/tool/ci.py package --destination "$RUNNER_TEMP/flutter-probe" --platform '${{ matrix.platform }}' --output "$RUNNER_TEMP/flutter-output"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: flutter-candidate-${{ matrix.platform }}-${{ github.sha }}
+          path: ${{ runner.temp }}/flutter-output
+          if-no-files-found: error
+          retention-days: 14

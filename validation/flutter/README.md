@@ -59,3 +59,9 @@ flutter run
 Mac GUI smoke 发现分解重音 `e\u0301 A\u030a n\u0303` 看起来只有基字符。固定 `terminal_view 0.5.0` 源码中 buffer 将零宽字符存入 `getCombined`，`getText` 保留它们；`TerminalPainter._paintLineForeground` 的 ASCII 批处理却只采集基字符，未检查/传递 combined。新增 `diagnostic/combining_render_test.dart` 用同一字体、真实 buffer 和 painter 写入输入/复制 API codepoints、cursorX、两张 PNG 与像素对照 JSON，直接验证该假设。
 
 诊断在独立 `render-characterization` CI job 中运行；可见重音与基字符像素相同时 job 必须失败，不能称字符正确性通过。五端包构建不依赖此诊断 job，便于继续设备比较。源码检查/目视现象不替代 CI 诊断结果；该诊断也不等价于原生剪贴板或系统 IME 验证。尚未对上游做补丁或改换终端引擎。
+
+## 可追溯的组合重音修复候选
+
+默认仍使用未修改 `terminal_view: 0.5.0`，原始失败证据保留。`patches/` 与 `tool/candidate.py` 提供显式实验分支：官方归档与补丁 hash 校验后，仅在新建 CI 临时工程启用 path override，不修改 pub cache。候选锁必须通过逐依赖基线比较；候选包附来源 manifest、LICENSE 和 NOTICE。
+
+修复涉及 ASCII 批处理分流、选区和 block cursor 的 combined 传递，不改输入、parser 或列宽。[修复说明与来源](../../docs/evidence/flutter/2026-10-30-combining-repair.md)；真实绘制回归位于 `regression/combining_patch_test.dart`。构建和测试结果需以独立候选工作流为准，不能把本地脚本检查当作已修复证明。

@@ -1,0 +1,3 @@
+# Preserve provenance bytes across Windows Git checkouts.
+patches/*.patch -text whitespace=-blank-at-eol
+pubspec.lock -text

@@ -1,0 +1,101 @@
+--- a/lib/src/ui/painter.dart
++++ b/lib/src/ui/painter.dart
+@@ -315,7 +315,9 @@
+         continue;
+       }
+ 
+-      if (charCode >= _kBatchableMin && charCode < _kBatchableEnd) {
++      if (charCode >= _kBatchableMin &&
++          charCode < _kBatchableEnd &&
++          (line.getCombined(i)?.isEmpty ?? true)) {
+         final foreground = line.getForeground(i);
+         final flags = line.getAttributes(i);
+         final background = line.getBackground(i);
+@@ -327,6 +329,8 @@
+         while (j < length) {
+           final code = line.getContent(j) & CellContent.codepointMask;
+           if (code < _kBatchableMin || code >= _kBatchableEnd) break;
++          // A combining suffix needs the existing grapheme-cell path.
++          if (line.getCombined(j)?.isNotEmpty ?? false) break;
+           if (line.getForeground(j) != foreground) break;
+           if (line.getAttributes(j) != flags) break;
+           if (inverse && line.getBackground(j) != background) break;
+@@ -564,6 +568,7 @@
+     CellData cellData, {
+     double? fitWidth,
+     String? combined,
++    Color? overrideColor,
+   }) {
+     final charCode = cellData.content & CellContent.codepointMask;
+     if (charCode == 0) return;
+@@ -598,6 +603,7 @@
+       background: cellData.background,
+       flags: cellData.flags,
+       fitWidth: fitWidth,
++      overrideColor: overrideColor,
+     );
+   }
+ 
+@@ -605,22 +611,15 @@
+     Canvas canvas,
+     Offset offset,
+     CellData cellData,
+-    Color color,
+-  ) {
+-    final charCode = cellData.content & CellContent.codepointMask;
+-    if (charCode == 0) return;
+-
+-    _singleCellBuffer[0] = charCode;
++    Color color, {
++    String? combined,
++  }) {
+     final doubleWidth = cellData.content >> CellContent.widthShift == 2;
+-
+-    _paintRun(
++    paintCellForeground(
+       canvas,
+       offset,
+-      _singleCellBuffer,
+-      1,
+-      foreground: cellData.foreground,
+-      background: cellData.background,
+-      flags: cellData.flags,
++      cellData,
++      combined: combined,
+       fitWidth: _cellSize.width * (doubleWidth ? 2 : 1),
+       overrideColor: color,
+     );
+--- a/lib/src/ui/render.dart
++++ b/lib/src/ui/render.dart
+@@ -781,6 +781,7 @@
+         startOffset.translate((i - start) * cellWidth, 0),
+         cellData,
+         textColor,
++        combined: line.getCombined(i),
+       );
+     }
+   }
+@@ -867,6 +868,7 @@
+     final column = _cursorColumn;
+     final screenRow = _cursorLine - buffer.scrollBack;
+     CellData? cellData;
++    String? combined;
+     for (final entry in overlayCells) {
+       if (entry.row == screenRow && entry.column == column) {
+         cellData = entry.cell;
+@@ -876,6 +878,7 @@
+     if (cellData == null) {
+       cellData = CellData.empty();
+       buffer.lines[_cursorLine].getCellData(column, cellData);
++      combined = buffer.lines[_cursorLine].getCombined(column);
+     }
+ 
+     _painter.paintCellForegroundColor(
+@@ -883,6 +886,7 @@
+       offset + cursorOffset,
+       cellData,
+       accent,
++      combined: combined,
+     );
+   }
+ }

@@ -14,6 +14,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/shared/design-tokens-v2.json
     - assets/shared/fixture.json
     - assets/shared/load-chunk.txt
     - assets/shared/SHA256SUMS

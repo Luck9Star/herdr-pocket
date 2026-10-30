@@ -87,7 +87,7 @@ jobs:
           cd "$RUNNER_TEMP/flutter-probe"
           flutter pub get --enforce-lockfile
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
-          flutter test diagnostic/combining_render_test.dart regression/combining_patch_test.dart --reporter expanded 2>&1 | tee candidate-macos-render.log
+          flutter test diagnostic/combining_render_test.dart regression/combining_patch_test.dart test/probe_ui_test.dart --reporter expanded 2>&1 | tee candidate-macos-render.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

@@ -3,10 +3,15 @@ import { invoke, Channel, isTauri } from '@tauri-apps/api/core';
 import '@xterm/xterm/css/xterm.css';
 import './style.css';
 import { ViewGate, byteLength, readBoundClipboard, WaitRegistry } from './gate.js';
+import { viewState } from './view-state.js';
+import { readTheme } from './theme.js';
 
 const $ = id => document.getElementById(id);
 const fixture = await fetch('/shared/fixture.json').then(r => { if (!r.ok) throw Error('fixture missing'); return r.json(); });
 const loadChunk = await fetch('/shared/load-chunk.txt').then(r => r.text());
+const designTokens = await fetch('/shared/design-tokens-v2.json').then(r => { if (!r.ok) throw Error('design tokens missing'); return r.json(); });
+const theme = readTheme(designTokens);
+for (const [name, value] of Object.entries(theme.css)) document.documentElement.style.setProperty(name, value);
 await document.fonts.load(`${fixture.terminal.fontSize}px ProbeNerd`);
 const native = isTauri();
 const logs = [];
@@ -15,7 +20,7 @@ function log(message) { logs.unshift(`${new Date().toISOString().slice(11,23)} $
 function error(err) { log(`失败: ${String(err)}`); }
 const panels = Object.fromEntries(['a', 'b'].map(id => {
   const node = document.createElement('article'); node.className = 'panel'; node.dataset.id = id;
-  node.innerHTML = `<div class="panel-head"><span>${id === 'a' ? 'build-lab · Tailscale' : 'review-lab · EasyTier'} / session-fixture / pane-${id}</span><button>设为输入焦点</button></div><div class="term-scroll"><div class="terminal-host"></div></div>`;
+  node.innerHTML = `<div class="panel-head"><span class="panel-title"><strong>${id === 'a' ? 'build-lab · Tailscale' : 'review-lab · EasyTier'}</strong><small>session-fixture / pane-${id} · 80 × 24</small></span><button>设为输入焦点</button></div><div class="term-scroll"><div class="terminal-host"></div></div>`;
   $('workspace').append(node);
   const p = { id, node, host:node.querySelector('.terminal-host'), gate:new ViewGate(id, fixture.load.maxQueuedBytes, fixture.load.maxInputBytes), draft:'', term:null, composing:null, keyToken:null, lease:null, tui:false, writes:new Map(), waits:new WaitRegistry() };
   node.querySelector('button').onclick = () => activate(id);
@@ -26,7 +31,7 @@ async function cancelNative(p) { p.waits.cancel(); const lease=p.lease; p.lease=
 function cancelWrites(p) { for (const resolve of p.writes.values()) resolve(false); p.writes.clear(); }
 function buildTerminal(p) {
   cancelWrites(p); p.term?.dispose(); p.host.replaceChildren(); p.composing=null; p.keyToken=null;
-  const t = new Terminal({cols:80,rows:24,fontFamily:'ProbeNerd, monospace',fontSize:14,scrollback:fixture.terminal.scrollback,disableStdin:true,cursorBlink:false,convertEol:false,allowProposedApi:false,theme:{background:'#101820',foreground:'#d9e5eb'}});
+  const t = new Terminal({cols:80,rows:24,fontFamily:'ProbeNerd, monospace',fontSize:14,scrollback:fixture.terminal.scrollback,disableStdin:true,cursorBlink:false,convertEol:false,allowProposedApi:false,theme:theme.terminal});
   p.term=t; t.open(p.host);
   // xterm owns platform IME. We bind its committed data to the view/focus at composition start.
   t.textarea.addEventListener('compositionstart', () => { p.composing=p.gate.token(); }, true);
@@ -65,19 +70,33 @@ function update() {
   for (const p of Object.values(panels)) {
     const visible=p.id===active || (split && window.innerWidth>=900);
     p.node.hidden=!visible; p.node.classList.toggle('active',p.id===active);
-    p.term.options.disableStdin=p.id!==active || p.gate.mode!=='direct' || !p.gate.ready;
-    p.term.options.cursorBlink=p.id===active && p.gate.mode==='direct' && p.gate.ready;
+    const state=viewState(p.gate);
+    p.term.options.disableStdin=p.id!==active || !state.canType;
+    p.term.options.cursorBlink=p.id===active && state.canType;
+    p.node.querySelector('.panel-head button').textContent=p.id===active ? '当前输入焦点' : '设为输入焦点';
+    p.node.querySelector('.panel-head button').setAttribute('aria-pressed',String(p.id===active));
   }
-  const p=current(); $('mode').value=p.gate.mode;
-  $('draft').value=p.draft; $('draft-label').hidden=p.gate.mode!=='draft'; $('send-draft').hidden=p.gate.mode!=='draft';
-  for (const b of $('keys').querySelectorAll('button')) b.disabled=p.gate.mode!=='direct' || !p.gate.ready;
-  $('keyboard').disabled=p.gate.mode!=='direct' || !p.gate.ready;
-  $('mode').disabled=!p.gate.ready || p.gate.unknown;
-  $('verified').disabled=!p.gate.ready || !p.gate.unknown;
-  $('paste').disabled=!p.gate.ready || p.gate.mode==='observe';
-  $('status').textContent=`焦点 ${p.id.toUpperCase()} · ${p.gate.reason} · 待消费 ${p.gate.pendingBytes}/${p.gate.maxQueuedBytes} bytes${p.gate.unknown?' · 有结果未知记录，请先核实':''}`;
+  const p=current(), state=viewState(p.gate);
+  for (const b of document.querySelectorAll('[data-mode]')) {
+    b.setAttribute('aria-pressed',String(b.dataset.mode===p.gate.mode));
+    b.disabled=!state.canChooseMode;
+  }
+  for (const b of document.querySelectorAll('[data-target]')) b.setAttribute('aria-pressed',String(b.dataset.target===active));
+  $('active-target').textContent=`目标 ${active.toUpperCase()} / session-fixture / pane-${active}`;
+  $('draft').value=p.draft; $('draft-area').hidden=p.gate.mode!=='draft';
+  $('draft').disabled=!state.canSendDraft; $('send-draft').disabled=!state.canSendDraft;
+  for (const b of $('keys').querySelectorAll('button')) b.disabled=!state.canType;
+  $('keyboard').disabled=!state.canType;
+  $('verified').disabled=!state.canAcknowledge;
+  $('verified').hidden=!p.gate.unknown;
+  $('paste').disabled=!state.canPaste;
+  $('mode-message').dataset.tone=state.tone;
+  $('mode-title').textContent=state.title; $('mode-detail').textContent=state.detail;
+  $('recovery-actions').hidden=!state.showRecovery;
+  $('status').textContent=`焦点 ${p.id.toUpperCase()} · ${p.gate.reason} · 待消费 ${p.gate.pendingBytes}/${p.gate.maxQueuedBytes} bytes`;
   $('tab-a').setAttribute('aria-pressed',String(active==='a')); $('tab-b').setAttribute('aria-pressed',String(active==='b')); $('split').setAttribute('aria-pressed',String(split));
 }
+
 async function activate(id) {
   if (id!==active) {
     const old=current(); old.gate.focus(false); old.term.blur();
@@ -110,7 +129,8 @@ $('split').onclick=async()=>{
   }
   update(); log('只变更本地布局；未发送 PTY resize');
 };
-$('mode').onchange=()=>{ current().gate.setMode($('mode').value); update(); if(current().gate.mode==='direct')current().term.focus(); };
+for (const b of document.querySelectorAll('[data-mode]')) b.onclick=()=>{ const p=current(); if(!viewState(p.gate).canChooseMode)return; p.gate.setMode(b.dataset.mode); update(); if(p.gate.mode==='direct')p.term.focus(); };
+for (const b of document.querySelectorAll('[data-target]')) b.onclick=()=>activate(b.dataset.target).catch(error);
 $('keyboard').onclick=()=>current().term.focus(); $('blur').onclick=()=>current().term.blur();
 const keys={esc:'\x1b',tab:'\t','ctrl-c':'\x03',up:'\x1b[A',down:'\x1b[B',left:'\x1b[D',right:'\x1b[C',enter:'\r'};
 for(const b of $('keys').querySelectorAll('button')) b.onclick=()=>capture(current(),keys[b.dataset.key],current().gate.token());
@@ -119,6 +139,7 @@ $('send-draft').onclick=()=>showPreview(current().draft,true);
 $('paste').onclick=async()=>{ const p=current(), draft=p.gate.mode==='draft'; const result=await readBoundClipboard(p.gate, async()=>{ try{return await navigator.clipboard.readText();}catch{log('剪贴板权限不可用；在预览框手动粘贴');return '';} }); if(result)showPreview(result.text,draft,p,result.token);else log('粘贴已取消：读取期间目标或模式变化'); };
 $('copy').onclick=async()=>{ const selected=current().term.getSelection(); if(!selected){log('先选择终端文字');return;} try{await navigator.clipboard.writeText(selected);log('已复制选区');}catch{log('复制权限不可用；使用系统选区复制');} };
 $('restore').onclick=()=>restore().catch(error);
+$('refresh-fixture').onclick=()=>restore().catch(error);
 $('verified').onclick=()=>{ const p=current(); if(p.gate.acknowledgeUnknown(p.gate.token()))log('用户已核实原目标结果；仍须显式进入输入'); update(); };
 $('unknown').onclick=()=>{const p=current();p.gate.unknownSend();cancelNative(p).catch(error);update();log(`目标 ${p.id} 发送结果未知；不自动重放，草稿不回填已发送内容`);};
 $('late').onclick=()=>{const p=current();const old={...p.gate.token(),epoch:p.gate.epoch-1};write(p,'delta','LATE MUST NOT APPEAR',old);};
@@ -161,5 +182,5 @@ document.addEventListener('visibilitychange',()=>{
 for(const p of Object.values(panels))buildTerminal(p);
 panels.a.gate.focus(true); panels.b.gate.hide();
 await restore(panels.a);update();
-$('versions').textContent=`xterm.js 6.0.0 · Tauri core 2.12.5 / API+CLI 2.12.4 · ${native?'原生壳':'浏览器预览（不代表 Tauri / 手机结果）'} · fixture ${fixture.id} · font SHA256 ${fixture.font.sha256} · ${navigator.userAgent}`;
+$('versions').textContent=`${designTokens.name} · xterm.js 6.0.0 · Tauri core 2.12.5 / API+CLI 2.12.4 · ${native?'原生壳':'浏览器预览（不代表 Tauri / 手机结果）'} · fixture ${fixture.id} · font SHA256 ${fixture.font.sha256} · ${navigator.userAgent}`;
 log('固定 80×24；对远端没有连接、命令、重放或 resize。');

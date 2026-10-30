@@ -1,19 +1,27 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>herdr-pocket · Tauri terminal probe</title></head><body>
-<header><div><span class="eyebrow">HERDR POCKET / A–B LAB</span><h1>终端验证壳 <small>Tauri + xterm.js</small></h1></div><span class="badge">离线 fixture · 没有 SSH 连接</span></header>
-<main>
-<p class="notice">仅记录本地输入字节。Nerd Font、中文、IME、触控与真机性能均需实测；终端固定 80 × 24，窗口与键盘变化只影响本地视口。</p>
-<nav aria-label="终端标签"><button id="tab-a" aria-pressed="true">A · build-lab / Tailscale</button><button id="tab-b" aria-pressed="false">B · review-lab / EasyTier</button><button id="split" aria-pressed="false">桌面分屏</button></nav>
+<header class="app-header"><div class="brand-lockup"><span class="brand-mark" aria-hidden="true">›_</span><div><span class="eyebrow">HERDR POCKET</span><h1>终端工作台 <small>Tauri + xterm.js</small></h1></div></div><span class="badge">离线验证 · 尚未连接 SSH</span></header>
+<main class="app-grid">
+<aside class="sidebar" aria-label="测试主机"><div class="section-heading"><h2>主机</h2><span class="count">2</span></div><p class="sidebar-note">共享 fixture 的两个独立目标</p>
+<button class="host-card" data-target="a" aria-pressed="true"><span class="host-icon" aria-hidden="true">⌘</span><span><strong>build-lab</strong><small>Tailscale · 示例路径</small></span><span class="host-focus">A</span></button>
+<button class="host-card" data-target="b" aria-pressed="false"><span class="host-icon" aria-hidden="true">⌘</span><span><strong>review-lab</strong><small>EasyTier · 示例路径</small></span><span class="host-focus">B</span></button>
+<div class="sidebar-foot"><strong>测试边界</strong><p>网络标签用于目标区分，不代表已经入网。SSH、扫码授权及真实主机接入仍未连接。</p></div></aside>
+<div class="workspace-main">
+<div class="workspace-heading"><div><span class="eyebrow">WORKSPACE</span><h2>完整终端</h2></div><button id="split" aria-pressed="false">桌面分屏</button></div>
+<p class="notice">终端固定 80 × 24；窗口和键盘变化仅改变本地视口。输入只记录在本机，不自动重放。</p>
+<nav class="terminal-tabs" aria-label="终端标签"><button id="tab-a" aria-pressed="true"><span>A · build-lab</span><small>Tailscale</small></button><button id="tab-b" aria-pressed="false"><span>B · review-lab</span><small>EasyTier</small></button></nav>
 <section id="workspace" aria-label="独立终端视图"></section>
 <section class="controls" aria-label="输入控制">
-<div class="row"><label>当前模式 <select id="mode"><option value="observe">观察</option><option value="direct">逐键输入</option><option value="draft">草稿</option></select></label><button id="keyboard">展开键盘 / 聚焦终端</button><button id="blur">收起键盘</button></div>
-<div class="row" id="keys"><button data-key="esc">Esc</button><button data-key="tab">Tab</button><button data-key="ctrl-c">Ctrl+C</button><button data-key="up">↑</button><button data-key="down">↓</button><button data-key="left">←</button><button data-key="right">→</button><button data-key="enter">Enter</button></div>
-<label id="draft-label">目标独立草稿（发送不追加回车）<textarea id="draft" rows="3" maxlength="4096" placeholder="内容仅在本地捕获；不要输入秘密"></textarea></label><button id="send-draft">预览并发送草稿</button>
-<div class="row"><button id="copy">复制终端选区</button><button id="paste">粘贴预览</button><button id="restore">新一轮全量画面</button><button id="verified">已核实原目标结果</button><button id="unknown">注入发送结果未知</button><button id="late">注入迟到帧</button><button id="load">1 MiB 有界负载</button><button id="tui">切换 fixture TUI</button></div>
-<p id="status" role="status" aria-live="polite"></p>
+<div class="control-heading"><div class="mode-switch" role="group" aria-label="终端输入模式"><button data-mode="observe" aria-pressed="true">观察</button><button data-mode="direct" aria-pressed="false">逐键输入</button><button data-mode="draft" aria-pressed="false">草稿</button></div><span id="active-target" class="target-label"></span></div>
+<div id="mode-message" class="mode-message" role="status" aria-live="polite"><strong id="mode-title"></strong><span id="mode-detail"></span></div>
+<div class="row keyboard-actions"><button id="keyboard">展开键盘 / 聚焦终端</button><button id="blur">收起键盘</button><button id="copy">复制选区</button><button id="paste">粘贴预览</button></div>
+<div class="row helper-keys" id="keys" aria-label="终端辅助键"><button data-key="esc">Esc</button><button data-key="tab">Tab</button><button data-key="ctrl-c">Ctrl+C</button><button data-key="up" aria-label="上方向键">↑</button><button data-key="down" aria-label="下方向键">↓</button><button data-key="left" aria-label="左方向键">←</button><button data-key="right" aria-label="右方向键">→</button><button data-key="enter">Enter</button></div>
+<div id="draft-area"><label id="draft-label">目标独立草稿 <span>不会自动追加回车</span><textarea id="draft" rows="4" maxlength="4096" placeholder="内容仅在本地捕获；不要输入秘密"></textarea></label><button id="send-draft" class="primary">预览并发送草稿</button></div>
+<div id="recovery-actions" class="row"><button id="restore" class="primary">获取新全量画面</button><button id="verified">已核实原目标结果</button></div>
+<p id="status" class="technical-status"></p>
 </section>
-<details open><summary>输入与诊断记录（最多 100 项；不自动重放）</summary><pre id="log"></pre></details>
+<details class="diagnostics"><summary>验证工具与记录 <span>仅离线故障注入</span></summary><div class="row"><button id="unknown">注入发送结果未知</button><button id="late">注入迟到帧</button><button id="load">1 MiB 有界负载</button><button id="tui">切换 fixture TUI</button><button id="refresh-fixture">重新载入 fixture</button></div><p>输入与诊断记录最多 100 项。捕获成功不代表服务端接收；不要粘贴真实秘密。</p><pre id="log"></pre></details>
 <footer id="versions"></footer>
-</main>
-<dialog id="paste-dialog"><form method="dialog"><h2>核对发送目标与文本</h2><p id="paste-target"></p><textarea id="paste-text" rows="6" maxlength="4096"></textarea><p>不会自动追加回车；确认后只尝试一次。</p><button value="cancel">取消</button><button id="confirm-paste" value="send">发送到当前目标</button></form></dialog>
+</div></main>
+<dialog id="paste-dialog"><form method="dialog"><span class="eyebrow">SEND PREVIEW</span><h2>核对发送目标与文本</h2><p id="paste-target"></p><label for="paste-text">即将发送的内容</label><textarea id="paste-text" rows="6" maxlength="4096"></textarea><p>不会自动追加回车；确认后只尝试一次。</p><div class="row dialog-actions"><button value="cancel">取消</button><button id="confirm-paste" value="send" class="primary">确认发送到此目标</button></div></form></dialog>
 <script type="module" src="/src/main.js"></script></body></html>

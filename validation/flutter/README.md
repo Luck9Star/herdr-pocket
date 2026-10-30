@@ -65,3 +65,13 @@ Mac GUI smoke 发现分解重音 `e\u0301 A\u030a n\u0303` 看起来只有基字
 默认仍使用未修改 `terminal_view: 0.5.0`，原始失败证据保留。`patches/` 与 `tool/candidate.py` 提供显式实验分支：官方归档与补丁 hash 校验后，仅在新建 CI 临时工程启用 path override，不修改 pub cache。候选锁必须通过逐依赖基线比较；候选包附来源 manifest、LICENSE 和 NOTICE。
 
 修复涉及 ASCII 批处理分流、选区和 block cursor 的 combined 传递，不改输入、parser 或列宽。[修复说明与来源](../../docs/evidence/flutter/2026-10-30-combining-repair.md)；真实绘制回归位于 `regression/combining_patch_test.dart`。构建和测试结果需以独立候选工作流为准，不能把本地脚本检查当作已修复证明。
+
+## Penpot v2 视觉接线（2026-10-30）
+
+验证壳现在读取两路线共享的 [`design-tokens-v2.json`](../shared/design-tokens-v2.json)：靛蓝操作色、浅色应用面板、深色终端，以及独立的状态文字色。桌面增加主机／会话侧栏，手机保留标签与模式入口；诊断操作集中到“验证工具”，发送结果未知的锁定和人工核实入口保持常显。此处是已认可视觉方案的离线适配，不是完整手机看板、配对或远端产品闭环。
+
+两壳显式使用相同 16 色 ANSI 工程基线；JSON 将它与 Penpot 实际 tokens 分开记录。fixture 字节、固定 Nerd Font、14px 和 80×24 不变。布局收窄时只保留当前目标，隐藏的分屏标签恢复仍需要新 full；布局和键盘不发送远端 resize。包 manifest 新增视觉 token 文件 SHA256。
+
+新增 `test/probe_ui_test.dart` 从实际控件驱动未知恢复、隐藏标签与窄屏切换，并检查 320×640／键盘 260px／1.3 倍 UI 字号下的布局和真实 terminal 几何。CI 保存的 `probe-results/ui-v2` 是 **headless widget 布局证据**，系统文字可能使用测试 fallback 字体，不能代替原生 App 视觉、真实输入法或触控验收。候选工作流继续生成带受控 terminal_view 修复的五端测试包；普通 baseline 工作流仍使用未补丁的官方 0.5.0，其已知组合绘制失败不可与候选包混用。
+
+手工步骤沿用上文：负载、故障注入和 UTF-8 记录现在位于“验证工具”；刷新图标是“获取新 full”，未知状态在 fresh full 后仍需显式“人工核实未知”。仅切换模式、标签、布局或刷新不得增加本地接收次数。

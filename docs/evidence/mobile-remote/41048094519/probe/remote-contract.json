@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "milestone": "M1a-mobile-readonly",
+  "scope": "Manual reviewed SSH access to a single explicitly named remote herdr session/pane; one full frame, no remote input",
+  "config": {
+    "schemaVersion": {
+      "type": "integer",
+      "value": 1
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "policy": "DNS name or IP only, no whitespace/control characters or URL"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "username": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "policy": "no whitespace/control characters"
+    },
+    "expectedHostKey": {
+      "type": "string",
+      "maxLength": 4096,
+      "policy": "ssh-ed25519 and canonical base64 SSH public-key wire blob; parse type/length, compare before authentication; reject extra lines/options"
+    },
+    "privateKeyPem": {
+      "type": "string",
+      "maxLength": 16384,
+      "policy": "explicit in-memory experimental OpenSSH Ed25519 key only; no discovery, persistence, diagnostics, artifact or clipboard capture"
+    },
+    "socketPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "policy": "absolute canonical remote path <configRoot>/herdr/sessions/<session>/herdr.sock; no control characters, dot/dotdot or empty interior segments; derive fixed XDG_CONFIG_HOME from this path"
+    },
+    "herdrPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "policy": "absolute remote executable path; shell-quote as data, no arbitrary command"
+    },
+    "session": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "policy": "explicit named session only; reserved default is unsupported in this step"
+    },
+    "paneId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9:_-]{1,128}$"
+    },
+    "reviewConfirmed": {
+      "type": "boolean",
+      "value": true,
+      "policy": "explicit review of source, target and expected host key; never inferred from import/scan"
+    }
+  },
+  "bounds": {
+    "configUtf8Bytes": 32768,
+    "rpcResponseBytes": 1048576,
+    "observeLineBytes": 1048576,
+    "totalObserveBytes": 2097152,
+    "columns": 80,
+    "rows": 24,
+    "remoteWrites": 0
+  },
+  "commands": {
+    "snapshot": "one direct-streamlocal channel, one session.snapshot RPC, validate response id, ok/error and result.type=session_snapshot, read result.snapshot, then close",
+    "observe": "fixed /usr/bin/env with only shell-quoted XDG_CONFIG_HOME derived from canonical socketPath; shell-quoted herdrPath --session session terminal session observe resolvedTerminalId --cols 80 --rows 24; no SSH PTY/control/takeover/resize; close after validated full frame"
+  },
+  "lifecycle": [
+    "Every attempt owns an internal generation; cancellation or target change invalidates it before transport cleanup.",
+    "Late frames and completions cannot replace newer UI state.",
+    "One-shot snapshot is labelled read-only and not realtime; refreshing is explicit.",
+    "No automatic retry, reconnect, credential fallback, trust acceptance or replay.",
+    "Authentication starts only after actual SSH host key comparison succeeds.",
+    "No remote write methods are exposed by this adapter, including from terminal callbacks."
+  ],
+  "cli": {
+    "arguments": [
+      "--config",
+      "TEMP_CONFIG_PATH",
+      "--case",
+      "positive|wrong-pin|missing-session|cancel",
+      "--output",
+      "SAFE_REPORT_PATH"
+    ],
+    "cases": [
+      "positive",
+      "wrong-pin",
+      "missing-session",
+      "cancel"
+    ],
+    "reportFields": [
+      "status",
+      "case",
+      "hostKeyChecked",
+      "hostKeyMatched",
+      "authStarted",
+      "snapshotReceived",
+      "fullFrameReceived",
+      "generation",
+      "lateEventsIgnored",
+      "errorCode"
+    ],
+    "negativeEvidence": "wrong-pin must reach the actual key callback, fail comparison and never start authentication; transport timeout/refusal does not pass this case",
+    "secrets": "config and keys live only in the self-created CI temporary fixture; outputs contain no config, credentials, raw server messages or raw stdout/stderr"
+  },
+  "unverified": [
+    "phone touch",
+    "real mobile IME",
+    "camera pairing",
+    "device protected key storage",
+    "overlay transport",
+    "remote terminal input",
+    "continuous observe",
+    "production credentials"
+  ],
+  "binding": {
+    "snapshot": "exact selected paneId must exist uniquely in result.snapshot.panes and resolve to terminal_id matching ^term_[0-9a-f]+$",
+    "observe": "use that resolved terminal_id as CLI target, never reuse paneId as fallback; force the same derived config root and named session",
+    "boundary": "herdr 0.9.5 snapshot/frame do not echo session identity; binding relies on pinned server path and terminal resolver semantics, not a frame identity field"
+  },
+  "protocol": {
+    "herdrVersion": "0.9.5",
+    "wireProtocol": 22,
+    "unsupportedVersions": "fail closed; no fallback"
+  }
+}

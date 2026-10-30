@@ -1,0 +1,35 @@
+{
+  "scope": "Historical candidate failures preserved; later passing runs do not erase these results",
+  "attempts": [
+    {
+      "conclusion": "failure",
+      "databaseId": 41046472225,
+      "headSha": "b88a0ad9b2a173ac743568ec5ce479f22b6844ca",
+      "status": "completed",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41046472225",
+      "failureStage": "analyzer",
+      "regularTests": {
+        "executed": 0,
+        "passed": 0,
+        "failed": 0
+      },
+      "log": "41046472225-failed.log.gz",
+      "logScope": "Flutter analyze/test failure only; original bytes compressed, not remote credential-stage logs"
+    },
+    {
+      "conclusion": "failure",
+      "databaseId": 41047398456,
+      "headSha": "4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+      "status": "completed",
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398456",
+      "failureStage": "widget-tests",
+      "regularTests": {
+        "executed": 20,
+        "passed": 19,
+        "failed": 1
+      },
+      "log": "41047398456-failed.log.gz",
+      "logScope": "Flutter analyze/test failure only; original bytes compressed, not remote credential-stage logs"
+    }
+  ]
+}

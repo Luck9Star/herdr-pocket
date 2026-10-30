@@ -1,6 +1,6 @@
 {
   "date": "2026-10-30",
-  "source": "pub.dev version API and dartssh2 archive exact source after SHA verification; lock prepared from pinned metadata, must pass pub --enforce-lockfile in CI",
+  "source": "pub.dev version API and dartssh2 archive exact source after SHA verification; pinned lock passed cloud dependency resolution and candidate no-transitive-drift guard in run 41046472225, repeated in 41048094396",
   "newPackages": [
     {
       "name": "asn1lib",
@@ -55,5 +55,10 @@
       "licenseFile": "licenses/asn1lib-1.5.8-LICENSE",
       "licenseSha256": "b0db8d3a93ea33f852d2b6dfa9c38fc57d33a51c31b47ca528df6d02700f2a42"
     }
-  ]
+  ],
+  "cloudLockVerification": {
+    "sourceSHA": "d15da12a4fc7d60313b3c253a315c001e7290b5e",
+    "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396",
+    "scope": "dependency resolution/enforced lock and candidate lock guard; not platform runtime acceptance"
+  }
 }

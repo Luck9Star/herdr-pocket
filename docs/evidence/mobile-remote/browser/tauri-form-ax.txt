@@ -1,0 +1,62 @@
+Browser tab: 1, Title: "herdr-pocket · 远端只读验证", URL: "http://127.0.0.1:1421/".
+1 AXWebArea herdr-pocket · 远端只读验证, URL: 127.0.0.1:1421/
+	2 container
+		3 text HERDR POCKET
+		4 heading 终端工作台 Tauri + xterm.js, Value: 1
+			5 text 终端工作台
+			6 text Tauri + xterm.js
+		7 text M1a · 实验测试包
+	8 container 验证入口
+		9 checkbox 远端只读, Value: 1, ID: show-remote
+		10 checkbox 离线终端实验室, Value: 0, ID: show-fixture
+	11 container remote-page
+		12 container
+			13 text REMOTE · READ ONLY
+			14 heading 查看远端终端, Value: 2
+				15 text 查看远端终端
+			16 text 手动核验一个明确的会话和 pane，读取一次完整画面。远端输入、扫码配对与三网络集成仍未开放。
+		17 text 浏览器预览没有原生 SSH 适配器。真实读取仅在测试安装包中可用，预览不会伪造连接成功。
+		18 container remote-form
+			19 container Description: 1. 审查目标与来源, ID: remote-fields
+				20 text 1. 审查目标与来源
+				21 text 从独立可信渠道核对主机公钥与路径。本轮仅支持 release herdr 0.9.5 的非 default 命名会话。
+				22 container
+					23 text 主机地址
+					24 text field (settable) 主机地址, ID: remote-host
+				25 container
+					26 text SSH 端口
+					27 stepper (settable, integer) SSH 端口, Value: 22, ID: remote-port
+				28 container
+					29 text SSH 用户名
+					30 text field (settable) SSH 用户名, ID: remote-user
+				31 container
+					32 text 命名会话
+					33 text field (settable) 命名会话, ID: remote-session
+				34 container
+					35 text pane 标识
+					36 text field (settable) pane 标识, ID: remote-pane
+				37 container
+					38 text herdr 可执行文件
+					39 text field (settable) herdr 可执行文件, ID: remote-herdr
+				40 container
+					41 text API socket 绝对路径
+					42 text field (settable) API socket 绝对路径, ID: remote-socket
+				43 container
+					44 text 预期 SSH 主机公钥
+					45 text entry area (settable) 预期 SSH 主机公钥, ID: remote-pin
+				46 heading 2. 临时凭据 · 实验功能, Value: 3
+					47 text 2. 临时凭据 · 实验功能
+				48 text 仅本次内存使用的未加密 OpenSSH Ed25519 私钥。没有设备安全存储；不要使用生产凭据。提交、取消或进入后台后会清空表单，JavaScript 内存不具备可靠擦除保证。
+				49 container
+					50 text 实验私钥
+					51 text field (settable) 实验私钥
+				52 container
+					53 checkbox (settable, integer) Description: 我已核对资料来源、目标会话、pane 与预期主机公钥，并确认仅使用实验凭据。, Value: 0, ID: remote-review
+					54 text 我已核对资料来源、目标会话、pane 与预期主机公钥，并确认仅使用实验凭据。
+			55 button (disabled) 核验并读取一次, ID: remote-connect
+			56 button (disabled) 取消读取, ID: remote-cancel
+			57 button 收起键盘, ID: remote-hide-keyboard
+			58 button 清除临时私钥, ID: remote-clear-key
+		59 text 浏览器仅预览表单与布局，没有原生 SSH 功能。
+
+The focused UI element is 1 AXWebArea herdr-pocket · 远端只读验证, URL: 127.0.0.1:1421/

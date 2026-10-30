@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-30",
+  "sourceSHA": "d15da12a4fc7d60313b3c253a315c001e7290b5e",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396",
+  "artifactId": 12973502337,
+  "scope": "Mac native Flutter candidate launch, navigation and synthetic invalid-config rejection only",
+  "candidate": "experimental patched terminal_view 0.5.0",
+  "packageSHA256": "1c01ff844a6400cbb89d76f00b37cc673e199f2358a810d5ee19ac068e82f964",
+  "checks": {
+    "launch": "passed",
+    "remoteEntry": "top action opens remote read-only form",
+    "scroll": "form bottom and submit reachable",
+    "invalidConfig": "synthetic-invalid-key rejected with fixed error; private field cleared",
+    "credentials": "no real credentials or clipboard read"
+  },
+  "unverified": [
+    "valid-credential GUI success",
+    "phone touch and IME",
+    "screen reader accessibility: native AX export did not expose text-field labels; no VoiceOver test performed"
+  ],
+  "cleanup": {
+    "app": "Cmd+Q did not end process; subsequent CUA requests aborted before dispatch; SIGTERM sent only after PID 27065 exact executable-path verification",
+    "process": "pgrep confirmed absent after TERM"
+  },
+  "files": {
+    "flutter-invalid-config-ax.txt": "3e5485d96ee6cb7a60c139808b14b9846694d933b03337e54a8a59f2f3d8382a",
+    "flutter-invalid-config.png": "e617b6e8b68fc173f68564a96a12692b9cbef4160c9f90227b72e82abcc4ceef"
+  }
+}

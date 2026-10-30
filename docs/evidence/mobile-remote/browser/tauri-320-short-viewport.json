@@ -1,0 +1,78 @@
+{
+  "controls": [
+    {
+      "height": 46,
+      "id": "remote-host",
+      "width": 255
+    },
+    {
+      "height": 46,
+      "id": "remote-port",
+      "width": 255
+    },
+    {
+      "height": 46,
+      "id": "remote-user",
+      "width": 255
+    },
+    {
+      "height": 46,
+      "id": "remote-session",
+      "width": 255
+    },
+    {
+      "height": 46,
+      "id": "remote-pane",
+      "width": 255
+    },
+    {
+      "height": 46,
+      "id": "remote-herdr",
+      "width": 255
+    },
+    {
+      "height": 46,
+      "id": "remote-socket",
+      "width": 255
+    },
+    {
+      "height": 98,
+      "id": "remote-pin",
+      "width": 255
+    },
+    {
+      "height": 46,
+      "id": "remote-private-key",
+      "width": 255
+    },
+    {
+      "height": 44,
+      "id": "remote-review",
+      "width": 44
+    },
+    {
+      "height": 44,
+      "id": "remote-connect",
+      "width": 136.5
+    },
+    {
+      "height": 44,
+      "id": "remote-cancel",
+      "width": 136.5
+    },
+    {
+      "height": 44,
+      "id": "remote-hide-keyboard",
+      "width": 136.5
+    },
+    {
+      "height": 44,
+      "id": "remote-clear-key",
+      "width": 136.5
+    }
+  ],
+  "documentWidth": 305,
+  "keyboardButtonVisible": true,
+  "viewportHeight": 380,
+  "viewportWidth": 320
+}

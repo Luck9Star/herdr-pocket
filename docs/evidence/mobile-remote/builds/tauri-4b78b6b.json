@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUTC": "2026-10-30T11:37:42.697991+00:00",
+  "sourceSHA": "4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+  "runId": 41047398458,
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458",
+  "lastObservedRunStatus": "in_progress",
+  "lastObservedRunConclusion": null,
+  "observationBoundary": "Four jobs completed successfully. Five artifact metadata entries existed. Windows was in post-cache cleanup at the final compact observation; its final job/run and individual build/package/upload conclusions were not retained and need a separate refresh.",
+  "jobs": [
+    {
+      "platform": "android",
+      "jobId": 124034991653,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/job/124034991653",
+      "lastObservedStatus": "completed",
+      "lastObservedConclusion": "success",
+      "unitStep": "success",
+      "buildStep": "success",
+      "packageStep": "success",
+      "uploadStep": "success",
+      "remainingObservedStep": null,
+      "artifact": {
+        "id": 12973202706,
+        "name": "tauri-android-4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/artifacts/12973202706",
+        "sizeBytes": 53291234,
+        "githubArchiveDigest": "sha256:62517d3098a5be5225b86f3d4e59244af69b0303c458ab99cf130809a8863fd4",
+        "expiredAtObservation": false
+      }
+    },
+    {
+      "platform": "ios-simulator",
+      "jobId": 124034992141,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/job/124034992141",
+      "lastObservedStatus": "completed",
+      "lastObservedConclusion": "success",
+      "unitStep": "success",
+      "buildStep": "success",
+      "packageStep": "success",
+      "uploadStep": "success",
+      "remainingObservedStep": null,
+      "artifact": {
+        "id": 12973266398,
+        "name": "tauri-ios-simulator-4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/artifacts/12973266398",
+        "sizeBytes": 26578576,
+        "githubArchiveDigest": "sha256:e1185e103c8b4611a3c3c3014181cfb72e38694066c64c0d5563af790c4bb128",
+        "expiredAtObservation": false
+      }
+    },
+    {
+      "platform": "macos",
+      "jobId": 124034992000,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/job/124034992000",
+      "lastObservedStatus": "completed",
+      "lastObservedConclusion": "success",
+      "unitStep": "success",
+      "buildStep": "success",
+      "packageStep": "success",
+      "uploadStep": "success",
+      "remainingObservedStep": null,
+      "artifact": {
+        "id": 12973041926,
+        "name": "tauri-macos-4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/artifacts/12973041926",
+        "sizeBytes": 8390618,
+        "githubArchiveDigest": "sha256:bbc46146ceda5659b0f2c05253d9bc64d8b175169d8cf1cf3db9478e9bbfcd81",
+        "expiredAtObservation": false
+      }
+    },
+    {
+      "platform": "linux",
+      "jobId": 124034991947,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/job/124034991947",
+      "lastObservedStatus": "completed",
+      "lastObservedConclusion": "success",
+      "unitStep": "success",
+      "buildStep": "success",
+      "packageStep": "success",
+      "uploadStep": "success",
+      "remainingObservedStep": null,
+      "artifact": {
+        "id": 12972044909,
+        "name": "tauri-linux-4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/artifacts/12972044909",
+        "sizeBytes": 8694975,
+        "githubArchiveDigest": "sha256:628f3428d785d9171312b2ff60159d8f6fb49dfe8d3e22babf630266b2666ae7",
+        "expiredAtObservation": false
+      }
+    },
+    {
+      "platform": "windows",
+      "jobId": 124034991980,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/job/124034991980",
+      "lastObservedStatus": "in_progress",
+      "lastObservedConclusion": null,
+      "unitStep": "success",
+      "buildStep": "not_recorded_in_compact_observation",
+      "packageStep": "not_recorded_in_compact_observation",
+      "uploadStep": "not_recorded_in_compact_observation",
+      "remainingObservedStep": "Post actions/cache",
+      "artifact": {
+        "id": 12973871407,
+        "name": "tauri-windows-4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458/artifacts/12973871407",
+        "sizeBytes": 7210299,
+        "githubArchiveDigest": "sha256:e8886e55f266cb39ceb632827db0fbafd18ceb84d4eca100114077cebf0a3736",
+        "expiredAtObservation": false
+      }
+    }
+  ],
+  "downloadVerification": {
+    "macos": {
+      "sourceSHA": "4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+      "platform": "macos",
+      "checksumsVerified": 17,
+      "sourceFilesVerified": [
+        "fixture",
+        "font",
+        "designTokens",
+        "remoteContract",
+        "transportSource",
+        "nativeLock",
+        "transportLock"
+      ],
+      "package": {
+        "file": "herdr-pocket-tauri-probe.app.zip",
+        "bytes": 5458966,
+        "sha256": "0266f1d06cbba81e71b4ff8cbbc9e6df632347761361f098db65e3f54b9ca31d"
+      },
+      "appPath": "/tmp/herdr-tauri-m1a-4b78b6b.n6v84fky/unpacked/herdr-pocket-tauri-probe.app",
+      "appStarted": false
+    },
+    "android": {
+      "sourceSHA": "4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+      "platform": "android",
+      "checksumsVerified": 17,
+      "sourceFilesVerified": [
+        "fixture",
+        "font",
+        "designTokens",
+        "remoteContract",
+        "transportSource",
+        "nativeLock",
+        "transportLock"
+      ],
+      "packages": [
+        {
+          "file": "app-universal-debug.apk",
+          "bytes": 165280632,
+          "sha256": "1f8c34a3965616bee58e49684686705e7684384ac40cd83b1087dc03ce3f2524"
+        }
+      ],
+      "signing": "ephemeral-debug-key",
+      "deviceResult": "unverified",
+      "apkPaths": [
+        "/tmp/herdr-tauri-m1a-4b78b6b.n6v84fky/android-artifact/app-universal-debug.apk"
+      ],
+      "appInstalled": false,
+      "apkAbis": [
+        "arm64-v8a"
+      ]
+    }
+  },
+  "runtimeBoundary": {
+    "macos": "Limited native form/invalid-config QA is recorded separately in ../macos; app was closed by parent agent. This download verification did not start it.",
+    "android": "Not installed; device unverified. Ephemeral debug signature.",
+    "ios-simulator": "Build only, no real-device signing or runtime verification.",
+    "windows": "Installer uploaded; installation/runtime unverified.",
+    "linux": "Package uploaded; installation/runtime unverified."
+  },
+  "sharedTransportEvidence": {
+    "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094519",
+    "sourceSHA": "d15da12a4fc7d60313b3c253a315c001e7290b5e",
+    "rustCasesPassed": 6,
+    "receivedInputBytes": 0,
+    "scope": "Ubuntu loopback SSH/herdr CLI adapter; not GUI or mobile transport execution",
+    "transportSourceGitBlobAtBothCommits": "52077e160662ba6ccc1a5759b1c4bbf2e882dedc"
+  },
+  "artifactRetentionDays": 14,
+  "binariesCommitted": false,
+  "localDownloadAndVerificationDirectory": "/tmp/herdr-tauri-m1a-4b78b6b.n6v84fky",
+  "finalObservation": {
+    "evidence": "../delivery-checks.json",
+    "verifiedBy": "Independent Luna check reported by root",
+    "runStatus": "completed",
+    "runConclusion": "success",
+    "jobsCompletedSuccessfully": 5,
+    "windowsBuildPackageUpload": "success, independently confirmed by root",
+    "historyPolicy": "Earlier lastObserved fields retain this agent's final compact observation; final outcome is recorded here without rewriting that history."
+  }
+}

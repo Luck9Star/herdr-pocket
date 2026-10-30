@@ -1,0 +1,69 @@
+{
+  "sourceCommit": "d15da12a4fc7d60313b3c253a315c001e7290b5e",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396",
+  "fontSha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+  "runner": {
+    "os": "macOS-14.8.9-arm64-arm-64bit-Mach-O",
+    "arch": "arm64",
+    "imageOS": "macos14",
+    "imageVersion": "20260831.0302.1"
+  },
+  "toolchains": {
+    "flutter": "Flutter 3.47.9 \u2022 channel [user-branch] \u2022 https://github.com/flutter/flutter.git\nFramework \u2022 revision c197ca5199 (21 hours ago) \u2022 2026-10-29 10:10:20 -0400\nEngine \u2022 hash 9e025265bef30b838c0c1b68cad19decf97048f2 (revision 89c39edfdf) (2 days ago) \u2022 2026-10-27 19:51:20.000Z\nTools \u2022 Dart 3.13.7 \u2022 DevTools 2.60.0",
+    "xcode": "Xcode 15.4\nBuild version 15F31d",
+    "java": "not applicable",
+    "installedNdkVersions": [
+      "27.3.13750724",
+      "28.2.13676358",
+      "29.0.14206865"
+    ]
+  },
+  "flutterVersion": "3.47.9",
+  "flutterCommit": "c197ca5199e9ee5661e865596c9c07294dfab51c",
+  "platform": "macos",
+  "artifactSha256": "1c01ff844a6400cbb89d76f00b37cc673e199f2358a810d5ee19ac068e82f964",
+  "designTokensSha256": "23579f1c87d0e2bcd1679d42a343b118cc95cfec6a7ec8ea1c57179bd132a0e5",
+  "visualScheme": "Penpot v2 Tech Indigo and Slate; offline shell adaptation",
+  "fixtureSha256": "ad2eca3667445764d501ecb6ab53079232850c913626f433b167d1cdb97d7ab3",
+  "lockSha256": "1440de0189f3920cd44a4bcdbdcc031e6b295833edeeb92f7b0f8b986ad0f9ac",
+  "scope": "compile only; isolated offline input fixture plus explicit manual read-only SSH snapshot adapter; device/overlays NOT RUN",
+  "remoteAdapter": {
+    "ssh": "dartssh2 4.1.0",
+    "input": "disabled",
+    "storage": "memory-only experimental",
+    "contractSha256": "f28233bf34e2ddf64e0eda4e8f3966f4044b83bcf552d60f36af58185f94dfbb"
+  },
+  "signing": "development test build; no production signing/notarization",
+  "terminalCandidate": {
+    "schemaVersion": 1,
+    "name": "terminal_view-0.5.0-combining-experiment",
+    "version": "0.5.0",
+    "archiveUrl": "https://pub.dev/api/archives/terminal_view-0.5.0.tar.gz",
+    "archiveSha256": "5f8cf2e999b9b98224430b7ef2a32d378062073fa4e566f1f52d89ac9d9ac9cf",
+    "patch": "terminal_view-0.5.0-combining.patch",
+    "patchSha256": "2d0fb1d7283b034eb8161651f5c1cee0343df2877ebd6863e6639782ad8e5833",
+    "files": {
+      "lib/src/ui/painter.dart": {
+        "beforeSha256": "3d482e223a21ec62cb690006b46178c1c58b7a95ff5747d13479dfa82af00258",
+        "afterSha256": "f009096d4685c374936c962d4200517e00af097013fd0c8042168c488d0460a3"
+      },
+      "lib/src/ui/render.dart": {
+        "beforeSha256": "c1584eb282e5f9ee243ef6b42ca988caa341cb6f7d4d7494ab688383454f46fc",
+        "afterSha256": "a3baef20bcc5e5094a61898051348fc6eff88b5573e2c6c9887bca1ce70da9a5"
+      }
+    },
+    "license": "MIT; upstream LICENSE and NOTICE retained inside candidate tree",
+    "scope": "Experimental renderer-only patch; no normalization or parser/width changes; not a framework selection.",
+    "sourceCommit": "d15da12a4fc7d60313b3c253a315c001e7290b5e",
+    "variant": "experimental-patched",
+    "baselineLockSha256": "58f7cc3fd81236889bda05d601c92119e4904085404792e966df9ca6ccda4f51",
+    "candidateLockSha256": "1440de0189f3920cd44a4bcdbdcc031e6b295833edeeb92f7b0f8b986ad0f9ac",
+    "transitiveLockComparison": "package blocks identical except terminal_view explicit path source; SDK footer recorded separately",
+    "sdkConstraintComparison": {
+      "baseline": "  dart: \">=3.11.0 <4.0.0\"\n  flutter: \">=3.19.0\"\n",
+      "candidate": "  dart: \">=3.11.0 <4.0.0\"\n  flutter: \">=3.18.0-18.0.pre.54\"\n",
+      "identical": false,
+      "actualFlutterVersionPinned": "3.47.9"
+    }
+  }
+}

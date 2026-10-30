@@ -1,0 +1,36 @@
+Window: "herdr_flutter_probe", App: herdr_flutter_probe.
+0 standard window herdr_flutter_probe, Secondary Actions: Raise
+	1 container herdr_flutter_probe
+		2 container (settable)
+			3 button (settable)
+			4 container (settable) 远端接入 · 只读
+			5 text (settable) M1a 手动接入
+			6 text (settable) 仅用于隔离测试主机。先核验资料，再获取一个明确目标的真实快照。此入口没有扫码配对、组网或远端输入。
+			7 text (settable) 1 · 连接目标
+			8 text field (settable)
+			9 text field (settable)
+			10 text field (settable)
+			11 text field (settable)
+			12 text field (settable)
+			13 text field (settable)
+			14 text field (settable)
+			15 text (settable) 2 · 主机身份核验
+			16 text field (settable)
+			17 text (settable) 3 · 内存临时凭据
+			18 text field (settable)
+			19 checkbox (settable, integer) Value: 0, 我已通过可信渠道核验主机公钥、账号与目标资料
+输入或保存资料不等于信任；任何编辑都会清除此确认。
+			20 button (settable) 核验并获取只读快照
+			21 text (settable) 仅支持内存中的未加密 OpenSSH Ed25519 测试私钥，请重新输入
+	22 close button
+	23 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	24 minimize button
+	25 text herdr_flutter_probe
+26 menu bar
+	27 herdr_flutter_probe
+	28 Edit
+	29 View
+	30 Window
+	31 Help
+
+The focused UI element is 18 text field (settable)

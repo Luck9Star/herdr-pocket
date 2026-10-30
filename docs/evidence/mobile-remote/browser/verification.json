@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-30",
+  "scope": "Mac Chromium browser form/viewport validation only; native SSH unavailable and deliberately disabled",
+  "source": "b88a0ad9b2a173ac743568ec5ce479f22b6844ca; tested Tauri frontend files unchanged in 4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+  "checks": {
+    "viewport360x740": "no horizontal overflow; controls >=44px",
+    "viewport390x844": "no horizontal overflow; controls >=44px",
+    "viewport320x380": "short viewport only, not actual mobile keyboard; scroll to hide-keyboard button succeeded",
+    "reviewInvalidation": "checking review then editing host/port clears review",
+    "nativeAbsent": "connect stays disabled even after checking review",
+    "secretInput": "final HTML input type=password; synthetic invalid text only",
+    "clearAndLeave": "clear button and switch to fixture empty temporary secret and invalidate review",
+    "consoleWarningsErrors": []
+  },
+  "preRepairImage": "tauri-360-form.png records initial textarea design, replaced by password input before final 390 captures",
+  "cleanup": {
+    "browserTab": "closed",
+    "viewportOverride": "reset",
+    "vite1421": "stopped"
+  },
+  "files": {
+    "tauri-320-short-viewport.json": "c917402bb1e30a2b94a20712cb7e8e6f23d269fce9e1c022914e6b0dab606ba6",
+    "tauri-320-short-viewport.png": "ac184bae78048ca5198d5d28b3353c4f36129cbfd3d80dcc410c4664c09d8a75",
+    "tauri-360-form.png": "aebb4add91adbcdfbe66bf3678f9e5fccaf6ad2c294e555ec7cf36a4b5edc7df",
+    "tauri-390-form.png": "32b4934d739576f6931f3d68fe16432c13f7945e455b64ecc437f14f46364d2d",
+    "tauri-390-full.png": "29850178b819447a74adec96588e948fd553d187e235a5250be104e88bd03b0d",
+    "tauri-form-ax.txt": "aa96b07f14171baed9a5c0615849f30a493164046610357a60557be2417dfc8c"
+  }
+}

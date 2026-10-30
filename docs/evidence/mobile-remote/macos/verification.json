@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-30",
+  "sourceSHA": "4b78b6b81a6761a248952e1fc5ec8f0e49f3d21b",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41047398458",
+  "artifactId": 12973041926,
+  "scope": "Mac native Tauri launch and local invalid-config UI only; not SSH GUI success or phone execution",
+  "packageSHA256": "0266f1d06cbba81e71b4ff8cbbc9e6df632347761361f098db65e3f54b9ca31d",
+  "checks": {
+    "launch": "passed",
+    "secretField": "native AX secure text field; only synthetic invalid string entered",
+    "reviewInvalidation": "editing target cleared review",
+    "invalidConfig": "format error shown; temporary secret cleared; no valid credentials supplied",
+    "nativeHtmlRequired": "empty required fields block submit before handler; recorded separately from adapter validation"
+  },
+  "cleanup": {
+    "app": "quit via Cmd+Q",
+    "process": "pgrep confirmed absent",
+    "credentials": "no real credentials, clipboard, user SSH config or authorization files read"
+  },
+  "files": {
+    "tauri-invalid-config-ax.txt": "2b9eaf4db41e708e8fee12bf92b0ca037e2e2bee1b3b36b76f451163bd6a9bcd",
+    "tauri-invalid-config.png": "b38ef695044820ebc258829bb34b3e3e016e0127c5f26bb84529c67f84ab2bb9"
+  }
+}

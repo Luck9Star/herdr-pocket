@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-30",
+  "sourceSHA": "b88a0ad9b2a173ac743568ec5ce479f22b6844ca",
+  "runId": 41046472357,
+  "artifactId": 12973360512,
+  "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/41046472357/artifacts/12973360512",
+  "downloaded": true,
+  "topLevelManifestFilesVerified": 7,
+  "probeManifestFilesVerified": 4,
+  "protocolCases": 12,
+  "passed": 2,
+  "failed": 10,
+  "zeroRemoteInputBytes": true,
+  "ownedProcessesStopped": true,
+  "ephemeralKeysRemoved": true,
+  "files": {
+    "SHA256SUMS": "37f3775bbc6c0d88c9c48981d4d268fe35b4d96705001b91ca7f4b6e9dbe87c5",
+    "probe/SHA256SUMS": "d78e646132ea4e4fa9ede4c9d6afa3bc29487f099ca3ab07bad8f26b74eef874",
+    "probe/flutter-pubspec.lock": "1440de0189f3920cd44a4bcdbdcc031e6b295833edeeb92f7b0f8b986ad0f9ac",
+    "probe/manifest.json": "3e3d763c67927051e10f110d01b83810d595e5ae1fd584554558f49d78e49caa",
+    "probe/remote-contract.json": "dd000e829d4f172165ef37f379e6c5e86fb206f01f120c238b53de8921112fab",
+    "probe/transport-Cargo.lock": "93aa257dea821ad18b8d9eba6d0fc4d7ea71421ba73b27fdd4307d42998a55c1",
+    "source.json": "aa923d1a6b63e28b7deb8fc35c0ae9706f1c4388742b8a908d142c2e4c3bc502",
+    "stage-outcomes.json": "da9d0a8a8285f0d2f89e8a115d91952102193d07d1202504ac90977a8a2c2cc9"
+  }
+}

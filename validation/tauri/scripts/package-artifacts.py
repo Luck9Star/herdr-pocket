@@ -20,8 +20,11 @@ manifest = {
     'signing':'ephemeral-debug-key' if os.getenv('PROBE_PLATFORM')=='android' else 'unsigned-test-only',
     'runner':{'os':platform.platform(),'architecture':platform.machine(),'imageVersion':os.getenv('ImageVersion'),'imageOS':os.getenv('ImageOS')},
     'toolchains':{'node':version(['node','--version']),'rustc':version(['rustc','--version']),'cargo':version(['cargo','--version'])},
-    'versions':{'tauriCore':'2.12.5','tauriBuild':'2.7.4','tauriAPI':'2.12.4','tauriCLI':'2.12.4','xterm':'6.0.0'},
-    'scope':'Offline renderer/IPC probe; no SSH, herdr or overlay connections; build does not verify devices.',
+    'versions':{'tauriCore':'2.12.5','tauriBuild':'2.7.4','tauriAPI':'2.12.4','tauriCLI':'2.12.4','xterm':'6.0.0','russh':'0.65.0','herdrProtocolTarget':'0.9.5'},
+    'scope':'Separate offline renderer/IPC fixture and experimental reviewed SSH one-shot read-only adapter; no remote input, overlay integration or protected credential storage. Build does not verify devices or a real remote connection.',
+    'remoteContractSHA256':sha(repo/'validation/shared/remote-contract.json'),
+    'transportSourceSHA256':sha(repo/'validation/transport-rust/src/lib.rs'),
+    'remoteBehavior':{'mode':'one-shot-readonly','remoteInput':False,'ptyResize':False,'credentialStorage':'experimental-memory-only','browserTransport':'unavailable','deviceResult':'unverified'},
     'fixtureSHA256':sha(repo/'validation/shared/fixture.json'),
     'fontSHA256':sha(repo/'validation/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'),
     'designTokensSHA256':sha(repo/'validation/shared/design-tokens-v2.json'),
@@ -30,7 +33,7 @@ manifest = {
 if platform.system()=='Darwin': manifest['toolchains']['xcode']=version(['xcodebuild','-version'])
 if os.getenv('PROBE_PLATFORM')=='android':
     manifest['toolchains']['java']=version(['java','-version']); manifest['toolchains']['ndk']='28.2.13676358'; manifest['toolchains']['androidPlatform']='android-35'
-for f in [root/'package-lock.json',root/'src-tauri/Cargo.lock',root/'core/Cargo.lock']:
+for f in [root/'package-lock.json',root/'src-tauri/Cargo.lock',root/'core/Cargo.lock',repo/'validation/transport-rust/Cargo.lock']:
     if f.exists(): shutil.copy2(f,out/f'{f.parent.name}-{f.name}')
 shutil.copytree(repo/'validation/shared',out/'shared',dirs_exist_ok=True,ignore=shutil.ignore_patterns('.gitattributes'))
 if (root/'dist').exists(): zip_tree(root/'dist',out/'browser-preview.zip')

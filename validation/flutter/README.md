@@ -1,6 +1,6 @@
 # Flutter 终端验证壳
 
-2026-10-30：最小 **本地 fixture 验证壳**，不是可连接 herdr 的产品。实际编译结果以 [Flutter Actions](https://github.com/Luck9Star/herdr-pocket/actions/workflows/flutter-validation.yml) 对应提交为准；真机字体、IME、选择、性能、真实 SSH 与三网络均未验证。
+2026-10-30：验证壳包含本地 fixture 和新增的 **M1a 手动只读 SSH 快照实验入口**，尚非完整产品。实际编译结果以 [Flutter Actions](https://github.com/Luck9Star/herdr-pocket/actions/workflows/flutter-validation.yml) 对应提交为准；真机字体、IME、选择、性能、真实 SSH 与三网络均未验证。
 
 ## 固定输入与边界
 
@@ -10,11 +10,11 @@
 - 每个焦点/模式 epoch 重建终端输入连接，并重新显示 fixture full，以阻止旧 IME 回调进入新焦点。**因此当前壳不保留模式切换前的滚动历史**；这是需要真实流接入后消除的验证壳限制，不是产品设计。
 - `autoResize: false` 且没有远端 resize 入口；窗口/键盘变化只改变可见空间。
 - 输出队列上限 65536 bytes；溢出丢弃本轮观察并等待显式新 full，不带损坏画面继续输入。负载消费计量为解析器提交，不代表 GPU 完成绘制，不能据此比较整 App 性能。
-- 本壳不读取 SSH 配置、凭据、私钥，不建立网络，不修改主机授权。
+- 默认 fixture 模式不建立网络。远端入口仅使用用户显式提供的内存测试私钥与预期 host key，不读取 SSH 配置、私钥文件或 agent，不修改主机授权。
 
 ## 云端构建
 
-工作流先在 Ubuntu 上生成临时平台工程、解析一次依赖锁并运行 analyze/tests，再让五端构建任务下载**同一个 lock**并使用 `--enforce-lockfile`。应用 `pubspec.lock` 已从 run 40982743142 取回并核对 terminal_view 归档 hash 后落库；构建脚本使用该锁并 `--enforce-lockfile`。锁 SHA256 为 `5b3979bec9c6487bb79f9bba82e66908fe735248923aeced14568cb101c9fa99`。首轮错误模板锁已排除，见来源记录。
+工作流先在 Ubuntu 上生成临时平台工程、解析一次依赖锁并运行 analyze/tests，再让五端构建任务下载**同一个 lock**并使用 `--enforce-lockfile`。应用 `pubspec.lock` 已从 run 40982743142 取回并核对 terminal_view 归档 hash 后落库；构建脚本使用该锁并 `--enforce-lockfile`。原离线基线锁 SHA256 为 `5b3979bec9c6487bb79f9bba82e66908fe735248923aeced14568cb101c9fa99`；M1a 新增依赖锁仍需首轮云 `--enforce-lockfile` 确认，不能把手工固定元数据视为已解析通过。首轮错误模板锁已排除，见来源记录。
 
 平台脚手架只在 runner 临时目录生成，未将完整 SDK/平台模板安装到本机。`ci.py bootstrap` 在非 GitHub Actions 环境拒绝执行。
 
@@ -53,7 +53,7 @@ flutter run
 
 ## 尚未具备
 
-真实 SSH host-key/session 绑定与 herdr observe、三网络原生桥、真机性能采样、手机配对及加密迁移都没有被这个 fixture 壳实现。它们不能因本壳编译或单元测试通过而改为“已验证”。`terminal_view` 的 Unicode 宽度表、emoji grapheme、SGR 支持与系统 fallback 需运行同 fixture 后判定；没有预先认定其优于 xterm.js。
+三网络原生桥、真机性能采样、手机配对及加密迁移仍未实现。M1a 已新增真实 SSH 只读适配源码，下述独立 CI 与设备结果才决定其验证状态。它们不能因本壳编译或单元测试通过而改为“已验证”。`terminal_view` 的 Unicode 宽度表、emoji grapheme、SGR 支持与系统 fallback 需运行同 fixture 后判定；没有预先认定其优于 xterm.js。
 # 组合字符渲染诊断
 
 Mac GUI smoke 发现分解重音 `e\u0301 A\u030a n\u0303` 看起来只有基字符。固定 `terminal_view 0.5.0` 源码中 buffer 将零宽字符存入 `getCombined`，`getText` 保留它们；`TerminalPainter._paintLineForeground` 的 ASCII 批处理却只采集基字符，未检查/传递 combined。新增 `diagnostic/combining_render_test.dart` 用同一字体、真实 buffer 和 painter 写入输入/复制 API codepoints、cursorX、两张 PNG 与像素对照 JSON，直接验证该假设。
@@ -75,3 +75,17 @@ Mac GUI smoke 发现分解重音 `e\u0301 A\u030a n\u0303` 看起来只有基字
 新增 `test/probe_ui_test.dart` 从实际控件驱动未知恢复、隐藏标签与窄屏切换，并检查 320×640／键盘 260px／1.3 倍 UI 字号下的布局和真实 terminal 几何。CI 保存的 `probe-results/ui-v2` 是 **headless widget 布局证据**，系统文字可能使用测试 fallback 字体，不能代替原生 App 视觉、真实输入法或触控验收。候选工作流继续生成带受控 terminal_view 修复的五端测试包；普通 baseline 工作流仍使用未补丁的官方 0.5.0，其已知组合绘制失败不可与候选包混用。
 
 手工步骤沿用上文：负载、故障注入和 UTF-8 记录现在位于“验证工具”；刷新图标是“获取新 full”，未知状态在 fresh full 后仍需显式“人工核实未知”。仅切换模式、标签、布局或刷新不得增加本地接收次数。
+
+## M1a · 手机手动只读接入
+
+顶部具名“远端只读”进入独立页面：连接目标 → 主机身份核验 → 内存临时凭据 → 显式确认 → 读取一张真实远端完整画面。手机表单可垂直滚动，连接按钮至少44px；连接期间字段锁定，任何编辑清除确认。成功后明确显示目标、获取时间和“连接已关闭／非实时”。取消、离开页面或应用暂停都会使本次 generation 失效；没有自动重连、远端输入或 PTY resize。原 fixture 逐键／草稿与远端路径隔离。
+
+此实验仅接受未加密 OpenSSH Ed25519 私钥（隐藏单行输入可粘贴完整 PEM，保留边界并在内存恢复换行），不读取或发现磁盘私钥／SSH agent，不保存或输出凭据。Dart 字符串由运行时管理，清空字段不是可证明的内存擦除；设备安全存储、长期凭据和相机配对仍后置。
+
+`remote_adapter.dart` 与 `tool/remote_probe.dart` 使用同一纯 Dart 适配器。固定 `dartssh2 4.1.0`（MIT）和 `pointycastle 4.0.0`，新增传递包锁为 `asn1lib 1.5.8`、`pinenacl 0.6.0`；归档、hash、原始许可证见 [`remote-dependencies.json`](remote-dependencies.json)、`licenses/`。Context7 先 `library dartssh2` 再 `/vicajilau/dartssh2` 文档；PointyCastle同样先解析后 `/bcgit/pc-dart` 文档。4.1.0实际源码 `ssh_transport.dart:40-50` 明确回调 fingerprint 是 UTF-8 `SHA256:<无padding base64>`，并非原始32字节digest。禁止省略回调、跳过签名或退回其他认证方法。
+
+目标绑定限于已核实 herdr 0.9.5 / protocol22：reviewed socket 必须符合 `/<XDG_CONFIG_HOME>/herdr/sessions/<显式非default会话>/herdr.sock`，只读 `session.snapshot` 核对RPC ID、版本、唯一 pane ID 和稳定 terminal ID；固定 exec 使用从socket派生且严格shellquote的 XDG root、herdr绝对路径、同一session和snapshot解析的terminal ID。不存在会话或错误socket绑定立即拒绝，不回退默认会话。协议frame不echo目标身份，绑定依据是snapshot与上述固定命令，不宣称另有服务端目标签名。
+
+仅打开 direct-streamlocal 并发送 `session.snapshot`；observe不申请SSH PTY，不使用shell、控制、takeover或任意命令入口。首frame必须full／ANSI／80×24／非负seq／有效base64和UTF-8；RPC单行上限1MiB，observe单行1MiB，stdout＋stderr合计2MiB、stderr另限64KiB。没有远端输出到系统标题、剪贴板、URL或输入的回调。原始连接future占用单一拨号预算，取消不能提前释放；迟到socket销毁、generation旧结果不发布。
+
+CI CLI只允许运行器本次 `/tmp/hp-mobile-<run>-...` 中的合成配置、loopback非特权端口，报告只有布尔检查、计数和稳定错误码；配置和keys不能打包。由独立 `validation/remote-harness` 验证同一adapter，不安装本机SDK或连接真实主机。当前新增Dart单元／Widget与真实协议检查等待首轮CI；未经执行不能标通过。

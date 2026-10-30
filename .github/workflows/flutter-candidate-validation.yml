@@ -106,10 +106,10 @@ jobs:
       matrix:
         include:
           - {platform: android, os: ubuntu-24.04}
+          - {platform: ios, os: macos-14}
+          - {platform: macos, os: macos-14}
           - {platform: linux, os: ubuntu-24.04}
           - {platform: windows, os: windows-2022}
-          - {platform: macos, os: macos-14}
-          - {platform: ios, os: macos-14}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:

@@ -2,7 +2,7 @@ name: Tauri validation shells
 on:
   push:
     branches: ['codex/**']
-    paths: ['validation/tauri/**', 'validation/shared/**', '.github/workflows/tauri-validation.yml']
+    paths: ['validation/tauri/**', 'validation/transport-rust/**', 'validation/shared/**', '.github/workflows/tauri-validation.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,16 +17,17 @@ jobs:
       max-parallel: 3
       matrix:
         include:
-          - platform: linux
-            runner: ubuntu-24.04
-          - platform: windows
-            runner: windows-2025
-          - platform: macos
-            runner: macos-15
+          # Submit mobile candidates first; desktop support remains in the same matrix.
           - platform: android
             runner: ubuntu-24.04
           - platform: ios-simulator
             runner: macos-15
+          - platform: macos
+            runner: macos-15
+          - platform: linux
+            runner: ubuntu-24.04
+          - platform: windows
+            runner: windows-2025
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     defaults:
@@ -77,6 +78,7 @@ jobs:
           npm ci
           npm test
           cargo test --locked --manifest-path core/Cargo.toml
+          cargo test --locked --manifest-path ../transport-rust/Cargo.toml
           npm run build
           npm run tauri -- icon icon.svg
       - name: Build test shell

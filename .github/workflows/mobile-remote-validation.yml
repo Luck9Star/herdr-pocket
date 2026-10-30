@@ -1,0 +1,96 @@
+name: Mobile-first read-only remote adapters
+on:
+  push:
+    branches: ['codex/**']
+    paths:
+      - 'validation/remote-harness/**'
+      - 'validation/transport-rust/**'
+      - 'validation/flutter/lib/remote*'
+      - 'validation/flutter/tool/remote_probe.dart'
+      - 'validation/flutter/pubspec*'
+      - 'validation/shared/remote-contract.json'
+      - '.github/workflows/mobile-remote-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mobile-readonly-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  shared-loopback:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Record source before toolchain or compile failures
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          out = Path(os.environ['RUNNER_TEMP']) / 'mobile-remote-artifacts'
+          out.mkdir()
+          paths = ['validation/transport-rust/Cargo.lock', 'validation/flutter/pubspec.lock', 'validation/shared/remote-contract.json']
+          value = {'sourceSHA': os.environ['GITHUB_SHA'], 'runUrl': 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['GITHUB_RUN_ID'], 'scope': 'Source provenance only, not execution evidence', 'sourceFiles': {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}}
+          (out / 'source.json').write_text(json.dumps(value, indent=2) + '\n')
+          PY
+      - name: Verify harness isolation and evidence guards
+        run: python3 -m unittest discover -s validation/remote-harness -p 'test_*.py' -v
+      - name: Pin Rust and install runner-only SSH server
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+          sudo apt-get update
+          sudo apt-get install -y openssh-server
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            validation/transport-rust/target
+          key: mobile-readonly-linux-rust196-${{ hashFiles('validation/transport-rust/Cargo.lock') }}
+      - name: Build and test Rust adapter used by Tauri
+        id: rust
+        run: |
+          cargo test --locked --manifest-path validation/transport-rust/Cargo.toml
+          cargo build --locked --manifest-path validation/transport-rust/Cargo.toml --bin remote-probe
+      - name: Install pinned Flutter in runner only
+        run: python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+      - name: Prepare the same Flutter adapter and terminal candidate
+        run: |
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-remote-probe"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-remote-probe"
+      - name: Resolve the fixed Dart dependencies
+        id: dart
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/flutter-remote-probe"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-remote-probe"
+      - name: Run both actual adapters against one isolated SSH and herdr target
+        id: probe
+        run: python3 validation/remote-harness/run-ci.py --flutter-app "$RUNNER_TEMP/flutter-remote-probe" --output "$RUNNER_TEMP/mobile-remote-artifacts/probe"
+      - name: Record actual stage outcomes without raw logs
+        if: always()
+        env:
+          RUST_OUTCOME: ${{ steps.rust.outcome }}
+          DART_OUTCOME: ${{ steps.dart.outcome }}
+          PROBE_OUTCOME: ${{ steps.probe.outcome }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          out = Path(os.environ['RUNNER_TEMP']) / 'mobile-remote-artifacts'
+          out.mkdir(exist_ok=True)
+          value = {'sourceSHA': os.environ['GITHUB_SHA'], 'rustBuildAndTest': os.environ['RUST_OUTCOME'], 'dartResolveAndLock': os.environ['DART_OUTCOME'], 'actualAdapters': os.environ['PROBE_OUTCOME']}
+          (out / 'stage-outcomes.json').write_text(json.dumps(value, indent=2) + '\n')
+          (out / 'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + str(p.relative_to(out)) + '\n' for p in sorted(out.rglob('*')) if p.is_file() and p != out / 'SHA256SUMS'))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: mobile-readonly-adapters-${{ github.sha }}
+          path: ${{ runner.temp }}/mobile-remote-artifacts/
+          if-no-files-found: warn
+          retention-days: 14

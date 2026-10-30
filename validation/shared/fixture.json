@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "id": "herdr-terminal-v1",
+  "terminal": {
+    "cols": 80,
+    "rows": 24,
+    "fontFamily": "JetBrainsMono Nerd Font Mono",
+    "fontSize": 14,
+    "scrollback": 2000
+  },
+  "viewports": {
+    "phone": {
+      "width": 390,
+      "height": 844
+    },
+    "smallPhone": {
+      "width": 360,
+      "height": 740
+    },
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    },
+    "narrowDesktop": {
+      "width": 720,
+      "height": 900
+    }
+  },
+  "frames": [
+    {
+      "id": "unicode-ansi-full",
+      "kind": "full",
+      "data": "\u001b[0m\u001b[2J\u001b[Hherdr-pocket / same fixture v1\r\nASCII | 0123456789 | ABC abc\r\nCJK   | 中文终端 | 日本語 | 한글\r\nNerd  |     󰟀 | powerline\r\nEmoji | 😀 🚀 ❤️ 👨‍👩‍👧‍👦 | end\r\nMarks | é Å ñ | end\r\n\u001b[1mBold\u001b[0m \u001b[3mItalic\u001b[0m \u001b[4mUnderline\u001b[0m \u001b[9mStrike\u001b[0m\r\n\u001b[31mRed\u001b[0m \u001b[38;2;65;180;170mTruecolor\u001b[0m \u001b[7mReverse\u001b[0m\r\n\u001b[10;1HColumn ruler: 1234567890123456789012345678901234567890\r\n\u001b[12;1HCursor: 中X éY 😀Z\r\n\u001b[14;1HNo real SSH connection. Input is captured locally.\r\n\u001b[16;1H$ "
+    },
+    {
+      "id": "positioned-delta",
+      "kind": "delta",
+      "data": "\u001b[18;1H\u001b[32mDELTA epoch current\u001b[0m\u001b[16;3H"
+    },
+    {
+      "id": "alternate-screen",
+      "kind": "delta",
+      "data": "\u001b[?1049h\u001b[H\u001b[7m fixture TUI \u001b[0m\r\nUse arrows, Tab, Esc and Ctrl-C; compare captured bytes."
+    },
+    {
+      "id": "alternate-exit",
+      "kind": "delta",
+      "data": "\u001b[?1049l"
+    }
+  ],
+  "inputCases": [
+    {
+      "id": "ime-commit",
+      "text": "中文",
+      "expectedUtf8Hex": "e4b8ade69687"
+    },
+    {
+      "id": "enter",
+      "text": "\r",
+      "expectedUtf8Hex": "0d"
+    },
+    {
+      "id": "ctrl-c",
+      "text": "\u0003",
+      "expectedUtf8Hex": "03"
+    },
+    {
+      "id": "up",
+      "text": "\u001b[A",
+      "expectedUtf8Hex": "1b5b41"
+    },
+    {
+      "id": "multiline",
+      "text": "echo one\necho two",
+      "expectedUtf8Hex": "6563686f206f6e650a6563686f2074776f"
+    },
+    {
+      "id": "combining",
+      "text": "é",
+      "expectedUtf8Hex": "65cc81"
+    },
+    {
+      "id": "emoji",
+      "text": "😀",
+      "expectedUtf8Hex": "f09f9880"
+    }
+  ],
+  "load": {
+    "chunkBytes": 4096,
+    "chunks": 256,
+    "maxQueuedBytes": 65536,
+    "chunkFile": "load-chunk.txt",
+    "encoding": "UTF-8",
+    "intervalMs": 0,
+    "maxInputBytes": 4096
+  },
+  "font": {
+    "file": "fonts/JetBrainsMonoNerdFontMono-Regular.ttf",
+    "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+    "release": "Nerd Fonts v3.4.0",
+    "source": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/v3.4.0/patched-fonts/JetBrainsMono/Ligatures/Regular/JetBrainsMonoNerdFontMono-Regular.ttf",
+    "fallback": "platform CJK/emoji fonts; record exact OS on the same device",
+    "licenseFiles": [
+      "fonts/LICENSE-JetBrainsMono.txt",
+      "fonts/LICENSE-Nerd-Fonts.txt"
+    ]
+  },
+  "scope": "Synthetic ANSI fixture, not a captured Powerlevel10k/Oh My Posh or herdr compatibility result."
+}

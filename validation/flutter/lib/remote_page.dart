@@ -29,7 +29,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   };
   bool reviewed = false, busy = false;
   int request = 0;
-  String status = '手动接入实验 · 只获取一张真实远端画面';
+  String status = '审查接入 → 会话 pane 看板 → 选择目标观察';
+  RemoteDashboard? dashboard;
+  String? selectedPane;
+  bool live = false;
+  int? sequence;
   RemoteSnapshot? snapshot;
   DateTime? capturedAt;
   Terminal? terminal;
@@ -38,12 +42,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void initState() { super.initState(); WidgetsBinding.instance.addObserver(this); }
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) stop('应用已暂停，连接已取消；请重新核验后主动连接');
+    if (state != AppLifecycleState.resumed) stop('应用已暂停，连接已取消；请重新核验后主动连接');
   }
   void stop([String message = '已取消；不会重连或发送输入']) {
     request++; unawaited(adapter.cancel());
     fields['privateKeyPem']!.clear();
-    if (mounted) setState(() { busy = false; reviewed = false; status = message; });
+    if (mounted) setState(() { busy = false; live = false; reviewed = false; status = message; });
   }
   @override
   void dispose() {
@@ -65,31 +69,38 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       });
       fields['privateKeyPem']!.clear();
       FocusScope.of(context).unfocus();
-      setState(() { busy = true; snapshot = null; capturedAt = null; terminal?.dispose(); terminal = null; status = '正在连接并核验主机身份'; });
-      final result = await adapter.read(config,onProgress:(generation,phase) {
+      setState(() { busy = true; live = false; dashboard = null; selectedPane = null; sequence = null; snapshot = null; capturedAt = null; terminal?.dispose(); terminal = null; status = '正在连接并核验主机身份'; });
+      await adapter.observe(config,onDashboard:(value) {
         if (!mounted || ticket != request) return;
+        setState(() { dashboard = value; reviewed = false;
+          status = value.panes.isEmpty ? '会话看板为空 · 未发现 pane，不代表主机没有任务' : '会话看板已核验 · 请选择一个明确 pane 开始观察'; });
+      },onFrame:(generation,paneId,frame) {
+        if (!mounted || ticket != request || dashboard?.generation != generation || selectedPane != paneId) return;
+        if (frame.full) {
+          terminal?.dispose();
+          terminal = Terminal(maxLines:24,reflowEnabled:false)..resize(80,24);
+        }
+        terminal!.write(frame.ansi);
+        setState(() { snapshot = RemoteSnapshot(generation,config.session,paneId,frame.ansi);
+          capturedAt = DateTime.now(); sequence = frame.seq; live = true;
+          status = '正在只读观察 · 输入关闭'; });
+      },onProgress:(generation,phase) {
+        if (!mounted || ticket != request) return;
+        if (phase == 'snapshot_received' || phase == 'full_received') return;
         setState(() { status = switch (phase) {
           'connecting' => '正在连接 · 尚未信任主机',
           'snapshot' => '主机身份与认证通过 · 读取会话看板',
-          'snapshot_received' => '目标已绑定 · 准备获取只读快照',
-          'observing' => '等待目标首张完整画面',
-          'full_received' => '已收到完整画面 · 正在关闭连接',
+          'observing' => '目标已绑定 · 等待首张完整画面',
           _ => '正在核验',
         }; });
       });
-      if (!mounted || ticket != request) return;
-      final view = Terminal(maxLines:2000,reflowEnabled:false);
-      // No title, bell, OSC, clipboard, URL, output or resize callbacks.
-      view.resize(80,24); view.write(result.ansi);
-      setState(() { snapshot = result; terminal = view; capturedAt = DateTime.now();
-        status = '只读快照 · 连接已关闭，画面不会实时更新'; busy = false; reviewed = false; });
     } catch (error) {
       if (!mounted || ticket != request) return;
       final code = error is RemoteFailure ? error.code : 'connection_failed';
-      setState(() { busy = false; reviewed = false;
+      setState(() { busy = false; live = false; reviewed = false;
         status = switch (code) {
           'host_key_mismatch' => '主机指纹不符 · 已在认证前拒绝，请从可信渠道重新核验',
-          'session_mismatch' || 'pane_missing' || 'invalid_terminal_id' => '指定会话或目标不匹配 · 已停止，请检查资料',
+          'session_mismatch' || 'pane_missing' || 'invalid_terminal_id' || 'invalid_snapshot' || 'stale_selection' => '指定会话或目标不匹配 · 已停止，请检查资料',
           'cancelled' => '已取消 · 不会自动重连',
           'invalid_private_key' => '仅支持内存中的未加密 OpenSSH Ed25519 测试私钥，请重新输入',
           'invalid_host_key' => '预期主机公钥格式无效 · 仅接受 ssh-ed25519 与 base64 两字段',
@@ -98,9 +109,21 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           'connection_busy' => '上一连接仍在关闭 · 请稍后主动重试',
           'unsupported_protocol' => '此实验只支持 herdr 0.9.5 / protocol 22，未继续读取',
           'timeout' => '连接或读取超时 · 未自动重试',
-          _ => '读取失败（$code）· 请检查资料，再主动连接',
-        }; });
+          'sequence_gap' => '观察序号不连续 · 已停止，旧画面不可视为当前状态',
+          'invalid_first_frame' || 'invalid_frame' || 'invalid_response' || 'truncated_response' => '观察数据不完整或格式异常 · 已停止，请重新审查连接',
+          'output_limit' => '观察缓冲超过上限 · 已停止，不能跳过增量继续',
+          'observe_ended' => '远端观察已结束／断线 · 已保留旧画面，请重新审查连接',
+          _ => '连接或读取失败 · 已停止，请重新审查资料后主动连接',
+        }; if (snapshot != null) status = '旧画面 · $status'; });
     } finally { if (mounted && ticket == request) fields['privateKeyPem']!.clear(); }
+  }
+
+  void selectPane(RemotePane pane) {
+    final board = dashboard;
+    if (!busy || board == null || selectedPane != null) return;
+    setState(() { selectedPane = pane.paneId; live = false; status = '目标已选择 · 等待新 full'; });
+    try { adapter.selectPane(board.generation,pane.paneId); }
+    on RemoteFailure { stop('目标选择已失效 · 请重新审查连接'); }
   }
 
   Future<void> pastePrivateKey() async {
@@ -141,14 +164,36 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         onPressed:() { stop(); Navigator.pop(context); })),
       body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
         child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-          Text('M1a 手动接入',style:Theme.of(context).textTheme.titleLarge),
+          Text('M1b 手机只读看板',style:Theme.of(context).textTheme.titleLarge),
           const SizedBox(height:8),
-          const Text('仅用于隔离测试主机。先核验资料，再获取一个明确目标的真实快照。此入口没有扫码配对、组网或远端输入。'),
+          const Text('仅用于隔离测试主机。审查接入后查看当前命名会话，选择明确 pane 观察。布局只改变本地视口，不调整共享 PTY。'),
+          const SizedBox(height:12),
+          Semantics(liveRegion:true,child:Text(status,key:const ValueKey('remote-status'),
+            style:TextStyle(color:widget.tokens.color('textSecondary')))),
+          if (busy) TextButton.icon(key:const ValueKey('remote-cancel'),onPressed:stop,
+            icon:const Icon(Icons.stop_circle_outlined),label:const Text('停止并断开')),
+          if (dashboard != null) ...[
+            const SizedBox(height:12),
+            Text('会话 ${dashboard!.session}',style:Theme.of(context).textTheme.titleMedium),
+            Text('仅来自已核验 socket 的 snapshot · ${dashboard!.panes.length} 个 pane\n${busy ? '连接保持，等待选择或正在观察' : '看板已陈旧，需重新审查连接'}'),
+            if (dashboard!.panes.isEmpty) const Padding(padding:EdgeInsets.symmetric(vertical:16),
+              child:Text('没有 pane · 不会回退到其他会话')),
+            for (final pane in dashboard!.panes) Card(child:Padding(padding:const EdgeInsets.all(12),
+              child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                Text(pane.paneId,style:Theme.of(context).textTheme.titleMedium),
+                Text(pane.terminalId,softWrap:true),
+                const SizedBox(height:8),
+                FilledButton(key:ValueKey('remote-pane-${pane.paneId}'),
+                  onPressed:busy && selectedPane == null ? () => selectPane(pane) : null,
+                  child:Text(selectedPane == pane.paneId ? '已选目标 · 只读' : '选择此 pane 观察')),
+              ]))),
+          ],
+          if (dashboard == null || !busy) ...[
           const SizedBox(height:16),
           Text('1 · 连接目标',style:Theme.of(context).textTheme.titleMedium),
           const SizedBox(height:12),
           input('host','SSH 主机 / IP'),input('port','SSH 端口'),input('username','SSH 用户'),
-          input('session','herdr 会话名（非 default）'),input('paneId','目标 pane ID',hint:'例如 w1:p1'),
+          input('session','herdr 会话名（非 default）'),
           input('socketPath','远端命名会话 socket 绝对路径',hint:'/.../herdr/sessions/会话/herdr.sock'),
           input('herdrPath','远端 herdr 可执行文件绝对路径'),
           Text('2 · 主机身份核验',style:Theme.of(context).textTheme.titleMedium),
@@ -163,15 +208,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             subtitle:const Text('输入或保存资料不等于信任；任何编辑都会清除此确认。')),
           const SizedBox(height:8),
           FilledButton.icon(key:const ValueKey('remote-connect'),onPressed:reviewed && !busy ? connect : null,
-            icon:const Icon(Icons.lock_outline),label:const Text('核验并获取只读快照')),
-          if (busy) TextButton.icon(key:const ValueKey('remote-cancel'),onPressed:stop,
-            icon:const Icon(Icons.close),label:const Text('取消连接')),
-          const SizedBox(height:12),
-          Semantics(liveRegion:true,child:Text(status,key:const ValueKey('remote-status'),
-            style:TextStyle(color:widget.tokens.color('textSecondary')))),
+            icon:const Icon(Icons.lock_outline),label:Text(dashboard == null ? '核验并读取会话看板' : '重新审查并连接')),
+          ],
           if (snapshot != null && terminal != null) ...[
             const SizedBox(height:12),
-            Text('${snapshot!.session} / ${snapshot!.paneId}\n获取于 ${capturedAt!.toLocal().toIso8601String()} · 80×24 · 非实时'),
+            Text('${snapshot!.session} / ${snapshot!.paneId}\n${live ? '只读观察中' : '旧画面 · 已停止'} · seq $sequence\n更新于 ${capturedAt!.toLocal().toIso8601String()} · 固定 80×24'),
             const SizedBox(height:8),
             SizedBox(height:360,child:ClipRRect(borderRadius:BorderRadius.circular(12),
               child:TerminalView(terminal!,theme:widget.tokens.terminalTheme,

@@ -115,7 +115,7 @@ def package(destination, platform, output):
         'visualScheme': 'Penpot v2 Tech Indigo and Slate; offline shell adaptation',
         'fixtureSha256': hashlib.sha256((ROOT / 'validation/shared/fixture.json').read_bytes()).hexdigest(),
         'lockSha256': hashlib.sha256((destination / 'pubspec.lock').read_bytes()).hexdigest(),
-        'scope': 'compile only; isolated offline input fixture plus explicit manual read-only SSH snapshot adapter; device/overlays NOT RUN',
+        'scope': 'compile only; isolated offline input fixture plus reviewed SSH pane dashboard and bounded continuous read-only observe adapter; device/overlays NOT RUN',
         'remoteAdapter': {'ssh': 'dartssh2 4.1.0', 'input': 'disabled', 'storage': 'memory-only experimental', 'contractSha256': hashlib.sha256((ROOT / 'validation/shared/remote-contract.json').read_bytes()).hexdigest()},
         'signing': 'iOS unsigned, not installable on device' if platform == 'ios' else 'development test build; no production signing/notarization',
     }

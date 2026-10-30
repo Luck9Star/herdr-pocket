@@ -100,4 +100,41 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(late.destroyed,isTrue);
   });
+  test('snapshot list binds all unique pane identities, accepts honest empty and rejects aliases/overlimit', () {
+    final config = RemoteConfig.fromJson({...fixtureConfig(),'paneId':''});
+    Map<String,dynamic> snapshot(List<Object?> panes) => {'type':'session_snapshot',
+      'snapshot':{'version':'0.9.5','protocol':22,'panes':panes}};
+    const pane = {'pane_id':'w1:p1','terminal_id':'term_abcd'};
+    expect(parseSnapshotDashboard(config,snapshot([]),3).panes,isEmpty);
+    expect(parseSnapshotDashboard(config,snapshot([pane]),3).generation,3);
+    expect(() => validateSnapshotTarget(config,snapshot([pane])),throwsA(failure('pane_missing')));
+    expect(() => parseSnapshotDashboard(config,snapshot([pane,pane]),1),throwsA(failure('invalid_snapshot')));
+    expect(() => parseSnapshotDashboard(config,snapshot([pane,{'pane_id':'w1:p2','terminal_id':'term_abcd'}]),1),
+      throwsA(failure('invalid_terminal_id')));
+    expect(() => parseSnapshotDashboard(config,snapshot(List.filled(257,pane)),1),throwsA(failure('invalid_snapshot')));
+  });
+  test('continuous full/delta sequences reject missing, duplicate, reordered or malformed frames', () async {
+    Map<String,Object?> record(int seq,{bool full=false}) => {'type':'terminal.frame','seq':seq,'full':full,
+      'encoding':'ansi','width':80,'height':24,'bytes':base64Encode(utf8.encode('synthetic $seq'))};
+    Stream<Uint8List> stream(List<Map<String,Object?>> frames) => Stream.fromIterable(frames.map((f) =>
+      Uint8List.fromList(utf8.encode('${jsonEncode(f)}\n'))));
+    final frames = await validatedFrames(stream([record(5,full:true),record(6),record(7,full:true)])).toList();
+    expect(frames.map((f) => f.seq),[5,6,7]); expect(frames[1].full,isFalse);
+    for (final seq in [5,4,7]) {
+      await expectLater(validatedFrames(stream([record(5,full:true),record(seq)])).toList(),throwsA(failure('sequence_gap')));
+    }
+    await expectLater(validatedFrames(stream([record(5)])).toList(),throwsA(failure('invalid_first_frame')));
+    for (final invalid in [
+      {...record(6),'encoding':'other'}, {...record(6),'width':79},
+      {...record(6),'seq':9007199254740992}, {...record(6),'type':'terminal.closed'},
+      {...record(6),'bytes':'!!!'}, {...record(6),'bytes':base64Encode([255])},
+    ]) {
+      await expectLater(validatedFrames(stream([record(5,full:true),invalid])).toList(),throwsA(failure('invalid_frame')));
+    }
+    await expectLater(validatedFrames(stream([{...record(5,full:true),'bytes':base64Encode(List.filled(65537,65))}])).toList(),
+      throwsA(failure('output_limit')));
+    final budget = ObserveByteBudget(continuous:true); budget.add(2097153);
+    expect(() => budget.add(65537,stderr:true),throwsA(failure('output_limit')));
+  });
+
 }

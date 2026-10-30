@@ -25,7 +25,11 @@ HERDR_URL = 'https://github.com/herdrdev/herdr/releases/download/v0.9.5/herdr-li
 HERDR_COMMIT = '2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01'
 BOOL_FIELDS = ('hostKeyChecked', 'hostKeyMatched', 'authStarted',
                'snapshotReceived', 'fullFrameReceived')
-CASES = ('positive', 'wrong-pin', 'missing-session', 'cross-session', 'cancel', 'reconnect')
+OBSERVE_CASES = ('observe-positive', 'observe-cancel', 'observe-reconnect')
+CASES = ('positive', 'wrong-pin', 'missing-session', 'cross-session', 'cancel', 'reconnect') + OBSERVE_CASES
+OBSERVE_COUNTERS = {'paneCount': 256, 'frameCount': 1_000_000,
+                    'deltaFrames': 1_000_000, 'connectionCount': 2,
+                    'bufferHighWaterBytes': 65_536}
 
 
 class ProbeFailure(Exception):
@@ -60,6 +64,16 @@ def safe_report(raw, expected_case):
                              not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', code)):
         raise ProbeFailure('invalid_error_code')
     clean['errorCode'] = code
+    if expected_case in OBSERVE_CASES:
+        for field, maximum in OBSERVE_COUNTERS.items():
+            value = raw.get(field)
+            if type(value) is not int or not 0 <= value <= maximum:
+                raise ProbeFailure('invalid_observe_counter')
+            clean[field] = value
+        seq = raw.get('lastSeq')
+        if seq is not None and (type(seq) is not int or not 0 <= seq <= 9_007_199_254_740_991):
+            raise ProbeFailure('invalid_observe_sequence')
+        clean['lastSeq'] = seq
     return clean
 
 
@@ -86,6 +100,24 @@ def validate_evidence(result, case):
                 result['authStarted'] and result['snapshotReceived'] and
                 not result['fullFrameReceived'] and result['errorCode'] == 'cancelled'):
             raise ProbeFailure('after_snapshot_cancel_not_proven')
+    elif case in OBSERVE_CASES:
+        if not all(result[field] for field in BOOL_FIELDS) or result['errorCode'] != 'cancelled':
+            raise ProbeFailure('observe_ssh_or_active_cancel_not_proven')
+        if not (1 <= result['paneCount'] <= 256 and result['lastSeq'] is not None and
+                0 < result['bufferHighWaterBytes'] <= 65_536):
+            raise ProbeFailure('observe_dashboard_or_buffer_evidence_missing')
+        if case == 'observe-cancel':
+            if result['frameCount'] != 1 or result['deltaFrames'] != 0 or result['connectionCount'] != 1:
+                raise ProbeFailure('first_full_cancel_not_proven')
+        elif case == 'observe-positive':
+            if not (result['frameCount'] >= 3 and result['deltaFrames'] >= 1 and result['connectionCount'] == 1):
+                raise ProbeFailure('continuous_delta_not_proven')
+        elif not (result['frameCount'] >= 4 and result['deltaFrames'] >= 2 and result['connectionCount'] == 2):
+            raise ProbeFailure('explicit_observe_reconnect_not_proven')
+        if result['deltaFrames'] >= result['frameCount']:
+            raise ProbeFailure('initial_full_not_proven')
+    else:
+        raise ProbeFailure('unsupported_evidence_case')
 
 
 def write_json(path, value):
@@ -141,17 +173,17 @@ def main():
     env.update(XDG_CONFIG_HOME=str(root / 'config'), XDG_STATE_HOME=str(root / 'state'),
                XDG_DATA_HOME=str(root / 'data'), XDG_CACHE_HOME=str(root / 'cache'), SHELL='/bin/sh')
     report = {
-        'schemaVersion': 1, 'milestone': 'M1a-mobile-readonly',
+        'schemaVersion': 1, 'milestone': 'M1b-mobile-dashboard-observe',
         'sourceSHA': os.environ['GITHUB_SHA'],
         'runUrl': 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['GITHUB_RUN_ID'],
         'platform': 'Ubuntu 24.04 x86_64 loopback OpenSSH',
         'runnerImage': {'imageOS': os.environ.get('ImageOS'), 'imageVersion': os.environ.get('ImageVersion')},
         'herdr': {'version': '0.9.5', 'sourceCommit': HERDR_COMMIT, 'asset': HERDR_URL, 'sha256': HERDR_SHA},
         'status': 'failed', 'checks': [],
-        'scope': 'Actual GUI adapter code in command-line runners; not a GUI click, phone, overlay or continuous observe acceptance',
-        'cancelScope': 'Actual SSH after-snapshot cancellation before observe full; adapter unit tests separately check stale generation publication',
+        'scope': 'Actual GUI adapter code in CLI runners, including continuous full/delta receive; not GUI click, phone, overlay or lifecycle device acceptance',
+        'cancelScope': 'M1a after-snapshot cancel plus M1b after-full active cancel; stale publication and invalid-frame injection are separate unit tests',
         'unverified': ['mobile touch', 'real mobile IME', 'camera pairing', 'protected key storage',
-                       'overlays', 'remote input', 'continuous observe', 'production credentials'],
+                       'overlays', 'remote input', 'GUI continuous observe and lifecycle', 'production credentials'],
     }
 
     def command(argv, timeout=60, cwd=None):
@@ -336,6 +368,9 @@ LogLevel VERBOSE
         report['status'] = 'passed' if all(c['status'] == 'passed' for c in report['checks']) else 'failed'
         report['receivedInputBytes'] = len((root / 'received.bin').read_bytes())
         report['fixtureSharedBetweenAdapters'] = True
+        report['observeFixture'] = {'syntheticTickIntervalMs': 200, 'changedTerminalRow': 23,
+                                    'selection': 'CLI explicitly chooses reviewed config pane from current snapshot; GUI selection is separate',
+                                    'backpressureScope': 'decoded single-frame byte high-water only, not JSON line, SSH buffers or whole-process memory'}
         for source, dest in ((REPO / 'validation/shared/remote-contract.json', 'remote-contract.json'),
                              (REPO / 'validation/transport-rust/Cargo.lock', 'transport-Cargo.lock'),
                              (args.flutter_app / 'pubspec.lock', 'flutter-pubspec.lock')):

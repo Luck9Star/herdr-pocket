@@ -43,9 +43,11 @@ class RemoteConfig {
     }
     final port = data['port'];
     if (port is! int || port < 1 || port > 65535) throw const RemoteFailure('invalid_config');
-    final session = field('session',64), pane = field('paneId',128);
+    final session = field('session',64);
+    final pane = data['paneId'] ?? '';
+    if (pane is! String || pane.length > 128) throw const RemoteFailure('invalid_target');
     if (session == 'default' || !RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(session) ||
-        !RegExp(r'^[A-Za-z0-9:_-]{1,128}$').hasMatch(pane)) throw const RemoteFailure('invalid_target');
+        (pane.isNotEmpty && !RegExp(r'^[A-Za-z0-9:_-]{1,128}$').hasMatch(pane))) throw const RemoteFailure('invalid_target');
     String path(String key) {
       final p = field(key,1024);
       if (!p.startsWith('/') || p.split('/').skip(1).any((s) => s.isEmpty || s == '.' || s == '..')) {
@@ -87,6 +89,8 @@ class RemoteEvidence {
   bool hostKeyChecked = false, hostKeyMatched = false, authStarted = false;
   bool snapshotReceived = false, fullFrameReceived = false;
   int generation = 0, lateEventsIgnored = 0;
+  int frameCount = 0, deltaFrames = 0, paneCount = 0, connectionCount = 0, bufferHighWaterBytes = 0;
+  int? lastSeq;
   String? errorCode;
   Map<String,Object?> toReport(String testCase, bool passed) => {
     'status': passed ? 'passed' : 'failed', 'case':testCase,
@@ -94,6 +98,8 @@ class RemoteEvidence {
     'authStarted':authStarted, 'snapshotReceived':snapshotReceived,
     'fullFrameReceived':fullFrameReceived,'generation':generation,
     'lateEventsIgnored':lateEventsIgnored,'errorCode':errorCode,
+    'frameCount':frameCount,'deltaFrames':deltaFrames,'lastSeq':lastSeq,'paneCount':paneCount,
+    'connectionCount':connectionCount,'bufferHighWaterBytes':bufferHighWaterBytes,
   };
 }
 
@@ -103,6 +109,27 @@ class RemoteSnapshot {
   final String session, paneId, ansi;
 }
 
+/// Only identities supplied by the reviewed named session's snapshot.
+class RemotePane {
+  const RemotePane(this.paneId, this.terminalId);
+  final String paneId, terminalId;
+}
+class RemoteDashboard {
+  const RemoteDashboard(this.generation, this.session, this.panes);
+  final int generation;
+  final String session;
+  final List<RemotePane> panes;
+}
+class RemoteFrame {
+  const RemoteFrame(this.seq, this.full, this.ansi);
+  final int seq;
+  final bool full;
+  final String ansi;
+}
+typedef DashboardConsumer = void Function(RemoteDashboard dashboard);
+// Awaited consumption provides backpressure: no unbounded UI frame queue.
+typedef FrameConsumer = FutureOr<void> Function(int generation, String paneId, RemoteFrame frame);
+
 typedef RemoteProgress = void Function(int generation, String phase);
 typedef SocketConnector = Future<SSHSocket> Function(String host, int port);
 
@@ -111,7 +138,8 @@ class _Attempt {
   final int generation;
   final RemoteEvidence evidence;
   final cancelled = Completer<void>();
-  final failed = Completer<RemoteFailure>();
+  RemoteFailure? failure;
+  void Function(RemoteFailure)? interruptWait;
   bool closed = false;
   Future<void>? closing;
   SSHSocket? socket;
@@ -119,14 +147,16 @@ class _Attempt {
   SSHForwardChannel? forward;
   SSHSession? observe;
   StreamSubscription<Uint8List>? stderr;
+  final selection = Completer<RemotePane>();
+  RemoteDashboard? dashboard;
 }
 
-/// One-shot read-only adapter; no input/PTY/resize API and no persistent storage.
+/// Reviewed read-only snapshot/continuous adapter; no input/PTY/resize API and no persistent storage.
 class RemoteReadOnlyAdapter {
   RemoteReadOnlyAdapter({SocketConnector? connector}) : _connector = connector ??
     ((host,port) => SSHSocket.connect(host,port,timeout:const Duration(seconds:8)));
   final SocketConnector _connector;
-  int generation = 0;
+  int generation = 0, _connectionCount = 0;
   _Attempt? _attempt;
   bool _activeRead = false, _dialPending = false;
   RemoteEvidence evidence = RemoteEvidence();
@@ -135,14 +165,32 @@ class RemoteReadOnlyAdapter {
   void _check(_Attempt a) {
     if (!_valid(a)) { a.evidence.lateEventsIgnored++; throw const RemoteFailure('cancelled'); }
   }
-  Future<T> _wait<T>(_Attempt a, Future<T> future, {void Function(T)? disposeLate}) async {
-    final guarded = future.then((value) {
-      if (!_valid(a)) { disposeLate?.call(value); _check(a); }
-      return value;
-    });
-    return Future.any<T>([guarded,a.cancelled.future.then<T>((_) => throw const RemoteFailure('cancelled')),
-      a.failed.future.then<T>((failure) => throw failure)])
-      .timeout(const Duration(seconds:10),onTimeout:() => throw const RemoteFailure('timeout'));
+  void _fail(_Attempt a, RemoteFailure failure) {
+    a.failure ??= failure;
+    a.interruptWait?.call(a.failure!);
+  }
+  Future<T> _wait<T>(_Attempt a, Future<T> future, {void Function(T)? disposeLate, bool timed = true}) async {
+    // One removable waiter, rather than accumulating cancellation Future.any
+    // listeners on every frame of a long-running observe.
+    final completion = Completer<T>();
+    void interrupt(RemoteFailure failure) {
+      if (!completion.isCompleted) completion.completeError(failure);
+    }
+    a.interruptWait = interrupt;
+    unawaited(future.then<void>((value) {
+      if (!_valid(a)) {
+        disposeLate?.call(value); a.evidence.lateEventsIgnored++;
+        interrupt(const RemoteFailure('cancelled'));
+      } else if (!completion.isCompleted) { completion.complete(value); }
+    },onError:(Object error,StackTrace stack) {
+      if (!completion.isCompleted) completion.completeError(error,stack);
+    }));
+    if (!_valid(a)) interrupt(const RemoteFailure('cancelled'));
+    if (a.failure != null) interrupt(a.failure!);
+    try {
+      return await (timed ? completion.future.timeout(const Duration(seconds:10),
+        onTimeout:() => throw const RemoteFailure('timeout')) : completion.future);
+    } finally { if (identical(a.interruptWait,interrupt)) a.interruptWait = null; }
   }
   Future<void> _close(_Attempt a) => a.closing ??= _closeResources(a);
   Future<void> _closeResources(_Attempt a) async {
@@ -160,10 +208,31 @@ class RemoteReadOnlyAdapter {
     if (a == null) return;
     a.evidence.generation = generation;
     if (!a.cancelled.isCompleted) a.cancelled.complete();
+    a.interruptWait?.call(const RemoteFailure('cancelled'));
     await _close(a);
   }
 
-  Future<RemoteSnapshot> read(RemoteConfig config, {RemoteProgress? onProgress}) {
+  Future<RemoteSnapshot> read(RemoteConfig config, {RemoteProgress? onProgress}) =>
+    _run(config,onProgress:onProgress);
+
+  /// Keeps the same authenticated connection open. Explicit selectPane is
+  /// required after the dashboard; cancellation/EOF ends this attempt forever.
+  Future<RemoteSnapshot> observe(RemoteConfig config, {required DashboardConsumer onDashboard,
+      required FrameConsumer onFrame, RemoteProgress? onProgress}) =>
+    _run(config,onProgress:onProgress,onDashboard:onDashboard,onFrame:onFrame);
+
+  void selectPane(int expectedGeneration, String paneId) {
+    final a = _attempt;
+    if (a == null || !_valid(a) || expectedGeneration != a.generation || a.selection.isCompleted) {
+      throw const RemoteFailure('stale_selection');
+    }
+    final matches = a.dashboard?.panes.where((p) => p.paneId == paneId).toList();
+    if (matches == null || matches.length != 1) throw const RemoteFailure('pane_missing');
+    a.selection.complete(matches.single);
+  }
+
+  Future<RemoteSnapshot> _run(RemoteConfig config, {RemoteProgress? onProgress,
+      DashboardConsumer? onDashboard, FrameConsumer? onFrame}) {
     final result = Completer<RemoteSnapshot>();
     _Attempt? owned;
     // An SSH transport can report an error from an internally detached Future.
@@ -171,7 +240,7 @@ class RemoteReadOnlyAdapter {
     // make the same adapter fail safely in both GUI and command-line callers.
     runZonedGuarded(() async {
       try {
-        result.complete(await _read(config,onProgress:onProgress,onAttempt:(a) { owned = a; }));
+        result.complete(await _read(config,onProgress:onProgress,onDashboard:onDashboard,onFrame:onFrame,onAttempt:(a) { owned = a; }));
       } catch (error,stack) { result.completeError(error,stack); }
     }, (error,stack) {
       final a = owned;
@@ -186,20 +255,21 @@ class RemoteReadOnlyAdapter {
         if (!result.isCompleted) result.completeError(failure,stack);
       } else if (!result.isCompleted) {
         a.evidence.errorCode ??= failure.code;
-        if (!a.failed.isCompleted) a.failed.complete(failure);
+        _fail(a,failure);
       }
     });
     return result.future;
   }
 
   Future<RemoteSnapshot> _read(RemoteConfig config, {RemoteProgress? onProgress,
+      DashboardConsumer? onDashboard, FrameConsumer? onFrame,
       required void Function(_Attempt) onAttempt}) async {
     if (_activeRead || _dialPending) throw const RemoteFailure('connection_busy');
     _activeRead = true;
     if (_attempt != null) await cancel();
     final a = _Attempt(++generation,RemoteEvidence());
     onAttempt(a);
-    _attempt = a; final e = a.evidence; evidence = e; e.generation = generation;
+    _attempt = a; final e = a.evidence; evidence = e; e.generation = generation; e.connectionCount = ++_connectionCount;
     RemoteSnapshot? completed;
     void phase(String name) { _check(a); onProgress?.call(a.generation,name); _check(a); }
     try {
@@ -246,26 +316,57 @@ class RemoteReadOnlyAdapter {
         throw const RemoteFailure('snapshot_rejected');
       }
       e.snapshotReceived = true;
-      final terminalId = validateSnapshotTarget(config,Map<String,dynamic>.from(rpc['result'] as Map));
+      final dashboard = parseSnapshotDashboard(config,Map<String,dynamic>.from(rpc['result'] as Map),a.generation);
+      a.dashboard = dashboard; e.paneCount = dashboard.panes.length;
       channel.destroy(); a.forward = null;
       phase('snapshot_received');
-      final observe = await _wait(a,client.execute(config.observeCommand(terminalId)),disposeLate:(s) => s.channel.destroy());
+      RemotePane selected;
+      if (onDashboard == null) {
+        final matches = dashboard.panes.where((p) => p.paneId == config.paneId).toList();
+        if (matches.length != 1) throw const RemoteFailure('pane_missing');
+        selected = matches.single;
+      } else {
+        onDashboard(dashboard); _check(a);
+        // User selection has no timeout and owns no additional channel/queue.
+        selected = await _wait(a,a.selection.future,timed:false);
+      }
+      _check(a);
+      final observe = await _wait(a,client.execute(config.observeCommand(selected.terminalId)),disposeLate:(s) => s.channel.destroy());
       a.observe = observe;
-      final budget = ObserveByteBudget();
+      final budget = ObserveByteBudget(continuous:onDashboard != null);
       a.stderr = observe.stderr.listen((chunk) {
         try { budget.add(chunk.length,stderr:true); } on RemoteFailure catch (error) {
           e.errorCode = error.code;
-          if (!a.failed.isCompleted) a.failed.complete(error);
+          _fail(a,error);
           observe.channel.destroy();
         }
       },onError:(Object _) {});
       phase('observing');
-      final result = await _wait(a,firstFullFrame(observe.stdout.map((chunk) { budget.add(chunk.length); return chunk; })));
-      _check(a);
-      if (a.failed.isCompleted) throw await a.failed.future;
-      e.fullFrameReceived = true;
-      phase('full_received');
-      completed = RemoteSnapshot(a.generation,config.session,config.paneId,result);
+      final frames = StreamIterator<RemoteFrame>(validatedFrames(
+        observe.stdout.map((chunk) { budget.add(chunk.length); return chunk; }),
+        continuous:onDashboard != null));
+      try {
+        var first = true;
+        while (await _wait(a,frames.moveNext(),timed:first)) {
+          _check(a);
+          if (a.failure != null) throw a.failure!;
+          final frame = frames.current;
+          e.frameCount++; if (!frame.full) e.deltaFrames++;
+          e.lastSeq = frame.seq; e.fullFrameReceived = true;
+          final byteLength = utf8.encode(frame.ansi).length;
+          if (byteLength > e.bufferHighWaterBytes) e.bufferHighWaterBytes = byteLength;
+          if (first) phase('full_received');
+          first = false;
+          completed = RemoteSnapshot(a.generation,config.session,selected.paneId,frame.ansi);
+          if (onFrame != null) {
+            await _wait(a,Future<void>.sync(() => onFrame(a.generation,selected.paneId,frame)),timed:false);
+          }
+          _check(a);
+          if (onDashboard == null) break;
+        }
+        if (onDashboard != null || completed == null) throw const RemoteFailure('observe_ended');
+      } finally { await frames.cancel(); }
+
     } catch (error) {
       final failure = error is RemoteFailure ? error : RemoteFailure(e.errorCode ??
         (error is SSHAuthFailError ? 'authentication_failed' : error is SSHAuthAbortError && e.hostKeyMatched ? 'authentication_aborted' : 'connection_failed'));
@@ -275,7 +376,7 @@ class RemoteReadOnlyAdapter {
     if (a.generation != generation || !identical(a,_attempt)) {
       e.errorCode = 'cancelled'; e.lateEventsIgnored++; throw const RemoteFailure('cancelled');
     }
-    if (a.failed.isCompleted) throw await a.failed.future;
+    if (a.failure != null) throw a.failure!;
     return completed;
   }
 }
@@ -286,32 +387,44 @@ Map<String,dynamic> _decodeObject(String line) {
   throw const RemoteFailure('invalid_response');
 }
 
-String validateSnapshotTarget(RemoteConfig config, Map<String,dynamic> result) {
-  // v0.9.5 does not echo session identity. Require the named socket layout and
-  // derive the same XDG config root for exec; server bytes remain untrusted.
+RemoteDashboard parseSnapshotDashboard(RemoteConfig config, Map<String,dynamic> result, int generation) {
+  // Pinned v0.9.5 has no session echo; enforce the reviewed socket/exec root.
   config.configRoot;
-  // ResponseResult is serde tagged; SessionSnapshot lives inside snapshot.
-  // Reject flat historical test shapes instead of treating them as a server reply.
   final snapshot = result['snapshot'];
   if (result['type'] != 'session_snapshot' || snapshot is! Map ||
       snapshot['version'] != '0.9.5' || snapshot['protocol'] != 22) throw const RemoteFailure('unsupported_protocol');
   final panes = snapshot['panes'];
-  if (panes is! List) throw const RemoteFailure('pane_missing');
-  final matches = panes.where((p) => p is Map && p['pane_id'] == config.paneId).toList();
-  if (matches.length != 1) throw const RemoteFailure('pane_missing');
-  final terminalId = matches.single['terminal_id'];
-  if (terminalId is! String || !RegExp(r'^term_[0-9a-f]{1,123}$').hasMatch(terminalId)) {
-    throw const RemoteFailure('invalid_terminal_id');
+  if (panes is! List || panes.length > 256) throw const RemoteFailure('invalid_snapshot');
+  final ids = <String>{}, terminals = <String>{};
+  final parsed = <RemotePane>[];
+  for (final pane in panes) {
+    if (pane is! Map || pane['pane_id'] is! String || pane['terminal_id'] is! String) {
+      throw const RemoteFailure('invalid_snapshot');
+    }
+    final id = pane['pane_id'] as String, terminal = pane['terminal_id'] as String;
+    if (!RegExp(r'^[A-Za-z0-9:_-]{1,128}$').hasMatch(id) || !ids.add(id)) {
+      throw const RemoteFailure('invalid_snapshot');
+    }
+    if (!RegExp(r'^term_[0-9a-f]{1,123}$').hasMatch(terminal) || !terminals.add(terminal)) {
+      throw const RemoteFailure('invalid_terminal_id');
+    }
+    parsed.add(RemotePane(id,terminal));
   }
-  return terminalId;
+  return RemoteDashboard(generation,config.session,List.unmodifiable(parsed));
 }
 
-Stream<String> boundedLines(Stream<Uint8List> source, {int maxTotal = 2097152}) async* {
+String validateSnapshotTarget(RemoteConfig config, Map<String,dynamic> result) {
+  final panes = parseSnapshotDashboard(config,result,0).panes.where((p) => p.paneId == config.paneId).toList();
+  if (panes.length != 1) throw const RemoteFailure('pane_missing');
+  return panes.single.terminalId;
+}
+
+Stream<String> boundedLines(Stream<Uint8List> source, {int? maxTotal = 2097152}) async* {
   var total = 0;
   var line = BytesBuilder(copy:false);
   await for (final chunk in source) {
     total += chunk.length;
-    if (total > maxTotal) throw const RemoteFailure('output_limit');
+    if (maxTotal != null && total > maxTotal) throw const RemoteFailure('output_limit');
     var offset = 0;
     while (offset < chunk.length) {
       final newline = chunk.indexOf(10,offset);
@@ -327,28 +440,43 @@ Stream<String> boundedLines(Stream<Uint8List> source, {int maxTotal = 2097152}) 
   if (line.length != 0) throw const RemoteFailure('truncated_response');
 }
 
-Future<String> firstFullFrame(Stream<Uint8List> source) async {
-  await for (final line in boundedLines(source)) {
+/// One bounded record at a time; no dropping deltas, recovery or retries.
+Stream<RemoteFrame> validatedFrames(Stream<Uint8List> source, {bool continuous = true}) async* {
+  int? previous;
+  await for (final line in boundedLines(source,maxTotal:continuous ? null : 2097152)) {
     final frame = _decodeObject(line);
-    // Pinned herdr CLI emits no ready metadata; the first record must be full.
-    if (frame['type'] != 'terminal.frame' || frame['full'] != true || frame['encoding'] != 'ansi' || frame['width'] != 80 ||
-        frame['height'] != 24 || frame['seq'] is! int || (frame['seq'] as int) < 0 || frame['bytes'] is! String) {
-      throw const RemoteFailure('invalid_first_frame');
+    final first = previous == null;
+    final code = first ? 'invalid_first_frame' : 'invalid_frame';
+    final seq = frame['seq'];
+    if (frame['type'] != 'terminal.frame' || frame['encoding'] != 'ansi' || frame['width'] != 80 ||
+        frame['height'] != 24 || seq is! int || seq < 0 || seq > 9007199254740991 ||
+        frame['full'] is! bool || (first && frame['full'] != true) || frame['bytes'] is! String) {
+      throw RemoteFailure(code);
     }
+    if (previous != null && seq != previous + 1) throw const RemoteFailure('sequence_gap');
+    String ansi;
     try {
       final bytes = base64Decode(frame['bytes'] as String);
-      if (bytes.length > 1048576) throw const RemoteFailure('output_limit');
-      return utf8.decode(bytes); // strict UTF-8; no synthetic replacement screen
-    } on FormatException { throw const RemoteFailure('invalid_first_frame'); }
+      if (bytes.length > 65536) throw const RemoteFailure('output_limit');
+      ansi = utf8.decode(bytes);
+    } on FormatException { throw RemoteFailure(code); }
+    previous = seq;
+    yield RemoteFrame(seq,frame['full'] as bool,ansi);
   }
+}
+
+Future<String> firstFullFrame(Stream<Uint8List> source) async {
+  await for (final frame in validatedFrames(source,continuous:false)) { return frame.ansi; }
   throw const RemoteFailure('observe_ended');
 }
 
 /// Shared stdout/stderr budget; stderr cannot evade the total read bound.
 class ObserveByteBudget {
+  ObserveByteBudget({this.continuous = false});
+  final bool continuous;
   int total = 0, errors = 0;
   void add(int count,{bool stderr=false}) {
     total += count; if (stderr) errors += count;
-    if (total > 2097152 || errors > 65536) throw const RemoteFailure('output_limit');
+    if ((!continuous && total > 2097152) || errors > 65536) throw const RemoteFailure('output_limit');
   }
 }

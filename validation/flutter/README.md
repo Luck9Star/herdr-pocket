@@ -91,3 +91,17 @@ Mac GUI smoke 发现分解重音 `e\u0301 A\u030a n\u0303` 看起来只有基字
 CI CLI只允许运行器本次 `/tmp/hp-mobile-<run>-...` 中的合成配置、loopback非特权端口，报告只有布尔检查、计数和稳定错误码；配置和keys不能打包。由独立 `validation/remote-harness` 验证同一adapter，不安装本机SDK或连接真实主机。[第三轮候选 run 41048094396](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396) 的20项常规测试、Linux与macOS headless绘制诊断已通过；[真实只读链路 run 41048094519](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094519) 已成功，设备、GUI实际远端操作和正式凭据仍未验证。构建与下载验SHA见[Flutter结果记录](../../docs/evidence/mobile-remote/flutter-builds/README.md)。前两轮失败保留；第三轮移除与异步SSH上传并发的 `channel.flush()` 后真实RPC通过，原始异常文本没有采集，不能声称已证实其具体消息。
 
 在4.1.0中，channel flush只转发到底层transport flush，并不等待channel上传循环完成；本适配器以匹配RPC响应作为请求已送达的证据。取消后的迟到结果、剪贴板回复和旧cleanup均不得更新新页面状态。意外的库异步错误在独立Dart error zone内转为固定错误码，未知错误仍失败，不输出远端文本。相关API已按Context7先library后docs核对 [runZonedGuarded](https://api.dart.dev/stable/latest/dart-async/runZonedGuarded.html) 和 [IOSink](https://api.dart.dev/stable/latest/dart-io/IOSink-class.html)。
+
+## M1b · 当前会话看板与持续只读观察
+
+2026-10-30 源码增量（本机无 Flutter SDK；新增 Dart/Widget、真实 SSH、五端构建须由对应提交 CI 记录确认）：审查接入 → 当前明确 named session 的真实 snapshot pane 看板 → 显式选择 pane → 持续只读观察 → 停止／断线旧画面。没有跨 session 自动发现；看板只显示实际 `pane_id`、`terminal_id`，不从屏幕内容推测任务状态。空 pane 保留为空，不借用默认会话。
+
+`RemoteReadOnlyAdapter.observe` 在同一个经过 pin、认证和 snapshot 校验的连接中等待 `selectPane(generation,paneId)`，只把当前 snapshot 的唯一稳定 terminal ID 传给固定 observe 命令。`read` 保留 M1a 一次性 CLI 调用语义；空 `paneId` 只用于看板发现，不能在一次性读取时回退。两种路径都不提供输入、SSH PTY、resize、control 或 takeover。
+
+首个完整合法 full 有绝对 10 秒预算，partial line 不重置它；之后允许合法静默，不因 idle 自动失败。后续 full/delta 均须 seq 恰好加一且不超出 JS 安全整数上限 `9007199254740991`，尺寸始终 80×24、encoding 为 ANSI。每行最多 1 MiB、解码帧最多 65536 bytes、stderr 累计最多 64 KiB；持续模式不设累计 stdout 字节上限。帧消费者逐帧 await，消费确认后才读下一帧，没有帧历史队列；远端入口 Terminal 上限 24 行，只保留屏幕，不累计 scrollback（离线实验室不变）。缺帧、重复、乱序、坏编码、版本不符、EOF 或超限终止整个观察，不跳过损坏增量继续。
+
+取消先使 generation 失效，再关闭资源；单一连接／未决拨号预算保留到其真实完成。等待器每帧替换并移除，不向长期 cancellation future 累积监听器。退至任意非 resumed 生命周期、返回或 dispose 都停止；回前台不重连。旧画面保留更新时间与陈旧标记，重新接入需再次确认并主动提供内存凭据。手机表单和看板可纵向滚动，pane 选择与停止目标至少 44px；320/360/390px、放大字号及键盘占位是 headless 布局用例，不是触控／IME 真机证据。
+
+同一 CI CLI 保留四个原 case，并新增 `observe-positive`（至少3帧且含delta后主动取消）、`observe-cancel`（首full后主动取消）和 `observe-reconnect`（同adapter显式第二次调用，每次至少full+delta）。报告只增加 pane/frame/delta/connection 计数、lastSeq 和解码帧缓冲高水位；主动取消完成才标成功，不输出 pane 内容、公钥、配置或原始错误。固定依赖及锁未变化。API核查使用 Context7 library→docs：`/vicajilau/dartssh2` 的 execute/stdout/close 与 `/websites/api_flutter_dev` 的生命周期；版本行为仍以锁定源码和真实隔离 CI 为准。
+
+固定 `dartssh2 4.1.0` 归档已按依赖清单 SHA256 复核：`SSHSession` stdout pause/resume 会传给 channel subscription，channel 暂停时不补发 window credit；底层预授信窗口固定 2 MiB、最大包 32 KiB，并拒绝越界包。此为 SSH 层额外有限接收预算，未混入只报告解码帧的 `bufferHighWaterBytes`；单测或该源码核查不替代真实慢消费者实测。

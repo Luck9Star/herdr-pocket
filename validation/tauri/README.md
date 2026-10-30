@@ -70,3 +70,7 @@ npm run dev
 来源与本地执行证据：[2026-10-30 核查](../../docs/evidence/tauri/2026-10-30-sources.md)。
 
 M1a 新查询：Context7 `library xterm.js` → `/xtermjs/xterm.js` → `docs` 核实 read-only、`parser.registerOscHandler` 与 `linkHandler`，再核对已安装固定 xterm 6.0.0 的公开实现；parser API 不需要启用 proposed API。Rust/herdr 固定来源见[适配器记录](../transport-rust/README.md#api-与协议来源)。
+
+## M1b 持续观察候选
+
+远端入口在核验后只列出同一次 snapshot 的 pane/terminal ID；用户选择后启动只读观察。首 full 后的每帧需严格连续，原生到页面一次仅允许一帧，xterm 渲染完成后才发送 ack；异常、断线、停止或后台进入后标记画面陈旧，不自动恢复。80×24 是本地观察视口，窗口尺寸变化不发共享 PTY resize。当前新增检查是本地 Rust/JS 和构建验证；隔离云端连续流、手机触控/IME 与真实设备运行需另列证据。

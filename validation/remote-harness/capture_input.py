@@ -22,7 +22,15 @@ try:
     os.write(1, data.encode('utf-8'))
     (root / 'capture-ready').write_text('ready')
     deadline = time.monotonic() + 900
+    next_tick = time.monotonic()
+    tick = 0
     while time.monotonic() < deadline and not (root / 'stop-capture').exists():
+        if time.monotonic() >= next_tick:
+            # A fixed row changes without accepting input or resizing the PTY.
+            # Save/restore the cursor so the shared fixture remains comparable.
+            tick += 1
+            os.write(1, f'\x1b7\x1b[23;1HSynthetic observe tick {tick:06d}\x1b[K\x1b8'.encode('ascii'))
+            next_tick = time.monotonic() + 0.2
         if select.select([fd], [], [], 0.05)[0]:
             received.extend(os.read(fd, 4096))
             (root / 'received.bin').write_bytes(received)

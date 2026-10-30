@@ -9,13 +9,21 @@ import 'remote_test_data.dart';
 
 class PendingAdapter extends RemoteReadOnlyAdapter {
   final pending = Completer<RemoteSnapshot>();
-  int calls = 0;
+  int calls = 0, cancels = 0;
+  DashboardConsumer? dashboard;
+  FrameConsumer? frame;
+  String? selected;
   @override
-  Future<RemoteSnapshot> read(RemoteConfig config,{RemoteProgress? onProgress}) {
-    calls++; generation++; return pending.future;
+  Future<RemoteSnapshot> observe(RemoteConfig config,{required DashboardConsumer onDashboard,
+      required FrameConsumer onFrame,RemoteProgress? onProgress}) {
+    calls++; generation++; dashboard = onDashboard; frame = onFrame; return pending.future;
   }
   @override
-  Future<void> cancel() async { generation++; }
+  void selectPane(int expectedGeneration,String paneId) { selected = paneId; }
+  void publish({bool empty = false}) => dashboard!(RemoteDashboard(generation,'probe',
+    empty ? const [] : const [RemotePane('w1:p1','term_abcd'),RemotePane('w1:p2','term_1234')]));
+  @override
+  Future<void> cancel() async { generation++; cancels++; }
 }
 Finder field(String name) => find.byKey(ValueKey('remote-$name'));
 
@@ -27,7 +35,7 @@ Future<void> prepare(WidgetTester tester,PendingAdapter adapter,Size size) async
   await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:RemotePage(tokens:tokens,adapter:adapter)));
   final values = fixtureConfig();
   for (final entry in values.entries) {
-    if (entry.key == 'schemaVersion' || entry.key == 'reviewConfirmed') continue;
+    if (entry.key == 'schemaVersion' || entry.key == 'reviewConfirmed' || entry.key == 'paneId') continue;
     await tester.ensureVisible(field(entry.key));
     await tester.enterText(field(entry.key),entry.value.toString());
     await tester.pump();
@@ -99,4 +107,61 @@ void main() {
     clipboard.last.complete({'text':'AFTER DISPOSE'}); await tester.pump();
     expect(tester.takeException(),isNull);
   });
+  testWidgets('snapshot board requires explicit target, disconnect keeps stale frame and never selects another pane', (tester) async {
+    final adapter = PendingAdapter();
+    await prepare(tester,adapter,const Size(360,780));
+    await tester.ensureVisible(field('review')); await tester.tap(field('review')); await tester.pump();
+    await tester.ensureVisible(field('connect')); await tester.tap(field('connect')); await tester.pump();
+    adapter.publish(); await tester.pump();
+    expect(adapter.selected,isNull);
+    expect(find.text('w1:p1'),findsOneWidget); expect(find.text('w1:p2'),findsOneWidget);
+    final target = find.byKey(const ValueKey('remote-pane-w1:p2'));
+    await tester.ensureVisible(target); await tester.tap(target); await tester.pump();
+    expect(adapter.selected,'w1:p2');
+    adapter.frame!(adapter.generation,'w1:p2',const RemoteFrame(5,true,'SYNTHETIC FULL'));
+    await tester.pump();
+    expect(find.textContaining('只读观察中'),findsOneWidget);
+    adapter.frame!(adapter.generation,'w1:p2',const RemoteFrame(6,false,'SYNTHETIC DELTA'));
+    await tester.pump();
+    adapter.pending.completeError(const RemoteFailure('observe_ended')); await tester.pumpAndSettle();
+    expect(find.textContaining('旧画面 · 已停止'),findsOneWidget);
+    expect(find.textContaining('只读观察中'),findsNothing);
+    expect(adapter.calls,1); expect(tester.takeException(),isNull);
+  });
+  testWidgets('empty snapshot is honest and background stop rejects late frames without reconnecting', (tester) async {
+    final adapter = PendingAdapter();
+    await prepare(tester,adapter,const Size(390,844));
+    await tester.ensureVisible(field('review')); await tester.tap(field('review')); await tester.pump();
+    await tester.ensureVisible(field('connect')); await tester.tap(field('connect')); await tester.pump();
+    adapter.publish(empty:true); await tester.pump();
+    expect(find.textContaining('没有 pane'),findsOneWidget);
+    expect(adapter.selected,isNull);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden); await tester.pump();
+    expect(adapter.cancels,greaterThan(0));
+    adapter.frame!(adapter.generation-1,'w1:p1',const RemoteFrame(7,true,'LATE FULL'));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pump();
+    expect(adapter.calls,1); expect(find.textContaining('只读观察中'),findsNothing);
+    expect(find.textContaining('应用已暂停'),findsOneWidget);
+    expect(tester.takeException(),isNull);
+  });
+  for (final width in [320.0,360.0,390.0]) {
+    testWidgets('board and stop remain reachable at ${width}px with keyboard and larger text', (tester) async {
+      final adapter = PendingAdapter();
+      await prepare(tester,adapter,Size(width,640));
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      tester.view.viewInsets = const FakeViewPadding(bottom:260); await tester.pump();
+      await tester.ensureVisible(field('review')); await tester.tap(field('review')); await tester.pump();
+      await tester.ensureVisible(field('connect')); await tester.tap(field('connect')); await tester.pump();
+      adapter.publish(); await tester.pump();
+      final pane = find.byKey(const ValueKey('remote-pane-w1:p1'));
+      await tester.ensureVisible(pane); await tester.pumpAndSettle();
+      expect(tester.getSize(pane).height,greaterThanOrEqualTo(44));
+      await tester.ensureVisible(field('cancel')); await tester.pumpAndSettle();
+      expect(field('cancel').hitTestable(),findsOneWidget);
+      expect(tester.getSize(field('cancel')).height,greaterThanOrEqualTo(44));
+      expect(tester.takeException(),isNull);
+    });
+  }
+
 }

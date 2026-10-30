@@ -23,7 +23,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadBuf},
     net::TcpStream,
     sync::Notify,
-    time::timeout,
+    time::{Instant, timeout, timeout_at},
 };
 use zeroize::Zeroize;
 
@@ -33,7 +33,7 @@ const TOTAL_LIMIT: usize = 2_097_152;
 pub type Result<T> = std::result::Result<T, &'static str>;
 
 // Deliberately no Debug/Serialize: a config contains experimental credentials.
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RemoteConfig {
     pub schema_version: u8,
@@ -61,6 +61,9 @@ impl RemoteConfig {
         serde_json::from_slice(bytes).map_err(|_| "invalid_config")
     }
     fn validate(&self) -> Result<PublicKey> {
+        self.validate_for(false)
+    }
+    fn validate_for(&self, dashboard: bool) -> Result<PublicKey> {
         fn bounded(s: &str, max: usize) -> bool {
             !s.is_empty() && s.len() <= max && !s.chars().any(char::is_control)
         }
@@ -81,7 +84,7 @@ impl RemoteConfig {
             || self.username.chars().any(char::is_whitespace)
             || !valid_name(&self.session, 64, false)
             || self.session == "default"
-            || !valid_name(&self.pane_id, 128, true)
+            || !(dashboard && self.pane_id.is_empty()) && !valid_name(&self.pane_id, 128, true)
             || !unix_path(&self.socket_path)
             || !unix_path(&self.herdr_path)
             || self.private_key_pem.len() > 16384
@@ -294,6 +297,17 @@ async fn bounded<T, E>(
     future: impl Future<Output = std::result::Result<T, E>>,
 ) -> Result<T> {
     tokio::select! { biased; _=cancel.wait()=>Err("cancelled"), value=timeout(Duration::from_secs(seconds),future)=>value.map_err(|_|"timeout")?.map_err(|_|code) }
+}
+// A single absolute deadline is shared by every partial stdout/stderr message.
+async fn before_first_frame<T>(
+    cancel: &Cancellation,
+    deadline: Instant,
+    future: impl Future<Output = T>,
+) -> Result<T> {
+    if Instant::now() >= deadline {
+        return Err("timeout");
+    }
+    tokio::select! { biased; _=cancel.wait()=>Err("cancelled"), result=timeout_at(deadline, future)=>result.map_err(|_|"timeout") }
 }
 struct Pinned {
     expected: PublicKey,
@@ -615,6 +629,280 @@ pub async fn read_once(
     })
 }
 
+#[derive(Clone, Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Pane {
+    pub pane_id: String,
+    pub terminal_id: String,
+}
+#[derive(Clone, Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamFrame {
+    pub seq: u64,
+    pub full: bool,
+    pub bytes: Vec<u8>,
+    pub buffer_high_water_bytes: usize,
+}
+fn snapshot_panes(value: &Value) -> Result<Vec<Pane>> {
+    // Reuse the strict envelope/version checks for each selectable target.
+    let raw = value
+        .pointer("/result/snapshot/panes")
+        .and_then(Value::as_array)
+        .ok_or("invalid_snapshot")?;
+    if raw.len() > 256 {
+        return Err("snapshot_limit");
+    }
+    let mut panes = Vec::new();
+    for p in raw {
+        let id = p["pane_id"]
+            .as_str()
+            .filter(|s| valid_name(s, 128, true))
+            .ok_or("invalid_snapshot")?;
+        let terminal_id = snapshot_terminal(value, id)?;
+        // Validate before exposing selection, even if the pane is never selected.
+        if !terminal_id.starts_with("term_")
+            || terminal_id.len() <= 5
+            || terminal_id.len() > 128
+            || !terminal_id[5..]
+                .bytes()
+                .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+        {
+            return Err("invalid_terminal_id");
+        }
+        if panes
+            .iter()
+            .any(|existing: &Pane| existing.terminal_id == terminal_id)
+        {
+            return Err("ambiguous_terminal");
+        }
+        panes.push(Pane {
+            pane_id: id.into(),
+            terminal_id,
+        });
+    }
+    // Empty arrays still require envelope and protocol validation.
+    if raw.is_empty()
+        && (value["id"] != "pocket-readonly"
+            || value["ok"] == false
+            || value.get("error").is_some_and(|v| !v.is_null())
+            || value["result"]["type"] != "session_snapshot"
+            || value["result"]["snapshot"]["version"] != "0.9.5"
+            || value["result"]["snapshot"]["protocol"] != 22)
+    {
+        return Err("invalid_snapshot");
+    }
+    Ok(panes)
+}
+fn parse_stream_frame(value: Value, previous: Option<u64>) -> Result<StreamFrame> {
+    if value["type"] != "terminal.frame"
+        || value["encoding"] != "ansi"
+        || value["width"] != 80
+        || value["height"] != 24
+    {
+        return Err("invalid_frame");
+    }
+    let seq = value["seq"]
+        .as_u64()
+        .filter(|seq| *seq <= 9_007_199_254_740_991)
+        .ok_or("invalid_frame")?;
+    let full = value["full"].as_bool().ok_or("invalid_frame")?;
+    if previous.is_none() && !full {
+        return Err("invalid_full_frame");
+    }
+    if let Some(prev) = previous {
+        if prev.checked_add(1) != Some(seq) {
+            return Err("sequence_gap");
+        }
+    }
+    let encoded = value["bytes"].as_str().ok_or("invalid_frame")?;
+    let bytes = Base64::decode_vec(encoded).map_err(|_| "invalid_frame")?;
+    let high_water = bytes.len();
+    if bytes.len() > 65536 {
+        return Err("observe_limit");
+    }
+    Ok(StreamFrame {
+        seq,
+        full,
+        bytes,
+        buffer_high_water_bytes: high_water,
+    })
+}
+
+pub async fn observe<Select, SelectFuture, Frame, FrameFuture>(
+    config: RemoteConfig,
+    cancel: Cancellation,
+    audit: Arc<Audit>,
+    progress: impl Fn(&'static str) + Send + Sync,
+    select: Select,
+    frame: Frame,
+) -> Result<()>
+where
+    Select: Fn(Vec<Pane>) -> SelectFuture,
+    SelectFuture: Future<Output = Result<String>>,
+    Frame: Fn(StreamFrame) -> FrameFuture,
+    FrameFuture: Future<Output = Result<()>>,
+{
+    let _cancel_on_drop = CancelOnDrop(cancel.clone());
+    let expected = config.validate_for(true)?;
+    config_root(&config.socket_path, &config.session)?;
+    let private =
+        decode_secret_key(&config.private_key_pem, None).map_err(|_| "invalid_private_key")?;
+    if private.algorithm() != Algorithm::Ed25519 {
+        return Err("invalid_private_key");
+    }
+    progress("connecting");
+    let tcp = bounded(
+        &cancel,
+        8,
+        "connection_failed",
+        TcpStream::connect((config.host.as_str(), config.port)),
+    )
+    .await?;
+    let settings = client::Config {
+        window_size: 65536,
+        maximum_packet_size: 32768,
+        channel_buffer_size: 2,
+        inactivity_timeout: None,
+        ..Default::default()
+    };
+    let connect = bounded(
+        &cancel,
+        8,
+        "handshake_failed",
+        client::connect_stream(
+            Arc::new(settings),
+            AbortableStream {
+                inner: tcp,
+                cancel: cancel.clone(),
+            },
+            Pinned {
+                expected,
+                audit: audit.clone(),
+            },
+        ),
+    )
+    .await;
+    let mut ssh = match connect {
+        Ok(ssh) => ssh,
+        Err(code) => {
+            return Err(
+                if audit.snapshot().host_key_checked && !audit.snapshot().host_key_matched {
+                    "host_key_mismatch"
+                } else {
+                    code
+                },
+            );
+        }
+    };
+    if !audit.snapshot().host_key_matched {
+        return Err("host_key_mismatch");
+    }
+    progress("host-key-verified");
+    audit.auth_started.store(true, Ordering::SeqCst);
+    if !bounded(
+        &cancel,
+        8,
+        "authentication_failed",
+        ssh.authenticate_publickey(
+            &config.username,
+            PrivateKeyWithHashAlg::new(Arc::new(private), None),
+        ),
+    )
+    .await?
+    .success()
+    {
+        return Err("authentication_failed");
+    }
+    progress("authenticated");
+    let channel = bounded(
+        &cancel,
+        8,
+        "socket_unavailable",
+        ssh.channel_open_direct_streamlocal(&config.socket_path),
+    )
+    .await?;
+    let mut stream = channel.into_stream();
+    bounded(
+        &cancel,
+        8,
+        "snapshot_failed",
+        stream.write_all(
+            b"{\"id\":\"pocket-readonly\",\"method\":\"session.snapshot\",\"params\":{}}\n",
+        ),
+    )
+    .await?;
+    let mut bytes = Vec::new();
+    bounded(
+        &cancel,
+        8,
+        "snapshot_failed",
+        BufReader::new(stream.take((LINE_LIMIT + 1) as u64)).read_until(b'\n', &mut bytes),
+    )
+    .await?;
+    if bytes.len() > LINE_LIMIT || !bytes.ends_with(b"\n") {
+        return Err("snapshot_limit");
+    }
+    let value: Value = serde_json::from_slice(&bytes).map_err(|_| "invalid_snapshot")?;
+    audit.snapshot_received.store(true, Ordering::SeqCst);
+    let panes = snapshot_panes(&value)?;
+    progress("snapshot-received");
+    let selected =
+        tokio::select! { biased; _=cancel.wait()=>return Err("cancelled"), v=select(panes)=>v? };
+    let terminal_id = snapshot_terminal(&value, &selected)?;
+    let command = observe_command(&config, &terminal_id)?;
+    let mut channel = bounded(&cancel, 8, "observe_failed", ssh.channel_open_session()).await?;
+    bounded(&cancel, 8, "observe_failed", channel.exec(true, command)).await?;
+    let first_deadline = Instant::now() + Duration::from_secs(10);
+    let mut pending = Vec::new();
+    let mut stderr = 0usize;
+    let mut sequence = None;
+    loop {
+        let msg = if sequence.is_none() {
+            before_first_frame(&cancel, first_deadline, channel.wait()).await?
+        } else {
+            tokio::select! { biased; _=cancel.wait()=>return Err("cancelled"), msg=channel.wait()=>msg }
+        };
+        match msg {
+            Some(ChannelMsg::Data { data }) => {
+                for b in data.iter() {
+                    pending.push(*b);
+                    if pending.len() > LINE_LIMIT {
+                        return Err("observe_limit");
+                    }
+                    if *b == b'\n' {
+                        let value: Value =
+                            serde_json::from_slice(&pending).map_err(|_| "invalid_frame")?;
+                        pending.clear();
+                        let parsed = parse_stream_frame(value, sequence)?;
+                        if sequence.is_none() && Instant::now() >= first_deadline {
+                            return Err("timeout");
+                        }
+                        sequence = Some(parsed.seq);
+                        if parsed.full {
+                            audit.full_frame_received.store(true, Ordering::SeqCst);
+                        }
+                        tokio::select! { biased; _=cancel.wait()=>return Err("cancelled"), result=frame(parsed)=>result? };
+                    }
+                }
+            }
+            Some(ChannelMsg::ExtendedData { data, .. }) => {
+                stderr = stderr.checked_add(data.len()).ok_or("observe_limit")?;
+                if stderr > 65536 {
+                    return Err("observe_limit");
+                }
+            }
+            Some(
+                ChannelMsg::Failure
+                | ChannelMsg::ExitStatus { .. }
+                | ChannelMsg::Close
+                | ChannelMsg::Eof,
+            )
+            | None => return Err("observe_ended"),
+            _ => {}
+        }
+    }
+}
+
 /// Frontends also guard their callbacks; this protects native command ownership across cancellation.
 #[derive(Default)]
 pub struct AttemptGate {
@@ -670,6 +958,81 @@ mod tests {
             .as_bytes(),
         )
         .unwrap()
+    }
+    #[test]
+    fn continuous_frames_fail_closed_on_gap_bad_delta_or_oversize() {
+        let first = json!({"type":"terminal.frame","seq":1,"full":true,"encoding":"ansi","width":80,"height":24,"bytes":"YWJj"});
+        let parsed = parse_stream_frame(first.clone(), None).unwrap();
+        let mut maximum = first.clone();
+        maximum["seq"] = json!(9_007_199_254_740_991u64);
+        assert!(parse_stream_frame(maximum.clone(), None).is_ok());
+        maximum["seq"] = json!(9_007_199_254_740_992u64);
+        assert_eq!(parse_stream_frame(maximum, None), Err("invalid_frame"));
+        assert_eq!(parsed.bytes, b"abc");
+        assert_eq!(parsed.buffer_high_water_bytes, 3);
+        let mut delta = first.clone();
+        delta["full"] = false.into();
+        delta["seq"] = 2.into();
+        assert!(!parse_stream_frame(delta.clone(), Some(1)).unwrap().full);
+        assert_eq!(
+            parse_stream_frame(delta.clone(), None),
+            Err("invalid_full_frame")
+        );
+        assert_eq!(
+            parse_stream_frame(delta.clone(), Some(0)),
+            Err("sequence_gap")
+        );
+        assert_eq!(
+            parse_stream_frame(delta.clone(), Some(2)),
+            Err("sequence_gap")
+        );
+        for (field, bad) in [
+            ("width", json!(81)),
+            ("encoding", json!("raw")),
+            ("bytes", json!("%%%")),
+            ("full", json!("false")),
+        ] {
+            let mut invalid = delta.clone();
+            invalid[field] = bad;
+            assert!(parse_stream_frame(invalid, Some(1)).is_err());
+        }
+        delta["bytes"] = Base64::encode_string(&vec![0; 65537]).into();
+        assert_eq!(parse_stream_frame(delta, Some(1)), Err("observe_limit"));
+    }
+    #[tokio::test]
+    async fn first_frame_deadline_does_not_restart_for_partial_messages() {
+        let cancel = Cancellation::default();
+        let deadline = Instant::now() + Duration::from_millis(25);
+        let mut chunks = 0;
+        loop {
+            let result = before_first_frame(&cancel, deadline, async {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            })
+            .await;
+            if result == Err("timeout") {
+                break;
+            }
+            result.unwrap();
+            chunks += 1;
+            assert!(
+                chunks < 10,
+                "partial messages extended the absolute deadline"
+            );
+        }
+    }
+    #[test]
+    fn dashboard_is_bounded_and_cannot_bind_duplicate_identity() {
+        let mut v = json!({"id":"pocket-readonly","result":{"type":"session_snapshot","snapshot":{"version":"0.9.5","protocol":22,"panes":[{"pane_id":"w1:p1","terminal_id":"term_abc"},{"pane_id":"w1:p2","terminal_id":"term_def"}]}}});
+        assert_eq!(snapshot_panes(&v).unwrap().len(), 2);
+        assert_eq!(snapshot_terminal(&v, "w1:p2").unwrap(), "term_def");
+        v["result"]["snapshot"]["panes"][1]["terminal_id"] = "term_abc".into();
+        assert_eq!(snapshot_panes(&v), Err("ambiguous_terminal"));
+        v["result"]["snapshot"]["panes"][1]["pane_id"] = "w1:p1".into();
+        assert_eq!(snapshot_panes(&v), Err("ambiguous_pane"));
+        let mut c = example_config();
+        c.pane_id.clear();
+        assert!(c.validate_for(true).is_ok());
+        assert!(c.validate().is_err());
     }
     #[test]
     fn config_requires_review_and_one_canonical_ed25519_host_key() {

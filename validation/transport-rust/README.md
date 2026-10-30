@@ -45,3 +45,9 @@ CLI 仅接受 `GITHUB_ACTIONS=true`、非特权端口 `127.0.0.1` 及显式临�
 - herdr 固定提交 `2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01`：[snapshot 构造](https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/src/app/api/session.rs)、[版本](https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/src/build_info.rs)、[protocol 22](https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/src/protocol/wire.rs)。
 - [响应 envelope](https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/src/api/schema/response.rs)：`ResponseResult` 是 `#[serde(tag = "type", rename_all = "snake_case")]` 枚举，`SessionSnapshot` variant 包含 `snapshot` 字段；不能只读内层 struct 后假定平铺到 result。
 - [配置根规则](https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/src/config/io.rs)、[命名 session 路径](https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/src/session.rs)、[精确 terminal target 解析](https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/src/app/terminal_targets.rs)、[observe JSON 字段](https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/src/client/terminal_sessions.rs)。
+
+## M1b 持续只读候选（本地测试范围）
+
+`observe` 在同一 SSH 连接内读取唯一命名会话快照，以 pane ID 和 terminal ID 显示看板，明确选择后再执行固定观察命令；空 pane ID 仅允许看板发现，`read_once` 原校验不变。快照最多 256 pane，重复 pane 或 terminal ID 拒绝。首帧 10 秒内须为 full，后续 full/delta 均要求 seq 恰好递增；不完整、非法、超限或乱序即终止，停止后原画面为陈旧。观察期间无输出不视为失败。单行上限 1 MiB、解码帧 64 KiB、stderr 总量 64 KiB；回调逐帧完成后才读取下一帧。取消中断选择、渲染等待和真实 SSH TCP；没有自动重连、输入、远端 PTY 或 resize。
+
+CI-only probe 增加 `observe-positive`（至少三帧及一个 delta）、`observe-cancel`（首帧后取消）和 `observe-reconnect`（主动发起两次独立观察，各 full + delta）。报告仅输出聚合计数，不记录终端数据；未运行的新云端用例不能作为真实 SSH 或手机验证结果。

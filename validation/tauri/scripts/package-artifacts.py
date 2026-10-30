@@ -21,7 +21,7 @@ manifest = {
     'runner':{'os':platform.platform(),'architecture':platform.machine(),'imageVersion':os.getenv('ImageVersion'),'imageOS':os.getenv('ImageOS')},
     'toolchains':{'node':version(['node','--version']),'rustc':version(['rustc','--version']),'cargo':version(['cargo','--version'])},
     'versions':{'tauriCore':'2.12.5','tauriBuild':'2.7.4','tauriAPI':'2.12.4','tauriCLI':'2.12.4','xterm':'6.0.0','russh':'0.65.0','herdrProtocolTarget':'0.9.5'},
-    'scope':'Separate offline renderer/IPC fixture and experimental reviewed SSH one-shot read-only adapter; no remote input, overlay integration or protected credential storage. Build does not verify devices or a real remote connection.',
+    'scope':'Separate offline renderer/IPC fixture and experimental reviewed SSH pane dashboard / bounded continuous read-only observe adapter; no remote input, overlay integration or protected credential storage. Build does not verify devices or GUI remote execution.',
     'remoteContractSHA256':sha(repo/'validation/shared/remote-contract.json'),
     'transportSourceSHA256':sha(repo/'validation/transport-rust/src/lib.rs'),
     'remoteBehavior':{'mode':'one-shot-readonly','remoteInput':False,'ptyResize':False,'credentialStorage':'experimental-memory-only','browserTransport':'unavailable','deviceResult':'unverified'},

@@ -16,4 +16,5 @@ tauri-build = { version = "=2.7.4", features = [] }
 tauri = { version = "=2.12.5", features = [] }
 herdr-probe-core = { path = "../core" }
 herdr-readonly-transport = { path = "../../transport-rust" }
+tokio = { version = "=1.54.1", features = ["sync"] }
 serde = { version = "=1.0.229", features = ["derive"] }

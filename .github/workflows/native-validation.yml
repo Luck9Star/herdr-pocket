@@ -1,0 +1,52 @@
+name: Native overlay feasibility probes
+on:
+  push:
+    branches: ['codex/**']
+    paths: ['validation/native/**', '.github/workflows/native-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-probes-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  probe:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.27.1'
+          check-latest: false
+          cache: false
+      - name: Pinned Rust on runner
+        shell: bash
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Linux native prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config libssl-dev
+      - name: Record compiler environment
+        shell: bash
+        run: |
+          python -c "import json,platform; print(json.dumps({'os':platform.platform(),'arch':platform.machine()}))"
+          cmake --version
+      - name: Compile/load each provider independently
+        if: always()
+        shell: bash
+        run: python validation/native/tool/probe.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: native-probes-${{ matrix.os }}-${{ github.sha }}
+          path: validation/native/artifacts/
+          retention-days: 14
+          if-no-files-found: error

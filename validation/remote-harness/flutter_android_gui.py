@@ -4,6 +4,8 @@ The exchange is app-private public data via adb run-as, not a signer/frame API.
 No HTTP service, system authorization files, real devices or raw logs in reports.
 """
 import hashlib
+import base64
+import binascii
 import json
 from pathlib import Path
 import re
@@ -19,10 +21,13 @@ BOOL_FIELDS = ('productionMain', 'defaultHostCatalog', 'uninjectedNativeDeviceKe
     'authorizationReviewed', 'pairedStateVisible', 'paneChosen', 'fullRendered',
     'deltaRendered', 'stoppedStale', 'observeMode', 'directModeDisabled',
     'draftModeDisabled', 'localIdentityDeleted')
-STAGES = {'host_board', 'public_request', 'restore_pending', 'host_authorization',
+STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'handle_save_failed',
+          'signer_create', 'signer_public', 'signer_sign', 'signer_delete', 'signer_read_deleted',
+          'public_key_failed', 'profile_save_failed', 'create_not_available', 'host_board', 'public_request', 'restore_pending', 'host_authorization',
           'response_review', 'ssh_and_dashboard', 'observe_frames', 'stop',
           'delete_local_identity', 'complete'}
-PUBLIC_LIMITS = {'request.json': 2048, 'result.json': 8192, 'stage': 40}
+PUBLIC_LIMITS = {'request.json': 2048, 'result.json': 8192, 'signer.json': 1024, 'stage': 40}
+SIGNER_CHALLENGE = b'herdr-pocket-android-signer-probe-v1'
 REQUEST_FIELDS = {'version', 'type', 'request_id', 'account', 'host_key',
                   'issued_at', 'expires_at', 'device', 'public_key'}
 
@@ -208,13 +213,18 @@ def checked_public_payload(raw, name):
             raise DeviceFailure(invalid)
         # The production Host.review remains authoritative for public-key
         # parsing, TTL, request ID, account and host fingerprint validation.
-    else:
+    elif name == 'result.json':
         safe_device_result(value)
+    elif name == 'signer.json':
+        if (not isinstance(value, dict) or set(value) != {'publicKey', 'signature', 'deleteReturned', 'readRejected'} or
+                not isinstance(value['publicKey'], str) or not isinstance(value['signature'], str) or
+                value['deleteReturned'] is not True or value['readRejected'] is not True):
+            raise DeviceFailure(invalid)
     return raw
 
 
 def read_public(relative, limit):
-    if not re.fullmatch(r'cache/herdr-flutter-android-[0-9]+/(?:request\.json|result\.json|stage)', relative):
+    if not re.fullmatch(r'cache/herdr-flutter-android-[0-9]+/(?:request\.json|result\.json|signer\.json|stage)', relative):
         raise DeviceFailure('flutter_android_public_path_invalid')
     name = relative.rsplit('/', 1)[1]
     if type(limit) is not int or limit != PUBLIC_LIMITS[name]:
@@ -260,6 +270,24 @@ def wait_public(proc, relative_directory, name, limit, timeout):
     raise DeviceFailure(failure_stage(relative_directory, 'flutter_android_phase_timeout'))
 
 
+def verify_signer(raw):
+    # Public bytes are consumed only here; never persist them in the report.
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.serialization import load_ssh_public_key
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    try:
+        checked_public_payload(raw, 'signer.json')
+        value = json.loads(raw)
+        signature = base64.b64decode(value['signature'], validate=True)
+        key = load_ssh_public_key(value['publicKey'].encode('ascii'))
+        if not isinstance(key, Ed25519PublicKey) or len(signature) != 64:
+            raise ValueError()
+        key.verify(signature, SIGNER_CHALLENGE)
+    except (ValueError, TypeError, KeyError, UnicodeError, binascii.Error, InvalidSignature):
+        raise DeviceFailure('flutter_android_signer_verification_failed') from None
+    return {'stage': 'complete', 'signatureVerified': True, 'deleteReturned': True, 'readRejected': True}
+
+
 def run_flutter_android(args, root, env, config, approval):
     # Import the existing process owner only in the real runner path. Guard and
     # evidence unit tests use the standard library and never touch adb/a host.
@@ -303,12 +331,17 @@ def _run(args, root, env, config, approval, owned_process):
     process = None
     reverse_added = False
     result = None
+    signer_evidence = {'stage': 'not_completed', 'signatureVerified': False,
+                       'deleteReturned': False, 'readRejected': False}
     cleanup = {'sourceSHA': env['GITHUB_SHA'], 'ownedPackageInitiallyAbsent': True,
                'ownedPackageAbsent': False, 'appProcessGone': False, 'reverseRemoved': False,
                'ownedForwardsRemoved': False, 'flutterToolStopped': False, 'rawLogsUploaded': False}
     try:
         adb('reverse', reverse, reverse); reverse_added = True
         with owned_process(command, cwd=app, env=env, log=root / 'flutter-android-private.log') as process:
+            raw_signer = wait_public(process, relative, 'signer.json', 1024, timeout=900)
+            signer_evidence['stage'] = 'verification_failed'
+            signer_evidence = verify_signer(raw_signer)
             request = wait_public(process, relative, 'request.json', 2048, timeout=900)
             response = approval.approve(request)
             write_response(relative, response)
@@ -321,6 +354,15 @@ def _run(args, root, env, config, approval, owned_process):
             if code:
                 raise DeviceFailure(failure_stage(relative, 'flutter_android_test_failed'))
     finally:
+        if signer_evidence['stage'] != 'complete':
+            try:
+                label = read_public(relative + '/stage', 40)
+                if label is not None and label.decode('ascii') in {
+                        'signer_create', 'signer_public', 'signer_sign', 'signer_delete', 'signer_read_deleted'}:
+                    signer_evidence['stage'] = label.decode('ascii')
+            except DeviceFailure:
+                pass
+        (output / 'flutter-android-signer-probe.json').write_text(json.dumps(signer_evidence, indent=2) + '\n', encoding='utf-8')
         cleanup['flutterToolStopped'] = process is None or process.poll() is not None
         try:
             if package_present():

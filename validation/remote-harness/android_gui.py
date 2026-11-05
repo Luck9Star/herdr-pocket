@@ -168,7 +168,8 @@ def run_android(args, root, env, config, approval):
                 raise
             phase = browser.evaluate("document.querySelector('#pair-status').dataset.createPhase || 'not_started'")
             allowed = {'review','catalog','device','ready','persist_failed','not_started'}
-            failures = {'host_storage_unavailable','host_storage_busy','host_storage_corrupt','invalid_host_name',
+            failures = {'host_storage_unavailable','host_storage_busy','host_storage_corrupt','host_storage_lock_failed',
+                        'host_path_bridge_unavailable','host_path_invalid','invalid_host_name',
                         'invalid_config','invalid_host_key','key_unavailable','invalid_device_key','pairing_busy',
                         'host_pairing_exists','host_already_exists','host_restore_required','invalid_public_field','unavailable'}
             allowed.update(stage+'_'+code for stage in ('catalog','device') for code in failures)

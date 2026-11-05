@@ -74,8 +74,7 @@ impl Recovery {
                 return Err(std::io::Error::other("unsafe lock"));
             }
             let file = open_private(&lock_path)?;
-            file.try_lock()
-                .map_err(|_| std::io::Error::other("already in use"))?;
+            crate::file_lock::try_lock_owner(&file)?;
             Ok(Inner {
                 directory,
                 _lock: file,

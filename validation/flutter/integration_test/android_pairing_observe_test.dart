@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,6 +70,33 @@ void publish(Directory dir, String name, String text) {
   pending.writeAsStringSync(text,flush:true); pending.renameSync('${dir.path}/$name');
 }
 
+// Independent ephemeral identity. It never enters the host catalog or pairing.
+Future<void> nativeSignerProbe(Directory exchange, void Function(String) stage) async {
+  final keys = NativeDeviceKeys();
+  String? handle;
+  var deleteAttempted = false;
+  try {
+    stage('signer_create');
+    handle = await keys.create();
+    stage('signer_public');
+    final publicKey = await keys.public(handle);
+    stage('signer_sign');
+    final signature = await keys.sign(handle,Uint8List.fromList(utf8.encode('herdr-pocket-android-signer-probe-v1')));
+    stage('signer_delete');
+    deleteAttempted = true;
+    await keys.delete(handle);
+    stage('signer_read_deleted');
+    var rejected = false;
+    try { await keys.public(handle); } catch (_) { rejected = true; }
+    if (!rejected) throw StateError('signer_deleted_read_succeeded');
+    publish(exchange,'signer.json',jsonEncode({'publicKey':publicKey,
+      'signature':base64Encode(signature),'deleteReturned':true,'readRejected':true}));
+  } finally {
+    // One cleanup attempt only; never retry an operation with an unknown result.
+    if (handle != null && !deleteAttempted) await keys.delete(handle);
+  }
+}
+
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('Android native identity through production host catalog to read-only SSH observe',(tester) async {
@@ -77,6 +105,7 @@ void main() {
     if (exchange.existsSync()) throw StateError('android_public_exchange_already_exists');
     exchange.createSync(recursive:true);
     void stage(String name) => publish(exchange,'stage',name);
+    await nativeSignerProbe(exchange,stage);
     stage('host_board');
     await app.main();
     await until(tester,() => find.byType(HostCatalogPage).evaluate().length == 1 &&
@@ -95,9 +124,21 @@ void main() {
       await tester.enterText(field,target[name].toString()); await tester.pump();
     }
     await tapKey(tester,'pair-target-review');
+    final createButton = tester.widget<FilledButton>(find.byKey(const ValueKey('pair-create')));
+    if (createButton.onPressed == null) { stage('create_not_available'); fail('create_not_available'); }
     await tapKey(tester,'pair-create'); // The only create action uses native AndroidKeyStore.
     final requestControl = find.byKey(const ValueKey('pair-request'));
-    await until(tester,() => requestControl.evaluate().length == 1);
+    const errors = {'核验连接资料':'target_invalid','保存创建意图':'catalog_intent_failed',
+      '创建设备身份':'device_create_failed','保存本机密钥引用':'handle_save_failed',
+      '读取设备公钥':'public_key_failed','保存主机资料':'profile_save_failed'};
+    await until(tester,() {
+      if (requestControl.evaluate().length == 1) return true;
+      final status = tester.widget<Text>(find.byKey(const ValueKey('pair-status'))).data ?? '';
+      for (final entry in errors.entries) {
+        if (status.startsWith('${entry.key}未完成')) { stage(entry.value); fail(entry.value); }
+      }
+      return false;
+    });
     final request = tester.widget<SelectableText>(requestControl).data!;
     expect(utf8.encode(request).length,lessThanOrEqualTo(2048));
     publish(exchange,'request.json',request);

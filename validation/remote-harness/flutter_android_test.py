@@ -187,6 +187,23 @@ class RunnerGuards(PreparedFixture):
 
 
 class WireGuards(unittest.TestCase):
+    @unittest.skipIf(paired_gui is None, 'signature verification requires cryptography')
+    def test_independent_signer_verification_and_tampering(self):
+        import base64
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+        key = Ed25519PrivateKey.generate()
+        value = {'publicKey': key.public_key().public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH).decode(),
+                 'signature': base64.b64encode(key.sign(gui.SIGNER_CHALLENGE)).decode(),
+                 'deleteReturned': True, 'readRejected': True}
+        clean = gui.verify_signer(json.dumps(value).encode())
+        self.assertEqual(clean, {'stage':'complete', 'signatureVerified':True, 'deleteReturned':True, 'readRejected':True})
+        self.assertNotIn(value['publicKey'], json.dumps(clean))
+        for change in ({'signature': base64.b64encode(bytes(64)).decode()}, {'readRejected': False},
+                       {'signature': 'invalid!'}, {'handle': 'never-accepted'}):
+            with self.subTest(change=change), self.assertRaises(gui.DeviceFailure):
+                gui.verify_signer(json.dumps(dict(value, **change)).encode())
+
     def test_actual_flutter_version_must_match_the_pinned_sdk(self):
         version = {'frameworkVersion': '3.47.9', 'frameworkRevision': tool.FLUTTER_COMMIT, 'private': 'never-copy'}
         with patch.object(gui.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, json.dumps(version).encode(), b'')):
@@ -349,7 +366,7 @@ class PublicExchangeGuards(unittest.TestCase):
 
 
 class CleanupGuards(PreparedFixture):
-    def exercise(self, fail_reverse_cleanup=False):
+    def exercise(self, fail_reverse_cleanup=False, fail_signer=False):
         self.prepared(); args = self.args()
         state = {'installed': False, 'reverse': False}
         original = (gui.SERIAL, 'tcp:55000', 'tcp:55001')
@@ -391,10 +408,17 @@ class CleanupGuards(PreparedFixture):
                 patch.object(gui, 'forward_set', side_effect=lambda: set(forwards)), \
                 patch.object(gui, 'write_response'), \
                 patch.object(gui, 'checked_flutter_version', return_value={'frameworkVersion': tool.FLUTTER_VERSION, 'frameworkRevision': tool.FLUTTER_COMMIT}), \
-                patch.object(gui, 'wait_public', side_effect=[b'{"public":"request"}', json.dumps(device_report()).encode()]):
+                patch.object(gui, 'wait_public', side_effect=[b'{"public":"signer"}', b'{"public":"request"}', json.dumps(device_report()).encode()]), \
+                patch.object(gui, 'verify_signer', side_effect=gui.DeviceFailure('flutter_android_signer_verification_failed') if fail_signer else None,
+                    return_value={'stage':'complete','signatureVerified':True,'deleteReturned':True,'readRejected':True}):
             if fail_reverse_cleanup:
                 with self.assertRaisesRegex(gui.DeviceFailure, 'flutter_android_cleanup_failed'):
                     gui._run(args, self.fixture_root, self.env, self.config, approval, process)
+                result = None
+            elif fail_signer:
+                with self.assertRaisesRegex(gui.DeviceFailure, 'flutter_android_signer_verification_failed'):
+                    gui._run(args, self.fixture_root, self.env, self.config, approval, process)
+                approval.approve.assert_not_called()
                 result = None
             else:
                 result = gui._run(args, self.fixture_root, self.env, self.config, approval, process)
@@ -404,6 +428,9 @@ class CleanupGuards(PreparedFixture):
         self.assertNotIn(('forward', '--remove', original[1]), calls)
         self.assertFalse((self.fixture_root / 'flutter-android-public-defines.json').exists())
         cleanup = json.loads((args.output / 'flutter-android-device-cleanup.json').read_text())
+        evidence = json.loads((args.output / 'flutter-android-signer-probe.json').read_text())
+        self.assertEqual(evidence['signatureVerified'], not fail_signer)
+        self.assertEqual(evidence['stage'], 'verification_failed' if fail_signer else 'complete')
         return result, cleanup
 
     def test_only_owned_package_reverse_and_new_vm_forward_are_cleaned(self):
@@ -419,6 +446,11 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(cleanup['status'], 'failed')
         self.assertFalse(cleanup['reverseRemoved'])
         self.assertTrue(cleanup['ownedPackageAbsent'])
+
+    def test_failed_signer_verification_stops_before_host_approval(self):
+        result, cleanup = self.exercise(fail_signer=True)
+        self.assertIsNone(result)
+        self.assertEqual(cleanup['status'], 'passed')
 
 
 class SharedReportGuards(unittest.TestCase):
@@ -488,7 +520,9 @@ class SharedRouteGuards(unittest.TestCase):
                 'expectedHostKey': 'public-fixture-only'}
             args = SimpleNamespace(paired_gui='flutter-android', input_fixture=None)
             host = object()
-            approval = Mock(spec=['verify_ssh', 'revoke'])
+            approval = Mock(spec=['verify_ssh', 'revoke', 'applied', 'fingerprint_authenticated'])
+            approval.applied = failure != 'device'
+            approval.fingerprint_authenticated.return_value = failure is None
             if failure == 'verification':
                 approval.verify_ssh.side_effect = paired_gui.GuiFailure('synthetic_verification_failure')
             exercise = Mock(return_value={'paired': True})
@@ -514,7 +548,8 @@ class SharedRouteGuards(unittest.TestCase):
     def test_native_route_verifies_zero_input_then_revokes(self):
         result, approval = self.exercise()
         approval.verify_ssh.assert_called_once_with(b'')
-        self.assertEqual(approval.method_calls, [('verify_ssh', (b'',), {}), ('revoke', (), {})])
+        self.assertEqual(approval.method_calls, [('verify_ssh', (b'',), {}),
+            ('fingerprint_authenticated', (), {}), ('revoke', (), {})])
         self.assertEqual(result['status'], 'passed')
         self.assertEqual(result['adapter'], 'flutter-android')
         self.assertEqual(result['receivedInputBytes'], 0)
@@ -526,14 +561,16 @@ class SharedRouteGuards(unittest.TestCase):
         approval.verify_ssh.assert_not_called()
         self.assertEqual(result['status'], 'failed')
         self.assertEqual(result['errorCode'], 'synthetic_device_failure')
-        self.assertNotIn('matchedDeviceKeyInSshd', result)
+        self.assertFalse(result['matchedDeviceKeyInSshd'])
+        self.assertFalse(result['temporaryHostApprovedRequest'])
 
     def test_native_route_verification_failure_still_revokes(self):
         result, approval = self.exercise('verification')
         approval.verify_ssh.assert_called_once_with(b'')
         self.assertEqual(result['status'], 'failed')
         self.assertEqual(result['errorCode'], 'synthetic_verification_failure')
-        self.assertNotIn('revokedFixtureKey', result)
+        self.assertTrue(result['revokedFixtureKey'])
+        self.assertFalse(result['matchedDeviceKeyInSshd'])
 
 
 if __name__ == '__main__':

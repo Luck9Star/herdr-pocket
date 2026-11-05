@@ -185,6 +185,48 @@ def gui_report_fields(route, result, input_fixture=False):
     return fields
 
 
+PTY_FIELDS = {'schemaVersion','state','endReason','initialRows','initialColumns','rows','columns',
+              'samples','changes','readErrors','captureErrors','winchHandlers','signalSamples',
+              'signalAvailable','signalsMayCoalesce','elapsedMs','sampleIntervalMs','maxSampleGapMs','terminationSignal'}
+
+
+def checked_final_pty(record):
+    if not isinstance(record,dict) or set(record) != PTY_FIELDS or not all(
+            type(value) is int and value >= 0 for value in record.values()):
+        return None
+    if record['state'] not in (2,3):
+        return None
+    result = {'noObservedResize':False, 'numericRecord':record}
+    if (record['schemaVersion'] != 1 or record['state'] != 2 or record['endReason'] != 1
+            or record['readErrors'] or record['captureErrors'] or record['terminationSignal']):
+        result['errorCode'] = 'pty_capture_incomplete'
+    elif (record['initialRows'] != record['rows'] or record['initialColumns'] != record['columns']
+          or record['changes']):
+        result['errorCode'] = 'pty_dimension_change_observed'
+    elif (min(record['rows'],record['columns']) < 1 or record['samples'] < 3 or record['elapsedMs'] < 1000
+          or record['signalAvailable'] != 1 or record['signalsMayCoalesce'] != 1
+          or record['maxSampleGapMs'] > 1500 or record['winchHandlers'] or record['signalSamples']):
+        result['errorCode'] = 'pty_coverage_inconclusive'
+    else:
+        result['noObservedResize'] = True
+    return result
+
+
+def final_pty_evidence(root):
+    path = root / 'pty-size.json'
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        try:
+            if path.is_file() and path.stat().st_size <= 2048:
+                result = checked_final_pty(json.loads(path.read_bytes()))
+                if result is not None:
+                    return result
+        except (OSError, ValueError):
+            pass
+        time.sleep(0.05)
+    return {'noObservedResize':False, 'errorCode':'owned_pty_final_record_unavailable'}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--flutter-app', type=Path)
@@ -450,6 +492,10 @@ LogLevel VERBOSE
         report['errorCode'] = 'fixture_setup_failed'
     finally:
         (root / 'stop-capture').write_text('stop')
+        if args.paired_gui and (root/'capture-ready').is_file():
+            report['sharedPty'] = final_pty_evidence(root)
+            if report['status'] == 'passed' and not report['sharedPty']['noObservedResize']:
+                report.update(status='failed', errorCode='shared_pty_size_not_confirmed')
         stopped = True
         for proc, handle in reversed(processes):
             if proc.poll() is None:

@@ -1,0 +1,255 @@
+"""Real, newly created local PTYs only; no shell, credentials or GUI.
+
+The controlled subprocess owns its session/PTY. No terminal output/history is
+read: tests inspect only numeric JSON, owned termios attributes and input bytes.
+"""
+from contextlib import contextmanager
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from unittest.mock import patch
+
+try:
+    import fcntl
+    import pty
+    import struct
+    import termios
+except ImportError:
+    fixture = None
+else:
+    spec = importlib.util.spec_from_file_location('owned_pty_capture', Path(__file__).with_name('capture_input.py'))
+    fixture = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fixture)
+
+
+@contextmanager
+def new_pty(rows=24, columns=80):
+    master, slave = pty.openpty()
+    try:
+        resize(slave, rows, columns)
+        yield master, slave
+    finally:
+        os.close(master); os.close(slave)
+
+
+def resize(fd, rows, columns):
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', rows, columns, 0, 0))
+
+
+def wait_until(check, timeout=3):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        value = check()
+        if value:
+            return value
+        time.sleep(0.01)
+    raise AssertionError('owned_pty_fixture_phase_timeout')
+
+
+def record(root):
+    path = Path(root) / 'pty-size.json'
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def restored_modes(attributes):
+    # Darwin may set PENDIN while switching from raw to canonical mode. This
+    # kernel input-queue marker is not a requested echo/canonical/signal mode.
+    # Compare every other attribute, rather than dropping the whole lflag word.
+    result = list(attributes)
+    if sys.platform == 'darwin':
+        result[3] &= ~getattr(termios, 'PENDIN', 0)
+    return result
+
+
+@contextmanager
+def owned_capture(timeout=6):
+    with tempfile.TemporaryDirectory(prefix='herdr-owned-pty-') as folder, new_pty() as (master, slave):
+        root = Path(folder)
+        shutil.copy2(Path(__file__).with_name('capture_input.py'), root / 'capture_input.py')
+        (root / 'terminal-fixture.json').write_text(json.dumps({'frames': [{'data': 'SYNTHETIC PTY FIXTURE'}]}))
+        original_attributes = termios.tcgetattr(slave)
+        # A private terminal fd is sufficient for real size/raw-mode evidence.
+        # Do not acquire a controlling terminal: some macOS sandboxes restrict
+        # its session teardown. SIGWINCH delivery is tested explicitly below.
+        bootstrap = ("import runpy,sys; "
+            "module=runpy.run_path(sys.argv[1],run_name='fixture_import'); "
+            "raise SystemExit(module['run_fixture'](timeout=float(sys.argv[2])))")
+        proc = subprocess.Popen([sys.executable, '-c', bootstrap, str(root / 'capture_input.py'), str(timeout)],
+            stdin=slave, stdout=slave, stderr=subprocess.DEVNULL, start_new_session=True)
+        try:
+            def ready():
+                if proc.poll() is not None:
+                    raise AssertionError('owned_pty_fixture_exited_before_ready')
+                return (root / 'capture-ready').exists() and record(root)
+            wait_until(ready)
+            yield root, master, slave, proc, original_attributes
+        finally:
+            if proc.poll() is None:
+                (root / 'stop-capture').write_text('stop')
+                try:
+                    proc.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    for number in (signal.SIGTERM, signal.SIGKILL):
+                        try:
+                            try:
+                                os.killpg(proc.pid, number)
+                            except PermissionError:
+                                os.kill(proc.pid, number)  # Some sandboxes deny groups but permit the owned PID.
+                        except ProcessLookupError:
+                            pass
+                        try:
+                            proc.wait(timeout=1)
+                            break
+                        except subprocess.TimeoutExpired:
+                            pass
+            if proc.poll() is None:
+                raise AssertionError('owned_pty_fixture_process_not_stopped')
+
+
+@unittest.skipIf(fixture is None, 'POSIX PTY and termios are required; no runtime evidence on this platform')
+class PtySizeTests(unittest.TestCase):
+    def assert_numeric_record(self, value):
+        expected = {'schemaVersion', 'state', 'endReason', 'initialRows', 'initialColumns', 'rows', 'columns',
+            'samples', 'changes', 'readErrors', 'captureErrors', 'winchHandlers', 'signalSamples',
+            'signalAvailable', 'signalsMayCoalesce', 'elapsedMs', 'maxSampleGapMs', 'sampleIntervalMs', 'terminationSignal'}
+        self.assertEqual(set(value), expected)
+        self.assertTrue(all(type(item) is int and item >= 0 for item in value.values()))
+        self.assertEqual(value['schemaVersion'], 1)
+        self.assertEqual(value['signalsMayCoalesce'], 1)
+
+    def test_unchanged_real_pty_records_samples_and_atomic_numeric_replacement(self):
+        with tempfile.TemporaryDirectory() as folder, new_pty() as (_, slave):
+            root = Path(folder); monitor = fixture.PtySizeRecorder(root, slave, poll_interval=0.01)
+            with patch.object(fixture.os, 'fsync', wraps=os.fsync) as fsync:
+                monitor.start()
+                with (root / 'pty-size.json').open() as old_file:
+                    first = json.load(old_file)
+                    old_inode = os.fstat(old_file.fileno()).st_ino
+                    time.sleep(0.02); monitor.poll()
+                    self.assertEqual((root / 'pty-size.json').stat().st_ino, old_inode)  # No per-sample disk writes.
+                    fsync.assert_not_called()
+                    monitor.finish(1); fsync.assert_called_once()
+                    self.assertNotEqual((root / 'pty-size.json').stat().st_ino, old_inode)
+                    old_file.seek(0); self.assertEqual(json.load(old_file), first)
+            value = record(root); self.assert_numeric_record(value)
+            self.assertEqual([value['initialRows'], value['rows'], value['initialColumns'], value['columns']], [24, 24, 80, 80])
+            self.assertGreaterEqual(value['samples'], 3); self.assertEqual(value['changes'], 0)
+            self.assertEqual(value['state'], 2); self.assertEqual(value['endReason'], 1)
+            self.assertEqual(value['readErrors'], 0)
+            self.assertEqual(stat.S_IMODE((root / 'pty-size.json').stat().st_mode), 0o600)
+            self.assertFalse((root / 'pty-size.json.new').exists())
+
+    def test_real_size_change_and_return_to_baseline_cannot_pass_as_unchanged(self):
+        with tempfile.TemporaryDirectory() as root, new_pty() as (_, slave):
+            monitor = fixture.PtySizeRecorder(root, slave, poll_interval=0.01); monitor.start()
+            resize(slave, 31, 96); time.sleep(0.02); monitor.poll()
+            self.assertEqual([record(root)['rows'], record(root)['columns']], [31, 96])
+            resize(slave, 24, 80); monitor.finish(1)
+            value = record(root); self.assert_numeric_record(value)
+            self.assertEqual(value['changes'], 2)
+            self.assertEqual([value['rows'], value['columns']], [24, 80])
+
+    @unittest.skipUnless(hasattr(signal, 'SIGWINCH'), 'SIGWINCH unavailable; polling is a separate scope')
+    def test_delivered_signal_marks_work_and_real_size_is_sampled_outside_handler(self):
+        with tempfile.TemporaryDirectory() as root, new_pty() as (_, slave):
+            monitor = fixture.PtySizeRecorder(root, slave, poll_interval=1); monitor.start()
+            previous = signal.signal(signal.SIGWINCH, monitor.note_winch)
+            try:
+                resize(slave, 32, 100)
+                os.kill(os.getpid(), signal.SIGWINCH)
+                wait_until(lambda: monitor.record['winchHandlers'] > 0)
+                self.assertEqual(monitor.record['samples'], 1)  # Handler performs no terminal I/O.
+                monitor.poll(); monitor.finish(1)
+            finally:
+                signal.signal(signal.SIGWINCH, previous)
+            value = record(root); self.assert_numeric_record(value)
+            self.assertGreaterEqual(value['signalSamples'], 1)
+            self.assertLessEqual(value['signalSamples'], value['winchHandlers'])
+            self.assertEqual([value['rows'], value['columns']], [32, 100])
+            self.assertEqual(value['changes'], 1)
+
+    def test_non_pty_read_failure_is_explicit_and_never_a_zero_change_pass(self):
+        with tempfile.TemporaryDirectory() as root:
+            read_fd, write_fd = os.pipe()
+            try:
+                monitor = fixture.PtySizeRecorder(root, read_fd)
+                with self.assertRaises(OSError): monitor.start()
+                monitor.finish(5, capture_errors=1)
+            finally:
+                os.close(read_fd); os.close(write_fd)
+            value = record(root); self.assert_numeric_record(value)
+            self.assertEqual(value['state'], 3); self.assertGreater(value['readErrors'], 0)
+            self.assertEqual(value['samples'], 0)
+
+    def test_unexpected_pending_file_is_not_followed_or_overwritten(self):
+        with tempfile.TemporaryDirectory() as folder, new_pty() as (_, slave):
+            root = Path(folder); pending = root / 'pty-size.json.new'; pending.write_text('synthetic sentinel')
+            monitor = fixture.PtySizeRecorder(root, slave)
+            with self.assertRaises(FileExistsError): monitor.start()
+            self.assertEqual(pending.read_text(), 'synthetic sentinel')
+            self.assertFalse((root / 'pty-size.json').exists())
+
+    @unittest.skipUnless(fixture is not None and hasattr(os, 'setsid'), 'owned POSIX process session unavailable')
+    def test_owned_capture_samples_real_resize_until_explicit_stop_and_restores_termios(self):
+        with owned_capture() as (root, master, slave, proc, original):
+            baseline = record(root); self.assert_numeric_record(baseline)
+            self.assertEqual(baseline['state'], 1); self.assertEqual(baseline['signalAvailable'], 1)
+            self.assertFalse(termios.tcgetattr(slave)[3] & (termios.ECHO | termios.ICANON))
+            wait_until(lambda: record(root)['samples'] >= 3)
+            resize(master, 35, 104)
+            wait_until(lambda: record(root)['rows'] == 35 and record(root)['columns'] == 104)
+            os.kill(proc.pid, signal.SIGWINCH)
+            wait_until(lambda: record(root)['signalSamples'] >= 1)
+            (root / 'stop-capture').write_text('stop')
+            self.assertEqual(proc.wait(timeout=3), 0)
+            final = record(root); self.assert_numeric_record(final)
+            self.assertEqual(final['state'], 2); self.assertEqual(final['endReason'], 1)
+            self.assertGreaterEqual(final['changes'], 1); self.assertGreaterEqual(final['samples'], 4)
+            self.assertGreater(final['elapsedMs'], 0); self.assertGreater(final['maxSampleGapMs'], 0)
+            self.assertFalse((root / 'capture-running').exists())
+            self.assertEqual((root / 'received.bin').read_bytes(), b'')
+            self.assertEqual(restored_modes(termios.tcgetattr(slave)), restored_modes(original))
+
+    @unittest.skipUnless(fixture is not None and hasattr(os, 'setsid'), 'owned POSIX process session unavailable')
+    def test_owned_capture_termination_is_failed_final_and_process_is_reaped(self):
+        with owned_capture() as (root, _, slave, proc, original):
+            os.kill(proc.pid, signal.SIGTERM)
+            self.assertEqual(proc.wait(timeout=3), 1)
+            value = record(root); self.assert_numeric_record(value)
+            self.assertEqual(value['state'], 3); self.assertEqual(value['endReason'], 6)
+            self.assertEqual(value['terminationSignal'], signal.SIGTERM)
+            self.assertFalse((root / 'capture-running').exists())
+            self.assertEqual(restored_modes(termios.tcgetattr(slave)), restored_modes(original))
+
+    @unittest.skipUnless(fixture is not None and hasattr(os, 'setsid'), 'owned POSIX process session unavailable')
+    def test_owned_capture_deadline_has_distinct_end_reason(self):
+        with owned_capture(timeout=0.2) as (root, _, _, proc, _):
+            self.assertEqual(proc.wait(timeout=3), 0)
+            value = record(root); self.assert_numeric_record(value)
+            self.assertEqual(value['state'], 2); self.assertEqual(value['endReason'], 2)
+            self.assertEqual(value['changes'], 0)
+
+    @unittest.skipUnless(fixture is not None and hasattr(os, 'setsid'), 'owned POSIX process session unavailable')
+    def test_existing_input_byte_contract_is_preserved_without_adding_payload_to_size_record(self):
+        with owned_capture() as (root, master, _, proc, _):
+            payload = 'Pocket测'.encode()
+            os.write(master, payload)
+            wait_until(lambda: (root / 'received.bin').read_bytes() == payload)
+            (root / 'stop-capture').write_text('stop')
+            self.assertEqual(proc.wait(timeout=3), 0)
+            value = record(root); self.assert_numeric_record(value)
+            self.assertNotIn('Pocket', json.dumps(value))
+            self.assertEqual(value['changes'], 0)
+
+
+if __name__ == '__main__':
+    unittest.main()

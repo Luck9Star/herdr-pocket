@@ -1,0 +1,23 @@
+{
+  "test": "macos native host board to editable target",
+  "checked": "2026-11-06",
+  "platform": "macOS arm64",
+  "binarySHA256": "762caa28943c819699ae266947868b9574d8febf5c3da516566738a8f89762b2",
+  "appIdentifier": "dev.herdrpocket.nov05boardcheck",
+  "source": "isolated local build during development preceding de86b33, distinct app identifier and app storage",
+  "observations": [
+    "empty native host catalog shown",
+    "pressing 新增主机 / 手动连接 opened the connection form",
+    "host field accepted fixture.invalid",
+    "SSH port showed 22",
+    "connection action remained disabled"
+  ],
+  "remoteConnectionAttempted": false,
+  "realCredentialsEntered": false,
+  "cleanup": {
+    "testProcessClosed": true,
+    "executableOpenHoldersAfterExit": 0,
+    "localBrowserFixturePortClosed": true
+  },
+  "scope": "Mac host entry smoke only; no pairing, SSH, system Keychain, mobile or pixel validation"
+}

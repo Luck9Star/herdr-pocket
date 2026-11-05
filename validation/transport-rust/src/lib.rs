@@ -27,6 +27,7 @@ use tokio::{
 };
 use zeroize::Zeroize;
 
+pub mod file_lock;
 pub mod pairing;
 pub mod input;
 pub mod recovery;

@@ -165,7 +165,10 @@ impl Repository {
             .create(true)
             .open(lock_path)
             .map_err(|_| "host_storage_unavailable")?;
-        lock.try_lock().map_err(|_| "host_storage_busy")?;
+        herdr_readonly_transport::file_lock::try_lock_owner(&lock).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::WouldBlock { "host_storage_busy" }
+            else { "host_storage_lock_failed" }
+        })?;
         let path = dir.join("hosts.json");
         let items = match fs::symlink_metadata(&path) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),

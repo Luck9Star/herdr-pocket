@@ -67,6 +67,8 @@ flutter test --no-pub --no-uninstall --reporter expanded -d emulator-5554 \
 
 ## 证据和清理
 
+正式看板之前另运行一次独立的原生 signer 探针：只通过 `NativeDeviceKeys` 创建一把临时身份、读取公钥、对固定公开挑战签名、删除并检查再次读取被拒绝。它不进入 catalog，不参与主机授权；失败则停止，不替换身份或重试未知结果的写操作。runner 仅在内存用 Python cryptography 对 Ed25519 公钥、签名和固定挑战验签，app-private 有界交换文件不上传；单独 `flutter-android-signer-probe.json` 只含固定 stage、验签、删除调用返回及删除后读取拒绝的布尔值。读取拒绝不单独证明其原因是删除。探针通过不等于完整配对通过，也不证明硬件保护或物理设备行为。
+
 测试先从默认主机列表新增身份，再返回列表重开同一待批准请求，核对原身份，证明本机原生存储读回路径。runner 读取的只有 app cache 中有界的公开 request、result、固定阶段名；主机 helper 对实际公钥审查并生成公开 response，response 以 [`adb shell -T`](https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/docs/user/adb.1.md) 的 stdin 写入，再原子改名。测试通过文本字段输入该响应并点击审查／批准；不提供签名 RPC 或帧注入 API。
 
 远程页首次 full 会新建生产 `Terminal`；随后在同一对象上观察到显示 seq 增加，作为已消费 delta 的证据。测试只读对象身份和可见文字，不改对象、适配器或帧。SSH 已认证及 snapshot 看板由实际远程页面出现佐证；共享 harness 还必须核对 sshd Accepted publickey 的设备指纹，并确认持续接收器仍活着且累计字节恰好 0。只检查模式按钮不足以证明 0 输入。

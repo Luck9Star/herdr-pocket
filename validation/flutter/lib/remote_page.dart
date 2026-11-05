@@ -57,6 +57,17 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       if (mounted) setState(() {});
     });
 
+  // Presentation only: retain the original pane objects and source order in
+  // each group. Stopped snapshots cannot advertise current pending work.
+  List<RemotePane> get displayPanes {
+    final panes = dashboard?.panes ?? const <RemotePane>[];
+    if (!busy) return panes;
+    return [for (final pane in panes) if (pane.agentStatus == 'blocked') pane,
+      for (final pane in panes) if (pane.agentStatus != 'blocked') pane];
+  }
+  int get blockedPaneCount => busy
+    ? dashboard?.panes.where((pane) => pane.agentStatus == 'blocked').length ?? 0 : 0;
+
   @override
   void initState() {
     super.initState(); WidgetsBinding.instance.addObserver(this);
@@ -397,12 +408,16 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             const SizedBox(height:12),
             Text('会话 ${dashboard!.session}',style:Theme.of(context).textTheme.titleMedium),
             Text('仅来自已核验 socket 的 snapshot · ${dashboard!.panes.length} 个 pane\n${busy ? '连接保持，等待选择或正在观察' : '看板已陈旧，需重新审查连接'}'),
+            if (blockedPaneCount > 0) Semantics(key:const ValueKey('remote-blocked-summary'),
+              liveRegion:true,excludeSemantics:true,
+              label:'主机报告 $blockedPaneCount 个受阻窗格。待处理优先，同级保持原顺序。',
+              child:Text('待处理优先 · $blockedPaneCount 个受阻窗格（主机报告）')),
             if (dashboard!.panes.isEmpty) const Padding(padding:EdgeInsets.symmetric(vertical:16),
               child:Text('没有 pane · 不会回退到其他会话')),
-            for (final pane in dashboard!.panes) Card(child:Padding(padding:const EdgeInsets.all(12),
+            for (final pane in displayPanes) Card(child:Padding(padding:const EdgeInsets.all(12),
               child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
                 Text(pane.label ?? pane.paneId,style:Theme.of(context).textTheme.titleMedium),
-                if (pane.agent != null || pane.agentStatus != 'unknown') Text('${pane.agent ?? 'Agent'} · ${pane.statusLabel}'),
+                Text('${pane.agent ?? '窗格状态'} · ${busy ? pane.statusLabel : '上次${pane.statusLabel}（待确认）'}'),
                 if (pane.workspace != null || pane.tab != null) Text([pane.workspace,pane.tab].whereType<String>().join(' / ')),
                 Text('${pane.paneId} · ${pane.terminalId}',softWrap:true),
                 const SizedBox(height:8),

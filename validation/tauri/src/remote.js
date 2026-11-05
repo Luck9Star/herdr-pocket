@@ -8,6 +8,7 @@ import { auxiliaryKey, draftBytes, displayDraft } from './input-codec.js';
 import { OnlineInputQueue } from './online-input-queue.js';
 import { scanCurrent } from './scan-lease.js';
 import { invalidatePairReview } from './pairing-lifecycle.js';
+import { dashboardPresentation, paneStatusText } from './dashboard-presentation.js';
 
 export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   const $ = id => document.getElementById(id), gate = new RemoteViewGate();
@@ -15,7 +16,16 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   let inputGeneration=null, inputEpoch=null, inputMode='observe', inputBusy=false, inputUnknown=false, inputRevision=0, selectedTarget=null, draftPreview=null, switchingFocus=false;
   let inputComposition=new InputComposition(), focusReset=Promise.resolve(); const onlineInput=new OnlineInputQueue();
   let hostRecords=[], activeHostId=null, hostNavigation=0, unsavedHostOpen=false; const hostDrafts=new Map(), hostStatuses=new Map();
-  let hostInitialization=Promise.resolve(false);
+  let hostInitialization=Promise.resolve(false), hostInitError='host_storage_unavailable';
+  function initializeHostCatalog() {
+    hostInitialization=invoke('host_init').then(()=>true,error=>{
+      const known=['host_storage_busy','host_storage_corrupt','host_storage_lock_failed',
+        'host_path_bridge_unavailable','host_path_invalid'];
+      hostInitError=known.includes(error)?error:'host_storage_unavailable';
+      return false;
+    });
+    return hostInitialization;
+  }
   const pairTargetIds = ['remote-host','remote-port','remote-user','remote-session','remote-herdr','remote-socket','remote-pin','pair-device'];
   const pairStatus = message => { $('pair-status').textContent = message; };
   const pairReady = () => pairState === 'authorized-unverified' || pairState === 'waiting-connectivity' || pairState === 'paired';
@@ -170,7 +180,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   function showRemotePage() {showingRemote=true; $('host-home').hidden=true; $('remote-page').hidden=false; $('fixture-workbench').hidden=true; $('show-remote').setAttribute('aria-pressed','true'); $('show-fixture').setAttribute('aria-pressed','false');}
   async function refreshHosts() {
     if(!native){hostMessage('浏览器预览不读取本机主机资料。');return;}
-    try {await hostInitialization; hostRecords=await invoke('host_list'); renderHosts(); hostMessage(hostRecords.length?'选择主机、管理资料，或新增主机。':'还没有已存主机。');}
+    try {if(!await hostInitialization)throw Error(hostInitError); hostRecords=await invoke('host_list'); renderHosts(); hostMessage(hostRecords.length?'选择主机、管理资料，或新增主机。':'还没有已存主机。');}
     catch {hostRecords=[];renderHosts();hostMessage('本机资料不可用；仍可打开手动连接表单。');}
   }
   function renderHosts() {
@@ -218,6 +228,8 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
     } catch(e) {hostMessage(String(e)==='unsaved_pairing'?'当前设备身份尚未保存；请先保存或删除后再切换。':'连接尚未结束，请稍后重试。');}
   }
   async function saveCurrentHost() {
+    // Re-open only on this explicit user write, never replay host_save or key creation.
+    if(!await hostInitialization && !await initializeHostCatalog()) throw hostInitError;
     const view=await invoke('host_save',{id:activeHostId,name:$('host-save-name').value,config:targetConfig()});
     activeHostId=view.id;unsavedHostOpen=false;await refreshHosts();$('host-save-status').textContent='已保存本机公开资料；不代表主机已验证或仍授权。';return view;
   }
@@ -250,7 +262,8 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
       phase.createPhase=p.stored?'ready':'persist_failed';
       $('pair-request').value=p.request; pairState=p.state; pairStatus(p.stored?`等待主机响应 · 设备指纹 ${p.fingerprint} · 授权未知`:'设备已创建但本地保存未确认；请求未公开。请删除此身份并检查存储，不会自动替换。'); await refreshHosts();
     } catch(e) {
-      const known=['host_storage_unavailable','host_storage_busy','host_storage_corrupt','invalid_host_name',
+      const known=['host_storage_unavailable','host_storage_busy','host_storage_corrupt','host_storage_lock_failed',
+        'host_path_bridge_unavailable','host_path_invalid','invalid_host_name',
         'invalid_config','invalid_host_key','key_unavailable','invalid_device_key','pairing_busy',
         'host_pairing_exists','host_already_exists','host_restore_required','invalid_public_field'];
       const code=known.includes(e)?e:'unavailable';
@@ -320,14 +333,11 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
         if(event.kind==='dashboard') {
           if(!validDashboard(event.panes)){cancel('会话看板无效，连接已停止。');return;}
           $('remote-dashboard').hidden=false; $('remote-panes').replaceChildren();
-          for(const pane of event.panes) {
+          const presentation=dashboardPresentation(event.panes);
+          for(const pane of presentation.panes) {
             const button=document.createElement('button'); button.type='button';
             button.textContent=`${pane.paneId} · ${pane.terminalId}`;
-            const statusNames={idle:'空闲',working:'工作中',blocked:'受阻',done:'已完成',unknown:'状态未知'};
-            const details=[pane.label];
-            if (pane.agent || (pane.agentStatus && pane.agentStatus!=='unknown')) {
-              details.push(`${pane.agent || 'Agent'} · ${statusNames[pane.agentStatus] || '状态未知'}`);
-            }
+            const details=[pane.label,paneStatusText(pane)];
             details.push([pane.workspace,pane.tab].filter(Boolean).join(' / '));
             const subtitle=details.filter(Boolean).join(' · ');
             if (subtitle) {
@@ -340,7 +350,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
             };
             $('remote-panes').append(button);
           }
-          status(event.panes.length?'请选择本次会话中的 pane。':'当前会话没有可观察的 pane；请停止连接。'); return;
+          status(presentation.summary); return;
         }
         if(event.kind!=='frame') { cancel('收到无效事件，连接已停止。'); return; }
         const frame=event.frame;
@@ -381,7 +391,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   window.addEventListener('pagehide',()=>cancel());
   // The browser never substitutes fixture output for a failed/missing native transport.
   $('remote-native-note').hidden=native;
-  showingRemote=false; hostInitialization=native?invoke('host_init').then(()=>true).catch(()=>false):Promise.resolve(false); void refreshHosts();
+  showingRemote=false; if(native)initializeHostCatalog(); void refreshHosts();
   $('host-open-remote').disabled=false; $('show-fixture').disabled=false;
   status(native?'待审查连接资料；没有建立远端连接。':'浏览器仅预览表单与布局，没有原生 SSH 功能。','info');render();
 }

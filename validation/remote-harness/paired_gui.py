@@ -80,6 +80,7 @@ class FixtureApproval:
         self.host = host
         self.request_id = None
         self.fingerprint = None
+        self.applied = False
 
     def approve(self, raw):
         now = int(time.time())
@@ -101,6 +102,7 @@ class FixtureApproval:
         # sshd's private, newly created AuthorizedKeysFile starts empty. Only
         # the key actually approved by the fixture helper becomes acceptable.
         self.replace_authorization(public_line)
+        self.applied = True
         return response
 
     def replace_authorization(self, content):
@@ -110,13 +112,16 @@ class FixtureApproval:
             stream.write(content)
         os.replace(pending, self.root / 'authorized_keys')
 
-    def verify_ssh(self, expected=b''):
-        if not self.fingerprint:
-            raise GuiFailure('device_key_not_approved')
+    def fingerprint_authenticated(self):
+        if not self.applied or not (self.root/'sshd.log').is_file():
+            return False
         log = bounded_wire(self.root / 'sshd.log', 2_097_152).decode(errors='replace')
         pattern = (r'Accepted publickey for ' + re.escape(self.config['username']) +
                    r' from 127\.0\.0\.1 port [0-9]+ ssh2: ED25519 ' + re.escape(self.fingerprint) + r'(?:\s|$)')
-        if not re.search(pattern, log):
+        return re.search(pattern, log) is not None
+
+    def verify_ssh(self, expected=b''):
+        if not self.fingerprint_authenticated():
             raise GuiFailure('device_fingerprint_not_authenticated_by_sshd')
         if expected:
             wait_for(lambda: (self.root/'received.bin').stat().st_size >= len(expected), 'fixture_input_missing', timeout=4)
@@ -154,7 +159,7 @@ def run_flutter(args, root, env, config, approval):
         try:
             code = proc.wait(timeout=100)
         except subprocess.TimeoutExpired as exc:
-            raise GuiFailure('widget_completion_timeout') from exc
+            raise widget_failure(exchange, 'widget_completion_timeout') from exc
         if code or not (exchange / 'result.json').is_file():
             # Return only named, fixed test-stage failures (never raw widget logs).
             raise widget_failure(exchange, 'widget_pairing_or_observe_failed')
@@ -171,7 +176,7 @@ def run_flutter(args, root, env, config, approval):
         if args.input_fixture and result.get('inputQueueAccepted') is not True:
             raise GuiFailure('widget_input_not_accepted')
         return {**{field: True for field in required}, 'inputQueueAccepted':bool(args.input_fixture), 'signCalls': calls, 'frameCount': frames, 'deltaFrames': deltas,
-                'keyStore': 'test-only Dart signer with runner-generated identity'}
+                'localViewportChanges':result.get('localViewportChanges',0), 'keyStore': 'test-only Dart signer with runner-generated identity'}
 
 
 class WebDriver:
@@ -288,6 +293,14 @@ def run_tauri(args, root, env, config, approval):
                 return int(value) if value and value.isdigit() else 0
             full = wait_for(lambda:rendered('full'), 'full_render_ack_missing')
             deltas = wait_for(lambda:rendered('delta'), 'delta_render_ack_missing')
+            for width in (1040,390):
+                dimensions = driver.call('POST',driver.session+'/window/rect',{'width':width,'height':844})
+                if dimensions.get('width') != width:
+                    raise GuiFailure('local_viewport_resize_unconfirmed')
+                def next_delta():
+                    count = rendered('delta')
+                    return count if count > deltas else 0
+                deltas = wait_for(next_delta,'delta_missing_after_local_resize')
             if args.input_fixture:
                 driver.click('#remote-input-draft-mode')
                 driver.fill('#remote-input-draft', 'Pocket测')
@@ -298,7 +311,7 @@ def run_tauri(args, root, env, config, approval):
             wait_for(lambda:'陈旧' in driver.read('#remote-captured'), 'stale_marker_missing')
             return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                     'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
-                    'inputQueueAccepted':bool(args.input_fixture), 'keyStore':'native process-memory Linux test identity'}
+                    'localViewportChanges':2, 'inputQueueAccepted':bool(args.input_fixture), 'keyStore':'native process-memory Linux test identity'}
         finally:
             driver.close()
 
@@ -331,7 +344,12 @@ def run_gui(args, root, env, config):
                     raise GuiFailure('missing_guarded_input_receipt')
                 approval.verify_ssh(expected)
             finally:
-                approval.revoke()
+                result['temporaryHostApprovedRequest'] = approval.applied
+                try:
+                    result['matchedDeviceKeyInSshd'] = approval.fingerprint_authenticated()
+                finally:
+                    approval.revoke()
+                    result['revokedFixtureKey'] = approval.applied
         result.update(status='passed', matchedDeviceKeyInSshd=True, receivedInputBytes=len(expected), revokedFixtureKey=True)
     except GuiFailure as exc:
         result['errorCode'] = str(exc)

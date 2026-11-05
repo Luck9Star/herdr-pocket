@@ -95,14 +95,14 @@ pub(crate) fn no_backup_directory<R: Runtime>(
 ) -> Result<std::path::PathBuf> {
     let state = app
         .try_state::<ConfigRoot<R>>()
-        .ok_or("host_storage_unavailable")?;
+        .ok_or("host_path_bridge_unavailable")?;
     let response: RootPath = state
         .0
         .run_mobile_plugin("privateConfigRoot", ())
-        .map_err(|_| "host_storage_unavailable")?;
+        .map_err(|_| "host_path_bridge_unavailable")?;
     let path = std::path::PathBuf::from(response.path);
     if !path.is_absolute() {
-        return Err("host_storage_unavailable");
+        return Err("host_path_invalid");
     }
     Ok(path)
 }

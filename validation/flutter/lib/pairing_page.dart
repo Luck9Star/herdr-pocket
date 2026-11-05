@@ -111,6 +111,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     final ticket = ++revision;
     String? handle;
     var createStarted = false;
+    var phase = '核验连接资料';
     setState(() { busy = true; sourceReviewed = false; });
     try {
       final values = <String,dynamic>{'schemaVersion':1,'reviewConfirmed':true,'paneId':'',
@@ -123,13 +124,19 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       final fullLabel = '${checked.host} / ${checked.session}';
       final label = fullLabel.length > 64 ? fullLabel.substring(0,64) : fullLabel;
       if (widget.catalog != null) {
+        phase = '保存创建意图';
         await widget.catalog!.beginCreation(values,label);
         if (!mounted || ticket != revision) { await widget.catalog!.clearUnstartedCreation(widget.catalog!.pendingCreation!['id'] as String); return; }
       }
       createStarted = true; PairingPage.retainedCreationUnknown = true;
+      phase = '创建设备身份';
       handle = await keys.create();
       PairingPage.retainedOrphan = handle;
-      if (widget.catalog != null) await widget.catalog!.recordCreatedHandle(handle);
+      if (widget.catalog != null) {
+        phase = '保存本机密钥引用';
+        await widget.catalog!.recordCreatedHandle(handle);
+      }
+      phase = '读取设备公钥';
       final publicKey = await keys.public(handle);
       if (!mounted || ticket != revision) {
         try { await keys.delete(handle); if (widget.catalog?.pendingCreation?['handle'] == handle) await widget.catalog!.clearDeletedCreation(handle); if (PairingPage.retainedOrphan == handle) { PairingPage.retainedOrphan = null; PairingPage.retainedCreationUnknown = false; } } catch (_) { PairingPage.retainedCreationUnknown = true; }
@@ -138,6 +145,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       final p = PendingDevicePairing(handle:handle,publicKey:publicKey,account:checked.username,
         hostKey:checked.expectedFingerprint,device:device,now:now);
       if (widget.catalog != null) {
+        phase = '保存主机资料';
         final profile = HostProfile.create(label,values,p,now,provider:provider);
         await widget.catalog!.completeCreation(profile); savedProfile = profile;
         if (!mounted || ticket != revision) return;
@@ -151,7 +159,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       PairingPage.retainedCreationUnknown = createStarted;
       if (mounted && ticket == revision) setState(() { busy = false; targetReviewed = false;
         creationUnknown = createStarted;
-        status = createStarted ? '设备安全存储不可用或创建结果未知 · 禁止重放创建；已有引用可明确删除，不会使用明文' : '目标无效 · 未创建设备身份'; });
+        status = createStarted ? '${phase}未完成 · 设备安全存储不可用或创建结果未知 · 请核验原身份，不会重放创建' : '${phase}未完成 · 未创建设备身份'; });
     }
   }
   Future<void> accept() async {

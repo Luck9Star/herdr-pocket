@@ -137,3 +137,5 @@ artifact / cache 等存储存在额度、保留和计费规则，不能从计算
 `codex/batch/phones-<批次名>` 在同一次运行中额外构建两条路线的 iOS 候选产物，仍跳过 Windows、Linux 与 Mac 安装包重建。产物保留签名、架构和工具链状态，Linux 的 SSH/GUI 用例及临时 Android 模拟器独立报告真实经过的步骤。
 
 手机闭环修复批次 `phones-observe-*` 只复验原版主机的 GUI、两套 Android 安装包、两个 API 35 模拟器和本次需要修复的 iOS/辅助工具 runner。已取得的协议、输入扩展和 overlay ABI 记录保留其原有 SHA。Flutter iOS 和 helper 的 macOS 任务使用本项目已成功调度的 `macos-15`。[GitHub 托管 runner](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+
+若 iOS 与 helper 已有同系列的独立结果，`android-observe-<批次名>` 只重建两套 Android 包并验证两种模拟器及 Flutter Linux widget，不再重复启动 Linux Tauri driver。已通过的 helper、协议与原生 ABI 对照保留原来运行的证据，避免重复申请桌面或 iOS runner。

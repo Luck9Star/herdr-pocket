@@ -2,6 +2,9 @@ name: Paired GUI to isolated SSH
 on:
   workflow_call:
     inputs:
+      flutter_only:
+        type: boolean
+        default: false
       input_fixture:
         type: boolean
         default: false
@@ -17,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        route: [flutter, tauri]
+        route: ${{ fromJSON(inputs.flutter_only && '["flutter"]' || '["flutter","tauri"]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -31,8 +34,8 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/pairing-venv"
           "$RUNNER_TEMP/pairing-venv/bin/pip" install -r validation/pairing/requirements.txt
           PYTHONDONTWRITEBYTECODE=1 "$RUNNER_TEMP/pairing-venv/bin/python" -m unittest discover -s validation/remote-harness -q
-          sudo apt-get update
-          sudo apt-get install -y openssh-server
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install -y openssh-server
       - name: Prepare the Flutter candidate used by the Android package
         if: matrix.route == 'flutter'
         run: |
@@ -52,7 +55,7 @@ jobs:
       - name: Prepare Linux native GUI driver
         if: matrix.route == 'tauri'
         run: |
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev build-essential patchelf webkit2gtk-driver xvfb xauth dbus-x11
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev build-essential patchelf webkit2gtk-driver xvfb xauth dbus-x11
           rustup toolchain install 1.96.0 --profile minimal
           rustup default 1.96.0
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830

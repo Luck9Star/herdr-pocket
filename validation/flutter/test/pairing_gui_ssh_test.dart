@@ -40,6 +40,12 @@ class GuiSshMemoryInputJournal implements RemoteInputJournal {
 void main() {
   final env = Platform.environment;
   final expectInput = env['HERDR_PAIRING_GUI_EXPECT_INPUT'] == '1';
+  // The external sshd, helper and device-signing callbacks operate in real
+  // time. Keep ordinary deterministic widget fixtures on their usual binding.
+  if (env.containsKey('HERDR_PAIRING_GUI_CONFIG')) {
+    LiveTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
+      LiveTestWidgetsFlutterBindingFramePolicy.onlyPumps;
+  }
   setUp(PairingPage.resetMemorySession);
   tearDown(PairingPage.resetMemorySession);
   testWidgets(expectInput ? 'isolated real SSH GUI pairing, observe and guarded draft input'
@@ -63,14 +69,24 @@ void main() {
         await tester.pump();
       }
     }
+    Future<void> tapControl(String id) async {
+      final control = find.byKey(ValueKey(id));
+      await until(() => control.evaluate().isNotEmpty);
+      await tester.ensureVisible(control);
+      // A live terminal can keep scheduling frames. Await the named control,
+      // then one frame, without requiring the entire widget tree to settle.
+      await tester.pump();
+      await tester.tap(control);
+      await tester.pump();
+    }
     stage('host_board');
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,
       catalog:catalog,keys:keys,adapterFactory:(_) => adapter,offlineBuilder:(_) => const SizedBox())));
     await tester.pumpAndSettle();
-    await helpers.tapVisible(tester,'hosts-add'); await tester.pumpAndSettle();
+    await tapControl('hosts-add'); await tester.pumpAndSettle();
     stage('public_request');
     await helpers.fillPairTarget(tester,config);
-    await helpers.tapVisible(tester,'pair-target-review'); await helpers.tapVisible(tester,'pair-create');
+    await tapControl('pair-target-review'); await tapControl('pair-create');
     final wire = find.byKey(const ValueKey('pair-request'));
     await until(() => wire.evaluate().isNotEmpty && catalog.profiles.length == 1);
     final temp = File('${dir.path}/request.json.new');
@@ -84,29 +100,34 @@ void main() {
     // must recover the same request/key and cannot start SSH or issue a new key.
     await tester.pageBack(); await tester.pumpAndSettle();
     stage('restore_pending');
-    await helpers.tapVisible(tester,'host-open-$id'); await tester.pumpAndSettle();
+    await tapControl('host-open-$id'); await tester.pumpAndSettle();
     expect(find.textContaining('awaiting-host'),findsOneWidget);
     expect(keys.creates,1); expect(keys.signCalls,0);
     expect(tester.widget<SelectableText>(wire).data,File('${dir.path}/request.json').readAsStringSync());
     stage('response_review');
     await helpers.acceptResponse(tester,response);
     expect(find.textContaining('authorized-unverified'),findsOneWidget);
-    await helpers.tapVisible(tester,'pair-connect'); await tester.pumpAndSettle();
+    await tapControl('pair-connect'); await tester.pumpAndSettle();
     stage('ssh_and_dashboard');
-    await helpers.tapVisible(tester,'remote-review'); await helpers.tapVisible(tester,'remote-connect');
+    await tapControl('remote-review'); await tapControl('remote-connect');
     final pane = 'remote-pane-${config['paneId']}';
     await until(() => find.byKey(ValueKey(pane)).evaluate().isNotEmpty);
     expect(adapter.evidence.hostKeyMatched,isTrue); expect(adapter.evidence.authStarted,isTrue);
     expect(keys.signCalls,greaterThan(0));
     expect(find.textContaining('状态 paired',skipOffstage:false),findsOneWidget);
     stage('observe_frames');
-    await helpers.tapVisible(tester,pane);
+    await tapControl(pane);
     await until(() => adapter.evidence.frameCount >= 1 && find.textContaining('只读观察中').evaluate().isNotEmpty);
     expect(find.byType(TerminalView),findsOneWidget);
     expect(tester.takeException(),isNull);
     final firstSeq = adapter.evidence.lastSeq;
     await until(() => adapter.evidence.deltaFrames >= 1 && adapter.evidence.lastSeq != firstSeq);
     expect(find.textContaining('seq ${adapter.evidence.lastSeq}'),findsOneWidget);
+    for (final viewport in [const Size(860,600),const Size(390,844)]) {
+      final previous = adapter.evidence.deltaFrames;
+      tester.view.physicalSize = viewport; await tester.pump();
+      await until(() => adapter.evidence.deltaFrames > previous);
+    }
     var inputQueueAccepted = false;
     final draftMode = find.byKey(const ValueKey('remote-mode-draft'));
     final directMode = find.byKey(const ValueKey('remote-mode-direct'));
@@ -119,17 +140,17 @@ void main() {
       expect(tester.widget<ChoiceChip>(draftMode).onSelected,isNotNull);
       expect(tester.widget<ChoiceChip>(directMode).onSelected,isNotNull);
       expect(inputJournal.reads,1);
-      await helpers.tapVisible(tester,'remote-mode-draft');
+      await tapControl('remote-mode-draft');
       final draft = find.byKey(const ValueKey('remote-input-draft'));
       await tester.ensureVisible(draft);
       await tester.enterText(draft,'Pocket测'); await tester.pump();
       expect(inputJournal.prepares,0); // Editing is local; no write without confirmation.
-      await helpers.tapVisible(tester,'remote-input-draft-send');
+      await tapControl('remote-input-draft-send');
       expect(find.text('预览发送文本'),findsOneWidget);
       final preview = find.descendant(of:find.byType(AlertDialog),matching:find.byType(SelectableText));
       expect(preview,findsOneWidget); expect(tester.widget<SelectableText>(preview).data,'Pocket测');
       expect(inputJournal.prepares,0);
-      await helpers.tapVisible(tester,'remote-input-confirm');
+      await tapControl('remote-input-confirm');
       await until(() {
         final status = find.byKey(const ValueKey('remote-input-status'));
         return status.evaluate().isNotEmpty && tester.widget<Text>(status).data ==
@@ -157,12 +178,12 @@ void main() {
     }
     expect(tester.takeException(),isNull);
     stage('stop');
-    await helpers.tapVisible(tester,'remote-cancel'); await tester.pump();
+    await tapControl('remote-cancel'); await tester.pump();
     expect(find.textContaining('旧画面 · 已停止'),findsOneWidget);
     expect(adapter.evidence.connectionCount,1);
     final report = {'paired':adapter.evidence.hostKeyMatched && adapter.evidence.authStarted,
       'paneChosen':true,'fullRendered':true,'deltaRendered':true,'stoppedStale':true,'signCalls':keys.signCalls,
-      'reopenedPendingRequest':true,'identityCreations':keys.creates,
+      'reopenedPendingRequest':true,'identityCreations':keys.creates,'localViewportChanges':2,
       'frameCount':adapter.evidence.frameCount,'deltaFrames':adapter.evidence.deltaFrames,
       'connectionCount':adapter.evidence.connectionCount,
       'inputRequested':expectInput,'inputQueueAccepted':inputQueueAccepted,

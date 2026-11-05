@@ -17,6 +17,19 @@ def result(case='positive', **changes):
 
 
 class HarnessGuards(unittest.TestCase):
+    def test_pty_acceptance_distinguishes_observed_change_from_low_coverage(self):
+        record = {key:0 for key in harness.PTY_FIELDS}
+        record.update(schemaVersion=1,state=2,endReason=1,initialRows=24,rows=24,
+                      initialColumns=80,columns=80,samples=30,elapsedMs=1600,
+                      signalAvailable=1,signalsMayCoalesce=1,maxSampleGapMs=65,sampleIntervalMs=50)
+        self.assertTrue(harness.checked_final_pty(record)['noObservedResize'])
+        for fields, code in [({'changes':2}, 'pty_dimension_change_observed'),
+                             ({'winchHandlers':1}, 'pty_coverage_inconclusive'),
+                             ({'maxSampleGapMs':1601}, 'pty_coverage_inconclusive'),
+                             ({'state':3}, 'pty_capture_incomplete')]:
+            self.assertEqual(harness.checked_final_pty(dict(record,**fields))['errorCode'],code)
+        self.assertIsNone(harness.checked_final_pty(dict(record,unrecognized=1)))
+
     def test_local_or_wrong_branch_never_enters_fixture_setup(self):
         for env in ({}, {'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '123', 'GITHUB_REF': 'refs/heads/main'},
                     {'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '../secret', 'GITHUB_REF': 'refs/heads/codex/test'}):

@@ -161,7 +161,18 @@ def run_android(args, root, env, config, approval):
         browser.click('#pair-mode')
         browser.click('#pair-target-review')
         browser.click('#pair-create')
-        request = wait_for(lambda: browser.read('#pair-request','value'), 'android_public_request_missing', timeout=60)
+        try:
+            request = wait_for(lambda: browser.read('#pair-request','value'), 'android_public_request_missing', timeout=60)
+        except GuiFailure as error:
+            if str(error) != 'android_public_request_missing':
+                raise
+            phase = browser.evaluate("document.querySelector('#pair-status').dataset.createPhase || 'not_started'")
+            allowed = {'review','catalog','device','ready','persist_failed','not_started'}
+            failures = {'host_storage_unavailable','host_storage_busy','host_storage_corrupt','invalid_host_name',
+                        'invalid_config','invalid_host_key','key_unavailable','invalid_device_key','pairing_busy',
+                        'host_pairing_exists','host_already_exists','host_restore_required','invalid_public_field','unavailable'}
+            allowed.update(stage+'_'+code for stage in ('catalog','device') for code in failures)
+            raise GuiFailure('android_public_request_'+(phase if phase in allowed else 'unknown')) from None
         if len(request.encode('utf-8')) > 2048:
             raise GuiFailure('android_public_request_oversize')
         response = approval.approve(request.encode('utf-8'))

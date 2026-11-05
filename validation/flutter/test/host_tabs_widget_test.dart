@@ -85,7 +85,18 @@ void main() {
     expect(adapters[a.id]!.calls,2); expect(adapters[b.id]!.calls,1); expect(keys.creates,0); expect(keys.signCalls,0);
     expect(find.textContaining('入网状态未知'),findsWidgets);
     await tapVisible(tester,'host-tab-close-${a.id}');
-    expect(find.byKey(ValueKey('host-tab-${b.id}')),findsOneWidget); expect(find.byKey(const ValueKey('hosts-status')),findsOneWidget);
+    expect(find.byKey(ValueKey('host-tab-${a.id}')),findsNothing);
+    expect(find.byKey(ValueKey('host-tab-${b.id}')),findsOneWidget);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-board-tab'))).selected,isTrue);
+    expect(adapters[b.id]!.calls,1); // Closing A must not resume B.
+    // The list retains its previous scroll position. Its lazy children above
+    // that position need scrolling back into view before they can be found.
+    final board = find.byType(ListView);
+    expect(board,findsOneWidget);
+    final status = find.byKey(const ValueKey('hosts-status'));
+    await tester.scrollUntilVisible(status,-300,
+      scrollable:find.descendant(of:board,matching:find.byType(Scrollable)));
+    expect(status,findsOneWidget);
     expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
 }

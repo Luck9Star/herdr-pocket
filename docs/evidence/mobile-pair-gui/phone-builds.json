@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Android phone-batch package provenance and paired GUI/emulator outcomes; physical-device results are not established",
+  "repository": "Luck9Star/herdr-pocket",
+  "branch": "codex/batch/phones-pairing-20261106",
+  "sourceSHA": "de86b33132a2ce72da562b5ba92d51af91bc83fb",
+  "run": {
+    "runId": 42128042321,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321",
+    "status": "completed",
+    "conclusion": "cancelled",
+    "firstObservedFailure": {
+      "job": "paired-gui / paired-observe (flutter)",
+      "jobId": 127597209066,
+      "failedStep": "Review pairing, authorize the displayed key, choose pane and observe updates",
+      "errorCode": "widget_exited_before_request_public_request",
+      "timeUtc": "2026-11-05T23:15:23.7311510Z",
+      "uiStage": "Flutter GUI exited before starting the public SSH request",
+      "receivedInputBytes": 0,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/jobs/127597209066"
+    },
+    "otherObservedFailures": [
+      {
+        "job": "flutter / patch-and-test",
+        "jobId": 127597208962,
+        "failedStep": "Exercise Flutter widgets and safety tests on the verified lock",
+        "firstFailure": "RemoteFailure(invalid_catalog) in test/host_catalog_page_test.dart: restart board opens original identity for review without generating a key or connecting",
+        "timeUtc": "2026-11-05T23:15:32.8824337Z",
+        "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/jobs/127597208962"
+      },
+      {
+        "job": "paired-gui / paired-observe (tauri)",
+        "jobId": 127597208992,
+        "failedStep": "Review pairing, authorize the displayed key, choose pane and observe updates",
+        "errorCode": "webdriver_click_element_not_interactable_remote-herdr",
+        "timeUtc": "2026-11-05T23:17:31.1565934Z",
+        "uiStage": "WebDriver could not interact with the remote-herdr control",
+        "receivedInputBytes": 0,
+        "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/jobs/127597208992"
+      },
+      {
+        "job": "android-emulator / flutter-device-key",
+        "jobId": 127597208806,
+        "failedStep": "Pair through production Flutter UI and native device signing on a new API35 AVD",
+        "errorCode": "gui_valueerror",
+        "timeUtc": "2026-11-05T23:17:42.2672354Z",
+        "uiStage": "Flutter Android emulator pairing flow",
+        "receivedInputBytes": 0,
+        "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/jobs/127597208806"
+      },
+      {
+        "job": "android-emulator / android-device-key",
+        "jobId": 127597209077,
+        "failedStep": "Pair through the real Android WebView and protected signer",
+        "errorCode": "android_public_request_missing",
+        "timeUtc": "2026-11-05T23:21:24.2798766Z",
+        "uiStage": "Tauri Android emulator did not produce the expected public pairing request",
+        "receivedInputBytes": 0,
+        "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/jobs/127597209077"
+      }
+    ]
+  },
+  "androidBuilds": {
+    "flutter": {
+      "status": "build-success; candidate widget/safety checks failed",
+      "jobId": 127597899910,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/jobs/127597899910",
+      "artifactId": 13462820378,
+      "artifactName": "flutter-candidate-android-de86b33132a2ce72da562b5ba92d51af91bc83fb",
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13462820378",
+      "artifactArchiveSHA256": "23bafecea0bf72d1c7df05740b2caa618efcfe1082379502d7fbc469a111e543",
+      "sourceSHA": "de86b33132a2ce72da562b5ba92d51af91bc83fb",
+      "manifest": "tmp-probe/android-20261106/flutter/manifest.json",
+      "manifestSHA256": "435ccbd54cfb63703039fe049c754e14ebceb9272eb435e169bbd22a74978055",
+      "candidateManifest": "tmp-probe/android-20261106/flutter/candidate-manifest.json",
+      "checksums": "tmp-probe/android-20261106/flutter/SHA256SUMS",
+      "checksumsSHA256": "bd9793782bc5f950e4f06cb7f103455a4b3977c5f83ed0338e52590237b930e6",
+      "packagedArchive": "tmp-probe/android-20261106/flutter/flutter-android-debug.zip",
+      "packagedArchiveSHA256": "0a92b366ac9a2f5802c862b8be94a99949742e3a9933d091ce58f49a6f81187a",
+      "apk": "tmp-probe/android-20261106/flutter/app-debug.apk",
+      "apkBytes": 157181794,
+      "apkSHA256": "f2388234ee265c6c4179ba2ad97d512628d16974650fde8eb826c9604c15215b",
+      "signing": "development test build; no production signing or notarization",
+      "candidateChecks": "failure; Flutter patch-and-test job records invalid_catalog failures"
+    },
+    "tauri": {
+      "status": "build-success; run SHA, manifest, SHA256SUMS, APK and notices verified",
+      "jobId": 127597208829,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/jobs/127597208829",
+      "artifactId": 13461308993,
+      "artifactName": "tauri-android-de86b33132a2ce72da562b5ba92d51af91bc83fb",
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13461308993",
+      "artifactArchiveSHA256": "1c242845dad030c999971005181fa580cec02897fe0d2c37a70559c628c35c25",
+      "sourceSHA": "de86b33132a2ce72da562b5ba92d51af91bc83fb",
+      "manifest": "tmp-probe/android-20261106/tauri/build-manifest.json",
+      "manifestSHA256": "da10fc9c55fd37f53e0438dafd0fc04ceaca37d07e878ca45c1307c57ce89911",
+      "checksums": "tmp-probe/android-20261106/tauri/SHA256SUMS",
+      "checksumsSHA256": "530104cb62c13de8de6171a08cce800b838503791ed79cbb4b5fe95631f22cdc",
+      "apk": "tmp-probe/android-20261106/tauri/app-universal-debug.apk",
+      "apkBytes": 172696509,
+      "apkSHA256": "a60dfac6f2a981f8eb917b927e3f981e74e1d9311fd9c957ed4f589b23ccd615",
+      "signing": "ephemeral-debug-key",
+      "deviceResult": "unverified"
+    }
+  },
+  "androidNotices": {
+    "assets/BOUNCY-CASTLE-LICENSE.md": {
+      "bytes": 1171,
+      "sha256": "0e01f1549c9022f406392ac2947d32223b7c2e977d21ea2f8c182fdeb4dae5fd",
+      "matchesSourceAtRunSHA": true
+    },
+    "assets/QR-NOTICE.txt": {
+      "bytes": 339,
+      "sha256": "7fc1888ae1ad783c0f318834a9e3263299530434c1ac0ac2077f385c33e018a4",
+      "matchesSourceAtRunSHA": true
+    },
+    "assets/ZXING-APACHE-2.0.txt": {
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "matchesSourceAtRunSHA": true
+    }
+  },
+  "guiObservations": {
+    "flutterStock": {
+      "status": "failed-before-public-request",
+      "jobId": 127597209066,
+      "errorCode": "widget_exited_before_request_public_request",
+      "artifactId": 13461289567,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13461289567",
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      }
+    },
+    "tauriStock": {
+      "status": "failed",
+      "jobId": 127597208992,
+      "errorCode": "webdriver_click_element_not_interactable_remote-herdr",
+      "artifactId": 13461677985,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13461677985",
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      }
+    },
+    "flutterGuardedInput": {
+      "status": "failed-before-public-request",
+      "jobId": 127599508472,
+      "errorCode": "widget_exited_before_request_public_request",
+      "artifactId": 13462865531,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13462865531",
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      }
+    },
+    "tauriGuardedInput": {
+      "status": "failed",
+      "jobId": 127599508508,
+      "errorCode": "webdriver_click_element_not_interactable_remote-herdr",
+      "artifactId": 13462646320,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13462646320",
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      }
+    }
+  },
+  "androidEmulators": {
+    "flutterDeviceKey": {
+      "status": "failed",
+      "jobId": 127597208806,
+      "errorCode": "gui_valueerror",
+      "step": "Pair through production Flutter UI and native device signing on a new API35 AVD",
+      "artifactId": 13461409853,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13461409853",
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false,
+        "ownedPackageInitiallyAbsent": true,
+        "ownedPackageAbsent": true,
+        "appProcessGone": true,
+        "reverseRemoved": true,
+        "ownedForwardsRemoved": true,
+        "flutterToolStopped": true
+      }
+    },
+    "tauriDeviceKey": {
+      "status": "failed",
+      "jobId": 127597209077,
+      "errorCode": "android_public_request_missing",
+      "step": "Pair through the real Android WebView and protected signer",
+      "artifactId": 13461064256,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13461064256",
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      }
+    }
+  },
+  "ios": {
+    "tauriSimulator": {
+      "status": "success",
+      "jobId": 127597208747,
+      "artifactId": 13462935479,
+      "artifactName": "tauri-ios-simulator-de86b33132a2ce72da562b5ba92d51af91bc83fb",
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13462935479",
+      "artifactArchiveSHA256": "8f97c3a3d4493dd0f1e7948181b6f9648e2f55840e880d8eb667a961a74a461c",
+      "sourceSHA": "de86b33132a2ce72da562b5ba92d51af91bc83fb",
+      "platform": "ios-simulator",
+      "signing": "unsigned-test-only",
+      "appArchive": "herdr-pocket-tauri-probe.app.zip",
+      "appArchiveBytes": 24578974,
+      "appArchiveSHA256": "e502c2e4b7228a06451e6fe00caa646c528cb41cdb83ad06031e7d6dc59d7e24",
+      "deviceResult": "unverified"
+    },
+    "flutter": {
+      "status": "cancelled",
+      "jobId": 127597899792,
+      "checkRunAnnotation": "The configuration 'macos-14-arm64-us-default' is not supported",
+      "stepsExecuted": 0,
+      "requestedBuildType": "flutter build ios --debug --no-codesign",
+      "signedIosArtifact": "none"
+    }
+  },
+  "transportSharedLoopback": {
+    "status": "success",
+    "jobId": 127597208910,
+    "checks": 18,
+    "passed": 18,
+    "rustAdapter": "success",
+    "dartResolveAndLock": "success",
+    "dartAnalyzeAndCompile": "success",
+    "actualAdapters": "success",
+    "scope": "isolated loopback OpenSSH and fixture; no real remote host"
+  },
+  "physicalDevice": "not tested"
+}

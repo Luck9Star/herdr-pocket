@@ -53,12 +53,45 @@ void main() {
     final disk = MemoryCatalogStorage();
     final catalog = HostCatalog(storage:disk,clock:() => 1000); await catalog.load();
     await catalog.beginCreation(fixtureConfig(),'Pending phone');
+    expect(catalog.pendingCreation!['target'],isA<Map<String,dynamic>>());
     final restarted = HostCatalog(storage:disk,clock:() => 1000); await restarted.load();
     expect(restarted.pendingCreation!['handle'],'');
+    expect(restarted.pendingCreation!['target'],isA<Map<String,dynamic>>());
     expect(() => restarted.beginCreation(fixtureConfig(),'Replacement'),throwsA(isA<RemoteFailure>()));
     await restarted.recordCreatedHandle('known-handle');
+    expect(restarted.pendingCreation!['handle'],'known-handle');
+    expect(restarted.pendingCreation!['target'],catalog.pendingCreation!['target']);
     await restarted.clearDeletedCreation('known-handle'); expect(restarted.pendingCreation,isNull);
     catalog.dispose(); restarted.dispose();
+  });
+  test('pending intent remains typed and immutable through repeated in-memory validation',() {
+    final config = fixtureConfig();
+    Map<String,dynamic> pending = {
+      'id':List.filled(32,'a').join(),'label':'Pending phone','handle':'',
+      'target':<String,dynamic>{for (final name in HostProfile.targetFields) name:config[name]},
+    };
+    for (var pass = 0; pass < 3; pass++) {
+      pending = validatePendingCreation(pending)!;
+      expect(pending,isA<Map<String,dynamic>>());
+      expect(pending['target'],isA<Map<String,dynamic>>());
+      expect(() => pending['handle'] = 'changed',throwsUnsupportedError);
+      expect(() => (pending['target'] as Map<String,dynamic>)['host'] = 'changed',throwsUnsupportedError);
+      pending = {...pending,'handle':'known-handle'};
+    }
+    expect(pending['handle'],'known-handle');
+  });
+  test('typed pending normalization still rejects extra fields and malformed target maps',() {
+    final config = fixtureConfig();
+    final target = <String,dynamic>{for (final name in HostProfile.targetFields) name:config[name]};
+    final pending = <String,dynamic>{'id':List.filled(32,'a').join(),'label':'Pending phone','handle':'','target':target};
+    for (final invalid in <Map<String,dynamic>>[
+      {...pending,'privateKeyPem':'forbidden'},
+      {...pending,'target':<String,dynamic>{...target,'privateKeyPem':'forbidden'}},
+      {...pending,'target':<dynamic,dynamic>{...target}},
+      {...pending,'target':<String,dynamic>{...target}..remove('host')},
+    ]) {
+      expect(() => validatePendingCreation(invalid),throwsA(isA<RemoteFailure>()));
+    }
   });
   test('corruption, duplicate decoded fields, secret fields and wrong account binding fail closed',() async {
     final disk = MemoryCatalogStorage();

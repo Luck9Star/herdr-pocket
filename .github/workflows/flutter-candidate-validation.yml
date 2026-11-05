@@ -80,7 +80,7 @@ jobs:
   macos-render-check:
     if: startsWith(github.ref, 'refs/heads/codex/') && !inputs.android_only
     needs: patch-and-test
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -124,9 +124,9 @@ jobs:
       matrix:
         include: >-
           ${{ fromJSON(inputs.include_ios &&
-          '[{"platform":"android","os":"ubuntu-24.04"},{"platform":"ios","os":"macos-14"}]' || inputs.android_only &&
+          '[{"platform":"android","os":"ubuntu-24.04"},{"platform":"ios","os":"macos-15"}]' || inputs.android_only &&
           '[{"platform":"android","os":"ubuntu-24.04"}]' ||
-          '[{"platform":"android","os":"ubuntu-24.04"},{"platform":"ios","os":"macos-14"},{"platform":"macos","os":"macos-14"},{"platform":"linux","os":"ubuntu-24.04"},{"platform":"windows","os":"windows-2022"}]') }}
+          '[{"platform":"android","os":"ubuntu-24.04"},{"platform":"ios","os":"macos-15"},{"platform":"macos","os":"macos-15"},{"platform":"linux","os":"ubuntu-24.04"},{"platform":"windows","os":"windows-2022"}]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:

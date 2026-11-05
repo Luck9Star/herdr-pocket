@@ -77,7 +77,7 @@ class HostProfile {
     final p = restoreDevicePairing(Map<String,dynamic>.from(data['pairing'] as Map),now);
     if (p.request['account'] != checked.username || p.request['host_key'] != checked.expectedFingerprint) throw const RemoteFailure('invalid_catalog');
     return HostProfile._(data['id'] as String,data['label'] as String,data['enabled'] as bool,
-      Map.unmodifiable(target),Map.unmodifiable(p.toPublicRecord()),data['provider'] as String);
+      Map<String,dynamic>.unmodifiable(target),Map<String,dynamic>.unmodifiable(p.toPublicRecord()),data['provider'] as String);
   }
   factory HostProfile.create(String label,Map<String,dynamic> target,PendingDevicePairing pairing,int now,{String provider='unspecified'}) {
     final random = Random.secure();
@@ -128,7 +128,9 @@ Map<String,dynamic>? validatePendingCreation(dynamic data) {
   if (target.length != HostProfile.targetFields.length || !target.keys.every(HostProfile.targetFields.contains)) throw const RemoteFailure('invalid_catalog');
   final checked = RemoteConfig.fromJson({...target,'schemaVersion':1,'reviewConfirmed':true,'privateKeyPem':'catalog-validation-only'});
   checked.configRoot;
-  return Map.unmodifiable({...data,'target':Map.unmodifiable(target)});
+  // The target is stored in a dynamic-valued record. Keep its runtime type
+  // explicit so revalidating this immutable result uses the same strict schema.
+  return Map<String,dynamic>.unmodifiable({...data,'target':Map<String,dynamic>.unmodifiable(target)});
 }
 
 class HostCatalog extends ChangeNotifier {

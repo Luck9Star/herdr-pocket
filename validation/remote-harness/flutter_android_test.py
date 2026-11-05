@@ -208,6 +208,7 @@ class WireGuards(unittest.TestCase):
     def test_public_exchange_only_uses_fixed_cache_paths_and_bounds(self):
         with patch.object(gui, 'adb', return_value=subprocess.CompletedProcess([], 0, b'x' * 2049, b'')) as adb:
             with self.assertRaises(gui.DeviceFailure): gui.read_public('cache/herdr-flutter-android-123/request.json', 2048)
+            self.assertEqual(adb.call_args.args[:5], ('shell', '-T', 'run-as', gui.PACKAGE, 'head'))
             self.assertEqual(adb.call_args.args[-3:], ('-c', '2049', 'cache/herdr-flutter-android-123/request.json'))
             with self.assertRaises(gui.DeviceFailure): gui.read_public('files/device-identity', 2048)
 
@@ -221,6 +222,130 @@ class WireGuards(unittest.TestCase):
             self.assertNotIn('$(never-execute)', ' '.join(first.args))
             self.assertEqual(second.args[:4], ('shell', 'run-as', gui.PACKAGE, 'mv'))
             with self.assertRaises(gui.DeviceFailure): gui.write_response('../escape', response)
+
+
+class PublicExchangeGuards(unittest.TestCase):
+    relative = 'cache/herdr-flutter-android-123'
+
+    def request(self):
+        # Shape-only public fixture: cryptographic key and TTL review belongs
+        # to Host.review, not this reader test or its approval spy.
+        return json.dumps({'version': 2, 'type': 'pairing-public-key-request',
+            'request_id': 'a' * 32, 'account': 'fixture', 'host_key': 'SHA256:' + 'A' * 43,
+            'device': 'Test phone', 'public_key': 'public-fixture-not-a-real-key',
+            'issued_at': 1000, 'expires_at': 1600}, indent=2).encode()
+
+    def read(self, stdout=b'', stderr=b'', code=0, name='request.json', limit=None):
+        if limit is None:
+            limit = {'request.json': 2048, 'result.json': 8192, 'stage': 40}[name]
+        reply = subprocess.CompletedProcess([], code, stdout, stderr)
+        with patch.object(gui, 'adb', return_value=reply) as adb:
+            value = gui.read_public(self.relative + '/' + name, limit)
+        adb.assert_called_once_with('shell', '-T', 'run-as', gui.PACKAGE,
+            'head', '-c', str(limit + 1), self.relative + '/' + name, check=False)
+        return value
+
+    def test_known_package_and_current_file_not_ready_diagnostics_wait_even_with_legacy_zero_status(self):
+        diagnostics = [
+            ('run-as: unknown package: ' + gui.PACKAGE + '\n').encode(),
+            ('head: ' + self.relative + '/request.json: No such file or directory\n').encode(),
+        ]
+        for diagnostic in diagnostics:
+            for stdout, stderr, code in ((diagnostic, b'', 0), (b'', diagnostic, 1)):
+                with self.subTest(diagnostic=diagnostic, code=code):
+                    self.assertIsNone(self.read(stdout, stderr, code))
+        # Diagnostics are longer than stage's 40-byte payload bound. They are
+        # still a missing file/package, including when failure_stage polls it.
+        for diagnostic in (diagnostics[0],
+                           ('head: ' + self.relative + '/stage: No such file or directory\n').encode()):
+            with self.subTest(stage_diagnostic=diagnostic):
+                self.assertIsNone(self.read(stderr=diagnostic, code=1, name='stage'))
+
+    def test_empty_whitespace_and_incomplete_json_wait_instead_of_reaching_approval(self):
+        for raw in (b'', b' \r\n\t ', b'{', b'{"version":', self.request()[:-1], b'{"device":"\xe4\xb8'):
+            with self.subTest(raw=raw):
+                self.assertIsNone(self.read(raw))
+
+    def test_unknown_shell_failures_use_static_file_specific_errors(self):
+        for name in ('request.json', 'result.json', 'stage'):
+            kind = name.split('.')[0]
+            for stdout, stderr, code in ((b'', b'PRIVATE_DIAGNOSTIC', 1),
+                                         (b'', b'PRIVATE_DIAGNOSTIC', 0),
+                                         (b'PRIVATE_DIAGNOSTIC', b'', 1)):
+                with self.subTest(name=name, code=code):
+                    with self.assertRaises(gui.DeviceFailure) as failure:
+                        self.read(stdout, stderr, code, name=name)
+                    self.assertEqual(str(failure.exception), 'flutter_android_public_' + kind + '_read_failed')
+
+    def test_unrelated_missing_files_and_other_packages_are_fatal_not_retried(self):
+        for diagnostic in (b'head: files/private-record: No such file or directory\n',
+                           b'run-as: unknown package: other.application\n',
+                           ('head: ' + self.relative + '/request.json: Permission denied\n').encode()):
+            with self.subTest(diagnostic=diagnostic):
+                with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_public_request_read_failed$'):
+                    self.read(stderr=diagnostic, code=1)
+
+    def test_complete_wrong_request_schema_and_non_json_never_leave_static_errors(self):
+        original = json.loads(self.request())
+        invalid = [b'PRIVATE_NON_JSON', b'[]', b'null', b'"PRIVATE_JSON_STRING"']
+        invalid.append(self.request().replace(b'{', b'{"version":2,', 1))
+        for changes in ({'version': True}, {'version': 1}, {'type': 'pairing-binding-response'},
+                        {'issued_at': True}, {'expires_at': '1600'}, {'account': {'private': 'nested'}},
+                        {'extra': 'PRIVATE_FIELD'}):
+            invalid.append(json.dumps(dict(original, **changes)).encode())
+        missing = dict(original); del missing['device']
+        invalid.append(json.dumps(missing).encode())
+        for raw in invalid:
+            with self.subTest(raw=raw):
+                with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_public_request_invalid$'):
+                    self.read(raw)
+
+    def test_fixed_limits_are_required_before_adb_and_stderr_is_bounded(self):
+        for name, limit in (('request.json', 8192), ('result.json', 2048), ('stage', 2048), ('request.json', True)):
+            with self.subTest(name=name, limit=limit), patch.object(gui, 'adb') as adb:
+                with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_public_limit_invalid$'):
+                    gui.read_public(self.relative + '/' + name, limit)
+                adb.assert_not_called()
+        with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_public_exchange_oversize$'):
+            self.read(stderr=b'PRIVATE_DIAGNOSTIC' * 129, code=1)
+
+    def test_valid_request_and_result_bytes_are_preserved_and_result_checks_stay_strict(self):
+        request = self.request()
+        result = json.dumps(device_report(), indent=2).encode()
+        self.assertEqual(self.read(request), request)
+        self.assertEqual(self.read(result, name='result.json', limit=8192), result)
+        with self.assertRaises(gui.DeviceFailure):
+            self.read(json.dumps(device_report(localIdentityDeleted=False)).encode(), name='result.json', limit=8192)
+
+    def test_only_fixed_stages_are_accepted_and_reported_as_failure_phase(self):
+        self.assertEqual(self.read(b'host_authorization', name='stage', limit=40), b'host_authorization')
+        with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_public_stage_invalid$'):
+            self.read(b'PRIVATE_STAGE', name='stage', limit=40)
+        proc = Mock(); proc.poll.return_value = 1
+        replies = [subprocess.CompletedProcess([], 1, b'',
+            ('head: ' + self.relative + '/request.json: No such file or directory\n').encode()),
+            subprocess.CompletedProcess([], 0, b'public_request', b'')]
+        with patch.object(gui, 'adb', side_effect=replies):
+            with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_test_exited_public_request$'):
+                gui.wait_public(proc, self.relative, 'request.json', 2048, timeout=1)
+
+    def test_wait_only_delivers_final_json_to_approval_spy_after_diagnostics_and_partial_data(self):
+        request = self.request()
+        replies = [subprocess.CompletedProcess([], 0,
+            ('run-as: unknown package: ' + gui.PACKAGE + '\n').encode(), b''),
+            subprocess.CompletedProcess([], 1, b'',
+                ('head: ' + self.relative + '/request.json: No such file or directory\n').encode()),
+            subprocess.CompletedProcess([], 0, b' \n', b''),
+            subprocess.CompletedProcess([], 0, b'{"version":', b''),
+            subprocess.CompletedProcess([], 0, request, b'')]
+        proc = Mock(); proc.poll.return_value = None
+        approval = Mock(spec=['approve'])
+        def sleep(_):
+            approval.approve.assert_not_called()
+        with patch.object(gui, 'adb', side_effect=replies) as adb, patch.object(gui.time, 'sleep', side_effect=sleep):
+            approval.approve(gui.wait_public(proc, self.relative, 'request.json', 2048, timeout=1))
+        self.assertEqual(adb.call_count, 5)
+        approval.approve.assert_called_once_with(request)
 
 
 class CleanupGuards(PreparedFixture):

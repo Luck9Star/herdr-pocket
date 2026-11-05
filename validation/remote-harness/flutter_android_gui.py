@@ -22,6 +22,9 @@ BOOL_FIELDS = ('productionMain', 'defaultHostCatalog', 'uninjectedNativeDeviceKe
 STAGES = {'host_board', 'public_request', 'restore_pending', 'host_authorization',
           'response_review', 'ssh_and_dashboard', 'observe_frames', 'stop',
           'delete_local_identity', 'complete'}
+PUBLIC_LIMITS = {'request.json': 2048, 'result.json': 8192, 'stage': 40}
+REQUEST_FIELDS = {'version', 'type', 'request_id', 'account', 'host_key',
+                  'issued_at', 'expires_at', 'device', 'public_key'}
 
 
 class DeviceFailure(ValueError):
@@ -142,15 +145,90 @@ def forward_set():
     return result
 
 
+def public_file_pending(reply, relative):
+    # During Flutter's build/install the app does not exist yet; after launch
+    # its atomic public file may not exist yet. Match only these exact paths
+    # and known diagnostics, including legacy exec-out's status-zero stdout.
+    pending = {
+        ('run-as: unknown package: ' + PACKAGE).encode(),
+        ('head: ' + relative + ': No such file or directory').encode(),
+        ("head: '" + relative + "': No such file or directory").encode(),
+        ('head: ' + relative + ': No such file or directory.').encode(),
+    }
+    lines = [line.strip() for line in (reply.stdout + b'\n' + reply.stderr).splitlines() if line.strip()]
+    return bool(lines) and all(line in pending for line in lines)
+
+
+def checked_public_payload(raw, name):
+    kind = name.split('.')[0]
+    invalid = 'flutter_android_public_' + kind + '_invalid'
+    if not raw.strip():
+        return None
+    if name == 'stage':
+        try:
+            label = raw.decode('ascii')
+        except UnicodeDecodeError:
+            raise DeviceFailure(invalid) from None
+        if label in STAGES:
+            return raw
+        if any(stage.startswith(label) for stage in STAGES):
+            return None
+        raise DeviceFailure(invalid)
+    if not raw.lstrip().startswith(b'{'):
+        raise DeviceFailure(invalid)
+
+    def unique_fields(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise DeviceFailure(invalid)
+            value[key] = item
+        return value
+
+    try:
+        decoded = raw.decode('utf-8')
+        value = json.loads(decoded, object_pairs_hook=unique_fields)
+    except UnicodeDecodeError as error:
+        if error.reason == 'unexpected end of data':
+            return None
+        raise DeviceFailure(invalid) from None
+    except json.JSONDecodeError:
+        # Nothing incomplete may reach the host approval boundary. The outer
+        # phase deadline still bounds a persistently incomplete publication.
+        return None
+    except RecursionError:
+        raise DeviceFailure(invalid) from None
+    if name == 'request.json':
+        if (not isinstance(value, dict) or set(value) != REQUEST_FIELDS or
+                type(value['version']) is not int or value['version'] != 2 or
+                value['type'] != 'pairing-public-key-request' or
+                any(type(value[key]) is not int for key in ('issued_at', 'expires_at')) or
+                any(not isinstance(value[key], str) or not value[key] for key in
+                    REQUEST_FIELDS - {'version', 'issued_at', 'expires_at'})):
+            raise DeviceFailure(invalid)
+        # The production Host.review remains authoritative for public-key
+        # parsing, TTL, request ID, account and host fingerprint validation.
+    else:
+        safe_device_result(value)
+    return raw
+
+
 def read_public(relative, limit):
     if not re.fullmatch(r'cache/herdr-flutter-android-[0-9]+/(?:request\.json|result\.json|stage)', relative):
         raise DeviceFailure('flutter_android_public_path_invalid')
-    reply = adb('exec-out', 'run-as', PACKAGE, 'head', '-c', str(limit + 1), relative, check=False)
-    if reply.returncode:
+    name = relative.rsplit('/', 1)[1]
+    if type(limit) is not int or limit != PUBLIC_LIMITS[name]:
+        raise DeviceFailure('flutter_android_public_limit_invalid')
+    # shell v2 (without -x) carries remote exit status and separate stderr.
+    # exec-out has neither guarantee and can present run-as/head errors as data.
+    reply = adb('shell', '-T', 'run-as', PACKAGE, 'head', '-c', str(limit + 1), relative, check=False)
+    if public_file_pending(reply, relative):
         return None
-    if len(reply.stdout) > limit:
+    if len(reply.stdout) > limit or len(reply.stderr) > limit:
         raise DeviceFailure('flutter_android_public_exchange_oversize')
-    return reply.stdout
+    if reply.returncode or reply.stderr:
+        raise DeviceFailure('flutter_android_public_' + name.split('.')[0] + '_read_failed')
+    return checked_public_payload(reply.stdout, name)
 
 
 def write_response(relative_directory, response):

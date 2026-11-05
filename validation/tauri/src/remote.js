@@ -238,13 +238,25 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   }
   $('pair-create').onclick=()=>pairOperation(async()=>{
     scanRevision++;
+    const phase = $('pair-status').dataset;
+    phase.createPhase='review';
     if (!$('pair-target-review').checked || !native) return;
     if (pairTargetIds.some(id=>!$(id).checkValidity() || !$(id).value)) { pairStatus('请先完整填写连接目标，再重新核对目标。'); $('pair-target-review').checked=false; return; }
     try { const config={schemaVersion:1,host:$('remote-host').value,port:Number($('remote-port').value),username:$('remote-user').value,expectedHostKey:$('remote-pin').value,privateKeyPem:'',socketPath:$('remote-socket').value,herdrPath:$('remote-herdr').value,session:$('remote-session').value,paneId:'',reviewConfirmed:true};
+      phase.createPhase='catalog';
       if(!activeHostId) {if(!$('host-save-name').value.trim()) $('host-save-name').value='待配对主机'; await saveCurrentHost();}
+      phase.createPhase='device';
       const p=await invoke('pair_create',{config,device:$('pair-device').value,hostId:activeHostId});
+      phase.createPhase=p.stored?'ready':'persist_failed';
       $('pair-request').value=p.request; pairState=p.state; pairStatus(p.stored?`等待主机响应 · 设备指纹 ${p.fingerprint} · 授权未知`:'设备已创建但本地保存未确认；请求未公开。请删除此身份并检查存储，不会自动替换。'); await refreshHosts();
-    } catch(e) { pairStatus(`创建失败：${String(e)}。没有自动重建设备身份。`); }
+    } catch(e) {
+      const known=['host_storage_unavailable','host_storage_busy','host_storage_corrupt','invalid_host_name',
+        'invalid_config','invalid_host_key','key_unavailable','invalid_device_key','pairing_busy',
+        'host_pairing_exists','host_already_exists','host_restore_required','invalid_public_field'];
+      const code=known.includes(e)?e:'unavailable';
+      phase.createPhase+='_'+code;
+      pairStatus(`配对请求未确认 · ${code}。请核验本机资料及设备解锁状态，再手动处理。`);
+    }
   });
   $('pair-scan').onclick=async()=>{
     if(!native || scanBusy || pairState==='none' || !$('pair-request').value)return;

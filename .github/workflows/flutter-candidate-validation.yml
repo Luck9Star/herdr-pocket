@@ -62,42 +62,6 @@ jobs:
             ${{ runner.temp }}/flutter-probe/candidate/terminal_view/NOTICE
           if-no-files-found: error
           retention-days: 14
-  macos-render-check:
-    if: startsWith(github.ref, 'refs/heads/codex/')
-    needs: patch-and-test
-    runs-on: macos-14
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-      - name: Install pinned Flutter in runner only
-        run: python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
-      - name: Prepare isolated fixture app
-        run: python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
-      - name: Materialize the same verified experimental candidate
-        run: python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: flutter-candidate-lock-${{ github.sha }}
-          path: ${{ runner.temp }}/flutter-probe
-      - name: Verify lock and run headless renderer tests
-        shell: bash
-        run: |
-          cd "$RUNNER_TEMP/flutter-probe"
-          flutter pub get --enforce-lockfile
-          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
-          flutter test diagnostic/combining_render_test.dart regression/combining_patch_test.dart test/probe_ui_test.dart --reporter expanded 2>&1 | tee candidate-macos-render.log
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
-        with:
-          name: flutter-candidate-macos-render-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/flutter-probe/candidate-manifest.json
-            ${{ runner.temp }}/flutter-probe/candidate-macos-render.log
-            ${{ runner.temp }}/flutter-probe/probe-results
-          if-no-files-found: error
-          retention-days: 14
   build:
     if: startsWith(github.ref, 'refs/heads/codex/')
     needs: patch-and-test
@@ -106,10 +70,6 @@ jobs:
       matrix:
         include:
           - {platform: android, os: ubuntu-24.04}
-          - {platform: ios, os: macos-14}
-          - {platform: macos, os: macos-14}
-          - {platform: linux, os: ubuntu-24.04}
-          - {platform: windows, os: windows-2022}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:

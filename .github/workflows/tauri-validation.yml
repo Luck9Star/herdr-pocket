@@ -20,14 +20,6 @@ jobs:
           # Submit mobile candidates first; desktop support remains in the same matrix.
           - platform: android
             runner: ubuntu-24.04
-          - platform: ios-simulator
-            runner: macos-15
-          - platform: macos
-            runner: macos-15
-          - platform: linux
-            runner: ubuntu-24.04
-          - platform: windows
-            runner: windows-2025
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     defaults:

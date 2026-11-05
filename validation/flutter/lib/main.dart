@@ -5,6 +5,7 @@ import 'package:terminal_view/terminal_view.dart';
 import 'probe_gate.dart';
 import 'design_tokens.dart';
 import 'remote_page.dart';
+import 'pairing_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -270,7 +271,10 @@ class _ProbePageState extends State<ProbePage> with WidgetsBindingObserver {
     final wide = MediaQuery.sizeOf(context).width >= 960;
     final canSend = gate.canInput;
     return Scaffold(appBar: AppBar(title: const Text('herdr pocket'),
-      actions: [TextButton.icon(label: const Text('远端只读'), icon: const Icon(Icons.link), onPressed: () {
+      actions: [TextButton.icon(key: const ValueKey('device-pairing'),label: const Text('设备配对'), icon: const Icon(Icons.phonelink_lock), onPressed: () {
+        for (final pane in panes) { pane.focusNode.unfocus(); pane.gate.invalidate(disconnect: true); }
+        Navigator.push<void>(context, MaterialPageRoute(builder: (_) => PairingPage(tokens:tokens)));
+      }), TextButton.icon(label: const Text('手动实验'), icon: const Icon(Icons.link), onPressed: () {
         for (final pane in panes) { pane.focusNode.unfocus(); pane.gate.invalidate(disconnect: true); }
         Navigator.push<void>(context, MaterialPageRoute(builder: (_) => RemotePage(tokens: tokens))).then((_) { if (mounted) setState(() {}); });
       }), if (wide) Padding(padding: const EdgeInsets.only(right: 16), child: Center(
@@ -287,7 +291,7 @@ class _ProbePageState extends State<ProbePage> with WidgetsBindingObserver {
           return SingleChildScrollView(child: SizedBox(height: height, child: Column(children: [
           if (MediaQuery.viewInsetsOf(context).bottom == 0) Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Row(children: [Icon(Icons.science_outlined, size: 16, color: tokens.color('brand')),
-              const SizedBox(width: 6), Expanded(child: Text('离线 fixture · 远端只读请用顶部入口，配对 / 三网络尚未接入',
+              const SizedBox(width: 6), Expanded(child: Text('离线 fixture · 顶部设备配对进入只读连接；三网络尚未验收',
                 style: TextStyle(color: tokens.color('textSecondary'), fontSize: 11)))])),
           Row(children: [for (var i = 0; i < panes.length; i++) Expanded(child: TextButton(
             key: ValueKey('tab-$i'), onPressed: () => select(i),

@@ -217,7 +217,10 @@ class FixturePairingHost:
     Consumption/revocation metadata live only in this process. No production
     persistence, concurrency guarantee, automatic approval or network transport.
     """
-    def __init__(self, *, host_public_key: str):
+    def __init__(self, *, host_public_key: str, fixture_account: str = 'fixture-user'):
+        if not re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', fixture_account):
+            raise ValueError('invalid fixture account')
+        self.fixture_account = fixture_account
         self.host_key = fingerprint(host_public_key)
         self.store = FixtureStore()
         self._records: dict[str, tuple[dict, object, str]] = {}
@@ -230,7 +233,7 @@ class FixturePairingHost:
 
     def _request(self, raw: bytes, *, now: int) -> dict:
         req = decode(raw, now=now)
-        if req['type'] != REQUEST or req['account'] != 'fixture-user' or req['host_key'] != self.host_key:
+        if req['type'] != REQUEST or req['account'] != self.fixture_account or req['host_key'] != self.host_key:
             raise ValueError('only the explicit fixture target is supported')
         return req
 

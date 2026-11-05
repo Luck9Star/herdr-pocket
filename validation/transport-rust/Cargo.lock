@@ -634,6 +634,7 @@ name = "herdr-readonly-transport"
 version = "0.1.0"
 dependencies = [
  "base64ct",
+ "ring",
  "russh",
  "serde",
  "serde_json",

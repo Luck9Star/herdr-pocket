@@ -77,14 +77,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '17.0.18+8'
-      - name: Compile storage bridge only; no emulator or Keystore calls
+      - name: Compile shared signer and run temporary JVM fixtures; no emulator or Keystore calls
         shell: bash
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35'
           mkdir -p pairing-artifacts "$RUNNER_TEMP/pairing-classes"
-          javac --release 17 -cp "$ANDROID_HOME/platforms/android-35/android.jar" -d "$RUNNER_TEMP/pairing-classes" validation/pairing/native/android/AndroidSeedEnvelope.java
+          BC_JAR="$RUNNER_TEMP/bcprov-jdk18on-1.86.jar"
+          curl --fail --silent --show-error --location https://repo.maven.apache.org/maven2/org/bouncycastle/bcprov-jdk18on/1.86/bcprov-jdk18on-1.86.jar -o "$BC_JAR"
+          echo "2af190b300cbb0b35e248ccf5f4a06b6072030aeb3da7a98ec73abe5b4cb371f  $BC_JAR" | sha256sum -c -
+          javac --release 17 -cp "$ANDROID_HOME/platforms/android-35/android.jar:$BC_JAR" -d "$RUNNER_TEMP/pairing-classes" validation/pairing/native/android/*.java validation/pairing/native/android/tests/*.java
+          java -cp "$RUNNER_TEMP/pairing-classes:$BC_JAR" org.herdr.pairing.DeviceKeyStoreCoreTest > pairing-artifacts/android-jvm-fixtures.json
+          sha256sum "$BC_JAR" > pairing-artifacts/android-dependency-sha256.txt
           java -version 2> pairing-artifacts/java-version.txt
-          echo '{"scope":"Android-API35-compile-only","keystoreRuntime":"not-executed","device":"not-executed"}' > pairing-artifacts/android-compile.json
+          echo '{"scope":"Android-API35-compile-and-pure-JVM-temp-fixtures","keystoreRuntime":"not-executed","device":"not-executed"}' > pairing-artifacts/android-compile.json
       - name: Hash non-secret validation artifacts
         if: always()
         shell: bash

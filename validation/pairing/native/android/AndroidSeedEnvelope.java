@@ -11,12 +11,12 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
-/** Compile-only bridge, API 35 baseline. No key is created by class loading.
+/** Native envelope backend, API 35 baseline. No key is created by class loading.
  * Wraps a locally generated Ed25519 seed; NOT a hardware Ed25519 signer.
- * Caller must persist only the envelope in app noBackupFilesDir, and keep all
+ * Shared DeviceKeyStoreCore persists only the envelope in app noBackupFilesDir; all
  * seed/signing calls within native code, never JS/Dart or exported config.
  */
-public final class AndroidSeedEnvelope {
+final class AndroidSeedEnvelope implements DeviceKeyStoreCore.EnvelopeBackend {
     private static final String PREFIX = "org.herdr.pocket.device-key.v1.";
     private final KeyStore keyStore;
     public AndroidSeedEnvelope() throws Exception {
@@ -25,7 +25,7 @@ public final class AndroidSeedEnvelope {
         keyStore.load(null);
     }
     private String alias(String handle) {
-        if (!handle.matches("[a-f0-9]{32}")) throw new IllegalArgumentException("local handle");
+        DeviceKeyStoreCore.checkedHandle(handle);
         return PREFIX + handle;
     }
     private SecretKey existing(String handle) throws Exception {
@@ -39,13 +39,13 @@ public final class AndroidSeedEnvelope {
         String name = alias(handle);
         if (keyStore.containsAlias(name)) throw new IllegalStateException("handle already exists");
         KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
-        generator.init(new KeyGenParameterSpec.Builder(name,
-            KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-            .setKeySize(256).setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setRandomizedEncryptionRequired(true).setUnlockedDeviceRequired(true).build());
-        generator.generateKey();
         try {
+            generator.init(new KeyGenParameterSpec.Builder(name,
+                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setKeySize(256).setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true).setUnlockedDeviceRequired(true).build());
+            generator.generateKey();
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, existing(handle));
             cipher.updateAAD(alias(handle).getBytes(StandardCharsets.UTF_8));
@@ -58,20 +58,22 @@ public final class AndroidSeedEnvelope {
             System.arraycopy(encrypted, 0, envelope, 13, 48);
             return envelope;
         } catch (Exception failure) {
-            keyStore.deleteEntry(name);
+            try { keyStore.deleteEntry(name); } catch (Exception cleanup) { failure.addSuppressed(cleanup); }
             throw failure;
         }
     }
     // Internal native callback: caller signs with its pinned Ed25519 library and
     // must not retain/return seed. This method must not be a GUI bridge method.
-    public interface SeedOperation<T> { T run(byte[] seed) throws Exception; }
-    public <T> T withSeed(String handle, byte[] envelope, SeedOperation<T> operation) throws Exception {
+    public <T> T withSeed(String handle, byte[] envelope, DeviceKeyStoreCore.SeedOperation<T> operation) throws Exception {
         if (envelope.length != 61 || envelope[0] != 1) throw new IllegalArgumentException("envelope format");
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.DECRYPT_MODE, existing(handle), new GCMParameterSpec(128, envelope, 1, 12));
         cipher.updateAAD(alias(handle).getBytes(StandardCharsets.UTF_8));
         byte[] seed = cipher.doFinal(envelope, 13, 48);
-        try { return operation.run(seed); }
+        try {
+            if (seed.length != 32) throw new IllegalStateException("seed bounds");
+            return operation.run(seed);
+        }
         finally { Arrays.fill(seed, (byte) 0); }
     }
     public void delete(String handle) throws Exception { keyStore.deleteEntry(alias(handle)); }

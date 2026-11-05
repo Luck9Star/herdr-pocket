@@ -27,6 +27,8 @@ use tokio::{
 };
 use zeroize::Zeroize;
 
+pub mod pairing;
+
 pub const CONFIG_LIMIT: usize = 32768;
 const LINE_LIMIT: usize = 1_048_576;
 const TOTAL_LIMIT: usize = 2_097_152;
@@ -60,10 +62,14 @@ impl RemoteConfig {
         }
         serde_json::from_slice(bytes).map_err(|_| "invalid_config")
     }
+    pub fn validate_pair_target(&self) -> Result<()> { self.validate_for_auth(true, true)?; config_root(&self.socket_path, &self.session)?; Ok(()) }
     fn validate(&self) -> Result<PublicKey> {
         self.validate_for(false)
     }
     fn validate_for(&self, dashboard: bool) -> Result<PublicKey> {
+        self.validate_for_auth(dashboard, false)
+    }
+    fn validate_for_auth(&self, dashboard: bool, external: bool) -> Result<PublicKey> {
         fn bounded(s: &str, max: usize) -> bool {
             !s.is_empty() && s.len() <= max && !s.chars().any(char::is_control)
         }
@@ -87,10 +93,9 @@ impl RemoteConfig {
             || !(dashboard && self.pane_id.is_empty()) && !valid_name(&self.pane_id, 128, true)
             || !unix_path(&self.socket_path)
             || !unix_path(&self.herdr_path)
-            || self.private_key_pem.len() > 16384
-            || !self
-                .private_key_pem
-                .starts_with("-----BEGIN OPENSSH PRIVATE KEY-----\n")
+            || if external { !self.private_key_pem.is_empty() } else {
+                self.private_key_pem.len() > 16384 || !self.private_key_pem.starts_with("-----BEGIN OPENSSH PRIVATE KEY-----\n")
+            }
         {
             return Err("invalid_config");
         }
@@ -742,14 +747,61 @@ where
     Frame: Fn(StreamFrame) -> FrameFuture,
     FrameFuture: Future<Output = Result<()>>,
 {
-    let _cancel_on_drop = CancelOnDrop(cancel.clone());
-    let expected = config.validate_for(true)?;
-    config_root(&config.socket_path, &config.session)?;
-    let private =
-        decode_secret_key(&config.private_key_pem, None).map_err(|_| "invalid_private_key")?;
-    if private.algorithm() != Algorithm::Ed25519 {
-        return Err("invalid_private_key");
+    observe_inner(config, cancel, audit, progress, select, frame, None).await
+}
+
+/// A device signer has no private-key export. The implementation owns its local handle.
+pub trait DeviceSigner: Send + Sync {
+    fn sign(&self, payload: &[u8]) -> std::result::Result<Vec<u8>, ()>;
+}
+
+struct ExternalSigner { key: PublicKey, signer: Arc<dyn DeviceSigner> }
+#[derive(Debug)]
+struct SigningError;
+impl From<russh::SendError> for SigningError { fn from(_: russh::SendError) -> Self { Self } }
+impl russh::Signer for ExternalSigner {
+    type Error = SigningError;
+    async fn auth_sign(&mut self, identity: &russh::keys::agent::AgentIdentity, hash: Option<russh::keys::HashAlg>, mut data: Vec<u8>) -> std::result::Result<Vec<u8>, SigningError> {
+        if hash.is_some() || !matches!(identity, russh::keys::agent::AgentIdentity::PublicKey { key, .. } if key == &self.key) || data.len() > 65536 { return Err(SigningError); }
+        let sig = self.signer.sign(&data).map_err(|_| SigningError)?;
+        let raw = self.key.key_data().ed25519().ok_or(SigningError)?;
+        ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, raw.as_ref()).verify(&data, &sig).map_err(|_| SigningError)?;
+        if sig.len() != 64 { return Err(SigningError); }
+        // SSH string containing algorithm and signature strings, appended to the signed packet.
+        data.extend_from_slice(&83u32.to_be_bytes());
+        data.extend_from_slice(&11u32.to_be_bytes());
+        data.extend_from_slice(b"ssh-ed25519");
+        data.extend_from_slice(&64u32.to_be_bytes());
+        data.extend_from_slice(&sig);
+        Ok(data)
     }
+}
+
+pub async fn observe_with_device_signer<Select, SelectFuture, Frame, FrameFuture>(
+    config: RemoteConfig, public_key: String, signer: Arc<dyn DeviceSigner>, cancel: Cancellation, audit: Arc<Audit>,
+    progress: impl Fn(&'static str) + Send + Sync, select: Select, frame: Frame,
+) -> Result<()>
+where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<String>>,
+      Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
+    let key = PublicKey::from_openssh(&public_key).map_err(|_| "invalid_device_key")?;
+    if key.algorithm() != Algorithm::Ed25519 || key.to_openssh().map_err(|_| "invalid_device_key")? != public_key { return Err("invalid_device_key"); }
+    observe_inner(config, cancel, audit, progress, select, frame, Some(ExternalSigner { key, signer })).await
+}
+
+async fn observe_inner<Select, SelectFuture, Frame, FrameFuture>(
+    config: RemoteConfig, cancel: Cancellation, audit: Arc<Audit>, progress: impl Fn(&'static str) + Send + Sync,
+    select: Select, frame: Frame, mut external: Option<ExternalSigner>,
+) -> Result<()>
+where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<String>>,
+      Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
+    let _cancel_on_drop = CancelOnDrop(cancel.clone());
+    let expected = config.validate_for_auth(true, external.is_some())?;
+    config_root(&config.socket_path, &config.session)?;
+    let private = if external.is_none() {
+        let key = decode_secret_key(&config.private_key_pem, None).map_err(|_| "invalid_private_key")?;
+        if key.algorithm() != Algorithm::Ed25519 { return Err("invalid_private_key"); }
+        Some(key)
+    } else { None };
     progress("connecting");
     let tcp = bounded(
         &cancel,
@@ -799,18 +851,14 @@ where
     }
     progress("host-key-verified");
     audit.auth_started.store(true, Ordering::SeqCst);
-    if !bounded(
-        &cancel,
-        8,
-        "authentication_failed",
-        ssh.authenticate_publickey(
-            &config.username,
-            PrivateKeyWithHashAlg::new(Arc::new(private), None),
-        ),
-    )
-    .await?
-    .success()
-    {
+    let authenticated = if let Some(ref mut signer) = external {
+        bounded(&cancel, 8, "authentication_failed", ssh.authenticate_publickey_with(
+            &config.username, signer.key.clone(), None, signer)).await?.success()
+    } else {
+        bounded(&cancel, 8, "authentication_failed", ssh.authenticate_publickey(
+            &config.username, PrivateKeyWithHashAlg::new(Arc::new(private.ok_or("invalid_private_key")?), None))).await?.success()
+    };
+    if !authenticated {
         return Err("authentication_failed");
     }
     progress("authenticated");
@@ -935,6 +983,28 @@ impl AttemptGate {
             self.pending = None;
         }
         accepted
+    }
+}
+
+#[cfg(all(test, any(target_os="linux",target_os="macos")))]
+mod signer_tests {
+    use super::*;
+    use russh::Signer;
+    use crate::pairing::{KeyStore, VolatileKeyStore};
+    struct Bound { store: Arc<VolatileKeyStore>, handle: String }
+    impl DeviceSigner for Bound { fn sign(&self, data:&[u8])->std::result::Result<Vec<u8>,()> { self.store.sign(&self.handle,data).map_err(|_|()) } }
+    #[tokio::test]
+    async fn signer_binds_identity_verifies_signature_and_bounds_payload() {
+        let store=Arc::new(VolatileKeyStore::default()); let (handle,public)=store.create().unwrap();
+        let key=PublicKey::from_openssh(&public).unwrap();
+        let mut signer=ExternalSigner{key:key.clone(),signer:Arc::new(Bound{store:store.clone(),handle:handle.clone()})};
+        let data=b"session-bound-userauth".to_vec();
+        let signed=signer.auth_sign(&key.clone().into(),None,data.clone()).await.unwrap();
+        assert_eq!(&signed[..data.len()],data); assert_eq!(signed.len(),data.len()+87);
+        let (_,other)=store.create().unwrap(); let other=PublicKey::from_openssh(&other).unwrap();
+        assert!(signer.auth_sign(&other.into(),None,data.clone()).await.is_err());
+        assert!(signer.auth_sign(&key.clone().into(),None,vec![0;65537]).await.is_err());
+        store.delete(&handle).unwrap(); assert!(signer.auth_sign(&key.into(),None,data).await.is_err());
     }
 }
 

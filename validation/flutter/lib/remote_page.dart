@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
 import 'remote_adapter.dart';
+import 'device_keys.dart';
 
 String pemFromSingleLineInput(String text) {
   final normalized = text.replaceAll(r'\n','\n').trim();
@@ -14,9 +15,13 @@ String pemFromSingleLineInput(String text) {
 }
 
 class RemotePage extends StatefulWidget {
-  const RemotePage({super.key,required this.tokens,this.adapter});
+  const RemotePage({super.key,required this.tokens,this.adapter,this.pairedTarget,this.deviceKeys,this.keyHandle,this.devicePublicKey,this.onConnecting,this.onAuthenticated,this.onStopped});
   final DesignTokens tokens;
   final RemoteReadOnlyAdapter? adapter;
+  final Map<String,dynamic>? pairedTarget;
+  final DeviceKeys? deviceKeys;
+  final String? keyHandle, devicePublicKey;
+  final VoidCallback? onConnecting, onAuthenticated, onStopped;
   @override
   State<RemotePage> createState() => _RemotePageState();
 }
@@ -28,6 +33,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       name:TextEditingController(text:name == 'port' ? '22' : ''),
   };
   bool reviewed = false, busy = false;
+  DeviceIdentityLease? identityLease;
   int request = 0;
   String status = '审查接入 → 会话 pane 看板 → 选择目标观察';
   RemoteDashboard? dashboard;
@@ -39,19 +45,26 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Terminal? terminal;
 
   @override
-  void initState() { super.initState(); WidgetsBinding.instance.addObserver(this); }
+  void initState() {
+    super.initState(); WidgetsBinding.instance.addObserver(this);
+    final target = widget.pairedTarget;
+    if (target != null) for (final entry in fields.entries) {
+      if (target[entry.key] != null) entry.value.text = target[entry.key].toString();
+    }
+  }
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) stop('应用已暂停，连接已取消；请重新核验后主动连接');
   }
   void stop([String message = '已取消；不会重连或发送输入']) {
-    request++; unawaited(adapter.cancel());
+    request++; identityLease?.cancel(); unawaited(adapter.cancel());
+    widget.onStopped?.call();
     fields['privateKeyPem']!.clear();
     if (mounted) setState(() { busy = false; live = false; reviewed = false; status = message; });
   }
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this); request++;
+    WidgetsBinding.instance.removeObserver(this); request++; identityLease?.cancel();
     unawaited(adapter.cancel()); terminal?.dispose();
     for (final c in fields.values) { c.clear(); c.dispose(); }
     super.dispose();
@@ -60,13 +73,23 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Future<void> connect() async {
     if (!reviewed || busy) return;
     final ticket = ++request;
+    setState(() { busy = true; });
     try {
-      final config = RemoteConfig.fromJson({
+      widget.onConnecting?.call();
+      final values = {
         'schemaVersion':1,for (final e in fields.entries) if (e.key != 'port' && e.key != 'privateKeyPem') e.key:e.value.text,
-        'port':int.tryParse(fields['port']!.text),
-        'privateKeyPem':pemFromSingleLineInput(fields['privateKeyPem']!.text),
-        'reviewConfirmed':reviewed,
-      });
+        'port':int.tryParse(fields['port']!.text),'reviewConfirmed':reviewed,
+      };
+      RemoteConfig config;
+      if (widget.pairedTarget != null) {
+        final publicKey = await widget.deviceKeys!.public(widget.keyHandle!);
+        if (!mounted || ticket != request) return;
+        if (publicKey != widget.devicePublicKey) throw const RemoteFailure('device_key_changed');
+        identityLease = DeviceIdentityLease(widget.deviceKeys!,widget.keyHandle!,publicKey);
+        config = RemoteConfig.fromDeviceJson(values,identityLease!.identity());
+      } else {
+        config = RemoteConfig.fromJson({...values,'privateKeyPem':pemFromSingleLineInput(fields['privateKeyPem']!.text)});
+      }
       fields['privateKeyPem']!.clear();
       FocusScope.of(context).unfocus();
       setState(() { busy = true; live = false; dashboard = null; selectedPane = null; sequence = null; snapshot = null; capturedAt = null; terminal?.dispose(); terminal = null; status = '正在连接并核验主机身份'; });
@@ -86,6 +109,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           status = '正在只读观察 · 输入关闭'; });
       },onProgress:(generation,phase) {
         if (!mounted || ticket != request) return;
+        if (phase == 'snapshot') widget.onAuthenticated?.call();
         if (phase == 'snapshot_received' || phase == 'full_received') return;
         setState(() { status = switch (phase) {
           'connecting' => '正在连接 · 尚未信任主机',
@@ -96,9 +120,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       });
     } catch (error) {
       if (!mounted || ticket != request) return;
+      identityLease?.cancel(); widget.onStopped?.call();
       final code = error is RemoteFailure ? error.code : 'connection_failed';
       setState(() { busy = false; live = false; reviewed = false;
         status = switch (code) {
+          'device_key_unavailable' || 'device_key_changed' => '设备密钥锁定、丢失或不可用 · 已停止，不会生成替代身份或使用明文',
           'host_key_mismatch' => '主机指纹不符 · 已在认证前拒绝，请从可信渠道重新核验',
           'session_mismatch' || 'pane_missing' || 'invalid_terminal_id' || 'invalid_snapshot' || 'stale_selection' => '指定会话或目标不匹配 · 已停止，请检查资料',
           'cancelled' => '已取消 · 不会自动重连',
@@ -144,7 +170,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget input(String name,String label,{bool secret=false,String? hint}) => Padding(
     padding:const EdgeInsets.only(bottom:14),child:TextField(
-      key:ValueKey('remote-$name'),controller:fields[name],enabled:!busy,
+      key:ValueKey('remote-$name'),controller:fields[name],enabled:!busy && widget.pairedTarget == null,
       obscureText:secret,enableSuggestions:!secret,autocorrect:false,
       enableIMEPersonalizedLearning:!secret,enableInteractiveSelection:!secret,
       keyboardType:name == 'port' ? TextInputType.number : TextInputType.text,
@@ -199,9 +225,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           Text('2 · 主机身份核验',style:Theme.of(context).textTheme.titleMedium),
           const SizedBox(height:12),
           input('expectedHostKey','预期主机 Ed25519 公钥',hint:'ssh-ed25519 BASE64（无注释）'),
+          if (widget.pairedTarget == null) ...[
           Text('3 · 内存临时凭据',style:Theme.of(context).textTheme.titleMedium),
           const SizedBox(height:12),
           input('privateKeyPem','临时 Ed25519 私钥',secret:true),
+          ] else const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('设备独立身份 · 私钥不进入表单；密钥不可用时停止')),
           CheckboxListTile(key:const ValueKey('remote-review'),contentPadding:EdgeInsets.zero,
             value:reviewed,onChanged:busy ? null : (value) => setState(() { reviewed = value ?? false; }),
             title:const Text('我已通过可信渠道核验主机公钥、账号与目标资料'),

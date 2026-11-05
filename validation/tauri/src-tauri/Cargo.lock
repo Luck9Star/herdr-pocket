@@ -1651,9 +1651,11 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 name = "herdr-pocket-tauri-probe"
 version = "0.1.0"
 dependencies = [
+ "base64ct",
  "herdr-probe-core",
  "herdr-readonly-transport",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tokio",
@@ -1668,6 +1670,7 @@ name = "herdr-readonly-transport"
 version = "0.1.0"
 dependencies = [
  "base64ct",
+ "ring",
  "russh",
  "serde",
  "serde_json",

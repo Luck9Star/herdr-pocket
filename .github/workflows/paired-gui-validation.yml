@@ -1,0 +1,91 @@
+name: Paired GUI to isolated SSH
+on:
+  push:
+    branches: ['codex/core-prototype-validation']
+    paths: ['validation/flutter/**', 'validation/tauri/**', 'validation/transport-rust/**', 'validation/remote-harness/**', 'validation/pairing/**', '.github/workflows/paired-gui-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: paired-gui-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  paired-observe:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    strategy:
+      fail-fast: false
+      matrix:
+        route: [flutter, tauri]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install isolated helper and loopback sshd dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pairing-venv"
+          "$RUNNER_TEMP/pairing-venv/bin/pip" install -r validation/pairing/requirements.txt
+          PYTHONDONTWRITEBYTECODE=1 "$RUNNER_TEMP/pairing-venv/bin/python" -m unittest discover -s validation/remote-harness -q
+          sudo apt-get update
+          sudo apt-get install -y openssh-server
+      - name: Prepare the Flutter candidate used by the Android package
+        if: matrix.route == 'flutter'
+        run: |
+          python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+          export PATH="$RUNNER_TEMP/flutter-sdk/bin:$PATH"
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-gui"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-gui"
+          cd "$RUNNER_TEMP/flutter-gui"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-gui"
+          flutter analyze
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        if: matrix.route == 'tauri'
+        with:
+          node-version: '22.22.2'
+          cache: npm
+          cache-dependency-path: validation/tauri/package-lock.json
+      - name: Prepare Linux native GUI driver
+        if: matrix.route == 'tauri'
+        run: |
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev build-essential patchelf webkit2gtk-driver xvfb xauth dbus-x11
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: matrix.route == 'tauri'
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            validation/tauri/src-tauri/target
+          key: paired-gui-${{ runner.os }}-rust196-${{ hashFiles('validation/tauri/src-tauri/Cargo.lock') }}
+      - name: Build native Tauri executable with production frontend assets
+        if: matrix.route == 'tauri'
+        working-directory: validation/tauri
+        run: |
+          cargo install tauri-driver --version 2.1.0 --locked
+          npm ci
+          npm test
+          npm run tauri -- icon icon.svg
+          npm run tauri -- build --debug --no-bundle -- --locked
+      - name: Review pairing, authorize the displayed key, choose pane and observe updates
+        env:
+          GUI_ROUTE: ${{ matrix.route }}
+          WEBKIT_DISABLE_COMPOSITING_MODE: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          if [ "$GUI_ROUTE" = flutter ]; then
+            "$RUNNER_TEMP/pairing-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui flutter --flutter-app "$RUNNER_TEMP/flutter-gui" --output "$RUNNER_TEMP/paired-evidence"
+          else
+            xvfb-run -a dbus-run-session -- "$RUNNER_TEMP/pairing-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui tauri --tauri-app "$GITHUB_WORKSPACE/validation/tauri/src-tauri/target/debug/herdr-pocket-tauri-probe" --output "$RUNNER_TEMP/paired-evidence"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: paired-gui-${{ matrix.route }}-${{ github.sha }}
+          path: ${{ runner.temp }}/paired-evidence/
+          retention-days: 14
+          if-no-files-found: warn

@@ -3,7 +3,7 @@
 <header class="app-header"><div class="brand-lockup"><span class="brand-mark" aria-hidden="true">›_</span><div><span class="eyebrow">HERDR POCKET</span><h1>终端工作台 <small>Tauri + xterm.js</small></h1></div></div><span class="badge">M1b · 实验测试包</span></header>
 <nav class="route-tabs" aria-label="验证入口"><button id="show-remote" aria-pressed="true">远端只读</button><button id="show-fixture" aria-pressed="false">离线终端实验室</button></nav>
 <main id="remote-page" class="remote-page">
-<section class="remote-intro"><span class="eyebrow">REMOTE · READ ONLY</span><h2>查看远端终端</h2><p>手动核验明确的会话，从实际快照选择 pane 并持续只读观察。远端输入、扫码配对与三网络集成仍未开放。</p></section>
+<section class="remote-intro"><span class="eyebrow">REMOTE · READ ONLY</span><h2>查看远端终端</h2><p>手动核验明确的会话，从实际快照选择 pane 并持续只读观察。公开请求与响应需要人工传递及独立审查；远端输入、扫码与三网络集成仍未开放。</p></section>
 <p id="remote-native-note" class="mode-message" data-tone="warning">浏览器预览没有原生 SSH 适配器。真实读取仅在测试安装包中可用，预览不会伪造连接成功。</p>
 <form id="remote-form" autocomplete="off">
 <fieldset id="remote-fields"><legend>1. 审查目标与来源</legend>
@@ -18,8 +18,26 @@
 <label class="full-width">API socket 绝对路径<input id="remote-socket" type="text" required maxlength="1024" placeholder="/配置根/herdr/sessions/work/herdr.sock" spellcheck="false" autocapitalize="none"></label>
 <label class="full-width">预期 SSH 主机公钥<textarea id="remote-pin" required rows="3" maxlength="4096" placeholder="ssh-ed25519 AAAA…（仅两字段）" spellcheck="false" autocapitalize="none" autocomplete="off"></textarea></label>
 </div>
-<div class="remote-key-section"><h3>2. 临时凭据 · 实验功能</h3><p class="remote-help">仅本次内存使用的未加密 OpenSSH Ed25519 私钥。没有设备安全存储；不要使用生产凭据。提交、取消或进入后台后会清空表单，JavaScript 内存不具备可靠擦除保证。</p>
-<label>实验私钥<input id="remote-private-key" type="password" required maxlength="16384" placeholder="粘贴实验用 OpenSSH 私钥" spellcheck="false" autocapitalize="none" autocorrect="off" autocomplete="off" data-1p-ignore data-lpignore="true"></label></div>
+<div class="remote-key-section"><h3>2. 认证方式</h3>
+<label><input id="pair-mode" type="checkbox"> 使用本机设备配对（桌面为仅进程内的测试身份）</label>
+<div id="pair-controls" hidden>
+<p>桌面身份仅存内存，退出即丢失；Android 使用本应用存储。当前配对状态与句柄不跨进程恢复；退出后需手动核查主机授权，不会自动重建。删除本机身份不会撤销主机授权。iOS/Windows 当前不可用。创建请求后目标锁定，删除本机身份后可修改。</p>
+<label>设备名称<input id="pair-device" value="Pocket test" maxlength="48" spellcheck="false"></label>
+<label><input id="pair-target-review" type="checkbox"> 我已独立核对 SSH 用户名和预期主机公钥。</label>
+<button id="pair-create" type="button">创建设备公开请求</button>
+<label>公开配对请求<textarea id="pair-request" readonly rows="6" spellcheck="false"></textarea></label>
+<p>通过可信方式将请求交给主机操作者；响应不会自动连接，也不证明主机可信。</p>
+<label>导入主机响应<textarea id="pair-response" rows="6" maxlength="2048" spellcheck="false"></textarea></label>
+<button id="pair-preview" type="button">查看响应内容</button>
+<pre id="pair-response-preview" hidden></pre>
+<label><input id="pair-source-review" type="checkbox"> 我已独立核实响应来源、账号、主机与设备指纹。</label>
+<button id="pair-accept" type="button">接受已审查响应</button>
+<button id="pair-cancel" type="button">取消配对</button>
+<button id="pair-reset" type="button">删除本机身份并重新开始</button>
+<p id="pair-status" role="status" aria-live="polite">尚未创建请求。</p>
+</div>
+<div id="manual-key-section"><h3>临时凭据 · 实验功能</h3><p class="remote-help">仅本次内存使用的未加密 OpenSSH Ed25519 私钥。没有设备安全存储；不要使用生产凭据。提交、取消或进入后台后会清空表单，JavaScript 内存不具备可靠擦除保证。</p>
+<label>实验私钥<input id="remote-private-key" type="password" required maxlength="16384" placeholder="粘贴实验用 OpenSSH 私钥" spellcheck="false" autocapitalize="none" autocorrect="off" autocomplete="off" data-1p-ignore data-lpignore="true"></label></div></div>
 <label class="review-check"><input id="remote-review" type="checkbox"><span>我已核对资料来源、目标会话与预期主机公钥，并确认仅使用实验凭据。</span></label>
 </fieldset>
 <div class="remote-actions"><button id="remote-connect" type="submit" class="primary" disabled>核验并读取看板</button><button id="remote-cancel" type="button" disabled>停止观察</button><button id="remote-hide-keyboard" type="button">收起键盘</button><button id="remote-clear-key" type="button">清除临时私钥</button></div>

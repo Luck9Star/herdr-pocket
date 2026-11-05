@@ -154,10 +154,15 @@ def snapshot_diagnostics(result):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--flutter-app', type=Path, required=True)
+    parser.add_argument('--flutter-app', type=Path)
+    parser.add_argument('--paired-gui', choices=('flutter', 'tauri'))
+    parser.add_argument('--tauri-app', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     require_runner(os.environ)
+    if ((args.paired_gui == 'tauri' and not args.tauri_app) or
+            (args.paired_gui != 'tauri' and not args.flutter_app)):
+        parser.error('provide the application built for this route')
     # Import only on the supported Linux CI route; unit tests remain portable.
     import pwd
 
@@ -254,7 +259,7 @@ def main():
             command(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C',
                      'ephemeral-herdr-pocket-mobile', '-f', root / name])
         authorized = root / 'authorized_keys'
-        authorized.write_bytes((root / 'client.pub').read_bytes())
+        authorized.write_bytes(b'' if args.paired_gui else (root / 'client.pub').read_bytes())
         authorized.chmod(0o600)
         with socket.socket() as reserve:
             reserve.bind(('127.0.0.1', 0))
@@ -314,10 +319,22 @@ LogLevel VERBOSE
                                          'expected': 'reject mismatched socket/session before publishing full'}
         config = {'schemaVersion': 1, 'host': '127.0.0.1', 'port': port, 'username': username,
                   'expectedHostKey': ' '.join((root / 'host.pub').read_text().split()[:2]),
-                  'privateKeyPem': (root / 'client').read_text(), 'socketPath': str(sock),
+                  'socketPath': str(sock),
                   'herdrPath': str(herdr), 'session': 'pocket-probe', 'paneId': pane,
                   'reviewConfirmed': True}
-        adapters = (
+        if args.paired_gui:
+            # Import the pairing dependencies only for the isolated GUI workflow.
+            from paired_gui import run_gui
+            report.update(milestone='M1c-pairing-dashboard-observe',
+                          scope='Linux desktop GUI or Flutter widget renderer with actual SSH and temporary signing identity',
+                          unverified=['phone runtime', 'Keystore or Keychain runtime', 'camera', 'real IME', 'overlay networks', 'remote input'])
+            report.pop('cancelScope', None)
+            result = run_gui(args, root, env, config)
+            report['checks'].append(result)
+            publish()
+        else:
+            config['privateKeyPem'] = (root / 'client').read_text()
+        adapters = () if args.paired_gui else (
             ('rust', [str(REPO / 'validation/transport-rust/target/debug/remote-probe')], REPO),
             ('dart', ['dart', 'run', 'tool/remote_probe.dart'], args.flutter_app.resolve()),
         )
@@ -367,13 +384,16 @@ LogLevel VERBOSE
                 publish()
         report['status'] = 'passed' if all(c['status'] == 'passed' for c in report['checks']) else 'failed'
         report['receivedInputBytes'] = len((root / 'received.bin').read_bytes())
-        report['fixtureSharedBetweenAdapters'] = True
+        report['fixtureSharedBetweenAdapters'] = not bool(args.paired_gui)
         report['observeFixture'] = {'syntheticTickIntervalMs': 200, 'changedTerminalRow': 23,
-                                    'selection': 'CLI explicitly chooses reviewed config pane from current snapshot; GUI selection is separate',
+                                    'selection': ('GUI chooses a pane button from the current snapshot' if args.paired_gui else
+                                                 'CLI explicitly chooses reviewed config pane from current snapshot; GUI selection is separate'),
                                     'backpressureScope': 'decoded single-frame byte high-water only, not JSON line, SSH buffers or whole-process memory'}
-        for source, dest in ((REPO / 'validation/shared/remote-contract.json', 'remote-contract.json'),
-                             (REPO / 'validation/transport-rust/Cargo.lock', 'transport-Cargo.lock'),
-                             (args.flutter_app / 'pubspec.lock', 'flutter-pubspec.lock')):
+        sources = [(REPO / 'validation/shared/remote-contract.json', 'remote-contract.json'),
+                   (REPO / 'validation/transport-rust/Cargo.lock', 'transport-Cargo.lock')]
+        if args.flutter_app:
+            sources.append((args.flutter_app / 'pubspec.lock', 'flutter-pubspec.lock'))
+        for source, dest in sources:
             shutil.copy2(source, out / dest)
     except ProbeFailure as exc:
         report['errorCode'] = str(exc)

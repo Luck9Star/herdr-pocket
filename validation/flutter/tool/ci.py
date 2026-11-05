@@ -51,6 +51,36 @@ def prepare(destination):
     text = manifest.read_text()
     if 'android.permission.INTERNET' not in text:
         manifest.write_text(text.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1))
+    # Register only the four-operation Android bridge. Shared security code has
+    # a single source of truth and never enters Dart or generated copies.
+    activity = destination / 'android/app/src/main/kotlin/dev/herdr/herdr_flutter_probe/MainActivity.kt'
+    shutil.copy2(source / 'native/android/MainActivity.kt', activity)
+    gradle = destination / 'android/app/build.gradle.kts'
+    script = gradle.read_text()
+    native = (ROOT / 'validation/pairing/native/android').as_posix()
+    script += '\nextra["herdrDeviceKeysDir"] = file("' + native + '")\n'
+    script += 'apply(from = "' + native + '/device-keys.gradle")\n'
+    gradle.write_text(script)
+    # Generated Swift files include the shared source verbatim at scaffold time;
+    # the repository keeps only one storage implementation. No Keychain calls
+    # are executed by prepare or channel registration.
+    shared_apple = (ROOT / 'validation/pairing/native/apple/DeviceKeys.swift').read_text()
+    apple_channel = (source / 'native/apple/DeviceKeyChannel.swift').read_text()
+    ios = destination / 'ios/Runner/AppDelegate.swift'
+    ios_text = ios.read_text()
+    marker = 'GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)'
+    if marker not in ios_text:
+        raise SystemExit('Pinned Flutter iOS implicit-engine registration template changed')
+    ios.write_text(ios_text.replace(marker, marker + '\n    registerHerdrDeviceKeys(messenger: engineBridge.applicationRegistrar.messenger())', 1)
+                   + '\n' + shared_apple + '\n' + apple_channel)
+    macos = destination / 'macos/Runner/MainFlutterWindow.swift'
+    mac_text = macos.read_text()
+    marker = 'RegisterGeneratedPlugins(registry: flutterViewController)'
+    if marker not in mac_text:
+        raise SystemExit('Pinned Flutter macOS registration template changed')
+    macos.write_text(mac_text.replace(marker, marker + '\n    registerHerdrDeviceKeys(messenger: flutterViewController.engine.binaryMessenger)', 1)
+                     + '\n' + shared_apple + '\n' + apple_channel)
+
     shutil.copytree(source / 'diagnostic', destination / 'diagnostic', dirs_exist_ok=True)
     shutil.copytree(source / 'regression', destination / 'regression', dirs_exist_ok=True)
     (destination / 'analysis_options.yaml').write_text('analyzer:\n  errors:\n    todo: ignore\n')

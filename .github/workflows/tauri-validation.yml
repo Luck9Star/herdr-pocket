@@ -2,7 +2,7 @@ name: Tauri validation shells
 on:
   push:
     branches: ['codex/**']
-    paths: ['validation/tauri/**', 'validation/transport-rust/**', 'validation/shared/**', '.github/workflows/tauri-validation.yml']
+    paths: ['validation/tauri/**', 'validation/transport-rust/**', 'validation/pairing/native/android/**', 'validation/shared/**', '.github/workflows/tauri-validation.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -90,6 +90,7 @@ jobs:
             macos) npm run tauri -- build --bundles app -- --locked ;;
             android)
               npm run tauri -- android init --ci
+              python3 scripts/wire-android.py
               npm run tauri -- android build --debug --target aarch64 --apk --ci
               ;;
             ios-simulator)

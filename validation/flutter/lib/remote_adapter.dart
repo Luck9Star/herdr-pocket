@@ -17,9 +17,10 @@ String shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 class RemoteConfig {
   RemoteConfig._(this.host, this.port, this.username, this.expectedHostKey,
     this.privateKeyPem, this.socketPath, this.herdrPath, this.session, this.paneId,
-    this.expectedFingerprint);
+    this.expectedFingerprint, [this.deviceIdentity]);
   final String host, username, expectedHostKey, privateKeyPem, socketPath, herdrPath, session, paneId, expectedFingerprint;
   final int port;
+  final SSHIdentity? deviceIdentity;
   static const fields = {'schemaVersion','host','port','username','expectedHostKey',
     'privateKeyPem','socketPath','herdrPath','session','paneId','reviewConfirmed'};
 
@@ -67,6 +68,14 @@ class RemoteConfig {
     final fingerprint = 'SHA256:${base64Encode(SHA256Digest().process(blob)).replaceAll('=', '')}';
     return RemoteConfig._(host,port,username,key,field('privateKeyPem',16384,secret:true),
       path('socketPath'),path('herdrPath'),session,pane,fingerprint);
+  }
+
+  /// Device credential path accepts no private key field or fallback identity.
+  factory RemoteConfig.fromDeviceJson(Map<String,dynamic> data, SSHIdentity identity) {
+    if (data.containsKey('privateKeyPem')) throw const RemoteFailure('invalid_config');
+    final c = RemoteConfig.fromJson({...data,'privateKeyPem':'device-handle-only'});
+    return RemoteConfig._(c.host,c.port,c.username,c.expectedHostKey,'',c.socketPath,
+      c.herdrPath,c.session,c.paneId,c.expectedFingerprint,identity);
   }
 
   String get configRoot {
@@ -274,9 +283,18 @@ class RemoteReadOnlyAdapter {
     void phase(String name) { _check(a); onProgress?.call(a.generation,name); _check(a); }
     try {
       phase('connecting');
-      List<SSHKeyPair> identities;
+      List<SSHIdentity> identities;
       try {
-        identities = SSHKeyPair.fromPem(config.privateKeyPem);
+        final device = config.deviceIdentity;
+        identities = device != null ? [SSHIdentity.custom(type:device.type,publicKey:device.toPublicKey(),shouldProbe:true,
+          signer:(payload) async {
+            _check(a);
+            if (!e.hostKeyChecked || !e.hostKeyMatched) throw const RemoteFailure('host_key_mismatch');
+            try {
+              final signature = await device.sign(payload);
+              _check(a); return signature;
+            } on RemoteFailure catch (failure) { e.errorCode = failure.code; rethrow; }
+          })] : SSHKeyPair.fromPem(config.privateKeyPem);
         if (identities.length != 1 || identities.single.type != 'ssh-ed25519') throw const RemoteFailure('invalid_private_key');
       } catch (_) { throw const RemoteFailure('invalid_private_key'); }
       _dialPending = true;

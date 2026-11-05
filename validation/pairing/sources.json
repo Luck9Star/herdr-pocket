@@ -1,27 +1,54 @@
 {
-  "checked_at": "2026-10-30",
+  "checked_at": "2026-11-05",
   "cryptography": {
     "version": "46.0.3",
     "source": "https://github.com/pyca/cryptography/tree/46.0.3",
     "api": "https://cryptography.io/en/46.0.3/hazmat/primitives/asymmetric/ed25519/",
     "serialization": "https://cryptography.io/en/46.0.3/hazmat/primitives/asymmetric/serialization/",
     "license": "Apache-2.0 OR BSD-3-Clause",
-    "context7": {"library": "/pyca/cryptography", "commands": 2, "result": "generate/sign/load_ssh_public_key documented; version checked against fixed official 46.0.3 docs"}
+    "context7": {
+      "library": "/pyca/cryptography",
+      "commands": 2,
+      "result": "generate/sign/load_ssh_public_key documented; version checked against fixed official 46.0.3 docs"
+    }
   },
   "apple": {
     "api_baseline": "iOS 15 compile target; macOS SDK 26.0 local compile only",
     "keychain": "https://developer.apple.com/documentation/security/ksecattraccessiblewhenunlockedthisdeviceonly",
     "secure_enclave": "https://developer.apple.com/documentation/security/protecting-keys-with-the-secure-enclave",
     "cryptokit": "https://developer.apple.com/documentation/cryptokit/curve25519/signing/privatekey",
-    "context7": {"library": "/apple/swift-crypto", "commands": 2, "result": "CryptoKit re-export on Apple; raw representation/signature APIs; official Apple JSON docs independently checked for storage limits"},
+    "context7": {
+      "library": "/apple/swift-crypto",
+      "commands": 2,
+      "result": "CryptoKit re-export on Apple; raw representation/signature APIs; official Apple JSON docs independently checked for storage limits"
+    },
     "runtime": "CryptoKit memory backend probe only; system Keychain not instantiated"
   },
   "android": {
     "api_baseline": 35,
     "keystore": "https://developer.android.com/privacy-and-security/keystore",
     "unlocked_device": "https://developer.android.com/reference/android/security/keystore/KeyGenParameterSpec.Builder#setUnlockedDeviceRequired(boolean)",
-    "context7": {"library": "/websites/developer_android_develop", "commands": 3, "result": "retrieval insufficient; official Android primary docs checked for Keystore and API31-34 limitations"},
-    "runtime": "not executed; API35 compile job authored but not run"
+    "context7": {
+      "library": "/websites/developer_android_develop",
+      "commands": 3,
+      "result": "retrieval insufficient; official Android primary docs checked for Keystore and API31-34 limitations"
+    },
+    "runtime": "Pure-JVM memory-AES/temp-file fixture tests executed locally (32 checks), no AndroidKeyStore/Android runtime. API35 shared-signer compile workflow authored but not run this turn.",
+    "ed25519": {
+      "dependency": "org.bouncycastle:bcprov-jdk18on:1.86",
+      "api": "org.bouncycastle.math.ec.rfc8032.Ed25519 (lightweight static generatePublicKey/sign; no provider registration)",
+      "source": "https://github.com/bcgit/bc-java/tree/r1rv86",
+      "artifact": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcprov-jdk18on/1.86/bcprov-jdk18on-1.86.jar",
+      "sha256": "2af190b300cbb0b35e248ccf5f4a06b6072030aeb3da7a98ec73abe5b4cb371f",
+      "license": "MIT",
+      "license_source": "https://github.com/bcgit/bc-java/blob/r1rv86/LICENSE.html",
+      "license_copy": "native/android/notices/BOUNCY-CASTLE-LICENSE.md",
+      "context7": {
+        "library": "/bcgit/bc-java",
+        "commands": 2,
+        "result": "Ed25519 lightweight seed/public/sign APIs documented; release 1.86 Maven artifact, API via javap, and included MIT license independently verified"
+      }
+    }
   },
-  "scope": "No private keys or encrypted private key envelopes are shipped. No real system keychain/host authorization/network identity modified. Native source is a validation bridge, not GUI-integrated production storage."
+  "scope": "No private keys or encrypted private key envelopes are shipped. Native facade is shared by Android GUI prototype build wiring; local pure-JVM fixtures do not prove AndroidKeyStore/device/unlock/runtime behavior. No real system keychain/host authorization/network identity modified."
 }

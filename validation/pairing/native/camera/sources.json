@@ -1,0 +1,15 @@
+{
+  "checked": "2026-11-05",
+  "embedded": {
+    "coordinate": "com.journeyapps:zxing-android-embedded:4.3.0",
+    "source": "https://github.com/journeyapps/zxing-android-embedded/tree/v4.3.0",
+    "license": "Apache-2.0"
+  },
+  "core": {
+    "coordinate": "com.google.zxing:core:3.5.3",
+    "source": "https://github.com/zxing/zxing/tree/zxing-3.5.3",
+    "license": "Apache-2.0"
+  },
+  "apple": "AVFoundation metadata QR reader",
+  "boundaries": "Pinned source API inspected. Maven artifact bytes were not independently downloaded locally (connection reset). Test package compilation and real phone camera evidence are separate."
+}

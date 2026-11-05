@@ -5,7 +5,7 @@ import 'package:terminal_view/terminal_view.dart';
 import 'probe_gate.dart';
 import 'design_tokens.dart';
 import 'remote_page.dart';
-import 'pairing_page.dart';
+import 'host_catalog_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,7 +13,7 @@ Future<void> main() async {
   final load = await rootBundle.loadString('assets/shared/load-chunk.txt');
   final tokens = await DesignTokens.load();
   runApp(MaterialApp(debugShowCheckedModeBanner: false, theme: tokens.theme,
-      home: ProbePage(fixture: fixture, load: load, tokens: tokens)));
+      home: HostCatalogPage(tokens:tokens,offlineBuilder:(_) => ProbePage(fixture: fixture, load: load, tokens: tokens))));
 }
 
 class ProbePane {
@@ -271,10 +271,7 @@ class _ProbePageState extends State<ProbePage> with WidgetsBindingObserver {
     final wide = MediaQuery.sizeOf(context).width >= 960;
     final canSend = gate.canInput;
     return Scaffold(appBar: AppBar(title: const Text('herdr pocket'),
-      actions: [TextButton.icon(key: const ValueKey('device-pairing'),label: const Text('设备配对'), icon: const Icon(Icons.phonelink_lock), onPressed: () {
-        for (final pane in panes) { pane.focusNode.unfocus(); pane.gate.invalidate(disconnect: true); }
-        Navigator.push<void>(context, MaterialPageRoute(builder: (_) => PairingPage(tokens:tokens)));
-      }), TextButton.icon(label: const Text('手动实验'), icon: const Icon(Icons.link), onPressed: () {
+      actions: [TextButton.icon(key: const ValueKey('device-pairing'),label: const Text('主机看板'), icon: const Icon(Icons.dns_outlined), onPressed: () { Navigator.popUntil(context,(route) => route.isFirst); }), TextButton.icon(label: const Text('手动实验'), icon: const Icon(Icons.link), onPressed: () {
         for (final pane in panes) { pane.focusNode.unfocus(); pane.gate.invalidate(disconnect: true); }
         Navigator.push<void>(context, MaterialPageRoute(builder: (_) => RemotePage(tokens: tokens))).then((_) { if (mounted) setState(() {}); });
       }), if (wide) Padding(padding: const EdgeInsets.only(right: 16), child: Center(

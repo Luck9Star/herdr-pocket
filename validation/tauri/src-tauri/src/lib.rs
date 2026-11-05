@@ -3,7 +3,7 @@ use herdr_probe_core::{Binding, CreditStream};
 use herdr_readonly_transport::{AttemptGate, Audit, FullSnapshot, RemoteConfig};
 use serde::Serialize;
 use herdr_readonly_transport::pairing::{KeyStore, Pairing};
-use tauri::{ipc::{Channel, Response}, State};
+use tauri::{ipc::{Channel, Response}, Manager, State};
 
 const CHUNK: &[u8] = include_bytes!("../../../shared/load-chunk.txt");
 #[derive(Default)]
@@ -44,20 +44,86 @@ struct RemoteProgress { generation:u64, stage:&'static str }
 #[derive(Serialize)]
 struct RemoteReply { generation:u64, snapshot:FullSnapshot }
 #[tauri::command]
-async fn remote_read_once(config:RemoteConfig,on_event:Channel<RemoteProgress>,state:State<'_,Mutex<AttemptGate>>)->Result<RemoteReply,String> {
-    let (generation,cancel)=state.lock().map_err(|_|"state_unavailable")?.begin().map_err(str::to_string)?;
+async fn remote_read_once(config:RemoteConfig,on_event:Channel<RemoteProgress>,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>)->Result<RemoteReply,String> {
+    const LEGACY_OWNER:u64=u64::MAX;
+    let (generation,cancel)={let mut f=flow.lock().map_err(|_|"state_unavailable")?; if f.owner.is_some() || pairing.restore_required.load(Ordering::SeqCst) {return Err("host_restore_required".into());} let mut g=state.lock().map_err(|_|"state_unavailable")?;let attempt=g.begin().map_err(str::to_string)?;f.owner=Some(LEGACY_OWNER);attempt};
     let progress_cancel=cancel.clone();
     let result=herdr_readonly_transport::read_once(config,cancel,Arc::new(Audit::default()),|stage| {
         if on_event.send(RemoteProgress{generation,stage}).is_err(){progress_cancel.cancel();}
     }).await;
-    if !state.lock().map_err(|_|"state_unavailable")?.finish(generation){return Err("cancelled".into());}
+    let accepted={let mut f=flow.lock().map_err(|_|"state_unavailable")?;let mut g=state.lock().map_err(|_|"state_unavailable")?;f.finish(LEGACY_OWNER,generation,&mut g)};
+    if !accepted{return Err("cancelled".into());}
     result.map(|snapshot|RemoteReply{generation,snapshot}).map_err(str::to_string)
 }
-struct PairingState { store: Arc<dyn KeyStore>, current: Arc<Mutex<Option<Pairing>>>, busy: AtomicBool }
+mod hosts;
+use hosts::{Hosts, Target};
+#[tauri::command]
+async fn host_init(app:tauri::AppHandle,hosts:State<'_,Hosts>)->Result<(),String> {
+    #[cfg(target_os="android")]
+    let root=android_keys::no_backup_directory(&app).map_err(str::to_string)?;
+    #[cfg(not(target_os="android"))]
+    let root=app.path().app_local_data_dir().map_err(|_|"host_storage_unavailable")?;
+    hosts.init(root.join("host-records-v1"))
+}
+#[tauri::command]
+fn host_list(hosts:State<'_,Hosts>)->Result<Vec<hosts::View>,String>{hosts.list()}
+#[tauri::command]
+fn host_save(id:Option<String>,name:String,config:RemoteConfig,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<hosts::View,String>{
+    let _lease=pairing.enter()?; let f=flow.lock().map_err(|_|"state_unavailable")?;
+    if f.owner.is_some(){return Err("connection_active".into());}
+    config.validate_pair_target().map_err(str::to_string)?;
+    let current=pairing.current.lock().map_err(|_|"state_unavailable")?;
+    let reference=match current.as_ref() {Some(p) if p.authorization=="authorized"=>Some(p.persistable(&config).map_err(str::to_string)?),_=>None};
+    hosts.save(id.as_deref(),&name,Target::from_config(&config),reference)
+}
+#[tauri::command]
+fn host_new(hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String>{
+    let _lease=pairing.enter()?;let f=flow.lock().map_err(|_|"state_unavailable")?;if f.owner.is_some(){return Err("connection_active".into());}
+    let mut current=pairing.current.lock().map_err(|_|"state_unavailable")?;
+    if let Some(p)=current.as_ref(){if !hosts.contains_handle(p.local_handle())? {return Err("unsaved_pairing".into());}}
+    *current=None;pairing.restore_required.store(false,Ordering::SeqCst);Ok(())
+}
+#[tauri::command]
+fn host_select(id:String,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<hosts::View,String>{
+    let _lease=pairing.enter()?;let f=flow.lock().map_err(|_|"state_unavailable")?;if f.owner.is_some(){return Err("connection_active".into());}
+    let host=hosts.get(&id)?;if !host.enabled{return Err("host_disabled".into());}
+    let mut current=pairing.current.lock().map_err(|_|"state_unavailable")?;
+    if let Some(p)=current.as_ref(){if !hosts.contains_handle(p.local_handle())? {return Err("unsaved_pairing".into());}}
+    *current=None;pairing.restore_required.store(host.pairing.is_some(),Ordering::SeqCst);host.view()
+}
+#[tauri::command]
+async fn host_restore(id:String,reviewed:bool,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<PairingView,String>{
+    let _lease=pairing.enter()?;let f=flow.lock().map_err(|_|"state_unavailable")?;if f.owner.is_some(){return Err("connection_active".into());}
+    let host=hosts.get(&id)?;if !host.enabled{return Err("host_disabled".into());}
+    let reference=host.pairing.as_ref().ok_or("host_has_no_device_key")?;
+    let mut current=pairing.current.lock().map_err(|_|"state_unavailable")?;
+    if let Some(p)=current.as_ref(){if !hosts.contains_handle(p.local_handle())? {return Err("unsaved_pairing".into());}}
+    let p=Pairing::restore(pairing.store.clone(),reference,&host.target.config(),reviewed).map_err(str::to_string)?;
+    let view=pairing_view(&p)?;*current=Some(p);pairing.restore_required.store(false,Ordering::SeqCst);Ok(view)
+}
+#[tauri::command]
+fn host_update(id:String,name:Option<String>,enabled:Option<bool>,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String>{
+    let _lease=pairing.enter()?;let f=flow.lock().map_err(|_|"state_unavailable")?;if f.owner.is_some(){return Err("connection_active".into());}
+    let host=hosts.get(&id)?; let mut current=pairing.current.lock().map_err(|_|"state_unavailable")?; hosts.update(&id,name.as_deref(),enabled)?;
+    if enabled==Some(false) && current.as_ref().zip(host.pairing.as_ref()).is_some_and(|(p,r)|p.local_handle()==r.handle) {*current=None;}
+    Ok(())
+}
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+struct RemoveHostReply {key_deleted:bool}
+#[tauri::command]
+async fn host_remove(id:String,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<RemoveHostReply,String>{
+    let _lease=pairing.enter()?;let f=flow.lock().map_err(|_|"state_unavailable")?;if f.owner.is_some(){return Err("connection_active".into());}
+    let host=hosts.remove(&id)?;let mut current=pairing.current.lock().map_err(|_|"state_unavailable")?;
+    if current.as_ref().zip(host.pairing.as_ref()).is_some_and(|(p,r)|p.local_handle()==r.handle){*current=None;}
+    let key_deleted=host.pairing.as_ref().is_none_or(|r|pairing.store.delete(&r.handle).is_ok());
+    Ok(RemoveHostReply{key_deleted})
+}
+struct PairingState { store: Arc<dyn KeyStore>, current: Arc<Mutex<Option<Pairing>>>, busy: AtomicBool, restore_required: AtomicBool }
 struct PairingLease<'a>(&'a AtomicBool);
 impl Drop for PairingLease<'_> { fn drop(&mut self) { self.0.store(false,Ordering::Release); } }
 impl PairingState {
-    fn new(store: Arc<dyn KeyStore>) -> Self { Self { store, current: Arc::new(Mutex::new(None)), busy:AtomicBool::new(false) } }
+    fn new(store: Arc<dyn KeyStore>) -> Self { Self { store, current: Arc::new(Mutex::new(None)), busy:AtomicBool::new(false), restore_required:AtomicBool::new(false) } }
     fn enter(&self)->Result<PairingLease<'_>,String> {
         self.busy.compare_exchange(false,true,Ordering::AcqRel,Ordering::Acquire).map_err(|_|"pairing_busy")?;
         Ok(PairingLease(&self.busy))
@@ -71,6 +137,7 @@ fn now() -> Result<u64,String> { std::time::SystemTime::now().duration_since(std
 #[tauri::command]
 async fn pair_create(config:RemoteConfig,device:String,state:State<'_,PairingState>) -> Result<PairingView,String> {
     let _lease=state.enter()?;
+    if state.restore_required.load(Ordering::SeqCst) {return Err("host_restore_required".into());}
     let mut current=state.current.lock().map_err(|_|"state_unavailable")?;
     if current.is_some() { return Err("pairing_already_exists".into()); }
     config.validate_pair_target().map_err(str::to_string)?;
@@ -79,12 +146,15 @@ async fn pair_create(config:RemoteConfig,device:String,state:State<'_,PairingSta
     let view=pairing_view(&p)?; *current=Some(p); Ok(view)
 }
 #[tauri::command]
-fn pair_accept(response:String,reviewed:bool,state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>) -> Result<PairingView,String> {
+fn pair_accept(response:String,reviewed:bool,state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,hosts:State<'_,Hosts>) -> Result<PairingView,String> {
     let _lease=state.enter()?;
     let f=flow.lock().map_err(|_|"state_unavailable")?;
     if f.owner.is_some() { return Err("connection_active".into()); }
     let mut current=state.current.lock().map_err(|_|"state_unavailable")?;
-    let p=current.as_mut().ok_or("pairing_missing")?; p.accept(&response,now()?,reviewed).map_err(str::to_string)?; pairing_view(p)
+    let p=current.as_mut().ok_or("pairing_missing")?;
+    let mut proposed=p.clone(); proposed.accept(&response,now()?,reviewed).map_err(str::to_string)?;
+    if proposed.authorization=="revoked" && hosts.initialized()? {hosts.clear_handle(p.local_handle())?;}
+    *p=proposed; pairing_view(p)
 }
 #[tauri::command]
 fn pair_cancel(state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>) -> Result<(),String> {
@@ -96,12 +166,12 @@ fn pair_cancel(state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>
     Ok(())
 }
 #[tauri::command]
-async fn pair_reset(state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>) -> Result<(),String> {
+async fn pair_reset(state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,hosts:State<'_,Hosts>) -> Result<(),String> {
     let _lease=state.enter()?;
     let f=flow.lock().map_err(|_|"state_unavailable")?;
     if f.owner.is_some() { return Err("connection_active".into()); }
     let mut current=state.current.lock().map_err(|_|"state_unavailable")?;
-    if let Some(p)=current.as_ref() { p.delete_local().map_err(str::to_string)?; }
+    if let Some(p)=current.as_ref() { if hosts.initialized()? {hosts.clear_handle(p.local_handle())?;} p.delete_local().map_err(str::to_string)?; }
     current.take();
     Ok(())
 }
@@ -111,6 +181,8 @@ struct RemoteFlow {
     cancelled_through: u64,
     select: Option<(u64, tokio::sync::oneshot::Sender<String>)>,
     ack: Option<(u64, u64, tokio::sync::oneshot::Sender<()>)>,
+    input: Option<(u64, Arc<herdr_readonly_transport::input::LiveInput>)>,
+    recovery: Option<herdr_readonly_transport::input::Recovery>,
 }
 impl RemoteFlow {
     fn begin(&mut self, client_generation:u64, gate:&mut AttemptGate)->Result<(u64,herdr_readonly_transport::Cancellation), &'static str> {
@@ -121,11 +193,11 @@ impl RemoteFlow {
     }
     fn cancel(&mut self, client_generation:u64, gate:&mut AttemptGate) {
         self.cancelled_through=self.cancelled_through.max(client_generation);
-        if self.owner==Some(client_generation) { gate.cancel(); }
+        if self.owner==Some(client_generation) { if let Some((_,input))=self.input.take() {input.invalidate();} gate.cancel(); }
     }
     fn finish(&mut self, client_generation:u64, generation:u64, gate:&mut AttemptGate)->bool {
         if self.owner!=Some(client_generation) { return false; }
-        self.select=None; self.ack=None; self.owner=None;
+        self.select=None; self.ack=None; self.owner=None; if let Some((_,input))=self.input.take() {input.invalidate();}
         gate.finish(generation)
     }
 }
@@ -149,10 +221,11 @@ enum ObserveEvent {
     Stage { generation:u64, stage:&'static str },
     Dashboard { generation:u64, panes:Vec<herdr_readonly_transport::Pane> },
     Frame { generation:u64, frame:herdr_readonly_transport::StreamFrame },
+    InputReady { generation:u64, unknown:bool, recovery_status:&'static str },
 }
 #[tauri::command]
 async fn remote_observe(config:RemoteConfig,device:bool,client_generation:u64,on_event:Channel<ObserveEvent>,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>)->Result<(),String> {
-    let (generation,cancel)={ let mut f=flow.lock().map_err(|_|"state_unavailable")?; let mut g=state.lock().map_err(|_|"state_unavailable")?; f.begin(client_generation,&mut g).map_err(str::to_string)? };
+    let (generation,cancel)={ let mut f=flow.lock().map_err(|_|"state_unavailable")?; if pairing.restore_required.load(Ordering::SeqCst) {return Err("host_restore_required".into());} let mut g=state.lock().map_err(|_|"state_unavailable")?; f.begin(client_generation,&mut g).map_err(str::to_string)? };
     let device_auth=if device {
         let lease=pairing.enter();
         if let Err(e)=lease { let mut f=flow.lock().map_err(|_|"state_unavailable")?; let mut g=state.lock().map_err(|_|"state_unavailable")?; f.finish(client_generation,generation,&mut g); return Err(e); }
@@ -181,13 +254,40 @@ async fn remote_observe(config:RemoteConfig,device:bool,client_generation:u64,on
             channel.send(ObserveEvent::Frame{generation,frame}).map_err(|_|"client_closed")?;
             rx.await.map_err(|_|"cancelled")
         }};
-    let result=if let Some((public,signer))=device_auth {
-        herdr_readonly_transport::observe_with_device_signer(config,public,signer,cancel,Arc::new(Audit::default()),progress,select,frame).await
-    } else { herdr_readonly_transport::observe(config,cancel,Arc::new(Audit::default()),progress,select,frame).await };
+    let input_flow=flow.inner().clone(); let input_channel=on_event.clone(); let input_cancel=cancel.clone();
+    let recovery=flow.lock().map_err(|_|"state_unavailable")?.recovery.clone().unwrap_or_else(herdr_readonly_transport::recovery::Recovery::disabled);
+    let hooks=herdr_readonly_transport::InputHooks { recovery, ready:Arc::new(move |input| {
+        if input_cancel.is_cancelled() {input.invalidate();return;}
+        let unknown=input.unknown(); let recovery_status=input.recovery_status();
+        if let Ok(mut f)=input_flow.lock() {
+            if f.owner!=Some(client_generation) || input_cancel.is_cancelled() {input.invalidate();return;}
+            f.input=Some((generation,input));
+            if input_channel.send(ObserveEvent::InputReady {generation,unknown,recovery_status}).is_err() {if let Some((_,input))=f.input.take(){input.invalidate();} input_cancel.cancel();}
+        } else { input.invalidate(); input_cancel.cancel(); }
+    }) };
+    let result=herdr_readonly_transport::observe_interactive(config,device_auth,cancel,Arc::new(Audit::default()),progress,select,frame,hooks).await;
     if device { if let Ok(mut p)=pairing.current.lock() { if let Some(p)=p.as_mut() { p.finish(false); } } }
     let accepted={ let mut f=flow.lock().map_err(|_|"state_unavailable")?; let mut g=state.lock().map_err(|_|"state_unavailable")?; f.finish(client_generation,generation,&mut g) };
     if !accepted {return Err("cancelled".into());}
     result.map_err(str::to_string)
+}
+fn current_input(flow:&Mutex<RemoteFlow>,generation:u64)->Result<Arc<herdr_readonly_transport::input::LiveInput>,String> {
+    let f=flow.lock().map_err(|_|"state_unavailable")?;
+    f.input.as_ref().filter(|(g,_)|*g==generation).map(|(_,i)|i.clone()).ok_or("input_stale".into())
+}
+#[tauri::command]
+fn remote_input_mode(generation:u64,mode:String,focused:bool,flow:State<'_,Arc<Mutex<RemoteFlow>>>) -> Result<u64,String> {
+    current_input(&flow,generation)?.set_mode(&mode,focused).map_err(str::to_string)
+}
+#[tauri::command]
+fn remote_input_recover(generation:u64,epoch:u64,flow:State<'_,Arc<Mutex<RemoteFlow>>>) -> Result<(),String> {
+    current_input(&flow,generation)?.acknowledge_unknown(epoch).map_err(str::to_string)
+}
+#[tauri::command]
+async fn remote_input_send(generation:u64,epoch:u64,bytes:Vec<u8>,draft:bool,flow:State<'_,Arc<Mutex<RemoteFlow>>>) -> Result<&'static str,String> {
+    use herdr_readonly_transport::input::SendOutcome;
+    let input=current_input(&flow,generation)?;
+    input.send(epoch,bytes,draft).await.map(|outcome|match outcome {SendOutcome::Accepted=>"accepted",SendOutcome::Rejected=>"rejected",SendOutcome::Unknown=>"unknown"}).map_err(str::to_string)
 }
 #[tauri::command]
 fn remote_select(generation:u64,pane_id:String,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
@@ -214,6 +314,8 @@ impl KeyStore for UnavailableKeyStore {
     fn sign(&self,_:&str,_:&[u8])->herdr_readonly_transport::Result<Vec<u8>> {Err("key_unavailable")}
     fn delete(&self,_:&str)->herdr_readonly_transport::Result<()> {Err("key_unavailable")}
 }
+mod camera;
+use camera::pair_scan_response;
 #[cfg(target_os="android")]
 mod android_keys;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -224,12 +326,17 @@ pub fn run() {
     #[cfg(any(target_os="ios",target_os="windows"))]
     let builder=builder.manage(PairingState::new(Arc::new(UnavailableKeyStore)));
     #[cfg(target_os="android")]
-    let builder=builder.plugin(android_keys::init());
+    let builder=builder.plugin(android_keys::init()).plugin(camera::android_plugin());
     builder
         .manage(Mutex::new(Streams::default()))
         .manage(Mutex::new(AttemptGate::default()))
-        .manage(Arc::new(Mutex::new(RemoteFlow::default())))
-        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_observe,remote_select,remote_ack,remote_cancel,pair_create,pair_accept,pair_cancel,pair_reset])
+        .manage(Hosts::default())
+        .setup(|app| {
+            let recovery=app.path().app_local_data_dir().ok().map(|p|herdr_readonly_transport::recovery::Recovery::open(p.join("remote-input-v1"))).unwrap_or_else(herdr_readonly_transport::recovery::Recovery::disabled);
+            let flow=RemoteFlow {recovery:Some(recovery),..Default::default()};
+            app.manage(Arc::new(Mutex::new(flow))); Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove])
         .run(tauri::generate_context!())
         .expect("Tauri probe startup failed");
 }

@@ -125,3 +125,9 @@ artifact / cache 等存储存在额度、保留和计费规则，不能从计算
 - Linux：依据所选 [Flutter](https://docs.flutter.dev/platform-integration/linux/setup) 或 [Tauri](https://v2.tauri.app/distribute/) 的发行前提，发行版 / ABI / 格式在实施时锁定。
 
 以上动态官方文档只证明核查日的能力与限制；实施时记录实际版本、runner 镜像与发行渠道要求，并更新本页。尚未编译、签名、上传或设备验收的格不能标记已支持。
+
+## 开发批次与集中验收（2026-11-05）
+
+日常实现在 `codex/core-prototype-validation` 积累，经本地检查和审阅后提交。需要集中验收时，将同一已审阅提交推到新的 `codex/batch/<批次名>`。GitHub 只启动一个[批次工作流](../.github/workflows/batch-validation.yml)，由它调用各层的可复用工作流，以同一来源 SHA 生成 GUI、协议和 helper 证据。日常开发分支的 push 不自动发起这些验证。
+
+普通批次优先覆盖两套 GUI、设备密钥、原版只读 SSH、候选扩展输入和 Android 模拟器。`codex/batch/full-<批次名>` 另行运行原生网络移植与原有 SSH 矩阵。上游原版终端绘制 characterization 可单独手动诊断，保留已有失败证据。测试包及构建与签名状态写入 manifest，源码实验、云模拟器、真机与真实组网分别验收。工作流权限为只读，不创建 tag、Release 或商店提交。

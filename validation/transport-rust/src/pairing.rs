@@ -12,11 +12,12 @@ pub trait KeyStore: Send + Sync {
     fn delete(&self, handle: &str) -> Result<()>;
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 struct Request {
     version: u8,
     #[serde(rename = "type")]
-    kind: &'static str,
+    kind: String,
     request_id: String,
     device: String,
     public_key: String,
@@ -65,6 +66,9 @@ fn device_valid(s: &str) -> bool {
         && s.bytes()
             .all(|c| c.is_ascii_alphanumeric() || c == b' ' || c == b'-')
 }
+pub fn random_public_id() -> Result<String> {
+    random_id()
+}
 fn random_id() -> Result<String> {
     use ring::rand::SecureRandom;
     let mut bytes = [0u8; 16];
@@ -74,7 +78,7 @@ fn random_id() -> Result<String> {
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 struct Target {
     host: String,
     port: u16,
@@ -97,6 +101,14 @@ impl Target {
         }
     }
 }
+/// Native-only persisted identity reference; never contains a secret key.
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct PairingReference {
+    pub handle: String,
+    pub request_json: String,
+}
+#[derive(Clone)]
 pub struct Pairing {
     store: Arc<dyn KeyStore>,
     handle: String,
@@ -132,7 +144,7 @@ impl Pairing {
             handle,
             request: Request {
                 version: 2,
-                kind: "pairing-public-key-request",
+                kind: "pairing-public-key-request".into(),
                 request_id,
                 device: device.into(),
                 public_key,
@@ -158,6 +170,81 @@ impl Pairing {
         }
         self.target = Some(Target::from_config(config));
         Ok(())
+    }
+    pub fn local_handle(&self) -> &str {
+        &self.handle
+    }
+    pub fn reference_fingerprint(reference: &PairingReference) -> Result<String> {
+        if reference.request_json.len() > 2048 {
+            return Err("pairing_restore_rejected");
+        }
+        let request: Request = serde_json::from_str(&reference.request_json)
+            .map_err(|_| "pairing_restore_rejected")?;
+        fingerprint(&request.public_key)
+    }
+    pub fn persistable(&self, config: &RemoteConfig) -> Result<PairingReference> {
+        if self.authorization != "authorized"
+            || !matches!(
+                self.state,
+                "authorized-unverified" | "waiting-connectivity" | "paired"
+            )
+            || self.target.as_ref() != Some(&Target::from_config(config))
+            || self.store.public(&self.handle)? != self.request.public_key
+        {
+            return Err("pairing_not_persistable");
+        }
+        Ok(PairingReference {
+            handle: self.handle.clone(),
+            request_json: self.request_json()?,
+        })
+    }
+    pub fn restore(
+        store: Arc<dyn KeyStore>,
+        reference: &PairingReference,
+        config: &RemoteConfig,
+        reviewed: bool,
+    ) -> Result<Self> {
+        if !reviewed
+            || reference.handle.is_empty()
+            || reference.handle.len() > 128
+            || reference.request_json.len() > 2048
+        {
+            return Err("pairing_restore_rejected");
+        }
+        config.validate_pair_target()?;
+        let request: Request = serde_json::from_str(&reference.request_json)
+            .map_err(|_| "pairing_restore_rejected")?;
+        let valid_id = request.request_id.len() == 32
+            && request
+                .request_id
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+        if request.version != 2
+            || request.kind != "pairing-public-key-request"
+            || !valid_id
+            || !account_valid(&request.account)
+            || !device_valid(&request.device)
+            || request.account != config.username
+            || fingerprint(&config.expected_host_key)? != request.host_key
+            || request
+                .expires_at
+                .checked_sub(request.issued_at)
+                .filter(|ttl| *ttl > 0 && *ttl <= 600)
+                .is_none()
+            || fingerprint(&request.public_key).is_err()
+            || store.public(&reference.handle)? != request.public_key
+        {
+            return Err("pairing_restore_rejected");
+        }
+        Ok(Self {
+            store,
+            handle: reference.handle.clone(),
+            request,
+            target: Some(Target::from_config(config)),
+            state: "authorized-unverified",
+            authorization: "authorized",
+            authorization_added: None,
+        })
     }
     pub fn request_json(&self) -> Result<String> {
         serde_json::to_string(&self.request).map_err(|_| "invalid_request")
@@ -398,6 +485,31 @@ mod tests {
         assert_eq!(p.authorization, "revoked");
         assert!(p.accept(&revoked, 101, true).is_err());
         assert!(p.begin(&config(&host)).is_err());
+    }
+    #[test]
+    fn restore_requires_review_original_key_and_bound_target() {
+        let store = Arc::new(VolatileKeyStore::default());
+        let host = new_host();
+        let config = config(&host);
+        let mut p =
+            Pairing::create(store.clone(), "fixture-user", &host, "Pocket test", 100).unwrap();
+        p.bind_target(&config).unwrap();
+        let reply = response(&p, "authorized");
+        p.accept(&reply, 101, true).unwrap();
+        let reference = p.persistable(&config).unwrap();
+        assert!(Pairing::restore(store.clone(), &reference, &config, false).is_err());
+        let (other_handle, _) = store.create().unwrap();
+        let mut wrong_handle = reference.clone();
+        wrong_handle.handle = other_handle;
+        assert!(Pairing::restore(store.clone(), &wrong_handle, &config, true).is_err());
+        let mut wrong = config.clone();
+        wrong.expected_host_key = new_host();
+        assert!(Pairing::restore(store.clone(), &reference, &wrong, true).is_err());
+        let mut restored = Pairing::restore(store.clone(), &reference, &config, true).unwrap();
+        assert_eq!(restored.state, "authorized-unverified");
+        assert!(restored.begin(&config).is_ok());
+        store.delete(&reference.handle).unwrap();
+        assert!(Pairing::restore(store, &reference, &config, true).is_err());
     }
     #[test]
     fn deleted_handle_never_recreates_key() {

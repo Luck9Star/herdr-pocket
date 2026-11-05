@@ -1,6 +1,9 @@
+import Foundation
 // Compiled beside the shared DeviceKeys.swift source in generated Apple runners.
 // No system Keychain operation happens at registration or class loading.
 func registerHerdrDeviceKeys(messenger: FlutterBinaryMessenger) {
+    registerHerdrHostCatalog(messenger: messenger)
+    registerHerdrInputJournal(messenger: messenger)
     let channel = FlutterMethodChannel(name: "dev.herdr/device-keys", binaryMessenger: messenger)
     let worker = DispatchQueue(label: "dev.herdr.device-keys")
     let store = MobileEd25519Store(backend: AppleKeychainSeedBackend())

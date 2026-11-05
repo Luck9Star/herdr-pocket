@@ -1,8 +1,6 @@
 name: Tauri validation shells
 on:
-  push:
-    branches: ['codex/**']
-    paths: ['validation/tauri/**', 'validation/transport-rust/**', 'validation/pairing/native/android/**', 'validation/shared/**', '.github/workflows/tauri-validation.yml']
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read

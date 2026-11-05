@@ -21,10 +21,12 @@ manifest = {
     'runner':{'os':platform.platform(),'architecture':platform.machine(),'imageVersion':os.getenv('ImageVersion'),'imageOS':os.getenv('ImageOS')},
     'toolchains':{'node':version(['node','--version']),'rustc':version(['rustc','--version']),'cargo':version(['cargo','--version'])},
     'versions':{'tauriCore':'2.12.5','tauriBuild':'2.7.4','tauriAPI':'2.12.4','tauriCLI':'2.12.4','xterm':'6.0.0','russh':'0.65.0','herdrProtocolTarget':'0.9.5'},
-    'scope':'Separate offline renderer/IPC fixture and experimental reviewed SSH pane dashboard / bounded continuous read-only observe adapter; no remote input, overlay integration or protected credential storage. Build does not verify devices or GUI remote execution.',
+    'scope':'Experimental pairing v2, opaque device signer, explicit SSH target review and bounded continuous read-only observation. Package construction does not exercise the device key store.',
     'remoteContractSHA256':sha(repo/'validation/shared/remote-contract.json'),
     'transportSourceSHA256':sha(repo/'validation/transport-rust/src/lib.rs'),
-    'remoteBehavior':{'mode':'one-shot-readonly','remoteInput':False,'ptyResize':False,'credentialStorage':'experimental-memory-only','browserTransport':'unavailable','deviceResult':'unverified'},
+    'pairingContractSHA256':sha(repo/'validation/pairing/protocol-v2.schema.json'),
+    'pairingDependenciesSHA256':sha(repo/'validation/pairing/sources.json'),
+    'remoteBehavior':{'mode':'explicit-pane-continuous-readonly','remoteInput':False,'ptyResize':False,'credentialStorage':{'android':'API35 wrapped Ed25519', 'linux':'volatile test signer', 'macos':'volatile test signer'}.get(os.getenv('PROBE_PLATFORM'),'device pairing unavailable'),'browserTransport':'unavailable','deviceResult':'unverified'},
     'fixtureSHA256':sha(repo/'validation/shared/fixture.json'),
     'fontSHA256':sha(repo/'validation/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'),
     'designTokensSHA256':sha(repo/'validation/shared/design-tokens-v2.json'),
@@ -48,6 +50,16 @@ for base in [root/'src-tauri/target/release/bundle/macos',root/'src-tauri/gen/ap
             else: zip_tree(app,dest)
 native_packages=[f for f in out.iterdir() if f.is_file() and (f.suffix in ['.apk','.deb','.exe'] or f.name.endswith('.app.zip'))]
 manifest['nativeArtifactStatus']='present-unverified' if native_packages else 'missing'
+if manifest['platform']=='android' and manifest['buildOutcome']=='success':
+    native=repo/'validation/pairing/native/android'
+    manifest['androidSignerSources']={f.name:sha(f) for f in sorted(native.glob('*.java'))}
+    expected=sha(native/'notices/BOUNCY-CASTLE-LICENSE.md')
+    for apk in (f for f in native_packages if f.suffix=='.apk'):
+        with zipfile.ZipFile(apk) as package:
+            if hashlib.sha256(package.read('assets/BOUNCY-CASTLE-LICENSE.md')).hexdigest()!=expected:
+                raise SystemExit('Android signer notice mismatch')
+    manifest['androidSignerNoticeSHA256']=expected
+
 for f in sorted(out.iterdir()):
     if f.is_file() and f.name not in ['build-manifest.json','SHA256SUMS']:
         manifest['artifacts'].append({'file':f.name,'bytes':f.stat().st_size,'sha256':sha(f)})

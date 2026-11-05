@@ -5,12 +5,51 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import org.herdr.pairing.AndroidDeviceKeyStore
 import java.util.concurrent.Executors
+import android.content.Intent
 
 /** Four operations only. All seed/envelope work stays in shared native code. */
 class MainActivity : FlutterActivity() {
+    private var scanner: PairScanChannel? = null
     private val worker = Executors.newSingleThreadExecutor()
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
+        scanner = PairScanChannel(this, engine.dartExecutor.binaryMessenger)
+        MethodChannel(engine.dartExecutor.binaryMessenger, "herdr.pocket/input_journal")
+            .setMethodCallHandler { call, result ->
+                if (call.method !in listOf("read", "prepare", "clear")) result.notImplemented()
+                else worker.execute {
+                    try {
+                        val store = InputJournalFile(applicationContext)
+                        val value: Any? = when (call.method) {
+                            "read" -> store.read()
+                            "prepare" -> { store.prepare(call.argument<String>("record") ?: error("record")); null }
+                            "clear" -> { store.clear(call.argument<String>("record") ?: error("record")); null }
+                            else -> error("operation")
+                        }
+                        runOnUiThread { result.success(value) }
+                    } catch (_: Exception) {
+                        runOnUiThread { result.error("input_journal_unavailable", "Public input marker unavailable or changed", null) }
+                    }
+                }
+            }
+        MethodChannel(engine.dartExecutor.binaryMessenger, "dev.herdr/host-catalog")
+            .setMethodCallHandler { call, result ->
+                if (call.method !in listOf("load", "save")) result.notImplemented()
+                else worker.execute {
+                    try {
+                        val store = HostCatalogFile(applicationContext)
+                        val value: Any = when (call.method) {
+                            "load" -> store.load()
+                            "save" -> store.save(call.argument<String>("expected") ?: error("expected"),
+                                call.argument<String>("contents") ?: error("contents"))
+                            else -> error("operation")
+                        }
+                        runOnUiThread { result.success(value) }
+                    } catch (_: Exception) {
+                        runOnUiThread { result.error("catalog_unavailable", "Local host catalog unavailable or changed", null) }
+                    }
+                }
+            }
         MethodChannel(engine.dartExecutor.binaryMessenger, "dev.herdr/device-keys")
             .setMethodCallHandler { call, result ->
                 if (call.method !in listOf("create", "public", "sign", "delete")) {
@@ -35,5 +74,8 @@ class MainActivity : FlutterActivity() {
                 }
             }
     }
-    override fun onDestroy() { worker.shutdown(); super.onDestroy() }
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (scanner?.handle(requestCode, resultCode, data) != true) super.onActivityResult(requestCode, resultCode, data)
+    }
+    override fun onDestroy() { scanner?.close(); worker.shutdown(); super.onDestroy() }
 }

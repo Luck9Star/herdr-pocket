@@ -1,0 +1,6 @@
+ZXing Android Embedded 4.3.0 — Journey Mobile, Inc. and contributors.
+https://github.com/journeyapps/zxing-android-embedded/tree/v4.3.0
+ZXing Core 3.5.3 — ZXing authors.
+https://github.com/zxing/zxing/tree/zxing-3.5.3
+Both Android libraries are distributed under the Apache License 2.0.
+See ZXING-APACHE-2.0.txt alongside this notice.

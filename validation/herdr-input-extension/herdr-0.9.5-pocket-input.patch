@@ -1,0 +1,145 @@
+diff --git a/src/api/schema.rs b/src/api/schema.rs
+index 439ed331..cb7b620c 100644
+--- a/src/api/schema.rs
++++ b/src/api/schema.rs
+@@ -75,6 +75,10 @@ pub enum Method {
+     ClientShellSurfaceSet(ClientShellSurfaceSetParams),
+     #[serde(rename = "session.snapshot")]
+     SessionSnapshot(EmptyParams),
++    #[serde(rename = "pocket.input.capabilities")]
++    PocketInputCapabilities(EmptyParams),
++    #[serde(rename = "pocket.input.send")]
++    PocketInputSend(PocketInputSendParams),
+     #[serde(rename = "workspace.create")]
+     WorkspaceCreate(WorkspaceCreateParams),
+     #[serde(rename = "workspace.list")]
+diff --git a/src/api/schema/panes.rs b/src/api/schema/panes.rs
+index 9dbe0221..9d182b27 100644
+--- a/src/api/schema/panes.rs
++++ b/src/api/schema/panes.rs
+@@ -694,3 +694,12 @@ pub struct PaneLinkRegion {
+     pub start_col: u16,
+     pub end_col: u16,
+ }
++
++/// Experimental herdr-pocket extension. It does not attach, resize or take over.
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
++#[serde(deny_unknown_fields)]
++pub struct PocketInputSendParams {
++    pub pane_id: String,
++    pub expected_terminal_id: String,
++    pub bytes_base64: String,
++}
+diff --git a/src/api/schema/response.rs b/src/api/schema/response.rs
+index e92e4952..6e71d23f 100644
+--- a/src/api/schema/response.rs
++++ b/src/api/schema/response.rs
+@@ -42,6 +42,8 @@ pub struct ErrorBody {
+ #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+ #[serde(tag = "type", rename_all = "snake_case")]
+ pub enum ResponseResult {
++    PocketInputCapabilities { version: u32, protocol: u32, atomic_terminal_guard: bool, raw_bytes: bool, max_input_bytes: usize },
++    PocketInputAccepted { pane_id: String, terminal_id: String, accepted_bytes: usize },
+     Pong {
+         version: String,
+         protocol: u32,
+diff --git a/src/api/server.rs b/src/api/server.rs
+index 0a4cfa66..a338a6b4 100644
+--- a/src/api/server.rs
++++ b/src/api/server.rs
+@@ -618,6 +618,8 @@ pub(crate) fn api_method_name(method: &Method) -> &'static str {
+         Method::ClientWindowTitleClear(_) => "client.window_title.clear",
+         Method::ClientShellSurfaceSet(_) => "client_shell.surface.set",
+         Method::SessionSnapshot(_) => "session.snapshot",
++        Method::PocketInputCapabilities(_) => "pocket.input.capabilities",
++        Method::PocketInputSend(_) => "pocket.input.send",
+         Method::WorkspaceCreate(_) => "workspace.create",
+         Method::WorkspaceList(_) => "workspace.list",
+         Method::WorkspaceGet(_) => "workspace.get",
+diff --git a/src/app/api.rs b/src/app/api.rs
+index dd87c508..a7564310 100644
+--- a/src/app/api.rs
++++ b/src/app/api.rs
+@@ -1059,6 +1059,8 @@ impl App {
+                 );
+             }
+             Method::SessionSnapshot(_) => return self.handle_session_snapshot(request.id),
++            Method::PocketInputCapabilities(_) => return self.handle_pocket_input_capabilities(request.id),
++            Method::PocketInputSend(params) => return self.handle_pocket_input_send(request.id, params),
+             Method::WorkspaceList(_) => return self.handle_workspace_list(request.id),
+             Method::WorkspaceGet(target) => return self.handle_workspace_get(request.id, target),
+             Method::WorkspaceCreate(params) => {
+diff --git a/src/app/api/panes.rs b/src/app/api/panes.rs
+index b5f3baf6..2594856e 100644
+--- a/src/app/api/panes.rs
++++ b/src/app/api/panes.rs
+@@ -1909,6 +1909,34 @@ impl App {
+         encode_success(id, ResponseResult::Ok {})
+     }
+
++    // Candidate extension: validate identity and enqueue in one app event. An OK
++    // response acknowledges queue acceptance only, not PTY/application execution.
++    pub(super) fn handle_pocket_input_capabilities(&self, id: String) -> String {
++        encode_success(id, ResponseResult::PocketInputCapabilities {
++            version: 1, protocol: crate::protocol::PROTOCOL_VERSION,
++            atomic_terminal_guard: true, raw_bytes: true, max_input_bytes: 4096,
++        })
++    }
++
++    pub(super) fn handle_pocket_input_send(&mut self, id: String, params: crate::api::schema::PocketInputSendParams) -> String {
++        use base64::Engine as _;
++        let reject = |id| encode_error(id, "pocket_input_rejected", "input rejected before enqueue");
++        if id.len()!=32 || !id.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) || params.bytes_base64.len()>5464 {
++            return reject(id);
++        }
++        let Ok(bytes)=base64::engine::general_purpose::STANDARD.decode(&params.bytes_base64) else { return reject(id); };
++        if bytes.is_empty() || bytes.len()>4096 || base64::engine::general_purpose::STANDARD.encode(&bytes)!=params.bytes_base64 { return reject(id); }
++        let Some((ws_idx,pane_id))=self.parse_pane_id(&params.pane_id) else { return reject(id); };
++        if self.public_pane_id(ws_idx,pane_id).as_deref()!=Some(params.pane_id.as_str()) { return reject(id); }
++        let Some(actual)=self.state.terminal_id_for_pane(ws_idx,pane_id) else { return reject(id); };
++        if actual.to_string()!=params.expected_terminal_id { return reject(id); }
++        let Some(runtime)=self.lookup_runtime_sender(ws_idx,pane_id) else { return reject(id); };
++        if runtime.validate_input_submission(&bytes).is_err() { return reject(id); }
++        let accepted_bytes=bytes.len();
++        if runtime.try_send_bytes(Bytes::from(bytes)).is_err() { return reject(id); }
++        encode_success(id, ResponseResult::PocketInputAccepted { pane_id:params.pane_id, terminal_id:params.expected_terminal_id, accepted_bytes })
++    }
++
+     pub(super) fn handle_pane_send_text(
+         &mut self,
+         id: String,
+@@ -2816,6 +2844,34 @@ mod tests {
+         assert!(read.truncated);
+     }
+
++    #[tokio::test]
++    async fn pocket_input_guards_identity_rejects_bad_bytes_and_never_resizes() {
++        use crate::api::schema::{Method, PocketInputSendParams, Request};
++        let (mut app, pane, mut rx) = app_with_send_key_runtime(1);
++        let raw_pane=app.state.workspaces[0].tabs[0].root_pane;
++        let terminal=app.state.terminal_id_for_pane(0,raw_pane).unwrap().to_string();
++        let req=|expected: &str, raw: &str| Request { id: "0123456789abcdef0123456789abcdef".into(), method: Method::PocketInputSend(PocketInputSendParams { pane_id:pane.clone(), expected_terminal_id:expected.into(), bytes_base64:raw.into() }) };
++        let rejected=app.handle_api_request(req("term_wrong","QQ=="));
++        assert!(rejected.contains("pocket_input_rejected")); assert!(rx.try_recv().is_err());
++        let rejected=app.handle_api_request(req(&terminal,"QQ"));
++        assert!(rejected.contains("pocket_input_rejected")); assert!(rx.try_recv().is_err());
++        let accepted=app.handle_api_request(req(&terminal,"QeaWhw=="));
++        let response: SuccessResponse=serde_json::from_str(&accepted).unwrap();
++        assert_eq!(response.result, ResponseResult::PocketInputAccepted { pane_id:pane.clone(), terminal_id:terminal.clone(), accepted_bytes:4 });
++        let full=app.handle_api_request(req(&terminal,"Qg=="));
++        assert!(full.contains("pocket_input_rejected"));
++        assert_eq!(rx.try_recv().unwrap(), bytes::Bytes::from_static("A文".as_bytes()));
++        assert!(rx.try_recv().is_err());
++        use base64::Engine as _;
++        let too_large=base64::engine::general_purpose::STANDARD.encode(vec![b'x';4097]);
++        assert!(app.handle_api_request(req(&terminal,&too_large)).contains("pocket_input_rejected"));
++        assert!(rx.try_recv().is_err());
++        app.state.workspaces[0].pane_state_mut(raw_pane).unwrap().attached_terminal_id=crate::terminal::TerminalId::alloc();
++        assert!(app.handle_api_request(req(&terminal,"QQ==")).contains("pocket_input_rejected"));
++        assert!(rx.try_recv().is_err());
++        assert!(!app.state.direct_attach_resize_locks.contains(&app.state.terminal_id_for_pane(0,raw_pane).unwrap()));
++    }
++
+     #[tokio::test]
+     async fn api_pane_send_keys_preserves_legacy_control_c_aliases() {
+         let (mut app, pane_id, mut rx) = app_with_send_key_runtime(3);

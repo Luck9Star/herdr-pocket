@@ -6,8 +6,8 @@ import unittest
 
 # Legacy read-only harness runs in a Python without pairing dependencies.
 try:
-    from paired_gui import FixtureApproval, GuiFailure
-    from pairing import FixturePairingHost, MemoryKeyStore, PendingPairing, encode
+    from paired_gui import FixtureApproval, GuiFailure, Host
+    from pairing import MemoryKeyStore, PendingPairing, encode
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
         raise
@@ -20,12 +20,13 @@ class GuiFixtureTests(unittest.TestCase):
         store = MemoryKeyStore()
         host_public = store.public(store.create())
         key = store.create()
-        with tempfile.TemporaryDirectory() as folder, FixturePairingHost(host_public_key=host_public, fixture_account='runner') as host:
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as scratch:
+            host = Host(Path(scratch), 'runner', host_public)
             root = Path(folder)
             (root/'authorized_keys').write_bytes(b'')
             approval = FixtureApproval(root, {'username':'runner'}, host)
             pending = PendingPairing(store, key, account='runner', device='test phone',
-                                     expected_host_key=host.host_key, now=int(time.time()))
+                                     expected_host_key=host.pin, now=int(time.time()))
             wire = encode(pending.request)
             wrong = dict(pending.request, account='different')
             with self.assertRaises(ValueError):

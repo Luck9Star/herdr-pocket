@@ -1,8 +1,6 @@
 name: Flutter experimental terminal candidate
 on:
-  push:
-    branches: ['codex/**']
-    paths: ['validation/flutter/**', 'validation/shared/**', '.github/workflows/flutter-candidate-validation.yml']
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read

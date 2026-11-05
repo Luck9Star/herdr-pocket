@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "purpose": "android baseline APK provenance; build artifacts only, device execution unverified",
+  "repository": "Luck9Star/herdr-pocket",
+  "branch": "codex/android-baseline-20261105",
+  "sourceSHA": "b08629980217b483784dde13b3949fa43fd399fc",
+  "builds": {
+    "flutter": {
+      "runId": 42034838601,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42034838601",
+      "artifactId": 13417443481,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42034838601/artifacts/13417443481",
+      "artifactName": "flutter-candidate-android-b08629980217b483784dde13b3949fa43fd399fc",
+      "status": "success; sourceSHA, manifest, SHA256SUMS, packaged APK verified",
+      "manifest": "tmp-probe/android-20261105/baseline/flutter/manifest.json",
+      "checksums": "tmp-probe/android-20261105/baseline/flutter/SHA256SUMS",
+      "packagedArchive": "tmp-probe/android-20261105/baseline/flutter/flutter-android-debug.zip",
+      "packagedArchiveSHA256": "72c69b25f40e49aa0457e3b8baa24ce9418981891b3a08a494257a9b2bb2a948",
+      "apk": "tmp-probe/android-20261105/baseline/flutter/app-debug.apk",
+      "apkBytes": 154105167,
+      "apkSHA256": "642bfad0224591f52ad0639668acdbdf34929f6ce4a4749349edb8930b6f62d7",
+      "deviceResult": "unverified"
+    },
+    "tauri": {
+      "runId": 42034838719,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42034838719",
+      "artifactId": 13417169114,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42034838719/artifacts/13417169114",
+      "artifactName": "tauri-android-b08629980217b483784dde13b3949fa43fd399fc",
+      "status": "success; sourceSHA, manifest, SHA256SUMS, APK verified",
+      "manifest": "tmp-probe/android-20261105/baseline/tauri/build-manifest.json",
+      "checksums": "tmp-probe/android-20261105/baseline/tauri/SHA256SUMS",
+      "apk": "tmp-probe/android-20261105/baseline/tauri/app-universal-debug.apk",
+      "apkBytes": 165957504,
+      "apkSHA256": "52c6cdd8ccd1cf90ebda442ac10e9bd138d2fdb9d5e28d9cc6ffe2d22da6290a",
+      "deviceResult": "unverified"
+    }
+  }
+}

@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'pairing.dart';

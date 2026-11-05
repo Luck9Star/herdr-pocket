@@ -155,13 +155,14 @@ def snapshot_diagnostics(result):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--flutter-app', type=Path)
-    parser.add_argument('--paired-gui', choices=('flutter', 'tauri'))
+    parser.add_argument('--paired-gui', choices=('flutter', 'tauri','tauri-android'))
     parser.add_argument('--tauri-app', type=Path)
+    parser.add_argument('--input-fixture', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     require_runner(os.environ)
-    if ((args.paired_gui == 'tauri' and not args.tauri_app) or
-            (args.paired_gui != 'tauri' and not args.flutter_app)):
+    if ((args.paired_gui in ('tauri','tauri-android') and not args.tauri_app) or
+            (args.paired_gui not in ('tauri','tauri-android') and not args.flutter_app)):
         parser.error('provide the application built for this route')
     # Import only on the supported Linux CI route; unit tests remain portable.
     import pwd
@@ -248,10 +249,24 @@ def main():
                                  stderr=subprocess.PIPE, timeout=5)
         version_text = (version.stdout + version.stderr).decode('ascii', errors='replace').strip()
         report['openSshVersion'] = version_text if re.fullmatch(r'OpenSSH_[ -~]{1,240}', version_text) else 'not_recorded'
-        with urllib.request.urlopen(HERDR_URL, timeout=60) as response:
-            binary = response.read(100 * 1024 * 1024 + 1)
-        if len(binary) > 100 * 1024 * 1024 or hashlib.sha256(binary).hexdigest() != HERDR_SHA:
-            raise ProbeFailure('herdr_hash_or_size_mismatch')
+        if args.input_fixture:
+            candidate = args.input_fixture.resolve()
+            if not args.paired_gui or candidate != Path(os.environ['RUNNER_TEMP']).resolve() / 'input-fixture':
+                raise ProbeFailure('unexpected_fixture_path')
+            metadata = json.loads((candidate / 'manifest.json').read_text())
+            patch = REPO/'validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch'
+            if (metadata.get('upstreamSHA') != HERDR_COMMIT or metadata.get('sourceSHA') != os.environ['GITHUB_SHA']
+                    or metadata.get('patchSHA256') != hashlib.sha256(patch.read_bytes()).hexdigest()):
+                raise ProbeFailure('input_fixture_source_mismatch')
+            binary = (candidate / 'herdr').read_bytes()
+            if len(binary) > 200 * 1024 * 1024 or hashlib.sha256(binary).hexdigest() != metadata.get('binarySHA256'):
+                raise ProbeFailure('input_fixture_digest_mismatch')
+            report['herdr'] = metadata
+        else:
+            with urllib.request.urlopen(HERDR_URL, timeout=60) as response:
+                binary = response.read(100 * 1024 * 1024 + 1)
+            if len(binary) > 100 * 1024 * 1024 or hashlib.sha256(binary).hexdigest() != HERDR_SHA:
+                raise ProbeFailure('herdr_hash_or_size_mismatch')
         herdr = root / 'herdr'
         herdr.write_bytes(binary)
         herdr.chmod(0o700)
@@ -326,7 +341,7 @@ LogLevel VERBOSE
             # Import the pairing dependencies only for the isolated GUI workflow.
             from paired_gui import run_gui
             report.update(milestone='M1c-pairing-dashboard-observe',
-                          scope='Linux desktop GUI or Flutter widget renderer with actual SSH and temporary signing identity',
+                          scope=('API35 Android emulator GUI with actual SSH and AndroidKeyStore-wrapped identity' if args.paired_gui == 'tauri-android' else 'Linux desktop GUI or Flutter widget renderer with actual SSH and temporary signing identity'),
                           unverified=['phone runtime', 'Keystore or Keychain runtime', 'camera', 'real IME', 'overlay networks', 'remote input'])
             report.pop('cancelScope', None)
             result = run_gui(args, root, env, config)

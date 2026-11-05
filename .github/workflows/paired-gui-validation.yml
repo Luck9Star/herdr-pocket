@@ -1,13 +1,15 @@
 name: Paired GUI to isolated SSH
 on:
-  push:
-    branches: ['codex/core-prototype-validation']
-    paths: ['validation/flutter/**', 'validation/tauri/**', 'validation/transport-rust/**', 'validation/remote-harness/**', 'validation/pairing/**', '.github/workflows/paired-gui-validation.yml']
+  workflow_call:
+    inputs:
+      input_fixture:
+        type: boolean
+        default: false
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: paired-gui-${{ github.ref }}
+  group: paired-gui-${{ github.ref }}-${{ inputs.input_fixture }}
   cancel-in-progress: true
 jobs:
   paired-observe:
@@ -71,21 +73,29 @@ jobs:
           npm test
           npm run tauri -- icon icon.svg
           npm run tauri -- build --debug --no-bundle -- --locked
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: inputs.input_fixture
+        with:
+          name: input-fixture-${{ github.sha }}
+          path: ${{ runner.temp }}/input-fixture
       - name: Review pairing, authorize the displayed key, choose pane and observe updates
         env:
           GUI_ROUTE: ${{ matrix.route }}
+          INPUT_FIXTURE: ${{ inputs.input_fixture }}
           WEBKIT_DISABLE_COMPOSITING_MODE: '1'
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
+          args=()
+          if [ "$INPUT_FIXTURE" = true ]; then args+=(--input-fixture "$RUNNER_TEMP/input-fixture"); fi
           if [ "$GUI_ROUTE" = flutter ]; then
-            "$RUNNER_TEMP/pairing-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui flutter --flutter-app "$RUNNER_TEMP/flutter-gui" --output "$RUNNER_TEMP/paired-evidence"
+            "$RUNNER_TEMP/pairing-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui flutter --flutter-app "$RUNNER_TEMP/flutter-gui" --output "$RUNNER_TEMP/paired-evidence" "${args[@]}"
           else
-            xvfb-run -a dbus-run-session -- "$RUNNER_TEMP/pairing-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui tauri --tauri-app "$GITHUB_WORKSPACE/validation/tauri/src-tauri/target/debug/herdr-pocket-tauri-probe" --output "$RUNNER_TEMP/paired-evidence"
+            xvfb-run -a dbus-run-session -- "$RUNNER_TEMP/pairing-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui tauri --tauri-app "$GITHUB_WORKSPACE/validation/tauri/src-tauri/target/debug/herdr-pocket-tauri-probe" --output "$RUNNER_TEMP/paired-evidence" "${args[@]}"
           fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: paired-gui-${{ matrix.route }}-${{ github.sha }}
+          name: paired-gui-${{ matrix.route }}-${{ inputs.input_fixture && 'guarded-input' || 'stock-observe' }}-${{ github.sha }}
           path: ${{ runner.temp }}/paired-evidence/
           retention-days: 14
           if-no-files-found: warn

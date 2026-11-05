@@ -1,8 +1,6 @@
 name: Helper fixture validation
 on:
-  push:
-    branches: ['codex/**']
-    paths: ['validation/helper/**', '.github/workflows/helper-validation.yml']
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,6 +20,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Check the shipping helper against temporary homes
+        shell: bash
+        run: |
+          python3 -m venv "$RUNNER_TEMP/helper-venv"
+          "$RUNNER_TEMP/helper-venv/bin/pip" install -r helper/requirements.txt
+          PYTHONDONTWRITEBYTECODE=1 "$RUNNER_TEMP/helper-venv/bin/python" -m unittest discover -s helper/tests -v
       - name: Run isolated fixture tests
         shell: bash
         run: |

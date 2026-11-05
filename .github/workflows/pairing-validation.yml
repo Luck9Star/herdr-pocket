@@ -1,10 +1,6 @@
 name: Pairing and device-key validation
 on:
-  push:
-    branches: ['codex/**']
-    paths: ['validation/pairing/**', 'validation/helper/**', '.github/workflows/pairing-validation.yml']
-  pull_request:
-    paths: ['validation/pairing/**', 'validation/helper/**', '.github/workflows/pairing-validation.yml']
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read

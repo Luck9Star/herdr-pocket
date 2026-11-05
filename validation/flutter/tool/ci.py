@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import plistlib
 import platform as host_platform
 from pathlib import Path
 import shutil
@@ -55,6 +56,9 @@ def prepare(destination):
     # a single source of truth and never enters Dart or generated copies.
     activity = destination / 'android/app/src/main/kotlin/dev/herdr/herdr_flutter_probe/MainActivity.kt'
     shutil.copy2(source / 'native/android/MainActivity.kt', activity)
+    shutil.copy2(source / 'native/android/PairScanChannel.kt', activity.with_name('PairScanChannel.kt'))
+    shutil.copy2(source / 'native/android/HostCatalogFile.kt', activity.with_name('HostCatalogFile.kt'))
+    shutil.copy2(source / 'native/android/InputJournalFile.kt', activity.with_name('InputJournalFile.kt'))
     gradle = destination / 'android/app/build.gradle.kts'
     script = gradle.read_text()
     native = (ROOT / 'validation/pairing/native/android').as_posix()
@@ -65,14 +69,21 @@ def prepare(destination):
     # the repository keeps only one storage implementation. No Keychain calls
     # are executed by prepare or channel registration.
     shared_apple = (ROOT / 'validation/pairing/native/apple/DeviceKeys.swift').read_text()
-    apple_channel = (source / 'native/apple/DeviceKeyChannel.swift').read_text()
+    apple_channel = (source / 'native/apple/DeviceKeyChannel.swift').read_text() + '\n' + (source / 'native/apple/HostCatalogFile.swift').read_text() + '\n' + (source / 'native/apple/InputJournalFile.swift').read_text()
     ios = destination / 'ios/Runner/AppDelegate.swift'
     ios_text = ios.read_text()
     marker = 'GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)'
     if marker not in ios_text:
         raise SystemExit('Pinned Flutter iOS implicit-engine registration template changed')
-    ios.write_text(ios_text.replace(marker, marker + '\n    registerHerdrDeviceKeys(messenger: engineBridge.applicationRegistrar.messenger())', 1)
-                   + '\n' + shared_apple + '\n' + apple_channel)
+    scanner = (ROOT / 'validation/pairing/native/camera/apple/PairScanner.swift').read_text()
+    scan_channel = (source / 'native/apple/PairScanChannel.swift').read_text()
+    ios.write_text(ios_text.replace(marker, marker + '\n    registerHerdrDeviceKeys(messenger: engineBridge.applicationRegistrar.messenger())'
+                                    + '\n    registerHerdrPairScanner(messenger: engineBridge.applicationRegistrar.messenger())', 1)
+                   + '\n' + shared_apple + '\n' + apple_channel + '\n' + scanner + '\n' + scan_channel)
+    info = destination / 'ios/Runner/Info.plist'
+    plist = plistlib.loads(info.read_bytes())
+    plist['NSCameraUsageDescription'] = '扫描主机的公开配对响应二维码。'
+    info.write_bytes(plistlib.dumps(plist, sort_keys=False))
     macos = destination / 'macos/Runner/MainFlutterWindow.swift'
     mac_text = macos.read_text()
     marker = 'RegisterGeneratedPlugins(registry: flutterViewController)'
@@ -94,6 +105,58 @@ def prepare(destination):
         json.dumps({'kind': 'herdr-flutter-validation', 'sourceCommit': os.environ.get('GITHUB_SHA')}), encoding='utf-8')
 
 
+def source_record(relative):
+    path = ROOT / relative
+    return {'path': relative, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+            'repositoryCommit': os.environ.get('GITHUB_SHA', 'local')}
+
+
+def verify_android_notice(apk):
+    relative = 'validation/pairing/native/android/notices/BOUNCY-CASTLE-LICENSE.md'
+    source = source_record(relative)
+    asset = 'assets/BOUNCY-CASTLE-LICENSE.md'
+    with zipfile.ZipFile(apk) as bundle:
+        entries = [entry for entry in bundle.infolist() if entry.filename == asset]
+        if len(entries) != 1 or entries[0].file_size > 65536:
+            raise SystemExit('Missing, duplicate or oversized Android Bouncy Castle notice asset')
+        actual = hashlib.sha256(bundle.read(entries[0])).hexdigest()
+    if actual != source['sha256']:
+        raise SystemExit('Android Bouncy Castle notice asset differs from shared native source')
+    return {'assetPath': asset, 'assetSha256': actual, 'sharedSource': source, 'matched': True}
+
+
+def pairing_provenance(platform, android_notice):
+    android = 'validation/pairing/native/android/'
+    android_names = ['AndroidDeviceKeyStore.java', 'AndroidSeedEnvelope.java',
+                     'DeviceKeyStoreCore.java', 'Ed25519Operations.java', 'device-keys.gradle']
+    return {
+        'wireSchema': source_record('validation/pairing/protocol-v2.schema.json'),
+        'flutterSources': [source_record('validation/flutter/' + name) for name in
+                           ['lib/pairing.dart', 'lib/pairing_page.dart', 'lib/device_keys.dart',
+                            'lib/remote_page.dart', 'lib/remote_adapter.dart', 'tool/ci.py']],
+        'androidSources': [source_record(android + name) for name in android_names],
+        'androidChannel': source_record('validation/flutter/native/android/MainActivity.kt'),
+        'androidCrypto': {'library': 'org.bouncycastle:bcprov-jdk18on:1.86',
+                          'noticeSource': source_record(android + 'notices/BOUNCY-CASTLE-LICENSE.md'),
+                          'packagedNotice': android_notice if platform == 'android' else 'not applicable'},
+        'appleSources': [source_record('validation/pairing/native/apple/DeviceKeys.swift'),
+                         source_record('validation/flutter/native/apple/DeviceKeyChannel.swift')],
+        'api': ['create', 'public', 'sign', 'delete'],
+        'privateKeyExport': False,
+        'systemStoreRuntime': 'NOT RUN by application build/package workflow',
+        'deviceRuntime': 'NOT RUN by application build/package workflow',
+        'androidStorageBaseline': 'API 35 native prototype; unsupported native storage fails closed',
+        'appleStorage': 'ThisDeviceOnly non-synchronizing Keychain seed; CryptoKit Ed25519 software signing; not Secure Enclave Ed25519',
+        'otherPlatforms': 'Windows/Linux device bridge unavailable; explicit manual PEM experiment remains separate',
+        'recovery': 'versioned public host catalog with device handles, pending creation intent and native CAS; restart requires original-key verification and manual target review; phone runtime NOT RUN',
+        'hostCatalogSources': [source_record('validation/flutter/' + name) for name in
+                               ['lib/host_catalog.dart', 'lib/host_catalog_page.dart', 'native/android/HostCatalogFile.kt', 'native/apple/HostCatalogFile.swift']],
+        'unknownInputMarker': {'scope': 'separate native single public marker, no command body; prepare/clear use exact record and atomic CAS; device runtime NOT RUN',
+                               'sources': [source_record('validation/flutter/native/' + name) for name in ['android/InputJournalFile.kt', 'apple/InputJournalFile.swift']]},
+        'testIdentity': 'memory signer exists only in explicit tests; not a production fallback or system-store evidence',
+    }
+
+
 def package(destination, platform, output):
     candidates = {
         'android': ['build/app/outputs/flutter-apk/app-debug.apk'],
@@ -107,6 +170,7 @@ def package(destination, platform, output):
     for path in paths:
         if not path.exists():
             raise SystemExit('Missing build output: ' + str(path))
+    android_notice = verify_android_notice(paths[0]) if platform == 'android' else None
     # tar preserves framework symlinks and executable mode on Apple/Linux bundles.
     unix_bundle = platform in ['ios', 'macos', 'linux']
     archive = output / ('flutter-' + platform + '-debug' + ('.tar.gz' if unix_bundle else '.zip'))
@@ -145,8 +209,9 @@ def package(destination, platform, output):
         'visualScheme': 'Penpot v2 Tech Indigo and Slate; offline shell adaptation',
         'fixtureSha256': hashlib.sha256((ROOT / 'validation/shared/fixture.json').read_bytes()).hexdigest(),
         'lockSha256': hashlib.sha256((destination / 'pubspec.lock').read_bytes()).hexdigest(),
-        'scope': 'compile only; isolated offline input fixture plus reviewed SSH pane dashboard and bounded continuous read-only observe adapter; device/overlays NOT RUN',
-        'remoteAdapter': {'ssh': 'dartssh2 4.1.0', 'input': 'disabled', 'storage': 'memory-only experimental', 'contractSha256': hashlib.sha256((ROOT / 'validation/shared/remote-contract.json').read_bytes()).hexdigest()},
+        'scope': 'compile/package only; offline fixture, public pairing review and native device-key channel wiring, pinned SSH pane dashboard and bounded read-only observe; runtime SSH/GUI pairing must use separate harness evidence; device/system storage/overlays NOT RUN',
+        'remoteAdapter': {'ssh': 'dartssh2 4.1.0', 'input': 'disabled', 'storage': 'device path uses opaque native handle; explicit manual PEM experiment remains memory-only; system storage runtime NOT RUN', 'contractSha256': hashlib.sha256((ROOT / 'validation/shared/remote-contract.json').read_bytes()).hexdigest()},
+        'pairingDeviceKeys': pairing_provenance(platform, android_notice),
         'signing': 'iOS unsigned, not installable on device' if platform == 'ios' else 'development test build; no production signing/notarization',
     }
     candidate_manifest = destination / 'candidate-manifest.json'
@@ -160,22 +225,27 @@ def package(destination, platform, output):
     (output / 'SHA256SUMS').write_text(manifest['artifactSha256'] + '  ' + archive.name + '\n')
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('command', choices=['bootstrap', 'prepare', 'package'])
-parser.add_argument('--destination', type=Path, required=True)
-parser.add_argument('--platform')
-parser.add_argument('--output', type=Path)
-a = parser.parse_args()
-if a.command == 'bootstrap':
-    if os.environ.get('GITHUB_ACTIONS') != 'true':
-        raise SystemExit('SDK bootstrap is CI-only; local SDK installation is not authorized')
-    run(['git', 'clone', '--depth=1', '--branch=' + VERSION, 'https://github.com/flutter/flutter.git', a.destination])
-    actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=a.destination, text=True, encoding='utf-8').strip()
-    if actual != COMMIT:
-        raise SystemExit('Flutter tag does not match locked source commit')
-    with open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8') as f:
-        f.write(str(a.destination / 'bin') + '\n')
-elif a.command == 'prepare':
-    prepare(a.destination)
-else:
-    package(a.destination, a.platform, a.output)
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('command', choices=['bootstrap', 'prepare', 'package'])
+    parser.add_argument('--destination', type=Path, required=True)
+    parser.add_argument('--platform')
+    parser.add_argument('--output', type=Path)
+    a = parser.parse_args()
+    if a.command == 'bootstrap':
+        if os.environ.get('GITHUB_ACTIONS') != 'true':
+            raise SystemExit('SDK bootstrap is CI-only; local SDK installation is not authorized')
+        run(['git', 'clone', '--depth=1', '--branch=' + VERSION, 'https://github.com/flutter/flutter.git', a.destination])
+        actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=a.destination, text=True, encoding='utf-8').strip()
+        if actual != COMMIT:
+            raise SystemExit('Flutter tag does not match locked source commit')
+        with open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8') as f:
+            f.write(str(a.destination / 'bin') + '\n')
+    elif a.command == 'prepare':
+        prepare(a.destination)
+    else:
+        package(a.destination, a.platform, a.output)
+
+
+if __name__ == '__main__':
+    main()

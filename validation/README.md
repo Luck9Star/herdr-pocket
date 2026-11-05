@@ -1,6 +1,8 @@
 # herdr-pocket 验证入口
 
-2026-10-30 最新看板、持续观察、配对与设备密钥结果及测试包见 [M1b 记录](../docs/13-mobile-dashboard-observe.md)。Penpot v2 视觉基线见 [UI v2 记录](../docs/11-ui-v2-integration.md)。下方前阶段测试包保留各自源码版本，不能当作新版已验收。
+2026-11-05 手机工作台已接入 GUI 配对审查、设备签名、主机目录、多标签与持续观察。当前实现、两份 Android 基线包、失败及尚待实测的项目见[手机配对工作台](../docs/14-mobile-pairing-workbench.md)。
+
+2026-10-30 看板、持续观察、配对与设备密钥结果及测试包见 [M1b 记录](../docs/13-mobile-dashboard-observe.md)。Penpot v2 视觉基线见 [UI v2 记录](../docs/11-ui-v2-integration.md)。下方前阶段测试包保留各自源码版本，不能当作新版已验收。
 
 > 修复测试请先看[最新候选与验收记录](../docs/10-blocker-repair.md)。原baseline包保留原结果；带组合重音修复的是本项目experimental-patched候选，并非官方terminal_view发布，也不代表已经选定UI框架。
 

@@ -1,0 +1,46 @@
+name: Prototype validation batch
+on:
+  push:
+    branches: ['codex/batch/**']
+  workflow_dispatch:
+    inputs:
+      full:
+        type: boolean
+        default: false
+        description: Also run upstream network and transport feasibility probes
+permissions:
+  contents: read
+concurrency:
+  group: batch-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  helper:
+    uses: ./.github/workflows/helper-validation.yml
+  pairing:
+    uses: ./.github/workflows/pairing-validation.yml
+  flutter:
+    uses: ./.github/workflows/flutter-candidate-validation.yml
+  tauri:
+    uses: ./.github/workflows/tauri-validation.yml
+  android-emulator:
+    uses: ./.github/workflows/paired-android-emulator.yml
+  transport:
+    uses: ./.github/workflows/mobile-remote-validation.yml
+  build-input-fixture:
+    uses: ./.github/workflows/input-extension-validation.yml
+  paired-input:
+    needs: build-input-fixture
+    uses: ./.github/workflows/paired-gui-validation.yml
+    with:
+      input_fixture: true
+  paired-gui:
+    uses: ./.github/workflows/paired-gui-validation.yml
+  native:
+    if: inputs.full || startsWith(github.ref, 'refs/heads/codex/batch/full-')
+    uses: ./.github/workflows/native-candidate-validation.yml
+  original-network-probes:
+    if: inputs.full || startsWith(github.ref, 'refs/heads/codex/batch/full-')
+    uses: ./.github/workflows/native-validation.yml
+  original-ssh-probes:
+    if: inputs.full || startsWith(github.ref, 'refs/heads/codex/batch/full-')
+    uses: ./.github/workflows/ssh-validation.yml

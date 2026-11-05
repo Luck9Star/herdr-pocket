@@ -1,15 +1,6 @@
 name: Mobile-first read-only remote adapters
 on:
-  push:
-    branches: ['codex/**']
-    paths:
-      - 'validation/remote-harness/**'
-      - 'validation/transport-rust/**'
-      - 'validation/flutter/lib/remote*'
-      - 'validation/flutter/tool/remote_probe.dart'
-      - 'validation/flutter/pubspec*'
-      - 'validation/shared/remote-contract.json'
-      - '.github/workflows/mobile-remote-validation.yml'
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read

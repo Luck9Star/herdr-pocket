@@ -1,9 +1,18 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>herdr-pocket · 远端只读验证</title></head><body>
 <header class="app-header"><div class="brand-lockup"><span class="brand-mark" aria-hidden="true">›_</span><div><span class="eyebrow">HERDR POCKET</span><h1>终端工作台 <small>Tauri + xterm.js</small></h1></div></div><span class="badge">M1b · 实验测试包</span></header>
-<nav class="route-tabs" aria-label="验证入口"><button id="show-remote" aria-pressed="true">远端只读</button><button id="show-fixture" aria-pressed="false">离线终端实验室</button></nav>
-<main id="remote-page" class="remote-page">
-<section class="remote-intro"><span class="eyebrow">REMOTE · READ ONLY</span><h2>查看远端终端</h2><p>手动核验明确的会话，从实际快照选择 pane 并持续只读观察。公开请求与响应需要人工传递及独立审查；远端输入、扫码与三网络集成仍未开放。</p></section>
+<nav class="route-tabs" aria-label="验证入口"><button id="show-remote" aria-pressed="true">主机</button><button id="show-fixture" aria-pressed="false">离线终端实验室</button></nav>
+<div id="remote-unsent-notices" class="remote-status unsent-notices" role="alert" hidden></div>
+<main id="host-home" class="remote-page">
+<section class="remote-intro"><span class="eyebrow">HOSTS · 本机资料</span><h2>连接你的主机</h2><p>已存资料只在本机；选择主机后仍需核对设备身份和连接目标。切换会停止观察，不会自动重连。</p></section>
+<div class="host-home-actions"><button id="host-open-remote" class="primary" type="button">新增主机 / 手动连接</button></div>
+<p id="host-home-status" class="remote-status" role="status" aria-live="polite">正在读取本机资料…</p><div id="host-list" class="host-list" aria-label="已存主机"></div>
+<p class="remote-help">Android 配对资料存于本应用 no-backup 目录。Linux/macOS 测试身份只保留在进程内，重启后不可恢复；移除本机资料不会撤销主机上的授权。</p>
+</main>
+<main id="remote-page" class="remote-page" hidden>
+<nav id="host-tabs" class="terminal-tabs host-tabs" aria-label="主机标签"></nav><div class="host-home-actions"><button id="host-return-home" type="button">返回主机看板</button></div>
+<section id="host-restore-panel" class="remote-intro" hidden><h2>恢复已存设备</h2><p id="host-restore-description"></p><label><input id="host-restore-review" type="checkbox"> 我已独立核对上方主机与设备公钥指纹。</label><button id="host-restore" type="button">恢复此设备</button><p id="host-restore-status" role="status" aria-live="polite"></p></section>
+<section class="remote-intro"><span class="eyebrow">REMOTE · READ ONLY</span><h2>查看远端终端</h2><p>手动核验明确的会话，从实际快照选择 pane 并持续只读观察。公开请求与响应需要人工传递及独立审查；实验输入仅在服务器明确提供安全扩展时开放。扫码与三网络仍未开放。</p></section>
 <p id="remote-native-note" class="mode-message" data-tone="warning">浏览器预览没有原生 SSH 适配器。真实读取仅在测试安装包中可用，预览不会伪造连接成功。</p>
 <form id="remote-form" autocomplete="off">
 <fieldset id="remote-fields"><legend>1. 审查目标与来源</legend>
@@ -28,6 +37,7 @@
 <label>公开配对请求<textarea id="pair-request" readonly rows="6" spellcheck="false"></textarea></label>
 <p>通过可信方式将请求交给主机操作者；响应不会自动连接，也不证明主机可信。</p>
 <label>导入主机响应<textarea id="pair-response" rows="6" maxlength="2048" spellcheck="false"></textarea></label>
+<button id="pair-scan" type="button">扫描主机响应</button>
 <button id="pair-preview" type="button">查看响应内容</button>
 <pre id="pair-response-preview" hidden></pre>
 <label><input id="pair-source-review" type="checkbox"> 我已独立核实响应来源、账号、主机与设备指纹。</label>
@@ -38,13 +48,19 @@
 </div>
 <div id="manual-key-section"><h3>临时凭据 · 实验功能</h3><p class="remote-help">仅本次内存使用的未加密 OpenSSH Ed25519 私钥。没有设备安全存储；不要使用生产凭据。提交、取消或进入后台后会清空表单，JavaScript 内存不具备可靠擦除保证。</p>
 <label>实验私钥<input id="remote-private-key" type="password" required maxlength="16384" placeholder="粘贴实验用 OpenSSH 私钥" spellcheck="false" autocapitalize="none" autocorrect="off" autocomplete="off" data-1p-ignore data-lpignore="true"></label></div></div>
-<label class="review-check"><input id="remote-review" type="checkbox"><span>我已核对资料来源、目标会话与预期主机公钥，并确认仅使用实验凭据。</span></label>
+<label class="review-check"><input id="remote-review" type="checkbox"><span>我已独立核对资料来源、目标会话与预期主机公钥，并主动发起本次连接。</span></label>
 </fieldset>
+<div class="host-save"><label>本地主机名称<input id="host-save-name" maxlength="96" placeholder="例如：工作站" autocomplete="off"></label><button id="host-save" type="button">保存此主机</button><p id="host-save-status" role="status" aria-live="polite"></p></div>
 <div class="remote-actions"><button id="remote-connect" type="submit" class="primary" disabled>核验并读取看板</button><button id="remote-cancel" type="button" disabled>停止观察</button><button id="remote-hide-keyboard" type="button">收起键盘</button><button id="remote-clear-key" type="button">清除临时私钥</button></div>
 </form>
 <p id="remote-status" class="remote-status" role="status" aria-live="polite"></p>
 <section id="remote-dashboard" class="remote-result" hidden aria-label="当前会话 pane"><h2>当前会话 pane</h2><p>来自本次快照；请选择一个 pane 开始只读观察。</p><div id="remote-panes" class="remote-actions"></div></section>
-<section id="remote-result" class="remote-result" hidden aria-label="远端只读观察"><div class="remote-result-heading"><strong>只读观察</strong><p id="remote-captured"></p></div><div class="term-scroll"><div id="remote-terminal" class="terminal-host"></div></div><p>可横向滚动查看完整 80 列。没有输入、粘贴发送或远端 PTY resize；窗口与键盘变化仅影响本地视口。</p></section>
+<section id="remote-result" class="remote-result" hidden aria-label="远端只读观察"><div class="remote-result-heading"><strong>只读观察</strong><p id="remote-captured"></p></div><div class="term-scroll"><div id="remote-terminal" class="terminal-host"></div></div><p>可横向滚动查看完整 80 列；窗口和键盘变化仅影响本地视口。</p>
+<section id="remote-input-controls" hidden aria-label="远端输入"><h3>远端输入 · 候选扩展</h3><p id="remote-input-target"></p><p id="remote-input-status" role="status" aria-live="polite">观察模式不发送输入。每次最多发送 4096 字节；当前连接内短暂排队并逐笔确认，切换或中断时丢弃未发送项。</p>
+<div class="remote-actions"><button type="button" id="remote-input-observe">观察</button><button type="button" id="remote-input-direct">逐键输入</button><button type="button" id="remote-input-draft-mode">草稿</button><button type="button" id="remote-input-recover" hidden>已核实原目标结果，恢复输入</button></div>
+<div class="remote-actions" id="remote-input-keys" aria-label="远端辅助键"><button type="button" data-remote-key="esc">Esc</button><button type="button" data-remote-key="tab">Tab</button><button type="button" data-remote-key="ctrl-c">Ctrl+C</button><button type="button" data-remote-key="up">↑</button><button type="button" data-remote-key="down">↓</button><button type="button" data-remote-key="left">←</button><button type="button" data-remote-key="right">→</button><button type="button" data-remote-key="enter">Enter</button></div>
+<div id="remote-input-draft-area" hidden><label>目标草稿<textarea id="remote-input-draft" rows="4" maxlength="4096" placeholder="仅在确认后发送"></textarea></label><button type="button" id="remote-input-preview">预览发送</button><div id="remote-input-preview-area" hidden><p>核对当前目标与内容；控制字符以转义形式显示，换行以 ↵ 标示。不会自动追加回车。</p><pre id="remote-input-preview-text"></pre><button type="button" id="remote-input-confirm">确认发送一次</button></div></div>
+</section></section>
 </main>
 <main id="fixture-workbench" class="app-grid" hidden>
 <aside class="sidebar" aria-label="测试主机"><div class="section-heading"><h2>主机</h2><span class="count">2</span></div><p class="sidebar-note">共享 fixture 的两个独立目标</p>

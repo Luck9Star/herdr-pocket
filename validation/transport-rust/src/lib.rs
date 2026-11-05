@@ -28,6 +28,8 @@ use tokio::{
 use zeroize::Zeroize;
 
 pub mod pairing;
+pub mod input;
+pub mod recovery;
 
 pub const CONFIG_LIMIT: usize = 32768;
 const LINE_LIMIT: usize = 1_048_576;
@@ -747,7 +749,7 @@ where
     Frame: Fn(StreamFrame) -> FrameFuture,
     FrameFuture: Future<Output = Result<()>>,
 {
-    observe_inner(config, cancel, audit, progress, select, frame, None).await
+    observe_inner(config, cancel, audit, progress, select, frame, None, None).await
 }
 
 /// A device signer has no private-key export. The implementation owns its local handle.
@@ -785,12 +787,32 @@ where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<
       Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
     let key = PublicKey::from_openssh(&public_key).map_err(|_| "invalid_device_key")?;
     if key.algorithm() != Algorithm::Ed25519 || key.to_openssh().map_err(|_| "invalid_device_key")? != public_key { return Err("invalid_device_key"); }
-    observe_inner(config, cancel, audit, progress, select, frame, Some(ExternalSigner { key, signer })).await
+    observe_inner(config, cancel, audit, progress, select, frame, Some(ExternalSigner { key, signer }), None).await
+}
+
+/// Capabilities are queried on the authenticated SSH connection. The hook is
+/// published only after the first full frame has actually been consumed.
+pub struct InputHooks {
+    pub recovery: recovery::SharedRecovery,
+    pub ready: Arc<dyn Fn(Arc<input::LiveInput>) + Send + Sync>,
+}
+pub async fn observe_interactive<Select, SelectFuture, Frame, FrameFuture>(
+    config: RemoteConfig, device: Option<(String, Arc<dyn DeviceSigner>)>, cancel: Cancellation, audit: Arc<Audit>,
+    progress: impl Fn(&'static str) + Send + Sync, select: Select, frame: Frame, hooks: InputHooks,
+) -> Result<()>
+where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<String>>,
+      Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
+    let external = if let Some((public_key, signer)) = device {
+        let key=PublicKey::from_openssh(&public_key).map_err(|_| "invalid_device_key")?;
+        if key.algorithm()!=Algorithm::Ed25519 || key.to_openssh().map_err(|_| "invalid_device_key")?!=public_key {return Err("invalid_device_key");}
+        Some(ExternalSigner {key,signer})
+    } else {None};
+    observe_inner(config,cancel,audit,progress,select,frame,external,Some(hooks)).await
 }
 
 async fn observe_inner<Select, SelectFuture, Frame, FrameFuture>(
     config: RemoteConfig, cancel: Cancellation, audit: Arc<Audit>, progress: impl Fn(&'static str) + Send + Sync,
-    select: Select, frame: Frame, mut external: Option<ExternalSigner>,
+    select: Select, frame: Frame, mut external: Option<ExternalSigner>, hooks: Option<InputHooks>,
 ) -> Result<()>
 where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<String>>,
       Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
@@ -862,6 +884,7 @@ where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<
         return Err("authentication_failed");
     }
     progress("authenticated");
+    let ssh=Arc::new(ssh);
     let channel = bounded(
         &cancel,
         8,
@@ -897,6 +920,10 @@ where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<
     let selected =
         tokio::select! { biased; _=cancel.wait()=>return Err("cancelled"), v=select(panes)=>v? };
     let terminal_id = snapshot_terminal(&value, &selected)?;
+    let supported=if hooks.is_some() { input::discover(&ssh,&config.socket_path,&cancel).await } else { false };
+    if cancel.is_cancelled() {return Err("cancelled");}
+    if hooks.is_some() && !supported {progress("input-unavailable");}
+    let mut ready_hook=if supported {hooks} else {None};
     let command = observe_command(&config, &terminal_id)?;
     let mut channel = bounded(&cancel, 8, "observe_failed", ssh.channel_open_session()).await?;
     bounded(&cancel, 8, "observe_failed", channel.exec(true, command)).await?;
@@ -930,6 +957,10 @@ where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<
                             audit.full_frame_received.store(true, Ordering::SeqCst);
                         }
                         tokio::select! { biased; _=cancel.wait()=>return Err("cancelled"), result=frame(parsed)=>result? };
+                        if let Some(hooks)=ready_hook.take() {
+                            let input=Arc::new(input::LiveInput::new(ssh.clone(),input::InputIdentity {host:config.host.clone(),port:config.port,user:config.username.clone(),host_key:config.expected_host_key.clone(),socket:config.socket_path.clone(),herdr:config.herdr_path.clone(),session:config.session.clone(),pane:selected.clone(),terminal:terminal_id.clone()},cancel.clone(),hooks.recovery));
+                            (hooks.ready)(input);
+                        }
                     }
                 }
             }

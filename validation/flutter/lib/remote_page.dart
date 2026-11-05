@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
 import 'remote_adapter.dart';
+import 'remote_input.dart';
+import 'remote_input_platform.dart';
 import 'device_keys.dart';
 
 String pemFromSingleLineInput(String text) {
@@ -15,19 +17,20 @@ String pemFromSingleLineInput(String text) {
 }
 
 class RemotePage extends StatefulWidget {
-  const RemotePage({super.key,required this.tokens,this.adapter,this.pairedTarget,this.deviceKeys,this.keyHandle,this.devicePublicKey,this.onConnecting,this.onAuthenticated,this.onStopped});
+  const RemotePage({super.key,required this.tokens,this.adapter,this.pairedTarget,this.deviceKeys,this.keyHandle,this.devicePublicKey,this.onConnecting,this.onAuthenticated,this.onStopped,this.visibility});
   final DesignTokens tokens;
   final RemoteReadOnlyAdapter? adapter;
   final Map<String,dynamic>? pairedTarget;
   final DeviceKeys? deviceKeys;
   final String? keyHandle, devicePublicKey;
   final VoidCallback? onConnecting, onAuthenticated, onStopped;
+  final ValueListenable<bool>? visibility;
   @override
   State<RemotePage> createState() => _RemotePageState();
 }
 
 class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
-  late final adapter = widget.adapter ?? RemoteReadOnlyAdapter();
+  late final adapter = widget.adapter ?? RemoteReadOnlyAdapter(inputJournal:const PlatformRemoteInputJournal());
   final fields = <String,TextEditingController>{
     for (final name in ['host','port','username','expectedHostKey','privateKeyPem','socketPath','herdrPath','session','paneId'])
       name:TextEditingController(text:name == 'port' ? '22' : ''),
@@ -43,13 +46,40 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   RemoteSnapshot? snapshot;
   DateTime? capturedAt;
   Terminal? terminal;
+  final terminalFocus = FocusNode();
+  final draft = TextEditingController();
+  bool rendering = false, previewOpen = false, acknowledgingInput = false;
+  String? draftTarget;
+  final drafts = <String,String>{};
+  late final inputGate = RemoteInputGate((target,bytes,current) =>
+    adapter.sendInput(target,bytes,stillCurrent:current),onChanged:() {
+      if (mounted) setState(() {});
+    });
 
   @override
   void initState() {
     super.initState(); WidgetsBinding.instance.addObserver(this);
+    widget.visibility?.addListener(visibilityChanged);
+    if (widget.visibility?.value == false) status = '标签已隐藏 · 输入关闭；显示后需主动审查恢复';
     final target = widget.pairedTarget;
     if (target != null) for (final entry in fields.entries) {
       if (target[entry.key] != null) entry.value.text = target[entry.key].toString();
+    }
+  }
+  @override
+  void didUpdateWidget(RemotePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.visibility,widget.visibility)) {
+      oldWidget.visibility?.removeListener(visibilityChanged);
+      widget.visibility?.addListener(visibilityChanged);
+      if (widget.visibility?.value == false || oldWidget.visibility?.value == false) visibilityChanged();
+    }
+  }
+  void visibilityChanged() {
+    if (widget.visibility?.value == false) {
+      stop('标签已隐藏 · 连接与输入已停止；未发送草稿保留，显示后需主动审查恢复');
+    } else if (mounted) {
+      setState(() { status = '标签已显示 · 旧画面仅供参考，请主动审查连接并取得新 full'; });
     }
   }
   @override
@@ -57,6 +87,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) stop('应用已暂停，连接已取消；请重新核验后主动连接');
   }
   void stop([String message = '已取消；不会重连或发送输入']) {
+    inputGate.invalidate(); terminalFocus.unfocus();
     request++; identityLease?.cancel(); unawaited(adapter.cancel());
     widget.onStopped?.call();
     fields['privateKeyPem']!.clear();
@@ -64,14 +95,16 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   @override
   void dispose() {
+    widget.visibility?.removeListener(visibilityChanged);
     WidgetsBinding.instance.removeObserver(this); request++; identityLease?.cancel();
+    inputGate.onChanged = null; inputGate.invalidate(); terminalFocus.dispose(); draft.dispose();
     unawaited(adapter.cancel()); terminal?.dispose();
     for (final c in fields.values) { c.clear(); c.dispose(); }
     super.dispose();
   }
 
   Future<void> connect() async {
-    if (!reviewed || busy) return;
+    if (!reviewed || busy || widget.visibility?.value == false) return;
     final ticket = ++request;
     setState(() { busy = true; });
     try {
@@ -92,6 +125,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       }
       fields['privateKeyPem']!.clear();
       FocusScope.of(context).unfocus();
+      inputGate.invalidate();
       setState(() { busy = true; live = false; dashboard = null; selectedPane = null; sequence = null; snapshot = null; capturedAt = null; terminal?.dispose(); terminal = null; status = '正在连接并核验主机身份'; });
       await adapter.observe(config,onDashboard:(value) {
         if (!mounted || ticket != request) return;
@@ -103,7 +137,21 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           terminal?.dispose();
           terminal = Terminal(maxLines:24,reflowEnabled:false)..resize(80,24);
         }
-        terminal!.write(frame.ansi);
+        // Parser-generated responses to remote device queries must never become
+        // user input, including while an interactive mode is selected.
+        rendering = true;
+        try { terminal!.write(frame.ansi); } finally { rendering = false; }
+        if (frame.full && adapter.inputTarget != null) {
+          final target = adapter.inputTarget!;
+          final key = '${target.hostFingerprint}\u0000${target.host}:${target.port}\u0000${target.username}\u0000${target.socketPath}\u0000${target.paneId}\u0000${target.terminalId}';
+          if (draftTarget != key) {
+            if (draftTarget != null) drafts[draftTarget!] = draft.text;
+            draft.text = drafts[key] ?? ''; draftTarget = key;
+          }
+          inputGate.bind(target,adapter.inputCapability);
+          if (adapter.pendingInput != null) inputGate.restorePending(adapter.pendingInput!);
+        }
+        bindTerminalOutput();
         setState(() { snapshot = RemoteSnapshot(generation,config.session,paneId,frame.ansi);
           capturedAt = DateTime.now(); sequence = frame.seq; live = true;
           status = '正在只读观察 · 输入关闭'; });
@@ -121,6 +169,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     } catch (error) {
       if (!mounted || ticket != request) return;
       identityLease?.cancel(); widget.onStopped?.call();
+      inputGate.invalidate(); terminalFocus.unfocus();
       final code = error is RemoteFailure ? error.code : 'connection_failed';
       setState(() { busy = false; live = false; reviewed = false;
         status = switch (code) {
@@ -150,6 +199,151 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     setState(() { selectedPane = pane.paneId; live = false; status = '目标已选择 · 等待新 full'; });
     try { adapter.selectPane(board.generation,pane.paneId); }
     on RemoteFailure { stop('目标选择已失效 · 请重新审查连接'); }
+  }
+
+  void bindTerminalOutput() {
+    final source = terminal;
+    final lease = inputGate.capture();
+    if (source == null) return;
+    source.onOutput = (text) {
+      if (!mounted || rendering || previewOpen || !identical(source,terminal) || !terminalFocus.hasFocus ||
+          lease == null || lease.mode != RemoteInputMode.direct || !inputGate.current(lease)) return;
+      // An IME/multiline insertion also goes through preview. Enter generated
+      // by the terminal component is CR and remains an explicit key action.
+      if (text.contains('\n')) { unawaited(previewInput(text,lease)); }
+      else { unawaited(inputGate.submit(lease,text)); }
+    };
+  }
+
+  void setInputMode(RemoteInputMode mode) {
+    terminalFocus.unfocus(); FocusScope.of(context).unfocus();
+    inputGate.setFocused(true); inputGate.setMode(mode); bindTerminalOutput();
+    final lease = inputGate.capture();
+    if (mode == RemoteInputMode.direct && lease != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && inputGate.current(lease)) terminalFocus.requestFocus();
+      });
+    }
+  }
+
+  Future<void> previewInput(String text, RemoteInputLease lease, {bool fromDraft = false}) async {
+    if (previewOpen || inputGate.sending || !inputGate.current(lease) || text.isEmpty) return;
+    if (utf8ByteLength(text) > 4096) {
+      setState(() { status = '文本超过 4096 bytes · 未发送'; }); return;
+    }
+    setState(() { previewOpen = true; });
+    final approved = await showDialog<bool>(context:context,builder:(context) => AlertDialog(
+      title:const Text('预览发送文本'),
+      content:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+        mainAxisSize:MainAxisSize.min,children:[
+          Text(lease.target.label),const SizedBox(height:12),SelectableText(text),
+          const SizedBox(height:12),
+          const Text('保留全部换行，不额外附加回车。换行可能被终端解释为执行输入。服务端接收不表示命令已执行。'),
+        ])),actions:[
+        TextButton(onPressed:() => Navigator.pop(context,false),child:const Text('取消')),
+        FilledButton(key:const ValueKey('remote-input-confirm'),
+          onPressed:() => Navigator.pop(context,true),child:const Text('发送文本')),
+      ]));
+    if (!mounted) return;
+    setState(() { previewOpen = false; });
+    if (approved != true || !inputGate.current(lease)) return;
+    final result = await inputGate.submit(lease,text);
+    if (!mounted) return;
+    // Unknown submitted bytes are quarantined in the local record, never put
+    // back into the sendable draft. A proven rejection preserves the draft.
+    if (fromDraft && draft.text == text && result.disposition != RemoteInputDisposition.rejected) draft.clear();
+  }
+
+  Future<void> pasteInput() async {
+    final lease = inputGate.capture();
+    if (lease == null || previewOpen || inputGate.sending) return;
+    final value = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted || !inputGate.current(lease) || value?.text == null) return;
+    if (lease.mode == RemoteInputMode.draft) {
+      if (utf8ByteLength(draft.text + value!.text!) <= 4096) draft.text += value.text!;
+    } else { await previewInput(value!.text!,lease); }
+  }
+
+  void auxiliaryInput(String bytes) {
+    final lease = inputGate.capture();
+    if (lease == null || lease.mode != RemoteInputMode.direct || previewOpen || inputGate.sending) return;
+    terminalFocus.requestFocus(); unawaited(inputGate.submit(lease,bytes));
+  }
+
+  Widget inputPanel() {
+    final available = live && inputGate.capability != null && inputGate.fresh;
+    final enabled = available && inputGate.unknown == null;
+    final result = inputGate.lastResult;
+    final message = inputGate.unknown != null
+      ? switch (inputGate.unknown!.knownDisposition) {
+        RemoteInputDisposition.accepted => '服务端已接收 · 本机发送锁未清理，输入已锁定，不会重放',
+        RemoteInputDisposition.rejected => '服务端已明确拒绝 · 本机发送锁未清理，输入已锁定',
+        _ => '发送结果待核实 · 输入已锁定，不会重放',
+      }
+      : inputGate.sending ? '正在发送 · 同一动作不会重复提交'
+      : result?.disposition == RemoteInputDisposition.accepted ? '服务端已接收 · 仅确认队列受理，请查看终端反馈'
+      : result?.disposition == RemoteInputDisposition.rejected ? '未发送成功 · 已明确拒绝；请主动修正后再操作'
+      : inputGate.mode == RemoteInputMode.direct ? '逐键输入 · 当前焦点目标；输入法提交后才发送'
+      : inputGate.mode == RemoteInputMode.draft ? '本地草稿 · 预览确认后发送，不补回车'
+      : '观察模式 · 输入关闭';
+    return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      const SizedBox(height:12),
+      Text('当前输入目标：${inputGate.target?.label ?? '尚未取得新 full'}'),
+      if (!available) const Padding(padding:EdgeInsets.symmetric(vertical:8),child:Text(
+        '原厂 herdr 0.9.5 保持只读。输入需要已核验的原子 terminal ID 保护扩展；不会改用 pane 名称写入或自动接管尺寸。')),
+      Semantics(liveRegion:true,child:Text(message,key:const ValueKey('remote-input-status'))),
+      Wrap(spacing:8,runSpacing:8,children:[
+        for (final entry in const {
+          RemoteInputMode.observe:'观察',RemoteInputMode.direct:'逐键输入',RemoteInputMode.draft:'草稿编辑',
+        }.entries) ChoiceChip(key:ValueKey('remote-mode-${entry.key.name}'),label:Text(entry.value),
+          selected:inputGate.mode == entry.key,
+          onSelected:entry.key == RemoteInputMode.observe || enabled
+            ? (_) => setInputMode(entry.key) : null),
+      ]),
+      if (inputGate.unknown != null) ...[
+        Text('待核实目标：${inputGate.unknown!.target.label}\n发送于 ${inputGate.unknown!.at.toLocal().toIso8601String()}'),
+        ExpansionTile(title:const Text('查看本机保留的待核实内容'),children:[
+          SelectableText(inputGate.unknown!.bytes.isEmpty
+            ? '上次进程仅持久保存了目标与尝试编号，正文未保存。请从远端画面核实。' : inputGate.unknown!.text)]),
+        const Text('先停止并重新连接同一目标、取得新 full，查看远端后再人工确认。确认只解除锁定，不会重发。'),
+        TextButton(key:const ValueKey('remote-input-acknowledge'),
+          onPressed:inputGate.canAcknowledgeUnknown && !inputGate.sending && !acknowledgingInput ? () async {
+            if (acknowledgingInput) return;
+            final target = inputGate.target!;
+            setState(() { acknowledgingInput = true; });
+            final cleared = await adapter.acknowledgeInputUnknown(target);
+            if (!mounted) return;
+            if (cleared && identical(inputGate.target,target)) inputGate.acknowledgeUnknown();
+            setState(() { acknowledgingInput = false; });
+          } : null,child:const Text('我已核实新画面，解除未知结果锁定')),
+      ],
+      if (inputGate.mode == RemoteInputMode.direct) ...[
+        Wrap(spacing:8,runSpacing:8,children:[
+          for (final key in const {'Esc':'\x1b','Tab':'\t','Ctrl+C':'\x03','Ctrl+D':'\x04',
+            'Ctrl+Z':'\x1a','Ctrl+A':'\x01','Ctrl+E':'\x05','Ctrl+L':'\x0c','Ctrl+R':'\x12',
+            'Ctrl+U':'\x15','Ctrl+W':'\x17','↑':'\x1b[A','↓':'\x1b[B','←':'\x1b[D','→':'\x1b[C',
+            'Home':'\x1b[H','End':'\x1b[F','PgUp':'\x1b[5~','PgDn':'\x1b[6~','Enter':'\r'}.entries)
+            OutlinedButton(key:ValueKey('remote-key-${key.key}'),onPressed:enabled && !previewOpen && !inputGate.sending ? () => auxiliaryInput(key.value) : null,
+              child:Text(key.key)),
+        ]),
+        OutlinedButton.icon(key:const ValueKey('remote-input-paste'),onPressed:enabled && !previewOpen && !inputGate.sending ? pasteInput : null,
+          icon:const Icon(Icons.content_paste),label:const Text('粘贴并预览')),
+      ],
+      if (inputGate.mode == RemoteInputMode.draft) ...[
+        TextField(key:const ValueKey('remote-input-draft'),controller:draft,minLines:2,maxLines:5,
+          maxLength:4096,
+          enabled:enabled && !inputGate.sending && !previewOpen,autocorrect:false,enableSuggestions:false,
+          enableIMEPersonalizedLearning:false,decoration:const InputDecoration(labelText:'此目标的本地草稿',
+            helperText:'发送最多 4096 UTF-8 bytes；中文等字符可能占多个 byte')),
+        Wrap(spacing:8,children:[
+          OutlinedButton(onPressed:enabled && !inputGate.sending && !previewOpen ? pasteInput : null,child:const Text('粘贴到草稿')),
+          FilledButton(key:const ValueKey('remote-input-draft-send'),
+            onPressed:enabled && !inputGate.sending && !previewOpen ? () {
+              final lease = inputGate.capture(); if (lease != null) unawaited(previewInput(draft.text,lease,fromDraft:true));
+            } : null,child:const Text('预览并发送文本')),
+        ]),
+      ],
+    ]);
   }
 
   Future<void> pastePrivateKey() async {
@@ -190,9 +384,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         onPressed:() { stop(); Navigator.pop(context); })),
       body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
         child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-          Text('M1b 手机只读看板',style:Theme.of(context).textTheme.titleLarge),
+          Text('手机看板 · 默认观察',style:Theme.of(context).textTheme.titleLarge),
           const SizedBox(height:8),
-          const Text('仅用于隔离测试主机。审查接入后查看当前命名会话，选择明确 pane 观察。布局只改变本地视口，不调整共享 PTY。'),
+          const Text('仅用于隔离测试主机。审查接入后查看当前命名会话，选择明确 pane 观察。支持保护扩展与持久锁时可显式输入；布局不调整共享 PTY。'),
           const SizedBox(height:12),
           Semantics(liveRegion:true,child:Text(status,key:const ValueKey('remote-status'),
             style:TextStyle(color:widget.tokens.color('textSecondary')))),
@@ -240,13 +434,24 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           ],
           if (snapshot != null && terminal != null) ...[
             const SizedBox(height:12),
-            Text('${snapshot!.session} / ${snapshot!.paneId}\n${live ? '只读观察中' : '旧画面 · 已停止'} · seq $sequence\n更新于 ${capturedAt!.toLocal().toIso8601String()} · 固定 80×24'),
+            Text('${snapshot!.session} / ${snapshot!.paneId}\n${live ? inputGate.mode == RemoteInputMode.observe ? '只读观察中' : '实时终端 · 显式输入模式' : '旧画面 · 已停止'} · seq $sequence\n更新于 ${capturedAt!.toLocal().toIso8601String()} · 固定 80×24'),
             const SizedBox(height:8),
             SizedBox(height:360,child:ClipRRect(borderRadius:BorderRadius.circular(12),
-              child:TerminalView(terminal!,theme:widget.tokens.terminalTheme,
-                autoResize:false,readOnly:true,simulateScroll:false,hardwareKeyboardOnly:true,
+              child:TerminalView(terminal!,key:ValueKey('remote-terminal-${inputGate.epoch}'),
+                focusNode:terminalFocus,theme:widget.tokens.terminalTheme,
+                autoResize:false,readOnly:!live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput,
+                simulateScroll:false,hardwareKeyboardOnly:inputGate.mode != RemoteInputMode.direct,
+                keyboardType:TextInputType.text,
                 textStyle:const TerminalStyle(fontFamily:'ProbeNerd',fontSize:14),shortcuts:const {},
-                onKeyEvent:(node,event) => KeyEventResult.handled))),
+                onKeyEvent:(node,event) {
+                  if (!live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput || previewOpen) return KeyEventResult.handled;
+                  if (event is KeyDownEvent && (HardwareKeyboard.instance.isControlPressed || HardwareKeyboard.instance.isMetaPressed) &&
+                      event.logicalKey == LogicalKeyboardKey.keyV) {
+                    unawaited(pasteInput()); return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                }))),
           ],
+          if (snapshot != null || inputGate.unknown != null) inputPanel(),
         ])))));
 }

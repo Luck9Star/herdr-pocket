@@ -1,42 +1,18 @@
 # herdr-pocket
 
-> 手机上的 herdr：一个 Flutter 客户端，iOS / Android 同一套 UI，**内置** Tailscale / EasyTier / ZeroTier 穿透，不需要系统 VPN。
+herdr-pocket 是面向远端 herdr 主机的图形客户端原型。目标覆盖 iOS、Android、Windows、macOS 和 Linux，手机优先。手机上从主机配对和会话看板进入终端，桌面共享同一套主机、会话和终端信息，并支持分屏。项目与 herdr 官方独立。
 
-状态：**M0 调研完成，代码未开始**。本仓库当前只放调研、架构、坑清单与路线图。
+**当前进度（2026-11-05）**　Flutter 与 Tauri 两条验证路线已推进到手机只读看板。实现、构建脚本和测试入口在[公开原型分支](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation)。项目许可证仍待依赖和分发审查后确定。
 
-## 为什么做
+| 范围 | 已取得的结果 | 下一项验证 |
+| --- | --- | --- |
+| 设计 | Penpot v2 已保存手机看板、终端观察和配对审查流程 | 手机触控、中文输入法与无障碍 |
+| 只读终端 | 两套 GUI 共用的适配器在隔离 SSH/herdr 主机上通过 18/18 项 CLI 对照，包含选定会话、持续观察、取消和显式重连。远端收到的输入为 0 字节 | 从 GUI 使用设备身份完成真实连接并观察所选 pane |
+| 配对和设备密钥 | 配对契约及 helper 已在临时测试目录运行，Apple 内存签名探针和 Android 桥编译通过 | 手机端响应审查、系统密钥存储与 SSH 签名 |
+| 测试构建 | 两条路线均已完成五平台云构建，Mac 包已做有限原生检查 | 手机安装、完整交互输入和三种组网的逐平台运行验收 |
 
-生态里已经有两半，但没人把它们拼起来：
+[设计原型与覆盖清单](https://github.com/Luck9Star/herdr-pocket/blob/221a37a14f70eb2a94e81071a00e62758beb1f9f/design/README.md) · [手机看板与持续观察验证记录](https://github.com/Luck9Star/herdr-pocket/blob/221a37a14f70eb2a94e81071a00e62758beb1f9f/docs/13-mobile-dashboard-observe.md) · [终端绘制与 EasyTier 移植记录](https://github.com/Luck9Star/herdr-pocket/blob/221a37a14f70eb2a94e81071a00e62758beb1f9f/docs/10-blocker-repair.md) · [逐平台构建与测试证据](https://github.com/Luck9Star/herdr-pocket/blob/221a37a14f70eb2a94e81071a00e62758beb1f9f/docs/evidence/mobile-observe/builds/README.md)
 
-- **跨平台统一 UI** 有 3 个活样本：React Native（benkraus/Herdr Mobile）、Flutter（tuan3w/herdr-mobile）、PWA（Collie / Ovis / 0cv relay / Roamgate）。
-- **App 内自带穿透** 只有 Heeler 一家做了，而且只有 iOS（Swift + tsnet / libzt / EasyTier no-TUN）。
-- 镜像事实：**没有任何 Android 客户端、也没有任何跨平台客户端做过 in-app overlay**。这是空白，不是重复造轮子。
+Android 测试包通过 GitHub Actions 分发，下载时请从对应 run 的 Artifacts 区选择应用包并核对随包的 SHA256SUMS。历史验证记录中的临时下载地址可能已失效。[构建记录](https://github.com/Luck9Star/herdr-pocket/actions)
 
-## 为什么是 Flutter
-
-不是"Flutter 好"，是三条事实刚好凑齐（详见 [`docs/02-architecture.md`](docs/02-architecture.md)）：
-
-1. `dartssh2` 4.x 已支持 `direct-streamlocal` → 不经主机 socat/python 就能直连 herdr 的 unix socket。
-2. `herdr terminal session observe` 直接吐 NDJSON 终端帧（base64 ANSI，首帧全量 + 后续增量）→ 不需要逆向 herdr 的二进制协议。
-3. `xterm3` / `terminal_view` 在移动端够快（113 MiB/s 纯 ASCII），三个 overlay 库都能 FFI 接。
-
-## 文档
-
-| 文件 | 内容 |
-| --- | --- |
-| [`docs/00-research.md`](docs/00-research.md) | 调研结论：生态、herdr 对客户端暴露的协议面、实测证据 |
-| [`docs/01-comparison.md`](docs/01-comparison.md) | 13 个客户端 × 17 项能力矩阵 + 实现对比 + 各自设计取向 |
-| [`docs/02-architecture.md`](docs/02-architecture.md) | Flutter 分层、选型、overlay 契约、Host/Route 竞速 |
-| [`docs/03-pitfalls.md`](docs/03-pitfalls.md) | **32 条坑清单**（含实测证据与规避），开工前必读 |
-| [`docs/04-roadmap.md`](docs/04-roadmap.md) | M0–M5 里程碑与验收标准 |
-| [`docs/assets/comparison.html`](docs/assets/comparison.html) | 同一份对比的可视化版（手机友好、暗色模式） |
-| [`docs/adr/`](docs/adr/) | 架构决策记录 |
-
-## 待定
-
-- 许可：未定。取决于自用 / 开源 / 商业闭源 —— 商业闭源会直接砍掉 ZeroTier 那条线（libzt 是 BSL 1.1）。
-- 仓库名 / 产品名：暂定 `herdr-pocket`。
-
-## 与 herdr 的关系
-
-本项目是第三方客户端，与 herdr 官方无关。客户端能力全部建立在 herdr 公开的 socket API 与 CLI 上。
+开发顺序为手机配对审查与设备密钥、会话看板、持续观察，再推进逐键输入、草稿、多标签与断线恢复。[产品设计](https://github.com/Luck9Star/herdr-pocket/blob/221a37a14f70eb2a94e81071a00e62758beb1f9f/docs/05-product-design.md) · [路线图](https://github.com/Luck9Star/herdr-pocket/blob/221a37a14f70eb2a94e81071a00e62758beb1f9f/docs/04-roadmap.md)

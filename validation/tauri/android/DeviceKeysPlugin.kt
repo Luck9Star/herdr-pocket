@@ -19,6 +19,9 @@ class DeviceKeysPlugin(private val activity: Activity): Plugin(activity) {
     private fun operation(invoke: Invoke, block: () -> JSObject) {
         try { invoke.resolve(block()) } catch (_: Exception) { invoke.reject("device_key_unavailable") }
     }
+    @Command fun privateConfigRoot(invoke: Invoke) = operation(invoke) {
+        JSObject().apply { put("path", activity.applicationContext.noBackupFilesDir.absolutePath) }
+    }
     @Command fun create(invoke: Invoke) = operation(invoke) {
         val key = AndroidDeviceKeyStore(activity).create()
         JSObject().apply { put("handle", key.handle); put("publicKey", key.publicKey) }

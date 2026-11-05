@@ -1,8 +1,6 @@
 name: Isolated SSH and herdr protocol probe
 on:
-  push:
-    branches: ['codex/**']
-    paths: ['validation/ssh/**', 'validation/tauri/core/**', '.github/workflows/ssh-validation.yml']
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,0 +1,61 @@
+name: Isolated input extension fixture
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  build:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BASE_SHA: 2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01
+      PATCH_SHA256: c07a1637e3b72b13c660dc4cc3c2cca50ef383b66d0400a3208bd9079434ab00
+      CARGO_BUILD_JOBS: 2
+      CARGO_PROFILE_DEV_DEBUG: 0
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: herdrdev/herdr
+          ref: 2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01
+          path: fixture-source
+          persist-credentials: false
+      - name: Verify the source and apply the isolated extension
+        run: |
+          test "$(git -C fixture-source rev-parse HEAD)" = "$BASE_SHA"
+          PATCH="$GITHUB_WORKSPACE/validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch"
+          echo "$PATCH_SHA256  $PATCH" | sha256sum -c -
+          git -C fixture-source apply --check "$PATCH"
+          git -C fixture-source apply "$PATCH"
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            fixture-source/target
+          key: pocket-input-fixture-${{ env.BASE_SHA }}-${{ env.PATCH_SHA256 }}-rust196
+      - name: Check atomic input guard and build the fixture server
+        working-directory: fixture-source
+        run: |
+          cargo test --locked --package herdr pocket_input_guards_identity_rejects_bad_bytes_and_never_resizes -- --nocapture
+          cargo build --locked --package herdr --bin herdr
+          mkdir "$RUNNER_TEMP/input-fixture"
+          cp target/debug/herdr LICENSE "$RUNNER_TEMP/input-fixture/"
+          cp "$GITHUB_WORKSPACE/validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch" "$RUNNER_TEMP/input-fixture/"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'input-fixture'
+          data={'scope':'isolated validation fixture','sourceSHA':os.environ['GITHUB_SHA'],'upstreamSHA':os.environ['BASE_SHA'],'patchSHA256':os.environ['PATCH_SHA256'],'binarySHA256':hashlib.sha256((root/'herdr').read_bytes()).hexdigest()}
+          (root/'manifest.json').write_text(json.dumps(data,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: input-fixture-${{ github.sha }}
+          path: ${{ runner.temp }}/input-fixture/
+          retention-days: 2
+          if-no-files-found: error

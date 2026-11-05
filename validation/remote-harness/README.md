@@ -53,3 +53,12 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s validation/remote-harn
 
 
 M1b [run 41060251076](../../docs/evidence/mobile-observe/41060251076/README.md) 在源码 `73ce2f8` 上 **18/18 通过**，两路线各9项。full/delta来自同一个每200ms更新的合成终端；输入计数0、cleanup通过。新三项分别取得3/2、1/0、4/2张总帧/delta，最后一项连接数2。`bufferHighWaterBytes=2572` 只统计解码单帧，不能当SSH缓冲或全进程内存。当前10项harness guard检查通过；不是手机或GUI持续运行证明。
+
+
+## 配对 GUI 与稳定目标写入的批次探针
+
+[批次工作流](../../.github/workflows/batch-validation.yml)在同一源码提交上调用 GUI 探针。主机 helper 的真实代码只访问 runner 新建的临时 home；helper 审查通过的唯一公钥进入测试 sshd 的专用授权文件。实际 sshd 日志中的 Accepted publickey 必须与请求中的设备指纹匹配。原版 herdr 0.9.5 场景要求接收器记录0字节。扩展候选由固定源码及补丁单独构建，验来源与哈希后才允许运行；输入场景必须恰好收到显式确认的一笔 `Pocket测`，不附加回车。
+
+Linux Tauri 用 WebKitWebDriver 驱动窗口，观测 xterm 写回调消费的 full/delta、停止后的陈旧状态。Flutter Widget 驱动产品配对页和同一适配器，使用明确注入的测试 signer／写入标记存储。Android Tauri 另建 API35 x86_64 临时模拟器，以 adb reverse 连接同一 runner 的 loopback sshd，驱动真实 WebView 和 AndroidKeyStore 签名路径。每个场景单独记录实际结果。构建脚本存在不等于设备结果。
+
+WebDriver 测试采用官方 [Tauri 测试说明](https://v2.tauri.app/develop/tests/webdriver/)，固定 tauri-driver 2.1.0。Android AVD 使用[官方命令行工具](https://developer.android.com/studio/run/emulator-commandline)，记录实际 image/emulator revision，使用完成后关闭本次启动的 AVD。编译上游候选只在临时 checkout，不更新用户主机。

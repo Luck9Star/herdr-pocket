@@ -1,0 +1,8 @@
+// Shared camera flow. The barcode activity requests permission only on launch.
+def cameraSources = project.file(project.ext.herdrDeviceKeysDir).parentFile.toPath().resolve('camera/android').toFile()
+android.sourceSets.main.java.srcDir(cameraSources)
+android.sourceSets.main.assets.srcDir(new File(cameraSources, 'notices'))
+dependencies {
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    implementation 'com.google.zxing:core:3.5.3'
+}

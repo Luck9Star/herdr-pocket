@@ -1,5 +1,7 @@
 # 手机配对与设备密钥契约实验
 
+2026-11-05 更新：Android 设备密钥四方法已接入两壳；Flutter 的 Apple bridge、独立相机入口与一次性 POSIX helper 已有实现。有关当前 GUI 的运行证据与缺项，见[手机配对工作台](../../docs/14-mobile-pairing-workbench.md)与[Android signer](native/android/README.md)。下文保留 10 月 30 日离线实验的范围。
+
 2026-10-30。这里完成**可执行的离线公开请求 → 临时 helper 授权 → 手机响应绑定 → 等待连通／取消／过期／重复／撤销状态契约**。Python reference 使用固定 `cryptography 46.0.3` 生成独立 Ed25519 key，并以成熟 OpenSSH parser 验证公钥；不是手机 App 已接线的实现。没有调用 SSH、相机、真实主机授权文件、系统 Keychain 或 overlay 身份，也没有运行服务。产品授权流程不构成本次真实主机写入授权。
 
 ## 运行与隔离边界

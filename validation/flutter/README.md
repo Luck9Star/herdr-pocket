@@ -107,3 +107,15 @@ CI CLI只允许运行器本次 `/tmp/hp-mobile-<run>-...` 中的合成配置、l
 同一 CI CLI 保留原 CLI case（harness 对应六项），并新增 `observe-positive`（至少3帧且含delta后主动取消）、`observe-cancel`（首full后主动取消）和 `observe-reconnect`（同adapter显式第二次调用，每次至少full+delta）。报告只增加 pane/frame/delta/connection 计数、lastSeq 和解码帧缓冲高水位；主动取消完成才标成功，不输出 pane 内容、公钥、配置或原始错误。固定依赖及锁未变化。API核查使用 Context7 library→docs：`/vicajilau/dartssh2` 的 execute/stdout/close 与 `/websites/api_flutter_dev` 的生命周期；版本行为仍以锁定源码和真实隔离 CI 为准。
 
 固定 `dartssh2 4.1.0` 归档已按依赖清单 SHA256 复核：`SSHSession` stdout pause/resume 会传给 channel subscription，channel 暂停时不补发 window credit；底层预授信窗口固定 2 MiB、最大包 32 KiB，并拒绝越界包。此为 SSH 层额外有限接收预算，未混入只报告解码帧的 `bufferHighWaterBytes`；单测或该源码核查不替代真实慢消费者实测。
+
+## 设备身份配对 GUI（2026-11-05 源码）
+
+顶部“设备配对”进入 `PairingPage`，原手动 PEM 入口改称“手动实验”。目标、公钥、账号和命名会话先审查，设备身份只通过 `DeviceKeys.create/public/sign/delete` 的 opaque handle 使用。公开 v2 请求交给主机审查；粘贴响应后同时显示实际响应账号、主机与设备指纹、授权／撤销、是否新增以及期限，再独立确认来源。响应仅到 `authorized-unverified`，主动进入冻结目标的只读连接页，再次审查后才拨号；同连接 pin 和 SSH 认证成功才进入 paired，随后 snapshot 看板要求明确选择 pane，接收 full／delta。
+
+固定 `dartssh2 4.1.0` 归档 SHA256 `39359aceafcf5940b868249e3c9c6d86e4e0f989eec7417d033c943157c84c51` 已复核，其 `SSHIdentity.custom` 与 `await identity.sign` 原生支持异步 signer，无需依赖补丁／升级。设备路径没有 PEM 字段，私钥不进入 Dart。native 返回的64字节签名经 RFC4253 signature envelope 包装后供 SSH 使用；签名前后核验 generation，取消／锁定／错误 pin 都不能使用迟到签名或切换身份。
+
+`ci.py prepare` 在新建临时工程接 Android MethodChannel，应用共享 `validation/pairing/native/android/device-keys.gradle`；四个Java源、Java17、BC1.86及MIT notice由共享脚本接线。Apple临时runner从共享 `DeviceKeys.swift` 加入同样四方法 channel，Swift采用现有 Keychain backend；注册没有系统存储副作用。Windows/Linux明确显示设备桥不可用并禁用创建，手动隔离实验保留。本机没有执行系统Keychain或Keystore；源码接线／编译不等于系统存储、锁屏、备份或手机运行验证。
+
+取消、过期、重复或错绑定响应拒绝；未知授权不重放，匹配且经审查的撤销响应仍可关闭未知状态。请求和已返回handle在同进程保留：离开再进可明确删除原身份；创建后的public读取或清理未确认则保留已知handle，禁止重放创建。**跨进程配对元数据／handle目录恢复尚未实现**；native身份存在不等于GUI可恢复其记录。取消与本机删除均不声称撤销主机授权，不自动创建替代身份。
+
+新增 `pairing_test.dart`、`device_keys_test.dart`、`pairing_gui_test.dart` 覆盖严格 UTF-8／2048byte／重复键／TTL、完整绑定和代际、SSH签名封装、锁定与真实Widget状态流程。memory double明确标为double，不作为SSH证据。 opt-in `test/pairing_gui_ssh_test.dart` 由隔离harness提供 `HERDR_PAIRING_GUI_CONFIG`（公开目标JSON路径）、`HERDR_PAIRING_GUI_DIR`（临时目录）和 `HERDR_PAIRING_GUI_TEST_KEY`（显式临时测试signer PEM路径）；真实Widget先原子写`request.json`，等待harness审查授权后写`response.json`，经实际控件完成只读连接、选pane、full／delta与停止并写脱敏`result.json`。此测试signer仅在test文件，生产没有私钥导入设备store或测试开关。是否实际通过以本轮云端日志为准。

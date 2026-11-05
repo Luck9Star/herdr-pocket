@@ -71,6 +71,7 @@ class PendingDevicePairing {
       'account':account,'host_key':hostKey,'device':device,'public_key':publicKey,'issued_at':now,'expires_at':now+600,
     }))),now);
   }
+  PendingDevicePairing._restored(this.handle,Map<String,dynamic> restored) { request = restored; }
   final String handle;
   late final Map<String,dynamic> request;
   String state = 'awaiting-host', authorization = 'unknown';
@@ -102,4 +103,37 @@ class PendingDevicePairing {
     state = authenticated ? 'paired' : 'waiting-connectivity';
   }
   void cancel() { state = 'cancelled'; generation++; }
+}
+
+extension PairingPersistence on PendingDevicePairing {
+  Map<String,dynamic> toPublicRecord() => {
+    'handle':handle,'request':Map<String,dynamic>.from(request),
+    'state':state == 'connecting' || state == 'paired' ? 'waiting-connectivity' : state,
+    'authorization':authorization,'consumed':consumed,
+  };
+}
+
+PendingDevicePairing restoreDevicePairing(Map<String,dynamic> record,int now) {
+  const fields = {'handle','request','state','authorization','consumed'};
+  if (record.length != fields.length || !record.keys.every(fields.contains) ||
+      record['handle'] is! String || !RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(record['handle'] as String) ||
+      record['request'] is! Map<String,dynamic> || record['consumed'] is! bool ||
+      !['awaiting-host','expired','cancelled','authorized-unverified','waiting-connectivity','paired','connecting','revoked'].contains(record['state']) ||
+      !['unknown','authorized','revoked'].contains(record['authorization'])) throw const RemoteFailure('invalid_catalog');
+  final request = Map<String,dynamic>.from(record['request'] as Map);
+  final start = request['issued_at'];
+  if (start is! int || start > now) throw const RemoteFailure('invalid_catalog');
+  final validated = decodePairing(Uint8List.fromList(utf8.encode(jsonEncode(request))),start);
+  if (validated['type'] != 'pairing-public-key-request') throw const RemoteFailure('invalid_catalog');
+  final authorization = record['authorization'] as String, state = record['state'] as String;
+  final consumed = record['consumed'] as bool;
+  if ((authorization == 'authorized' && !consumed) ||
+      (['authorized-unverified','waiting-connectivity','paired','connecting'].contains(state) && authorization != 'authorized') ||
+      (authorization == 'revoked' && (state != 'revoked' || !consumed)) ||
+      (state == 'revoked' && authorization != 'revoked') ||
+      (state == 'awaiting-host' && (authorization != 'unknown' || consumed))) throw const RemoteFailure('invalid_catalog');
+  final p = PendingDevicePairing._restored(record['handle'] as String,validated);
+  p.state = ['paired','connecting'].contains(state) ? 'waiting-connectivity' : state;
+  p.authorization = authorization; p.consumed = consumed; p.tick(now);
+  return p;
 }

@@ -1,0 +1,143 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'design_tokens.dart';
+import 'device_keys.dart';
+import 'host_catalog.dart';
+import 'pairing_page.dart';
+import 'host_tabs.dart';
+import 'remote_adapter.dart';
+
+class HostCatalogPage extends StatefulWidget {
+  const HostCatalogPage({super.key,required this.tokens,required this.offlineBuilder,this.catalog,this.keys,this.tabs,this.adapterFactory});
+  final DesignTokens tokens;
+  final WidgetBuilder offlineBuilder;
+  final HostCatalog? catalog;
+  final DeviceKeys? keys;
+  final HostTabs? tabs;
+  final RemoteReadOnlyAdapter Function(HostProfile)? adapterFactory;
+  @override
+  State<HostCatalogPage> createState() => _HostCatalogPageState();
+}
+class _HostCatalogPageState extends State<HostCatalogPage> {
+  late final catalog = widget.catalog ?? HostCatalog();
+  late final tabs = widget.tabs ?? HostTabs();
+  String? notice;
+  bool busy = false;
+  @override
+  void initState() { super.initState(); catalog.addListener(changed); tabs.addListener(tabChanged); unawaited(catalog.load()); }
+  void changed() { if (catalog.ready) tabs.reconcile(catalog.profiles); if (mounted) setState(() {}); }
+  void tabChanged() { if (mounted) setState(() {}); }
+  @override
+  void dispose() { catalog.removeListener(changed); tabs.removeListener(tabChanged); if (widget.tabs == null) tabs.dispose(); if (widget.catalog == null) catalog.dispose(); super.dispose(); }
+  Future<void> action(Future<void> Function() work) async {
+    if (busy) return;
+    setState(() { busy = true; notice = null; });
+    try { await work(); } catch (_) { if (mounted) setState(() { notice = '本机操作未确认 · 已停止，请重新读取核验；不会重放'; }); }
+    if (mounted) setState(() { busy = false; });
+  }
+  Future<void> open([HostProfile? profile]) async {
+    if (busy || !catalog.ready || catalog.writing || profile?.enabled == false) return;
+    if (profile != null) { tabs.open(profile,adapter:tabs.find(profile.id) == null ? widget.adapterFactory?.call(profile) : null); return; }
+    tabs.select(null);
+    await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,
+      catalog:catalog,profileId:profile?.id)));
+    if (mounted) setState(() {});
+  }
+  Future<void> rename(HostProfile profile) async {
+    final controller = TextEditingController(text:profile.label);
+    final label = await showDialog<String>(context:context,builder:(context) => AlertDialog(title:const Text('重命名本机资料'),
+      content:TextField(key:const ValueKey('host-rename-input'),controller:controller,maxLength:64,decoration:const InputDecoration(labelText:'名称')),
+      actions:[TextButton(onPressed:() => Navigator.pop(context),child:const Text('取消')),
+        FilledButton(onPressed:() => Navigator.pop(context,controller.text),child:const Text('保存名称'))]));
+    controller.dispose();
+    if (label != null) await action(() => catalog.update(profile.change(label:label,now:catalog.clock())));
+  }
+  Future<void> configureProvider(HostProfile profile) async {
+    var provider = profile.provider;
+    final selected = await showDialog<String>(context:context,builder:(context) => StatefulBuilder(builder:(context,update) => AlertDialog(
+      title:const Text('网络 provider 资料'),
+      content:Column(mainAxisSize:MainAxisSize.min,children:[
+        const Text('这里只记录此主机的连接配置。不会启动组网、切换网络身份或据此声称已入网。'),
+        DropdownButtonFormField<String>(initialValue:provider,items:[for (final value in hostProviders) DropdownMenuItem(value:value,child:Text(hostProviderLabel(value)))],
+          onChanged:(value) { if (value != null) update(() { provider = value; }); }),
+      ]),actions:[TextButton(onPressed:() => Navigator.pop(context),child:const Text('取消')),
+        FilledButton(onPressed:() => Navigator.pop(context,provider),child:const Text('保存配置（入网仍未知）'))])));
+    if (selected != null) await action(() => catalog.update(profile.change(provider:selected,now:catalog.clock())));
+  }
+  Future<void> remove(HostProfile profile) async {
+    final confirmed = await showDialog<bool>(context:context,builder:(context) => AlertDialog(
+      title:const Text('删除本机资料与设备身份'),
+      content:Text('将删除“${profile.label}”的本机资料与此设备密钥。此操作不会撤销主机上的公钥授权；请先在主机核验撤销。若删除未确认，资料会保持停用以便处理。'),
+      actions:[TextButton(onPressed:() => Navigator.pop(context,false),child:const Text('取消')),
+        FilledButton(onPressed:() => Navigator.pop(context,true),child:const Text('仅删除本机'))]));
+    if (confirmed != true) return;
+    await action(() async {
+      // Persist disabled before deleting the key. A crash between the two never
+      // leaves an enabled profile pointing to an identity deliberately removed.
+      await catalog.update(profile.change(enabled:false,now:catalog.clock()));
+      await (widget.keys ?? NativeDeviceKeys()).delete(profile.restore(catalog.clock()).handle);
+      await catalog.remove(profile.id);
+      if (mounted) notice = '本机已删除 · 主机授权未因此撤销';
+    });
+  }
+  Widget board() => ListView(padding:const EdgeInsets.all(16),children:[
+    Text(catalog.status,key:const ValueKey('hosts-status')),
+    if (notice != null) Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(notice!)),
+    const SizedBox(height:12),
+    FilledButton.icon(key:const ValueKey('hosts-add'),onPressed:catalog.ready && !busy && !catalog.writing && catalog.profiles.length < maxHostProfiles && catalog.pendingCreation == null ? () => open() : null,
+      icon:const Icon(Icons.add),label:const Text('新增主机与设备配对')),
+    if (catalog.pendingCreation != null) ...[
+      const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('上次设备身份创建未完成或结果未知 · 已禁止再次创建，不会自动重放。已返回句柄可明确删除；无句柄时需人工核验本机身份，不能按空记录处理。')),
+      if ((catalog.pendingCreation!['handle'] as String).isNotEmpty) TextButton(key:const ValueKey('hosts-delete-pending'),
+        onPressed:busy || !catalog.ready ? null : () => action(() async {
+          final handle = catalog.pendingCreation!['handle'] as String;
+          await (widget.keys ?? NativeDeviceKeys()).delete(handle); await catalog.clearDeletedCreation(handle);
+        }),child:const Text('明确删除未完成的本机身份（不撤销主机）')),
+    ],
+    for (final profile in catalog.profiles) Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Text(profile.label,style:Theme.of(context).textTheme.titleMedium),
+      Text('${hostProviderLabel(profile.provider)} · 入网状态未知\n${profile.target['username']}@${profile.target['host']}:${profile.target['port']}\n会话 ${profile.target['session']} · ${profile.enabled ? '本机启用' : '本机停用'}\n${profile.restore(catalog.clock()).state} · 在线与主机授权需重新核验'),
+      const SizedBox(height:8),
+      FilledButton(key:ValueKey('host-open-${profile.id}'),onPressed:!busy && catalog.ready && profile.enabled ? () => open(profile) : null,
+        child:const Text('审查此主机并主动连接')),
+      Wrap(spacing:8,children:[
+        TextButton(key:ValueKey('host-rename-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => rename(profile),child:const Text('重命名')),
+        TextButton(key:ValueKey('host-provider-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => configureProvider(profile),child:const Text('网络 provider 资料')),
+        TextButton(key:ValueKey('host-disable-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => action(() => catalog.update(profile.change(enabled:!profile.enabled,now:catalog.clock()))),
+          child:Text(profile.enabled ? '本机停用（不撤销主机）' : '本机启用（仍需审查）')),
+        TextButton(key:ValueKey('host-delete-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => remove(profile),child:const Text('删除本机资料与身份')),
+      ]),
+    ]))),
+    const SizedBox(height:12),TextButton(key:const ValueKey('hosts-offline'),onPressed:() { tabs.select(null); Navigator.push<void>(context,MaterialPageRoute(builder:widget.offlineBuilder)); },child:const Text('进入离线终端实验室')),
+    const Text('资料只含公开目标、设备公钥与本机句柄。不会自动连接、替换主机公钥、重建密钥或重放未知操作。'),
+  ]);
+  Widget tabNavigator(HostTab tab) => ValueListenableBuilder<bool>(valueListenable:tab.visible,
+    builder:(context,visible,child) => IgnorePointer(ignoring:!visible,child:ExcludeSemantics(excluding:!visible,
+      child:FocusScope(canRequestFocus:visible,child:child!))),
+    child:Navigator(key:tab.navigator,onGenerateRoute:(settings) => MaterialPageRoute<void>(settings:settings,
+      builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,catalog:catalog,profileId:tab.id,
+        adapter:tab.adapter,visibility:tab.visible))));
+  Widget tabBar() => SingleChildScrollView(scrollDirection:Axis.horizontal,padding:const EdgeInsets.symmetric(horizontal:12,vertical:6),
+    child:Row(children:[
+      Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(key:const ValueKey('hosts-board-tab'),label:const Text('主机列表'),selected:tabs.activeId == null,onSelected:(_) => tabs.select(null))),
+      for (final tab in tabs.tabs) Padding(padding:const EdgeInsets.only(right:8),child:Container(
+        decoration:BoxDecoration(border:Border.all(color:tabs.activeId == tab.id ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor),borderRadius:BorderRadius.circular(12)),
+        child:Row(mainAxisSize:MainAxisSize.min,children:[
+          TextButton(key:ValueKey('host-tab-${tab.id}'),onPressed:() => tabs.select(tab.id),child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:210),child:Text('${tab.label} · ${tabs.activeId == tab.id ? '当前视图' : '已暂停'}',overflow:TextOverflow.ellipsis))),
+          IconButton(key:ValueKey('host-tab-close-${tab.id}'),tooltip:'关闭本地标签，不终止远端任务',onPressed:() => tabs.close(tab.id),icon:const Icon(Icons.close,size:18)),
+        ]))),
+    ]));
+  @override
+  Widget build(BuildContext context) => PopScope(canPop:tabs.activeId == null,onPopInvokedWithResult:(didPop,result) {
+    if (didPop) return;
+    final navigator = tabs.active?.navigator.currentState;
+    if (navigator?.canPop() == true) { unawaited(navigator!.maybePop()); } else { tabs.select(null); }
+  },child:Scaffold(appBar:AppBar(title:const Text('herdr pocket · 主机与标签'),actions:[
+    IconButton(key:const ValueKey('hosts-reload'),tooltip:'重新读取本机资料',onPressed:busy || catalog.writing ? null : catalog.load,icon:const Icon(Icons.refresh)),
+  ]),body:SafeArea(child:Column(children:[
+    tabBar(),
+    if (tabs.notice != null) Padding(padding:const EdgeInsets.symmetric(horizontal:16),child:Text(tabs.notice!)),
+    if (tabs.active != null) Padding(padding:const EdgeInsets.symmetric(horizontal:16,vertical:4),child:Text('${hostProviderLabel(tabs.active!.provider)} · 仅配置，入网状态未知；隐藏标签停止观察，不终止远端任务',style:Theme.of(context).textTheme.bodySmall)),
+    Expanded(child:IndexedStack(index:tabs.activeIndex+1,children:[board(),for (final tab in tabs.tabs) KeyedSubtree(key:ValueKey('host-tab-view-${tab.id}'),child:tabNavigator(tab))])),
+  ]))));
+}

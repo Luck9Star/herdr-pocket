@@ -85,10 +85,32 @@ impl<R: Runtime> KeyStore for AndroidStore<R> {
         Ok(())
     }
 }
+struct ConfigRoot<R: Runtime>(PluginHandle<R>);
+#[derive(Deserialize)]
+struct RootPath {
+    path: String,
+}
+pub(crate) fn no_backup_directory<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<std::path::PathBuf> {
+    let state = app
+        .try_state::<ConfigRoot<R>>()
+        .ok_or("host_storage_unavailable")?;
+    let response: RootPath = state
+        .0
+        .run_mobile_plugin("privateConfigRoot", ())
+        .map_err(|_| "host_storage_unavailable")?;
+    let path = std::path::PathBuf::from(response.path);
+    if !path.is_absolute() {
+        return Err("host_storage_unavailable");
+    }
+    Ok(path)
+}
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("devicekeys")
         .setup(|app, api| {
             let handle = api.register_android_plugin("org.herdr.pocket", "DeviceKeysPlugin")?;
+            app.manage(ConfigRoot(handle.clone()));
             app.manage(PairingState::new(Arc::new(AndroidStore(handle))));
             Ok(())
         })

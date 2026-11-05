@@ -65,7 +65,6 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
         if (matches.length != 1) { profileBlocked = true; status = '指定主机资料不存在或已停用 · 不回退其他主机'; }
         else {
           savedProfile = matches.single; provider = savedProfile!.provider; pairing = savedProfile!.restore(now); target = savedProfile!.target;
-          if (pairing!.state == 'awaiting-host') pairing!.cancel();
           identityAvailable = false;
           status = '已恢复原主机与设备身份 · 正在核验本机句柄；不会自动连接';
           unawaited(checkExistingIdentity());
@@ -83,7 +82,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       if (mounted && p.state != previous) setState(() { status = '请求已到期 · 授权结果仍未知，不会重放请求'; });
     });
   }
-  void invalidate([String message = '已取消等待 · 主机授权可能已发生；取消不等于撤销']) {
+  void cancelWaiting() {
     revision++; scanning = false;
     final p = pairing;
     if (p != null) {
@@ -91,11 +90,16 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       if (['connecting','paired'].contains(p.state)) { p.generation++; p.state = 'waiting-connectivity'; }
     }
     if (widget.catalog != null && savedProfile != null) unawaited(persistPairing().catchError((Object _) {}));
-    if (mounted) setState(() { busy = false; targetReviewed = false; sourceReviewed = false; status = message; });
+    if (mounted) setState(() { busy = false; targetReviewed = false; sourceReviewed = false; status = '已取消等待 · 主机授权可能已发生，请在主机核验'; });
   }
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed && !scanning) invalidate('应用已暂停 · 不会自动重建身份、重放授权或重连');
+    if (scanning) return; // The OS may pause this activity for its own scanner.
+    if (state == AppLifecycleState.resumed) {
+      if (pageVisible && pairing != null && !profileBlocked) unawaited(checkExistingIdentity());
+      return;
+    }
+    pauseReview('应用已暂停 · 保留原请求，返回后重新核验设备与响应来源');
   }
   @override
   void dispose() {
@@ -249,12 +253,22 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
         savedProfile = current.single; provider = current.single.provider;
       }
       if (mounted) setState(() { status = '标签已返回 · 目标与草稿保留；请主动重新审查连接，默认观察'; });
+      if (pairing != null && !profileBlocked) unawaited(checkExistingIdentity());
       return;
     }
+    pauseReview('标签已暂停 · 不发送输入、不重连；远端任务未终止');
+  }
+  void pauseReview(String message) {
     revision++; scanning = false; targetReviewed = false; sourceReviewed = false;
     final p = pairing;
-    if (p != null && ['connecting','paired'].contains(p.state)) { p.generation++; p.state = 'waiting-connectivity'; }
-    if (mounted) setState(() { status = '标签已暂停 · 不发送输入、不重连；远端任务未终止'; });
+    if (p != null) {
+      identityAvailable = false;
+      if (['connecting','paired'].contains(p.state)) { p.generation++; p.state = 'waiting-connectivity'; }
+      p.tick(now);
+    } else if (busy && PairingPage.retainedCreationUnknown) {
+      creationUnknown = true;
+    }
+    if (mounted) setState(() { busy = false; status = message; });
   }
   Future<void> scanResponse() async {
     final p = pairing;
@@ -317,7 +331,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
           if (['authorized-unverified','waiting-connectivity','paired'].contains(p.state)) FilledButton(
             key:const ValueKey('pair-connect'),onPressed:busy || !identityAvailable || profileBlocked || widget.catalog?.ready == false ? null : connect,child:const Text('主动审查连接并读取看板')),
           if (savedProfile != null && !identityAvailable) TextButton(key:const ValueKey('pair-recheck-key'),onPressed:busy ? null : checkExistingIdentity,child:const Text('仅重新核验原设备身份')),
-          TextButton(key:const ValueKey('pair-cancel'),onPressed:busy ? null : invalidate,child:const Text('取消等待（不撤销主机授权）')),
+          TextButton(key:const ValueKey('pair-cancel'),onPressed:busy ? null : cancelWaiting,child:const Text('取消等待（不撤销主机授权）')),
           TextButton(key:const ValueKey('pair-delete'),onPressed:busy ? null : delete,child:const Text('删除本机身份（不撤销主机授权）')),
         ],
       ]))));

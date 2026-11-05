@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "purpose": "paired GUI Android package provenance and run outcome; emulator/device observations are reported separately",
+  "repository": "Luck9Star/herdr-pocket",
+  "branch": "codex/batch/mobile-workbench-20261105",
+  "sourceSHA": "4c475b2408d0704d2fe0c6b63b736bc160e467fd",
+  "run": {
+    "runId": 42050012843,
+    "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843",
+    "status": "failure",
+    "firstRelevantFailures": [
+      {
+        "job": "flutter / patch-and-test",
+        "jobId": 127323281816,
+        "step": "Analyze and verify original safety tests",
+        "error": "flutter analyze failed: nullable SSH fields and undefined ValueListenable; Flutter APK/GUI candidate jobs skipped",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843/jobs/127323281816"
+      },
+      {
+        "job": "android-emulator / android-device-key",
+        "jobId": 127323281242,
+        "step": "Pair through the real Android WebView and protected signer",
+        "error": "QEMU could not start: libpulse.so.0 missing (exit 127); Android emulator pairing not exercised",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843/jobs/127323281242"
+      },
+      {
+        "job": "build-input-fixture / build",
+        "jobId": 127323280603,
+        "step": "Check atomic input guard and build the fixture server",
+        "error": "ghostty-vt build requires Zig 0.16.0; zig executable not found; paired-input job skipped",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843/jobs/127323280603"
+      },
+      {
+        "job": "transport / shared-loopback",
+        "jobId": 127323281262,
+        "step": "Analyze and compile Dart CLI before creating credentials",
+        "error": "Dart analysis failed on nullable SSH fields in remote_adapter.dart; adapter probes skipped",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843/jobs/127323281262"
+      }
+    ]
+  },
+  "builds": {
+    "flutter": {
+      "status": "failed-before-android-build",
+      "sourceSHA": "4c475b2408d0704d2fe0c6b63b736bc160e467fd",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843/jobs/127323281816",
+      "apk": null,
+      "deviceResult": "not-run"
+    },
+    "tauri": {
+      "status": "success; run SHA, manifest, SHA256SUMS, and APK verified",
+      "jobId": 127323281598,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843/jobs/127323281598",
+      "artifactId": 13425823518,
+      "artifactName": "tauri-android-4c475b2408d0704d2fe0c6b63b736bc160e467fd",
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843/artifacts/13425823518",
+      "artifactArchiveSHA256": "10e2dc468726ae782f53d3e7955588a06c048a1149ae08d69f164a97d23dc0be",
+      "sourceSHA": "4c475b2408d0704d2fe0c6b63b736bc160e467fd",
+      "manifest": "tmp-probe/android-20261105/paired/tauri/build-manifest.json",
+      "checksums": "tmp-probe/android-20261105/paired/tauri/SHA256SUMS",
+      "apk": "tmp-probe/android-20261105/paired/tauri/app-universal-debug.apk",
+      "apkBytes": 172641997,
+      "apkSHA256": "118a80d49a9d933a5ba6d688970866ed4a155fbde7f472a0b9242a2cbf1099d4",
+      "androidPlatform": "android-35",
+      "deviceResult": "emulator-job-failed-before-pairing; missing host libpulse.so.0",
+      "signing": "ephemeral-debug-key",
+      "packagedNotices": {
+        "assets/BOUNCY-CASTLE-LICENSE.md": {
+          "bytes": 1171,
+          "sha256": "0e01f1549c9022f406392ac2947d32223b7c2e977d21ea2f8c182fdeb4dae5fd"
+        },
+        "assets/QR-NOTICE.txt": {
+          "bytes": 339,
+          "sha256": "7fc1888ae1ad783c0f318834a9e3263299530434c1ac0ac2077f385c33e018a4"
+        },
+        "assets/ZXING-APACHE-2.0.txt": {
+          "bytes": 11357,
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        }
+      }
+    }
+  },
+  "guiObservation": {
+    "tauri": {
+      "status": "failed",
+      "errorCode": "webdriver_clear_element_not_interactable",
+      "artifactId": 13426577734,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843/artifacts/13426577734",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843/jobs/127323281807",
+      "remoteInputBytes": 0
+    },
+    "flutter": {
+      "status": "failure",
+      "jobId": 127323281745,
+      "failedStep": "Prepare the Flutter candidate used by the Android package",
+      "error": "Flutter analyze failed on nullable SSH fields and undefined ValueListenable",
+      "interactionStep": "Review pairing, authorize the displayed key, choose pane and observe updates",
+      "interactionConclusion": "skipped",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42050012843/jobs/127323281745"
+    }
+  }
+}

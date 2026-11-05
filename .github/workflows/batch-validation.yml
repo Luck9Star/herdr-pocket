@@ -20,8 +20,12 @@ jobs:
     uses: ./.github/workflows/pairing-validation.yml
   flutter:
     uses: ./.github/workflows/flutter-candidate-validation.yml
+    with:
+      android_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-') }}
   tauri:
     uses: ./.github/workflows/tauri-validation.yml
+    with:
+      android_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-') }}
   android-emulator:
     uses: ./.github/workflows/paired-android-emulator.yml
   transport:
@@ -35,6 +39,17 @@ jobs:
       input_fixture: true
   paired-gui:
     uses: ./.github/workflows/paired-gui-validation.yml
+  overlay-isolation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Exercise stream ownership and cancellation with synthetic C ABI only
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          cargo +1.96.0 test --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --features native-fixture
   native:
     if: inputs.full || startsWith(github.ref, 'refs/heads/codex/batch/full-')
     uses: ./.github/workflows/native-candidate-validation.yml

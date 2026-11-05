@@ -340,11 +340,22 @@ LogLevel VERBOSE
         if args.paired_gui:
             # Import the pairing dependencies only for the isolated GUI workflow.
             from paired_gui import run_gui
-            report.update(milestone='M1c-pairing-dashboard-observe',
-                          scope=('API35 Android emulator GUI with actual SSH and AndroidKeyStore-wrapped identity' if args.paired_gui == 'tauri-android' else 'Linux desktop GUI or Flutter widget renderer with actual SSH and temporary signing identity'),
-                          unverified=['phone runtime', 'Keystore or Keychain runtime', 'camera', 'real IME', 'overlay networks', 'remote input'])
+            scopes = {
+                'tauri-android':'API35 emulator WebView and AndroidKeyStore-wrapped identity',
+                'tauri':'Linux GTK WebView with native process-memory test identity',
+                'flutter':'Flutter widget with explicit test signer, catalog and input journal',
+            }
+            report.update(milestone='M1c-pairing-dashboard-observe', scope=scopes[args.paired_gui],
+                          frameEvidence=('widget state after Terminal.write' if args.paired_gui == 'flutter'
+                                         else 'xterm parser callback after consuming a frame'),
+                          unverified=['physical phone', 'camera', 'real IME', 'overlay networks',
+                                      'pixel rendering', 'hardware key protection', 'production deployment'])
             report.pop('cancelScope', None)
             result = run_gui(args, root, env, config)
+            if result['status'] != 'passed' or not args.input_fixture:
+                report['unverified'].append('remote input from this GUI')
+            if result['status'] != 'passed' or args.paired_gui != 'tauri-android':
+                report['unverified'].append('protected system-store runtime')
             report['checks'].append(result)
             publish()
         else:

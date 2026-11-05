@@ -16,6 +16,9 @@ class AndroidNoticeTests(unittest.TestCase):
             apk = Path(temp) / 'synthetic.apk'
             for contents in [None, b'incorrect notice', source.read_bytes()]:
                 with zipfile.ZipFile(apk, 'w') as bundle:
+                    notices = ci.ROOT / 'validation/pairing/native/camera/android/notices'
+                    for notice in notices.iterdir():
+                        bundle.write(notice, 'assets/' + notice.name)
                     if contents is not None:
                         bundle.writestr('assets/BOUNCY-CASTLE-LICENSE.md', contents)
                 if contents == source.read_bytes():
@@ -25,6 +28,15 @@ class AndroidNoticeTests(unittest.TestCase):
                 else:
                     with self.assertRaises(SystemExit):
                         ci.verify_android_notice(apk)
+
+    def test_missing_camera_notice_prevents_packaging(self):
+        with tempfile.TemporaryDirectory() as temp:
+            apk = Path(temp) / 'synthetic.apk'
+            source = ci.ROOT / 'validation/pairing/native/android/notices/BOUNCY-CASTLE-LICENSE.md'
+            with zipfile.ZipFile(apk, 'w') as bundle:
+                bundle.write(source, 'assets/' + source.name)
+            with self.assertRaisesRegex(SystemExit, 'QR-NOTICE'):
+                ci.verify_android_notice(apk)
 
     def test_manifest_separates_native_sources_runtime_and_manual_identity(self):
         metadata = ci.pairing_provenance('macos', None)

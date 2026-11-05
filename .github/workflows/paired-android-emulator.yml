@@ -37,7 +37,7 @@ jobs:
       - name: Pair through the real Android WebView and protected signer
         run: |
           sudo apt-get update
-          sudo apt-get install -y openssh-server acl
+          sudo apt-get install -y openssh-server acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
           python3 -m venv "$RUNNER_TEMP/android-venv"
           "$RUNNER_TEMP/android-venv/bin/pip" install -r validation/pairing/requirements.txt websocket-client==1.8.0
           mapfile -t apks < <(find validation/tauri/src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk')

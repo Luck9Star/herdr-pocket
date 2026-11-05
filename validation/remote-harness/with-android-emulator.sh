@@ -21,6 +21,7 @@ sdkmanager --install 'emulator' 'platform-tools' "$image"
 # Save actual tool/image revisions as the SDK registry can update this package.
 mkdir -p "$RUNNER_TEMP/avd-evidence"
 cp "$ANDROID_HOME/system-images/android-35/google_apis/x86_64/source.properties" "$RUNNER_TEMP/avd-evidence/image.properties"
+# The launcher sets its private library path. Check the actual launcher.
 emulator -version > "$RUNNER_TEMP/avd-evidence/emulator-version.txt"
 printf 'no\n' | avdmanager create avd --name "$name" --package "$image" --device pixel_5
 emulator -avd "$name" -port 5554 -accel on -no-window -no-audio -no-boot-anim -no-snapshot -gpu software > "$RUNNER_TEMP/avd.log" 2>&1 &

@@ -322,9 +322,10 @@ class RemoteReadOnlyAdapter {
     SSHForwardChannel? channel;
     RemoteInputResult result = const RemoteInputResult.rejected('input_cancelled_before_write');
     try {
-      channel = await _wait(a,a.client!.forwardLocalUnix(a.config!.socketPath),input:true,
+      final opened = await _wait<SSHForwardChannel>(a,a.client!.forwardLocalUnix(a.config!.socketPath),input:true,
         disposeLate:(c) => c.destroy());
-      a.inputForward = channel;
+      channel = opened;
+      a.inputForward = opened;
       if (!_canWrite(a,target) || _unknownInputTarget != null || !stillCurrent()) return result;
       final id = _requestId();
       final request = utf8.encode('${jsonEncode({'id':id,'method':'pocket.input.send','params':{
@@ -342,8 +343,8 @@ class RemoteReadOnlyAdapter {
       }
       // Set before sink.add: even an error here cannot prove remote rejection.
       submitted = true;
-      channel.sink.add(request);
-      final line = await _wait(a,boundedLines(channel.stream,maxTotal:16384).first,input:true);
+      opened.sink.add(request);
+      final line = await _wait(a,boundedLines(opened.stream,maxTotal:16384).first,input:true);
       result = parseInputResponse(_decodeObject(line),id,target,bytes.length);
       if (result.disposition != RemoteInputDisposition.unknown) {
         // Only a matching accepted ACK or proven pre-queue rejection clears it.

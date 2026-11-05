@@ -1,6 +1,10 @@
 name: Tauri validation shells
 on:
   workflow_call:
+    inputs:
+      android_only:
+        type: boolean
+        default: false
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,18 +18,10 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        include:
-          # Submit mobile candidates first; desktop support remains in the same matrix.
-          - platform: android
-            runner: ubuntu-24.04
-          - platform: ios-simulator
-            runner: macos-15
-          - platform: macos
-            runner: macos-15
-          - platform: linux
-            runner: ubuntu-24.04
-          - platform: windows
-            runner: windows-2025
+        include: >-
+          ${{ fromJSON(inputs.android_only &&
+          '[{"platform":"android","runner":"ubuntu-24.04"}]' ||
+          '[{"platform":"android","runner":"ubuntu-24.04"},{"platform":"ios-simulator","runner":"macos-15"},{"platform":"macos","runner":"macos-15"},{"platform":"linux","runner":"ubuntu-24.04"},{"platform":"windows","runner":"windows-2025"}]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     defaults:

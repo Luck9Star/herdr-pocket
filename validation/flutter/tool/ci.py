@@ -9,10 +9,13 @@ import platform as host_platform
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tarfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / 'validation/shared'))
+from android_notices import verify as verify_packaged_notices
 VERSION = '3.47.9'
 COMMIT = 'c197ca5199e9ee5661e865596c9c07294dfab51c'
 
@@ -115,14 +118,9 @@ def verify_android_notice(apk):
     relative = 'validation/pairing/native/android/notices/BOUNCY-CASTLE-LICENSE.md'
     source = source_record(relative)
     asset = 'assets/BOUNCY-CASTLE-LICENSE.md'
-    with zipfile.ZipFile(apk) as bundle:
-        entries = [entry for entry in bundle.infolist() if entry.filename == asset]
-        if len(entries) != 1 or entries[0].file_size > 65536:
-            raise SystemExit('Missing, duplicate or oversized Android Bouncy Castle notice asset')
-        actual = hashlib.sha256(bundle.read(entries[0])).hexdigest()
-    if actual != source['sha256']:
-        raise SystemExit('Android Bouncy Castle notice asset differs from shared native source')
-    return {'assetPath': asset, 'assetSha256': actual, 'sharedSource': source, 'matched': True}
+    notices = verify_packaged_notices(apk)
+    return {'assetPath': asset, 'assetSha256': notices[asset], 'sharedSource': source,
+            'matched': True, 'allPackagedNotices': notices}
 
 
 def pairing_provenance(platform, android_notice):
@@ -199,6 +197,7 @@ def package(destination, platform, output):
     ndk_versions = sorted(p.name for p in (Path(sdk) / 'ndk').glob('*') if p.is_dir()) if sdk else []
     manifest = {
         'sourceCommit': os.environ.get('GITHUB_SHA', 'local'),
+        'candidateChecks': os.environ.get('CANDIDATE_CHECKS', 'not recorded'),
         'runUrl': 'https://github.com/' + os.environ.get('GITHUB_REPOSITORY', '') + '/actions/runs/' + os.environ.get('GITHUB_RUN_ID', ''),
         'fontSha256': hashlib.sha256((shared / 'fonts/JetBrainsMonoNerdFontMono-Regular.ttf').read_bytes()).hexdigest(),
         'runner': {'os': host_platform.platform(), 'arch': host_platform.machine(), 'imageOS': os.environ.get('ImageOS'), 'imageVersion': os.environ.get('ImageVersion')},
@@ -210,7 +209,7 @@ def package(destination, platform, output):
         'fixtureSha256': hashlib.sha256((ROOT / 'validation/shared/fixture.json').read_bytes()).hexdigest(),
         'lockSha256': hashlib.sha256((destination / 'pubspec.lock').read_bytes()).hexdigest(),
         'scope': 'compile/package only; offline fixture, public pairing review and native device-key channel wiring, pinned SSH pane dashboard and bounded read-only observe; runtime SSH/GUI pairing must use separate harness evidence; device/system storage/overlays NOT RUN',
-        'remoteAdapter': {'ssh': 'dartssh2 4.1.0', 'input': 'disabled', 'storage': 'device path uses opaque native handle; explicit manual PEM experiment remains memory-only; system storage runtime NOT RUN', 'contractSha256': hashlib.sha256((ROOT / 'validation/shared/remote-contract.json').read_bytes()).hexdigest()},
+        'remoteAdapter': {'ssh': 'dartssh2 4.1.0', 'input': 'stock server read-only; opt-in guarded server capability, no automatic replay', 'storage': 'device path uses opaque native handle; explicit manual PEM experiment remains memory-only; system storage runtime NOT RUN', 'contractSha256': hashlib.sha256((ROOT / 'validation/shared/remote-contract.json').read_bytes()).hexdigest()},
         'pairingDeviceKeys': pairing_provenance(platform, android_notice),
         'signing': 'iOS unsigned, not installable on device' if platform == 'ios' else 'development test build; no production signing/notarization',
     }

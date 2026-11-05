@@ -10,3 +10,5 @@ Apply only in a disposable checkout of that exact commit and build/test the patc
 git -C "$HERDR_TEMP_CHECKOUT" rev-parse HEAD
 git -C "$HERDR_TEMP_CHECKOUT" apply --check "$POCKET_REPO/validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch"
 ```
+
+The Linux fixture build verifies the fixed Rust 1.96.0 environment and the upstream-required Zig 0.16.0 compiler before compiling the vendored Ghostty VT library. The runner checks the Linux x86_64 archive against the [official digest](https://ziglang.org/download/index.json). No local SDK is installed by this workflow.

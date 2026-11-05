@@ -1,8 +1,10 @@
 """Create bounded, auditable test artifacts, including failures; never package credentials."""
 from pathlib import Path
-import hashlib, json, os, platform, shutil, subprocess, zipfile
+import hashlib, json, os, platform, shutil, subprocess, sys, zipfile
 root = Path(__file__).resolve().parents[1]
 repo = root.parents[1]
+sys.path.insert(0, str(repo / 'validation/shared'))
+from android_notices import verify as verify_packaged_notices
 out = root / 'artifacts'
 out.mkdir(exist_ok=True)
 def version(command):
@@ -26,7 +28,7 @@ manifest = {
     'transportSourceSHA256':sha(repo/'validation/transport-rust/src/lib.rs'),
     'pairingContractSHA256':sha(repo/'validation/pairing/protocol-v2.schema.json'),
     'pairingDependenciesSHA256':sha(repo/'validation/pairing/sources.json'),
-    'remoteBehavior':{'mode':'explicit-pane-continuous-readonly','remoteInput':False,'ptyResize':False,'credentialStorage':{'android':'API35 wrapped Ed25519', 'linux':'volatile test signer', 'macos':'volatile test signer'}.get(os.getenv('PROBE_PLATFORM'),'device pairing unavailable'),'browserTransport':'unavailable','deviceResult':'unverified'},
+    'remoteBehavior':{'mode':'explicit-pane-continuous-readonly','remoteInput':'stock server read-only; explicit guarded capability required','ptyResize':False,'credentialStorage':{'android':'API35 wrapped Ed25519', 'linux':'volatile test signer', 'macos':'volatile test signer'}.get(os.getenv('PROBE_PLATFORM'),'device pairing unavailable'),'browserTransport':'unavailable','deviceResult':'unverified'},
     'fixtureSHA256':sha(repo/'validation/shared/fixture.json'),
     'fontSHA256':sha(repo/'validation/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'),
     'designTokensSHA256':sha(repo/'validation/shared/design-tokens-v2.json'),
@@ -53,12 +55,8 @@ manifest['nativeArtifactStatus']='present-unverified' if native_packages else 'm
 if manifest['platform']=='android' and manifest['buildOutcome']=='success':
     native=repo/'validation/pairing/native/android'
     manifest['androidSignerSources']={f.name:sha(f) for f in sorted(native.glob('*.java'))}
-    expected=sha(native/'notices/BOUNCY-CASTLE-LICENSE.md')
-    for apk in (f for f in native_packages if f.suffix=='.apk'):
-        with zipfile.ZipFile(apk) as package:
-            if hashlib.sha256(package.read('assets/BOUNCY-CASTLE-LICENSE.md')).hexdigest()!=expected:
-                raise SystemExit('Android signer notice mismatch')
-    manifest['androidSignerNoticeSHA256']=expected
+    manifest['androidPackagedNotices']={apk.name:verify_packaged_notices(apk) for apk in native_packages if apk.suffix=='.apk'}
+    manifest['androidSignerNoticeSHA256']=sha(native/'notices/BOUNCY-CASTLE-LICENSE.md')
 
 for f in sorted(out.iterdir()):
     if f.is_file() and f.name not in ['build-manifest.json','SHA256SUMS']:

@@ -7,6 +7,7 @@ import { InputComposition } from './input-composition.js';
 import { auxiliaryKey, draftBytes, displayDraft } from './input-codec.js';
 import { OnlineInputQueue } from './online-input-queue.js';
 import { scanCurrent } from './scan-lease.js';
+import { invalidatePairReview } from './pairing-lifecycle.js';
 
 export function initRemote({ native, theme, onFixture }) {
   const $ = id => document.getElementById(id), gate = new RemoteViewGate();
@@ -35,7 +36,7 @@ export function initRemote({ native, theme, onFixture }) {
     $('pair-reset').disabled=!native || gate.pending || pairState==='none' || pairState==='restore-required';
     $('host-save').disabled=!native || gate.pending || pairBusy; $('host-save-name').disabled=gate.pending || pairBusy;
     $('host-restore').disabled=!native || gate.pending || pairBusy || !$('host-restore-review').checked;
-    $('pair-cancel').disabled=!native || gate.pending || pairState==='none' || pairState==='cancelled' || pairState==='revoked' || pairState==='restore-required';
+    $('pair-cancel').disabled=!native || gate.pending || pairState==='none' || pairState==='cancelled' || pairState==='revoked' || pairState==='restore-required' || pairState==='storage-failed';
     $('remote-cancel').disabled=!gate.pending;
     $('remote-review').checked=gate.reviewed;
   }
@@ -43,7 +44,7 @@ export function initRemote({ native, theme, onFixture }) {
   function discardKey() { $('remote-private-key').value=''; }
   function cancel(reason='本次读取已取消。迟到结果不会显示。') {
     const clientGeneration=gate.pendingGeneration;
-    scanRevision++; const discarded=invalidateInput(); recordUnsent(discarded.count); gate.invalidate(); discardKey(); if ($('pair-mode').checked && gate.pending && pairState!=='paired') { pairState='cancelled'; pairStatus('已取消；主机授权状态可能未知，请核查清理。'); } $('remote-dashboard').hidden=true; if(terminal) $('remote-captured').textContent='观察已停止 · 画面陈旧'; status(reason+(discarded.count?` ${discarded.count} 笔待发送输入已丢弃。`:'')); render();
+    scanRevision++; previewResponse=invalidatePairReview($('pair-source-review'),$('pair-response-preview')); if(pairState==='none') $('pair-target-review').checked=false; const discarded=invalidateInput(); recordUnsent(discarded.count); gate.invalidate(); discardKey(); if ($('pair-mode').checked && gate.pending && pairState!=='paired') { pairState='cancelled'; pairStatus('已取消；主机授权状态可能未知，请核查清理。'); } $('remote-dashboard').hidden=true; if(terminal) $('remote-captured').textContent='观察已停止 · 画面陈旧'; status(reason+(discarded.count?` ${discarded.count} 笔待发送输入已丢弃。`:'')); render();
     // Invalidating precedes asynchronous cleanup. Keep busy until the old invoke settles.
     if (gate.pending && native) void invoke('remote_cancel',{clientGeneration}).catch(()=>{if(gate.pendingGeneration===clientGeneration)status('正在结束旧连接；结束前不可开始新读取。','warning');});
   }
@@ -174,23 +175,25 @@ export function initRemote({ native, theme, onFixture }) {
   }
   function renderHosts() {
     $('host-open-remote').textContent=unsavedHostOpen && !activeHostId?'继续未保存的主机':'新增主机 / 手动连接';
+    $('host-open-remote').disabled=pairBusy;
     $('host-list').replaceChildren(); $('host-tabs').replaceChildren();
     for(const host of hostRecords) {
       const card=document.createElement('article'); card.className='saved-host-card';
       const title=document.createElement('h3');title.textContent=host.name;card.append(title);
-      const detail=document.createElement('p');detail.textContent=`${host.target.username}@${host.target.host}:${host.target.port} · ${host.enabled?'已启用':'已停用'} · ${host.deviceFingerprint?'设备资料已存':'未保存设备身份'} · ${hostStatuses.get(host.id) || '尚未在本次运行中连接'}`;card.append(detail);
+      const detail=document.createElement('p');detail.textContent=`${host.target.username}@${host.target.host}:${host.target.port} · ${host.enabled?'已启用':'已停用'} · ${host.pairingStatus==='awaiting-host'?'待主机响应':host.pairingStatus==='cancelled'?'配对已取消，需核查授权':host.deviceFingerprint?'设备资料已存':'未保存设备身份'} · ${hostStatuses.get(host.id) || '尚未在本次运行中连接'}`;card.append(detail);
       const name=document.createElement('input');name.value=host.name;name.maxLength=96;name.setAttribute('aria-label',`重命名 ${host.name}`);card.append(name);
       const actions=document.createElement('div');actions.className='saved-host-actions';
-      const button=(label,callback)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=callback;actions.append(b);return b;};
-      const open=button('打开',()=>void openSavedHost(host.id));open.disabled=!host.enabled;
+      const button=(label,callback)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=callback;b.disabled=pairBusy;actions.append(b);return b;};
+      const open=button('打开',()=>void openSavedHost(host.id));open.disabled=pairBusy || !host.enabled;
       button('保存名称',async()=>{try {await invoke('host_update',{id:host.id,name:name.value,enabled:null});await refreshHosts();}catch {await refreshHosts();hostMessage('名称保存未确认，请核查。');}});
       button(host.enabled?'停用':'启用',async()=>{try {await waitForOldConnection(++hostNavigation);await invoke('host_update',{id:host.id,name:null,enabled:!host.enabled});await refreshHosts();}catch {await refreshHosts();hostMessage('操作未确认，请核查状态并确保连接已结束。');}});
       let confirming=false; const remove=button('移除',async()=>{if(!confirming){confirming=true;remove.textContent='确认移除本机资料';return;} try {await waitForOldConnection(++hostNavigation);const result=await invoke('host_remove',{id:host.id});if(activeHostId===host.id)activeHostId=null;hostDrafts.delete(host.id);hostStatuses.delete(host.id);await refreshHosts();hostMessage(result.keyDeleted?'已移除本机资料；主机授权仍须另行处理。':'资料已移除，本机密钥删除未确认；请核查。');}catch {await refreshHosts();hostMessage('移除未确认；请核查本机状态。');}});
       card.append(actions);$('host-list').append(card);
-      if(host.enabled) {const tab=document.createElement('button');tab.type='button';tab.textContent=host.name;tab.setAttribute('aria-pressed',String(host.id===activeHostId));tab.onclick=()=>void openSavedHost(host.id);$('host-tabs').append(tab);}
+      if(host.enabled) {const tab=document.createElement('button');tab.type='button';tab.textContent=host.name;tab.disabled=pairBusy;tab.setAttribute('aria-pressed',String(host.id===activeHostId));tab.onclick=()=>void openSavedHost(host.id);$('host-tabs').append(tab);}
     }
   }
   async function openSavedHost(id) {
+    if(pairBusy)return;
     const revision=++hostNavigation; saveHostDraft();
     try {
       await waitForOldConnection(revision);const host=await invoke('host_select',{id});if(revision!==hostNavigation)return;
@@ -205,6 +208,7 @@ export function initRemote({ native, theme, onFixture }) {
     } catch(e) {hostMessage(String(e)==='unsaved_pairing'?'当前设备身份尚未保存；请先保存或删除后再切换。':'无法打开主机；资料或旧连接不可用。');}
   }
   async function openNewHost() {
+    if(pairBusy)return;
     const revision=++hostNavigation;saveHostDraft();
     try {await waitForOldConnection(revision);if(revision!==hostNavigation)return;
       if(unsavedHostOpen && !activeHostId) {showRemotePage();render();status('继续未保存的目标；重新核对后主动连接。');return;}
@@ -224,20 +228,22 @@ export function initRemote({ native, theme, onFixture }) {
   $('host-restore').onclick=()=>pairOperation(async()=>{
     scanRevision++;
     if(!activeHostId || !$('host-restore-review').checked)return;
-    try {const p=await invoke('host_restore',{id:activeHostId,reviewed:true}); pairState=p.state; $('pair-request').value=p.request; $('host-restore-review').checked=false; $('host-restore-panel').hidden=true;gate.reviewed=false;pairStatus(`原设备公钥匹配 · ${p.fingerprint}；尚未进行 SSH 认证。`);}
+    try {const p=await invoke('host_restore',{id:activeHostId,reviewed:true}); pairState=p.state; $('pair-request').value=p.request; $('host-restore-review').checked=false; $('host-restore-panel').hidden=true;gate.reviewed=false;pairStatus(p.state==='awaiting-host'?`原设备公钥匹配 · ${p.fingerprint}；继续等待同一请求的主机响应，需重新审查。`:p.state==='expired'?'原请求已过期；不能接受授权，请核查主机状态，可审查撤销响应或删除本机身份。':p.state==='cancelled'?'请求已取消；不能接受授权，请核查主机状态或审查撤销响应。':`原设备公钥匹配 · ${p.fingerprint}；尚未进行 SSH 认证。`);}
     catch(e){$('host-restore-status').textContent=`恢复失败：${String(e)}。不会自动生成替代身份。`;}
   });
   async function pairOperation(work) {
     if (pairBusy) return;
-    pairBusy=true; render();
-    try { await work(); } finally { pairBusy=false; render(); }
+    pairBusy=true; render(); renderHosts();
+    try { await work(); } finally { pairBusy=false; render(); renderHosts(); }
   }
   $('pair-create').onclick=()=>pairOperation(async()=>{
     scanRevision++;
     if (!$('pair-target-review').checked || !native) return;
     if (pairTargetIds.some(id=>!$(id).checkValidity() || !$(id).value)) { pairStatus('请先完整填写连接目标，再重新核对目标。'); $('pair-target-review').checked=false; return; }
-    try { const config={schemaVersion:1,host:$('remote-host').value,port:Number($('remote-port').value),username:$('remote-user').value,expectedHostKey:$('remote-pin').value,privateKeyPem:'',socketPath:$('remote-socket').value,herdrPath:$('remote-herdr').value,session:$('remote-session').value,paneId:'',reviewConfirmed:true}; const p=await invoke('pair_create',{config,device:$('pair-device').value});
-      $('pair-request').value=p.request; pairState=p.state; pairStatus(`等待主机响应 · 设备指纹 ${p.fingerprint} · 授权未知`);
+    try { const config={schemaVersion:1,host:$('remote-host').value,port:Number($('remote-port').value),username:$('remote-user').value,expectedHostKey:$('remote-pin').value,privateKeyPem:'',socketPath:$('remote-socket').value,herdrPath:$('remote-herdr').value,session:$('remote-session').value,paneId:'',reviewConfirmed:true};
+      if(!activeHostId) {if(!$('host-save-name').value.trim()) $('host-save-name').value='待配对主机'; await saveCurrentHost();}
+      const p=await invoke('pair_create',{config,device:$('pair-device').value,hostId:activeHostId});
+      $('pair-request').value=p.request; pairState=p.state; pairStatus(p.stored?`等待主机响应 · 设备指纹 ${p.fingerprint} · 授权未知`:'设备已创建但本地保存未确认；请求未公开。请删除此身份并检查存储，不会自动替换。'); await refreshHosts();
     } catch(e) { pairStatus(`创建失败：${String(e)}。没有自动重建设备身份。`); }
   });
   $('pair-scan').onclick=async()=>{

@@ -83,10 +83,16 @@ class FixtureApproval:
 
     def approve(self, raw):
         now = int(time.time())
-        request = self.host.review(raw, now)
+        try:
+            request = self.host.review(raw, now)
+        except ValueError:
+            raise GuiFailure('fixture_public_request_invalid') from None
         if self.request_id or request['account'] != self.config['username']:
             raise GuiFailure('unexpected_fixture_request')
-        response = self.host.authorize(raw, request['request_id'], now=now)
+        try:
+            response = self.host.authorize(raw, request['request_id'], now=now)
+        except (OSError, ValueError):
+            raise GuiFailure('fixture_device_authorization_failed') from None
         public_line = bounded_wire(self.host.home / '.ssh' / 'authorized_keys', 4096)
         if len(public_line.splitlines()) != 1 or not public_line.startswith(request['public_key'].encode() + b' '):
             raise GuiFailure('fixture_authorization_mismatch')
@@ -216,8 +222,16 @@ class WebDriver:
         # The document contains hidden forms and an initially disabled board
         # button. Observe readiness; interactions still use WebDriver events.
         script = """const e=document.querySelector(arguments[0]);
-            return !!e && e.getClientRects().length > 0 && !e.matches(':disabled') &&
-                   (!arguments[1] || !e.readOnly) && getComputedStyle(e).visibility === 'visible'"""
+            if (!e || !e.getClientRects().length || e.matches(':disabled') ||
+                getComputedStyle(e).visibility !== 'visible') return false;
+            e.scrollIntoView({block:'center',inline:'center',behavior:'instant'});
+            if (arguments[1]) {
+                if (e.readOnly) return false;
+                e.focus();
+                return document.activeElement === e;
+            }
+            const r=e.getBoundingClientRect(), at=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+            return e.contains(at);"""
         def ready():
             return self.call('POST', self.session+'/execute/sync', {'script':script,'args':[selector,editable]})
         wait_for(ready, ('form_not_editable_' if editable else 'control_not_ready_')+selector.lstrip('#'))
@@ -227,7 +241,6 @@ class WebDriver:
         label = selector.lstrip('#')
         path = self.element(selector)
         try:
-            self.call('POST', path+'/click', {})
             self.call('POST', path+'/clear', {})
             self.call('POST', path+'/value', {'text':str(value), 'value':list(str(value))})
         except GuiFailure as error:

@@ -31,7 +31,7 @@ class GuiFixtureTests(unittest.TestCase):
         driver.call = command
         driver.fill('#remote-host', 'fixture')
         self.assertEqual(calls, ['/session/test/execute/sync'] * 2 +
-                         ['/field/click', '/field/clear', '/field/value'])
+                         ['/field/clear', '/field/value'])
 
     def test_widget_failure_stage_only_emits_an_allowlisted_value(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -54,7 +54,7 @@ class GuiFixtureTests(unittest.TestCase):
                                      expected_host_key=host.pin, now=int(time.time()))
             wire = encode(pending.request)
             wrong = dict(pending.request, account='different')
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(GuiFailure, 'fixture_public_request_invalid'):
                 approval.approve(encode(wrong))
             self.assertEqual((root/'authorized_keys').read_bytes(), b'')
             approval.approve(wire)

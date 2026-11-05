@@ -17,6 +17,7 @@ jobs:
   helper:
     uses: ./.github/workflows/helper-validation.yml
   pairing:
+    if: "!startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-')"
     uses: ./.github/workflows/pairing-validation.yml
   flutter:
     uses: ./.github/workflows/flutter-candidate-validation.yml
@@ -27,12 +28,14 @@ jobs:
     uses: ./.github/workflows/tauri-validation.yml
     with:
       android_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-') || startsWith(github.ref, 'refs/heads/codex/batch/phones-') }}
-      include_ios: ${{ startsWith(github.ref, 'refs/heads/codex/batch/phones-') }}
+      include_ios: ${{ startsWith(github.ref, 'refs/heads/codex/batch/phones-') && !startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-') }}
   android-emulator:
     uses: ./.github/workflows/paired-android-emulator.yml
   transport:
+    if: "!startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-')"
     uses: ./.github/workflows/mobile-remote-validation.yml
   build-input-fixture:
+    if: "!startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-')"
     uses: ./.github/workflows/input-extension-validation.yml
   paired-input:
     needs: build-input-fixture
@@ -42,6 +45,7 @@ jobs:
   paired-gui:
     uses: ./.github/workflows/paired-gui-validation.yml
   overlay-isolation:
+    if: "!startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-')"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

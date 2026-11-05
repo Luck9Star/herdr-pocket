@@ -24,3 +24,11 @@
 1. 从同一来源验证两份 Android 应用包和两种模拟器 GUI。核对 helper 接受的设备公钥指纹、sshd 的实际记录、已选 pane 的 full/delta、主动停止及设备进程关闭。原版只读用例要求接收端输入为 0。
 2. 将带保护输入的隔离候选主机单独验证。需要匹配请求 ID 的队列受理回执和精确的终端接收字节；网络结果未知时保持锁定，人工核实原目标再恢复，不重放。
 3. 在能取得真机时补扫码、中文 IME、触控、键盘变化、锁屏与长期运行。三网与跨网并发仍待逐端验证；确认正确性后再定框架并回写高保真页面。
+
+### 双手机候选 de86b33
+
+[集中运行 42128042321](https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321) 同源产出 [Flutter Android APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13462820378)、[Tauri Android APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13461308993)、[Tauri iOS 模拟器包](https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13462935479)与[一次性 POSIX helper 源码包](https://github.com/Luck9Star/herdr-pocket/actions/runs/42128042321/artifacts/13461532833)。Tauri 的 iOS 新插件已在模拟器包中完成编译链接。Flutter iOS 任务因 GitHub 当时不支持请求的 macOS 14 runner 配置，在零步骤执行时取消。整个 run 显示 cancelled；各 job 的 build、failure 和 cancelled 分开记录。
+
+Flutter 分析通过，12 项目录／widget 用例失败，其中 7 项追到同一嵌套 Map 类型错误，阻断原生设备句柄写入。Linux Flutter GUI 停在公开请求之前。Linux Tauri 进入表单，在编辑 herdr 可执行路径时触发 WebDriver 不可交互错误；API 35 Tauri 在创建请求阶段停止。Flutter API 35 清理记录确认应用、ADB 转发和测试工具都已退出，未完成 GUI 正向用例。原版隔离 SSH 再次通过 18/18，扩展主机的 socket、snapshot 与能力查询自检通过。手机闭环修复集中验证目录写入、公开交换的 ADB 退出状态，以及正常表单的滚动与焦点。
+
+两份 APK 已解包，实际字节、来源 SHA、随包校验和以及 BC、QR、ZXing 三份声明都已核对。Flutter 的 APK SHA-256 是 `f2388234ee265c6c4179ba2ad97d512628d16974650fde8eb826c9604c15215b`，Tauri 的是 `a60dfac6f2a981f8eb917b927e3f981e74e1d9311fd9c957ed4f589b23ccd615`。Flutter 这一版仍含上文的目录错误，下载时请区分构建成功与配对可用。[完整结果、产物与清理记录](evidence/mobile-pair-gui/phone-builds.json)

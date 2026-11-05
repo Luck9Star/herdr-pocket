@@ -28,9 +28,9 @@
 <label class="full-width">预期 SSH 主机公钥<textarea id="remote-pin" required rows="3" maxlength="4096" placeholder="ssh-ed25519 AAAA…（仅两字段）" spellcheck="false" autocapitalize="none" autocomplete="off"></textarea></label>
 </div>
 <div class="remote-key-section"><h3>2. 认证方式</h3>
-<label><input id="pair-mode" type="checkbox"> 使用本机设备配对（桌面为仅进程内的测试身份）</label>
+<label><input id="pair-mode" type="checkbox"> 使用本机设备配对</label>
 <div id="pair-controls" hidden>
-<p>桌面身份仅存内存，退出即丢失；Android 使用本应用存储。当前配对状态与句柄不跨进程恢复；退出后需手动核查主机授权，不会自动重建。删除本机身份不会撤销主机授权。iOS/Windows 当前不可用。创建请求后目标锁定，删除本机身份后可修改。</p>
+<p>Android 使用应用受保护的设备身份。重开主机时，请核对原设备指纹，再恢复待授权请求。Linux 和 macOS 测试身份随进程退出而失效。删除本机身份后，如需停止该公钥用于新连接，请在主机上另行撤销授权。</p>
 <label>设备名称<input id="pair-device" value="Pocket test" maxlength="48" spellcheck="false"></label>
 <label><input id="pair-target-review" type="checkbox"> 我已独立核对 SSH 用户名和预期主机公钥。</label>
 <button id="pair-create" type="button">创建设备公开请求</button>

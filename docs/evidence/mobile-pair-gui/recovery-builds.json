@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "purpose": "recovery batch Android package provenance and paired validation outcomes; physical device unverified",
+  "repository": "Luck9Star/herdr-pocket",
+  "branch": "codex/batch/android-pair-recovery-20261105",
+  "sourceSHA": "988f362c572804d260ecfdb67e0a9d74b28b5c07",
+  "run": {
+    "runId": 42052516810,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810",
+    "status": "completed",
+    "conclusion": "failure",
+    "firstFailure": {
+      "job": "flutter / patch-and-test",
+      "jobId": 127332093840,
+      "step": "Analyze and verify original safety tests",
+      "error": "flutter analyze exited 1 on unnecessary_import at test/remote_input_widget_test.dart:2:8",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/jobs/127332093840"
+    },
+    "otherBuildFailure": {
+      "job": "flutter / build (android, ubuntu-24.04)",
+      "jobId": 127332560469,
+      "step": "Build test package",
+      "error": "HostCatalogFile.kt:53:82 unresolved reference O_DIRECTORY; Gradle :app:compileDebugKotlin failed",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/jobs/127332560469"
+    }
+  },
+  "builds": {
+    "flutter": {
+      "status": "failed; no APK artifact produced",
+      "sourceSHA": "988f362c572804d260ecfdb67e0a9d74b28b5c07",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/jobs/127332560469",
+      "apk": null,
+      "deviceResult": "not-run"
+    },
+    "tauri": {
+      "status": "success; run SHA, manifest, SHA256SUMS, APK, and notices verified",
+      "jobId": 127332093932,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/jobs/127332093932",
+      "artifactId": 13426803591,
+      "artifactName": "tauri-android-988f362c572804d260ecfdb67e0a9d74b28b5c07",
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/artifacts/13426803591",
+      "artifactArchiveSHA256": "17b6a9b9b7ca0e91c52de720706bdd8f64ba8e4beb791c36c1528e98e73e2f5f",
+      "sourceSHA": "988f362c572804d260ecfdb67e0a9d74b28b5c07",
+      "manifest": "tmp-probe/android-20261105/recovery/tauri/build-manifest.json",
+      "manifestSHA256": "fbdb168810f05c367926b937b48f290911b8f7298bdb8eccd968c6d5952f009a",
+      "checksums": "tmp-probe/android-20261105/recovery/tauri/SHA256SUMS",
+      "checksumsSHA256": "2e5ce146041cd5954f590e2bd92a58b082f29faee0db0139bbacebed1632d3e3",
+      "apk": "tmp-probe/android-20261105/recovery/tauri/app-universal-debug.apk",
+      "apkBytes": 172674997,
+      "apkSHA256": "8ef2958ff0aaa3eeddbe13c4c1807907440fec215d7027dc59873daa84939d1c",
+      "androidPlatform": "android-35",
+      "signing": "ephemeral-debug-key",
+      "deviceResult": "unverified",
+      "packagedNotices": {
+        "assets/BOUNCY-CASTLE-LICENSE.md": {
+          "bytes": 1171,
+          "sha256": "0e01f1549c9022f406392ac2947d32223b7c2e977d21ea2f8c182fdeb4dae5fd"
+        },
+        "assets/QR-NOTICE.txt": {
+          "bytes": 339,
+          "sha256": "7fc1888ae1ad783c0f318834a9e3263299530434c1ac0ac2077f385c33e018a4"
+        },
+        "assets/ZXING-APACHE-2.0.txt": {
+          "bytes": 11357,
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        }
+      }
+    }
+  },
+  "guiAndSsh": {
+    "tauriStockGui": {
+      "status": "failed",
+      "jobId": 127332094215,
+      "step": "Review pairing, authorize the displayed key, choose pane and observe updates",
+      "errorCode": "form_not_editable_remote-host",
+      "checks": 1,
+      "passed": 0,
+      "artifactId": 13427483501,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/artifacts/13427483501",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/jobs/127332094215",
+      "receivedInputBytes": 0,
+      "readinessSnapshot": "both isolated sessions reported herdr 0.9.5 / protocol 22; combined GUI pairing-to-observe check did not pass"
+    },
+    "tauriGuardedInput": {
+      "status": "failed-before-checks",
+      "jobId": 127336084061,
+      "errorCode": "herdr_readonly_readiness_timeout",
+      "checks": 0,
+      "passed": 0,
+      "artifactId": 13428496222,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/artifacts/13428496222",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/jobs/127336084061"
+    },
+    "flutterGui": {
+      "status": "failed-before-interaction",
+      "jobId": 127332094101,
+      "error": "Flutter candidate analysis failed on unnecessary_import",
+      "interactionStep": "Review pairing, authorize the displayed key, choose pane and observe updates",
+      "interactionConclusion": "skipped",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/jobs/127332094101"
+    },
+    "transportSharedLoopback": {
+      "status": "success",
+      "jobId": 127332094284,
+      "checks": 18,
+      "passed": 18,
+      "rustAdapter": "success",
+      "dartAnalysisAndCli": "success",
+      "actualProbe": "success",
+      "artifactId": 13426953012,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/artifacts/13426953012",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/jobs/127332094284",
+      "scope": "isolated loopback OpenSSH and test fixture, not a real host"
+    }
+  },
+  "androidEmulator": {
+    "status": "failed",
+    "jobId": 127332091767,
+    "step": "Pair through the real Android WebView and protected signer",
+    "errorCode": "android_text_control_missing",
+    "artifactId": 13428226004,
+    "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/artifacts/13428226004",
+    "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42052516810/jobs/127332091767",
+    "receivedInputBytes": 0
+  },
+  "cleanupEvidence": {
+    "tauriStockGui": {
+      "ownedProcessesStopped": true,
+      "ephemeralKeysRemoved": true,
+      "userAuthorizationFilesTouched": false,
+      "rawLogsUploaded": false
+    },
+    "tauriGuardedInput": {
+      "ownedProcessesStopped": true,
+      "ephemeralKeysRemoved": true,
+      "userAuthorizationFilesTouched": false,
+      "rawLogsUploaded": false
+    },
+    "androidEmulator": {
+      "ownedProcessesStopped": true,
+      "ephemeralKeysRemoved": true,
+      "userAuthorizationFilesTouched": false,
+      "rawLogsUploaded": false
+    }
+  },
+  "physicalDevice": "not tested"
+}

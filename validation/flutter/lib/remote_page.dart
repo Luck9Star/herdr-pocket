@@ -401,8 +401,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
               child:Text('没有 pane · 不会回退到其他会话')),
             for (final pane in dashboard!.panes) Card(child:Padding(padding:const EdgeInsets.all(12),
               child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-                Text(pane.paneId,style:Theme.of(context).textTheme.titleMedium),
-                Text(pane.terminalId,softWrap:true),
+                Text(pane.label ?? pane.paneId,style:Theme.of(context).textTheme.titleMedium),
+                if (pane.agent != null || pane.agentStatus != 'unknown') Text('${pane.agent ?? 'Agent'} · ${pane.statusLabel}'),
+                if (pane.workspace != null || pane.tab != null) Text([pane.workspace,pane.tab].whereType<String>().join(' / ')),
+                Text('${pane.paneId} · ${pane.terminalId}',softWrap:true),
                 const SizedBox(height:8),
                 FilledButton(key:ValueKey('remote-pane-${pane.paneId}'),
                   onPressed:busy && selectedPane == null ? () => selectPane(pane) : null,

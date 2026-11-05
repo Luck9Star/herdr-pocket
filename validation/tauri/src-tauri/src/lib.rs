@@ -61,7 +61,9 @@ use hosts::{Hosts, Target};
 async fn host_init(app:tauri::AppHandle,hosts:State<'_,Hosts>)->Result<(),String> {
     #[cfg(target_os="android")]
     let root=android_keys::no_backup_directory(&app).map_err(str::to_string)?;
-    #[cfg(not(target_os="android"))]
+    #[cfg(target_os="ios")]
+    let root=ios_keys::private_config_root(&app).map_err(str::to_string)?;
+    #[cfg(not(any(target_os="android",target_os="ios")))]
     let root=app.path().app_local_data_dir().map_err(|_|"host_storage_unavailable")?;
     hosts.init(root.join("host-records-v1"))
 }
@@ -307,9 +309,9 @@ fn remote_ack(generation:u64,seq:u64,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Res
 fn remote_cancel(client_generation:u64,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>)->Result<(),String> {
     let mut f=flow.lock().map_err(|_|"state_unavailable")?; let mut g=state.lock().map_err(|_|"state_unavailable")?; if f.owner==Some(client_generation) { if let Some(p)=pairing.current.lock().map_err(|_|"state_unavailable")?.as_mut() { if p.state=="connecting" {p.cancel();} } } f.cancel(client_generation,&mut g); Ok(())
 }
-#[cfg(any(target_os="ios",target_os="windows"))]
+#[cfg(target_os="windows")]
 struct UnavailableKeyStore;
-#[cfg(any(target_os="ios",target_os="windows"))]
+#[cfg(target_os="windows")]
 impl KeyStore for UnavailableKeyStore {
     fn create(&self)->herdr_readonly_transport::Result<(String,String)> {Err("key_unavailable")}
     fn public(&self,_:&str)->herdr_readonly_transport::Result<String> {Err("key_unavailable")}
@@ -320,15 +322,19 @@ mod camera;
 use camera::pair_scan_response;
 #[cfg(target_os="android")]
 mod android_keys;
+#[cfg(target_os="ios")]
+mod ios_keys;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder=tauri::Builder::default();
     #[cfg(any(target_os="linux",target_os="macos"))]
     let builder=builder.manage(PairingState::new(Arc::new(herdr_readonly_transport::pairing::VolatileKeyStore::default())));
-    #[cfg(any(target_os="ios",target_os="windows"))]
+    #[cfg(target_os="windows")]
     let builder=builder.manage(PairingState::new(Arc::new(UnavailableKeyStore)));
     #[cfg(target_os="android")]
     let builder=builder.plugin(android_keys::init()).plugin(camera::android_plugin());
+    #[cfg(target_os="ios")]
+    let builder=builder.plugin(ios_keys::init());
     builder
         .manage(Mutex::new(Streams::default()))
         .manage(Mutex::new(AttemptGate::default()))

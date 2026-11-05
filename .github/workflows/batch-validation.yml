@@ -21,11 +21,13 @@ jobs:
   flutter:
     uses: ./.github/workflows/flutter-candidate-validation.yml
     with:
-      android_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-') }}
+      android_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-') || startsWith(github.ref, 'refs/heads/codex/batch/phones-') }}
+      include_ios: ${{ startsWith(github.ref, 'refs/heads/codex/batch/phones-') }}
   tauri:
     uses: ./.github/workflows/tauri-validation.yml
     with:
-      android_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-') }}
+      android_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-') || startsWith(github.ref, 'refs/heads/codex/batch/phones-') }}
+      include_ios: ${{ startsWith(github.ref, 'refs/heads/codex/batch/phones-') }}
   android-emulator:
     uses: ./.github/workflows/paired-android-emulator.yml
   transport:

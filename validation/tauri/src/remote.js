@@ -9,7 +9,7 @@ import { OnlineInputQueue } from './online-input-queue.js';
 import { scanCurrent } from './scan-lease.js';
 import { invalidatePairReview } from './pairing-lifecycle.js';
 
-export function initRemote({ native, theme, onFixture }) {
+export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   const $ = id => document.getElementById(id), gate = new RemoteViewGate();
   let terminal = null, showingRemote = true, pairState = 'none', previewResponse = '', pairBusy = false, scanBusy = false, scanRevision = 0;
   let inputGeneration=null, inputEpoch=null, inputMode='observe', inputBusy=false, inputUnknown=false, inputRevision=0, selectedTarget=null, draftPreview=null, switchingFocus=false;
@@ -283,7 +283,7 @@ export function initRemote({ native, theme, onFixture }) {
     $('show-fixture').setAttribute('aria-pressed','true'); $('show-remote').setAttribute('aria-pressed','false'); onFixture();
   };
   $('show-remote').onclick=()=>{
-    saveHostDraft(); hostNavigation++; cancel('已返回主机看板；观察已停止。'); showingRemote=false;
+    onLeaveFixture(); saveHostDraft(); hostNavigation++; cancel('已返回主机看板；观察已停止。'); showingRemote=false;
     $('remote-page').hidden=true; $('host-home').hidden=false; $('fixture-workbench').hidden=true;
     $('show-fixture').setAttribute('aria-pressed','false'); $('show-remote').setAttribute('aria-pressed','true'); void refreshHosts();
   };
@@ -311,6 +311,17 @@ export function initRemote({ native, theme, onFixture }) {
           for(const pane of event.panes) {
             const button=document.createElement('button'); button.type='button';
             button.textContent=`${pane.paneId} · ${pane.terminalId}`;
+            const statusNames={idle:'空闲',working:'工作中',blocked:'受阻',done:'已完成',unknown:'状态未知'};
+            const details=[pane.label];
+            if (pane.agent || (pane.agentStatus && pane.agentStatus!=='unknown')) {
+              details.push(`${pane.agent || 'Agent'} · ${statusNames[pane.agentStatus] || '状态未知'}`);
+            }
+            details.push([pane.workspace,pane.tab].filter(Boolean).join(' / '));
+            const subtitle=details.filter(Boolean).join(' · ');
+            if (subtitle) {
+              const meta=document.createElement('small'); meta.className='pane-summary';
+              meta.textContent=subtitle; button.append(meta);
+            }
             button.onclick=()=>{ selectedTarget=pane; $('remote-input-target').textContent=`目标：${pane.paneId} · ${pane.terminalId}`; for(const item of $('remote-panes').children)item.disabled=true;
               void invoke('remote_select',{generation:event.generation,paneId:pane.paneId}).catch(()=>{if(gate.accepts(generation,event.generation))cancel('选择失败，连接已停止。');});
               $('remote-dashboard').hidden=true; status(`正在观察 ${pane.paneId} · ${pane.terminalId}`);
@@ -359,5 +370,6 @@ export function initRemote({ native, theme, onFixture }) {
   // The browser never substitutes fixture output for a failed/missing native transport.
   $('remote-native-note').hidden=native;
   showingRemote=false; hostInitialization=native?invoke('host_init').then(()=>true).catch(()=>false):Promise.resolve(false); void refreshHosts();
+  $('host-open-remote').disabled=false; $('show-fixture').disabled=false;
   status(native?'待审查连接资料；没有建立远端连接。':'浏览器仅预览表单与布局，没有原生 SSH 功能。','info');render();
 }

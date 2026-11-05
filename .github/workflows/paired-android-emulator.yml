@@ -52,3 +52,68 @@ jobs:
             ${{ runner.temp }}/avd-evidence/
           retention-days: 14
           if-no-files-found: warn
+  flutter-device-key:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17.0.18+8'
+      - name: Check Flutter Android routing, fixture and cleanup guards without devices
+        run: |
+          python3 -m venv "$RUNNER_TEMP/flutter-android-venv"
+          "$RUNNER_TEMP/flutter-android-venv/bin/pip" install -r validation/pairing/requirements.txt
+          "$RUNNER_TEMP/flutter-android-venv/bin/python" -m unittest discover -s validation/remote-harness -v
+          "$RUNNER_TEMP/flutter-android-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'flutter_android_test.py' -v
+      - name: Prepare the fixed Flutter SDK and matching Android build dependencies
+        run: |
+          python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-android-sdk"
+          export PATH="$RUNNER_TEMP/flutter-android-sdk/bin:$PATH"
+          flutter precache --android
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+      - name: Verify the production candidate before adding device test dependencies
+        run: |
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-android-gui"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-android-gui"
+          cd "$RUNNER_TEMP/flutter-android-gui"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-android-gui"
+      - name: Add SDK integration_test only to this disposable device-test scaffold
+        run: |
+          python3 validation/flutter/tool/android_device_test.py prepare --destination "$RUNNER_TEMP/flutter-android-gui"
+          cd "$RUNNER_TEMP/flutter-android-gui"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/flutter-android-gui"
+          flutter analyze lib integration_test
+      - name: Pair through production Flutter UI and native device signing on a new API35 AVD
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-server acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
+          bash validation/remote-harness/with-android-emulator.sh \
+            "$RUNNER_TEMP/flutter-android-venv/bin/python" validation/remote-harness/run-ci.py \
+              --paired-gui flutter-android \
+              --flutter-app "$RUNNER_TEMP/flutter-android-gui" \
+              --output "$RUNNER_TEMP/flutter-android-gui-evidence"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: flutter-android-emulator-pairing-${{ github.sha }}
+          # Explicit paths only: no APK, app-private identity, public pairing
+          # wire/config, Flutter/sshd/herdr output, or raw emulator logs.
+          path: |
+            ${{ runner.temp }}/flutter-android-gui-evidence/
+            ${{ runner.temp }}/avd-evidence/
+            ${{ runner.temp }}/flutter-android-gui/candidate-manifest.json
+            ${{ runner.temp }}/flutter-android-gui/.herdr-android-device-test.json
+            ${{ runner.temp }}/flutter-android-gui/pubspec.lock
+            ${{ runner.temp }}/flutter-android-gui/tool/android-device-baseline.lock
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: warn

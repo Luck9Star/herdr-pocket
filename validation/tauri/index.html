@@ -1,18 +1,18 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>herdr-pocket · 远端只读验证</title></head><body>
-<header class="app-header"><div class="brand-lockup"><span class="brand-mark" aria-hidden="true">›_</span><div><span class="eyebrow">HERDR POCKET</span><h1>终端工作台 <small>Tauri + xterm.js</small></h1></div></div><span class="badge">M1b · 实验测试包</span></header>
-<nav class="route-tabs" aria-label="验证入口"><button id="show-remote" aria-pressed="true">主机</button><button id="show-fixture" aria-pressed="false">离线终端实验室</button></nav>
+<header class="app-header"><div class="brand-lockup"><span class="brand-mark" aria-hidden="true">›_</span><div><span class="eyebrow">HERDR POCKET</span><h1>终端工作台 <small>Tauri + xterm.js</small></h1></div></div></header>
+<nav class="route-tabs" aria-label="验证入口"><button id="show-remote" aria-pressed="true">主机</button><button id="show-fixture" disabled aria-pressed="false">离线终端实验室</button></nav>
 <div id="remote-unsent-notices" class="remote-status unsent-notices" role="alert" hidden></div>
 <main id="host-home" class="remote-page">
 <section class="remote-intro"><span class="eyebrow">HOSTS · 本机资料</span><h2>连接你的主机</h2><p>已存资料只在本机；选择主机后仍需核对设备身份和连接目标。切换会停止观察，不会自动重连。</p></section>
-<div class="host-home-actions"><button id="host-open-remote" class="primary" type="button">新增主机 / 手动连接</button></div>
+<div class="host-home-actions"><button id="host-open-remote" disabled class="primary" type="button">新增主机 / 手动连接</button></div>
 <p id="host-home-status" class="remote-status" role="status" aria-live="polite">正在读取本机资料…</p><div id="host-list" class="host-list" aria-label="已存主机"></div>
 <p class="remote-help">Android 配对资料存于本应用 no-backup 目录。Linux/macOS 测试身份只保留在进程内，重启后不可恢复；移除本机资料不会撤销主机上的授权。</p>
 </main>
 <main id="remote-page" class="remote-page" hidden>
 <nav id="host-tabs" class="terminal-tabs host-tabs" aria-label="主机标签"></nav><div class="host-home-actions"><button id="host-return-home" type="button">返回主机看板</button></div>
 <section id="host-restore-panel" class="remote-intro" hidden><h2>恢复已存设备</h2><p id="host-restore-description"></p><label><input id="host-restore-review" type="checkbox"> 我已独立核对上方主机与设备公钥指纹。</label><button id="host-restore" type="button">恢复此设备</button><p id="host-restore-status" role="status" aria-live="polite"></p></section>
-<section class="remote-intro"><span class="eyebrow">REMOTE · READ ONLY</span><h2>查看远端终端</h2><p>手动核验明确的会话，从实际快照选择 pane 并持续只读观察。公开请求与响应需要人工传递及独立审查；实验输入仅在服务器明确提供安全扩展时开放。扫码与三网络仍未开放。</p></section>
+<section class="remote-intro"><span class="eyebrow">REMOTE · READ ONLY</span><h2>查看远端终端</h2><p>手动核验明确的会话，从实际快照选择 pane 并持续只读观察。公开请求与响应需要人工传递及独立审查；实验输入仅在服务器明确提供安全扩展时开放。手机可扫描主机授权响应；实际组网接入按平台单独验证。</p></section>
 <p id="remote-native-note" class="mode-message" data-tone="warning">浏览器预览没有原生 SSH 适配器。真实读取仅在测试安装包中可用，预览不会伪造连接成功。</p>
 <form id="remote-form" autocomplete="off">
 <fieldset id="remote-fields"><legend>1. 审查目标与来源</legend>

@@ -152,10 +152,43 @@ def snapshot_diagnostics(result):
             'nestedKnownFields': protocol_diagnostics(snapshot) if isinstance(snapshot, dict) else None}
 
 
+def gui_report_fields(route, result, input_fixture=False):
+    """Keep test route, required frame evidence and runtime limits distinct."""
+    scopes = {
+        'tauri-android': 'API35 emulator WebView and AndroidKeyStore-wrapped identity',
+        'tauri': 'Linux GTK WebView with native process-memory test identity',
+        'flutter': 'Flutter widget with explicit test signer, catalog and input journal',
+        'flutter-android': 'API35 Flutter debug app with production HostCatalogPage and native AndroidKeyStore-wrapped identity',
+    }
+    frames = {
+        'flutter': 'widget state after Terminal.write',
+        'flutter-android': 'displayed sequence advance on the same production Terminal object after initial full',
+        'tauri': 'xterm parser callback after consuming a frame',
+        'tauri-android': 'xterm parser callback after consuming a frame',
+    }
+    unverified = ['physical phone', 'camera', 'real IME', 'overlay networks',
+                  'pixel rendering', 'hardware key protection', 'production deployment']
+    passed = result.get('status') == 'passed'
+    if not passed or not input_fixture:
+        unverified.append('remote input from this GUI')
+    native_store = route == 'tauri-android'
+    if route == 'flutter-android':
+        native_store = (result.get('uninjectedNativeDeviceKeys') is True and
+                        all(result.get(name) is False for name in
+                            ('storageMocked', 'signerInjected', 'framesInjected')))
+        unverified.append('Flutter release/profile application runtime')
+    if not passed or not native_store:
+        unverified.append('protected system-store runtime')
+    fields = {'scope': scopes[route], 'frameEvidence': frames[route], 'unverified': unverified}
+    if route == 'flutter-android':
+        fields['platform'] = 'Android API35 x86_64 AVD on Ubuntu 24.04 loopback OpenSSH; Flutter debug'
+    return fields
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--flutter-app', type=Path)
-    parser.add_argument('--paired-gui', choices=('flutter', 'tauri','tauri-android'))
+    parser.add_argument('--paired-gui', choices=('flutter', 'tauri', 'tauri-android', 'flutter-android'))
     parser.add_argument('--tauri-app', type=Path)
     parser.add_argument('--input-fixture', type=Path)
     parser.add_argument('--output', type=Path, required=True)
@@ -340,22 +373,11 @@ LogLevel VERBOSE
         if args.paired_gui:
             # Import the pairing dependencies only for the isolated GUI workflow.
             from paired_gui import run_gui
-            scopes = {
-                'tauri-android':'API35 emulator WebView and AndroidKeyStore-wrapped identity',
-                'tauri':'Linux GTK WebView with native process-memory test identity',
-                'flutter':'Flutter widget with explicit test signer, catalog and input journal',
-            }
-            report.update(milestone='M1c-pairing-dashboard-observe', scope=scopes[args.paired_gui],
-                          frameEvidence=('widget state after Terminal.write' if args.paired_gui == 'flutter'
-                                         else 'xterm parser callback after consuming a frame'),
-                          unverified=['physical phone', 'camera', 'real IME', 'overlay networks',
-                                      'pixel rendering', 'hardware key protection', 'production deployment'])
+            report.update(milestone='M1c-pairing-dashboard-observe',
+                          **gui_report_fields(args.paired_gui, {'status': 'failed'}, bool(args.input_fixture)))
             report.pop('cancelScope', None)
             result = run_gui(args, root, env, config)
-            if result['status'] != 'passed' or not args.input_fixture:
-                report['unverified'].append('remote input from this GUI')
-            if result['status'] != 'passed' or args.paired_gui != 'tauri-android':
-                report['unverified'].append('protected system-store runtime')
+            report.update(gui_report_fields(args.paired_gui, result, bool(args.input_fixture)))
             report['checks'].append(result)
             publish()
         else:

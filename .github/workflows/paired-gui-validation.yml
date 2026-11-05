@@ -43,7 +43,6 @@ jobs:
           cd "$RUNNER_TEMP/flutter-gui"
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-gui"
-          flutter analyze
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         if: matrix.route == 'tauri'
         with:

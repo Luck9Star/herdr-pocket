@@ -122,8 +122,13 @@ class RemoteSnapshot {
 
 /// Only identities supplied by the reviewed named session's snapshot.
 class RemotePane {
-  const RemotePane(this.paneId, this.terminalId);
-  final String paneId, terminalId;
+  const RemotePane(this.paneId, this.terminalId, {this.label,this.agent,this.agentStatus='unknown',this.workspace,this.tab});
+  final String paneId, terminalId, agentStatus;
+  final String? label, agent, workspace, tab;
+
+  String get statusLabel => switch (agentStatus) {
+    'working' => '工作中', 'blocked' => '受阻', 'idle' => '空闲', 'done' => '已完成', _ => '状态未知',
+  };
 }
 class RemoteDashboard {
   const RemoteDashboard(this.generation, this.session, this.panes);
@@ -567,6 +572,14 @@ Map<String,dynamic> _decodeObject(String line) {
   throw const RemoteFailure('invalid_response');
 }
 
+String? _paneCaption(dynamic value) {
+  if (value is! String) return null;
+  final text = value.trim();
+  if (text.isEmpty || text.runes.length > 64 ||
+      RegExp(r'[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]').hasMatch(text)) return null;
+  return text;
+}
+
 RemoteDashboard parseSnapshotDashboard(RemoteConfig config, Map<String,dynamic> result, int generation) {
   // Pinned v0.9.5 has no session echo; enforce the reviewed socket/exec root.
   config.configRoot;
@@ -588,7 +601,11 @@ RemoteDashboard parseSnapshotDashboard(RemoteConfig config, Map<String,dynamic> 
     if (!RegExp(r'^term_[0-9a-f]{1,123}$').hasMatch(terminal) || !terminals.add(terminal)) {
       throw const RemoteFailure('invalid_terminal_id');
     }
-    parsed.add(RemotePane(id,terminal));
+    final status = pane['agent_status'];
+    parsed.add(RemotePane(id,terminal,label:_paneCaption(pane['label']),
+      agent:_paneCaption(pane['display_agent']) ?? _paneCaption(pane['agent']),
+      agentStatus:const {'idle','working','blocked','done'}.contains(status) ? status as String : 'unknown',
+      workspace:_paneCaption(pane['workspace_id']),tab:_paneCaption(pane['tab_id'])));
   }
   return RemoteDashboard(generation,config.session,List.unmodifiable(parsed));
 }

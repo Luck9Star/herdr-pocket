@@ -54,14 +54,62 @@ jobs:
         working-directory: fixture-source
         run: |
           cargo test --locked --package herdr pocket_input_guards_identity_rejects_bad_bytes_and_never_resizes -- --nocapture
-          cargo build --locked --package herdr --bin herdr
+          # 0.9.5 selects herdr-dev whenever this binary has debug assertions;
+          # the loopback harness intentionally exercises the release `herdr` path.
+          # Keep dev optimisation/profile and the normal test build; set this on
+          # the binary only so test dependencies need not be rebuilt.
+          cargo rustc --locked --package herdr --bin herdr -- -C debug-assertions=no
           mkdir "$RUNNER_TEMP/input-fixture"
           cp target/debug/herdr LICENSE "$RUNNER_TEMP/input-fixture/"
           cp "$GITHUB_WORKSPACE/validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch" "$RUNNER_TEMP/input-fixture/"
           python3 - <<'PY'
-          import hashlib,json,os,pathlib
+          import hashlib,json,os,pathlib,signal,socket,subprocess,tempfile,time
           root=pathlib.Path(os.environ['RUNNER_TEMP'])/'input-fixture'
-          data={'scope':'isolated validation fixture','sourceSHA':os.environ['GITHUB_SHA'],'upstreamSHA':os.environ['BASE_SHA'],'patchSHA256':os.environ['PATCH_SHA256'],'binarySHA256':hashlib.sha256((root/'herdr').read_bytes()).hexdigest()}
+          # Verify the built artifact itself in a separate, owned sandbox. Do not
+          # send terminal input or expose fixture logs in the artifact.
+          with tempfile.TemporaryDirectory(prefix='hp-path-',dir=os.environ['RUNNER_TEMP']) as d:
+              tmp=pathlib.Path(d)
+              env={k:v for k,v in os.environ.items() if not k.startswith('HERDR_') and k not in ('SSH_AUTH_SOCK','SSH_AGENT_PID','BASH_ENV')}
+              env.update(HOME=str(tmp),XDG_CONFIG_HOME=str(tmp/'config'),XDG_STATE_HOME=str(tmp/'state'),XDG_DATA_HOME=str(tmp/'data'),XDG_CACHE_HOME=str(tmp/'cache'),SHELL='/bin/sh')
+              proc=subprocess.Popen([str(root/'herdr'),'--session','fixture-smoke','server'],env=env,cwd=tmp,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+              try:
+                  sock=tmp/'config/herdr/sessions/fixture-smoke/herdr.sock'
+                  def request(method):
+                      with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as s:
+                          s.settimeout(0.5);s.connect(str(sock))
+                          s.sendall(json.dumps({'id':'fixture-readiness','method':method,'params':{}}).encode()+b'\n')
+                          data=bytearray()
+                          while b'\n' not in data and len(data)<=1_048_576:
+                              chunk=s.recv(4096)
+                              if not chunk: break
+                              data.extend(chunk)
+                          if len(data)>1_048_576: raise ValueError('oversize response')
+                          value=json.loads(data.split(b'\n',1)[0])
+                          if not isinstance(value,dict) or value.get('id')!='fixture-readiness' or not isinstance(value.get('result'),dict): raise ValueError('invalid response')
+                          return value['result']
+                  deadline=time.monotonic()+20
+                  while True:
+                      if proc.poll() is not None: raise SystemExit('fixture_server_exited')
+                      try:
+                          result=request('session.snapshot')
+                          if result.get('type')!='session_snapshot' or result.get('snapshot',{}).get('version')!='0.9.5' or result.get('snapshot',{}).get('protocol')!=22: raise ValueError('invalid snapshot')
+                          capability=request('pocket.input.capabilities')
+                          if capability!={'type':'pocket_input_capabilities','version':1,'protocol':22,'atomic_terminal_guard':True,'raw_bytes':True,'max_input_bytes':4096}: raise ValueError('invalid capability')
+                          break
+                      except (OSError,ValueError,TypeError):
+                          if time.monotonic()>=deadline: raise SystemExit('fixture_readiness_or_capability_failed')
+                          time.sleep(0.1)
+                  if (tmp/'config/herdr-dev').exists(): raise SystemExit('fixture_unexpected_debug_config')
+              finally:
+                  if proc.poll() is None:
+                      try: os.killpg(proc.pid,signal.SIGTERM)
+                      except ProcessLookupError: pass
+                      try: proc.wait(timeout=5)
+                      except subprocess.TimeoutExpired:
+                          try: os.killpg(proc.pid,signal.SIGKILL)
+                          except ProcessLookupError: pass
+                          proc.wait(timeout=5)
+          data={'scope':'isolated validation fixture','sourceSHA':os.environ['GITHUB_SHA'],'upstreamSHA':os.environ['BASE_SHA'],'patchSHA256':os.environ['PATCH_SHA256'],'binarySHA256':hashlib.sha256((root/'herdr').read_bytes()).hexdigest(),'buildProfile':'dev','binaryDebugAssertions':False,'configDirectory':'herdr','readinessAndCapabilitySmokePassed':True}
           (root/'manifest.json').write_text(json.dumps(data,indent=2)+'\n')
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

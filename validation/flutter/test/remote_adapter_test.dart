@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show File;
 import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -99,6 +100,15 @@ void main() {
     final late = FakeSocket(); pending.complete(late);
     await Future<void>.delayed(Duration.zero);
     expect(late.destroyed,isTrue);
+  });
+  test('shared dashboard labels are presentation only and unknown status stays unknown', () {
+    final wire = jsonDecode(File('assets/shared/dashboard-snapshot.json').readAsStringSync()) as Map<String,dynamic>;
+    final config = RemoteConfig.fromJson({...fixtureConfig(),'paneId':''});
+    final panes = parseSnapshotDashboard(config,wire['result'] as Map<String,dynamic>,1).panes;
+    expect([panes[0].label,panes[0].agent,panes[0].statusLabel,panes[0].workspace],
+      ['构建 Android','Codex','工作中','w1']);
+    expect([panes[1].terminalId,panes[1].label,panes[1].agent,panes[1].agentStatus],
+      ['term_def',null,null,'unknown']);
   });
   test('snapshot list binds all unique pane identities, accepts honest empty and rejects aliases/overlimit', () {
     final config = RemoteConfig.fromJson({...fixtureConfig(),'paneId':''});

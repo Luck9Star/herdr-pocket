@@ -1,0 +1,35 @@
+{
+  "id": "pocket-readonly",
+  "ok": true,
+  "result": {
+    "type": "session_snapshot",
+    "snapshot": {
+      "version": "0.9.5",
+      "protocol": 22,
+      "panes": [
+        {
+          "pane_id": "w1:p1",
+          "terminal_id": "term_abc",
+          "workspace_id": "w1",
+          "tab_id": "w1:t1",
+          "label": "\u6784\u5efa Android",
+          "display_agent": "Codex",
+          "agent_status": "working"
+        },
+        {
+          "pane_id": "w1:p2",
+          "terminal_id": "term_def",
+          "workspace_id": "w1",
+          "tab_id": "w1:t2",
+          "label": "unsafe\u202e change",
+          "agent": "synth\u001bname",
+          "agent_status": "future-value",
+          "cwd": "/synthetic/private",
+          "tokens": {
+            "fixture": "never forward"
+          }
+        }
+      ]
+    }
+  }
+}

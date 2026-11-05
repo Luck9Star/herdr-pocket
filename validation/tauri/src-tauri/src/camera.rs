@@ -38,7 +38,11 @@ pub async fn pair_scan_response<R: Runtime>(app: AppHandle<R>) -> Result<String,
         }
         Ok(reply.text)
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_os = "ios")]
+    {
+        super::ios_keys::scan(&app).await
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         let _ = app;
         Err("camera_unavailable".into())

@@ -79,6 +79,8 @@ M1a 新查询：Context7 `library xterm.js` → `/xtermjs/xterm.js` → `docs` �
 
 远端入口可显式选择设备配对：先独立核对账号与主机公钥并生成公开请求，再人工粘贴响应、预览、单独确认来源，最后再次审查连接资料并手动连接。响应只绑定请求，不能证明主机身份；实际 SSH 先验证预期公钥，再由绑定该请求的本机句柄签名，认证后进入既有 pane 看板。取消或删除本机身份不会撤销主机授权；授权未知时仍须向主机核查。拒绝响应不会消耗请求，已接受授权的重放、错配、过期、签名错误与迟到结果被拒绝。没有自动连接或重放。
 
-Linux/macOS 的 signer 是明确标示的**仅进程内测试身份**，退出消失，不是系统安全存储。Android 经注册的原生桥使用共享 Java 设备密钥实现；签名材料及本机句柄只在原生层使用，页面只得到公开请求和指纹。iOS 与 Windows 的设备配对当前 fail closed。仍可使用原有手动实验私钥入口。此接线不表示任何设备 Keystore、锁屏/重装或 Android GUI 已运行验证。
+Linux/macOS 的 signer 是明确标示的**仅进程内测试身份**，退出消失，不是系统安全存储。Android 经注册的原生桥使用共享 Java 设备密钥实现；iOS 使用共享 Swift CryptoKit Ed25519 实现，种子保存在 `WhenUnlockedThisDeviceOnly` Keychain，签名在软件中执行，**不是 Secure Enclave 签名**。签名材料及本机句柄只在原生层使用，页面只得到公开请求和指纹；找不到原密钥或公钥不匹配时不会重建。Windows 的设备配对仍 fail closed。仍可使用原有手动实验私钥入口。此接线不表示系统密钥存储、锁屏/重装或 GUI 已运行验证。
 
 Android 云构建在 `tauri android init` 后运行 `scripts/wire-android.py`，将 Tauri 插件复制到生成工程，并应用共享 `device-keys.gradle`（Java 17、BC 1.86 和许可证 notice）；生成工程不入库。本机不安装 SDK。移动平台运行、系统存储、设备锁定行为、桌面 GUI 到隔离 SSH 的实际完整流程均须以独立运行记录为准，不能从编译或单测推断。
+
+iOS 构建在 Cargo build script 中引用固定 Tauri crate 的 Swift API，并从仓库共享 Swift 源在临时构建目录生成静态 Swift 包，无需修改生成的 Xcode 工程；`Info.ios.plist` 提供相机用途说明。相机返回的仅是待人工审查的公开响应，取消和权限拒绝均可继续手动导入。在有 Swift 命令行工具的 macOS 上执行 `python3 test/ios_wire_test.py` 可运行 plist/注册接线检查、无系统 Keychain 的 CryptoKit 内存替身和 Swift 接口桩类型检查；这些检查不替代 iOS SDK 链接、模拟器或真机验证。

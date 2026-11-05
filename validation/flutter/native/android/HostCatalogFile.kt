@@ -50,8 +50,11 @@ class HostCatalogFile(context: Context, directoryName: String = "herdr-hosts-v1"
             FileOutputStream(pending).use { stream -> stream.write(replacement); stream.fd.sync() }
             Files.move(pending.toPath(), File(directory, "catalog.json").toPath(),
                 StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-            val fd = Os.open(directory.path, OsConstants.O_RDONLY or OsConstants.O_DIRECTORY, 0)
-            try { Os.fsync(fd) } finally { Os.close(fd) }
+            val fd = Os.open(directory.path, OsConstants.O_RDONLY or OsConstants.O_NOFOLLOW or OsConstants.O_NONBLOCK, 0)
+            try {
+                check(OsConstants.S_ISDIR(Os.fstat(fd).st_mode))
+                Os.fsync(fd)
+            } finally { Os.close(fd) }
             token(replacement)
         } finally { pending.delete() }
     }

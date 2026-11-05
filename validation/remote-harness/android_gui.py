@@ -88,19 +88,20 @@ class AndroidWebView:
 
     def click(self, selector):
         # scrollIntoView is layout-only. Actual activation goes through CDP input.
-        expression = '''(()=>{const e=document.querySelector(%s); if(!e || e.disabled || e.hidden) return null;
+        expression = '''(()=>{const e=document.querySelector(%s); if(!e || e.matches(':disabled') || e.hidden) return null;
           e.scrollIntoView({block:'center',inline:'center'}); const r=e.getBoundingClientRect();
           const x=r.left+r.width/2,y=r.top+r.height/2;
-          return r.width>0 && r.height>0 && x>=0 && y>=0 && x<innerWidth && y<innerHeight ? {x,y}:null})()''' % json.dumps(selector)
-        point = wait_for(lambda: self.evaluate(expression), 'android_control_missing')
+          return r.width>0 && r.height>0 && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
+                 e.contains(document.elementFromPoint(x,y)) ? {x,y}:null})()''' % json.dumps(selector)
+        point = wait_for(lambda: self.evaluate(expression), 'android_control_missing_'+selector.lstrip('#').replace(' ','_'))
         for kind in ('mousePressed', 'mouseReleased'):
             self.call('Input.dispatchMouseEvent', {'type': kind, 'x': point['x'], 'y': point['y'],
                                                  'button': 'left', 'clickCount': 1})
 
     def fill(self, selector, value):
-        expression = '''(()=>{const e=document.querySelector(%s); if(!e || e.disabled || e.readOnly) return false;
+        expression = '''(()=>{const e=document.querySelector(%s); if(!e || !e.getClientRects().length || e.matches(':disabled') || e.readOnly) return false;
           e.scrollIntoView({block:'center'}); e.focus(); e.select(); return document.activeElement===e})()''' % json.dumps(selector)
-        wait_for(lambda: self.evaluate(expression), 'android_text_control_missing')
+        wait_for(lambda: self.evaluate(expression), 'android_text_control_missing_'+selector.lstrip('#'))
         self.call('Input.insertText', {'text': str(value)})
         if self.read(selector, 'value') != str(value):
             raise GuiFailure('android_text_input_mismatch')

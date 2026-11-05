@@ -2,6 +2,9 @@ name: Tauri validation shells
 on:
   workflow_call:
     inputs:
+      include_ios:
+        type: boolean
+        default: false
       android_only:
         type: boolean
         default: false
@@ -19,7 +22,8 @@ jobs:
       max-parallel: 3
       matrix:
         include: >-
-          ${{ fromJSON(inputs.android_only &&
+          ${{ fromJSON(inputs.include_ios &&
+          '[{"platform":"android","runner":"ubuntu-24.04"},{"platform":"ios-simulator","runner":"macos-15"}]' || inputs.android_only &&
           '[{"platform":"android","runner":"ubuntu-24.04"}]' ||
           '[{"platform":"android","runner":"ubuntu-24.04"},{"platform":"ios-simulator","runner":"macos-15"},{"platform":"macos","runner":"macos-15"},{"platform":"linux","runner":"ubuntu-24.04"},{"platform":"windows","runner":"windows-2025"}]') }}
     runs-on: ${{ matrix.runner }}

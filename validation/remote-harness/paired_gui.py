@@ -209,19 +209,22 @@ class WebDriver:
         return self.session+'/element/'+wait_for(find, 'missing_control_'+re.sub(r'[^a-z0-9_-]', '', selector)[:40])
 
     def click(self, selector):
+        self.wait_control(selector)
         self.call('POST', self.element(selector)+'/click', {})
 
-    def fill(self, selector, value):
-        # The default host board opens the form asynchronously after reading its
-        # private catalog. The inputs already exist in the hidden WebView DOM.
-        # Observe readiness only; actual edits go through the W3C input commands.
+    def wait_control(self, selector, editable=False):
+        # The document contains hidden forms and an initially disabled board
+        # button. Observe readiness; interactions still use WebDriver events.
         script = """const e=document.querySelector(arguments[0]);
             return !!e && e.getClientRects().length > 0 && !e.matches(':disabled') &&
-                   !e.readOnly && getComputedStyle(e).visibility === 'visible'"""
-        def editable():
-            return self.call('POST', self.session+'/execute/sync', {'script':script,'args':[selector]})
+                   (!arguments[1] || !e.readOnly) && getComputedStyle(e).visibility === 'visible'"""
+        def ready():
+            return self.call('POST', self.session+'/execute/sync', {'script':script,'args':[selector,editable]})
+        wait_for(ready, ('form_not_editable_' if editable else 'control_not_ready_')+selector.lstrip('#'))
+
+    def fill(self, selector, value):
+        self.wait_control(selector, editable=True)
         label = selector.lstrip('#')
-        wait_for(editable, 'form_not_editable_'+label)
         path = self.element(selector)
         try:
             self.call('POST', path+'/click', {})
@@ -305,6 +308,8 @@ def run_gui(args, root, env, config):
             try:
                 if args.paired_gui == 'tauri-android':
                     from android_gui import run_android as exercise
+                elif args.paired_gui == 'flutter-android':
+                    from flutter_android_gui import run_flutter_android as exercise
                 else:
                     exercise = run_tauri if args.paired_gui == 'tauri' else run_flutter
                 result.update(exercise(args, root, env, config, approval))

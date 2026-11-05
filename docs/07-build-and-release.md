@@ -133,3 +133,5 @@ artifact / cache 等存储存在额度、保留和计费规则，不能从计算
 普通批次优先覆盖两套 GUI、设备密钥、原版只读 SSH、候选扩展输入和 Android 模拟器。`codex/batch/full-<批次名>` 另行运行原生网络移植与原有 SSH 矩阵。上游原版终端绘制 characterization 可单独手动诊断，保留已有失败证据。测试包及构建与签名状态写入 manifest，源码实验、云模拟器、真机与真实组网分别验收。工作流权限为只读，不创建 tag、Release 或商店提交。
 
 手机集中复验使用 `codex/batch/android-<批次名>`。两壳只重建 Android 应用，继续运行配对、SSH 与 GUI 用例；其他系统保留各自历史验证结果。Flutter 的依赖锁须先验证，验证过的锁可用于生成诊断用 debug APK。单元或 GUI 失败仍保留在 Actions 和 manifest，得到 APK 只证明打包步骤成功。一次性 POSIX helper 单独输出含固定依赖、操作说明和源码 SHA 的源码包。
+
+`codex/batch/phones-<批次名>` 在同一次运行中额外构建两条路线的 iOS 候选产物，仍跳过 Windows、Linux 与 Mac 安装包重建。产物保留签名、架构和工具链状态，Linux 的 SSH/GUI 用例及临时 Android 模拟器独立报告真实经过的步骤。

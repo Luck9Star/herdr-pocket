@@ -2,6 +2,9 @@ name: Flutter experimental terminal candidate
 on:
   workflow_call:
     inputs:
+      include_ios:
+        type: boolean
+        default: false
       android_only:
         type: boolean
         default: false
@@ -38,13 +41,19 @@ jobs:
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
           echo "verified_lock=true" >> "$GITHUB_OUTPUT"
-      - name: Analyze and verify original safety tests
+      - name: Analyze the Flutter candidate
         shell: bash
         run: |
           cd "$RUNNER_TEMP/flutter-probe"
           flutter analyze 2>&1 | tee candidate-analyze.log
+      - name: Exercise Flutter widgets and safety tests on the verified lock
+        if: "!cancelled() && steps.resolve.outputs.verified_lock == 'true'"
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/flutter-probe"
           flutter test --reporter expanded 2>&1 | tee candidate-safety-tests.log
       - name: Verify actual combining render and regression references
+        if: "!cancelled() && steps.resolve.outputs.verified_lock == 'true'"
         shell: bash
         run: |
           cd "$RUNNER_TEMP/flutter-probe"
@@ -114,7 +123,8 @@ jobs:
       fail-fast: false
       matrix:
         include: >-
-          ${{ fromJSON(inputs.android_only &&
+          ${{ fromJSON(inputs.include_ios &&
+          '[{"platform":"android","os":"ubuntu-24.04"},{"platform":"ios","os":"macos-14"}]' || inputs.android_only &&
           '[{"platform":"android","os":"ubuntu-24.04"}]' ||
           '[{"platform":"android","os":"ubuntu-24.04"},{"platform":"ios","os":"macos-14"},{"platform":"macos","os":"macos-14"},{"platform":"linux","os":"ubuntu-24.04"},{"platform":"windows","os":"windows-2022"}]') }}
     runs-on: ${{ matrix.os }}

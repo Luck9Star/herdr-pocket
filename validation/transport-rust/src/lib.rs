@@ -641,6 +641,11 @@ pub async fn read_once(
 pub struct Pane {
     pub pane_id: String,
     pub terminal_id: String,
+    pub label: Option<String>,
+    pub agent: Option<String>,
+    pub agent_status: &'static str,
+    pub workspace: Option<String>,
+    pub tab: Option<String>,
 }
 #[derive(Clone, Serialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -650,6 +655,17 @@ pub struct StreamFrame {
     pub bytes: Vec<u8>,
     pub buffer_high_water_bytes: usize,
 }
+// Optional display text is never used to select a terminal. Untrusted titles,
+// cwd, metadata tokens and arbitrary labels are not forwarded to the dashboard.
+fn pane_caption(value: &Value) -> Option<String> {
+    let text = value.as_str()?.trim();
+    if text.is_empty() || text.chars().count() > 64
+        || text.chars().any(|c| c.is_control() || matches!(c, '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{2028}'..='\u{202e}' | '\u{2066}'..='\u{2069}')) {
+        return None;
+    }
+    Some(text.to_owned())
+}
+
 fn snapshot_panes(value: &Value) -> Result<Vec<Pane>> {
     // Reuse the strict envelope/version checks for each selectable target.
     let raw = value
@@ -685,6 +701,14 @@ fn snapshot_panes(value: &Value) -> Result<Vec<Pane>> {
         panes.push(Pane {
             pane_id: id.into(),
             terminal_id,
+            label: pane_caption(&p["label"]),
+            agent: pane_caption(&p["display_agent"]).or_else(|| pane_caption(&p["agent"])),
+            agent_status: match p["agent_status"].as_str() {
+                Some("idle") => "idle", Some("working") => "working",
+                Some("blocked") => "blocked", Some("done") => "done", _ => "unknown",
+            },
+            workspace: pane_caption(&p["workspace_id"]),
+            tab: pane_caption(&p["tab_id"]),
         });
     }
     // Empty arrays still require envelope and protocol validation.
@@ -1120,6 +1144,20 @@ mod tests {
                 "partial messages extended the absolute deadline"
             );
         }
+    }
+    #[test]
+    fn dashboard_uses_only_printable_snapshot_metadata_without_changing_targets() {
+        let snapshot = serde_json::from_str(include_str!("../../shared/dashboard-snapshot.json")).unwrap();
+        let panes = snapshot_panes(&snapshot).unwrap();
+        assert_eq!(panes[0].label.as_deref(), Some("构建 Android"));
+        assert_eq!(panes[0].agent.as_deref(), Some("Codex"));
+        assert_eq!(panes[0].agent_status, "working");
+        assert_eq!(panes[0].workspace.as_deref(), Some("w1"));
+        assert_eq!(panes[1].terminal_id, "term_def");
+        assert_eq!((panes[1].label.as_ref(), panes[1].agent.as_ref()), (None, None));
+        assert_eq!(panes[1].agent_status, "unknown");
+        let exported = serde_json::to_value(&panes[1]).unwrap();
+        assert!(exported.get("tokens").is_none() && exported.get("cwd").is_none());
     }
     #[test]
     fn dashboard_is_bounded_and_cannot_bind_duplicate_identity() {

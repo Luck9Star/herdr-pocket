@@ -18,3 +18,5 @@
 
 .unsent-notices{max-width:960px;margin:8px auto;background:var(--hp-warningSoft);color:var(--hp-warningText)}.unsent-notices p{margin:3px 0;overflow-wrap:anywhere}
 #remote-input-controls{background:var(--hp-card);color:var(--hp-textPrimary);padding:16px;border-top:1px solid var(--hp-border)}#remote-input-controls h3{margin:0 0 8px}#remote-input-controls p{font-size:13px;line-height:1.6;color:var(--hp-textSecondary)}#remote-input-controls textarea{display:block;width:100%;margin:8px 0}#remote-input-preview-text{max-height:240px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--hp-textPrimary);background:var(--hp-canvas);padding:12px;border-radius:10px}
+
+#remote-panes .pane-summary { display: block; margin-block-start: .25rem; font-weight: 400; overflow-wrap: anywhere; }

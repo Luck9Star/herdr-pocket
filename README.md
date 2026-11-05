@@ -8,7 +8,7 @@
 
 当前按手机优先推进[会话看板与持续观察](docs/13-mobile-dashboard-observe.md)：两条适配器已在同一云端临时 SSH/herdr 目标完成 **18/18** 项真实对照，覆盖显式 pane 选择后的 full/delta、主动停止和手动再次连接，远端输入为 0。配对 v2 契约、Apple 内存签名探针与 Android 桥编译同步推进。手机界面布景、真实 SSH CLI、原生包构建分别记录；GUI 真实接入、设备密钥存储、手机运行与完整输入仍待验证。
 
-当前批次已开始手机设备配对、主机目录、多标签和带目标保护的远端输入实验。Android 基线包、首轮失败与批次验收入口见[手机配对工作台](docs/14-mobile-pairing-workbench.md)。
+手机设备配对、主机目录、待授权恢复、多标签和受保护输入已进入两套工作壳。两份 Android 基线包与测试步骤见[手机配对工作台](docs/14-mobile-pairing-workbench.md)，新版 APK、云端失败及 Mac 实际入口检查见[手机 GUI 验证记录](docs/15-mobile-gui-validation.md)。
 
 ## 首版做什么
 

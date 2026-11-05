@@ -22,6 +22,18 @@ class GuiFailure(Exception):
     """Static phase codes only; never publish driver, host or widget output."""
 
 
+def widget_failure(exchange, fallback):
+    # Only emit stages chosen by the harness. Never copy widget logs or form data.
+    stages = {'host_board', 'public_request', 'host_authorization', 'restore_pending',
+              'response_review', 'ssh_and_dashboard', 'observe_frames', 'guarded_input', 'stop'}
+    path = exchange / 'stage'
+    if path.is_file():
+        phase = bounded_wire(path, 40).decode('ascii', errors='ignore')
+        if phase in stages:
+            return GuiFailure(f'{fallback}_{phase}')
+    return GuiFailure(fallback)
+
+
 def wait_for(probe, code, *, timeout=25):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -126,7 +138,7 @@ def run_flutter(args, root, env, config, approval):
     with owned_process(command, cwd=args.flutter_app, env=widget_env, log=root/'widget.log') as proc:
         def request_ready():
             if proc.poll() is not None:
-                raise GuiFailure('widget_exited_before_request')
+                raise widget_failure(exchange, 'widget_exited_before_request')
             return (exchange / 'request.json').is_file()
         wait_for(request_ready, 'widget_request_timeout', timeout=100)
         response = approval.approve(bounded_wire(exchange / 'request.json'))
@@ -139,11 +151,12 @@ def run_flutter(args, root, env, config, approval):
             raise GuiFailure('widget_completion_timeout') from exc
         if code or not (exchange / 'result.json').is_file():
             # Return only named, fixed test-stage failures (never raw widget logs).
-            raise GuiFailure('widget_pairing_or_observe_failed')
+            raise widget_failure(exchange, 'widget_pairing_or_observe_failed')
         result = json.loads(bounded_wire(exchange / 'result.json'))
-        required = ('paired', 'paneChosen', 'fullRendered', 'deltaRendered', 'stoppedStale')
+        required = ('paired', 'paneChosen', 'fullRendered', 'deltaRendered', 'stoppedStale', 'reopenedPendingRequest')
         calls = result.get('signCalls')
-        if not all(result.get(field) is True for field in required) or type(calls) != int or not 1 <= calls <= 8:
+        if (not all(result.get(field) is True for field in required) or result.get('identityCreations') != 1
+                or type(calls) != int or not 1 <= calls <= 8):
             raise GuiFailure('widget_evidence_incomplete')
         frames = result.get('frameCount')
         deltas = result.get('deltaFrames')
@@ -199,9 +212,25 @@ class WebDriver:
         self.call('POST', self.element(selector)+'/click', {})
 
     def fill(self, selector, value):
+        # The default host board opens the form asynchronously after reading its
+        # private catalog. The inputs already exist in the hidden WebView DOM.
+        # Observe readiness only; actual edits go through the W3C input commands.
+        script = """const e=document.querySelector(arguments[0]);
+            return !!e && e.getClientRects().length > 0 && !e.matches(':disabled') &&
+                   !e.readOnly && getComputedStyle(e).visibility === 'visible'"""
+        def editable():
+            return self.call('POST', self.session+'/execute/sync', {'script':script,'args':[selector]})
+        label = selector.lstrip('#')
+        wait_for(editable, 'form_not_editable_'+label)
         path = self.element(selector)
-        self.call('POST', path+'/clear', {})
-        self.call('POST', path+'/value', {'text':str(value), 'value':list(str(value))})
+        try:
+            self.call('POST', path+'/click', {})
+            self.call('POST', path+'/clear', {})
+            self.call('POST', path+'/value', {'text':str(value), 'value':list(str(value))})
+        except GuiFailure as error:
+            raise GuiFailure(f'{error}_{label}') from None
+        if self.read(selector,'value') != str(value):
+            raise GuiFailure('form_input_mismatch_'+label)
 
     def read(self, selector, prop='innerText'):
         return self.call('GET', self.element(selector)+'/property/'+prop)

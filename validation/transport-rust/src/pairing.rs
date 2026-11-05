@@ -107,6 +107,16 @@ impl Target {
 pub struct PairingReference {
     pub handle: String,
     pub request_json: String,
+    #[serde(default)]
+    pub status: ReferenceStatus,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReferenceStatus {
+    #[default]
+    Authorized,
+    AwaitingHost,
+    Cancelled,
 }
 #[derive(Clone)]
 pub struct Pairing {
@@ -196,6 +206,25 @@ impl Pairing {
         Ok(PairingReference {
             handle: self.handle.clone(),
             request_json: self.request_json()?,
+            status: ReferenceStatus::Authorized,
+        })
+    }
+    pub fn pending_reference(&self, config: &RemoteConfig) -> Result<PairingReference> {
+        if self.authorization != "unknown"
+            || !matches!(self.state, "awaiting-host" | "cancelled" | "expired")
+            || self.target.as_ref() != Some(&Target::from_config(config))
+            || self.store.public(&self.handle)? != self.request.public_key
+        {
+            return Err("pairing_not_persistable");
+        }
+        Ok(PairingReference {
+            handle: self.handle.clone(),
+            request_json: self.request_json()?,
+            status: if self.state == "cancelled" {
+                ReferenceStatus::Cancelled
+            } else {
+                ReferenceStatus::AwaitingHost
+            },
         })
     }
     pub fn restore(
@@ -203,6 +232,30 @@ impl Pairing {
         reference: &PairingReference,
         config: &RemoteConfig,
         reviewed: bool,
+    ) -> Result<Self> {
+        if reference.status != ReferenceStatus::Authorized {
+            return Err("pairing_restore_rejected");
+        }
+        Self::restore_verified(store, reference, config, reviewed, None)
+    }
+    pub fn restore_pending(
+        store: Arc<dyn KeyStore>,
+        reference: &PairingReference,
+        config: &RemoteConfig,
+        reviewed: bool,
+        now: u64,
+    ) -> Result<Self> {
+        if reference.status == ReferenceStatus::Authorized {
+            return Err("pairing_restore_rejected");
+        }
+        Self::restore_verified(store, reference, config, reviewed, Some(now))
+    }
+    fn restore_verified(
+        store: Arc<dyn KeyStore>,
+        reference: &PairingReference,
+        config: &RemoteConfig,
+        reviewed: bool,
+        pending_now: Option<u64>,
     ) -> Result<Self> {
         if !reviewed
             || reference.handle.is_empty()
@@ -236,13 +289,26 @@ impl Pairing {
         {
             return Err("pairing_restore_rejected");
         }
+        if pending_now.is_some_and(|now| now < request.issued_at) {
+            return Err("pairing_restore_rejected");
+        }
+        let state = match pending_now {
+            None => "authorized-unverified",
+            Some(_) if reference.status == ReferenceStatus::Cancelled => "cancelled",
+            Some(now) if now >= request.expires_at => "expired",
+            Some(_) => "awaiting-host",
+        };
         Ok(Self {
             store,
             handle: reference.handle.clone(),
             request,
             target: Some(Target::from_config(config)),
-            state: "authorized-unverified",
-            authorization: "authorized",
+            state,
+            authorization: if pending_now.is_some() {
+                "unknown"
+            } else {
+                "authorized"
+            },
             authorization_added: None,
         })
     }
@@ -510,6 +576,60 @@ mod tests {
         assert!(restored.begin(&config).is_ok());
         store.delete(&reference.handle).unwrap();
         assert!(Pairing::restore(store, &reference, &config, true).is_err());
+    }
+    #[test]
+    fn pending_restore_preserves_request_requires_key_review_and_respects_expiry_and_cancel() {
+        let store = Arc::new(VolatileKeyStore::default());
+        let host = new_host();
+        let config = config(&host);
+        let mut original =
+            Pairing::create(store.clone(), "fixture-user", &host, "Pocket test", 100).unwrap();
+        original.bind_target(&config).unwrap();
+        let reference = original.pending_reference(&config).unwrap();
+        assert_eq!(reference.status, ReferenceStatus::AwaitingHost);
+        let mut legacy = serde_json::to_value(&reference).unwrap();
+        legacy.as_object_mut().unwrap().remove("status");
+        let legacy: PairingReference = serde_json::from_value(legacy).unwrap();
+        assert_eq!(legacy.status, ReferenceStatus::Authorized);
+        assert!(Pairing::restore(store.clone(), &reference, &config, true).is_err());
+        assert!(Pairing::restore_pending(store.clone(), &reference, &config, false, 101).is_err());
+        assert!(Pairing::restore_pending(store.clone(), &reference, &config, true, 99).is_err());
+        let mut changed = config.clone();
+        changed.expected_host_key = new_host();
+        assert!(Pairing::restore_pending(store.clone(), &reference, &changed, true, 101).is_err());
+        let mut resumed =
+            Pairing::restore_pending(store.clone(), &reference, &config, true, 101).unwrap();
+        assert_eq!(
+            resumed.request_json().unwrap(),
+            original.request_json().unwrap()
+        );
+        assert!(resumed.begin(&config).is_err());
+        resumed
+            .accept(&response(&original, "authorized"), 101, true)
+            .unwrap();
+        let mut expired =
+            Pairing::restore_pending(store.clone(), &reference, &config, true, 700).unwrap();
+        assert_eq!(expired.state, "expired");
+        assert!(
+            expired
+                .accept(&response(&original, "authorized"), 700, true)
+                .is_err()
+        );
+        let mut cancelled = reference.clone();
+        cancelled.status = ReferenceStatus::Cancelled;
+        let mut cancelled =
+            Pairing::restore_pending(store.clone(), &cancelled, &config, true, 101).unwrap();
+        assert_eq!(cancelled.state, "cancelled");
+        assert!(
+            cancelled
+                .accept(&response(&original, "authorized"), 101, true)
+                .is_err()
+        );
+        cancelled
+            .accept(&response(&original, "revoked"), 101, true)
+            .unwrap();
+        store.delete(&reference.handle).unwrap();
+        assert!(Pairing::restore_pending(store, &reference, &config, true, 101).is_err());
     }
     #[test]
     fn deleted_handle_never_recreates_key() {

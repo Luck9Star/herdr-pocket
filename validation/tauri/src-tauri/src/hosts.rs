@@ -1,7 +1,7 @@
 //! App-private, bounded host records. Handles never cross the frontend bridge.
 use herdr_readonly_transport::{
     RemoteConfig,
-    pairing::{Pairing, PairingReference, random_public_id},
+    pairing::{Pairing, PairingReference, ReferenceStatus, random_public_id},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -79,6 +79,7 @@ pub struct View {
     pub target: Target,
     pub device_fingerprint: Option<String>,
     pub host_fingerprint: String,
+    pub pairing_status: Option<ReferenceStatus>,
 }
 impl Record {
     fn validate(&self) -> Result<(), String> {
@@ -118,6 +119,7 @@ impl Record {
                 &self.target.expected_host_key,
             )
             .map_err(str::to_string)?,
+            pairing_status: self.pairing.as_ref().map(|p| p.status),
         })
     }
 }
@@ -345,6 +347,44 @@ impl Hosts {
             r.commit(list)
         })
     }
+    pub fn attach_pending(
+        &self,
+        id: &str,
+        target: &Target,
+        reference: PairingReference,
+    ) -> Result<(), String> {
+        self.with(|r| {
+            let mut list = r.items.clone();
+            if list
+                .iter()
+                .filter_map(|h| h.pairing.as_ref())
+                .any(|p| p.handle == reference.handle)
+            {
+                return Err("host_key_in_use".into());
+            }
+            let h = list.iter_mut().find(|h| h.id == id).ok_or("host_missing")?;
+            if !h.enabled
+                || &h.target != target
+                || h.pairing.is_some()
+                || reference.status != ReferenceStatus::AwaitingHost
+            {
+                return Err("host_pairing_exists".into());
+            }
+            h.pairing = Some(reference);
+            r.commit(list)
+        })
+    }
+    pub fn set_status(&self, handle: &str, status: ReferenceStatus) -> Result<(), String> {
+        self.with(|r| {
+            let mut list = r.items.clone();
+            let h = list
+                .iter_mut()
+                .find(|h| h.pairing.as_ref().is_some_and(|p| p.handle == handle))
+                .ok_or("host_pairing_missing")?;
+            h.pairing.as_mut().ok_or("host_pairing_missing")?.status = status;
+            r.commit(list)
+        })
+    }
     pub fn remove(&self, id: &str) -> Result<Record, String> {
         self.with(|r| {
             let mut list = r.items.clone();
@@ -450,6 +490,7 @@ mod tests {
         let reference = PairingReference {
             handle: pairing.local_handle().to_owned(),
             request_json: pairing.request_json().unwrap(),
+            status: ReferenceStatus::Authorized,
         };
         let view = store
             .save(None, "One", first.clone(), Some(reference.clone()))
@@ -470,5 +511,68 @@ mod tests {
         let store = Hosts::default();
         assert!(store.init(temp.0.clone()).is_err());
         assert_eq!(fs::read(temp.0.join("hosts.json")).unwrap(), b"{");
+    }
+    #[test]
+    fn pending_reference_survives_reopen_and_cancel_is_durable_without_secrets() {
+        let temp = Temp::new();
+        let hosts = Hosts::default();
+        hosts.init(temp.0.clone()).unwrap();
+        let keys = std::sync::Arc::new(VolatileKeyStore::default());
+        let target = target();
+        let view = hosts.save(None, "Pending", target.clone(), None).unwrap();
+        let mut pairing = Pairing::create(
+            keys.clone(),
+            "fixture",
+            &target.expected_host_key,
+            "Pocket",
+            100,
+        )
+        .unwrap();
+        pairing.bind_target(&target.config()).unwrap();
+        let reference = pairing.pending_reference(&target.config()).unwrap();
+        hosts
+            .attach_pending(&view.id, &target, reference.clone())
+            .unwrap();
+        assert!(
+            hosts
+                .attach_pending(&view.id, &target, reference.clone())
+                .is_err()
+        );
+        let raw = fs::read_to_string(temp.0.join("hosts.json")).unwrap();
+        assert!(
+            !raw.contains("privateKeyPem") && !raw.contains("seed") && !raw.contains("password")
+        );
+        drop(hosts);
+        let hosts = Hosts::default();
+        hosts.init(temp.0.clone()).unwrap();
+        let saved = hosts.get(&view.id).unwrap();
+        let saved_ref = saved.pairing.unwrap();
+        let restored =
+            Pairing::restore_pending(keys.clone(), &saved_ref, &target.config(), true, 101)
+                .unwrap();
+        assert_eq!(
+            restored.request_json().unwrap(),
+            pairing.request_json().unwrap()
+        );
+        assert!(
+            Pairing::restore_pending(
+                std::sync::Arc::new(VolatileKeyStore::default()),
+                &saved_ref,
+                &target.config(),
+                true,
+                101
+            )
+            .is_err()
+        );
+        hosts
+            .set_status(&saved_ref.handle, ReferenceStatus::Cancelled)
+            .unwrap();
+        drop(hosts);
+        let hosts = Hosts::default();
+        hosts.init(temp.0.clone()).unwrap();
+        assert_eq!(
+            hosts.get(&view.id).unwrap().pairing.unwrap().status,
+            ReferenceStatus::Cancelled
+        );
     }
 }

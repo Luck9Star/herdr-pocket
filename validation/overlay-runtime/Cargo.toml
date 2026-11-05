@@ -1,0 +1,14 @@
+[package]
+name = "herdr-overlay-runtime-probe"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[features]
+default = []
+linked-easytier = []
+# Explicitly synthetic: builds the failure-injecting C ABI fixture, not EasyTier.
+native-fixture = ["linked-easytier"]
+
+[workspace]

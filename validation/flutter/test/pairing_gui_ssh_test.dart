@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
+import 'package:herdr_flutter_probe/host_catalog.dart';
+import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'package:herdr_flutter_probe/remote_input.dart';
 import 'pairing_gui_test.dart' as helpers;
+import 'host_catalog_test.dart' show MemoryCatalogStorage;
 
 /// Explicit public-marker memory double, never a production fallback. This
 /// exercises the production adapter's prepare/clear ordering and exact-record
@@ -46,6 +49,9 @@ void main() {
     final keys = helpers.TestDeviceKeys(File(env['HERDR_PAIRING_GUI_TEST_KEY']!).readAsStringSync());
     final inputJournal = GuiSshMemoryInputJournal();
     final adapter = RemoteReadOnlyAdapter(inputJournal:inputJournal);
+    final catalog = HostCatalog(storage:MemoryCatalogStorage());
+    addTearDown(catalog.dispose);
+    void stage(String name) => File('${dir.path}/stage').writeAsStringSync(name,flush:true);
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
@@ -57,24 +63,43 @@ void main() {
         await tester.pump();
       }
     }
-    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:PairingPage(tokens:tokens,keys:keys,adapter:adapter,
-      onRequest:(request) {
-        final temp = File('${dir.path}/request.json.new');
-        temp.writeAsStringSync(jsonEncode(request),flush:true); temp.renameSync('${dir.path}/request.json');
-      })));
+    stage('host_board');
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,
+      catalog:catalog,keys:keys,adapterFactory:(_) => adapter,offlineBuilder:(_) => const SizedBox())));
+    await tester.pumpAndSettle();
+    await helpers.tapVisible(tester,'hosts-add'); await tester.pumpAndSettle();
+    stage('public_request');
     await helpers.fillPairTarget(tester,config);
     await helpers.tapVisible(tester,'pair-target-review'); await helpers.tapVisible(tester,'pair-create');
+    final wire = find.byKey(const ValueKey('pair-request'));
+    await until(() => wire.evaluate().isNotEmpty && catalog.profiles.length == 1);
+    final temp = File('${dir.path}/request.json.new');
+    temp.writeAsStringSync(tester.widget<SelectableText>(wire).data!,flush:true);
+    temp.renameSync('${dir.path}/request.json');
+    stage('host_authorization');
     await until(() => File('${dir.path}/response.json').existsSync());
     final response = jsonDecode(File('${dir.path}/response.json').readAsStringSync()) as Map<String,dynamic>;
+    final id = catalog.profiles.single.id;
+    // Return to the ordinary board while authorization is pending. Reopening
+    // must recover the same request/key and cannot start SSH or issue a new key.
+    await tester.pageBack(); await tester.pumpAndSettle();
+    stage('restore_pending');
+    await helpers.tapVisible(tester,'host-open-$id'); await tester.pumpAndSettle();
+    expect(find.textContaining('awaiting-host'),findsOneWidget);
+    expect(keys.creates,1); expect(keys.signCalls,0);
+    expect(tester.widget<SelectableText>(wire).data,File('${dir.path}/request.json').readAsStringSync());
+    stage('response_review');
     await helpers.acceptResponse(tester,response);
     expect(find.textContaining('authorized-unverified'),findsOneWidget);
     await helpers.tapVisible(tester,'pair-connect'); await tester.pumpAndSettle();
+    stage('ssh_and_dashboard');
     await helpers.tapVisible(tester,'remote-review'); await helpers.tapVisible(tester,'remote-connect');
     final pane = 'remote-pane-${config['paneId']}';
     await until(() => find.byKey(ValueKey(pane)).evaluate().isNotEmpty);
     expect(adapter.evidence.hostKeyMatched,isTrue); expect(adapter.evidence.authStarted,isTrue);
     expect(keys.signCalls,greaterThan(0));
     expect(find.textContaining('状态 paired',skipOffstage:false),findsOneWidget);
+    stage('observe_frames');
     await helpers.tapVisible(tester,pane);
     await until(() => adapter.evidence.frameCount >= 1 && find.textContaining('只读观察中').evaluate().isNotEmpty);
     expect(find.byType(TerminalView),findsOneWidget);
@@ -86,6 +111,7 @@ void main() {
     final draftMode = find.byKey(const ValueKey('remote-mode-draft'));
     final directMode = find.byKey(const ValueKey('remote-mode-direct'));
     if (expectInput) {
+      stage('guarded_input');
       // The opt-in branch requires the real guarded-server capability. A stock
       // server or a missing capability must fail this branch, never downgrade.
       expect(adapter.inputCapability,isNotNull);
@@ -130,11 +156,13 @@ void main() {
       expect(inputJournal.marker,isNull);
     }
     expect(tester.takeException(),isNull);
+    stage('stop');
     await helpers.tapVisible(tester,'remote-cancel'); await tester.pump();
     expect(find.textContaining('旧画面 · 已停止'),findsOneWidget);
     expect(adapter.evidence.connectionCount,1);
     final report = {'paired':adapter.evidence.hostKeyMatched && adapter.evidence.authStarted,
       'paneChosen':true,'fullRendered':true,'deltaRendered':true,'stoppedStale':true,'signCalls':keys.signCalls,
+      'reopenedPendingRequest':true,'identityCreations':keys.creates,
       'frameCount':adapter.evidence.frameCount,'deltaFrames':adapter.evidence.deltaFrames,
       'connectionCount':adapter.evidence.connectionCount,
       'inputRequested':expectInput,'inputQueueAccepted':inputQueueAccepted,

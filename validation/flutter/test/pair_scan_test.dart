@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
-import 'pairing_gui_test.dart' show TestDeviceKeys,fillPairTarget,tapVisible,authorizedResponse;
+import 'pairing_gui_test.dart' show TestDeviceKeys,fillPairTarget,tapVisible,authorizedResponse,acceptResponse;
 import 'remote_test_data.dart';
 
 void main() {
@@ -50,6 +50,26 @@ void main() {
     expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('pair-source-review'))).value,isFalse);
     expect(find.byKey(const ValueKey('pair-connect')),findsNothing);
     expect(find.textContaining('awaiting-host'),findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('background clipboard round trip keeps the same pending request and requires fresh source review',(tester) async {
+    final visibility = ValueNotifier(true);
+    addTearDown(visibility.dispose);
+    final request = await prepare(tester,visibility,() => 1000);
+    final review = find.byKey(const ValueKey('pair-source-review'));
+    await tapVisible(tester,'pair-source-review');
+    resumed(tester);
+    for (final state in [AppLifecycleState.inactive,AppLifecycleState.hidden,AppLifecycleState.paused]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    resumed(tester); await tester.pump();
+    final public = tester.widget<SelectableText>(find.byKey(const ValueKey('pair-request')));
+    expect(jsonDecode(public.data!),request);
+    expect(tester.widget<CheckboxListTile>(review).value,isFalse);
+    expect(find.textContaining('awaiting-host'),findsOneWidget);
+    expect(find.byKey(const ValueKey('pair-connect')),findsNothing);
+    await acceptResponse(tester,authorizedResponse(request));
+    expect(find.textContaining('authorized-unverified'),findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
   testWidgets('hidden-tab late scan cannot refill response or trust; return never accepts it',(tester) async {

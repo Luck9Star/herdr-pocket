@@ -1,6 +1,10 @@
 name: Flutter experimental terminal candidate
 on:
   workflow_call:
+    inputs:
+      android_only:
+        type: boolean
+        default: false
   workflow_dispatch:
 permissions:
   contents: read
@@ -9,6 +13,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   patch-and-test:
+    outputs:
+      verified_lock: ${{ steps.resolve.outputs.verified_lock }}
     if: startsWith(github.ref, 'refs/heads/codex/')
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -17,7 +23,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Check isolation and lock guards
-        run: python3 -m unittest discover -s validation/flutter/tool -p 'test_candidate.py' -v
+        run: python3 -m unittest discover -s validation/flutter/tool -v
       - name: Install pinned Flutter in runner only
         run: python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
       - name: Prepare isolated fixture app
@@ -25,11 +31,13 @@ jobs:
       - name: Materialize verified experimental candidate
         run: python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
       - name: Resolve candidate without transitive drift
+        id: resolve
         shell: bash
         run: |
           cd "$RUNNER_TEMP/flutter-probe"
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
+          echo "verified_lock=true" >> "$GITHUB_OUTPUT"
       - name: Analyze and verify original safety tests
         shell: bash
         run: |
@@ -61,7 +69,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   macos-render-check:
-    if: startsWith(github.ref, 'refs/heads/codex/')
+    if: startsWith(github.ref, 'refs/heads/codex/') && !inputs.android_only
     needs: patch-and-test
     runs-on: macos-14
     timeout-minutes: 20
@@ -97,17 +105,18 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   build:
-    if: startsWith(github.ref, 'refs/heads/codex/')
+    if: >-
+      !cancelled() && startsWith(github.ref, 'refs/heads/codex/') &&
+      needs.patch-and-test.outputs.verified_lock == 'true' &&
+      (needs.patch-and-test.result == 'success' || inputs.android_only)
     needs: patch-and-test
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {platform: android, os: ubuntu-24.04}
-          - {platform: ios, os: macos-14}
-          - {platform: macos, os: macos-14}
-          - {platform: linux, os: ubuntu-24.04}
-          - {platform: windows, os: windows-2022}
+        include: >-
+          ${{ fromJSON(inputs.android_only &&
+          '[{"platform":"android","os":"ubuntu-24.04"}]' ||
+          '[{"platform":"android","os":"ubuntu-24.04"},{"platform":"ios","os":"macos-14"},{"platform":"macos","os":"macos-14"},{"platform":"linux","os":"ubuntu-24.04"},{"platform":"windows","os":"windows-2022"}]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -150,6 +159,8 @@ jobs:
           esac
       - name: Collect package and source-linked manifest
         shell: bash
+        env:
+          CANDIDATE_CHECKS: ${{ needs.patch-and-test.result }}
         run: python validation/flutter/tool/ci.py package --destination "$RUNNER_TEMP/flutter-probe" --platform '${{ matrix.platform }}' --output "$RUNNER_TEMP/flutter-output"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::{Arc, Mutex, atomic::{AtomicBool,Ordering}
 use herdr_probe_core::{Binding, CreditStream};
 use herdr_readonly_transport::{AttemptGate, Audit, FullSnapshot, RemoteConfig};
 use serde::Serialize;
-use herdr_readonly_transport::pairing::{KeyStore, Pairing};
+use herdr_readonly_transport::pairing::{KeyStore, Pairing, ReferenceStatus};
 use tauri::{ipc::{Channel, Response}, Manager, State};
 
 const CHUNK: &[u8] = include_bytes!("../../../shared/load-chunk.txt");
@@ -98,7 +98,7 @@ async fn host_restore(id:String,reviewed:bool,hosts:State<'_,Hosts>,pairing:Stat
     let reference=host.pairing.as_ref().ok_or("host_has_no_device_key")?;
     let mut current=pairing.current.lock().map_err(|_|"state_unavailable")?;
     if let Some(p)=current.as_ref(){if !hosts.contains_handle(p.local_handle())? {return Err("unsaved_pairing".into());}}
-    let p=Pairing::restore(pairing.store.clone(),reference,&host.target.config(),reviewed).map_err(str::to_string)?;
+    let p=if reference.status==ReferenceStatus::Authorized {Pairing::restore(pairing.store.clone(),reference,&host.target.config(),reviewed)} else {Pairing::restore_pending(pairing.store.clone(),reference,&host.target.config(),reviewed,now()?)}.map_err(str::to_string)?;
     let view=pairing_view(&p)?;*current=Some(p);pairing.restore_required.store(false,Ordering::SeqCst);Ok(view)
 }
 #[tauri::command]
@@ -131,19 +131,21 @@ impl PairingState {
 }
 #[derive(Serialize)]
 #[serde(rename_all="camelCase")]
-struct PairingView { request: String, fingerprint: String, state: &'static str, authorization: &'static str }
-fn pairing_view(p: &Pairing) -> Result<PairingView,String> { Ok(PairingView {request:p.request_json().map_err(str::to_string)?,fingerprint:p.public_fingerprint().map_err(str::to_string)?,state:p.state,authorization:p.authorization}) }
+struct PairingView { request: String, fingerprint: String, state: &'static str, authorization: &'static str, stored: bool }
+fn pairing_view(p: &Pairing) -> Result<PairingView,String> { Ok(PairingView {request:p.request_json().map_err(str::to_string)?,fingerprint:p.public_fingerprint().map_err(str::to_string)?,state:p.state,authorization:p.authorization,stored:true}) }
 fn now() -> Result<u64,String> { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|x|x.as_secs()).map_err(|_|"invalid_time".into()) }
 #[tauri::command]
-async fn pair_create(config:RemoteConfig,device:String,state:State<'_,PairingState>) -> Result<PairingView,String> {
+async fn pair_create(config:RemoteConfig,device:String,host_id:String,state:State<'_,PairingState>,hosts:State<'_,Hosts>) -> Result<PairingView,String> {
     let _lease=state.enter()?;
     if state.restore_required.load(Ordering::SeqCst) {return Err("host_restore_required".into());}
     let mut current=state.current.lock().map_err(|_|"state_unavailable")?;
     if current.is_some() { return Err("pairing_already_exists".into()); }
     config.validate_pair_target().map_err(str::to_string)?;
+    let host=hosts.get(&host_id)?; if !host.enabled || host.target!=Target::from_config(&config) || host.pairing.is_some() {return Err("host_pairing_exists".into());}
     let mut p=Pairing::create(state.store.clone(),&config.username,&config.expected_host_key,&device,now()?).map_err(str::to_string)?;
     if let Err(e)=p.bind_target(&config) { let _=p.delete_local(); return Err(e.into()); }
-    let view=pairing_view(&p)?; *current=Some(p); Ok(view)
+    let stored=p.pending_reference(&config).map_err(str::to_string).and_then(|reference|hosts.attach_pending(&host_id,&host.target,reference)).is_ok();
+    let mut view=pairing_view(&p)?; if !stored {view.request.clear();view.state="storage-failed";view.stored=false;} *current=Some(p); Ok(view)
 }
 #[tauri::command]
 fn pair_accept(response:String,reviewed:bool,state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,hosts:State<'_,Hosts>) -> Result<PairingView,String> {
@@ -153,16 +155,16 @@ fn pair_accept(response:String,reviewed:bool,state:State<'_,PairingState>,flow:S
     let mut current=state.current.lock().map_err(|_|"state_unavailable")?;
     let p=current.as_mut().ok_or("pairing_missing")?;
     let mut proposed=p.clone(); proposed.accept(&response,now()?,reviewed).map_err(str::to_string)?;
-    if proposed.authorization=="revoked" && hosts.initialized()? {hosts.clear_handle(p.local_handle())?;}
+    if proposed.authorization=="revoked" {hosts.clear_handle(p.local_handle())?;} else if proposed.authorization=="authorized" {hosts.set_status(p.local_handle(),ReferenceStatus::Authorized)?;}
     *p=proposed; pairing_view(p)
 }
 #[tauri::command]
-fn pair_cancel(state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>) -> Result<(),String> {
+fn pair_cancel(state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>,hosts:State<'_,Hosts>) -> Result<(),String> {
     let _lease=state.enter()?;
     let mut f=flow.lock().map_err(|_|"state_unavailable")?;
     let mut g=gate.lock().map_err(|_|"state_unavailable")?;
     if let Some(owner)=f.owner { f.cancel(owner,&mut g); }
-    if let Some(p)=state.current.lock().map_err(|_|"state_unavailable")?.as_mut() { p.cancel(); }
+    if let Some(p)=state.current.lock().map_err(|_|"state_unavailable")?.as_mut() { hosts.set_status(p.local_handle(),ReferenceStatus::Cancelled)?; p.cancel(); }
     Ok(())
 }
 #[tauri::command]

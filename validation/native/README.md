@@ -77,3 +77,5 @@ Android 双 provider 装包扩展由 `tool/android_bundle.py build <新bundle目
 ## ZeroTier 安全基础（2026-11-07，未接运行时）
 
 新增[固定来源准备工具](tool/zerotier_candidate.py)、[候选补丁与四个离线程序](candidates/zerotier/README.md)及[来源／前后文件锁](zerotier-candidate.json)。设备级身份核心与真实回归边界见[本批记录](../../docs/28-zerotier-native-foundation.md)。六个 Mac 翻译单元实编不等于共享库或 Android/Windows 支持；上游 ECC shift-base 诊断仍未解决，不能将选择性 sanitizer 检查记成完整通过。
+
+后续同日批次已用 `0007` 修复 ECC 的未定义左移，删除该 sanitizer 排除；公开向量与独立大整数差分通过。[设备／网络 manager](zerotier-runtime/README.md)和 Android 包装已落源码；[`tool/zerotier_macos.py`](tool/zerotier_macos.py)按固定 CMake 源清单用已有 clang 完成 114 TU 的整库编译、动态链接／加载及两轮未启动节点的身份初始化／stop／release。它不是其他平台或实际节点／socket 的证明。完整范围、失败历史及后续手机顺序见[后续记录](../../docs/29-zerotier-managed-device.md)，现有 APK 不含本批。

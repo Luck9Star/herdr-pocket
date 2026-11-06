@@ -9,6 +9,10 @@
     {
       "path": "candidates/zerotier/patches/0006-strict-offline-identity.patch",
       "sha256": "c5fd552feab0b4cb5f91d842e1ffa3937c4ce37df2d634f7a6dc95e95a4348f8"
+    },
+    {
+      "path": "candidates/zerotier/patches/0007-defined-ecc-shifts.patch",
+      "sha256": "a65ea3314b2811106f366ac2649bd21d6ee39836da09262481ad0d2403f4c407"
     }
   ],
   "copies": [
@@ -26,6 +30,16 @@
       "path": "candidates/zerotier/shim/hp_zt_lifecycle.cpp",
       "destination": "src/hp_zt_lifecycle.cpp",
       "sha256": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693"
+    },
+    {
+      "path": "zerotier-runtime/hp_zt_manager.h",
+      "destination": "src/hp_zt_manager.h",
+      "sha256": "39d606878f17843abd63db0de5e4163346334cc0104cc715a0eb30b66abe80e3"
+    },
+    {
+      "path": "zerotier-runtime/manager.cpp",
+      "destination": "src/hp_zt_manager.cpp",
+      "sha256": "b33305cf145073c81b6ab2989e0540444495eebc81b2bccc28fb84605f6365d0"
     }
   ],
   "validationFiles": [
@@ -47,14 +61,35 @@
     },
     {
       "path": "candidates/zerotier/tests/run_offline.py",
-      "sha256": "59522cdb61d3849eb98e6f738ebe36c22bdd9ca7abf23160e9189e5f1ceb020b"
+      "sha256": "5442fe223bffdfffd695bc51ce5268ecd6a8570f317465e050e95d0e3f4a9c52"
     },
     {
       "path": "candidates/zerotier/README.md",
-      "sha256": "7d67fc4a0bc584f9114541477efa8c894c2cedd971f86b37114de62b7a5eb85a"
+      "sha256": "5e9b5cfec29ae53c0ff8cba0eefcb9bc298af9d76f031869704949166466e729"
+    },
+    {
+      "path": "candidates/zerotier/tests/ecc_driver.cpp",
+      "sha256": "2403c3ede751f0be6731bc68ca738d19057f6fa7281ae9f376d5eda7b32e245f"
+    },
+    {
+      "path": "candidates/zerotier/tests/ecc_reference_test.py",
+      "sha256": "3bdc66b1990f633d912f08583322efe58dc3c4ce3d2cd59c47bf7421af5b90a4"
+    },
+    {
+      "path": "zerotier-runtime/README.md",
+      "sha256": "23cb6826d21516fba231c25f3f79d3c403a5c958b806e60b19be91e9870e5b0b"
+    },
+    {
+      "path": "zerotier-runtime/tests/manager_test.cpp",
+      "sha256": "e5290a0ae68a05881068913c794d6c38bdc8a0e1c66859ee1196ebef9f0a8ebd"
+    },
+    {
+      "path": "zerotier-runtime/tests/run_manager.py",
+      "sha256": "dceb58d702d6098e970ec3bc078163c33dc1ba892cd327d7b37face3d300b363"
     }
   ],
   "beforeFiles": {
+    "ext/ZeroTierOne/node/ECC.cpp": "9a9aa9ce6d15745f22babfad7e9905661532f67e9d87fc2518ca75e43cfc581b",
     "ext/ZeroTierOne/node/ECC.hpp": "2ae06fc551a3add96b33f5f8e3f5ab42335bbd2609877b219be8f34020ad66fb",
     "ext/ZeroTierOne/node/Identity.cpp": "0f7f4af189a84b0f93663f29ad0b0ed576e265991011951eaa94aa2cd9a21749",
     "include/ZeroTierSockets.h": "84515706435ccdf3c253cede0a51f0309d00068c3f39cce7185f41fe07d33dc9",
@@ -70,6 +105,7 @@
     "src/VirtualTap.hpp": "1c6fafdf06ac81a888450cd9baa267883da8188f0f1de04fed1d6db3f86ff7d5"
   },
   "afterFiles": {
+    "ext/ZeroTierOne/node/ECC.cpp": "b74ddffca6e9e80d8dd67dca2a4764b1f09afee579d61b4f6b5a2c48377833b4",
     "ext/ZeroTierOne/node/ECC.hpp": "da314ade30130826eebc32aa96a5f5ed40b66cdb6c399e5717054861bb8c07d4",
     "ext/ZeroTierOne/node/Identity.cpp": "84dda1ab7abb90e9df791a714172955980a6b92a9f3f48ca8f8612a89b11a714",
     "include/ZeroTierSockets.h": "286dd2c193eb6423eeaed14cbb2a108eb76426f20547b75e17283ac7750dc3e4",
@@ -85,7 +121,9 @@
     "src/VirtualTap.hpp": "3887342ebe4deaa04ca1baa5c8f74d79d5694842237d6df5d0dfa72d4f384843",
     "src/hp_zt.h": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad",
     "src/hp_zt_identity.cpp": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992",
-    "src/hp_zt_lifecycle.cpp": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693"
+    "src/hp_zt_lifecycle.cpp": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693",
+    "src/hp_zt_manager.cpp": "b33305cf145073c81b6ab2989e0540444495eebc81b2bccc28fb84605f6365d0",
+    "src/hp_zt_manager.h": "39d606878f17843abd63db0de5e4163346334cc0104cc715a0eb30b66abe80e3"
   },
-  "scope": "Offline ZeroTier identity/event/retirement candidate; no full-library link, node, device, Android integration or network result. ECC.cpp excludes UBSan shift-base; no overall sanitizer pass claim."
+  "scope": "Fixed ZeroTier source with defined ECC arithmetic and device/network control-plane candidate. Offline full ASan/UBSan/vector tests have no ECC exclusion; separate library load checks do not establish node, route, socket, JNI, device or network support."
 }

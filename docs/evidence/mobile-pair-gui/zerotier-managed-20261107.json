@@ -1,0 +1,1119 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-07 Asia/Shanghai",
+  "baseCommit": "b2c652876d33c9973dbf5af67465dd7fb4c0259f",
+  "sourceIdentity": "Subsequent source batch, identified by file hashes; not in the 750798fe Android APKs.",
+  "sourceFiles": [
+    {
+      "path": "validation/native/.gitattributes",
+      "sha256": "d6324438d0f3087f61f18bb0e5ada439195e709f11ce2c8a3c4219e238828e3d"
+    },
+    {
+      "path": "validation/native/zerotier-candidate.json",
+      "sha256": "40630720f1ba92cea5ca8d7134162fde62e7e3c9f529fac38deba6bad68306e1"
+    },
+    {
+      "path": "validation/native/tool/zerotier_macos.py",
+      "sha256": "59a41622313aca2f739907c0ea725f97ea0e3bbb4009c9cd46fdd7ec0715632c"
+    },
+    {
+      "path": "validation/native/zerotier-runtime/README.md",
+      "sha256": "23cb6826d21516fba231c25f3f79d3c403a5c958b806e60b19be91e9870e5b0b"
+    },
+    {
+      "path": "validation/native/zerotier-runtime/hp_zt_manager.h",
+      "sha256": "39d606878f17843abd63db0de5e4163346334cc0104cc715a0eb30b66abe80e3"
+    },
+    {
+      "path": "validation/native/zerotier-runtime/manager.cpp",
+      "sha256": "b33305cf145073c81b6ab2989e0540444495eebc81b2bccc28fb84605f6365d0"
+    },
+    {
+      "path": "validation/native/zerotier-runtime/tests/library_probe.cpp",
+      "sha256": "052641871870f43eebc00637e18e8854592df39aa79b33b80cf303a923b1cb3a"
+    },
+    {
+      "path": "validation/native/zerotier-runtime/tests/manager_test.cpp",
+      "sha256": "e5290a0ae68a05881068913c794d6c38bdc8a0e1c66859ee1196ebef9f0a8ebd"
+    },
+    {
+      "path": "validation/native/zerotier-runtime/tests/run_manager.py",
+      "sha256": "dceb58d702d6098e970ec3bc078163c33dc1ba892cd327d7b37face3d300b363"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/README.md",
+      "sha256": "5e9b5cfec29ae53c0ff8cba0eefcb9bc298af9d76f031869704949166466e729"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/patches/0007-defined-ecc-shifts.patch",
+      "sha256": "a65ea3314b2811106f366ac2649bd21d6ee39836da09262481ad0d2403f4c407"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/tests/ecc_driver.cpp",
+      "sha256": "2403c3ede751f0be6731bc68ca738d19057f6fa7281ae9f376d5eda7b32e245f"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/tests/ecc_reference_test.py",
+      "sha256": "3bdc66b1990f633d912f08583322efe58dc3c4ce3d2cd59c47bf7421af5b90a4"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/tests/run_offline.py",
+      "sha256": "5442fe223bffdfffd695bc51ce5268ecd6a8570f317465e050e95d0e3f4a9c52"
+    },
+    {
+      "path": "validation/network-profiles/native/android/AndroidZeroTierDeviceStore.java",
+      "sha256": "5fa62715f1e53d366be6fd8b9630222e7d58219eb499696ac75e0f8e6b5d8b78"
+    },
+    {
+      "path": "validation/network-profiles/native/android/AndroidZeroTierEnvelope.java",
+      "sha256": "99257bb7a4980d1c0485c2083b6b17c292c1fb0bdd90c3c188e0886f137b3a4a"
+    },
+    {
+      "path": "validation/network-profiles/native/android/ZeroTierAndroidStore.md",
+      "sha256": "a8dc1adbf085188f2f243772aadc22570519c5078fadf7ecd300211a5b127b03"
+    },
+    {
+      "path": "validation/network-profiles/native/android/tests/ZeroTierAndroidStoreTest.java",
+      "sha256": "0cca37d110f87c80995780a68df6545746930248799dcd154a1dae2d5c41b59b"
+    },
+    {
+      "path": "validation/network-profiles/native/android/tests/run-zerotier-android.sh",
+      "sha256": "38465a49b50a5f34d45198f46f48e0b440fa2e6f842e1d5cff653c7cec8af727"
+    },
+    {
+      "path": "validation/network-profiles/native/android/tests/zerotier-stubs/android/app/KeyguardManager.java",
+      "sha256": "b24d941963b1dad2c037e2a7f32cc4fe52a3127ec89758398d635e56d2122738"
+    },
+    {
+      "path": "validation/network-profiles/native/android/tests/zerotier-stubs/android/content/Context.java",
+      "sha256": "c0d30f39611c24b51b8d4d04c261e75a4d0bbc53046f512c385450b109989061"
+    },
+    {
+      "path": "validation/network-profiles/native/android/tests/zerotier-stubs/android/os/Build.java",
+      "sha256": "b8dca7401c022d8b95d106d5ae59bbcf479ff9c479f1e5123d9815fcb11b5bce"
+    },
+    {
+      "path": "validation/network-profiles/native/android/tests/zerotier-stubs/android/security/keystore/KeyGenParameterSpec.java",
+      "sha256": "d62616d7367761ebae56dabfeda9bf2f6a133299478811ace7d76aa15cb9ccf2"
+    },
+    {
+      "path": "validation/network-profiles/native/android/tests/zerotier-stubs/android/security/keystore/KeyProperties.java",
+      "sha256": "26d2188f740fb32a881b65ce40f93b8e3b286f08d694d8e25d3422369e8cffdb"
+    }
+  ],
+  "candidateManifest": {
+    "schemaVersion": 1,
+    "baseManifestSha256": "f7be03f90ee923723240f752ff096d64f58f0aaf028a526cd3981cc90159f3e3",
+    "patches": [
+      {
+        "path": "candidates/zerotier/patches/0005-native-safety.patch",
+        "sha256": "d4871e8370b85e6a075448f64f6597c75737eccd02b9286b7a6a81a5d3442e52"
+      },
+      {
+        "path": "candidates/zerotier/patches/0006-strict-offline-identity.patch",
+        "sha256": "c5fd552feab0b4cb5f91d842e1ffa3937c4ce37df2d634f7a6dc95e95a4348f8"
+      },
+      {
+        "path": "candidates/zerotier/patches/0007-defined-ecc-shifts.patch",
+        "sha256": "a65ea3314b2811106f366ac2649bd21d6ee39836da09262481ad0d2403f4c407"
+      }
+    ],
+    "copies": [
+      {
+        "path": "candidates/zerotier/shim/hp_zt.h",
+        "destination": "src/hp_zt.h",
+        "sha256": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad"
+      },
+      {
+        "path": "candidates/zerotier/shim/hp_zt_identity.cpp",
+        "destination": "src/hp_zt_identity.cpp",
+        "sha256": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992"
+      },
+      {
+        "path": "candidates/zerotier/shim/hp_zt_lifecycle.cpp",
+        "destination": "src/hp_zt_lifecycle.cpp",
+        "sha256": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693"
+      },
+      {
+        "path": "zerotier-runtime/hp_zt_manager.h",
+        "destination": "src/hp_zt_manager.h",
+        "sha256": "39d606878f17843abd63db0de5e4163346334cc0104cc715a0eb30b66abe80e3"
+      },
+      {
+        "path": "zerotier-runtime/manager.cpp",
+        "destination": "src/hp_zt_manager.cpp",
+        "sha256": "b33305cf145073c81b6ab2989e0540444495eebc81b2bccc28fb84605f6365d0"
+      }
+    ],
+    "validationFiles": [
+      {
+        "path": "candidates/zerotier/tests/events_test.cpp",
+        "sha256": "f467508f36948ef9eac96b1f6a768f14e02cd1dbedcf384023ab7692a434ddc5"
+      },
+      {
+        "path": "candidates/zerotier/tests/identity_test.cpp",
+        "sha256": "05c62ca2a36c9a09df3fdcb0529447e401550adacc957a9f0c99d7a9d8af6168"
+      },
+      {
+        "path": "candidates/zerotier/tests/lifecycle_test.cpp",
+        "sha256": "0f3b8933ea9c631ad222e14816bb7ec4f20a2e91b315a638a514be7bcd15b473"
+      },
+      {
+        "path": "candidates/zerotier/tests/projection_test.cpp",
+        "sha256": "8e53444334e37c00ce924ed990a1f61dcfb18a59309f74fd4b8dc098583bc073"
+      },
+      {
+        "path": "candidates/zerotier/tests/run_offline.py",
+        "sha256": "5442fe223bffdfffd695bc51ce5268ecd6a8570f317465e050e95d0e3f4a9c52"
+      },
+      {
+        "path": "candidates/zerotier/README.md",
+        "sha256": "5e9b5cfec29ae53c0ff8cba0eefcb9bc298af9d76f031869704949166466e729"
+      },
+      {
+        "path": "candidates/zerotier/tests/ecc_driver.cpp",
+        "sha256": "2403c3ede751f0be6731bc68ca738d19057f6fa7281ae9f376d5eda7b32e245f"
+      },
+      {
+        "path": "candidates/zerotier/tests/ecc_reference_test.py",
+        "sha256": "3bdc66b1990f633d912f08583322efe58dc3c4ce3d2cd59c47bf7421af5b90a4"
+      },
+      {
+        "path": "zerotier-runtime/README.md",
+        "sha256": "23cb6826d21516fba231c25f3f79d3c403a5c958b806e60b19be91e9870e5b0b"
+      },
+      {
+        "path": "zerotier-runtime/tests/manager_test.cpp",
+        "sha256": "e5290a0ae68a05881068913c794d6c38bdc8a0e1c66859ee1196ebef9f0a8ebd"
+      },
+      {
+        "path": "zerotier-runtime/tests/run_manager.py",
+        "sha256": "dceb58d702d6098e970ec3bc078163c33dc1ba892cd327d7b37face3d300b363"
+      }
+    ],
+    "beforeFiles": {
+      "ext/ZeroTierOne/node/ECC.cpp": "9a9aa9ce6d15745f22babfad7e9905661532f67e9d87fc2518ca75e43cfc581b",
+      "ext/ZeroTierOne/node/ECC.hpp": "2ae06fc551a3add96b33f5f8e3f5ab42335bbd2609877b219be8f34020ad66fb",
+      "ext/ZeroTierOne/node/Identity.cpp": "0f7f4af189a84b0f93663f29ad0b0ed576e265991011951eaa94aa2cd9a21749",
+      "include/ZeroTierSockets.h": "84515706435ccdf3c253cede0a51f0309d00068c3f39cce7185f41fe07d33dc9",
+      "src/Controls.cpp": "8ac20ae3cc53af330b9f28d1ed09e05338b551f7c5079e4e65869f9e02c5b260",
+      "src/Events.cpp": "39c2db1bdf3bde312e50b4bc39a8d00ae01d6eda4ed7460f303cccb2f53dbaca",
+      "src/Events.hpp": "fb447ada6e9a0ee218f853270feb468c2040aa407d991a5a593e016bf96a1edc",
+      "src/HpEventOwnership.hpp": null,
+      "src/HpEventProjection.hpp": null,
+      "src/HpLifecycle.hpp": null,
+      "src/NodeService.cpp": "c28c471f2d59d7319ed474d204bbd601ea205ea893a44e21197f00c95ddcf6c2",
+      "src/NodeService.hpp": "62c5ef5fce0b42aa5bd85539e34a4c5632ded9cc1b7c60a7c9415c07dfa05852",
+      "src/VirtualTap.cpp": "72503f675fafb97be500b71be07a23251faad18513013fda3274f8b885789298",
+      "src/VirtualTap.hpp": "1c6fafdf06ac81a888450cd9baa267883da8188f0f1de04fed1d6db3f86ff7d5"
+    },
+    "afterFiles": {
+      "ext/ZeroTierOne/node/ECC.cpp": "b74ddffca6e9e80d8dd67dca2a4764b1f09afee579d61b4f6b5a2c48377833b4",
+      "ext/ZeroTierOne/node/ECC.hpp": "da314ade30130826eebc32aa96a5f5ed40b66cdb6c399e5717054861bb8c07d4",
+      "ext/ZeroTierOne/node/Identity.cpp": "84dda1ab7abb90e9df791a714172955980a6b92a9f3f48ca8f8612a89b11a714",
+      "include/ZeroTierSockets.h": "286dd2c193eb6423eeaed14cbb2a108eb76426f20547b75e17283ac7750dc3e4",
+      "src/Controls.cpp": "67aa07b56e26e55e981cb28358f246f8c1d2d0930818daef19addd16eeacb6b1",
+      "src/Events.cpp": "34c5b8a43494391b5c66f193f0a7c15a063f7a71999148b4e6860b55d7b76909",
+      "src/Events.hpp": "ed38b2564ed26934a4e9d31dcdcb080469d51f0c7bd7ed2b85f299c74f802f8d",
+      "src/HpEventOwnership.hpp": "a65f218e6111a951b5988910d708b7793a5c88175e300cf24b5897f50e12a813",
+      "src/HpEventProjection.hpp": "d67a828e723907a740ad9957627a0dc49a274e4edec37a272406348dc15a46d2",
+      "src/HpLifecycle.hpp": "6040de28a900eb3180110206368fbf7cd5e690f820b6b1b9a66fb09ee1a048a4",
+      "src/NodeService.cpp": "fab73354eac8e905e279abb2b518e400569891b9c8696fd734d4541ef7102adb",
+      "src/NodeService.hpp": "a877bb426a395ff9a7932a1e85254f6f7d834684832ac4f7fbcd7b8d4f253a92",
+      "src/VirtualTap.cpp": "cbf0e79a8fa7086f7be502bd403005e9b5356a48e3bcd16f878a6ab4e038893e",
+      "src/VirtualTap.hpp": "3887342ebe4deaa04ca1baa5c8f74d79d5694842237d6df5d0dfa72d4f384843",
+      "src/hp_zt.h": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad",
+      "src/hp_zt_identity.cpp": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992",
+      "src/hp_zt_lifecycle.cpp": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693",
+      "src/hp_zt_manager.cpp": "b33305cf145073c81b6ab2989e0540444495eebc81b2bccc28fb84605f6365d0",
+      "src/hp_zt_manager.h": "39d606878f17843abd63db0de5e4163346334cc0104cc715a0eb30b66abe80e3"
+    },
+    "scope": "Fixed ZeroTier source with defined ECC arithmetic and device/network control-plane candidate. Offline full ASan/UBSan/vector tests have no ECC exclusion; separate library load checks do not establish node, route, socket, JNI, device or network support."
+  },
+  "ecc": {
+    "patchSha256": "a65ea3314b2811106f366ac2649bd21d6ee39836da09262481ad0d2403f4c407",
+    "preimageSha256": "9a9aa9ce6d15745f22babfad7e9905661532f67e9d87fc2518ca75e43cfc581b",
+    "postimageSha256": "b74ddffca6e9e80d8dd67dca2a4764b1f09afee579d61b4f6b5a2c48377833b4",
+    "sanitizerExclusions": [],
+    "configurations": [
+      "C++11 O0",
+      "C++11 O2",
+      "C++17 O2",
+      "C++20 O2"
+    ],
+    "operationsPerConfiguration": 5016,
+    "comparisonsPerConfiguration": 5083,
+    "originalSourceNegativeControls": 3,
+    "negativeControlStatus": "expected UBSan diagnostic and nonzero exit; exact original source hash reconstructed outside candidate tree",
+    "oracles": [
+      "RFC7748 public vectors and 1000-iteration chain",
+      "RFC8032-checked independent bigint Edwards reference",
+      "independent bigint field/carry/X25519 comparison"
+    ],
+    "scope": "Instrumented core and actually exercised offline test paths; six initial production TU checks are ordinary compilation. Not formal equivalence, side-channel audit or all compilers/platforms."
+  },
+  "checks": {
+    "nativeToolTests": 43,
+    "androidWrapperJvm": 36,
+    "deviceCoreJvm": 151,
+    "managerSynthetic": {
+      "ordinary": 109,
+      "onlineFence": 6,
+      "scope": "production manager, fixed real header, synthetic C engine; no real node"
+    },
+    "candidateFiles": 4052,
+    "candidateChangedPaths": 19,
+    "originalOfflinePrograms": 4
+  },
+  "library": {
+    "scope": "local Darwin arm64 build of pinned libzt CMake sources; not official upstream/product build",
+    "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cmakeSha256": "bf7b5801d4a715689a75014f92f317a2ec27d955e801bd856e3d2fde12306602",
+    "translationUnitCount": 114,
+    "translationUnitFailures": 0,
+    "candidateVerifyBefore": {
+      "verifiedFiles": 4052,
+      "nodeStarted": false
+    },
+    "candidateVerifyAfter": {
+      "verifiedFiles": 4052,
+      "nodeStarted": false
+    },
+    "library": {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/libhp_zerotier.dylib",
+      "bytes": 18203720,
+      "sha256": "43cb4cebe65ccbb24a96d426961a05ca63b039d8e3142026df9fd0e4d26cd9fc"
+    },
+    "probe": {
+      "argv": [
+        "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/library-probe"
+      ],
+      "exitCode": 0,
+      "log": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/probe-run.log",
+      "nodeStarted": false
+    }
+  },
+  "libraryScope": "Every one of 114 production TUs instrumented with ASan+UBSan. Linked and loaded on macOS arm64; probe executes only ABI, temporary in-memory identity validation and two initialized-but-not-started device stop/release cycles. No node start/join/dial/network proof.",
+  "review": {
+    "nativeArithmetic": "Sol implementation; Terra independent bounded arithmetic and oracle review; parent fresh apply and independent offline run",
+    "manager": "Parent implementation; Terra reproduced online stop fence and pre-init deadline failures; parent fixed them and added late stop/release checks",
+    "android": "Terra implementation; parent read/retested actual wrapper and core against JVM stubs"
+  },
+  "failures": [
+    {
+      "kind": "manager online fence",
+      "observed": "blocked online query returned after stop, then join side effect was emitted",
+      "resolution": "recheck closing before join admission; final test passed"
+    },
+    {
+      "kind": "manager pre-init deadline",
+      "observed": "quiescent query returned after deadline then init side effect began",
+      "resolution": "recheck deadline before native initialization; final test passed"
+    },
+    {
+      "kind": "build report serialization",
+      "observed": "first 114-TU compile completed but report serialization rejected a Path-containing tuple",
+      "resolution": "record-only JSON serialization; original failed directory retained; fresh complete rebuild passed"
+    }
+  ],
+  "notVerified": [
+    "actual ZeroTier node start/join/leave lifecycle",
+    "network-directed sockets and streams (not implemented)",
+    "AndroidKeyStore hardware/runtime",
+    "JNI and either GUI integration",
+    "cross-restart unreadable-identity trusted-handle recovery",
+    "Android/iOS/Windows/Linux runtime",
+    "actual overlay/SSH and concurrency"
+  ],
+  "safety": {
+    "realCredentialsRead": false,
+    "realAuthorizationFilesTouched": false,
+    "networkNodesStarted": false,
+    "GUIAppsOpened": false,
+    "SDKsInstalled": false,
+    "newActions": false
+  },
+  "logs": [
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/build-ecc-c++11-O0.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/build-ecc-c++11-O2.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/build-ecc-c++17-O2.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/build-ecc-c++20-O2.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/build-ecc-negative-control.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/build-events.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/build-identity.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/build-lifecycle.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/build-projection.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/core-ECC.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/core-Identity.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/core-SHA512.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/core-Salsa20.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/core-Utils.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/reconstruct-ecc-preimage.log",
+      "bytes": 22,
+      "sha256": "9e033fdf620d52c18798c4c486ff48c9f93aa7092da8b218221325c66a7fe22b"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/test-ecc-c++11-O0.log",
+      "bytes": 214,
+      "sha256": "6ca414755560f3eec659c3e89334114d94462202ffedc72bbe01060ff1d573da"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/test-ecc-c++11-O2.log",
+      "bytes": 214,
+      "sha256": "6ca414755560f3eec659c3e89334114d94462202ffedc72bbe01060ff1d573da"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/test-ecc-c++17-O2.log",
+      "bytes": 214,
+      "sha256": "6ca414755560f3eec659c3e89334114d94462202ffedc72bbe01060ff1d573da"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/test-ecc-c++20-O2.log",
+      "bytes": 214,
+      "sha256": "6ca414755560f3eec659c3e89334114d94462202ffedc72bbe01060ff1d573da"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/test-ecc-negative-control.log",
+      "bytes": 155,
+      "sha256": "b41f30bc2dd7c40af36df430750cc6c95ce9b692e107afd74ff9ec1a48c93e84"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/test-events.log",
+      "bytes": 212,
+      "sha256": "4ef1a25a9e4770cf698bcb894fc60b43e0d8631c52f193713063bbbd1917beba"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/test-identity.log",
+      "bytes": 134,
+      "sha256": "7fdf65189a7ac1615d56f060fce0dddbce983366a8e1967398c4e1e07db1647b"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/test-lifecycle.log",
+      "bytes": 129,
+      "sha256": "2e49d9bcf91b52bfad71319c64bd3649c355fbd27b06169ce65df0edfce13a51"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/test-projection.log",
+      "bytes": 109,
+      "sha256": "6cd47f81ec72b43658ec58ff91de51f65fb68ec4dd711c0d3c5a64341b192c9f"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/tu-Controls.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/tu-Events.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/tu-NodeService.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/tu-VirtualTap.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/tu-hp_zt_identity.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-offline-parent-20261107/tu-hp_zt_lifecycle.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-manager-parent-final-20261107/compile.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-manager-parent-final-20261107/manager.log",
+      "bytes": 60,
+      "sha256": "ce13f773fb3efd2870885a177ba4295d2f23f3427b18a08e0bb3f2dec9aab48f"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-manager-parent-final-20261107/online-fence.log",
+      "bytes": 58,
+      "sha256": "eeb9b4d07bedb4e909b52b0bb2b8946d211551daaaa3708c3ce006158eeeacac"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-android-wrapper.log",
+      "bytes": 70,
+      "sha256": "29fdc373686e262fb573ab6b93b6308663223e448cef3f31e93987f091afe523"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-core-android.log",
+      "bytes": 80,
+      "sha256": "046f6cc5fea439926b3aac070ec1c1a4adb6145d9a6ae5071c67e49d9e0bb86e"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-manager-audit-20261107/online-fence.log",
+      "bytes": 45,
+      "sha256": "b73a2b08c9e5ae0faf7f9423586a6c56ddae7385375e3cd68662b56a2645e392"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-manager-preinit-20261107/manager.log",
+      "bytes": 63,
+      "sha256": "8857e557acb89dd8a3aacc0262dfb75d6e13c81d8737292d04df2b57ff380536"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/build-report.json",
+      "bytes": 332017,
+      "sha256": "9cce989d15026df120673032d013fee554d17d8cf9e5c73675f765493ee6616e"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/translation-units.jsonl",
+      "bytes": 246363,
+      "sha256": "fd4ef89eee42caf7f759ffc0ae60dca17ca25606f6aeb930a135c68c3b90864a"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/libzt-19305913393f8d68.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/libzt-28654b5bc6482f45.log",
+      "bytes": 2630,
+      "sha256": "1f1b19aa5358829ac08240209f59bbafee39e7e591fe34c5fde38d3f64356bf0"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/libzt-2eadb0114c492974.log",
+      "bytes": 2636,
+      "sha256": "4183f6f475df19c963d60c21968ec1295a2cbca02674bea7a82903701eb1e7e6"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/libzt-68c181b1c0f11437.log",
+      "bytes": 221,
+      "sha256": "daa2e2fc06b27d9d52d34435d2cc04cded5b5fe2b78a42b987cefa25ca80c2be"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/libzt-726580eebaf16f08.log",
+      "bytes": 4783,
+      "sha256": "a4b16138f27c1dbe9fb73b5bb2d2b3b116e9b14812d55c3f41100e0d0b655285"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/libzt-749999120ac5b7ad.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/libzt-7aa20ec55da6ecde.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/libzt-8a2b3b177aaa89ff.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/libzt-bf94e0c105a05fd7.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/libzt-eeefdf2a967a711e.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/libzt-fb0e6f68a9a77b4b.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/link.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-023ee2b667300642.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-08692d0b02296887.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-09b0198f2db1f844.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-0a6dcdad3f1294a0.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-0fac90a5b7eb8027.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-121d7d9efe289192.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-12bd107cca17de08.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-13c6b369360b7a78.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-194d5e0612696fb6.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-22f2d44d36ed1cad.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-2daa4de72a023781.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-2df072324da887f0.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-2e8818fd8f14ef6b.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-35e9b6f22b70db1b.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-3a2b3fd3f4ae0b8f.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-3b2b38f55bde2205.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-434f72ce0f1ac468.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-47479660504f8c04.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-4eb266764d538848.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-4fc6387584d23c75.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-545624d75ec4c4b0.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-56ddcf41e1c55e12.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-5a93d3bca33c0b8f.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-60dbb41953cff290.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-6abb8723bc5bd803.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-6cd0b19230dfc974.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-82d0bbd7f3f0f400.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-8726bd92fb40ed74.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-89ad5963a2684d21.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-8aac43b62b290e9b.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-8bd39487f0a753ac.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-8bf107a610b11708.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-900af81765f13a1b.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-957544cff83a88fa.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-95c79437739fc7cf.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-994df65edf993b07.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-9bc1085d6669d5c9.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-9dd35b484cf47122.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-9e673aa4a4d8e1a2.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-9ed04b222d9540da.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-a07e693f6d87ab8a.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-b7e341a8ea05a571.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-b9417a8f5dd080ae.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-b9bce6fd16d8056e.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-be0fc776fdb85915.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-ce3a4bd5c484f50e.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-cff15b808ba0b965.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-d29ea5a29c88857c.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-d47d266f229e7226.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-db157f53696b6a0e.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-de7033a7554f80e7.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-e19e11a537c9d741.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-eefdef7575c9096b.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/lwip-f26cf148d8dfe94f.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-263382005c144f5e.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-27fc1680c0c61d45.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-2a1928861ad5e406.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-4f040586a7e13639.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-54d88fc851b5bac2.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-6079354fdb89045e.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-611fb5577447a2bb.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-77c8c0236d80e86c.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-7bac06f47731cac3.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-a1a6196a279806ca.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-bf99ec0dacc4694f.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-cfd2876a481a97ae.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/miniupnpc-d91a8ad97d6e6fff.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/natpmp-35bd9e253033ad43.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/natpmp-c41bcab01f6426e2.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/probe-compile.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/probe-run.log",
+      "bytes": 126,
+      "sha256": "ea36c9fe440923031c3e4662fc482e468d62b6326e40d0d5a6df2ab5f031e1a9"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-041cbd70dd6c580d.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-0ef199c3d0912436.log",
+      "bytes": 2987,
+      "sha256": "87d472671beb896d5e6dfe00561412eac51c67842df16501e59efd09a8e66e03"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-1661bf5aa607c9a1.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-180a65423292fbe7.log",
+      "bytes": 3962,
+      "sha256": "bfd013987b5af7a318444f31df4dc5c66904ddf62b04167b22dd518d17563197"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-1ca3e61dab0f8c9a.log",
+      "bytes": 7592,
+      "sha256": "efda04db7c9d627a706a689fb1013881464a3facfe4c212180ef2457e5de3c69"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-221fc8a99fffb061.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-22f8a615dd22c9cf.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-29757496592e8b56.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-29bc62dc6fc44a29.log",
+      "bytes": 5581,
+      "sha256": "89f0ab35459bcc8f24b1eda42c99616319c2cf05e54a38332754703c1a00036f"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-367138d9b70eaf16.log",
+      "bytes": 2935,
+      "sha256": "63c7e1dba84b917689df7553a462af6fb0e92c2bf9b08c0a68dcbb2e9cd5b733"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-3d78bbfa17b7ad73.log",
+      "bytes": 3413,
+      "sha256": "c46fe4b5ce7105ae3c42e52e30d76fc90f1e51f8c771c217f4710f1d17d8f3f1"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-505b6f361ff2a3d7.log",
+      "bytes": 4366,
+      "sha256": "8830962633ece3f53f320b474185f6e8e0205ab98e24f0a8d50250eddfdb40e1"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-54ab2b787ca02c57.log",
+      "bytes": 3920,
+      "sha256": "e843ca9b393e45e919ca64576f2f84eeb54ddcc51fc43820cb52f7f01eb506b0"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-5edda7796e5dd7dc.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-7b365d023ec8aad0.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-8429e4689dc742e6.log",
+      "bytes": 4299,
+      "sha256": "80d5fe34c09278cc09820b8b7895915e3e1569260dc59465e83320596052a845"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-88d2060a16ca3f39.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-9278f885e1c25473.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-95c0a5c4ac97c59a.log",
+      "bytes": 4188,
+      "sha256": "04c50caaaab8c779d2e82fb933af979849596b6b4967c8c427a56546d66cc390"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-9cbd381c4cb76dd2.log",
+      "bytes": 2907,
+      "sha256": "1698f886845aa057e8c96609549b9be7957ca3b97be8c2b5e84f7c3f7d0b0d45"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-a55fb11b08865096.log",
+      "bytes": 2983,
+      "sha256": "ff5107454d2f32526a08f0ca7eb6a23aa53b3d684b5ac225092ea4d4b1ff4312"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-a5dbb93bc2dfdf53.log",
+      "bytes": 2963,
+      "sha256": "5e93b806fae575d64f27a39922b0a0451106b59371492c0f1e90f09eafe90f43"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-aaaac05ea2ad52e8.log",
+      "bytes": 397,
+      "sha256": "e05378375bfc4237a5847a8f546ecff605afbb0fbe55352395d1e4ef2102169b"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-bcbd066463fc48b8.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-c3c98aea575833b0.log",
+      "bytes": 3105,
+      "sha256": "1b8e43191fda9837765a6cbfaddd2cab5c8ce60c143bb6b0015e8d454d30b3e2"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-c993ca3a5cf69785.log",
+      "bytes": 2682,
+      "sha256": "9417b2de0f7b700e6a8b48c11c202e00f5d28e81949547467dc57ddc52d319b1"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-d240a2611236bca8.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-d93791861f2e7460.log",
+      "bytes": 2935,
+      "sha256": "1d13c8a0ec1d2b90c7e2e198e8720a6e47ced765e07df9aff5a57dd761dfc87a"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-da8b84e5a26a4a63.log",
+      "bytes": 2784,
+      "sha256": "dffa98ae4864612a39b36db081c2a23457952d4443d4690f3b5eda6ce67f6b3f"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-dc7f127cb664ca4d.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-eb11ef4147ec2795.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-f1150a5d2ca21adb.log",
+      "bytes": 2134,
+      "sha256": "2bcdbfba0c4bec187422cdf258d6dd303f13e950de1954db8e15a085e92ae905"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-fb737d67bb288258.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/private/tmp/herdr-zt-managed-macos-parent-final-20261107/logs/ztcore-ffd98f2424a7dc79.log",
+      "bytes": 3609,
+      "sha256": "b50c697d728a231f42f857deb3ce97347fc902e19cd1a4b1f20f2d34c1394237"
+    }
+  ]
+}

@@ -1,25 +1,22 @@
 # herdr-pocket
 
-herdr-pocket 是手机优先的远端 herdr 图形客户端原型，目标覆盖 iOS、Android、Windows、macOS 和 Linux。桌面共享主机、会话和终端模型。项目独立于 herdr 官方，具体许可证待依赖和分发审查后确定。
+herdr-pocket 是手机优先的远端 herdr 图形客户端原型，目标覆盖 iOS、Android、Windows、macOS 和 Linux。手机从配对和主机看板进入完整终端，桌面共享信息模型并提供分屏。项目独立于 herdr 官方；具体许可证待依赖与分发审查后确定。
 
-**当前进度 · 2026-11-06**　Flutter 与 Tauri 在同源 `040eb26` 的 Android API 35 云模拟器完成 **配对审查 → 设备公钥认证 → 主机与会话看板 → 持续观察 → 主动停止**，原版用例远端输入为 0。Tauri 受保护输入通过；Flutter 普通包构建成功，受保护用例和新增回归仍有失败。[公开原型分支](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [当前实现与验证记录](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/18-mobile-network-profiles.md)
+**当前进度 · 2026-11-06**　Flutter 与 Tauri 两条路线已在同源 `040eb26` 的 Android API 35 云模拟器走通 **配对 → 主机与会话看板 → 选定 pane → 持续观察 → 主动停止**，只读用例远端输入为 0。Tauri 的受保护输入取得两笔匹配回执；Flutter 输入／新增回归仍有失败，后续源码修复待集中复验。框架尚未定案。[公开原型分支](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [实际结果与失败记录](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/18-mobile-network-profiles.md)
 
-## Android 测试包
+当前可下载的 Android 测试包仍来自 `040eb26`：[Flutter debug APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/42158644225/artifacts/13476846146) · [Tauri arm64 debug APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/42158644225/artifacts/13475774527) · [解包、校验值与测试步骤](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/18-mobile-network-profiles.md)。该批总运行最终取消，已完成的构建和已下载核对的产物分别保留；不能把总运行或所有用例称为通过。
 
-两份包都来自 `040eb26ba7c31e071048616a39591e17c74c99ab`，已下载核对源码、APK SHA-256、ABI、共享样例与原生声明。
+后续已发布源码 `d6c4285` 接入 Android 本机网络身份、共享节点生命周期，以及两套 GUI 的显式 EasyTier 路由和 Flutter 原生字节流通道。**当前下载包不包含这些源码增量**；隔离 Rust／JVM 检查不等于 Android 加载、真实入网或 SSH 组网闭环已经验证。[最新已提交的原生通道与构建记录](https://github.com/Luck9Star/herdr-pocket/blob/d6c4285d4ccacd38fb8a43452ee447143f0ce4d3/docs/21-flutter-native-network.md)
 
-| 应用 | 下载 | 实际结果 |
+| 范围 | 已取得的结果 | 尚待验证 |
 | --- | --- | --- |
-| Flutter，arm64-v8a / armeabi-v7a / x86_64 | [debug APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/42158644225/artifacts/13476846146) | 只读配对、看板、full/delta 和停止通过；受保护用例停在响应来源复选框确认；新增回归有测试代码错误，渲染回归 10 项通过 |
-| Tauri，arm64-v8a | [debug APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/42158644225/artifacts/13475774527) | 只读与受保护输入用例通过；逐键、草稿和隐藏后显式恢复得到两笔匹配回执，共 10 bytes；991 次 PTY 取样保持 119×40 |
+| 设计 | Penpot v2 已保存 30 个画板，包含新版配色、配对、终端、网络与迁移流程 | 真机触控、中文输入法、无障碍与实测反馈 |
+| 配对与密钥 | 两条 Android 云模拟器路线核对实际 SSH 接受的设备公钥；helper 仅在隔离临时目录验证授权和撤销 | 真实相机、锁屏、重启恢复及各平台身份保护 |
+| 看板与观察 | 选定 pane 的 full/delta、主动停止和旧画面标记通过隔离 GUI 用例 | 长期运行、跨网络多标签和真实设备生命周期 |
+| 输入与迁移 | Tauri 隔离主机收到精确的 1 与 9 字节两笔输入；两套源码接入受保护输入、配置迁移和网络偏好 | Flutter 失败复验、真实 IME、TUI、结果未知恢复 |
+| 原生网络 | EasyTier 参考桥的三桌面编译／链接／符号加载与隔离生命周期检查有记录；Android GUI 接线已提交 | Android 原生加载、真实节点、Tailscale／ZeroTier 及逐平台并发 |
+| 分发 | 两份 Android debug 测试包与各自 SHA 可获取 | 新源码集中重建、签名、安装及设备运行分别验收 |
 
-GitHub artifact 需登录下载，保留期 14 天。完整摘要、解包与测试步骤见[下载说明](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/18-mobile-network-profiles.md#android-下载与实际结果)。本批整体状态为 cancelled，含退役 Mac runner 取消及 Flutter job failure；Mac 定向补验单独通过。后续修复 `61a6b09` 不在上述 APK 中，新 Flutter 回归尚未再跑。[逐项原始证据](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/evidence/mobile-pair-gui/network-config-build-040eb26.json)
+[设计与覆盖清单](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/design/README.md) · [配对审查与设备密钥](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/14-mobile-pairing-workbench.md) · [终端绘制与 EasyTier 移植修复](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/10-blocker-repair.md) · [三桌面原生候选运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42159392366)
 
-## 手机实现与设计
-
-- 两套 GUI 已接入独立网络配置、主机绑定、加密迁移 v2 和本机字号。停用网络仍可完成本地配对审查；真实连接检查桥接可用性，不回退到普通网络。导入网络生成新 ID、默认停用，字号默认不覆盖。Mac 已实际完成系统文件导出、解密预览与导入，测试应用已关闭。
-- Penpot v2 沿用用户选定的 Tech Indigo／Slate，现有 30 个画板。网络列表、修改影响、迁移审查和导入结果已保存，重载读回并实际点击关键往返流程。[设计与覆盖清单](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/design/README.md) · [打开手机网络原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=b9d502c0-514c-80a9-8008-e7033d91f34d)
-- EasyTier 新节点生命周期接口已在 Linux、Windows、macOS 完成固定源码编译、链接和九个符号加载；真实节点启动、设备身份存储、GUI overlay 路由与三网并发仍待完成。Tailscale、EasyTier、ZeroTier 五端矩阵分别验收。
-- 原版 herdr 维持只读，输入使用隔离候选扩展验证。发送结果未知时锁定输入，取得原目标新 full 并人工核实后才能继续。布局变化不隐式修改共享 PTY 尺寸。[产品设计](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/05-product-design.md)
-
-真实手机 IME、触控、相机、iOS 签名安装和三网设备运行继续标为未验证。Flutter 与 Tauri 保留对照，先判断正确性，再比较性能和维护成本。后续按手机跨网接入与恢复、桌面分屏的顺序推进，集中构建，测试产物与正式发布分开。[实施顺序](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/04-roadmap.md) · [许可与分发审查](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/17-license-and-distribution-review.md)
+下一批继续手机独立终端标签、保留连接与显式恢复，再集中重建两套 Android 包；桌面分屏紧随手机闭环。两路线保持相同字体和 fixture，以正确性、实测和维护成本收敛技术选择。断线或结果未知不自动重放输入，布局不隐式修改远端共享 PTY。真实三网与五端验收矩阵仍保留未验证项。[产品设计](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/05-product-design.md) · [云构建与分发](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/07-build-and-release.md)

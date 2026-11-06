@@ -15,9 +15,21 @@ pub struct Session {
     pub record: Option<crate::hosts::Record>,
     pub node_binding: Option<Binding>,
     pub control: Option<herdr_readonly_transport::ObservationControl>,
-    pub select: Option<(u64, oneshot::Sender<String>)>,
+    pub select: Option<(u64, u64, oneshot::Sender<herdr_readonly_transport::DashboardTarget>)>,
+    pub dashboard:crate::dashboard_watch::DashboardReview,
+    pub selected:Option<herdr_readonly_transport::DashboardTarget>,
     pub ack: Option<(u64, u64, u64, oneshot::Sender<()>)>,
     pub input: Option<(u64, u64, Arc<LiveInput>)>,
+}
+
+impl Session {
+    pub fn select_dashboard(&mut self,generation:u64,epoch:u64,revision:u64,pane:String,terminal:String)->Result<(),&'static str> {
+        if self.generation!=generation || self.control.as_ref().is_none_or(|c|c.snapshot().epoch!=epoch) ||
+            !self.select.as_ref().is_some_and(|(g,e,_)|*g==generation && *e==epoch) {return Err("stale_selection");}
+        let target=self.dashboard.select(epoch,revision,pane,terminal)?;
+        self.selected=Some(target.clone());
+        self.select.take().unwrap().2.send(target).map_err(|_|"cancelled")
+    }
 }
 
 #[derive(Default)]
@@ -100,6 +112,23 @@ mod tests {
         s.cancel("a",1,old);let (new,_)=s.begin("a",1,None,None).unwrap();
         assert!(matches!(s.claim("a",1,old),Err("tab_stale")));
         assert!(!s.finish("a",1,old));assert!(s.claim("a",1,new).is_ok());
+    }
+
+    #[tokio::test]
+    async fn refreshed_review_keeps_selection_receiver_and_rejects_old_row_without_consuming_it() {
+        use herdr_readonly_transport::{Pane,session_watch::{SessionWatchPhase,SessionWatchUpdate}};
+        let mut session=Session {generation:41,control:Some(herdr_readonly_transport::ObservationControl::new()),..Session::default()};
+        let (tx,mut rx)=oneshot::channel();session.select=Some((41,1,tx));
+        let update=|revision,terminal:&str|SessionWatchUpdate {epoch:1,revision,phase:SessionWatchPhase::Fresh,reason:"fixture",panes:Some(vec![Pane {pane_id:"w1:p1".into(),terminal_id:terminal.into(),label:None,agent:None,agent_status:"working",workspace:None,tab:None}])};
+        session.dashboard.update(1,&update(1,"term_abc"));
+        session.dashboard.update(1,&update(2,"term_def"));
+        assert_eq!(session.select_dashboard(41,1,1,"w1:p1".into(),"term_abc".into()),Err("dashboard_stale"));
+        assert_eq!(session.select_dashboard(41,1,2,"w1:p1".into(),"term_abc".into()),Err("target_changed"));
+        assert_eq!(session.select_dashboard(42,1,2,"w1:p1".into(),"term_def".into()),Err("stale_selection"));
+        assert!(matches!(rx.try_recv(),Err(oneshot::error::TryRecvError::Empty)));
+        session.select_dashboard(41,1,2,"w1:p1".into(),"term_def".into()).unwrap();
+        let selected=rx.await.unwrap();assert_eq!(selected.terminal_id,"term_def");
+        assert_eq!(session.select_dashboard(41,1,2,"w1:p1".into(),"term_def".into()),Err("stale_selection"));
     }
 
 }

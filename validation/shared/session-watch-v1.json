@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "name": "session-watch-v1",
+  "scope": "Synthetic fixed-wire contract; a fixture is not a test result or real device/network validation.",
+  "source": {
+    "repository": "https://github.com/herdrdev/herdr",
+    "version": "0.9.5",
+    "protocol": 22,
+    "releaseCommit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+    "documentBaselineCommit": "bc8c28988f75c538d4ca058b702f5adbea30566e",
+    "files": [
+      {
+        "path": "src/api/schema/events.rs",
+        "gitBlobSha": "52ac6c96a5ebbfa4dcf04170225d778cc5050273"
+      },
+      {
+        "path": "src/api/schema/response.rs",
+        "gitBlobSha": "e92e49524757b5c80d59700ff3fc9d22754ff625"
+      },
+      {
+        "path": "src/api/subscriptions.rs",
+        "gitBlobSha": "2258a3ce6a5be8fb496e818d451a959e32de65fd"
+      },
+      {
+        "path": "src/api/server.rs",
+        "gitBlobSha": "0a4cfa662aa1b60d7038d51a23597114539b8c09"
+      }
+    ],
+    "verification": "events/response/subscriptions blobs identical between both fixed commits; release stream_subscriptions ACK, batch and events_lost handling inspected separately."
+  },
+  "globalSubscriptions": [
+    "workspace.created",
+    "workspace.updated",
+    "workspace.metadata_updated",
+    "workspace.renamed",
+    "workspace.moved",
+    "workspace.reordered",
+    "workspace.closed",
+    "workspace.focused",
+    "tab.created",
+    "tab.closed",
+    "tab.focused",
+    "tab.renamed",
+    "tab.moved",
+    "pane.created",
+    "pane.closed",
+    "pane.updated",
+    "pane.focused",
+    "pane.moved",
+    "pane.exited",
+    "pane.agent_detected",
+    "layout.updated"
+  ],
+  "wire": {
+    "request": {
+      "id": "0123456789abcdef0123456789abcdef",
+      "method": "events.subscribe",
+      "params": {
+        "subscriptions": [
+          {
+            "type": "workspace.created"
+          },
+          {
+            "type": "workspace.updated"
+          },
+          {
+            "type": "workspace.metadata_updated"
+          },
+          {
+            "type": "workspace.renamed"
+          },
+          {
+            "type": "workspace.moved"
+          },
+          {
+            "type": "workspace.reordered"
+          },
+          {
+            "type": "workspace.closed"
+          },
+          {
+            "type": "workspace.focused"
+          },
+          {
+            "type": "tab.created"
+          },
+          {
+            "type": "tab.closed"
+          },
+          {
+            "type": "tab.focused"
+          },
+          {
+            "type": "tab.renamed"
+          },
+          {
+            "type": "tab.moved"
+          },
+          {
+            "type": "pane.created"
+          },
+          {
+            "type": "pane.closed"
+          },
+          {
+            "type": "pane.updated"
+          },
+          {
+            "type": "pane.focused"
+          },
+          {
+            "type": "pane.moved"
+          },
+          {
+            "type": "pane.exited"
+          },
+          {
+            "type": "pane.agent_detected"
+          },
+          {
+            "type": "layout.updated"
+          }
+        ]
+      }
+    },
+    "paneStatusSubscription": {
+      "type": "pane.agent_status_changed",
+      "pane_id": "w1:p1"
+    },
+    "ack": {
+      "id": "0123456789abcdef0123456789abcdef",
+      "result": {
+        "type": "subscription_started"
+      }
+    },
+    "created": {
+      "event": "pane_created",
+      "data": {
+        "type": "pane_created",
+        "pane": {
+          "pane_id": "w1:p3",
+          "terminal_id": "term_123",
+          "workspace_id": "w1",
+          "tab_id": "w1:t1",
+          "focused": false,
+          "agent_status": "working",
+          "revision": 0
+        }
+      }
+    },
+    "closed": {
+      "event": "pane_closed",
+      "data": {
+        "type": "pane_closed",
+        "pane_id": "w1:p3",
+        "workspace_id": "w1"
+      }
+    },
+    "exited": {
+      "event": "pane_exited",
+      "data": {
+        "type": "pane_exited",
+        "pane_id": "w1:p3",
+        "workspace_id": "w1"
+      }
+    },
+    "status": {
+      "event": "pane.agent_status_changed",
+      "data": {
+        "pane_id": "w1:p1",
+        "workspace_id": "w1",
+        "agent_status": "blocked"
+      }
+    },
+    "lost": {
+      "id": "0123456789abcdef0123456789abcdef",
+      "error": {
+        "code": "events_lost",
+        "message": "fixture retained history lost"
+      }
+    }
+  },
+  "limits": {
+    "maxPanes": 256,
+    "maxEventLineBytes": 1048576,
+    "maxActiveSubscriptionChannels": 1,
+    "maxConcurrentSnapshotReads": 1,
+    "coalesceMs": 100,
+    "fallbackMs": 30000,
+    "retryMinMs": 500,
+    "retryMaxMs": 2000,
+    "maxDirtyAndPublishedRevision": 9007199254740991
+  },
+  "rules": [
+    "Subscribe global lifecycle, wait for ACK, read snapshot; rebuild subscription with per-pane status entries, wait for ACK, then snapshot again.",
+    "Lifecycle push event names use snake_case; pane-specific agent status push uses pane.agent_status_changed.",
+    "Events are invalidations only. At most one snapshot in flight and a coalesced dirty counter; never apply payloads to cache.",
+    "An event during a read schedules another read; snapshot and events have no shared remote sequence.",
+    "On events_lost, EOF, invalid data or subscription failure, publish stale before channel retirement; await old channel cleanup before replacement.",
+    "A missing event method is unavailable with an authoritative one-shot snapshot; it does not imply SSH or terminal disconnection.",
+    "Publication is fenced by connection generation in the caller and observation epoch plus local revision. Terminal full/delta cannot change board freshness.",
+    "Pause retires the epoch subscription and observer while retaining SSH; explicit resume re-subscribes and obtains snapshot plus terminal full.",
+    "User selection carries pane_id and terminal_id from the reviewed row. Re-check both against the latest authoritative snapshot; never substitute a newer same-name pane.",
+    "Watching issues only events.subscribe/session.snapshot; it cannot send input, prompt, resize, takeover or PTY requests."
+  ],
+  "cases": [
+    {
+      "id": "SW01",
+      "scenario": "ACK precedes authoritative initial snapshot; no fresh state before reconciliation"
+    },
+    {
+      "id": "SW02",
+      "scenario": "Pane added/closed/exited and status changes trigger current snapshot metadata"
+    },
+    {
+      "id": "SW03",
+      "scenario": "Event payload contradicts snapshot; only snapshot wins"
+    },
+    {
+      "id": "SW04",
+      "scenario": "events_lost while snapshot in flight marks stale immediately; old read cannot freshen loss"
+    },
+    {
+      "id": "SW05",
+      "scenario": "Subscription EOF retries on same SSH with ACK before snapshot"
+    },
+    {
+      "id": "SW06",
+      "scenario": "Storm coalesces without a payload backlog or concurrent snapshots"
+    },
+    {
+      "id": "SW07",
+      "scenario": "Paused epoch and late old events cannot update new epoch"
+    },
+    {
+      "id": "SW08",
+      "scenario": "Active terminal replaced/removed ends original observer; never reselects"
+    },
+    {
+      "id": "SW09",
+      "scenario": "New row can be selected by exact typed intent; reused old row rejected"
+    },
+    {
+      "id": "SW10",
+      "scenario": "Unsupported subscribe keeps one-shot observe available and board unavailable"
+    },
+    {
+      "id": "SW11",
+      "scenario": "Read-only watch traffic contains zero input and resize requests"
+    }
+  ]
+}

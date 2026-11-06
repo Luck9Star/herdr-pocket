@@ -228,6 +228,7 @@ jobs:
             cp "$RUNNER_TEMP/flutter-probe/candidate/terminal_view/NOTICE" "$RUNNER_TEMP/app-output/terminal_view-NOTICE"
           fi
           cp validation/shared/mobile-tabs-v1.json "$RUNNER_TEMP/app-output/mobile-tabs-v1.json"
+          cp validation/shared/session-watch-v1.json "$RUNNER_TEMP/app-output/session-watch-v1.json"
           cp validation/vendor/RUSSH-NOTICE.md validation/vendor/russh-0.65.0-source.json validation/vendor/russh-0.65.0-local-close.patch "$RUNNER_TEMP/app-output/"
           cp validation/vendor/russh-0.65.0-LICENSE-APACHE "$RUNNER_TEMP/app-output/russh-LICENSE"
           python3 validation/native/tool/android_bundle.py report "$RUNNER_TEMP/app-output" --commit "$GITHUB_SHA" --app "$APP" --checks "$SOURCE_CHECKS" --transport-checks "$TRANSPORT_CHECKS"

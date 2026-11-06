@@ -131,16 +131,124 @@ class RemotePane {
     'working' => '工作中', 'blocked' => '受阻', 'idle' => '空闲', 'done' => '已完成', _ => '状态未知',
   };
 }
+enum DashboardFreshness { stale, refreshing, fresh, unavailable }
+
 class RemoteDashboard {
-  const RemoteDashboard(this.generation, this.session, this.panes);
-  final int generation;
+  const RemoteDashboard(this.generation, this.session, this.panes,
+      {this.freshness=DashboardFreshness.stale,this.revision=0});
+  final int generation, revision;
   final String session;
   final List<RemotePane> panes;
+  final DashboardFreshness freshness;
+  bool get selectable => freshness == DashboardFreshness.fresh || freshness == DashboardFreshness.unavailable;
+}
+/// Selection and automatic requested-target restoration share this guard.
+/// A matching ID in an old row is never permission to observe it.
+void requireSelectableDashboardTarget(RemotePane target,RemoteDashboard board) {
+  if (!board.selectable) throw const RemoteFailure('stale_selection');
+  requireOriginalObservationTarget(target,board);
 }
 /// A resumed view is bound to both fields from its original snapshot.
 void requireOriginalObservationTarget(RemotePane original,RemoteDashboard fresh) {
   final matches = fresh.panes.where((p) => p.paneId == original.paneId && p.terminalId == original.terminalId);
   if (matches.length != 1) throw const RemoteFailure('resume_target_changed');
+}
+/// Fixed herdr 0.9.5 protocol 22 subscription schema. Every status filter
+/// requires a real pane ID from an authoritative snapshot.
+List<Map<String,Object?>> dashboardSubscriptions(List<RemotePane> panes) => [
+  for (final type in const ['workspace.created','workspace.updated','workspace.metadata_updated',
+    'workspace.renamed','workspace.moved','workspace.reordered','workspace.closed','workspace.focused',
+    'tab.created','tab.closed','tab.focused','tab.renamed','tab.moved',
+    'pane.created','pane.closed','pane.updated','pane.focused','pane.moved','pane.exited',
+    'pane.agent_detected','layout.updated']) {'type':type},
+  for (final pane in panes) {'type':'pane.agent_status_changed','pane_id':pane.paneId},
+];
+enum DashboardWatchAck { started, unavailable, retry }
+/// Fixed protocol-22 envelopes. Push records have no RPC ID; errors must echo
+/// this subscription's ID. Payloads are checked only as invalidations and are
+/// never used to update a pane, terminal, status or input target.
+DashboardWatchAck validateDashboardWatchAck(Map<String,dynamic> record,String requestId,
+    {required bool initialGlobal}) {
+  if (record['id'] != requestId || record.keys.any((key) => !{'id','result','error'}.contains(key))) {
+    throw const RemoteFailure('invalid_response');
+  }
+  final error = record['error'];
+  if (error != null) {
+    if (record.containsKey('result') || error is! Map || error['code'] is! String || error['message'] is! String) {
+      throw const RemoteFailure('invalid_response');
+    }
+    final unavailable = {'unknown_method','method_not_found','invalid_method'}.contains(error['code']) ||
+      (initialGlobal && error['code'] == 'invalid_request');
+    return unavailable ? DashboardWatchAck.unavailable : DashboardWatchAck.retry;
+  }
+  final result = record['result'];
+  if (record.containsKey('error') || result is! Map || result.length != 1 || result['type'] != 'subscription_started') {
+    throw const RemoteFailure('invalid_response');
+  }
+  return DashboardWatchAck.started;
+}
+void validateDashboardWatchEvent(Map<String,dynamic> record,String requestId,Set<String> subscribedPanes) {
+  if (record.containsKey('error')) {
+    final error = record['error'];
+    if (record.length != 2 || record['id'] != requestId || error is! Map ||
+        error['code'] is! String || error['message'] is! String) throw const RemoteFailure('invalid_response');
+    throw const RemoteFailure('watch_disconnected');
+  }
+  final event = record['event'],data = record['data'];
+  if (record.length != 2 || event is! String || data is! Map) throw const RemoteFailure('invalid_response');
+  bool id(Object? value) => value is String && RegExp(r'^[A-Za-z0-9:_-]{1,128}$').hasMatch(value);
+  if (event == 'pane.agent_status_changed') {
+    if (data.containsKey('type') || !subscribedPanes.contains(data['pane_id']) || !id(data['workspace_id']) ||
+        !{'idle','working','blocked','done','unknown'}.contains(data['agent_status'])) throw const RemoteFailure('invalid_response');
+    return;
+  }
+  final allowed = dashboardSubscriptions(const []).map((entry) => (entry['type'] as String).replaceAll('.','_')).toSet();
+  if (!allowed.contains(event) || data['type'] != event) throw const RemoteFailure('invalid_response');
+  bool objectId(String field,String key) => data[field] is Map && id((data[field] as Map)[key]);
+  final valid = switch (event) {
+    'workspace_created' || 'workspace_updated' || 'workspace_metadata_updated' => objectId('workspace','workspace_id'),
+    'workspace_reordered' => data['workspace_ids'] is List && (data['workspace_ids'] as List).every(id) && data['workspaces'] is List,
+    'workspace_closed' || 'workspace_focused' => id(data['workspace_id']),
+    'workspace_renamed' => id(data['workspace_id']) && data['label'] is String,
+    'workspace_moved' => id(data['workspace_id']) && data['insert_index'] is int && data['workspaces'] is List,
+    'tab_created' => objectId('tab','tab_id') && objectId('tab','workspace_id'),
+    'tab_closed' || 'tab_focused' => id(data['tab_id']) && id(data['workspace_id']),
+    'tab_renamed' => id(data['tab_id']) && id(data['workspace_id']) && data['label'] is String,
+    'tab_moved' => id(data['tab_id']) && id(data['workspace_id']) && data['insert_index'] is int && data['tabs'] is List,
+    'pane_created' || 'pane_updated' => objectId('pane','pane_id') && objectId('pane','terminal_id') && objectId('pane','workspace_id'),
+    'pane_moved' => id(data['previous_pane_id']) && id(data['previous_workspace_id']) && id(data['previous_tab_id']) && objectId('pane','pane_id'),
+    'pane_closed' || 'pane_focused' || 'pane_exited' || 'pane_agent_detected' => id(data['pane_id']) && id(data['workspace_id']),
+    'layout_updated' => objectId('layout','workspace_id') && objectId('layout','tab_id'),
+    _ => false,
+  };
+  if (!valid) throw const RemoteFailure('invalid_response');
+}
+/// Every concurrent wait has an independent removable registration. A single
+/// callback slot would lose a frame wait when a watch or cleanup starts.
+class RemoteWaitGroup {
+  final Set<void Function(RemoteFailure)> _waiters = {};
+  void add(void Function(RemoteFailure) waiter) => _waiters.add(waiter);
+  void remove(void Function(RemoteFailure) waiter) => _waiters.remove(waiter);
+  void interrupt(RemoteFailure failure) {
+    for (final waiter in _waiters.toList()) { waiter(failure); }
+  }
+}
+/// Constant-space invalidation state. Snapshot contents remain authoritative;
+/// no event payload or per-event work list is retained.
+class DashboardInvalidations {
+  int revision = 0;
+  bool dirty = false, lost = false;
+  bool mark({bool disconnected=false}) {
+    if (revision >= 9007199254740991) throw const RemoteFailure('dashboard_revision_limit');
+    final first = !dirty;
+    revision++; dirty = true; lost = lost || disconnected;
+    return first;
+  }
+  bool acceptSnapshot(int startedAt) {
+    if (lost || revision != startedAt) { dirty = true; return false; }
+    dirty = false; return true;
+  }
+  void resetSubscription() { dirty = false; lost = false; }
 }
 class RemoteFrame {
   const RemoteFrame(this.seq, this.full, this.ansi,{this.observationEpoch=0});
@@ -183,6 +291,8 @@ class ChannelRetirementTracker {
   final void Function() onOverflow;
   final Set<int> _active = {};
   int _pending = 0,_confirmations = 0;
+  int? _serialTicket;
+  bool _serialOpening = false;
   Completer<void>? _change,_pendingIdle;
   bool _overflowed = false;
   int get activeCount => _active.length;
@@ -193,6 +303,23 @@ class ChannelRetirementTracker {
       throw const RemoteFailure('channel_capacity');
     }
     _pending++;
+  }
+  // The adapter serializes actual opens. Trace confirmation is emitted before
+  // dartssh2 completes the original open Future (4.1.0 _handleChannelConfirmation).
+  void beginTicket() {
+    if (_serialOpening) { _overflowed = true; onOverflow(); throw const RemoteFailure('channel_identity'); }
+    _serialOpening = true; _serialTicket = null;
+  }
+  int? endTicket({required bool succeeded}) {
+    final ticket = _serialTicket;
+    _serialTicket = null; _serialOpening = false;
+    if ((succeeded && ticket == null) || (!succeeded && ticket != null)) {
+      if (!_overflowed) { _overflowed = true; onOverflow(); }
+    }
+    return ticket;
+  }
+  Future<void> waitTicket(int id) async {
+    while (_active.contains(id)) { await (_change ??= Completer<void>()).future; }
   }
   void verifyOpen() {
     if (_confirmations == 0 && !_overflowed) { _overflowed = true; onOverflow(); }
@@ -215,6 +342,13 @@ class ChannelRetirementTracker {
       if (id == null || id > 65535 || _active.contains(id)) return;
       if (_active.length >= 8 || _confirmations >= _pending) {
         if (!_overflowed) { _overflowed = true; onOverflow(); } return;
+      }
+      if (_serialOpening) {
+        if (_serialTicket != null) {
+          if (!_overflowed) { _overflowed = true; onOverflow(); }
+          return;
+        }
+        _serialTicket = id;
       }
       _active.add(id); _confirmations++; _notify(); return;
     }
@@ -242,8 +376,8 @@ class _Attempt {
   final RemoteEvidence evidence;
   final cancelled = Completer<void>();
   RemoteFailure? failure;
-  void Function(RemoteFailure)? interruptWait;
-  void Function(RemoteFailure)? interruptInput;
+  final waits = RemoteWaitGroup(), inputWaits = RemoteWaitGroup(),
+    observationWaits = RemoteWaitGroup(), watchWaits = RemoteWaitGroup();
   bool closed = false;
   Future<void>? closing;
   SSHSocket? socket;
@@ -255,6 +389,7 @@ class _Attempt {
   StreamSubscription<Uint8List>? stderr;
   final selection = Completer<RemotePane>();
   RemoteDashboard? dashboard;
+  RemotePane? selectedTarget;
   RemoteConfig? config;
   RemoteInputCapability? inputCapability;
   RemoteInputTarget? inputTarget;
@@ -262,7 +397,14 @@ class _Attempt {
   bool observationPaused = false;
   int observationEpoch = 0;
   Completer<void>? resumeObservation;
-  void Function(RemoteFailure)? interruptObservation;
+  Future<void> openTail = Future<void>.value();
+  Future<void> snapshotTail = Future<void>.value();
+  final Map<Object,int> channelTickets = Map<Object,int>.identity();
+  SSHForwardChannel? watch;
+  int watchEpoch = 0, dashboardRevision = 0;
+  Future<void>? watchRun;
+  void Function()? restartWatch;
+  void Function()? wakeWatch;
   ChannelRetirementTracker? channels;
   bool lateChannelDestroyFailed = false;
 }
@@ -289,23 +431,31 @@ class RemoteReadOnlyAdapter {
 
   bool _valid(_Attempt a) => identical(a,_attempt) && a.generation == generation && !a.closed;
   void _check(_Attempt a) {
+    if (a.failure != null) throw a.failure!;
     if (!_valid(a)) { a.evidence.lateEventsIgnored++; throw const RemoteFailure('cancelled'); }
   }
   void _fail(_Attempt a, RemoteFailure failure) {
     a.failure ??= failure;
-    a.interruptWait?.call(a.failure!);
-    a.interruptInput?.call(a.failure!);
+    a.waits.interrupt(a.failure!); a.wakeWatch?.call();
+  }
+  void _cleanupFailed(_Attempt a,RemoteFailure failure) {
+    _fail(a,failure);
+    // Late cleanup runs outside the owning read stack. Closing the transport
+    // is required even if no main waiter is currently registered.
+    unawaited(_close(a).then<void>((_) {},onError:(Object _,StackTrace __) {}));
   }
   Future<T> _wait<T>(_Attempt a, Future<T> future, {void Function(T)? disposeLate, void Function(bool,bool)? onSettled,
-      bool timed = true, bool input = false, bool observation = false,Duration timeout=const Duration(seconds:10)}) async {
-    // One removable waiter, rather than accumulating cancellation Future.any
-    // listeners on every frame of a long-running observe.
+      bool timed = true, bool input = false, bool observation = false, bool watch = false,Duration timeout=const Duration(seconds:10)}) async {
+    // Each scope retains all concurrent waits, then removes this registration
+    // on completion instead of accumulating cancellation Future.any listeners.
     final completion = Completer<T>();
     void interrupt(RemoteFailure failure) {
       if (!completion.isCompleted) completion.completeError(failure);
     }
-    if (input) { a.interruptInput = interrupt; } else { a.interruptWait = interrupt; }
-    if (observation) a.interruptObservation = interrupt;
+    a.waits.add(interrupt);
+    if (watch) a.watchWaits.add(interrupt);
+    if (input) a.inputWaits.add(interrupt);
+    if (observation) a.observationWaits.add(interrupt);
     unawaited(future.then<void>((value) {
       final wasLate = !_valid(a) || completion.isCompleted;
       try {
@@ -325,44 +475,114 @@ class RemoteReadOnlyAdapter {
       return await completion.future;
     } finally {
       timer?.cancel();
-      if (identical(a.interruptObservation,interrupt)) a.interruptObservation = null;
-      if (input) {
-        if (identical(a.interruptInput,interrupt)) a.interruptInput = null;
-      } else if (identical(a.interruptWait,interrupt)) { a.interruptWait = null; }
+      a.waits.remove(interrupt); a.watchWaits.remove(interrupt);
+      a.inputWaits.remove(interrupt); a.observationWaits.remove(interrupt);
     }
   }
-  Future<T> _openChannel<T>(_Attempt a,Future<T> Function() open,void Function(T) destroy,
-      {bool input=false,bool observation=false}) async {
+  Future<T> _openChannel<T extends Object>(_Attempt a,Future<T> Function() open,void Function(T) destroy,
+      {bool input=false,bool observation=false,bool watch=false}) async {
     final tracker = a.channels;
     if (tracker == null) throw const RemoteFailure('connection_failed');
-    final epoch = a.observationEpoch;
-    tracker.startOpen();
-    var delivered = false;
+    final epoch = a.observationEpoch, watchEpoch = a.watchEpoch;
+    tracker.startOpen(); // queued and late opens both retain their reservation
+    final previous = a.openTail;
+    final release = Completer<void>();
+    a.openTail = release.future;
+    var started = false;
     try {
-      final value = await _wait(a,Future<T>.sync(open),input:input,observation:observation,
-        onSettled:(success,wasLate) {
-          if (success && !wasLate) { delivered = true; return; }
-          tracker.finishOpen(succeeded:success);
-          if (!success && _valid(a) && !a.observationPaused) _fail(a,const RemoteFailure('channel_open_failed'));
-        },disposeLate:(value) {
-        try { destroy(value); } catch (_) { a.lateChannelDestroyFailed = true; }
-      });
-      tracker.verifyOpen();
-      if (a.failure != null || !_valid(a) || (observation && (a.observationPaused || a.observationEpoch != epoch))) {
-        try { destroy(value); } catch (_) { a.lateChannelDestroyFailed = true; }
-        throw a.failure ?? (!_valid(a) ? const RemoteFailure('cancelled') : const RemoteFailure('observation_paused'));
+      await _wait(a,previous,input:input,observation:observation,watch:watch);
+      _check(a);
+      if ((observation && (a.observationPaused || epoch != a.observationEpoch)) ||
+          (watch && (a.observationPaused || watchEpoch != a.watchEpoch))) {
+        throw const RemoteFailure('observation_paused');
       }
-      return value;
-    } finally { if (delivered) tracker.finishOpen(succeeded:true); }
+      tracker.beginTicket(); started = true;
+      final pending = Future<T>.sync(open);
+      var confirmed = false,settled = false;
+      Timer? abandonment;
+      final owned = pending.then<T>((value) {
+        final ticket = tracker.endTicket(succeeded:true); confirmed = ticket != null;
+        if (ticket == null || !_valid(a) || a.failure != null ||
+            (observation && (a.observationPaused || epoch != a.observationEpoch)) ||
+            (watch && (a.observationPaused || watchEpoch != a.watchEpoch))) {
+          try { destroy(value); } catch (_) {
+            a.lateChannelDestroyFailed = true; _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
+          }
+          if (ticket != null) {
+            unawaited(tracker.waitTicket(ticket).timeout(const Duration(seconds:2)).catchError((Object _) {
+              if (_valid(a)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
+            }));
+          }
+          throw const RemoteFailure('cancelled');
+        }
+        a.channelTickets[value] = ticket;
+        return value;
+      },onError:(Object error,StackTrace stack) {
+        confirmed = tracker.endTicket(succeeded:false) != null;
+        Error.throwWithStackTrace(error,stack);
+      });
+      try { return await _wait(a,owned,input:input,observation:observation,watch:watch,
+        onSettled:(_,__) {
+          settled = true; abandonment?.cancel();
+          tracker.finishOpen(succeeded:confirmed);
+          if (!release.isCompleted) release.complete();
+        },disposeLate:(value) {
+          final ticket = a.channelTickets.remove(value);
+          try { destroy(value); } catch (_) {
+            a.lateChannelDestroyFailed = true; _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
+          }
+          if (ticket == null) { _cleanupFailed(a,const RemoteFailure('channel_identity')); }
+          else {
+            unawaited(tracker.waitTicket(ticket).timeout(const Duration(seconds:2)).catchError((Object _) {
+              if (_valid(a)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
+            }));
+          }
+        }); } catch (_) {
+        // An abandoned original open still owns the serial lock and capacity.
+        // If it never settles, retaining this SSH cannot safely recover.
+        if (!settled && _valid(a)) {
+          abandonment = Timer(const Duration(seconds:2),() {
+            if (!settled && _valid(a)) {
+              _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
+            }
+          });
+        }
+        rethrow;
+      }
+    } finally {
+      if (!started) {
+        // A cancelled queued request must not release the next request ahead
+        // of its predecessor; it must never issue an open after cancellation.
+        unawaited(previous.whenComplete(() {
+          tracker.finishOpen(succeeded:false);
+          if (!release.isCompleted) release.complete();
+        }));
+      }
+    }
+  }
+  Future<void> _retireChannel(_Attempt a,Object channel) async {
+    final id = a.channelTickets.remove(channel);
+    if (id == null) { _cleanupFailed(a,const RemoteFailure('channel_identity')); throw const RemoteFailure('channel_identity'); }
+    // A pause interrupts reads, not the independent obligation to observe
+    // this ticket's CLOSE before keeping the SSH transport.
+    try { await a.channels!.waitTicket(id).timeout(const Duration(seconds:2)); }
+    catch (_) { if (_valid(a)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout')); rethrow; }
   }
   Future<void> _close(_Attempt a) => a.closing ??= _closeResources(a);
   Future<void> _closeResources(_Attempt a) async {
     a.closed = true;
-    a.interruptInput?.call(const RemoteFailure('cancelled'));
+    a.wakeWatch?.call(); a.waits.interrupt(const RemoteFailure('cancelled'));
     // Destroy owned channels synchronously; SSHSession.close discards a Future
     // in dartssh2 4.1.0. Let the client finish before destroying its socket.
-    a.observe?.channel.destroy(); a.forward?.destroy(); a.inputForward?.destroy();
-    try { await a.stderr?.cancel(); } catch (_) { /* discarded remote stream */ }
+    for (final destroy in <void Function()>[
+      if (a.observe != null) () => a.observe!.channel.destroy(),
+      if (a.forward != null) () => a.forward!.destroy(),
+      if (a.inputForward != null) () => a.inputForward!.destroy(),
+      if (a.watch != null) () => a.watch!.destroy(),
+    ]) {
+      try { destroy(); } catch (_) { a.lateChannelDestroyFailed = true; }
+    }
+    try { await a.stderr?.cancel().timeout(const Duration(seconds:2)); } catch (_) { /* discarded remote stream */ }
     try {
       final closing = a.client?.close(); a.clientClosing = closing;
       await closing?.timeout(const Duration(seconds:2));
@@ -375,8 +595,7 @@ class RemoteReadOnlyAdapter {
     if (a == null) return;
     a.evidence.generation = generation;
     if (!a.cancelled.isCompleted) a.cancelled.complete();
-    a.interruptWait?.call(const RemoteFailure('cancelled'));
-    a.interruptInput?.call(const RemoteFailure('cancelled'));
+    a.waits.interrupt(const RemoteFailure('cancelled')); a.wakeWatch?.call();
     await _close(a);
   }
 
@@ -384,25 +603,36 @@ class RemoteReadOnlyAdapter {
   /// transport stays owned by this attempt until explicit cancel or failure.
   bool pauseObservation() {
     final a = _attempt;
-    if (a == null || !_valid(a)) return false;
+    if (a == null || !_valid(a) || a.failure != null) return false;
     if (a.observationPaused) return true;
-    a.observationPaused = true; a.observationEpoch++;
+    a.observationPaused = true; a.observationEpoch++; a.watchEpoch++;
+    final board = a.dashboard;
+    if (board != null) a.dashboard = RemoteDashboard(board.generation,board.session,board.panes,
+      freshness:DashboardFreshness.stale,revision:board.revision);
+    // Revoke every write proof before any destructor can throw.
     a.evidence.fullFrameReceived = false; a.inputTarget = null;
-    a.interruptInput?.call(const RemoteFailure('cancelled'));
-    a.inputForward?.destroy();
-    a.interruptObservation?.call(const RemoteFailure('observation_paused'));
-    a.observe?.channel.destroy();
-    return true;
+    a.watchWaits.interrupt(const RemoteFailure('observation_paused')); a.wakeWatch?.call();
+    a.inputWaits.interrupt(const RemoteFailure('cancelled'));
+    a.observationWaits.interrupt(const RemoteFailure('observation_paused'));
+    for (final destroy in <void Function()>[
+      if (a.watch != null) () => a.watch!.destroy(),
+      if (a.inputForward != null) () => a.inputForward!.destroy(),
+      if (a.observe != null) () => a.observe!.channel.destroy(),
+    ]) {
+      try { destroy(); } catch (_) { _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout')); }
+    }
+    return _valid(a) && a.failure == null;
   }
 
   /// An explicit user action only. A fresh target snapshot and first full are
   /// required before a new input capability can be used.
   bool resumeObservation() {
     final a = _attempt;
-    if (a == null || !_valid(a) || !a.observationPaused) return false;
+    if (a == null || !_valid(a) || a.failure != null || !a.observationPaused) return false;
     a.observationPaused = false;
     final signal = a.resumeObservation; a.resumeObservation = null;
     if (signal != null && !signal.isCompleted) signal.complete();
+    a.restartWatch?.call();
     return true;
   }
 
@@ -417,12 +647,25 @@ class RemoteReadOnlyAdapter {
 
   void selectPane(int expectedGeneration, String paneId) {
     final a = _attempt;
-    if (a == null || !_valid(a) || a.observationPaused || expectedGeneration != a.generation || a.selection.isCompleted) {
+    if (a == null || !_valid(a) || a.failure != null || a.observationPaused || expectedGeneration != a.generation || a.selection.isCompleted) {
       throw const RemoteFailure('stale_selection');
     }
     final matches = a.dashboard?.panes.where((p) => p.paneId == paneId).toList();
     if (matches == null || matches.length != 1) throw const RemoteFailure('pane_missing');
-    a.selection.complete(matches.single);
+    selectTarget(expectedGeneration,matches.single);
+  }
+
+  /// Freeze both fields supplied by the row, rather than resolving a reused
+  /// pane ID to a different terminal after the row was rendered.
+  void selectTarget(int expectedGeneration, RemotePane target) {
+    final a = _attempt;
+    if (a == null || !_valid(a) || a.failure != null || a.observationPaused || expectedGeneration != a.generation || a.selection.isCompleted) {
+      throw const RemoteFailure('stale_selection');
+    }
+    final board = a.dashboard;
+    if (board == null) throw const RemoteFailure('pane_missing');
+    requireSelectableDashboardTarget(target,board);
+    a.selectedTarget = target; a.selection.complete(target);
   }
 
   String _requestId() {
@@ -430,7 +673,7 @@ class RemoteReadOnlyAdapter {
     return List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2,'0')).join();
   }
 
-  bool _canWrite(_Attempt a, RemoteInputTarget target) => _valid(a) && a.failure == null &&
+  bool _canWrite(_Attempt a, RemoteInputTarget target) => _valid(a) && a.failure == null && !a.observationPaused &&
     identical(target,a.inputTarget) && identical(target.connection,a) &&
     a.inputCapability != null && a.evidence.hostKeyMatched && a.evidence.fullFrameReceived;
 
@@ -528,9 +771,9 @@ class RemoteReadOnlyAdapter {
     } finally {
       channel?.destroy();
       if (identical(a.inputForward,channel)) a.inputForward = null;
-      if (channel != null && _valid(a) && !a.observationPaused && a.channels != null) {
-        try { await _wait(a,a.channels!.waitOnly(a.observe?.channel.channelId),input:true,timeout:const Duration(seconds:2)); }
-        catch (_) { if (_valid(a) && !a.observationPaused) _fail(a,const RemoteFailure('channel_cleanup_timeout')); }
+      if (channel != null && _valid(a) && a.channels != null) {
+        try { await _retireChannel(a,channel); }
+        catch (_) { if (_valid(a)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout')); }
       }
       a.inputBusy = false;
     }
@@ -628,25 +871,42 @@ class RemoteReadOnlyAdapter {
       unawaited(client.done.then<void>((_) {},onError:(Object _,StackTrace __) {}));
       await _wait(a,client.authenticated);
       if (!e.hostKeyChecked || !e.hostKeyMatched) throw const RemoteFailure('host_key_mismatch');
-      Future<void> waitRetired() => _wait(a,tracker.waitIdle(),timeout:const Duration(seconds:2));
-      Future<RemoteDashboard> snapshot({bool observation=false}) async {
-        final channel = await _openChannel<SSHForwardChannel>(a,() => client.forwardLocalUnix(config.socketPath),
-          (c) => c.destroy(),observation:observation);
-        a.forward = channel;
+      Future<RemoteDashboard> snapshot({bool observation=false,bool watch=false}) async {
+        final previous = a.snapshotTail;
+        final release = Completer<void>();
+        final watchEpoch = a.watchEpoch, observationEpoch = a.observationEpoch;
+        a.snapshotTail = release.future;
+        var acquired = false;
         try {
-          final id = _requestId();
-          channel.sink.add(utf8.encode('${jsonEncode({'id':id,'method':'session.snapshot','params':<String,Object?>{}})}\n'));
-          final line = await _wait(a,boundedLines(channel.stream,maxTotal:1048576).first,observation:observation);
-          final rpc = _decodeObject(line);
-          if (rpc['id'] != id || rpc['error'] != null || rpc['ok'] == false || rpc['result'] is! Map) {
-            throw const RemoteFailure('snapshot_rejected');
+          await _wait(a,previous,observation:observation,watch:watch);
+          _check(a);
+          if (((observation || watch) && a.observationPaused) ||
+              (watch && watchEpoch != a.watchEpoch) ||
+              (observation && observationEpoch != a.observationEpoch)) throw const RemoteFailure('observation_paused');
+          acquired = true;
+          final channel = await _openChannel<SSHForwardChannel>(a,() => client.forwardLocalUnix(config.socketPath),
+            (c) => c.destroy(),observation:observation,watch:watch);
+          if (!watch) a.forward = channel;
+          try {
+            final id = _requestId();
+            channel.sink.add(utf8.encode('${jsonEncode({'id':id,'method':'session.snapshot','params':<String,Object?>{}})}\n'));
+            final line = await _wait(a,boundedLines(channel.stream,maxTotal:1048576).first,observation:observation,watch:watch);
+            final rpc = _decodeObject(line);
+            if (rpc['id'] != id || rpc['error'] != null || rpc['ok'] == false || rpc['result'] is! Map) {
+              throw const RemoteFailure('snapshot_rejected');
+            }
+            return parseSnapshotDashboard(config,Map<String,dynamic>.from(rpc['result'] as Map),a.generation);
+          } finally {
+            channel.destroy(); if (identical(a.forward,channel)) a.forward = null;
+            if (_valid(a)) await _retireChannel(a,channel);
           }
-          return parseSnapshotDashboard(config,Map<String,dynamic>.from(rpc['result'] as Map),a.generation);
-        } finally { channel.destroy(); if (identical(a.forward,channel)) a.forward = null; }
+        } finally {
+          if (acquired) { if (!release.isCompleted) release.complete(); }
+          else { unawaited(previous.whenComplete(() { if (!release.isCompleted) release.complete(); })); }
+        }
       }
       phase('snapshot');
       final dashboard = await snapshot();
-      await waitRetired();
       e.snapshotReceived = true; a.dashboard = dashboard; e.paneCount = dashboard.panes.length;
       if (onDashboard != null) {
         // Capability discovery is side-effect-free; stock 0.9.5 replies with an
@@ -664,7 +924,7 @@ class RemoteReadOnlyAdapter {
           a.inputCapability = RemoteInputCapability.parse(response['result']);
         }
         capabilityChannel.destroy(); a.forward = null;
-        await waitRetired();
+        await _retireChannel(a,capabilityChannel);
         _journalReady = false;
         if (a.inputCapability != null) {
           try {
@@ -676,6 +936,165 @@ class RemoteReadOnlyAdapter {
           } catch (_) { a.inputCapability = null; }
         }
       }
+      // A watch owns one subscription channel and at most one snapshot at a
+      // time. Event payloads are only invalidations, never row mutations.
+      void publishBoard(DashboardFreshness state,[RemoteDashboard? authority]) {
+        if (!_valid(a) || a.observationPaused || onDashboard == null) return;
+        if ((state == DashboardFreshness.fresh || state == DashboardFreshness.unavailable) && authority != null && a.selectedTarget != null) {
+          try { requireOriginalObservationTarget(a.selectedTarget!,authority); }
+          on RemoteFailure catch (failure) {
+            _fail(a,failure); a.observe?.channel.destroy(); return;
+          }
+        }
+        final source = authority ?? a.dashboard;
+        if (source == null) return;
+        if (a.dashboardRevision >= 9007199254740991) { _fail(a,const RemoteFailure('dashboard_revision_limit')); return; }
+        final value = RemoteDashboard(a.generation,config.session,source.panes,
+          freshness:state,revision:++a.dashboardRevision);
+        a.dashboard = value;
+        e.paneCount = value.panes.length;
+        onDashboard(value);
+      }
+      Future<void> runWatch(int epoch) async {
+        bool current() => _valid(a) && a.failure == null && !a.observationPaused && epoch == a.watchEpoch;
+        var retries = 0;
+        while (current()) {
+          SSHForwardChannel? channel;
+          StreamIterator<String>? lines;
+          Completer<void>? changed;
+          var unsupported = false;
+          final invalidations = DashboardInvalidations();
+          void wake() { final signal = changed; changed = null; if (signal != null && !signal.isCompleted) signal.complete(); }
+          a.wakeWatch = wake;
+          void invalidate({bool disconnected=false}) {
+            if (!current()) return;
+            bool first;
+            try { first = invalidations.mark(disconnected:disconnected); }
+            on RemoteFailure catch (failure) { _fail(a,failure); return; }
+            if (disconnected) { publishBoard(DashboardFreshness.stale); }
+            else if (first) { publishBoard(DashboardFreshness.refreshing); }
+            wake();
+          }
+          Future<void> closeSubscription() async {
+            final old = channel;
+            final oldLines = lines;
+            channel = null; lines = null;
+            if (identical(a.watch,old)) a.watch = null;
+            old?.destroy();
+            final cancelLines = oldLines?.cancel() ?? Future<void>.value();
+            final retired = old != null && _valid(a) ? _retireChannel(a,old) : Future<void>.value();
+            await Future.wait<void>([cancelLines,retired]).timeout(const Duration(seconds:2));
+          }
+          Future<void> subscribe(List<RemotePane> panes,{required bool initialGlobal}) async {
+            final opened = await _openChannel<SSHForwardChannel>(a,() => client.forwardLocalUnix(config.socketPath),
+              (c) => c.destroy(),watch:true);
+            if (!current()) { opened.destroy(); await _retireChannel(a,opened); throw const RemoteFailure('observation_paused'); }
+            channel = opened; a.watch = opened;
+            final id = _requestId();
+            final subscriptions = dashboardSubscriptions(panes);
+            opened.sink.add(utf8.encode('${jsonEncode({'id':id,'method':'events.subscribe','params':{'subscriptions':subscriptions}})}\n'));
+            lines = StreamIterator<String>(boundedLines(opened.stream,maxTotal:null));
+            if (!await _wait(a,lines!.moveNext(),watch:true)) throw const RemoteFailure('watch_disconnected');
+            final ack = _decodeObject(lines!.current);
+            final accepted = validateDashboardWatchAck(ack,id,initialGlobal:initialGlobal);
+            if (accepted != DashboardWatchAck.started) {
+              // A missing pane filter must rebuild, not downgrade to a
+              // selectable one-shot board. Other server errors also retry.
+              unsupported = accepted == DashboardWatchAck.unavailable;
+              throw RemoteFailure(unsupported ? 'watch_unavailable' : 'watch_rebuild');
+            }
+            final subscribedPanes = panes.map((pane) => pane.paneId).toSet();
+            final ownedLines = lines!;
+            unawaited(() async {
+              try {
+                while (current() && identical(lines,ownedLines) && await ownedLines.moveNext()) {
+                  if (!current() || !identical(lines,ownedLines)) return;
+                  final record = _decodeObject(ownedLines.current);
+                  validateDashboardWatchEvent(record,id,subscribedPanes);
+                  invalidate();
+                }
+              } catch (_) { /* EOF, malformed record or cancelled stream */ }
+              if (current() && identical(lines,ownedLines)) invalidate(disconnected:true);
+            }());
+          }
+          bool sameMembers(RemoteDashboard first,RemoteDashboard second) {
+            final left = first.panes.map((p) => p.paneId).toSet();
+            final right = second.panes.map((p) => p.paneId).toSet();
+            return left.length == right.length && left.containsAll(right);
+          }
+          try {
+            publishBoard(DashboardFreshness.refreshing);
+            await subscribe(const [],initialGlobal:true);
+            final first = await snapshot(watch:true);
+            if (!current() || invalidations.lost) throw const RemoteFailure('watch_disconnected');
+            await closeSubscription();
+            if (!current()) return;
+            invalidations.resetSubscription();
+            await subscribe(first.panes,initialGlobal:false);
+            var members = first;
+            while (current() && !invalidations.lost) {
+              final before = invalidations.revision;
+              final latest = await snapshot(watch:true);
+              if (!current() || invalidations.lost) break;
+              if (!sameMembers(members,latest)) {
+                members = latest;
+                await closeSubscription();
+                if (!current()) return;
+                invalidations.resetSubscription();
+                await subscribe(members.panes,initialGlobal:false);
+                continue; // Always read again after the subscription ACK.
+              }
+              members = latest;
+              if (invalidations.acceptSnapshot(before)) {
+                retries = 0; publishBoard(DashboardFreshness.fresh,latest);
+              } else { publishBoard(DashboardFreshness.refreshing); }
+              if (!invalidations.dirty && !invalidations.lost) {
+                changed = Completer<void>();
+                final signal = changed!;
+                final timer = Timer(const Duration(seconds:30),wake);
+                try { await signal.future; } finally { timer.cancel(); changed = null; }
+              }
+              if (current() && !invalidations.lost) {
+                publishBoard(DashboardFreshness.refreshing);
+                await Future<void>.delayed(const Duration(milliseconds:100));
+              }
+            }
+          } catch (_) {
+            if (current() && unsupported) {
+              try {
+                await closeSubscription();
+                final authority = await snapshot(watch:true);
+                if (current()) publishBoard(DashboardFreshness.unavailable,authority);
+              } catch (_) { unsupported = false; if (current()) publishBoard(DashboardFreshness.stale); }
+            } else if (current()) { publishBoard(DashboardFreshness.stale); }
+          } finally {
+            if (identical(a.wakeWatch,wake)) a.wakeWatch = null;
+            try { await closeSubscription(); } catch (_) { if (_valid(a)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout')); }
+          }
+          if (!current() || unsupported || a.failure != null) return;
+          if (++retries > 3) {
+            // A visible stopped attempt can be explicitly reviewed/reconnected;
+            // do not leave a permanently stale board beside a live observer.
+            _fail(a,const RemoteFailure('watch_retry_exhausted'));
+            return;
+          }
+          await Future<void>.delayed(Duration(milliseconds:500 << (retries - 1)));
+        }
+      }
+      void restartWatch() {
+        if (onDashboard == null || !_valid(a) || a.observationPaused) return;
+        final epoch = ++a.watchEpoch;
+        final previous = a.watchRun;
+        final future = () async {
+          if (previous != null) await previous;
+          if (_valid(a) && !a.observationPaused && a.watchEpoch == epoch) await runWatch(epoch);
+        }();
+        a.watchRun = future;
+        unawaited(future.then<void>((_) {},onError:(Object _,StackTrace __) {
+          if (_valid(a)) _fail(a,const RemoteFailure('watch_failed'));
+        }));
+      }
+      a.restartWatch = restartWatch;
       phase('snapshot_received');
       RemotePane selected;
       if (onDashboard == null) {
@@ -684,12 +1103,16 @@ class RemoteReadOnlyAdapter {
         selected = matches.single;
       } else {
         onDashboard(dashboard); _check(a);
+        restartWatch();
         // User selection has no timeout and owns no additional channel/queue.
         selected = await _wait(a,a.selection.future,timed:false);
       }
       _check(a);
       final route = connectedSocketRoute(socket);
-      var needsSnapshot = a.observationEpoch != 0;
+      // A row can be replaced between rendering and selection. Validate the
+      // frozen pane and terminal against a new authoritative snapshot before
+      // opening the observer, including for the first selection.
+      var needsSnapshot = onDashboard != null || a.observationEpoch != 0;
       while (true) {
         while (a.observationPaused) {
           needsSnapshot = true;
@@ -708,9 +1131,8 @@ class RemoteReadOnlyAdapter {
         try {
           if (needsSnapshot) {
             final fresh = await snapshot(observation:true); checkObservation();
-            await waitRetired(); checkObservation();
+            checkObservation();
             requireOriginalObservationTarget(selected,fresh);
-            a.dashboard = fresh;
           }
           checkObservation();
           a.inputTarget = RemoteInputTarget(connection:a,generation:a.generation,
@@ -760,19 +1182,17 @@ class RemoteReadOnlyAdapter {
           if (onDashboard != null) e.fullFrameReceived = false;
           observe?.channel.destroy();
           if (identical(a.observe,observe)) a.observe = null;
+          if (observe != null && _valid(a)) await _retireChannel(a,observe);
           try { await stderr?.cancel(); } catch (_) { /* retired observer */ }
           if (identical(a.stderr,stderr)) a.stderr = null;
           try { await frames?.cancel().timeout(const Duration(seconds:2)); } catch (_) { /* retired observer */ }
         }
-        // Local destroy alone leaves dartssh2's channel table occupied until
-        // peer CLOSE. Never re-open or keep an indefinitely hidden SSH if the
-        // prior observer, input channel or late open does not retire in time.
-        await waitRetired();
-      }
+        // The observer's exact inbound CLOSE was awaited above.
+        }
 
     } catch (error) {
-      final failure = error is RemoteFailure ? error : RemoteFailure(e.errorCode ??
-        (error is SSHAuthFailError ? 'authentication_failed' : error is SSHAuthAbortError && e.hostKeyMatched ? 'authentication_aborted' : 'connection_failed'));
+      final failure = a.failure ?? (error is RemoteFailure ? error : RemoteFailure(e.errorCode ??
+        (error is SSHAuthFailError ? 'authentication_failed' : error is SSHAuthAbortError && e.hostKeyMatched ? 'authentication_aborted' : 'connection_failed')));
       e.errorCode ??= failure.code;
       throw failure;
     } finally {

@@ -2,7 +2,7 @@
 use super::*;
 use crate::input::SendOutcome;
 use russh::{Channel, ChannelId, server};
-use std::{path::PathBuf, process::Command, sync::atomic::AtomicUsize};
+use std::{collections::HashSet, path::PathBuf, process::Command, sync::atomic::AtomicUsize};
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     sync::mpsc,
@@ -20,6 +20,8 @@ struct Stats {
     auths: AtomicUsize,
     execs: AtomicUsize,
     snapshots: AtomicUsize,
+    snapshot_active: AtomicUsize,
+    snapshot_high: AtomicUsize,
     closes: AtomicUsize,
     terminal: Mutex<String>,
     writes: Mutex<Vec<Vec<u8>>>,
@@ -27,6 +29,24 @@ struct Stats {
     receipt: Notify,
     block_after_exec: AtomicBool,
     block_reads: AtomicBool,
+    watch_subscribers: AtomicUsize,
+    watch_active: AtomicUsize,
+    watch_high: AtomicUsize,
+    watch_ids: Mutex<Vec<Vec<String>>>,
+    events: Mutex<Vec<mpsc::UnboundedSender<Option<Value>>>>,
+    panes: Mutex<Option<Vec<Value>>>,
+    hold_snapshot: AtomicBool,
+    snapshot_gate: Notify,
+    watch_unsupported: AtomicBool,
+    methods: Mutex<Vec<String>>,
+    // Synthetic fault channels stay registered until the actual peer CLOSE.
+    snapshot_fault_mode: AtomicUsize,
+    snapshot_fault_channels: Mutex<HashSet<ChannelId>>,
+    snapshot_fault_closed: AtomicUsize,
+    snapshot_overlap: AtomicUsize,
+    hold_streamlocal_open: AtomicBool,
+    held_streamlocal_count: AtomicUsize,
+    held_streamlocal: Mutex<Vec<(Channel<server::Msg>, server::ChannelOpenHandle)>>,
 }
 #[derive(Clone)]
 struct Peer {
@@ -74,10 +94,13 @@ impl server::Handler for Peer {
     }
     async fn channel_close(
         &mut self,
-        _: ChannelId,
+        channel: ChannelId,
         _: &mut server::Session,
     ) -> std::result::Result<(), Self::Error> {
         self.stats.closes.fetch_add(1, Ordering::SeqCst);
+        if locked(&self.stats.snapshot_fault_channels).remove(&channel) {
+            self.stats.snapshot_fault_closed.fetch_add(1, Ordering::SeqCst);
+        }
         Ok(())
     }
     async fn channel_open_direct_streamlocal(
@@ -87,6 +110,14 @@ impl server::Handler for Peer {
         reply: server::ChannelOpenHandle,
         _: &mut server::Session,
     ) -> std::result::Result<(), Self::Error> {
+        if self.stats.hold_streamlocal_open.load(Ordering::SeqCst) {
+            self.stats.held_streamlocal_count.fetch_add(1, Ordering::SeqCst);
+            // Retain both objects: dropping the reply would auto-reject rather
+            // than emulate a server that never confirms the open.
+            locked(&self.stats.held_streamlocal).push((channel, reply));
+            return Ok(());
+        }
+        let channel_id = channel.id();
         reply.accept().await;
         let stats = self.stats.clone();
         tokio::spawn(async move {
@@ -102,10 +133,99 @@ impl server::Handler for Peer {
             let Ok(request) = serde_json::from_slice::<Value>(&raw) else {
                 return;
             };
-            let response = match request["method"].as_str().unwrap_or("") {
+            let method = request["method"].as_str().unwrap_or("");
+            locked(&stats.methods).push(method.into());
+            if method == "events.subscribe" {
+                stats.watch_subscribers.fetch_add(1, Ordering::SeqCst);
+                if stats.watch_unsupported.load(Ordering::SeqCst) {
+                    let mut raw=serde_json::to_vec(&serde_json::json!({"id":request["id"],"error":{"code":"unknown_method","message":"fixture unsupported"}})).unwrap();
+                    raw.push(b'\n');
+                    let _ = stream.write_all(&raw).await;
+                    let _ = stream.shutdown().await;
+                    return;
+                }
+                let ids: Vec<String> = request["params"]["subscriptions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|s| s["pane_id"].as_str().map(str::to_owned))
+                    .collect();
+                locked(&stats.watch_ids).push(ids.clone());
+                let mut raw=serde_json::to_vec(&serde_json::json!({"id":request["id"],"result":{"type":"subscription_started"}})).unwrap();
+                raw.push(b'\n');
+                let (tx, mut events) = mpsc::unbounded_channel();
+                locked(&stats.events).push(tx);
+                let active = stats.watch_active.fetch_add(1, Ordering::SeqCst) + 1;
+                stats.watch_high.fetch_max(active, Ordering::SeqCst);
+                struct Retire(Arc<Stats>);
+                impl Drop for Retire {
+                    fn drop(&mut self) {
+                        self.0.watch_active.fetch_sub(1, Ordering::SeqCst);
+                    }
+                }
+                let _retire = Retire(stats.clone());
+                if stream.write_all(&raw).await.is_err() {
+                    return;
+                }
+                loop {
+                    let mut input = [0u8; 1];
+                    tokio::select! {biased;
+                        result=stream.read(&mut input)=>{if matches!(result,Ok(0)|Err(_)){return;}},
+                        event=events.recv()=> {
+                            let Some(Some(mut event))=event else {let _=stream.shutdown().await;return;};
+                            if event.get("error").is_some(){event["id"]=request["id"].clone();}
+                            if event["event"]=="pane.agent_status_changed" && !ids.iter().any(|id|event["data"]["pane_id"].as_str()==Some(id)){continue;}
+                            let lost=event.get("error").is_some();let mut raw=serde_json::to_vec(&event).unwrap();raw.push(b'\n');
+                            if stream.write_all(&raw).await.is_err(){return;}
+                            if lost {let _=stream.shutdown().await;return;}
+                        }
+                    }
+                }
+            }
+            if method == "session.snapshot" {
+                if !locked(&stats.snapshot_fault_channels).is_empty() {
+                    stats.snapshot_overlap.fetch_add(1, Ordering::SeqCst);
+                }
+                let fault = stats.snapshot_fault_mode.load(Ordering::SeqCst);
+                if fault != 0 {
+                    stats.snapshots.fetch_add(1, Ordering::SeqCst);
+                    locked(&stats.snapshot_fault_channels).insert(channel_id);
+                    if fault == 1 {
+                        // An unterminated response exceeding the production
+                        // limit, with the channel held open after the write.
+                        let oversized = vec![b'x'; LINE_LIMIT + 1];
+                        let _ = stream.write_all(&oversized).await;
+                    }
+                    // Fault 2 sends no response. In both cases the peer waits
+                    // for client EOF; channel_close records the actual CLOSE.
+                    let mut input = [0u8; 1];
+                    while matches!(stream.read(&mut input).await, Ok(n) if n != 0) {}
+                    return;
+                }
+            }
+            let response = match method {
                 "session.snapshot" => {
                     stats.snapshots.fetch_add(1, Ordering::SeqCst);
-                    serde_json::json!({"id":"pocket-readonly","result":{"type":"session_snapshot","snapshot":{"version":"0.9.5","protocol":22,"panes":[{"pane_id":"w1:p1","terminal_id":locked(&stats.terminal).clone()},{"pane_id":"w1:p2","terminal_id":"term_def"}]}}})
+                    let active = stats.snapshot_active.fetch_add(1, Ordering::SeqCst) + 1;
+                    stats.snapshot_high.fetch_max(active, Ordering::SeqCst);
+                    struct ReadGuard(Arc<Stats>);
+                    impl Drop for ReadGuard {
+                        fn drop(&mut self) {
+                            self.0.snapshot_active.fetch_sub(1, Ordering::SeqCst);
+                        }
+                    }
+                    let _read = ReadGuard(stats.clone());
+                    let panes=locked(&stats.panes).clone().unwrap_or_else(||vec![serde_json::json!({"pane_id":"w1:p1","terminal_id":locked(&stats.terminal).clone()}),serde_json::json!({"pane_id":"w1:p2","terminal_id":"term_def"})]);
+                    while stats.hold_snapshot.load(Ordering::SeqCst) {
+                        let wake = stats.snapshot_gate.notified();
+                        tokio::pin!(wake);
+                        wake.as_mut().enable();
+                        if !stats.hold_snapshot.load(Ordering::SeqCst) {
+                            break;
+                        }
+                        wake.await;
+                    }
+                    serde_json::json!({"id":"pocket-readonly","result":{"type":"session_snapshot","snapshot":{"version":"0.9.5","protocol":22,"panes":panes}}})
                 }
                 "pocket.input.capabilities" => {
                     serde_json::json!({"id":request["id"],"result":{"type":"pocket_input_capabilities","version":1,"protocol":22,"atomic_terminal_guard":true,"raw_bytes":true,"max_input_bytes":4096}})
@@ -500,6 +620,10 @@ async fn pause_submitted_input_is_unknown_and_late_receipt_never_clears_new_epoc
     harness.stats.hold_receipt.store(true, Ordering::SeqCst);
     let recovery = harness.recovery("journal");
     let mut view = View::launch(harness.config.clone(), Some(recovery.clone()));
+    // Exercise the existing unknown-write contract with live watch channels.
+    view.control
+        .set_dashboard_listener(Arc::new(|_| {}))
+        .unwrap();
     view.accept().await;
     let (_, old) = view.input().await;
     let mut other_config = harness.config.clone();
@@ -781,4 +905,550 @@ async fn closing_owner_does_not_finish_before_actual_io_drop() {
     );
     assert!(gate.dropped.load(Ordering::SeqCst));
     assert_eq!(control.snapshot().phase, ObservationPhase::Closed);
+}
+
+struct Watching {
+    control: ObservationControl,
+    cancel: Cancellation,
+    updates: mpsc::UnboundedReceiver<session_watch::SessionWatchUpdate>,
+    frames: mpsc::UnboundedReceiver<u64>,
+    task: tokio::task::JoinHandle<Result<()>>,
+    choose: Arc<Notify>,
+}
+impl Watching {
+    fn launch(h: &Harness, target: DashboardTarget, wait_for_choice: bool) -> Self {
+        let control = ObservationControl::new();
+        let cancel = Cancellation::default();
+        let (tx, updates) = mpsc::unbounded_channel();
+        control
+            .set_dashboard_listener(Arc::new(move |update| {
+                let _ = tx.send(update);
+            }))
+            .unwrap();
+        let (frame_tx, frames) = mpsc::unbounded_channel();
+        let config = h.config.clone();
+        let choose = Arc::new(Notify::new());
+        let gate = choose.clone();
+        let c = control.clone();
+        let stop = cancel.clone();
+        let task = tokio::spawn(async move {
+            observe_interactive_controlled_target_with_dialer(
+                config,
+                None,
+                stop,
+                Arc::new(Audit::default()),
+                |_| {},
+                move |_| {
+                    let gate = gate.clone();
+                    let target = target.clone();
+                    async move {
+                        if wait_for_choice {
+                            gate.notified().await;
+                        }
+                        Ok(target)
+                    }
+                },
+                move |epoch, frame| {
+                    let tx = frame_tx.clone();
+                    async move {
+                        assert!(frame.full);
+                        let _ = tx.send(epoch);
+                        Ok(())
+                    }
+                },
+                None,
+                c,
+                &transport::SystemDialer,
+            )
+            .await
+        });
+        Self {
+            control,
+            cancel,
+            updates,
+            frames,
+            task,
+            choose,
+        }
+    }
+    async fn update(
+        &mut self,
+        predicate: impl Fn(&session_watch::SessionWatchUpdate) -> bool,
+    ) -> session_watch::SessionWatchUpdate {
+        timeout(Duration::from_secs(7), async {
+            loop {
+                let next = self.updates.recv().await.expect("watch ended");
+                if predicate(&next) {
+                    return next;
+                }
+            }
+        })
+        .await
+        .unwrap()
+    }
+    async fn fresh(&mut self) -> session_watch::SessionWatchUpdate {
+        self.update(|u| u.phase == session_watch::SessionWatchPhase::Fresh)
+            .await
+    }
+    async fn full(&mut self) -> u64 {
+        timeout(Duration::from_secs(7), self.frames.recv())
+            .await
+            .unwrap()
+            .unwrap()
+    }
+    async fn stop(self) {
+        self.cancel.cancel();
+        assert!(
+            timeout(Duration::from_secs(7), self.task)
+                .await
+                .unwrap()
+                .unwrap()
+                .is_err()
+        );
+    }
+}
+fn target(pane: &str, terminal: &str) -> DashboardTarget {
+    DashboardTarget {
+        pane_id: pane.into(),
+        terminal_id: terminal.into(),
+    }
+}
+fn event(h: &Harness, value: Option<Value>) {
+    for tx in locked(&h.stats.events).iter() {
+        let _ = tx.send(value.clone());
+    }
+}
+fn changed(h: &Harness) {
+    event(
+        h,
+        Some(
+            serde_json::json!({"event":"pane_updated","data":{"type":"pane_updated","pane":{"pane_id":"w1:p2"}}}),
+        ),
+    );
+}
+fn set_panes(h: &Harness, panes: Value) {
+    *locked(&h.stats.panes) = Some(panes.as_array().unwrap().clone());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn watch_lifecycle_status_refreshes_authoritative_panes_without_input_or_resize() {
+    let h = Harness::new().await;
+    let mut view = Watching::launch(&h, target("w1:p1", "term_abc"), false);
+    view.fresh().await;
+    view.full().await;
+    set_panes(
+        &h,
+        serde_json::json!([{"pane_id":"w1:p1","terminal_id":"term_abc","agent_status":"blocked"},{"pane_id":"w1:p3","terminal_id":"term_123","agent_status":"working"}]),
+    );
+    event(
+        &h,
+        Some(
+            serde_json::json!({"event":"pane_created","data":{"type":"pane_created","pane":{"pane_id":"w1:p3"}}}),
+        ),
+    );
+    let added = view
+        .update(|u| {
+            u.phase == session_watch::SessionWatchPhase::Fresh
+                && u.panes
+                    .as_ref()
+                    .is_some_and(|p| p.iter().any(|p| p.pane_id == "w1:p3"))
+        })
+        .await;
+    assert_eq!(added.panes.unwrap()[0].agent_status, "blocked");
+    assert!(
+        locked(&h.stats.watch_ids)
+            .last()
+            .unwrap()
+            .contains(&"w1:p3".into())
+    );
+    set_panes(
+        &h,
+        serde_json::json!([{"pane_id":"w1:p1","terminal_id":"term_abc","agent_status":"idle"}]),
+    );
+    event(
+        &h,
+        Some(
+            serde_json::json!({"event":"pane_closed","data":{"type":"pane_closed","pane_id":"w1:p3","workspace_id":"w1"}}),
+        ),
+    );
+    view.update(|u| {
+        u.phase == session_watch::SessionWatchPhase::Fresh
+            && u.panes.as_ref().is_some_and(|p| p.len() == 1)
+    })
+    .await;
+    set_panes(
+        &h,
+        serde_json::json!([{"pane_id":"w1:p1","terminal_id":"term_abc","agent_status":"working"}]),
+    );
+    event(
+        &h,
+        Some(
+            serde_json::json!({"event":"pane.agent_status_changed","data":{"pane_id":"w1:p1","workspace_id":"w1","agent_status":"blocked"}}),
+        ),
+    );
+    let status = view.fresh().await;
+    // Event says blocked; authoritative snapshot says working and must win.
+    assert_eq!(status.panes.unwrap()[0].agent_status, "working");
+    set_panes(
+        &h,
+        serde_json::json!([{"pane_id":"w1:p1","terminal_id":"term_abc","agent_status":"idle"},{"pane_id":"w1:p4","terminal_id":"term_456"}]),
+    );
+    event(
+        &h,
+        Some(
+            serde_json::json!({"event":"pane_created","data":{"type":"pane_created","pane":{"pane_id":"w1:p4"}}}),
+        ),
+    );
+    view.update(|u| {
+        u.phase == session_watch::SessionWatchPhase::Fresh
+            && u.panes.as_ref().is_some_and(|p| p.len() == 2)
+    })
+    .await;
+    set_panes(
+        &h,
+        serde_json::json!([{"pane_id":"w1:p1","terminal_id":"term_abc","agent_status":"idle"}]),
+    );
+    event(
+        &h,
+        Some(
+            serde_json::json!({"event":"pane_exited","data":{"type":"pane_exited","pane_id":"w1:p4","workspace_id":"w1"}}),
+        ),
+    );
+    view.update(|u| {
+        u.phase == session_watch::SessionWatchPhase::Fresh
+            && u.panes.as_ref().is_some_and(|p| p.len() == 1)
+    })
+    .await;
+    assert_eq!(h.stats.auths.load(Ordering::SeqCst), 1);
+    assert_eq!(h.stats.execs.load(Ordering::SeqCst), 1);
+    assert!(locked(&h.stats.writes).is_empty());
+    assert!(
+        locked(&h.stats.methods)
+            .iter()
+            .all(|m| matches!(m.as_str(), "session.snapshot" | "events.subscribe"))
+    );
+    assert_eq!(h.stats.watch_high.load(Ordering::SeqCst), 1);
+    view.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn watch_loss_marks_stale_before_inflight_snapshot_and_resubscribes_same_ssh() {
+    let h = Harness::new().await;
+    let mut view = Watching::launch(&h, target("w1:p1", "term_abc"), false);
+    view.fresh().await;
+    view.full().await;
+    let before = h.stats.snapshots.load(Ordering::SeqCst);
+    h.stats.hold_snapshot.store(true, Ordering::SeqCst);
+    changed(&h);
+    until(|| h.stats.snapshots.load(Ordering::SeqCst) > before).await;
+    event(
+        &h,
+        Some(
+            serde_json::json!({"id":"ignored-fixture-id","error":{"code":"events_lost","message":"fixture overrun"}}),
+        ),
+    );
+    let lost = view.update(|u| u.reason == "events_lost").await;
+    assert_eq!(lost.phase, session_watch::SessionWatchPhase::Stale);
+    assert!(lost.panes.is_none());
+    assert!(h.stats.hold_snapshot.load(Ordering::SeqCst));
+    h.stats.hold_snapshot.store(false, Ordering::SeqCst);
+    h.stats.snapshot_gate.notify_waiters();
+    let recovered = view.fresh().await;
+    assert!(recovered.revision > lost.revision);
+    assert_eq!(h.stats.auths.load(Ordering::SeqCst), 1);
+    let subscriptions = h.stats.watch_subscribers.load(Ordering::SeqCst);
+    event(&h, None);
+    view.update(|u| u.reason == "watch_disconnected").await;
+    view.fresh().await;
+    assert!(h.stats.watch_subscribers.load(Ordering::SeqCst) > subscriptions);
+    assert_eq!(h.stats.auths.load(Ordering::SeqCst), 1);
+    view.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn watch_storm_coalesces_while_reading_and_never_replays_payloads() {
+    let h = Harness::new().await;
+    let mut view = Watching::launch(&h, target("w1:p1", "term_abc"), false);
+    view.fresh().await;
+    view.full().await;
+    let before = h.stats.snapshots.load(Ordering::SeqCst);
+    h.stats.hold_snapshot.store(true, Ordering::SeqCst);
+    changed(&h);
+    until(|| h.stats.snapshots.load(Ordering::SeqCst) > before).await;
+    for _ in 0..500 {
+        changed(&h);
+    }
+    set_panes(
+        &h,
+        serde_json::json!([{"pane_id":"w1:p1","terminal_id":"term_abc","agent_status":"idle"},{"pane_id":"w1:p2","terminal_id":"term_def"}]),
+    );
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(
+        view.updates.len() < 20,
+        "event payloads became an unbounded callback backlog while read was pending"
+    );
+    assert_eq!(h.stats.snapshot_high.load(Ordering::SeqCst), 1);
+    h.stats.hold_snapshot.store(false, Ordering::SeqCst);
+    h.stats.snapshot_gate.notify_waiters();
+    let fresh = view.fresh().await;
+    assert_eq!(fresh.panes.unwrap()[0].agent_status, "idle");
+    assert!(
+        h.stats.snapshots.load(Ordering::SeqCst) - before <= 4,
+        "storm created excess snapshot requests"
+    );
+    assert!(locked(&h.stats.writes).is_empty());
+    view.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn watch_target_replacement_ends_observer_without_silent_reselection() {
+    let h = Harness::new().await;
+    let mut view = Watching::launch(&h, target("w1:p1", "term_abc"), false);
+    view.fresh().await;
+    view.full().await;
+    *locked(&h.stats.terminal) = "term_123".into();
+    changed(&h);
+    assert_eq!(
+        timeout(Duration::from_secs(7), view.task)
+            .await
+            .unwrap()
+            .unwrap(),
+        Err("resume_target_changed")
+    );
+    assert_eq!(h.stats.execs.load(Ordering::SeqCst), 1);
+    assert!(locked(&h.stats.writes).is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn watch_pause_retires_subscription_and_old_events_cannot_freshen_resumed_epoch() {
+    let h = Harness::new().await;
+    let mut view = Watching::launch(&h, target("w1:p1", "term_abc"), false);
+    let first = view.fresh().await;
+    view.full().await;
+    let old = locked(&h.stats.events).last().unwrap().clone();
+    view.control.pause().unwrap().await.unwrap();
+    until(|| h.stats.watch_active.load(Ordering::SeqCst) == 0).await;
+    while view.updates.try_recv().is_ok() {}
+    assert!(
+        old.send(Some(serde_json::json!({"event":"pane_updated","data":{}})))
+            .is_err()
+    );
+    assert!(view.updates.try_recv().is_err());
+    let ack = view.control.resume().unwrap();
+    let next = view.full().await;
+    ack.await.unwrap();
+    let fresh = view
+        .update(|u| u.phase == session_watch::SessionWatchPhase::Fresh && u.epoch == next)
+        .await;
+    assert!(fresh.epoch > first.epoch);
+    assert_eq!(h.stats.auths.load(Ordering::SeqCst), 1);
+    assert!(locked(&h.stats.writes).is_empty());
+    view.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn watch_typed_selection_accepts_new_row_and_rejects_reused_old_row() {
+    let h = Harness::new().await;
+    let mut view = Watching::launch(&h, target("w1:p3", "term_123"), true);
+    view.fresh().await;
+    set_panes(
+        &h,
+        serde_json::json!([{"pane_id":"w1:p1","terminal_id":"term_abc"},{"pane_id":"w1:p3","terminal_id":"term_123"}]),
+    );
+    changed(&h);
+    view.update(|u| {
+        u.phase == session_watch::SessionWatchPhase::Fresh
+            && u.panes
+                .as_ref()
+                .is_some_and(|p| p.iter().any(|p| p.pane_id == "w1:p3"))
+    })
+    .await;
+    view.choose.notify_one();
+    view.full().await;
+    view.stop().await;
+    let h = Harness::new().await;
+    let mut view = Watching::launch(&h, target("w1:p1", "term_abc"), true);
+    view.fresh().await;
+    *locked(&h.stats.terminal) = "term_123".into();
+    changed(&h);
+    view.update(|u| {
+        u.phase == session_watch::SessionWatchPhase::Fresh
+            && u.panes
+                .as_ref()
+                .is_some_and(|p| p[0].terminal_id == "term_123")
+    })
+    .await;
+    view.choose.notify_one();
+    assert_eq!(
+        timeout(Duration::from_secs(7), view.task)
+            .await
+            .unwrap()
+            .unwrap(),
+        Err("resume_target_changed")
+    );
+    assert_eq!(h.stats.execs.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn watch_unsupported_is_separate_from_terminal_and_does_not_retry_ssh() {
+    let h = Harness::new().await;
+    h.stats.watch_unsupported.store(true, Ordering::SeqCst);
+    let mut view = Watching::launch(&h, target("w1:p1", "term_abc"), false);
+    view.update(|u| u.phase == session_watch::SessionWatchPhase::Unavailable && u.panes.is_some())
+        .await;
+    view.full().await;
+    assert_eq!(h.stats.auths.load(Ordering::SeqCst), 1);
+    assert_eq!(h.stats.watch_subscribers.load(Ordering::SeqCst), 1);
+    assert!(locked(&h.stats.writes).is_empty());
+    view.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn watch_fault_oversized_snapshots_retire_before_each_retry_on_same_ssh() {
+    let h = Harness::new().await;
+    h.stats.snapshot_fault_mode.store(1, Ordering::SeqCst);
+    let cancel = Cancellation::default();
+    let control = ObservationControl::new();
+    let dialer = Counting {
+        dials: AtomicUsize::new(0),
+    };
+    let (ssh, _) = authenticate_observer(
+        &h.config,
+        &cancel,
+        Arc::new(Audit::default()),
+        &|_| {},
+        None,
+        &dialer,
+    )
+    .await
+    .unwrap();
+    let epoch = control.snapshot().epoch;
+    for _ in 0..3 {
+        assert_eq!(
+            timeout(
+                Duration::from_secs(12),
+                snapshot(&ssh, &h.config, &cancel, &control, epoch)
+            )
+            .await
+            .unwrap(),
+            Err("snapshot_limit")
+        );
+        assert!(!cancel.is_cancelled());
+    }
+    h.stats.snapshot_fault_mode.store(0, Ordering::SeqCst);
+    let current = timeout(
+        Duration::from_secs(5),
+        snapshot(&ssh, &h.config, &cancel, &control, epoch),
+    )
+    .await
+    .unwrap()
+    .unwrap()
+    .unwrap();
+    assert_eq!(snapshot_terminal(&current, "w1:p1").unwrap(), "term_abc");
+    until(|| h.stats.snapshot_fault_closed.load(Ordering::SeqCst) == 3).await;
+    assert_eq!(h.stats.snapshot_overlap.load(Ordering::SeqCst), 0);
+    assert!(locked(&h.stats.snapshot_fault_channels).is_empty());
+    assert_eq!(dialer.dials.load(Ordering::SeqCst), 1);
+    assert_eq!(h.stats.connections.load(Ordering::SeqCst), 1);
+    assert_eq!(h.stats.auths.load(Ordering::SeqCst), 1);
+    assert!(locked(&h.stats.writes).is_empty());
+    cancel.cancel();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn watch_fault_snapshot_read_timeout_retires_before_same_ssh_recovers() {
+    let h = Harness::new().await;
+    h.stats.snapshot_fault_mode.store(2, Ordering::SeqCst);
+    let cancel = Cancellation::default();
+    let control = ObservationControl::new();
+    let dialer = Counting {
+        dials: AtomicUsize::new(0),
+    };
+    let (ssh, _) = authenticate_observer(
+        &h.config,
+        &cancel,
+        Arc::new(Audit::default()),
+        &|_| {},
+        None,
+        &dialer,
+    )
+    .await
+    .unwrap();
+    let epoch = control.snapshot().epoch;
+    assert_eq!(
+        timeout(
+            Duration::from_secs(15),
+            snapshot(&ssh, &h.config, &cancel, &control, epoch)
+        )
+        .await
+        .unwrap(),
+        Err("timeout")
+    );
+    assert!(!cancel.is_cancelled());
+    h.stats.snapshot_fault_mode.store(0, Ordering::SeqCst);
+    let current = timeout(
+        Duration::from_secs(5),
+        snapshot(&ssh, &h.config, &cancel, &control, epoch),
+    )
+    .await
+    .unwrap()
+    .unwrap()
+    .unwrap();
+    assert_eq!(snapshot_terminal(&current, "w1:p1").unwrap(), "term_abc");
+    until(|| h.stats.snapshot_fault_closed.load(Ordering::SeqCst) == 1).await;
+    assert_eq!(h.stats.snapshot_overlap.load(Ordering::SeqCst), 0);
+    assert_eq!(dialer.dials.load(Ordering::SeqCst), 1);
+    assert_eq!(h.stats.connections.load(Ordering::SeqCst), 1);
+    assert_eq!(h.stats.auths.load(Ordering::SeqCst), 1);
+    assert!(locked(&h.stats.writes).is_empty());
+    cancel.cancel();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn watch_fault_unconfirmed_open_cancels_owner_without_redial() {
+    let h = Harness::new().await;
+    h.stats.hold_streamlocal_open.store(true, Ordering::SeqCst);
+    let view = Watching::launch(&h, target("w1:p1", "term_abc"), false);
+    until(|| h.stats.held_streamlocal_count.load(Ordering::SeqCst) == 1).await;
+    let result = timeout(Duration::from_secs(15), view.task)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(result.is_err());
+    assert!(view.cancel.is_cancelled());
+    // The controlled owner joins actual I/O before reporting Closed.
+    assert_eq!(view.control.snapshot().phase, ObservationPhase::Closed);
+    assert_eq!(h.stats.held_streamlocal_count.load(Ordering::SeqCst), 1);
+    assert_eq!(h.stats.connections.load(Ordering::SeqCst), 1);
+    assert_eq!(h.stats.auths.load(Ordering::SeqCst), 1);
+    assert_eq!(h.stats.watch_subscribers.load(Ordering::SeqCst), 0);
+    assert!(locked(&h.stats.methods).is_empty());
+    assert!(locked(&h.stats.writes).is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn watch_fault_oversized_watch_retries_do_not_accumulate_channels() {
+    let h = Harness::new().await;
+    h.stats.snapshot_fault_mode.store(1, Ordering::SeqCst);
+    let mut view = Watching::launch(&h, target("w1:p1", "term_abc"), false);
+    // Let the real watcher schedule retries itself. The peer checks each new
+    // snapshot against fault-channel CLOSEs already processed on this SSH.
+    until(|| h.stats.snapshots.load(Ordering::SeqCst) >= 3).await;
+    h.stats.snapshot_fault_mode.store(0, Ordering::SeqCst);
+    let fresh = view.fresh().await;
+    assert!(
+        fresh
+            .panes
+            .unwrap()
+            .iter()
+            .any(|pane| pane.pane_id == "w1:p1")
+    );
+    view.full().await;
+    assert!(h.stats.snapshot_fault_closed.load(Ordering::SeqCst) >= 3);
+    assert!(locked(&h.stats.snapshot_fault_channels).is_empty());
+    assert_eq!(h.stats.snapshot_overlap.load(Ordering::SeqCst), 0);
+    assert_eq!(h.stats.connections.load(Ordering::SeqCst), 1);
+    assert_eq!(h.stats.auths.load(Ordering::SeqCst), 1);
+    assert!(locked(&h.stats.writes).is_empty());
+    view.stop().await;
 }

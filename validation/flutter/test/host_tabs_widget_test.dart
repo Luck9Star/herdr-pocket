@@ -32,7 +32,7 @@ class TabFixtureAdapter extends PendingAdapter {
   @override
   void publish({bool empty=false}) {
     latestDashboard = RemoteDashboard(generation,config.session,
-      empty ? const [] : const [RemotePane('w1:p1','term_abcd'),RemotePane('w1:p2','term_1234')]);
+      empty ? const [] : const [RemotePane('w1:p1','term_abcd'),RemotePane('w1:p2','term_1234')],freshness:DashboardFreshness.fresh,revision:++boardRevision);
     dashboard!(latestDashboard!);
   }
   @override RemoteDashboard? get currentDashboard => latestDashboard;
@@ -112,6 +112,9 @@ void main() {
     aAdapter.frame!(aAdapter.generation,'w1:p1',const RemoteFrame(0,true,'NEW SAME TARGET FULL',observationEpoch:2)); await tester.pump(); await mode(tester,'draft');
     expect(tester.widget<TextField>(draft).controller!.text,'Host A unsent');
     expect(aAdapter.calls,1); expect(bAdapter.calls,1); expect(keys.creates,0); expect(keys.signCalls,0);
+    // A terminal full does not refresh the board: the watch publishes its
+    // own fresh snapshot before a new pane can be opened.
+    aAdapter.publish(); await tester.pump();
     await tapVisible(tester,'remote-pane-new-tab-w1:p2'); await tester.pumpAndSettle();
     final secondATab = tabs.active!.id,secondA = adapters[a.id]!.last;
     expect(secondATab,isNot(aTab)); expect(tabs.forHost(a.id).length,2);

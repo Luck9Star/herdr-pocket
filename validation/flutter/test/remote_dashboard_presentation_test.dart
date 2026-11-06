@@ -60,7 +60,7 @@ void main() {
       final panes = sharedFixturePanes(adapter.generation);
       final sourceIds = panes.map((pane) => pane.paneId).toList();
       final sourceTerminals = panes.map((pane) => pane.terminalId).toList();
-      adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',panes)); await tester.pump();
+      adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',panes,freshness:DashboardFreshness.fresh)); await tester.pump();
       expect(displayedPaneIds(tester),['w1:p3','w1:p5','w1:p1','w1:p2','w1:p4','w1:p6']);
       expect(panes.map((pane) => pane.paneId),sourceIds);
       expect(panes.map((pane) => pane.terminalId),sourceTerminals);
@@ -99,6 +99,54 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
   }
+  testWidgets('a previously rendered fresh row cannot be selected after the watch becomes stale',(tester) async {
+    final adapter = DashboardFixtureAdapter();
+    await connect(tester,adapter,390);
+    const pane = RemotePane('w1:p1','term_abcd');
+    adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [pane],freshness:DashboardFreshness.fresh,revision:1));
+    await tester.pump();
+    final oldCallback = tester.widget<FilledButton>(find.byKey(const ValueKey('remote-pane-w1:p1'))).onPressed!;
+    adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [pane],freshness:DashboardFreshness.stale,revision:2));
+    await tester.pump(); oldCallback(); await tester.pump();
+    expect(adapter.selected,isNull); expect(adapter.writes,0);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('remote-pane-w1:p1'))).onPressed,isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('old row cannot select a replacement terminal sharing the pane ID',(tester) async {
+    final adapter = DashboardFixtureAdapter();
+    await connect(tester,adapter,390);
+    adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [RemotePane('w1:p1','term_abcd')],
+      freshness:DashboardFreshness.fresh,revision:1)); await tester.pump();
+    final button = tester.widget<FilledButton>(find.byKey(const ValueKey('remote-pane-w1:p1')));
+    final oldCallback = button.onPressed!;
+    adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [RemotePane('w1:p1','term_1234')],
+      freshness:DashboardFreshness.fresh,revision:2)); await tester.pump();
+    oldCallback(); await tester.pump();
+    expect(adapter.selected,isNull); expect(adapter.writes,0);
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'UNSELECTED REPLACEMENT'));
+    await tester.pump(); expect(find.byType(TerminalView),findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('late board revisions are ignored and terminal full cannot freshen a stale board',(tester) async {
+    final adapter = DashboardFixtureAdapter();
+    await connect(tester,adapter,390);
+    const pane = RemotePane('w1:p1','term_abcd',agentStatus:'blocked');
+    adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [pane],freshness:DashboardFreshness.fresh,revision:2));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('remote-blocked-summary')),findsOneWidget);
+    adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [pane],freshness:DashboardFreshness.stale,revision:3));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('remote-blocked-summary')),findsNothing);
+    adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [pane],freshness:DashboardFreshness.fresh,revision:2));
+    adapter.dashboard!(RemoteDashboard(adapter.generation-1,'probe',const [pane],freshness:DashboardFreshness.fresh,revision:4));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('remote-blocked-summary')),findsNothing);
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'UNSOLICITED FULL'));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('remote-blocked-summary')),findsNothing);
+    expect(adapter.selected,isNull); expect(adapter.writes,0);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('legacy pane-only fixture retains its order and unknown status without inventing agents',(tester) async {
     final adapter = DashboardFixtureAdapter();
     await connect(tester,adapter,360);

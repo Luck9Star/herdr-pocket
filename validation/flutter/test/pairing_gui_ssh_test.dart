@@ -114,7 +114,10 @@ void main() {
     stage('ssh_and_dashboard');
     await tapControl('remote-review'); await tapControl('remote-connect');
     final pane = 'remote-pane-${config['paneId']}';
-    await until(() => find.byKey(ValueKey(pane)).evaluate().isNotEmpty);
+    await until(() {
+      final row = find.byKey(ValueKey(pane));
+      return row.evaluate().isNotEmpty && tester.widget<FilledButton>(row).onPressed != null;
+    });
     expect(adapter.evidence.hostKeyMatched,isTrue); expect(adapter.evidence.authStarted,isTrue);
     expect(keys.signCalls,greaterThan(0));
     expect(find.textContaining('状态 paired',skipOffstage:false),findsOneWidget);

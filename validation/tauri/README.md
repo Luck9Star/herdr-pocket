@@ -90,3 +90,23 @@ iOS 构建在 Cargo build script 中引用固定 Tauri crate 的 Swift API，并
 已保存并审查设备身份的主机可从看板新建终端标签，或从实际快照把指定 pane 与 terminal 在新标签打开。标签最多八个；仍在关闭的连接占用连接容量。显式连接后，前台切换会撤销旧输入并暂停其观察；主动恢复时复用该 SSH 连接，重新核对原 pane/terminal 并等待新 full。应用进入后台时取消所有连接，返回后不自动连接或发送。网络、身份或主机绑定变更会撤销受影响标签，需关闭并重新新建。新旧连接入口互斥；单机全局输入恢复记录可能使其他标签的输入暂时锁定，观察仍可使用。
 
 终端使用用户设定字号和 ProbeNerd 字体；目前 transport frame 不携带远端行列尺寸，因此显示沿用本地 80×24 并可横向滚动，不发送远端 PTY resize。逐键、IME、草稿、焦点及 unknown 的本地隔离测试不代表手机输入体验或远端会话已验收。受控观察暂停只证明本地观察和输入权限已退休、通道关闭请求已由 SSH 任务处理，不证明远端进程已经退出。真实设备、跨网络、多 SSH 同时运行及前后台行为仍须单独验证。
+
+## 手机标签的持续看板（2026-11-06 源码批次）
+
+手机标签入口现接入共享 `session_watch`：在已认证 SSH 上先等待事件订阅确认，再读取权威快照；按当前 pane 集加入状态订阅，成员变化时重新订阅和读取。固定协议依据为 herdr 0.9.5 / protocol 22、stock 提交 `2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01`，wire、来源摘要与共同条件见 [session-watch-v1.json](../shared/session-watch-v1.json)。事件只使快照失效，不直接修改看板内容。
+
+页面分别显示看板“已同步／正在同步／陈旧／持续更新不可用”和终端观察状态。终端 full/delta 不改变看板 freshness；缺少事件方法时仍可显示明确标为“仅本次快照”的结果，不冒称主机断开。隐藏会先禁用旧看板选择并退休本 epoch 的订阅及观察；主动恢复在保留的 SSH 上重新核验。跨连接 generation、观察 epoch 和看板 revision 的迟到更新均被拒绝，后台仍关闭连接，不自动拨号。
+
+选择命令携带用户看到的 pane、terminal 和快照 revision，原生缓存与共享传输再次核对；刷新不重建等待选择的 channel。界面等原生层在合法 full 前确认同一 typed 目标后才绑定终端身份，选择回执自身不开放输入。正在逐键输入时只更新看板容器，保持终端 textarea 与焦点。草稿焦点／IME 组合期间，watch 和选择回执也仅更新看板 DOM，不移除草稿 textarea。未知输入仍需原有人工核实流程，不会被看板刷新解除；新标签、布局或字号不发送远端 resize。
+
+在本目录，使用已有 Node 与 Rust 工具链复验：
+
+```sh
+npm test
+npm run build
+CARGO_TARGET_DIR=/private/tmp/herdr-tauri-watch-target cargo test --locked --offline --manifest-path src-tauri/Cargo.toml --lib
+```
+
+本批实际为 **104 项 Node 测试、前端生产构建和 30 项 Tauri crate Rust 单元测试通过**。新增覆盖乱序 watch 更新、新 pane、旧 row 的 terminal 复用、隐藏／显式恢复、unsupported 单次快照、选择回执跨 epoch、终端 full 不解除看板 stale／输入 unknown，以及直接输入焦点保持。Node 交互使用合成 DOM／IPC，Rust 测试验证实际 command 委托的缓存与选择 helper；它们不证明 Tauri GUI 到真实 herdr 的事件闭环。
+
+未启动 GUI、触发 CI、生成或安装新手机包。本节不新增真机 IME／触控、真实 SSH/herdr watch、overlay 或五端支持通过项。共享核心的 channel 清理须以其独立回归结果为准；本层测试不替代传输资源生命周期验证。

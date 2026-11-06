@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-11-06",
+  "milestone": "mobile-session-watch-source",
+  "baseCommit": "0e5134bf12bc794abe585bd32aecdd00c6422bf7",
+  "observationScope": "source worktree before scoped commit; hashes identify reviewed files",
+  "sourceFiles": [
+    {
+      "path": ".github/workflows/android-network-experiment.yml",
+      "sha256": "e2f6dfadc65e98dd61db364d63baa1dc48344ef004aace08831e2d40115e0f06"
+    },
+    {
+      "path": "validation/flutter/README.md",
+      "sha256": "0433d153b65fa7a9ea7136906e76511997483845a192dcab0df8b0f6ae4139d0"
+    },
+    {
+      "path": "validation/flutter/lib/remote_adapter.dart",
+      "sha256": "ca67dd040bbcd0a12146f053053dc4ad4628af897244239a65956067640c2dc4"
+    },
+    {
+      "path": "validation/flutter/lib/remote_page.dart",
+      "sha256": "4616848cfdbe5d30d242d6331e4532ffc88dd12a5f348067e86b1a8d0415b222"
+    },
+    {
+      "path": "validation/flutter/test/host_tabs_widget_test.dart",
+      "sha256": "2e529fcb64ab3c6bd94276f37a12af3930cdcb3b7e077018f9ec02584ea1d93a"
+    },
+    {
+      "path": "validation/flutter/test/pairing_gui_ssh_test.dart",
+      "sha256": "baa63ec4dd3d95019a37f422ac21d289bbcb7a87856075a1fb485d8e4cabd621"
+    },
+    {
+      "path": "validation/flutter/test/pairing_gui_test.dart",
+      "sha256": "7b80a48293468194dbf23d5984c3ec3d54eb3c4ba91df581678852e93c222e9a"
+    },
+    {
+      "path": "validation/flutter/test/remote_adapter_test.dart",
+      "sha256": "6d2c9a7122203eae070c1f52c7140dd19c7aeb908568d3dbeefcbb8904fd9e8c"
+    },
+    {
+      "path": "validation/flutter/test/remote_dashboard_presentation_test.dart",
+      "sha256": "e2d96367814621631afbdf408b6e74e44c02d0f2ad59fe3489adb371b1eb8376"
+    },
+    {
+      "path": "validation/flutter/test/remote_page_test.dart",
+      "sha256": "839cf9c4d773d5942b4621db5373e0268e8743093a80e4513af1485dbf8177e9"
+    },
+    {
+      "path": "validation/flutter/tool/remote_probe.dart",
+      "sha256": "d7cf2f42a42d1b59b28a109e6073bbc261a88c03800cf4221335e9d94dd7fa70"
+    },
+    {
+      "path": "validation/shared/README.md",
+      "sha256": "36815e286ff8674a458b208cc4bb8b22a2d10ce381e1977bd3493aed6c90b6cb"
+    },
+    {
+      "path": "validation/shared/SHA256SUMS",
+      "sha256": "7caf3c84ae04f45329e4ac633ef17b19d3d183ceace39f528e37e446cc106051"
+    },
+    {
+      "path": "validation/shared/session-watch-v1.json",
+      "sha256": "56285f086a4fee7f15dd32031ca6d068a46f9fb5e8fdce5d06da7a59c1299058"
+    },
+    {
+      "path": "validation/tauri/README.md",
+      "sha256": "943d8fd32547a76e7c760bf3b6976285dd5bccdaecc1777a3792033124af88b0"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/dashboard_watch.rs",
+      "sha256": "0cbdd0a8f77f6562807a191b1cdd6227548347f2e71b2cd78396b6fbd0435f39"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/lib.rs",
+      "sha256": "d8dd09571caeb620bcf26b272de09702c68079599847514c886aa4a986d5c7c2"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/remote_sessions.rs",
+      "sha256": "f90b5d630d3a22171b45d8c2ee2fea5a5914c2e56c921a3e0b7a88bd2e1524e4"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/remote_tab_commands.rs",
+      "sha256": "618119d08bca307296915b46064d2d7ac37fd531415c565c9f08d67b088d2851"
+    },
+    {
+      "path": "validation/tauri/src/dashboard-watch.js",
+      "sha256": "739daa9562d806513db9a1886e6fdb51285bc8a02d055218ee69dfc9b6de55f9"
+    },
+    {
+      "path": "validation/tauri/src/tab-workspace.js",
+      "sha256": "0c9d79ad414d656d3ba3019ae983dd8bd9a25e9c9c74eabdea7611377eae1525"
+    },
+    {
+      "path": "validation/tauri/test/dashboard-watch.test.mjs",
+      "sha256": "2d16b971368d321d4cab1e2065b6f51a7d23ec51458b6aa96ff4c0bc86fcf3bb"
+    },
+    {
+      "path": "validation/tauri/test/tab-workspace.test.mjs",
+      "sha256": "c6ce2752e0d91b11e21c5519371de5f3fba0dbebcecf92755f6016dd5bbd4748"
+    },
+    {
+      "path": "validation/transport-rust/README.md",
+      "sha256": "4477fd297c51442082c7d248a2854b54778f9432efe1e37aebe28840f31d95b2"
+    },
+    {
+      "path": "validation/transport-rust/src/controlled.rs",
+      "sha256": "2ac23745369addadb996f6c98707c4a5cba6841494165fae9fcdb13a2f98d42e"
+    },
+    {
+      "path": "validation/transport-rust/src/controlled/tests.rs",
+      "sha256": "6e7c7c1373fb838ee94450a7e042eca661e594b5eb84cbeb46fbdd63064d49ed"
+    },
+    {
+      "path": "validation/transport-rust/src/lib.rs",
+      "sha256": "0734024f09e1766f693afedfaf6a0dca461a4587d1cd39bdf1fad3d6c185c47d"
+    },
+    {
+      "path": "validation/transport-rust/src/session_watch.rs",
+      "sha256": "ffe624aeaaffa4b6a63bbd9dcfc9e95f1e19387c4b548d90cb05a0017a2f5b1c"
+    }
+  ],
+  "checks": [
+    {
+      "name": "shared-transport-default",
+      "status": "passed",
+      "verifiedBy": "parent independent rerun",
+      "unit": 64,
+      "cli": 1,
+      "command": "CARGO_TARGET_DIR=/private/tmp/herdr-watch-target cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml",
+      "scope": "self-created loopback SSH peers and temporary keys; outside sandbox because local bind is denied inside sandbox"
+    },
+    {
+      "name": "tauri-node",
+      "status": "passed",
+      "verifiedBy": "parent independent rerun",
+      "tests": 104,
+      "command": "npm test (validation/tauri)",
+      "scope": "Node and synthetic DOM; not mobile IME"
+    },
+    {
+      "name": "tauri-frontend",
+      "status": "passed",
+      "verifiedBy": "parent independent rerun",
+      "command": "npm run build (validation/tauri)"
+    },
+    {
+      "name": "tauri-native-tests",
+      "status": "passed",
+      "verifiedBy": "parent independent rerun",
+      "tests": 30,
+      "command": "CARGO_TARGET_DIR=/private/tmp/herdr-node-overlay-target cargo test --locked --offline --manifest-path validation/tauri/src-tauri/Cargo.toml --lib"
+    },
+    {
+      "name": "dart-syntax-only",
+      "status": "passed",
+      "verifiedBy": "parent independent rerun",
+      "files": 52,
+      "tool": "existing tree_sitter_dart in /private/tmp/herdr-m1c-venv",
+      "scope": "lib/*.dart, test/*.dart and tool/remote_probe.dart; not analyzer/type checking or test execution"
+    },
+    {
+      "name": "shared-checksums",
+      "status": "passed",
+      "verifiedBy": "parent independent recomputation",
+      "files": 43
+    },
+    {
+      "name": "stock-protocol-blobs",
+      "status": "passed",
+      "verifiedBy": "parent GitHub fetch_file SHA comparison",
+      "commit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+      "files": [
+        {
+          "path": "src/api/schema/events.rs",
+          "gitBlobSha": "52ac6c96a5ebbfa4dcf04170225d778cc5050273"
+        },
+        {
+          "path": "src/api/schema/response.rs",
+          "gitBlobSha": "e92e49524757b5c80d59700ff3fc9d22754ff625"
+        },
+        {
+          "path": "src/api/subscriptions.rs",
+          "gitBlobSha": "2258a3ce6a5be8fb496e818d451a959e32de65fd"
+        },
+        {
+          "path": "src/api/server.rs",
+          "gitBlobSha": "0a4cfa662aa1b60d7038d51a23597114539b8c09"
+        }
+      ]
+    },
+    {
+      "name": "cleanup-regression-negative-control",
+      "status": "expected failure observed by child",
+      "scope": "temporary isolated source copy restored old early-return defect; real watch retry test failed snapshot_fault_closed >= 3",
+      "independentlyRepeatedByParent": false
+    },
+    {
+      "name": "git-diff-check",
+      "status": "passed"
+    }
+  ],
+  "newFaultTests": [
+    "watch_fault_oversized_snapshots_retire_before_each_retry_on_same_ssh",
+    "watch_fault_oversized_watch_retries_do_not_accumulate_channels",
+    "watch_fault_snapshot_read_timeout_retires_before_same_ssh_recovers",
+    "watch_fault_unconfirmed_open_cancels_owner_without_redial"
+  ],
+  "notRun": [
+    "Flutter analyzer/type checking",
+    "Flutter tests including new widget and SSH behavior",
+    "real herdr session watch end-to-end",
+    "real phone/camera/IME",
+    "real overlay networks",
+    "new Android packaging",
+    "strict Clippy after final parent cleanup repair"
+  ],
+  "lastDeliveredApkSource": "546c3eb34bf166a22effa033d9862544641a308a",
+  "includedInLastDeliveredApks": false,
+  "newCiTriggered": false,
+  "guiApplicationsOpened": false,
+  "originalUntrackedPreserved": {
+    "design/penpot/build-v2.js": "34d9928f02e6fac2e24dc45ed643e7656a8ff1e796e46b70cc7346b5fff52957"
+  },
+  "knownPolicyDifference": "Rust retries same-SSH subscriptions with a bounded interval; Flutter stops after more than three consecutive failed rebuilds. Neither automatically redials SSH."
+}

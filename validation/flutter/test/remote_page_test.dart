@@ -11,7 +11,7 @@ import 'remote_test_data.dart';
 
 class PendingAdapter extends RemoteReadOnlyAdapter {
   final pending = Completer<RemoteSnapshot>();
-  int calls = 0, cancels = 0;
+  int calls = 0, cancels = 0,boardRevision = 0;
   DashboardConsumer? dashboard;
   FrameConsumer? frame;
   String? selected;
@@ -22,10 +22,17 @@ class PendingAdapter extends RemoteReadOnlyAdapter {
   }
   @override
   void selectPane(int expectedGeneration,String paneId) { selected = paneId; }
+  @override
+  void selectTarget(int expectedGeneration,RemotePane target) { selectPane(expectedGeneration,target.paneId); }
   void publish({bool empty = false}) => dashboard!(RemoteDashboard(generation,'probe',
-    empty ? const [] : const [RemotePane('w1:p1','term_abcd'),RemotePane('w1:p2','term_1234')]));
+    empty ? const [] : const [RemotePane('w1:p1','term_abcd'),RemotePane('w1:p2','term_1234')],freshness:DashboardFreshness.fresh,revision:++boardRevision));
   @override
   Future<void> cancel() async { generation++; cancels++; }
+}
+class PausingPendingAdapter extends PendingAdapter {
+  bool paused = false;
+  @override bool pauseObservation() { paused = true; return true; }
+  @override bool resumeObservation() { if (!paused) return false; paused = false; return true; }
 }
 class BindingChanges extends ChangeNotifier { void emit() => notifyListeners(); }
 Finder field(String name) => find.byKey(ValueKey('remote-$name'));
@@ -62,6 +69,44 @@ Future<void> fillRemoteFixture(WidgetTester tester) async {
 }
 
 void main() {
+  for (final accepted in [DashboardFreshness.fresh,DashboardFreshness.unavailable]) {
+    testWidgets('requested target waits through starting and refreshing boards before $accepted', (tester) async {
+      final adapter = PendingAdapter();
+      final tokens = (await tester.runAsync(DesignTokens.load))!;
+      const pane = RemotePane('w1:p1','term_abcd');
+      await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:RemotePage(tokens:tokens,adapter:adapter,requestedTarget:pane)));
+      await fillRemoteFixture(tester);
+      await tester.ensureVisible(field('review')); await tester.tap(field('review')); await tester.pump();
+      await tester.ensureVisible(field('connect')); await tester.tap(field('connect')); await tester.pump();
+      adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [pane])); await tester.pump();
+      expect(adapter.selected,isNull);
+      expect(find.textContaining('持续更新不可用'),findsNothing);
+      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('remote-pane-w1:p1'))).onPressed,isNull);
+      adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [pane],freshness:DashboardFreshness.refreshing,revision:1));
+      await tester.pump(); expect(adapter.selected,isNull);
+      adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [pane],freshness:accepted,revision:2));
+      await tester.pump(); expect(adapter.selected,pane.paneId);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+  testWidgets('requested target resume cannot select the board retained before hiding', (tester) async {
+    final adapter = PausingPendingAdapter(),visible = ValueNotifier(true);
+    addTearDown(visible.dispose);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    const pane = RemotePane('w1:p1','term_abcd');
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:RemotePage(tokens:tokens,adapter:adapter,
+      requestedTarget:pane,visibility:visible)));
+    await fillRemoteFixture(tester);
+    await tester.ensureVisible(field('review')); await tester.tap(field('review')); await tester.pump();
+    await tester.ensureVisible(field('connect')); await tester.tap(field('connect')); await tester.pump();
+    adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [pane])); await tester.pump();
+    visible.value = false; await tester.pump(); visible.value = true; await tester.pump();
+    await tester.ensureVisible(field('resume')); await tester.tap(field('resume')); await tester.pump();
+    expect(adapter.selected,isNull); expect(adapter.paused,isFalse);
+    adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [pane],freshness:DashboardFreshness.fresh,revision:1));
+    await tester.pump(); expect(adapter.selected,pane.paneId);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('MT04 requested new view refuses a same-name pane with a replaced terminal', (tester) async {
     final adapter = PendingAdapter();
     final tokens = (await tester.runAsync(DesignTokens.load))!;

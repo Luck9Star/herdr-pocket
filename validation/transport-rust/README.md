@@ -125,3 +125,17 @@ python3 validation/vendor/reproduce-local-close.py --archive /private/tmp/herdr-
 本轮最终本机结果：默认完整 suite **51 项 library + 1 项 CLI report test**，`overlay-native-fixture` 完整 suite **60 项 library + 1 项 CLI report test** 全通过。新增 8 项 controlled loopback 回归覆盖同 SSH 连续 8 次暂停／恢复且 dial/auth 各一次、两条连接隔离、恢复目标替换拒绝、pending frame ACK 可暂停／取消及覆盖恢复、未决输入 unknown 与迟到 ACK 隔离、peer 不读 Close 时本地退休、zero-window pending 后 5 秒超时断开原连接、用户选择超过 8 秒与迟到 I/O Drop 收敛。
 
 独立源码重建对照以同一正常 pause/resume 测试取得官方 upstream 预期关闭超时（exit 101），候选通过（exit 0）；来源校验还证明三根各只有一个 russh 候选实例。vendor 新增的两个内部单测因本机缺少其锁定 dev 依赖没有运行，不计入上述通过数。严格 Clippy 仍有原有 12 个诊断，新 controlled 模块没有诊断；依赖自身另有原始 unused-variable/dead-code warning。没有运行本批 CI、真实 herdr／overlay 节点、真实凭据或设备测试。
+
+## 持续会话看板候选（2026-11-06，后续源码）
+
+在 attach 前调用一次 `ObservationControl::set_dashboard_listener` 启用看板订阅。`SessionWatchUpdate` 独立携带观察 epoch、单调 revision、`stale / refreshing / fresh / unavailable` 和可选的权威 pane 列表；宿主仍须检查连接 generation。终端 full／delta 不改变看板 freshness。没有注册 listener 的旧入口保持单次快照行为。
+
+`observe_interactive_controlled_target_with_dialer` 的选择 Future 返回 `DashboardTarget { pane_id, terminal_id }`，必须来自用户实际审查的行。旧 String 选择接口绑定原始行中的 terminal ID，不能让同名 pane 静默指向替换后的终端。启用 watch 时核心再次按最新可选择快照核对两字段；活动目标消失或被替换会终止原观察。
+
+协议固定为 stock herdr 0.9.5 / protocol 22，来源 blob、消息和 SW01–SW11 条件见 [共享 fixture](../shared/session-watch-v1.json)。先订阅全局生命周期并等待 ACK，再读取快照、订阅其中各 pane 的 agent 状态并再次取快照。事件只标记失效，保留一个 dirty counter；100 ms 合并和 30 秒前台兜底限制请求，不保存事件正文队列。最多一个订阅与一个快照请求。丢失、EOF 或非法消息立即标旧，退休旧 channel 后才在同一 SSH 重订阅；不自动重新拨号。
+
+明确的方法不支持降级为 unavailable 的一次性快照。逐 pane 的 invalid_request 可能来自成员在两次请求间消失，须重新取得成员，不能当成整个服务不支持。暂停会等待订阅和观察退休；恢复重新订阅并要求新快照与 full，输入仍需重新显式开启。
+
+父审补修 RPC 失败的通道清理：读写失败、超限和读取超时也要先退休原 channel，再允许 watch 重试。若 channel open 无法确认，无法取得精确 recipient ID，因此取消原 SSH，防止迟到 open 持续累积。这里只关闭自有连接，不重放输入或操作共享 PTY。
+
+父代理独立运行默认完整 suite，**64 项单元 + 1 项 CLI 报告测试通过**。四项新增故障回归通过真实自建 loopback SSH，覆盖多次超限、watch 自动重试、8 秒读取超时与未确认 open；检查同连接恢复、旧通道 CLOSE 顺序和没有重新拨号。子代理在临时隔离副本恢复旧的提前返回缺陷，watch 重试用例按预期失败。所有密钥和 peer 为临时 fixture；这不是实际 herdr 进程、手机、overlay 或 GUI 的验收，也不包含在已发布的 546c3eb Android 包内。

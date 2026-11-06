@@ -89,7 +89,10 @@ pub unsafe extern "C" fn heeler_et_stream_shutdown_write(id:u64,timeout_ms:u32,e
 /// err is null or errlen writable bytes, and remains valid until return.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn heeler_et_stream_close(id:u64,err:*mut c_char,errlen:usize)->c_int {
-    ffi_call(err,errlen,||stream_runtime()?.block_on(streams().close(id)).map(|()|HEELER_ET_OK).map_err(stream_failure))
+    ffi_call(err,errlen,||{
+        stream_runtime()?.block_on(streams().close(id)).map_err(stream_failure)?;
+        pocket_stream_closed(id); Ok(HEELER_ET_OK)
+    })
 }
 
 #[cfg(test)]

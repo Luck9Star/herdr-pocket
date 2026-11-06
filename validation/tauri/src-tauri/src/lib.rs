@@ -63,6 +63,7 @@ mod config_exchange;
 use config_document::{config_document_open, config_document_platform, config_document_save};
 use config_exchange::{config_apply, config_discard, config_export, config_preview};
 use hosts::{Hosts, Target};
+mod networks;
 #[tauri::command]
 async fn host_init(app:tauri::AppHandle,hosts:State<'_,Hosts>)->Result<(),String> {
     #[cfg(target_os="android")]
@@ -72,6 +73,31 @@ async fn host_init(app:tauri::AppHandle,hosts:State<'_,Hosts>)->Result<(),String
     #[cfg(not(any(target_os="android",target_os="ios")))]
     let root=app.path().app_local_data_dir().map_err(|_|"host_storage_unavailable")?;
     hosts.init(root.join("host-records-v1"))
+}
+#[tauri::command]
+fn preferences_save(font:u8,expected_catalog:String,hosts:State<'_,Hosts>)->Result<(),String>{hosts.save_preferences(font,&expected_catalog)}
+#[tauri::command]
+fn network_list(hosts:State<'_,Hosts>)->Result<hosts::NetworkCatalog,String>{hosts.networks()}
+#[tauri::command]
+fn network_save(profile:networks::NetworkProfile, expected_catalog:String, expected_revision:Option<u32>, affected:Vec<String>, hosts:State<'_,Hosts>, flow:State<'_,Arc<Mutex<RemoteFlow>>>, gate:State<'_,Mutex<AttemptGate>>)->Result<(),String>{
+    let mut f=flow.lock().map_err(|_|"state_unavailable")?;
+    // Check the reviewed catalog and affected set before invalidating a connection.
+    let catalog=hosts.networks()?; let mut actual:Vec<String>=catalog.bindings.iter().filter(|b|b.profile_id==profile.id).map(|b|b.host_id.clone()).collect();actual.sort();let mut reviewed=affected.clone();reviewed.sort();
+    if catalog.revision!=expected_catalog || actual!=reviewed {return Err("network_changed".into());}
+    profile.validate()?;
+    if let Some(old)=catalog.profiles.iter().find(|p|p.id==profile.id) {if expected_revision!=Some(old.revision) || old.provider!=profile.provider || old.revision==i32::MAX as u32 {return Err("network_changed".into());}} else if expected_revision.is_some() {return Err("network_changed".into());}
+    if f.host_id.as_ref().is_some_and(|id|actual.contains(id)) {let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(&actual,&mut g);}
+    hosts.save_network(profile,&expected_catalog,expected_revision,&affected)?;Ok(())
+}
+#[tauri::command]
+fn network_delete(id:String,expected_catalog:String,expected_revision:u32,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String>{let _f=flow.lock().map_err(|_|"state_unavailable")?;hosts.delete_network(&id,&expected_catalog,expected_revision)}
+#[tauri::command]
+fn network_bind(host_id:String,profile_id:Option<String>,expected_catalog:String,confirmed_direct:bool,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>)->Result<(),String>{
+    let mut f=flow.lock().map_err(|_|"state_unavailable")?;let old=hosts.get(&host_id)?; if old.network_profile_id.is_some() && profile_id.is_none() && !confirmed_direct{return Err("network_direct_confirmation_required".into());}
+    let catalog=hosts.networks()?;if catalog.revision!=expected_catalog {return Err("network_changed".into());}
+    if profile_id.as_ref().is_some_and(|id|!catalog.profiles.iter().any(|p|&p.id==id && p.enabled)) {return Err("network_profile_missing".into());}
+    if old.network_profile_id!=profile_id && f.host_id.as_ref()==Some(&host_id) {let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(std::slice::from_ref(&host_id),&mut g);}
+    hosts.bind_network(&host_id,profile_id,&expected_catalog)
 }
 #[tauri::command]
 fn host_list(hosts:State<'_,Hosts>)->Result<Vec<hosts::View>,String>{hosts.list()}
@@ -106,7 +132,7 @@ async fn host_restore(id:String,reviewed:bool,hosts:State<'_,Hosts>,pairing:Stat
     let reference=host.pairing.as_ref().ok_or("host_has_no_device_key")?;
     let mut current=pairing.current.lock().map_err(|_|"state_unavailable")?;
     if let Some(p)=current.as_ref(){if !hosts.contains_handle(p.local_handle())? {return Err("unsaved_pairing".into());}}
-    let p=if reference.status==ReferenceStatus::Authorized {Pairing::restore(pairing.store.clone(),reference,&host.target.config(),reviewed)} else {Pairing::restore_pending(pairing.store.clone(),reference,&host.target.config(),reviewed,now()?)}.map_err(str::to_string)?;
+    let p=restore_offline_pair(pairing.store.clone(),reference,&host.target.config(),reviewed,now()?)?;
     let view=pairing_view(&p)?;*current=Some(p);pairing.restore_required.store(false,Ordering::SeqCst);Ok(view)
 }
 #[tauri::command]
@@ -142,16 +168,28 @@ impl PairingState {
 struct PairingView { request: String, fingerprint: String, state: &'static str, authorization: &'static str, stored: bool }
 fn pairing_view(p: &Pairing) -> Result<PairingView,String> { Ok(PairingView {request:p.request_json().map_err(str::to_string)?,fingerprint:p.public_fingerprint().map_err(str::to_string)?,state:p.state,authorization:p.authorization,stored:true}) }
 fn now() -> Result<u64,String> { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|x|x.as_secs()).map_err(|_|"invalid_time".into()) }
+// Offline pairing manages only the local device identity and public helper request.
+fn create_offline_pair(store:Arc<dyn KeyStore>,config:&RemoteConfig,device:&str,time:u64)->Result<Pairing,String>{
+    let mut p=Pairing::create(store,&config.username,&config.expected_host_key,device,time).map_err(str::to_string)?;
+    if let Err(e)=p.bind_target(config) {let _=p.delete_local();return Err(e.into());}Ok(p)
+}
+fn restore_offline_pair(store:Arc<dyn KeyStore>,reference:&herdr_readonly_transport::pairing::PairingReference,config:&RemoteConfig,reviewed:bool,time:u64)->Result<Pairing,String>{
+    if reference.status==ReferenceStatus::Authorized {Pairing::restore(store,reference,config,reviewed)} else {Pairing::restore_pending(store,reference,config,reviewed,time)}.map_err(str::to_string)
+}
+fn require_transport_route(hosts:&Hosts,host:&hosts::Record)->Result<(),String>{
+    // This check precedes Pairing::begin, signing and transport DNS/TCP.
+    if hosts.route(host)?.is_some(){Err("provider_unavailable".into())}else{Ok(())}
+}
 #[tauri::command]
-async fn pair_create(config:RemoteConfig,device:String,host_id:String,state:State<'_,PairingState>,hosts:State<'_,Hosts>) -> Result<PairingView,String> {
+async fn pair_create(config:RemoteConfig,device:String,host_id:String,state:State<'_,PairingState>,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>) -> Result<PairingView,String> {
     let _lease=state.enter()?;
     if state.restore_required.load(Ordering::SeqCst) {return Err("host_restore_required".into());}
+    let f=flow.lock().map_err(|_|"state_unavailable")?;if f.owner.is_some(){return Err("connection_active".into());}
     let mut current=state.current.lock().map_err(|_|"state_unavailable")?;
     if current.is_some() { return Err("pairing_already_exists".into()); }
     config.validate_pair_target().map_err(str::to_string)?;
     let host=hosts.get(&host_id)?; if !host.enabled || host.target!=Target::from_config(&config) || host.pairing.is_some() {return Err("host_pairing_exists".into());}
-    let mut p=Pairing::create(state.store.clone(),&config.username,&config.expected_host_key,&device,now()?).map_err(str::to_string)?;
-    if let Err(e)=p.bind_target(&config) { let _=p.delete_local(); return Err(e.into()); }
+    let p=create_offline_pair(state.store.clone(),&config,&device,now()?)?;
     let stored=p.pending_reference(&config).map_err(str::to_string).and_then(|reference|hosts.attach_pending(&host_id,&host.target,reference)).is_ok();
     let mut view=pairing_view(&p)?; if !stored {view.request.clear();view.state="storage-failed";view.stored=false;} *current=Some(p); Ok(view)
 }
@@ -206,6 +244,7 @@ impl RemoteFlow {
         self.cancelled_through=self.cancelled_through.max(client_generation);
         if self.owner==Some(client_generation) { if let Some((_,input))=self.input.take() {input.invalidate();} gate.cancel(); }
     }
+    fn cancel_affected(&mut self, ids:&[String],gate:&mut AttemptGate) {if let Some((owner,id))=self.owner.zip(self.host_id.clone()) {if ids.contains(&id) {self.cancel(owner,gate);}}}
     fn finish(&mut self, client_generation:u64, generation:u64, gate:&mut AttemptGate)->bool {
         if self.owner!=Some(client_generation) { return false; }
         self.select=None; self.ack=None; self.owner=None; self.host_id=None; if let Some((_,input))=self.input.take() {input.invalidate();}
@@ -215,6 +254,12 @@ impl RemoteFlow {
 #[cfg(test)]
 mod remote_flow_tests {
     use super::*;
+    #[test]
+    fn network_changes_invalidate_only_affected_owner() {
+        let mut f=RemoteFlow::default();let mut gate=AttemptGate::default();let (generation,cancel)=f.begin(1,&mut gate).unwrap();f.host_id=Some("one".into());
+        f.cancel_affected(&["two".into()],&mut gate);assert!(!cancel.is_cancelled());
+        f.cancel_affected(&["one".into()],&mut gate);assert!(cancel.is_cancelled());assert!(!f.finish(1,generation,&mut gate));
+    }
     #[test]
     fn delayed_cancel_and_precancel_cannot_affect_another_attempt() {
         let mut f=RemoteFlow::default(); let mut gate=AttemptGate::default();
@@ -238,13 +283,15 @@ enum ObserveEvent {
 async fn remote_observe(config:RemoteConfig,device:bool,host_id:Option<String>,client_generation:u64,on_event:Channel<ObserveEvent>,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>,hosts:State<'_,Hosts>)->Result<(),String> {
     let (generation,cancel)={
         let mut f=flow.lock().map_err(|_|"state_unavailable")?;
-        if pairing.restore_required.load(Ordering::SeqCst) {return Err("host_restore_required".into());}
         if let Some(id) = &host_id {
             let record = hosts.get(id)?;
             if !record.enabled || record.retired || record.target != Target::from_config(&config) {
                 return Err("host_selection_changed".into());
             }
+            // Never allow a configured overlay to fall through to system DNS/TCP.
+            require_transport_route(&hosts,&record)?;
         }
+        if pairing.restore_required.load(Ordering::SeqCst) {return Err("host_restore_required".into());}
         let mut g=state.lock().map_err(|_|"state_unavailable")?;
         let attempt = f.begin(client_generation,&mut g).map_err(str::to_string)?;
         f.host_id = host_id;
@@ -374,7 +421,7 @@ pub fn run() {
             let flow=RemoteFlow {recovery:Some(recovery),..Default::default()};
             app.manage(Arc::new(Mutex::new(flow))); Ok(())
         })
-        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,
+        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,preferences_save,network_list,network_save,network_delete,network_bind,
             config_document_platform,config_document_open,config_document_save,config_export,config_preview,config_apply,config_discard])
         .run(tauri::generate_context!())
         .expect("Tauri probe startup failed");

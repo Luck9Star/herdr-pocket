@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-11-06",
+  "sourceBase": "aa4f31f66642390ea1f8677d0164e5391599460e",
+  "sourceState": "uncommitted scoped native/overlay-runtime changes",
+  "patchSha256": "98897e41300496ad20b4708172c1c111f8ecab08e7cb279530b5a10f0e3620d7",
+  "platform": "macOS arm64",
+  "tests": [
+    {
+      "command": "cargo test --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml",
+      "scope": "default bridge/store rejection before identity load",
+      "passed": 1,
+      "exitCode": 0
+    },
+    {
+      "command": "cargo test --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --features native-fixture",
+      "scope": "synthetic C ABI, no real engine/network/identity; original 12 plus 11 managed-node regressions, including 4 independent-review race/fence repairs",
+      "passed": 23,
+      "exitCode": 0
+    },
+    {
+      "command": "cargo test --locked --offline --manifest-path validation/native/portable-stream/Cargo.toml",
+      "scope": "8 original portable tests plus 4 exact-node-template fake engine tests",
+      "passed": 12,
+      "exitCode": 0,
+      "note": "first sandbox run blocked localhost bind in 5 existing loopback tests; unchanged suite rerun outside sandbox passed; no real overlay node started"
+    },
+    {
+      "command": "cargo clippy --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --all-targets --features native-fixture -- -D warnings",
+      "exitCode": 0
+    },
+    {
+      "command": "cargo clippy --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --all-targets -- -D warnings",
+      "exitCode": 0
+    },
+    {
+      "command": "cargo run --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --features native-fixture --example abi_presence",
+      "scope": "synthetic 9-symbol link; only close(0)/status(0) calls",
+      "exitCode": 0
+    },
+    {
+      "check": "git apply --check against 3 SHA-verified original fixed files; apply and all patched-file/module/template hashes",
+      "exitCode": 0
+    },
+    {
+      "check": "Python tool syntax, local README links, scoped git diff --check",
+      "exitCode": 0
+    }
+  ],
+  "notRun": [
+    "Updated fixed Heeler/EasyTier cargo check or real-library link/load",
+    "Real node start/join/status/stop/dial",
+    "Platform secure identity storage or stable identity persistence",
+    "GUI native binding or real SSH via overlay",
+    "iOS/Android/Windows/Linux runtime/device/network validation",
+    "Five platforms x three providers and cross-provider concurrency"
+  ],
+  "auxiliaryCheck": {
+    "check": "portable crate Clippy -D warnings",
+    "status": "existing src/lib.rs collapsible_if lint fails strict Clippy; exact new managed_nodes test compiles/clippies with only that existing lint allowed; no production source lint was suppressed"
+  },
+  "networkNodesStarted": false,
+  "realIdentitiesRead": false,
+  "ciStarted": false,
+  "reviewRepair": {
+    "cause": "pending detach could be followed by start reactivation; explicit managed revision could route to a legacy replacement",
+    "implementation": "registry-serialized permanent admission retirement; pending start cancellation/wakeup and late cleanup; all explicit revisions compare against actual profile revision",
+    "newRegressionTests": [
+      "detach_during_secure_load_cancels_and_never_reactivates_original_revision",
+      "detach_during_native_start_cleans_late_node_and_retains_failed_stop_budget",
+      "detach_after_activation_revokes_streams_and_preserves_explicit_node_stop",
+      "managed_revision_cannot_open_a_legacy_replacement_under_the_same_key"
+    ],
+    "executed": "runtime default 1/1, native-fixture 23/23, both Clippy configurations -D warnings passed after repair",
+    "nativePatchChanged": false
+  }
+}

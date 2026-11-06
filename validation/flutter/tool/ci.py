@@ -200,10 +200,17 @@ def package(destination, platform, output):
         except Exception as exc:
             return type(exc).__name__
     shared = ROOT / 'validation/shared'
-    config_transfer_fixture_sha256 = hashlib.sha256((shared / 'config-transfer-v1.json').read_bytes()).hexdigest()
-    config_transfer_checksum = config_transfer_fixture_sha256 + '  config-transfer-v1.json'
-    if config_transfer_checksum not in (shared / 'SHA256SUMS').read_text(encoding='utf-8').splitlines():
-        raise SystemExit('Config transfer fixture checksum mismatch')
+    fixture_checksums = (shared / 'SHA256SUMS').read_text(encoding='utf-8').splitlines()
+    fixture_provenance = {}
+    for field, filename in {
+        'configTransferFixtureSHA256': 'config-transfer-v1.json',
+        'configTransferV2FixtureSHA256': 'config-transfer-v2.json',
+        'networkProfileFixtureSHA256': 'network-profiles-v1.json',
+    }.items():
+        digest = hashlib.sha256((shared / filename).read_bytes()).hexdigest()
+        if digest + '  ' + filename not in fixture_checksums:
+            raise SystemExit('Shared fixture checksum mismatch: ' + filename)
+        fixture_provenance[field] = digest
     shutil.copytree(shared, output / 'shared', dirs_exist_ok=True)
     shutil.copytree(ROOT / 'validation/flutter/licenses', output / 'remote-dependency-licenses', dirs_exist_ok=True)
     shutil.copy2(ROOT / 'validation/flutter/remote-dependencies.json', output / 'remote-dependencies.json')
@@ -221,7 +228,7 @@ def package(destination, platform, output):
         'designTokensSha256': hashlib.sha256((ROOT / 'validation/shared/design-tokens-v2.json').read_bytes()).hexdigest(),
         'visualScheme': 'Penpot v2 Tech Indigo and Slate; offline shell adaptation',
         'fixtureSha256': hashlib.sha256((ROOT / 'validation/shared/fixture.json').read_bytes()).hexdigest(),
-        'configTransferFixtureSHA256': config_transfer_fixture_sha256,
+        **fixture_provenance,
         'lockSha256': hashlib.sha256((destination / 'pubspec.lock').read_bytes()).hexdigest(),
         'scope': 'compile/package only; offline fixture, public pairing review and native device-key channel wiring, pinned SSH pane dashboard and bounded read-only observe; runtime SSH/GUI pairing must use separate harness evidence; device/system storage/overlays NOT RUN',
         'remoteAdapter': {'ssh': 'dartssh2 4.1.0', 'input': 'stock server read-only; opt-in guarded server capability, no automatic replay', 'storage': 'device path uses opaque native handle; explicit manual PEM experiment remains memory-only; system storage runtime NOT RUN', 'contractSha256': hashlib.sha256((ROOT / 'validation/shared/remote-contract.json').read_bytes()).hexdigest()},

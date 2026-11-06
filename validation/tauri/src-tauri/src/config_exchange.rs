@@ -1,8 +1,8 @@
 use super::{PairingState, RemoteFlow};
-use crate::hosts::{Hosts, ImportChoice, ImportPlan, ImportResult};
+use crate::hosts::{Hosts, ImportChoice, ImportPlanV2, ImportResult};
 use herdr_readonly_transport::{
     AttemptGate,
-    config_transfer::{self, Archive},
+    config_transfer::{self, ArchiveV2, PortableArchive},
     pairing::random_public_id,
 };
 use serde::Serialize;
@@ -16,7 +16,7 @@ use tokio::sync::Semaphore;
 struct Pending {
     ticket: String,
     revision: String,
-    archive: Archive,
+    archive: ArchiveV2,
     created: Instant,
     active: Option<(u64, String)>,
 }
@@ -39,7 +39,7 @@ impl Default for Transfers {
 #[serde(rename_all = "camelCase")]
 pub struct Preview {
     ticket: String,
-    plan: ImportPlan,
+    plan: ImportPlanV2,
     active_host_id: Option<String>,
 }
 
@@ -63,6 +63,8 @@ fn stop_replaced_host(
 #[tauri::command]
 pub async fn config_export(
     ids: Vec<String>,
+    network_ids: Vec<String>,
+    include_preferences: bool,
     password: String,
     transfers: State<'_, Transfers>,
     hosts: State<'_, Hosts>,
@@ -72,7 +74,7 @@ pub async fn config_export(
         .clone()
         .try_acquire_owned()
         .map_err(|_| "transfer_busy")?;
-    let archive = hosts.export_portable(&ids)?;
+    let archive = hosts.export_v2(&ids, &network_ids, include_preferences)?;
     tauri::async_runtime::spawn_blocking(move || {
         let _permit = permit;
         let bytes = serde_json::to_vec(&archive).map_err(|_| "transfer_invalid_schema")?;
@@ -103,7 +105,7 @@ pub async fn config_preview(
         .take();
     let (archive, _permit) = tauri::async_runtime::spawn_blocking(move || {
         let result =
-            config_transfer::decrypt(&password, &bytes).and_then(|plain| Archive::parse(&plain));
+            config_transfer::decrypt(&password, &bytes).and_then(|plain| PortableArchive::parse(&plain).map(PortableArchive::into_v2));
         (result, permit)
     })
     .await
@@ -112,7 +114,7 @@ pub async fn config_preview(
     let ticket = random_public_id().map_err(str::to_string)?;
     let flow = flow.lock().map_err(|_| "state_unavailable")?;
     let active = flow.owner.zip(flow.host_id.clone());
-    let plan = hosts.preview_import(&archive)?;
+    let plan = hosts.preview_v2(&archive)?;
     *transfers
         .pending
         .lock()
@@ -146,6 +148,8 @@ pub fn config_discard(ticket: String, transfers: State<'_, Transfers>) -> Result
 pub fn config_apply(
     ticket: String,
     choices: Vec<ImportChoice>,
+    selected_networks: Vec<String>,
+    apply_preferences: bool,
     transfers: State<'_, Transfers>,
     hosts: State<'_, Hosts>,
     flow: State<'_, Arc<Mutex<RemoteFlow>>>,
@@ -169,7 +173,7 @@ pub fn config_apply(
     if pending.created.elapsed() > Duration::from_secs(900) {
         return Err("transfer_stale_plan".into());
     }
-    hosts.apply_import_with(&pending.archive, &pending.revision, &choices, |replaced| {
+    hosts.apply_v2(&pending.archive, &pending.revision, &choices, &selected_networks, apply_preferences, |replaced| {
         let ids: Vec<_> = replaced.iter().map(|record| record.id.clone()).collect();
         stop_replaced_host(&mut flow, &mut gate, &pending.active, &ids)?;
         if current.as_ref().is_some_and(|identity| {

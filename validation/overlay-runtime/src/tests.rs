@@ -27,7 +27,7 @@ fn until(predicate: impl Fn() -> bool) {
 }
 fn isolated() -> MutexGuard<'static, ()> {
     let guard = lock(&SERIAL);
-    until(|| metric(0) == 0 && metric(5) == 0);
+    until(|| metric(0) == 0 && metric(5) == 0 && metric(7) == 0);
     unsafe {
         fixture_reset();
     }
@@ -529,5 +529,545 @@ fn profile_replacement_waits_for_old_cleanup_and_old_lease_never_routes_to_it() 
     );
     assert_eq!(metric(2), 0);
     close(&runtime, &owner, &current);
+    drained(&runtime);
+}
+
+// Deliberately synthetic; production has no SecureConfigSource implementation.
+struct SyntheticSecureSource(&'static str);
+impl crate::nodes::SecureConfigSource for SyntheticSecureSource {
+    fn load(&self, spec: &crate::nodes::NodeSpec) -> Result<crate::nodes::SecretConfig> {
+        crate::nodes::SecretConfig::from_bytes(format!("{};{}", spec.network, self.0).into_bytes())
+    }
+}
+fn node_spec(id: &str, revision: u64) -> crate::nodes::NodeSpec {
+    crate::nodes::NodeSpec {
+        profile: key(Provider::EasyTier, id),
+        revision,
+        network: format!("network-{id}"),
+        identity_ref: format!("synthetic-ref-{id}"),
+    }
+}
+fn start_node(
+    runtime: &OverlayRuntime,
+    id: &str,
+    revision: u64,
+    mode: &'static str,
+) -> crate::nodes::NodeLease {
+    runtime
+        .start_easytier_profile(
+            node_spec(id, revision),
+            Some(Arc::new(SyntheticSecureSource(mode))),
+            TIME,
+        )
+        .unwrap()
+        .wait(TIME)
+        .unwrap()
+}
+fn node_open(
+    runtime: &OverlayRuntime,
+    owner: &Owner,
+    node: &crate::nodes::NodeLease,
+    host: &str,
+) -> StreamLease {
+    runtime
+        .open_revision(owner, node.profile(), node.revision(), host, 22, TIME)
+        .unwrap()
+        .wait(TIME)
+        .unwrap()
+}
+fn nodes_drained(runtime: &OverlayRuntime) {
+    until(|| runtime.reserved_nodes() == 0 && metric(7) == 0);
+    drained(runtime);
+}
+
+#[test]
+fn managed_node_missing_secure_store_refuses_before_native_start() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    assert!(matches!(
+        runtime.start_easytier_profile(node_spec("no-store", 1), None, TIME),
+        Err(Failure::IdentityUnavailable)
+    ));
+    assert_eq!(runtime.reserved_nodes(), 0);
+    assert_eq!(metric(8), 0);
+}
+
+#[test]
+fn managed_node_epoch_revision_and_drain_do_not_retire_another_profile() {
+    use crate::nodes::NodeStatus;
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let owner = runtime.new_owner();
+    let first = start_node(&runtime, "first", 1, "");
+    let second = start_node(&runtime, "second", 3, "");
+    assert_eq!(
+        runtime.node_status(&first).unwrap().wait(TIME),
+        Ok(NodeStatus::EngineStarted)
+    );
+    assert!(matches!(
+        runtime.open(&owner, first.profile(), "echo", 22, TIME),
+        Err(Failure::StaleRevision)
+    ));
+    let foreign = OverlayRuntime::new();
+    assert!(matches!(
+        foreign.node_status(&first),
+        Err(Failure::WrongOwner)
+    ));
+    assert!(matches!(
+        foreign.stop_node(&first, TIME),
+        Err(Failure::WrongOwner)
+    ));
+    let old = node_open(&runtime, &owner, &first, "echo");
+    let other = node_open(&runtime, &owner, &second, "echo");
+    assert_eq!(
+        runtime
+            .read(&owner, &old, 128, TIME)
+            .unwrap()
+            .wait(TIME)
+            .unwrap(),
+        b"managed-1|network-first"
+    );
+    runtime.stop_node(&first, TIME).unwrap().wait(TIME).unwrap();
+    assert_eq!(runtime.reserved_nodes(), 1);
+    assert!(other.is_active());
+    assert!(!old.is_active());
+    assert_eq!(
+        runtime.node_status(&first).unwrap().wait(TIME),
+        Ok(NodeStatus::Stopped)
+    );
+    assert!(matches!(
+        runtime.start_easytier_profile(
+            node_spec("first", 1),
+            Some(Arc::new(SyntheticSecureSource(""))),
+            TIME
+        ),
+        Err(Failure::StaleRevision)
+    ));
+    let replacement = start_node(&runtime, "first", 2, "");
+    assert!(matches!(
+        runtime.open_revision(&owner, first.profile(), 1, "echo", 22, TIME),
+        Err(Failure::StaleRevision)
+    ));
+    let new_stream = node_open(&runtime, &owner, &replacement, "echo");
+    assert_eq!(new_stream.profile_revision(), 2);
+    assert_eq!(
+        runtime
+            .read(&owner, &new_stream, 128, TIME)
+            .unwrap()
+            .wait(TIME)
+            .unwrap(),
+        b"managed-3|network-first"
+    );
+    assert!(matches!(
+        runtime.write(&owner, &old, b"old".to_vec(), TIME),
+        Err(Failure::WrongOwner)
+    ));
+    // Re-stopping a prior epoch cannot touch the replacement.
+    runtime.stop_node(&first, TIME).unwrap().wait(TIME).unwrap();
+    assert!(new_stream.is_active());
+    runtime
+        .stop_node(&replacement, TIME)
+        .unwrap()
+        .wait(TIME)
+        .unwrap();
+    runtime
+        .stop_node(&second, TIME)
+        .unwrap()
+        .wait(TIME)
+        .unwrap();
+    nodes_drained(&runtime);
+    assert_eq!(metric(11), 0);
+    assert_eq!(metric(2), 0);
+}
+
+#[test]
+fn cancelled_late_start_keeps_its_quota_and_never_attaches_to_new_revision() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let mut operation = runtime
+        .start_easytier_profile(
+            node_spec("late-node", 1),
+            Some(Arc::new(SyntheticSecureSource("late-start"))),
+            TIME,
+        )
+        .unwrap();
+    until(|| metric(8) == 1 && metric(5) == 1);
+    let counter = Arc::new(WakeCounter(AtomicUsize::new(0)));
+    let waker = Waker::from(counter.clone());
+    let mut cx = Context::from_waker(&waker);
+    assert!(Pin::new(&mut operation).poll(&mut cx).is_pending());
+    operation.cancel();
+    assert!(counter.0.load(Ordering::SeqCst) > 0);
+    assert!(matches!(operation.wait(TIME), Err(Failure::Cancelled)));
+    assert_eq!(runtime.reserved_nodes(), 1);
+    assert!(matches!(
+        runtime.start_easytier_profile(
+            node_spec("late-node", 2),
+            Some(Arc::new(SyntheticSecureSource(""))),
+            TIME
+        ),
+        Err(Failure::Busy)
+    ));
+    let owner = runtime.new_owner();
+    assert!(matches!(
+        runtime.open_revision(
+            &owner,
+            &node_spec("late-node", 1).profile,
+            1,
+            "echo",
+            22,
+            TIME
+        ),
+        Err(Failure::ProfileUnavailable)
+    ));
+    control(3);
+    nodes_drained(&runtime);
+    assert_eq!(metric(8), 1);
+    assert_eq!(metric(9), 1);
+    let replacement = start_node(&runtime, "late-node", 2, "");
+    runtime
+        .stop_node(&replacement, TIME)
+        .unwrap()
+        .wait(TIME)
+        .unwrap();
+    nodes_drained(&runtime);
+}
+
+#[test]
+fn failed_start_and_stop_keep_exact_revision_until_explicit_cleanup() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let operation = runtime
+        .start_easytier_profile(
+            node_spec("failed-node", 7),
+            Some(Arc::new(SyntheticSecureSource("start-fail;stop-fail"))),
+            TIME,
+        )
+        .unwrap();
+    assert!(matches!(
+        operation.wait(TIME),
+        Err(Failure::NativeRejected(-2))
+    ));
+    until(|| metric(9) == 1);
+    assert_eq!(runtime.reserved_nodes(), 1);
+    assert_eq!(metric(7), 1);
+    assert!(matches!(
+        runtime.retry_node_cleanup(&node_spec("failed-node", 7).profile, 6, TIME),
+        Err(Failure::StaleRevision)
+    ));
+    assert!(matches!(
+        runtime.start_easytier_profile(
+            node_spec("failed-node", 8),
+            Some(Arc::new(SyntheticSecureSource(""))),
+            TIME
+        ),
+        Err(Failure::Busy)
+    ));
+    // The stop worker may still be publishing its first failure; Busy is explicit.
+    let retry_deadline = Instant::now() + TIME;
+    loop {
+        assert!(
+            Instant::now() < retry_deadline,
+            "cleanup worker stayed busy"
+        );
+        match runtime
+            .retry_node_cleanup(&node_spec("failed-node", 7).profile, 7, TIME)
+            .unwrap()
+            .wait(TIME)
+        {
+            Err(Failure::Busy) => thread::yield_now(),
+            result => {
+                assert_eq!(result, Ok(()));
+                break;
+            }
+        }
+    }
+    nodes_drained(&runtime);
+    assert_eq!(metric(8), 1);
+    assert_eq!(metric(9), 2);
+}
+
+#[test]
+fn node_stop_waits_for_late_stream_and_retains_failed_close_resources() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let owner = runtime.new_owner();
+    let node = start_node(&runtime, "drain", 1, "");
+    let pending = runtime
+        .open_revision(&owner, node.profile(), node.revision(), "late", 22, TIME)
+        .unwrap();
+    until(|| metric(1) == 1);
+    let stopping = runtime.stop_node(&node, TIME).unwrap();
+    assert!(matches!(pending.wait(TIME), Err(Failure::Cancelled)));
+    assert_eq!(metric(9), 0);
+    assert_eq!(runtime.reserved_nodes(), 1);
+    assert_eq!(runtime.reserved_streams(), 1);
+    control(1);
+    stopping.wait(TIME).unwrap();
+    nodes_drained(&runtime);
+    assert_eq!(metric(11), 0);
+    let replacement = start_node(&runtime, "drain", 2, "");
+    let stream = node_open(&runtime, &owner, &replacement, "close-fail");
+    assert_eq!(
+        runtime
+            .stop_node(&replacement, Duration::from_millis(30))
+            .unwrap()
+            .wait(TIME),
+        Err(Failure::ClosePending)
+    );
+    assert_eq!(metric(9), 1);
+    assert_eq!(runtime.reserved_streams(), 1);
+    assert_eq!(runtime.reserved_nodes(), 1);
+    runtime
+        .stop_node(&replacement, TIME)
+        .unwrap()
+        .wait(TIME)
+        .unwrap();
+    nodes_drained(&runtime);
+    assert_eq!(metric(9), 2);
+    assert_eq!(metric(11), 0);
+    assert!(!stream.is_active());
+}
+
+#[test]
+fn failed_stop_nodes_remain_in_capacity_budget() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let nodes: Vec<_> = (0..crate::nodes::MAX_NODES)
+        .map(|i| start_node(&runtime, &format!("limit-{i}"), 1, "stop-fail"))
+        .collect();
+    for node in &nodes {
+        assert_eq!(
+            runtime.stop_node(node, TIME).unwrap().wait(TIME),
+            Err(Failure::ClosePending)
+        );
+    }
+    assert_eq!(runtime.reserved_nodes(), crate::nodes::MAX_NODES);
+    assert!(matches!(
+        runtime.start_easytier_profile(
+            node_spec("over-limit", 1),
+            Some(Arc::new(SyntheticSecureSource(""))),
+            TIME
+        ),
+        Err(Failure::Capacity)
+    ));
+    for node in &nodes {
+        runtime.stop_node(node, TIME).unwrap().wait(TIME).unwrap();
+    }
+    nodes_drained(&runtime);
+}
+
+#[test]
+fn dropping_unclaimed_start_and_runtime_drain_their_owned_nodes() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let operation = runtime
+        .start_easytier_profile(
+            node_spec("unclaimed", 1),
+            Some(Arc::new(SyntheticSecureSource(""))),
+            TIME,
+        )
+        .unwrap();
+    until(|| metric(8) == 1);
+    drop(operation);
+    nodes_drained(&runtime);
+    let node = start_node(&runtime, "runtime-drop", 1, "");
+    let owner = runtime.new_owner();
+    let _stream = node_open(&runtime, &owner, &node, "echo");
+    drop(runtime);
+    until(|| metric(7) == 0 && metric(0) == 0);
+    assert_eq!(metric(11), 0);
+}
+
+struct BlockedSecureSource {
+    entered: std::sync::mpsc::Sender<()>,
+    release: Mutex<std::sync::mpsc::Receiver<()>>,
+}
+impl crate::nodes::SecureConfigSource for BlockedSecureSource {
+    fn load(&self, spec: &crate::nodes::NodeSpec) -> Result<crate::nodes::SecretConfig> {
+        self.entered.send(()).unwrap();
+        lock(&self.release).recv_timeout(TIME).unwrap();
+        crate::nodes::SecretConfig::from_bytes(spec.network.as_bytes().to_vec())
+    }
+}
+
+#[test]
+fn detach_during_secure_load_cancels_and_never_reactivates_original_revision() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let owner = runtime.new_owner();
+    let other = start_node(&runtime, "detach-other", 1, "");
+    let other_stream = node_open(&runtime, &owner, &other, "echo");
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let spec = node_spec("detach-loading", 1);
+    let mut start = runtime
+        .start_easytier_profile(
+            spec.clone(),
+            Some(Arc::new(BlockedSecureSource {
+                entered: entered_tx,
+                release: Mutex::new(release_rx),
+            })),
+            TIME,
+        )
+        .unwrap();
+    entered_rx.recv_timeout(TIME).unwrap();
+    let counter = Arc::new(WakeCounter(AtomicUsize::new(0)));
+    let waker = Waker::from(counter.clone());
+    let mut context = Context::from_waker(&waker);
+    assert!(Pin::new(&mut start).poll(&mut context).is_pending());
+    assert_eq!(runtime.detach_profile(&spec.profile), Ok(0));
+    assert!(counter.0.load(Ordering::SeqCst) > 0);
+    assert!(matches!(start.try_result(), Some(Err(Failure::Cancelled))));
+    assert_eq!(runtime.reserved_nodes(), 2); // blocked load still owns its slot
+    assert_eq!(metric(8), 1); // only the unrelated node reached native start
+    assert!(matches!(
+        runtime.open_revision(&owner, &spec.profile, 1, "echo", 22, TIME),
+        Err(Failure::ProfileUnavailable)
+    ));
+    assert!(matches!(
+        runtime.start_easytier_profile(
+            node_spec("detach-loading", 2),
+            Some(Arc::new(SyntheticSecureSource(""))),
+            TIME
+        ),
+        Err(Failure::Busy)
+    ));
+    release_tx.send(()).unwrap();
+    until(|| runtime.reserved_nodes() == 1);
+    assert_eq!(metric(8), 1); // revoked load never starts an engine
+    assert!(matches!(
+        runtime.open_revision(&owner, &spec.profile, 1, "echo", 22, TIME),
+        Err(Failure::ProfileUnavailable)
+    ));
+    assert!(other_stream.is_active());
+    assert_eq!(
+        runtime.node_status(&other).unwrap().wait(TIME),
+        Ok(crate::nodes::NodeStatus::EngineStarted)
+    );
+    let replacement = start_node(&runtime, "detach-loading", 2, "");
+    assert!(matches!(
+        runtime.open_revision(&owner, &spec.profile, 1, "echo", 22, TIME),
+        Err(Failure::StaleRevision)
+    ));
+    runtime
+        .stop_node(&replacement, TIME)
+        .unwrap()
+        .wait(TIME)
+        .unwrap();
+    runtime.stop_node(&other, TIME).unwrap().wait(TIME).unwrap();
+    nodes_drained(&runtime);
+    assert_eq!(metric(11), 0);
+}
+
+#[test]
+fn detach_during_native_start_cleans_late_node_and_retains_failed_stop_budget() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let spec = node_spec("detach-native-start", 1);
+    let start = runtime
+        .start_easytier_profile(
+            spec.clone(),
+            Some(Arc::new(SyntheticSecureSource("late-start;stop-fail"))),
+            TIME,
+        )
+        .unwrap();
+    until(|| metric(8) == 1 && metric(5) == 1);
+    assert_eq!(runtime.detach_profile(&spec.profile), Ok(0));
+    assert!(matches!(start.wait(TIME), Err(Failure::Cancelled)));
+    assert_eq!(runtime.reserved_nodes(), 1);
+    assert_eq!(metric(9), 0);
+    control(3);
+    until(|| metric(9) == 1 && metric(5) == 0);
+    assert_eq!(runtime.reserved_nodes(), 1);
+    assert_eq!(metric(7), 1);
+    assert!(matches!(
+        runtime.start_easytier_profile(
+            node_spec("detach-native-start", 2),
+            Some(Arc::new(SyntheticSecureSource(""))),
+            TIME
+        ),
+        Err(Failure::Busy)
+    ));
+    let retry_deadline = Instant::now() + TIME;
+    loop {
+        assert!(
+            Instant::now() < retry_deadline,
+            "detached cleanup stayed busy"
+        );
+        match runtime
+            .retry_node_cleanup(&spec.profile, 1, TIME)
+            .unwrap()
+            .wait(TIME)
+        {
+            Err(Failure::Busy) => thread::yield_now(),
+            result => {
+                assert_eq!(result, Ok(()));
+                break;
+            }
+        }
+    }
+    nodes_drained(&runtime);
+    assert_eq!(metric(8), 1);
+    assert_eq!(metric(9), 2);
+    assert_eq!(metric(11), 0);
+}
+
+#[test]
+fn detach_after_activation_revokes_streams_and_preserves_explicit_node_stop() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let owner = runtime.new_owner();
+    let node = start_node(&runtime, "detach-active", 1, "");
+    let stream = node_open(&runtime, &owner, &node, "echo");
+    assert_eq!(runtime.detach_profile(node.profile()), Ok(1));
+    drained(&runtime);
+    assert!(!stream.is_active());
+    assert_eq!(
+        runtime.node_status(&node).unwrap().wait(TIME),
+        Ok(crate::nodes::NodeStatus::EngineStarted)
+    );
+    assert_eq!(runtime.reserved_nodes(), 1);
+    assert_eq!(metric(9), 0);
+    assert!(matches!(
+        runtime.open_revision(&owner, node.profile(), 1, "echo", 22, TIME),
+        Err(Failure::ProfileUnavailable)
+    ));
+    runtime.stop_node(&node, TIME).unwrap().wait(TIME).unwrap();
+    nodes_drained(&runtime);
+}
+
+#[test]
+fn managed_revision_cannot_open_a_legacy_replacement_under_the_same_key() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let owner = runtime.new_owner();
+    let node = start_node(&runtime, "revision-legacy", 7, "");
+    runtime.stop_node(&node, TIME).unwrap().wait(TIME).unwrap();
+    nodes_drained(&runtime);
+    runtime
+        .attach_profile(
+            node.profile().clone(),
+            Arc::new(
+                EasyTierBackend::linked("replacement-instance", "replacement-network").unwrap(),
+            ),
+        )
+        .unwrap();
+    assert!(matches!(
+        runtime.open_revision(&owner, node.profile(), 7, "echo", 22, TIME),
+        Err(Failure::StaleRevision)
+    ));
+    assert_eq!(metric(1), 0);
+    let legacy = open(&runtime, &owner, node.profile(), "echo");
+    assert_eq!(legacy.profile_revision(), 0);
+    assert_eq!(
+        runtime
+            .read(&owner, &legacy, 128, TIME)
+            .unwrap()
+            .wait(TIME)
+            .unwrap(),
+        b"replacement-instance|replacement-network"
+    );
+    close(&runtime, &owner, &legacy);
     drained(&runtime);
 }

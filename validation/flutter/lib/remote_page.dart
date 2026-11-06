@@ -9,6 +9,7 @@ import 'remote_input.dart';
 import 'remote_auxiliary.dart';
 import 'remote_input_platform.dart';
 import 'device_keys.dart';
+import 'network_profiles.dart';
 
 String pemFromSingleLineInput(String text) {
   final normalized = text.replaceAll(r'\n','\n').trim();
@@ -19,8 +20,9 @@ String pemFromSingleLineInput(String text) {
 }
 
 class RemotePage extends StatefulWidget {
-  const RemotePage({super.key,required this.tokens,this.adapter,this.pairedTarget,this.deviceKeys,this.keyHandle,this.devicePublicKey,this.onConnecting,this.onAuthenticated,this.onStopped,this.visibility});
+  const RemotePage({super.key,required this.tokens,this.adapter,this.pairedTarget,this.deviceKeys,this.keyHandle,this.devicePublicKey,this.onConnecting,this.onAuthenticated,this.onStopped,this.visibility,this.networkBinding});
   final DesignTokens tokens;
+  final NetworkConnectionBinding? networkBinding;
   final RemoteReadOnlyAdapter? adapter;
   final Map<String,dynamic>? pairedTarget;
   final DeviceKeys? deviceKeys;
@@ -76,6 +78,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     super.initState(); WidgetsBinding.instance.addObserver(this);
     terminalFocus.addListener(terminalFocusChanged);
     widget.visibility?.addListener(visibilityChanged);
+    widget.networkBinding?.changes?.addListener(networkChanged);
     if (widget.visibility?.value == false) status = '标签已隐藏 · 输入关闭；显示后需主动审查恢复';
     final target = widget.pairedTarget;
     if (target != null) for (final entry in fields.entries) {
@@ -93,11 +96,21 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(RemotePage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.networkBinding,widget.networkBinding)) {
+      oldWidget.networkBinding?.changes?.removeListener(networkChanged);
+      widget.networkBinding?.changes?.addListener(networkChanged);
+      networkChanged();
+    }
     if (!identical(oldWidget.visibility,widget.visibility)) {
       oldWidget.visibility?.removeListener(visibilityChanged);
       widget.visibility?.addListener(visibilityChanged);
       if (widget.visibility?.value == false || oldWidget.visibility?.value == false) visibilityChanged();
     }
+  }
+  void networkChanged() {
+    if (widget.networkBinding?.stillCurrent() == false) {
+      stop('网络绑定已改变、停用或目录不可用 · 已停止，请关闭后重新审查');
+    } else if (mounted) { setState(() {}); }
   }
   void visibilityChanged() {
     if (widget.visibility?.value == false) {
@@ -120,6 +133,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     widget.visibility?.removeListener(visibilityChanged);
+    widget.networkBinding?.changes?.removeListener(networkChanged);
     WidgetsBinding.instance.removeObserver(this); request++; identityLease?.cancel();
     inputGate.onChanged = null; inputGate.invalidate();
     terminalFocus.removeListener(terminalFocusChanged); terminalFocus.dispose(); draft.dispose();
@@ -133,6 +147,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final ticket = ++request;
     setState(() { busy = true; });
     try {
+      widget.networkBinding?.requireTransport();
       widget.onConnecting?.call();
       final values = {
         'schemaVersion':1,for (final e in fields.entries) if (e.key != 'port' && e.key != 'privateKeyPem') e.key:e.value.text,
@@ -142,6 +157,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       if (widget.pairedTarget != null) {
         final publicKey = await widget.deviceKeys!.public(widget.keyHandle!);
         if (!mounted || ticket != request) return;
+        widget.networkBinding?.requireTransport();
         if (publicKey != widget.devicePublicKey) throw const RemoteFailure('device_key_changed');
         identityLease = DeviceIdentityLease(widget.deviceKeys!,widget.keyHandle!,publicKey);
         config = RemoteConfig.fromDeviceJson(values,identityLease!.identity());
@@ -198,6 +214,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       final code = error is RemoteFailure ? error.code : 'connection_failed';
       setState(() { busy = false; live = false; reviewed = false;
         status = switch (code) {
+          'provider_unavailable' => 'provider_unavailable · 此网络的手机连接桥尚未接入，已停止；不会改走系统 TCP 或 DNS',
+          'network_binding_changed' => '网络绑定已改变或停用 · 已停止，请关闭后重新审查',
           'device_key_unavailable' || 'device_key_changed' => '设备密钥锁定、丢失或不可用 · 已停止，不会生成替代身份或使用明文',
           'host_key_mismatch' => '主机指纹不符 · 已在认证前拒绝，请从可信渠道重新核验',
           'session_mismatch' || 'pane_missing' || 'invalid_terminal_id' || 'invalid_snapshot' || 'stale_selection' => '指定会话或目标不匹配 · 已停止，请检查资料',
@@ -438,6 +456,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           const SizedBox(height:8),
           const Text('仅用于隔离测试主机。审查接入后查看当前命名会话，选择明确 pane 观察。支持保护扩展与持久锁时可显式输入；布局不调整共享 PTY。'),
           const SizedBox(height:12),
+          if (widget.networkBinding != null) Text('冻结网络：${widget.networkBinding!.label}',key:const ValueKey('remote-network-binding')),
           Semantics(liveRegion:true,child:Text(status,key:const ValueKey('remote-status'),
             style:TextStyle(color:widget.tokens.color('textSecondary')))),
           if (busy) TextButton.icon(key:const ValueKey('remote-cancel'),onPressed:stop,
@@ -498,7 +517,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 autoResize:false,readOnly:!live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput,
                 simulateScroll:false,hardwareKeyboardOnly:inputGate.mode != RemoteInputMode.direct,
                 keyboardType:TextInputType.text,
-                textStyle:const TerminalStyle(fontFamily:'ProbeNerd',fontSize:14),shortcuts:const {},
+                textStyle:TerminalStyle(fontFamily:'ProbeNerd',fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble()),shortcuts:const {},
                 onKeyEvent:(node,event) {
                   if (!live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput || previewOpen) return KeyEventResult.handled;
                   if (event is KeyDownEvent && (HardwareKeyboard.instance.isControlPressed || HardwareKeyboard.instance.isMetaPressed) &&

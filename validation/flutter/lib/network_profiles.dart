@@ -1,0 +1,97 @@
+import 'dart:convert';
+import 'dart:math';
+import 'package:flutter/foundation.dart' show Listenable;
+import 'remote_adapter.dart';
+
+const maxNetworkProfiles = 32;
+const overlayProviders = ['tailscale','easytier','zerotier'];
+const maxNetworkRevision = 2147483647;
+
+bool _publicText(dynamic value,int limit,{bool empty=false}) => value is String &&
+  (empty || value.trim().isNotEmpty) && utf8.encode(value).length <= limit &&
+  utf8.decode(utf8.encode(value)) == value && !RegExp(r'[\x00-\x1f\x7f-\x9f]').hasMatch(value);
+
+Uri? _publicUri(dynamic value,Set<String> schemes) {
+  if (value is! String || value.length > 2048 || value.contains('?') || value.contains('#') || value.contains('\\') || !RegExp(r'^[\x21-\x7e]+$').hasMatch(value)) return null;
+  try {
+    final uri = Uri.parse(value);
+    if (!schemes.contains(uri.scheme) || !uri.hasAuthority || uri.host.isEmpty || uri.authority.contains('@') || uri.userInfo.isNotEmpty ||
+        uri.hasQuery || uri.hasFragment || (uri.hasPort && (uri.port < 1 || uri.port > 65535))) return null;
+    return uri;
+  } catch (_) { return null; }
+}
+
+/// Public descriptions only. No provider identity, join secret or SSH key is
+/// accepted by this schema; an overlay description cannot enable TCP fallback.
+class NetworkProfile {
+  NetworkProfile._(this.id,this.label,this.provider,this.enabled,this.revision,this.settings,[this.expectedPrevious]);
+  final String id,label,provider;
+  final bool enabled;
+  final int revision;
+  final Map<String,dynamic> settings;
+  final String? expectedPrevious;
+  factory NetworkProfile.fromJson(Map<String,dynamic> value) {
+    const fields = {'id','label','provider','enabled','revision','settings'};
+    if (value.length != fields.length || !value.keys.every(fields.contains) || value['id'] is! String ||
+        !RegExp(r'^[a-f0-9]{32}$').hasMatch(value['id'] as String) || !_publicText(value['label'],96) ||
+        !overlayProviders.contains(value['provider']) || value['enabled'] is! bool || value['revision'] is! int ||
+        (value['revision'] as int) < 1 || (value['revision'] as int) > maxNetworkRevision ||
+        value['settings'] is! Map<String,dynamic>) throw const RemoteFailure('invalid_network_profile');
+    final settings = Map<String,dynamic>.from(value['settings'] as Map);
+    bool exact(Set<String> names) => settings.length == names.length && settings.keys.every(names.contains);
+    switch (value['provider']) {
+      case 'tailscale':
+        if (!exact({'controlUrl','hostname'}) || settings['controlUrl'] is! String || settings['hostname'] is! String ||
+            (settings['controlUrl'] != '' && _publicUri(settings['controlUrl'],{'https'}) == null) ||
+            (settings['hostname'] != '' && !RegExp(r'^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$').hasMatch(settings['hostname'] as String))) {
+          throw const RemoteFailure('invalid_network_profile');
+        }
+      case 'easytier':
+        if (!exact({'networkName','peers'}) || !_publicText(settings['networkName'],64) || settings['peers'] is! List ||
+            (settings['peers'] as List).isEmpty || (settings['peers'] as List).length > 16) throw const RemoteFailure('invalid_network_profile');
+        final peers = settings['peers'] as List;
+        if (peers.toSet().length != peers.length) throw const RemoteFailure('invalid_network_profile');
+        for (final value in peers) {
+          final uri = _publicUri(value,{'tcp','udp','ws','wss'});
+          if (uri == null || (['tcp','udp'].contains(uri.scheme) &&
+              (!uri.hasPort || (uri.path.isNotEmpty && uri.path != '/')))) throw const RemoteFailure('invalid_network_profile');
+        }
+        settings['peers'] = List<String>.unmodifiable(peers.cast<String>());
+      case 'zerotier':
+        if (!exact({'networkId'}) || settings['networkId'] is! String ||
+            !RegExp(r'^[a-f0-9]{16}$').hasMatch(settings['networkId'] as String) || settings['networkId'] == '0000000000000000') {
+          throw const RemoteFailure('invalid_network_profile');
+        }
+    }
+    return NetworkProfile._(value['id'] as String,value['label'] as String,value['provider'] as String,
+      value['enabled'] as bool,value['revision'] as int,Map<String,dynamic>.unmodifiable(settings));
+  }
+  factory NetworkProfile.create(String label,String provider,Map<String,dynamic> settings) {
+    final random = Random.secure();
+    return NetworkProfile.fromJson({'id':List.generate(16,(_) => random.nextInt(256).toRadixString(16).padLeft(2,'0')).join(),
+      'label':label,'provider':provider,'enabled':true,'revision':1,'settings':settings});
+  }
+  Map<String,dynamic> toJson() => {'id':id,'label':label,'provider':provider,'enabled':enabled,'revision':revision,'settings':settings};
+  NetworkProfile change({String? label,bool? enabled,Map<String,dynamic>? settings}) {
+    if (revision == maxNetworkRevision) throw const RemoteFailure('network_revision_limit');
+    final checked = NetworkProfile.fromJson({...toJson(),'revision':revision+1,
+      if (label != null) 'label':label,if (enabled != null) 'enabled':enabled,if (settings != null) 'settings':settings});
+    return NetworkProfile._(checked.id,checked.label,checked.provider,checked.enabled,checked.revision,checked.settings,jsonEncode(toJson()));
+  }
+}
+
+/// A connection freezes one explicit provider revision. Production overlay
+/// transport is intentionally unavailable until a real mobile bridge is wired.
+class NetworkConnectionBinding {
+  const NetworkConnectionBinding(this.profile,this.stillCurrent,{this.changes,this.fontSize});
+  final NetworkProfile? profile;
+  final bool Function() stillCurrent;
+  final Listenable? changes;
+  final int Function()? fontSize;
+  int get terminalFontSize => fontSize?.call() ?? 14;
+  String get label => profile == null ? '系统直连（沿用系统路由）' : '${profile!.label} · ${profile!.provider}';
+  void requireTransport() {
+    if (!stillCurrent()) throw const RemoteFailure('network_binding_changed');
+    if (profile != null) throw const RemoteFailure('provider_unavailable');
+  }
+}

@@ -11,8 +11,10 @@ fn main() {
     backend
         .close(0)
         .expect("candidate ABI invalid-handle close must be harmless");
+    herdr_overlay_runtime_probe::easytier::verify_managed_abi_presence()
+        .expect("candidate managed-node ABI invalid status must be harmless");
     println!(
-        "ABI presence checked: {:?}; no node start/join/dial/identity calls",
+        "Five stream + four managed-node ABI symbols checked: {:?}; no node start/join/dial/identity calls",
         backend.evidence()
     );
 }

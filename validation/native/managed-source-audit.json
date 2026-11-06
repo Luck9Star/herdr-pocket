@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-11-06",
+  "referenceCommit": "6a2817fc02aeb552df251d9478753c22fd4738bb",
+  "engineCommit": "728ba94b5029240add6204eed591f22e4e039e6b",
+  "files": [
+    {
+      "repository": "Ylarod/heeler-overlay-natives",
+      "path": "native/easytier/src/lib.rs",
+      "sha256": "34bca319f85822ae410cea3c3d108024611d9bb26f9b0f98796b0ceee1eef537",
+      "facts": [
+        "start parses outbound-only TOML and calls create_native_instance then instance.start",
+        "legacy SLOTS keys replaceable",
+        "legacy stop returns void and ignores bounded-stop timeout"
+      ]
+    },
+    {
+      "repository": "Ylarod/heeler-overlay-natives",
+      "path": "native/easytier/Cargo.toml",
+      "sha256": "96034733949f653592893999adea7e99b6d816803fa4b168b4c7657d0b31c0c9",
+      "facts": [
+        "default-features=false",
+        "management feature not enabled; native comment explicitly excludes management RPC/file storage"
+      ]
+    },
+    {
+      "repository": "EasyTier/EasyTier",
+      "path": "easytier/src/instance/factory.rs",
+      "sha256": "942c384194ae4bb7c70ad955713edba2962be47a144312bc3bdd0cfd497da589",
+      "facts": [
+        "create_native_instance(config)->anyhow::Result<Arc<NativeCoreInstance>>",
+        "native factory creates a CoreProcessRuntime and delegates composition"
+      ]
+    },
+    {
+      "repository": "EasyTier/EasyTier",
+      "path": "easytier/src/instance/composition.rs",
+      "sha256": "d25784daa92e55a772bd8e2c559bf03614b0fe39795c9e1f4af696ff1f853f6a",
+      "facts": [
+        "normalizes config and creates native runtime host",
+        "credential_storage comes from runtime_peer_credential_storage"
+      ]
+    },
+    {
+      "repository": "EasyTier/EasyTier",
+      "path": "easytier/src/instance/config.rs",
+      "sha256": "ff69b2a824e872b0444cf6d13814f3990067de49c476fff71051a840c313a6cb",
+      "facts": [
+        "runtime_peer_credential_storage returns None without management feature",
+        "with management, credential-file path could create storage; managed ABI rejects this configuration"
+      ]
+    },
+    {
+      "repository": "EasyTier/EasyTier",
+      "path": "easytier-core/src/instance/lifecycle.rs",
+      "sha256": "a5fa102aca3e5eb935061be9c4f3b5afd5bef46b02c16d0f1001490e0c8d62b7",
+      "facts": [
+        "start(self:&Arc<Self>)->anyhow::Result<()>; start success sets Running",
+        "stop(self:&Arc<Self>)->(); state Stopped only after stop_components completes"
+      ]
+    }
+  ],
+  "limits": [
+    "Static source inspection only; no device identity or platform secure-store implementation verified",
+    "Normal runtime source absent returns IdentityUnavailable; no plaintext persistence fallback",
+    "Engine-owned in-memory config may retain network secret; temporary input overwrite is not proof of full erasure",
+    "Updated fixed-source native check/link/load not run; fake-engine tests cannot establish this result"
+  ]
+}

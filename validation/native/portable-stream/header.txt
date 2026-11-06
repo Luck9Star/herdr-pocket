@@ -29,3 +29,20 @@ int heeler_et_stream_read(uint64_t handle, uint8_t *buf, size_t len, uint32_t ti
 int heeler_et_stream_write(uint64_t handle, const uint8_t *buf, size_t len, uint32_t timeout_ms, char *err, size_t errlen);
 int heeler_et_stream_shutdown_write(uint64_t handle, uint32_t timeout_ms, char *err, size_t errlen);
 int heeler_et_stream_close(uint64_t handle, char *err, size_t errlen);
+
+/* Managed-node ABI v1: additive; original five stream symbols remain ABI v1.
+ * IDs never reuse and are isolated from legacy key-based SLOTS. start may fail
+ * with nonzero out_node: caller still owns the lease and MUST stop it. start
+ * success means engine-started only, NOT joined/address/route/TCP readiness.
+ * status returns only 0(not started),1(engine started),2(closing), no secrets.
+ * Drain owned stream handles AND wait for active I/O calls before node_stop.
+ * stop timeout retains lease/capacity; explicit retry only, no start replay.
+ * Configuration is borrowed, in-memory, max 64 KiB; credential_file and managed
+ * credentials are rejected. Host secure-store integration remains required.
+ * All calls require dedicated non-UI, non-Tokio workers. */
+#define HEELER_ET_NODE_ABI_VERSION 1
+int heeler_et_node_start(const char *toml, uint32_t timeout_ms, uint64_t *out_node, char *err, size_t errlen);
+int heeler_et_node_status(uint64_t node, uint32_t *out_state, char *err, size_t errlen);
+int heeler_et_node_stop(uint64_t node, uint32_t timeout_ms, char *err, size_t errlen);
+int heeler_et_node_stream_connect(uint64_t node, const char *network, const char *host, uint16_t port,
+                                  uint32_t timeout_ms, uint64_t *out_handle, char *err, size_t errlen);

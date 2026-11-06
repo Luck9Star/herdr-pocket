@@ -10,7 +10,7 @@
 #include <time.h>
 
 typedef struct {
-    uint64_t id;
+    uint64_t id, node;
     int closed, half_closed, close_failed;
     char mode[32];
     uint8_t bytes[65536];
@@ -31,7 +31,11 @@ static Slot *find(uint64_t id) {
     if (!id || id >= next_id || id > 256) return NULL;
     return &slots[id - 1];
 }
+static void reset_nodes(void);
+static int node_metric(int metric);
+static void control_node(int operation);
 void fixture_reset(void) {
+    reset_nodes();
     pthread_mutex_lock(&mutex);
     memset(slots, 0, sizeof(slots)); next_id = 1;
     open_calls = write_calls = close_calls = close_successes = active_calls = release_open = release_write = 0; accepted_bytes = 0;
@@ -39,6 +43,7 @@ void fixture_reset(void) {
 }
 void fixture_control(int operation) {
     pthread_mutex_lock(&mutex);
+    control_node(operation);
     if (operation == 1) release_open = 1;
     if (operation == 2) release_write = 1;
     pthread_cond_broadcast(&changed); pthread_mutex_unlock(&mutex);
@@ -52,6 +57,7 @@ int fixture_metric(int metric) {
     else if (metric == 4) value = close_successes;
     else if (metric == 5) value = active_calls;
     else if (metric == 6) value = (int)accepted_bytes;
+    else value = node_metric(metric);
     pthread_mutex_unlock(&mutex); return value;
 }
 int heeler_et_stream_connect(const char *key, const char *network, const char *host,
@@ -117,3 +123,71 @@ int heeler_et_stream_close(uint64_t id, char *err, size_t errlen) {
     }
     slot->closed = 1; ++close_successes; pthread_cond_broadcast(&changed); pthread_mutex_unlock(&mutex); return 0;
 }
+
+/* Managed-node symbols are synthetic as well. No engine or network exists. */
+typedef struct { uint64_t id; int stopped, stop_failed; char config[256]; } Node;
+static Node nodes[64];
+static uint64_t next_node = 1;
+static int node_starts, node_stops, node_statuses, release_start, stop_order_violations;
+static Node *node_find(uint64_t id) {
+    if (!id || id >= next_node || id > 64 || nodes[id-1].stopped) return NULL;
+    return &nodes[id-1];
+}
+int heeler_et_node_start(const char *config, uint32_t timeout_ms, uint64_t *out, char *err, size_t errlen) {
+    if (!config || !out || !timeout_ms) return failure(-1, err, errlen);
+    *out = 0;
+    pthread_mutex_lock(&mutex); ++node_starts; ++active_calls;
+    if (next_node > 64) { --active_calls; pthread_mutex_unlock(&mutex); return failure(-9, err, errlen); }
+    Node *node = &nodes[next_node-1]; node->id = next_node++;
+    snprintf(node->config, sizeof(node->config), "%s", config); *out = node->id;
+    while (strstr(config, "late-start") && !release_start) pthread_cond_wait(&changed, &mutex);
+    --active_calls;
+    int code = strstr(config, "start-fail") ? -2 : 0;
+    pthread_mutex_unlock(&mutex); return code ? failure(code, err, errlen) : 0;
+}
+int heeler_et_node_status(uint64_t id, uint32_t *state, char *err, size_t errlen) {
+    pthread_mutex_lock(&mutex); ++node_statuses; Node *node = node_find(id);
+    if (!node || !state) { pthread_mutex_unlock(&mutex); return failure(-6, err, errlen); }
+    *state = 1; pthread_mutex_unlock(&mutex); return 0;
+}
+int heeler_et_node_stop(uint64_t id, uint32_t timeout_ms, char *err, size_t errlen) {
+    (void)timeout_ms;
+    pthread_mutex_lock(&mutex); ++node_stops; Node *node = node_find(id);
+    if (!node) { pthread_mutex_unlock(&mutex); return failure(-6, err, errlen); }
+    for (uint64_t i = 1; i < next_id; ++i) {
+        if (!slots[i-1].closed && slots[i-1].node == id) {
+            ++stop_order_violations; pthread_mutex_unlock(&mutex); return failure(-10, err, errlen);
+        }
+    }
+    if (strstr(node->config, "stop-fail") && !node->stop_failed) {
+        node->stop_failed = 1; pthread_mutex_unlock(&mutex); return failure(-2, err, errlen);
+    }
+    node->stopped = 1; pthread_mutex_unlock(&mutex); return 0;
+}
+int heeler_et_node_stream_connect(uint64_t id, const char *network, const char *host, uint16_t port,
+                                 uint32_t timeout_ms, uint64_t *out, char *err, size_t errlen) {
+    pthread_mutex_lock(&mutex); Node *node = node_find(id);
+    int valid = node && network && strstr(node->config, network);
+    pthread_mutex_unlock(&mutex);
+    if (!valid) return failure(-4, err, errlen);
+    char key[64]; snprintf(key, sizeof(key), "managed-%llu", (unsigned long long)id);
+    int code = heeler_et_stream_connect(key, network, host, port, timeout_ms, out, err, errlen);
+    if (code == 0) { pthread_mutex_lock(&mutex); find(*out)->node = id; pthread_mutex_unlock(&mutex); }
+    return code;
+}
+
+static void reset_nodes(void) {
+    pthread_mutex_lock(&mutex);
+    memset(nodes, 0, sizeof(nodes)); next_node = 1;
+    node_starts = node_stops = node_statuses = release_start = stop_order_violations = 0;
+    pthread_mutex_unlock(&mutex);
+}
+static int node_metric(int metric) {
+    if (metric == 7) { int count = 0; for (uint64_t i=1; i<next_node; ++i) if (!nodes[i-1].stopped) ++count; return count; }
+    if (metric == 8) return node_starts;
+    if (metric == 9) return node_stops;
+    if (metric == 10) return node_statuses;
+    if (metric == 11) return stop_order_violations;
+    return 0;
+}
+static void control_node(int operation) { if (operation == 3) release_start = 1; }

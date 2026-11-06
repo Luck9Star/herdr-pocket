@@ -14,6 +14,7 @@ use std::{
 };
 
 pub mod easytier;
+pub mod nodes;
 
 pub const MAX_STREAMS: usize = 32;
 pub const MAX_IO: usize = 65_536;
@@ -38,6 +39,8 @@ pub enum Evidence {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Failure {
     ProviderUnavailable,
+    IdentityUnavailable,
+    StaleRevision,
     InvalidRoute,
     InvalidDeadline,
     WrongOwner,
@@ -88,6 +91,7 @@ fn valid_host(host: &str) -> bool {
 }
 struct Profile {
     backend: Arc<dyn Backend>,
+    revision: u64,
     active: AtomicBool,
 }
 struct OwnerState {
@@ -108,6 +112,10 @@ impl StreamLease {
     }
     pub fn evidence(&self) -> Evidence {
         self.entry.profile.backend.evidence()
+    }
+    /// Zero denotes the legacy, externally-managed backend experiment.
+    pub fn profile_revision(&self) -> u64 {
+        self.entry.profile.revision
     }
     /// open allocates a pending native handle. No API here claims TCP readiness.
     pub fn is_active(&self) -> bool {
@@ -146,6 +154,8 @@ struct Registry {
     next_id: u64,
     entries: HashMap<u64, Arc<Entry>>,
     profiles: HashMap<ProfileKey, Arc<Profile>>,
+    nodes: HashMap<ProfileKey, Arc<nodes::NodeEntry>>,
+    revisions: HashMap<ProfileKey, u64>,
 }
 struct Inner {
     identity: Arc<()>,
@@ -215,6 +225,8 @@ impl OverlayRuntime {
                     next_id: 1,
                     entries: HashMap::new(),
                     profiles: HashMap::new(),
+                    nodes: HashMap::new(),
+                    revisions: HashMap::new(),
                 }),
             }),
         }
@@ -239,6 +251,9 @@ impl OverlayRuntime {
             return Err(Failure::InvalidRoute);
         }
         let mut registry = lock(&self.inner.registry);
+        if registry.nodes.contains_key(&key) {
+            return Err(Failure::Busy);
+        }
         if let Some(previous) = registry.profiles.get(&key)
             && (previous.active.load(Ordering::Acquire)
                 || registry
@@ -252,6 +267,7 @@ impl OverlayRuntime {
             key,
             Arc::new(Profile {
                 backend,
+                revision: 0,
                 active: AtomicBool::new(true),
             }),
         );
@@ -280,10 +296,33 @@ impl OverlayRuntime {
                 .upgrade()
                 .is_some_and(|r| Arc::ptr_eq(&r, &self.inner))
     }
+    /// Legacy backend experiment. Managed profiles require open_revision.
     pub fn open(
         &self,
         owner: &Owner,
         key: &ProfileKey,
+        host: &str,
+        port: u16,
+        deadline: Duration,
+    ) -> Result<Operation<StreamLease>> {
+        self.open_checked(owner, key, None, host, port, deadline)
+    }
+    pub fn open_revision(
+        &self,
+        owner: &Owner,
+        key: &ProfileKey,
+        revision: u64,
+        host: &str,
+        port: u16,
+        deadline: Duration,
+    ) -> Result<Operation<StreamLease>> {
+        self.open_checked(owner, key, Some(revision), host, port, deadline)
+    }
+    fn open_checked(
+        &self,
+        owner: &Owner,
+        key: &ProfileKey,
+        revision: Option<u64>,
         host: &str,
         port: u16,
         deadline: Duration,
@@ -304,6 +343,12 @@ impl OverlayRuntime {
                 .get(key)
                 .cloned()
                 .ok_or(Failure::ProfileMissing)?;
+            if match revision {
+                Some(expected) => expected != profile.revision,
+                None => profile.revision != 0,
+            } {
+                return Err(Failure::StaleRevision);
+            }
             if !profile.active.load(Ordering::Acquire) {
                 return Err(Failure::ProfileUnavailable);
             }
@@ -524,22 +569,32 @@ impl OverlayRuntime {
         }
         Ok(entries.len())
     }
-    /// Closes only this profile's owned streams. Does not stop a shared node,
-    /// leave a network, delete state, log out, or touch another profile/provider.
+    /// Permanently revokes this profile revision's admission and closes its
+    /// streams. A pending managed start is cancelled and its late node cleaned
+    /// up; an already-started node remains available for status/explicit stop.
+    /// Never touches another profile/provider or persisted identity.
     pub fn detach_profile(&self, key: &ProfileKey) -> Result<usize> {
-        let entries = {
+        let (entries, managed) = {
             let registry = lock(&self.inner.registry);
             let profile = registry.profiles.get(key).ok_or(Failure::ProfileMissing)?;
             profile.active.store(false, Ordering::Release);
-            registry
+            let managed = registry.nodes.get(key).map(|node| {
+                let pending = node.retire_admission();
+                (node.clone(), pending)
+            });
+            let entries = registry
                 .entries
                 .values()
                 .filter(|entry| Arc::ptr_eq(&entry.profile, profile))
                 .cloned()
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>();
+            (entries, managed)
         };
         for entry in &entries {
             self.inner.cancel(entry);
+        }
+        if let Some((node, pending)) = managed {
+            self.inner.finish_profile_detach(node, pending);
         }
         Ok(entries.len())
     }
@@ -558,6 +613,7 @@ impl Drop for OverlayRuntime {
         for entry in entries {
             self.inner.cancel(&entry);
         }
+        self.stop_nodes_on_drop();
     }
 }
 

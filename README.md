@@ -8,6 +8,8 @@
 
 手机逐键／组合键、主机回执、隐藏恢复和加密主机资料迁移已接入两套 GUI。Tauri API 35 受保护输入通过，Flutter 新包构建与 100 项测试通过，Android 授权确认仍有失败。两份最新测试包、源码与边界见[本批验证及下载](docs/16-mobile-input-and-config.md)。Penpot 已保存 26 个画板、149 条有效交互。[设计与实点记录](design/README.md)
 
+后续源码已加入独立网络配置、主机绑定、加密迁移 v2 与终端字号；停用网络仍可完成本地配对审查，实际连接继续检查组件可用性。EasyTier 节点生命周期已通过隔离回归，真实节点与 GUI 桥接待验。[本批实现与验收](docs/18-mobile-network-profiles.md)
+
 ## 首版做什么
 
 五端首版都连接**远端 herdr 主机**：手机扫码配对（手动配置兜底）→ 审查连接配置与主机身份 → 主动连接 → 查看 agent 和终端 → 显式输入 → 断线后核实状态。扫码不要求先安装本项目桌面 GUI。桌面本机 herdr 接入后续再做，首版不管理本地进程或 WSL 服务；后台通知、文件 / diff 后置，不承诺后台常连。
@@ -32,6 +34,7 @@ Heeler 已有三网络的源码实现可供按许可移植：EasyTier 使用 no-
 
 | 文件 | 内容 |
 | --- | --- |
+| [`docs/18-mobile-network-profiles.md`](docs/18-mobile-network-profiles.md) | 手机网络配置、v2 迁移、字号和节点生命周期 |
 | [`docs/16-mobile-input-and-config.md`](docs/16-mobile-input-and-config.md) | 最新手机输入、配置迁移、两包与失败记录 |
 | [`docs/17-license-and-distribution-review.md`](docs/17-license-and-distribution-review.md) | 固定依赖许可、字体来源与发行待办 |
 | [`docs/13-mobile-dashboard-observe.md`](docs/13-mobile-dashboard-observe.md) | 当前手机看板、持续观察、配对／设备密钥、CI 与下载 |

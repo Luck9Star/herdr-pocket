@@ -1,15 +1,43 @@
 //! Static/dynamic link to the existing Heeler + portable-stream candidate ABI.
-//! No entry point here starts a node, reads identity state, or uses OS TCP.
+//! Managed node entry points own isolated native epochs; legacy linking is
+//! retained for ABI experiments. No system TCP or plaintext-storage fallback.
+use crate::nodes::{NodeStatus, SecretConfig};
 use crate::{Backend, Evidence, Failure, Provider, Result};
 #[cfg(feature = "linked-easytier")]
 use crate::{MAX_DEADLINE, MAX_IO};
 #[cfg(feature = "linked-easytier")]
 use std::ffi::{CString, c_char, c_int};
+#[cfg(feature = "linked-easytier")]
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 #[cfg(feature = "linked-easytier")]
 #[link(name = "heeler_easytier")]
 unsafe extern "C" {
+    fn heeler_et_node_start(
+        config: *const c_char,
+        timeout_ms: u32,
+        out_node: *mut u64,
+        err: *mut c_char,
+        errlen: usize,
+    ) -> c_int;
+    fn heeler_et_node_status(
+        node: u64,
+        out_state: *mut u32,
+        err: *mut c_char,
+        errlen: usize,
+    ) -> c_int;
+    fn heeler_et_node_stop(node: u64, timeout_ms: u32, err: *mut c_char, errlen: usize) -> c_int;
+    fn heeler_et_node_stream_connect(
+        node: u64,
+        network: *const c_char,
+        host: *const c_char,
+        port: u16,
+        timeout_ms: u32,
+        out_handle: *mut u64,
+        err: *mut c_char,
+        errlen: usize,
+    ) -> c_int;
     fn heeler_et_stream_connect(
         key: *const c_char,
         network: *const c_char,
@@ -50,11 +78,15 @@ unsafe extern "C" {
 /// or printed through Debug. Node setup remains a separate unimplemented layer.
 pub struct EasyTierBackend {
     #[cfg(feature = "linked-easytier")]
-    instance_key: CString,
+    instance_key: Option<CString>,
+    #[cfg(feature = "linked-easytier")]
+    node: AtomicU64,
     #[cfg(feature = "linked-easytier")]
     network: CString,
 }
 impl EasyTierBackend {
+    /// Legacy key-based ABI experiment. Product node ownership uses
+    /// OverlayRuntime::start_easytier_profile and never this constructor.
     pub fn linked(instance_key: &str, network: &str) -> Result<Self> {
         #[cfg(not(feature = "linked-easytier"))]
         {
@@ -73,9 +105,122 @@ impl EasyTierBackend {
                 return Err(Failure::InvalidRoute);
             }
             Ok(Self {
-                instance_key: CString::new(instance_key).map_err(|_| Failure::InvalidRoute)?,
+                instance_key: Some(CString::new(instance_key).map_err(|_| Failure::InvalidRoute)?),
+                node: AtomicU64::new(0),
                 network: CString::new(network).map_err(|_| Failure::InvalidRoute)?,
             })
+        }
+    }
+    pub(crate) fn managed(network: &str) -> Result<Self> {
+        #[cfg(not(feature = "linked-easytier"))]
+        {
+            let _ = network;
+            Err(Failure::ProviderUnavailable)
+        }
+        #[cfg(feature = "linked-easytier")]
+        {
+            Ok(Self {
+                instance_key: None,
+                node: AtomicU64::new(0),
+                network: CString::new(network).map_err(|_| Failure::InvalidRoute)?,
+            })
+        }
+    }
+    pub(crate) fn start_node(&self, config: &SecretConfig, deadline: Duration) -> Result<()> {
+        #[cfg(not(feature = "linked-easytier"))]
+        {
+            let _ = (config, deadline);
+            Err(Failure::ProviderUnavailable)
+        }
+        #[cfg(feature = "linked-easytier")]
+        {
+            if self.instance_key.is_some() || self.node.load(Ordering::Acquire) != 0 {
+                return Err(Failure::Busy);
+            }
+            // Short-lived owned buffer, erased by SecretConfig's Drop after FFI returns.
+            let mut bytes = config.bytes().to_vec();
+            bytes.push(0);
+            let owned = SecretConfig::nul_terminated(bytes);
+            let mut node = 0;
+            let mut error = [0 as c_char; 512];
+            // SAFETY: input and output buffers remain owned until synchronous return.
+            let code = unsafe {
+                heeler_et_node_start(
+                    owned.bytes().as_ptr().cast(),
+                    milliseconds(deadline)?,
+                    &mut node,
+                    error.as_mut_ptr(),
+                    error.len(),
+                )
+            };
+            // A failed start may still own native resources. Preserve its lease.
+            self.node.store(node, Ordering::Release);
+            if code != 0 {
+                Err(Failure::NativeRejected(code))
+            } else if node == 0 {
+                Err(Failure::InvalidNativeResponse)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    pub(crate) fn node_status(&self) -> Result<NodeStatus> {
+        #[cfg(not(feature = "linked-easytier"))]
+        {
+            Err(Failure::ProviderUnavailable)
+        }
+        #[cfg(feature = "linked-easytier")]
+        {
+            let mut state = 0;
+            let mut error = [0 as c_char; 512];
+            // SAFETY: all output buffers remain valid until the worker returns.
+            let code = unsafe {
+                heeler_et_node_status(
+                    self.node.load(Ordering::Acquire),
+                    &mut state,
+                    error.as_mut_ptr(),
+                    error.len(),
+                )
+            };
+            if code != 0 {
+                return Err(Failure::NativeRejected(code));
+            }
+            match state {
+                0 => Ok(NodeStatus::Starting),
+                1 => Ok(NodeStatus::EngineStarted),
+                2 => Ok(NodeStatus::Closing),
+                _ => Err(Failure::InvalidNativeResponse),
+            }
+        }
+    }
+    pub(crate) fn stop_node(&self, deadline: Duration) -> Result<()> {
+        #[cfg(not(feature = "linked-easytier"))]
+        {
+            let _ = deadline;
+            Err(Failure::ProviderUnavailable)
+        }
+        #[cfg(feature = "linked-easytier")]
+        {
+            let node = self.node.load(Ordering::Acquire);
+            if node == 0 {
+                return Ok(());
+            }
+            let mut error = [0 as c_char; 512];
+            // SAFETY: this backend exclusively owns the node and its cleanup.
+            let code = unsafe {
+                heeler_et_node_stop(
+                    node,
+                    milliseconds(deadline)?,
+                    error.as_mut_ptr(),
+                    error.len(),
+                )
+            };
+            if code == 0 {
+                self.node.store(0, Ordering::Release);
+                Ok(())
+            } else {
+                Err(Failure::ClosePending)
+            }
         }
     }
 }
@@ -113,16 +258,29 @@ impl Backend for EasyTierBackend {
             // SAFETY: owned NUL-terminated strings and writable output/error
             // buffers remain live until this synchronous worker call returns.
             let code = unsafe {
-                heeler_et_stream_connect(
-                    self.instance_key.as_ptr(),
-                    self.network.as_ptr(),
-                    host.as_ptr(),
-                    port,
-                    milliseconds(deadline)?,
-                    &mut handle,
-                    error.as_mut_ptr(),
-                    error.len(),
-                )
+                if let Some(key) = &self.instance_key {
+                    heeler_et_stream_connect(
+                        key.as_ptr(),
+                        self.network.as_ptr(),
+                        host.as_ptr(),
+                        port,
+                        milliseconds(deadline)?,
+                        &mut handle,
+                        error.as_mut_ptr(),
+                        error.len(),
+                    )
+                } else {
+                    heeler_et_node_stream_connect(
+                        self.node.load(Ordering::Acquire),
+                        self.network.as_ptr(),
+                        host.as_ptr(),
+                        port,
+                        milliseconds(deadline)?,
+                        &mut handle,
+                        error.as_mut_ptr(),
+                        error.len(),
+                    )
+                }
             };
             if code != 0 {
                 Err(Failure::NativeRejected(code))
@@ -245,6 +403,33 @@ impl Backend for EasyTierBackend {
             } else {
                 Err(Failure::ClosePending)
             }
+        }
+    }
+}
+
+/// Link all additive node symbols and call only status(0). This initializes no
+/// node and reads no identity. Source/library verification remains external.
+pub fn verify_managed_abi_presence() -> Result<()> {
+    #[cfg(not(feature = "linked-easytier"))]
+    {
+        Err(Failure::ProviderUnavailable)
+    }
+    #[cfg(feature = "linked-easytier")]
+    {
+        std::hint::black_box([
+            heeler_et_node_start as *const (),
+            heeler_et_node_status as *const (),
+            heeler_et_node_stop as *const (),
+            heeler_et_node_stream_connect as *const (),
+        ]);
+        let mut state = 0;
+        let mut error = [0 as c_char; 128];
+        // SAFETY: zero is deliberately invalid; owned output buffers remain live.
+        let code = unsafe { heeler_et_node_status(0, &mut state, error.as_mut_ptr(), error.len()) };
+        if code == -6 {
+            Ok(())
+        } else {
+            Err(Failure::InvalidNativeResponse)
         }
     }
 }

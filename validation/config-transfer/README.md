@@ -2,6 +2,8 @@
 
 本实现供两条手机候选使用。导入界面先显示目标、冲突和所需新授权，确认后提交一次本机目录更新。正在使用的被替换目标先停止输入与观察。配对身份保留在停用的旧记录中，新记录取得新的本机 ID 并重新配对。
 
+2026-11-06 增加 plaintext v2，包含公开网络配置与可选字号；加密 envelope 继续沿用下述 v1 格式。旧 v1 plaintext 可读取，新 GUI 默认导出 v2。网络引用、导入停用及单次目录事务见[网络迁移契约](../network-profiles/README.md)，当前验收见[手机网络记录](../../docs/18-mobile-network-profiles.md)。
+
 ## 版本 1 格式
 
 文件依次为 4-byte ASCII `HPKT`、版本 `01`、套件 `01`、16-byte salt、12-byte nonce，以及 AES-256-GCM 密文和末尾 16-byte tag。完整的 34-byte 头部作为 AAD。PBKDF2-HMAC-SHA256 固定迭代 600,000 次，派生 32-byte key。每次导出以系统安全随机源生成 salt 和 nonce。格式选择为本轮实现默认值，移动设备上的耗时仍需实测。
@@ -10,7 +12,7 @@
 
 Rust 使用锁定的 `ring 0.17.14`，Dart 使用 `pointycastle 4.0.0`。两者分别调用成熟库的 PBKDF2 和 GCM 实现。[ring PBKDF2](https://docs.rs/ring/0.17.14/ring/pbkdf2/fn.derive.html) · [ring AEAD](https://docs.rs/ring/0.17.14/ring/aead/struct.LessSafeKey.html) · [PointyCastle 4.0.0](https://pub.dev/documentation/pointycastle/4.0.0/)
 
-明文采用严格 JSON schema，每份包含 1–16 个 `hosts`。字段为 `label`、`provider`，以及 `target` 中的 `host`、`port`、`username`、`expectedHostKey`、`socketPath`、`herdrPath`、`session`。当前迁移范围是已有的主机定位与网络类型元数据。设备身份、秘密、输入与终端运行状态由白名单排除。网络 profile 参数与偏好将随对应产品模型继续接入。
+v1 明文采用严格 JSON schema，每份包含 1–16 个 `hosts`。字段为 `label`、`provider`，以及 `target` 中的 `host`、`port`、`username`、`expectedHostKey`、`socketPath`、`herdrPath`、`session`。v1 范围为主机定位与网络类型元数据；v2 扩展上述网络模型与偏好。两个版本均由白名单排除设备身份、秘密、输入与终端运行状态。
 
 ## 审查与事务
 

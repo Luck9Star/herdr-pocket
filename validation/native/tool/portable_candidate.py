@@ -17,6 +17,8 @@ def apply(reference):
     manifest=json.loads((ROOT/'validation/native/patches/portable-manifest.json').read_text())
     patch=ROOT/'validation/native/patches'/manifest['patch']
     if base.sha(patch)!=manifest['patchSha256']:raise RuntimeError('candidate patch hash mismatch')
+    for name,digest in manifest.get('sourceTemplates',{}).items():
+        if base.sha(ROOT/'validation/native/portable-stream'/name)!=digest:raise RuntimeError('candidate source template hash mismatch: '+name)
     if subprocess.check_output(['git','rev-parse','HEAD'],cwd=reference,text=True).strip()!=manifest['referenceCommit']:
         raise RuntimeError('candidate source commit mismatch')
     for name,digest in manifest['originalFiles'].items():
@@ -68,11 +70,14 @@ def main():
         if not library.is_file():raise RuntimeError('shared library missing')
         load='''import ctypes,sys
 lib=ctypes.CDLL(sys.argv[1])
-for symbol in ['heeler_et_stream_connect','heeler_et_stream_read','heeler_et_stream_write','heeler_et_stream_shutdown_write','heeler_et_stream_close']:
+for symbol in ['heeler_et_stream_connect','heeler_et_stream_read','heeler_et_stream_write','heeler_et_stream_shutdown_write','heeler_et_stream_close','heeler_et_node_start','heeler_et_node_status','heeler_et_node_stop','heeler_et_node_stream_connect']:
     getattr(lib,symbol)
 close=lib.heeler_et_stream_close;close.argtypes=[ctypes.c_uint64,ctypes.c_void_p,ctypes.c_size_t];close.restype=ctypes.c_int
 assert close(0,None,0)==-6
-print('five portable ABI symbols resolved; invalid close rejected; no node started')
+status=lib.heeler_et_node_status;status.argtypes=[ctypes.c_uint64,ctypes.POINTER(ctypes.c_uint32),ctypes.c_void_p,ctypes.c_size_t];status.restype=ctypes.c_int
+state=ctypes.c_uint32(0)
+assert status(0,ctypes.byref(state),None,0)==-6
+print('five stream and four managed-node ABI symbols resolved; invalid handles rejected; no node started')
 '''
         base.run('candidate-shared-load',[sys.executable,'-c',load,library],timeout=30)
         report['load']='passed';report['library']={'bytes':library.stat().st_size,'sha256':base.sha(library)}

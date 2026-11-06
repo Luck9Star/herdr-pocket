@@ -1,0 +1,181 @@
+// Additive managed-node ABI v1. Unlike legacy keys, these IDs are never reused
+// and never enter SLOTS, so legacy start/stop/replacement cannot retarget them.
+struct PocketNode {
+    instance: Mutex<Option<Arc<NativeCoreInstance>>>,
+    network_name: String,
+    lifecycle: Mutex<()>,
+    closing: std::sync::atomic::AtomicBool,
+    engine_started: std::sync::atomic::AtomicBool,
+    handles: Mutex<std::collections::HashSet<u64>>,
+}
+struct PocketNodes {
+    next: u64,
+    entries: HashMap<u64, Arc<PocketNode>>,
+    stream_owners: HashMap<u64, Arc<PocketNode>>,
+}
+fn pocket_nodes() -> &'static Mutex<PocketNodes> {
+    static NODES: OnceLock<Mutex<PocketNodes>> = OnceLock::new();
+    NODES.get_or_init(|| Mutex::new(PocketNodes {
+        next: 1, entries: HashMap::new(), stream_owners: HashMap::new(),
+    }))
+}
+fn pocket_node(id: u64) -> Result<Arc<PocketNode>, Failure> {
+    lock(pocket_nodes()).entries.get(&id).cloned()
+        .ok_or_else(|| Failure::new(-6, "invalid managed node lease"))
+}
+fn pocket_stream_closed(id: u64) {
+    let owner = lock(pocket_nodes()).stream_owners.remove(&id);
+    if let Some(owner) = owner { lock(&owner.handles).remove(&id); }
+}
+
+/// Starts an isolated node. A negative result MAY return a nonzero node lease;
+/// that lease still owns resources and MUST be stopped. No start retry occurs.
+/// # Safety
+/// toml is NUL terminated, out_node is writable, err follows ffi_call's contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn heeler_et_node_start(
+    toml: *const c_char, timeout_ms: u32, out_node: *mut u64,
+    err: *mut c_char, errlen: usize,
+) -> c_int {
+    ffi_call(err, errlen, || {
+        if out_node.is_null() { return Err(Failure::generic("out_node is null")); }
+        unsafe { *out_node = 0; }
+        let rt = stream_runtime()?;
+        let text = unsafe { borrowed_str(toml, "configuration") }?;
+        if text.len() > 65536 { return Err(Failure::generic("configuration too large")); }
+        // Do not return TOML/parser/engine error text: it can contain secrets.
+        let config = outbound_only_config(text)
+            .map_err(|_| Failure::generic("managed node configuration rejected"))?;
+        // The managed path never accepts a filesystem credential adapter.
+        if config.get_credential_file().is_some() || !config.get_managed_credentials().is_empty() {
+            return Err(Failure::generic("managed node requires an in-memory secure configuration"));
+        }
+        let node = Arc::new(PocketNode {
+            network_name: config.get_network_identity().network_name,
+            instance: Mutex::new(None), lifecycle: Mutex::new(()),
+            closing: std::sync::atomic::AtomicBool::new(false),
+            engine_started: std::sync::atomic::AtomicBool::new(false),
+            handles: Mutex::new(std::collections::HashSet::new()),
+        });
+        let id = {
+            let mut registry = lock(pocket_nodes());
+            if registry.entries.len() >= MAX_INSTANCES { return Err(Failure::new(-9, "managed node capacity")); }
+            let id = registry.next;
+            registry.next = id.checked_add(1).ok_or_else(|| Failure::new(-9, "managed node IDs exhausted"))?;
+            registry.entries.insert(id, node.clone()); id
+        };
+        unsafe { *out_node = id; }
+        let _lifecycle = lock(&node.lifecycle);
+        let timeout = Duration::from_millis(u64::from(timeout_ms.clamp(1, 60000)));
+        // Construction/drop both occur inside the engine runtime context.
+        rt.block_on(async {
+            let instance = match create_native_instance(config) {
+                Ok(instance) => instance,
+                Err(_) => {
+                    lock(pocket_nodes()).entries.remove(&id);
+                    unsafe { *out_node = 0; }
+                    return Err(Failure::generic("managed node construction failed"));
+                }
+            };
+            *lock(&node.instance) = Some(instance.clone());
+            match tokio::time::timeout(timeout, instance.start()).await {
+                Ok(Ok(())) => {
+                    node.engine_started.store(true, std::sync::atomic::Ordering::Release);
+                    Ok(HEELER_ET_OK)
+                }
+                outcome => {
+                    node.closing.store(true, std::sync::atomic::Ordering::Release);
+                    let code = if outcome.is_err() { HEELER_ET_ERR_TIMEOUT } else { HEELER_ET_ERR };
+                    // Retain instance and capacity even if start performed partial cleanup.
+                    Err(Failure::new(code, "managed node start failed; stop retained lease"))
+                }
+            }
+        })
+    })
+}
+
+/// Whitelist status: 0 = not engine-started, 1 = engine started, 2 = closing.
+/// This is NOT proof of assigned address, route, peer, join or TCP readiness.
+/// # Safety
+/// out_state is writable; err follows ffi_call's contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn heeler_et_node_status(id: u64, out_state: *mut u32, err: *mut c_char, errlen: usize) -> c_int {
+    ffi_call(err, errlen, || {
+        if out_state.is_null() { return Err(Failure::generic("out_state is null")); }
+        let node = pocket_node(id)?;
+        let state = if node.closing.load(std::sync::atomic::Ordering::Acquire) { 2 }
+            else if node.engine_started.load(std::sync::atomic::Ordering::Acquire)
+                && lock(&node.instance).as_ref().is_some_and(|i| matches!(i.state(), CoreInstanceState::Running)) { 1 }
+            else { 0 };
+        unsafe { *out_state = state; } Ok(HEELER_ET_OK)
+    })
+}
+
+/// Stop only after all owned streams have been explicitly closed/drained.
+/// Timeout retains node/instance/capacity and closes admission. Explicit retry
+/// is permitted; the lease is removed only when engine stop actually returns.
+/// # Safety
+/// err follows ffi_call's contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn heeler_et_node_stop(id: u64, timeout_ms: u32, err: *mut c_char, errlen: usize) -> c_int {
+    ffi_call(err, errlen, || {
+        let rt = stream_runtime()?;
+        let node = pocket_node(id)?;
+        let _lifecycle = lock(&node.lifecycle);
+        node.closing.store(true, std::sync::atomic::Ordering::Release);
+        if !lock(&node.handles).is_empty() { return Err(Failure::new(-10, "drain managed node streams first")); }
+        let instance = lock(&node.instance).clone();
+        let timeout = Duration::from_millis(u64::from(timeout_ms.clamp(1, 60000)));
+        rt.block_on(async {
+            if let Some(instance) = instance {
+                tokio::time::timeout(timeout, instance.stop()).await
+                    .map_err(|_| Failure::new(HEELER_ET_ERR_TIMEOUT, "managed node stop pending"))?;
+            }
+            lock(pocket_nodes()).entries.remove(&id);
+            lock(&node.instance).take();
+            Ok(HEELER_ET_OK)
+        })
+    })
+}
+
+/// Connect through this immutable node lease, never through a reusable key.
+/// # Safety
+/// network/host are NUL terminated; output/error buffers are writable until return.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn heeler_et_node_stream_connect(
+    node_id: u64, network: *const c_char, host: *const c_char, port: u16,
+    timeout_ms: u32, out_handle: *mut u64, err: *mut c_char, errlen: usize,
+) -> c_int {
+    ffi_call(err, errlen, || {
+        if out_handle.is_null() { return Err(Failure::generic("out_handle is null")); }
+        unsafe { *out_handle = 0; }
+        let rt = stream_runtime()?;
+        let node = pocket_node(node_id)?;
+        let _lifecycle = lock(&node.lifecycle);
+        if node.closing.load(std::sync::atomic::Ordering::Acquire)
+            || !node.engine_started.load(std::sync::atomic::Ordering::Acquire) { return Err(not_running()); }
+        let wanted = unsafe { borrowed_str(network, "network") }?.to_owned();
+        if wanted.is_empty() || wanted != node.network_name { return Err(Failure::new(-4, "managed network selector mismatch")); }
+        let instance = lock(&node.instance).clone().ok_or_else(not_running)?;
+        let source = DialSource::Manual { instance, network_name: node.network_name.clone() };
+        let host = unsafe { borrowed_str(host, "host") }?.to_owned();
+        let timeout = Duration::from_millis(u64::from(timeout_ms.clamp(1, 60000)));
+        let id = streams().reserve().map_err(stream_failure)?;
+        lock(&node.handles).insert(id);
+        lock(pocket_nodes()).stream_owners.insert(id, node.clone());
+        let entered = rt.enter();
+        let started = streams().spawn_dial(id, async move {
+            match tokio::time::timeout(timeout, dial_overlay(source, Some(wanted.to_owned()), host, port, timeout)).await {
+                Ok(Ok(stream)) => { let _ = streams().complete(id, stream); }
+                Ok(Err(_)) => streams().fail(id, "managed overlay dial failed".into()),
+                Err(_) => streams().fail(id, "managed overlay dial timed out".into()),
+            }
+        });
+        drop(entered);
+        if let Err(error) = started {
+            rt.block_on(streams().close(id)).map_err(stream_failure)?;
+            pocket_stream_closed(id); return Err(stream_failure(error));
+        }
+        unsafe { *out_handle = id; } Ok(HEELER_ET_OK)
+    })
+}

@@ -25,6 +25,21 @@ void main() {
     expect(keys.creates,0); expect(keys.signCalls,0);
     await tester.pumpWidget(const SizedBox()); first.dispose(); reopened.dispose();
   });
+  testWidgets('catalog reload revokes existing tabs before storage returns',(tester) async {
+    final storage = MemoryCatalogStorage();
+    final catalog = HostCatalog(storage:storage,clock:() => 1000); await catalog.load();
+    final profile = await saveCatalogProfile(catalog);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,
+      keys:TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String),offlineBuilder:(_) => const SizedBox())));
+    await tester.pumpAndSettle(); await tapVisible(tester,'host-open-${profile.id}'); await tester.pumpAndSettle();
+    final reload = catalog.load();
+    await tester.pump();
+    expect(find.byKey(ValueKey('host-tab-${profile.id}')),findsNothing);
+    await reload; await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('host-tab-${profile.id}')),findsNothing);
+    await tester.pumpWidget(const SizedBox()); catalog.dispose();
+  });
   testWidgets('missing or locked original key disables connection and offers only recheck or explicit deletion',(tester) async {
     final disk = MemoryCatalogStorage();
     final catalog = HostCatalog(storage:disk,clock:() => 1000); await catalog.load(); final profile = await saveCatalogProfile(catalog);

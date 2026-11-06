@@ -1,6 +1,6 @@
 # 手机输入、恢复与配置迁移
 
-2026-11-06。本批基于 Android 配对与持续观察的已验收版本继续开发，保留两条五端候选。手机输入、组合键、隐藏恢复与配置迁移集中提交，云端复用每条路线的构建环境，分别运行原版只读与受保护输入用例。测试包来源与运行结果将随本批验收记录更新。
+2026-11-06。本批基于 Android 配对与持续观察的已验收版本继续开发，保留两条五端候选。手机输入、组合键、隐藏恢复与配置迁移已接入两套 GUI。Tauri API 35 的只读与受保护输入用例通过，Flutter 最新普通 APK 构建和回归通过，Android GUI 仍有失败。完整来源、摘要和三轮结果见[批次记录](evidence/mobile-pair-gui/input-config-builds.json)。
 
 ## 已接入产品入口
 
@@ -24,9 +24,23 @@ Mac 上的生产 Rust 传输适配器通过自建 loopback SSH 验证了两种�
 | Apple 文件 I/O | 共享 Swift 和 Tauri 完整链接通过；自建临时文件的后台协调读写、取消门禁与主线程回调通过 |
 | 浏览器界面 | 实际看板入口在 360px 无整页横向溢出；模拟原生依赖的表单与冲突预览在 360px／800px 均无溢出，修复单选按钮与预览焦点；只作界面证据。本次浏览器和服务已关闭 |
 
-完整 Rust 本地回归为 transport 29 项加 CLI 1 项，Tauri 原生 9 项；Tauri JavaScript 52 项及前端构建通过。Python harness 为 26 项，Flutter Android 准备／证据门禁为 35 项，Flutter 工具为 8 项。首次并行运行出现短暂文件锁竞争。测试进程 fork/exec 期间可能继承尚未关闭的描述符，现采用有界等待核验释放；完整重跑通过。
+完整 Rust 本地回归为 transport 29 项加 CLI 1 项，Tauri 原生 9 项；Tauri JavaScript 52 项及前端构建通过。Python harness 为 26 项，Flutter Android 准备／证据门禁为 36 项，Flutter 工具为 8 项。首次并行运行出现短暂文件锁竞争。测试进程 fork/exec 期间可能继承尚未关闭的描述符，现采用有界等待核验释放；完整重跑通过。
 
-Flutter 的新增源码及回归已通过语法解析，完整 analyzer、widget、加密互读和 Android GUI 仍需本批实际云结果。各项测试的通过范围以对应运行记录为准。
+Flutter 在 `007e20d` 的云回归中通过 analyzer、100 项单元／widget 测试和 10 项渲染测试，另有 1 项 opt-in SSH widget 测试跳过。加密互读和迁移回归包含在上述测试中。Android GUI 结果见下文。
+
+### 首轮结果与定向修复
+
+[集中运行 42141054727](https://github.com/Luck9Star/herdr-pocket/actions/runs/42141054727) 的 Tauri Android 两种主机用例通过。原版接收 0 字节；扩展候选在隐藏后主动恢复同一目标、预览确认草稿，收到两笔匹配回执和精确的 10 字节。814 次共享 PTY 取样均为 119×40，最大采样间隔 97ms，未观测到尺寸变化。临时授权已撤销，进程与密钥已清理。[原版报告](evidence/mobile-pair-gui/gui-8daf1bc/tauri-android-stock.json) · [受保护输入报告](evidence/mobile-pair-gui/gui-8daf1bc/tauri-android-guarded.json)
+
+[Tauri ARM64 普通测试包](https://github.com/Luck9Star/herdr-pocket/actions/runs/42141054727/artifacts/13466854945) 的源码为 `8daf1bc`，APK SHA-256 为 `2dcfa4474655e5f80604612cb183b35dac24ba1e248037d1dc1e7f57aa1b7828`。已核对包内 ABI、三份原生声明、终端与配置样例摘要及校验和。
+
+同批 Flutter 的 `inputGate` 初始化出现循环类型推断，阻断应用编译及 GUI 用例。脱离页面的 50 项测试实际通过，包括配置加密样例互读与 12 项迁移测试；13 个依赖页面的测试文件无法加载。修复提交 `226b101` 显式声明类型，[定向运行 42143460447](https://github.com/Luck9Star/herdr-pocket/actions/runs/42143460447) 产出普通 APK。该轮测试为 98 通过、1 跳过、1 失败，analyzer 有 3 项冗余导入提示，渲染 10 项通过。失败 widget 的配对时钟与目录时钟不一致；原版 AVD 停在响应审查，受保护 AVD 停在逐键输入。
+
+`007e20d` 统一配对时钟、清理导入并调整真实终端焦点驱动，[运行 42147341123](https://github.com/Luck9Star/herdr-pocket/actions/runs/42147341123) 的 analyzer 无诊断，100 项测试和 10 项渲染回归通过，1 项跳过。普通 APK 构建成功；原版 AVD 在 `response_authorized` 等待超时，临时主机已批准请求，手机侧接受响应和后续 SSH 尚未完成。该轮受保护 lane 在 harness 前被“存在设备”保护拒绝，缺少 GUI 报告；日志未记录设备 serial 和归属，保持未运行状态。[原版失败报告](evidence/mobile-pair-gui/gui-007e20d/flutter-android-stock.json) · [安全阶段诊断](evidence/mobile-pair-gui/gui-007e20d/flutter-android-test-failure.json)两轮定向运行均整体失败。
+
+[最新 Flutter 普通 APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/42147341123/artifacts/13472225200) 来自 `007e20d`，SHA-256 为 `22d29a726ecc63c0e7e6cb50815fdf3f1fdc350dc6e46187f11c6efffdb0ccfa`。下载 artifact 后解开 `flutter-appmain-package/flutter-android-debug.zip` 取得 `app-debug.apk`。已核对来源、两份共享样例、包校验和、三种 ABI 及字体的 35 份文件，其中 32 份是本批新增来源／声明。Tauri APK 来自较早的 `8daf1bc`，两包各自保留实际源码版本，性能对照需另取同源构建。
+
+Mac 另运行独立标识的 Tauri 应用，实际打开原生选择器并验证取消后回到“未选择文件”。正向导入在本次自动化中未完成，随后观察服务返回 ScreenCaptureKit 错误；原因待定位。已退出应用，并按确切可执行文件检查进程结束。[Mac 记录](evidence/mobile-pair-gui/macos-config-picker.json)
 
 ## 本批云端验收
 
@@ -36,6 +50,6 @@ Flutter 普通 `app.main` APK 与集成测试变体分开，Tauri 手机 arm64 �
 
 ## 后续顺序
 
-先收齐本批手机输入与两份安装包的实际结果，处理具体失败；再验证系统文件选择器的完整交互及跨候选文件搬运。真实手机 IME、触控、摄像头、iOS 安装与三网并发继续单列未验证。随后接入完整网络 profile／偏好迁移和前台跨网络标签，再完善桌面真实分屏与独立焦点，最后以正确性与设备性能收敛框架。
+先修正 Flutter 手机授权与测试驱动的具体失败，将修复并入下一批集中验收；随后验证系统文件选择器的完整交互及跨候选文件搬运。真实手机 IME、触控、摄像头、iOS 安装与三网并发继续单列未验证。随后接入完整网络 profile／偏好迁移和前台跨网络标签，再完善桌面真实分屏与独立焦点，最后以正确性与设备性能收敛框架。
 
 Tauri 的 macOS 文件桥编译目标与包最低版本统一为 11.0。Android、iOS 和 macOS 系统选择器已有接线；物理设备及云文件提供方仍需实测。iOS 强杀或崩溃后的临时加密导出残留清理仍待完成。Windows/Linux 文件控件与下载路径也需要独立系统验收。

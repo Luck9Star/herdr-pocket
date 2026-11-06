@@ -1,0 +1,31 @@
+{
+  "sourceSHA": "8daf1bcb081903cb0c4fe3c8982c346b315200d3",
+  "date": "2026-11-06",
+  "platform": "macOS arm64",
+  "applicationIdentifier": "dev.herdrpocket.transfercheck20261106",
+  "build": "debug app bundle with a distinct test identifier",
+  "fixture": "shared config-transfer-v1 synthetic archive",
+  "fixtureBytes": 395,
+  "entry": "actual host board and production config_document native command",
+  "observed": {
+    "initialCatalogEmpty": true,
+    "nativeOpenPanelAppeared": true,
+    "syntheticFileSelectableInList": true,
+    "cancelReturnedToApplication": true,
+    "applicationReportedNoFileSelected": true
+  },
+  "positiveImport": "not completed",
+  "export": "not run",
+  "limitation": "Open remained disabled during file selection in this automation attempt. A later CUA observation also failed with ScreenCaptureKit SCStreamErrorDomain -3812. The cause is unresolved.",
+  "cleanup": {
+    "applicationQuitRequested": true,
+    "exactExecutableAbsentFromLsof": true,
+    "exactExecutableAbsentFromProcessList": true
+  },
+  "unverified": [
+    "native picker successful selection",
+    "GUI encryption and import transaction",
+    "cloud file providers",
+    "iOS runtime"
+  ]
+}

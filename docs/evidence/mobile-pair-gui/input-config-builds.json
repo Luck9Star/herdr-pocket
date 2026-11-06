@@ -1,0 +1,437 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-06",
+  "run": {
+    "id": 42141054727,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42141054727",
+    "workflow": "Prototype validation batch",
+    "event": "push",
+    "branch": "codex/batch/android-input-20261106",
+    "sourceSHA": "8daf1bcb081903cb0c4fe3c8982c346b315200d3",
+    "attempt": 1,
+    "status": "completed",
+    "conclusion": "failure",
+    "startedAt": "2026-11-06T01:02:12Z",
+    "updatedAt": "2026-11-06T01:17:49Z"
+  },
+  "branchSelection": {
+    "inputFixtureJob": "success",
+    "androidInputEmulatorJobs": {
+      "flutter-device-key": {
+        "id": 127643699126,
+        "conclusion": "failure"
+      },
+      "android-device-key": {
+        "id": 127643699171,
+        "conclusion": "success"
+      }
+    },
+    "unrelatedValidationJobs": "skipped"
+  },
+  "fixture": {
+    "buildJob": "build-input-fixture / build",
+    "conclusion": "success",
+    "artifact": {
+      "id": 13467429233,
+      "name": "input-fixture-8daf1bcb081903cb0c4fe3c8982c346b315200d3",
+      "sha256": "ccb160c177a1c1de7f5092efa428d0eec1330b1c325e2e761f4716675ac3ddb0"
+    },
+    "upstreamSHA": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+    "patchSHA256": "c07a1637e3b72b13c660dc4cc3c2cca50ef383b66d0400a3208bd9079434ab00",
+    "binarySHA256": "4bc21805f02ad092ca07ede35792876781c9e4783239da98fef90a328cace4b5",
+    "buildProfile": "dev",
+    "binaryDebugAssertions": false,
+    "readinessAndCapabilitySmokePassed": true
+  },
+  "sharedFixtures": {
+    "fixture.json": {
+      "sha256": "ad2eca3667445764d501ecb6ab53079232850c913626f433b167d1cdb97d7ab3",
+      "verification": "matched Tauri package manifest, packaged bytes, and shared/SHA256SUMS"
+    },
+    "config-transfer-v1.json": {
+      "sha256": "f6528bfa829b26c0cf5f102aa4efd540f9e13927c0d2bd151771e15abfbf62cc",
+      "verification": "matched Tauri package manifest, packaged bytes, and shared/SHA256SUMS"
+    }
+  },
+  "appMainArtifacts": {
+    "flutter": {
+      "artifactId": 13469155230,
+      "artifactName": "flutter-android-appmain-debug-8daf1bcb081903cb0c4fe3c8982c346b315200d3",
+      "artifactZipSHA256": "a5f915c55da7e5b609334687104e6653353b9f34e32792a25ed4e2c50e0e9255",
+      "buildAndPackageStatus": "failed",
+      "apkPresent": false,
+      "apkSHA256": null,
+      "packageManifestPresent": false,
+      "failure": "flutter build apk --debug failed at lib/remote_page.dart:57: inputGate circularity during type inference; package status exit 1",
+      "sourceSHA": "8daf1bcb081903cb0c4fe3c8982c346b315200d3",
+      "fixtureHashesInPackageManifest": "unverified: APK build failed before package manifest was produced"
+    },
+    "tauri": {
+      "artifactId": 13466854945,
+      "artifactName": "tauri-android-appmain-arm64-8daf1bcb081903cb0c4fe3c8982c346b315200d3",
+      "artifactZipSHA256": "219365e2eabed55d179e4759e182d55fd20b825da131f904c26eeb361158f8fb",
+      "buildOutcome": "success",
+      "sourceSHA": "8daf1bcb081903cb0c4fe3c8982c346b315200d3",
+      "targetABI": "arm64-v8a",
+      "apk": {
+        "file": "app-arm64-v8a-debug.apk",
+        "bytes": 175013701,
+        "sha256": "2dcfa4474655e5f80604612cb183b35dac24ba1e248037d1dc1e7f57aa1b7828",
+        "downloadedTo": "tmp-probe/android-20261106/input-config/app-arm64-v8a-debug.apk"
+      },
+      "notices": {
+        "assets/BOUNCY-CASTLE-LICENSE.md": "0e01f1549c9022f406392ac2947d32223b7c2e977d21ea2f8c182fdeb4dae5fd",
+        "assets/QR-NOTICE.txt": "7fc1888ae1ad783c0f318834a9e3263299530434c1ac0ac2077f385c33e018a4",
+        "assets/ZXING-APACHE-2.0.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+      },
+      "manifestAndPackageSHA256SUMS": "verified"
+    }
+  },
+  "androidEvidence": {
+    "downloadsDirectory": "tmp-probe/android-20261106/input-config",
+    "artifactZipDigests": "all six downloaded appmain/stock/guarded evidence archives matched GitHub artifact digests",
+    "flutter": {
+      "stockArtifactId": 13468486644,
+      "guardedArtifactId": 13468481658,
+      "sourceSHA": "8daf1bcb081903cb0c4fe3c8982c346b315200d3",
+      "reportChecksums": "both stock and guarded evidence SHA256SUMS verified",
+      "stock": {
+        "status": "failed",
+        "receivedInputBytes": 0,
+        "errorCode": "flutter_android_test_exited"
+      },
+      "guarded": {
+        "status": "failed",
+        "receivedInputBytes": 0,
+        "errorCode": "flutter_android_test_exited"
+      },
+      "flutterRegressionAggregate": "failed",
+      "failureCause": "analyzer/test compilation reports the inputGate circular type inference error in lib/remote_page.dart:57"
+    },
+    "tauri": {
+      "stockArtifactId": 13468401757,
+      "guardedArtifactId": 13468441296,
+      "sourceSHA": "8daf1bcb081903cb0c4fe3c8982c346b315200d3",
+      "reportChecksums": "both stock and guarded evidence SHA256SUMS verified",
+      "stock": {
+        "status": "passed",
+        "receivedInputBytes": 0,
+        "inputQueueAccepted": false
+      },
+      "guarded": {
+        "status": "passed",
+        "receivedInputBytes": 10,
+        "inputQueueAccepted": true,
+        "receiptCount": 2,
+        "hiddenReentryFreshFull": true,
+        "fixtureBinarySHA256": "4bc21805f02ad092ca07ede35792876781c9e4783239da98fef90a328cace4b5"
+      }
+    },
+    "cleanup": {
+      "flutterStockAndGuarded": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false
+      },
+      "tauriStockAndGuarded": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false
+      },
+      "rawSSHLogsReadOrSaved": false,
+      "AVDs": "each wrapper invocation completed; stock and guarded evidence directories are separate"
+    }
+  },
+  "downloadedArtifacts": [
+    "flutter-appmain.zip",
+    "flutter-stock.zip",
+    "flutter-guarded.zip",
+    "tauri-appmain.zip",
+    "tauri-stock.zip",
+    "tauri-guarded.zip",
+    "app-arm64-v8a-debug.apk"
+  ],
+  "flutterRecovery": {
+    "branch": "codex/batch/android-input-flutter-20261106",
+    "sourceSHA": "226b101d69b64e4e8224bd82adba57ed52797541",
+    "runId": 42143460447,
+    "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42143460447",
+    "status": "completed",
+    "conclusion": "failure",
+    "jobs": [
+      {
+        "name": "build-input-fixture / build",
+        "id": 127649158774,
+        "conclusion": "success",
+        "artifactId": 13469202054,
+        "artifactName": "input-fixture-226b101d69b64e4e8224bd82adba57ed52797541",
+        "artifactZipSHA256": "fa419ac21994b6e3bd3925ad7495fb74b425ec0adc984b2d2be141306898e7ca"
+      },
+      {
+        "name": "android-input-emulator / flutter-device-key",
+        "id": 127650587811,
+        "conclusion": "failure",
+        "appMainBuildPackage": "success",
+        "regressionStepActionConclusion": "success (exit status captured separately)",
+        "analyzeUnitWidgetRenderRegressionStatus": "exit 1",
+        "stockAvdStatus": "exit 1",
+        "guardedAvdStatus": "exit 1"
+      },
+      {
+        "name": "android-input-emulator / android-device-key",
+        "id": 127650589580,
+        "conclusion": "skipped",
+        "reason": "flutter_only recovery route"
+      },
+      {
+        "name": "unrelated validation jobs",
+        "conclusion": "skipped"
+      }
+    ],
+    "artifacts": {
+      "flutterAppMain": {
+        "artifactId": 13469184568,
+        "artifactName": "flutter-android-appmain-debug-226b101d69b64e4e8224bd82adba57ed52797541",
+        "artifactZipSHA256": "ade079e61981e26a49da462d666b8ad79f12604b6b607f01c3e6e28aa16df667",
+        "sourceSHA": "226b101d69b64e4e8224bd82adba57ed52797541",
+        "packageStatus": "success",
+        "androidApk": "tmp-probe/android-20261106/input-config/flutter-recovery/flutter-android-debug.apk",
+        "androidApkBytes": 157230286,
+        "androidApkSHA256": "e4e1bd12f97e6bccb296da9bc2aa692c96df0b7db9f3b16c6bc6eef60178c7c1",
+        "packageZipSHA256": "2155d4a7c17f9da28825d6ad2145997db2c8e869214a1a635c164e3ce999a072",
+        "manifestSourceSHA": "226b101d69b64e4e8224bd82adba57ed52797541",
+        "manifestFixtureSHA256": "ad2eca3667445764d501ecb6ab53079232850c913626f433b167d1cdb97d7ab3",
+        "manifestConfigTransferFixtureSHA256": "f6528bfa829b26c0cf5f102aa4efd540f9e13927c0d2bd151771e15abfbf62cc",
+        "sharedSHA256SUMS": "7 entries verified; both shared fixture hashes matched actual packaged bytes",
+        "packageSHA256SUMS": "APK and package ZIP hashes verified against actual bytes and manifest",
+        "noticesAndLicenses": {
+          "terminal_view-LICENSE": "fa9c766d83aeeaca6e8994be904afcc1940ece6b10cd9754919ee09bc0aa3530",
+          "terminal_view-NOTICE": "c307f60f6ada98062e4fd2634497e7e335741e09545f3caa54d48155621871a3",
+          "remote-dependency-licenses/asn1lib-1.5.8-LICENSE": "b0db8d3a93ea33f852d2b6dfa9c38fc57d33a51c31b47ca528df6d02700f2a42",
+          "remote-dependency-licenses/dartssh2-4.1.0-LICENSE": "465afc358e3c3520109a7fd728d333e3101c71ad32d143181313bf406232808b",
+          "remote-dependency-licenses/pinenacl-0.6.0-LICENSE": "14cd126a80ee0e99ebd6e46ac5b8c7f929fecdcb1a01b8a0542552ea1f96589e",
+          "remote-dependency-licenses/pointycastle-4.0.0-LICENSE": "3a7bb295473da049a1c6edd2f8c41b9e526a4e80f200c0200cc5600b2634df3f",
+          "shared/fonts/LICENSE-JetBrainsMono.txt": "30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad",
+          "shared/fonts/LICENSE-Nerd-Fonts.txt": "1f6ad4edae6479aaace3112ede5279a23284ae54b2a34db66357aef5f64df160"
+        }
+      },
+      "flutterStock": {
+        "artifactId": 13469852031,
+        "artifactName": "flutter-android-emulator-pairing-226b101d69b64e4e8224bd82adba57ed52797541",
+        "artifactZipSHA256": "4685c2ed1644199a69dc99f72d8f720273e468fa0789558ae21d14784ff5d2b5",
+        "reportSourceSHA": "226b101d69b64e4e8224bd82adba57ed52797541",
+        "status": "failed",
+        "errorCode": "flutter_android_test_exited_response_review",
+        "matchedDeviceKeyInSshd": false,
+        "revokedFixtureKey": true,
+        "evidenceSHA256SUMS": "6 entries verified",
+        "cleanup": "passed"
+      },
+      "flutterGuarded": {
+        "artifactId": 13469392770,
+        "artifactName": "android-emulator-flutter-guarded-input-226b101d69b64e4e8224bd82adba57ed52797541",
+        "artifactZipSHA256": "e4acaa229c8ba0a1f30e2c14f893ad7e0b7fd8e5cf2689e0564cd90fe419414c",
+        "reportSourceSHA": "226b101d69b64e4e8224bd82adba57ed52797541",
+        "status": "failed",
+        "errorCode": "flutter_android_test_exited_guarded_direct",
+        "matchedDeviceKeyInSshd": true,
+        "revokedFixtureKey": true,
+        "evidenceSHA256SUMS": "6 entries verified",
+        "cleanup": "passed"
+      }
+    },
+    "regression": {
+      "capturedExitStatus": 1,
+      "analyzer": {
+        "status": "passed",
+        "diagnostics": "3 info-level unnecessary_import notices; no errors"
+      },
+      "flutterUnitWidgetTests": {
+        "status": "failed",
+        "passed": 98,
+        "skipped": 1,
+        "failed": 1,
+        "failingTest": "config_transfer_widget_test.dart: normal host board opens imported metadata in formal explicit pairing without inheriting identity",
+        "failure": "RemoteFailure(invalid_catalog) while building HostCatalogPage; parent review identified issued_at > now in the stack/fixture path"
+      },
+      "rendererRegression": {
+        "status": "passed",
+        "passed": 10
+      },
+      "actionStepConclusion": "success is not a pass signal because command exit statuses were captured to artifact status files"
+    },
+    "verification": {
+      "artifactZipDigests": "all three downloaded archives match GitHub artifact API digests",
+      "sourceSHA": "appmain manifest and both AVD report manifests match recovery commit",
+      "sharedFixtureHashes": "fixture.json and config-transfer-v1.json both match established hashes in manifest and shared/SHA256SUMS",
+      "evidenceChecksums": "stock and guarded evidence SHA256SUMS verified",
+      "rawSSHLogs": "not read or saved; cleanup reports also state rawLogsUploaded=false"
+    },
+    "downloadDirectory": "tmp-probe/android-20261106/input-config/flutter-recovery",
+    "note": "The normal Flutter appmain debug APK was built and packaged successfully on this recovery SHA. Analyzer completed with three info-level unnecessary-import notices. Flutter tests were 98 passed, 1 skipped, 1 failed (one config_transfer_widget_test invalid_catalog failure; parent review identified issued_at > now). Renderer regressions passed 10/10. Stock and guarded AVD lanes both ran and failed their respective response_review and guarded_direct stages; checksums and cleanup verified. Tauri and unrelated jobs were intentionally skipped."
+  },
+  "unverified": [
+    "The original 8daf1bcb Flutter appmain package was not produced because compilation failed; a separate appmain APK was verified from recovery SHA 226b101d69b64e4e8224bd82adba57ed52797541.",
+    "Recovery analyzer passed with three info-level diagnostics; Flutter unit/widget tests had 98 passed, 1 skipped, and 1 failed; stock and guarded AVD reports failed. Renderer regressions passed 10/10.",
+    "No physical-phone behavior is established by these API 35 emulator results."
+  ],
+  "rerunOrNewAction": false,
+  "followupRecovery": {
+    "branch": "codex/batch/android-input-flutter-20261106",
+    "sourceSHA": "007e20d293fbc333ebd65a7baf7f2dcb7827bff7",
+    "runId": 42147341123,
+    "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42147341123",
+    "status": "completed",
+    "conclusion": "failure",
+    "jobs": [
+      {
+        "name": "build-input-fixture / build",
+        "id": 127661916225,
+        "conclusion": "success",
+        "artifactId": 13469924916,
+        "artifactName": "input-fixture-007e20d293fbc333ebd65a7baf7f2dcb7827bff7",
+        "artifactZipSHA256": "81542cff7f18cc814e4451cdc692ce50939f738faf632d4bb3858d2a87f91dea"
+      },
+      {
+        "name": "android-input-emulator / flutter-device-key",
+        "id": 127663700518,
+        "conclusion": "failure",
+        "appMainBuildPackage": "step success; APK verified below",
+        "regressionStepConclusion": "success; captured aggregate status independently verified exit 0",
+        "avdStepConclusion": "success; stock report failed and guarded report absent",
+        "finalFailureStep": "failure"
+      },
+      {
+        "name": "android-input-emulator / android-device-key",
+        "id": 127663701938,
+        "conclusion": "skipped",
+        "reason": "flutter_only route"
+      },
+      {
+        "name": "unrelated validation jobs",
+        "conclusion": "skipped"
+      }
+    ],
+    "artifacts": {
+      "appmain": {
+        "artifactId": 13472225200,
+        "artifactName": "flutter-android-appmain-debug-007e20d293fbc333ebd65a7baf7f2dcb7827bff7",
+        "artifactZipBytes": 153315065,
+        "artifactZipSHA256": "d69bdd4873bfbff523710efda0e09cc08922fd4bb62fc33d46c3bb213c3bbd11",
+        "sourceCommit": "007e20d293fbc333ebd65a7baf7f2dcb7827bff7",
+        "packageZipSHA256": "5794e42e52a541630551eba030d0b504e45efd4a43b2d54a42d5da823197058f",
+        "apkFile": "tmp-probe/android-20261106/input-config/flutter-007e20d/flutter-android-debug.apk",
+        "apkBytes": 157293672,
+        "apkSHA256": "22d29a726ecc63c0e7e6cb50815fdf3f1fdc350dc6e46187f11c6efffdb0ccfa",
+        "fixtureSha256": "ad2eca3667445764d501ecb6ab53079232850c913626f433b167d1cdb97d7ab3",
+        "configTransferFixtureSHA256": "f6528bfa829b26c0cf5f102aa4efd540f9e13927c0d2bd151771e15abfbf62cc",
+        "packageSHA256SUMS": "2 entries verified",
+        "sharedSHA256SUMS": "39 entries verified",
+        "fontTTFSHA256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+        "fontTTFMatchesPriorRun": true,
+        "fontNoticeAssets": {
+          "count": 32,
+          "apkEmbeddedAssetsMatchSharedHashes": true,
+          "files": {
+            "fonts/FONT-NOTICES.md": "0dd7b286ab499ce131e6c60cab8afaf146487da5b3e6f8916aaa2d4efd531739",
+            "fonts/font-sources.json": "c51ec2056b07a181819eeeb496681255f7ca470ff566946157c7b33393d40dbf",
+            "fonts/licenses/LICENSE-Apache-2.0.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "fonts/licenses/LICENSE-Codicons-CC-BY-4.0.txt": "d6239afa918961b465b07bf7411cbe34ff6685854f58553db7966f4881a0211f",
+            "fonts/licenses/LICENSE-Devicon-2.16.0-MIT.txt": "121194741d4a915b9f5890fdd6dd95121f9b1f816517c792358d72d7c838d664",
+            "fonts/licenses/LICENSE-Font-Awesome-Extension-MIT.txt": "b47b15d771c4507a75ff65beca3a78168d6af4cca9b45177a1aa817139c64ba5",
+            "fonts/licenses/LICENSE-Font-Awesome-Free-6.5.1.txt": "0aa8f86525273b2efa4f40f4272a188e187704252170e979dc06879adf68d43c",
+            "fonts/licenses/LICENSE-Font-Awesome-Free-vendored.txt": "de784a808496d49f5f80dd9d1d6e9a51cff712cfbc339e7c25155631ae3cdb5d",
+            "fonts/licenses/LICENSE-Font-Logos-Unlicense.txt": "88d9b4eb60579c191ec391ca04c16130572d7eedc4a86daa58bf28c6e14c9bcd",
+            "fonts/licenses/LICENSE-Hack-MIT-Bitstream-Vera.txt": "1f61bb7c790c59b4b0ecdf304628b94e42ae4c8020094a8c3da73381ab212623",
+            "fonts/licenses/LICENSE-IEC-Power-Symbols-MIT.txt": "11aef1cdf2d58d822e6857e2574870ccc59d4900052bf5c098e319d750e7ac3d",
+            "fonts/licenses/LICENSE-Material-Design-Icons.txt": "3bae6305bcaa6d10219b999f65c342034c2d40b1c0e8567fa08605e73ccba829",
+            "fonts/licenses/LICENSE-Octicons-MIT.txt": "4f886642f9e8d99eeadd484acdac011c3fde8a338faf52f5ca1408c13b9a9b63",
+            "fonts/licenses/LICENSE-Pomicons-OFL-1.1.txt": "cb4797a9745683f287c28833db596e9d68ec43082d59359b3a49c504f0f610ce",
+            "fonts/licenses/LICENSE-Powerline-Extra-MIT.txt": "544307a58e6826c24145b2af1c3578b53e2e21ae0e6c67ab4c6abd544304d26a",
+            "fonts/licenses/LICENSE-Powerline-Symbols-MIT.txt": "46d5355e4734468135d8e4a30d0916292cc4df2b3ec30aa68c866f82497933be",
+            "fonts/licenses/LICENSE-Seti-0.8.1-MIT.txt": "d4d2d888c6a0a220a7b0e2d6013cf37539b0e05ef937002b3b33bdb364575b88",
+            "fonts/licenses/LICENSE-Vorillaz-Devicons-reference-MIT.txt": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1",
+            "fonts/licenses/LICENSE-Weather-Icons-OFL-1.1.txt": "69cdedc8a4f57a30d68e4f045af8b9cce0ec3b1a6e7eec1ad41737c894f26790",
+            "fonts/source-notes/Font-Logos-1.3.0-README.txt": "b7c98abe0c74e0804e5852fa508ee2bc51b44a4aee45a8384204938a705fabf8",
+            "fonts/source-notes/Nerd-Fonts-3.4.0-license-audit.txt": "22c490a48e08adcabab0b06d317fe6c6310a420e081d8ebff7f44d0210096cd1",
+            "fonts/source-notes/glyphs-README.txt": "8538467a6f1f67b9d7fb7f95da492796ac1f02046121aa4138c07026e85c5fb2",
+            "fonts/source-notes/glyphs-codicons-README.txt": "86fd7d1b3b215633d6a8457fe0dbf561bda25af01c5c1ca4a4c53ec4e7c9ffea",
+            "fonts/source-notes/glyphs-devicons-README.txt": "4d5547fb89112b934f117d1688872dc29389f1ac1cd7e831fc938561a1023aea",
+            "fonts/source-notes/glyphs-devicons-fixed-README.txt": "35b5b8e221383cc1bf87e37d4298b37a05f1395e43edd452c7a79c8225e9e788",
+            "fonts/source-notes/glyphs-devicons-vorillaz-README.txt": "4772f570f66011a1f0d2b1358f48809c472cea8439cfca54f66a9ed9ad34c828",
+            "fonts/source-notes/glyphs-font-awesome-README.txt": "83a5c255a5c182d1697086313265bf83788c22fe9f2c160777ecda3e32d8d76c",
+            "fonts/source-notes/glyphs-materialdesign-README.txt": "7afc59be7303f6877297db80c1ea8f506bcf4e18290ff85e1bba1584ffa0555b",
+            "fonts/source-notes/glyphs-pomicons-README.txt": "c0de5db022d38bc135ceb3d1d0c892b2a36a0deb2d4df5e728c964e952edeacd",
+            "fonts/source-notes/glyphs-powerline-extra-README.txt": "5c79ad0af0366752aac6a0887126554e74c84cecff9b56e1e411758000d3e8cc",
+            "fonts/source-notes/glyphs-powerline-symbols-README.txt": "c6cde819271276da3f8faa35a1163d902f2a903e9eb375646dd473c0c582cdef",
+            "fonts/source-notes/svgs-README.txt": "9dec4f69fe88de80eacd07aca4f9a626ef066707be52660d5a38647f3c9948fc"
+          }
+        },
+        "licenseReview": "partial; 6 items remain pending; this is not a complete compliance conclusion"
+      },
+      "stock": {
+        "artifactId": 13471691142,
+        "artifactName": "flutter-android-emulator-pairing-007e20d293fbc333ebd65a7baf7f2dcb7827bff7",
+        "artifactZipBytes": 33455,
+        "artifactZipSHA256": "8c5903f566928c5fbe3d8bc68dfd99ed74189d7d44f43896d4e1367a6f52515d",
+        "reportSourceSHA": "007e20d293fbc333ebd65a7baf7f2dcb7827bff7",
+        "manifestStatus": "failed",
+        "errorCode": "flutter_android_test_exited_response_authorized",
+        "failure": {
+          "stage": "response_authorized",
+          "errorClass": "TestFailure",
+          "line": 48
+        },
+        "evidenceSHA256SUMS": "7 entries verified",
+        "cleanupStatus": "passed"
+      },
+      "guarded": {
+        "artifactId": 13471296985,
+        "artifactName": "android-emulator-flutter-guarded-input-007e20d293fbc333ebd65a7baf7f2dcb7827bff7",
+        "artifactZipBytes": 12463,
+        "artifactZipSHA256": "cc5c36f7e16739f0ab46889d96b0368e7582eb3c7fa34c09e8808794357cf9ec",
+        "candidateSourceSHA": "007e20d293fbc333ebd65a7baf7f2dcb7827bff7",
+        "manifestStatus": "missing",
+        "checksErrorCode": "unavailable",
+        "failureJson": "missing",
+        "cleanupReport": "missing",
+        "harnessStatus": "not_run; AVD wrapper refused to run after detecting an existing device; no harness manifest/failure.json/cleanup report uploaded",
+        "androidAvdTestStatus": "guarded=1; wrapper refused existing-device condition before harness",
+        "deviceIdentity": "serial/ownership was not recorded; cannot classify the existing device as owned, stale, or foreign"
+      }
+    },
+    "regression": {
+      "flutterRegressionStatus": "analyze+unit/widget+render-regression exit status: 0",
+      "analyzer": "passed; No issues found!",
+      "unitWidgetTests": {
+        "passed": 100,
+        "skipped": 1,
+        "failed": 0,
+        "evidence": "flutter-tests.log ends +100 ~1: All tests passed!"
+      },
+      "rendererRegression": {
+        "passed": 10,
+        "failed": 0,
+        "evidence": "flutter-render-regressions.log ends +10: All tests passed!"
+      },
+      "packageStatus": "normal app build/package exit status: 0"
+    },
+    "avdStepDiagnostic": {
+      "publicLogFiltered": "Runtime log line: 2026-11-06T02:14:27.4169501Z Refusing to run with an existing device. The earlier “same-run fixture download failed” lines were echoed shell-script text, not evidence of executed failure. The guarded harness was not reached and its report is absent. No serial identity was recorded, so do not infer owned/stale/foreign.",
+      "stock": "harness ran and failed at response_authorized; see stock.failure"
+    },
+    "verification": {
+      "artifactZipDigests": "all three downloaded appmain/stock/guarded ZIP bytes match GitHub artifact API digests",
+      "sourceSHA": "appmain package manifest, stock evidence manifest/failure, and guarded candidate manifest match this commit",
+      "rawSSHLogsReadOrSaved": false,
+      "downloadDirectory": "/Users/yangyitian/Documents/dev/Agents/herdr-pocket/tmp-probe/android-20261106/input-config/flutter-007e20d"
+    },
+    "downloadedArtifacts": [
+      "appmain.zip",
+      "stock.zip",
+      "guarded.zip",
+      "flutter-android-debug.apk"
+    ],
+    "note": "Flutter analyzer, 100 unit/widget tests (1 skipped), and 10 renderer regressions passed. Stock device harness failed at response_authorized; guarded route has no report and is classified not run to harness/missing evidence. Appmain APK and all 32 new font notice/license/source assets were hash verified. Six license review items remain pending."
+  }
+}

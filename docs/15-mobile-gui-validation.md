@@ -4,6 +4,17 @@
 
 ## 当前可下载的手机测试包
 
+本批已接入主机受理回执、组合键、隐藏恢复与加密主机资料迁移。Tauri `8daf1bc` 的 API 35 原版与受保护用例通过；Flutter `007e20d` 普通包已构建，100 项单元／widget、10 项渲染回归通过，Android GUI 仍未通过。
+
+| 应用 | 最新测试包 | 验证范围 |
+| --- | --- | --- |
+| Flutter `007e20d` | [debug APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/42147341123/artifacts/13472225200) | 构建和回归通过。原版 AVD 停在手机授权确认，受保护 lane 被既有设备保护拦截、未进入 GUI 测试 |
+| Tauri `8daf1bc` | [arm64 debug APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/42141054727/artifacts/13466854945) | API 35 配对、观察、单键、草稿和隐藏后恢复通过，接收端精确收到 10 bytes |
+
+两包源码分别记录。解包步骤、完整 SHA 与失败边界见[本批验证](16-mobile-input-and-config.md)，原始产物核验见[集中记录](evidence/mobile-pair-gui/input-config-builds.json)。真机 IME、相机和三网并发继续单列。
+
+### 已通过只读闭环的同源基线
+
 两包来自同一提交 `307c863baf568af0b154d4ff6d414a69f3cf4274`，对应的 Flutter 与 Tauri 应用路径都在 API 35 云模拟器通过配对和只读观察。下载的是供试用的 debug APK；自动化另行构建了同源的 AVD 测试变体。[成功运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593) · [安装与手动验收步骤](14-mobile-pairing-workbench.md#测试包怎么试)
 
 | 应用 | 下载与解包 | 实际 APK SHA-256 |

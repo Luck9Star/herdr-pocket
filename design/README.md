@@ -83,3 +83,5 @@ macOS首轮发现 terminal_view 0.5.0 的 ASCII组合重音绘制缺陷，已增
 ![新版组件状态与可访问性](evidence/v2-S15.png)
 
 增量脚本是本次编辑记录，不是同步覆盖命令；`extend-v2-recovery.js` 拒绝重复新建。首次执行的参数／名称错误已按实际部分状态修复，只有最终重载读回和已导出的画板作为完成证据。`verify-v2.js` 是只读核验入口。官方 MCP 2.15.4 对 Penpot 2.19.0 的版本警告仍存在；Context7 library 查询成功，docs 两次网络 fetch failed，本次 API 依据实际官方 MCP `high_level_overview`／`penpot_api_info`，未从旧训练知识推断成功。
+
+2026-11-06 的[手机状态增量交接](penpot/mobile-state-handoff-20261106.md)与 [S17 原型入口](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=61ebadac-98b5-8013-8008-e6e7917e7a2b)记录主机受理、隐藏恢复、配置冲突和辅助键状态。后续冲突流程增加新增／保留／替换选中态与各自结果，当前读回 26 画板、149 交互、无悬空目的地；查看器实际点击 S19 → 替换 S23 → 确认 S24 → 返回 S19，其余分支未逐条手点。[读回与点击记录](evidence/v2-conflict-flow-20261106.json) · [查看器截图](evidence/v2-conflict-viewer-result-20261106.jpg)。这是演示，不执行导入；真机验收仍待完成。

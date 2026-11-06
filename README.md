@@ -6,7 +6,7 @@
 
 手机优先。两套工作壳已实现待授权请求恢复、设备身份审查、按主机查看标签和受阻窗格优先；桌面沿用同一目标标识。当前使用用户选定的 Penpot v2 靛蓝／Slate 方案，后续按真机和输入正确性收敛框架及组件状态。[新版设计与覆盖](design/README.md) · [配对步骤](docs/14-mobile-pairing-workbench.md) · [历史共享 SSH 对照](docs/13-mobile-dashboard-observe.md)
 
-手机逐键／组合键、隐藏恢复和加密主机迁移已进入集中开发批次，本地与云端证据分开记录。[本批实现与验证边界](docs/16-mobile-input-and-config.md)
+手机逐键／组合键、主机回执、隐藏恢复和加密主机资料迁移已接入两套 GUI。Tauri API 35 受保护输入通过，Flutter 新包构建与 100 项测试通过，Android 授权确认仍有失败。两份最新测试包、源码与边界见[本批验证及下载](docs/16-mobile-input-and-config.md)。Penpot 已保存 26 个画板、149 条有效交互。[设计与实点记录](design/README.md)
 
 ## 首版做什么
 
@@ -32,6 +32,8 @@ Heeler 已有三网络的源码实现可供按许可移植：EasyTier 使用 no-
 
 | 文件 | 内容 |
 | --- | --- |
+| [`docs/16-mobile-input-and-config.md`](docs/16-mobile-input-and-config.md) | 最新手机输入、配置迁移、两包与失败记录 |
+| [`docs/17-license-and-distribution-review.md`](docs/17-license-and-distribution-review.md) | 固定依赖许可、字体来源与发行待办 |
 | [`docs/13-mobile-dashboard-observe.md`](docs/13-mobile-dashboard-observe.md) | 当前手机看板、持续观察、配对／设备密钥、CI 与下载 |
 | [`docs/05-product-design.md`](docs/05-product-design.md) | 首版用户、核心流程、交互状态与范围 |
 | [`docs/08-ui-design-plan.md`](docs/08-ui-design-plan.md) | Penpot 关键流程、状态画板与并行验证交付计划 |

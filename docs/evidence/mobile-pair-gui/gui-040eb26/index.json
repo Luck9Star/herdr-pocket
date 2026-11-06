@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "040eb26ba7c31e071048616a39591e17c74c99ab",
+  "batchRun": {
+    "id": 42158644225,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42158644225",
+    "conclusion": "cancelled",
+    "reasonSummary": [
+      "native macos-14 runner config unsupported (check annotation: macos-14-arm64-us-default)",
+      "Flutter device-key job failed after preserving evidence"
+    ]
+  },
+  "macosFollowup": {
+    "id": 42159392366,
+    "sourceSHA": "1fc7dce2f5bec67360180550499089785541ec0e",
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42159392366",
+    "conclusion": "success",
+    "job": "portable (macos-15)",
+    "scope": "native portability follow-up; original macos-14 cancellation remains unchanged"
+  },
+  "stock": {
+    "flutter": {
+      "artifactId": 13476940824,
+      "status": "passed",
+      "firstSequence": 1,
+      "deltaSequence": 5,
+      "frameCountLowerBound": 2,
+      "deltaCountLowerBound": 1,
+      "inputQueueAccepted": false,
+      "receivedInputBytes": 0,
+      "cleanup": "passed"
+    },
+    "tauri": {
+      "artifactId": 13475908970,
+      "status": "passed",
+      "fullRenderAcknowledgements": 1,
+      "deltaRenderAcknowledgements": 1,
+      "inputQueueAccepted": false,
+      "receivedInputBytes": 0,
+      "pty": {
+        "noObservedResize": true,
+        "samples": 887,
+        "elapsedMs": 44841,
+        "columns": 119,
+        "rows": 40,
+        "changes": 0,
+        "captureErrors": 0,
+        "readErrors": 0
+      }
+    }
+  },
+  "guarded": {
+    "flutter": {
+      "artifactId": 13476970736,
+      "status": "failed",
+      "failure": {
+        "stage": "response_source_confirm",
+        "errorClass": "TestFailure",
+        "line": 212
+      },
+      "matchedDeviceKeyInSshd": false,
+      "sshAuthenticationConclusion": "not established by this stage report"
+    },
+    "tauri": {
+      "artifactId": 13475824325,
+      "status": "passed",
+      "inputReceipts": [
+        {
+          "acceptedBytes": 1,
+          "paneId": "w1:p1",
+          "terminalId": "term_65f93add09a4a1"
+        },
+        {
+          "acceptedBytes": 9,
+          "paneId": "w1:p1",
+          "terminalId": "term_65f93add09a4a1"
+        }
+      ],
+      "receivedInputBytes": 10,
+      "fullRenderAcknowledgements": 1,
+      "deltaRenderAcknowledgements": 1,
+      "hiddenReentryFreshFull": true,
+      "pty": {
+        "noObservedResize": true,
+        "samples": 991,
+        "elapsedMs": 50129,
+        "columns": 119,
+        "rows": 40,
+        "changes": 0,
+        "captureErrors": 0,
+        "readErrors": 0
+      }
+    }
+  },
+  "flutterChecks": {
+    "analyzer": "failed: test/network_profiles_test.dart:61:78 PendingDevicePairing.toPublicRecord undefined",
+    "unitWidget": "failed: compile errors cascade in network_profiles_test.dart, network_profiles_widget_test.dart, config_transfer_v2_test.dart; config_transfer_test.dart:137 expected 3 actual 4",
+    "rendererRegression": "passed 10/10"
+  },
+  "copiedOriginalJson": [
+    "flutter-guarded-cleanup.json",
+    "flutter-guarded-failure.json",
+    "flutter-guarded-manifest.json",
+    "flutter-guarded-signer-probe.json",
+    "flutter-stock-cleanup.json",
+    "flutter-stock-failure.json",
+    "flutter-stock-manifest.json",
+    "flutter-stock-signer-probe.json",
+    "tauri-guarded-manifest.json",
+    "tauri-stock-manifest.json"
+  ],
+  "privacy": "Sanitized JSON reports only; raw runner logs and private artifacts are excluded.",
+  "postRunCommit": {
+    "sha": "61a6b09f64cd135dd444a22bcf6c8c89c90df1bc",
+    "notIncludedInThisRun": true,
+    "ciRerun": "not run"
+  },
+  "fontBoundary": {
+    "flutterApk": "35 shared font assets plus MaterialIcons-Regular.otf (36 total font entries)",
+    "tauriApk": "no /fonts/ entries; embedded webview payload not verified",
+    "sharedSourceBundle": "35 files checksum verified in both outer package artifacts"
+  }
+}

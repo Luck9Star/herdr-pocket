@@ -1,6 +1,8 @@
 # 核心原型与并行技术验证
 
-> 2026-11-06 更新：两套 Android 候选已完成隔离 SSH 的设备公钥配对、选定 pane 和持续观察。[当前测试包与 GUI 实测](15-mobile-gui-validation.md)。直接 SSH 的结果与下方三网及跨网并发矩阵分别计数。下文保留 10 月的原始评估。
+> 2026-11-06 更新：两套 Android 候选已完成隔离 SSH 的设备公钥配对、选定 pane 和持续观察。[当前测试包与结果](18-mobile-network-profiles.md) · [此前 GUI 实测](15-mobile-gui-validation.md)。直接 SSH 的结果与下方三网及跨网并发矩阵分别计数。下文保留 10 月的原始评估。
+
+> 后续手机输入、隐藏恢复和加密迁移结果见[输入批次](16-mobile-input-and-config.md)；独立网络配置、v2 迁移、Mac 系统文件交互与 EasyTier managed-node 的当前结果见[网络批次](18-mobile-network-profiles.md)。这些增量不把下方尚缺的真实三网、手机 IME 或前台并发格改为通过。
 
 > 2026-10-30修复进展：旧baseline结果和下载包保留原结论；本项目实验补丁的最新验证与候选包入口见[阻断修复记录](10-blocker-repair.md)。官方terminal_view 0.5.0原包未修复，实验补丁不是官方发布，UI框架尚未定案。
 

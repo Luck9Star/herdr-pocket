@@ -1,0 +1,1668 @@
+{
+  "result": {
+    "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "page": "7a22df08-251d-8016-8008-de03541c11da",
+    "count": 30,
+    "added": [
+      {
+        "id": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+        "name": "S27 · 网络配置",
+        "children": [
+          {
+            "name": "action · 编辑工作网络",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033da721eb",
+                    "type": "board",
+                    "name": "S28 · 编辑网络与影响",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 450,
+                    "y": 5900,
+                    "parentIndex": 27,
+                    "parentX": 450,
+                    "parentY": 5900,
+                    "boardX": 450,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 450,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 645.0000047683716,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "编辑工作网络",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033da721eb",
+                    "type": "board",
+                    "name": "S28 · 编辑网络与影响",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 450,
+                    "y": 5900,
+                    "parentIndex": 27,
+                    "parentX": 450,
+                    "parentY": 5900,
+                    "boardX": 450,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 450,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 645.0000047683716,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "action · 审查加密迁移",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033db44885",
+                    "type": "board",
+                    "name": "S29 · 审查网络迁移",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 900,
+                    "y": 5900,
+                    "parentIndex": 28,
+                    "parentX": 900,
+                    "parentY": 5900,
+                    "boardX": 900,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 900,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 1095.0000047683716,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "审查加密迁移",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033db44885",
+                    "type": "board",
+                    "name": "S29 · 审查网络迁移",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 900,
+                    "y": 5900,
+                    "parentIndex": 28,
+                    "parentX": 900,
+                    "parentY": 5900,
+                    "boardX": 900,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 900,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 1095.0000047683716,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "action · 返回主机看板",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "7a22df08-251d-8016-8008-de045ec11db9",
+                    "type": "board",
+                    "name": "S01 · 手机看板 · 现代化主机与会话管理",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [
+                      {
+                        "id": "7a22df08-251d-8016-8008-de045ed2152a",
+                        "style": "drop-shadow",
+                        "offsetX": 0,
+                        "offsetY": 8,
+                        "blur": 24,
+                        "spread": 0,
+                        "hidden": false,
+                        "color": {
+                          "color": "#0f172a",
+                          "opacity": 0.06
+                        }
+                      }
+                    ],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 0,
+                    "y": 0,
+                    "parentIndex": 0,
+                    "parentX": 0,
+                    "parentY": 0,
+                    "boardX": 0,
+                    "boardY": 0,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 195.00000476837158,
+                      "y": 421.99997901916504
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [
+                      {
+                        "strokeColor": "#e2e8f0",
+                        "strokeColorRefFile": null,
+                        "strokeColorRefId": null,
+                        "strokeOpacity": null,
+                        "strokeStyle": "solid",
+                        "strokeWidth": 1,
+                        "strokeWidthType": "simple",
+                        "strokeWidthTop": 1,
+                        "strokeWidthRight": 1,
+                        "strokeWidthBottom": 1,
+                        "strokeWidthLeft": 1,
+                        "strokeAlignment": "inner",
+                        "strokeCapStart": null,
+                        "strokeCapEnd": null,
+                        "strokeColorGradient": null,
+                        "strokeImage": null
+                      }
+                    ],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "返回主机看板",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "7a22df08-251d-8016-8008-de045ec11db9",
+                    "type": "board",
+                    "name": "S01 · 手机看板 · 现代化主机与会话管理",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [
+                      {
+                        "id": "7a22df08-251d-8016-8008-de045ed2152a",
+                        "style": "drop-shadow",
+                        "offsetX": 0,
+                        "offsetY": 8,
+                        "blur": 24,
+                        "spread": 0,
+                        "hidden": false,
+                        "color": {
+                          "color": "#0f172a",
+                          "opacity": 0.06
+                        }
+                      }
+                    ],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 0,
+                    "y": 0,
+                    "parentIndex": 0,
+                    "parentX": 0,
+                    "parentY": 0,
+                    "boardX": 0,
+                    "boardY": 0,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 195.00000476837158,
+                      "y": 421.99997901916504
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [
+                      {
+                        "strokeColor": "#e2e8f0",
+                        "strokeColorRefFile": null,
+                        "strokeColorRefId": null,
+                        "strokeOpacity": null,
+                        "strokeStyle": "solid",
+                        "strokeWidth": 1,
+                        "strokeWidthType": "simple",
+                        "strokeWidthTop": 1,
+                        "strokeWidthRight": 1,
+                        "strokeWidthBottom": 1,
+                        "strokeWidthLeft": 1,
+                        "strokeAlignment": "inner",
+                        "strokeCapStart": null,
+                        "strokeCapEnd": null,
+                        "strokeColorGradient": null,
+                        "strokeImage": null
+                      }
+                    ],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          }
+        ],
+        "texts": [
+          "HERDR POCKET  /  交互原型",
+          "网络配置",
+          "工作网络 · Tailscale",
+          "配置已保存 · 桥接不可用\n主机：工作站 01",
+          "团队网络 · EasyTier",
+          "已停用 · 等待本机配置\n未绑定主机",
+          "实验网络 · ZeroTier",
+          "配置已保存 · 桥接不可用\n连接不可用，不使用系统网络回退",
+          "编辑工作网络",
+          "审查加密迁移",
+          "返回主机看板",
+          "本地配对请求仍可创建和审查。\n连接需等待网络组件与本机授权；保存配置不代表已入网。",
+          "交互原型 · 示例资料，不执行配置或连接"
+        ]
+      },
+      {
+        "id": "b9d502c0-514c-80a9-8008-e7033da721eb",
+        "name": "S28 · 编辑网络与影响",
+        "children": [
+          {
+            "name": "action · 演示保存并返回",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+                    "type": "board",
+                    "name": "S27 · 网络配置",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 0,
+                    "y": 5900,
+                    "parentIndex": 26,
+                    "parentX": 0,
+                    "parentY": 5900,
+                    "boardX": 0,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 0,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 195.00000476837158,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "演示保存并返回",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+                    "type": "board",
+                    "name": "S27 · 网络配置",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 0,
+                    "y": 5900,
+                    "parentIndex": 26,
+                    "parentX": 0,
+                    "parentY": 5900,
+                    "boardX": 0,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 0,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 195.00000476837158,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "action · 取消，返回网络",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+                    "type": "board",
+                    "name": "S27 · 网络配置",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 0,
+                    "y": 5900,
+                    "parentIndex": 26,
+                    "parentX": 0,
+                    "parentY": 5900,
+                    "boardX": 0,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 0,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 195.00000476837158,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "取消，返回网络",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+                    "type": "board",
+                    "name": "S27 · 网络配置",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 0,
+                    "y": 5900,
+                    "parentIndex": 26,
+                    "parentX": 0,
+                    "parentY": 5900,
+                    "boardX": 0,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 0,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 195.00000476837158,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          }
+        ],
+        "texts": [
+          "HERDR POCKET  /  交互原型",
+          "编辑网络与影响",
+          "工作网络 · Tailscale",
+          "控制地址：使用默认\n设备名称：自动\n仅保存公开配置，不收集设备秘密。",
+          "修改前检查影响",
+          "工作站 01 引用此网络。保存或停用会停止该主机的连接，之后需重新核对。",
+          "保存结果未知",
+          "旧连接许可已撤销；先核对当前主机与网络状态。",
+          "演示保存并返回",
+          "取消，返回网络",
+          "交互原型 · 示例资料，不执行配置或连接"
+        ]
+      },
+      {
+        "id": "b9d502c0-514c-80a9-8008-e7033db44885",
+        "name": "S29 · 审查网络迁移",
+        "children": [
+          {
+            "name": "action · 演示确认导入",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033dc11f0a",
+                    "type": "board",
+                    "name": "S30 · 导入后的网络",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 1350,
+                    "y": 5900,
+                    "parentIndex": 29,
+                    "parentX": 1350,
+                    "parentY": 5900,
+                    "boardX": 1350,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 1350,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 1545.0000047683716,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "演示确认导入",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033dc11f0a",
+                    "type": "board",
+                    "name": "S30 · 导入后的网络",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 1350,
+                    "y": 5900,
+                    "parentIndex": 29,
+                    "parentX": 1350,
+                    "parentY": 5900,
+                    "boardX": 1350,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 1350,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 1545.0000047683716,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "action · 取消，返回网络",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+                    "type": "board",
+                    "name": "S27 · 网络配置",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 0,
+                    "y": 5900,
+                    "parentIndex": 26,
+                    "parentX": 0,
+                    "parentY": 5900,
+                    "boardX": 0,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 0,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 195.00000476837158,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "取消，返回网络",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+                    "type": "board",
+                    "name": "S27 · 网络配置",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 0,
+                    "y": 5900,
+                    "parentIndex": 26,
+                    "parentX": 0,
+                    "parentY": 5900,
+                    "boardX": 0,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 0,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 195.00000476837158,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          }
+        ],
+        "texts": [
+          "HERDR POCKET  /  交互原型",
+          "审查网络迁移",
+          "同名网络 · 新建副本",
+          "本机：工作网络 · Tailscale\n导入：工作网络 · Tailscale\n保留原配置；新网络默认停用。",
+          "本机授权与主机绑定",
+          "导入网络不含设备身份；需要单独认证。导入的主机按选择引用新网络。",
+          "终端字号偏好",
+          "☐ 应用文件中的字号：18\n默认不勾选，当前字号保持不变。",
+          "演示确认导入",
+          "取消，返回网络",
+          "交互原型 · 示例资料，不执行配置或连接"
+        ]
+      },
+      {
+        "id": "b9d502c0-514c-80a9-8008-e7033dc11f0a",
+        "name": "S30 · 导入后的网络",
+        "children": [
+          {
+            "name": "action · 返回网络配置",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+                    "type": "board",
+                    "name": "S27 · 网络配置",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 0,
+                    "y": 5900,
+                    "parentIndex": 26,
+                    "parentX": 0,
+                    "parentY": 5900,
+                    "boardX": 0,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 0,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 195.00000476837158,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "返回网络配置",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+                    "type": "board",
+                    "name": "S27 · 网络配置",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 0,
+                    "y": 5900,
+                    "parentIndex": 26,
+                    "parentX": 0,
+                    "parentY": 5900,
+                    "boardX": 0,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 0,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 195.00000476837158,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "action · 返回迁移审查",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033db44885",
+                    "type": "board",
+                    "name": "S29 · 审查网络迁移",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 900,
+                    "y": 5900,
+                    "parentIndex": 28,
+                    "parentX": 900,
+                    "parentY": 5900,
+                    "boardX": 900,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 900,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 1095.0000047683716,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          },
+          {
+            "name": "返回迁移审查",
+            "targets": [
+              {
+                "trigger": "click",
+                "action": {
+                  "type": "navigate-to",
+                  "destination": {
+                    "id": "b9d502c0-514c-80a9-8008-e7033db44885",
+                    "type": "board",
+                    "name": "S29 · 审查网络迁移",
+                    "blocked": false,
+                    "hidden": false,
+                    "visible": true,
+                    "proportionLock": false,
+                    "constraintsHorizontal": null,
+                    "constraintsVertical": null,
+                    "fixedWhenScrolling": false,
+                    "borderRadius": 20,
+                    "borderRadiusTopLeft": 20,
+                    "borderRadiusTopRight": 20,
+                    "borderRadiusBottomRight": 20,
+                    "borderRadiusBottomLeft": 20,
+                    "opacity": null,
+                    "blendMode": "normal",
+                    "shadows": [],
+                    "blur": null,
+                    "backgroundBlur": null,
+                    "exports": [],
+                    "x": 900,
+                    "y": 5900,
+                    "parentIndex": 28,
+                    "parentX": 900,
+                    "parentY": 5900,
+                    "boardX": 900,
+                    "boardY": 5900,
+                    "width": 390.00000953674316,
+                    "height": 843.9999580383301,
+                    "bounds": {
+                      "x": 900,
+                      "y": 5900,
+                      "width": 390.00000953674316,
+                      "height": 843.9999580383301
+                    },
+                    "center": {
+                      "x": 1095.0000047683716,
+                      "y": 6321.999979019165
+                    },
+                    "rotation": 0,
+                    "flipX": false,
+                    "flipY": false,
+                    "fills": [
+                      {
+                        "fillColor": "#f8fafc",
+                        "fillOpacity": 1,
+                        "fillColorGradient": null,
+                        "fillColorRefFile": null,
+                        "fillColorRefId": null,
+                        "fillImage": null
+                      }
+                    ],
+                    "strokes": [],
+                    "layoutChild": null,
+                    "layoutCell": null,
+                    "interactions": [],
+                    "tokens": {},
+                    "clipContent": true,
+                    "showInViewMode": true,
+                    "grid": null,
+                    "flex": null,
+                    "guides": [],
+                    "rulerGuides": [],
+                    "horizontalSizing": "fix",
+                    "verticalSizing": "fix"
+                  },
+                  "preserveScrollPosition": false
+                }
+              }
+            ]
+          }
+        ],
+        "texts": [
+          "HERDR POCKET  /  交互原型",
+          "导入后的网络",
+          "网络资料已添加 · 示例",
+          "工作网络（新） · 已停用\n原同名网络保留；本机身份需单独配置。",
+          "连接尚不可用",
+          "可继续本地配对审查；连接需网络组件与本机授权，不会自动连接。",
+          "字号保持原值",
+          "未选择导入偏好，本机字号未覆盖。",
+          "返回网络配置",
+          "返回迁移审查",
+          "交互原型 · 示例资料，不执行配置或连接"
+        ]
+      }
+    ],
+    "home": [
+      {
+        "type": "navigate-to",
+        "destination": {
+          "id": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+          "type": "board",
+          "name": "S27 · 网络配置",
+          "blocked": false,
+          "hidden": false,
+          "visible": true,
+          "proportionLock": false,
+          "constraintsHorizontal": null,
+          "constraintsVertical": null,
+          "fixedWhenScrolling": false,
+          "borderRadius": 20,
+          "borderRadiusTopLeft": 20,
+          "borderRadiusTopRight": 20,
+          "borderRadiusBottomRight": 20,
+          "borderRadiusBottomLeft": 20,
+          "opacity": null,
+          "blendMode": "normal",
+          "shadows": [],
+          "blur": null,
+          "backgroundBlur": null,
+          "exports": [],
+          "x": 0,
+          "y": 5900,
+          "parentIndex": 26,
+          "parentX": 0,
+          "parentY": 5900,
+          "boardX": 0,
+          "boardY": 5900,
+          "width": 390.00000953674316,
+          "height": 843.9999580383301,
+          "bounds": {
+            "x": 0,
+            "y": 5900,
+            "width": 390.00000953674316,
+            "height": 843.9999580383301
+          },
+          "center": {
+            "x": 195.00000476837158,
+            "y": 6321.999979019165
+          },
+          "rotation": 0,
+          "flipX": false,
+          "flipY": false,
+          "fills": [
+            {
+              "fillColor": "#f8fafc",
+              "fillOpacity": 1,
+              "fillColorGradient": null,
+              "fillColorRefFile": null,
+              "fillColorRefId": null,
+              "fillImage": null
+            }
+          ],
+          "strokes": [],
+          "layoutChild": null,
+          "layoutCell": null,
+          "interactions": [],
+          "tokens": {},
+          "clipContent": true,
+          "showInViewMode": true,
+          "grid": null,
+          "flex": null,
+          "guides": [],
+          "rulerGuides": [],
+          "horizontalSizing": "fix",
+          "verticalSizing": "fix"
+        },
+        "preserveScrollPosition": false
+      }
+    ]
+  },
+  "log": ""
+}

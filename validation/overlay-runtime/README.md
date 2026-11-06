@@ -88,7 +88,7 @@ CARGO_TARGET_DIR=/private/tmp/herdr-overlay-runtime-target cargo test --locked -
 CARGO_TARGET_DIR=/private/tmp/herdr-portable-stream-target cargo test --locked --offline --manifest-path validation/native/portable-stream/Cargo.toml
 ```
 
-第二条实际包含原 8 项 portable 测试与 4 项精确 `nodes.txt` fake-engine FFI 测试。fake engine 不创建网络节点、socket、DNS 或身份文件；它验证新 Rust 源模板的 epoch、selector、drain、timeout 配额、拒绝文件凭据与错误脱敏。旧 8 项中的自有 loopback 测试需要允许 localhost bind；本轮默认 sandbox 禁止 bind，已在授权的 sandbox 外复跑通过。不能把 fake engine 或 C fixture 通过当成真实 Heeler 新四符号已编译/链接；更新后补丁的真实云构建尚未执行。新增 race 回归以屏障固定 secure-load/native-start 与 detach 的交错，核对撤销后不能激活原 revision、迟到清理失败仍占配额、activation 先完成时仍保持 admission 关闭，以及 managed revision 不会打开同 key 的 legacy 替换。
+第二条实际包含原 8 项 portable 测试与 4 项精确 `nodes.txt` fake-engine FFI 测试。fake engine 不创建网络节点、socket、DNS 或身份文件；它验证新 Rust 源模板的 epoch、selector、drain、timeout 配额、拒绝文件凭据与错误脱敏。旧 8 项中的自有 loopback 测试需要允许 localhost bind；本轮默认 sandbox 禁止 bind，已在授权的 sandbox 外复跑通过。不能把 fake engine 或 C fixture 通过当成真实 Heeler 新四符号已编译/链接；离线检查时尚未执行真实云构建；随后三桌面固定源码 check/link/load 已通过，详见[网络批次验收](../../docs/18-mobile-network-profiles.md)，不代表真实节点运行。新增 race 回归以屏障固定 secure-load/native-start 与 detach 的交错，核对撤销后不能激活原 revision、迟到清理失败仍占配额、activation 先完成时仍保持 admission 关闭，以及 managed revision 不会打开同 key 的 legacy 替换。
 
 ## 当前边界
 

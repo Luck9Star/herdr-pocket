@@ -53,7 +53,7 @@ flutter run
 
 ## 尚未具备
 
-三网络原生桥、真机性能采样、手机配对及加密迁移仍未实现。M1a 已新增真实 SSH 只读适配源码，下述独立 CI 与设备结果才决定其验证状态。它们不能因本壳编译或单元测试通过而改为“已验证”。`terminal_view` 的 Unicode 宽度表、emoji grapheme、SGR 支持与系统 fallback 需运行同 fixture 后判定；没有预先认定其优于 xterm.js。
+Android EasyTier 的节点与绑定 stream 桥正在原型接入；缺少原生桥、未启动节点或实际路由与冻结身份不一致时拒绝连接，不能回退系统 TCP。Tailscale、ZeroTier、真机性能采样与加密迁移尚未完成。节点引擎启动不代表入网或 SSH 成功；具体构建、设备和真实网络结果以对应验证记录为准。Flutter 新增节点和 socket 测试尚未在本机运行。M1a 只读适配源码的云端结果也不能替代手机验证。`terminal_view` 的 Unicode 宽度表、emoji grapheme、SGR 支持与系统 fallback 需运行同 fixture 后判定；没有预先认定其优于 xterm.js。
 # 组合字符渲染诊断
 
 Mac GUI smoke 发现分解重音 `e\u0301 A\u030a n\u0303` 看起来只有基字符。固定 `terminal_view 0.5.0` 源码中 buffer 将零宽字符存入 `getCombined`，`getText` 保留它们；`TerminalPainter._paintLineForeground` 的 ASCII 批处理却只采集基字符，未检查/传递 combined。新增 `diagnostic/combining_render_test.dart` 用同一字体、真实 buffer 和 painter 写入输入/复制 API codepoints、cursorX、两张 PNG 与像素对照 JSON，直接验证该假设。

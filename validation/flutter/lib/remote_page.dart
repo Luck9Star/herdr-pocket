@@ -10,6 +10,8 @@ import 'remote_auxiliary.dart';
 import 'remote_input_platform.dart';
 import 'device_keys.dart';
 import 'network_profiles.dart';
+import 'network_runtime.dart';
+import 'network_identity.dart';
 
 String pemFromSingleLineInput(String text) {
   final normalized = text.replaceAll(r'\n','\n').trim();
@@ -34,7 +36,21 @@ class RemotePage extends StatefulWidget {
 }
 
 class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
-  late final adapter = widget.adapter ?? RemoteReadOnlyAdapter(inputJournal:const PlatformRemoteInputJournal());
+  final runtime = const NativeNetworkRuntime();
+  late final NetworkConnectionBinding? originalNetworkBinding;
+  bool networkBindingInvalidated = false;
+  NetworkNodeBinding? frozenNode;
+  late final adapter = widget.networkBinding?.profile != null
+    ? RemoteReadOnlyAdapter(inputJournal:const PlatformRemoteInputJournal(),connector:(host,port) async {
+        final node = frozenNode;
+        if (node == null || widget.networkBinding?.stillCurrent() != true) throw const RemoteFailure('network_binding_changed');
+        final socket = await runtime.open(node,host,port);
+        if (widget.networkBinding?.stillCurrent() != true || !identical(node,frozenNode)) {
+          socket.destroy(); throw const RemoteFailure('network_binding_changed');
+        }
+        return socket;
+      })
+    : widget.adapter ?? RemoteReadOnlyAdapter(inputJournal:const PlatformRemoteInputJournal());
   final fields = <String,TextEditingController>{
     for (final name in ['host','port','username','expectedHostKey','privateKeyPem','socketPath','herdrPath','session','paneId'])
       name:TextEditingController(text:name == 'port' ? '22' : ''),
@@ -76,6 +92,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState(); WidgetsBinding.instance.addObserver(this);
+    originalNetworkBinding = widget.networkBinding;
     terminalFocus.addListener(terminalFocusChanged);
     widget.visibility?.addListener(visibilityChanged);
     widget.networkBinding?.changes?.addListener(networkChanged);
@@ -97,9 +114,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void didUpdateWidget(RemotePage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.networkBinding,widget.networkBinding)) {
+      networkBindingInvalidated = true;
       oldWidget.networkBinding?.changes?.removeListener(networkChanged);
       widget.networkBinding?.changes?.addListener(networkChanged);
-      networkChanged();
+      stop('网络绑定已改变 · 已停止，请关闭本页后重新审查');
     }
     if (!identical(oldWidget.visibility,widget.visibility)) {
       oldWidget.visibility?.removeListener(visibilityChanged);
@@ -109,6 +127,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   void networkChanged() {
     if (widget.networkBinding?.stillCurrent() == false) {
+      networkBindingInvalidated = true;
       stop('网络绑定已改变、停用或目录不可用 · 已停止，请关闭后重新审查');
     } else if (mounted) { setState(() {}); }
   }
@@ -125,7 +144,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   void stop([String message = '已取消；不会重连或发送输入']) {
     inputGate.invalidate(); terminalFocus.unfocus();
-    request++; identityLease?.cancel(); unawaited(adapter.cancel());
+    request++; frozenNode = null; identityLease?.cancel(); unawaited(adapter.cancel());
     widget.onStopped?.call();
     fields['privateKeyPem']!.clear();
     if (mounted) setState(() { busy = false; live = false; reviewed = false; status = message; });
@@ -143,11 +162,18 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   Future<void> connect() async {
-    if (!reviewed || busy || widget.visibility?.value == false) return;
+    if (networkBindingInvalidated || !identical(originalNetworkBinding,widget.networkBinding) ||
+        !reviewed || busy || widget.visibility?.value == false) return;
     final ticket = ++request;
     setState(() { busy = true; });
     try {
-      widget.networkBinding?.requireTransport();
+      final network = widget.networkBinding;
+      if (network?.profile != null) {
+        if (!network!.stillCurrent()) throw const RemoteFailure('network_binding_changed');
+        frozenNode = await runtime.freeze(network.profile!,NativeNetworkIdentityStore());
+        if (!mounted || ticket != request) return;
+        network.requireTransport(overlayReady:true);
+      } else { network?.requireTransport(); }
       widget.onConnecting?.call();
       final values = {
         'schemaVersion':1,for (final e in fields.entries) if (e.key != 'port' && e.key != 'privateKeyPem') e.key:e.value.text,
@@ -157,7 +183,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       if (widget.pairedTarget != null) {
         final publicKey = await widget.deviceKeys!.public(widget.keyHandle!);
         if (!mounted || ticket != request) return;
-        widget.networkBinding?.requireTransport();
+        widget.networkBinding?.requireTransport(overlayReady:frozenNode != null);
         if (publicKey != widget.devicePublicKey) throw const RemoteFailure('device_key_changed');
         identityLease = DeviceIdentityLease(widget.deviceKeys!,widget.keyHandle!,publicKey);
         config = RemoteConfig.fromDeviceJson(values,identityLease!.identity());
@@ -184,7 +210,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         try { terminal!.write(frame.ansi); } finally { rendering = false; }
         if (frame.full && adapter.inputTarget != null) {
           final target = adapter.inputTarget!;
-          final key = '${target.hostFingerprint}\u0000${target.host}:${target.port}\u0000${target.username}\u0000${target.socketPath}\u0000${target.paneId}\u0000${target.terminalId}';
+          final key = '${target.route}\u0000${target.hostFingerprint}\u0000${target.host}:${target.port}\u0000${target.username}\u0000${target.socketPath}\u0000${target.paneId}\u0000${target.terminalId}';
           if (draftTarget != key) {
             if (draftTarget != null) drafts[draftTarget!] = draft.text;
             draft.text = drafts[key] ?? ''; draftTarget = key;
@@ -214,7 +240,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       final code = error is RemoteFailure ? error.code : 'connection_failed';
       setState(() { busy = false; live = false; reviewed = false;
         status = switch (code) {
-          'provider_unavailable' => 'provider_unavailable · 此网络的手机连接桥尚未接入，已停止；不会改走系统 TCP 或 DNS',
+          'provider_unavailable' => 'provider_unavailable · 此平台或网络的连接桥不可用，已停止；不会改走系统 TCP 或 DNS',
+          'network_node_not_started' => '节点未确认以此配置与身份启动 · 请先在网络管理中刷新并明确启动，不代表入网成功',
+          'network_identity_unavailable' => '本机网络身份不可用或当前无密码模式不受支持 · 已停止，请核对本机资料',
+          'network_runtime_unavailable' => '节点状态或连接桥不可确认 · 已停止，请刷新状态后重新审查',
           'network_binding_changed' => '网络绑定已改变或停用 · 已停止，请关闭后重新审查',
           'device_key_unavailable' || 'device_key_changed' => '设备密钥锁定、丢失或不可用 · 已停止，不会生成替代身份或使用明文',
           'host_key_mismatch' => '主机指纹不符 · 已在认证前拒绝，请从可信渠道重新核验',
@@ -500,11 +529,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           input('privateKeyPem','临时 Ed25519 私钥',secret:true),
           ] else const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('设备独立身份 · 私钥不进入表单；密钥不可用时停止')),
           CheckboxListTile(key:const ValueKey('remote-review'),contentPadding:EdgeInsets.zero,
-            value:reviewed,onChanged:busy ? null : (value) => setState(() { reviewed = value ?? false; }),
+            value:reviewed,onChanged:busy || networkBindingInvalidated ? null : (value) => setState(() { reviewed = value ?? false; }),
             title:const Text('我已通过可信渠道核验主机公钥、账号与目标资料'),
             subtitle:const Text('输入或保存资料不等于信任；任何编辑都会清除此确认。')),
           const SizedBox(height:8),
-          FilledButton.icon(key:const ValueKey('remote-connect'),onPressed:reviewed && !busy ? connect : null,
+          if (networkBindingInvalidated) const Text('网络绑定已改变 · 请关闭本页并重新打开，审查后才能连接。',key:ValueKey('remote-network-invalidated')),
+          FilledButton.icon(key:const ValueKey('remote-connect'),onPressed:reviewed && !busy && !networkBindingInvalidated ? connect : null,
             icon:const Icon(Icons.lock_outline),label:Text(dashboard == null ? '核验并读取会话看板' : '重新审查并连接')),
           ],
           if (snapshot != null && terminal != null) ...[

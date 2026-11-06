@@ -90,8 +90,8 @@ class NetworkConnectionBinding {
   final int Function()? fontSize;
   int get terminalFontSize => fontSize?.call() ?? 14;
   String get label => profile == null ? '系统直连（沿用系统路由）' : '${profile!.label} · ${profile!.provider}';
-  void requireTransport() {
+  void requireTransport({bool overlayReady=false}) {
     if (!stillCurrent()) throw const RemoteFailure('network_binding_changed');
-    if (profile != null) throw const RemoteFailure('provider_unavailable');
+    if (profile != null && (!overlayReady || !profile!.enabled || profile!.provider != 'easytier')) throw const RemoteFailure('provider_unavailable');
   }
 }

@@ -19,8 +19,12 @@ final class InputJournalFile {
                 else if char == "[" || char == "]" { throw DeviceKeyError.invalidHandle }
             }
         }
-        guard !quoted, colons == fields.count, braces == 2,
-              let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any], Set(obj.keys) == fields else { throw DeviceKeyError.invalidHandle }
+        guard !quoted, braces == 2,
+              let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let version = obj["schemaVersion"] as? NSNumber, CFGetTypeID(version) != CFBooleanGetTypeID(),
+              version.doubleValue == Double(version.intValue), (1...2).contains(version.intValue) else { throw DeviceKeyError.invalidHandle }
+        let expected = version.intValue == 1 ? fields : fields.union(["route"])
+        guard colons == expected.count, Set(obj.keys) == expected else { throw DeviceKeyError.invalidHandle }
         func integer(_ name: String, _ low: Int, _ high: Int) throws {
             guard let value = obj[name] as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(),
                   value.doubleValue == Double(value.int64Value), value.int64Value >= low, value.int64Value <= high else { throw DeviceKeyError.invalidHandle }
@@ -31,7 +35,12 @@ final class InputJournalFile {
                   pattern == nil || value.range(of: "^(?:" + pattern! + ")$", options: .regularExpression) != nil else { throw DeviceKeyError.invalidHandle }
             return value
         }
-        try integer("schemaVersion",1,1); try integer("port",1,65535); try integer("generation",1,2147483647)
+        try integer("schemaVersion",1,2); try integer("port",1,65535); try integer("generation",1,2147483647)
+        if version.intValue == 2, !(obj["route"] is NSNull) {
+            let route = try text("route",256,"easy-tier:[a-f0-9]{32}:[1-9][0-9]{0,9}:[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}")
+            let parts = route.split(separator: ":")
+            guard parts.count == 4, let revision = Int64(parts[2]), revision <= 2147483647 else { throw DeviceKeyError.invalidHandle }
+        }
         _ = try text("requestId",32,"[a-f0-9]{32}"); _ = try text("host",253,"[A-Za-z0-9:.\\[\\]_-]+")
         let user = try text("username",128); guard !user.hasPrefix("-"), user.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else { throw DeviceKeyError.invalidHandle }
         _ = try text("hostFingerprint",100,"SHA256:[A-Za-z0-9+/]{43}")

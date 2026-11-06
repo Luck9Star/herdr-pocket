@@ -66,6 +66,7 @@ def prepare(destination):
     shutil.copy2(source / 'native/android/HostCatalogFile.kt', activity.with_name('HostCatalogFile.kt'))
     shutil.copy2(source / 'native/android/InputJournalFile.kt', activity.with_name('InputJournalFile.kt'))
     shutil.copy2(source / 'native/android/NetworkIdentityChannel.kt', activity.with_name('NetworkIdentityChannel.kt'))
+    shutil.copy2(source / 'native/android/NetworkRuntimeChannel.kt', activity.with_name('NetworkRuntimeChannel.kt'))
     gradle = destination / 'android/app/build.gradle.kts'
     script = gradle.read_text()
     native = (ROOT / 'validation/pairing/native/android').as_posix()

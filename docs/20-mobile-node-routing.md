@@ -2,6 +2,8 @@
 
 2026-11-06，延续 [本机入网资料批次](19-mobile-network-identity.md)。本批把 Android vault 内部配置读取、共享 Rust 节点服务和 Tauri 手机连接路径接在一起。**这是源码集成和隔离验证；没有启动真实 EasyTier 节点、重建 APK 或触发 Actions。默认应用缺少已验证的 Android 原生库时仍拒绝组网连接。** [现有下载](18-mobile-network-profiles.md#android-下载与实际结果)继续对应 `040eb26`，不包含本批。
 
+后续 [Flutter 原生通道批次](21-flutter-native-network.md)已补平台字节流和节点 GUI，并准备 Android 分层构建；以下保留本批历史范围。
+
 ## 从本机资料到节点
 
 Android 新增 JNI 专用配置入口，在同一次加锁、认证解密中核验 profile、handle、模式和稳定 instanceId。只接受已审查的网络名称和 peers，构建固定 TOML：instance_id、DHCP、空 listeners、network_identity、peer URI 和 no_tun。没有任意 TOML、秘密读取或导出到 Dart／JS 的接口。

@@ -1,0 +1,124 @@
+name: Android network candidate batch (arm64)
+on:
+  push:
+    branches: ['codex/network-batch/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: network-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17.0.18+8'
+      - name: Install pinned Android and Rust toolchains
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'ndk;28.2.13676358'
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup target add --toolchain 1.95.0 aarch64-linux-android
+      - name: Build and statically inspect candidate
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 validation/native/tool/android_bundle.py build "$RUNNER_TEMP/android-native"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-native-${{ github.sha }}
+          path: ${{ runner.temp }}/android-native
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: android-native-failure-${{ github.sha }}
+          path: ${{ runner.temp }}/android-native
+          if-no-files-found: ignore
+          retention-days: 14
+  apps:
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [flutter, tauri]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17.0.18+8'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: android-native-${{ github.sha }}
+          path: ${{ runner.temp }}/android-native
+      - name: Install toolchain and verify native input
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358'
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+          rustup target add aarch64-linux-android
+          echo "NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "CC_aarch64_linux_android=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_linux_android=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang++" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> "$GITHUB_ENV"
+          echo "HEELER_ET_LIB_DIR=$RUNNER_TEMP/android-native" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang" >> "$GITHUB_ENV"
+          echo "READELF=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" >> "$GITHUB_ENV"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 validation/native/tool/android_bundle.py verify "$RUNNER_TEMP/android-native" --commit "$GITHUB_SHA" --readelf "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: matrix.app == 'tauri'
+        with:
+          node-version: '22.22.2'
+      - name: Build Tauri arm64 APK
+        if: matrix.app == 'tauri'
+        working-directory: validation/tauri
+        run: |
+          npm ci
+          npm run tauri -- android init --ci
+          python3 scripts/wire-android.py
+          mkdir -p src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a
+          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/
+          npm run tauri -- android build --debug --target aarch64 --features network-easytier --apk --ci
+          mapfile -t apks < <(find src-tauri/gen/android -name '*.apk' -type f)
+          test "${#apks[@]}" -eq 1
+          cp "${apks[0]}" "$RUNNER_TEMP/app.apk"
+      - name: Build Flutter arm64 APK
+        if: matrix.app == 'flutter'
+        run: |
+          python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+          echo "$RUNNER_TEMP/flutter-sdk/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/flutter-sdk/bin:$PATH"
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
+          cargo build --manifest-path validation/flutter-network-runtime/Cargo.toml --locked --target aarch64-linux-android --features network-easytier
+          mkdir -p "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a"
+          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
+          cp validation/flutter-network-runtime/target/aarch64-linux-android/debug/libherdr_flutter_network_runtime.so "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
+          cd "$RUNNER_TEMP/flutter-probe"
+          flutter pub get --enforce-lockfile
+          flutter build apk --debug --target-platform android-arm64
+          cp build/app/outputs/flutter-apk/app-debug.apk "$RUNNER_TEMP/app.apk"
+      - name: Verify APK ABI, native hash and dynamic dependency
+        run: python3 validation/native/tool/android_bundle.py apk "$RUNNER_TEMP/app.apk" "$RUNNER_TEMP/android-native" --commit "$GITHUB_SHA" --readelf "$READELF" --app '${{ matrix.app }}'
+      - name: Record APK provenance and validation boundary
+        env:
+          APP: ${{ matrix.app }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/app-output"
+          cp "$RUNNER_TEMP/app.apk" "$RUNNER_TEMP/app-output/app.apk"
+          cp "$RUNNER_TEMP/android-native/manifest.json" "$RUNNER_TEMP/app-output/native-manifest.json"
+          python3 validation/native/tool/android_bundle.py report "$RUNNER_TEMP/app-output" --commit "$GITHUB_SHA" --app "$APP"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-${{ matrix.app }}-network-${{ github.sha }}
+          path: ${{ runner.temp }}/app-output
+          if-no-files-found: error
+          retention-days: 14

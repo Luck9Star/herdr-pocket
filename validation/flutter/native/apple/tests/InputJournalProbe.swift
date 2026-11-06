@@ -40,6 +40,19 @@ struct InputJournalProbe {
         let catalog = HostCatalogFile(testDirectory:base)
         try check(try catalog.load()["contents"] == "")
         try journal.clear(record:second)
+        fields["schemaVersion"] = 2
+        fields["route"] = "easy-tier:0123456789abcdef0123456789abcdef:3:a0000000-0000-4000-8000-000000000001"
+        let routed = try wire(fields); try journal.prepare(record:routed)
+        try check(try journal.read() == routed)
+        try rejects { try journal.clear(record:second) }
+        try journal.clear(record:routed)
+        fields["route"] = "easy-tier:0123456789abcdef0123456789abcdef:03:a0000000-0000-4000-8000-000000000001"
+        try rejects { try journal.prepare(record:wire(fields)) }
+        fields["route"] = "easy-tier:0123456789abcdef0123456789abcdef:2147483648:a0000000-0000-4000-8000-000000000001"
+        try rejects { try journal.prepare(record:wire(fields)) }
+        fields["route"] = NSNull()
+        let nullRoute = try wire(fields); try journal.prepare(record:nullRoute)
+        try check(try journal.read() == nullRoute); try journal.clear(record:nullRoute)
         print("{\"checks\":\(checks),\"scope\":\"temporary public unknown-write marker; no command content, Flutter channel or system key store execution\"}")
     }
 }

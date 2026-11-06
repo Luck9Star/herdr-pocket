@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'host_catalog.dart';
 import 'network_identity.dart';
 import 'network_profiles.dart';
+import 'network_runtime.dart';
 import 'remote_adapter.dart';
 
 /// Keeps a reviewed identity write in the catalog's existing serialization lane.
@@ -23,6 +24,12 @@ class CatalogNetworkIdentityStore implements NetworkIdentityStore {
       throw const RemoteFailure('network_profile_stale');
     }
   }
+  void checkCurrent() {
+    if (!catalog.ready || catalog.revision != expectedRevision ||
+        !catalog.networkProfiles.any((p) => jsonEncode(p.toJson()) == jsonEncode(profile.toJson()))) {
+      throw const RemoteFailure('network_profile_stale');
+    }
+  }
   @override
   Future<NetworkIdentityRecord?> status(NetworkProfile requested) {
     check(requested); return delegate.status(profile);
@@ -31,13 +38,21 @@ class CatalogNetworkIdentityStore implements NetworkIdentityStore {
   Future<NetworkIdentityRecord> create(NetworkProfile requested,String mode,Uint8List secret) {
     check(requested);
     return catalog.guardedNetworkOperation(profile,expectedRevision:expectedRevision,
-      beforeDispatch:closeAffected,operation:() => delegate.create(profile,mode,secret));
+      beforeDispatch:closeAffected,operation:() async {
+        await const NativeNetworkRuntime().stopBeforeChange(profile);
+        checkCurrent();
+        return delegate.create(profile,mode,secret);
+      });
   }
   @override
   Future<void> delete(NetworkProfile requested,NetworkIdentityRecord identity) {
     check(requested);
     return catalog.guardedNetworkOperation(profile,expectedRevision:expectedRevision,
-      beforeDispatch:closeAffected,operation:() => delegate.delete(profile,identity));
+      beforeDispatch:closeAffected,operation:() async {
+        await const NativeNetworkRuntime().stopBeforeChange(profile);
+        checkCurrent();
+        return delegate.delete(profile,identity);
+      });
   }
 }
 

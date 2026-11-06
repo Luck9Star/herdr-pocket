@@ -139,3 +139,5 @@ artifact / cache 等存储存在额度、保留和计费规则，不能从计算
 手机闭环修复批次 `phones-observe-*` 只复验原版主机的 GUI、两套 Android 安装包、两个 API 35 模拟器和本次需要修复的 iOS/辅助工具 runner。已取得的协议、输入扩展和 overlay ABI 记录保留其原有 SHA。Flutter iOS 和 helper 的 macOS 任务使用本项目已成功调度的 `macos-15`。[GitHub 托管 runner](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 
 若 iOS 与 helper 已有同系列的独立结果，`android-observe-<批次名>` 只重建两套 Android 包并验证两种模拟器及 Flutter Linux widget，不再重复启动 Linux Tauri driver。已通过的 helper、协议与原生 ABI 对照保留原来运行的证据，避免重复申请桌面或 iOS runner。
+
+Android 组网候选另设[显式批次同源实验工作流](../.github/workflows/android-network-experiment.yml)：先产出 arm64/API 35 原生库与来源材料，再由两套 GUI 校验后消费。它只匹配新的 `codex/network-batch/**`，不匹配常规开发或既有 `codex/batch/**`，不改变常规包的 feature/ABI。手动入口须先在默认分支注册，不能依赖未注册的原型分支 dispatch。工作流目前只有源码和静态检查证据，尚无实际运行；动态加载、安装、节点与 SSH 另验，详见[本批记录](21-flutter-native-network.md)。

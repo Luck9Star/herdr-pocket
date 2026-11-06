@@ -19,20 +19,23 @@ class RemoteInputPending {
   final DateTime at;
   static const fields = {'schemaVersion','requestId','host','port','username','hostFingerprint',
     'session','socketPath','paneId','terminalId','generation','createdAt'};
+  static const routedFields = {...fields,'route'};
   factory RemoteInputPending.create(String id, RemoteInputTarget target) {
     final at = DateTime.now().toUtc();
-    final raw = jsonEncode({'schemaVersion':1,'requestId':id,'host':target.host,'port':target.port,
+    final raw = jsonEncode({'schemaVersion':target.route == 'system' ? 1 : 2,'requestId':id,'host':target.host,'port':target.port,
       'username':target.username,'hostFingerprint':target.hostFingerprint,'session':target.session,
       'socketPath':target.socketPath,'paneId':target.paneId,'terminalId':target.terminalId,
-      'generation':target.generation,'createdAt':at.toIso8601String()});
+      'generation':target.generation,'createdAt':at.toIso8601String(),
+      if (target.route != 'system') 'route':target.route});
     RemoteInputPending.parse(raw);
     return RemoteInputPending(raw,id,target,at);
   }
   factory RemoteInputPending.parse(String raw) {
     if (utf8ByteLength(raw) > 8192) throw const FormatException('input_journal_invalid');
     final data = jsonDecode(raw);
-    if (data is! Map<String,dynamic> || data.length != fields.length ||
-        data.keys.any((k) => !fields.contains(k)) || data['schemaVersion'] != 1 || jsonEncode(data) != raw) {
+    if (data is! Map<String,dynamic>) throw const FormatException('input_journal_invalid');
+    final expected = data['schemaVersion'] == 1 ? fields : data['schemaVersion'] == 2 ? routedFields : <String>{};
+    if (data.length != expected.length || data.keys.any((k) => !expected.contains(k)) || jsonEncode(data) != raw) {
       throw const FormatException('input_journal_invalid');
     }
     String field(String key, int limit) {
@@ -47,6 +50,7 @@ class RemoteInputPending {
     final fingerprint = field('hostFingerprint',100), host = field('host',253);
     final username = field('username',128), pane = field('paneId',128);
     final port = data['port'], generation = data['generation'];
+    final route = data['schemaVersion'] == 1 || data['route'] == null ? 'system' : field('route',256);
     final at = DateTime.tryParse(field('createdAt',40));
     if (!RegExp(r'^[0-9a-f]{32}$').hasMatch(id) || !RegExp(r'^term_[0-9a-f]{1,123}$').hasMatch(terminal) ||
         session == 'default' || !RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(session) ||
@@ -54,12 +58,13 @@ class RemoteInputPending {
         socket.split('/').skip(1).any((s) => s.isEmpty || s == '.' || s == '..') ||
         !RegExp(r'^[A-Za-z0-9:.\[\]_-]+$').hasMatch(host) || username.startsWith('-') || RegExp(r'\s').hasMatch(username) ||
         !RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$').hasMatch(fingerprint) || at == null || !at.isUtc ||
-        port is! int || port < 1 || port > 65535 || generation is! int || generation < 1 || generation > 2147483647) {
+        port is! int || port < 1 || port > 65535 || generation is! int || generation < 1 || generation > 2147483647 ||
+        (data['schemaVersion'] == 2 && data['route'] != null && !isValidOverlayRoute(route))) {
       throw const FormatException('input_journal_invalid');
     }
     return RemoteInputPending(raw,id,RemoteInputTarget(connection:Object(),generation:generation,
       host:host,port:port,username:username,hostFingerprint:fingerprint,session:session,
-      socketPath:socket,paneId:pane,terminalId:terminal),at);
+      socketPath:socket,paneId:pane,terminalId:terminal,route:route),at);
   }
 }
 
@@ -81,15 +86,22 @@ class RemoteInputTarget {
   const RemoteInputTarget({required this.connection, required this.generation,
     required this.host, required this.port, required this.username,
     required this.hostFingerprint, required this.session, required this.socketPath,
-    required this.paneId, required this.terminalId});
+    required this.paneId, required this.terminalId, this.route = 'system'});
   final Object connection;
   final int generation, port;
   final String host, username, hostFingerprint, session, socketPath, paneId, terminalId;
+  final String route;
   String get label => '$username@$host:$port / $session / $paneId / $terminalId';
   bool sameEndpoint(RemoteInputTarget other) => host == other.host && port == other.port &&
     username == other.username && hostFingerprint == other.hostFingerprint &&
     session == other.session && socketPath == other.socketPath &&
-    paneId == other.paneId && terminalId == other.terminalId;
+    paneId == other.paneId && terminalId == other.terminalId && route == other.route;
+}
+
+/// Only public, stable metadata identifying the actual overlay socket route.
+bool isValidOverlayRoute(String route) {
+  final match = RegExp(r'^easy-tier:([a-f0-9]{32}):([1-9][0-9]{0,9}):([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$').firstMatch(route);
+  return match != null && int.parse(match.group(2)!) <= 2147483647;
 }
 
 enum RemoteInputMode { observe, direct, draft }

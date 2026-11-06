@@ -6,17 +6,20 @@ import io.flutter.plugin.common.MethodChannel
 import org.herdr.pairing.AndroidDeviceKeyStore
 import java.util.concurrent.Executors
 import android.content.Intent
+import dev.herdr.pocket.NetworkRuntimeChannel
 
 /** Four operations only. All seed/envelope work stays in shared native code. */
 class MainActivity : FlutterActivity() {
     private var scanner: PairScanChannel? = null
     private var documents: ConfigDocumentChannel? = null
+    private var networkRuntime: NetworkRuntimeChannel? = null
     private var networkIdentity: NetworkIdentityChannel? = null
     private val worker = Executors.newSingleThreadExecutor()
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
         scanner = PairScanChannel(this, engine.dartExecutor.binaryMessenger)
         documents = ConfigDocumentChannel(this, engine.dartExecutor.binaryMessenger)
+        networkRuntime = NetworkRuntimeChannel(this, engine.dartExecutor.binaryMessenger)
         networkIdentity = NetworkIdentityChannel(this, engine.dartExecutor.binaryMessenger)
         MethodChannel(engine.dartExecutor.binaryMessenger, "herdr.pocket/input_journal")
             .setMethodCallHandler { call, result ->
@@ -82,5 +85,5 @@ class MainActivity : FlutterActivity() {
         if (scanner?.handle(requestCode, resultCode, data) != true &&
             documents?.handle(requestCode, resultCode, data) != true) super.onActivityResult(requestCode, resultCode, data)
     }
-    override fun onDestroy() { scanner?.close(); documents?.close(); networkIdentity?.close(); worker.shutdown(); super.onDestroy() }
+    override fun onDestroy() { scanner?.close(); documents?.close(); networkIdentity?.close(); networkRuntime?.close(); worker.shutdown(); super.onDestroy() }
 }

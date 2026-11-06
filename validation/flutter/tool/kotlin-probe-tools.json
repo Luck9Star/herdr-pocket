@@ -1,0 +1,58 @@
+[
+  {
+    "file": "kotlin-compiler-embeddable-2.2.21.jar",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-compiler-embeddable/2.2.21/kotlin-compiler-embeddable-2.2.21.jar",
+    "upstreamSha1": "b13aed5cf8412f9ee9d1e4db21bdcfebcc24f606",
+    "sha256": "9588fa696ac5507af764fd5660df6894185e12704ec1bc3f5cb772af4987f295",
+    "bytes": 56908512
+  },
+  {
+    "file": "kotlin-stdlib-2.2.21.jar",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.21/kotlin-stdlib-2.2.21.jar",
+    "upstreamSha1": "fa374a986e128314c3db00a20aae55f72a258511",
+    "sha256": "6558a3d233da56a20934b32159f9db5f86ed5816ef098f78a2c223dc6abb79dd",
+    "bytes": 1761445
+  },
+  {
+    "file": "kotlin-script-runtime-2.2.21.jar",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-script-runtime/2.2.21/kotlin-script-runtime-2.2.21.jar",
+    "upstreamSha1": "e9b021c4e335e4ed7a7e3b32285249ae6bb3a6c8",
+    "sha256": "2b1519b427b514d1536c1b425674b03fe914af637924028e9959c6625442df51",
+    "bytes": 44769
+  },
+  {
+    "file": "kotlin-reflect-1.6.10.jar",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-reflect/1.6.10/kotlin-reflect-1.6.10.jar",
+    "upstreamSha1": "1cbe9c92c12a94eea200d23c2bbaedaf3daf5132",
+    "sha256": "3277ac102ae17aad10a55abec75ff5696c8d109790396434b496e75087854203",
+    "bytes": 3038560
+  },
+  {
+    "file": "kotlin-daemon-embeddable-2.2.21.jar",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-daemon-embeddable/2.2.21/kotlin-daemon-embeddable-2.2.21.jar",
+    "upstreamSha1": "78fde5db1c92786448170b351d8f8868acabd2ce",
+    "sha256": "91c0673c22e44b054ae0314d323860ebe1f3aff3f0ebc74fff82c4733dde09be",
+    "bytes": 347987
+  },
+  {
+    "file": "kotlinx-coroutines-core-jvm-1.8.0.jar",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.8.0/kotlinx-coroutines-core-jvm-1.8.0.jar",
+    "upstreamSha1": "ac1dc37a30a93150b704022f8d895ee1bd3a36b3",
+    "sha256": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5",
+    "bytes": 1548360
+  },
+  {
+    "file": "annotations-13.0.jar",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/annotations/13.0/annotations-13.0.jar",
+    "upstreamSha1": "919f0dfe192fb4e063e7dacadee7f8bb9a2672a9",
+    "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+    "bytes": 17536
+  },
+  {
+    "file": "json-20250517.jar",
+    "url": "https://repo.maven.apache.org/maven2/org/json/json/20250517/json-20250517.jar",
+    "upstreamSha1": "d67181bbd819ccceb929b580a4e2fcb0c8b17cd8",
+    "sha256": "3ea61b2a06e31edf1c91134fe9106b0ebb16628be169f3db75bc7a2b06b45796",
+    "bytes": 82710
+  }
+]

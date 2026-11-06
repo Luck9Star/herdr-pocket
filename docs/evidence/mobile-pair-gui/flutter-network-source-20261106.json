@@ -1,0 +1,271 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-06",
+  "branch": "codex/core-prototype-validation",
+  "baseCommit": "18585d9c86afc2929bc6cef75f86f3c68fb98ab7",
+  "scope": "source integration, synthetic native ABI, desktop JVM and static artifact inspection; no Android SDK build, native node or new APK",
+  "newActionsRun": false,
+  "newApk": false,
+  "existingApkSource": "040eb26ba7c31e071048616a39591e17c74c99ab",
+  "currentArtifactRun": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42158644225",
+  "latestRunsVerified": [
+    {
+      "id": 42159392366,
+      "source": "1fc7dce2f5bec67360180550499089785541ec0e",
+      "conclusion": "success"
+    },
+    {
+      "id": 42158644225,
+      "source": "040eb26ba7c31e071048616a39591e17c74c99ab",
+      "conclusion": "cancelled"
+    }
+  ],
+  "checks": [
+    {
+      "name": "Flutter native runtime final",
+      "result": "passed",
+      "defaultTests": 3,
+      "nativeFixtureTests": 11,
+      "jvmAssertions": 38,
+      "executedBy": [
+        "author",
+        "root",
+        "independent-reviewer"
+      ],
+      "scope": "final repaired source; native C ABI and desktop JVM only; independent reviewer ran these plus its original parked-cleanup regression (12 fixture cases in temporary copy)"
+    },
+    {
+      "name": "shared mobile service final",
+      "result": "passed",
+      "tests": 10,
+      "executedBy": [
+        "author",
+        "root"
+      ],
+      "command": "CARGO_TARGET_DIR=/private/tmp/herdr-transport-overlay-target cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml --features overlay-native-fixture mobile_nodes",
+      "scope": "exact-attempt capability, replacement and cancellation; isolated synthetic ABI"
+    },
+    {
+      "name": "Flutter native runtime strict Clippy",
+      "result": "passed",
+      "executedBy": [
+        "author",
+        "root"
+      ],
+      "scope": "default (author) and native-fixture (author/root), all-targets --no-deps -D warnings; dependency-wide transport diagnostics from previous batch remain outside this claim"
+    },
+    {
+      "name": "Kotlin actual channel compile and static JNI signatures",
+      "result": "passed",
+      "signatures": 4,
+      "executedBy": [
+        "root"
+      ],
+      "command": "python3 validation/flutter/tool/check-network-kotlin.py /private/tmp/herdr-kotlin-2.2.21-check",
+      "scope": "fixed Kotlin 2.2.21 compiler, synthetic Android/Flutter Java stubs and desktop org.json; no SDK/device/libraries loaded"
+    },
+    {
+      "name": "Android native bundle verifier",
+      "result": "passed",
+      "tests": 8,
+      "materialNegativeCases": 20,
+      "executedBy": [
+        "author",
+        "independent-reviewer",
+        "root"
+      ],
+      "command": "python3 -m unittest discover -s validation/native/tool -p test_android_bundle.py -v",
+      "scope": "synthetic ELF/readelf; required exported JNI, architecture/dependencies, same bundle bytes, missing/forged sources/modules/patches despite self-consistent manifest hashes; not actual Android ELF"
+    },
+    {
+      "name": "Apple input journal",
+      "result": "passed",
+      "checks": 16,
+      "executedBy": [
+        "author",
+        "root"
+      ],
+      "scope": "self-created temporary public markers and Flutter channel stubs; no Keychain",
+      "rootRetry": "initial shared cache failed because /tmp and /private/tmp aliases defined the same Foundation module twice (Swift frontend signal11); fresh temporary module cache compiled and passed; no source workaround or user cache removal"
+    },
+    {
+      "name": "Flutter Python packaging",
+      "result": "passed",
+      "tests": 8,
+      "executedBy": [
+        "root"
+      ],
+      "command": "python3 -m unittest discover -s validation/flutter/tool -v"
+    },
+    {
+      "name": "legacy helper isolated fixtures",
+      "result": "passed",
+      "tests": 15,
+      "executedBy": [
+        "root"
+      ],
+      "command": "python3 -m unittest discover -s validation/helper -v",
+      "scope": "self-created temporary authorized-key fixtures only"
+    },
+    {
+      "name": "Dart syntax",
+      "result": "passed",
+      "files": 51,
+      "executedBy": [
+        "author",
+        "root"
+      ],
+      "scope": "final 51 files parsed with tree-sitter; not analyzer/widget tests"
+    },
+    {
+      "name": "workflow YAML and admission",
+      "result": "passed",
+      "executedBy": [
+        "root"
+      ],
+      "scope": "Ruby standard YAML parse; exact codex/network-batch/** prefix does not match existing codex/batch/** or core development branch; contents read, native prerequisite, Flutter/Tauri matrix; no dispatch or batch branch push",
+      "initialAttempt": "system Python lacked PyYAML; used installed Ruby YAML instead, no dependency install"
+    },
+    {
+      "name": "documentation and whitespace",
+      "result": "passed",
+      "executedBy": [
+        "root",
+        "independent-doc-reviewer"
+      ],
+      "scope": "numbered docs, README, relative local links and fenced blocks",
+      "documents": 6
+    }
+  ],
+  "review": [
+    {
+      "finding": "status workers could block stop lane",
+      "result": "fixed; separate bounded status and stop executors"
+    },
+    {
+      "finding": "APK JNI export verification missing or admitted hidden/local/undefined symbols",
+      "result": "fixed; required exact symbols and public defined dynamic bindings"
+    },
+    {
+      "finding": "bundled source/provenance and required patch/module materials not cross-bound",
+      "result": "fixed; forged and omitted materials rejected even after self-consistent artifact hash rebuild"
+    },
+    {
+      "finding": "late scope cleanup could stop another scope replacement with same persisted binding",
+      "result": "fixed and independently reproduced positive: opaque NodeAttempt checks exact service/attempt before stop; replacement remains EngineStarted with no extra stop; pending owner cannot be released by old Stopped history; no-history, same history, new revision/network, and new handle cancellation variants passed"
+    },
+    {
+      "finding": "Flutter State route mode reuse retained old connector",
+      "result": "fixed in source; changed/revoked binding permanently locks page until reopened; widget regressions added but unexecuted"
+    },
+    {
+      "finding": "strict available reply and invalid actual route cleanup",
+      "result": "fixed in source; Dart negative tests added but unexecuted"
+    }
+  ],
+  "sourcesConsulted": [
+    {
+      "name": "Context7 Kotlin",
+      "library": "/jetbrains/kotlin-web-site",
+      "scope": "external JNI and @JvmStatic; fixed compiler validated actual signatures"
+    },
+    {
+      "name": "Context7 dartssh2",
+      "library": "/vicajilau/dartssh2",
+      "scope": "SSHSocket interface then fixed 4.1.0 archive source",
+      "archiveSha256": "39359aceafcf5940b868249e3c9c6d86e4e0f989eec7417d033c943157c84c51"
+    },
+    {
+      "name": "Context7 GitHub Actions",
+      "library": "/websites/github_en_actions",
+      "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows",
+      "scope": "workflow_dispatch default-branch requirement and push non-default branch behavior; library then docs, two commands outside sandbox"
+    },
+    {
+      "name": "Kotlin probe compiler and dependencies",
+      "path": "validation/flutter/tool/kotlin-probe-tools.json",
+      "scope": "fixed official Maven URLs, upstream SHA1 and computed SHA256; probe validates SHA256 before execution"
+    }
+  ],
+  "limits": [
+    "retired stream slots conservatively retained until global runtime reserved_streams reaches zero",
+    "maximum 4 scopes including failed cleanup, 8 nodes, 32 stream slots and 32 historical profile IDs",
+    "GUI caller CAS guarantees public peers unchanged within profile revision",
+    "PUBLIC_NO_SECRET may be saved but cannot start on fixed candidate",
+    "new workflow has not built or loaded any Android native library",
+    "no new platform/provider matrix pass"
+  ],
+  "notVerified": [
+    "Flutter analyzer and new unit/widget tests",
+    "Android target Rust/Kotlin/Gradle compile and ELF dynamic load",
+    "Android JNI/KeyStore device runtime",
+    "real EasyTier node/overlay SSH",
+    "Tailscale/ZeroTier native GUI paths and three-network concurrency",
+    "mobile Chinese IME/touch/camera/background lifecycle",
+    "iOS signing/install and native overlay",
+    "desktop split focus behavior"
+  ],
+  "cleanup": {
+    "guiTestAppsOpened": false,
+    "realCredentialsAccessed": false,
+    "realAuthorizationFilesModified": false,
+    "realNetworkIdentitiesAccessed": false,
+    "fullSdkInstalled": false,
+    "protectedPenpotSourceSha256": "34d9928f02e6fac2e24dc45ed643e7656a8ff1e796e46b70cc7346b5fff52957"
+  },
+  "sourceSha256": {
+    ".github/workflows/android-network-experiment.yml": "9b0ced492a8c1185810343e0f1ee02cf45a83192b43f7cb9e915ba8e161be0b0",
+    "README.md": "e9b433a709a9f55ae1d9b89087f49c1264d293893483381a243a17ef375ad114",
+    "docs/07-build-and-release.md": "066edbbca6942f23cafa4b9b87e188c81a951ac011c7298a03976ce343438cf5",
+    "docs/20-mobile-node-routing.md": "7264d9a29fc67f001a15435b8f83eb653f8a7a24df0e861986f24512b75203a1",
+    "docs/21-flutter-native-network.md": "84509e900a1c7f80532ce5e25c77f619f069fb5f2abef7e957e5d00c38622359",
+    "validation/flutter-network-runtime/Cargo.lock": "78f0445de6c3eed49f4564e37021a35a3c9c41b3cdaf308388df364519ae4310",
+    "validation/flutter-network-runtime/Cargo.toml": "123d6304fa24c190c3103153fc4d50462414ef57289e8c9e7463fab93bc8fa50",
+    "validation/flutter-network-runtime/README.md": "47a1289d5f0229b929f988cba41836e41d9098c1249186231790bb457e910c14",
+    "validation/flutter-network-runtime/src/lib.rs": "6e8fa13682bfb945fc74079cb2c7a31fea955477b63991d1e779dace9624304c",
+    "validation/flutter-network-runtime/src/native.rs": "fb2c83149b4712878f3fafc8398a9d3a82b6e1f9d5dcb1b5fb73bcaa02cb0cd6",
+    "validation/flutter-network-runtime/src/tests.rs": "ab69a0005c25719c6fad81bd8223da2f46e6af9ae56a56a9cead228e78402e72",
+    "validation/flutter-network-runtime/tests/java/dev/herdr/pocket/NetworkRuntimeChannel.java": "c2267d75c05cdb399bde892a7ff2bf26e6f3a5935f27df437fd0f82a1d48d2ca",
+    "validation/flutter-network-runtime/tests/run-jvm.sh": "a9912efedfd5257c2ab1a38d26e231ee9db8cbc75f3ef1a815db60fea401785c",
+    "validation/flutter/README.md": "1590f925aa238c8b602fb7bf76db4a4464fde3b84eb3b447246e68e9bcf814f4",
+    "validation/flutter/lib/host_catalog.dart": "74d7dac75706cab516c15899a3f4d8e9d1fab52362481f82a83a20ea56380733",
+    "validation/flutter/lib/network_identity_dialog.dart": "f659e6a7c65634933b5c28dca88ea64afdf803472b99884572d762d83d179ddd",
+    "validation/flutter/lib/network_profiles.dart": "32a0e40c6f3d8943135fca30934ff3733a00470dba47c426a763407b1b32e00a",
+    "validation/flutter/lib/network_profiles_page.dart": "37efc48c0373dd30a588e32e55cfa4647ee6b10c5a6c5f26231783fcd9e9a363",
+    "validation/flutter/lib/network_runtime.dart": "d77778f238c8f14672c68819ad78259a470428962bf30073033e8dea8ee8099a",
+    "validation/flutter/lib/remote_adapter.dart": "4b9629a8cffb1b220da37ba58f94b5cd1125471ea6367d8cadd003c8c239190c",
+    "validation/flutter/lib/remote_input.dart": "dd9eaa8fb4be43740f5f70ebb53e3999610d3d069901761e8d88c0d3b41b5324",
+    "validation/flutter/lib/remote_page.dart": "aad40070f6254f695c6668ae38d4c86788ef88171dd4e6d840ce5559ce60a238",
+    "validation/flutter/native/android/InputJournalFile.kt": "cf8a9163c79440054700a201ada80853a6050ba8ce2ba71d1c3336f886fe1bce",
+    "validation/flutter/native/android/MainActivity.kt": "713b0114624170b9495572e8609c741a8dc40f1c16eee9b8f40d7ed4fe5afedb",
+    "validation/flutter/native/android/NetworkRuntimeChannel.kt": "c306f201ff2ceff974668e786bb87c28af46a8c82239508a982925036e2901a1",
+    "validation/flutter/native/apple/InputJournalFile.swift": "f026c81c6493085b7a46fdd6d794145b72a083fdf79b3ae221af99aefe47d5f7",
+    "validation/flutter/native/apple/tests/InputJournalProbe.swift": "7bda5109d38ced3ddb8c648618e4fb53b7fdbdfc1759e6ff069325080a68fc03",
+    "validation/flutter/test/network_profiles_widget_test.dart": "331ecd5419709fa8235bc8e4abfa369c281f3ddb102d81472cc9e224b539372f",
+    "validation/flutter/test/network_runtime_test.dart": "62af6ab8c972f04f5f31a174352dfcb9420c231f4299ce4aed10393aa85d064a",
+    "validation/flutter/test/remote_input_test.dart": "cf0115158d4b2a211fa9aba7c6073f987dd64a4a618de8aab045544e9e418adc",
+    "validation/flutter/test/remote_page_test.dart": "7c366178be505df2c6a08e518514384c907adf8eace9ba61c3a3adb051149c34",
+    "validation/flutter/tool/check-network-kotlin.py": "ac1d6124656e32fc18296c2c9f6a052d514189b1e9041337cba988dc75acf2b1",
+    "validation/flutter/tool/ci.py": "c856e661eb2746156d5ab9e0947fda339cc98396dd5712ae68978f3277b41bb3",
+    "validation/flutter/tool/kotlin-probe-tools.json": "457925148717f6da961fb2a94385731d7e5a939c7a799ad17e9df6777ce28afa",
+    "validation/native/ANDROID-BUILD.md": "ff905ffa7b28400cd8a8ea93c33f48155f35b3db1afb2c60aa5a16ec37da8003",
+    "validation/native/README.md": "a2e7893562f5b08ff28dcd4b78fc63e344f739be73e4afd6bb6de5b94ba49782",
+    "validation/native/sources.json": "684d2fced643a9234e308dcbc988fd44670517080caf05cc46ae9eea9610e94b",
+    "validation/native/tool/android_bundle.py": "b2078f270c3a65febabe28294db56850e82fbdeef5f0184496cab9ee7d2d79c1",
+    "validation/native/tool/test_android_bundle.py": "e998c8facc606ca6f944e68f76dec2f929ff5b19ca4cf629890b233ca02b1e0b",
+    "validation/transport-rust/src/mobile_nodes.rs": "19af64fd9d5c4622a2edc534ddc60f7785d6b2c26fb0c4c3fac0970b9e61d4a9",
+    "validation/transport-rust/src/mobile_nodes/tests.rs": "9c183fa8ef48ef6fcf7e2cd554a08880ddcc885fa2fe7e01f988262d5daf1c7f"
+  },
+  "workflowTrigger": {
+    "push": [
+      "codex/network-batch/**"
+    ],
+    "manual": "requires default-branch registration; not assumed available yet",
+    "batchBranchPushed": false,
+    "retentionDays": 14,
+    "nativeThenAppMatrix": [
+      "flutter",
+      "tauri"
+    ]
+  }
+}

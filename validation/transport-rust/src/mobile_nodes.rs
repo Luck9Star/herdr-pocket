@@ -8,7 +8,7 @@ use overlay_runtime::{Failure, MAX_DEADLINE, OverlayRuntime, ProfileKey, Provide
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard, Weak},
     time::Duration,
 };
 
@@ -107,6 +107,14 @@ pub struct Snapshot {
     pub binding: Binding,
     pub state: State,
 }
+/// Process-local capability for one admitted attempt. Never serialize it or
+/// substitute its attempt number for the durable route profile revision.
+#[derive(Clone)]
+pub struct NodeAttempt {
+    service: Weak<Inner>,
+    binding: Binding,
+    attempt: u64,
+}
 struct Entry {
     binding: Binding,
     attempt: u64,
@@ -173,6 +181,47 @@ impl MobileNodeService {
     /// The runtime's eight-node limit is enforced before loading any source.
     pub fn reserved_nodes(&self) -> usize {
         self.inner.runtime.reserved_nodes()
+    }
+    /// Includes pending opens and native handles whose cleanup is unfinished.
+    pub fn reserved_streams(&self) -> usize {
+        self.inner.runtime.reserved_streams()
+    }
+
+    /// Capture under the host's ownership lock before dispatching delayed
+    /// cleanup. None means no attempt for this binding was admitted yet
+    /// (different-binding Stopped history is not an admitted current attempt).
+    /// A host cancelling a
+    /// pending start must cancel its token before capture, so admission either
+    /// precedes this capture or observes cancellation under the same registry.
+    pub fn capture_attempt(&self, binding: &Binding) -> Result<Option<NodeAttempt>> {
+        binding.validate()?;
+        let registry = lock(&self.inner.registry);
+        let Some(entry) = registry.entries.get(binding.profile_id()) else {
+            return Ok(None);
+        };
+        if entry.binding != *binding {
+            if entry.state == State::Stopped {
+                return Ok(None);
+            }
+            return Err("mobile_node_binding_mismatch");
+        }
+        Ok(Some(NodeAttempt {
+            service: Arc::downgrade(&self.inner),
+            binding: binding.clone(),
+            attempt: entry.attempt,
+        }))
+    }
+
+    fn owns_attempt(&self, attempt: &NodeAttempt) -> Result<()> {
+        if attempt
+            .service
+            .upgrade()
+            .is_some_and(|service| Arc::ptr_eq(&service, &self.inner))
+        {
+            Ok(())
+        } else {
+            Err("overlay_wrong_owner")
+        }
     }
 
     pub async fn start(
@@ -285,15 +334,32 @@ impl MobileNodeService {
     }
 
     pub async fn status(&self, binding: &Binding) -> Result<Snapshot> {
+        self.status_checked(binding, None).await
+    }
+
+    /// Observe only the captured attempt; never query a replacement node.
+    pub async fn status_attempt(&self, attempt: &NodeAttempt) -> Result<Snapshot> {
+        self.owns_attempt(attempt)?;
+        self.status_checked(&attempt.binding, Some(attempt.attempt))
+            .await
+    }
+
+    async fn status_checked(&self, binding: &Binding, expected: Option<u64>) -> Result<Snapshot> {
         binding.validate()?;
         let attempt = {
             let registry = lock(&self.inner.registry);
             let Some(entry) = registry.entries.get(binding.profile_id()) else {
+                if expected.is_some() {
+                    return Err("overlay_stale_revision");
+                }
                 return Ok(Snapshot {
                     binding: binding.clone(),
                     state: State::Stopped,
                 });
             };
+            if expected.is_some_and(|expected| entry.attempt != expected) {
+                return Err("overlay_stale_revision");
+            }
             if entry.binding != *binding {
                 return Err("mobile_node_binding_mismatch");
             }
@@ -362,16 +428,39 @@ impl MobileNodeService {
     /// Closing are valid inputs. A failed cleanup remains reserved; another
     /// explicit stop retries only the original attempt, never starts it again.
     pub async fn stop(&self, binding: &Binding, timeout: Duration) -> Result<Snapshot> {
+        self.stop_checked(binding, None, timeout).await
+    }
+
+    /// Retirement and native cleanup admission compare the captured attempt
+    /// while the service registry is locked, before any side effect or await.
+    pub async fn stop_attempt(&self, attempt: &NodeAttempt, timeout: Duration) -> Result<Snapshot> {
+        self.owns_attempt(attempt)?;
+        self.stop_checked(&attempt.binding, Some(attempt.attempt), timeout)
+            .await
+    }
+
+    async fn stop_checked(
+        &self,
+        binding: &Binding,
+        expected: Option<u64>,
+        timeout: Duration,
+    ) -> Result<Snapshot> {
         binding.validate()?;
         deadline(timeout)?;
         let (attempt, operation) = {
             let mut registry = lock(&self.inner.registry);
             let Some(entry) = registry.entries.get_mut(binding.profile_id()) else {
+                if expected.is_some() {
+                    return Err("overlay_stale_revision");
+                }
                 return Ok(Snapshot {
                     binding: binding.clone(),
                     state: State::Stopped,
                 });
             };
+            if expected.is_some_and(|expected| entry.attempt != expected) {
+                return Err("overlay_stale_revision");
+            }
             if entry.binding != *binding {
                 return Err("mobile_node_binding_mismatch");
             }

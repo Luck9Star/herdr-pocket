@@ -6,6 +6,7 @@ import 'host_catalog.dart';
 import 'pairing_page.dart';
 import 'host_tabs.dart';
 import 'remote_adapter.dart';
+import 'config_transfer_page.dart';
 
 class HostCatalogPage extends StatefulWidget {
   const HostCatalogPage({super.key,required this.tokens,required this.offlineBuilder,this.catalog,this.keys,this.tabs,this.adapterFactory});
@@ -37,10 +38,17 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
   }
   Future<void> open([HostProfile? profile]) async {
     if (busy || !catalog.ready || catalog.writing || profile?.enabled == false) return;
-    if (profile != null) { tabs.open(profile,adapter:tabs.find(profile.id) == null ? widget.adapterFactory?.call(profile) : null); return; }
+    if (profile != null && profile.hasIdentity) { tabs.open(profile,adapter:tabs.find(profile.id) == null ? widget.adapterFactory?.call(profile) : null); return; }
     tabs.select(null);
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,
       catalog:catalog,profileId:profile?.id)));
+    if (mounted) setState(() {});
+  }
+  Future<void> transfer() async {
+    if (busy || !catalog.ready || catalog.writing || catalog.pendingCreation != null) return;
+    tabs.select(null);
+    await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => ConfigTransferPage(catalog:catalog,
+      closeTabs:(ids) { for (final id in ids) { tabs.close(id); } })));
     if (mounted) setState(() {});
   }
   Future<void> rename(HostProfile profile) async {
@@ -75,7 +83,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
       // Persist disabled before deleting the key. A crash between the two never
       // leaves an enabled profile pointing to an identity deliberately removed.
       await catalog.update(profile.change(enabled:false,now:catalog.clock()));
-      await (widget.keys ?? NativeDeviceKeys()).delete(profile.restore(catalog.clock()).handle);
+      if (profile.hasIdentity) await (widget.keys ?? NativeDeviceKeys()).delete(profile.restore(catalog.clock()).handle);
       await catalog.remove(profile.id);
       if (mounted) notice = '本机已删除 · 主机授权未因此撤销';
     });
@@ -86,6 +94,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
     const SizedBox(height:12),
     FilledButton.icon(key:const ValueKey('hosts-add'),onPressed:catalog.ready && !busy && !catalog.writing && catalog.profiles.length < maxHostProfiles && catalog.pendingCreation == null ? () => open() : null,
       icon:const Icon(Icons.add),label:const Text('新增主机与设备配对')),
+    OutlinedButton.icon(key:const ValueKey('hosts-transfer'),onPressed:catalog.ready && !busy && !catalog.writing && catalog.pendingCreation == null ? transfer : null,
+      icon:const Icon(Icons.import_export),label:const Text('加密导出／导入公开主机资料')),
     if (catalog.pendingCreation != null) ...[
       const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('上次设备身份创建未完成或结果未知 · 已禁止再次创建，不会自动重放。已返回句柄可明确删除；无句柄时需人工核验本机身份，不能按空记录处理。')),
       if ((catalog.pendingCreation!['handle'] as String).isNotEmpty) TextButton(key:const ValueKey('hosts-delete-pending'),
@@ -96,14 +106,16 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
     ],
     for (final profile in catalog.profiles) Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Text(profile.label,style:Theme.of(context).textTheme.titleMedium),
-      Text('${hostProviderLabel(profile.provider)} · 入网状态未知\n${profile.target['username']}@${profile.target['host']}:${profile.target['port']}\n会话 ${profile.target['session']} · ${profile.enabled ? '本机启用' : '本机停用'}\n${profile.restore(catalog.clock()).state} · 在线与主机授权需重新核验'),
+      Text('${hostProviderLabel(profile.provider)} · 入网状态未知\n${profile.target['username']}@${profile.target['host']}:${profile.target['port']}\n会话 ${profile.target['session']} · ${profile.retired ? '已替换停用，保留原身份待撤销' : profile.enabled ? '本机启用' : '本机停用'}\n${profile.hasIdentity ? profile.restore(catalog.clock()).state : '导入未配对 · 无本机身份'} · 在线与主机授权需重新核验'),
+      if (profile.retired && profile.hasIdentity) ExpansionTile(title:const Text('原配对公开请求（供主机核验撤销）'),
+        children:[SelectableText(profile.restore(catalog.clock()).wire)]),
       const SizedBox(height:8),
       FilledButton(key:ValueKey('host-open-${profile.id}'),onPressed:!busy && catalog.ready && profile.enabled ? () => open(profile) : null,
-        child:const Text('审查此主机并主动连接')),
+        child:Text(profile.hasIdentity ? '审查此主机并主动连接' : '审查导入目标并在此设备配对')),
       Wrap(spacing:8,children:[
         TextButton(key:ValueKey('host-rename-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => rename(profile),child:const Text('重命名')),
         TextButton(key:ValueKey('host-provider-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => configureProvider(profile),child:const Text('网络 provider 资料')),
-        TextButton(key:ValueKey('host-disable-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => action(() => catalog.update(profile.change(enabled:!profile.enabled,now:catalog.clock()))),
+        TextButton(key:ValueKey('host-disable-${profile.id}'),onPressed:busy || !catalog.ready || profile.retired ? null : () => action(() => catalog.update(profile.change(enabled:!profile.enabled,now:catalog.clock()))),
           child:Text(profile.enabled ? '本机停用（不撤销主机）' : '本机启用（仍需审查）')),
         TextButton(key:ValueKey('host-delete-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => remove(profile),child:const Text('删除本机资料与身份')),
       ]),

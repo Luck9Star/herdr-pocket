@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'package:herdr_flutter_probe/remote_input.dart';
 import 'package:herdr_flutter_probe/remote_page.dart';
@@ -15,6 +16,8 @@ class InputFixtureAdapter extends base.PendingAdapter {
   final bool supported;
   Object connection = Object();
   final received = <Uint8List>[];
+  RemoteInputResult nextResult = const RemoteInputResult.accepted();
+  int acknowledgements = 0;
   RemoteInputTarget? selectedTarget;
   @override Future<RemoteSnapshot> observe(RemoteConfig config,{required DashboardConsumer onDashboard,
       required FrameConsumer onFrame,RemoteProgress? onProgress}) {
@@ -33,7 +36,10 @@ class InputFixtureAdapter extends base.PendingAdapter {
     if (stillCurrent?.call() != true || !identical(target,selectedTarget)) {
       return const RemoteInputResult.rejected('input_cancelled_before_write');
     }
-    received.add(Uint8List.fromList(bytes)); return const RemoteInputResult.accepted();
+    received.add(Uint8List.fromList(bytes)); return nextResult;
+  }
+  @override Future<bool> acknowledgeInputUnknown(RemoteInputTarget target) async {
+    acknowledgements++; return identical(target,selectedTarget);
   }
 }
 
@@ -58,6 +64,87 @@ Future<void> mode(WidgetTester tester,String value) async {
 }
 
 void main() {
+  testWidgets('Ctrl and Alt hold only explicit auxiliary input, then release; cancel and focus loss send nothing', (tester) async {
+    final adapter = InputFixtureAdapter(); await start(tester,adapter); await mode(tester,'direct');
+    Future<void> press(String name) async {
+      final button = find.byKey(ValueKey(name)); await tester.ensureVisible(button);
+      await tester.tap(button); await tester.pump(); await tester.pump();
+    }
+    await press('remote-modifier-ctrl'); await press('remote-modifier-alt');
+    expect(tester.widget<FilterChip>(find.byKey(const ValueKey('remote-modifier-ctrl'))).selected,isTrue);
+    expect(tester.widget<FilterChip>(find.byKey(const ValueKey('remote-modifier-alt'))).selected,isTrue);
+    expect(adapter.received,isEmpty);
+    await press('remote-base-c');
+    expect(adapter.received.single,[27,3]);
+    expect(tester.widget<FilterChip>(find.byKey(const ValueKey('remote-modifier-ctrl'))).selected,isFalse);
+    expect(tester.widget<FilterChip>(find.byKey(const ValueKey('remote-modifier-alt'))).selected,isFalse);
+    await press('remote-modifier-ctrl'); await press('remote-modifier-cancel');
+    expect(adapter.received.length,1);
+    await press('remote-modifier-alt');
+    tester.testTextInput.updateEditingValue(const TextEditingValue(text:'中文',
+      selection:TextSelection.collapsed(offset:2),composing:TextRange(start:0,end:2)));
+    await tester.pump(); expect(adapter.received.length,1);
+    tester.testTextInput.updateEditingValue(const TextEditingValue(text:'中文',
+      selection:TextSelection.collapsed(offset:2),composing:TextRange.empty));
+    await tester.pump(); expect(adapter.received.last,utf8.encode('中文'));
+    expect(tester.widget<FilterChip>(find.byKey(const ValueKey('remote-modifier-alt'))).selected,isFalse);
+    await press('remote-modifier-ctrl');
+    tester.widget<TerminalView>(find.byType(TerminalView)).focusNode!.unfocus(); await tester.pump();
+    await mode(tester,'direct');
+    expect(tester.widget<FilterChip>(find.byKey(const ValueKey('remote-modifier-ctrl'))).selected,isFalse);
+    expect(adapter.received.length,2);
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(1,false,'\x1b[?1h'));
+    await tester.pump(); await press('remote-key-↑');
+    expect(adapter.received.last,[27,79,65]);
+    await mode(tester,'draft');
+    expect(tester.widget<FilterChip>(find.byKey(const ValueKey('remote-modifier-ctrl'))).onSelected,isNull);
+    expect(tester.takeException(),isNull);
+  });
+  testWidgets('direct focus loss revokes mode and refocusing cannot send until explicit selection', (tester) async {
+    final adapter = InputFixtureAdapter(); await start(tester,adapter); await mode(tester,'direct');
+    final focus = tester.widget<TerminalView>(find.byType(TerminalView)).focusNode!;
+    expect(focus.hasFocus,isTrue); focus.unfocus(); await tester.pump();
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+    focus.requestFocus(); await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyX,character:'x'); await tester.pump();
+    expect(adapter.received,isEmpty);
+    await mode(tester,'direct');
+    tester.testTextInput.updateEditingValue(const TextEditingValue(text:'k',
+      selection:TextSelection.collapsed(offset:1),composing:TextRange.empty));
+    await tester.pump(); expect(adapter.received.map((bytes) => utf8.decode(bytes)),['k']);
+  });
+  testWidgets('unknown draft is quarantined; only manual same-target new full recovery unlocks without replay', (tester) async {
+    final adapter = InputFixtureAdapter()..nextResult = const RemoteInputResult.unknown();
+    await start(tester,adapter); await mode(tester,'draft');
+    final draft = find.byKey(const ValueKey('remote-input-draft'));
+    await tester.ensureVisible(draft); await tester.enterText(draft,'Pocket测');
+    final send = find.byKey(const ValueKey('remote-input-draft-send'));
+    await tester.ensureVisible(send); await tester.tap(send); await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('remote-input-confirm'))); await tester.pumpAndSettle();
+    expect(adapter.received.map((bytes) => utf8.decode(bytes)),['Pocket测']);
+    expect(find.textContaining('发送结果待核实'),findsOneWidget);
+    final acknowledge = find.byKey(const ValueKey('remote-input-acknowledge'));
+    expect(tester.widget<TextButton>(acknowledge).onPressed,isNull);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
+    await tester.ensureVisible(base.field('cancel')); await tester.tap(base.field('cancel')); await tester.pump();
+    await tester.ensureVisible(base.field('privateKeyPem'));
+    await tester.enterText(base.field('privateKeyPem'),fixtureConfig()['privateKeyPem'] as String);
+    await tester.ensureVisible(base.field('review')); await tester.tap(base.field('review')); await tester.pump();
+    await tester.ensureVisible(base.field('connect')); await tester.tap(base.field('connect')); await tester.pump();
+    adapter.publish(); await tester.pump();
+    final pane = find.byKey(const ValueKey('remote-pane-w1:p1'));
+    await tester.ensureVisible(pane); await tester.tap(pane); await tester.pump();
+    expect(tester.widget<TextButton>(acknowledge).onPressed,isNull);
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'NEW VERIFIED FULL'));
+    await tester.pump();
+    expect(tester.widget<TextButton>(acknowledge).onPressed,isNotNull);
+    expect(adapter.received.length,1); expect(adapter.acknowledgements,0);
+    await tester.ensureVisible(acknowledge); await tester.tap(acknowledge); await tester.pumpAndSettle();
+    expect(adapter.acknowledgements,1); expect(adapter.received.length,1);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+    await mode(tester,'draft'); expect(tester.widget<TextField>(draft).controller!.text,isEmpty);
+    expect(adapter.received.length,1);
+  });
   testWidgets('stock server stays read-only after full and cannot be enabled by mode controls', (tester) async {
     final adapter = InputFixtureAdapter(supported:false); await start(tester,adapter);
     final chip = find.byKey(const ValueKey('remote-mode-direct'));

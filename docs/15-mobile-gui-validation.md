@@ -65,3 +65,5 @@ Flutter Linux widget 已走通“主机列表 → 生成公开请求 → 返回�
 **Tauri Android API 35 同样通过。** 原生应用在 WebView 内完成公开请求及响应审查，临时主机接受了 GUI 对应的 Android 设备公钥。选定 pane 后，xterm parser 回调确认消费了 1 个 full、1 个 delta；手动停止后画面标为陈旧，接收端输入为 0。该次设备观察期间的 837 次采样均为 119 × 40，未观测到共享 PTY 尺寸变化。fixture 公钥已撤销，自建测试进程已关闭。[Android GUI 报告](evidence/mobile-pair-gui/gui-307c863/tauri-android.json)
 
 两条路线的手机第一闭环因此有同版本、同 API 级别的实证。下一步优先验证**受保护的逐键／草稿输入、断线后结果核实、隐藏标签恢复**，再做手机真机相机、IME 与三网并发测试；完成正确性对照后决定框架。原型的配色与信息模型继续沿用当前版本。
+
+下一批实现与本地回归见[手机输入、恢复与配置迁移](16-mobile-input-and-config.md)，其云端与设备结果另行记录。

@@ -15,8 +15,27 @@ def zip_tree(source, dest):
     with zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED) as z:
         for f in sorted(source.rglob('*')):
             if f.is_file(): z.write(f, f.relative_to(source.parent))
+def android_apks():
+    if 'ANDROID_APK_PATH' not in os.environ:
+        return list(root.glob('src-tauri/gen/android/app/build/outputs/apk/**/*.apk'))
+    value = os.environ['ANDROID_APK_PATH']
+    if not value:
+        return []
+    candidate = Path(value)
+    runner_temp = Path(os.environ.get('RUNNER_TEMP', '')).resolve()
+    if (not os.environ.get('RUNNER_TEMP') or candidate.is_symlink() or not candidate.is_file() or
+            not candidate.resolve().is_relative_to(runner_temp)):
+        raise SystemExit('ANDROID_APK_PATH must name a runner-owned APK')
+    return [candidate.resolve()]
+config_transfer_fixture = repo/'validation/shared/config-transfer-v1.json'
+config_transfer_fixture_sha256 = sha(config_transfer_fixture)
+if config_transfer_fixture_sha256 + '  config-transfer-v1.json' not in (repo/'validation/shared/SHA256SUMS').read_text().splitlines():
+    raise SystemExit('Config transfer fixture checksum mismatch')
+source_sha = os.environ.get('GITHUB_SHA', '')
+if len(source_sha) not in (40, 64) or any(ch not in '0123456789abcdef' for ch in source_sha.lower()):
+    raise SystemExit('GITHUB_SHA must identify the exact source commit before packaging')
 manifest = {
-    'schemaVersion':1, 'sourceSHA':version(['git','rev-parse','HEAD']),
+    'schemaVersion':1, 'sourceSHA':source_sha,
     'route':'tauri', 'platform':os.getenv('PROBE_PLATFORM','unknown'),
     'buildOutcome':os.getenv('BUILD_OUTCOME','unknown'), 'deviceResult':'unverified',
     'signing':'ephemeral-debug-key' if os.getenv('PROBE_PLATFORM')=='android' else 'unsigned-test-only',
@@ -30,6 +49,7 @@ manifest = {
     'pairingDependenciesSHA256':sha(repo/'validation/pairing/sources.json'),
     'remoteBehavior':{'mode':'explicit-pane-continuous-readonly','remoteInput':'stock server read-only; explicit guarded capability required','ptyResize':False,'credentialStorage':{'android':'API35 wrapped Ed25519', 'linux':'volatile test signer', 'macos':'volatile test signer'}.get(os.getenv('PROBE_PLATFORM'),'device pairing unavailable'),'browserTransport':'unavailable','deviceResult':'unverified'},
     'fixtureSHA256':sha(repo/'validation/shared/fixture.json'),
+    'configTransferFixtureSHA256':config_transfer_fixture_sha256,
     'fontSHA256':sha(repo/'validation/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'),
     'designTokensSHA256':sha(repo/'validation/shared/design-tokens-v2.json'),
     'visualBaseline':'herdr-pocket-v2-tech-indigo; shared 16 ANSI colors; fixed 80x24 fixture',
@@ -37,12 +57,14 @@ manifest = {
 if platform.system()=='Darwin': manifest['toolchains']['xcode']=version(['xcodebuild','-version'])
 if os.getenv('PROBE_PLATFORM')=='android':
     manifest['toolchains']['java']=version(['java','-version']); manifest['toolchains']['ndk']='28.2.13676358'; manifest['toolchains']['androidPlatform']='android-35'
+    manifest['toolchains']['androidTargetAbi']=os.getenv('ANDROID_TARGET_ABI','not recorded')
 for f in [root/'package-lock.json',root/'src-tauri/Cargo.lock',root/'core/Cargo.lock',repo/'validation/transport-rust/Cargo.lock']:
     if f.exists(): shutil.copy2(f,out/f'{f.parent.name}-{f.name}')
 shutil.copytree(repo/'validation/shared',out/'shared',dirs_exist_ok=True,ignore=shutil.ignore_patterns('.gitattributes'))
 if (root/'dist').exists(): zip_tree(root/'dist',out/'browser-preview.zip')
-for pattern in ['src-tauri/target/release/bundle/deb/*.deb','src-tauri/target/release/bundle/nsis/*.exe','src-tauri/gen/android/app/build/outputs/apk/**/*.apk']:
+for pattern in ['src-tauri/target/release/bundle/deb/*.deb','src-tauri/target/release/bundle/nsis/*.exe']:
     for f in root.glob(pattern): shutil.copy2(f,out/f.name)
+for f in android_apks(): shutil.copy2(f,out/f.name)
 for base in [root/'src-tauri/target/release/bundle/macos',root/'src-tauri/gen/apple/build']:
     if base.exists():
         for app in base.rglob('*.app'):
@@ -56,6 +78,7 @@ if manifest['platform']=='android' and manifest['buildOutcome']=='success':
     native=repo/'validation/pairing/native/android'
     manifest['androidSignerSources']={f.name:sha(f) for f in sorted(native.glob('*.java'))}
     manifest['androidPackagedNotices']={apk.name:verify_packaged_notices(apk) for apk in native_packages if apk.suffix=='.apk'}
+    manifest['androidApkSha256']={apk.name:sha(apk) for apk in native_packages if apk.suffix=='.apk'}
     manifest['androidSignerNoticeSHA256']=sha(native/'notices/BOUNCY-CASTLE-LICENSE.md')
 
 for f in sorted(out.iterdir()):

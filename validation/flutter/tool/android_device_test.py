@@ -60,13 +60,17 @@ def checked_app(destination, env):
     return app
 
 
+PRODUCTION_CHANNELS = ('MainActivity.kt', 'PairScanChannel.kt', 'HostCatalogFile.kt', 'InputJournalFile.kt',
+                       'ConfigDocumentChannel.kt')
+
+
 def production_sources(app):
     expected = {p.relative_to(SOURCE / 'lib') for p in (SOURCE / 'lib').rglob('*.dart')}
     actual = {p.relative_to(app / 'lib') for p in (app / 'lib').rglob('*.dart')}
     if actual != expected or any(digest(app / 'lib' / name) != digest(SOURCE / 'lib' / name) for name in expected):
         raise DevicePreparationFailure('android_device_production_dart_mismatch')
     native = app / 'android/app/src/main/kotlin/dev/herdr/herdr_flutter_probe'
-    for name in ('MainActivity.kt', 'PairScanChannel.kt', 'HostCatalogFile.kt', 'InputJournalFile.kt'):
+    for name in PRODUCTION_CHANNELS:
         if digest(native / name) != digest(SOURCE / 'native/android' / name):
             raise DevicePreparationFailure('android_device_production_channel_mismatch')
     return {str(Path('lib') / name): digest(scoped_path(app, Path('lib') / name)) for name in sorted(expected)}
@@ -131,7 +135,7 @@ def prepare(destination, env=None):
         'integrationTestSha256': digest(app / 'integration_test/android_pairing_observe_test.dart')}
     native = Path('android/app/src/main/kotlin/dev/herdr/herdr_flutter_probe')
     proof['productionAndroidChannels'] = {str(native / name): digest(app / native / name) for name in
-        ('MainActivity.kt', 'PairScanChannel.kt', 'HostCatalogFile.kt', 'InputJournalFile.kt')}
+        PRODUCTION_CHANNELS}
     (app / MARKER).write_text(json.dumps(proof, indent=2) + '\n', encoding='utf-8')
     return proof
 

@@ -63,10 +63,21 @@ fn capability_reply(raw: &[u8], id: &str) -> bool {
         && e.result.raw_bytes
         && e.result.max_input_bytes == LIMIT
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InputReceipt {
+    pub request_id: String,
+    pub pane_id: String,
+    pub terminal_id: String,
+    pub accepted_bytes: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SendOutcome {
-    Accepted,
+    Accepted(InputReceipt),
     Rejected,
+    /// The host returned a correlated decision but the local marker could not be cleared.
+    RecoveryLocked { receipt: Option<InputReceipt> },
     Unknown,
 }
 fn outcome(raw: &[u8], id: &str, pane: &str, terminal: &str, len: usize) -> SendOutcome {
@@ -77,7 +88,12 @@ fn outcome(raw: &[u8], id: &str, pane: &str, terminal: &str, len: usize) -> Send
             && e.result.terminal_id == terminal
             && e.result.accepted_bytes == len
         {
-            return SendOutcome::Accepted;
+            return SendOutcome::Accepted(InputReceipt {
+                request_id: e.id,
+                pane_id: e.result.pane_id,
+                terminal_id: e.result.terminal_id,
+                accepted_bytes: e.result.accepted_bytes,
+            });
         }
     }
     if let Ok(e) = serde_json::from_slice::<ErrorEnvelope>(raw) {
@@ -298,30 +314,22 @@ impl LiveInput {
             Ok(raw) => outcome(&raw, &id, &self.pane, &self.terminal, data.len()),
             Err(_) => SendOutcome::Unknown,
         };
-        let cleared = if let Ok(s) = self.state.lock() {
-            if result != SendOutcome::Unknown
-                && s.valid
-                && !self.cancel.is_cancelled()
-                && self
-                    .recovery
-                    .clear_confirmed(&self.identity, Some(&id))
-                    .is_ok()
-            {
-                pending.1 = true;
-                true
-            } else {
-                false
+        if let Ok(state) = self.state.lock() {
+            if result != SendOutcome::Unknown && state.valid && !self.cancel.is_cancelled() {
+                if self.recovery.clear_confirmed(&self.identity, Some(&id)).is_ok() {
+                    pending.1 = true;
+                    return Ok(result);
+                }
+                return Ok(match result {
+                    SendOutcome::Accepted(receipt) => SendOutcome::RecoveryLocked { receipt: Some(receipt) },
+                    SendOutcome::Rejected => SendOutcome::RecoveryLocked { receipt: None },
+                    other => other,
+                });
             }
-        } else {
-            false
-        };
-        if cleared {
-            Ok(result)
-        } else {
-            self.invalidate();
-            self.cancel.cancel();
-            Ok(SendOutcome::Unknown)
         }
+        // The pending guard invalidates the lease and ends the connection on
+        // unresolved writes, including failure to clear a known decision.
+        Ok(SendOutcome::Unknown)
     }
 }
 impl Drop for LiveInput {
@@ -359,7 +367,15 @@ mod tests {
         assert!(capability_reply(cap, "i"));
         assert!(!capability_reply(cap, "j"));
         let ack=br#"{"id":"i","result":{"type":"pocket_input_accepted","pane_id":"p","terminal_id":"t","accepted_bytes":3}}"#;
-        assert_eq!(outcome(ack, "i", "p", "t", 3), SendOutcome::Accepted);
+        let SendOutcome::Accepted(receipt) = outcome(ack, "i", "p", "t", 3) else {
+            panic!("expected the correlated queue receipt");
+        };
+        assert_eq!(serde_json::to_value(receipt).unwrap(), json!({
+            "requestId":"i", "paneId":"p", "terminalId":"t", "acceptedBytes":3
+        }));
+        assert_eq!(outcome(ack, "other", "p", "t", 3), SendOutcome::Unknown);
+        assert_eq!(outcome(ack, "i", "other", "t", 3), SendOutcome::Unknown);
+        assert_eq!(outcome(ack, "i", "p", "t", 4), SendOutcome::Unknown);
         assert_eq!(outcome(ack, "i", "p", "other", 3), SendOutcome::Unknown);
         let error = br#"{"id":"i","error":{"code":"pocket_input_rejected","message":"rejected"}}"#;
         assert_eq!(outcome(error, "i", "p", "t", 3), SendOutcome::Rejected);

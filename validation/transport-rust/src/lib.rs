@@ -28,6 +28,9 @@ use tokio::{
 use zeroize::Zeroize;
 
 pub mod file_lock;
+pub mod config_transfer;
+#[cfg(all(test, unix))]
+mod input_loopback_test;
 pub mod pairing;
 pub mod input;
 pub mod recovery;

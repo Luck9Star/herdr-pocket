@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -16,10 +17,37 @@ sys.path.insert(0, str(REPO / 'helper'))
 sys.path.insert(0, str(REPO / 'validation/pairing'))
 from pairing import fingerprint
 from herdr_pocket_helper.store import Host
+from guarded_input import ANDROID_ROUTES, EvidenceError, expected_bytes, mobile_receipts
 
 
 class GuiFailure(Exception):
     """Static phase codes only; never publish driver, host or widget output."""
+
+
+def fixture_terminal_id(config):
+    # Read back the selected pane from the fixture server independently of the
+    # app. Different sessions can both contain w1:p1.
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+        sock.settimeout(4)
+        sock.connect(config['socketPath'])
+        sock.sendall(b'{"id":"verify-input-target","method":"session.snapshot","params":{}}\n')
+        with sock.makefile('rb') as stream:
+            line = stream.readline(1_048_577)
+    if len(line) > 1_048_576 or not line.endswith(b'\n'):
+        raise GuiFailure('fixture_snapshot_invalid')
+    reply = json.loads(line)
+    result = reply.get('result', {}) if isinstance(reply, dict) else {}
+    if (not isinstance(result, dict) or reply.get('id') != 'verify-input-target' or
+            result.get('type') != 'session_snapshot' or not isinstance(result.get('snapshot'), dict)):
+        raise GuiFailure('fixture_snapshot_invalid')
+    snapshot = result['snapshot']
+    panes = snapshot.get('panes')
+    if snapshot.get('version') != '0.9.5' or snapshot.get('protocol') != 22 or not isinstance(panes, list):
+        raise GuiFailure('fixture_snapshot_invalid')
+    ids = [row.get('terminal_id') for row in panes if isinstance(row, dict) and row.get('pane_id') == config['paneId']]
+    if len(ids) != 1 or not isinstance(ids[0], str) or not re.fullmatch(r'term_[0-9a-f]{1,123}', ids[0]):
+        raise GuiFailure('fixture_terminal_binding_invalid')
+    return ids[0]
 
 
 def widget_failure(exchange, fallback):
@@ -323,7 +351,9 @@ def run_gui(args, root, env, config):
             root.parent != Path('/tmp') or not root.name.startswith('hp-mobile-'+run_id+'-') or
             (root/'authorized_keys').stat().st_size or 'privateKeyPem' in config or config['host'] != '127.0.0.1'):
         raise GuiFailure('unsafe_fixture')
-    result = {'adapter': args.paired_gui, 'testId':'reviewed-device-key-to-observe', 'status':'failed'}
+    guarded_mobile = args.paired_gui in ANDROID_ROUTES and bool(args.input_fixture)
+    case = 'reviewed-device-key-to-direct-and-draft' if guarded_mobile else 'reviewed-device-key-to-observe'
+    result = {'adapter': args.paired_gui, 'testId': case, 'status':'failed'}
     try:
         # Exercise the shipping helper against its own private scratch home.
         # The normal CLI obtains the operator's home from pwd instead.
@@ -338,10 +368,22 @@ def run_gui(args, root, env, config):
                     from flutter_android_gui import run_flutter_android as exercise
                 else:
                     exercise = run_tauri if args.paired_gui == 'tauri' else run_flutter
-                result.update(exercise(args, root, env, config, approval))
-                expected = 'Pocket测'.encode() if args.input_fixture else b''
+                terminal = fixture_terminal_id(config) if guarded_mobile else None
+                observed = exercise(args, root, env, config, approval)
+                receipts = observed.pop('inputReceipts', None)
+                result.update(observed)
+                expected = expected_bytes(args.paired_gui, bool(args.input_fixture))
                 if expected and result.get('inputQueueAccepted') is not True:
                     raise GuiFailure('missing_guarded_input_receipt')
+                if guarded_mobile:
+                    try:
+                        result['inputReceipts'] = mobile_receipts(receipts, config['paneId'], terminal)
+                    except EvidenceError as exc:
+                        raise GuiFailure(str(exc)) from None
+                    if fixture_terminal_id(config) != terminal:
+                        raise GuiFailure('fixture_input_target_changed')
+                elif receipts:
+                    raise GuiFailure('unexpected_mobile_receipts')
                 approval.verify_ssh(expected)
             finally:
                 result['temporaryHostApprovedRequest'] = approval.applied

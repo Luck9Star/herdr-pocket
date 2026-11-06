@@ -359,7 +359,7 @@ class RemoteReadOnlyAdapter {
         } catch (_) {
           // The remote result is known; a local persistence failure must not
           // erase that fact. Keep the durable lock until explicit recovery.
-          result = RemoteInputResult.journalLocked(result.disposition);
+          result = RemoteInputResult.journalLocked(result.disposition,receipt:result.receipt);
         }
       }
     } catch (_) {

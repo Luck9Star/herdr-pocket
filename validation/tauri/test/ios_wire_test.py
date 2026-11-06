@@ -1,4 +1,4 @@
-"""Isolated Swift bridge contract checks; no device, GUI, or system Keychain."""
+"""Stubbed bridge checks; these do not replace iOS SDK, device or GUI tests."""
 from pathlib import Path
 import os
 import plistlib
@@ -16,13 +16,16 @@ class IOSWireTests(unittest.TestCase):
         self.assertTrue(info['NSCameraUsageDescription'])
         build = (ROOT / 'src-tauri/build.rs').read_text()
         for item in ('DEP_TAURI_IOS_LIBRARY_PATH', 'DeviceKeys.swift', 'PairScanner.swift',
-                     'PocketKeyBridge.swift', 'PocketPlugin.swift', 'link_apple_library'):
+                     'PocketKeyBridge.swift', 'PocketPlugin.swift', 'ConfigDocument.swift', 'link_apple_library'):
             self.assertIn(item, build)
         rust = (ROOT / 'src-tauri/src/ios_keys.rs').read_text()
         swift = (ROOT / 'ios/PocketPlugin.swift').read_text()
         self.assertIn('init_plugin_herdr_pocket_ios', rust)
         self.assertIn('init_plugin_herdr_pocket_ios', swift)
         for method in ('create', 'publicKey', 'sign', 'delete', 'privateConfigRoot', 'scan'):
+            self.assertIn(f'func {method}(', swift)
+            self.assertIn(f'"{method}"', rust)
+        for method in ('openDocument', 'saveDocument'):
             self.assertIn(f'func {method}(', swift)
             self.assertIn(f'"{method}"', rust)
 
@@ -42,9 +45,11 @@ class IOSWireTests(unittest.TestCase):
             cache = ['-module-cache-path', str(tmp / 'modules')]
             (tmp / 'UIKit.swift').write_text('''import Foundation
 public enum UIModalPresentationStyle { case fullScreen }
+open class UIView: NSObject { public var window: NSObject? }
 open class UIViewController: NSObject {
   public var presentedViewController: UIViewController?
   public var modalPresentationStyle: UIModalPresentationStyle = .fullScreen
+  public var viewIfLoaded: UIView?
   public func present(_ controller: UIViewController, animated: Bool) {}
 }
 ''')
@@ -61,6 +66,14 @@ open class Plugin: NSObject { public let manager = PluginManager() }
             (tmp / 'Scanner.swift').write_text('''import UIKit
 final class PairScanner: UIViewController { var onFinish: ((String?, String?) -> Void)? }
 ''')
+            (tmp / 'Documents.swift').write_text('''import Foundation
+import UIKit
+enum PocketDocumentIO { static let limit = 65586 }
+final class PocketDocumentPicker {
+  func open(presenter: UIViewController, completion: @escaping (Result<Data?, Error>) -> Void) {}
+  func save(_ bytes: Data, presenter: UIViewController, completion: @escaping (Result<Data?, Error>) -> Void) {}
+}
+''')
             for module in ('UIKit', 'Tauri'):
                 subprocess.run(['swiftc', *cache, '-emit-module', '-module-name', module,
                                 '-I', str(tmp), str(tmp / (module + '.swift')),
@@ -68,7 +81,7 @@ final class PairScanner: UIViewController { var onFinish: ((String?, String?) ->
                                env=env, check=True)
             subprocess.run(['swiftc', *cache, '-typecheck', '-I', str(tmp), str(SHARED),
                             str(ROOT / 'ios/PocketKeyBridge.swift'), str(ROOT / 'ios/PocketPlugin.swift'),
-                            str(tmp / 'Scanner.swift')], env=env, check=True)
+                            str(tmp / 'Scanner.swift'), str(tmp / 'Documents.swift')], env=env, check=True)
 
 
 if __name__ == '__main__':

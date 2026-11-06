@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import subprocess
 import time
+from guarded_input import EvidenceError, mobile_receipts, validate_mode
 
 PACKAGE = 'dev.herdr.herdr_flutter_probe'
 SERIAL = 'emulator-5554'
@@ -25,7 +26,12 @@ STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'ha
           'signer_create', 'signer_public', 'signer_sign', 'signer_delete', 'signer_read_deleted',
           'public_key_failed', 'profile_save_failed', 'create_not_available', 'host_board', 'public_request', 'restore_pending', 'host_authorization',
           'response_review', 'ssh_and_dashboard', 'observe_frames', 'stop',
-          'delete_local_identity', 'complete'}
+          'delete_local_identity', 'complete', 'guarded_direct', 'guarded_hidden_draft',
+          'guarded_reconnect', 'guarded_draft_review'}
+STOCK_CASE = 'android-native-pairing-observe'
+GUARDED_CASE = 'android-native-pairing-guarded-input'
+GUARDED_FIELDS = ('guardedInput', 'directInputAccepted', 'draftInputAccepted', 'hiddenTabStopped',
+                  'hiddenTabManualRecovery', 'unsentDraftRestored', 'postStopInputDisabled')
 PUBLIC_LIMITS = {'request.json': 2048, 'result.json': 8192, 'signer.json': 1024, 'stage': 40}
 SIGNER_CHALLENGE = b'herdr-pocket-android-signer-probe-v1'
 REQUEST_FIELDS = {'version', 'type', 'request_id', 'account', 'host_key',
@@ -66,9 +72,12 @@ def require_cloud(env, root, application, config):
         raise DeviceFailure('flutter_android_preparation_not_verified')
     sources = proof.get('productionDartSources')
     channels = proof.get('productionAndroidChannels')
+    expected_channels = {'MainActivity.kt', 'PairScanChannel.kt', 'HostCatalogFile.kt', 'InputJournalFile.kt',
+                         'ConfigDocumentChannel.kt'}
     if (not isinstance(sources, dict) or not {'lib/main.dart', 'lib/device_keys.dart', 'lib/host_catalog.dart',
             'lib/pairing_page.dart', 'lib/remote_adapter.dart'}.issubset(sources) or
-            not isinstance(channels, dict) or len(channels) != 4):
+            not isinstance(channels, dict) or len(channels) != len(expected_channels) or
+            {Path(path).name for path in channels} != expected_channels):
         raise DeviceFailure('flutter_android_production_source_proof_missing')
     for name, expected in {**sources, **channels}.items():
         if (not isinstance(name, str) or '..' in Path(name).parts or Path(name).is_absolute() or
@@ -81,11 +90,12 @@ def require_cloud(env, root, application, config):
     return app
 
 
-def safe_device_result(raw):
-    if not isinstance(raw, dict) or raw.get('case') != 'android-native-pairing-observe' or raw.get('buildMode') != 'debug':
+def safe_device_result(raw, guarded=False):
+    case = GUARDED_CASE if guarded else STOCK_CASE
+    if not isinstance(raw, dict) or raw.get('case') != case or raw.get('buildMode') != 'debug':
         raise DeviceFailure('flutter_android_result_case_invalid')
     clean = {'case': raw['case'], 'buildMode': 'debug'}
-    for field in BOOL_FIELDS:
+    for field in BOOL_FIELDS + (GUARDED_FIELDS if guarded else ()):
         if type(raw.get(field)) is not bool or raw[field] is not True:
             raise DeviceFailure('flutter_android_result_boolean_invalid')
         clean[field] = True
@@ -100,6 +110,18 @@ def safe_device_result(raw):
         if type(raw.get(field)) is not int or raw[field] != expected:
             raise DeviceFailure('flutter_android_result_counter_invalid')
         clean[field] = expected
+    if guarded:
+        try:
+            clean['inputReceipts'] = mobile_receipts(raw.get('inputReceipts'))
+        except EvidenceError as exc:
+            raise DeviceFailure(str(exc)) from None
+        sizes = [receipt['acceptedBytes'] for receipt in clean['inputReceipts']]
+        counts = raw.get('acceptedByteCounts')
+        if counts != sizes or not all(type(count) is int for count in counts):
+            raise DeviceFailure('flutter_android_guarded_byte_counts_invalid')
+        clean['acceptedByteCounts'] = sizes
+    elif raw.get('inputReceipts') or raw.get('guardedInput'):
+        raise DeviceFailure('flutter_android_stock_input_unexpected')
     return clean
 
 
@@ -214,7 +236,9 @@ def checked_public_payload(raw, name):
         # The production Host.review remains authoritative for public-key
         # parsing, TTL, request ID, account and host fingerprint validation.
     elif name == 'result.json':
-        safe_device_result(value)
+        # Validate the wire shape here; _run separately binds it to the
+        # explicitly selected stock/guarded case before accepting the result.
+        safe_device_result(value, guarded=isinstance(value, dict) and value.get('case') == GUARDED_CASE)
     elif name == 'signer.json':
         if (not isinstance(value, dict) or set(value) != {'publicKey', 'signature', 'deleteReturned', 'readRejected'} or
                 not isinstance(value['publicKey'], str) or not isinstance(value['signature'], str) or
@@ -300,8 +324,11 @@ def run_flutter_android(args, root, env, config, approval):
 
 def _run(args, root, env, config, approval, owned_process):
     app = require_cloud(env, root, args.flutter_app, config)
-    if getattr(args, 'input_fixture', None):
-        raise DeviceFailure('flutter_android_readonly_case_requires_stock_server')
+    guarded = getattr(args, 'android_guarded_input', False)
+    try:
+        validate_mode('flutter-android', bool(args.input_fixture), guarded)
+    except EvidenceError as exc:
+        raise DeviceFailure(str(exc)) from None
     output = Path(args.output).resolve()
     temporary = Path(env['RUNNER_TEMP']).resolve()
     if output == temporary or not output.is_relative_to(temporary) or not output.is_dir():
@@ -323,6 +350,7 @@ def _run(args, root, env, config, approval, owned_process):
     relative = 'cache/herdr-flutter-android-' + env['GITHUB_RUN_ID']
     defines = root / 'flutter-android-public-defines.json'
     defines.write_text(json.dumps({'HERDR_ANDROID_NATIVE_PAIRING': '1', 'HERDR_ANDROID_RUN_ID': env['GITHUB_RUN_ID'],
+        'POCKET_GUARDED_INPUT': 'true' if guarded else 'false',
         'HERDR_ANDROID_TARGET_JSON': json.dumps(config, separators=(',', ':')),
         'HERDR_ANDROID_PUBLIC_DIR': '/data/user/0/' + PACKAGE + '/' + relative}), encoding='utf-8')
     defines.chmod(0o600)
@@ -346,7 +374,7 @@ def _run(args, root, env, config, approval, owned_process):
             response = approval.approve(request)
             write_response(relative, response)
             raw = wait_public(process, relative, 'result.json', 8192, timeout=400)
-            result = safe_device_result(json.loads(raw.decode('utf-8')))
+            result = safe_device_result(json.loads(raw.decode('utf-8')), guarded=guarded)
             try:
                 code = process.wait(timeout=60)
             except subprocess.TimeoutExpired:
@@ -399,6 +427,7 @@ def _run(args, root, env, config, approval, owned_process):
     if result is None:
         raise DeviceFailure('flutter_android_result_missing')
     return {**result, 'paired': True, 'reopenedPendingRequest': True,
+        'inputQueueAccepted': guarded and result['directInputAccepted'] and result['draftInputAccepted'],
         'keyStore': 'API35 emulator production AndroidKeyStore AES-wrapped seed; native software Ed25519 signing',
         'device': 'disposable API35 Android AVD', 'uiDriver': 'Flutter SDK integration_test public text/tap controls',
         'frameEvidence': 'displayed sequence advance on the same production Terminal object after initial full',

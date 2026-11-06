@@ -96,15 +96,26 @@ enum RemoteInputMode { observe, direct, draft }
 enum RemoteInputDisposition { rejected, accepted, unknown }
 
 class RemoteInputResult {
-  const RemoteInputResult(this.disposition, this.code, {this.requiresJournalRecovery = false});
+  const RemoteInputResult(this.disposition, this.code, {this.requiresJournalRecovery = false, this.receipt});
   const RemoteInputResult.rejected(String code) : this(RemoteInputDisposition.rejected, code);
-  const RemoteInputResult.accepted() : this(RemoteInputDisposition.accepted, 'accepted');
+  const RemoteInputResult.accepted({RemoteInputReceipt? receipt})
+    : this(RemoteInputDisposition.accepted, 'accepted', receipt:receipt);
   const RemoteInputResult.unknown() : this(RemoteInputDisposition.unknown, 'input_result_unknown');
-  const RemoteInputResult.journalLocked(RemoteInputDisposition disposition)
-    : this(disposition, 'input_journal_clear_failed', requiresJournalRecovery:true);
+  const RemoteInputResult.journalLocked(RemoteInputDisposition disposition, {RemoteInputReceipt? receipt})
+    : this(disposition, 'input_journal_clear_failed', requiresJournalRecovery:true, receipt:receipt);
   final RemoteInputDisposition disposition;
   final String code;
   final bool requiresJournalRecovery;
+  final RemoteInputReceipt? receipt;
+}
+
+/// Public acceptance metadata, created only after the complete ACK matches.
+/// It proves queue admission, not terminal/application execution.
+class RemoteInputReceipt {
+  const RemoteInputReceipt(this.requestId,this.paneId,this.terminalId,this.acceptedBytes);
+  final String requestId, paneId, terminalId;
+  final int acceptedBytes;
+  String get label => 'request $requestId · pane $paneId · terminal $terminalId · $acceptedBytes bytes';
 }
 
 class RemoteInputLease {
@@ -268,5 +279,5 @@ RemoteInputResult parseInputResponse(Map<String,dynamic> value, String id,
       result['type'] != 'pocket_input_accepted' || result['pane_id'] != target.paneId ||
       result['terminal_id'] != target.terminalId || result['accepted_bytes'] is! int ||
       result['accepted_bytes'] != byteCount) return const RemoteInputResult.unknown();
-  return const RemoteInputResult.accepted();
+  return RemoteInputResult.accepted(receipt:RemoteInputReceipt(id,target.paneId,target.terminalId,byteCount));
 }

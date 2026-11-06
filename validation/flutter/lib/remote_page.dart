@@ -6,6 +6,7 @@ import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
 import 'remote_adapter.dart';
 import 'remote_input.dart';
+import 'remote_auxiliary.dart';
 import 'remote_input_platform.dart';
 import 'device_keys.dart';
 
@@ -52,8 +53,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   bool rendering = false, previewOpen = false, acknowledgingInput = false;
   String? draftTarget;
   final drafts = <String,String>{};
+  final auxiliaryModifiers = AuxiliaryModifiers();
   late final inputGate = RemoteInputGate((target,bytes,current) =>
     adapter.sendInput(target,bytes,stillCurrent:current),onChanged:() {
+      if (!inputGate.canInput || inputGate.mode != RemoteInputMode.direct || inputGate.sending) auxiliaryModifiers.reset();
       if (mounted) setState(() {});
     });
 
@@ -71,11 +74,20 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState(); WidgetsBinding.instance.addObserver(this);
+    terminalFocus.addListener(terminalFocusChanged);
     widget.visibility?.addListener(visibilityChanged);
     if (widget.visibility?.value == false) status = '标签已隐藏 · 输入关闭；显示后需主动审查恢复';
     final target = widget.pairedTarget;
     if (target != null) for (final entry in fields.entries) {
       if (target[entry.key] != null) entry.value.text = target[entry.key].toString();
+    }
+  }
+  void terminalFocusChanged() {
+    if (mounted) setState(() { if (!terminalFocus.hasFocus) auxiliaryModifiers.reset(); });
+    // A preview owns a target-bound lease while its modal takes focus. All
+    // other direct focus loss revokes the lease and any queued keystrokes.
+    if (!terminalFocus.hasFocus && !previewOpen && inputGate.mode == RemoteInputMode.direct) {
+      inputGate.setFocused(false); bindTerminalOutput();
     }
   }
   @override
@@ -109,7 +121,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void dispose() {
     widget.visibility?.removeListener(visibilityChanged);
     WidgetsBinding.instance.removeObserver(this); request++; identityLease?.cancel();
-    inputGate.onChanged = null; inputGate.invalidate(); terminalFocus.dispose(); draft.dispose();
+    inputGate.onChanged = null; inputGate.invalidate();
+    terminalFocus.removeListener(terminalFocusChanged); terminalFocus.dispose(); draft.dispose();
     unawaited(adapter.cancel()); terminal?.dispose();
     for (final c in fields.values) { c.clear(); c.dispose(); }
     super.dispose();
@@ -228,6 +241,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   void setInputMode(RemoteInputMode mode) {
+    auxiliaryModifiers.reset();
     terminalFocus.unfocus(); FocusScope.of(context).unfocus();
     inputGate.setFocused(true); inputGate.setMode(mode); bindTerminalOutput();
     final lease = inputGate.capture();
@@ -243,7 +257,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (utf8ByteLength(text) > 4096) {
       setState(() { status = '文本超过 4096 bytes · 未发送'; }); return;
     }
-    setState(() { previewOpen = true; });
+    setState(() { auxiliaryModifiers.reset(); previewOpen = true; });
     final approved = await showDialog<bool>(context:context,builder:(context) => AlertDialog(
       title:const Text('预览发送文本'),
       content:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
@@ -258,6 +272,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       ]));
     if (!mounted) return;
     setState(() { previewOpen = false; });
+    if (lease.mode == RemoteInputMode.direct && inputGate.current(lease)) terminalFocus.requestFocus();
     if (approved != true || !inputGate.current(lease)) return;
     final result = await inputGate.submit(lease,text);
     if (!mounted) return;
@@ -276,10 +291,17 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     } else { await previewInput(value!.text!,lease); }
   }
 
-  void auxiliaryInput(String bytes) {
+  bool get auxiliaryReady => live && inputGate.canInput && inputGate.mode == RemoteInputMode.direct &&
+    terminalFocus.hasFocus && !previewOpen && !inputGate.sending;
+
+  void auxiliaryInput(String name) {
     final lease = inputGate.capture();
-    if (lease == null || lease.mode != RemoteInputMode.direct || previewOpen || inputGate.sending) return;
-    terminalFocus.requestFocus(); unawaited(inputGate.submit(lease,bytes));
+    final allowed = auxiliaryReady && lease != null;
+    final bytes = auxiliaryModifiers.take(name,applicationCursorMode:terminal?.cursorKeysMode == true,
+      allowed:allowed);
+    setState(() { if (allowed && bytes == null) status = '此辅助组合未定义 · 未发送；组合键已释放'; });
+    if (bytes == null || lease == null) return;
+    unawaited(inputGate.submit(lease,bytes));
   }
 
   Widget inputPanel() {
@@ -304,6 +326,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       if (!available) const Padding(padding:EdgeInsets.symmetric(vertical:8),child:Text(
         '原厂 herdr 0.9.5 保持只读。输入需要已核验的原子 terminal ID 保护扩展；不会改用 pane 名称写入或自动接管尺寸。')),
       Semantics(liveRegion:true,child:Text(message,key:const ValueKey('remote-input-status'))),
+      if (result?.receipt != null) Text(result!.receipt!.label,key:const ValueKey('remote-input-receipt')),
       Wrap(spacing:8,runSpacing:8,children:[
         for (final entry in const {
           RemoteInputMode.observe:'观察',RemoteInputMode.direct:'逐键输入',RemoteInputMode.draft:'草稿编辑',
@@ -329,13 +352,28 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             setState(() { acknowledgingInput = false; });
           } : null,child:const Text('我已核实新画面，解除未知结果锁定')),
       ],
+      Semantics(liveRegion:true,child:Text(auxiliaryModifiers.held
+          ? '${auxiliaryModifiers.ctrl ? 'Ctrl ' : ''}${auxiliaryModifiers.alt ? 'Alt ' : ''}保持 · 选择一个辅助基础键后释放；终端输入法文字不受影响'
+          : '组合键已释放 · 仅影响下一次辅助基础键',key:const ValueKey('remote-modifier-status'))),
+        Wrap(spacing:8,runSpacing:8,children:[
+          for (final name in const ['ctrl','alt']) FilterChip(key:ValueKey('remote-modifier-$name'),
+            label:Text(name == 'ctrl' ? 'Ctrl' : 'Alt'),selected:name == 'ctrl' ? auxiliaryModifiers.ctrl : auxiliaryModifiers.alt,
+            onSelected:auxiliaryReady ? (_) => setState(() { auxiliaryModifiers.toggle(name,allowed:auxiliaryReady); }) : null),
+          TextButton(key:const ValueKey('remote-modifier-cancel'),onPressed:auxiliaryReady && auxiliaryModifiers.held
+            ? () => setState(auxiliaryModifiers.reset) : null,child:const Text('取消组合键')),
+        ]),
+        if (auxiliaryModifiers.held) Wrap(spacing:8,runSpacing:8,children:[
+          for (final name in [...'abcdefghijklmnopqrstuvwxyz'.split(''),'space'])
+            OutlinedButton(key:ValueKey('remote-base-$name'),onPressed:auxiliaryReady ? () => auxiliaryInput(name) : null,
+              child:Text(name == 'space' ? 'Space' : name.toUpperCase())),
+        ]),
       if (inputGate.mode == RemoteInputMode.direct) ...[
         Wrap(spacing:8,runSpacing:8,children:[
-          for (final key in const {'Esc':'\x1b','Tab':'\t','Ctrl+C':'\x03','Ctrl+D':'\x04',
-            'Ctrl+Z':'\x1a','Ctrl+A':'\x01','Ctrl+E':'\x05','Ctrl+L':'\x0c','Ctrl+R':'\x12',
-            'Ctrl+U':'\x15','Ctrl+W':'\x17','↑':'\x1b[A','↓':'\x1b[B','←':'\x1b[D','→':'\x1b[C',
-            'Home':'\x1b[H','End':'\x1b[F','PgUp':'\x1b[5~','PgDn':'\x1b[6~','Enter':'\r'}.entries)
-            OutlinedButton(key:ValueKey('remote-key-${key.key}'),onPressed:enabled && !previewOpen && !inputGate.sending ? () => auxiliaryInput(key.value) : null,
+          for (final key in const {'Esc':'esc','Tab':'tab','Ctrl+C':'ctrl-c','Ctrl+D':'ctrl-d',
+            'Ctrl+Z':'ctrl-z','Ctrl+A':'ctrl-a','Ctrl+E':'ctrl-e','Ctrl+L':'ctrl-l','Ctrl+R':'ctrl-r',
+            'Ctrl+U':'ctrl-u','Ctrl+W':'ctrl-w','↑':'up','↓':'down','←':'left','→':'right',
+            'Home':'home','End':'end','PgUp':'pgup','PgDn':'pgdn','Enter':'enter'}.entries)
+            OutlinedButton(key:ValueKey('remote-key-${key.key}'),onPressed:auxiliaryReady ? () => auxiliaryInput(key.value) : null,
               child:Text(key.key)),
         ]),
         OutlinedButton.icon(key:const ValueKey('remote-input-paste'),onPressed:enabled && !previewOpen && !inputGate.sending ? pasteInput : null,

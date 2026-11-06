@@ -6,12 +6,46 @@ private struct KeyArgs: Decodable {
     let handle: String
     let payload: String
 }
+private struct DocumentArgs: Decodable { let data: String }
 
 // The only key material returned to Rust is a public key or a signature.
 final class PocketPlugin: Plugin {
     private let worker = DispatchQueue(label: "dev.herdr.pocket.ios.keys")
     private let keys = PocketKeyBridge(backend: AppleKeychainSeedBackend())
     private var scanning = false // main queue only
+    private let documents = PocketDocumentPicker()
+
+    @objc public func openDocument(_ invoke: Invoke) {
+        DispatchQueue.main.async { [self] in
+            guard var presenter = self.manager.viewController else { invoke.reject("document_unavailable"); return }
+            while let next = presenter.presentedViewController { presenter = next }
+            guard presenter.viewIfLoaded?.window != nil else { invoke.reject("document_unavailable"); return }
+            self.documents.open(presenter: presenter) { result in
+                switch result {
+                case .failure: invoke.reject("document_unavailable")
+                case .success(let data):
+                    if let data = data { invoke.resolve(["data": data.base64EncodedString()]) }
+                    else { invoke.resolve([String: String]()) }
+                }
+            }
+        }
+    }
+
+    @objc public func saveDocument(_ invoke: Invoke) {
+        DispatchQueue.main.async { [self] in
+            guard let args = try? invoke.parseArgs(DocumentArgs.self), args.data.utf8.count <= 87448,
+                  let bytes = Data(base64Encoded: args.data), !bytes.isEmpty, bytes.count <= PocketDocumentIO.limit,
+                  var presenter = self.manager.viewController else { invoke.reject("document_unavailable"); return }
+            while let next = presenter.presentedViewController { presenter = next }
+            guard presenter.viewIfLoaded?.window != nil else { invoke.reject("document_unavailable"); return }
+            self.documents.save(bytes, presenter: presenter) { result in
+                switch result {
+                case .failure: invoke.reject("document_unavailable")
+                case .success(let value): invoke.resolve(["saved": value != nil])
+                }
+            }
+        }
+    }
 
     @objc public func create(_ invoke: Invoke) {
         worker.async {

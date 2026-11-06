@@ -28,7 +28,10 @@ void main() {
     final t = target();
     final value = {'id':'request','result':{'type':'pocket_input_accepted','pane_id':t.paneId,
       'terminal_id':t.terminalId,'accepted_bytes':7}};
-    expect(parseInputResponse(value,'request',t,7).disposition,RemoteInputDisposition.accepted);
+    final accepted = parseInputResponse(value,'request',t,7);
+    expect(accepted.disposition,RemoteInputDisposition.accepted);
+    expect(accepted.receipt!.requestId,'request'); expect(accepted.receipt!.acceptedBytes,7);
+    expect(accepted.receipt!.paneId,t.paneId); expect(accepted.receipt!.terminalId,t.terminalId);
     for (final invalid in [
       {...value,'id':'late'}, {...value,'ok':false},
       {...value,'result':{...value['result'] as Map,'terminal_id':'term_ffff'}},
@@ -40,6 +43,7 @@ void main() {
       {...value,'error':{'code':'pocket_input_rejected'}},
     ]) {
       expect(parseInputResponse(invalid,'request',t,7).disposition,RemoteInputDisposition.unknown);
+      expect(parseInputResponse(invalid,'request',t,7).receipt,isNull);
     }
     expect(parseInputResponse({'id':'request','error':{'code':'pocket_input_rejected'}},'request',t,7).disposition,
       RemoteInputDisposition.rejected);

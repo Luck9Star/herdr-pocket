@@ -45,12 +45,15 @@ def prepare(destination):
     shutil.copytree(source / 'test', destination / 'test', dirs_exist_ok=True)
     (destination / 'tool').mkdir(exist_ok=True)
     shutil.copy2(source / 'tool/remote_probe.dart', destination / 'tool/remote_probe.dart')
-    # Native socket permission only; no background service or identity entitlement.
+    # Client sockets and user-selected document access; no background service.
     for name in ['DebugProfile.entitlements', 'Release.entitlements']:
         entitlements = destination / 'macos/Runner' / name
         text = entitlements.read_text()
         if 'com.apple.security.network.client' not in text:
-            entitlements.write_text(text.replace('</dict>', '<key>com.apple.security.network.client</key><true/>\n</dict>'))
+            text = text.replace('</dict>', '<key>com.apple.security.network.client</key><true/>\n</dict>')
+        if 'com.apple.security.files.user-selected.read-write' not in text:
+            text = text.replace('</dict>', '<key>com.apple.security.files.user-selected.read-write</key><true/>\n</dict>')
+        entitlements.write_text(text)
     manifest = destination / 'android/app/src/main/AndroidManifest.xml'
     text = manifest.read_text()
     if 'android.permission.INTERNET' not in text:
@@ -60,6 +63,7 @@ def prepare(destination):
     activity = destination / 'android/app/src/main/kotlin/dev/herdr/herdr_flutter_probe/MainActivity.kt'
     shutil.copy2(source / 'native/android/MainActivity.kt', activity)
     shutil.copy2(source / 'native/android/PairScanChannel.kt', activity.with_name('PairScanChannel.kt'))
+    shutil.copy2(source / 'native/android/ConfigDocumentChannel.kt', activity.with_name('ConfigDocumentChannel.kt'))
     shutil.copy2(source / 'native/android/HostCatalogFile.kt', activity.with_name('HostCatalogFile.kt'))
     shutil.copy2(source / 'native/android/InputJournalFile.kt', activity.with_name('InputJournalFile.kt'))
     gradle = destination / 'android/app/build.gradle.kts'
@@ -73,6 +77,7 @@ def prepare(destination):
     # are executed by prepare or channel registration.
     shared_apple = (ROOT / 'validation/pairing/native/apple/DeviceKeys.swift').read_text()
     apple_channel = (source / 'native/apple/DeviceKeyChannel.swift').read_text() + '\n' + (source / 'native/apple/HostCatalogFile.swift').read_text() + '\n' + (source / 'native/apple/InputJournalFile.swift').read_text()
+    apple_documents = (ROOT / 'validation/config-transfer/apple/ConfigDocument.swift').read_text() + '\n' + (source / 'native/apple/ConfigDocumentChannel.swift').read_text()
     ios = destination / 'ios/Runner/AppDelegate.swift'
     ios_text = ios.read_text()
     marker = 'GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)'
@@ -81,8 +86,9 @@ def prepare(destination):
     scanner = (ROOT / 'validation/pairing/native/camera/apple/PairScanner.swift').read_text()
     scan_channel = (source / 'native/apple/PairScanChannel.swift').read_text()
     ios.write_text(ios_text.replace(marker, marker + '\n    registerHerdrDeviceKeys(messenger: engineBridge.applicationRegistrar.messenger())'
-                                    + '\n    registerHerdrPairScanner(messenger: engineBridge.applicationRegistrar.messenger())', 1)
-                   + '\n' + shared_apple + '\n' + apple_channel + '\n' + scanner + '\n' + scan_channel)
+                                    + '\n    registerHerdrPairScanner(messenger: engineBridge.applicationRegistrar.messenger())'
+                                    + '\n    registerHerdrConfigDocuments(messenger: engineBridge.applicationRegistrar.messenger())', 1)
+                   + '\n' + shared_apple + '\n' + apple_channel + '\n' + scanner + '\n' + scan_channel + '\n' + apple_documents)
     info = destination / 'ios/Runner/Info.plist'
     plist = plistlib.loads(info.read_bytes())
     plist['NSCameraUsageDescription'] = '扫描主机的公开配对响应二维码。'
@@ -92,8 +98,9 @@ def prepare(destination):
     marker = 'RegisterGeneratedPlugins(registry: flutterViewController)'
     if marker not in mac_text:
         raise SystemExit('Pinned Flutter macOS registration template changed')
-    macos.write_text(mac_text.replace(marker, marker + '\n    registerHerdrDeviceKeys(messenger: flutterViewController.engine.binaryMessenger)', 1)
-                     + '\n' + shared_apple + '\n' + apple_channel)
+    macos.write_text(mac_text.replace(marker, marker + '\n    registerHerdrDeviceKeys(messenger: flutterViewController.engine.binaryMessenger)'
+                                     + '\n    registerHerdrConfigDocuments(messenger: flutterViewController.engine.binaryMessenger)', 1)
+                     + '\n' + shared_apple + '\n' + apple_channel + '\n' + apple_documents)
 
     shutil.copytree(source / 'diagnostic', destination / 'diagnostic', dirs_exist_ok=True)
     shutil.copytree(source / 'regression', destination / 'regression', dirs_exist_ok=True)
@@ -156,6 +163,9 @@ def pairing_provenance(platform, android_notice):
 
 
 def package(destination, platform, output):
+    source_commit = os.environ.get('GITHUB_SHA', '')
+    if len(source_commit) not in (40, 64) or any(ch not in '0123456789abcdef' for ch in source_commit.lower()):
+        raise SystemExit('GITHUB_SHA must identify the exact source commit before packaging')
     candidates = {
         'android': ['build/app/outputs/flutter-apk/app-debug.apk'],
         'ios': ['build/ios/iphoneos/Runner.app'],
@@ -190,13 +200,17 @@ def package(destination, platform, output):
         except Exception as exc:
             return type(exc).__name__
     shared = ROOT / 'validation/shared'
+    config_transfer_fixture_sha256 = hashlib.sha256((shared / 'config-transfer-v1.json').read_bytes()).hexdigest()
+    config_transfer_checksum = config_transfer_fixture_sha256 + '  config-transfer-v1.json'
+    if config_transfer_checksum not in (shared / 'SHA256SUMS').read_text(encoding='utf-8').splitlines():
+        raise SystemExit('Config transfer fixture checksum mismatch')
     shutil.copytree(shared, output / 'shared', dirs_exist_ok=True)
     shutil.copytree(ROOT / 'validation/flutter/licenses', output / 'remote-dependency-licenses', dirs_exist_ok=True)
     shutil.copy2(ROOT / 'validation/flutter/remote-dependencies.json', output / 'remote-dependencies.json')
     sdk = os.environ.get('ANDROID_HOME', '')
     ndk_versions = sorted(p.name for p in (Path(sdk) / 'ndk').glob('*') if p.is_dir()) if sdk else []
     manifest = {
-        'sourceCommit': os.environ.get('GITHUB_SHA', 'local'),
+        'sourceCommit': source_commit,
         'candidateChecks': os.environ.get('CANDIDATE_CHECKS', 'not recorded'),
         'runUrl': 'https://github.com/' + os.environ.get('GITHUB_REPOSITORY', '') + '/actions/runs/' + os.environ.get('GITHUB_RUN_ID', ''),
         'fontSha256': hashlib.sha256((shared / 'fonts/JetBrainsMonoNerdFontMono-Regular.ttf').read_bytes()).hexdigest(),
@@ -207,12 +221,16 @@ def package(destination, platform, output):
         'designTokensSha256': hashlib.sha256((ROOT / 'validation/shared/design-tokens-v2.json').read_bytes()).hexdigest(),
         'visualScheme': 'Penpot v2 Tech Indigo and Slate; offline shell adaptation',
         'fixtureSha256': hashlib.sha256((ROOT / 'validation/shared/fixture.json').read_bytes()).hexdigest(),
+        'configTransferFixtureSHA256': config_transfer_fixture_sha256,
         'lockSha256': hashlib.sha256((destination / 'pubspec.lock').read_bytes()).hexdigest(),
         'scope': 'compile/package only; offline fixture, public pairing review and native device-key channel wiring, pinned SSH pane dashboard and bounded read-only observe; runtime SSH/GUI pairing must use separate harness evidence; device/system storage/overlays NOT RUN',
         'remoteAdapter': {'ssh': 'dartssh2 4.1.0', 'input': 'stock server read-only; opt-in guarded server capability, no automatic replay', 'storage': 'device path uses opaque native handle; explicit manual PEM experiment remains memory-only; system storage runtime NOT RUN', 'contractSha256': hashlib.sha256((ROOT / 'validation/shared/remote-contract.json').read_bytes()).hexdigest()},
         'pairingDeviceKeys': pairing_provenance(platform, android_notice),
         'signing': 'iOS unsigned, not installable on device' if platform == 'ios' else 'development test build; no production signing/notarization',
     }
+    if platform == 'android':
+        manifest['androidApkSha256'] = hashlib.sha256(paths[0].read_bytes()).hexdigest()
+        shutil.copy2(paths[0], output / 'flutter-android-debug.apk')
     candidate_manifest = destination / 'candidate-manifest.json'
     if candidate_manifest.exists():
         provenance = json.loads(candidate_manifest.read_text(encoding='utf-8'))
@@ -221,7 +239,10 @@ def package(destination, platform, output):
         for name in ['LICENSE', 'NOTICE']:
             shutil.copy2(destination / 'candidate/terminal_view' / name, output / ('terminal_view-' + name))
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    (output / 'SHA256SUMS').write_text(manifest['artifactSha256'] + '  ' + archive.name + '\n')
+    checksums = [manifest['artifactSha256'] + '  ' + archive.name]
+    if platform == 'android':
+        checksums.append(manifest['androidApkSha256'] + '  flutter-android-debug.apk')
+    (output / 'SHA256SUMS').write_text('\n'.join(checksums) + '\n')
 
 
 def main():

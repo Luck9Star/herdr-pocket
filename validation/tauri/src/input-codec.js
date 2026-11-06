@@ -1,8 +1,36 @@
 const encoder = new TextEncoder();
 const arrows = {up:'A',down:'B',right:'C',left:'D'};
-export function auxiliaryKey(name, applicationCursorMode) {
-  if (Object.hasOwn(arrows,name)) return `\x1b${applicationCursorMode?'O':'['}${arrows[name]}`;
-  return ({esc:'\x1b',tab:'\t','ctrl-c':'\x03',enter:'\r'})[name] ?? null;
+export function auxiliaryKey(name, applicationCursorMode, {ctrl=false,alt=false}={}) {
+  const modifier=1+(ctrl?4:0)+(alt?2:0);
+  const cursor=arrows[name] ?? ({home:'H',end:'F'})[name];
+  if(cursor) return modifier>1 ? `\x1b[1;${modifier}${cursor}` : `\x1b${applicationCursorMode?'O':'['}${cursor}`;
+  const page=({pgup:5,pgdn:6})[name];
+  if(page) return `\x1b[${page}${modifier>1?`;${modifier}`:''}~`;
+  const shortcuts={'ctrl-c':'\x03','ctrl-d':'\x04','ctrl-z':'\x1a','ctrl-a':'\x01','ctrl-e':'\x05','ctrl-l':'\x0c','ctrl-r':'\x12','ctrl-u':'\x15','ctrl-w':'\x17'};
+  if(Object.hasOwn(shortcuts,name))return shortcuts[name];
+  let value=({esc:'\x1b',tab:'\t',enter:'\r',space:' '})[name] ?? (/^[a-z]$/.test(name)?name:null);
+  if(value===null)return null;
+  if(ctrl) {
+    if(/^[a-z]$/.test(value))value=String.fromCharCode(value.toUpperCase().charCodeAt(0)-64);
+    else if(name==='space')value='\x00';
+    else return null; // No guessed Ctrl+Tab/Enter/Esc encoding.
+  }
+  return (alt?'\x1b':'')+value;
+}
+/** One-shot toolbar state, never applied to terminal/IME onData. */
+export class AuxiliaryModifiers {
+  ctrl=false; alt=false;
+  get held(){return this.ctrl || this.alt;}
+  reset(){this.ctrl=false;this.alt=false;}
+  toggle(name,allowed) {
+    if(!allowed){this.reset();return false;}
+    if(name!=='ctrl' && name!=='alt')return false;
+    this[name]=!this[name];return true;
+  }
+  take(name,applicationCursorMode,allowed) {
+    const selected={ctrl:this.ctrl,alt:this.alt}; this.reset();
+    return allowed?auxiliaryKey(name,applicationCursorMode,selected):null;
+  }
 }
 export function draftBytes(text, bracketed) {
   if (typeof text!=='string' || !text || (bracketed && text.includes('\x1b[201~'))) return null;

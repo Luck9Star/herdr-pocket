@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:terminal_view/terminal_view.dart';
@@ -17,6 +18,7 @@ const fixtureEnabled = String.fromEnvironment('HERDR_ANDROID_NATIVE_PAIRING');
 const runId = String.fromEnvironment('HERDR_ANDROID_RUN_ID');
 const publicTarget = String.fromEnvironment('HERDR_ANDROID_TARGET_JSON');
 const publicDirectory = String.fromEnvironment('HERDR_ANDROID_PUBLIC_DIR');
+const guardedInput = bool.fromEnvironment('POCKET_GUARDED_INPUT');
 
 /// Only public fixture target/request/response and typed evidence cross these
 /// files. No injected DeviceKeys, catalog, adapter, frame or MethodChannel mock.
@@ -70,6 +72,23 @@ void publish(Directory dir, String name, String text) {
   pending.writeAsStringSync(text,flush:true); pending.renameSync('${dir.path}/$name');
 }
 
+Map<String,Object> visibleReceipt(WidgetTester tester, String paneId, int count) {
+  final control = find.byKey(const ValueKey('remote-input-receipt'));
+  final value = tester.widget<Text>(control).data!;
+  final match = RegExp(r'^request ([0-9a-f]{32}) · pane (\S+) · terminal (\S+) · ([0-9]+) bytes$').firstMatch(value);
+  expect(match,isNotNull);
+  expect(match!.group(2),paneId); expect(int.parse(match.group(4)!),count);
+  return {'requestId':match.group(1)!,'paneId':match.group(2)!,
+    'terminalId':match.group(3)!,'acceptedBytes':count};
+}
+
+Future<void> accepted(WidgetTester tester, {String? previousRequest}) => until(tester,() {
+  final control = find.byKey(const ValueKey('remote-input-receipt'));
+  return control.evaluate().length == 1 &&
+    !(tester.widget<Text>(control).data ?? '').contains(previousRequest ?? 'never-a-request') &&
+    find.textContaining('服务端已接收 · 仅确认队列受理').evaluate().isNotEmpty;
+});
+
 // Independent ephemeral identity. It never enters the host catalog or pairing.
 Future<void> nativeSignerProbe(Directory exchange, void Function(String) stage) async {
   final keys = NativeDeviceKeys();
@@ -99,7 +118,7 @@ Future<void> nativeSignerProbe(Directory exchange, void Function(String) stage) 
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('Android native identity through production host catalog to read-only SSH observe',(tester) async {
+  testWidgets('Android native identity through production host catalog to guarded or stock SSH',(tester) async {
     final target = checkedTarget();
     final exchange = Directory(publicDirectory);
     if (exchange.existsSync()) throw StateError('android_public_exchange_already_exists');
@@ -190,12 +209,63 @@ void main() {
       identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal,fullTerminal));
     final deltaSequence = displayedSequence(tester)!;
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
-    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
-    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-draft'))).onSelected,isNull);
+    final inputReceipts = <Map<String,Object>>[];
+    if (guardedInput) {
+      stage('guarded_direct');
+      expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNotNull);
+      await tapKey(tester,'remote-mode-direct');
+      final terminalView = find.byType(TerminalView);
+      await tester.ensureVisible(terminalView); await tester.pump(const Duration(milliseconds:200));
+      expect(tester.widget<TerminalView>(terminalView).focusNode!.hasFocus,isTrue);
+      // Submit a committed character through TerminalView's normal TextInput
+      // path. A hardware key event alone need not generate printable text on
+      // Android. This is GUI automation, not proof of a physical IME.
+      expect(tester.testTextInput.isRegistered,isTrue);
+      tester.testTextInput.updateEditingValue(const TextEditingValue(text:'k',
+        selection:TextSelection.collapsed(offset:1),composing:TextRange.empty));
+      await tester.pump();
+      await accepted(tester);
+      inputReceipts.add(visibleReceipt(tester,target['paneId'] as String,1));
+
+      stage('guarded_hidden_draft');
+      await tapKey(tester,'remote-mode-draft');
+      final draftControl = find.byKey(const ValueKey('remote-input-draft'));
+      await tester.ensureVisible(draftControl); await tester.enterText(draftControl,'Pocket测');
+      await tester.pump();
+      await tapKey(tester,'hosts-board-tab');
+      await tapKey(tester,'host-tab-$id');
+      expect(find.textContaining('请主动审查连接并取得新 full'),findsOneWidget);
+      expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
+      expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+      stage('guarded_reconnect');
+      await tapKey(tester,'remote-review'); await tapKey(tester,'remote-connect');
+      await until(tester,() => pane.evaluate().length == 1 &&
+        tester.widget<FilledButton>(pane).onPressed != null);
+      await tap(tester,pane);
+      await until(tester,() => find.textContaining('只读观察中').evaluate().isNotEmpty &&
+        tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected != null);
+      await tapKey(tester,'remote-mode-draft');
+      expect(tester.widget<TextField>(draftControl).controller!.text,'Pocket测');
+      stage('guarded_draft_review');
+      await tapKey(tester,'remote-input-draft-send');
+      expect(find.text('预览发送文本'),findsOneWidget);
+      expect(find.text('Pocket测'),findsWidgets);
+      await tapKey(tester,'remote-input-confirm');
+      await accepted(tester,previousRequest:inputReceipts.first['requestId'] as String);
+      inputReceipts.add(visibleReceipt(tester,target['paneId'] as String,9));
+      expect(inputReceipts.last['terminalId'],inputReceipts.first['terminalId']);
+      expect(tester.widget<TextField>(draftControl).controller!.text,isEmpty);
+    } else {
+      expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
+      expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-draft'))).onSelected,isNull);
+    }
     expect(tester.takeException(),isNull);
     stage('stop');
     await tapKey(tester,'remote-cancel');
     await until(tester,() => find.textContaining('旧画面 · 已停止').evaluate().isNotEmpty);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-draft'))).onSelected,isNull);
+    if (guardedInput) await tester.sendKeyEvent(LogicalKeyboardKey.keyX,character:'x');
     await tap(tester,find.byTooltip('返回离线验证')); // Production remote page's explicit back control.
     await tester.pump(const Duration(milliseconds:400));
     await tapKey(tester,'hosts-board-tab');
@@ -207,7 +277,7 @@ void main() {
     expect(tester.takeException(),isNull);
     stage('complete');
     final report = <String,Object?>{
-      'case':'android-native-pairing-observe','buildMode':'debug',
+      'case':guardedInput ? 'android-native-pairing-guarded-input' : 'android-native-pairing-observe','buildMode':'debug',
       'productionMain':true,'defaultHostCatalog':true,'uninjectedNativeDeviceKeys':true,
       'publicRequestShown':true,'pendingRequestReopened':true,'originalDeviceKeyRevalidated':true,
       'authorizationReviewed':true,'pairedStateVisible':true,'paneChosen':true,
@@ -215,6 +285,12 @@ void main() {
       'directModeDisabled':true,'draftModeDisabled':true,'localIdentityDeleted':true,
       'identityCreationActions':1,'firstSequence':firstSequence,'deltaSequence':deltaSequence,
       'frameCountLowerBound':2,'deltaCountLowerBound':1,
+      if (guardedInput) ...{
+        'guardedInput':true,'directInputAccepted':true,'draftInputAccepted':true,
+        'hiddenTabStopped':true,'hiddenTabManualRecovery':true,'unsentDraftRestored':true,
+        'postStopInputDisabled':true,'inputReceipts':inputReceipts,
+        'acceptedByteCounts':[1,9],
+      },
     };
     publish(exchange,'result.json',jsonEncode(report));
     binding.reportData = report;

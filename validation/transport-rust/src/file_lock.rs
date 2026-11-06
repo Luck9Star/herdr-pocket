@@ -39,7 +39,19 @@ mod tests {
         try_lock_owner(&first).unwrap();
         assert_eq!(try_lock_owner(&second).unwrap_err().kind(), io::ErrorKind::WouldBlock);
         drop(first);
-        try_lock_owner(&second).unwrap();
+        // A concurrent test may fork while the first descriptor is live.
+        // CLOEXEC closes the child's inherited copy at exec, rather than at
+        // this thread's drop. Bound that transient interval without weakening
+        // the production nonblocking operation or the contention assertion.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        loop {
+            match try_lock_owner(&second) {
+                Ok(()) => break,
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock && std::time::Instant::now() < deadline =>
+                    std::thread::sleep(std::time::Duration::from_millis(5)),
+                Err(error) => panic!("released file lock remains unavailable: {error}"),
+            }
+        }
         drop(second);
         std::fs::remove_file(path).unwrap();
     }

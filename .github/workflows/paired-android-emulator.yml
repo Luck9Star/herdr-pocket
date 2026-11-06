@@ -1,6 +1,10 @@
 name: Android emulator pairing
 on:
   workflow_call:
+    inputs:
+      guarded_input:
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -21,37 +25,230 @@ jobs:
         with:
           distribution: temurin
           java-version: '17.0.18+8'
-      - name: Build the x86_64 emulator variant of the Android application
+      - name: Install fixed Tauri dependencies
         working-directory: validation/tauri
+        run: npm ci
+      - name: Record Tauri unit-test result
+        if: inputs.guarded_input || startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
+        working-directory: validation/tauri
+        run: |
+          if npm test > "$RUNNER_TEMP/tauri-npm-test.log" 2>&1; then
+            npm_status=0
+          else
+            npm_status=$?
+          fi
+          cat "$RUNNER_TEMP/tauri-npm-test.log"
+          echo "TAURI_NPM_TEST_STATUS=$npm_status" >> "$GITHUB_ENV"
+          echo "npm test exit status: $npm_status" > "$RUNNER_TEMP/tauri-npm-test-status.txt"
+      - name: Build x86_64 emulator and aarch64 phone APKs once
+        id: android-builds
+        working-directory: validation/tauri
+        env:
+          ANDROID_INPUT_ROUTE: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-input-') }}
         run: |
           rustup toolchain install 1.96.0 --profile minimal
           rustup default 1.96.0
           rustup target add x86_64-linux-android
+          if [ "$ANDROID_INPUT_ROUTE" = true ]; then rustup target add aarch64-linux-android; fi
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358'
           export NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
-          npm ci
           npm run tauri -- icon icon.svg
           npm run tauri -- android init --ci
           python3 scripts/wire-android.py
-          npm run tauri -- android build --debug --target x86_64 --apk --ci
-      - name: Pair through the real Android WebView and protected signer
+          x86_status=0
+          if npm run tauri -- android build --debug --target x86_64 --apk --ci > "$RUNNER_TEMP/tauri-android-x86-build.log" 2>&1; then :; else x86_status=$?; fi
+          cat "$RUNNER_TEMP/tauri-android-x86-build.log"
+          x86_apk=
+          if [ "$x86_status" -eq 0 ]; then
+            if python3 - "$RUNNER_TEMP/tauri-x86_64-debug.apk" x86_64 <<'PY'
+          from pathlib import Path
+          import sys, zipfile
+          candidates = []
+          for path in Path('src-tauri/gen/android/app/build/outputs/apk').rglob('*.apk'):
+              try:
+                  with zipfile.ZipFile(path) as apk:
+                      if any(name.startswith('lib/x86_64/') and name.endswith('.so') for name in apk.namelist()):
+                          candidates.append(path)
+              except (OSError, zipfile.BadZipFile):
+                  pass
+          if len(candidates) != 1:
+              raise SystemExit(f'expected exactly one x86_64 APK, found {len(candidates)}')
+          Path(sys.argv[1]).parent.mkdir(parents=True, exist_ok=True)
+          Path(sys.argv[1]).write_bytes(candidates[0].read_bytes())
+          PY
+            then x86_apk="$RUNNER_TEMP/tauri-x86_64-debug.apk"; else x86_status=1; fi
+          fi
+          arm_status=0
+          if [ "$ANDROID_INPUT_ROUTE" = true ]; then
+            if npm run tauri -- android build --debug --target aarch64 --apk --ci > "$RUNNER_TEMP/tauri-android-arm64-build.log" 2>&1; then :; else arm_status=$?; fi
+          else
+            echo 'aarch64 app artifact is only built on the android-input batch route' > "$RUNNER_TEMP/tauri-android-arm64-build.log"
+          fi
+          cat "$RUNNER_TEMP/tauri-android-arm64-build.log"
+          arm_apk=
+          if [ "$ANDROID_INPUT_ROUTE" = true ] && [ "$arm_status" -eq 0 ]; then
+            if python3 - "$RUNNER_TEMP/app-arm64-v8a-debug.apk" arm64-v8a <<'PY'
+          from pathlib import Path
+          import sys, zipfile
+          candidates = []
+          for path in Path('src-tauri/gen/android/app/build/outputs/apk').rglob('*.apk'):
+              try:
+                  with zipfile.ZipFile(path) as apk:
+                      if any(name.startswith('lib/arm64-v8a/') and name.endswith('.so') for name in apk.namelist()):
+                          candidates.append(path)
+              except (OSError, zipfile.BadZipFile):
+                  pass
+          if len(candidates) != 1:
+              raise SystemExit(f'expected exactly one arm64-v8a APK, found {len(candidates)}')
+          Path(sys.argv[1]).parent.mkdir(parents=True, exist_ok=True)
+          Path(sys.argv[1]).write_bytes(candidates[0].read_bytes())
+          PY
+            then arm_apk="$RUNNER_TEMP/app-arm64-v8a-debug.apk"; else arm_status=1; fi
+          fi
+          echo "x86_status=$x86_status" >> "$GITHUB_OUTPUT"
+          echo "x86_apk=$x86_apk" >> "$GITHUB_OUTPUT"
+          echo "arm_status=$arm_status" >> "$GITHUB_OUTPUT"
+          echo "arm_apk=$arm_apk" >> "$GITHUB_OUTPUT"
+          echo "TAURI_ANDROID_X86_STATUS=$x86_status" >> "$GITHUB_ENV"
+          echo "TAURI_ANDROID_ARM64_STATUS=$arm_status" >> "$GITHUB_ENV"
+          printf 'x86_64 build/selection: %s\naarch64 build/selection: %s\n' "$x86_status" "$arm_status" > "$RUNNER_TEMP/tauri-android-build-status.txt"
+      - name: Package the normal aarch64 app APK with source and notice manifest
+        if: always() && startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
+        working-directory: validation/tauri
+        env:
+          PROBE_PLATFORM: android
+          ANDROID_TARGET_ABI: arm64-v8a
+          ANDROID_APK_PATH: ${{ steps.android-builds.outputs.arm_apk }}
+          BUILD_OUTCOME: ${{ steps.android-builds.outputs.arm_status == '0' && 'success' || 'failure' }}
+        run: |
+          if python3 scripts/package-artifacts.py > "$RUNNER_TEMP/tauri-android-package.log" 2>&1; then
+            package_status=0
+          else
+            package_status=$?
+          fi
+          cat "$RUNNER_TEMP/tauri-android-package.log"
+          echo "TAURI_ANDROID_PACKAGE_STATUS=$package_status" >> "$GITHUB_ENV"
+          echo "aarch64 app package exit status: $package_status" > "$RUNNER_TEMP/tauri-android-package-status.txt"
+      - name: Prepare isolated SSH and GUI test dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y openssh-server acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
           python3 -m venv "$RUNNER_TEMP/android-venv"
           "$RUNNER_TEMP/android-venv/bin/pip" install -r validation/pairing/requirements.txt websocket-client==1.8.0
-          mapfile -t apks < <(find validation/tauri/src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk')
-          test "${#apks[@]}" = 1
-          bash validation/remote-harness/with-android-emulator.sh "$RUNNER_TEMP/android-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui tauri-android --tauri-app "${apks[0]}" --output "$RUNNER_TEMP/android-gui-evidence"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        id: download-fixture
+        if: inputs.guarded_input
+        continue-on-error: true
+        with:
+          name: input-fixture-${{ github.sha }}
+          path: ${{ runner.temp }}/input-fixture
+      - name: Run independent stock and guarded API35 AVDs
+        env:
+          GUARDED_REQUESTED: ${{ inputs.guarded_input }}
+          GUARDED_INPUT: ${{ inputs.guarded_input && steps.download-fixture.outcome == 'success' }}
+          X86_APK: ${{ steps.android-builds.outputs.x86_apk }}
+        run: |
+          x86_status=0
+          if [ -z "$X86_APK" ] || [ ! -f "$X86_APK" ]; then
+            x86_status=1
+            stock_avd_evidence="$RUNNER_TEMP/avd-evidence"
+            if [ "$GUARDED_REQUESTED" = true ]; then stock_avd_evidence="$RUNNER_TEMP/stock-avd-evidence"; fi
+            mkdir -p "$RUNNER_TEMP/android-gui-evidence" "$stock_avd_evidence"
+            echo 'stock AVD not started: x86_64 emulator APK build or selection failed' > "$RUNNER_TEMP/android-gui-evidence/preparation-status.txt"
+            echo 'stock AVD not started: x86_64 emulator APK build or selection failed' > "$stock_avd_evidence/preparation-status.txt"
+          fi
+          stock_avd_env=()
+          if [ "$GUARDED_REQUESTED" = true ]; then stock_avd_env=("AVD_EVIDENCE_DIR=$RUNNER_TEMP/stock-avd-evidence"); fi
+          stock_status=$x86_status
+          if [ "$x86_status" -eq 0 ]; then
+            if env "${stock_avd_env[@]}" bash validation/remote-harness/with-android-emulator.sh \
+              "$RUNNER_TEMP/android-venv/bin/python" validation/remote-harness/run-ci.py \
+                --paired-gui tauri-android --tauri-app "$X86_APK" --output "$RUNNER_TEMP/android-gui-evidence"; then
+              :
+            else
+              stock_status=$?
+            fi
+          fi
+          guarded_status=0
+          if [ "$GUARDED_REQUESTED" = true ] && [ "$GUARDED_INPUT" = true ] && [ "$x86_status" -eq 0 ]; then
+            if AVD_EVIDENCE_DIR="$RUNNER_TEMP/guarded-avd-evidence" bash validation/remote-harness/with-android-emulator.sh \
+              "$RUNNER_TEMP/android-venv/bin/python" validation/remote-harness/run-ci.py \
+                --paired-gui tauri-android --tauri-app "$X86_APK" --output "$RUNNER_TEMP/android-guarded-input-evidence" \
+                --input-fixture "$RUNNER_TEMP/input-fixture" --android-guarded-input; then
+              :
+            else
+              guarded_status=$?
+            fi
+          elif [ "$GUARDED_REQUESTED" = true ]; then
+            guarded_status=1
+            mkdir -p "$RUNNER_TEMP/android-guarded-input-evidence"
+            if [ "$x86_status" -ne 0 ]; then
+              echo 'guarded input AVD not started: x86_64 emulator APK build or selection failed' > "$RUNNER_TEMP/android-guarded-input-evidence/preparation-status.txt"
+              mkdir -p "$RUNNER_TEMP/guarded-avd-evidence"
+              echo 'guarded AVD not started: x86_64 emulator APK build or selection failed' > "$RUNNER_TEMP/guarded-avd-evidence/preparation-status.txt"
+            else
+              echo 'guarded input AVD not started: same-run fixture download failed' > "$RUNNER_TEMP/android-guarded-input-evidence/preparation-status.txt"
+              mkdir -p "$RUNNER_TEMP/guarded-avd-evidence"
+              echo 'guarded AVD not started: same-run fixture download failed' > "$RUNNER_TEMP/guarded-avd-evidence/preparation-status.txt"
+            fi
+          fi
+          avd_status=0
+          if [ "$stock_status" -ne 0 ] || [ "$guarded_status" -ne 0 ]; then avd_status=1; fi
+          echo "ANDROID_AVD_TEST_STATUS=$avd_status" >> "$GITHUB_ENV"
+          echo "stock=$stock_status guarded=$guarded_status" > "$RUNNER_TEMP/android-avd-test-status.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: android-emulator-pairing-${{ github.sha }}
           path: |
             ${{ runner.temp }}/android-gui-evidence/
-            ${{ runner.temp }}/avd-evidence/
+            ${{ runner.temp }}/${{ inputs.guarded_input && 'stock-avd-evidence' || 'avd-evidence' }}/
+            ${{ runner.temp }}/android-avd-test-status.txt
+            ${{ runner.temp }}/tauri-npm-test.log
+            ${{ runner.temp }}/tauri-npm-test-status.txt
+            ${{ runner.temp }}/tauri-android-x86-build.log
+            ${{ runner.temp }}/tauri-android-arm64-build.log
+            ${{ runner.temp }}/tauri-android-build-status.txt
+            ${{ runner.temp }}/tauri-android-package.log
+            ${{ runner.temp }}/tauri-android-package-status.txt
           retention-days: 14
           if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && inputs.guarded_input
+        with:
+          name: android-emulator-tauri-guarded-input-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/android-guarded-input-evidence/
+            ${{ runner.temp }}/guarded-avd-evidence/
+            ${{ runner.temp }}/android-avd-test-status.txt
+            ${{ runner.temp }}/tauri-npm-test.log
+            ${{ runner.temp }}/tauri-npm-test-status.txt
+            ${{ runner.temp }}/tauri-android-x86-build.log
+            ${{ runner.temp }}/tauri-android-arm64-build.log
+            ${{ runner.temp }}/tauri-android-build-status.txt
+            ${{ runner.temp }}/tauri-android-package.log
+            ${{ runner.temp }}/tauri-android-package-status.txt
+          retention-days: 14
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
+        with:
+          name: tauri-android-appmain-arm64-${{ github.sha }}
+          path: |
+            validation/tauri/artifacts/
+            ${{ runner.temp }}/tauri-android-x86-build.log
+            ${{ runner.temp }}/tauri-android-arm64-build.log
+            ${{ runner.temp }}/tauri-android-build-status.txt
+            ${{ runner.temp }}/tauri-android-package.log
+            ${{ runner.temp }}/tauri-android-package-status.txt
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Fail after preserving Tauri and Android evidence
+        if: always()
+        run: |
+          if [ "${TAURI_NPM_TEST_STATUS:-0}" -ne 0 ] || [ "${ANDROID_AVD_TEST_STATUS:-0}" -ne 0 ] || \
+             [ "${TAURI_ANDROID_X86_STATUS:-0}" -ne 0 ] || [ "${TAURI_ANDROID_ARM64_STATUS:-0}" -ne 0 ] || \
+             [ "${TAURI_ANDROID_PACKAGE_STATUS:-0}" -ne 0 ]; then exit 1; fi
   flutter-device-key:
     if: startsWith(github.ref, 'refs/heads/codex/')
     runs-on: ubuntu-24.04
@@ -85,22 +282,101 @@ jobs:
           cd "$RUNNER_TEMP/flutter-android-gui"
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-android-gui"
+      - name: Build and package the normal Flutter Android app before instrumentation
+        if: startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
+        run: |
+          cd "$RUNNER_TEMP/flutter-android-gui"
+          appmain_status=0
+          if flutter build apk --debug > "$RUNNER_TEMP/flutter-appmain-build.log" 2>&1; then :; else appmain_status=$?; fi
+          cat "$RUNNER_TEMP/flutter-appmain-build.log"
+          if [ "$appmain_status" -eq 0 ]; then
+            if python3 "$GITHUB_WORKSPACE/validation/flutter/tool/ci.py" package \
+              --destination "$RUNNER_TEMP/flutter-android-gui" --platform android \
+              --output "$RUNNER_TEMP/flutter-appmain-package" > "$RUNNER_TEMP/flutter-appmain-package.log" 2>&1; then
+              :
+            else
+              appmain_status=$?
+            fi
+          fi
+          cat "$RUNNER_TEMP/flutter-appmain-package.log" 2>/dev/null || true
+          echo "FLUTTER_APPMAIN_PACKAGE_STATUS=$appmain_status" >> "$GITHUB_ENV"
+          echo "normal app build/package exit status: $appmain_status" > "$RUNNER_TEMP/flutter-appmain-package-status.txt"
       - name: Add SDK integration_test only to this disposable device-test scaffold
         run: |
           python3 validation/flutter/tool/android_device_test.py prepare --destination "$RUNNER_TEMP/flutter-android-gui"
           cd "$RUNNER_TEMP/flutter-android-gui"
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/flutter-android-gui"
+      - name: Analyze the Flutter device-test scaffold
+        if: ${{ !inputs.guarded_input && !startsWith(github.ref, 'refs/heads/codex/batch/android-input-') }}
+        run: |
+          cd "$RUNNER_TEMP/flutter-android-gui"
           flutter analyze lib integration_test
-      - name: Pair through production Flutter UI and native device signing on a new API35 AVD
+      - name: Run analyzer, Flutter tests and renderer regressions on the verified lock
+        if: inputs.guarded_input || startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
+        run: |
+          cd "$RUNNER_TEMP/flutter-android-gui"
+          flutter_status=0
+          if flutter analyze > "$RUNNER_TEMP/flutter-analyze.log" 2>&1; then :; else flutter_status=1; fi
+          cat "$RUNNER_TEMP/flutter-analyze.log"
+          if flutter test --reporter expanded > "$RUNNER_TEMP/flutter-tests.log" 2>&1; then :; else flutter_status=1; fi
+          cat "$RUNNER_TEMP/flutter-tests.log"
+          if flutter test diagnostic/combining_render_test.dart regression/combining_patch_test.dart --reporter expanded > "$RUNNER_TEMP/flutter-render-regressions.log" 2>&1; then :; else flutter_status=1; fi
+          cat "$RUNNER_TEMP/flutter-render-regressions.log"
+          echo "FLUTTER_REGRESSION_STATUS=$flutter_status" >> "$GITHUB_ENV"
+          echo "analyze+unit/widget+render-regression exit status: $flutter_status" > "$RUNNER_TEMP/flutter-regression-status.txt"
+      - name: Install isolated SSH and GUI test dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y openssh-server acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
-          bash validation/remote-harness/with-android-emulator.sh \
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        id: download-fixture
+        if: inputs.guarded_input
+        continue-on-error: true
+        with:
+          name: input-fixture-${{ github.sha }}
+          path: ${{ runner.temp }}/input-fixture
+      - name: Run independent stock and guarded API35 AVDs
+        env:
+          GUARDED_REQUESTED: ${{ inputs.guarded_input }}
+          GUARDED_INPUT: ${{ inputs.guarded_input && steps.download-fixture.outcome == 'success' }}
+        run: |
+          stock_avd_env=()
+          if [ "$GUARDED_REQUESTED" = true ]; then stock_avd_env=("AVD_EVIDENCE_DIR=$RUNNER_TEMP/stock-avd-evidence"); fi
+          stock_status=0
+          if env "${stock_avd_env[@]}" bash validation/remote-harness/with-android-emulator.sh \
             "$RUNNER_TEMP/flutter-android-venv/bin/python" validation/remote-harness/run-ci.py \
               --paired-gui flutter-android \
               --flutter-app "$RUNNER_TEMP/flutter-android-gui" \
-              --output "$RUNNER_TEMP/flutter-android-gui-evidence"
+              --output "$RUNNER_TEMP/flutter-android-gui-evidence"; then
+            :
+          else
+            stock_status=$?
+          fi
+          guarded_status=0
+          if [ "$GUARDED_REQUESTED" = true ] && [ "$GUARDED_INPUT" = true ]; then
+            if AVD_EVIDENCE_DIR="$RUNNER_TEMP/guarded-avd-evidence" bash validation/remote-harness/with-android-emulator.sh \
+              "$RUNNER_TEMP/flutter-android-venv/bin/python" validation/remote-harness/run-ci.py \
+                --paired-gui flutter-android \
+                --flutter-app "$RUNNER_TEMP/flutter-android-gui" \
+                --output "$RUNNER_TEMP/android-guarded-input-evidence" \
+                --input-fixture "$RUNNER_TEMP/input-fixture" \
+                --android-guarded-input; then
+              :
+            else
+              guarded_status=$?
+            fi
+          elif [ "$GUARDED_REQUESTED" = true ]; then
+            guarded_status=1
+            mkdir -p "$RUNNER_TEMP/android-guarded-input-evidence"
+            echo 'guarded input AVD not started: same-run fixture download failed' > "$RUNNER_TEMP/android-guarded-input-evidence/preparation-status.txt"
+            mkdir -p "$RUNNER_TEMP/guarded-avd-evidence"
+            echo 'guarded AVD not started: same-run fixture download failed' > "$RUNNER_TEMP/guarded-avd-evidence/preparation-status.txt"
+          fi
+          avd_status=0
+          if [ "$stock_status" -ne 0 ] || [ "$guarded_status" -ne 0 ]; then avd_status=1; fi
+          echo "ANDROID_AVD_TEST_STATUS=$avd_status" >> "$GITHUB_ENV"
+          echo "stock=$stock_status guarded=$guarded_status" > "$RUNNER_TEMP/android-avd-test-status.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -109,11 +385,57 @@ jobs:
           # wire/config, Flutter/sshd/herdr output, or raw emulator logs.
           path: |
             ${{ runner.temp }}/flutter-android-gui-evidence/
-            ${{ runner.temp }}/avd-evidence/
+            ${{ runner.temp }}/${{ inputs.guarded_input && 'stock-avd-evidence' || 'avd-evidence' }}/
             ${{ runner.temp }}/flutter-android-gui/candidate-manifest.json
             ${{ runner.temp }}/flutter-android-gui/.herdr-android-device-test.json
             ${{ runner.temp }}/flutter-android-gui/pubspec.lock
             ${{ runner.temp }}/flutter-android-gui/tool/android-device-baseline.lock
+            ${{ runner.temp }}/flutter-regression-status.txt
+            ${{ runner.temp }}/flutter-analyze.log
+            ${{ runner.temp }}/flutter-tests.log
+            ${{ runner.temp }}/flutter-render-regressions.log
+            ${{ runner.temp }}/flutter-appmain-build.log
+            ${{ runner.temp }}/flutter-appmain-package.log
+            ${{ runner.temp }}/flutter-appmain-package-status.txt
+            ${{ runner.temp }}/android-avd-test-status.txt
           include-hidden-files: true
           retention-days: 14
           if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && inputs.guarded_input
+        with:
+          name: android-emulator-flutter-guarded-input-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/android-guarded-input-evidence/
+            ${{ runner.temp }}/guarded-avd-evidence/
+            ${{ runner.temp }}/flutter-android-gui/candidate-manifest.json
+            ${{ runner.temp }}/flutter-android-gui/.herdr-android-device-test.json
+            ${{ runner.temp }}/flutter-android-gui/pubspec.lock
+            ${{ runner.temp }}/flutter-android-gui/tool/android-device-baseline.lock
+            ${{ runner.temp }}/flutter-regression-status.txt
+            ${{ runner.temp }}/flutter-analyze.log
+            ${{ runner.temp }}/flutter-tests.log
+            ${{ runner.temp }}/flutter-render-regressions.log
+            ${{ runner.temp }}/flutter-appmain-build.log
+            ${{ runner.temp }}/flutter-appmain-package.log
+            ${{ runner.temp }}/flutter-appmain-package-status.txt
+            ${{ runner.temp }}/android-avd-test-status.txt
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
+        with:
+          name: flutter-android-appmain-debug-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/flutter-appmain-package/
+            ${{ runner.temp }}/flutter-appmain-build.log
+            ${{ runner.temp }}/flutter-appmain-package.log
+            ${{ runner.temp }}/flutter-appmain-package-status.txt
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Fail after preserving Flutter and Android evidence
+        if: always()
+        run: |
+          if [ "${FLUTTER_REGRESSION_STATUS:-0}" -ne 0 ] || [ "${ANDROID_AVD_TEST_STATUS:-0}" -ne 0 ] || \
+             [ "${FLUTTER_APPMAIN_PACKAGE_STATUS:-0}" -ne 0 ]; then exit 1; fi

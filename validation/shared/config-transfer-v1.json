@@ -1,0 +1,7 @@
+{
+  "password": "河岸 fixture 🔐 2026",
+  "plaintext": "{\"version\":1,\"hosts\":[{\"label\":\"测试主机\",\"provider\":\"easytier\",\"target\":{\"host\":\"fixture.invalid\",\"port\":2222,\"username\":\"fixture\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\",\"socketPath\":\"/fixture/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/fixture/bin/herdr\",\"session\":\"work\"}}]}",
+  "saltHex": "000102030405060708090a0b0c0d0e0f",
+  "nonceHex": "101112131415161718191a1b",
+  "archiveHex": "48504b540101000102030405060708090a0b0c0d0e0f101112131415161718191a1b2bd735761050e1a1855d55301229f8c0a60e1c7af8464a07e7bedb17e899e1768765ee959c962b562b49b0d6d4a7e3f5a2686eb1754c6efe26d2fe1a20be49c791bcd68b3ec006d30f4e9da6b5e29561d8d6ffbbd511a43923e9413fbdf534cb2162827823fc4fad0a64deadee8661515fc9fe6a64a8fc330ab1bd24dac620ff5ac7b8a6e9a1f214d38ffa4604d3f59be8a764e793d5da67143e48a59ae3629119a4cdcf5d80bb3cc21dc107151e2b2ece03dceeba10a0ef362999ddde3160a11467e33b0471849295dbc120d3391201d40054832eec0071d718827ca3da929889ad80314ec614d7b96931a7fba375fd2387cafb3211dda41f4ef470d21f28c8203d157f5625d7dbedb7488ccd8f9cc1afa2f8e54745fbb77991b6520679b6c72599da344ca4872e9eb2f8e493e156c831b4cbdbee3564b02eb46414755a080edd759e48964ee14ca758560508e2a0dd4f4e5dc615df8249b999c56b91cd67f75a6efc0fe5bee6f286"
+}

@@ -1,0 +1,427 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-07 Asia/Shanghai",
+  "baseCommit": "750798fe6bf5e396768333c1abe8c96ff0dd2178",
+  "sourceIdentity": "The subsequent foundation batch is identified by file hashes; not included in the base commit APKs.",
+  "scope": "macOS offline source preparation, translation-unit compilation, native helper/ABI tests and isolated JVM storage core; no node start, full-library link, JNI/AndroidKeyStore/GUI/runtime integration or network proof.",
+  "sources": {
+    "schemaVersion": 1,
+    "reference": {
+      "repository": "Ylarod/heeler-overlay-natives",
+      "commit": "6a2817fc02aeb552df251d9478753c22fd4738bb",
+      "lockGitBlob": "8afee8d0328f4191a490f4c83476a142c7e833d3"
+    },
+    "sources": [
+      {
+        "name": "libzt",
+        "repository": "Ylarod/libzt",
+        "commit": "7e5d0f99a2de81c45faa28e44289bcd19d933bf2",
+        "destination": ".",
+        "sha256": "ba9ade19877d6f35b061600d8e2d0df6d6273f11099f07b05c9d9793fb447e0c"
+      },
+      {
+        "name": "ZeroTierOne",
+        "repository": "zerotier/ZeroTierOne",
+        "commit": "fc5c3ec22090b5b2a0f274e863651fe9ca489bf4",
+        "destination": "ext/ZeroTierOne",
+        "sha256": "5f48e6a9492cc2a31f28f9f15e7fad5e1b4a82e95fe451464ff2b32d6bed9fa4"
+      },
+      {
+        "name": "lwip",
+        "repository": "joseph-henry/lwip",
+        "commit": "32708c0a8b140efb545cc35101ee5fdeca6d6489",
+        "destination": "ext/lwip",
+        "sha256": "49e5a5a1c5b4eedcc749abd60e839d4552618fbbe72a6920447e7dcacb3ea4bf"
+      },
+      {
+        "name": "lwip-contrib",
+        "repository": "joseph-henry/lwip-contrib",
+        "commit": "4fd612c9c72dfcd1db6618bd59c1a17d9f5b55f8",
+        "destination": "ext/lwip-contrib",
+        "sha256": "8d0f2c9c54dc2f51e213afc52ebc3be1615a2269d4aa0f93198de86ac67178f3"
+      }
+    ],
+    "upstreamPatches": [
+      {
+        "path": "patches/libzt/0001-independent-root-sets.patch",
+        "sha256": "b082d29c410f2e69ecdcf829ad57f6575173bb03add85b08253539790bacba43"
+      },
+      {
+        "path": "patches/libzt/0002-managed-gateway-routes.patch",
+        "sha256": "ec02c07070d6a252e8042a5e1dfcdcfe2bcc4409e40a1bee758081982f03efdd"
+      },
+      {
+        "path": "patches/libzt/0003-metrics-saver-on-demand.patch",
+        "sha256": "abb698416801341e03971a69c676ecc0e7d425b2e9c7c76a12b511729750984b"
+      },
+      {
+        "path": "patches/libzt/0004-rebind-defunct-udp-sockets.patch",
+        "sha256": "50e352bb77487dfd0e4d4f5f229822014f4f93e5c700132be183e7e6de742365"
+      }
+    ],
+    "scope": "Pinned source preparation and offline validation only. No node start, network join, real identities or platform support claim."
+  },
+  "candidate": {
+    "schemaVersion": 1,
+    "baseManifestSha256": "f7be03f90ee923723240f752ff096d64f58f0aaf028a526cd3981cc90159f3e3",
+    "patches": [
+      {
+        "path": "candidates/zerotier/patches/0005-native-safety.patch",
+        "sha256": "d4871e8370b85e6a075448f64f6597c75737eccd02b9286b7a6a81a5d3442e52"
+      },
+      {
+        "path": "candidates/zerotier/patches/0006-strict-offline-identity.patch",
+        "sha256": "c5fd552feab0b4cb5f91d842e1ffa3937c4ce37df2d634f7a6dc95e95a4348f8"
+      }
+    ],
+    "copies": [
+      {
+        "path": "candidates/zerotier/shim/hp_zt.h",
+        "destination": "src/hp_zt.h",
+        "sha256": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad"
+      },
+      {
+        "path": "candidates/zerotier/shim/hp_zt_identity.cpp",
+        "destination": "src/hp_zt_identity.cpp",
+        "sha256": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992"
+      },
+      {
+        "path": "candidates/zerotier/shim/hp_zt_lifecycle.cpp",
+        "destination": "src/hp_zt_lifecycle.cpp",
+        "sha256": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693"
+      }
+    ],
+    "validationFiles": [
+      {
+        "path": "candidates/zerotier/tests/events_test.cpp",
+        "sha256": "f467508f36948ef9eac96b1f6a768f14e02cd1dbedcf384023ab7692a434ddc5"
+      },
+      {
+        "path": "candidates/zerotier/tests/identity_test.cpp",
+        "sha256": "05c62ca2a36c9a09df3fdcb0529447e401550adacc957a9f0c99d7a9d8af6168"
+      },
+      {
+        "path": "candidates/zerotier/tests/lifecycle_test.cpp",
+        "sha256": "0f3b8933ea9c631ad222e14816bb7ec4f20a2e91b315a638a514be7bcd15b473"
+      },
+      {
+        "path": "candidates/zerotier/tests/projection_test.cpp",
+        "sha256": "8e53444334e37c00ce924ed990a1f61dcfb18a59309f74fd4b8dc098583bc073"
+      },
+      {
+        "path": "candidates/zerotier/tests/run_offline.py",
+        "sha256": "59522cdb61d3849eb98e6f738ebe36c22bdd9ca7abf23160e9189e5f1ceb020b"
+      },
+      {
+        "path": "candidates/zerotier/README.md",
+        "sha256": "7d67fc4a0bc584f9114541477efa8c894c2cedd971f86b37114de62b7a5eb85a"
+      }
+    ],
+    "beforeFiles": {
+      "ext/ZeroTierOne/node/ECC.hpp": "2ae06fc551a3add96b33f5f8e3f5ab42335bbd2609877b219be8f34020ad66fb",
+      "ext/ZeroTierOne/node/Identity.cpp": "0f7f4af189a84b0f93663f29ad0b0ed576e265991011951eaa94aa2cd9a21749",
+      "include/ZeroTierSockets.h": "84515706435ccdf3c253cede0a51f0309d00068c3f39cce7185f41fe07d33dc9",
+      "src/Controls.cpp": "8ac20ae3cc53af330b9f28d1ed09e05338b551f7c5079e4e65869f9e02c5b260",
+      "src/Events.cpp": "39c2db1bdf3bde312e50b4bc39a8d00ae01d6eda4ed7460f303cccb2f53dbaca",
+      "src/Events.hpp": "fb447ada6e9a0ee218f853270feb468c2040aa407d991a5a593e016bf96a1edc",
+      "src/HpEventOwnership.hpp": null,
+      "src/HpEventProjection.hpp": null,
+      "src/HpLifecycle.hpp": null,
+      "src/NodeService.cpp": "c28c471f2d59d7319ed474d204bbd601ea205ea893a44e21197f00c95ddcf6c2",
+      "src/NodeService.hpp": "62c5ef5fce0b42aa5bd85539e34a4c5632ded9cc1b7c60a7c9415c07dfa05852",
+      "src/VirtualTap.cpp": "72503f675fafb97be500b71be07a23251faad18513013fda3274f8b885789298",
+      "src/VirtualTap.hpp": "1c6fafdf06ac81a888450cd9baa267883da8188f0f1de04fed1d6db3f86ff7d5"
+    },
+    "afterFiles": {
+      "ext/ZeroTierOne/node/ECC.hpp": "da314ade30130826eebc32aa96a5f5ed40b66cdb6c399e5717054861bb8c07d4",
+      "ext/ZeroTierOne/node/Identity.cpp": "84dda1ab7abb90e9df791a714172955980a6b92a9f3f48ca8f8612a89b11a714",
+      "include/ZeroTierSockets.h": "286dd2c193eb6423eeaed14cbb2a108eb76426f20547b75e17283ac7750dc3e4",
+      "src/Controls.cpp": "67aa07b56e26e55e981cb28358f246f8c1d2d0930818daef19addd16eeacb6b1",
+      "src/Events.cpp": "34c5b8a43494391b5c66f193f0a7c15a063f7a71999148b4e6860b55d7b76909",
+      "src/Events.hpp": "ed38b2564ed26934a4e9d31dcdcb080469d51f0c7bd7ed2b85f299c74f802f8d",
+      "src/HpEventOwnership.hpp": "a65f218e6111a951b5988910d708b7793a5c88175e300cf24b5897f50e12a813",
+      "src/HpEventProjection.hpp": "d67a828e723907a740ad9957627a0dc49a274e4edec37a272406348dc15a46d2",
+      "src/HpLifecycle.hpp": "6040de28a900eb3180110206368fbf7cd5e690f820b6b1b9a66fb09ee1a048a4",
+      "src/NodeService.cpp": "fab73354eac8e905e279abb2b518e400569891b9c8696fd734d4541ef7102adb",
+      "src/NodeService.hpp": "a877bb426a395ff9a7932a1e85254f6f7d834684832ac4f7fbcd7b8d4f253a92",
+      "src/VirtualTap.cpp": "cbf0e79a8fa7086f7be502bd403005e9b5356a48e3bcd16f878a6ab4e038893e",
+      "src/VirtualTap.hpp": "3887342ebe4deaa04ca1baa5c8f74d79d5694842237d6df5d0dfa72d4f384843",
+      "src/hp_zt.h": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad",
+      "src/hp_zt_identity.cpp": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992",
+      "src/hp_zt_lifecycle.cpp": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693"
+    },
+    "scope": "Offline ZeroTier identity/event/retirement candidate; no full-library link, node, device, Android integration or network result. ECC.cpp excludes UBSan shift-base; no overall sanitizer pass claim."
+  },
+  "sourceFiles": [
+    {
+      "path": "validation/native/.gitattributes",
+      "sha256": "046ab6ca0175adb82642eb15d428c974fac703a518ae687cba29cd410df968f8"
+    },
+    {
+      "path": "validation/native/zerotier-runtime-source.json",
+      "sha256": "f7be03f90ee923723240f752ff096d64f58f0aaf028a526cd3981cc90159f3e3"
+    },
+    {
+      "path": "validation/native/zerotier-candidate.json",
+      "sha256": "6bf02d1e1dafc0a4c545afb588722d9829ae59afcfa4ceedfa67807956b0f7f7"
+    },
+    {
+      "path": "validation/native/tool/zerotier_candidate.py",
+      "sha256": "372757cebc2d81d5c15473c4307cf2e4ba01b467e3d740a34f747dd0a194eedc"
+    },
+    {
+      "path": "validation/native/tool/test_zerotier_candidate.py",
+      "sha256": "d9bfd17adced029fa873d89103359b4c267525487ee253faf961ff06f2caa554"
+    },
+    {
+      "path": "validation/network-profiles/native/android/ZeroTierDeviceStoreCore.java",
+      "sha256": "b8077d9ca91624cf5dc924b1fa6d0cdaa58ba71629f8b362741388c031bfba5d"
+    },
+    {
+      "path": "validation/network-profiles/native/android/tests/ZeroTierDeviceStoreCoreTest.java",
+      "sha256": "124b220620f9950ecfe76a565666391e7a4cd0068887c713a02a4254c5d0cce3"
+    },
+    {
+      "path": "validation/network-profiles/native/android/tests/run-zerotier-device.sh",
+      "sha256": "5839c228ea602df59f4c42c34d24b560cf6e408ff46f4c817c2a8bd7c94ee21a"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/README.md",
+      "sha256": "7d67fc4a0bc584f9114541477efa8c894c2cedd971f86b37114de62b7a5eb85a"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/patches/0005-native-safety.patch",
+      "sha256": "d4871e8370b85e6a075448f64f6597c75737eccd02b9286b7a6a81a5d3442e52"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/patches/0006-strict-offline-identity.patch",
+      "sha256": "c5fd552feab0b4cb5f91d842e1ffa3937c4ce37df2d634f7a6dc95e95a4348f8"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/shim/hp_zt.h",
+      "sha256": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/shim/hp_zt_identity.cpp",
+      "sha256": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/shim/hp_zt_lifecycle.cpp",
+      "sha256": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/tests/events_test.cpp",
+      "sha256": "f467508f36948ef9eac96b1f6a768f14e02cd1dbedcf384023ab7692a434ddc5"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/tests/identity_test.cpp",
+      "sha256": "05c62ca2a36c9a09df3fdcb0529447e401550adacc957a9f0c99d7a9d8af6168"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/tests/lifecycle_test.cpp",
+      "sha256": "0f3b8933ea9c631ad222e14816bb7ec4f20a2e91b315a638a514be7bcd15b473"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/tests/projection_test.cpp",
+      "sha256": "8e53444334e37c00ce924ed990a1f61dcfb18a59309f74fd4b8dc098583bc073"
+    },
+    {
+      "path": "validation/native/candidates/zerotier/tests/run_offline.py",
+      "sha256": "59522cdb61d3849eb98e6f738ebe36c22bdd9ca7abf23160e9189e5f1ceb020b"
+    }
+  ],
+  "checks": {
+    "baseSourceFiles": 4044,
+    "candidateSourceFiles": 4050,
+    "changedOrCopiedPaths": 16,
+    "candidateWholeTreeVerification": "passed before native checks",
+    "unexpectedSourceNegativeCheck": "added owned extra source to earlier parent candidate; verification rejected it, then owned file removed and original inventory verified",
+    "archiveToolTests": 14,
+    "allNativeToolTests": 43,
+    "vaultJvmChecks": 151,
+    "vaultScope": "temporary JCE, synthetic identity factory and self-created JVM child processes; no AndroidKeyStore",
+    "nativeProductionTranslationUnits": [
+      "Controls.cpp",
+      "Events.cpp",
+      "NodeService.cpp",
+      "VirtualTap.cpp",
+      "hp_zt_identity.cpp",
+      "hp_zt_lifecycle.cpp"
+    ],
+    "nativePrograms": [
+      "identity ABI (generated temporary pairs, both private-half mismatch rejection)",
+      "actual bounded network projection helper",
+      "worker/frame/launch guards only, no real node",
+      "actual Events TU and production typed ownership helper; unused NodeService query stub"
+    ],
+    "nativeProgramsStatus": "passed under ASan/UBSan halt/abort, except ECC.cpp shift-base is explicitly excluded",
+    "fullLibraryLink": "not run",
+    "nativeNodeLifecycle": "not run",
+    "Android": "not run",
+    "Windows": "not run",
+    "iOS": "not run",
+    "realOverlay": "not run",
+    "GUI": "not run",
+    "CI": "not run for ZeroTier"
+  },
+  "review": {
+    "models": [
+      "Sol/xhigh native source and patch",
+      "Terra/xhigh device vault and independent native review",
+      "Luna/high source/build materials and separate Android CI audit"
+    ],
+    "independentFinding": "address events leaked when disabled/full queue rejected ownership; fixed with production typed RAII and tested failure/success transfer cases",
+    "lifecycleBoundary": "No further confirmed false-retirement or UAF found under original-owner, drained API/stream admissions and serialized maintenance. This is source review, not node runtime evidence.",
+    "unboundedMutexValidationGap": "lwip_state_m uses a short untimed critical section; no concrete stuck path established under caller drain preconditions."
+  },
+  "failuresAndLimits": [
+    {
+      "failure": "first archive preparation rejected five upstream internal symbolic links",
+      "resolution": "only in-archive regular-file targets materialized; original archives and conversion metadata retained; fresh directory used"
+    },
+    {
+      "failure": "27 upstream ECC.cpp signed-negative shift diagnostics",
+      "sourceSha256": "9a9aa9ce6d15745f22babfad7e9905661532f67e9d87fc2518ca75e43cfc581b",
+      "locations": "99/100/102/103/105/106/108/109/111/112/114/115/117/118/120/121/123/124:26;168:21;178:25;182/183:26;192:21;270/271/272/273:9",
+      "resolution": "UNRESOLVED; ECC TU alone excludes UBSan shift-base. No full UBSan pass claim. Raw temporary scalar values were not preserved in the redacted summary."
+    },
+    {
+      "failure": "original unified-diff context triggered whitespace diagnostics",
+      "resolution": "two patch files have narrowly scoped whitespace attributes; all candidate source bytes fixed with -text for Windows checkout"
+    },
+    {
+      "limitation": "unreadable device identity recovery after process restart",
+      "resolution": "requires an independent trusted handle. Current two-step discard requires a handle previously authenticated on this same live core; header alone does not establish trust."
+    }
+  ],
+  "logs": [
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-summary-20261107.log",
+      "sha256": "30040f00c1771e455961e97a88b36c87fd964d668b8d5b1c7864818a604b7fbc",
+      "bytes": 702
+    },
+    {
+      "path": "/private/tmp/herdr-zt-vault-parent-20261107.log",
+      "sha256": "046f6cc5fea439926b3aac070ec1c1a4adb6145d9a6ae5071c67e49d9e0bb86e",
+      "bytes": 80
+    },
+    {
+      "path": "/private/tmp/herdr-zt-tools-parent-20261107.log",
+      "sha256": "71ac9e9db0eb7bbe149a78557234e50a62aa02535f109e17e3f7370cbed57475",
+      "bytes": 98
+    },
+    {
+      "path": "/private/tmp/herdr-zt-identity-upstream-ubsan-redacted.log",
+      "sha256": "254ce580eb63308cca19f5215de7a74aad571abb9e830f774189f15e4a58bac0",
+      "bytes": 7765
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/build-events.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/build-identity.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/build-lifecycle.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/build-projection.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/core-ECC.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/core-Identity.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/core-SHA512.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/core-Salsa20.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/core-Utils.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/test-events.log",
+      "sha256": "4ef1a25a9e4770cf698bcb894fc60b43e0d8631c52f193713063bbbd1917beba",
+      "bytes": 212
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/test-identity.log",
+      "sha256": "7fdf65189a7ac1615d56f060fce0dddbce983366a8e1967398c4e1e07db1647b",
+      "bytes": 134
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/test-lifecycle.log",
+      "sha256": "2e49d9bcf91b52bfad71319c64bd3649c355fbd27b06169ce65df0edfce13a51",
+      "bytes": 129
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/test-projection.log",
+      "sha256": "6cd47f81ec72b43658ec58ff91de51f65fb68ec4dd711c0d3c5a64341b192c9f",
+      "bytes": 109
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/tu-Controls.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/tu-Events.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/tu-NodeService.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/tu-VirtualTap.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/tu-hp_zt_identity.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/herdr-zt-parent-offline-final-20261107/tu-hp_zt_lifecycle.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ],
+  "toolchain": {
+    "os": "27.2",
+    "architecture": "arm64",
+    "clang": "Apple clang version 21.0.0 (clang-2100.4.1.1)"
+  },
+  "safety": {
+    "realCredentialsRead": false,
+    "realAuthorizationFilesTouched": false,
+    "networkNodesStarted": false,
+    "SDKsInstalled": false,
+    "GUIAppsOpened": false,
+    "newActionsForZeroTier": false
+  }
+}

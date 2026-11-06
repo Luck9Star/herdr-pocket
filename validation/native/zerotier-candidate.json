@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "baseManifestSha256": "f7be03f90ee923723240f752ff096d64f58f0aaf028a526cd3981cc90159f3e3",
+  "patches": [
+    {
+      "path": "candidates/zerotier/patches/0005-native-safety.patch",
+      "sha256": "d4871e8370b85e6a075448f64f6597c75737eccd02b9286b7a6a81a5d3442e52"
+    },
+    {
+      "path": "candidates/zerotier/patches/0006-strict-offline-identity.patch",
+      "sha256": "c5fd552feab0b4cb5f91d842e1ffa3937c4ce37df2d634f7a6dc95e95a4348f8"
+    }
+  ],
+  "copies": [
+    {
+      "path": "candidates/zerotier/shim/hp_zt.h",
+      "destination": "src/hp_zt.h",
+      "sha256": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad"
+    },
+    {
+      "path": "candidates/zerotier/shim/hp_zt_identity.cpp",
+      "destination": "src/hp_zt_identity.cpp",
+      "sha256": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992"
+    },
+    {
+      "path": "candidates/zerotier/shim/hp_zt_lifecycle.cpp",
+      "destination": "src/hp_zt_lifecycle.cpp",
+      "sha256": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693"
+    }
+  ],
+  "validationFiles": [
+    {
+      "path": "candidates/zerotier/tests/events_test.cpp",
+      "sha256": "f467508f36948ef9eac96b1f6a768f14e02cd1dbedcf384023ab7692a434ddc5"
+    },
+    {
+      "path": "candidates/zerotier/tests/identity_test.cpp",
+      "sha256": "05c62ca2a36c9a09df3fdcb0529447e401550adacc957a9f0c99d7a9d8af6168"
+    },
+    {
+      "path": "candidates/zerotier/tests/lifecycle_test.cpp",
+      "sha256": "0f3b8933ea9c631ad222e14816bb7ec4f20a2e91b315a638a514be7bcd15b473"
+    },
+    {
+      "path": "candidates/zerotier/tests/projection_test.cpp",
+      "sha256": "8e53444334e37c00ce924ed990a1f61dcfb18a59309f74fd4b8dc098583bc073"
+    },
+    {
+      "path": "candidates/zerotier/tests/run_offline.py",
+      "sha256": "59522cdb61d3849eb98e6f738ebe36c22bdd9ca7abf23160e9189e5f1ceb020b"
+    },
+    {
+      "path": "candidates/zerotier/README.md",
+      "sha256": "7d67fc4a0bc584f9114541477efa8c894c2cedd971f86b37114de62b7a5eb85a"
+    }
+  ],
+  "beforeFiles": {
+    "ext/ZeroTierOne/node/ECC.hpp": "2ae06fc551a3add96b33f5f8e3f5ab42335bbd2609877b219be8f34020ad66fb",
+    "ext/ZeroTierOne/node/Identity.cpp": "0f7f4af189a84b0f93663f29ad0b0ed576e265991011951eaa94aa2cd9a21749",
+    "include/ZeroTierSockets.h": "84515706435ccdf3c253cede0a51f0309d00068c3f39cce7185f41fe07d33dc9",
+    "src/Controls.cpp": "8ac20ae3cc53af330b9f28d1ed09e05338b551f7c5079e4e65869f9e02c5b260",
+    "src/Events.cpp": "39c2db1bdf3bde312e50b4bc39a8d00ae01d6eda4ed7460f303cccb2f53dbaca",
+    "src/Events.hpp": "fb447ada6e9a0ee218f853270feb468c2040aa407d991a5a593e016bf96a1edc",
+    "src/HpEventOwnership.hpp": null,
+    "src/HpEventProjection.hpp": null,
+    "src/HpLifecycle.hpp": null,
+    "src/NodeService.cpp": "c28c471f2d59d7319ed474d204bbd601ea205ea893a44e21197f00c95ddcf6c2",
+    "src/NodeService.hpp": "62c5ef5fce0b42aa5bd85539e34a4c5632ded9cc1b7c60a7c9415c07dfa05852",
+    "src/VirtualTap.cpp": "72503f675fafb97be500b71be07a23251faad18513013fda3274f8b885789298",
+    "src/VirtualTap.hpp": "1c6fafdf06ac81a888450cd9baa267883da8188f0f1de04fed1d6db3f86ff7d5"
+  },
+  "afterFiles": {
+    "ext/ZeroTierOne/node/ECC.hpp": "da314ade30130826eebc32aa96a5f5ed40b66cdb6c399e5717054861bb8c07d4",
+    "ext/ZeroTierOne/node/Identity.cpp": "84dda1ab7abb90e9df791a714172955980a6b92a9f3f48ca8f8612a89b11a714",
+    "include/ZeroTierSockets.h": "286dd2c193eb6423eeaed14cbb2a108eb76426f20547b75e17283ac7750dc3e4",
+    "src/Controls.cpp": "67aa07b56e26e55e981cb28358f246f8c1d2d0930818daef19addd16eeacb6b1",
+    "src/Events.cpp": "34c5b8a43494391b5c66f193f0a7c15a063f7a71999148b4e6860b55d7b76909",
+    "src/Events.hpp": "ed38b2564ed26934a4e9d31dcdcb080469d51f0c7bd7ed2b85f299c74f802f8d",
+    "src/HpEventOwnership.hpp": "a65f218e6111a951b5988910d708b7793a5c88175e300cf24b5897f50e12a813",
+    "src/HpEventProjection.hpp": "d67a828e723907a740ad9957627a0dc49a274e4edec37a272406348dc15a46d2",
+    "src/HpLifecycle.hpp": "6040de28a900eb3180110206368fbf7cd5e690f820b6b1b9a66fb09ee1a048a4",
+    "src/NodeService.cpp": "fab73354eac8e905e279abb2b518e400569891b9c8696fd734d4541ef7102adb",
+    "src/NodeService.hpp": "a877bb426a395ff9a7932a1e85254f6f7d834684832ac4f7fbcd7b8d4f253a92",
+    "src/VirtualTap.cpp": "cbf0e79a8fa7086f7be502bd403005e9b5356a48e3bcd16f878a6ab4e038893e",
+    "src/VirtualTap.hpp": "3887342ebe4deaa04ca1baa5c8f74d79d5694842237d6df5d0dfa72d4f384843",
+    "src/hp_zt.h": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad",
+    "src/hp_zt_identity.cpp": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992",
+    "src/hp_zt_lifecycle.cpp": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693"
+  },
+  "scope": "Offline ZeroTier identity/event/retirement candidate; no full-library link, node, device, Android integration or network result. ECC.cpp excludes UBSan shift-base; no overall sanitizer pass claim."
+}

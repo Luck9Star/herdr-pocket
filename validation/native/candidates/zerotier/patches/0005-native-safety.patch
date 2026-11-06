@@ -1,0 +1,1192 @@
+herdr-pocket: bounded events and explicit service/callback/driver retirement
+
+--- a/include/ZeroTierSockets.h
++++ b/include/ZeroTierSockets.h
+@@ -9,6 +9,9 @@
+  * On the date above, in accordance with the Business Source License, use
+  * of this software will be governed by version 2.0 of the Apache License.
+  */
++
++/* Modified by herdr-pocket contributors (2026): bounded native identity,
++ * event projection and observable worker retirement; see candidate README. */
+ /****/
+
+ /**
+@@ -41,7 +44,9 @@
+     /** No result (not necessarily an error) */
+     ZTS_ERR_NO_RESULT = -4,
+     /** Consider filing a bug report */
+-    ZTS_ERR_GENERAL = -5
++    ZTS_ERR_GENERAL = -5,
++    ZTS_ERR_TIMEOUT = -6,
++    ZTS_ERR_BUSY = -7
+ } zts_error_t;
+
+ //----------------------------------------------------------------------------//
+@@ -1768,18 +1773,22 @@
+  * timers) will remain active in case future traffic processing is required.
+  * To stop all activity and free all resources use `zts_free()` instead.
+  *
+- * Blocks until the node has been torn down, after which the node can be
++ * Waits at most 30 seconds; TIMEOUT preserves every active worker and the node.
++ * Successful completion means it can be
+  * configured (`zts_init_*()`) and started again. When called from the event
+- * handler the teardown happens asynchronously after the handler returns.
++ * handler it requests teardown and returns BUSY; external code must retry stop
++ * and obtain OK before releasing callback context.
+  *
+  * @return `ZTS_ERR_OK` if successful, `ZTS_ERR_SERVICE` if the node
+  *     experiences a problem.
+  */
++ZTS_API int ZTCALL zts_node_stop_with_timeout(unsigned int timeout_ms);
++ZTS_API int ZTCALL zts_node_is_quiescent();
+ ZTS_API int ZTCALL zts_node_stop();
+
+ /**
+- * @brief Stop all background threads, bring down all transport services, free all
+- *     resources. After calling this function an application restart will be
++ * @brief Retire the node, event callbacks and outer stack driver. The fixed lwIP
++ *     tcpip thread has no join API and is not claimed to be stopped here. After calling this function an application restart will be
+  *     required before the library can be used again. Callable only after the node
+  *     has been started.
+  *
+@@ -1789,6 +1798,7 @@
+  * @return `ZTS_ERR_OK` if successful, `ZTS_ERR_SERVICE` if the node
+  *     experiences a problem.
+  */
++ZTS_API int ZTCALL zts_node_free_with_timeout(unsigned int timeout_ms);
+ ZTS_API int ZTCALL zts_node_free();
+
+ /**
+--- a/src/Controls.cpp
++++ b/src/Controls.cpp
+@@ -9,6 +9,9 @@
+  * On the date above, in accordance with the Business Source License, use
+  * of this software will be governed by version 2.0 of the Apache License.
+  */
++
++/* Modified by herdr-pocket contributors (2026): bounded native identity,
++ * event projection and observable worker retirement; see candidate README. */
+ /****/
+
+ /**
+@@ -23,6 +26,8 @@
+ #include "VirtualTap.hpp"
+
+ #include <atomic>
++#include "HpLifecycle.hpp"
++#include <chrono>
+ #include <string.h>
+
+ using namespace ZeroTier;
+@@ -53,41 +58,13 @@
+ Events* zts_events;
+
+ extern Mutex events_m;
+-Mutex service_m;
+-
+-// Set from zts_node_start() until the service thread has completely torn down
+-// the node (deleted the service and disabled events)
+-static std::atomic<bool> service_thread_active(false);
+-// Set from zts_node_start() until the callback thread has delivered the last
+-// event of the session
+-static std::atomic<bool> callback_thread_active(false);
+-
+-/**
+- * Wait for the service thread to finish, so that zts_init_*() calls after
+- * zts_node_stop() configure a new service instead of the dying one. Not
+- * possible from the callback thread: the teardown needs the event lock that is
+- * held while the user's callback runs, so stopping from there stays
+- * asynchronous.
+- */
+-static void wait_for_service_thread()
+-{
+-    if (Events::isCallbackThread()) {
+-        return;
+-    }
+-#ifdef ZTS_ENABLE_PYTHON
+-    // Called from Python with the GIL held, which the callback thread needs to
+-    // deliver the remaining events
+-    PyThreadState* py_state = (Py_IsInitialized() && PyGILState_Check()) ? PyEval_SaveThread() : NULL;
+-#endif
+-    for (int i = 0; i < 3000 && (service_thread_active.load() || callback_thread_active.load()); i++) {
+-        zts_util_delay(10);
+-    }
+-#ifdef ZTS_ENABLE_PYTHON
+-    if (py_state) {
+-        PyEval_RestoreThread(py_state);
+-    }
+-#endif
+-}
++std::timed_mutex service_m;
++
++// Modified by herdr-pocket (2026): authoritative worker drain and admission fence.
++HpWorkers hp_workers;
++static std::atomic<bool> hp_retiring(false);
++static std::atomic<bool> hp_free_called(false);
++bool hp_can_configure() { return !hp_retiring && !hp_free_called && hp_workers.node_quiet(); }
+
+ int init_subsystems()
+ {
+@@ -97,7 +74,7 @@
+     if (! zts_events) {
+         zts_events = new Events();
+     }
+-    if (zts_events->getState(ZTS_STATE_FREE_CALLED)) {
++    if (hp_free_called || zts_events->getState(ZTS_STATE_FREE_CALLED)) {
+         return ZTS_ERR_SERVICE;
+     }
+ #ifdef ZTS_ENABLE_CUSTOM_SIGNAL_HANDLERS
+@@ -375,7 +352,7 @@
+     // pthread_setname_np(ZTS_EVENT_CALLBACK_THREAD_NAME);
+ #endif
+     zts_events->run();
+-    callback_thread_active = false;
++    hp_workers.finish(HpWorkers::Callback);
+     //#if ZTS_ENABLE_JAVA
+     //    _java_detach_from_thread();
+     // pthread_exit(0);
+@@ -590,29 +567,28 @@
+ #if defined(__APPLE__)
+     // pthread_setname_np(ZTS_SERVICE_THREAD_NAME);
+ #endif
++    try { zts_service->run(); }
++    catch (...) { /* Cleanup below remains mandatory. */ }
+     try {
+-        zts_service->run();
+-        // Begin shutdown
+-        service_m.lock();
+-        zts_events->clrState(ZTS_STATE_NODE_RUNNING);
+-        delete zts_service;
+-        zts_service = (NodeService*)0;
+-        service_m.unlock();
+-        events_m.lock();
+-        zts_util_delay(ZTS_CALLBACK_PROCESSING_INTERVAL * 2);
+-        if (zts_events) {
+-            zts_events->disable();
+-            // Let the callback thread deliver what is queued (e.g.
+-            // ZTS_EVENT_NODE_DOWN) and exit. It used to run until
+-            // ZTS_EVENT_STACK_DOWN, which could never be queued with events
+-            // disabled, so every zts_node_start() added another one.
+-            zts_events->clrState(ZTS_STATE_CALLBACKS_RUNNING);
+-        }
+-        events_m.unlock();
++        {
++            std::lock_guard<std::timed_mutex> lock(service_m);
++            zts_events->clrState(ZTS_STATE_NODE_RUNNING);
++            delete zts_service;
++            zts_service=NULL;
++        }
++        {
++            Mutex::Lock lock(events_m);
++            if (zts_events) {
++                zts_events->disable();
++                zts_events->clrState(ZTS_STATE_CALLBACKS_RUNNING);
++            }
++        }
+     }
+     catch (...) {
+-    }
+-    service_thread_active = false;
++        // Unproven cleanup must never become a completed retirement predicate.
++        return NULL;
++    }
++    hp_workers.finish(HpWorkers::Service);
+ #ifndef __WINDOWS__
+     pthread_exit(0);
+ #endif
+@@ -630,7 +606,8 @@
+         // Must be set before the thread starts since Events::run() exits as
+         // soon as it observes this state cleared (with an empty queue)
+         zts_events->setState(ZTS_STATE_CALLBACKS_RUNNING);
+-        callback_thread_active = true;
++        HpLaunchGuard callback_launch(hp_workers,HpWorkers::Callback);
++        if (!callback_launch) { return ZTS_ERR_BUSY; }
+ #if defined(__WINDOWS__)
+         HANDLE callbackThread = CreateThread(NULL, 0, cbRun, NULL, 0, NULL);
+         if (callbackThread == NULL) {
+@@ -649,14 +626,16 @@
+         // pthread_setname_np(cbThread, ZTS_EVENT_CALLBACK_THREAD_NAME);
+ #endif
+         if (res != ZTS_ERR_OK) {
+-            callback_thread_active = false;
+             zts_events->clrState(ZTS_STATE_CALLBACKS_RUNNING);
+             zts_events->clrCallback();
+-            res = ZTS_ERR_OK;   // Run without callbacks
+-        }
++            return ZTS_ERR_GENERAL;   // Do not silently drop the requested callback
++        }
++        callback_launch.commit();
+     }
+     // Start ZeroTier service
+-    service_thread_active = true;
++    HpLaunchGuard service_launch(hp_workers,HpWorkers::Service);
++    if (!service_launch) { return ZTS_ERR_BUSY; }
++    zts_events->setState(ZTS_STATE_NODE_RUNNING);
+ #if defined(__WINDOWS__)
+     HANDLE serviceThread = CreateThread(NULL, 0, _runNodeService, (void*)NULL, 0, NULL);
+     if (serviceThread == NULL) {
+@@ -675,11 +654,12 @@
+     // pthread_setname_np(service_thread, ZTS_SERVICE_THREAD_NAME);
+ #endif
+     if (res != ZTS_ERR_OK) {
+-        service_thread_active = false;
+         zts_events->clrState(ZTS_STATE_NODE_RUNNING);
++        zts_events->disable();
++        zts_events->clrState(ZTS_STATE_CALLBACKS_RUNNING);
+         return res;
+     }
+-    zts_events->setState(ZTS_STATE_NODE_RUNNING);
++    service_launch.commit();
+     return ZTS_ERR_OK;
+ }
+
+@@ -701,40 +681,66 @@
+     return zts_service->getPrimaryPort();
+ }
+
+-int zts_node_stop()
+-{
++int zts_node_stop_with_timeout(unsigned int timeout_ms)
++{
++    if (timeout_ms == 0 || timeout_ms > 60000) { return ZTS_ERR_ARG; }
++    const auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout_ms);
+     {
+-        ACQUIRE_SERVICE(ZTS_ERR_SERVICE);
+-        zts_events->clrState(ZTS_STATE_NODE_RUNNING);
+-        zts_service->terminate();
+-    }
+-    // The service lock must not be held, the teardown needs it
+-    wait_for_service_thread();
+-#if defined(__WINDOWS__)
+-    WSACleanup();
+-#endif
+-    return ZTS_ERR_OK;
+-}
+-
+-int zts_node_free()
+-{
++        hp_retiring=true;
++        std::unique_lock<std::timed_mutex> lock(service_m,std::defer_lock);
++        if (!lock.try_lock_until(deadline)) { return ZTS_ERR_TIMEOUT; }
++        if (zts_service) {
++            zts_events->clrState(ZTS_STATE_NODE_RUNNING);
++            zts_service->terminate();
++            if (!hp_workers.active(HpWorkers::Service)) {
++                // Only an initialized-but-never-started instance is synchronous.
++                // A surprising Node/frame without a service worker is not freeable.
++                if (zts_service->_node || !zts_service->_frameGate.quiet()) { return ZTS_ERR_TIMEOUT; }
++                delete zts_service;
++                zts_service=NULL;
++                zts_events->disable();
++                zts_events->clrState(ZTS_STATE_CALLBACKS_RUNNING);
++            }
++        }
++    }
++    // Never wait for our own callback lease, and never delete its event system.
++    if (Events::isCallbackThread()) { return ZTS_ERR_BUSY; }
++    if (!hp_workers.wait_node(deadline)) { return ZTS_ERR_TIMEOUT; }
+     {
+-        ACQUIRE_SERVICE(ZTS_ERR_SERVICE);
+-        zts_events->setState(ZTS_STATE_FREE_CALLED);
+-        zts_events->clrState(ZTS_STATE_NODE_RUNNING);
+-        zts_service->terminate();
+-    }
+-    // Previously zts_events was deleted below while the service thread could
+-    // still use it
+-    wait_for_service_thread();
+-#if defined(__WINDOWS__)
+-    WSACleanup();
+-#endif
+-    zts_lwip_driver_shutdown();
++        std::unique_lock<std::timed_mutex> lock(service_m,std::defer_lock);
++        if (!lock.try_lock_until(deadline)) { return ZTS_ERR_TIMEOUT; }
++        if (zts_service || !hp_workers.node_quiet()) { return ZTS_ERR_TIMEOUT; }
++        if (zts_events) { zts_events->clrCallback(); }
++        hp_retiring=false;
++    }
++    return ZTS_ERR_OK;
++}
++int zts_node_is_quiescent()
++{
++    std::unique_lock<std::timed_mutex> lock(service_m,std::try_to_lock);
++    return lock.owns_lock() && !zts_service && hp_workers.node_quiet();
++}
++int zts_node_stop() { return zts_node_stop_with_timeout(30000); }
++int zts_node_free_with_timeout(unsigned int timeout_ms)
++{
++    if (timeout_ms == 0 || timeout_ms > 60000) { return ZTS_ERR_ARG; }
++    const auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout_ms);
++    {
++        hp_free_called=true;
++        service_state.fetch_or(ZTS_STATE_FREE_CALLED,std::memory_order_acq_rel);
++        service_state.fetch_and(static_cast<uint8_t>(~ZTS_STATE_NET_SERVICE_RUNNING),std::memory_order_acq_rel);
++    }
++    const int result=zts_node_stop_with_timeout(timeout_ms);
++    if (result!=ZTS_ERR_OK) { return result; }
++    const int driver=zts_lwip_driver_shutdown_until(deadline);
++    if (driver!=ZTS_ERR_OK) { return driver; }
++    std::unique_lock<std::timed_mutex> lock(service_m,std::defer_lock);
++    if (!lock.try_lock_until(deadline)) { return ZTS_ERR_TIMEOUT; }
+     delete zts_events;
+-    zts_events = (Events*)0;
+-    return ZTS_ERR_OK;
+-}
++    zts_events=NULL;
++    return ZTS_ERR_OK;
++}
++int zts_node_free() { return zts_node_free_with_timeout(30000); }
+
+ int zts_moon_orbit(uint64_t moon_roots_id, uint64_t moon_seed)
+ {
+--- a/src/Events.cpp
++++ b/src/Events.cpp
+@@ -9,6 +9,9 @@
+  * On the date above, in accordance with the Business Source License, use
+  * of this software will be governed by version 2.0 of the Apache License.
+  */
++
++/* Modified by herdr-pocket contributors (2026): bounded native identity,
++ * event projection and observable worker retirement; see candidate README. */
+ /****/
+
+ /**
+@@ -18,6 +21,9 @@
+  */
+
+ #include "Events.hpp"
++#include "Utils.hpp"
++#include <cstring>
++#include <new>
+
+ #include "Mutex.hpp"
+ #include "NodeService.hpp"
+@@ -57,13 +63,12 @@
+
+ // Global state variable shared between Socket, Control, Event and
+ // NodeService logic.
+-volatile uint8_t service_state = 0;
+-int last_state_check;
++std::atomic<uint8_t> service_state(0);
+
+ #define RESET_FLAGS() service_state = 0;
+-#define SET_FLAGS(f)  service_state |= f;
+-#define CLR_FLAGS(f)  service_state &= ~f;
+-#define GET_FLAGS(f)  ((service_state & f) > 0)
++#define SET_FLAGS(f)  service_state.fetch_or(f, std::memory_order_acq_rel);
++#define CLR_FLAGS(f)  service_state.fetch_and(static_cast<uint8_t>(~(f)), std::memory_order_acq_rel);
++#define GET_FLAGS(f)  ((service_state.load(std::memory_order_acquire) & f) > 0)
+
+ // Lock to guard access to callback function pointers.
+ Mutex events_m;
+@@ -84,36 +89,44 @@
+     return _isCallbackThread;
+ }
+
++bool Events::dequeue(zts_event_msg_t*& message,bool& closed)
++{
++    std::lock_guard<std::mutex> gate(_queue_m);
++    if (_callbackMsgQueue.try_dequeue(message)) {
++        --_pending;
++        closed=false;
++        return true;
++    }
++    closed=!_enabled && _pending==0;
++    return false;
++}
+ void Events::run()
+ {
+-    _isCallbackThread = true;
+-    while (getState(ZTS_STATE_CALLBACKS_RUNNING) || _callbackMsgQueue.size_approx() > 0) {
+-        zts_event_msg_t* msg;
+-        size_t sz = _callbackMsgQueue.size_approx();
+-        for (size_t j = 0; j < sz; j++) {
+-            if (_callbackMsgQueue.try_dequeue(msg)) {
+-                events_m.lock();
+-                sendToUser(msg);
+-                events_m.unlock();
+-            }
++    _isCallbackThread=true;
++    for (;;) {
++        zts_event_msg_t* message=NULL;
++        bool closed=false;
++        if (dequeue(message,closed)) {
++            events_m.lock();
++            sendToUser(message);
++            events_m.unlock();
++            continue;
+         }
++        if (!getState(ZTS_STATE_CALLBACKS_RUNNING) && closed) { break; }
+         zts_util_delay(ZTS_CALLBACK_PROCESSING_INTERVAL);
+     }
++    _isCallbackThread=false;
+ }
+
+ bool Events::enqueue(unsigned int event_code, const void* arg, int len)
+ {
++    std::lock_guard<std::mutex> gate(_queue_m);
+     if (! _enabled) {
+         return false;
+     }
+-    if (_callbackMsgQueue.size_approx() > 1024) {
+-        /* Rate-limit number of events. This value should only grow if the
+-        user application isn't returning from the event handler in a timely manner.
+-        For most applications it should hover around 1 to 2 */
+-        return false;
+-    }
+-    
+-    zts_event_msg_t* msg = new zts_event_msg_t();
++    if (_pending>=1024) { return false; }
++    zts_event_msg_t* msg = new(std::nothrow) zts_event_msg_t();
++    if (!msg) { return false; }
+     msg->event_code = event_code;
+
+     if (ZTS_NODE_EVENT(event_code)) {
+@@ -144,14 +157,22 @@
+         msg->len = sizeof(zts_addr_info_t);
+     }
+     if (ZTS_STORE_EVENT(event_code)) {
+-        msg->cache = (void*)arg;
+-        msg->len = len;
++        if (!arg || len<=0 || len>ZTS_STORE_DATA_LEN) { delete msg; return false; }
++        unsigned char* owned=new(std::nothrow) unsigned char[len];
++        if (!owned) { delete msg; return false; }
++        std::memcpy(owned,arg,len);
++        msg->cache=owned;
++        msg->len=len;
+     }
+
+     //
+     // ownership of arg is now transferred
+     //
+-    _callbackMsgQueue.enqueue(msg);
++    if (!_callbackMsgQueue.enqueue(msg)) {
++        if (msg->cache) { Utils::burn(msg->cache,msg->len); delete[] static_cast<unsigned char*>(msg->cache); }
++        delete msg; return false;
++    }
++    ++_pending; // Publication and count happen under the same producer/consumer gate.
+     return true;
+ }
+
+@@ -178,6 +199,7 @@
+     if (msg->addr) {
+         delete msg->addr;
+     }
++    if (msg->cache) { Utils::burn(msg->cache,msg->len); delete[] static_cast<unsigned char*>(msg->cache); }
+     delete msg;
+     msg = NULL;
+ }
+@@ -270,7 +292,7 @@
+
+ void Events::setState(uint8_t newFlags)
+ {
+-    if ((newFlags ^ service_state) & ZTS_STATE_NET_SERVICE_RUNNING) {
++    if ((newFlags ^ service_state.load(std::memory_order_acquire)) & ZTS_STATE_NET_SERVICE_RUNNING) {
+         return;   // No effect. Not allowed to set this flag manually
+     }
+     SET_FLAGS(newFlags);
+@@ -300,16 +322,18 @@
+
+ bool Events::getState(uint8_t testFlags)
+ {
+-    return testFlags & service_state;
++    return testFlags & service_state.load(std::memory_order_acquire);
+ }
+
+ void Events::enable()
+ {
++    std::lock_guard<std::mutex> gate(_queue_m);
+     _enabled = true;
+ }
+
+ void Events::disable()
+ {
++    std::lock_guard<std::mutex> gate(_queue_m);
+     _enabled = false;
+ }
+
+--- a/src/Events.hpp
++++ b/src/Events.hpp
+@@ -9,6 +9,9 @@
+  * On the date above, in accordance with the Business Source License, use
+  * of this software will be governed by version 2.0 of the Apache License.
+  */
++
++/* Modified by herdr-pocket contributors (2026): bounded native identity,
++ * event projection and observable worker retirement; see candidate README. */
+ /****/
+
+ /**
+@@ -21,6 +24,9 @@
+ #define ZTS_USER_EVENTS_HPP
+
+ #include "ZeroTierSockets.h"
++#include "HpLifecycle.hpp"
++#include <atomic>
++#include <mutex>
+
+ #ifdef __WINDOWS__
+ #include <basetsd.h>
+@@ -32,18 +38,19 @@
+
+ // Lock service and check that it is running
+ #define ACQUIRE_SERVICE(x)                                                                                             \
+-    Mutex::Lock _ls(service_m);                                                                                        \
++    std::lock_guard<std::timed_mutex> _ls(service_m);                                                                                        \
+     if (! zts_service || ! zts_service->isRunning()) {                                                                 \
+         return x;                                                                                                      \
+     }
+ // Lock service and check that it is not currently running
+ #define ACQUIRE_SERVICE_OFFLINE()                                                                                      \
+-    Mutex::Lock _ls(service_m);                                                                                        \
+-    if (zts_service && zts_service->isRunning()) {                                                                     \
++    std::lock_guard<std::timed_mutex> _ls(service_m);                                                                                        \
++    if (!hp_can_configure() || (zts_service && zts_service->isRunning())) {                                                                     \
+         return ZTS_ERR_SERVICE;                                                                                        \
+     }                                                                                                                  \
+     if (! zts_service) {                                                                                               \
+-        init_subsystems();                                                                                             \
++        const int initialized=init_subsystems(); \
++        if (initialized!=ZTS_ERR_OK) { return initialized; }                                                                                             \
+     }
+ // Unlock service
+ #define RELEASE_SERVICE() service_m.unlock();
+@@ -76,13 +83,11 @@
+ #define ZTS_STATE_CALLBACKS_RUNNING   0x08
+ #define ZTS_STATE_FREE_CALLED         0x10
+
+-extern volatile uint8_t service_state;
+-extern int last_state_check;
++extern std::atomic<uint8_t> service_state;
+
+ inline int transport_ok()
+ {
+-    last_state_check = service_state & ZTS_STATE_NET_SERVICE_RUNNING;
+-    return last_state_check;
++    return service_state.load(std::memory_order_acquire) & ZTS_STATE_NET_SERVICE_RUNNING;
+ }
+
+ /**
+@@ -92,6 +97,9 @@
+
+ class Events {
+     bool _enabled;
++    std::mutex _queue_m;
++    size_t _pending=0;
++    bool dequeue(zts_event_msg_t*& message,bool& closed);
+
+   public:
+     Events() : _enabled(false)
+--- /dev/null
++++ b/src/HpEventOwnership.hpp
+@@ -0,0 +1,48 @@
++// herdr-pocket (2026): the sender owns projected objects until enqueue succeeds.
++#ifndef HP_ZT_EVENT_OWNERSHIP_HPP
++#define HP_ZT_EVENT_OWNERSHIP_HPP
++#include "ZeroTierSockets.h"
++namespace ZeroTier {
++struct HpDeleteEvent {
++    template<class T> void operator()(T* object) const { delete object; }
++};
++inline bool hp_event_input_is_owned(unsigned int code) {
++    return code==ZTS_EVENT_ADDR_ADDED_IP4 || code==ZTS_EVENT_ADDR_ADDED_IP6 ||
++           code==ZTS_EVENT_ADDR_REMOVED_IP4 || code==ZTS_EVENT_ADDR_REMOVED_IP6;
++}
++template<class Delete>
++inline void hp_dispose_rejected_event(unsigned int code,void* object,const Delete& dispose) {
++    if (!object) { return; }
++    switch(code) {
++    case ZTS_EVENT_NODE_UP: case ZTS_EVENT_NODE_ONLINE: case ZTS_EVENT_NODE_OFFLINE:
++    case ZTS_EVENT_NODE_DOWN: case ZTS_EVENT_NODE_FATAL_ERROR:
++        dispose(static_cast<zts_node_info_t*>(object)); break;
++    case ZTS_EVENT_NETWORK_NOT_FOUND: case ZTS_EVENT_NETWORK_CLIENT_TOO_OLD:
++    case ZTS_EVENT_NETWORK_REQ_CONFIG: case ZTS_EVENT_NETWORK_ACCESS_DENIED:
++    case ZTS_EVENT_NETWORK_DOWN: case ZTS_EVENT_NETWORK_UPDATE:
++    case ZTS_EVENT_NETWORK_READY_IP4: case ZTS_EVENT_NETWORK_READY_IP6: case ZTS_EVENT_NETWORK_OK:
++        dispose(static_cast<zts_net_info_t*>(object)); break;
++    case ZTS_EVENT_ADDR_ADDED_IP4: case ZTS_EVENT_ADDR_ADDED_IP6:
++    case ZTS_EVENT_ADDR_REMOVED_IP4: case ZTS_EVENT_ADDR_REMOVED_IP6:
++        dispose(static_cast<zts_addr_info_t*>(object)); break;
++    case ZTS_EVENT_PEER_DIRECT: case ZTS_EVENT_PEER_RELAY: case ZTS_EVENT_PEER_UNREACHABLE:
++    case ZTS_EVENT_PEER_PATH_DISCOVERED: case ZTS_EVENT_PEER_PATH_DEAD:
++        dispose(static_cast<zts_peer_info_t*>(object)); break;
++    default:
++        // STORE input is borrowed. Events owns only the copy it makes itself.
++        break;
++    }
++}
++template<class Delete=HpDeleteEvent>
++class HpEventOwner {
++public:
++    HpEventOwner(unsigned int code,void* object,Delete dispose=Delete()):code_(code),object_(object),dispose_(dispose){}
++    ~HpEventOwner(){hp_dispose_rejected_event(code_,object_,dispose_);}
++    void transfer(){object_=NULL;}
++private:
++    unsigned int code_; void* object_; Delete dispose_;
++    HpEventOwner(const HpEventOwner&)=delete;
++    HpEventOwner& operator=(const HpEventOwner&)=delete;
++};
++}
++#endif
+--- /dev/null
++++ b/src/HpEventProjection.hpp
+@@ -0,0 +1,32 @@
++// herdr-pocket (2026): bounded projection of the pinned core's larger arrays.
++#ifndef HP_ZT_EVENT_PROJECTION_HPP
++#define HP_ZT_EVENT_PROJECTION_HPP
++#include "ZeroTierSockets.h"
++#include "ZeroTierOne.h"
++#include <algorithm>
++#include <cstring>
++namespace ZeroTier {
++template<class D,size_t DN,class S,size_t SN>
++inline unsigned int hp_projection_count(unsigned int count,const D (&)[DN],const S (&)[SN]) {
++ return static_cast<unsigned int>(std::min(static_cast<size_t>(count),std::min(DN,SN)));
++}
++template<class Convert>
++inline void hp_project_network(zts_net_info_t& dst,const ZT_VirtualNetworkConfig& src,Convert convert) {
++ std::memset(&dst,0,sizeof(dst));
++ dst.net_id=src.nwid; dst.mac=src.mac;
++ std::memcpy(dst.name,src.name,std::min(sizeof(dst.name)-1,sizeof(src.name)));
++ dst.status=static_cast<zts_network_status_t>(src.status); dst.type=static_cast<zts_net_info_type_t>(src.type);
++ dst.mtu=src.mtu; dst.dhcp=src.dhcp; dst.bridge=src.bridge; dst.broadcast_enabled=src.broadcastEnabled;
++ dst.port_error=src.portError; dst.netconf_rev=src.netconfRevision;
++ dst.assigned_addr_count=hp_projection_count(src.assignedAddressCount,dst.assigned_addrs,src.assignedAddresses);
++ for(unsigned int i=0;i<dst.assigned_addr_count;++i){convert(&dst.assigned_addrs[i],&src.assignedAddresses[i]);}
++ dst.route_count=hp_projection_count(src.routeCount,dst.routes,src.routes);
++ for(unsigned int i=0;i<dst.route_count;++i){
++  convert(&dst.routes[i].target,&src.routes[i].target); convert(&dst.routes[i].via,&src.routes[i].via);
++  dst.routes[i].flags=src.routes[i].flags; dst.routes[i].metric=src.routes[i].metric;
++ }
++ dst.multicast_sub_count=hp_projection_count(src.multicastSubscriptionCount,dst.multicast_subs,src.multicastSubscriptions);
++ for(unsigned int i=0;i<dst.multicast_sub_count;++i){dst.multicast_subs[i].mac=src.multicastSubscriptions[i].mac;dst.multicast_subs[i].adi=src.multicastSubscriptions[i].adi;}
++}
++}
++#endif
+--- /dev/null
++++ b/src/HpLifecycle.hpp
+@@ -0,0 +1,68 @@
++// herdr-pocket (2026): shared retirement predicates, used by the real workers.
++#ifndef HP_ZT_LIFECYCLE_HPP
++#define HP_ZT_LIFECYCLE_HPP
++#include <mutex>
++#include <condition_variable>
++#include <chrono>
++namespace ZeroTier {
++class HpWorkers {
++public:
++ enum Worker { Service=0, Callback=1, Driver=2 };
++ bool begin(Worker worker) {
++  std::lock_guard<std::mutex> lock(mutex_);
++  if (active_[worker]) { return false; }
++  active_[worker]=true; return true;
++ }
++ void finish(Worker worker) {
++  std::lock_guard<std::mutex> lock(mutex_);
++  active_[worker]=false; changed_.notify_all();
++ }
++ bool active(Worker worker) const { std::lock_guard<std::mutex> lock(mutex_); return active_[worker]; }
++ bool node_quiet() const { std::lock_guard<std::mutex> lock(mutex_); return !active_[Service] && !active_[Callback]; }
++ bool wait_node(std::chrono::steady_clock::time_point deadline) {
++  std::unique_lock<std::mutex> lock(mutex_);
++  return changed_.wait_until(lock,deadline,[this]{return !active_[Service] && !active_[Callback];});
++ }
++ bool wait_driver(std::chrono::steady_clock::time_point deadline) {
++  std::unique_lock<std::mutex> lock(mutex_);
++  return changed_.wait_until(lock,deadline,[this]{return !active_[Driver];});
++ }
++private:
++ mutable std::mutex mutex_; std::condition_variable changed_; bool active_[3]={false,false,false};
++};
++// Failed native thread creation must retire only its own new admission.
++class HpLaunchGuard {
++public:
++ HpLaunchGuard(HpWorkers& workers,HpWorkers::Worker worker):workers_(workers),worker_(worker),admitted_(workers.begin(worker)),committed_(false){}
++ ~HpLaunchGuard(){if(admitted_ && !committed_){workers_.finish(worker_);}}
++ explicit operator bool() const{return admitted_;}
++ void commit(){committed_=true;}
++private:
++ HpWorkers& workers_; HpWorkers::Worker worker_; bool admitted_; bool committed_;
++ HpLaunchGuard(const HpLaunchGuard&)=delete; HpLaunchGuard& operator=(const HpLaunchGuard&)=delete;
++};
++extern HpWorkers hp_workers;
++bool hp_can_configure();
++// The core can receive frames on lwIP's thread. Retire new admissions before
++// deleting the Node, and wait without holding the lwIP core or service mutex.
++class HpFrameGate {
++public:
++ bool enter() { std::lock_guard<std::mutex> lock(mutex_); if (closed_) { return false; } ++active_; return true; }
++ void leave() { std::lock_guard<std::mutex> lock(mutex_); --active_; changed_.notify_all(); }
++ bool quiet() const { std::lock_guard<std::mutex> lock(mutex_); return active_==0; }
++ void retire() { std::lock_guard<std::mutex> lock(mutex_); closed_=true; }
++ void drain() { std::unique_lock<std::mutex> lock(mutex_); closed_=true; changed_.wait(lock,[this]{return active_==0;}); }
++private:
++ mutable std::mutex mutex_; std::condition_variable changed_; bool closed_=false; unsigned int active_=0;
++};
++class HpFrameLease {
++public:
++ explicit HpFrameLease(HpFrameGate& gate):gate_(gate),entered_(gate.enter()){}
++ ~HpFrameLease(){if(entered_){gate_.leave();}}
++ explicit operator bool() const{return entered_;}
++private:
++ HpFrameGate& gate_; bool entered_;
++ HpFrameLease(const HpFrameLease&)=delete; HpFrameLease& operator=(const HpFrameLease&)=delete;
++};
++}
++#endif
+--- a/src/NodeService.cpp
++++ b/src/NodeService.cpp
+@@ -9,6 +9,9 @@
+  * On the date above, in accordance with the Business Source License, use
+  * of this software will be governed by version 2.0 of the Apache License.
+  */
++
++/* Modified by herdr-pocket contributors (2026): bounded native identity,
++ * event projection and observable worker retirement; see candidate README. */
+ /****/
+
+ /*
+@@ -23,6 +26,8 @@
+  * ZeroTier Node Service
+  */
+
++#include "HpEventProjection.hpp"
++#include "HpEventOwnership.hpp"
+ #include <stdlib.h>
+
+ #include "NodeService.hpp"
+@@ -47,6 +52,8 @@
+ #define ZT_TCP_FALLBACK_RELAY "204.80.128.1/443"
+
+ namespace ZeroTier {
++extern std::timed_mutex service_m;
++
+
+ static int SnodeVirtualNetworkConfigFunction(
+     ZT_Node* node,
+@@ -237,6 +244,11 @@
+
+ NodeService::~NodeService()
+ {
++    _frameGate.drain();
++    delete _node;
++    _node=NULL;
++    Utils::burn(_publicIdStr,sizeof(_publicIdStr));
++    Utils::burn(_secretIdStr,sizeof(_secretIdStr));
+     _binder.closeAll(_phy);
+ #ifdef ZT_USE_MINIUPNPC
+     delete _portMapper;
+@@ -245,7 +257,11 @@
+
+ NodeService::ReasonForTermination NodeService::run()
+ {
+-    _run = true;
++    {
++        Mutex::Lock lock(_run_m);
++        if (_stopRequested) { return ONE_NORMAL_TERMINATION; }
++        _run=true;
++    }
+     try {
+         // Create home path (if necessary)
+         // By default, _homePath is empty and nothing is written to storage
+@@ -289,7 +305,10 @@
+             struct ZT_Node_Config config;
+             config.enableEncryptedHello = _encryptedHello ? 1 : 0;
+             config.lowBandwidthMode = _lowBandwidthMode ? 1 : 0;
+-            _node = new Node(this, (void*)0, &config, &cb, OSUtils::now());
++            Node* admitted=new Node(this,(void*)0,&config,&cb,OSUtils::now());
++            std::lock_guard<std::timed_mutex> service_lock(service_m);
++            _node=admitted;
++            if (_stopRequested) { return ONE_NORMAL_TERMINATION; }
+         }
+
+         unsigned int minPort = (_randomPortRangeStart ? _randomPortRangeStart : 20000);
+@@ -384,7 +403,7 @@
+         sendEventToUser(ZTS_EVENT_NODE_UP, NULL);
+
+         // Join existing networks in networks.d
+-        if (_allowNetworkCaching) {
++        if (_allowNetworkCaching && !_homePath.empty()) {
+             std::vector<std::string> networksDotD(
+                 OSUtils::listDirectory((_homePath + ZT_PATH_SEPARATOR_S "networks.d").c_str()));
+             for (std::vector<std::string>::iterator f(networksDotD.begin()); f != networksDotD.end(); ++f) {
+@@ -551,7 +570,7 @@
+
+             const unsigned long delay = (dl > now) ? (unsigned long)(dl - now) : 100;
+             clockShouldBe = now + (uint64_t)delay;
+-            _phy.poll(delay);
++            _phy.poll(std::min<decltype(delay)>(delay,50));
+         }
+     }
+     catch (std::exception& e) {
+@@ -602,6 +621,9 @@
+         _fatalErrorMessage = "unexpected exception in main thread: unknown exception";
+     }
+
++    { Mutex::Lock lock(_run_m); _run=false; }
++    _frameGate.drain();
++    std::lock_guard<std::timed_mutex> service_lock(service_m);
+     {
+         Mutex::Lock _l(_nets_m);
+         for (std::map<uint64_t, NetworkState>::iterator n(_nets.begin()); n != _nets.end(); ++n) {
+@@ -640,22 +662,12 @@
+
+ void NodeService::terminate()
+ {
+-    _run_m.lock();
+-    _run = false;
+-    _run_m.unlock();
+-    _nodeId = 0x0;
+-    _primaryPort = 0;
+-    _homePath.clear();
+-    _allowNetworkCaching = true;
+-    _allowPeerCaching = true;
+-    _allowIdentityCaching = true;
+-    _allowRootSetCaching = true;
+-    memset(_publicIdStr, 0, ZT_IDENTITY_STRING_BUFFER_LENGTH);
+-    memset(_secretIdStr, 0, ZT_IDENTITY_STRING_BUFFER_LENGTH);
+-    _interfacePrefixBlacklist.clear();
+-    // Events stay enabled until the service thread has torn the node down so
+-    // that ZTS_EVENT_NODE_DOWN is delivered
+-    _phy.whack();
++    _stopRequested=true;
++    _run=false;
++    _frameGate.retire();
++    // The original service owns its settings and secret until its worker exits.
++    // Never clear storage while a pending constructor/state-read is using it.
++    // The service poll is capped below; no blocking pipe write on the stop path.
+ }
+
+ void NodeService::syncManagedStuff(NetworkState& n)
+@@ -1004,7 +1016,7 @@
+                 *nuptr = (void*)0;
+                 delete n.tap;
+                 _nets.erase(net_id);
+-                if (_allowNetworkCaching) {
++                if (_allowNetworkCaching && !_homePath.empty()) {
+                     if (op == ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_DESTROY) {
+                         char nlcpath[256] = { 0 };
+                         OSUtils::ztsnprintf(
+@@ -1071,7 +1083,10 @@
+
+ void NodeService::sendEventToUser(unsigned int zt_event_code, const void* obj, unsigned int len)
+ {
+-    if (! _events) {
++    if (!_events) {
++        if (hp_event_input_is_owned(zt_event_code)) {
++            HpEventOwner<> owned(zt_event_code,const_cast<void*>(obj));
++        }
+         return;
+     }
+
+@@ -1117,31 +1132,7 @@
+         case ZTS_EVENT_NETWORK_OK: {
+             NetworkState* ns = (NetworkState*)obj;
+             nt = new zts_net_info_t();
+-            nt->net_id = ns->config.nwid;
+-            nt->mac = ns->config.mac;
+-            strncpy(nt->name, ns->config.name, sizeof(ns->config.name));
+-            nt->status = (zts_network_status_t)ns->config.status;
+-            nt->type = (zts_net_info_type_t)ns->config.type;
+-            nt->mtu = ns->config.mtu;
+-            nt->dhcp = ns->config.dhcp;
+-            nt->bridge = ns->config.bridge;
+-            nt->broadcast_enabled = ns->config.broadcastEnabled;
+-            nt->port_error = ns->config.portError;
+-            nt->netconf_rev = ns->config.netconfRevision;
+-            // Copy and convert address structures
+-            nt->assigned_addr_count = ns->config.assignedAddressCount;
+-            for (unsigned int i = 0; i < ns->config.assignedAddressCount; i++) {
+-                native_ss_to_zts_ss(&(nt->assigned_addrs[i]), &(ns->config.assignedAddresses[i]));
+-            }
+-            nt->route_count = ns->config.routeCount;
+-            for (unsigned int i = 0; i < ns->config.routeCount; i++) {
+-                native_ss_to_zts_ss(&(nt->routes[i].target), &(ns->config.routes[i].target));
+-                native_ss_to_zts_ss(&(nt->routes[i].via), &(ns->config.routes[i].via));
+-                nt->routes[i].flags = ns->config.routes[i].flags;
+-                nt->routes[i].metric = ns->config.routes[i].metric;
+-            }
+-            nt->multicast_sub_count = ns->config.multicastSubscriptionCount;
+-            memcpy(nt->multicast_subs, &(ns->config.multicastSubscriptions), sizeof(ns->config.multicastSubscriptions));
++            hp_project_network(*nt,ns->config,native_ss_to_zts_ss);
+             objptr = (void*)nt;
+             break;
+         }
+@@ -1219,64 +1210,8 @@
+     // Send event
+
+     if (objptr) {
+-        if (!_events->enqueue(zt_event_code, objptr, len)) {
+-            //
+-            // ownership of objptr was NOT transferred, so delete any news from above
+-            //
+-            switch (zt_event_code) {
+-                case ZTS_EVENT_NODE_UP:
+-                case ZTS_EVENT_NODE_ONLINE:
+-                case ZTS_EVENT_NODE_OFFLINE:
+-                case ZTS_EVENT_NODE_DOWN:
+-                case ZTS_EVENT_NODE_FATAL_ERROR: {
+-                    delete nd;
+-                    break;
+-                }
+-                case ZTS_EVENT_NETWORK_NOT_FOUND:
+-                case ZTS_EVENT_NETWORK_CLIENT_TOO_OLD:
+-                case ZTS_EVENT_NETWORK_REQ_CONFIG:
+-                case ZTS_EVENT_NETWORK_ACCESS_DENIED:
+-                case ZTS_EVENT_NETWORK_DOWN: {
+-                    delete nt;
+-                    break;
+-                }
+-                case ZTS_EVENT_NETWORK_UPDATE:
+-                case ZTS_EVENT_NETWORK_READY_IP4:
+-                case ZTS_EVENT_NETWORK_READY_IP6:
+-                case ZTS_EVENT_NETWORK_OK: {
+-                    delete nt;
+-                    break;
+-                }
+-                case ZTS_EVENT_ADDR_ADDED_IP4:
+-                    break;
+-                case ZTS_EVENT_ADDR_ADDED_IP6:
+-                    break;
+-                case ZTS_EVENT_ADDR_REMOVED_IP4:
+-                    break;
+-                case ZTS_EVENT_ADDR_REMOVED_IP6:
+-                    break;
+-                case ZTS_EVENT_STORE_IDENTITY_PUBLIC:
+-                    break;
+-                case ZTS_EVENT_STORE_IDENTITY_SECRET:
+-                    break;
+-                case ZTS_EVENT_STORE_PLANET:
+-                    break;
+-                case ZTS_EVENT_STORE_PEER:
+-                    break;
+-                case ZTS_EVENT_STORE_NETWORK:
+-                    break;
+-                case ZTS_EVENT_PEER_DIRECT:
+-                case ZTS_EVENT_PEER_RELAY:
+-                case ZTS_EVENT_PEER_UNREACHABLE:
+-                case ZTS_EVENT_PEER_PATH_DISCOVERED:
+-                case ZTS_EVENT_PEER_PATH_DEAD: {
+-                    delete pr;
+-                    break;
+-                }
+-                default:
+-                    break;
+-            }
+-        }
++        HpEventOwner<> owned(zt_event_code,objptr);
++        if (_events->enqueue(zt_event_code,objptr,len)) { owned.transfer(); }
+     }
+ }
+
+@@ -1851,6 +1786,7 @@
+         default:
+             return -1;
+     }
++    if (_homePath.empty()) { return -1; }
+     FILE* f = fopen(p, "rb");
+     if (f) {
+         int n = (int)fread(data, 1, maxlen, f);
+@@ -2072,6 +2008,8 @@
+     const void* data,
+     unsigned int len)
+ {
++    HpFrameLease frame(_frameGate);
++    if (!frame || !_node) { return; }
+     _node->processVirtualNetworkFrame(
+         (void*)0,
+         OSUtils::now(),
+--- a/src/NodeService.hpp
++++ b/src/NodeService.hpp
+@@ -9,6 +9,9 @@
+  * On the date above, in accordance with the Business Source License, use
+  * of this software will be governed by version 2.0 of the Apache License.
+  */
++
++/* Modified by herdr-pocket contributors (2026): bounded native identity,
++ * event projection and observable worker retirement; see candidate README. */
+ /****/
+
+ /**
+@@ -28,6 +31,8 @@
+ #include "Phy.hpp"
+ #include "PortMapper.hpp"
+ #include "ZeroTierSockets.h"
++#include "HpLifecycle.hpp"
++#include <atomic>
+ #include "version.h"
+
+ #include <string>
+@@ -237,7 +242,9 @@
+     /** Lock to control access to service run state */
+     Mutex _run_m;
+     // Set to false to force service to stop
+-    volatile bool _run;
++    std::atomic<bool> _run;
++    std::atomic<bool> _stopRequested{false};
++    HpFrameGate _frameGate;
+     /** Lock to control access to termination reason */
+     Mutex _termReason_m;
+     // Termination status information
+@@ -270,7 +277,7 @@
+     int _rootsDataLen = 0;
+
+     /** Whether the node has successfully come online */
+-    bool _nodeIsOnline;
++    std::atomic<bool> _nodeIsOnline;
+
+     /** Whether we allow the NodeService to generate events for the user */
+     bool _eventsEnabled;
+--- a/src/VirtualTap.cpp
++++ b/src/VirtualTap.cpp
+@@ -9,6 +9,9 @@
+  * On the date above, in accordance with the Business Source License, use
+  * of this software will be governed by version 2.0 of the Apache License.
+  */
++
++/* Modified by herdr-pocket contributors (2026): bounded native identity,
++ * event projection and observable worker retirement; see candidate README. */
+ /****/
+
+ /*
+@@ -301,8 +304,9 @@
+ // Netif driver code for lwIP network stack                                   //
+ //----------------------------------------------------------------------------//
+
+-bool _has_exited = false;
+-bool _has_started = false;
++std::atomic<bool> _has_exited(false);
++std::atomic<bool> _has_started(false);
++static bool hp_driver_shutdown_requested=false;
+
+ // Used to generate enumerated lwIP interface names
+ int netifCount = 0;
+@@ -315,8 +319,11 @@
+ {
+     sys_sem_t* sem;
+     sem = (sys_sem_t*)arg;
+-    zts_events->setState(ZTS_STATE_STACK_RUNNING);
+-    _has_started = true;
++    {
++        Mutex::Lock lock(lwip_state_m);
++        if (!hp_driver_shutdown_requested) { zts_events->setState(ZTS_STATE_STACK_RUNNING); }
++        _has_started=true;
++    }
+     // zts_events->enqueue(ZTS_EVENT_STACK_UP, NULL);
+     sys_sem_signal(sem);
+ }
+@@ -340,12 +347,13 @@
+     while (zts_events->getState(ZTS_STATE_STACK_RUNNING)) {
+         zts_util_delay(LWIP_DRIVER_LOOP_INTERVAL);
+     }
+-    _has_exited = true;
+     
+     //
+     // no need to check if event was enqueued since NULL is being passed
+     //
+     zts_events->enqueue(ZTS_EVENT_STACK_DOWN, NULL);
++    _has_exited=true;
++    hp_workers.finish(HpWorkers::Driver); // Last access to Events above this line.
+ }
+
+ bool zts_lwip_is_up()
+@@ -366,28 +374,29 @@
+ #if defined(__WINDOWS__)
+     sys_init();   // Required for win32 init of critical sections
+ #endif
+-    sys_thread_new(
++    if (hp_driver_shutdown_requested) { return; }
++    HpLaunchGuard driver_launch(hp_workers,HpWorkers::Driver);
++    if (!driver_launch) { return; }
++    if (sys_thread_new(
+         ZTS_LWIP_THREAD_NAME,
+         zts_main_lwip_driver_loop,
+         NULL,
+         DEFAULT_THREAD_STACKSIZE,
+-        DEFAULT_THREAD_PRIO);
+-}
+-
++        DEFAULT_THREAD_PRIO)) { driver_launch.commit(); }
++}
++
++int zts_lwip_driver_shutdown_until(std::chrono::steady_clock::time_point deadline)
++{
++    {
++        Mutex::Lock lock(lwip_state_m);
++        hp_driver_shutdown_requested=true;
++        if (zts_events) { zts_events->clrState(ZTS_STATE_STACK_RUNNING); }
++    }
++    return hp_workers.wait_driver(deadline) ? ZTS_ERR_OK : ZTS_ERR_TIMEOUT;
++}
+ void zts_lwip_driver_shutdown()
+ {
+-    if (_has_exited) {
+-        return;
+-    }
+-    Mutex::Lock _l(lwip_state_m);
+-    // Set flag to stop sending frames into the core
+-    zts_events->clrState(ZTS_STATE_STACK_RUNNING);
+-    // Wait until the main lwIP thread has exited
+-    if (_has_started) {
+-        while (! _has_exited) {
+-            zts_util_delay(LWIP_DRIVER_LOOP_INTERVAL);
+-        }
+-    }
++    (void)zts_lwip_driver_shutdown_until(std::chrono::steady_clock::now()+std::chrono::seconds(30));
+ }
+
+ void zts_lwip_remove_netif(void* netif)
+@@ -400,14 +409,14 @@
+     netif_remove(n);
+     netif_set_down(n);
+     netif_set_link_down(n);
++    n->state=NULL; // Queued lwIP work must never retain the destroyed tap.
+     UNLOCK_TCPIP_CORE();
+ }
+
+ signed char zts_lwip_eth_tx(struct netif* n, struct pbuf* p)
+ {
+-    if (! n) {
+-        return ERR_IF;
+-    }
++    if (!n || !n->state || !p) { return ERR_IF; }
++    if (p->tot_len<sizeof(struct eth_hdr) || p->tot_len>ZT_MAX_MTU+32) { return ERR_IF; }
+     struct pbuf* q;
+     char buf[ZT_MAX_MTU + 32] = { 0 };
+     char* bufptr;
+@@ -416,6 +425,7 @@
+     VirtualTap* tap = (VirtualTap*)n->state;
+     bufptr = buf;
+     for (q = p; q != NULL; q = q->next) {
++        if (q->len>sizeof(buf)-static_cast<size_t>(totalLength)) { return ERR_IF; }
+         memcpy(bufptr, q->payload, q->len);
+         bufptr += q->len;
+         totalLength += q->len;
+--- a/src/VirtualTap.hpp
++++ b/src/VirtualTap.hpp
+@@ -9,6 +9,9 @@
+  * On the date above, in accordance with the Business Source License, use
+  * of this software will be governed by version 2.0 of the Apache License.
+  */
++
++/* Modified by herdr-pocket contributors (2026): bounded native identity,
++ * event projection and observable worker retirement; see candidate README. */
+ /****/
+
+ /*
+@@ -29,6 +32,7 @@
+
+ #define ZTS_UNUSED_ARG(x) (void)x
+
++#include "HpLifecycle.hpp"
+ #include "Events.hpp"
+ #include "MAC.hpp"
+ #include "Phy.hpp"
+@@ -272,6 +276,7 @@
+  * interfaces will be brought down and all resources will be deallocated. A
+  * full application restart will be required to bring the stack back online.
+  */
++int zts_lwip_driver_shutdown_until(std::chrono::steady_clock::time_point deadline);
+ void zts_lwip_driver_shutdown();
+
+ /**

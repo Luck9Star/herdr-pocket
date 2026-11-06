@@ -2,6 +2,8 @@
 
 2026-11-06，延续[原生状态托管](25-tailscale-native-custody.md)。Flutter 与 Tauri 的 Android 宿主、手机身份入口、显式登录及原节点路由已接入源码，复用配对审查 → 看板 → 持续观察。隔离验证和剩余项见[证据记录](evidence/mobile-pair-gui/tailscale-mobile-source-20261106.json)。本批没有运行 Actions、生成新 APK 或启动真实网络；当前下载包仍来自 `546c3eb`，不能用它验收本页新增功能。
 
+**后续更新 · 2026-11-07：** 本页记录的是源码阶段。随后 `750798fe` 双网络云构建、Flutter analyzer／widget、隔离 SSH 和两份 APK 静态校验通过，下载与失败历史见[集中云验收](27-mobile-tailscale-cloud.md)。下表中的“待 CI／未编译 Android”保留该源码阶段的历史边界；设备运行与真实组网仍未验证。
+
 ## 手机操作和状态
 
 先保存 Tailscale 的公开控制服务器与主机名，再创建本设备身份。GUI 只持有 profile、revision、provider 与不透明 handle，状态为 `DEVICE_STATE`；完整 StateStore 留在 Android 原生加密存储中，不进入 Dart／JS，也不接受 auth key。身份创建、删除和配置变更需停止受影响的原节点与主机连接；停止失败或结果未知时不继续替换身份。

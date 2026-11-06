@@ -2,3 +2,9 @@ patches/** -text
 patches/*.patch whitespace=-blank-at-eol
 patches/0002-tsnet-explicit-auth.patch whitespace=-blank-at-eol,-space-before-tab
 portable-stream/** -text
+# Candidate hashes cover exact bytes, including on Windows checkouts.
+candidates/zerotier/** -text
+zerotier-*.json -text
+# Unified-diff prefixes and original context are source material, not indentation.
+candidates/zerotier/patches/0005-native-safety.patch whitespace=-blank-at-eol,-space-before-tab,-blank-at-eof
+candidates/zerotier/patches/0006-strict-offline-identity.patch whitespace=-blank-at-eol,-space-before-tab,-blank-at-eof

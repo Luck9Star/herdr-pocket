@@ -44,3 +44,7 @@
 样例使用虚构地址和公开测试材料。实现的编译、单元／widget、原生 GUI、真实组网和设备体验分别记录；三网平台与并发矩阵仍见[总验证记录](../../docs/09-prototype-validation.md)。
 
 2026-11-06 按 Context7 的 library → docs 查询官方 EasyTier、Tailscale 和 ZeroTier 文档。当前官方资料用于字段含义核对，原生实现继续依据 [sources.json](../native/sources.json) 的固定版本。EasyTier 的共享网络名称与秘密由节点匹配，tsnet 的服务器配置与本机身份状态分开，ZeroTier 网络 ID 使用 16 位十六进制并经 node join 处理。[EasyTier 官方配置](https://github.com/easytier/easytier/blob/main/README.md) · [tsnet 官方说明](https://github.com/tailscale/tailscale/blob/main/tsnet/README.md) · [ZeroTier Sockets](https://github.com/zerotier/docs/blob/main/docs/sockets.md)
+
+## ZeroTier 设备级身份基础（2026-11-07）
+
+`native/android/ZeroTierDeviceStoreCore.java` 是独立设备 namespace 的托管核心，151 个临时 JCE／JVM 检查通过。它保留跨进程 owner 租约、原生退休证明接口及明确的创建／删除恢复；不复用首个 profile 作为全局身份。不可读身份的两步丢弃仅针对同实例此前认证过的 handle；跨重启缺少可信引用仍阻断。尚未接 AndroidKeyStore、JNI、network manager 或 GUI，不在当前测试包中。[实现与完整边界](../../docs/28-zerotier-native-foundation.md)

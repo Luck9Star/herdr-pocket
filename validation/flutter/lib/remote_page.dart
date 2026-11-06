@@ -65,6 +65,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   String status = '审查接入 → 会话 pane 看板 → 选择目标观察';
   RemoteDashboard? dashboard;
   String? selectedPane;
+  RemotePane? selectedTarget;
   bool live = false;
   int? sequence;
   RemoteSnapshot? snapshot;
@@ -86,10 +87,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     });
 
   void reportView() {
-    final selected = dashboard?.panes.where((p) => p.paneId == selectedPane).toList() ?? const <RemotePane>[];
     widget.onViewState?.call(inputGate.unknown != null || adapter.pendingInput != null ? 'unknown' :
       viewPaused ? 'paused' : live ? 'live' : 'stale',selectedPane ?? widget.requestedTarget?.paneId,
-      selected.length == 1 ? selected.single.terminalId : widget.requestedTarget?.terminalId);
+      selectedTarget?.terminalId ?? widget.requestedTarget?.terminalId);
   }
   String targetKey(RemoteInputTarget target) => '${target.route}\u0000${target.hostFingerprint}\u0000${target.host}:${target.port}\u0000${target.username}\u0000${target.socketPath}\u0000${target.paneId}\u0000${target.terminalId}';
   void draftChanged() { draftRevision++; }
@@ -169,15 +169,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       stop('原连接或网络绑定已失效 · 请关闭后重新审查'); return;
     }
     setState(() { viewPaused = false; live = false; status = '正在重新核验原目标 · 等待新 full，输入关闭'; });
-    final requested = widget.requestedTarget,board = dashboard;
-    if (requested != null && board != null && selectedPane == null) {
-      if (board.panes.where((p) => p.paneId == requested.paneId && p.terminalId == requested.terminalId).length != 1) {
-        stop('原 pane 或 terminal 已改变 · 不自动切换目标，请重新审查'); return;
-      }
-      setState(() { selectedPane = requested.paneId; });
-      try { adapter.selectPane(board.generation,requested.paneId); }
-      on RemoteFailure { stop('原目标已失效 · 请重新审查连接'); return; }
-    }
+    // Requested targets wait for the resumed watch's authoritative callback;
+    // the board retained while hidden cannot authorize a new selection.
     reportView();
   }
   @override
@@ -239,19 +232,21 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       fields['privateKeyPem']!.clear();
       FocusScope.of(context).unfocus();
       inputGate.invalidate();
-      setState(() { busy = true; live = false; dashboardFresh = false; dashboard = null; selectedPane = null; sequence = null; snapshot = null; capturedAt = null; terminal?.dispose(); terminal = null; status = '正在连接并核验主机身份'; });
+      setState(() { busy = true; live = false; dashboardFresh = false; dashboard = null; selectedPane = null; selectedTarget = null; sequence = null; snapshot = null; capturedAt = null; terminal?.dispose(); terminal = null; status = '正在连接并核验主机身份'; });
       await adapter.observe(config,onDashboard:(value) {
-        if (!mounted || ticket != request) return;
+        if (!mounted || ticket != request || value.generation != adapter.generation ||
+            (dashboard != null && dashboard!.generation == value.generation && value.revision <= dashboard!.revision)) return;
         final requested = widget.requestedTarget;
-        if (requested != null && value.panes.where((p) => p.paneId == requested.paneId && p.terminalId == requested.terminalId).length != 1) {
+        final canSelect = value.selectable && !viewPaused && widget.visibility?.value != false;
+        if (requested != null && selectedTarget == null && canSelect && value.panes.where((p) => p.paneId == requested.paneId && p.terminalId == requested.terminalId).length != 1) {
           throw const RemoteFailure('resume_target_changed');
         }
-        setState(() { dashboard = value; reviewed = false; dashboardFresh = !viewPaused && widget.visibility?.value != false;
-          if (requested != null && !viewPaused && widget.visibility?.value != false) selectedPane = requested.paneId;
-          status = requested != null ? '已核对原 pane 与 terminal · 等待新 full' : value.panes.isEmpty
+        setState(() { dashboard = value; reviewed = false; dashboardFresh = value.freshness == DashboardFreshness.fresh && !viewPaused && widget.visibility?.value != false;
+          if (requested != null && selectedTarget == null && canSelect) selectedPane = requested.paneId;
+          status = !value.selectable ? '看板正在重新核验 · 目标选择暂不可用' : requested != null ? '已核对原 pane 与 terminal · 等待新 full' : value.panes.isEmpty
             ? '会话看板为空 · 未发现 pane，不代表主机没有任务' : '会话看板已核验 · 请选择一个明确 pane 开始观察'; });
-        if (requested != null && selectedPane == requested.paneId && !viewPaused && widget.visibility?.value != false) {
-          adapter.selectPane(value.generation,requested.paneId); reportView();
+        if (requested != null && selectedTarget == null && selectedPane == requested.paneId && canSelect) {
+          adapter.selectTarget(value.generation,requested); selectedTarget = requested; reportView();
         }
       },onFrame:(generation,paneId,frame) {
         if (!mounted || ticket != request || widget.visibility?.value == false || viewPaused || frame.observationEpoch != observationEpoch ||
@@ -275,9 +270,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           if (adapter.pendingInput != null) inputGate.restorePending(adapter.pendingInput!);
         }
         bindTerminalOutput();
-        final refreshed = adapter.currentDashboard;
-        setState(() { if (frame.full && refreshed != null && refreshed.generation == generation) { dashboard = refreshed; dashboardFresh = true; }
-          snapshot = RemoteSnapshot(generation,config.session,paneId,frame.ansi);
+        setState(() { snapshot = RemoteSnapshot(generation,config.session,paneId,frame.ansi);
           capturedAt = DateTime.now(); sequence = frame.seq; live = true;
           status = '正在只读观察 · 输入关闭'; });
         reportView();
@@ -318,6 +311,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           'sequence_gap' => '观察序号不连续 · 已停止，旧画面不可视为当前状态',
           'invalid_first_frame' || 'invalid_frame' || 'invalid_response' || 'truncated_response' => '观察数据不完整或格式异常 · 已停止，请重新审查连接',
           'output_limit' => '观察缓冲超过上限 · 已停止，不能跳过增量继续',
+          'watch_retry_exhausted' => '看板订阅连续失败 · 已停止连接；请重新审查后主动连接',
           'observe_ended' => '远端观察已结束／断线 · 已保留旧画面，请重新审查连接',
           'resume_target_changed' => '原 pane 或 terminal 已改变 · 不自动切换目标，请重新审查',
           _ => '连接或读取失败 · 已停止，请重新审查资料后主动连接',
@@ -328,10 +322,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   void selectPane(RemotePane pane) {
     final board = dashboard;
-    if (!busy || viewPaused || widget.visibility?.value == false || board == null || selectedPane != null) return;
-    setState(() { selectedPane = pane.paneId; live = false; status = '目标已选择 · 等待新 full'; });
+    if (!busy || viewPaused || widget.visibility?.value == false || board == null || selectedPane != null ||
+        board.generation != adapter.generation ||
+        !board.selectable ||
+        board.panes.where((p) => p.paneId == pane.paneId && p.terminalId == pane.terminalId).length != 1) return;
+    setState(() { selectedPane = pane.paneId; selectedTarget = pane; live = false; status = '目标已选择 · 等待新 full'; });
     reportView();
-    try { adapter.selectPane(board.generation,pane.paneId); }
+    try { adapter.selectTarget(board.generation,pane); }
     on RemoteFailure { stop('目标选择已失效 · 请重新审查连接'); }
   }
 
@@ -590,7 +587,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           if (dashboard != null) ...[
             const SizedBox(height:12),
             Text('会话 ${dashboard!.session}',style:Theme.of(context).textTheme.titleMedium),
-            Text('仅来自已核验 socket 的 snapshot · ${dashboard!.panes.length} 个 pane\n${busy && dashboardFresh ? '连接保持，等待选择或正在观察' : '看板已陈旧，等待重新核验'}'),
+            Text('仅来自已核验 socket 的 snapshot · ${dashboard!.panes.length} 个 pane\n${busy && dashboardFresh ? '持续更新已核验' : dashboard!.freshness == DashboardFreshness.unavailable && busy ? '持续更新不可用 · 仅为单次快照' : dashboard!.freshness == DashboardFreshness.refreshing && busy ? '正在重新核验' : '看板已陈旧，等待重新核验'}'),
             if (blockedPaneCount > 0) Semantics(key:const ValueKey('remote-blocked-summary'),
               liveRegion:true,excludeSemantics:true,
               label:'主机报告 $blockedPaneCount 个受阻窗格。待处理优先，同级保持原顺序。',
@@ -605,10 +602,15 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 Text('${pane.paneId} · ${pane.terminalId}',softWrap:true),
                 const SizedBox(height:8),
                 FilledButton(key:ValueKey('remote-pane-${pane.paneId}'),
-                  onPressed:busy && !viewPaused && selectedPane == null ? () => selectPane(pane) : null,
+                  onPressed:busy && !viewPaused && selectedPane == null &&
+                    dashboard!.selectable ? () => selectPane(pane) : null,
                   child:Text(selectedPane == pane.paneId ? '已选目标 · 只读' : '选择此 pane 观察')),
                 if (widget.onOpenPane != null) TextButton(key:ValueKey('remote-pane-new-tab-${pane.paneId}'),
-                  onPressed:busy && dashboardFresh && !viewPaused && widget.visibility?.value != false ? () => widget.onOpenPane!(pane) : null,
+                  onPressed:busy && dashboardFresh && !viewPaused && widget.visibility?.value != false ? () {
+                    final current = dashboard;
+                    if (current != null && current.generation == adapter.generation && current.freshness == DashboardFreshness.fresh &&
+                        current.panes.where((p) => p.paneId == pane.paneId && p.terminalId == pane.terminalId).length == 1) widget.onOpenPane!(pane);
+                  } : null,
                   child:const Text('在新标签打开此目标')),
               ]))),
           ],

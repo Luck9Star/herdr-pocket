@@ -42,9 +42,11 @@ class GuiMemoryAdapter extends RemoteReadOnlyAdapter {
     expect(config.privateKeyPem,isEmpty); expect(config.deviceIdentity,isNotNull);
     calls++; generation++; board = onDashboard; frame = onFrame;
     onProgress?.call(generation,'snapshot');
-    onDashboard(RemoteDashboard(generation,'probe',const [RemotePane('w1:p1','term_abcd')]));
+    onDashboard(RemoteDashboard(generation,'probe',const [RemotePane('w1:p1','term_abcd')],freshness:DashboardFreshness.fresh));
     return pending.future;
   }
+  @override
+  void selectTarget(int expectedGeneration,RemotePane target) { selectPane(expectedGeneration,target.paneId); }
   @override
   void selectPane(int expectedGeneration,String paneId) {
     chosen = paneId;

@@ -61,6 +61,129 @@ void main() {
     tracker.trace(closed(1)); expect(tracker.activeCount,1); // Late close cannot retire a different ID.
     tracker.trace(closed(3)); await tracker.waitIdle(); expect(overflow,0);
   });
+  test('watch subscriptions match shared fixed wire and bind each real pane', () {
+    final fixture = jsonDecode(File('assets/shared/session-watch-v1.json').readAsStringSync()) as Map<String,dynamic>;
+    final subscriptions = dashboardSubscriptions(const [RemotePane('w1:p1','term_abcd'),RemotePane('w1:p2','term_1234')]);
+    final globals = (fixture['globalSubscriptions'] as List).cast<String>();
+    expect(subscriptions.take(globals.length).map((entry) => entry['type']),globals);
+    expect(subscriptions.skip(globals.length),[
+      {'type':'pane.agent_status_changed','pane_id':'w1:p1'},
+      {'type':'pane.agent_status_changed','pane_id':'w1:p2'},
+    ]);
+    expect(subscriptions.every((entry) => entry['type'] != 'pane.agent_status_changed' || entry['pane_id'] != null),isTrue);
+  });
+  test('watch ACK binds request ID and only global unsupported errors allow a one-shot board', () {
+    final fixture = jsonDecode(File('assets/shared/session-watch-v1.json').readAsStringSync()) as Map<String,dynamic>;
+    final wire = fixture['wire'] as Map<String,dynamic>;
+    final ack = Map<String,dynamic>.from(wire['ack'] as Map),id = ack['id'] as String;
+    expect(validateDashboardWatchAck(ack,id,initialGlobal:true),DashboardWatchAck.started);
+    final rejected = <String,dynamic>{'id':id,'error':{'code':'invalid_request','message':'fixture missing pane'}};
+    expect(validateDashboardWatchAck(rejected,id,initialGlobal:false),DashboardWatchAck.retry);
+    expect(validateDashboardWatchAck(rejected,id,initialGlobal:true),DashboardWatchAck.unavailable);
+    for (final code in ['unknown_method','method_not_found','invalid_method']) {
+      for (final global in [true,false]) {
+        expect(validateDashboardWatchAck({'id':id,'error':{'code':code,'message':'fixture'}},id,initialGlobal:global),DashboardWatchAck.unavailable);
+      }
+    }
+    expect(validateDashboardWatchAck({'id':id,'error':{'code':'events_lost','message':'fixture'}},id,initialGlobal:true),DashboardWatchAck.retry);
+    for (final invalid in <Map<String,dynamic>>[
+      {...ack,'id':'different-request'}, {...ack,'error':null}, {...ack,'ok':true},
+      {...ack,'result':{'type':'session_snapshot'}},
+      {'id':id,'error':{'code':'invalid_request'}}, {...rejected,'result':{'type':'subscription_started'}},
+    ]) {
+      expect(() => validateDashboardWatchAck(invalid,id,initialGlobal:true),throwsA(failure('invalid_response')));
+    }
+  });
+  test('watch push accepts fixed fixture envelopes and rejects foreign pane filters or forged RPC errors', () {
+    final fixture = jsonDecode(File('assets/shared/session-watch-v1.json').readAsStringSync()) as Map<String,dynamic>;
+    final wire = fixture['wire'] as Map<String,dynamic>;
+    final id = (wire['ack'] as Map)['id'] as String;
+    for (final key in ['created','closed','exited','status']) {
+      validateDashboardWatchEvent(Map<String,dynamic>.from(wire[key] as Map),id,{'w1:p1'});
+    }
+    final status = Map<String,dynamic>.from(wire['status'] as Map);
+    final created = Map<String,dynamic>.from(wire['created'] as Map);
+    for (final invalid in <Map<String,dynamic>>[
+      {...status,'event':'pane_agent_status_changed'}, {...status,'id':id},
+      {...status,'data':{...(status['data'] as Map),'pane_id':'w1:p999'}},
+      {...status,'data':{...(status['data'] as Map),'agent_status':'invented'}},
+      {...created,'event':'pane.created'}, {...created,'data':{'type':'pane_closed'}},
+      {'event':'arbitrary-string','data':{}}, {'event':'pane_closed'},
+    ]) {
+      expect(() => validateDashboardWatchEvent(invalid,id,{'w1:p1'}),throwsA(failure('invalid_response')));
+    }
+    expect(() => validateDashboardWatchEvent(status,id,{}),throwsA(failure('invalid_response')));
+    final lost = Map<String,dynamic>.from(wire['lost'] as Map);
+    expect(() => validateDashboardWatchEvent(lost,id,{'w1:p1'}),throwsA(failure('watch_disconnected')));
+    expect(() => validateDashboardWatchEvent({...lost,'id':'other-subscription'},id,{'w1:p1'}),throwsA(failure('invalid_response')));
+  });
+  test('a matching pane in a starting, stale or refreshing dashboard cannot authorize selection', () {
+    const pane = RemotePane('w1:p1','term_abcd');
+    const initial = RemoteDashboard(1,'probe',[pane]);
+    expect(initial.freshness,DashboardFreshness.stale); expect(initial.selectable,isFalse);
+    for (final state in DashboardFreshness.values) {
+      final board = RemoteDashboard(1,'probe',const [pane],freshness:state);
+      if (state == DashboardFreshness.fresh || state == DashboardFreshness.unavailable) {
+        requireSelectableDashboardTarget(pane,board);
+      } else {
+        expect(() => requireSelectableDashboardTarget(pane,board),throwsA(failure('stale_selection')));
+      }
+    }
+    expect(() => requireSelectableDashboardTarget(pane,const RemoteDashboard(1,'probe',
+      [RemotePane('w1:p1','term_1234')],freshness:DashboardFreshness.fresh)),throwsA(failure('resume_target_changed')));
+  });
+  test('concurrent waiters all receive failure and removing an old waiter preserves newer waits', () {
+    final all = RemoteWaitGroup(),watch = RemoteWaitGroup(),observation = RemoteWaitGroup();
+    final interrupted = <String>[];
+    void first(RemoteFailure failure) { interrupted.add('snapshot:${failure.code}'); }
+    void second(RemoteFailure failure) { interrupted.add('event:${failure.code}'); }
+    void frame(RemoteFailure failure) { interrupted.add('frame:${failure.code}'); }
+    all.add(first); all.add(second); all.add(frame); watch.add(first); watch.add(second); observation.add(frame);
+    watch.remove(first); all.remove(first); // The older read settled first.
+    watch.interrupt(const RemoteFailure('observation_paused'));
+    expect(interrupted,['event:observation_paused']);
+    interrupted.clear(); all.interrupt(const RemoteFailure('synthetic_failure'));
+    expect(interrupted,['event:synthetic_failure','frame:synthetic_failure']);
+    interrupted.clear(); watch.remove(second); all.remove(second);
+    observation.interrupt(const RemoteFailure('observation_paused'));
+    expect(interrupted,['frame:observation_paused']);
+  });
+  test('watch invalidations coalesce a storm and a lost stream cannot freshen an in-flight snapshot', () {
+    final pending = DashboardInvalidations();
+    final beforeRead = pending.revision;
+    expect(pending.mark(),isTrue);
+    for (var i = 0; i < 999; i++) { expect(pending.mark(),isFalse); }
+    expect(pending.dirty,isTrue); expect(pending.revision,1000);
+    expect(pending.acceptSnapshot(beforeRead),isFalse);
+    expect(pending.dirty,isTrue); // One pending read; no queued payloads.
+    final nextRead = pending.revision;
+    expect(pending.acceptSnapshot(nextRead),isTrue);
+    expect(pending.dirty,isFalse);
+    final interrupted = pending.revision;
+    pending.mark(disconnected:true);
+    expect(pending.lost,isTrue);
+    expect(pending.acceptSnapshot(interrupted),isFalse);
+    pending.resetSubscription();
+    expect(pending.acceptSnapshot(pending.revision),isTrue);
+  });
+  test('ticket retirement ignores other channel close and post-ACK failure fails closed', () async {
+    var failures = 0;
+    final tracker = ChannelRetirementTracker('fixture',onOverflow:() { failures++; });
+    String opened(int id) => '<- fixture: SSH_Message_Channel_Confirmation(recipientChannel: $id, senderChannel: 7, initialWindowSize: 1, maximumPacketSize: 1)';
+    String closed(int id) => '<- fixture: SSH_Message_Channel_Close(recipientChannel: $id)';
+    tracker.startOpen(); tracker.beginTicket(); tracker.trace(opened(11));
+    final watch = tracker.endTicket(succeeded:true)!; tracker.finishOpen(succeeded:true);
+    tracker.startOpen(); tracker.beginTicket(); tracker.trace(opened(12));
+    final snapshot = tracker.endTicket(succeeded:true)!; tracker.finishOpen(succeeded:true);
+    var retired = false; final waiting = tracker.waitTicket(watch).then((_) { retired = true; });
+    tracker.trace(closed(snapshot)); await Future<void>.delayed(Duration.zero);
+    expect(retired,isFalse); expect(tracker.activeCount,1);
+    tracker.trace(closed(watch)); await waiting; expect(retired,isTrue);
+    tracker.startOpen(); tracker.beginTicket(); tracker.trace(opened(13));
+    expect(tracker.endTicket(succeeded:false),13); tracker.finishOpen(succeeded:true);
+    expect(failures,1); // An exec failure after confirmation cannot be attributed safely.
+    expect(() => tracker.startOpen(),throwsA(failure('channel_capacity')));
+  });
   test('socket route comes from the connected socket and only an unrouted socket is system', () {
     const route = 'easy-tier:0123456789abcdef0123456789abcdef:3:a0000000-0000-4000-8000-000000000001';
     final system = FakeSocket(),overlay = FakeRoutedSocket(route);

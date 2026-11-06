@@ -64,6 +64,7 @@ pub extern "system" fn Java_org_herdr_network_AndroidEasyTierConfig_bindNative(
 }
 mod hosts;
 mod remote_sessions;
+mod dashboard_watch;
 mod remote_tab_commands;
 mod config_document;
 #[cfg(target_os = "macos")]

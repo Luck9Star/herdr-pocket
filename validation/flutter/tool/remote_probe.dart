@@ -31,12 +31,13 @@ Future<void> main(List<String> arguments) async {
     if (config.host != '127.0.0.1' || config.port < 1024) throw const RemoteFailure('invalid_fixture_target');
     if (testCase.startsWith('observe-')) {
       Future<bool> observeOnce() async {
-        var intentionalStop = false;
+        var intentionalStop = false,selected = false;
         try {
           await adapter.observe(config,onDashboard:(dashboard) {
+            if (selected || !dashboard.selectable) return;
             final matches = dashboard.panes.where((p) => p.paneId == config.paneId).toList();
             if (matches.length != 1) throw const RemoteFailure('pane_missing');
-            adapter.selectPane(dashboard.generation,matches.single.paneId);
+            adapter.selectTarget(dashboard.generation,matches.single); selected = true;
           },onFrame:(generation,paneId,frame) {
             final evidence = adapter.evidence;
             final enough = testCase == 'observe-cancel' ? evidence.frameCount >= 1 :

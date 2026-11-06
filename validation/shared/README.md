@@ -20,3 +20,5 @@
 `result-template.json` 不预填通过；CI 构建记录与设备记录分开。三网 15 格以及 TS+ET、TS+ZT、ET+ZT、TS+ET+ZT 并发单独填 `platform-matrix.json`，普通TCP或fixture不能改变这些格。
 
 `mobile-tabs-v1.json` 定义两条路线共同的手机多标签生命周期：独立目标、前台隐藏保留 SSH、显式恢复新 full、迟到 epoch、关闭与配置影响隔离、后台关闭和含清理中资源的容量上限。它只有虚构公开元数据；12 个用例是验收要求，不能因为文件已随包复制就填通过。各路线分别记录模型、隔离传输、真实 GUI 和设备执行结果；单条全局未知输入记录的限制须继续披露。
+
+`session-watch-v1.json` 固定 herdr 0.9.5 / protocol 22 的订阅请求、确认、生命周期事件、逐 pane 状态和丢失消息，以及两路线共同的持续看板验收条件。事件只使旧快照失效；界面内容必须由后续权威快照更新，不能把事件 payload 直接应用为行状态。看板 freshness 与终端 full 分离，目标按 pane 和稳定 terminal 联合核验；隐藏后退休订阅，恢复仍须显式操作。文件及合成测试不代替真实 herdr、手机或 overlay 结果。

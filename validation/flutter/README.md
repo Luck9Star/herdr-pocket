@@ -2,6 +2,12 @@
 
 2026-10-30：验证壳包含本地 fixture、保留的 M1a 一次性 CLI，以及 **M1b 看板／持续只读 SSH 入口**，尚非完整产品。实际编译结果以 [Flutter Actions](https://github.com/Luck9Star/herdr-pocket/actions/workflows/flutter-validation.yml) 对应提交为准；手机字体、IME、选择、性能与三网络仍未验证；同一只读适配器的真实 SSH 证据限于下述云端隔离 loopback，不代表手机或 GUI 远端验收。
 
+## 持续看板候选（待验证）
+
+本地源码接入固定 herdr 0.9.5 / protocol 22 的 `events.subscribe`：先确认全局生命周期订阅，再读 snapshot、按当前 pane 重建状态订阅并再次读 snapshot；事件只触发合并后的权威读取。前台无事件时 30 秒兜底，丢失、非法 wire 或 EOF 将看板标旧并在同一 SSH 上有限重试；连续重试耗尽时停止整条连接，用户可重新审查后主动连接，不留下永久陈旧的看板配实时终端。只有明确方法未知（`unknown_method`／`method_not_found`／`invalid_method`）或全局订阅返回 `invalid_request` 时，重新读取权威单次 snapshot 后才显示订阅不可用，并可继续只读观察。启动／重核期间的行不可选择，自动恢复原目标也遵守同一新鲜度门槛。终端 full 不改变看板新鲜度；隐藏时停止订阅，主动恢复后重新验证。完整 wire 与情景见 [`../shared/session-watch-v1.json`](../shared/session-watch-v1.json)。
+
+同 SSH 的实际 open 串行，固定 dartssh2 的 `SSHClient._handleChannelConfirmation` 在完成 open Future 前同步发出 trace；`SSHForwardChannel` 的底层 channel ID 不公开。候选将这一确认与唯一在途 open 绑定，仅以相同 ID 的入站 CLOSE 判定回收。打开被中断后原 Future 仍占额并持锁；不能确认身份、迟到清理失败或超时会关闭 SSH。watch、observe 与 input 的每个在途等待各自注册可移除的取消回调；暂停只中断对应 epoch，连接失败／取消向所有等待广播。迟到 open 无法证明身份或按时回收时直接关闭 SSH。ACK／流错误必须匹配订阅请求 ID，生命周期 push 只接受固定 snake_case 与匹配 data.type，状态 push 必须属于已订阅 pane；载荷从不直接更新看板。相关反例测试尚未在 Flutter SDK 下运行，不代表 analyzer、widget、SSH、设备或真实网络结果。
+
 ## 多视图观察候选
 
 每个视图拥有独立 tab ID、SSH 与明确 pane／terminal，最多保留 8 个视图；system 与 overlay 共享 8 个连接名额，正在关闭或尚未返回的拨号继续占位。从已核验看板的 pane 新开视图后，仍需在新视图主动审查并连接；新 snapshot 必须与原 pane、terminal 精确匹配。

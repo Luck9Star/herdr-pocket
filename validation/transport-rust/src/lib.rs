@@ -39,7 +39,8 @@ pub mod pairing;
 pub mod input;
 pub mod recovery;
 mod controlled;
-pub use controlled::{ControlledInputHooks, ObservationAck, ObservationControl, ObservationPhase, ObservationSnapshot, observe_interactive_controlled_with_dialer};
+pub mod session_watch;
+pub use controlled::{DashboardTarget, observe_interactive_controlled_target_with_dialer, ControlledInputHooks, ObservationAck, ObservationControl, ObservationPhase, ObservationSnapshot, observe_interactive_controlled_with_dialer};
 
 pub const CONFIG_LIMIT: usize = 32768;
 const LINE_LIMIT: usize = 1_048_576;

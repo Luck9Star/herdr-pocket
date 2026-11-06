@@ -144,6 +144,7 @@ struct Gate {
     lease_cancel: Cancellation,
     input: Option<Arc<input::LiveInput>>,
     listener: Option<Arc<dyn Fn(ObservationSnapshot) + Send + Sync>>,
+    dashboard: Option<Arc<dyn Fn(session_watch::SessionWatchUpdate) + Send + Sync>>,
 }
 struct ControlInner {
     gate: Mutex<Gate>,
@@ -153,7 +154,7 @@ struct ControlInner {
 pub struct ObservationControl {
     inner: Arc<ControlInner>,
 }
-fn locked<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+pub(crate) fn locked<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|p| p.into_inner())
 }
 impl Default for ObservationControl {
@@ -176,6 +177,7 @@ impl ObservationControl {
                     lease_cancel: Cancellation::default(),
                     input: None,
                     listener: None,
+                    dashboard: None,
                 }),
                 changed: Notify::new(),
             }),
@@ -183,6 +185,22 @@ impl ObservationControl {
     }
     pub fn snapshot(&self) -> ObservationSnapshot {
         locked(&self.inner.gate).snapshot
+    }
+    /// Register once before attaching. Dashboard revisions never change the
+    /// terminal epoch and must also be fenced by the caller's connection ID.
+    pub fn set_dashboard_listener(
+        &self,
+        listener: Arc<dyn Fn(session_watch::SessionWatchUpdate) + Send + Sync>,
+    ) -> Result<()> {
+        let mut gate = locked(&self.inner.gate);
+        if gate.attached
+            || gate.dashboard.is_some()
+            || gate.snapshot.phase == ObservationPhase::Closed
+        {
+            return Err("control_busy");
+        }
+        gate.dashboard = Some(listener);
+        Ok(())
     }
     pub fn pause(&self) -> Result<ObservationAck> {
         self.command(Kind::Pause)
@@ -334,7 +352,7 @@ impl ObservationControl {
             Ok(gate.lease_cancel.clone())
         }
     }
-    async fn changed(&self, epoch: u64) {
+    pub(crate) async fn changed(&self, epoch: u64) {
         loop {
             let notification = self.inner.changed.notified();
             tokio::pin!(notification);
@@ -431,6 +449,68 @@ where
     Frame: Fn(u64, StreamFrame) -> FrameFuture,
     FrameFuture: Future<Output = Result<()>>,
 {
+    observe_interactive_controlled_target_with_dialer(
+        config,
+        device,
+        cancel,
+        audit,
+        progress,
+        move |panes: Vec<Pane>| {
+            let original = panes.clone();
+            let pending = select(panes);
+            async move {
+                let pane_id = pending.await?;
+                let terminal_id = original
+                    .iter()
+                    .find(|p| p.pane_id == pane_id)
+                    .ok_or("pane_missing")?
+                    .terminal_id
+                    .clone();
+                Ok(DashboardTarget {
+                    pane_id,
+                    terminal_id,
+                })
+            }
+        },
+        frame,
+        hooks,
+        control,
+        dialer,
+    )
+    .await
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DashboardTarget {
+    pub pane_id: String,
+    pub terminal_id: String,
+}
+
+/// Selection captures both fields from the row the user actually reviewed.
+#[allow(clippy::too_many_arguments)]
+pub async fn observe_interactive_controlled_target_with_dialer<
+    Select,
+    SelectFuture,
+    Frame,
+    FrameFuture,
+>(
+    config: RemoteConfig,
+    device: Option<(String, Arc<dyn DeviceSigner>)>,
+    cancel: Cancellation,
+    audit: Arc<Audit>,
+    progress: impl Fn(&'static str) + Send + Sync,
+    select: Select,
+    frame: Frame,
+    hooks: Option<ControlledInputHooks>,
+    control: ObservationControl,
+    dialer: &dyn transport::Dialer,
+) -> Result<()>
+where
+    Select: Fn(Vec<Pane>) -> SelectFuture,
+    SelectFuture: Future<Output = Result<DashboardTarget>>,
+    Frame: Fn(u64, StreamFrame) -> FrameFuture,
+    FrameFuture: Future<Output = Result<()>>,
+{
     control.attach(cancel.clone(), hooks.as_ref().map(|h| h.state.clone()))?;
     let _guard = Guard(control.clone());
     let _cancel = CancelOnDrop(cancel.clone());
@@ -474,7 +554,7 @@ async fn run_controlled<Select, SelectFuture, Frame, FrameFuture>(
 ) -> Result<()>
 where
     Select: Fn(Vec<Pane>) -> SelectFuture,
-    SelectFuture: Future<Output = Result<String>>,
+    SelectFuture: Future<Output = Result<DashboardTarget>>,
     Frame: Fn(u64, StreamFrame) -> FrameFuture,
     FrameFuture: Future<Output = Result<()>>,
 {
@@ -509,67 +589,65 @@ where
             }
             _ => {}
         }
-        let Some(value) = snapshot(&ssh, &config, &cancel, &control, state.epoch).await? else {
-            continue;
-        };
-        audit.snapshot_received.store(true, Ordering::SeqCst);
-        progress("snapshot-received");
-        if let Some((pane, terminal)) = &target {
-            if snapshot_terminal(&value, pane)? != *terminal {
-                return Err("resume_target_changed");
-            }
-        } else {
-            let panes = snapshot_panes(&value)?;
-            let selected = tokio::select! {biased;_=cancel.wait()=>return Err("cancelled"),_=control.changed(state.epoch)=>continue,result=select(panes)=>result?};
-            target = Some((selected.clone(), snapshot_terminal(&value, &selected)?));
-        }
-        let (pane, terminal) = target.as_ref().unwrap();
-        let supported = if hooks.is_some() {
-            let Some(supported) =
-                capabilities(&ssh, &config, &cancel, &control, state.epoch).await?
-            else {
-                continue;
+        let listener = locked(&control.inner.gate).dashboard.clone();
+        let mut watcher = listener.map(|listener| {
+            session_watch::EpochWatch::start(
+                ssh.clone(),
+                config.clone(),
+                cancel.clone(),
+                control.clone(),
+                state.epoch,
+                listener,
+                target.clone(),
+            )
+        });
+        let observing = async {
+            let value = if let Some(watch)=&mut watcher {
+                watch.first().await?
+            } else {
+                let Some(value)=snapshot(&ssh,&config,&cancel,&control,state.epoch).await? else {return Ok(());};
+                value
             };
-            supported
-        } else {
-            false
-        };
-        if !current(&control, state.epoch) {
-            continue;
-        }
-        if hooks.is_some() && !supported {
-            progress("input-unavailable");
-        }
-        let mut channel = bounded(&cancel, 8, "observe_failed", ssh.channel_open_session()).await?;
-        let observing = observe_epoch(
-            &ssh,
-            &config,
-            &cancel,
-            &audit,
-            &control,
-            state.epoch,
-            &mut channel,
-            pane,
-            terminal,
-            route.clone(),
-            supported,
-            hooks.as_ref(),
-            &frame,
-        )
-        .await;
-        match observing {
-            Ok(()) => {
-                close_channel(&ssh, &cancel, &mut channel).await?;
+            audit.snapshot_received.store(true,Ordering::SeqCst);
+            progress("snapshot-received");
+            if let Some((pane,terminal))=&target {
+                if snapshot_terminal(&value,pane)?!=*terminal {return Err("resume_target_changed");}
+            } else {
+                let panes=snapshot_panes(&value)?;
+                let choosing=async {tokio::select! {biased;_=cancel.wait()=>Err("cancelled"),_=control.changed(state.epoch)=>Err("observation_paused"),result=select(panes)=>result}};
+                let selected=if let Some(watch)=&mut watcher {watch.during(choosing).await?} else {choosing.await?};
+                let current_value=if let Some(watch)=&watcher {watch.selected(&selected)?} else {value.clone()};
+                if snapshot_terminal(&current_value,&selected.pane_id)?!=selected.terminal_id {return Err("resume_target_changed");}
+                target=Some((selected.pane_id,selected.terminal_id));
             }
+            let (pane,terminal)=target.as_ref().unwrap();
+            let supported=if hooks.is_some() {
+                let Some(supported)=capabilities(&ssh,&config,&cancel,&control,state.epoch).await? else {return Ok(());};supported
+            } else {false};
+            if !current(&control,state.epoch) {return Ok(());}
+            if hooks.is_some() && !supported {progress("input-unavailable");}
+            let mut channel=bounded(&cancel,8,"observe_failed",ssh.channel_open_session()).await?;
+            let epoch=observe_epoch(&ssh,&config,&cancel,&audit,&control,state.epoch,&mut channel,
+                pane,terminal,route.clone(),supported,hooks.as_ref(),&frame);
+            let result=if let Some(watch)=&mut watcher {watch.during(epoch).await} else {epoch.await};
+            // Even a watch failure retires the observer before ending this SSH.
+            let retired=close_channel(&ssh,&cancel,&mut channel).await;
+            result.and(retired)
+        }.await;
+        if let Some(watch) = &mut watcher {
+            watch.stop().await?;
+        }
+        match observing {
+            Ok(()) | Err("observation_paused") => {}
             Err(code) => return Err(code),
         }
     }
 }
-fn current(control: &ObservationControl, epoch: u64) -> bool {
+pub(crate) fn current(control: &ObservationControl, epoch: u64) -> bool {
     control.snapshot().epoch == epoch && control.snapshot().phase != ObservationPhase::Closed
 }
 
-async fn close_channel(
+pub(crate) async fn close_channel(
     ssh: &client::Handle<Pinned>,
     cancel: &Cancellation,
     channel: &mut russh::Channel<client::Msg>,
@@ -608,7 +686,7 @@ async fn retire_channel(
         }
     }
 }
-async fn snapshot(
+pub(crate) async fn snapshot(
     ssh: &client::Handle<Pinned>,
     config: &RemoteConfig,
     cancel: &Cancellation,
@@ -664,13 +742,22 @@ async fn rpc_closed(
     wire: &[u8],
     limit: usize,
 ) -> Result<Option<Vec<u8>>> {
-    let mut channel = bounded(
+    let opened = bounded(
         cancel,
         8,
         "socket_unavailable",
         ssh.channel_open_direct_streamlocal(socket),
     )
-    .await?;
+    .await;
+    let mut channel = match opened {
+        Ok(channel) => channel,
+        Err(reason) => {
+            // A timed-out open can still have reached the SSH driver. Its
+            // recipient ID is unavailable here, so the connection owns cleanup.
+            cancel.cancel();
+            return Err(reason);
+        }
+    };
     let read = async {
         bounded(
             cancel,
@@ -701,9 +788,20 @@ async fn rpc_closed(
             }
         }
     };
-    let value = tokio::select! {biased;_=cancel.wait()=>return Err("cancelled"),_=control.changed(epoch)=>None,result=timeout(Duration::from_secs(8),read)=>Some(result.map_err(|_|"timeout")??)};
-    close_channel(ssh, cancel, &mut channel).await?;
-    Ok(value)
+    let value = tokio::select! {
+        biased;
+        _ = cancel.wait() => Err("cancelled"),
+        _ = control.changed(epoch) => Ok(None),
+        result = timeout(Duration::from_secs(8), read) => match result {
+            Ok(result) => result.map(Some),
+            Err(_) => Err("timeout"),
+        },
+    };
+    // Even failed reads/writes and malformed responses retire their exact
+    // channel before the watch is allowed to issue another snapshot.
+    let retired = close_channel(ssh, cancel, &mut channel).await;
+    retired?;
+    value
 }
 
 #[allow(clippy::too_many_arguments)]

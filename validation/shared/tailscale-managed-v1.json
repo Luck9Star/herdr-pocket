@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "name": "tailscale-managed-v1",
+  "scope": "Shared acceptance contract, not execution, device or real-network evidence.",
+  "sources": {"tailscale": "v1.104.1", "commit": "9a522a9786c97eb7910c01ccb7bd66557b04c910", "abi": "hp_ts v1"},
+  "limits": {"nodes": 8, "streams": 32, "ioBytes": 65536, "deadlineMs": 60000, "stateKeyBytes": 1024, "stateValueBytes": 262144},
+  "rules": [
+    "No ambient auth, implicit login, plaintext StateStore, system TCP/DNS fallback or input replay.",
+    "Engine start differs from Running; explicit login may require machine approval.",
+    "Host callbacks survive until successful native node release; late callbacks after retirement must not access host storage.",
+    "Retain failed, timed-out and late resources in quotas until close and release actually converge.",
+    "Public GUI data contains device-local identity handles, never state keys or values.",
+    "No implicit shared PTY resize; network identity or focus changes revoke input.",
+    "Five platforms and all cross-provider combinations require independent results."
+  ],
+  "cases": [
+    {"id": "TS01", "scenario": "Synthetic ambient auth variables do not alter explicit auth policy or automatically start login"},
+    {"id": "TS02", "scenario": "Reserved, Starting, NeedsLogin, NeedsMachineAuth, Running, Closing and Stopped remain distinct; only Running admits dial"},
+    {"id": "TS03", "scenario": "Arbitrary binary keys, missing, present empty, value and delete remain byte-exact through native storage callbacks"},
+    {"id": "TS04", "scenario": "Wrong provider/profile/revision/network/identity/runtime attempt rejects before loading host custody"},
+    {"id": "TS05", "scenario": "Cancel during start or dial retains and closes the original late resource; no replacement-node handoff"},
+    {"id": "TS06", "scenario": "Failed Close retains resource/context/quota; explicit retry waits original IO and callback leases; post-release callback reaches no host store"},
+    {"id": "TS07", "scenario": "Read timeout is retryable only after zero-byte original Read settles; unknown write never replays; half-close preserves read or rejects unsupported"},
+    {"id": "TS08", "scenario": "Encrypted state survives reopen and concurrent updates; corrupt/missing key/record is unavailable, never a fresh identity"},
+    {"id": "TS09", "scenario": "Deletion intent binds original profile/handle/ciphertext and resumes partial deletion without touching replacement identity"},
+    {"id": "TS10", "scenario": "Framework no_backup permissions remain intact; app-owned directories are private, owned and nonsymlink; Java buffers are cleared on success/error"},
+    {"id": "TS11", "scenario": "Tailscale and EasyTier same-address streams, stop, stale dialers and stores remain isolated in foreground concurrency"},
+    {"id": "TS12", "scenario": "On each actual platform: explicit login, encrypted identity restart, real overlay SSH host-key/session binding, mobile pairing-dashboard-watch and interrupted recovery"}
+  ],
+  "platforms": ["ios", "android", "windows", "macos", "linux"],
+  "concurrency": ["tailscale+easytier", "tailscale+zerotier", "easytier+zerotier", "tailscale+easytier+zerotier"],
+  "resultMatrix": "platform-matrix.json"
+}

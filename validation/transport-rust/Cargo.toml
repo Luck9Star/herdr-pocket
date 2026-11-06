@@ -11,6 +11,8 @@ russh = { path = "../vendor/russh-0.65.0" }
 [features]
 default = []
 overlay-linked-easytier = ["overlay-runtime/linked-easytier"]
+overlay-linked-tailscale = ["overlay-runtime/linked-tailscale"]
+overlay-tailscale-fixture = ["overlay-runtime/tailscale-fixture"]
 # Synthetic ABI only, never enabled as a missing-bridge fallback.
 overlay-native-fixture = ["overlay-runtime/native-fixture"]
 

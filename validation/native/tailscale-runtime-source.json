@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "tailscaleVersion": "v1.104.1",
+  "tailscaleCommit": "9a522a9786c97eb7910c01ccb7bd66557b04c910",
+  "heelerCommit": "6a2817fc02aeb552df251d9478753c22fd4738bb",
+  "module": "herdr.local/tailscale-runtime",
+  "referenceGoModSha256": "71b27d3e43394c4722730e1e08a23afff48a691eb1ebec5552dcb7c60bff13d9",
+  "referenceGoSumSha256": "5bd4b5552ddc90f28560bcf155b9384683bfe2df2c60667d831a612794ebc85a",
+  "goModSha256": "a4d265bf7ae29c504966efd162001bb847f53f7397e3046bca415a2d0cfce817",
+  "goSumSha256": "5bd4b5552ddc90f28560bcf155b9384683bfe2df2c60667d831a612794ebc85a",
+  "source": {
+    "path": "tsnet/tsnet.go",
+    "gitBlobSha": "8aaef641057285812ae59ebf320509de4951a349",
+    "sha256": "33cbbdde2afc71fd1ae92dcad811604d81d56b2b23906ce8c1dc06f2bc0bbaf7",
+    "patchedSha256": "86d45bde9fa490da9dfc41248b6f1fb82c2b50c1e1185fe72819651e39bcb323"
+  },
+  "patch": {
+    "path": "patches/0002-tsnet-explicit-auth.patch",
+    "sha256": "29b70583aadd99fa2ba79908be89c77306faffe2eeae979fec83410f4df0569e"
+  },
+  "context7": {
+    "library": "/tailscale/tailscale/v1.104.4",
+    "commands": 2,
+    "scope": "Current official documentation background; implementation pinned to v1.104.1 fixed source, no silent dependency update."
+  },
+  "scope": "Source preparation only. Building/loading ABI version must not start a tsnet node, read real identity or access ambient credentials.",
+  "patchTests": {
+    "path": "patches/tsnet-explicit-auth-test.go",
+    "sha256": "5060bfafca2a4923bf1415a529424c464a79e1d942923cf4b4bd11c516eb2900"
+  }
+}

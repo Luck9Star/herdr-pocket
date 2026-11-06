@@ -25,7 +25,7 @@ fn until(predicate: impl Fn() -> bool) {
         thread::sleep(Duration::from_millis(2));
     }
 }
-fn isolated() -> MutexGuard<'static, ()> {
+pub(super) fn isolated() -> MutexGuard<'static, ()> {
     let guard = lock(&SERIAL);
     until(|| metric(0) == 0 && metric(5) == 0 && metric(7) == 0);
     unsafe {
@@ -108,13 +108,25 @@ fn idle_native_read_timeout_consumes_nothing_and_keeps_its_stream_active() {
     let profile = easy(&runtime, "idle", "idle-instance", "idle-network");
     let lease = open(&runtime, &owner, &profile, "read-block");
     assert_eq!(
-        runtime.read(&owner, &lease, 32, Duration::from_millis(10)).unwrap().wait(TIME),
+        runtime
+            .read(&owner, &lease, 32, Duration::from_millis(10))
+            .unwrap()
+            .wait(TIME),
         Err(Failure::ReadTimedOut)
     );
     assert!(lease.is_active());
     assert_eq!(runtime.reserved_streams(), 1);
-    assert_eq!(runtime.write(&owner, &lease, b"ok".to_vec(), TIME).unwrap().wait(TIME), Ok(2));
-    assert_eq!(runtime.read(&owner, &lease, 32, TIME).unwrap().wait(TIME), Ok(b"ok".to_vec()));
+    assert_eq!(
+        runtime
+            .write(&owner, &lease, b"ok".to_vec(), TIME)
+            .unwrap()
+            .wait(TIME),
+        Ok(2)
+    );
+    assert_eq!(
+        runtime.read(&owner, &lease, 32, TIME).unwrap().wait(TIME),
+        Ok(b"ok".to_vec())
+    );
     close(&runtime, &owner, &lease);
     drained(&runtime);
 }
@@ -262,10 +274,13 @@ fn same_address_routes_stay_bound_to_provider_profile_and_native_network() {
     assert!(three.is_active());
     close(&runtime, &c, &three);
     drained(&runtime);
+    #[cfg(not(feature = "linked-tailscale"))]
     assert_eq!(
         runtime.require_provider(Provider::Tailscale),
         Err(Failure::ProviderUnavailable)
     );
+    #[cfg(feature = "linked-tailscale")]
+    assert_eq!(runtime.require_provider(Provider::Tailscale), Ok(()));
     assert_eq!(
         runtime.require_provider(Provider::ZeroTier),
         Err(Failure::ProviderUnavailable)
@@ -767,7 +782,9 @@ fn exact_node_lease_rejects_even_a_forced_same_attempt_replacement() {
     runtime.stop_node(&old, TIME).unwrap().wait(TIME).unwrap();
     // Only this adversarial test bypasses the monotonic-start guard. Opening
     // still has an independent exact-Arc contract under its admission lock.
-    lock(&runtime.inner.registry).revisions.remove(old.profile());
+    lock(&runtime.inner.registry)
+        .revisions
+        .remove(old.profile());
     let replacement = start_node(&runtime, "forced-collision", 1, "");
     assert_eq!(old.revision(), replacement.revision());
     assert!(matches!(
@@ -775,10 +792,17 @@ fn exact_node_lease_rejects_even_a_forced_same_attempt_replacement() {
         Err(Failure::StaleRevision)
     ));
     assert_eq!(metric(1), 0);
-    let stream = runtime.open_node(&owner, &replacement, "echo", 22, TIME)
-        .unwrap().wait(TIME).unwrap();
+    let stream = runtime
+        .open_node(&owner, &replacement, "echo", 22, TIME)
+        .unwrap()
+        .wait(TIME)
+        .unwrap();
     assert!(stream.is_active());
-    runtime.stop_node(&replacement, TIME).unwrap().wait(TIME).unwrap();
+    runtime
+        .stop_node(&replacement, TIME)
+        .unwrap()
+        .wait(TIME)
+        .unwrap();
     nodes_drained(&runtime);
 }
 

@@ -38,16 +38,25 @@ impl OverlayDialer {
         if deadline.is_zero() || deadline > MAX_DEADLINE {
             return Err("overlay_invalid_deadline");
         }
-        if node.evidence() == Evidence::SyntheticNativeFixture
-            && !cfg!(feature = "overlay-native-fixture")
-        {
-            return Err("overlay_fixture_disabled");
-        }
+        require_overlay_evidence(node.evidence())?;
         Ok(Self {
             runtime,
             node,
             deadline,
         })
+    }
+}
+
+pub(crate) fn require_overlay_evidence(evidence: Evidence) -> crate::Result<()> {
+    if evidence == Evidence::SyntheticNativeFixture
+        && !cfg!(any(
+            feature = "overlay-native-fixture",
+            feature = "overlay-tailscale-fixture"
+        ))
+    {
+        Err("overlay_fixture_disabled")
+    } else {
+        Ok(())
     }
 }
 

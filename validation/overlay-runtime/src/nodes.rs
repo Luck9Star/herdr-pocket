@@ -2,8 +2,39 @@
 //! absent one, startup refuses before reading state or entering native code.
 use super::*;
 use crate::easytier::EasyTierBackend;
+use crate::tailscale::{LoginStatus, NativeStateSource, TailscaleBackend};
 
 pub const MAX_NODES: usize = 8;
+
+/// One lifecycle registry for all app-owned providers. Concrete backends own
+/// their native epochs; cancellation/drain/revision rules remain in NodeEntry.
+trait ManagedBackend: Backend {
+    fn managed_status(&self) -> Result<NodeStatus>;
+    fn managed_stop(&self, deadline: Duration) -> Result<()>;
+    fn managed_login(&self, _deadline: Duration) -> Result<LoginStatus> {
+        Err(Failure::ProviderUnavailable)
+    }
+}
+impl ManagedBackend for EasyTierBackend {
+    fn managed_status(&self) -> Result<NodeStatus> {
+        self.node_status()
+    }
+    fn managed_stop(&self, deadline: Duration) -> Result<()> {
+        self.stop_node(deadline)
+    }
+}
+
+impl ManagedBackend for TailscaleBackend {
+    fn managed_status(&self) -> Result<NodeStatus> {
+        self.node_status()
+    }
+    fn managed_stop(&self, deadline: Duration) -> Result<()> {
+        self.stop_node(deadline)
+    }
+    fn managed_login(&self, deadline: Duration) -> Result<LoginStatus> {
+        self.begin_login(deadline)
+    }
+}
 
 /// Public metadata only; secret material is obtained on the lifecycle worker.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -16,6 +47,29 @@ pub struct NodeSpec {
     pub network: String,
     pub identity_ref: String,
 }
+fn validate_spec(spec: &NodeSpec, provider: Provider) -> Result<()> {
+    if spec.profile.provider != provider
+        || spec.revision == 0
+        || spec.profile_revision == 0
+        || spec.profile.id.is_empty()
+        || spec.profile.id.len() > 128
+        || !spec
+            .profile
+            .id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        || spec.network.is_empty()
+        || spec.network.len() > 256
+        || spec.network.chars().any(char::is_control)
+        || spec.identity_ref.is_empty()
+        || spec.identity_ref.len() > 256
+        || spec.identity_ref.chars().any(char::is_control)
+    {
+        return Err(Failure::InvalidRoute);
+    }
+    Ok(())
+}
+
 /// A short-lived borrowed configuration, deliberately neither Debug nor Clone.
 /// Does not save to disk. Best-effort overwrite does not erase engine copies.
 pub struct SecretConfig(Vec<u8>);
@@ -55,6 +109,9 @@ pub trait SecureConfigSource: Send + Sync + 'static {
 pub enum NodeStatus {
     Starting,
     EngineStarted,
+    NeedsLogin,
+    NeedsMachineAuth,
+    Running,
     Closing,
     Stopped,
 }
@@ -85,7 +142,7 @@ impl NodeLease {
 pub(super) struct NodeEntry {
     spec: NodeSpec,
     profile: Arc<Profile>,
-    backend: Arc<EasyTierBackend>,
+    backend: Arc<dyn ManagedBackend>,
     pending: AtomicBool,
     admission_retired: AtomicBool,
     start_cancelled: Arc<AtomicBool>,
@@ -224,26 +281,56 @@ impl OverlayRuntime {
         if !valid_deadline(deadline) {
             return Err(Failure::InvalidDeadline);
         }
-        if spec.profile.provider != Provider::EasyTier
-            || spec.revision == 0
-            || spec.profile_revision == 0
-            || spec.profile.id.is_empty()
-            || spec.profile.id.len() > 128
-            || !spec
-                .profile
-                .id
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-            || spec.network.is_empty()
-            || spec.network.len() > 256
-            || spec.network.chars().any(char::is_control)
-            || spec.identity_ref.is_empty()
-            || spec.identity_ref.len() > 256
-            || spec.identity_ref.chars().any(char::is_control)
-        {
-            return Err(Failure::InvalidRoute);
-        }
+        validate_spec(&spec, Provider::EasyTier)?;
         let backend = Arc::new(EasyTierBackend::managed(&spec.network)?);
+        let starter = backend.clone();
+        self.start_managed_profile(
+            spec,
+            backend,
+            move |spec| source.load(spec),
+            move |config, deadline| starter.start_node(&config, deadline),
+            deadline,
+        )
+    }
+    pub fn start_tailscale_profile(
+        &self,
+        spec: NodeSpec,
+        source: Option<Arc<dyn NativeStateSource>>,
+        deadline: Duration,
+    ) -> Result<NodeOperation<NodeLease>> {
+        let source = source.ok_or(Failure::IdentityUnavailable)?;
+        self.require_provider(Provider::Tailscale)?;
+        if !valid_deadline(deadline) {
+            return Err(Failure::InvalidDeadline);
+        }
+        validate_spec(&spec, Provider::Tailscale)?;
+        let backend = Arc::new(TailscaleBackend::managed(&spec)?);
+        let starter = backend.clone();
+        self.start_managed_profile(
+            spec,
+            backend,
+            move |spec| source.load(spec),
+            move |config, deadline| starter.start_node(config, deadline),
+            deadline,
+        )
+    }
+    fn start_managed_profile<C, L, S>(
+        &self,
+        spec: NodeSpec,
+        backend: Arc<dyn ManagedBackend>,
+        load: L,
+        start: S,
+        deadline: Duration,
+    ) -> Result<NodeOperation<NodeLease>>
+    where
+        C: Send + 'static,
+        L: FnOnce(&NodeSpec) -> Result<C> + Send + 'static,
+        S: FnOnce(C, Duration) -> Result<()> + Send + 'static,
+    {
+        if !valid_deadline(deadline) {
+            return Err(Failure::InvalidDeadline);
+        }
+        validate_spec(&spec, backend.provider())?;
         let profile = Arc::new(Profile {
             backend: backend.clone(),
             revision: spec.revision,
@@ -316,13 +403,13 @@ impl OverlayRuntime {
                 {
                     Err(Failure::Cancelled)
                 } else {
-                    source.load(&owned.spec).and_then(|config| {
+                    load(&owned.spec).and_then(|config| {
                         if cancelled.load(Ordering::Acquire)
                             || owned.admission_retired.load(Ordering::Acquire)
                         {
                             Err(Failure::Cancelled)
                         } else {
-                            owned.backend.start_node(&config, deadline)
+                            start(config, deadline)
                         }
                     })
                 };
@@ -436,7 +523,7 @@ impl OverlayRuntime {
                 } else if entry.pending.load(Ordering::Acquire) {
                     Ok(NodeStatus::Starting)
                 } else {
-                    entry.backend.node_status()
+                    entry.backend.managed_status()
                 };
                 let result = if entry.stopped.load(Ordering::Acquire) {
                     Ok(NodeStatus::Stopped)
@@ -446,6 +533,45 @@ impl OverlayRuntime {
                     result
                 };
                 completion.finish(result);
+            })
+            .is_err()
+        {
+            operation.completion.finish(Err(Failure::WorkerUnavailable));
+        }
+        Ok(operation)
+    }
+    /// Explicit login only. No retry and no raw backend logs. Cancellation
+    /// discards publication; native callbacks retain their original owner.
+    pub fn begin_node_login(
+        &self,
+        lease: &NodeLease,
+        deadline: Duration,
+    ) -> Result<NodeOperation<LoginStatus>> {
+        if !valid_deadline(deadline) {
+            return Err(Failure::InvalidDeadline);
+        }
+        let entry = self.owned_node(lease)?;
+        if entry.closing.load(Ordering::Acquire)
+            || entry.stopped.load(Ordering::Acquire)
+            || entry.pending.load(Ordering::Acquire)
+        {
+            return Err(Failure::ProfileUnavailable);
+        }
+        let operation = NodeOperation::new(None);
+        let completion = operation.completion.clone();
+        if thread::Builder::new()
+            .name("overlay-node-login".into())
+            .spawn(move || {
+                let result = entry.backend.managed_login(deadline);
+                completion.finish(
+                    if entry.closing.load(Ordering::Acquire)
+                        || entry.stopped.load(Ordering::Acquire)
+                    {
+                        Err(Failure::Cancelled)
+                    } else {
+                        result
+                    },
+                );
             })
             .is_err()
         {
@@ -569,7 +695,7 @@ impl Inner {
                             Err(Failure::ClosePending)
                         } else {
                             native_stop_attempted = true;
-                            owned.backend.stop_node(remaining)
+                            owned.backend.managed_stop(remaining)
                         };
                     }
                     if Instant::now() >= until {

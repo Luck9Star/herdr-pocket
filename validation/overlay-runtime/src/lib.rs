@@ -15,6 +15,7 @@ use std::{
 
 pub mod easytier;
 pub mod nodes;
+pub mod tailscale;
 
 pub const MAX_STREAMS: usize = 32;
 pub const MAX_IO: usize = 65_536;
@@ -284,10 +285,12 @@ impl OverlayRuntime {
         );
         Ok(())
     }
-    /// No Tailscale/ZeroTier bridge is supplied by this crate. A caller cannot
-    /// request one and silently receive EasyTier or ordinary TCP instead.
+    /// Only an explicitly linked provider is available. No caller can receive
+    /// another provider or ordinary system TCP as an implicit fallback.
     pub fn require_provider(&self, provider: Provider) -> Result<()> {
-        if provider == Provider::EasyTier && cfg!(feature = "linked-easytier") {
+        if (provider == Provider::EasyTier && cfg!(feature = "linked-easytier"))
+            || (provider == Provider::Tailscale && cfg!(feature = "linked-tailscale"))
+        {
             Ok(())
         } else {
             Err(Failure::ProviderUnavailable)

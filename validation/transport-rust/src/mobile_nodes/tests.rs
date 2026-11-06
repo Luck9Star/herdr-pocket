@@ -35,6 +35,50 @@ fn binding_is_bounded_public_metadata_and_has_no_attempt() {
     }
 }
 
+#[test]
+fn explicit_tailscale_provider_round_trips_while_legacy_binding_keeps_easytier() {
+    let legacy = serde_json::to_value(binding("legacy")).unwrap();
+    assert!(legacy.get("provider").is_none());
+    let parsed: Binding = serde_json::from_value(legacy).unwrap();
+    assert_eq!(parsed.provider(), &BindingProvider::EasyTier);
+    let saved = Binding::with_provider(
+        BindingProvider::Tailscale,
+        "tail".into(),
+        7,
+        "tailnet".into(),
+        "native-ref".into(),
+    )
+    .unwrap();
+    let wire = serde_json::to_value(&saved).unwrap();
+    assert_eq!(wire["provider"], "tailscale");
+    assert_eq!(serde_json::from_value::<Binding>(wire).unwrap(), saved);
+    assert!(serde_json::from_value::<Binding>(serde_json::json!({"provider":"system","profileId":"x","profileRevision":1,"networkName":"x","identityRef":"x"})).is_err());
+}
+
+#[cfg(not(any(
+    feature = "overlay-native-fixture",
+    feature = "overlay-tailscale-fixture"
+)))]
+#[test]
+fn default_gate_rejects_synthetic_without_either_explicit_fixture_feature() {
+    assert_eq!(
+        crate::overlay::require_overlay_evidence(overlay_runtime::Evidence::SyntheticNativeFixture),
+        Err("overlay_fixture_disabled")
+    );
+    assert_eq!(
+        crate::overlay::require_overlay_evidence(overlay_runtime::Evidence::CandidateAbiOnly),
+        Ok(())
+    );
+}
+#[cfg(feature = "overlay-tailscale-fixture")]
+#[test]
+fn explicitly_selected_tailscale_fixture_is_accepted_as_synthetic_only() {
+    assert_eq!(
+        crate::overlay::require_overlay_evidence(overlay_runtime::Evidence::SyntheticNativeFixture),
+        Ok(())
+    );
+}
+
 #[cfg(not(any(
     feature = "overlay-linked-easytier",
     feature = "overlay-native-fixture"
@@ -495,7 +539,7 @@ mod native {
         let new_target = recovery_target(new_route);
         let request = "0123456789abcdef0123456789abcdef";
         recovery.prepare(&old_target, request).unwrap();
-        recovery.end_attempt(&old_target,request);
+        recovery.end_attempt(&old_target, request);
         assert_eq!(
             recovery.clear_confirmed(&new_target, None),
             Err("input_original_target_required")
@@ -503,7 +547,7 @@ mod native {
         assert!(recovery.unknown());
         recovery.clear_confirmed(&old_target, None).unwrap();
         recovery.prepare(&new_target, request).unwrap();
-        recovery.end_attempt(&new_target,request);
+        recovery.end_attempt(&new_target, request);
         assert_eq!(
             recovery.clear_confirmed(&old_target, None),
             Err("input_original_target_required")
@@ -684,5 +728,211 @@ mod native {
         assert_eq!(service.reserved_nodes(), 0);
         assert_eq!(metric(9), 16);
         assert_eq!(metric(8), 8);
+    }
+}
+
+#[cfg(feature = "overlay-tailscale-fixture")]
+mod tailscale_native {
+    use super::*;
+    use crate::transport::{Dialer, OverlayProvider};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    const TIME: Duration = Duration::from_secs(2);
+    unsafe extern "C" {
+        fn hp_ts_fixture_reset();
+        fn hp_ts_fixture_control(op: i32);
+        fn hp_ts_fixture_metric(index: i32) -> i32;
+        fn hp_ts_fixture_all_running();
+    }
+    fn metric(index: i32) -> i32 {
+        unsafe { hp_ts_fixture_metric(index) }
+    }
+    async fn until(test: impl Fn() -> bool) {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !test() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+    async fn isolated() -> tokio::sync::MutexGuard<'static, ()> {
+        let guard = SERIAL.lock().await;
+        until(|| metric(2) == 0).await;
+        unsafe { hp_ts_fixture_reset() };
+        guard
+    }
+    #[derive(Default)]
+    struct Store(Mutex<HashMap<Vec<u8>, Vec<u8>>>);
+    impl NativeStateStore for Store {
+        fn read(&self, key: &[u8]) -> StateStoreResult<Vec<u8>> {
+            lock(&self.0)
+                .get(key)
+                .cloned()
+                .ok_or(StateStoreError::Missing)
+        }
+        fn write(&self, key: &[u8], value: Option<&[u8]>) -> StateStoreResult<()> {
+            let mut rows = lock(&self.0);
+            if let Some(value) = value {
+                rows.insert(key.to_vec(), value.to_vec());
+            } else {
+                rows.remove(key);
+            }
+            Ok(())
+        }
+    }
+    struct Source {
+        store: Arc<Store>,
+        hostname: &'static str,
+        loaded: AtomicUsize,
+    }
+    impl NativeStateSource for Source {
+        fn load(&self, spec: &NodeSpec) -> overlay_runtime::Result<NativeNodeConfig> {
+            self.loaded.fetch_add(1, Ordering::SeqCst);
+            NativeNodeConfig::for_spec(
+                spec,
+                NativeVettedDirectory::from_native_vetted(std::path::PathBuf::from(
+                    "/native-vetted/synthetic-no-files",
+                ))?,
+                self.hostname.into(),
+                "https://controlplane.tailscale.com".into(),
+                self.store.clone(),
+            )
+        }
+    }
+    fn source(hostname: &'static str) -> Arc<Source> {
+        Arc::new(Source {
+            store: Arc::new(Store::default()),
+            hostname,
+            loaded: AtomicUsize::new(0),
+        })
+    }
+    fn saved(id: &str) -> Binding {
+        Binding::with_provider(
+            BindingProvider::Tailscale,
+            id.into(),
+            9,
+            "synthetic-tailnet".into(),
+            "native-store-A".into(),
+        )
+        .unwrap()
+    }
+    #[tokio::test]
+    async fn login_state_gates_dialer_and_route_keeps_provider_revision_identity() {
+        let _serial = isolated().await;
+        let service = MobileNodeService::new();
+        let binding = saved("ts-mobile");
+        let source = source("fixture");
+        assert_eq!(
+            service
+                .start_tailscale(
+                    binding.clone(),
+                    source.clone(),
+                    TIME,
+                    Cancellation::default()
+                )
+                .await
+                .unwrap()
+                .state,
+            State::NeedsLogin
+        );
+        assert_eq!(
+            service.dialer(&binding, TIME).err(),
+            Some("mobile_node_not_started")
+        );
+        assert_eq!(metric(5), 0);
+        let login = service
+            .begin_login(&binding, TIME, Cancellation::default())
+            .await
+            .unwrap();
+        assert_eq!(login.state, State::NeedsMachineAuth);
+        assert!(login.auth_url.as_ref().unwrap().starts_with("https://"));
+        assert!(!format!("{login:?}").contains("token"));
+        unsafe { hp_ts_fixture_all_running() };
+        assert_eq!(
+            service.status(&binding).await.unwrap().state,
+            State::Running
+        );
+        let old_attempt = service.capture_attempt(&binding).unwrap().unwrap();
+        let dialer = service.dialer(&binding, TIME).unwrap();
+        let mut connected = dialer
+            .dial("same-virtual-address".into(), 22, Cancellation::default())
+            .await
+            .unwrap();
+        let route = connected
+            .route_identity()
+            .expect("must not fall back to system TCP");
+        assert_eq!(route.provider, OverlayProvider::Tailscale);
+        assert_eq!(route.profile_revision, 9);
+        assert_eq!(route.identity_ref, "native-store-A");
+        connected.write_all(b"once").await.unwrap();
+        let mut bytes = [0; 4];
+        connected.read_exact(&mut bytes).await.unwrap();
+        assert_eq!(&bytes, b"once");
+        assert_eq!(metric(7), 1);
+        drop(connected);
+        service.stop(&binding, TIME).await.unwrap();
+        until(|| service.reserved_nodes() == 0).await;
+        assert_eq!(
+            service
+                .start_tailscale(
+                    binding.clone(),
+                    source.clone(),
+                    TIME,
+                    Cancellation::default()
+                )
+                .await
+                .unwrap()
+                .state,
+            State::NeedsLogin
+        );
+        assert_eq!(
+            service.stop_attempt(&old_attempt, TIME).await.unwrap_err(),
+            "overlay_stale_revision"
+        );
+        assert_eq!(
+            dialer
+                .dial("same-virtual-address".into(), 22, Cancellation::default())
+                .await
+                .err(),
+            Some("overlay_stale_revision")
+        );
+        assert_eq!(source.loaded.load(Ordering::SeqCst), 2);
+        service.stop(&binding, TIME).await.unwrap();
+    }
+    #[tokio::test]
+    async fn cancelled_tailscale_start_uses_original_attempt_cleanup_without_replaying_source() {
+        let _serial = isolated().await;
+        unsafe { hp_ts_fixture_control(1) };
+        let service = MobileNodeService::new();
+        let binding = saved("late-mobile");
+        let source = source("late-start");
+        let cancel = Cancellation::default();
+        let owned_service = service.clone();
+        let owned_binding = binding.clone();
+        let owned_source = source.clone();
+        let owned_cancel = cancel.clone();
+        let task = tokio::spawn(async move {
+            owned_service
+                .start_tailscale(owned_binding, owned_source, TIME, owned_cancel)
+                .await
+        });
+        until(|| metric(3) == 1).await;
+        cancel.cancel();
+        assert_eq!(task.await.unwrap().unwrap_err(), "cancelled");
+        assert_eq!(service.reserved_nodes(), 1);
+        assert_eq!(
+            service.status(&binding).await.unwrap().state,
+            State::Closing
+        );
+        unsafe { hp_ts_fixture_control(2) };
+        until(|| service.reserved_nodes() == 0).await;
+        assert_eq!(
+            service.status(&binding).await.unwrap().state,
+            State::Stopped
+        );
+        assert_eq!(source.loaded.load(Ordering::SeqCst), 1);
+        assert_eq!(metric(1), 1);
     }
 }

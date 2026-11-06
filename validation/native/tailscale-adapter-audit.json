@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "date": "2026-11-06",
-  "scope": "Fixed-source audit only. No module build, node start, identity read, authentication or network traffic performed.",
+  "scope": "Initial fixed-source audit retained below; followUp records later implementation and isolated execution separately. No real node, identity, authorization or overlay traffic was used.",
   "reference": {
     "heeler": "6a2817fc02aeb552df251d9478753c22fd4738bb",
     "libtailscale": "d1dc45d039edb7759ecbee6ba2aea0c4bca884b8",
@@ -57,16 +57,38 @@
       "next": "disable upload before first node and expose only explicitly reviewed auth state, not raw logs"
     }
   ],
-  "notImplemented": [
+  "context7": {
+    "library": "/tailscale/tailscale",
+    "commands": 2,
+    "scope": "current docs background; all implementation conclusions checked against fixed v1.104.1 source"
+  },
+  "initialNotImplemented": [
     "portable Tailscale managed ABI",
     "encrypted full StateStore/JNI adapter",
     "interactive login GUI",
     "Android/Apple/Windows/native integration",
     "Tailscale plus EasyTier actual concurrency"
   ],
-  "context7": {
-    "library": "/tailscale/tailscale",
-    "commands": 2,
-    "scope": "current docs background; all implementation conclusions checked against fixed v1.104.1 source"
+  "followUp": {
+    "date": "2026-11-06",
+    "document": "../../docs/25-tailscale-native-custody.md",
+    "sourceManifest": "tailscale-runtime-source.json",
+    "implemented": [
+      "portable managed hp_ts ABI v1 with explicit-auth tsnet patch",
+      "callback retirement gate and retained close-failure ownership",
+      "shared Rust managed provider and explicit login API",
+      "Android encrypted full binary StateStore and JNI source"
+    ],
+    "verifiedScope": [
+      "Mac arm64 fixed-source c-shared build/load, no Start",
+      "fake engine and independent Rust C ABI fixtures",
+      "temporary POSIX/JCE and desktop JNI with Android stubs"
+    ],
+    "stillPending": [
+      "Flutter/Tauri host binding, GUI identity and login integration",
+      "Android/iOS/Windows/Linux new runtime builds and device validation",
+      "real Tailscale login, encrypted identity restart, overlay SSH and cross-provider concurrency",
+      "ZeroTier integration and all platform acceptance gates"
+    ]
   }
 }

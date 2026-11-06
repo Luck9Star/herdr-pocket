@@ -21,25 +21,28 @@ void main() {
   testWidgets('missing Android TS bridge fails before device-key access, SSH or system fallback',(tester) async {
     final previous = foundation.debugDefaultTargetPlatformOverride;
     foundation.debugDefaultTargetPlatformOverride = foundation.TargetPlatform.android;
-    addTearDown(() { foundation.debugDefaultTargetPlatformOverride = previous; });
-    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger,calls = <services.MethodCall>[];
-    messenger.setMockMethodCallHandler(NativeNetworkRuntime.channel,(call) async {
-      calls.add(call); throw services.PlatformException(code:'overlay_provider_unavailable');
-    });
-    addTearDown(() => messenger.setMockMethodCallHandler(NativeNetworkRuntime.channel,null));
-    final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
-    final profile = testNetwork(),host = await saveCatalogProfile(catalog); await catalog.addNetwork(profile);
-    final bound = host.change(networkProfileId:profile.id,replaceNetwork:true,now:1000); await catalog.update(bound);
-    final tokens = (await tester.runAsync(DesignTokens.load))!,adapter = PendingAdapter();
-    final keys = CountingDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
-    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:RemotePage(tokens:tokens,adapter:adapter,
-      pairedTarget:bound.target,deviceKeys:keys,keyHandle:bound.pairingRecord['handle'] as String,
-      devicePublicKey:fixtureConfig()['expectedHostKey'] as String,networkBinding:catalog.freezeNetwork(bound))));
-    await tapVisible(tester,'remote-review'); await tapVisible(tester,'remote-connect'); await tester.pumpAndSettle();
-    expect(calls.map((c) => c.method),['available']); expect(calls.single.arguments,{'provider':'tailscale'});
-    expect(keys.publicCalls,0); expect(keys.signCalls,0); expect(adapter.calls,0);
-    expect(find.textContaining('节点状态或连接桥不可确认'),findsOneWidget);
-    await tester.pumpWidget(const SizedBox()); catalog.dispose();
+    try {
+      final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger,calls = <services.MethodCall>[];
+      messenger.setMockMethodCallHandler(NativeNetworkRuntime.channel,(call) async {
+        calls.add(call); throw services.PlatformException(code:'overlay_provider_unavailable');
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(NativeNetworkRuntime.channel,null));
+      final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+      final profile = testNetwork(),host = await saveCatalogProfile(catalog); await catalog.addNetwork(profile);
+      final bound = host.change(networkProfileId:profile.id,replaceNetwork:true,now:1000); await catalog.update(bound);
+      final tokens = (await tester.runAsync(DesignTokens.load))!,adapter = PendingAdapter();
+      final keys = CountingDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
+      await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:RemotePage(tokens:tokens,adapter:adapter,
+        pairedTarget:bound.target,deviceKeys:keys,keyHandle:bound.pairingRecord['handle'] as String,
+        devicePublicKey:fixtureConfig()['expectedHostKey'] as String,networkBinding:catalog.freezeNetwork(bound))));
+      await tapVisible(tester,'remote-review'); await tapVisible(tester,'remote-connect'); await tester.pumpAndSettle();
+      expect(calls.map((c) => c.method),['available']); expect(calls.single.arguments,{'provider':'tailscale'});
+      expect(keys.publicCalls,0); expect(keys.signCalls,0); expect(adapter.calls,0);
+      expect(find.textContaining('节点状态或连接桥不可确认'),findsOneWidget);
+      await tester.pumpWidget(const SizedBox()); catalog.dispose();
+    } finally {
+      foundation.debugDefaultTargetPlatformOverride = previous;
+    }
   });
   testWidgets('320px Tailscale node and explicit browser authorization return to Running without SSH/input',(tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(320,760);

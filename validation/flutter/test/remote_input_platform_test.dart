@@ -15,10 +15,10 @@ void main() {
     messenger.setMockMethodCallHandler(PlatformRemoteInputJournal.channel,(call) async {
       calls.add(call);
       try {
-        if (call.method == 'readAll') return backend.readAll();
+        if (call.method == 'readAll') return await backend.readAll();
         final args = call.arguments as Map,raw = args['record'] as String;
         switch (call.method) {
-          case 'prepare': return backend.prepare(raw);
+          case 'prepare': return await backend.prepare(raw);
           case 'complete': await backend.complete(raw,args['lease'] as String); return null;
           case 'abandon': await backend.abandon(raw,args['lease'] as String); return null;
           case 'resolve': await backend.resolve(raw); return null;

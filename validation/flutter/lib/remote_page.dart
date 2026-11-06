@@ -272,7 +272,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           final reconciled = journalRead != null && adapter.isInputJournalReadCurrent(journalRead) &&
             inputGate.reconcileJournalRefresh(journalRead.review);
           inputGate.bind(target,adapter.inputCapability);
-          if (reconciled && journalRead != null && identical(inputGate.target,journalRead.target)) inputGate.lastResult = journalRead.review.knownResult;
+          if (reconciled && identical(inputGate.target,journalRead.target)) inputGate.lastResult = journalRead.review.knownResult;
           if (adapter.pendingInput != null) inputGate.restorePending(adapter.pendingInput!);
         }
         bindTerminalOutput();

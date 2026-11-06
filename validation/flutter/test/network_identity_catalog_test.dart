@@ -172,15 +172,20 @@ void main() {
     await tester.pumpWidget(MaterialApp(home:Scaffold(body:NetworkIdentityDialog(
       profile:profile,catalog:catalog,store:store,closeTabs:(_) { closed++; }))));
     await tester.pumpAndSettle();
+    addTearDown(() => tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed));
     final field = find.byKey(const ValueKey('network-identity-secret'));
     final review = find.byKey(const ValueKey('network-identity-review'));
     await tester.ensureVisible(field); await tester.enterText(field,'synthetic-local-secret');
+    final controller = tester.widget<TextField>(field).controller!;
     await tester.ensureVisible(review); await tester.tap(review); await tester.pump();
     expect(tester.widget<CheckboxListTile>(review).value,isTrue);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive); await tester.pump();
+    expect(controller.text,isEmpty);
+    expect(field,findsNothing); expect(review,findsNothing);
+    expect(store.creates,0); expect(store.deletes,0);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pumpAndSettle();
     expect(tester.widget<TextField>(field).controller!.text,isEmpty);
     expect(tester.widget<CheckboxListTile>(review).value,isFalse);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pump();
     expect(store.creates,0); expect(store.deletes,0); expect(closed,0);
     await tester.pumpWidget(const SizedBox.shrink()); catalog.dispose();
   });

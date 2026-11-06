@@ -272,8 +272,17 @@ void main() {
     final data = jsonDecode(marker.raw) as Map<String,dynamic>;
     for (final invalid in ['easy-tier:0123456789abcdef0123456789abcdef:03:a0000000-0000-4000-8000-000000000001',
       'easy-tier:0123456789abcdef0123456789abcdef:2147483648:a0000000-0000-4000-8000-000000000001',
-      'tailscale:0123456789abcdef0123456789abcdef:3:a0000000-0000-4000-8000-000000000001']) {
+      'tail-scale:0123456789abcdef0123456789abcdef:3:a0000000-0000-4000-8000-000000000001']) {
       expect(() => RemoteInputPending.parse(jsonEncode({...data,'route':invalid})),throwsFormatException);
+    }
+    const tailscaleRoute = 'tailscale:0123456789abcdef0123456789abcdef:3:a0000000-0000-4000-8000-000000000001';
+    final tailscale = RemoteInputPending.parse(jsonEncode({...data,'route':tailscaleRoute}));
+    expect(tailscale.target.route,tailscaleRoute);
+    expect(tailscale.target.sameEndpoint(parsed.target),isFalse);
+    expect(parseRemoteInputJournalRecords([marker.raw,tailscale.raw]),hasLength(2));
+    for (final revision in ['03','2147483648']) {
+      expect(() => RemoteInputPending.parse(jsonEncode({...data,
+        'route':'tailscale:0123456789abcdef0123456789abcdef:$revision:a0000000-0000-4000-8000-000000000001'})),throwsFormatException);
     }
     final old = RemoteInputPending.create('b'*32,base);
     expect(RemoteInputPending.parse(old.raw).target.route,'system');

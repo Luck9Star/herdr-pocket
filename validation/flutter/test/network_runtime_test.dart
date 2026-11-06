@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:herdr_flutter_probe/remote_adapter.dart' show connectedSocketRoute;
 import 'package:herdr_flutter_probe/network_runtime.dart';
 
 class FakeRuntime extends NativeNetworkRuntime {
@@ -31,6 +32,17 @@ class FakeRuntime extends NativeNetworkRuntime {
 Future<void> tick() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  test('native actual route is retained on the returned SSH socket',() async {
+    final runtime = FakeRuntime();
+    const binding = NetworkNodeBinding('0123456789abcdef0123456789abcdef',3,'fixture','a0000000-0000-4000-8000-000000000001');
+    final opening = runtime.open(binding,'fixture',22);
+    runtime.opens.single.complete({'streamId':'routed','route':{'provider':'easy-tier','profile_id':binding.profileId,
+      'profile_revision':binding.profileRevision,'identity_ref':binding.identityRef}});
+    final socket = await opening;
+    expect(connectedSocketRoute(socket),'easy-tier:${binding.profileId}:${binding.profileRevision}:${binding.identityRef}');
+    socket.destroy(); await tick();
+    expect(runtime.calls.where((c) => c.$1 == 'streamClose' && c.$2['streamId'] == 'routed').length,1);
+  });
   test('available requires the exact two response keys',() async {
     final runtime = FakeRuntime();
     expect(await runtime.available(),isTrue);

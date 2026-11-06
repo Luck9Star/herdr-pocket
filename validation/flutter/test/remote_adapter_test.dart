@@ -4,6 +4,7 @@ import 'dart:io' show File;
 import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:herdr_flutter_probe/network_runtime.dart' show RoutedSSHSocket;
 import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'package:herdr_flutter_probe/remote_page.dart';
 import 'remote_test_data.dart';
@@ -22,6 +23,13 @@ class FakeSocket implements SSHSocket {
   @override Future<void> close() async { destroy(); }
   @override void destroy() { destroyed = true; input.close(); output.close(); }
 }
+class FakeRoutedSocket extends FakeSocket implements RoutedSSHSocket {
+  FakeRoutedSocket(this.actualRoute);
+  @override final String actualRoute;
+}
+class TraceObject {
+  @override String toString() => throw StateError('must not stringify');
+}
 class FailedDestroySocket extends FakeSocket {
   @override void destroy() { throw StateError('synthetic close failed'); }
 }
@@ -38,6 +46,7 @@ void main() {
     String opened(int id) => '<- fixture: SSH_Message_Channel_Confirmation(recipientChannel: $id, senderChannel: 7, initialWindowSize: 2097152, maximumPacketSize: 32768)';
     String closed(int id) => '<- fixture: SSH_Message_Channel_Close(recipientChannel: $id)';
     tracker.startOpen(); tracker.trace(opened(1)); tracker.finishOpen(succeeded:true);
+    tracker.trace(null); tracker.trace(7); tracker.trace(TraceObject());
     final initial = tracker.waitIdle(); var retired = false; unawaited(initial.then((_) { retired = true; }));
     for (final fake in [
       'banner <- fixture: SSH_Message_Channel_Close(recipientChannel: 1)',
@@ -51,6 +60,13 @@ void main() {
     tracker.startOpen(); tracker.trace(opened(3)); tracker.finishOpen(succeeded:true);
     tracker.trace(closed(1)); expect(tracker.activeCount,1); // Late close cannot retire a different ID.
     tracker.trace(closed(3)); await tracker.waitIdle(); expect(overflow,0);
+  });
+  test('socket route comes from the connected socket and only an unrouted socket is system', () {
+    const route = 'easy-tier:0123456789abcdef0123456789abcdef:3:a0000000-0000-4000-8000-000000000001';
+    final system = FakeSocket(),overlay = FakeRoutedSocket(route);
+    expect(connectedSocketRoute(system),'system');
+    expect(connectedSocketRoute(overlay),route);
+    system.destroy(); overlay.destroy();
   });
   test('MT10 snapshot and input channels both require retirement and channel count stays bounded', () async {
     var overflow = 0;

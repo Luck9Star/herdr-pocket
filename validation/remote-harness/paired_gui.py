@@ -192,7 +192,7 @@ def run_flutter(args, root, env, config, approval):
             # Return only named, fixed test-stage failures (never raw widget logs).
             raise widget_failure(exchange, 'widget_pairing_or_observe_failed')
         result = json.loads(bounded_wire(exchange / 'result.json'))
-        required = ('paired', 'paneChosen', 'fullRendered', 'deltaRendered', 'stoppedStale', 'reopenedPendingRequest')
+        required = ('paired', 'paneChosen', 'fullRendered', 'deltaRendered', 'stoppedStale', 'reopenedPendingRequest', 'pauseResumeSameConnection')
         calls = result.get('signCalls')
         if (not all(result.get(field) is True for field in required) or result.get('identityCreations') != 1
                 or type(calls) != int or not 1 <= calls <= 8):

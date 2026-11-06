@@ -63,10 +63,10 @@ void main() {
     final one = host('A',a,'opaque-a'),two = host('B',b,'opaque-b'); await catalog.add(one); await catalog.add(two);
     final frozen = catalog.freezeNetwork(one),tabs = HostTabs();
     tabs.open(one,networks:catalog.networkProfiles); tabs.open(two,networks:catalog.networkProfiles);
-    final unaffected = tabs.find(two.id);
+    final unaffected = tabs.forHost(two.id).single;
     await catalog.updateNetwork(a.change(label:'Changed'));
     tabs.reconcile(catalog.profiles,catalog.networkProfiles);
-    expect(tabs.find(one.id),isNull); expect(identical(tabs.find(two.id),unaffected),isTrue);
+    expect(tabs.forHost(one.id),isEmpty); expect(identical(tabs.forHost(two.id).single,unaffected),isTrue);
     expect(frozen.stillCurrent(),isFalse);
     await catalog.updateNetwork(b.change(enabled:false)); tabs.reconcile(catalog.profiles,catalog.networkProfiles);
     expect(tabs.tabs,isEmpty); tabs.dispose(); catalog.dispose();

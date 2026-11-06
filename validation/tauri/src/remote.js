@@ -1,4 +1,5 @@
 import { initNetworkUI } from './network-ui.js';
+import { initTabWorkspace } from './tab-workspace.js';
 import { Terminal } from '@xterm/xterm';
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { RemoteViewGate, RemoteFrameQueue, validDashboard } from './remote-state.js';
@@ -19,6 +20,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   let inputGeneration=null, inputEpoch=null, inputMode='observe', inputBusy=false, inputUnknown=false, inputRevision=0, selectedTarget=null, draftPreview=null, switchingFocus=false;
   let inputComposition=new InputComposition(), focusReset=Promise.resolve(); const onlineInput=new OnlineInputQueue();
   const auxiliaryModifiers=new AuxiliaryModifiers();
+  let networkRevisions=new Map();
   let hostRecords=[], activeHostId=null, hostNavigation=0, unsavedHostOpen=false; const hostDrafts=new Map(), hostStatuses=new Map();
   let hostInitialization=Promise.resolve(false), hostInitError='host_storage_unavailable';
   function initializeHostCatalog() {
@@ -241,7 +243,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   function showRemotePage() {closeConfigTransfer(); showingRemote=true; $('host-home').hidden=true; $('remote-page').hidden=false; $('fixture-workbench').hidden=true; $('show-remote').setAttribute('aria-pressed','true'); $('show-fixture').setAttribute('aria-pressed','false');}
   async function refreshHosts(refreshNetwork=true) {
     if(!native){hostMessage('浏览器预览不读取本机主机资料。');return;}
-    try {if(!await hostInitialization)throw Error(hostInitError); hostRecords=await invoke('host_list'); const catalog=await invoke('network_list'); terminalFontSize=catalog.preferences.terminalFontSize; $('terminal-font-size').value=terminalFontSize; if(terminal)terminal.options.fontSize=terminalFontSize; renderHosts(); if(refreshNetwork)networks?.refresh(); hostMessage(hostRecords.length?'选择主机、管理资料，或新增主机。':'还没有已存主机。');}
+    try {if(!await hostInitialization)throw Error(hostInitError); hostRecords=await invoke('host_list'); const catalog=await invoke('network_list'); networkRevisions=new Map(catalog.profiles.map(p=>[p.id,p.revision])); terminalFontSize=catalog.preferences.terminalFontSize; workspace?.setFont(terminalFontSize); $('terminal-font-size').value=terminalFontSize; if(terminal)terminal.options.fontSize=terminalFontSize; renderHosts(); if(refreshNetwork)networks?.refresh(); hostMessage(hostRecords.length?'选择主机、管理资料，或新增主机。':'还没有已存主机。');}
     catch {hostRecords=[];renderHosts();hostMessage('本机资料不可用；仍可打开手动连接表单。');}
   }
   function renderHosts() {
@@ -256,9 +258,10 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
       const actions=document.createElement('div');actions.className='saved-host-actions';
       const button=(label,callback)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=callback;b.disabled=pairBusy;actions.append(b);return b;};
       const open=button('打开',()=>void openSavedHost(host.id));open.disabled=pairBusy || !host.enabled;
+      const openTab=button('新终端标签',async()=>{try {await waitForOldConnection(++hostNavigation);const id=workspace.create(host.id,null);showRemotePage();await workspace.select(id);}catch{hostMessage('无法新建标签；请核对设备身份与八标签上限。');}});openTab.disabled=pairBusy || !host.enabled || !host.deviceFingerprint;
       button('保存名称',async()=>{try {await invoke('host_update',{id:host.id,name:name.value,enabled:null});await refreshHosts();}catch {await refreshHosts();hostMessage('名称保存未确认，请核查。');}});
-      if(!host.retired) button(host.enabled?'停用':'启用',async()=>{try {await waitForOldConnection(++hostNavigation);await invoke('host_update',{id:host.id,name:null,enabled:!host.enabled});await refreshHosts();}catch {await refreshHosts();hostMessage('操作未确认，请核查状态并确保连接已结束。');}});
-      let confirming=false; const remove=button('移除',async()=>{if(!confirming){confirming=true;remove.textContent='确认移除本机资料';return;} try {await waitForOldConnection(++hostNavigation);const result=await invoke('host_remove',{id:host.id});if(activeHostId===host.id)activeHostId=null;hostDrafts.delete(host.id);hostStatuses.delete(host.id);await refreshHosts();hostMessage(result.keyDeleted?'已移除本机资料；主机授权仍须另行处理。':'资料已移除，本机密钥删除未确认；请核查。');}catch {await refreshHosts();hostMessage('移除未确认；请核查本机状态。');}});
+      if(!host.retired) button(host.enabled?'停用':'启用',async()=>{try {await waitForOldConnection(++hostNavigation);if(host.enabled)workspace.affected([host.id]);await invoke('host_update',{id:host.id,name:null,enabled:!host.enabled});await refreshHosts();}catch {await refreshHosts();hostMessage('操作未确认，请核查状态并确保连接已结束。');}});
+      let confirming=false; const remove=button('移除',async()=>{if(!confirming){confirming=true;remove.textContent='确认移除本机资料';return;} try {await waitForOldConnection(++hostNavigation);workspace.affected([host.id]);const result=await invoke('host_remove',{id:host.id});if(activeHostId===host.id)activeHostId=null;hostDrafts.delete(host.id);hostStatuses.delete(host.id);await refreshHosts();hostMessage(result.keyDeleted?'已移除本机资料；主机授权仍须另行处理。':'资料已移除，本机密钥删除未确认；请核查。');}catch {await refreshHosts();hostMessage('移除未确认；请核查本机状态。');}});
       card.append(actions);$('host-list').append(card);
       if(host.enabled) {const tab=document.createElement('button');tab.type='button';tab.textContent=host.name;tab.disabled=pairBusy;tab.setAttribute('aria-pressed',String(host.id===activeHostId));tab.onclick=()=>void openSavedHost(host.id);$('host-tabs').append(tab);}
     }
@@ -294,15 +297,21 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
     const view=await invoke('host_save',{id:activeHostId,name:$('host-save-name').value,config:targetConfig()});
     activeHostId=view.id;unsavedHostOpen=false;await refreshHosts();$('host-save-status').textContent='已保存本机公开资料；不代表主机已验证或仍授权。';return view;
   }
-  const networks=initNetworkUI({native,invoke,getHosts:()=>hostRecords,onAffected:async ids=>{if(ids.includes(activeHostId))cancel('网络操作涉及此主机；观察已停止，请重新核对当前配置。');await refreshHosts(false);}});
+  const workspace=initTabWorkspace({native,invoke,theme,channelFactory:()=>new Channel(),terminalFactory:options=>new Terminal(options),getFontSize:()=>terminalFontSize,hostInfo:id=>{const host=hostRecords.find(h=>h.id===id);if(!host)return null;const networkRevision=host.networkProfileId ? networkRevisions.get(host.networkProfileId) : null;return networkRevision===undefined ? null : {...host,networkRevision};},hostName:id=>hostRecords.find(h=>h.id===id)?.name || '主机'});
+  const networks=initNetworkUI({native,invoke,getHosts:()=>hostRecords,onAffected:async ids=>{workspace.affected(ids);if(ids.includes(activeHostId))cancel('网络操作涉及此主机；观察已停止，请重新核对当前配置。');await refreshHosts(false);}});
   $('terminal-font-save').disabled=!native;
-  $('terminal-font-save').onclick=async()=>{const font=Number($('terminal-font-size').value);if(!Number.isInteger(font)||font<10||font>28){$('terminal-font-status').textContent='请输入 10 至 28 的整数。';return;}try{const catalog=await invoke('network_list');await invoke('preferences_save',{font,expectedCatalog:catalog.revision});terminalFontSize=font;if(terminal)terminal.options.fontSize=font;$('terminal-font-status').textContent='字号已保存；不改变远端终端尺寸。';}catch{$('terminal-font-status').textContent='字号保存未确认；请核查后重试。';await refreshHosts();}};
+  $('terminal-font-save').onclick=async()=>{const font=Number($('terminal-font-size').value);if(!Number.isInteger(font)||font<10||font>28){$('terminal-font-status').textContent='请输入 10 至 28 的整数。';return;}try{const catalog=await invoke('network_list');await invoke('preferences_save',{font,expectedCatalog:catalog.revision});terminalFontSize=font;workspace.setFont(font);if(terminal)terminal.options.fontSize=font;$('terminal-font-status').textContent='字号已保存；不改变远端终端尺寸。';}catch{$('terminal-font-status').textContent='字号保存未确认；请核查后重试。';await refreshHosts();}};
   $('host-open-remote').onclick=()=>void openNewHost();
-  const closeConfigTransfer=initConfigTransfer({native, invoke, getHosts:()=>hostRecords, refreshHosts, onApplied:async result=>{
+  const closeConfigTransfer=initConfigTransfer({native, invoke, getHosts:()=>hostRecords, refreshHosts, onAffected:ids=>workspace.prepareAffected(ids), onSettled:ids=>workspace.affected(ids), onApplied:async result=>{
     const affected=[...result.removedIds,...result.retired.map(h=>h.id)];
+    workspace.affected(affected);
     if(affected.includes(activeHostId)) { hostNavigation++; cancel('配置已替换；旧观察已停止，新目标需重新配对。'); activeHostId=null; clearSnapshot(); }
   }});
-  $('host-return-home').onclick=()=>{saveHostDraft();hostNavigation++;cancel('已返回主机看板；观察已停止。');showingRemote=false;$('remote-page').hidden=true;$('fixture-workbench').hidden=true;$('host-home').hidden=false;void refreshHosts();};
+  $('host-return-home').addEventListener('pointerdown',()=>workspace.prepareHide());
+  $('show-fixture').addEventListener('pointerdown',()=>workspace.prepareHide());
+  $('show-remote').addEventListener('pointerdown',()=>workspace.prepareHide());
+  for(const id of ['host-return-home','show-fixture','show-remote']) {$(id).addEventListener('pointercancel',()=>workspace.cancelPrepareHide());$(id).addEventListener('pointerup',()=>setTimeout(()=>workspace.cancelPrepareHide(),0));}
+  $('host-return-home').onclick=()=>{void workspace.hide();saveHostDraft();hostNavigation++;cancel('已返回主机看板；观察已停止。');showingRemote=false;$('remote-page').hidden=true;$('fixture-workbench').hidden=true;$('host-home').hidden=false;void refreshHosts();};
   $('host-save').onclick=async()=>{try {await saveCurrentHost();}catch(e){await refreshHosts();$('host-save-status').textContent=`保存未确认：${String(e)}；请核查已存主机后再试。`;}};
   $('host-restore-review').addEventListener('input',render);
   $('host-restore').onclick=()=>pairOperation(async()=>{
@@ -365,19 +374,19 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
       if(activeHostId && p.state==='authorized-unverified') {try {await saveCurrentHost();} catch { $('host-save-status').textContent='配对资料保存未确认；请核查后重试，切勿丢弃当前身份。'; }}
     } catch(e) { pairStatus(`响应拒绝：${String(e)}。请重新核对；请求未被消耗。`); }
   });
-  $('pair-cancel').onclick=()=>pairOperation(async()=>{ scanRevision++; try { await invoke('pair_cancel'); pairState='cancelled'; pairStatus('已取消；主机可能已授权，请核查或导入匹配的撤销响应。'); } catch(e) {pairStatus(`取消失败：${String(e)}`);} });
-  $('pair-reset').onclick=()=>pairOperation(async()=>{ scanRevision++; try { await invoke('pair_reset'); pairState='none'; $('pair-request').value=''; $('pair-response').value=''; previewResponse=''; $('pair-target-review').checked=false; $('pair-source-review').checked=false; $('pair-response-preview').hidden=true; pairStatus('本机身份已删除；请向主机核查或撤销可能存在的授权。'); } catch(e) {pairStatus(`删除失败：${String(e)}`);} });
+  $('pair-cancel').onclick=()=>pairOperation(async()=>{ scanRevision++; if(activeHostId)workspace.affected([activeHostId]);try { await invoke('pair_cancel'); pairState='cancelled'; pairStatus('已取消；主机可能已授权，请核查或导入匹配的撤销响应。'); } catch(e) {pairStatus(`取消失败：${String(e)}`);} });
+  $('pair-reset').onclick=()=>pairOperation(async()=>{ scanRevision++; if(activeHostId)workspace.affected([activeHostId]);try { await invoke('pair_reset'); pairState='none'; $('pair-request').value=''; $('pair-response').value=''; previewResponse=''; $('pair-target-review').checked=false; $('pair-source-review').checked=false; $('pair-response-preview').hidden=true; pairStatus('本机身份已删除；请向主机核查或撤销可能存在的授权。'); } catch(e) {pairStatus(`删除失败：${String(e)}`);} });
   $('remote-cancel').onclick=()=>cancel();
   $('remote-clear-key').onclick=()=>{ cancel('临时私钥已从表单清除。'); };
   $('remote-hide-keyboard').onclick=()=>document.activeElement?.blur();
   $('show-fixture').onclick=()=>{
     closeConfigTransfer();
-    cancel('已离开远端读取；没有后台连接或自动恢复。'); showingRemote=false;
+    void workspace.hide();cancel('已离开远端读取；没有后台连接或自动恢复。'); showingRemote=false;
     saveHostDraft(); hostNavigation++; $('host-home').hidden=true; $('remote-page').hidden=true; $('fixture-workbench').hidden=false;
     $('show-fixture').setAttribute('aria-pressed','true'); $('show-remote').setAttribute('aria-pressed','false'); onFixture();
   };
   $('show-remote').onclick=()=>{
-    onLeaveFixture(); saveHostDraft(); hostNavigation++; cancel('已返回主机看板；观察已停止。'); showingRemote=false;
+    onLeaveFixture(); void workspace.hide();saveHostDraft(); hostNavigation++; cancel('已返回主机看板；观察已停止。'); showingRemote=false;
     $('remote-page').hidden=true; $('host-home').hidden=false; $('fixture-workbench').hidden=true;
     $('show-fixture').setAttribute('aria-pressed','false'); $('show-remote').setAttribute('aria-pressed','true'); void refreshHosts();
   };
@@ -419,6 +428,10 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
               $('remote-dashboard').hidden=true; status(`正在观察 ${pane.paneId} · ${pane.terminalId}`);
             };
             $('remote-panes').append(button);
+            const newTab=document.createElement('button');newTab.type='button';newTab.textContent=`在新标签打开 ${pane.paneId}`;
+            newTab.disabled=!activeHostId || !$('pair-mode').checked;
+            newTab.onclick=async()=>{const host=activeHostId;try {await waitForOldConnection(++hostNavigation);const id=workspace.create(host,pane);await workspace.select(id);status('目标已固定；请在标签中主动连接。');}catch {status('无法新建标签；请确认设备身份、连接状态和八标签上限。','warning');}};
+            $('remote-panes').append(newTab);
           }
           status(presentation.summary); return;
         }
@@ -457,8 +470,8 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
       if(gate.accepts(generation)){ if(['provider_unavailable','overlay_provider_unavailable'].includes(String(error))) errors[String(error)]='网络桥接不可用；没有使用系统网络回退。'; if(String(error)==='mobile_node_not_started') errors.mobile_node_not_started='请先启动此网络的本机节点；不会回退到系统网络。'; if(String(error)==='network_public_mode_unsupported') errors.network_public_mode_unsupported='公开无秘密模式暂不支持节点启动。'; if(String(error)==='network_identity_missing') errors.network_identity_missing='本机网络身份尚未配置。'; if(['network_identity_changed','mobile_node_binding_mismatch','overlay_stale_revision'].includes(String(error))) errors[String(error)]='网络配置或本机身份已变化；请核对节点后重新连接。'; if(String(error)==='network_profile_disabled') errors.network_profile_disabled='网络配置已停用；无法连接。'; if(terminal) $('remote-captured').textContent='连接已结束 · 画面陈旧'; $('remote-dashboard').hidden=true; status(errors[String(error)] || '观察已结束，画面陈旧。重新连接需手动核验；没有自动重放。','warning'); }
     } finally { discardKey(); if(config)config.privateKeyPem=''; if(gate.finish(generation)){const lost=invalidateInput();recordUnsent(lost.count);} gate.reviewed=false; render(); }
   });
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)cancel('应用进入后台，已取消读取并清除临时私钥。回到前台后需重新核验。');});
-  window.addEventListener('pagehide',()=>cancel());
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){workspace.background();cancel('应用进入后台，已取消读取并清除临时私钥。回到前台后需重新核验。');}});
+  window.addEventListener('pagehide',()=>{workspace.background();cancel();});
   // The browser never substitutes fixture output for a failed/missing native transport.
   $('remote-native-note').hidden=native;
   showingRemote=false; if(native)initializeHostCatalog(); void refreshHosts();

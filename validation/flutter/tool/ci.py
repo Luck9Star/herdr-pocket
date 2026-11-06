@@ -114,7 +114,12 @@ def prepare(destination):
     font = shared / fixture['font']['file']
     if hashlib.sha256(font.read_bytes()).hexdigest() != fixture['font']['sha256']:
         raise SystemExit('Shared font checksum mismatch')
-    shutil.copytree(shared, destination / 'assets/shared')
+    shutil.copytree(shared, destination / 'assets/shared', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+    notices = destination / 'assets/rust-notices'
+    notices.mkdir(parents=True, exist_ok=True)
+    for name in ['RUSSH-NOTICE.md', 'russh-0.65.0-source.json', 'russh-0.65.0-local-close.patch']:
+        shutil.copy2(ROOT / 'validation/vendor' / name, notices / name)
+    shutil.copy2(ROOT / 'validation/vendor/russh-0.65.0-LICENSE-APACHE', notices / 'russh-LICENSE')
     (destination / '.herdr-generated-probe.json').write_text(
         json.dumps({'kind': 'herdr-flutter-validation', 'sourceCommit': os.environ.get('GITHUB_SHA')}), encoding='utf-8')
 

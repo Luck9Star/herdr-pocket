@@ -24,15 +24,15 @@ export async function exportIfCurrent(encrypt, isCurrent, save) {
   return true;
 }
 
-export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onApplied }) {
+export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onApplied, onAffected=()=>{}, onSettled=()=>{} }) {
   const panel = document.getElementById('config-transfer');
   const opener = document.getElementById('config-transfer-open');
-  let ticket = null, plan = null, activeHostId = null, fileBytes = null, busy = false, pickerPending = false, epoch = 0, platform = null, catalog = null;
+  let ticket = null, plan = null, activeHostId = null, activeHostIds = [], fileBytes = null, busy = false, pickerPending = false, epoch = 0, platform = null, catalog = null;
   const selectedNetworks = new Set(); let applyPreferences = false;
   const selections = new Map();
   const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
   function clearSecrets() { panel.querySelectorAll('input[type=password]').forEach(n => { n.value = ''; }); }
-  function discard() { const old = ticket; ticket = null; plan = null; activeHostId = null; selections.clear(); selectedNetworks.clear(); applyPreferences = false; if (old) void invoke('config_discard', { ticket: old }).catch(() => {}); }
+  function discard() { const old = ticket; ticket = null; plan = null; activeHostId = null; activeHostIds = []; selections.clear(); selectedNetworks.clear(); applyPreferences = false; if (old) void invoke('config_discard', { ticket: old }).catch(() => {}); }
   function invalidate() { epoch++; discard(); fileBytes = null; clearSecrets(); panel.querySelector('.config-preview')?.remove(); }
   const describe = target => `${target.username}@${target.host}:${target.port} · 会话 ${target.session}`;
   function render() {
@@ -90,18 +90,18 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
         if (!previewIsCurrent(current, epoch)) return;
         const result = await invoke('config_preview', { bytes, password: secret }); clearSecrets();
         if (!previewIsCurrent(current, epoch)) { void invoke('config_discard', { ticket: result.ticket }).catch(() => {}); return; }
-        ticket = result.ticket; plan = result.plan; activeHostId = result.activeHostId; fileBytes = null; busy = false; render(); panel.querySelector('.config-preview h3')?.focus();
+        ticket = result.ticket; plan = result.plan; activeHostId = result.activeHostId; activeHostIds = Array.isArray(result.activeHostIds) ? result.activeHostIds : (activeHostId ? [activeHostId] : []); fileBytes = null; busy = false; render(); panel.querySelector('.config-preview h3')?.focus();
       } catch { message('无法验证或解密文件，或文件不受支持；没有导入任何资料。'); }
       finally { clearSecrets(); busy = false; preview.disabled = false; close.disabled = false; if (!previewIsCurrent(current, epoch) && !panel.hidden) render(); }
     }; importBox.append(preview); panel.append(importBox);
     if (plan && ticket) {
       const previewBox = el('section', null, 'config-preview'); const previewTitle = el('h3', '逐条审查并选择'); previewTitle.tabIndex = -1; previewBox.append(previewTitle);
-      previewBox.append(el('p', `当前活动主机 ID：${activeHostId || '无'}。替换会关闭受影响标签与连接；新目标须重新配对并主动连接。`));
+      previewBox.append(el('p', `当前活动主机 ID：${activeHostIds.join('、') || '无'}。替换会关闭受影响标签与连接；新目标须重新配对并主动连接。`));
       for (const entry of plan.entries) {
         const group = el('fieldset'); group.append(el('legend', entry.host.label));
         group.append(el('p', `${describe(entry.host.target)} · 网络 ${entry.host.provider}${entry.host.networkKey ? ` · 引用 ${entry.host.networkKey}` : ' · 原有系统连接'}（需单独授权）`));
         if (entry.sameLabelIndices.length) group.append(el('p', `文件中另有同名条目：${entry.sameLabelIndices.map(i => i + 1).join('、')}。`));
-        for (const c of entry.conflicts) group.append(el('p', `冲突：${c.name} · ${describe(c.target)}${c.id === activeHostId ? ' · 活动主机，替换将关闭标签' : ''}${c.paired ? ' · 已配对，替换后保留身份并停用，仍可删除或撤销' : ' · 替换后移除本机资料'}`));
+        for (const c of entry.conflicts) group.append(el('p', `冲突：${c.name} · ${describe(c.target)}${activeHostIds.includes(c.id) ? ' · 活动主机，替换将关闭标签' : ''}${c.paired ? ' · 已配对，替换后保留身份并停用，仍可删除或撤销' : ' · 替换后移除本机资料'}`));
         for (const [value, label] of [['add','新增'],['keep','保留现有 / 跳过此条'],['replace','替换全部列出的冲突']]) {
           if (value === 'replace' && !entry.conflicts.length) continue;
           const option = el('label', null, 'config-option'); const radio = el('input'); radio.type = 'radio'; radio.name = `config-choice-${entry.index}`; radio.value = value; radio.checked = selections.get(entry.index) === value; radio.onchange = () => { selections.set(entry.index, value); updateAffected(); }; option.append(radio, document.createTextNode(` ${label}`)); group.append(option);
@@ -116,7 +116,7 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
       }
       if(plan.preferences) {const option=el('label',null,'config-option'),cb=el('input');cb.type='checkbox';cb.checked=applyPreferences;cb.onchange=()=>{applyPreferences=cb.checked;};option.append(cb,document.createTextNode(` 应用导入字号 ${plan.preferences.terminalFontSize}（默认不应用）`));previewBox.append(option);}
       const affected = el('p', '', 'config-affected'); previewBox.append(affected);
-      function updateAffected() { const ids = plan.entries.filter(e => selections.get(e.index) === 'replace').flatMap(e => e.conflicts.map(c => c.id)); affected.textContent = ids.includes(activeHostId) ? '当前活动主机受影响：确认后将关闭其标签与连接。' : '当前选择不替换活动主机。'; }
+      function updateAffected() { const ids = plan.entries.filter(e => selections.get(e.index) === 'replace').flatMap(e => e.conflicts.map(c => c.id)); affected.textContent = ids.some(id => activeHostIds.includes(id)) ? '当前活动主机受影响：确认后将关闭其标签与连接。' : '当前选择不替换活动主机。'; }
       updateAffected();
       const apply = el('button', '确认应用所选操作', 'primary'); apply.type = 'button'; apply.disabled = busy;
       apply.onclick = async () => {
@@ -124,8 +124,10 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
         let choices; try { choices = buildImportChoices(plan.entries, selections); } catch { message('请逐条选择操作；同一冲突不能被多条同时替换。'); return; }
         const usedTicket = ticket, selectedNetworkKeys=[...selectedNetworks], shouldApplyPreferences=applyPreferences, current=epoch; ticket = null; plan = null; selections.clear(); selectedNetworks.clear(); applyPreferences=false; catalog=null; busy = true; exp.disabled=true; apply.disabled = true; close.disabled = true;
         let result=null, confirmed=false, refreshFailed=false;
-        try { result = await invoke('config_apply', { ticket: usedTicket, choices, selectedNetworks:selectedNetworkKeys, applyPreferences:shouldApplyPreferences }); await onApplied(result); confirmed=true; }
+        const affectedIds=choices.flatMap(c=>c.replaceIds || []);
+        try { await onAffected(affectedIds); result = await invoke('config_apply', { ticket: usedTicket, choices, selectedNetworks:selectedNetworkKeys, applyPreferences:shouldApplyPreferences }); await onApplied(result); confirmed=true; }
         catch { /* the single-use write may have completed; never replay */ }
+        try {await onSettled(affectedIds);} catch { /* cleanup result remains unknown */ }
         try { await refreshHosts(); } catch { refreshFailed=true; }
         let updated=null;
         try { updated=await invoke('network_list'); if (!updated || !Array.isArray(updated.profiles)) throw Error('invalid_catalog'); } catch { updated=null; }

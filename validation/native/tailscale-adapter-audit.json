@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-06",
+  "scope": "Fixed-source audit only. No module build, node start, identity read, authentication or network traffic performed.",
+  "reference": {
+    "heeler": "6a2817fc02aeb552df251d9478753c22fd4738bb",
+    "libtailscale": "d1dc45d039edb7759ecbee6ba2aea0c4bca884b8",
+    "tailscaleVersion": "v1.104.1",
+    "tailscaleCommit": "9a522a9786c97eb7910c01ccb7bd66557b04c910"
+  },
+  "sources": [
+    {
+      "path": "tailscale.go",
+      "gitBlobSha": "ce7cb74a8a26637b792ebf3da4db254c73ceb917",
+      "url": "https://github.com/tailscale/libtailscale/blob/d1dc45d039edb7759ecbee6ba2aea0c4bca884b8/tailscale.go"
+    },
+    {
+      "path": "tailscale.h",
+      "gitBlobSha": "9bc8e7cc39966caa1f8684ba5ed8b9b09fd71fc6",
+      "url": "https://github.com/tailscale/libtailscale/blob/d1dc45d039edb7759ecbee6ba2aea0c4bca884b8/tailscale.h"
+    },
+    {
+      "path": "tsnet/tsnet.go",
+      "gitBlobSha": "8aaef641057285812ae59ebf320509de4951a349",
+      "url": "https://github.com/tailscale/tailscale/blob/9a522a9786c97eb7910c01ccb7bd66557b04c910/tsnet/tsnet.go"
+    },
+    {
+      "path": "ipn/store.go",
+      "gitBlobSha": "49007c14e387b2fd124e155cb18f49a839365918",
+      "url": "https://github.com/tailscale/tailscale/blob/9a522a9786c97eb7910c01ccb7bd66557b04c910/ipn/store.go"
+    }
+  ],
+  "findings": [
+    {
+      "requirement": "owned cancellable streams across five platforms",
+      "observed": "fixed libtailscale uses Unix Socketpair/SCM_RIGHTS and TsnetDial(context.Background); existing compile probe only imports tsnet, it does not compile or validate this fd shim",
+      "next": "implement portable opaque net.Conn handles with per-operation contexts and bounded ownership; no system TCP fallback"
+    },
+    {
+      "requirement": "native encrypted identity persistence",
+      "observed": "tsnet Store defaults to FileStore if nil; StateStore is concurrent, missing returns ErrStateNotExist, nil WriteState deletes; custom Store still requires a distinct root directory",
+      "next": "provide mandatory encrypted native-only StateStore; do not reuse EasyTier's single network-secret envelope as complete Tailscale state"
+    },
+    {
+      "requirement": "no ambient credentials",
+      "observed": "fixed getAuthKey falls back to TS_AUTHKEY and other auth sources when Server.AuthKey absent",
+      "next": "explicit auth policy must prevent ambient credential fallback without reading real environment values; bounded interactive login state must be distinct from Running"
+    },
+    {
+      "requirement": "separate lifecycle cancellation",
+      "observed": "Dial calls Start implicitly; Close documented not before or concurrent with Start; Up may wait through NeedsLogin or NeedsMachineAuth",
+      "next": "serialize managed Start/Close, preserve late-start cleanup ownership, bound readiness independently from local engine start"
+    },
+    {
+      "requirement": "no unsanitized native logs or remote upload",
+      "observed": "Heeler disables log upload inside Go runtime via envknob and logtail; C setenv after Go initialization is insufficient; UserLogf may contain login URL",
+      "next": "disable upload before first node and expose only explicitly reviewed auth state, not raw logs"
+    }
+  ],
+  "notImplemented": [
+    "portable Tailscale managed ABI",
+    "encrypted full StateStore/JNI adapter",
+    "interactive login GUI",
+    "Android/Apple/Windows/native integration",
+    "Tailscale plus EasyTier actual concurrency"
+  ],
+  "context7": {
+    "library": "/tailscale/tailscale",
+    "commands": 2,
+    "scope": "current docs background; all implementation conclusions checked against fixed v1.104.1 source"
+  }
+}

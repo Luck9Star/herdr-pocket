@@ -2,6 +2,16 @@
 
 2026-10-30：验证壳包含本地 fixture、保留的 M1a 一次性 CLI，以及 **M1b 看板／持续只读 SSH 入口**，尚非完整产品。实际编译结果以 [Flutter Actions](https://github.com/Luck9Star/herdr-pocket/actions/workflows/flutter-validation.yml) 对应提交为准；手机字体、IME、选择、性能与三网络仍未验证；同一只读适配器的真实 SSH 证据限于下述云端隔离 loopback，不代表手机或 GUI 远端验收。
 
+## 多视图观察候选
+
+每个视图拥有独立 tab ID、SSH 与明确 pane／terminal，最多保留 8 个视图；system 与 overlay 共享 8 个连接名额，正在关闭或尚未返回的拨号继续占位。从已核验看板的 pane 新开视图后，仍需在新视图主动审查并连接；新 snapshot 必须与原 pane、terminal 精确匹配。
+
+前台切换时立即关闭输入并丢弃未发送队列，关闭该视图观察 channel；显示旧标签不会自动恢复。仅在原 channel 确认回收时保留已认证 SSH；用户主动恢复后，在同一 SSH 和实际 route 上重新核验目标，收到新 full 才显示为实时，输入模式保持关闭。后台、关闭标签或连接失败仍关闭该连接，关闭单个标签不会停止共享网络节点。已发送但结果未知的输入保留锁定，不自动重放。
+
+这是对固定 dartssh2 **4.1.0** 的实验性适配：`destroy()` 的本地完成不代表内部 channel 已移除。代码只识别完整匹配的入站 confirmation／close trace 和本地 channel ID，不输出或保存 trace；snapshot、输入和观察 channel 均计数，每条 SSH 的已确认活跃 channel 和未结束的 open 各自上限为 8（同一 open 在确认后返回前会被两边暂时计数，二者计数之和最多 16）。暂停后最多等待 2 秒回收，否则关闭整条 SSH。归档 SHA-256 为 `39359aceafcf5940b868249e3c9c6d86e4e0f989eec7417d033c943157c84c51`；已逐文件核对归档中 `ssh_client.dart`、`ssh_channel.dart` 和 `msg_channel.dart`。trace 不是稳定公开协议，升级依赖前必须重新核验并执行回归；这不是设备验证证明。
+
+当前持久化输入日志是全局单槽；一个视图的未知结果可能限制其他视图输入，不会据此取消其他视图观察，也不会清除另一目标的记录。草稿提交时先从可发送编辑框移出；旧观察 epoch 返回明确拒绝时，原文只进入该目标的本机只读找回区，不覆盖新草稿或自动发送。共享要求见 [`../shared/mobile-tabs-v1.json`](../shared/mobile-tabs-v1.json)；新增 Widget、连接预算与可选隔离 SSH 测试尚未运行，不能视为编译、真实网络、手机或五平台通过。
+
 ## 固定输入与边界
 
 - Flutter **3.47.9**，源码提交 `c197ca5199e9ee5661e865596c9c07294dfab51c`；终端 `terminal_view: 0.5.0`，MIT。

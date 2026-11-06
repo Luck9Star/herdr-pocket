@@ -120,6 +120,31 @@ void main() {
     expect(gate.acknowledgeUnknown(),isTrue); expect(gate.mode,RemoteInputMode.observe);
     expect(calls,1); // Acknowledging/rebinding never replays anything.
   });
+  test('MT08 MT09 hide revokes queued bytes and preserves the submitted unknown on its original target', () async {
+    final reply = Completer<RemoteInputResult>(); var calls = 0;
+    final gate = RemoteInputGate((t,b,current) { calls++; return reply.future; });
+    final original = target(); ready(gate,original);
+    final lease = gate.capture()!;
+    final sent = gate.submit(lease,'once'),queued = gate.submit(lease,'unsent');
+    gate.invalidate();
+    expect((await queued).code,'input_cancelled_before_write');
+    reply.complete(const RemoteInputResult.unknown()); await sent;
+    expect(calls,1); expect(gate.unknown!.target,original); expect(gate.unknown!.text,'once');
+    gate.bind(original,const RemoteInputCapability(4096));
+    expect(gate.canAcknowledgeUnknown,isFalse); expect(gate.canInput,isFalse);
+  });
+  test('MT10 old known rejection cannot overwrite new observation lease result or mode', () async {
+    final reply = Completer<RemoteInputResult>(),connection = Object();
+    final gate = RemoteInputGate((t,b,current) => reply.future);
+    final oldTarget = target(connection:connection); ready(gate,oldTarget,mode:RemoteInputMode.draft);
+    final oldResult = gate.submit(gate.capture()!,'old');
+    gate.invalidate();
+    final resumedTarget = target(connection:connection); ready(gate,resumedTarget,mode:RemoteInputMode.draft);
+    final resumedLease = gate.capture()!;
+    reply.complete(const RemoteInputResult.rejected('pocket_input_rejected')); await oldResult;
+    expect(gate.lastResult,isNull); expect(gate.current(resumedLease),isTrue);
+    expect(gate.mode,RemoteInputMode.draft); expect(gate.unknown,isNull);
+  });
   test('journal records only public identity and attempt ID; malformed/noncanonical/extra fields fail closed', () {
     final t = target(); final pending = RemoteInputPending.create('a'*32,t);
     final data = jsonDecode(pending.raw) as Map<String,dynamic>;

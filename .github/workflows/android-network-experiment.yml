@@ -5,10 +5,97 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
 concurrency:
   group: network-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  transport-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - name: Verify the fixed source repair and test isolated SSH controls
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+          python3 validation/vendor/verify-russh.py
+          cargo test --manifest-path validation/transport-rust/Cargo.toml --locked 2>&1 | tee "$RUNNER_TEMP/transport-tests.log"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-network-transport-source-${{ github.sha }}
+          path: ${{ runner.temp }}/transport-tests.log
+          if-no-files-found: ignore
+          retention-days: 14
+  flutter-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      verified_lock: ${{ steps.resolve.outputs.verified_lock }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - name: Prepare the pinned experimental renderer and shared mobile fixtures
+        run: |
+          python3 -m unittest discover -s validation/flutter/tool -v
+          python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+          export PATH="$RUNNER_TEMP/flutter-sdk/bin:$PATH"
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
+      - name: Resolve and verify the candidate lock
+        id: resolve
+        working-directory: ${{ runner.temp }}/flutter-probe
+        run: |
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
+          echo "verified_lock=true" >> "$GITHUB_OUTPUT"
+      - name: Analyze candidate
+        working-directory: ${{ runner.temp }}/flutter-probe
+        run: flutter analyze 2>&1 | tee candidate-analyze.log
+      - name: Test mobile state and input contracts
+        id: safety
+        if: "!cancelled() && steps.resolve.outputs.verified_lock == 'true'"
+        working-directory: ${{ runner.temp }}/flutter-probe
+        run: flutter test --reporter expanded 2>&1 | tee candidate-safety-tests.log
+      - name: Test the combining-character repair
+        id: renderer
+        if: "!cancelled() && steps.resolve.outputs.verified_lock == 'true'"
+        working-directory: ${{ runner.temp }}/flutter-probe
+        run: flutter test diagnostic/combining_render_test.dart regression/combining_patch_test.dart --reporter expanded 2>&1 | tee candidate-render-tests.log
+      - name: Test pairing and retained SSH observation with an isolated host
+        if: "!cancelled() && steps.safety.outcome == 'success' && steps.renderer.outcome == 'success'"
+        run: |
+          export PATH="$RUNNER_TEMP/flutter-sdk/bin:$PATH"
+          python3 -m venv "$RUNNER_TEMP/pairing-venv"
+          "$RUNNER_TEMP/pairing-venv/bin/pip" install -r validation/pairing/requirements.txt
+          PYTHONDONTWRITEBYTECODE=1 "$RUNNER_TEMP/pairing-venv/bin/python" -m unittest discover -s validation/remote-harness -q
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install -y openssh-server
+          "$RUNNER_TEMP/pairing-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui flutter --flutter-app "$RUNNER_TEMP/flutter-probe" --output "$RUNNER_TEMP/paired-evidence"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-network-flutter-ssh-${{ github.sha }}
+          path: ${{ runner.temp }}/paired-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-network-flutter-source-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/flutter-probe/pubspec.lock
+            ${{ runner.temp }}/flutter-probe/candidate-manifest.json
+            ${{ runner.temp }}/flutter-probe/candidate-*.log
+            ${{ runner.temp }}/flutter-probe/probe-results
+          if-no-files-found: ignore
+          retention-days: 14
   native:
     runs-on: ubuntu-24.04
     timeout-minutes: 100
@@ -41,7 +128,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   apps:
-    needs: native
+    needs: [native, flutter-source, transport-source]
+    if: "!cancelled() && needs.native.result == 'success'"
     runs-on: ubuntu-24.04
     timeout-minutes: 100
     strategy:
@@ -60,6 +148,7 @@ jobs:
           path: ${{ runner.temp }}/android-native
       - name: Install toolchain and verify native input
         run: |
+          python3 validation/vendor/verify-russh.py
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358'
           rustup toolchain install 1.96.0 --profile minimal
           rustup default 1.96.0
@@ -83,6 +172,7 @@ jobs:
         working-directory: validation/tauri
         run: |
           npm ci
+          npm test
           npm run tauri -- android init --ci
           python3 scripts/wire-android.py
           mkdir -p src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a
@@ -91,19 +181,30 @@ jobs:
           mapfile -t apks < <(find src-tauri/gen/android -name '*.apk' -type f)
           test "${#apks[@]}" -eq 1
           cp "${apks[0]}" "$RUNNER_TEMP/app.apk"
-      - name: Build Flutter arm64 APK
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         if: matrix.app == 'flutter'
+        with:
+          name: android-network-flutter-source-${{ github.sha }}
+          path: ${{ runner.temp }}/flutter-source
+      - name: Build Flutter arm64 APK from the verified experimental candidate
+        if: matrix.app == 'flutter'
+        env:
+          VERIFIED_LOCK: ${{ needs.flutter-source.outputs.verified_lock }}
         run: |
+          test "$VERIFIED_LOCK" = true
           python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
           echo "$RUNNER_TEMP/flutter-sdk/bin" >> "$GITHUB_PATH"
           export PATH="$RUNNER_TEMP/flutter-sdk/bin:$PATH"
           python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
+          cp "$RUNNER_TEMP/flutter-source/pubspec.lock" "$RUNNER_TEMP/flutter-probe/pubspec.lock"
           cargo build --manifest-path validation/flutter-network-runtime/Cargo.toml --locked --target aarch64-linux-android --features network-easytier
           mkdir -p "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a"
           cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
           cp validation/flutter-network-runtime/target/aarch64-linux-android/debug/libherdr_flutter_network_runtime.so "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
           cd "$RUNNER_TEMP/flutter-probe"
           flutter pub get --enforce-lockfile
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
           flutter build apk --debug --target-platform android-arm64
           cp build/app/outputs/flutter-apk/app-debug.apk "$RUNNER_TEMP/app.apk"
       - name: Verify APK ABI, native hash and dynamic dependency
@@ -111,11 +212,21 @@ jobs:
       - name: Record APK provenance and validation boundary
         env:
           APP: ${{ matrix.app }}
+          SOURCE_CHECKS: ${{ matrix.app == 'flutter' && needs.flutter-source.result || 'success' }}
+          TRANSPORT_CHECKS: ${{ needs.transport-source.result }}
         run: |
           mkdir -p "$RUNNER_TEMP/app-output"
           cp "$RUNNER_TEMP/app.apk" "$RUNNER_TEMP/app-output/app.apk"
           cp "$RUNNER_TEMP/android-native/manifest.json" "$RUNNER_TEMP/app-output/native-manifest.json"
-          python3 validation/native/tool/android_bundle.py report "$RUNNER_TEMP/app-output" --commit "$GITHUB_SHA" --app "$APP"
+          if test "$APP" = flutter; then
+            cp "$RUNNER_TEMP/flutter-probe/candidate-manifest.json" "$RUNNER_TEMP/app-output/candidate-manifest.json"
+            cp "$RUNNER_TEMP/flutter-probe/candidate/terminal_view/LICENSE" "$RUNNER_TEMP/app-output/terminal_view-LICENSE"
+            cp "$RUNNER_TEMP/flutter-probe/candidate/terminal_view/NOTICE" "$RUNNER_TEMP/app-output/terminal_view-NOTICE"
+          fi
+          cp validation/shared/mobile-tabs-v1.json "$RUNNER_TEMP/app-output/mobile-tabs-v1.json"
+          cp validation/vendor/RUSSH-NOTICE.md validation/vendor/russh-0.65.0-source.json validation/vendor/russh-0.65.0-local-close.patch "$RUNNER_TEMP/app-output/"
+          cp validation/vendor/russh-0.65.0-LICENSE-APACHE "$RUNNER_TEMP/app-output/russh-LICENSE"
+          python3 validation/native/tool/android_bundle.py report "$RUNNER_TEMP/app-output" --commit "$GITHUB_SHA" --app "$APP" --checks "$SOURCE_CHECKS" --transport-checks "$TRANSPORT_CHECKS"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: android-${{ matrix.app }}-network-${{ github.sha }}

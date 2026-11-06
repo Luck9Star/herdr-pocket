@@ -137,9 +137,15 @@ class RemoteDashboard {
   final String session;
   final List<RemotePane> panes;
 }
+/// A resumed view is bound to both fields from its original snapshot.
+void requireOriginalObservationTarget(RemotePane original,RemoteDashboard fresh) {
+  final matches = fresh.panes.where((p) => p.paneId == original.paneId && p.terminalId == original.terminalId);
+  if (matches.length != 1) throw const RemoteFailure('resume_target_changed');
+}
 class RemoteFrame {
-  const RemoteFrame(this.seq, this.full, this.ansi);
+  const RemoteFrame(this.seq, this.full, this.ansi,{this.observationEpoch=0});
   final int seq;
+  final int observationEpoch;
   final bool full;
   final String ansi;
 }
@@ -149,6 +155,81 @@ typedef FrameConsumer = FutureOr<void> Function(int generation, String paneId, R
 
 typedef RemoteProgress = void Function(int generation, String phase);
 typedef SocketConnector = Future<SSHSocket> Function(String host, int port);
+
+/// Shared by all views, including system TCP; an interrupted pending dial keeps
+/// its slot until the late socket has been retired.
+class RemoteConnectionBudget {
+  RemoteConnectionBudget({this.limit=8});
+  final int limit;
+  int _inUse = 0;
+  int get inUse => _inUse;
+  bool acquire() { if (_inUse >= limit) return false; _inUse++; return true; }
+  void release() { assert(_inUse > 0); _inUse--; }
+}
+final _sharedConnectionBudget = RemoteConnectionBudget();
+
+/// Pinned dartssh2 4.1 trace messages are consumed, never logged. A local
+/// channel destroy completes `done` before the peer CLOSE removes the channel
+/// from SSHClient's internal table; only the inbound CLOSE is retirement.
+/// Per SSH the confirmed-active set and unsettled-open count are independently
+/// bounded to 8 each; a confirmed open can temporarily be counted in both.
+class ChannelRetirementTracker {
+  ChannelRetirementTracker(this.socketText,{required this.onOverflow});
+  final String socketText;
+  final void Function() onOverflow;
+  final Set<int> _active = {};
+  int _pending = 0,_confirmations = 0;
+  Completer<void>? _change,_pendingIdle;
+  bool _overflowed = false;
+  int get activeCount => _active.length;
+  int get pendingCount => _pending;
+  void startOpen() {
+    if (_pending >= 8 || _active.length >= 8 || _overflowed) {
+      if (!_overflowed) { _overflowed = true; onOverflow(); }
+      throw const RemoteFailure('channel_capacity');
+    }
+    _pending++;
+  }
+  void verifyOpen() {
+    if (_confirmations == 0 && !_overflowed) { _overflowed = true; onOverflow(); }
+  }
+  void finishOpen({required bool succeeded}) {
+    assert(_pending > 0);
+    if (succeeded && _confirmations == 0) {
+      verifyOpen();
+    } else if (_confirmations > 0) { _confirmations--; }
+    _pending--; _notify();
+  }
+  void trace(String message) {
+    final prefix = '<- $socketText: ';
+    if (!message.startsWith(prefix)) return;
+    final event = message.substring(prefix.length);
+    final open = RegExp(r'^SSH_Message_Channel_Confirmation\(recipientChannel: ([0-9]+), senderChannel: [0-9]+, initialWindowSize: [0-9]+, maximumPacketSize: [0-9]+\)$').firstMatch(event);
+    if (open != null) {
+      final id = int.tryParse(open.group(1)!);
+      if (id == null || id > 65535 || _active.contains(id)) return;
+      if (_active.length >= 8 || _confirmations >= _pending) {
+        if (!_overflowed) { _overflowed = true; onOverflow(); } return;
+      }
+      _active.add(id); _confirmations++; _notify(); return;
+    }
+    final close = RegExp(r'^SSH_Message_Channel_Close\(recipientChannel: ([0-9]+)\)$').firstMatch(event);
+    if (close == null) return;
+    final id = int.tryParse(close.group(1)!);
+    if (id != null) { _active.remove(id); _notify(); }
+  }
+  Future<void> waitIdle() => waitOnly(null);
+  Future<void> waitOnly(int? allowedId) async {
+    while (_pending != 0 || _active.any((id) => id != allowedId)) {
+      await (_change ??= Completer<void>()).future;
+    }
+  }
+  Future<void> waitPending() => _pending == 0 ? Future<void>.value() : (_pendingIdle ??= Completer<void>()).future;
+  void _notify() {
+    if (_pending == 0) { final pending = _pendingIdle; _pendingIdle = null; if (pending != null && !pending.isCompleted) pending.complete(); }
+    final change = _change; _change = null; if (change != null && !change.isCompleted) change.complete();
+  }
+}
 
 class _Attempt {
   _Attempt(this.generation, this.evidence);
@@ -162,6 +243,7 @@ class _Attempt {
   Future<void>? closing;
   SSHSocket? socket;
   SSHClient? client;
+  Future<void>? clientClosing;
   SSHForwardChannel? forward;
   SSHForwardChannel? inputForward;
   SSHSession? observe;
@@ -172,14 +254,21 @@ class _Attempt {
   RemoteInputCapability? inputCapability;
   RemoteInputTarget? inputTarget;
   bool inputBusy = false;
+  bool observationPaused = false;
+  int observationEpoch = 0;
+  Completer<void>? resumeObservation;
+  void Function(RemoteFailure)? interruptObservation;
+  ChannelRetirementTracker? channels;
+  bool lateChannelDestroyFailed = false;
 }
 
 /// Defaults to read-only. Writes require the separate guarded test extension;
 /// stock herdr 0.9.5 never gains input through a pane-ID-only fallback.
 class RemoteReadOnlyAdapter {
-  RemoteReadOnlyAdapter({SocketConnector? connector, this.inputJournal}) : _connector = connector ??
+  RemoteReadOnlyAdapter({SocketConnector? connector, this.inputJournal,RemoteConnectionBudget? connectionBudget}) : _budget = connectionBudget ?? _sharedConnectionBudget, _connector = connector ??
     ((host,port) => SSHSocket.connect(host,port,timeout:const Duration(seconds:8)));
   final SocketConnector _connector;
+  final RemoteConnectionBudget _budget;
   final RemoteInputJournal? inputJournal;
   int generation = 0, _connectionCount = 0;
   _Attempt? _attempt;
@@ -191,6 +280,7 @@ class RemoteReadOnlyAdapter {
   RemoteInputPending? get pendingInput => _pendingInput;
   RemoteInputTarget? get inputTarget => _attempt?.inputTarget;
   RemoteInputCapability? get inputCapability => _attempt?.inputCapability;
+  RemoteDashboard? get currentDashboard => _attempt?.dashboard;
 
   bool _valid(_Attempt a) => identical(a,_attempt) && a.generation == generation && !a.closed;
   void _check(_Attempt a) {
@@ -201,7 +291,8 @@ class RemoteReadOnlyAdapter {
     a.interruptWait?.call(a.failure!);
     a.interruptInput?.call(a.failure!);
   }
-  Future<T> _wait<T>(_Attempt a, Future<T> future, {void Function(T)? disposeLate, bool timed = true, bool input = false}) async {
+  Future<T> _wait<T>(_Attempt a, Future<T> future, {void Function(T)? disposeLate, void Function(bool,bool)? onSettled,
+      bool timed = true, bool input = false, bool observation = false,Duration timeout=const Duration(seconds:10)}) async {
     // One removable waiter, rather than accumulating cancellation Future.any
     // listeners on every frame of a long-running observe.
     final completion = Completer<T>();
@@ -209,24 +300,55 @@ class RemoteReadOnlyAdapter {
       if (!completion.isCompleted) completion.completeError(failure);
     }
     if (input) { a.interruptInput = interrupt; } else { a.interruptWait = interrupt; }
+    if (observation) a.interruptObservation = interrupt;
     unawaited(future.then<void>((value) {
-      if (!_valid(a)) {
-        disposeLate?.call(value); a.evidence.lateEventsIgnored++;
-        interrupt(const RemoteFailure('cancelled'));
-      } else if (!completion.isCompleted) { completion.complete(value); }
+      final wasLate = !_valid(a) || completion.isCompleted;
+      try {
+        if (wasLate) {
+          disposeLate?.call(value); a.evidence.lateEventsIgnored++;
+          interrupt(const RemoteFailure('cancelled'));
+        } else { completion.complete(value); }
+      } finally { onSettled?.call(true,wasLate); }
     },onError:(Object error,StackTrace stack) {
-      if (!completion.isCompleted) completion.completeError(error,stack);
+      try { if (!completion.isCompleted) completion.completeError(error,stack); }
+      finally { onSettled?.call(false,true); }
     }));
     if (!_valid(a)) interrupt(const RemoteFailure('cancelled'));
     if (a.failure != null) interrupt(a.failure!);
+    final timer = timed ? Timer(timeout,() => interrupt(const RemoteFailure('timeout'))) : null;
     try {
-      return await (timed ? completion.future.timeout(const Duration(seconds:10),
-        onTimeout:() => throw const RemoteFailure('timeout')) : completion.future);
+      return await completion.future;
     } finally {
+      timer?.cancel();
+      if (identical(a.interruptObservation,interrupt)) a.interruptObservation = null;
       if (input) {
         if (identical(a.interruptInput,interrupt)) a.interruptInput = null;
       } else if (identical(a.interruptWait,interrupt)) { a.interruptWait = null; }
     }
+  }
+  Future<T> _openChannel<T>(_Attempt a,Future<T> Function() open,void Function(T) destroy,
+      {bool input=false,bool observation=false}) async {
+    final tracker = a.channels;
+    if (tracker == null) throw const RemoteFailure('connection_failed');
+    final epoch = a.observationEpoch;
+    tracker.startOpen();
+    var delivered = false;
+    try {
+      final value = await _wait(a,Future<T>.sync(open),input:input,observation:observation,
+        onSettled:(success,wasLate) {
+          if (success && !wasLate) { delivered = true; return; }
+          tracker.finishOpen(succeeded:success);
+          if (!success && _valid(a) && !a.observationPaused) _fail(a,const RemoteFailure('channel_open_failed'));
+        },disposeLate:(value) {
+        try { destroy(value); } catch (_) { a.lateChannelDestroyFailed = true; }
+      });
+      tracker.verifyOpen();
+      if (a.failure != null || !_valid(a) || (observation && (a.observationPaused || a.observationEpoch != epoch))) {
+        try { destroy(value); } catch (_) { a.lateChannelDestroyFailed = true; }
+        throw a.failure ?? (!_valid(a) ? const RemoteFailure('cancelled') : const RemoteFailure('observation_paused'));
+      }
+      return value;
+    } finally { if (delivered) tracker.finishOpen(succeeded:true); }
   }
   Future<void> _close(_Attempt a) => a.closing ??= _closeResources(a);
   Future<void> _closeResources(_Attempt a) async {
@@ -236,7 +358,10 @@ class RemoteReadOnlyAdapter {
     // in dartssh2 4.1.0. Let the client finish before destroying its socket.
     a.observe?.channel.destroy(); a.forward?.destroy(); a.inputForward?.destroy();
     try { await a.stderr?.cancel(); } catch (_) { /* discarded remote stream */ }
-    try { await a.client?.close().timeout(const Duration(seconds:2)); } catch (_) { /* socket cleanup below */ }
+    try {
+      final closing = a.client?.close(); a.clientClosing = closing;
+      await closing?.timeout(const Duration(seconds:2));
+    } catch (_) { /* socket cleanup below; slot still waits for original future */ }
     finally { a.socket?.destroy(); }
   }
   Future<void> cancel() async {
@@ -250,6 +375,32 @@ class RemoteReadOnlyAdapter {
     await _close(a);
   }
 
+  /// Revoke input immediately and retire only the observing channel. The SSH
+  /// transport stays owned by this attempt until explicit cancel or failure.
+  bool pauseObservation() {
+    final a = _attempt;
+    if (a == null || !_valid(a)) return false;
+    if (a.observationPaused) return true;
+    a.observationPaused = true; a.observationEpoch++;
+    a.evidence.fullFrameReceived = false; a.inputTarget = null;
+    a.interruptInput?.call(const RemoteFailure('cancelled'));
+    a.inputForward?.destroy();
+    a.interruptObservation?.call(const RemoteFailure('observation_paused'));
+    a.observe?.channel.destroy();
+    return true;
+  }
+
+  /// An explicit user action only. A fresh target snapshot and first full are
+  /// required before a new input capability can be used.
+  bool resumeObservation() {
+    final a = _attempt;
+    if (a == null || !_valid(a) || !a.observationPaused) return false;
+    a.observationPaused = false;
+    final signal = a.resumeObservation; a.resumeObservation = null;
+    if (signal != null && !signal.isCompleted) signal.complete();
+    return true;
+  }
+
   Future<RemoteSnapshot> read(RemoteConfig config, {RemoteProgress? onProgress}) =>
     _run(config,onProgress:onProgress);
 
@@ -261,7 +412,7 @@ class RemoteReadOnlyAdapter {
 
   void selectPane(int expectedGeneration, String paneId) {
     final a = _attempt;
-    if (a == null || !_valid(a) || expectedGeneration != a.generation || a.selection.isCompleted) {
+    if (a == null || !_valid(a) || a.observationPaused || expectedGeneration != a.generation || a.selection.isCompleted) {
       throw const RemoteFailure('stale_selection');
     }
     final matches = a.dashboard?.panes.where((p) => p.paneId == paneId).toList();
@@ -328,8 +479,8 @@ class RemoteReadOnlyAdapter {
     SSHForwardChannel? channel;
     RemoteInputResult result = const RemoteInputResult.rejected('input_cancelled_before_write');
     try {
-      final opened = await _wait<SSHForwardChannel>(a,a.client!.forwardLocalUnix(a.config!.socketPath),input:true,
-        disposeLate:(c) => c.destroy());
+      final opened = await _openChannel<SSHForwardChannel>(a,() => a.client!.forwardLocalUnix(a.config!.socketPath),
+        (c) => c.destroy(),input:true);
       channel = opened;
       a.inputForward = opened;
       if (!_canWrite(a,target) || _unknownInputTarget != null || !stillCurrent()) return result;
@@ -372,6 +523,10 @@ class RemoteReadOnlyAdapter {
     } finally {
       channel?.destroy();
       if (identical(a.inputForward,channel)) a.inputForward = null;
+      if (channel != null && _valid(a) && !a.observationPaused && a.channels != null) {
+        try { await _wait(a,a.channels!.waitOnly(a.observe?.channel.channelId),input:true,timeout:const Duration(seconds:2)); }
+        catch (_) { if (_valid(a) && !a.observationPaused) _fail(a,const RemoteFailure('channel_cleanup_timeout')); }
+      }
       a.inputBusy = false;
     }
     if (_pendingInput != null) _unknownInputTarget = target;
@@ -412,13 +567,17 @@ class RemoteReadOnlyAdapter {
       DashboardConsumer? onDashboard, FrameConsumer? onFrame,
       required void Function(_Attempt) onAttempt}) async {
     if (_activeRead || _dialPending) throw const RemoteFailure('connection_busy');
+    if (!_budget.acquire()) throw const RemoteFailure('connection_capacity');
     _activeRead = true;
-    if (_attempt != null) await cancel();
+    try { if (_attempt != null) await cancel(); }
+    catch (_) { _activeRead = false; _budget.release(); rethrow; }
     final a = _Attempt(++generation,RemoteEvidence());
     a.config = config;
     onAttempt(a);
     _attempt = a; final e = a.evidence; evidence = e; e.generation = generation; e.connectionCount = ++_connectionCount;
     RemoteSnapshot? completed;
+    Future<SSHSocket>? ownedDial;
+    var lateDestroyFailed = false;
     void phase(String name) { _check(a); onProgress?.call(a.generation,name); _check(a); }
     try {
       phase('connecting');
@@ -439,10 +598,16 @@ class RemoteReadOnlyAdapter {
       _dialPending = true;
       final pending = Future<SSHSocket>.sync(() => _connector(config.host,config.port))
         .whenComplete(() { _dialPending = false; });
-      final socket = await _wait(a,pending,disposeLate:(s) => s.destroy());
+      ownedDial = pending;
+      final socket = await _wait(a,pending,disposeLate:(s) {
+        try { s.destroy(); } catch (_) { lateDestroyFailed = true; }
+      });
       a.socket = socket;
+      final tracker = ChannelRetirementTracker(socket.toString(),onOverflow:() => _fail(a,const RemoteFailure('channel_capacity')));
+      a.channels = tracker;
       final client = SSHClient(socket,username:config.username,identities:identities,
         keepAliveInterval:null,handshakeTimeout:const Duration(seconds:8),authTimeout:const Duration(seconds:8),
+        printTrace:tracker.trace,
         onVerifyHostKey:(type,fingerprint) {
           if (!_valid(a)) return false;
           e.hostKeyChecked = true;
@@ -458,28 +623,31 @@ class RemoteReadOnlyAdapter {
       unawaited(client.done.then<void>((_) {},onError:(Object _,StackTrace __) {}));
       await _wait(a,client.authenticated);
       if (!e.hostKeyChecked || !e.hostKeyMatched) throw const RemoteFailure('host_key_mismatch');
-      phase('snapshot');
-      final channel = await _wait(a,client.forwardLocalUnix(config.socketPath),disposeLate:(c) => c.destroy());
-      a.forward = channel;
-      final id = 'pocket-readonly-${a.generation}';
-      channel.sink.add(utf8.encode('${jsonEncode({'id':id,'method':'session.snapshot','params':<String,Object?>{}})}\n'));
-      // The channel upload loop writes asynchronously. Its flush() forwards
-      // directly to the transport's IOSink and is not a channel write barrier.
-      // The matching RPC response is the acknowledgement; do not race flush
-      // against the SSH transport's other writes on the same socket.
-      final rpcLine = await _wait(a,boundedLines(channel.stream,maxTotal:1048576).first);
-      final rpc = _decodeObject(rpcLine);
-      if (rpc['id'] != id || rpc['error'] != null || rpc['ok'] == false || rpc['result'] is! Map) {
-        throw const RemoteFailure('snapshot_rejected');
+      Future<void> waitRetired() => _wait(a,tracker.waitIdle(),timeout:const Duration(seconds:2));
+      Future<RemoteDashboard> snapshot({bool observation=false}) async {
+        final channel = await _openChannel<SSHForwardChannel>(a,() => client.forwardLocalUnix(config.socketPath),
+          (c) => c.destroy(),observation:observation);
+        a.forward = channel;
+        try {
+          final id = _requestId();
+          channel.sink.add(utf8.encode('${jsonEncode({'id':id,'method':'session.snapshot','params':<String,Object?>{}})}\n'));
+          final line = await _wait(a,boundedLines(channel.stream,maxTotal:1048576).first,observation:observation);
+          final rpc = _decodeObject(line);
+          if (rpc['id'] != id || rpc['error'] != null || rpc['ok'] == false || rpc['result'] is! Map) {
+            throw const RemoteFailure('snapshot_rejected');
+          }
+          return parseSnapshotDashboard(config,Map<String,dynamic>.from(rpc['result'] as Map),a.generation);
+        } finally { channel.destroy(); if (identical(a.forward,channel)) a.forward = null; }
       }
-      e.snapshotReceived = true;
-      final dashboard = parseSnapshotDashboard(config,Map<String,dynamic>.from(rpc['result'] as Map),a.generation);
-      a.dashboard = dashboard; e.paneCount = dashboard.panes.length;
-      channel.destroy(); a.forward = null;
+      phase('snapshot');
+      final dashboard = await snapshot();
+      await waitRetired();
+      e.snapshotReceived = true; a.dashboard = dashboard; e.paneCount = dashboard.panes.length;
       if (onDashboard != null) {
         // Capability discovery is side-effect-free; stock 0.9.5 replies with an
         // error and remains read-only. This is never inferred from version alone.
-        final capabilityChannel = await _wait(a,client.forwardLocalUnix(config.socketPath),disposeLate:(c) => c.destroy());
+        final capabilityChannel = await _openChannel<SSHForwardChannel>(a,() => client.forwardLocalUnix(config.socketPath),
+          (c) => c.destroy());
         a.forward = capabilityChannel;
         final capabilityId = _requestId();
         capabilityChannel.sink.add(utf8.encode('${jsonEncode({'id':capabilityId,
@@ -491,6 +659,7 @@ class RemoteReadOnlyAdapter {
           a.inputCapability = RemoteInputCapability.parse(response['result']);
         }
         capabilityChannel.destroy(); a.forward = null;
+        await waitRetired();
         _journalReady = false;
         if (a.inputCapability != null) {
           try {
@@ -514,52 +683,114 @@ class RemoteReadOnlyAdapter {
         selected = await _wait(a,a.selection.future,timed:false);
       }
       _check(a);
-      a.inputTarget = RemoteInputTarget(connection:a,generation:a.generation,
-        host:config.host,port:config.port,username:config.username,hostFingerprint:config.expectedFingerprint,
-        session:config.session,socketPath:config.socketPath,paneId:selected.paneId,terminalId:selected.terminalId,
-        route:socket is RoutedSSHSocket ? socket.actualRoute : 'system');
-      final observe = await _wait(a,client.execute(config.observeCommand(selected.terminalId)),disposeLate:(s) => s.channel.destroy());
-      a.observe = observe;
-      final budget = ObserveByteBudget(continuous:onDashboard != null);
-      a.stderr = observe.stderr.listen((chunk) {
-        try { budget.add(chunk.length,stderr:true); } on RemoteFailure catch (error) {
-          e.errorCode = error.code;
-          _fail(a,error);
-          observe.channel.destroy();
+      final route = socket is RoutedSSHSocket ? socket.actualRoute : 'system';
+      var needsSnapshot = a.observationEpoch != 0;
+      while (true) {
+        while (a.observationPaused) {
+          needsSnapshot = true;
+          final signal = a.resumeObservation ??= Completer<void>();
+          await _wait(a,signal.future,timed:false);
+          if (identical(a.resumeObservation,signal)) a.resumeObservation = null;
         }
-      },onError:(Object _) {});
-      phase('observing');
-      final frames = StreamIterator<RemoteFrame>(validatedFrames(
-        observe.stdout.map((chunk) { budget.add(chunk.length); return chunk; }),
-        continuous:onDashboard != null));
-      try {
-        var first = true;
-        while (await _wait(a,frames.moveNext(),timed:first)) {
+        final epoch = a.observationEpoch;
+        void checkObservation() {
           _check(a);
-          if (a.failure != null) throw a.failure!;
-          final frame = frames.current;
-          e.frameCount++; if (!frame.full) e.deltaFrames++;
-          e.lastSeq = frame.seq; e.fullFrameReceived = true;
-          final byteLength = utf8.encode(frame.ansi).length;
-          if (byteLength > e.bufferHighWaterBytes) e.bufferHighWaterBytes = byteLength;
-          if (first) phase('full_received');
-          first = false;
-          completed = RemoteSnapshot(a.generation,config.session,selected.paneId,frame.ansi);
-          if (onFrame != null) {
-            await _wait(a,Future<void>.sync(() => onFrame(a.generation,selected.paneId,frame)),timed:false);
+          if (a.observationPaused || a.observationEpoch != epoch) throw const RemoteFailure('observation_paused');
+        }
+        SSHSession? observe;
+        StreamIterator<RemoteFrame>? frames;
+        StreamSubscription<Uint8List>? stderr;
+        try {
+          if (needsSnapshot) {
+            final fresh = await snapshot(observation:true); checkObservation();
+            await waitRetired(); checkObservation();
+            requireOriginalObservationTarget(selected,fresh);
+            a.dashboard = fresh;
           }
-          _check(a);
-          if (onDashboard == null) break;
+          checkObservation();
+          a.inputTarget = RemoteInputTarget(connection:a,generation:a.generation,
+            host:config.host,port:config.port,username:config.username,hostFingerprint:config.expectedFingerprint,
+            session:config.session,socketPath:config.socketPath,paneId:selected.paneId,terminalId:selected.terminalId,route:route);
+          e.fullFrameReceived = false;
+          observe = await _openChannel<SSHSession>(a,() => client.execute(config.observeCommand(selected.terminalId)),
+            (s) => s.channel.destroy(),observation:true);
+          checkObservation(); a.observe = observe;
+          final current = observe;
+          final budget = ObserveByteBudget(continuous:onDashboard != null);
+          stderr = current.stderr.listen((chunk) {
+            if (!_valid(a) || a.observationPaused || a.observationEpoch != epoch) return;
+            try { budget.add(chunk.length,stderr:true); } on RemoteFailure catch (error) {
+              e.errorCode = error.code; _fail(a,error); current.channel.destroy();
+            }
+          },onError:(Object _) {});
+          a.stderr = stderr;
+          phase('observing'); checkObservation();
+          frames = StreamIterator<RemoteFrame>(validatedFrames(
+            current.stdout.map((chunk) { budget.add(chunk.length); return chunk; }),continuous:onDashboard != null));
+          var first = true;
+          while (await _wait(a,frames.moveNext(),timed:first,observation:true)) {
+            checkObservation();
+            if (a.failure != null) throw a.failure!;
+            final frame = frames.current;
+            e.frameCount++; if (!frame.full) e.deltaFrames++;
+            e.lastSeq = frame.seq; e.fullFrameReceived = true;
+            final byteLength = utf8.encode(frame.ansi).length;
+            if (byteLength > e.bufferHighWaterBytes) e.bufferHighWaterBytes = byteLength;
+            if (first) phase('full_received');
+            first = false;
+            completed = RemoteSnapshot(a.generation,config.session,selected.paneId,frame.ansi);
+            if (onFrame != null) await _wait(a,Future<void>.sync(() => onFrame(a.generation,selected.paneId,
+              RemoteFrame(frame.seq,frame.full,frame.ansi,observationEpoch:epoch))),timed:false,observation:true);
+            checkObservation();
+            if (onDashboard == null) break;
+          }
+          checkObservation();
+          if (onDashboard != null || completed == null) throw const RemoteFailure('observe_ended');
+          break;
+        } on RemoteFailure catch (error) {
+          if (error.code != 'observation_paused' && a.observationEpoch == epoch) rethrow;
+          _check(a); needsSnapshot = true;
+        } finally {
+          a.inputTarget = null;
+          if (onDashboard != null) e.fullFrameReceived = false;
+          observe?.channel.destroy();
+          if (identical(a.observe,observe)) a.observe = null;
+          try { await stderr?.cancel(); } catch (_) { /* retired observer */ }
+          if (identical(a.stderr,stderr)) a.stderr = null;
+          try { await frames?.cancel().timeout(const Duration(seconds:2)); } catch (_) { /* retired observer */ }
         }
-        if (onDashboard != null || completed == null) throw const RemoteFailure('observe_ended');
-      } finally { await frames.cancel(); }
+        // Local destroy alone leaves dartssh2's channel table occupied until
+        // peer CLOSE. Never re-open or keep an indefinitely hidden SSH if the
+        // prior observer, input channel or late open does not retire in time.
+        await waitRetired();
+      }
 
     } catch (error) {
       final failure = error is RemoteFailure ? error : RemoteFailure(e.errorCode ??
         (error is SSHAuthFailError ? 'authentication_failed' : error is SSHAuthAbortError && e.hostKeyMatched ? 'authentication_aborted' : 'connection_failed'));
       e.errorCode ??= failure.code;
       throw failure;
-    } finally { await _close(a); _activeRead = false; }
+    } finally {
+      var closed = false;
+      try { await _close(a); closed = true; }
+      finally {
+        _activeRead = false;
+        final pending = ownedDial;
+        if (!closed) {
+          // Failed teardown does not prove that this slot is reusable.
+        } else {
+          // Wait for every underlying channel open and its late disposer, as
+          // well as the dial, even though cancellation already returned.
+          final dial = pending == null ? Future<void>.value() :
+            pending.then<void>((_) {},onError:(Object _,StackTrace __) {});
+          final channels = a.channels?.waitPending() ?? Future<void>.value();
+          final closing = a.clientClosing?.then<void>((_) {},onError:(Object _,StackTrace __) {}) ?? Future<void>.value();
+          unawaited(Future.wait<void>([dial,channels,closing]).then<void>((_) {
+            if (!lateDestroyFailed && !a.lateChannelDestroyFailed) _budget.release();
+          }));
+        }
+      }
+    }
     if (a.generation != generation || !identical(a,_attempt)) {
       e.errorCode = 'cancelled'; e.lateEventsIgnored++; throw const RemoteFailure('cancelled');
     }

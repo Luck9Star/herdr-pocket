@@ -96,3 +96,32 @@ Starting、EngineStarted、Closing、Stopped 只描述本机生命周期；Engin
 每个 service 最多保留 32 个不同 profile ID（含 Stopped 历史），以保留本 runtime 的 revision／网络名防降级检查；第 33 个新 ID 在读取 source 前返回 `mobile_node_history_capacity`，已知 ID 仍可重启。不会静默淘汰历史。清空历史须在旧 runtime 资源明确清理后，由 app 重建 service/runtime；这不是自动恢复或真实安全存储防回滚保证。
 
 本批复验仅使用显式 `overlay-native-fixture` 的合成 C ABI、自建临时 recovery 目录与已有隔离 SSH fixture；没有新 CI 构建、平台 SDK 安装、真实凭据读取、socket 转发或真实节点启动。测试命令沿用上面的 `/private/tmp/herdr-transport-overlay-target` 与 `/private/tmp/herdr-overlay-runtime-target`；GUI、真实 engine 与设备验收分别记录。
+
+## 保留 SSH 的暂停与显式恢复（2026-11-06）
+
+新增 `observe_interactive_controlled_with_dialer` 供宿主为每个连接创建独立的 `ObservationControl`；旧入口保持原语义。参数沿用 config、device signer、整连接 cancellation、audit、progress、pane selection、frame callback 和 dialer，增加 `Option<ControlledInputHooks>` 与 control。`frame(epoch, StreamFrame)` 的 Future 是本帧消费确认；`ControlledInputHooks` 提供共享 recovery、`ready(epoch, Arc<LiveInput>)` 和 `state(ObservationSnapshot)`。只读调用传 `None` 仍可暂停／恢复。
+
+`control.snapshot()` 返回 `{ epoch:u64, phase }`；phase 为 `starting / active / pausing / paused / resuming / closed`。`pause()`、`resume()` 同步返回 `Result<ObservationAck>`，宿主必须继续 await 该 Future。每个 control 只接纳一个命令；忙时返回 `control_busy`，`resume` 仅接受 Paused 状态。Pause 可覆盖正在执行的 Resume：先同步退休旧 epoch 和输入权限，原恢复 ACK 返回 `control_superseded`，旧 frame／ready／receipt 不能激活新 epoch。宿主处理所有 callback 时仍须匹配连接 ID 与 epoch，并同步清除自己的未发送输入队列；core 不持有 GUI 队列。
+
+暂停先同步撤销原 `LiveInput`，再关闭本地 observation channel，成功 ACK 后进入 Paused，保留原 SSH、实际 route、host pin、用户、session、pane 和 terminal。ACK 表示**本地 channel sender 已退休、Close 请求已处理**；它不证明对端收到 Close 或观察进程退出。暂停没有持续 frame 缓冲，也不依赖悬挂 frame ACK。恢复只在同一 SSH 上重新 snapshot，核对原 pane 仍对应同 terminal，再创建新的 observe channel；首帧必须 seq=1/full，且其 callback 完成后才进入 Active／发布新 `LiveInput`。新输入仍从 observe 模式开始，没有自动 dial、重连、resize 或输入重放。初次 pane 选择可一直等待用户，取消或 control epoch 变化仍可打断。
+
+未决输入在暂停后失去资格，保留 durable unknown marker；迟到的成功 receipt 不能清除它。observation epoch 的取消只退休原输入，整连接 cancellation 仍中断网络和输入。Recovery 本轮继续只有一个全局 marker：A 的未知结果可能阻止 B 发送，B 的独立观察和暂停／恢复继续工作；不同目标不能清除 A 的标记。恢复 marker 的持久 route 不增加 observation epoch，也不弱化原有身份校验。
+
+单次本地 Close 处理最多 5 秒，snapshot／capability RPC 同样显式退休自己的 channel；EOF 单独不算退休。关闭错误、超限或超时会取消原 SSH。`ObservationAck` 从创建起设 10 秒截止时间，等待时到期或丢弃当前未完成 ACK 会撤销整连接；被覆盖旧 ACK 的迟到 Drop 不影响新命令。宿主必须 await ACK 并处理错误，不能丢弃 Pause 后继续使用原输入。连接入口正常返回前会取消网络并等待其 pending dial Future 与 SSH driver 所拥有的实际 ByteStream 完成 Drop；宿主的连接额度必须保留到入口结束，不能以收到 Closed 状态代替释放。overlay 的迟到 native open／failed cleanup 另受 runtime 的 32 stream 预算约束；宿主的 8 个 SSH 额度不表示 native reservation 已全部归零。
+
+### 固定 russh 的局部候选修补
+
+官方 0.65.0 本地主动 Close 删除 encrypted channel 后，后续 peer Close 被 established-channel 检查跳过，独立 client sender 索引仍残留。候选在原 Close 分支退休 sender；若该分支发现 encrypted pending data，则保守断开本 SSH。驱动遇 zero-window 时可能先停止读取普通 outbound 队列，让 Close 尚未进入此分支；此时由上面的 5 秒关闭限时取消原 SSH。zero-window 回归证明的是这条超时／撤销路径，没有声称动态执行了 defensive pending guard。服务端不响应 Close 时，成功的本地退休也不能证明远端进程退出。
+
+三个消费根 `transport-rust`、`tauri/src-tauri`、`flutter-network-runtime` 的 patch 和锁均指向同一个本地 0.65.0；独立 `validation/ssh` 保留原 registry 版本作对照。完整官方 90 文件、唯一修改 `src/client/mod.rs` 的补丁、源码／archive hash 和补充 Apache 许可证见 [source manifest](../vendor/russh-0.65.0-source.json) 与 [NOTICE](../vendor/RUSSH-NOTICE.md)。离线校验会反向应用精确补丁，逐文件还原官方 hash；提供已缓存 archive 时还会独立核对每个成员，不写 Cargo registry。
+
+```sh
+python3 validation/vendor/verify-russh.py --metadata
+# archive 参数是已取得的官方 .crate 本地路径；本机本轮为以下临时文件。
+python3 validation/vendor/verify-russh.py --archive /private/tmp/herdr-russh-0.65.0.crate --metadata
+python3 validation/vendor/reproduce-local-close.py --archive /private/tmp/herdr-russh-0.65.0.crate --log-dir /private/tmp/herdr-russh-local-close-evidence --output /private/tmp/herdr-russh-local-close-evidence.json
+```
+
+本轮最终本机结果：默认完整 suite **51 项 library + 1 项 CLI report test**，`overlay-native-fixture` 完整 suite **60 项 library + 1 项 CLI report test** 全通过。新增 8 项 controlled loopback 回归覆盖同 SSH 连续 8 次暂停／恢复且 dial/auth 各一次、两条连接隔离、恢复目标替换拒绝、pending frame ACK 可暂停／取消及覆盖恢复、未决输入 unknown 与迟到 ACK 隔离、peer 不读 Close 时本地退休、zero-window pending 后 5 秒超时断开原连接、用户选择超过 8 秒与迟到 I/O Drop 收敛。
+
+独立源码重建对照以同一正常 pause/resume 测试取得官方 upstream 预期关闭超时（exit 101），候选通过（exit 0）；来源校验还证明三根各只有一个 russh 候选实例。vendor 新增的两个内部单测因本机缺少其锁定 dev 依赖没有运行，不计入上述通过数。严格 Clippy 仍有原有 12 个诊断，新 controlled 模块没有诊断；依赖自身另有原始 unused-variable/dead-code warning。没有运行本批 CI、真实 herdr／overlay 节点、真实凭据或设备测试。

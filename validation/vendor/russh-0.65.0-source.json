@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "name": "russh",
+  "version": "0.65.0",
+  "upstream": {
+    "archiveUrl": "https://static.crates.io/crates/russh/russh-0.65.0.crate",
+    "archiveSha256": "3bb77a4b259312b2abbc541bca1c13cb4e9b61c560a7fd894068c3b92e0c9dc3",
+    "repository": "https://github.com/warp-tech/russh",
+    "vcsCommit": "183a22e8f8f490fa09b6eb7bd044ef99d8c4414f",
+    "pathInVcs": "russh"
+  },
+  "patch": {
+    "path": "russh-0.65.0-local-close.patch",
+    "sha256": "1b9ddcaf676ad089d016f94c75448f2c39c746fe4663218a6bc17e7781c8cf40",
+    "changedFiles": [
+      {
+        "path": "src/client/mod.rs",
+        "beforeSha256": "a35138c0964145ceaab621effa8324d90ef5500799d277fbc33f65312ef76b40",
+        "afterSha256": "d619be8cd8f76dbbcf4bca58713816db8170cdaea2e787f7fe1d8055c8771c0f"
+      }
+    ]
+  },
+  "upstreamFiles": {
+    "path": "russh-0.65.0-upstream-files.json",
+    "sha256": "2f294a54bc781d3ed895ce3477027cfb5550a42f1426937139b2b684e0eeb478",
+    "count": 90
+  },
+  "license": {
+    "spdx": "Apache-2.0",
+    "path": "russh-0.65.0-LICENSE-APACHE",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "note": "Supplemental canonical license; official crate archive omits standalone license file."
+  },
+  "notice": {
+    "path": "RUSSH-NOTICE.md",
+    "sha256": "fdce4bb71743552ad8d012148f49c20c9fe6182358e6193b82664f71fd39a9ad"
+  }
+}

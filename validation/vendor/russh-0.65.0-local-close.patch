@@ -1,0 +1,59 @@
+--- a/src/client/mod.rs
++++ b/src/client/mod.rs
+@@ -1778,7 +1778,18 @@
+             Msg::Channel(id, ChannelMsg::AgentForward { want_reply }) => {
+                 self.agent_forward(id, want_reply)?
+             }
+-            Msg::Channel(id, ChannelMsg::Close) => self.close(id)?,
++            Msg::Channel(id, ChannelMsg::Close) => {
++                if self.common.encrypted.as_ref().is_some_and(|enc| enc.has_pending_data(id)) {
++                    // A local close must not acknowledge retirement while
++                    // encrypted queued data still retains the channel.
++                    return Err(crate::Error::Disconnect);
++                }
++                self.close(id)?;
++                // Local close retires the receiver's sender index as well.
++                // Encrypted::close may already have removed protocol state,
++                // so a later peer close cannot be relied on to reach it.
++                self.channels.remove(&id);
++            }
+             Msg::Rekey => self.initiate_rekey()?,
+             Msg::AwaitExtensionInfo {
+                 extension_name,
+@@ -2126,6 +2137,36 @@
+     use crate::{CryptoVec, cipher, mac};
+ 
+     struct TestHandler;
++
++    #[test]
++    fn herdr_local_close_retires_both_indexes_without_queued_data() {
++        let (mut session, _sender, _reply) = keyboard_interactive_session();
++        let id = session.common.encrypted.as_mut().unwrap().new_channel(1024, 1024);
++        session.common.encrypted.as_mut().unwrap().channels.get_mut(&id).unwrap().confirmed = true;
++        let (sender, mut receiver) = channel(1);
++        session.channels.insert(id, ChannelRef::new(sender));
++        session.handle_msg(Msg::Channel(id, ChannelMsg::Close)).unwrap();
++        assert!(!session.common.encrypted.as_ref().unwrap().channels.contains_key(&id));
++        assert!(!session.channels.contains_key(&id));
++        assert!(matches!(receiver.try_recv(), Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)));
++    }
++
++    #[test]
++    fn herdr_local_close_pending_data_disconnects_instead_of_false_retirement() {
++        let (mut session, _sender, _reply) = keyboard_interactive_session();
++        let id = session.common.encrypted.as_mut().unwrap().new_channel(0, 1024);
++        let entry = session.common.encrypted.as_mut().unwrap().channels.get_mut(&id).unwrap();
++        entry.confirmed = true;
++        entry.pending_data.push_back((bytes::Bytes::from_static(b"unsettled"), None, 0));
++        let (sender, mut receiver) = channel(1);
++        session.channels.insert(id, ChannelRef::new(sender));
++        assert!(matches!(session.handle_msg(Msg::Channel(id, ChannelMsg::Close)), Err(crate::Error::Disconnect)));
++        // The driver must terminate, not report a successful local close while
++        // the encrypted pending queue remains alive. Driver drop drains both.
++        assert!(session.common.encrypted.as_ref().unwrap().has_pending_data(id));
++        drop(session);
++        assert!(matches!(receiver.try_recv(), Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)));
++    }
+ 
+     impl Handler for TestHandler {
+         type Error = crate::Error;

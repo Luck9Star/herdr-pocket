@@ -40,17 +40,24 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
   Future<void> open([HostProfile? profile]) async {
     if (busy || !catalog.ready || catalog.writing || profile?.enabled == false) return;
     if (profile != null && profile.hasIdentity) {
-      tabs.open(profile,networks:catalog.networkProfiles,adapter:tabs.find(profile.id) == null ? widget.adapterFactory?.call(profile) : null); return; }
+      tabs.open(profile,networks:catalog.networkProfiles,adapter:widget.adapterFactory?.call(profile)); return; }
     tabs.select(null);
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,
       catalog:catalog,profileId:profile?.id)));
     if (mounted) setState(() {});
   }
+  void openPane(HostTab source,RemotePane pane) {
+    if (busy || !catalog.ready || catalog.writing || tabs.activeId != source.id || !source.visible.value || tabs.find(source.id) != source) return;
+    final matches = catalog.profiles.where((p) => p.id == source.hostId && p.enabled && !p.retired).toList();
+    if (matches.length != 1 || HostTab.bindingFor(matches.single,catalog.networkProfiles) != source.binding) return;
+    final profile = matches.single;
+    tabs.open(profile,networks:catalog.networkProfiles,requestedTarget:pane,adapter:widget.adapterFactory?.call(profile));
+  }
   Future<void> transfer() async {
     if (busy || !catalog.ready || catalog.writing || catalog.pendingCreation != null) return;
     tabs.select(null);
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => ConfigTransferPage(catalog:catalog,
-      closeTabs:(ids) { for (final id in ids) { tabs.close(id); } })));
+      closeTabs:(ids) { for (final id in ids) { tabs.closeHost(id); } })));
     if (mounted) setState(() {});
   }
   Future<void> terminalPreferences() async {
@@ -72,7 +79,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
     if (busy || !catalog.ready || catalog.writing) return;
     tabs.select(null);
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => NetworkProfilesPage(catalog:catalog,
-      closeTabs:(ids) { for (final id in ids) { tabs.close(id); } })));
+      closeTabs:(ids) { for (final id in ids) { tabs.closeHost(id); } })));
     if (mounted) setState(() {});
   }
   Future<void> configureNetwork(HostProfile profile) async {
@@ -95,7 +102,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
         FilledButton(key:const ValueKey('host-network-confirm'),onPressed:() => Navigator.pop(context,true),child:const Text('确认更换并停止此主机'))]));
     if (confirmed != true || !mounted) return;
     await action(() => catalog.update(profile.change(networkProfileId:result.isEmpty ? null : result,replaceNetwork:true,now:catalog.clock()),
-      expectedRevision:captured,beforeCommit:() => tabs.close(profile.id)));
+      expectedRevision:captured,beforeCommit:() => tabs.closeHost(profile.id)));
   }
 
   Future<void> rename(HostProfile profile) async {
@@ -129,7 +136,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
     await action(() async {
       // Persist disabled before deleting the key. A crash between the two never
       // leaves an enabled profile pointing to an identity deliberately removed.
-      await catalog.update(profile.change(enabled:false,now:catalog.clock()),beforeCommit:() => tabs.close(profile.id));
+      await catalog.update(profile.change(enabled:false,now:catalog.clock()),beforeCommit:() => tabs.closeHost(profile.id));
       if (profile.hasIdentity) await (widget.keys ?? NativeDeviceKeys()).delete(profile.restore(catalog.clock()).handle);
       await catalog.remove(profile.id);
       if (mounted) notice = '本机已删除 · 主机授权未因此撤销';
@@ -163,12 +170,12 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
         children:[SelectableText(profile.restore(catalog.clock()).wire)]),
       const SizedBox(height:8),
       FilledButton(key:ValueKey('host-open-${profile.id}'),onPressed:!busy && catalog.ready && profile.enabled ? () => open(profile) : null,
-        child:Text(profile.hasIdentity ? '审查此主机并主动连接' : '审查导入目标并在此设备配对')),
+        child:Text(profile.hasIdentity ? '新建视图并审查连接' : '审查导入目标并在此设备配对')),
       Wrap(spacing:8,children:[
         TextButton(key:ValueKey('host-rename-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => rename(profile),child:const Text('重命名')),
         TextButton(key:ValueKey('host-network-${profile.id}'),onPressed:busy || !catalog.ready || profile.retired ? null : () => configureNetwork(profile),child:const Text('选择／解除网络绑定')),
         TextButton(key:ValueKey('host-provider-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => configureProvider(profile),child:const Text('旧 provider 标签（仅资料）')),
-        TextButton(key:ValueKey('host-disable-${profile.id}'),onPressed:busy || !catalog.ready || profile.retired ? null : () => action(() => catalog.update(profile.change(enabled:!profile.enabled,now:catalog.clock()),beforeCommit:() => tabs.close(profile.id))),
+        TextButton(key:ValueKey('host-disable-${profile.id}'),onPressed:busy || !catalog.ready || profile.retired ? null : () => action(() => catalog.update(profile.change(enabled:!profile.enabled,now:catalog.clock()),beforeCommit:() => tabs.closeHost(profile.id))),
           child:Text(profile.enabled ? '本机停用（不撤销主机）' : '本机启用（仍需审查）')),
         TextButton(key:ValueKey('host-delete-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => remove(profile),child:const Text('删除本机资料与身份')),
       ]),
@@ -180,15 +187,18 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
     builder:(context,visible,child) => IgnorePointer(ignoring:!visible,child:ExcludeSemantics(excluding:!visible,
       child:FocusScope(canRequestFocus:visible,child:child!))),
     child:Navigator(key:tab.navigator,onGenerateRoute:(settings) => MaterialPageRoute<void>(settings:settings,
-      builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,catalog:catalog,profileId:tab.id,
-        adapter:tab.adapter,visibility:tab.visible))));
+      builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,catalog:catalog,profileId:tab.hostId,
+        adapter:tab.adapter,visibility:tab.visible,onViewState:tab.report,requestedTarget:tab.requestedTarget,
+        onOpenPane:(pane) => openPane(tab,pane)))));
   Widget tabBar() => SingleChildScrollView(scrollDirection:Axis.horizontal,padding:const EdgeInsets.symmetric(horizontal:12,vertical:6),
     child:Row(children:[
       Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(key:const ValueKey('hosts-board-tab'),label:const Text('主机列表'),selected:tabs.activeId == null,onSelected:(_) => tabs.select(null))),
       for (final tab in tabs.tabs) Padding(padding:const EdgeInsets.only(right:8),child:Container(
         decoration:BoxDecoration(border:Border.all(color:tabs.activeId == tab.id ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor),borderRadius:BorderRadius.circular(12)),
         child:Row(mainAxisSize:MainAxisSize.min,children:[
-          TextButton(key:ValueKey('host-tab-${tab.id}'),onPressed:() => tabs.select(tab.id),child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:210),child:Text('${tab.label} · ${tabs.activeId == tab.id ? '当前视图' : '已暂停'}',overflow:TextOverflow.ellipsis))),
+          ValueListenableBuilder<HostTabView>(valueListenable:tab.view,builder:(context,view,_) =>
+            TextButton(key:ValueKey('host-tab-${tab.id}'),onPressed:() => tabs.select(tab.id),child:ConstrainedBox(
+              constraints:const BoxConstraints(maxWidth:260),child:Text('${tab.label} · ${tab.networkLabel}\n${view.target} · ${view.label}',maxLines:2,overflow:TextOverflow.ellipsis)))),
           IconButton(key:ValueKey('host-tab-close-${tab.id}'),tooltip:'关闭本地标签，不终止远端任务',onPressed:() => tabs.close(tab.id),icon:const Icon(Icons.close,size:18)),
         ]))),
     ]));
@@ -202,7 +212,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
   ]),body:SafeArea(child:Column(children:[
     tabBar(),
     if (tabs.notice != null) Padding(padding:const EdgeInsets.symmetric(horizontal:16),child:Text(tabs.notice!)),
-    if (tabs.active != null) Padding(padding:const EdgeInsets.symmetric(horizontal:16,vertical:4),child:Text('旧 provider 标签：${hostProviderLabel(tabs.active!.provider)} · 入网状态未知；实际网络按连接页审查，隐藏标签停止观察',style:Theme.of(context).textTheme.bodySmall)),
+    if (tabs.active != null) Padding(padding:const EdgeInsets.symmetric(horizontal:16,vertical:4),child:Text('隐藏标签暂停观察与输入；连接可保留，返回后需主动恢复并等待原目标新画面。',style:Theme.of(context).textTheme.bodySmall)),
     Expanded(child:IndexedStack(index:tabs.activeIndex+1,children:[board(),for (final tab in tabs.tabs) KeyedSubtree(key:ValueKey('host-tab-view-${tab.id}'),child:tabNavigator(tab))])),
   ]))));
 }

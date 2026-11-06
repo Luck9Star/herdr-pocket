@@ -5,6 +5,9 @@ edition = "2024"
 rust-version = "1.96"
 publish = false
 
+[patch.crates-io]
+russh = { path = "../../vendor/russh-0.65.0" }
+
 [lib]
 name = "herdr_pocket_tauri_probe_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]

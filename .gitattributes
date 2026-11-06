@@ -1,0 +1,3 @@
+# Preserve verified upstream bytes and unified-diff blank context lines.
+validation/vendor/russh-0.65.0/README.md -whitespace
+validation/vendor/russh-0.65.0-local-close.patch -whitespace

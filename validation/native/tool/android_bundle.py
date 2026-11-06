@@ -161,15 +161,24 @@ def main():
     p = sub.add_parser('build'); p.add_argument('bundle', type=Path)
     p = sub.add_parser('verify'); p.add_argument('bundle', type=Path); p.add_argument('--commit', required=True); p.add_argument('--readelf', required=True)
     p = sub.add_parser('report'); p.add_argument('output', type=Path); p.add_argument('--commit', required=True); p.add_argument('--app', choices=['flutter', 'tauri'], required=True)
+    p.add_argument('--checks', choices=['success', 'failure', 'cancelled', 'skipped', 'not_run'], default='not_run')
+    p.add_argument('--transport-checks', choices=['success', 'failure', 'cancelled', 'skipped', 'not_run'], default='not_run')
     p = sub.add_parser('apk'); p.add_argument('apk', type=Path); p.add_argument('bundle', type=Path); p.add_argument('--commit', required=True); p.add_argument('--readelf', required=True); p.add_argument('--app', choices=['flutter', 'tauri'], required=True)
     a = parser.parse_args()
     if a.command == 'build': build(a.bundle)
     elif a.command == 'verify': verify(a.bundle, a.commit, a.readelf)
     elif a.command == 'report':
         report = {'sourceCommit': a.commit, 'app': a.app, 'abi': 'arm64-v8a', 'api': 35,
+                  'sourceChecks': a.checks,
+                  'transportChecks': a.transport_checks,
+                  'transportChecksScope': 'shared Rust isolated SSH and unit checks; not Android runtime or real overlay',
+                  'sourceChecksScope': 'Flutter analyzer, unit/widget, renderer and isolated SSH GUI checks' if a.app == 'flutter' else 'JavaScript unit tests; Rust target compilation is part of build',
                   'apkSha256': sha(a.output / 'app.apk'), 'nativeManifestSha256': sha(a.output / 'native-manifest.json'),
                   'build': 'passed', 'staticInspection': 'passed', 'androidLoad': 'not run',
                   'installation': 'not run', 'node': 'not run'}
+        candidate = a.output / 'candidate-manifest.json'
+        if candidate.exists():
+            report['terminalCandidateManifestSha256'] = sha(candidate)
         (a.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
         (a.output / 'SHA256SUMS').write_text(''.join(f'{sha(p)}  {p.name}\n' for p in sorted(a.output.iterdir()) if p.is_file() and p.name != 'SHA256SUMS'))
     else: apk(a.apk, a.bundle, a.commit, a.readelf, a.app)

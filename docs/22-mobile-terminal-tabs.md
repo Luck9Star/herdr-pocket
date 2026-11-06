@@ -1,6 +1,6 @@
 # 手机独立终端标签与保留连接
 
-2026-11-06，延续 [Flutter 原生网络通道](21-flutter-native-network.md)。本批推进手机从配对、看板进入多个独立终端视图：同一主机可打开不同 pane，隐藏视图撤销输入并暂停观察，回到前台后由用户显式恢复。**首轮集中云构建已执行并失败，未生成新 APK；修复后的复验待执行。** 此前 Android 测试包仍对应 `040eb26`，不能用来验收本批代码。[上一批包与失败记录](18-mobile-network-profiles.md)
+2026-11-06，延续 [Flutter 原生网络通道](21-flutter-native-network.md)。本批推进手机从配对、看板进入多个独立终端视图：同一主机可打开不同 pane，隐藏视图撤销输入并暂停观察，回到前台后由用户显式恢复。**两轮集中云构建已执行，均未产生通过产物校验的新 APK；已汇总后续修复待复验。** 此前 Android 测试包仍对应 `040eb26`，不能用来验收本批代码。[上一批包与失败记录](18-mobile-network-profiles.md)
 
 ## 两套 GUI 的共同契约
 
@@ -38,6 +38,14 @@ Flutter 使用固定 `dartssh2 4.1.0` 的消息 trace 识别入站通道确认�
 首轮 [Actions 42184737889](https://github.com/Luck9Star/herdr-pocket/actions/runs/42184737889) 对应 `cc3f988e476527e9dd67bd12d197767aca4f7051`，5 个 job 中 2 成功、3 失败。共享传输测试通过；Flutter 组合字符绘制 10 项通过，但分析和 mobile widget 测试被两个编译错误阻断：`SSHPrintHandler` 接受可空字符串，原 trace 回调参数不可空；`SSHSocket` 的路由接口需显式转换。已修复类型并增加空值、非字符串和实际 socket 路由回归，复验完成前仍不标通过。
 
 Android 原生库编译和静态检查成功，但上传默认遗漏 `portable-stream/.gitignore`，两套 APK job 均被来源清单校验拦下，未进入 APK 构建。仅对全新生成的 `android-native` 来源包启用 `include-hidden-files`，保留原清单严格校验；该目录与构建 worktree、认证文件分离，输入仅为固定来源归档、候选源码和构建记录。[官方上传规则](https://github.com/actions/upload-artifact/blob/v4/README.md#uploading-hidden-files)已经 Context7 查询核实。原生 job 成功不能代表其上传产物可用；隔离 SSH GUI 检查本轮跳过。详见[首轮失败记录](evidence/mobile-pair-gui/mobile-tabs-ci-first-20261106.json)。Tauri 合成 DOM 测试不等于手机触控或 IME 通过。
+
+第二轮 [Actions 42187302052](https://github.com/Luck9Star/herdr-pocket/actions/runs/42187302052) 对应 `16575c06bf47b11e9aca8169b36fbf501e2ff1ff`，共享传输与 native job 成功，两套消费端均通过原生包完整校验，首轮类型错误也已消失。但整体仍是 2 成功、3 失败，未上传 APK：
+
+- Flutter mobile 测试 173 通过、1 跳过、5 失败；绘制 10 通过，隔离配对 GUI 跳过。三项身份测试把内存身份替身与未模拟的 native 通道混用，被正确拒绝；现显式注入节点运行时，生产默认保持真实通道，并加停止未知不写身份的反例。另修复原始 URL 的 `:0`／`:00` 端口被 URI 规范化掩盖，以及平台相关 widget 测试；移除导致 analyzer 非零退出的冗余 import。
+- Tauri 91 项 Node 测试通过，Android Rust 构建缺少 `icons/32x32.png`。补上 `android init` 前用现有 SVG 生成图标的步骤；本机固定 CLI 已验证 5 个 bundle 图标和 Android launcher 资源，尚不代替 Android 构建。
+- Flutter APK 编译成功，但实装 Heeler 库 SHA 与原生来源包不一致，严格校验拦截后没有上传。当前推断是 Gradle 打包时移除符号；按[官方 `keepDebugSymbols` 配置](https://developer.android.com/reference/tools/gradle-api/8.0/com/android/build/api/dsl/JniLibsPackaging#keepDebugSymbols())，仅保留 `libheeler_easytier.so` 原始字节。两壳应用同一配置，下一轮仍须通过原有逐字节与 ELF 校验，不能以此配置本身证明原因或修复已验证。
+
+完整 job、产物 ID 和边界见[第二轮记录](evidence/mobile-pair-gui/mobile-tabs-ci-second-20261106.json)。修复后本机 Python 构建辅助 8 项、原生包检查 9 项通过；Dart 51 文件仅语法检查通过，尚无修复后的 analyzer／widget 结果。
 
 ## 新包的手机验收步骤
 

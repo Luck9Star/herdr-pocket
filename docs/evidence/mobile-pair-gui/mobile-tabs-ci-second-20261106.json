@@ -1,0 +1,34 @@
+{
+  "recordedOn": "2026-11-06",
+  "kind": "actual-cloud-run-failure",
+  "repository": "Luck9Star/herdr-pocket",
+  "commit": "16575c06bf47b11e9aca8169b36fbf501e2ff1ff",
+  "runId": 42187302052,
+  "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42187302052",
+  "conclusion": "failure",
+  "jobTotals": {"success": 2, "failure": 3},
+  "jobs": [
+    {"id": 127790581953, "name": "transport-source", "conclusion": "success"},
+    {"id": 127790581965, "name": "native", "conclusion": "success", "consumerBundleVerification": "passed in both apps jobs"},
+    {"id": 127790581610, "name": "flutter-source", "conclusion": "failure", "analyzer": "one unnecessary_import info; nonzero exit", "mobileTests": {"passed": 173, "skipped": 1, "failed": 5}, "combiningRendererTests": {"passed": 10}, "isolatedSshGui": "skipped"},
+    {"id": 127792108133, "name": "apps (tauri)", "conclusion": "failure", "nodeTests": {"passed": 91}, "cause": "icons/32x32.png missing during Android Rust build"},
+    {"id": 127792108139, "name": "apps (flutter)", "conclusion": "failure", "apkCompilation": "passed", "apkInspection": "failed: APK native library differs from verified bundle", "apkUpload": "skipped"}
+  ],
+  "artifacts": [
+    {"id": 13488885158, "kind": "native source bundle", "sizeBytes": 98606774},
+    {"id": 13488392463, "kind": "transport source log", "sizeBytes": 4650},
+    {"id": 13487977616, "kind": "Flutter source logs and verified lock; failed source checks", "sizeBytes": 156830}
+  ],
+  "newApkArtifacts": [],
+  "resolvedFirstRunFailures": ["nullable trace callback", "explicit connected-socket route cast", "hidden native source file preserved through artifact upload and download"],
+  "pendingRepairs": [
+    "Explicit runtime injection for identity tests, production native default unchanged; stop-unknown negative cases",
+    "Reject raw authority zero port before URI normalization",
+    "Deterministic platform tests and Android channel failure refusing credentials or fallback",
+    "Remove redundant import",
+    "Generate existing SVG icons before Tauri Android init",
+    "Keep Heeler native bytes through Gradle packaging; stripping cause is an inference pending actual follow-up verification"
+  ],
+  "localRepairChecks": {"flutterBuildTools": "8 passed", "nativeBundleTests": "9 passed", "tauriIconGeneration": "fixed CLI generated all referenced bundle and Android launcher assets", "tauriFrontend": "91 Node tests and Vite build passed", "dartSyntax": "51 files; not analyzer or test execution"},
+  "boundaries": ["No downloadable APK in this run", "No physical device, Android load or real overlay result", "No local GUI test app opened", "No real credentials or authorization files used"]
+}

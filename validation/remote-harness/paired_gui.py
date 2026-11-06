@@ -53,7 +53,7 @@ def fixture_terminal_id(config):
 def widget_failure(exchange, fallback):
     # Only emit stages chosen by the harness. Never copy widget logs or form data.
     stages = {'host_board', 'public_request', 'host_authorization', 'restore_pending',
-              'response_review', 'ssh_and_dashboard', 'observe_frames', 'guarded_input', 'stop'}
+              'response_review', 'ssh_and_dashboard', 'observe_frames', 'pause_resume_original', 'guarded_input', 'stop'}
     path = exchange / 'stage'
     if path.is_file():
         phase = bounded_wire(path, 40).decode('ascii', errors='ignore')

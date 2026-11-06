@@ -75,6 +75,9 @@ def prepare(destination):
     network_native = (ROOT / 'validation/network-profiles/native/android').as_posix()
     script += '\nextra["herdrNetworkSecretsDir"] = file("' + network_native + '")\n'
     script += 'apply(from = "' + network_native + '/network-secrets.gradle")\n'
+    # Preserve the exact prebuilt candidate bytes checked against its source
+    # bundle. AGP otherwise strips native debug symbols during APK packaging.
+    script += '\nandroid { packaging { jniLibs.keepDebugSymbols += "**/libheeler_easytier.so" } }\n'
     gradle.write_text(script)
     # Generated Swift files include the shared source verbatim at scaffold time;
     # the repository keeps only one storage implementation. No Keychain calls

@@ -6,6 +6,7 @@ import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/network_identity.dart';
 import 'package:herdr_flutter_probe/network_identity_dialog.dart';
 import 'package:herdr_flutter_probe/network_profiles.dart';
+import 'package:herdr_flutter_probe/network_runtime.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'host_catalog_test.dart' show MemoryCatalogStorage,catalogPairing;
 import 'network_identity_test.dart' show MemoryNetworkIdentity,identityReply;
@@ -16,10 +17,29 @@ Future<void> requireAbsent(MemoryNetworkIdentity store,NetworkProfile profile) a
   if (await store.status(profile) != null) throw const RemoteFailure('network_identity_present');
 }
 
+class FixtureNodeRuntime extends NativeNetworkRuntime {
+  FixtureNodeRuntime(this.profile,{this.failStop=false});
+  final NetworkProfile profile;
+  final bool failStop;
+  int statusCalls = 0,stopCalls = 0;
+  @override bool get supported => true;
+  @override Future<Object?> call(String method,Map<String,Object> args) async {
+    if (method == 'nodeStatus') {
+      statusCalls++;
+      return failStop ? {'state':'engine-started','binding':{
+        'profileId':profile.id,'profileRevision':profile.revision,'networkName':profile.settings['networkName'],
+        'identityRef':'a0000000-0000-4000-8000-000000000001',
+      }} : {'state':'stopped','binding':null};
+    }
+    if (method == 'nodeStop') { stopCalls++; throw const RemoteFailure('network_stop_unknown'); }
+    throw const RemoteFailure('unexpected_fixture_method');
+  }
+}
+
 CatalogNetworkIdentityStore guarded(HostCatalog catalog,NetworkProfile profile,
-    MemoryNetworkIdentity store,void Function() closeAffected) => CatalogNetworkIdentityStore(
+    MemoryNetworkIdentity store,void Function() closeAffected,{NativeNetworkRuntime? runtime}) => CatalogNetworkIdentityStore(
   catalog:catalog,profile:profile,expectedRevision:catalog.revision,
-  closeAffected:closeAffected,delegate:store);
+  closeAffected:closeAffected,delegate:store,runtime:runtime ?? FixtureNodeRuntime(profile));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -114,6 +134,29 @@ void main() {
     await session.refresh(); expect(store.deletes,1); expect(store.creates,0); expect(store.reads,3);
     session.dispose(); catalog.dispose();
   });
+  for (final deleting in [false,true]) {
+    test('unknown node stop blocks identity ${deleting ? 'delete' : 'create'} without retry or catalog write',() async {
+      final storage = MemoryCatalogStorage();
+      final active = HostCatalog(storage:storage,clock:() => 1000); await active.load();
+      final profile = testNetwork('easytier'); await active.addNetwork(profile);
+      final record = NetworkIdentityRecord.checked(identityReply(profile),profile);
+      final store = MemoryNetworkIdentity()..current = deleting ? record : null;
+      final runtime = FixtureNodeRuntime(profile,failStop:true); var closed = 0;
+      final reviewed = guarded(active,profile,store,() { closed++; },runtime:runtime);
+      final writes = storage.writes,revision = active.revision;
+      Future<void> mutation() async {
+        if (deleting) { await reviewed.delete(profile,record); }
+        else { await reviewed.create(profile,'PRIVATE',Uint8List.fromList([65])); }
+      }
+      await expectLater(mutation(),throwsA(isA<RemoteFailure>()));
+      expect(runtime.stopCalls,1); expect(store.creates,0); expect(store.deletes,0);
+      expect(closed,1); expect(storage.writes,writes); expect(active.revision,revision);
+      await expectLater(mutation(),throwsA(isA<RemoteFailure>()));
+      expect(runtime.stopCalls,1); expect(store.creates,0); expect(store.deletes,0);
+      expect(storage.writes,writes); expect(active.revision,revision);
+      active.dispose();
+    });
+  }
   test('exact profile mismatch rejects at dispatch even with a matching catalog revision',() async {
     final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
     final profile = testNetwork('easytier'); await catalog.addNetwork(profile); var dispatched = false,closed = false;

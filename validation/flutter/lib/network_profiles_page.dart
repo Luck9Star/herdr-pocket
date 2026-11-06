@@ -173,7 +173,7 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
   Future<void> localIdentity(NetworkProfile profile) async {
     if (!canChange(profile)) return;
     await showDialog<void>(context:context,builder:(_) => NetworkIdentityDialog(profile:profile,catalog:catalog,
-      closeTabs:widget.closeTabs,store:identities));
+      closeTabs:widget.closeTabs,store:identities,runtime:runtime));
   }
   @override
   Widget build(BuildContext context) => Scaffold(appBar:AppBar(title:const Text('网络管理 · 公开配置')),

@@ -264,14 +264,15 @@ class RemoteInputGate {
       // cannot prove that bytes were not accepted, so conservatively lock.
       try { result = await writer(entry.lease.target,entry.bytes,() => current(entry.lease)); }
       catch (_) { result = const RemoteInputResult.unknown(); }
+      final sameLease = current(entry.lease);
       if (result.disposition == RemoteInputDisposition.unknown || result.requiresJournalRecovery) {
-        unknown = RemoteInputRecord(record.target,record.bytes,record.at,
+        unknown ??= RemoteInputRecord(record.target,record.bytes,record.at,
           knownDisposition:result.requiresJournalRecovery ? result.disposition : null);
         epoch++; mode = RemoteInputMode.observe; _discardQueued();
       } else if (result.code == 'input_journal_unavailable') {
         invalidate();
       }
-      if (identical(entry.lease.target,target) || result.disposition == RemoteInputDisposition.unknown) lastResult = result;
+      if (sameLease) lastResult = result;
       entry.result.complete(result); sending = false; _notify();
     }
   }

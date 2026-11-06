@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
+import 'package:herdr_flutter_probe/host_tabs.dart';
 import 'host_catalog_test.dart';
 import 'pairing_gui_test.dart' show TestDeviceKeys, tapVisible;
 import 'remote_test_data.dart';
@@ -30,15 +31,17 @@ void main() {
     final catalog = HostCatalog(storage:storage,clock:() => 1000); await catalog.load();
     final profile = await saveCatalogProfile(catalog);
     final tokens = (await tester.runAsync(DesignTokens.load))!;
-    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,
+    final tabs = HostTabs();
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,tabs:tabs,
       keys:TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String),offlineBuilder:(_) => const SizedBox())));
     await tester.pumpAndSettle(); await tapVisible(tester,'host-open-${profile.id}'); await tester.pumpAndSettle();
+    final tabId = tabs.active!.id;
     final reload = catalog.load();
     await tester.pump();
-    expect(find.byKey(ValueKey('host-tab-${profile.id}')),findsNothing);
+    expect(find.byKey(ValueKey('host-tab-$tabId')),findsNothing);
     await reload; await tester.pumpAndSettle();
-    expect(find.byKey(ValueKey('host-tab-${profile.id}')),findsNothing);
-    await tester.pumpWidget(const SizedBox()); catalog.dispose();
+    expect(find.byKey(ValueKey('host-tab-$tabId')),findsNothing);
+    await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
   });
   testWidgets('missing or locked original key disables connection and offers only recheck or explicit deletion',(tester) async {
     final disk = MemoryCatalogStorage();

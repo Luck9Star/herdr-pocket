@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 1,
+  "scope": "Synthetic public lifecycle contract shared by both shells. Case definitions are requirements, not execution results or provider/device support evidence. Addresses, routes and target IDs are fictitious; no credentials or authorized host.",
+  "limits": {
+    "maxViewTabs": 8,
+    "maxConnectionSlotsIncludingClosing": 8,
+    "maxVisibleInputOwners": 1,
+    "maxPendingFrameBytes": 65536
+  },
+  "targets": [
+    {
+      "host": "203.0.113.17",
+      "port": 22,
+      "username": "fixture",
+      "session": "probe",
+      "socketPath": "/tmp/fixture/herdr/sessions/probe/herdr.sock",
+      "id": "direct-pane-a",
+      "hostId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "route": {
+        "provider": "system"
+      },
+      "paneId": "w1:p1",
+      "terminalId": "term_a001"
+    },
+    {
+      "host": "203.0.113.17",
+      "port": 22,
+      "username": "fixture",
+      "session": "probe",
+      "socketPath": "/tmp/fixture/herdr/sessions/probe/herdr.sock",
+      "id": "mesh-pane-b",
+      "hostId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "route": {
+        "provider": "easy-tier",
+        "profile_id": "22222222222222222222222222222222",
+        "profile_revision": 3,
+        "identity_ref": "a0000000-0000-4000-8000-000000000001"
+      },
+      "paneId": "w1:p1",
+      "terminalId": "term_b001"
+    },
+    {
+      "host": "203.0.113.17",
+      "port": 22,
+      "username": "fixture",
+      "session": "probe",
+      "socketPath": "/tmp/fixture/herdr/sessions/probe/herdr.sock",
+      "id": "direct-pane-c",
+      "hostId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "route": {
+        "provider": "system"
+      },
+      "paneId": "w1:p2",
+      "terminalId": "term_c001"
+    }
+  ],
+  "cases": [
+    {
+      "id": "MT01",
+      "name": "same-host-independent-targets",
+      "actions": [
+        "open direct-pane-a",
+        "open direct-pane-c"
+      ],
+      "expected": [
+        "distinct immutable tab IDs",
+        "same host does not merge views",
+        "draft and input target remain independent"
+      ]
+    },
+    {
+      "id": "MT02",
+      "name": "foreground-hide-keeps-authenticated-ssh",
+      "actions": [
+        "connect direct-pane-a and mesh-pane-b",
+        "focus mesh-pane-b",
+        "hide direct-pane-a"
+      ],
+      "expected": [
+        "direct-pane-a observer stopped or safely paused",
+        "direct-pane-a authenticated SSH retained",
+        "direct-pane-a input revoked before focus transfer",
+        "mesh-pane-b remains usable",
+        "no automatic reconnect or node stop"
+      ]
+    },
+    {
+      "id": "MT03",
+      "name": "explicit-resume-revalidates-original-target",
+      "actions": [
+        "show paused direct-pane-a",
+        "explicitly resume",
+        "read new snapshot",
+        "receive full with new observation epoch"
+      ],
+      "expected": [
+        "show alone does not resume",
+        "same original SSH and actual route used",
+        "snapshot pane and terminal IDs match original",
+        "new full precedes input capability",
+        "input stays observe until explicit user mode change"
+      ]
+    },
+    {
+      "id": "MT04",
+      "name": "replacement-refuses-resume",
+      "actions": [
+        "pause direct-pane-a",
+        "snapshot w1:p1 now points to term_new",
+        "explicitly resume"
+      ],
+      "expected": [
+        "reject replaced target",
+        "do not follow same pane name to new terminal",
+        "do not display old epoch frames as current",
+        "do not redial or send"
+      ]
+    },
+    {
+      "id": "MT05",
+      "name": "close-is-local",
+      "actions": [
+        "connect direct-pane-a and mesh-pane-b",
+        "close direct-pane-a"
+      ],
+      "expected": [
+        "mesh-pane-b remains connected",
+        "shared native node stop count unchanged",
+        "closed view rejects late callbacks"
+      ]
+    },
+    {
+      "id": "MT06",
+      "name": "affected-host-and-profile-only",
+      "actions": [
+        "open direct-pane-a direct-pane-c mesh-pane-b",
+        "disable direct host"
+      ],
+      "expected": [
+        "both direct host views revoked",
+        "mesh-pane-b unaffected",
+        "no auto activation or input on neighboring tab"
+      ]
+    },
+    {
+      "id": "MT07",
+      "name": "background-closes-all",
+      "actions": [
+        "connect multiple views",
+        "app background",
+        "app foreground"
+      ],
+      "expected": [
+        "revoke all input and pending composition",
+        "close all SSH including hidden",
+        "do not automatically reconnect or resume after foreground"
+      ]
+    },
+    {
+      "id": "MT08",
+      "name": "unknown-is-not-a-draft",
+      "actions": [
+        "submit from direct-pane-a then lose result",
+        "switch mesh-pane-b",
+        "return direct-pane-a"
+      ],
+      "expected": [
+        "unknown stays associated with original complete target and route",
+        "submitted bytes are not restored into sendable draft",
+        "no replay",
+        "other view observation is not cancelled"
+      ]
+    },
+    {
+      "id": "MT09",
+      "name": "discard-unsent-on-hide",
+      "actions": [
+        "queue unsent input on direct-pane-a",
+        "hide direct-pane-a"
+      ],
+      "expected": [
+        "queued not-yet-submitted bytes discarded",
+        "submitted in-flight input handled as unknown if result unavailable",
+        "no queued bytes reach another tab"
+      ]
+    },
+    {
+      "id": "MT10",
+      "name": "late-observation-epoch",
+      "actions": [
+        "pause with old full or ack pending",
+        "resume original target with new epoch and sequence 1",
+        "deliver old frame and ack"
+      ],
+      "expected": [
+        "old epoch cannot satisfy new full or release new ack",
+        "control/cancel works while frame ack pending",
+        "at most one bounded observer per view"
+      ]
+    },
+    {
+      "id": "MT11",
+      "name": "connection-capacity-includes-closing",
+      "actions": [
+        "occupy 8 connection slots",
+        "request ninth",
+        "close one with delayed cleanup",
+        "request ninth again",
+        "old task finally settles"
+      ],
+      "expected": [
+        "reject ninth while 8 are occupied",
+        "closing still counts until settled",
+        "do not reuse old tab or attempt IDs",
+        "slot becomes available only after actual cleanup"
+      ]
+    },
+    {
+      "id": "MT12",
+      "name": "binding-change-requires-new-view",
+      "actions": [
+        "bind a page to system route",
+        "replace its network binding with mesh route"
+      ],
+      "expected": [
+        "old connector cannot be used for new route",
+        "original input and observer revoked",
+        "explicit close/reopen and review required",
+        "no system route fallback"
+      ]
+    }
+  ],
+  "evidenceRules": [
+    "Report model, transport/loopback, GUI automation and device runs separately for each case.",
+    "A shared fixture copy or a green model test does not establish real GUI integration.",
+    "Actual TS/ET/ZT and platform combinations retain their independent acceptance matrix.",
+    "One-global-recovery-marker limitations must be stated; do not silently clear another view marker."
+  ]
+}

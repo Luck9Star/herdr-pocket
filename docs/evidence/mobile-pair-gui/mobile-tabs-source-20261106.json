@@ -1,0 +1,244 @@
+{
+  "recordedAt": "2026-11-06T07:56:48.782958+00:00",
+  "kind": "pre-cloud-source-validation",
+  "baseCommit": "d6c4285d4ccacd38fb8a43452ee447143f0ce4d3",
+  "sourceAtCapture": "reviewed working tree; exact source hashes below; later CI commit must match these source bytes",
+  "mainReadmeOnlyCommit": "0fb24a2b9be73884e678db86c08d585fe088710f",
+  "environment": {
+    "os": "Darwin arm64",
+    "rust": "1.96.0",
+    "node": "24.22.2",
+    "python": "3.15.2",
+    "guiApplicationsOpened": false
+  },
+  "checks": [
+    {
+      "id": "transport-default",
+      "executor": "parent independently reran",
+      "command": "CARGO_TARGET_DIR=/private/tmp/herdr-transport-overlay-target cargo test --manifest-path validation/transport-rust/Cargo.toml --locked",
+      "result": "passed",
+      "libraryTests": 51,
+      "cliTests": 1,
+      "scope": "self-created loopback SSH and units; no real host credentials"
+    },
+    {
+      "id": "transport-native-fixture",
+      "executor": "Sol author; parent inspected final log",
+      "command": "cargo test --manifest-path validation/transport-rust/Cargo.toml --locked --features overlay-native-fixture",
+      "result": "passed",
+      "libraryTests": 60,
+      "cliTests": 1,
+      "scope": "synthetic native ABI; not real overlay"
+    },
+    {
+      "id": "tauri-node",
+      "executor": "parent independently reran",
+      "command": "cd validation/tauri && npm test",
+      "result": "passed",
+      "tests": 91,
+      "scope": "Node and fake DOM behavior; not physical IME or WebView"
+    },
+    {
+      "id": "tauri-build",
+      "executor": "parent independently reran",
+      "command": "cd validation/tauri && npm run build",
+      "result": "passed",
+      "scope": "Vite frontend compilation; no application launched"
+    },
+    {
+      "id": "tauri-rust",
+      "executor": "parent independently reran after shared transport changes",
+      "command": "cargo test --locked --manifest-path validation/tauri/src-tauri/Cargo.toml --lib",
+      "result": "passed",
+      "tests": 27,
+      "scope": "host library checks; not Android"
+    },
+    {
+      "id": "flutter-native-default",
+      "executor": "parent independently reran",
+      "command": "CARGO_TARGET_DIR=/private/tmp/herdr-flutter-network-runtime-target cargo test --manifest-path validation/flutter-network-runtime/Cargo.toml --locked",
+      "result": "passed",
+      "tests": 3,
+      "scope": "host default feature; not Android JNI or Dart"
+    },
+    {
+      "id": "flutter-python",
+      "executor": "parent and Luna independently reran",
+      "command": "python3 -m unittest discover -s validation/flutter/tool -v",
+      "result": "passed",
+      "tests": 8
+    },
+    {
+      "id": "bundle-python",
+      "executor": "parent and Luna independently reran",
+      "command": "python3 -m unittest discover -s validation/native/tool -v",
+      "result": "passed",
+      "tests": 9,
+      "scope": "synthetic packaging/material checks; not actual APK"
+    },
+    {
+      "id": "harness-python",
+      "executor": "parent",
+      "command": "PYTHONDONTWRITEBYTECODE=1 /private/tmp/herdr-m1c-venv/bin/python -m unittest discover -s validation/remote-harness -q",
+      "result": "passed",
+      "tests": 31,
+      "scope": "guards and report contracts; no real GUI launched"
+    },
+    {
+      "id": "workflow-static",
+      "executor": "Luna independently checked; parent checked YAML structure",
+      "result": "passed",
+      "bashBlocks": 14,
+      "scope": "YAML parsing/bash -n; no Actions execution"
+    },
+    {
+      "id": "dart-syntax",
+      "executor": "Terra author",
+      "result": "passed",
+      "files": 51,
+      "scope": "tree-sitter only; NOT Dart analyzer/compiler/widgets"
+    },
+    {
+      "id": "source-provenance",
+      "executor": "parent independently reran",
+      "command": "python3 validation/vendor/verify-russh.py --archive <official cached russh-0.65.0.crate> --metadata",
+      "result": "passed",
+      "archiveVerified": true,
+      "officialFiles": 90,
+      "changedVendorFiles": [
+        "src/client/mod.rs"
+      ],
+      "uniqueCandidateCargoRoots": 3
+    },
+    {
+      "id": "strict-clippy",
+      "executor": "Sol author; parent inspected diagnostic summary",
+      "result": "failed",
+      "existingDiagnostics": 12,
+      "newControlledDiagnostics": 0,
+      "upstreamCandidateWarnings": 2,
+      "scope": "whole transport crate is NOT lint-clean"
+    },
+    {
+      "id": "vendor-internal-unit-tests",
+      "result": "not_run",
+      "tests": 2,
+      "reason": "offline dev dependencies aws-lc-rs 1.17.1 and pkcs1 unavailable; not counted as passed"
+    }
+  ],
+  "upstreamReproduction": {
+    "sourceFilesVerified": 90,
+    "archiveVerified": true,
+    "test": "controlled::tests::pause_resume_reuses_authenticated_ssh_and_other_connection_is_independent",
+    "upstream": {
+      "version": "0.65.0",
+      "expectedFailureReproduced": true,
+      "exitCode": 101
+    },
+    "candidate": {
+      "version": "0.65.0",
+      "sameTestPassed": true,
+      "exitCode": 0
+    },
+    "scope": "self-created loopback SSH; no user credentials, authorization files, overlay nodes or device evidence"
+  },
+  "controlledCases": {
+    "count": 8,
+    "actualEvidence": [
+      "eight explicit pause/resume cycles reuse one dial/auth; another SSH stays independent",
+      "replaced stable terminal refuses resume",
+      "pending frame ACK interruption and resume supersession",
+      "submitted unknown write is not replayed; late receipt cannot clear marker",
+      "silent peer permits local retirement without proving remote exit",
+      "zero-window queued data blocks Close; five-second timeout cancels only original SSH",
+      "human selection remains pending beyond eight seconds and cancel interrupts",
+      "closing task retains ownership until actual I/O drop"
+    ],
+    "notClaimed": "defensive pending-data branch was not dynamically covered by zero-window test"
+  },
+  "environmentFailure": {
+    "initialSandboxUnitPassed": 40,
+    "initialSandboxUnitFailed": 11,
+    "reason": "sandbox denied binding 127.0.0.1 with EPERM",
+    "authorizedOutsideSandboxRetest": "51 library + 1 CLI passed"
+  },
+  "notVerified": [
+    "Flutter analyzer and widget/render tests",
+    "new opt-in Flutter paired SSH widget",
+    "Android Rust/Kotlin/Gradle build and loading",
+    "new APK installation",
+    "Android/iOS physical camera, IME, touch and lifecycle",
+    "real overlay SSH or provider concurrency",
+    "five-platform product completion"
+  ],
+  "sourceHashes": {
+    ".gitattributes": "751efc49cf47a0f0b94142c34a05b85724c93a7e0f4431981d2bc0393b5d42b7",
+    ".github/workflows/android-network-experiment.yml": "241fd7eaad5833d1f06bfa7b7286850336bb0dada06b8fda120610ad42d7187f",
+    "validation/flutter-network-runtime/Cargo.lock": "ff397fb4eb0a6df3d5515ac3f7cbec0897bb2ec85cb3af5e54796ccaa8fa3ab5",
+    "validation/flutter-network-runtime/Cargo.toml": "5f2d4622c992eb49a7e827d0c4d053d75bd5d9f7f4556a4e0fc6a71f8f4fc4a6",
+    "validation/flutter/README.md": "22f803ca8b8d50876911bbe49f46ffe56846c020f96a78214abc823b3e49ba0a",
+    "validation/flutter/lib/host_catalog.dart": "6009dc59150326e5fb2e02eee5682d89a171892b22777e1b6ca8b660e568ee6e",
+    "validation/flutter/lib/host_catalog_page.dart": "87910bdb4a0420bc8fa806aa06d4239e00d5749f2ef1be723babda7529670cd7",
+    "validation/flutter/lib/host_tabs.dart": "b662179a632ea4ea1192e7a37c438a4a348603fb318d3d4a366f1f72c58f29a6",
+    "validation/flutter/lib/pairing_page.dart": "a0b7f77c57c1979ee351445de0991e319e973f184f27c66905dc46edb8cd3d84",
+    "validation/flutter/lib/remote_adapter.dart": "bf58af5465b351329881e78a2ed8cf778a72726156384393f0011f2d00967068",
+    "validation/flutter/lib/remote_input.dart": "30bf0846a31236e6bacc6df5862f2ef17855528a9987eb936b8ecaf5e8e917e6",
+    "validation/flutter/lib/remote_page.dart": "a2f208a57cde0be896bd83395872aec9082c50351dfa973a900accfb7bda2e88",
+    "validation/flutter/pubspec.yaml": "cc710f7be274e0681f1ec83e8e827f2a2a5bcc3e7d704541a22a3eaa2db8cdd7",
+    "validation/flutter/test/host_catalog_page_test.dart": "d470c0ce38cc16f63258dcf8fc2f3cab530e621248d73a472e4d8ce70db3e71b",
+    "validation/flutter/test/host_tabs_test.dart": "4a3b2ce6ddc63d7dec3ce0b695192837b4ce525e061a0c64d89118194a572266",
+    "validation/flutter/test/host_tabs_widget_test.dart": "700b2b2caa6d48984f3f553fe07af26b1dc6436ca72ffe70cc3919dfea16290f",
+    "validation/flutter/test/network_profiles_test.dart": "d1c34e36ccc87d1ab7982489fe350fda53258001b08908e45bef5cd40e2b6222",
+    "validation/flutter/test/pairing_gui_ssh_test.dart": "843f6876151e7aa1df96bb1da0ce4888fb24186aedbdb022b625254559415b31",
+    "validation/flutter/test/remote_adapter_test.dart": "b56200a93c5eee6e26aa280d95ff3c754616b31f08afc802c675b78fc42a61fb",
+    "validation/flutter/test/remote_input_test.dart": "cb927defb4c9c9855414f1c771c49fc5665412277fd819b3347b2b8e30991338",
+    "validation/flutter/test/remote_input_widget_test.dart": "e0d5724455b9de4af0b8a15a0998767b245992f6c9380534639257e0c497bae8",
+    "validation/flutter/test/remote_page_test.dart": "4e6b318257ccc8675b51cafd0808dd024cfba9c28833e7fb72da2547c5f08393",
+    "validation/flutter/tool/ci.py": "3ff6a29241b30053ab2679f4531f46c3caf3802bd01a5c68ce3f7656df374b2c",
+    "validation/native/tailscale-adapter-audit.json": "5d6c07befef7bc31cb1b1e1035df968458e68a6a672f4b224a302f5dca364633",
+    "validation/native/tool/android_bundle.py": "7f7dc2f1bde104247589a2fc5495882fb2203b139c3922f791c620dc669b6f87",
+    "validation/native/tool/test_android_bundle.py": "c4e367cc2e7e9c6e25b10a62f5b7eb61d6bcbe2925392a79215f6872f0f6567f",
+    "validation/remote-harness/paired_gui.py": "5f897d5bb4f63fd6d327590553ad3658abb098922580551637c7ebae78b89f44",
+    "validation/shared/README.md": "da3204b71f34ec54e7018310c8764b0e917a7be92b63d63d9c80fa1f2376a6dc",
+    "validation/shared/SHA256SUMS": "bb7cfb95fa57182a959598ce2c008b4bcb1184b75e0b2dafc9ec9af10dcc56ac",
+    "validation/shared/mobile-tabs-v1.json": "eb54967ea116195a5280287b212bf24bc72929c0324d5c98b7c90ff285ee1adf",
+    "validation/tauri/.gitignore": "4cde4ed81702891c0c5880b7aa17a68666a02aa22298782e0a0758db773a310f",
+    "validation/tauri/README.md": "21d49a963a122cc49c256b510c93664ea70328b320075b25cba4bd607906f422",
+    "validation/tauri/index.html": "1db877344ffb61586f09e8901fca0c3c91c8bee7032f510d9a4495de8dc6ba48",
+    "validation/tauri/scripts/prepare-fixtures.mjs": "3cbcf64c197c8b0a69f67c34e0606608fdb91273482ab89e9de487ae5df1a324",
+    "validation/tauri/src-tauri/Cargo.lock": "964ab4ac38a3a98dbee71f461cfb001165fc374ede327389662e212598a67b3a",
+    "validation/tauri/src-tauri/Cargo.toml": "390c29ea6703cd8e6a3d3270c6fb8c2ba788f191b1c430913e04058e5718c3fc",
+    "validation/tauri/src-tauri/src/config_exchange.rs": "aea2985e732a4b7b0e38929a7d4f9355be08580783da98976fa52074c2fdcc5f",
+    "validation/tauri/src-tauri/src/lib.rs": "9f70fbab92f258b4ed2aa8ecbc76e1d6f48d4866d154f2abfe05cf1cbc2862d3",
+    "validation/tauri/src-tauri/src/remote_sessions.rs": "d48a40975baf5a1c0325f1451885408dfa3ed830c89f178373b898322d306b04",
+    "validation/tauri/src-tauri/src/remote_tab_commands.rs": "6dbc6bedd8ef9376877a3bfd54282b22b4e591027111f2565b32d880d0fa8985",
+    "validation/tauri/src/config-transfer-ui.js": "fd444d3056f86b52bbc4001a59853e8bf976c510d3e9b193a152ff251beb09c6",
+    "validation/tauri/src/remote-tabs.js": "4042db4d151021d4afa07717d6187d1f99336052dd73532a62bc151b0633dd21",
+    "validation/tauri/src/remote.js": "12574ae595d63a30b8fbfe813b03b932dcfc750392e26d4eb86c4bbd45137140",
+    "validation/tauri/src/style.css": "a684f209fc06c411a75285f890738e4c8ac2dc9ae1ab3897d2cc91b81d591a55",
+    "validation/tauri/src/tab-workspace.js": "c65f2edf08f661b5fad1d027303921cfdbb6738fa79afa5941ce68ef18673317",
+    "validation/tauri/test/remote-tabs.test.mjs": "ef55fc8686f1735d60c402a61c4919546ba663a05d8209a065d23dbf976df23f",
+    "validation/tauri/test/tab-workspace.test.mjs": "d2f31ec88c63c75be2a1a94fbab38157d8a7b58ca31f6dd4af5ef40ba50b25b6",
+    "validation/transport-rust/Cargo.lock": "7bafa507a75509e776304099facf2599c11e4d1bac9f3794d005f6ebc1ecaf5e",
+    "validation/transport-rust/Cargo.toml": "506bd4ed64d52f5d4211b982605728ae95830848b4e5fce9526e63d47ee2d808",
+    "validation/transport-rust/README.md": "1f68c13e4804497beca77684e841c18a551b30a16f836f9b19f9f48ebb43bae9",
+    "validation/transport-rust/src/controlled.rs": "9ccf9cba6e9146ca857a1a45982be57c5a6cd155fb2afcd70ffb52c89a5ae5cd",
+    "validation/transport-rust/src/controlled/tests.rs": "8407f6c98207d06c09444ee96ede752a040651e53e4ed3086510fc9ef9dc090e",
+    "validation/transport-rust/src/input.rs": "bce831e2c53278a4ba647164d00ae21b12051f25d5dff04385c728bcb7522109",
+    "validation/transport-rust/src/lib.rs": "471790e566c23cf34e5847f5f598e421117b1953aa4ae1c6b56f2a04a328cb7a",
+    "validation/vendor/RUSSH-NOTICE.md": "fdce4bb71743552ad8d012148f49c20c9fe6182358e6193b82664f71fd39a9ad",
+    "validation/vendor/reproduce-local-close.py": "e8998c77abe3c0cbe78837c7fe392731faeb40727337795f59cc17008b070864",
+    "validation/vendor/russh-0.65.0-LICENSE-APACHE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "validation/vendor/russh-0.65.0-local-close.patch": "1b9ddcaf676ad089d016f94c75448f2c39c746fe4663218a6bc17e7781c8cf40",
+    "validation/vendor/russh-0.65.0-source.json": "58e8f45e984ba84afa7ef1b1a6b4422ed5339ec98a8691f7746240ee701e4d51",
+    "validation/vendor/russh-0.65.0-upstream-files.json": "2f294a54bc781d3ed895ce3477027cfb5550a42f1426937139b2b684e0eeb478",
+    "validation/vendor/verify-russh.py": "295fe2d42a3b44002f070738f231a0b46d1ca2f704b2371042237d3f388de206"
+  },
+  "whitespaceExceptions": {
+    "paths": [
+      "validation/vendor/russh-0.65.0/README.md",
+      "validation/vendor/russh-0.65.0-local-close.patch"
+    ],
+    "reason": "exact upstream README bytes and literal unified-diff blank context lines; executable source remains checked"
+  }
+}

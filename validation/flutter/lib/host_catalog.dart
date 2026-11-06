@@ -115,6 +115,12 @@ bool sameHostTarget(Map<String,dynamic> a,Map<String,dynamic> b) =>
   a.length == HostProfile.targetFields.length && b.length == HostProfile.targetFields.length &&
   HostProfile.targetFields.every((key) => a.containsKey(key) && b.containsKey(key) && a[key] == b[key]);
 
+/// Connection status is per view; authorization and identity are shared.
+Map<String,dynamic> hostPairingBinding(HostProfile host) => {
+  for (final key in ['handle','request','authorization','consumed']) key:host.pairingRecord[key],
+};
+bool samePairingBinding(HostProfile a,HostProfile b) => _sameRecord(hostPairingBinding(a),hostPairingBinding(b));
+
 bool _samePortableTarget(Map<String,dynamic> a,Map<String,dynamic> b) =>
   transferTargetFields.every((key) => a.containsKey(key) && b.containsKey(key) && a[key] == b[key]);
 
@@ -375,9 +381,7 @@ class HostCatalog extends ChangeNotifier {
       if (!ready || _disposed) return false;
       final current = profiles.where((p) => p.id == host.id && p.enabled && !p.retired).toList();
       if (current.length != 1 || !sameHostTarget(current.single.target,host.target) ||
-          current.single.pairingRecord['handle'] != host.pairingRecord['handle'] ||
-          (current.single.hasIdentity ? (current.single.pairingRecord['request'] as Map)['public_key'] : null) !=
-            (host.hasIdentity ? (host.pairingRecord['request'] as Map)['public_key'] : null)) return false;
+          !samePairingBinding(current.single,host)) return false;
       try {
         final n = networkFor(current.single);
         return (n == null || n.enabled) && jsonEncode({'networkProfileId':current.single.networkProfileId,'network':n?.toJson()}) == binding;

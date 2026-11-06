@@ -26,3 +26,8 @@
 .config-transfer .config-option input{width:22px;height:22px;min-height:22px;margin:0;padding:0;flex:0 0 22px}
 
 .network-editor,.network-binding{display:grid;gap:10px;margin:14px 0}.network-editor label{display:grid;gap:6px}.network-editor input,.network-editor select,.network-editor textarea,.network-binding select{width:100%;min-height:44px;padding:8px;border:1px solid var(--hp-borderStrong);border-radius:10px;background:var(--hp-canvas);color:var(--hp-textPrimary);font:inherit}.network-binding{padding:12px;border:1px solid var(--hp-border);border-radius:12px}.network-binding button{min-height:44px}
+#view-content{padding:16px;color:var(--hp-termText)}
+#view-content p{overflow-wrap:anywhere;font-size:13px;line-height:1.5}
+#view-content label{display:flex;gap:8px;align-items:center;margin:12px 0}
+#view-content textarea{width:100%;min-height:88px;background:var(--hp-canvas);color:var(--hp-textPrimary)}
+#view-content .term-scroll{margin-top:12px}

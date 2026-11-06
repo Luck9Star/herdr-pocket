@@ -1,6 +1,7 @@
 node_modules/
 dist/
 public/shared/
+public/rust-notices/
 core/target/
 src-tauri/target/
 src-tauri/gen/

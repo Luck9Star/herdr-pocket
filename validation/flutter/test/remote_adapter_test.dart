@@ -22,8 +22,74 @@ class FakeSocket implements SSHSocket {
   @override Future<void> close() async { destroy(); }
   @override void destroy() { destroyed = true; input.close(); output.close(); }
 }
+class FailedDestroySocket extends FakeSocket {
+  @override void destroy() { throw StateError('synthetic close failed'); }
+}
+class DelayedCloseSocket extends FakeSocket {
+  final closing = Completer<void>();
+  bool closeCalled = false;
+  @override Future<void> close() { closeCalled = true; return closing.future; }
+}
 
 void main() {
+  test('MT10 fixed-version channel trace waits for exact peer close and rejects forged, stale and wrong IDs', () async {
+    var overflow = 0;
+    final tracker = ChannelRetirementTracker('fixture',onOverflow:() { overflow++; });
+    String opened(int id) => '<- fixture: SSH_Message_Channel_Confirmation(recipientChannel: $id, senderChannel: 7, initialWindowSize: 2097152, maximumPacketSize: 32768)';
+    String closed(int id) => '<- fixture: SSH_Message_Channel_Close(recipientChannel: $id)';
+    tracker.startOpen(); tracker.trace(opened(1)); tracker.finishOpen(succeeded:true);
+    final initial = tracker.waitIdle(); var retired = false; unawaited(initial.then((_) { retired = true; }));
+    for (final fake in [
+      'banner <- fixture: SSH_Message_Channel_Close(recipientChannel: 1)',
+      '<- fixture: SSH_Message_Channel_Data(recipientChannel: 1, data=SSH_Message_Channel_Close(recipientChannel: 1))',
+      '-> fixture: SSH_Message_Channel_Close(recipientChannel: 1)',
+      '<- fixture: SSH_Message_Channel_Close(recipientChannel: 1, extra: 0)',closed(2),
+    ]) { tracker.trace(fake); }
+    await Future<void>.delayed(Duration.zero); expect(retired,isFalse); expect(tracker.activeCount,1);
+    await expectLater(tracker.waitIdle().timeout(const Duration(milliseconds:1)),throwsA(isA<TimeoutException>()));
+    tracker.trace(closed(1)); await initial; expect(retired,isTrue);
+    tracker.startOpen(); tracker.trace(opened(3)); tracker.finishOpen(succeeded:true);
+    tracker.trace(closed(1)); expect(tracker.activeCount,1); // Late close cannot retire a different ID.
+    tracker.trace(closed(3)); await tracker.waitIdle(); expect(overflow,0);
+  });
+  test('MT10 snapshot and input channels both require retirement and channel count stays bounded', () async {
+    var overflow = 0;
+    final tracker = ChannelRetirementTracker('fixture',onOverflow:() { overflow++; });
+    String opened(int id) => '<- fixture: SSH_Message_Channel_Confirmation(recipientChannel: $id, senderChannel: 7, initialWindowSize: 1, maximumPacketSize: 1)';
+    String closed(int id) => '<- fixture: SSH_Message_Channel_Close(recipientChannel: $id)';
+    for (final id in [1,2,3]) { tracker.startOpen(); tracker.trace(opened(id)); tracker.finishOpen(succeeded:true); }
+    var ready = false; final onlyObserver = tracker.waitOnly(1).then((_) { ready = true; });
+    tracker.trace(closed(2)); await Future<void>.delayed(Duration.zero); expect(ready,isFalse);
+    tracker.trace(closed(3)); await onlyObserver; expect(ready,isTrue);
+    for (var id = 4; id <= 10; id++) { tracker.startOpen(); tracker.trace(opened(id)); tracker.finishOpen(succeeded:true); }
+    expect(tracker.activeCount,8); expect(() => tracker.startOpen(),throwsA(failure('channel_capacity')));
+    expect(overflow,1); expect(tracker.activeCount,8);
+  });
+  test('MT10 unrecognized confirmation cannot silently retire an opened channel', () {
+    var failures = 0;
+    final tracker = ChannelRetirementTracker('fixture',onOverflow:() { failures++; });
+    tracker.startOpen();
+    tracker.trace('<- fixture: SSH_Message_Channel_Confirmation(recipientChannel: 1, senderChannel: 7, initialWindowSize: 1, maximumPacketSize: 1, extra: 0)');
+    tracker.finishOpen(succeeded:true);
+    expect(failures,1);
+    expect(() => tracker.startOpen(),throwsA(failure('channel_capacity')));
+  });
+  test('MT11 pending channel open retains cleanup until its own late completion', () async {
+    final tracker = ChannelRetirementTracker('fixture',onOverflow:() {});
+    tracker.startOpen(); var settled = false;
+    final pending = tracker.waitPending().then((_) { settled = true; });
+    await Future<void>.delayed(Duration.zero); expect(settled,isFalse);
+    tracker.finishOpen(succeeded:false); await pending; expect(settled,isTrue);
+  });
+  test('MT11 unsettled opens have their own limit even before channel confirmation', () {
+    var failures = 0;
+    final tracker = ChannelRetirementTracker('fixture',onOverflow:() { failures++; });
+    for (var i = 0; i < 8; i++) { tracker.startOpen(); }
+    expect(tracker.pendingCount,8); expect(tracker.activeCount,0);
+    expect(() => tracker.startOpen(),throwsA(failure('channel_capacity'))); expect(failures,1);
+    for (var i = 0; i < 8; i++) { tracker.finishOpen(succeeded:false); }
+    expect(tracker.pendingCount,0);
+  });
   test('unreviewed, multiline pin, wrong wire key, URL host and path aliases fail closed', () {
     final source = fixtureConfig();
     expect(() => RemoteConfig.fromJson({...source,'reviewConfirmed':false}),throwsA(failure('review_required')));
@@ -47,6 +113,16 @@ void main() {
     expect(() => validateSnapshotTarget(config,{...envelope,'type':'another_result'}),throwsA(failure('unsupported_protocol')));
     expect(() => config.observeCommand('term_x;touch /tmp/no'),throwsA(failure('invalid_terminal_id')));
     expect(shellQuote("/tmp/a'b;echo no"),"'/tmp/a'\\''b;echo no'");
+  });
+  test('MT04 resumed observation rejects a replaced terminal even when pane name is unchanged', () {
+    const original = RemotePane('w1:p1','term_abcd');
+    requireOriginalObservationTarget(original,const RemoteDashboard(1,'probe',[RemotePane('w1:p1','term_abcd')]));
+    for (final panes in <List<RemotePane>>[
+      const [],const [RemotePane('w1:p1','term_ffff')],const [RemotePane('w1:p2','term_abcd')],
+      const [RemotePane('w1:p1','term_abcd'),RemotePane('w1:p1','term_abcd')],
+    ]) {
+      expect(() => requireOriginalObservationTarget(original,RemoteDashboard(2,'probe',panes)),throwsA(failure('resume_target_changed')));
+    }
   });
   test('private key single-line input reconstructs only OpenSSH PEM in memory', () {
     final pem = fixtureConfig()['privateKeyPem'] as String;
@@ -86,6 +162,53 @@ void main() {
     expect(adapter.evidence.lateEventsIgnored,greaterThan(0));
     await expectLater(adapter.read(RemoteConfig.fromJson(fixtureConfig())),throwsA(failure('synthetic_connection')));
     expect(calls,2);
+  });
+  test('MT11 eight connection slots include cancelled dials until late sockets are destroyed', () async {
+    final budget = RemoteConnectionBudget(),pending = List.generate(9,(_) => Completer<SSHSocket>());
+    final adapters = List.generate(9,(index) => RemoteReadOnlyAdapter(connectionBudget:budget,
+      connector:(_,__) => pending[index].future));
+    final config = RemoteConfig.fromJson(fixtureConfig());
+    final completions = <Future<void>>[];
+    for (var i = 0; i < 8; i++) { completions.add(expectLater(adapters[i].read(config),throwsA(failure('cancelled')))); }
+    await Future<void>.delayed(Duration.zero);
+    expect(budget.inUse,8);
+    for (var i = 0; i < 8; i++) { await adapters[i].cancel(); }
+    await Future.wait(completions); expect(budget.inUse,8);
+    await expectLater(adapters[8].read(config),throwsA(failure('connection_capacity')));
+    final late = FakeSocket(); pending[0].complete(late); await Future<void>.delayed(Duration.zero);
+    expect(late.destroyed,isTrue); expect(budget.inUse,7);
+    final ninth = expectLater(adapters[8].read(config),throwsA(failure('cancelled')));
+    await Future<void>.delayed(Duration.zero); await adapters[8].cancel(); await ninth;
+    expect(budget.inUse,8);
+    for (var i = 1; i < 9; i++) { pending[i].complete(FakeSocket()); }
+    await Future<void>.delayed(Duration.zero); expect(budget.inUse,0);
+  });
+  test('MT11 late socket close failure keeps its admission slot', () async {
+    final budget = RemoteConnectionBudget(limit:1),pending = Completer<SSHSocket>();
+    final first = RemoteReadOnlyAdapter(connectionBudget:budget,connector:(_,__) => pending.future);
+    final second = RemoteReadOnlyAdapter(connectionBudget:budget,connector:(_,__) => Future.error(StateError('must not dial')));
+    final config = RemoteConfig.fromJson(fixtureConfig());
+    final completed = expectLater(first.read(config),throwsA(failure('cancelled')));
+    await Future<void>.delayed(Duration.zero); await first.cancel(); await completed;
+    final late = FailedDestroySocket(); pending.complete(late); await Future<void>.delayed(Duration.zero);
+    expect(budget.inUse,1); await expectLater(second.read(config),throwsA(failure('connection_capacity')));
+    unawaited(late.input.close()); unawaited(late.output.close());
+  });
+  test('MT11 asynchronous SSH close still occupies its slot after local timeout', () async {
+    final budget = RemoteConnectionBudget(limit:1),socket = DelayedCloseSocket();
+    final first = RemoteReadOnlyAdapter(connectionBudget:budget,connector:(_,__) async => socket);
+    final second = RemoteReadOnlyAdapter(connectionBudget:budget,connector:(_,__) => Future.error(StateError('must not dial')));
+    final config = RemoteConfig.fromJson(fixtureConfig());
+    final ended = expectLater(first.read(config),throwsA(failure('cancelled')));
+    await Future<void>.delayed(Duration.zero);
+    final cancelling = first.cancel();
+    await Future<void>.delayed(Duration.zero); expect(socket.closeCalled,isTrue);
+    await Future<void>.delayed(const Duration(milliseconds:2100));
+    await cancelling; await ended;
+    expect(socket.destroyed,isTrue); expect(budget.inUse,1);
+    await expectLater(second.read(config),throwsA(failure('connection_capacity')));
+    socket.closing.complete(); await Future<void>.delayed(Duration.zero);
+    expect(budget.inUse,0);
   });
   test('detached transport errors fail the attempt without escaping or releasing a pending dial', () async {
     final pending = Completer<SSHSocket>();

@@ -84,3 +84,9 @@ Linux/macOS 的 signer 是明确标示的**仅进程内测试身份**，退出�
 Android 云构建在 `tauri android init` 后运行 `scripts/wire-android.py`，将 Tauri 插件复制到生成工程，并应用共享 `device-keys.gradle`（Java 17、BC 1.86 和许可证 notice）；生成工程不入库。本机不安装 SDK。移动平台运行、系统存储、设备锁定行为、桌面 GUI 到隔离 SSH 的实际完整流程均须以独立运行记录为准，不能从编译或单测推断。
 
 iOS 构建在 Cargo build script 中引用固定 Tauri crate 的 Swift API，并从仓库共享 Swift 源在临时构建目录生成静态 Swift 包，无需修改生成的 Xcode 工程；`Info.ios.plist` 提供相机用途说明。相机返回的仅是待人工审查的公开响应，取消和权限拒绝均可继续手动导入。在有 Swift 命令行工具的 macOS 上执行 `python3 test/ios_wire_test.py` 可运行 plist/注册接线检查、无系统 Keychain 的 CryptoKit 内存替身和 Swift 接口桩类型检查；这些检查不替代 iOS SDK 链接、模拟器或真机验证。
+
+## 多终端标签（实验）
+
+已保存并审查设备身份的主机可从看板新建终端标签，或从实际快照把指定 pane 与 terminal 在新标签打开。标签最多八个；仍在关闭的连接占用连接容量。显式连接后，前台切换会撤销旧输入并暂停其观察；主动恢复时复用该 SSH 连接，重新核对原 pane/terminal 并等待新 full。应用进入后台时取消所有连接，返回后不自动连接或发送。网络、身份或主机绑定变更会撤销受影响标签，需关闭并重新新建。新旧连接入口互斥；单机全局输入恢复记录可能使其他标签的输入暂时锁定，观察仍可使用。
+
+终端使用用户设定字号和 ProbeNerd 字体；目前 transport frame 不携带远端行列尺寸，因此显示沿用本地 80×24 并可横向滚动，不发送远端 PTY resize。逐键、IME、草稿、焦点及 unknown 的本地隔离测试不代表手机输入体验或远端会话已验收。受控观察暂停只证明本地观察和输入权限已退休、通道关闭请求已由 SSH 任务处理，不证明远端进程已经退出。真实设备、跨网络、多 SSH 同时运行及前后台行为仍须单独验证。

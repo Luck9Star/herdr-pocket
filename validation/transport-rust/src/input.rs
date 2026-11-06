@@ -45,13 +45,13 @@ struct ErrorBody {
     code: String,
     message: String,
 }
-fn random_id() -> Option<String> {
+pub(crate) fn random_id() -> Option<String> {
     use ring::rand::SecureRandom;
     let mut b = [0u8; 16];
     ring::rand::SystemRandom::new().fill(&mut b).ok()?;
     Some(b.iter().map(|v| format!("{v:02x}")).collect())
 }
-fn capability_reply(raw: &[u8], id: &str) -> bool {
+pub(crate) fn capability_reply(raw: &[u8], id: &str) -> bool {
     let Ok(e) = serde_json::from_slice::<Envelope<Capability>>(raw) else {
         return false;
     };
@@ -77,7 +77,9 @@ pub enum SendOutcome {
     Accepted(InputReceipt),
     Rejected,
     /// The host returned a correlated decision but the local marker could not be cleared.
-    RecoveryLocked { receipt: Option<InputReceipt> },
+    RecoveryLocked {
+        receipt: Option<InputReceipt>,
+    },
     Unknown,
 }
 fn outcome(raw: &[u8], id: &str, pane: &str, terminal: &str, len: usize) -> SendOutcome {
@@ -158,6 +160,7 @@ struct State {
     mode: Mode,
     inflight: bool,
     epoch: u64,
+    paused: bool,
 }
 impl State {
     fn permits(&self, epoch: u64, draft: bool, unknown: bool, cancelled: bool) -> bool {
@@ -203,6 +206,7 @@ pub struct LiveInput {
     pane: String,
     terminal: String,
     cancel: Cancellation,
+    connection_cancel: Cancellation,
     state: Mutex<State>,
     recovery: Recovery,
     identity: InputIdentity,
@@ -219,6 +223,7 @@ impl LiveInput {
             socket: identity.socket.clone(),
             pane: identity.pane.clone(),
             terminal: identity.terminal.clone(),
+            connection_cancel: cancel.clone(),
             cancel,
             state: Mutex::new(State {
                 valid: true,
@@ -227,6 +232,28 @@ impl LiveInput {
             recovery,
             identity,
         }
+    }
+    pub(crate) fn new_observation(
+        ssh: Arc<client::Handle<Pinned>>,
+        identity: InputIdentity,
+        connection_cancel: Cancellation,
+        cancel: Cancellation,
+        recovery: Recovery,
+    ) -> Self {
+        let mut input = Self::new(ssh, identity, cancel, recovery);
+        input.connection_cancel = connection_cancel;
+        input
+    }
+    /// Synchronous observation retirement. Submitted requests retain their
+    /// durable unknown marker, but retiring this epoch does not close SSH.
+    pub(crate) fn retire_for_pause(&self) {
+        if let Ok(mut state) = self.state.lock() {
+            state.paused = true;
+            state.valid = false;
+            state.focused = false;
+            state.epoch = state.epoch.saturating_add(1);
+        }
+        self.cancel.cancel();
     }
     pub fn unknown(&self) -> bool {
         self.recovery.unknown()
@@ -238,7 +265,7 @@ impl LiveInput {
     }
     pub fn set_mode(&self, mode: &str, focused: bool) -> crate::Result<u64> {
         let mut s = self.state.lock().map_err(|_| "input_unavailable")?;
-        if !s.valid || self.cancel.is_cancelled() {
+        if !s.valid || self.cancel.is_cancelled() || self.connection_cancel.is_cancelled() {
             return Err("input_stale");
         }
         let next = match mode {
@@ -251,6 +278,7 @@ impl LiveInput {
             self.mark_unknown();
             s.valid = false;
             self.cancel.cancel();
+            self.connection_cancel.cancel();
             return Err("input_result_unknown");
         }
         s.mode = next;
@@ -262,6 +290,7 @@ impl LiveInput {
         let mut s = self.state.lock().map_err(|_| "input_unavailable")?;
         if !s.valid
             || self.cancel.is_cancelled()
+            || self.connection_cancel.is_cancelled()
             || !s.focused
             || s.mode != Mode::Observe
             || s.inflight
@@ -290,7 +319,12 @@ impl LiveInput {
         let id = random_id().ok_or("input_storage_unavailable")?;
         {
             let mut s = self.state.lock().map_err(|_| "input_unavailable")?;
-            if !s.permits(epoch, draft, self.unknown(), self.cancel.is_cancelled()) {
+            if !s.permits(
+                epoch,
+                draft,
+                self.unknown(),
+                self.cancel.is_cancelled() || self.connection_cancel.is_cancelled(),
+            ) {
                 return Err("input_stale");
             }
             self.recovery.prepare(&self.identity, &id)?;
@@ -303,6 +337,9 @@ impl LiveInput {
                     self.0.mark_unknown();
                     self.0.invalidate();
                     self.0.cancel.cancel();
+                    if self.0.state.lock().map_or(true, |state| !state.paused) {
+                        self.0.connection_cancel.cancel();
+                    }
                 }
                 self.0.recovery.end_attempt();
                 if let Ok(mut s) = self.0.state.lock() {
@@ -317,13 +354,23 @@ impl LiveInput {
             Err(_) => SendOutcome::Unknown,
         };
         if let Ok(state) = self.state.lock() {
-            if result != SendOutcome::Unknown && state.valid && !self.cancel.is_cancelled() {
-                if self.recovery.clear_confirmed(&self.identity, Some(&id)).is_ok() {
+            if result != SendOutcome::Unknown
+                && state.valid
+                && !self.cancel.is_cancelled()
+                && !self.connection_cancel.is_cancelled()
+            {
+                if self
+                    .recovery
+                    .clear_confirmed(&self.identity, Some(&id))
+                    .is_ok()
+                {
                     pending.1 = true;
                     return Ok(result);
                 }
                 return Ok(match result {
-                    SendOutcome::Accepted(receipt) => SendOutcome::RecoveryLocked { receipt: Some(receipt) },
+                    SendOutcome::Accepted(receipt) => SendOutcome::RecoveryLocked {
+                        receipt: Some(receipt),
+                    },
                     SendOutcome::Rejected => SendOutcome::RecoveryLocked { receipt: None },
                     other => other,
                 });
@@ -372,9 +419,12 @@ mod tests {
         let SendOutcome::Accepted(receipt) = outcome(ack, "i", "p", "t", 3) else {
             panic!("expected the correlated queue receipt");
         };
-        assert_eq!(serde_json::to_value(receipt).unwrap(), json!({
-            "requestId":"i", "paneId":"p", "terminalId":"t", "acceptedBytes":3
-        }));
+        assert_eq!(
+            serde_json::to_value(receipt).unwrap(),
+            json!({
+                "requestId":"i", "paneId":"p", "terminalId":"t", "acceptedBytes":3
+            })
+        );
         assert_eq!(outcome(ack, "other", "p", "t", 3), SendOutcome::Unknown);
         assert_eq!(outcome(ack, "i", "other", "t", 3), SendOutcome::Unknown);
         assert_eq!(outcome(ack, "i", "p", "t", 4), SendOutcome::Unknown);

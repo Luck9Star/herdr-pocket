@@ -13,12 +13,15 @@ import 'remote_page.dart';
 /// Public request/response review. Native identity creation is always explicit;
 /// missing/locked storage has no fallback, and responses never establish SSH trust.
 class PairingPage extends StatefulWidget {
-  const PairingPage({super.key,required this.tokens,this.keys,this.adapter,this.onRequest,this.clock,this.catalog,this.profileId,this.visibility});
+  const PairingPage({super.key,required this.tokens,this.keys,this.adapter,this.onRequest,this.clock,this.catalog,this.profileId,this.visibility,this.onViewState,this.requestedTarget,this.onOpenPane});
   final DesignTokens tokens;
   final DeviceKeys? keys;
   final HostCatalog? catalog;
   final String? profileId;
   final ValueListenable<bool>? visibility;
+  final void Function(String,String?,String?)? onViewState;
+  final RemotePane? requestedTarget;
+  final void Function(RemotePane)? onOpenPane;
   final RemoteReadOnlyAdapter? adapter;
   final void Function(Map<String,dynamic>)? onRequest;
   static PendingDevicePairing? retainedPairing;
@@ -220,7 +223,8 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     var ticket = p.generation;
     setState(() { busy = true; status = '请在连接页再次审查冻结目标；只有实际 pin 与 SSH 认证成功才标记已配对'; });
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => RemotePage(tokens:widget.tokens,
-      adapter:widget.adapter,visibility:widget.visibility,networkBinding:networkBinding,pairedTarget:target,deviceKeys:keys,keyHandle:p.handle,
+      adapter:widget.adapter,visibility:widget.visibility,networkBinding:networkBinding,pairedTarget:target,deviceKeys:keys,keyHandle:p.handle,onViewState:widget.onViewState,
+      requestedTarget:widget.requestedTarget,onOpenPane:widget.onOpenPane,
       devicePublicKey:p.request['public_key'] as String,onConnecting:() { ticket = p.connect(); },onAuthenticated:() { p.connectionResult(ticket,true); if (mounted) setState(() {}); },
       onStopped:() { if (['connecting','paired'].contains(p.state)) { p.generation++; p.state = 'waiting-connectivity'; } })));
     if (!mounted) return;
@@ -260,7 +264,12 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     final catalog = widget.catalog, p = candidate ?? pairing, old = savedProfile;
     if (catalog == null || p == null || old == null) return;
     try {
-      final next = old.change(pairing:p,now:now); await catalog.update(next); savedProfile = next;
+      final matches = catalog.profiles.where((current) => current.id == old.id && current.enabled && !current.retired).toList();
+      if (!catalog.ready || matches.length != 1 || !sameHostTarget(matches.single.target,old.target) ||
+          matches.single.networkProfileId != old.networkProfileId || !samePairingBinding(matches.single,old)) {
+        throw const RemoteFailure('catalog_binding_changed');
+      }
+      final next = matches.single.change(pairing:p,now:now); await catalog.update(next); savedProfile = next;
     } catch (_) { profileBlocked = true; rethrow; }
   }
   Future<void> deleteOrphan() async {
@@ -292,7 +301,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       if (catalog != null && previous != null) {
         final current = catalog.profiles.where((p) => p.id == previous.id && p.enabled).toList();
         if (!catalog.ready || current.length != 1 || !sameHostTarget(current.single.target,previous.target) || current.single.networkProfileId != previous.networkProfileId ||
-            jsonEncode(current.single.pairingRecord) != jsonEncode(previous.pairingRecord)) {
+            !samePairingBinding(current.single,previous)) {
           profileBlocked = true;
           if (mounted) setState(() { status = '本机绑定或授权资料已改变 · 请关闭此标签重新读取审查，不沿用旧状态'; });
           return;

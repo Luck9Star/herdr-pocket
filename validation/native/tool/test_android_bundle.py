@@ -16,6 +16,22 @@ class BundleTests(unittest.TestCase):
         self.lib = self.path / 'libheeler_easytier.so'
         self.lib.write_bytes(b'\x7fELF\x02\x01' + bytes(10) + struct.pack('<HH', 3, 183))
 
+    def test_report_preserves_failed_source_checks_without_claiming_android_runtime(self):
+        # This exercises report assembly only, not APK or native validation.
+        (self.path / 'app.apk').write_bytes(b'synthetic report fixture')
+        (self.path / 'native-manifest.json').write_text('{}\n')
+        candidate = self.path / 'candidate-manifest.json'
+        candidate.write_text('{"variant":"experimental-patched"}\n')
+        with mock.patch('sys.argv', ['android_bundle.py', 'report', str(self.path),
+                                   '--commit', 'a' * 40, '--app', 'flutter', '--checks', 'failure']):
+            bundle.main()
+        report = json.loads((self.path / 'report.json').read_text())
+        self.assertEqual(report['sourceChecks'], 'failure')
+        self.assertEqual(report['transportChecks'], 'not_run')
+        self.assertEqual(report['terminalCandidateManifestSha256'], bundle.sha(candidate))
+        for field in ['androidLoad', 'installation', 'node']:
+            self.assertEqual(report[field], 'not run')
+
     def test_elf_arch_and_dependencies_fail_closed(self):
         with mock.patch.object(bundle.subprocess, 'check_output', return_value='  (NEEDED) Shared library: [libc.so]\n'):
             self.assertEqual(bundle.elf(self.lib, 'readelf'), ['libc.so'])

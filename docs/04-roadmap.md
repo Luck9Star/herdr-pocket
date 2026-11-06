@@ -10,7 +10,9 @@
 
 随后源码批次完成 Android EasyTier 本机入网资料 GUI 和共享 vault、Rust overlay 字节流到 SSH 的显式适配，以及恢复标记的网络身份绑定。暂未触发新 Actions；下一依赖为 native 内部安全配置→真实节点→GUI 路由，再完成手机跨网络标签和其他 provider。损坏／缺 key 的显式恢复与 Flutter 新回归一并保留。[源码批次与验证边界](19-mobile-network-identity.md)
 
-后续已连接固定 Java 配置构建、JNI source、区分持久 revision 与启动 attempt 的节点服务，以及 Tauri 手机显式启动／停止／观察路由。默认缺库继续拒绝；Android feature 与真实组网尚未验证，Flutter 平台流尚待完成。先补原生 Android 包与两路线接线，再集中云验收；随后跨网标签，桌面分屏后置。[当前源码进展](20-mobile-node-routing.md)
+后续已连接固定 Java 配置构建、JNI source、区分持久 revision 与启动 attempt 的节点服务，以及 Tauri 手机显式启动／停止／观察路由。默认缺库继续拒绝；Android feature 与真实组网尚未验证。[该批源码进展](20-mobile-node-routing.md)
+
+Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码继续整合独立终端标签、隐藏时保留 SSH、显式恢复、新观察 epoch 和旧输入回执隔离。固定 SSH 通道清理修复与两包构建进入同一集中验收，未执行的 Flutter／设备检查仍保留未验证。先稳定手机闭环和 EasyTier 原生加载，再分接 Tailscale／ZeroTier，随后桌面分屏。[原生通道](21-flutter-native-network.md) · [多标签与本批验收](22-mobile-terminal-tabs.md)
 
 里程碑基线：2026-10-29，当时只有设计文档；2026-10-30已进入验证壳阶段，进度以上方执行记录为准。里程碑以可复现证据验收，不以代码量或功能勾选替代结果。
 

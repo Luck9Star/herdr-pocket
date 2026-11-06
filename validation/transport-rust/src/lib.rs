@@ -38,6 +38,8 @@ mod input_loopback_test;
 pub mod pairing;
 pub mod input;
 pub mod recovery;
+mod controlled;
+pub use controlled::{ControlledInputHooks, ObservationAck, ObservationControl, ObservationPhase, ObservationSnapshot, observe_interactive_controlled_with_dialer};
 
 pub const CONFIG_LIMIT: usize = 32768;
 const LINE_LIMIT: usize = 1_048_576;
@@ -906,34 +908,12 @@ where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<
 
 async fn observe_inner<Select, SelectFuture, Frame, FrameFuture>(
     config: RemoteConfig, cancel: Cancellation, audit: Arc<Audit>, progress: impl Fn(&'static str) + Send + Sync,
-    select: Select, frame: Frame, mut external: Option<ExternalSigner>, hooks: Option<InputHooks>, dialer: &dyn transport::Dialer,
+    select: Select, frame: Frame, external: Option<ExternalSigner>, hooks: Option<InputHooks>, dialer: &dyn transport::Dialer,
 ) -> Result<()>
 where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<String>>,
       Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
     let _cancel_on_drop = CancelOnDrop(cancel.clone());
-    let expected = config.validate_for_auth(true, external.is_some())?;
-    config_root(&config.socket_path, &config.session)?;
-    let private = if external.is_none() {
-        let key = decode_secret_key(&config.private_key_pem, None).map_err(|_| "invalid_private_key")?;
-        if key.algorithm() != Algorithm::Ed25519 { return Err("invalid_private_key"); }
-        Some(key)
-    } else { None };
-    progress("connecting");
-    let (mut ssh, route) = connect_pinned(&config, &cancel, audit.clone(), expected, None, dialer).await?;
-    progress("host-key-verified");
-    audit.auth_started.store(true, Ordering::SeqCst);
-    let authenticated = if let Some(ref mut signer) = external {
-        bounded(&cancel, 8, "authentication_failed", ssh.authenticate_publickey_with(
-            &config.username, signer.key.clone(), None, signer)).await?.success()
-    } else {
-        bounded(&cancel, 8, "authentication_failed", ssh.authenticate_publickey(
-            &config.username, PrivateKeyWithHashAlg::new(Arc::new(private.ok_or("invalid_private_key")?), None))).await?.success()
-    };
-    if !authenticated {
-        return Err("authentication_failed");
-    }
-    progress("authenticated");
-    let ssh=Arc::new(ssh);
+    let (ssh, route) = authenticate_observer(&config, &cancel, audit.clone(), &progress, external, dialer).await?;
     let channel = bounded(
         &cancel,
         8,
@@ -1029,6 +1009,35 @@ where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<
             _ => {}
         }
     }
+}
+
+async fn authenticate_observer(
+    config: &RemoteConfig, cancel: &Cancellation, audit: Arc<Audit>,
+    progress: &(impl Fn(&'static str) + Send + Sync), mut external: Option<ExternalSigner>, dialer: &dyn transport::Dialer,
+) -> Result<(Arc<client::Handle<Pinned>>, Option<transport::OverlayRouteIdentity>)> {
+    let expected = config.validate_for_auth(true, external.is_some())?;
+    config_root(&config.socket_path, &config.session)?;
+    let private = if external.is_none() {
+        let key = decode_secret_key(&config.private_key_pem, None).map_err(|_| "invalid_private_key")?;
+        if key.algorithm() != Algorithm::Ed25519 { return Err("invalid_private_key"); }
+        Some(key)
+    } else { None };
+    progress("connecting");
+    let (mut ssh, route) = connect_pinned(config, cancel, audit.clone(), expected, None, dialer).await?;
+    progress("host-key-verified");
+    audit.auth_started.store(true, Ordering::SeqCst);
+    let authenticated = if let Some(ref mut signer) = external {
+        bounded(cancel, 8, "authentication_failed", ssh.authenticate_publickey_with(
+            &config.username, signer.key.clone(), None, signer)).await?.success()
+    } else {
+        bounded(cancel, 8, "authentication_failed", ssh.authenticate_publickey(
+            &config.username, PrivateKeyWithHashAlg::new(Arc::new(private.ok_or("invalid_private_key")?), None))).await?.success()
+    };
+    if !authenticated {
+        return Err("authentication_failed");
+    }
+    progress("authenticated");
+    Ok((Arc::new(ssh), route))
 }
 
 /// Frontends also guard their callbacks; this protects native command ownership across cancellation.

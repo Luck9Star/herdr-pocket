@@ -16,6 +16,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/rust-notices/
+    - assets/shared/mobile-tabs-v1.json
     - assets/shared/design-tokens-v2.json
     - assets/shared/fixture.json
     - assets/shared/network-profiles-v1.json

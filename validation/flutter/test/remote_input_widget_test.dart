@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
@@ -17,8 +18,13 @@ class InputFixtureAdapter extends base.PendingAdapter {
   Object connection = Object();
   final received = <Uint8List>[];
   RemoteInputResult nextResult = const RemoteInputResult.accepted();
+  Completer<RemoteInputResult>? delayedResult;
+  Completer<bool>? delayedAcknowledgement;
   int acknowledgements = 0;
   RemoteInputTarget? selectedTarget;
+  RemoteInputTarget? pausedTarget;
+  int pauses = 0,resumes = 0;
+  bool paused = false;
   @override Future<RemoteSnapshot> observe(RemoteConfig config,{required DashboardConsumer onDashboard,
       required FrameConsumer onFrame,RemoteProgress? onProgress}) {
     connection = Object();
@@ -26,6 +32,18 @@ class InputFixtureAdapter extends base.PendingAdapter {
   }
   @override RemoteInputCapability? get inputCapability => supported ? const RemoteInputCapability(4096) : null;
   @override RemoteInputTarget? get inputTarget => selectedTarget;
+  @override bool pauseObservation() {
+    if (calls == 0) return false;
+    if (!paused) { pauses++; paused = true; pausedTarget = selectedTarget; selectedTarget = null; }
+    return true;
+  }
+  @override bool resumeObservation() {
+    if (!paused) return false;
+    paused = false; resumes++;
+    final old = pausedTarget;
+    if (old != null) selectedTarget = fixtures.target(connection:connection,generation:old.generation,pane:old.paneId,term:old.terminalId);
+    return true;
+  }
   @override void selectPane(int expectedGeneration,String paneId) {
     super.selectPane(expectedGeneration,paneId);
     selectedTarget = fixtures.target(connection:connection,generation:expectedGeneration,pane:paneId,
@@ -36,10 +54,13 @@ class InputFixtureAdapter extends base.PendingAdapter {
     if (stillCurrent?.call() != true || !identical(target,selectedTarget)) {
       return const RemoteInputResult.rejected('input_cancelled_before_write');
     }
-    received.add(Uint8List.fromList(bytes)); return nextResult;
+    received.add(Uint8List.fromList(bytes));
+    return delayedResult == null ? nextResult : await delayedResult!.future;
   }
   @override Future<bool> acknowledgeInputUnknown(RemoteInputTarget target) async {
-    acknowledgements++; return identical(target,selectedTarget);
+    acknowledgements++;
+    if (delayedAcknowledgement != null) return await delayedAcknowledgement!.future;
+    return identical(target,selectedTarget);
   }
 }
 
@@ -64,6 +85,70 @@ Future<void> mode(WidgetTester tester,String value) async {
 }
 
 void main() {
+  for (final disposition in [RemoteInputDisposition.accepted,RemoteInputDisposition.rejected]) {
+    testWidgets('MT10 late $disposition receipt cannot modify a new epoch draft or status', (tester) async {
+      final visibility = ValueNotifier(true); addTearDown(visibility.dispose);
+      final adapter = InputFixtureAdapter()..delayedResult = Completer<RemoteInputResult>();
+      await start(tester,adapter,visibility:visibility); await mode(tester,'draft');
+      final draft = find.byKey(const ValueKey('remote-input-draft'));
+      await tester.ensureVisible(draft); await tester.enterText(draft,'same text'); await tester.pump();
+      final controller = tester.widget<TextField>(draft).controller!;
+      final send = find.byKey(const ValueKey('remote-input-draft-send'));
+      await tester.ensureVisible(send); await tester.tap(send); await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('remote-input-confirm'))); await tester.pump();
+      expect(controller.text,isEmpty); expect(adapter.received.length,1);
+      visibility.value = false; await tester.pump(); visibility.value = true; await tester.pump();
+      final resume = find.byKey(const ValueKey('remote-resume'));
+      await tester.ensureVisible(resume); await tester.tap(resume); await tester.pump();
+      adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'NEW EPOCH',observationEpoch:1)); await tester.pump();
+      await mode(tester,'draft'); controller.text = 'same text'; await tester.pump();
+      adapter.delayedResult!.complete(disposition == RemoteInputDisposition.accepted
+        ? const RemoteInputResult.accepted() : const RemoteInputResult.rejected('pocket_input_rejected'));
+      await tester.pump(); await tester.pump();
+      expect(controller.text,'same text'); expect(adapter.received.length,1);
+      expect(find.textContaining('已明确拒绝'),findsNothing);
+      if (disposition == RemoteInputDisposition.rejected) expect(find.byKey(const ValueKey('remote-rejected-draft-0')),findsOneWidget);
+    });
+  }
+  testWidgets('MT10 a stale mode callback cannot enable input in a new observation epoch', (tester) async {
+    final visibility = ValueNotifier(true); addTearDown(visibility.dispose);
+    final adapter = InputFixtureAdapter(); await start(tester,adapter,visibility:visibility);
+    final old = tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected!;
+    visibility.value = false; await tester.pump(); visibility.value = true; await tester.pump();
+    final resume = find.byKey(const ValueKey('remote-resume'));
+    await tester.ensureVisible(resume); await tester.tap(resume); await tester.pump();
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'FRESH',observationEpoch:1)); await tester.pump();
+    old(true); await tester.pump();
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+    expect(adapter.received,isEmpty);
+  });
+  testWidgets('MT10 late unknown acknowledgement cannot unlock a later observation epoch', (tester) async {
+    final visibility = ValueNotifier(true); addTearDown(visibility.dispose);
+    final adapter = InputFixtureAdapter()..nextResult = const RemoteInputResult.unknown();
+    await start(tester,adapter,visibility:visibility); await mode(tester,'direct');
+    final enter = find.byKey(const ValueKey('remote-key-Enter'));
+    await tester.ensureVisible(enter); await tester.tap(enter); await tester.pump();
+    await tester.ensureVisible(base.field('cancel')); await tester.tap(base.field('cancel')); await tester.pump();
+    await tester.ensureVisible(base.field('privateKeyPem'));
+    await tester.enterText(base.field('privateKeyPem'),fixtureConfig()['privateKeyPem'] as String);
+    await tester.ensureVisible(base.field('review')); await tester.tap(base.field('review')); await tester.pump();
+    await tester.ensureVisible(base.field('connect')); await tester.tap(base.field('connect')); await tester.pump();
+    adapter.publish(); await tester.pump();
+    final pane = find.byKey(const ValueKey('remote-pane-w1:p1'));
+    await tester.ensureVisible(pane); await tester.tap(pane); await tester.pump();
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'RECONNECTED')); await tester.pump();
+    final acknowledge = find.byKey(const ValueKey('remote-input-acknowledge'));
+    expect(tester.widget<TextButton>(acknowledge).onPressed,isNotNull);
+    adapter.delayedAcknowledgement = Completer<bool>();
+    await tester.ensureVisible(acknowledge); await tester.tap(acknowledge); await tester.pump();
+    visibility.value = false; await tester.pump(); visibility.value = true; await tester.pump();
+    final resume = find.byKey(const ValueKey('remote-resume'));
+    await tester.ensureVisible(resume); await tester.tap(resume); await tester.pump();
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'LATER EPOCH',observationEpoch:1)); await tester.pump();
+    adapter.delayedAcknowledgement!.complete(true); await tester.pump();
+    expect(find.textContaining('发送结果待核实'),findsOneWidget);
+    expect(adapter.received.length,1); expect(adapter.acknowledgements,1);
+  });
   testWidgets('Ctrl and Alt hold only explicit auxiliary input, then release; cancel and focus loss send nothing', (tester) async {
     final adapter = InputFixtureAdapter(); await start(tester,adapter); await mode(tester,'direct');
     Future<void> press(String name) async {
@@ -207,7 +292,7 @@ void main() {
     await tester.ensureVisible(enter); await tester.tap(enter); await tester.pump();
     expect(adapter.received.last,[13]); expect(tester.takeException(),isNull);
   });
-  testWidgets('hidden tab stops input and late frames; explicit reconnect restores only its unsent draft', (tester) async {
+  testWidgets('MT03 MT09 hidden tab stops input, retains connection and requires explicit resume plus full', (tester) async {
     final visibility = ValueNotifier(true); addTearDown(visibility.dispose);
     final adapter = InputFixtureAdapter(); await start(tester,adapter,visibility:visibility);
     await mode(tester,'draft');
@@ -215,21 +300,32 @@ void main() {
     await tester.ensureVisible(draft); await tester.enterText(draft,'tab-owned unsent draft');
     final oldGeneration = adapter.generation;
     visibility.value = false; await tester.pump();
-    expect(adapter.cancels,greaterThan(0)); expect(adapter.received,isEmpty);
+    expect(adapter.pauses,1); expect(adapter.cancels,0); expect(adapter.received,isEmpty);
     adapter.frame!(oldGeneration,'w1:p1',const RemoteFrame(1,false,'LATE HIDDEN FRAME'));
     visibility.value = true; await tester.pump();
-    expect(adapter.calls,1); expect(find.textContaining('请主动审查连接并取得新 full'),findsOneWidget);
-    await tester.ensureVisible(base.field('privateKeyPem'));
-    await tester.enterText(base.field('privateKeyPem'),fixtureConfig()['privateKeyPem'] as String);
-    await tester.ensureVisible(base.field('review')); await tester.tap(base.field('review')); await tester.pump();
-    await tester.ensureVisible(base.field('connect')); await tester.tap(base.field('connect')); await tester.pump();
-    adapter.publish(); await tester.pump();
-    final pane = find.byKey(const ValueKey('remote-pane-w1:p1'));
-    await tester.ensureVisible(pane); await tester.tap(pane); await tester.pump();
-    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'NEW FULL AFTER TAB RESTORE'));
-    await tester.pump(); expect(adapter.calls,2);
+    expect(adapter.calls,1); expect(find.textContaining('请主动恢复原目标并等待新 full'),findsOneWidget);
+    final resume = find.byKey(const ValueKey('remote-resume'));
+    await tester.ensureVisible(resume); await tester.tap(resume); await tester.pump();
+    expect(adapter.resumes,1); expect(adapter.received,isEmpty);
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'NEW FULL AFTER TAB RESTORE',observationEpoch:1));
+    await tester.pump(); expect(adapter.calls,1);
     await mode(tester,'draft');
     expect(tester.widget<TextField>(draft).controller!.text,'tab-owned unsent draft');
     expect(adapter.received,isEmpty);
+  });
+  testWidgets('MT08 unknown submitted input remains locked after same-SSH resume and is never resent', (tester) async {
+    final visibility = ValueNotifier(true); addTearDown(visibility.dispose);
+    final adapter = InputFixtureAdapter()..nextResult = const RemoteInputResult.unknown();
+    await start(tester,adapter,visibility:visibility); await mode(tester,'direct');
+    final enter = find.byKey(const ValueKey('remote-key-Enter'));
+    await tester.ensureVisible(enter); await tester.tap(enter); await tester.pump();
+    expect(adapter.received.length,1); expect(find.textContaining('发送结果待核实'),findsOneWidget);
+    visibility.value = false; await tester.pump(); visibility.value = true; await tester.pump();
+    final resume = find.byKey(const ValueKey('remote-resume'));
+    await tester.ensureVisible(resume); await tester.tap(resume); await tester.pump();
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'AFTER UNKNOWN',observationEpoch:1)); await tester.pump();
+    expect(find.textContaining('发送结果待核实'),findsOneWidget);
+    expect(tester.widget<TextButton>(find.byKey(const ValueKey('remote-input-acknowledge'))).onPressed,isNull);
+    expect(adapter.received.length,1); expect(adapter.acknowledgements,0);
   });
 }

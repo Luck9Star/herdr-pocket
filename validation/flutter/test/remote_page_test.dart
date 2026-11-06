@@ -62,6 +62,19 @@ Future<void> fillRemoteFixture(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('MT04 requested new view refuses a same-name pane with a replaced terminal', (tester) async {
+    final adapter = PendingAdapter();
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:RemotePage(tokens:tokens,adapter:adapter,
+      requestedTarget:const RemotePane('w1:p1','term_ffff'))));
+    await fillRemoteFixture(tester);
+    await tester.ensureVisible(field('review')); await tester.tap(field('review')); await tester.pump();
+    await tester.ensureVisible(field('connect')); await tester.tap(field('connect')); await tester.pump();
+    expect(adapter.calls,1);
+    expect(() => adapter.publish(),throwsA(isA<RemoteFailure>().having((e) => e.code,'code','resume_target_changed')));
+    expect(adapter.selected,isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('reused system page is permanently locked when changed to overlay and back', (tester) async {
     final adapter = PendingAdapter();
     final tokens = (await tester.runAsync(DesignTokens.load))!;

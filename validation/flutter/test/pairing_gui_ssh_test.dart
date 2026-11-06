@@ -6,6 +6,7 @@ import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
+import 'package:herdr_flutter_probe/host_tabs.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'package:herdr_flutter_probe/remote_input.dart';
@@ -56,7 +57,9 @@ void main() {
     final inputJournal = GuiSshMemoryInputJournal();
     final adapter = RemoteReadOnlyAdapter(inputJournal:inputJournal);
     final catalog = HostCatalog(storage:MemoryCatalogStorage());
+    final tabs = HostTabs();
     addTearDown(catalog.dispose);
+    addTearDown(tabs.dispose);
     void stage(String name) => File('${dir.path}/stage').writeAsStringSync(name,flush:true);
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);
@@ -81,7 +84,7 @@ void main() {
     }
     stage('host_board');
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,
-      catalog:catalog,keys:keys,adapterFactory:(_) => adapter,offlineBuilder:(_) => const SizedBox())));
+      catalog:catalog,keys:keys,tabs:tabs,adapterFactory:(_) => adapter,offlineBuilder:(_) => const SizedBox())));
     await tester.pumpAndSettle();
     await tapControl('hosts-add'); await tester.pumpAndSettle();
     stage('public_request');
@@ -128,6 +131,20 @@ void main() {
       tester.view.physicalSize = viewport; await tester.pump();
       await until(() => adapter.evidence.deltaFrames > previous);
     }
+    // MT02/MT03: the actual adapter keeps its authenticated SSH while hidden;
+    // only an explicit resume may re-open the same target and deliver a full.
+    stage('pause_resume_original');
+    final tabId = tabs.active!.id,fulls = adapter.evidence.frameCount - adapter.evidence.deltaFrames;
+    await tapControl('hosts-board-tab');
+    expect(adapter.evidence.fullFrameReceived,isFalse);
+    await tapControl('host-tab-$tabId');
+    expect(adapter.evidence.connectionCount,1);
+    expect(find.byKey(const ValueKey('remote-resume')),findsOneWidget);
+    await tapControl('remote-resume');
+    await until(() => adapter.evidence.frameCount - adapter.evidence.deltaFrames > fulls &&
+      find.textContaining('只读观察中').evaluate().isNotEmpty);
+    expect(adapter.evidence.connectionCount,1);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
     var inputQueueAccepted = false;
     final draftMode = find.byKey(const ValueKey('remote-mode-draft'));
     final directMode = find.byKey(const ValueKey('remote-mode-direct'));
@@ -184,6 +201,7 @@ void main() {
     final report = {'paired':adapter.evidence.hostKeyMatched && adapter.evidence.authStarted,
       'paneChosen':true,'fullRendered':true,'deltaRendered':true,'stoppedStale':true,'signCalls':keys.signCalls,
       'reopenedPendingRequest':true,'identityCreations':keys.creates,'localViewportChanges':2,
+      'pauseResumeSameConnection':true,
       'frameCount':adapter.evidence.frameCount,'deltaFrames':adapter.evidence.deltaFrames,
       'connectionCount':adapter.evidence.connectionCount,
       'inputRequested':expectInput,'inputQueueAccepted':inputQueueAccepted,

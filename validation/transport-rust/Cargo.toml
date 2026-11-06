@@ -5,6 +5,9 @@ edition = "2024"
 rust-version = "1.96"
 publish = false
 
+[patch.crates-io]
+russh = { path = "../vendor/russh-0.65.0" }
+
 [features]
 default = []
 overlay-linked-easytier = ["overlay-runtime/linked-easytier"]

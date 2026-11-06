@@ -102,3 +102,9 @@ CARGO_TARGET_DIR=/private/tmp/herdr-portable-stream-target cargo test --locked -
 | 15 格单网络、20 格前台并发矩阵 | 本段不新增任何通过格，继续按[原矩阵](../../docs/09-prototype-validation.md)验收 |
 
 现有 [native 候选三桌面结果](../../docs/10-blocker-repair.md)与这里的新 runtime 分层记录；历史库链接通过不能代替本段集成，fixture 跨 provider 隔离不能代替 Tailscale + EasyTier 真并发。
+
+## Rust SSH byte adapter（2026-11-06）
+
+[transport-rust](../transport-rust/README.md#显式-overlay-byte-transport2026-11-06) 已新增真正的 Tokio `AsyncRead + AsyncWrite` adapter，使用本 runtime 的 Future 和精确 `open_node` → `open_revision`；`open_node` 另检查 NodeLease 的原 runtime。`NodeLease::identity_ref()` 只公开安全存储引用，供实际 stream 的持久 recovery route 绑定。它不公开 native epoch，也不表示身份已实现持久稳定。默认仍缺桥拒绝；本段不新增真实节点、GUI overlay 或设备验证。
+
+`Failure::ReadTimedOut` 只表示同步 read 已返回、没有读取任何字节且没有迟到 read。EasyTier 固定 ABI 的 read `-2` 映射到此值；transport 在原 Operation 完成后以有界 timer 继续读取，正常空闲不关闭连接，write 仍不自动重试。本轮 native fixture 24 项和默认门禁 1 项通过，新增 timeout 回归证明之后可写入并读到同一流的数据。其余历史测试与真实网络边界继续按上文和 transport README 区分。

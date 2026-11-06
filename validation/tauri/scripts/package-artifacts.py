@@ -84,6 +84,11 @@ manifest['nativeArtifactStatus']='present-unverified' if native_packages else 'm
 if manifest['platform']=='android' and manifest['buildOutcome']=='success':
     native=repo/'validation/pairing/native/android'
     manifest['androidSignerSources']={f.name:sha(f) for f in sorted(native.glob('*.java'))}
+    network_vault=repo/'validation/network-profiles/native/android'
+    manifest['androidNetworkVaultSources']={f.name:sha(f) for f in sorted(network_vault.glob('*.java'))}
+    manifest['androidNetworkVaultGradleSHA256']=sha(network_vault/'network-secrets.gradle')
+    manifest['androidNetworkBridgeSHA256']=sha(root/'android/DeviceKeysPlugin.kt')
+    manifest['androidNetworkVaultDeviceResult']='unverified'
     manifest['androidPackagedNotices']={apk.name:verify_packaged_notices(apk) for apk in native_packages if apk.suffix=='.apk'}
     manifest['androidApkSha256']={apk.name:sha(apk) for apk in native_packages if apk.suffix=='.apk'}
     manifest['androidSignerNoticeSHA256']=sha(native/'notices/BOUNCY-CASTLE-LICENSE.md')

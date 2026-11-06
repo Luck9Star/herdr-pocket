@@ -51,3 +51,34 @@ CLI 仅接受 `GITHUB_ACTIONS=true`、非特权端口 `127.0.0.1` 及显式临�
 `observe` 在同一 SSH 连接内读取唯一命名会话快照，以 pane ID 和 terminal ID 显示看板，明确选择后再执行固定观察命令；空 pane ID 仅允许看板发现，`read_once` 原校验不变。快照最多 256 pane，重复 pane 或 terminal ID 拒绝。首帧 10 秒内须为 full，后续 full/delta 均要求 seq 恰好递增；不完整、非法、超限或乱序即终止，停止后原画面为陈旧。观察期间无输出不视为失败。单行上限 1 MiB、解码帧 64 KiB、stderr 总量 64 KiB；回调逐帧完成后才读取下一帧。取消中断选择、渲染等待和真实 SSH TCP；没有自动重连、输入、远端 PTY 或 resize。
 
 CI-only probe 增加 `observe-positive`（至少三帧及一个 delta）、`observe-cancel`（首帧后取消）和 `observe-reconnect`（主动发起两次独立观察，各 full + delta）。报告仅输出聚合计数，不记录终端数据；未运行的新云端用例不能作为真实 SSH 或手机验证结果。
+
+## 显式 overlay byte transport（2026-11-06）
+
+`transport::Dialer` 返回真正可交给 `russh::client::connect_stream` 的 `ByteStream`；旧 `read_once`、`observe`、device signer 和 guarded input API 继续使用 `SystemDialer`。需要 overlay 时明确调用 `read_once_with_dialer`、`observe_with_dialer`、`observe_with_device_signer_and_dialer` 或 `observe_interactive_with_dialer`，传入 `overlay::OverlayDialer`。所有入口共用 `connect_pinned`，继续使用同一个 host-key handler、认证、device signer、snapshot/session/terminal 校验和原 `LiveInput`；不会另建简化的 SSH 信任路径。
+
+`OverlayDialer::new(Arc<OverlayRuntime>, NodeLease, Duration)` 只绑定实际 app-owned node lease。runtime 的 `open_node` 先验证 node 来自同一个 runtime，再调用 `open_revision`；同名 profile、同 revision 或同虚拟地址不能跨 runtime 借用。每次 dial 新建 owner，取消或丢弃待完成 open 后，原迟到 native handle 仍由 runtime 清理。stream 持有原 owner/profile/revision，不会随 profile 替换而转向新节点。默认构建没有 bridge：缺桥严格拒绝，没有系统 DNS、普通 TCP、localhost listener 或其他 provider fallback。
+
+- `OverlayStream` 直接 poll runtime 的 `Operation` Future；同步 FFI 仍只在 runtime 的独立 worker。读写各最多一个 operation，单次至多 64 KiB；改变下次读缓冲大小时保留已读取的剩余字节。
+- 正数 write 只确认本地接受前缀。适配器仅返回该前缀长度，随后由原 SSH writer 推进；UNKNOWN、取消、错误或丢弃 pending write 后更换 buffer 都会关闭该流，不重发。`flush` 没有远端送达保证，ABI 没有额外 flush primitive。
+- 原生 read 的 `-2` 明确映射 `ReadTimedOut`，只在同步 FFI 已返回、原 read slot 已释放后，以 Tokio timer 至少间隔 10 ms 再提交 read。正常空闲保持 pending；迟到 read 未返回时不再提交。这里依据固定 portable `Registry::read` 对 cancel-safe Tokio `read` 的 timeout；其他 read 错误仍关闭。write timeout 不走这条继续路径。SSH 握手的整体 8 秒限时和首帧限时继续由共享上层执行。
+- `shutdown` 是异步半关闭，保留读取；`close`、取消和 Drop 请求退休本 owner 的流。它们不是 cleanup 成功凭据：宿主保留 runtime，通过 `reserved_streams()` 及节点 cleanup 状态观察尚未返回/清理失败的配额，需要时显式重试原 revision 的 cleanup。
+
+recovery marker 现在绑定**实际连接 stream**提供的 `provider/profile_id/profile_revision/identity_ref`，并继续比较原 SSH host/key/user/socket/session/pane/terminal。没有让 GUI caller 自行传 `None`。旧 marker 缺少 `route` 字段时只表示 legacy/system，overlay 不能清除它；不同 provider、profile、revision 或设备安全存储引用均不能确认同一未知输入。持久 route 不含仅本进程有效的 node epoch/owner，profile 的 network 或 identity 改变必须提升持久 revision。
+
+feature `overlay-linked-easytier` 明确链接既定候选库；`overlay-native-fixture` 明确启用合成 C ABI，不能作为真实网络证据或缺桥 fallback。`OverlayDialer` 不能在未启用 fixture feature 时接收 `SyntheticNativeFixture` node。路径依赖 `herdr-overlay-runtime-probe = 0.1.0` 固定在本仓库，未新增外部依赖版本。
+
+本轮先完成 Context7 `library russh` → `/eugeny/russh` → `docs`，再核对本机锁定 russh 0.65.0 的 `connect_stream` 约束及 Tokio 1.54.1 `read` 的 cancel-safety。固定 Heeler 原源 SHA-256 `34bca319f85822ae410cea3c3d108024611d9bb26f9b0f98796b0ceee1eef537` 已与 [managed source audit](../native/managed-source-audit.json) 重算比对，`HEELER_ET_ERR_TIMEOUT == -2`；[portable read](../native/portable-stream/src/lib.rs) 和 [FFI mapping](../native/portable-stream/ffi.txt) 是读超时语义的直接依据。
+
+本轮最终本地结果：transport 完整 suite 为 42 项 library tests + 1 项 CLI report test 通过，其中 11 项为新 overlay adapter 测试；runtime 合成 native fixture 为 24 项通过，默认缺桥/安全存储门禁 1 项通过；默认 transport `cargo check --locked --offline` 通过。没有运行 CI 或安装平台 SDK。
+
+验证命令（target 产物只写临时目录）：
+
+```sh
+CARGO_TARGET_DIR=/private/tmp/herdr-transport-overlay-target cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml --features overlay-native-fixture
+CARGO_TARGET_DIR=/private/tmp/herdr-transport-overlay-target cargo check --locked --offline --manifest-path validation/transport-rust/Cargo.toml
+CARGO_TARGET_DIR=/private/tmp/herdr-overlay-runtime-target cargo test --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --features native-fixture
+```
+
+新增测试只使用合成 Backend、受控 C ABI、Unix socketpair 及原有自建 loopback SSH fixture。Unix socketpair 测试经过真正的 `OverlayStream → russh` key exchange，分别证明只读和 guarded 入口在错 pin 时认证计数为零。它们没有启动真实 overlay node、访问真实凭据或连接用户主机，不新增任何设备/真实组网矩阵通过格。GUI 的实际 native packaging、系统安全存储和 node identity 仍由各宿主另行验收。
+
+严格 `cargo clippy --all-targets --features overlay-native-fixture -- -D warnings` 本轮没有通过：剩余诊断位于原有 config transfer、input、legacy API 和 loopback test 的 `collapsible_if`、`nonminimal_bool`、`result_unit_err`、`too_many_arguments`、`type_complexity`、`field_reassign_with_default`。本批没有把它写成无警告结果。

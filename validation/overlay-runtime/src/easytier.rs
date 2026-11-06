@@ -316,6 +316,12 @@ impl Backend for EasyTierBackend {
                     error.len(),
                 )
             };
+            // Fixed portable Registry::read uses cancel-safe Tokio read. FFI
+            // returns only after that read future is dropped; timeout consumes
+            // no bytes and no read remains in flight.
+            if count == -2 {
+                return Err(Failure::ReadTimedOut);
+            }
             if count < 0 {
                 return Err(Failure::NativeRead(count));
             }

@@ -10,6 +10,8 @@
 
 两套源码已加入独立网络配置、主机绑定、加密迁移 v2 与终端字号；停用网络仍可完成本地配对审查，实际连接继续检查组件可用性。EasyTier 节点生命周期隔离回归及三桌面固定源码编译／链接／符号加载已通过，真实节点与 GUI 桥接待验。[本批实现与验收](docs/18-mobile-network-profiles.md)
 
+后续源码已接入 Android EasyTier 本机入网资料的创建、状态与显式移除，以及 Rust overlay→SSH 字节流适配。38 项 JVM、Tauri JS/Rust 和隔离传输检查通过；Flutter 新测试、Android 原生构建和完整组网接线尚待验收，未发布新包。[本机资料与传输接线](docs/19-mobile-network-identity.md)
+
 ## 首版做什么
 
 五端首版都连接**远端 herdr 主机**：手机扫码配对（手动配置兜底）→ 审查连接配置与主机身份 → 主动连接 → 查看 agent 和终端 → 显式输入 → 断线后核实状态。扫码不要求先安装本项目桌面 GUI。桌面本机 herdr 接入后续再做，首版不管理本地进程或 WSL 服务；后台通知、文件 / diff 后置，不承诺后台常连。
@@ -34,6 +36,7 @@ Heeler 已有三网络的源码实现可供按许可移植：EasyTier 使用 no-
 
 | 文件 | 内容 |
 | --- | --- |
+| [`docs/19-mobile-network-identity.md`](docs/19-mobile-network-identity.md) | Android 本机入网资料、身份影响串行与 overlay SSH 适配 |
 | [`docs/18-mobile-network-profiles.md`](docs/18-mobile-network-profiles.md) | 手机网络配置、v2 迁移、字号和节点生命周期 |
 | [`docs/16-mobile-input-and-config.md`](docs/16-mobile-input-and-config.md) | 最新手机输入、配置迁移、两包与失败记录 |
 | [`docs/17-license-and-distribution-review.md`](docs/17-license-and-distribution-review.md) | 固定依赖许可、字体来源与发行待办 |

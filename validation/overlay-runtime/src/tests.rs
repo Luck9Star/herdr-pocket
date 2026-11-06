@@ -101,6 +101,25 @@ fn abi_full_duplex_read_does_not_block_write_or_half_close() {
 }
 
 #[test]
+fn idle_native_read_timeout_consumes_nothing_and_keeps_its_stream_active() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let owner = runtime.new_owner();
+    let profile = easy(&runtime, "idle", "idle-instance", "idle-network");
+    let lease = open(&runtime, &owner, &profile, "read-block");
+    assert_eq!(
+        runtime.read(&owner, &lease, 32, Duration::from_millis(10)).unwrap().wait(TIME),
+        Err(Failure::ReadTimedOut)
+    );
+    assert!(lease.is_active());
+    assert_eq!(runtime.reserved_streams(), 1);
+    assert_eq!(runtime.write(&owner, &lease, b"ok".to_vec(), TIME).unwrap().wait(TIME), Ok(2));
+    assert_eq!(runtime.read(&owner, &lease, 32, TIME).unwrap().wait(TIME), Ok(b"ok".to_vec()));
+    close(&runtime, &owner, &lease);
+    drained(&runtime);
+}
+
+#[test]
 fn owner_and_runtime_tokens_reject_cross_host_calls_before_abi() {
     let _serial = isolated();
     let runtime = OverlayRuntime::new();

@@ -21,12 +21,15 @@ use std::{
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadBuf},
-    net::TcpStream,
     sync::Notify,
     time::{Instant, timeout, timeout_at},
 };
 use zeroize::Zeroize;
+#[cfg(test)]
+use tokio::net::TcpStream;
 
+pub mod transport;
+pub mod overlay;
 pub mod file_lock;
 pub mod config_transfer;
 #[cfg(all(test, unix))]
@@ -265,7 +268,7 @@ impl Drop for CancelOnDrop {
 }
 // russh owns a background task. Abort its actual TCP I/O, not just the caller's future.
 struct AbortableStream {
-    inner: TcpStream,
+    inner: Box<dyn transport::ByteStream>,
     cancel: Cancellation,
 }
 impl AsyncRead for AbortableStream {
@@ -275,6 +278,7 @@ impl AsyncRead for AbortableStream {
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         if let Err(e) = self.cancel.io_ready(cx, false) {
+            self.inner.abort();
             return Poll::Ready(Err(e));
         }
         Pin::new(&mut self.inner).poll_read(cx, buf)
@@ -287,19 +291,28 @@ impl AsyncWrite for AbortableStream {
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
         if let Err(e) = self.cancel.io_ready(cx, true) {
+            self.inner.abort();
             return Poll::Ready(Err(e));
         }
         Pin::new(&mut self.inner).poll_write(cx, buf)
     }
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         if let Err(e) = self.cancel.io_ready(cx, true) {
+            self.inner.abort();
             return Poll::Ready(Err(e));
         }
         Pin::new(&mut self.inner).poll_flush(cx)
     }
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        if let Err(e) = self.cancel.io_ready(cx, true) {
+            self.inner.abort();
+            return Poll::Ready(Err(e));
+        }
         Pin::new(&mut self.inner).poll_shutdown(cx)
     }
+}
+impl Drop for AbortableStream {
+    fn drop(&mut self) { self.inner.abort(); }
 }
 async fn bounded<T, E>(
     cancel: &Cancellation,
@@ -463,42 +476,30 @@ fn parse_frame(value: Value) -> Result<Vec<u8>> {
     let text = value["bytes"].as_str().ok_or("invalid_full_frame")?;
     Base64::decode_vec(text).map_err(|_| "invalid_full_frame")
 }
-pub async fn read_once(
-    config: RemoteConfig,
-    cancel: Cancellation,
-    audit: Arc<Audit>,
-    progress: impl Fn(&'static str) + Send + Sync,
-) -> Result<FullSnapshot> {
-    let _cancel_on_drop = CancelOnDrop(cancel.clone());
-    let expected = config.validate()?;
-    let private =
-        decode_secret_key(&config.private_key_pem, None).map_err(|_| "invalid_private_key")?;
-    if private.algorithm() != Algorithm::Ed25519 {
-        return Err("invalid_private_key");
-    }
-    progress("connecting");
-    let tcp = bounded(
-        &cancel,
-        8,
-        "connection_failed",
-        TcpStream::connect((config.host.as_str(), config.port)),
-    )
-    .await?;
+async fn connect_pinned(
+    config: &RemoteConfig, cancel: &Cancellation, audit: Arc<Audit>, expected: PublicKey,
+    inactivity_timeout: Option<Duration>, dialer: &dyn transport::Dialer,
+) -> Result<(client::Handle<Pinned>, Option<transport::OverlayRouteIdentity>)> {
+    let stream = tokio::select! { biased;
+        _ = cancel.wait() => return Err("cancelled"),
+        result = timeout(Duration::from_secs(8), dialer.dial(config.host.clone(), config.port, cancel.clone())) => result.map_err(|_| "timeout")??,
+    };
+    let route = stream.route_identity();
     let settings = client::Config {
         window_size: 65536,
         maximum_packet_size: 32768,
         channel_buffer_size: 2,
-        inactivity_timeout: Some(Duration::from_secs(12)),
+        inactivity_timeout,
         ..Default::default()
     };
     let connect = bounded(
-        &cancel,
+        cancel,
         8,
         "handshake_failed",
         client::connect_stream(
             Arc::new(settings),
             AbortableStream {
-                inner: tcp,
+                inner: stream,
                 cancel: cancel.clone(),
             },
             Pinned {
@@ -508,7 +509,7 @@ pub async fn read_once(
         ),
     )
     .await;
-    let mut ssh = match connect {
+    let ssh = match connect {
         Ok(ssh) => ssh,
         Err(code) => {
             return Err(
@@ -523,6 +524,34 @@ pub async fn read_once(
     if !audit.snapshot().host_key_matched {
         return Err("host_key_mismatch");
     }
+    Ok((ssh, route))
+}
+
+pub async fn read_once(
+    config: RemoteConfig,
+    cancel: Cancellation,
+    audit: Arc<Audit>,
+    progress: impl Fn(&'static str) + Send + Sync,
+) -> Result<FullSnapshot> {
+    read_once_with_dialer(config, cancel, audit, progress, &transport::SystemDialer).await
+}
+
+pub async fn read_once_with_dialer(
+    config: RemoteConfig,
+    cancel: Cancellation,
+    audit: Arc<Audit>,
+    progress: impl Fn(&'static str) + Send + Sync,
+    dialer: &dyn transport::Dialer,
+) -> Result<FullSnapshot> {
+    let _cancel_on_drop = CancelOnDrop(cancel.clone());
+    let expected = config.validate()?;
+    let private =
+        decode_secret_key(&config.private_key_pem, None).map_err(|_| "invalid_private_key")?;
+    if private.algorithm() != Algorithm::Ed25519 {
+        return Err("invalid_private_key");
+    }
+    progress("connecting");
+    let (mut ssh, _) = connect_pinned(&config, &cancel, audit.clone(), expected, Some(Duration::from_secs(12)), dialer).await?;
     progress("host-key-verified");
     audit.auth_started.store(true, Ordering::SeqCst);
     if !bounded(
@@ -777,7 +806,18 @@ where
     Frame: Fn(StreamFrame) -> FrameFuture,
     FrameFuture: Future<Output = Result<()>>,
 {
-    observe_inner(config, cancel, audit, progress, select, frame, None, None).await
+    observe_inner(config, cancel, audit, progress, select, frame, None, None, &transport::SystemDialer).await
+}
+
+/// Read-only observation with explicit routing and unchanged SSH/session guards.
+pub async fn observe_with_dialer<Select, SelectFuture, Frame, FrameFuture>(
+    config: RemoteConfig, cancel: Cancellation, audit: Arc<Audit>,
+    progress: impl Fn(&'static str) + Send + Sync, select: Select, frame: Frame,
+    dialer: &dyn transport::Dialer,
+) -> Result<()>
+where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<String>>,
+      Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
+    observe_inner(config, cancel, audit, progress, select, frame, None, None, dialer).await
 }
 
 /// A device signer has no private-key export. The implementation owns its local handle.
@@ -813,9 +853,20 @@ pub async fn observe_with_device_signer<Select, SelectFuture, Frame, FrameFuture
 ) -> Result<()>
 where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<String>>,
       Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
+    observe_with_device_signer_and_dialer(config, public_key, signer, cancel, audit, progress, select, frame, &transport::SystemDialer).await
+}
+
+// Keep the callable shape of the existing API while adding explicit routing.
+#[allow(clippy::too_many_arguments)]
+pub async fn observe_with_device_signer_and_dialer<Select, SelectFuture, Frame, FrameFuture>(
+    config: RemoteConfig, public_key: String, signer: Arc<dyn DeviceSigner>, cancel: Cancellation, audit: Arc<Audit>,
+    progress: impl Fn(&'static str) + Send + Sync, select: Select, frame: Frame, dialer: &dyn transport::Dialer,
+) -> Result<()>
+where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<String>>,
+      Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
     let key = PublicKey::from_openssh(&public_key).map_err(|_| "invalid_device_key")?;
     if key.algorithm() != Algorithm::Ed25519 || key.to_openssh().map_err(|_| "invalid_device_key")? != public_key { return Err("invalid_device_key"); }
-    observe_inner(config, cancel, audit, progress, select, frame, Some(ExternalSigner { key, signer }), None).await
+    observe_inner(config, cancel, audit, progress, select, frame, Some(ExternalSigner { key, signer }), None, dialer).await
 }
 
 /// Capabilities are queried on the authenticated SSH connection. The hook is
@@ -830,17 +881,31 @@ pub async fn observe_interactive<Select, SelectFuture, Frame, FrameFuture>(
 ) -> Result<()>
 where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<String>>,
       Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
+    observe_interactive_with_dialer(config, device, cancel, audit, progress, select, frame, hooks, &transport::SystemDialer).await
+}
+
+/// Uses the same guarded-input, device-signer, and target-binding path with an
+/// explicitly selected byte route. A route never changes SSH trust policy.
+// Keep the callable shape of the existing API while adding explicit routing.
+#[allow(clippy::too_many_arguments)]
+pub async fn observe_interactive_with_dialer<Select, SelectFuture, Frame, FrameFuture>(
+    config: RemoteConfig, device: Option<(String, Arc<dyn DeviceSigner>)>, cancel: Cancellation, audit: Arc<Audit>,
+    progress: impl Fn(&'static str) + Send + Sync, select: Select, frame: Frame, hooks: InputHooks,
+    dialer: &dyn transport::Dialer,
+) -> Result<()>
+where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<String>>,
+      Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
     let external = if let Some((public_key, signer)) = device {
         let key=PublicKey::from_openssh(&public_key).map_err(|_| "invalid_device_key")?;
         if key.algorithm()!=Algorithm::Ed25519 || key.to_openssh().map_err(|_| "invalid_device_key")?!=public_key {return Err("invalid_device_key");}
         Some(ExternalSigner {key,signer})
     } else {None};
-    observe_inner(config,cancel,audit,progress,select,frame,external,Some(hooks)).await
+    observe_inner(config,cancel,audit,progress,select,frame,external,Some(hooks),dialer).await
 }
 
 async fn observe_inner<Select, SelectFuture, Frame, FrameFuture>(
     config: RemoteConfig, cancel: Cancellation, audit: Arc<Audit>, progress: impl Fn(&'static str) + Send + Sync,
-    select: Select, frame: Frame, mut external: Option<ExternalSigner>, hooks: Option<InputHooks>,
+    select: Select, frame: Frame, mut external: Option<ExternalSigner>, hooks: Option<InputHooks>, dialer: &dyn transport::Dialer,
 ) -> Result<()>
 where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<String>>,
       Frame: Fn(StreamFrame) -> FrameFuture, FrameFuture: Future<Output=Result<()>> {
@@ -853,52 +918,7 @@ where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<
         Some(key)
     } else { None };
     progress("connecting");
-    let tcp = bounded(
-        &cancel,
-        8,
-        "connection_failed",
-        TcpStream::connect((config.host.as_str(), config.port)),
-    )
-    .await?;
-    let settings = client::Config {
-        window_size: 65536,
-        maximum_packet_size: 32768,
-        channel_buffer_size: 2,
-        inactivity_timeout: None,
-        ..Default::default()
-    };
-    let connect = bounded(
-        &cancel,
-        8,
-        "handshake_failed",
-        client::connect_stream(
-            Arc::new(settings),
-            AbortableStream {
-                inner: tcp,
-                cancel: cancel.clone(),
-            },
-            Pinned {
-                expected,
-                audit: audit.clone(),
-            },
-        ),
-    )
-    .await;
-    let mut ssh = match connect {
-        Ok(ssh) => ssh,
-        Err(code) => {
-            return Err(
-                if audit.snapshot().host_key_checked && !audit.snapshot().host_key_matched {
-                    "host_key_mismatch"
-                } else {
-                    code
-                },
-            );
-        }
-    };
-    if !audit.snapshot().host_key_matched {
-        return Err("host_key_mismatch");
-    }
+    let (mut ssh, route) = connect_pinned(&config, &cancel, audit.clone(), expected, None, dialer).await?;
     progress("host-key-verified");
     audit.auth_started.store(true, Ordering::SeqCst);
     let authenticated = if let Some(ref mut signer) = external {
@@ -986,7 +1006,7 @@ where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<
                         }
                         tokio::select! { biased; _=cancel.wait()=>return Err("cancelled"), result=frame(parsed)=>result? };
                         if let Some(hooks)=ready_hook.take() {
-                            let input=Arc::new(input::LiveInput::new(ssh.clone(),input::InputIdentity {host:config.host.clone(),port:config.port,user:config.username.clone(),host_key:config.expected_host_key.clone(),socket:config.socket_path.clone(),herdr:config.herdr_path.clone(),session:config.session.clone(),pane:selected.clone(),terminal:terminal_id.clone()},cancel.clone(),hooks.recovery));
+                            let input=Arc::new(input::LiveInput::new(ssh.clone(),input::InputIdentity {route:route.clone(),host:config.host.clone(),port:config.port,user:config.username.clone(),host_key:config.expected_host_key.clone(),socket:config.socket_path.clone(),herdr:config.herdr_path.clone(),session:config.session.clone(),pane:selected.clone(),terminal:terminal_id.clone()},cancel.clone(),hooks.recovery));
                             (hooks.ready)(input);
                         }
                     }
@@ -1324,7 +1344,7 @@ mod tests {
         let (mut peer, _) = listener.accept().await.unwrap();
         let cancel = Cancellation::default();
         let mut stream = AbortableStream {
-            inner: client,
+            inner: Box::new(client),
             cancel: cancel.clone(),
         };
         let read = tokio::spawn(async move {

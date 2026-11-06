@@ -64,6 +64,7 @@ use config_document::{config_document_open, config_document_platform, config_doc
 use config_exchange::{config_apply, config_discard, config_export, config_preview};
 use hosts::{Hosts, Target};
 mod networks;
+mod network_identity;
 #[tauri::command]
 async fn host_init(app:tauri::AppHandle,hosts:State<'_,Hosts>)->Result<(),String> {
     #[cfg(target_os="android")]
@@ -79,8 +80,8 @@ fn preferences_save(font:u8,expected_catalog:String,hosts:State<'_,Hosts>)->Resu
 #[tauri::command]
 fn network_list(hosts:State<'_,Hosts>)->Result<hosts::NetworkCatalog,String>{hosts.networks()}
 #[tauri::command]
-fn network_save(profile:networks::NetworkProfile, expected_catalog:String, expected_revision:Option<u32>, affected:Vec<String>, hosts:State<'_,Hosts>, flow:State<'_,Arc<Mutex<RemoteFlow>>>, gate:State<'_,Mutex<AttemptGate>>)->Result<(),String>{
-    let mut f=flow.lock().map_err(|_|"state_unavailable")?;
+fn network_save(profile:networks::NetworkProfile, expected_catalog:String, expected_revision:Option<u32>, affected:Vec<String>, hosts:State<'_,Hosts>, flow:State<'_,Arc<Mutex<RemoteFlow>>>, gate:State<'_,Mutex<AttemptGate>>,ops:State<'_,network_identity::Operations>)->Result<(),String>{
+    let _op=ops.enter()?;let mut f=flow.lock().map_err(|_|"state_unavailable")?;
     // Check the reviewed catalog and affected set before invalidating a connection.
     let catalog=hosts.networks()?; let mut actual:Vec<String>=catalog.bindings.iter().filter(|b|b.profile_id==profile.id).map(|b|b.host_id.clone()).collect();actual.sort();let mut reviewed=affected.clone();reviewed.sort();
     if catalog.revision!=expected_catalog || actual!=reviewed {return Err("network_changed".into());}
@@ -90,14 +91,54 @@ fn network_save(profile:networks::NetworkProfile, expected_catalog:String, expec
     hosts.save_network(profile,&expected_catalog,expected_revision,&affected)?;Ok(())
 }
 #[tauri::command]
-fn network_delete(id:String,expected_catalog:String,expected_revision:u32,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String>{let _f=flow.lock().map_err(|_|"state_unavailable")?;hosts.delete_network(&id,&expected_catalog,expected_revision)}
+async fn network_delete(id:String,expected_catalog:String,expected_revision:u32,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<(),String>{
+    let _op=ops.enter()?;
+    let catalog=hosts.networks()?;let profile=catalog.profiles.iter().find(|p|p.id==id).ok_or("network_profile_missing")?;
+    if catalog.revision!=expected_catalog || profile.revision!=expected_revision {return Err("network_changed".into());}
+    if catalog.bindings.iter().any(|b|b.profile_id==id) {return Err("network_in_use".into());}
+    #[cfg(target_os="android")]
+    if profile.provider==networks::Provider::Easytier {
+        let app=app.clone();let id=id.clone();let status=tauri::async_runtime::spawn_blocking(move||android_keys::network_identity(&app,"networkIdentityStatus",&id,"","")).await.map_err(|_|"network_identity_unavailable")?;
+        match status {Ok(Some(_))=>return Err("network_identity_in_use".into()),Ok(None)=>{},Err(e)=>return Err(e)}
+    }
+    #[cfg(not(target_os="android"))] {let _=(app,profile);}
+    let _f=flow.lock().map_err(|_|"state_unavailable")?;hosts.delete_network(&id,&expected_catalog,expected_revision)
+}
 #[tauri::command]
-fn network_bind(host_id:String,profile_id:Option<String>,expected_catalog:String,confirmed_direct:bool,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>)->Result<(),String>{
-    let mut f=flow.lock().map_err(|_|"state_unavailable")?;let old=hosts.get(&host_id)?; if old.network_profile_id.is_some() && profile_id.is_none() && !confirmed_direct{return Err("network_direct_confirmation_required".into());}
+fn network_bind(host_id:String,profile_id:Option<String>,expected_catalog:String,confirmed_direct:bool,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>,ops:State<'_,network_identity::Operations>)->Result<(),String>{
+    let _op=ops.enter()?;let mut f=flow.lock().map_err(|_|"state_unavailable")?;let old=hosts.get(&host_id)?; if old.network_profile_id.is_some() && profile_id.is_none() && !confirmed_direct{return Err("network_direct_confirmation_required".into());}
     let catalog=hosts.networks()?;if catalog.revision!=expected_catalog {return Err("network_changed".into());}
     if profile_id.as_ref().is_some_and(|id|!catalog.profiles.iter().any(|p|&p.id==id && p.enabled)) {return Err("network_profile_missing".into());}
     if old.network_profile_id!=profile_id && f.host_id.as_ref()==Some(&host_id) {let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(std::slice::from_ref(&host_id),&mut g);}
     hosts.bind_network(&host_id,profile_id,&expected_catalog)
+}
+#[cfg_attr(not(target_os="android"),allow(dead_code))]
+fn reviewed_identity_profile(hosts:&Hosts,id:&str,revision:u32,catalog_revision:&str,affected:&[String])->Result<(),String>{
+    let catalog=hosts.networks()?;let p=catalog.profiles.iter().find(|p|p.id==id).ok_or("network_profile_missing")?;
+    let mut actual:Vec<_>=catalog.bindings.iter().filter(|b|b.profile_id==id).map(|b|b.host_id.clone()).collect();actual.sort();let mut supplied=affected.to_vec();supplied.sort();
+    if catalog.revision!=catalog_revision || p.revision!=revision || actual!=supplied{return Err("network_changed".into());}
+    if p.provider!=networks::Provider::Easytier{return Err("network_identity_provider_unavailable".into());}Ok(())
+}
+#[tauri::command]
+async fn network_identity_status(id:String,hosts:State<'_,Hosts>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<network_identity::Status,String>{
+    let _op=ops.enter()?;let catalog=hosts.networks()?;let p=catalog.profiles.iter().find(|p|p.id==id).ok_or("network_profile_missing")?;
+    if p.provider!=networks::Provider::Easytier {return Err("network_identity_provider_unavailable".into());}
+    #[cfg(target_os="android")]
+    {let result=tauri::async_runtime::spawn_blocking(move||android_keys::network_identity(&app,"networkIdentityStatus",&id,"","")).await.map_err(|_|"network_identity_unavailable")?;match result {Ok(metadata)=>Ok(network_identity::Status::from_metadata(metadata)),Err(e)=>Err(e)}}
+    #[cfg(not(target_os="android"))]
+    {let _=(id,app);Ok(network_identity::Status::unsupported())}
+}
+#[tauri::command]
+async fn network_identity_write(id:String,expected_catalog:String,expected_revision:u32,affected:Vec<String>,action:String,mode:String,secret:String,expected_handle:Option<String>,hosts:State<'_,Hosts>,ops:State<'_,network_identity::Operations>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>,app:tauri::AppHandle)->Result<(),String>{
+    let secret=zeroize::Zeroizing::new(secret);let _op=ops.enter()?;
+    network_identity::validate_expected_handle(&action,expected_handle.as_deref())?;
+    if action=="create" {network_identity::validate_input(&mode,&secret)?;} else if action!="delete" || !mode.is_empty() || !secret.is_empty() {return Err("invalid_network_identity".into());}
+    #[cfg(not(target_os="android"))]
+    {let _=(id,expected_catalog,expected_revision,affected,hosts,flow,gate,app,secret,expected_handle);return Err("network_identity_unavailable".into());}
+    #[cfg(target_os="android")]
+    {let mut f=flow.lock().map_err(|_|"state_unavailable")?;reviewed_identity_profile(&hosts,&id,expected_revision,&expected_catalog,&affected)?;if f.host_id.as_ref().is_some_and(|id|affected.contains(id)){let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(&affected,&mut g);}}
+    #[cfg(target_os="android")]
+    {tauri::async_runtime::spawn_blocking(move|| {if action=="create" {android_keys::network_identity(&app,"networkIdentityCreate",&id,&mode,&secret).and_then(|v|if v.is_some(){Ok(())}else{Err("network_identity_unavailable".into())})} else {android_keys::delete_network_identity(&app,&id,expected_handle.as_deref().ok_or("invalid_network_identity")?)}}).await.map_err(|_|"network_identity_result_unknown")?.map_err(|_|"network_identity_result_unknown")}
 }
 #[tauri::command]
 fn host_list(hosts:State<'_,Hosts>)->Result<Vec<hosts::View>,String>{hosts.list()}
@@ -146,8 +187,8 @@ fn host_update(id:String,name:Option<String>,enabled:Option<bool>,hosts:State<'_
 #[serde(rename_all="camelCase")]
 struct RemoveHostReply {key_deleted:bool}
 #[tauri::command]
-async fn host_remove(id:String,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<RemoveHostReply,String>{
-    let _lease=pairing.enter()?;let f=flow.lock().map_err(|_|"state_unavailable")?;if f.owner.is_some(){return Err("connection_active".into());}
+async fn host_remove(id:String,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,ops:State<'_,network_identity::Operations>)->Result<RemoveHostReply,String>{
+    let _network_lease=ops.enter()?;let _lease=pairing.enter()?;let f=flow.lock().map_err(|_|"state_unavailable")?;if f.owner.is_some(){return Err("connection_active".into());}
     let host=hosts.remove(&id)?;let mut current=pairing.current.lock().map_err(|_|"state_unavailable")?;
     if current.as_ref().zip(host.pairing.as_ref()).is_some_and(|(p,r)|p.local_handle()==r.handle){*current=None;}
     let key_deleted=host.pairing.as_ref().is_none_or(|r|pairing.store.delete(&r.handle).is_ok());
@@ -415,13 +456,14 @@ pub fn run() {
         .manage(Mutex::new(Streams::default()))
         .manage(Mutex::new(AttemptGate::default()))
         .manage(Hosts::default())
+        .manage(network_identity::Operations::default())
         .manage(config_exchange::Transfers::default())
         .setup(|app| {
             let recovery=app.path().app_local_data_dir().ok().map(|p|herdr_readonly_transport::recovery::Recovery::open(p.join("remote-input-v1"))).unwrap_or_else(herdr_readonly_transport::recovery::Recovery::disabled);
             let flow=RemoteFlow {recovery:Some(recovery),..Default::default()};
             app.manage(Arc::new(Mutex::new(flow))); Ok(())
         })
-        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,preferences_save,network_list,network_save,network_delete,network_bind,
+        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,
             config_document_platform,config_document_open,config_document_save,config_export,config_preview,config_apply,config_discard])
         .run(tauri::generate_context!())
         .expect("Tauri probe startup failed");

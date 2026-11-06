@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'host_catalog.dart';
 import 'network_profiles.dart';
+import 'network_identity.dart';
+import 'network_identity_dialog.dart';
 import 'remote_adapter.dart';
 
 class NetworkProfilesPage extends StatefulWidget {
-  const NetworkProfilesPage({super.key,required this.catalog,required this.closeTabs});
+  const NetworkProfilesPage({super.key,required this.catalog,required this.closeTabs,this.identityStore});
   final HostCatalog catalog;
   final void Function(Set<String>) closeTabs;
+  final NetworkIdentityStore? identityStore;
   @override
   State<NetworkProfilesPage> createState() => _NetworkProfilesPageState();
 }
 class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
   HostCatalog get catalog => widget.catalog;
+  late final identities = widget.identityStore ?? NativeNetworkIdentityStore();
   bool busy = false;
   String? notice;
   bool get available => catalog.ready && !catalog.writing && !busy;
@@ -29,6 +33,8 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
         'network_in_use' => '此网络仍被主机引用 · 请先从主机列表明确更换或解除网络绑定后再删除',
         'invalid_network_profile' => '公开网络资料格式无效 · 尚未保存，请检查字段；不接受密钥、令牌或加入密码',
         'network_revision_limit' => '此配置版本已达上限 · 请明确创建新配置并重新绑定',
+        'network_identity_present' => '此配置仍有本机入网资料 · 请先打开“本机入网资料”明确移除，再删除公开配置。',
+        'network_identity_unavailable' => '无法核对本机入网资料 · 请解锁并重新读取，暂不删除公开配置。',
         _ => '操作未确认或预览已过期 · 已停止，请重新读取核验；不会重放',
       }; });
     }
@@ -66,12 +72,21 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
     final captured = catalog.revision,affected = catalog.networkImpact(profile.id);
     if (!await confirm(profile,'删除',affected) || !mounted) return;
     await action(() => catalog.removeNetwork(profile,expectedRevision:captured,
-      beforeCommit:() => widget.closeTabs(affected.map((p) => p.id).toSet())));
+      beforeRemove:() async {
+        if (profile.provider == 'easytier' && identities.supported && await identities.status(profile) != null) {
+          throw const RemoteFailure('network_identity_present');
+        }
+      },beforeCommit:() => widget.closeTabs(affected.map((p) => p.id).toSet())));
+  }
+  Future<void> localIdentity(NetworkProfile profile) async {
+    if (!available) return;
+    await showDialog<void>(context:context,builder:(_) => NetworkIdentityDialog(profile:profile,catalog:catalog,
+      closeTabs:widget.closeTabs,store:identities));
   }
   @override
   Widget build(BuildContext context) => Scaffold(appBar:AppBar(title:const Text('网络管理 · 公开配置')),
     body:SafeArea(child:ListView(padding:const EdgeInsets.all(16),children:[
-      const Text('Tailscale、EasyTier、ZeroTier 配置可由多台主机复用。这里只保存公开参数，不复制三网身份、SSH 私钥、令牌或加入密码。'),
+      const Text('Tailscale、EasyTier、ZeroTier 公开配置可由多台主机复用。本机入网资料单独保管，不随配置导出，也不复制 SSH 私钥或三网身份。'),
       const Text('手机网络连接桥尚未接入：绑定配置后的连接明确返回 provider_unavailable，不会改走系统 TCP / DNS。旧主机的 provider 标签仍只是资料。'),
       if (notice != null) Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(notice!,key:const ValueKey('networks-notice'))),
       FilledButton.icon(key:const ValueKey('networks-add'),onPressed:available && catalog.networkProfiles.length < maxNetworkProfiles ? () => edit() : null,
@@ -82,6 +97,7 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
         Text('引用主机 ${catalog.networkImpact(profile.id).length} 个'),
         SelectableText(profile.settings.entries.map((e) => '${e.key}: ${e.value}').join('\n')),
         Wrap(spacing:8,children:[
+          TextButton(key:ValueKey('network-identity-${profile.id}'),onPressed:available ? () => localIdentity(profile) : null,child:const Text('本机入网资料')),
           TextButton(key:ValueKey('network-edit-${profile.id}'),onPressed:available ? () => edit(profile) : null,child:const Text('编辑公开参数')),
           TextButton(key:ValueKey('network-toggle-${profile.id}'),onPressed:available ? () => toggle(profile) : null,child:Text(profile.enabled ? '停用与影响预览' : '启用与影响预览')),
           TextButton(key:ValueKey('network-delete-${profile.id}'),onPressed:available ? () => remove(profile) : null,child:const Text('删除与影响预览')),

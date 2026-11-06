@@ -58,19 +58,22 @@ def prepare(destination):
     text = manifest.read_text()
     if 'android.permission.INTERNET' not in text:
         manifest.write_text(text.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1))
-    # Register only the four-operation Android bridge. Shared security code has
-    # a single source of truth and never enters Dart or generated copies.
+    # Register bounded native bridges; shared secret stores never enter Dart.
     activity = destination / 'android/app/src/main/kotlin/dev/herdr/herdr_flutter_probe/MainActivity.kt'
     shutil.copy2(source / 'native/android/MainActivity.kt', activity)
     shutil.copy2(source / 'native/android/PairScanChannel.kt', activity.with_name('PairScanChannel.kt'))
     shutil.copy2(source / 'native/android/ConfigDocumentChannel.kt', activity.with_name('ConfigDocumentChannel.kt'))
     shutil.copy2(source / 'native/android/HostCatalogFile.kt', activity.with_name('HostCatalogFile.kt'))
     shutil.copy2(source / 'native/android/InputJournalFile.kt', activity.with_name('InputJournalFile.kt'))
+    shutil.copy2(source / 'native/android/NetworkIdentityChannel.kt', activity.with_name('NetworkIdentityChannel.kt'))
     gradle = destination / 'android/app/build.gradle.kts'
     script = gradle.read_text()
     native = (ROOT / 'validation/pairing/native/android').as_posix()
     script += '\nextra["herdrDeviceKeysDir"] = file("' + native + '")\n'
     script += 'apply(from = "' + native + '/device-keys.gradle")\n'
+    network_native = (ROOT / 'validation/network-profiles/native/android').as_posix()
+    script += '\nextra["herdrNetworkSecretsDir"] = file("' + network_native + '")\n'
+    script += 'apply(from = "' + network_native + '/network-secrets.gradle")\n'
     gradle.write_text(script)
     # Generated Swift files include the shared source verbatim at scaffold time;
     # the repository keeps only one storage implementation. No Keychain calls
@@ -158,6 +161,15 @@ def pairing_provenance(platform, android_notice):
                                ['lib/host_catalog.dart', 'lib/host_catalog_page.dart', 'native/android/HostCatalogFile.kt', 'native/apple/HostCatalogFile.swift']],
         'unknownInputMarker': {'scope': 'separate native single public marker, no command body; prepare/clear use exact record and atomic CAS; device runtime NOT RUN',
                                'sources': [source_record('validation/flutter/native/' + name) for name in ['android/InputJournalFile.kt', 'apple/InputJournalFile.swift']]},
+        'networkIdentity': {
+            'api': ['create', 'status', 'delete'], 'secretReadApi': False,
+            'scope': 'Android API 35 EasyTier local secret envelope and stable instance metadata; not node-start or connectivity proof',
+            'runtime': 'NOT RUN by build/package workflow',
+            'sources': [source_record('validation/network-profiles/native/android/' + name) for name in
+                        ['AndroidNetworkSecretStore.java', 'AndroidNetworkEnvelope.java', 'NetworkSecretStoreCore.java', 'network-secrets.gradle']] +
+                       [source_record('validation/flutter/' + name) for name in
+                        ['lib/network_identity.dart', 'lib/network_identity_dialog.dart', 'native/android/NetworkIdentityChannel.kt']],
+        },
         'testIdentity': 'memory signer exists only in explicit tests; not a production fallback or system-store evidence',
     }
 

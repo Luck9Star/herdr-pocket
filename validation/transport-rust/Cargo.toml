@@ -5,7 +5,14 @@ edition = "2024"
 rust-version = "1.96"
 publish = false
 
+[features]
+default = []
+overlay-linked-easytier = ["overlay-runtime/linked-easytier"]
+# Synthetic ABI only, never enabled as a missing-bridge fallback.
+overlay-native-fixture = ["overlay-runtime/native-fixture"]
+
 [dependencies]
+overlay-runtime = { package = "herdr-overlay-runtime-probe", version = "=0.1.0", path = "../overlay-runtime" }
 russh = { version = "=0.65.0", default-features = false, features = ["ring"] }
 tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "net", "io-util", "time", "sync"] }
 serde = { version = "=1.0.229", features = ["derive"] }

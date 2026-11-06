@@ -199,6 +199,7 @@ mod tests {
     use super::*;
     fn identity() -> InputIdentity {
         InputIdentity {
+            route: None,
             host: "127.0.0.1".into(),
             port: 22,
             user: "fixture".into(),
@@ -272,5 +273,49 @@ mod tests {
                 .prepare(&identity(), "0123456789abcdef0123456789abcdef")
                 .is_err()
         );
+    }
+    #[test]
+    fn overlay_recovery_requires_exact_durable_route_and_legacy_remains_system_only() {
+        use crate::transport::{OverlayProvider, OverlayRouteIdentity};
+        let temp = Temp::new();
+        let id = "0123456789abcdef0123456789abcdef";
+        let system = identity();
+        let mut overlay = system.clone();
+        overlay.route = Some(OverlayRouteIdentity {
+            provider: OverlayProvider::EasyTier,
+            profile_id: "phone-a".into(),
+            profile_revision: 7,
+            identity_ref: "device-safe-ref".into(),
+        });
+        let store = Recovery::open(temp.0.clone());
+        store.prepare(&system, id).unwrap();
+        store.end_attempt();
+        // An old marker has no route field. Deserializing it means system,
+        // and an overlay connection may never confirm or erase it.
+        let raw = fs::read_to_string(temp.0.join("pending.json")).unwrap();
+        assert!(!raw.contains("route"));
+        assert!(store.clear_confirmed(&overlay, None).is_err());
+        store.clear_confirmed(&system, None).unwrap();
+        store.prepare(&overlay, id).unwrap();
+        store.end_attempt();
+        drop(store);
+        let reopened = Recovery::open(temp.0.clone());
+        assert!(reopened.clear_confirmed(&system, None).is_err());
+        for variant in 0..4 {
+            let mut other = overlay.clone();
+            let route = other.route.as_mut().unwrap();
+            match variant {
+                0 => route.profile_id = "phone-b".into(),
+                1 => route.profile_revision += 1,
+                2 => route.identity_ref = "another-device-ref".into(),
+                _ => route.provider = OverlayProvider::Tailscale,
+            }
+            assert!(reopened.clear_confirmed(&other, None).is_err());
+            assert!(reopened.unknown());
+        }
+        // The durable route is unchanged across reconnect/restart; no owner
+        // or process-local native epoch appears in this identity.
+        reopened.clear_confirmed(&overlay, None).unwrap();
+        assert!(!reopened.unknown());
     }
 }

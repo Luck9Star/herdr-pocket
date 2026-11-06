@@ -940,6 +940,17 @@ mod tests {
         let second_pair=crate::create_offline_pair(keys,&second_target.config(),"Pocket 2",101).unwrap();hosts.attach_pending(&second.id,&second_target,second_pair.pending_reference(&second_target.config()).unwrap()).unwrap();
     }
     #[test]
+    fn identity_write_requires_reviewed_profile_revision_and_host_set() {
+        use crate::networks::Settings;let temp=Temp::new();let hosts=Hosts::default();hosts.init(temp.0.clone()).unwrap();
+        let host=hosts.save(None,"fixture",target(),None).unwrap();let cat=hosts.networks().unwrap();
+        let p=NetworkProfile{id:"0".repeat(32),label:"team".into(),provider:Provider::Easytier,enabled:true,revision:1,settings:Settings::Easytier{network_name:"team".into(),peers:vec!["tcp://example.test:1234".into()]}};
+        hosts.save_network(p,&cat.revision,None,&[]).unwrap();let cat=hosts.networks().unwrap();let id=cat.profiles[0].id.clone();hosts.bind_network(&host.id,Some(id.clone()),&cat.revision).unwrap();let cat=hosts.networks().unwrap();
+        assert!(crate::reviewed_identity_profile(&hosts,&id,1,&cat.revision,&[host.id.clone()]).is_ok());
+        assert!(crate::reviewed_identity_profile(&hosts,&id,2,&cat.revision,&[host.id.clone()]).is_err());
+        assert!(crate::reviewed_identity_profile(&hosts,&id,1,&cat.revision,&[]).is_err());
+        assert!(crate::reviewed_identity_profile(&hosts,&id,1,"stale",&[host.id]).is_err());
+    }
+    #[test]
     fn records_persist_disable_and_reject_target_replacement() {
         let temp = Temp::new();
         let store = Hosts::default();

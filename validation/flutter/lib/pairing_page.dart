@@ -52,7 +52,10 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   int revision = 0;
   Timer? timer;
   Map<String,dynamic>? responsePreview;
-  int get now => widget.clock?.call() ?? DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  // A catalog-backed page must use the same clock for request creation and
+  // later restoration. Otherwise a newly persisted request can appear future
+  // dated when the board rebuilds (notably with an isolated fixture clock).
+  int get now => widget.clock?.call() ?? widget.catalog?.clock() ?? DateTime.now().millisecondsSinceEpoch ~/ 1000;
   @override
   void initState() {
     super.initState(); WidgetsBinding.instance.addObserver(this); widget.visibility?.addListener(visibilityChanged);

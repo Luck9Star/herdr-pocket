@@ -150,6 +150,17 @@ class ScaffoldGuards(PreparedFixture):
 
 
 class RunnerGuards(PreparedFixture):
+    def test_failure_metadata_has_no_message_stack_or_payload_channel(self):
+        record = {'stage': 'guarded_direct_commit', 'errorClass': 'TestFailure', 'line': 240}
+        self.assertEqual(gui.safe_test_failure(record), record)
+        self.assertEqual(gui.checked_public_payload(json.dumps(record).encode(), 'failure.json'),
+                         json.dumps(record).encode())
+        for changes in ({'message': 'remote text'}, {'stage': 'user_supplied_text'},
+                        {'stage': []}, {'errorClass': {}}, {'errorClass': 'unbounded failure'},
+                        {'line': True}, {'line': 10001}):
+            with self.assertRaises(gui.DeviceFailure):
+                gui.safe_test_failure(dict(record, **changes))
+
     def test_unprepared_or_changed_production_app_never_reaches_adb(self):
         with self.assertRaises(gui.DeviceFailure): gui.require_cloud(self.env, self.fixture_root, self.app, self.config)
         self.prepared()

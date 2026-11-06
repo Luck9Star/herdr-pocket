@@ -1,0 +1,5 @@
+# Preserve reviewed upstream license bytes, including original CRLF and BOM.
+licenses/* -text whitespace=-blank-at-eol
+source-notes/* -text whitespace=-blank-at-eol
+FONT-NOTICES.md text eol=lf
+font-sources.json text eol=lf

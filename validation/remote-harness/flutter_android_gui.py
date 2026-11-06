@@ -30,6 +30,8 @@ STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'ha
           'guarded_reconnect', 'guarded_draft_review', 'fixture_validation',
           'response_enter', 'response_preview', 'response_source_confirm', 'response_accept',
           'response_authorized', 'response_open_remote', 'response_remote_identity',
+          'response_finish_edit', 'response_rejected', 'response_save_unconfirmed',
+          'response_review_invalidated',
           'guarded_direct_available', 'guarded_direct_select', 'guarded_direct_focus',
           'guarded_direct_commit', 'guarded_direct_ack', 'guarded_direct_receipt'}
 STOCK_CASE = 'android-native-pairing-observe'

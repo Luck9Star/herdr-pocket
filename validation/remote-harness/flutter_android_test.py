@@ -362,6 +362,10 @@ class PublicExchangeGuards(unittest.TestCase):
 
     def test_only_fixed_stages_are_accepted_and_reported_as_failure_phase(self):
         self.assertEqual(self.read(b'host_authorization', name='stage', limit=40), b'host_authorization')
+        for stage in ('response_finish_edit', 'response_rejected', 'response_save_unconfirmed',
+                      'response_review_invalidated'):
+            encoded = stage.encode('ascii')
+            self.assertEqual(self.read(encoded, name='stage', limit=40), encoded)
         with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_public_stage_invalid$'):
             self.read(b'PRIVATE_STAGE', name='stage', limit=40)
         proc = Mock(); proc.poll.return_value = 1

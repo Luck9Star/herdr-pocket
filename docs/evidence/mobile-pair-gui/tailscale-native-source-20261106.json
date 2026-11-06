@@ -1,0 +1,429 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-06",
+  "generatedAtUtc": "2026-11-06T13:49:24.504077+00:00",
+  "baselineCommit": "cab1f8ae1caa938ef26bfc156197154ad8949a74",
+  "branch": "codex/core-prototype-validation",
+  "scope": "Source batch and isolated local validation only; no real tsnet node, credentials, device, new CI, APK or GUI run.",
+  "sourceFiles": {
+    "validation/android-network-source/src/jvm_fixture.rs": "352cd9f60496a3dd58b9ce463a4c47ac8047d5061e150cc7cebb76900419c631",
+    "validation/android-network-source/src/lib.rs": "9566b736a60eebec146fa508f52ba776113ea8e7e9be8c29dc6e10aeadaf6b22",
+    "validation/android-network-source/src/tailscale.rs": "677be538ed5aae05886854ccb110b8ad476f0782875f9b3fa39128ccc03815b7",
+    "validation/android-network-source/tests/java/android/content/Context.java": "4c158f271b7e3aba0ff50d1b984fe5298817c962ef21179970cd399ac3f7dba3",
+    "validation/android-network-source/tests/java/android/os/Process.java": "25b8e12777c2e4ea81d49d0c6bea3c905406e6da96932d25a901cdc0388b8d87",
+    "validation/android-network-source/tests/java/android/system/Os.java": "11025de12101867916f99aadecbe1f3a0cab5558258238236abf1269193428d1",
+    "validation/android-network-source/tests/java/android/system/OsConstants.java": "6570b4b39acfe0b8004fb36cd45c468ccfdd1572b70e89192e1f476c6e603284",
+    "validation/android-network-source/tests/java/android/system/StructStat.java": "51ce0338559827a9d2047c2006ef23f4558312cd56bc083716df9aa6c3e8a694",
+    "validation/android-network-source/tests/java/org/herdr/network/AndroidTailscaleStateStore.java": "9929a4a7fb34d6e773d7d9a161106bbafafe7f43253baf93bc2c12dd88d183da",
+    "validation/android-network-source/tests/java/org/herdr/network/TailscaleSourceFixture.java": "0446043f5c338f31ff39fb00a80680a56b34e3f737c2b7cda9cfb7af71999bfe",
+    "validation/android-network-source/tests/run-tailscale-jvm.sh": "1e7bc4f5999f9e92ad1b6948339e26751970d05d90ce3708fc910dffb06e63bf",
+    "validation/native/.gitattributes": "1017ef8461db631b2a1e1b2993f1518b0562f682bdd2e0416cf33513435aa1a3",
+    "validation/native/patches/0002-tsnet-explicit-auth.patch": "29b70583aadd99fa2ba79908be89c77306faffe2eeae979fec83410f4df0569e",
+    "validation/native/patches/tsnet-explicit-auth-test.go": "5060bfafca2a4923bf1415a529424c464a79e1d942923cf4b4bd11c516eb2900",
+    "validation/native/tailscale-adapter-audit.json": "76cc01b73a0d689ba4d9543da61cc066bcc0c117c1cc017f99b8f4e98d4c45bb",
+    "validation/native/tailscale-runtime-source.json": "ab5754e36edec68a18ad650af713086fac8f49c45df5e8fa9e0a2d842a9fa7f0",
+    "validation/native/tailscale-runtime/abi.go": "ae489f70aea8fdf6c4ca40e627fff12fc26451db9fa4363576c5ce441b092523",
+    "validation/native/tailscale-runtime/adapter.go": "95f7b65444428d1ddfdca6a04f394233d37f29527312ddeac142653abae083e7",
+    "validation/native/tailscale-runtime/core.go": "323df7ac6f9936f168481ff0a410ef28eae23e517c345ce3eec924a7d228bfb1",
+    "validation/native/tailscale-runtime/core_test.go": "5bd1730ae5e168b0ec54510069d0447f370cd16947b68ba659b13988dccfe860",
+    "validation/native/tailscale-runtime/go.mod": "a4d265bf7ae29c504966efd162001bb847f53f7397e3046bca415a2d0cfce817",
+    "validation/native/tailscale-runtime/go.sum": "5bd4b5552ddc90f28560bcf155b9384683bfe2df2c60667d831a612794ebc85a",
+    "validation/native/tailscale-runtime/hp_ts.h": "28a1b10e5de1266e32ef19ca22a88b5079068196e98b24f3170c50dccf8fe042",
+    "validation/native/tailscale-runtime/store_abi_test.go": "bfe26efe0941120e1bc3d6fe747ef52541730308bae1d093f7f652e681268128",
+    "validation/native/tailscale-runtime/store_testbridge.go": "098ccdadf8a0a7efb89e7335a6335a3a53a87198c260da6a2d60e352562b64b1",
+    "validation/native/tool/check_tailscale_abi.py": "43a46d0004f0dce8115a9c1c7903ffbcbf5ad45998030b8371c1220635e9b527",
+    "validation/native/tool/tailscale_candidate.py": "f374e5a9fe5125bd7f4c0c06a4d7f778bb8845d643accc4ff8249916bc1d5812",
+    "validation/native/tool/test_tailscale_candidate.py": "9cb754a1f8ce3391047f4c3a07052bae551be15e57bd272f765b23d439ad928c",
+    "validation/network-profiles/native/android/AndroidTailscaleConfig.java": "36fbcca0bcc209cdf3bd4796702c95d7c6f12c8d0cc8cd69db4660328e6d71d0",
+    "validation/network-profiles/native/android/AndroidTailscaleEnvelope.java": "f782286a4cdd556ef7bae9345232cf83e92c8c91fc8bcf607dc0b790d8ab1bd3",
+    "validation/network-profiles/native/android/AndroidTailscaleStateStore.java": "07dd0a743113635ba7dc746797249c4c8132582b234dbfc4ae47e0fb9070777d",
+    "validation/network-profiles/native/android/TailscaleStateStoreCore.java": "0cd311c161dfdf8b38dff0aa40eaa23ccf4d789a6c7168f276ebbba38e98241d",
+    "validation/network-profiles/native/android/tests/TailscaleStateStoreCoreTest.java": "0fe0371b94b1e060efed0bc05a2ebc609322f0aed7cec2c73f3afb841027bbae",
+    "validation/network-profiles/native/android/tests/TailscaleStateStoreSurfaceTest.java": "78100b7c8d42001993e3da1d540cb602cba2b1deda77eca23243deb5a8a7a550",
+    "validation/network-profiles/native/android/tests/run-tailscale-state.sh": "8eabc8fdd0e339e2d7cb75411bec69d149edad621c6a8db0d244fff8ac9bac6e",
+    "validation/overlay-runtime/Cargo.toml": "fde556074eb9efd3fafa715cc061a9977655aa80845a22d003b33370e96d6600",
+    "validation/overlay-runtime/build.rs": "3b743e802fa08696be1ab3bbb8dfb430d1ecb582540b86646254adf8b2f0d2cb",
+    "validation/overlay-runtime/examples/tailscale_abi_presence.rs": "306218b8402827ddedf89754263664d9f7cecc7e92fcbac291b3a1bd9dbdcdc3",
+    "validation/overlay-runtime/src/lib.rs": "6b6f2e03f6cf8295af12677f3aab794fd800b81987da713278a1c5fa9c26f3a8",
+    "validation/overlay-runtime/src/nodes.rs": "f478fa7498c5733eafbe0e1ba5f36854da7d24aaa7a46c75e86679a58347be33",
+    "validation/overlay-runtime/src/tailscale.rs": "95417ba61f12de2161228f5c8618438ed7aba255cfcc366eca8186ab5c1c4b6a",
+    "validation/overlay-runtime/src/tailscale/tests.rs": "73bcf9c551bf7fa5571f62634b0680c3f46ad9adcf6247b821c647cdf357283b",
+    "validation/overlay-runtime/src/tests.rs": "1c5fa870ba4381f97f79b7217c9d7fe234a5d8c99e4daf6dcfb75756e68eeef1",
+    "validation/overlay-runtime/tests/tailscale_fixture.c": "9e57e7b94ba217aeb4fa68579ba7d46df2f4036f0e809897cdc827a2976b96c9",
+    "validation/shared/SHA256SUMS": "4d6268ae57719a6887f073cff48c07870dc4321aa3ffcd14adf481eab6e51f3e",
+    "validation/shared/tailscale-managed-v1.json": "8c0c1651985c35c274db130c50a45842318b6d1368bf9044419a601dd12a9273",
+    "validation/tauri/src-tauri/src/network_nodes.rs": "631bee83460c07e37a527b08811bd747f8a26ec7eeb17fea7a9a9de532224d47",
+    "validation/transport-rust/Cargo.toml": "f07e7383456c44619a8f7fbca140632cd369a0e5371ebacd7e3e026bdb36ee3c",
+    "validation/transport-rust/src/mobile_nodes.rs": "1c9cd795d2b242b25b0e6217c2a4d4e95af065e731a9674db9a18fc367dabd3e",
+    "validation/transport-rust/src/mobile_nodes/tests.rs": "cfe475cd310466320fe3a77c8ecf5d00add1a886b1fc74b47d9dd4e5326fc7a1",
+    "validation/transport-rust/src/overlay.rs": "36412c6cb6f1073386824ef8e7d73d91ba9646cb17d77cad188aeb67e52504fd"
+  },
+  "sourceSnapshotSha256": "c022930bb4c708a5891dd175576ef88466c8385e5a805baff134267a900cf022",
+  "checks": [
+    {
+      "id": "explicit-auth",
+      "command": "go test tailscale.com/tsnet -run ^TestHerdr -count=1 -v",
+      "exitCode": 0,
+      "result": "3 passed",
+      "scope": "fixed v1.104.1 patched source; synthetic environment, no node",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-candidate-20261106/logs/explicit-auth-test.log",
+        "sha256": "388b1471f1e24b37e8da2424e49538af5a9e7915be74476450e14a7bf800775e",
+        "bytes": 381
+      }
+    },
+    {
+      "id": "go-runtime",
+      "command": "go test -race -tags hp_ts_test ./... -count=1 -v",
+      "exitCode": 0,
+      "result": "30 passed",
+      "scope": "26 core fake-engine/owned-loopback plus 4 cgo store tests; no tsnet Start",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-candidate-20261106/logs/runtime-tests.log",
+        "sha256": "4b3d55196d2ce6ab24c524bc3c044f695fef0c1d444c63c818b39c18202563cf",
+        "bytes": 3559
+      }
+    },
+    {
+      "id": "go-build",
+      "command": "go build -buildmode=c-shared -o libhp_tailscale.dylib .",
+      "exitCode": 0,
+      "result": "passed",
+      "scope": "real pinned adapter compiled on macOS arm64",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-candidate-20261106/logs/shared-build.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      }
+    },
+    {
+      "id": "go-load",
+      "command": "python3 validation/native/tool/check_tailscale_abi.py <owned-library>",
+      "exitCode": 0,
+      "result": "passed",
+      "scope": "version/new/Stopped/reject unstarted login and dial/close/release; zero host callbacks, no Start",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-candidate-20261106/logs/shared-load.log",
+        "sha256": "b18414ed5c8813d9c717e83e4a050af94e03583fbad47e6a6cfc5dee4c4d8808",
+        "bytes": 113
+      }
+    },
+    {
+      "id": "rust-real-load",
+      "command": "DYLD_LIBRARY_PATH=<owned-library-dir> <target>/debug/examples/tailscale_abi_presence",
+      "exitCode": 0,
+      "result": "passed",
+      "scope": "actual Go dylib, version and invalid-node status; no new/start/login/dial/store",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-rust-real-load-final-20261106.log",
+        "sha256": "b5aeba2118053a46399853b710e50ada81759ec67a3abacd582ebbe94b3bb26e",
+        "bytes": 85
+      }
+    },
+    {
+      "id": "overlay-default",
+      "command": "cargo test --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml",
+      "exitCode": 0,
+      "result": "3 passed",
+      "scope": "default absence gates",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-overlay-default-parent-20261106.log",
+        "sha256": "3809bc317c746d41d904c7bdf7d3bb72886159a0c811c11f56fc737a8b886718",
+        "bytes": 764
+      }
+    },
+    {
+      "id": "overlay-fixture",
+      "command": "cargo test --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --features native-fixture,tailscale-fixture",
+      "exitCode": 0,
+      "result": "33 passed",
+      "scope": "independent synthetic C ABIs; no real engine",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-overlay-parent-20261106.log",
+        "sha256": "96a3e5deb7363bb299f2500406cbc176592c18839d2805e5d5422ac62d95fdd3",
+        "bytes": 3636
+      }
+    },
+    {
+      "id": "overlay-clippy",
+      "command": "cargo clippy --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --all-targets --features native-fixture,tailscale-fixture -- -D warnings",
+      "exitCode": 0,
+      "result": "passed",
+      "scope": "overlay crate only",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-overlay-clippy-parent-20261106.log",
+        "sha256": "23b9a21bbaf189889e08dc27ed8eba521021280c5852db22205f721db08b2c7c",
+        "bytes": 72
+      }
+    },
+    {
+      "id": "transport-fixture",
+      "command": "cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml --features overlay-native-fixture,overlay-tailscale-fixture",
+      "exitCode": 0,
+      "result": "89 library + 1 CLI passed",
+      "scope": "synthetic overlay and self-created loopback SSH, not real overlay",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-transport-parent-20261106.log",
+        "sha256": "4ccb7e7c02441d206088b90242811405ad15580990f673517b01318fc40eec0c",
+        "bytes": 10387
+      }
+    },
+    {
+      "id": "mobile-default",
+      "command": "cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml mobile_nodes",
+      "exitCode": 0,
+      "result": "4 passed",
+      "scope": "default provider/fixture gates; filtered suite",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-mobile-default-parent-20261106.log",
+        "sha256": "68e03e2ac1dba1b7b827942a3cfde0ed3ebc1d0cf4c06abd85ac3f3f79b354e7",
+        "bytes": 2080
+      }
+    },
+    {
+      "id": "android-store",
+      "command": "sh validation/network-profiles/native/android/tests/run-tailscale-state.sh",
+      "exitCode": 0,
+      "result": "211 checks + surface passed",
+      "scope": "temporary POSIX/JCE, real core and Android stubs; no hardware KeyStore",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-state-final-parent-20261106.log",
+        "sha256": "a6d3217cc2d7ffa0457a32335111311b26f3c5af73e075384bd0ee7b762ab473",
+        "bytes": 171
+      }
+    },
+    {
+      "id": "android-jni",
+      "command": "sh validation/android-network-source/tests/run-tailscale-jvm.sh",
+      "exitCode": 0,
+      "result": "1090 assertions passed",
+      "scope": "desktop -Xcheck:jni, production bridge, synthetic vault; count includes byte clearing assertions",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-jni-attempt-final-parent-20261106.log",
+        "sha256": "200b8d0daeb57ec1c93a5dc0fef2409292ac97977adda03ac4f522a783f7fb5d",
+        "bytes": 1367
+      }
+    },
+    {
+      "id": "easytier-jni",
+      "command": "sh validation/android-network-source/tests/run-jvm.sh",
+      "exitCode": 0,
+      "result": "52 checks passed",
+      "scope": "desktop JNI old-provider regression",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-et-attempt-final-parent-20261106.log",
+        "sha256": "86abe9f1c132b88e4f3b05dfdce44c2c1683cdc94359d1d60124d730188e18ad",
+        "bytes": 1364
+      }
+    },
+    {
+      "id": "tauri-host",
+      "command": "cargo test --locked --offline --manifest-path validation/tauri/src-tauri/Cargo.toml --lib",
+      "exitCode": 0,
+      "result": "32 passed",
+      "scope": "Rust host compatibility and exact state wire mapping; no GUI",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-tauri-final-parent-20261106.log",
+        "sha256": "0981f972d10502bf6f926477cc1cc163e9d60db51842634775115f86b08bb6a9",
+        "bytes": 4414
+      }
+    },
+    {
+      "id": "flutter-native-host",
+      "command": "cargo test --locked --offline --manifest-path validation/flutter-network-runtime/Cargo.toml",
+      "exitCode": 0,
+      "result": "3 passed",
+      "scope": "Rust host default only; not Dart/analyzer/widget/device",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-flutter-native-parent-20261106.log",
+        "sha256": "70c88303d2cfec257dbda527e4acb46da75b1b4f97c6bb32a14d115d493f79b3",
+        "bytes": 7430
+      }
+    },
+    {
+      "id": "builder",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s validation/native/tool -p test_tailscale_candidate.py -v",
+      "exitCode": 0,
+      "result": "13 passed",
+      "scope": "offline provenance, ownership, environment, source drift",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-builder-parent-20261106.log",
+        "sha256": "7dd2ae019530213c8e3f7f618af33e6c7ed044fd0d1d62e77c1c41ac64081c45",
+        "bytes": 1686
+      }
+    },
+    {
+      "id": "transport-clippy",
+      "command": "cargo clippy --locked --offline --all-targets --manifest-path validation/transport-rust/Cargo.toml --message-format=json -- -D warnings",
+      "exitCode": 101,
+      "result": "failed: 12 unique diagnostics",
+      "scope": "independently executed on current source; no earlier-commit baseline",
+      "log": {
+        "path": "/private/tmp/herdr-tailscale-transport-clippy-parent-20261106.jsonl",
+        "sha256": "b8d9685f0049b33ff56ce69720d6824f4806787782f7697f6bf94d81692bac00",
+        "bytes": 220507
+      },
+      "diagnostics": [
+        {
+          "message": "this `if` statement can be collapsed",
+          "file": "src/config_transfer.rs",
+          "line": 159,
+          "code": "clippy::collapsible_if"
+        },
+        {
+          "message": "this `if` statement can be collapsed",
+          "file": "src/input.rs",
+          "line": 86,
+          "code": "clippy::collapsible_if"
+        },
+        {
+          "message": "this `if` statement can be collapsed",
+          "file": "src/input.rs",
+          "line": 101,
+          "code": "clippy::collapsible_if"
+        },
+        {
+          "message": "this `if` statement can be collapsed",
+          "file": "src/input.rs",
+          "line": 366,
+          "code": "clippy::collapsible_if"
+        },
+        {
+          "message": "this boolean expression can be simplified",
+          "file": "src/lib.rs",
+          "line": 106,
+          "code": "clippy::nonminimal_bool"
+        },
+        {
+          "message": "this `if` statement can be collapsed",
+          "file": "src/lib.rs",
+          "line": 780,
+          "code": "clippy::collapsible_if"
+        },
+        {
+          "message": "this returns a `Result<_, ()>`",
+          "file": "src/lib.rs",
+          "line": 829,
+          "code": "clippy::result_unit_err"
+        },
+        {
+          "message": "this function has too many arguments (8/7)",
+          "file": "src/lib.rs",
+          "line": 854,
+          "code": "clippy::too_many_arguments"
+        },
+        {
+          "message": "this function has too many arguments (8/7)",
+          "file": "src/lib.rs",
+          "line": 882,
+          "code": "clippy::too_many_arguments"
+        },
+        {
+          "message": "this function has too many arguments (9/7)",
+          "file": "src/lib.rs",
+          "line": 910,
+          "code": "clippy::too_many_arguments"
+        },
+        {
+          "message": "very complex type used. Consider factoring parts into `type` definitions",
+          "file": "src/input_loopback_test.rs",
+          "line": 21,
+          "code": "clippy::type_complexity"
+        },
+        {
+          "message": "field assignment outside of initializer for an instance created with Default::default()",
+          "file": "src/input.rs",
+          "line": 406,
+          "code": "clippy::field_reassign_with_default"
+        }
+      ]
+    }
+  ],
+  "artifact": {
+    "path": "/private/tmp/herdr-tailscale-candidate-20261106/libhp_tailscale.dylib",
+    "sha256": "5f1ab1770acf03cc9477961961c3dc360cf119be13a6663015bb83fb95a969a9",
+    "bytes": 22264786,
+    "platform": "macOS arm64",
+    "publicDistribution": false,
+    "nodeStarted": false
+  },
+  "toolchain": {
+    "go": "go1.27.3 darwin/arm64",
+    "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "cc": "Apple clang 21.0.0 clang-2100.4.1.1",
+    "java": "Temurin 25.0.2+10-LTS",
+    "installedFullSdk": false
+  },
+  "repairedFailures": [
+    {
+      "issue": "cgo static C variable linker symbols unavailable",
+      "resolution": "static inline getters; final complete tests/build passed",
+      "initialLog": {
+        "path": "/private/tmp/herdr-tailscale-cgo-link-initial-failure-20261106.log",
+        "sha256": "7e59dd1118d5323a12a979fe0f7c725689dc6d9bd38044367089fa228f04b647",
+        "bytes": 1466
+      }
+    },
+    {
+      "issue": "cargo run dyld cannot locate real dylib",
+      "resolution": "build then direct executable with explicit DYLD_LIBRARY_PATH; final load passed",
+      "initialLog": {
+        "path": "/private/tmp/herdr-tailscale-rust-real-abi-20261106.log",
+        "sha256": "3810aa2fc5948daf63622fd9bc9b8a7f03ae4a89aacb3f39e245b49bceaaadb9",
+        "bytes": 2213
+      }
+    },
+    {
+      "issue": "Tauri exhaustive match omitted 3 new node states",
+      "resolution": "exact seven-state wire mapping and regression; final 32 tests passed",
+      "initialLog": {
+        "path": "/private/tmp/herdr-tailscale-tauri-check-parent-20261106.log",
+        "sha256": "b0c70aa9e4f0a5e4dfe4ef83eb92652d5f7f02add9041900de1d39c9165d7969",
+        "bytes": 11814
+      }
+    }
+  ],
+  "reviewRepairs": [
+    "Close error retains resource/context; explicit original-object retry",
+    "per-node StateStore callback retirement gate independent of upstream shutdown",
+    "recoverable deletion intent bound to original profile/handle/ciphertext",
+    "Android API35 framework no_backup 0771 accepted, owned subdirs atomically 0700",
+    "public source constructor freezes internal attempt on first valid load; GUI never predicts attempt"
+  ],
+  "primarySources": {
+    "tailscaleManifest": "../../../validation/native/tailscale-runtime-source.json",
+    "androidContextImpl": {
+      "tag": "android-15.0.0_r1",
+      "gitBlobSha": "3b9a5d3b2cf2310a89e1e2bcbf0567171ec9423a",
+      "url": "https://github.com/aosp-mirror/platform_frameworks_base/blob/android-15.0.0_r1/core/java/android/app/ContextImpl.java"
+    },
+    "context7": [
+      {
+        "library": "/tailscale/tailscale/v1.104.4",
+        "commands": 2,
+        "meaning": "documentation background, actual dependency remains v1.104.1"
+      },
+      {
+        "library": "/websites/developer_android",
+        "commands": 2,
+        "meaning": "current docs plus fixed API35 source audit"
+      }
+    ]
+  },
+  "sharedFixtureShaEntries": 45,
+  "platformMatrixChanged": false,
+  "unverified": [
+    "actual mobile host bind_tailscale exports/init and Tailscale GUI identity/login",
+    "Android hardware KeyStore and real app-private filesystem",
+    "real tsnet Start/login/approval/state restart/dial and overlay SSH",
+    "Android/iOS/Windows/Linux new managed runtime build and runtime",
+    "15 platform-provider and 20 foreground concurrency cells",
+    "current Flutter analyzer/widget and device interactions",
+    "ZeroTier and remaining desktop implementation"
+  ],
+  "latestAndroidArtifactSource": "546c3eb34bf166a22effa033d9862544641a308a",
+  "latestAndroidRun": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281",
+  "newActionsRuns": 0,
+  "testApplicationsOpened": 0,
+  "whitespaceValidation": "Unified diff context space+tab is preserved; path-specific attributes exclude that data convention, while applied source is separately checked. Other tracked/untracked changes checked normally."
+}

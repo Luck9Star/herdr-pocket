@@ -14,7 +14,17 @@ pub struct Nodes {
 #[derive(Serialize)]
 pub struct View {state:&'static str,binding:Option<Binding>}
 #[cfg_attr(not(any(test,all(target_os="android",feature="network-easytier"))),allow(dead_code))]
-fn view(s:herdr_readonly_transport::mobile_nodes::Snapshot)->View {View {state:match s.state {State::Starting=>"starting",State::EngineStarted=>"engine-started",State::Closing=>"closing",State::Stopped=>"stopped"},binding:Some(s.binding)}}
+fn view(s:herdr_readonly_transport::mobile_nodes::Snapshot)->View {
+    View {state:match s.state {
+        State::Starting=>"starting",
+        State::EngineStarted=>"engine-started",
+        State::NeedsLogin=>"needs-login",
+        State::NeedsMachineAuth=>"needs-machine-auth",
+        State::Running=>"running",
+        State::Closing=>"closing",
+        State::Stopped=>"stopped",
+    },binding:Some(s.binding)}
+}
 #[cfg_attr(not(any(test,all(target_os="android",feature="network-easytier"))),allow(dead_code))]
 fn ready_view(current:Option<herdr_readonly_transport::mobile_nodes::Snapshot>,initialized:bool)->View {
     if current.as_ref().is_some_and(|s|s.state!=State::Stopped) {return view(current.unwrap());}
@@ -87,6 +97,20 @@ mod tests {
    let mut p=NetworkProfile{id:"a".repeat(32),label:"team".into(),provider:Provider::Easytier,enabled:true,revision:1,settings:Settings::Easytier{network_name:"team".into(),peers:vec!["tcp://x:1".into()]}};
    if !cfg!(all(target_os="android",feature="network-easytier")){assert_eq!(select_route(Some(&p)),Err("overlay_provider_unavailable".into()));}
    p.provider=Provider::Tailscale;assert_eq!(select_route(Some(&p)),Err("overlay_provider_unavailable".into()));
+ }
+ #[test] fn managed_state_wire_preserves_login_and_running_states() {
+   use herdr_readonly_transport::mobile_nodes::{BindingProvider,Snapshot};
+   let binding=Binding::with_provider(BindingProvider::Tailscale,"a".repeat(32),1,"team".into(),"native-store-ref".into()).unwrap();
+   for (state,expected) in [
+      (State::Starting,"starting"),(State::EngineStarted,"engine-started"),
+      (State::NeedsLogin,"needs-login"),(State::NeedsMachineAuth,"needs-machine-auth"),
+      (State::Running,"running"),(State::Closing,"closing"),(State::Stopped,"stopped"),
+   ] {
+      let wire=serde_json::to_value(view(Snapshot{binding:binding.clone(),state})).unwrap();
+      assert_eq!(wire["state"],expected);
+      assert_eq!(wire["binding"]["provider"],"tailscale");
+      assert_ne!(wire["state"],"ready");
+   }
  }
  #[test] fn unavailable_source_does_not_hide_active_old_binding() {
    let b=Binding::new("a".repeat(32),1,"team".into(),"11111111-1111-4111-8111-111111111111".into()).unwrap();

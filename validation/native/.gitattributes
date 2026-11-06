@@ -1,3 +1,4 @@
 patches/** -text
 patches/*.patch whitespace=-blank-at-eol
+patches/0002-tsnet-explicit-auth.patch whitespace=-blank-at-eol,-space-before-tab
 portable-stream/** -text

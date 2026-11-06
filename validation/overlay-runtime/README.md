@@ -1,6 +1,6 @@
 # 前台 overlay 字节流核心实验
 
-2026-11-06。这个独立 Rust crate 实现 owner 绑定的 overlay 流，以及 profile revision 绑定的 EasyTier node start/status/stop 入口。默认构建没有原生 backend；显式链接更新后的候选库才调用五个 stream 和四个 managed-node 符号。本轮实际只执行合成 C ABI 与 fake-engine 测试，没有启动真实 EasyTier 节点或读取真实身份；GUI、系统安全存储与实际 overlay TCP 仍未接通。
+2026-11-06。这个独立 Rust crate 实现 owner 绑定的 overlay 流，以及 profile revision 绑定的 managed node start/status/stop 入口。EasyTier 与新增 Tailscale 候选复用同一 NodeEntry 生命周期；默认构建没有原生 backend，必须显式 feature 与库目录。本轮实际只执行合成 C ABI 与 fake-engine 测试，没有启动真实 EasyTier 节点或读取真实身份；GUI、系统安全存储与实际 overlay TCP 仍未接通。
 
 本轮精确检查记录见 [offline evidence](../native/evidence/2026-11-06-managed-node-offline.json)。维护者先运行下面的离线复验。它调用单独编译的 C ABI 故障 fixture，**不是真实 EasyTier 节点或组网结果**。
 
@@ -96,7 +96,8 @@ CARGO_TARGET_DIR=/private/tmp/herdr-portable-stream-target cargo test --locked -
 | --- | --- |
 | owner/profile/revision、C ABI 调用、取消与资源回收 | 23 项 Mac C fixture 与 1 项默认门禁测试通过；不含真实 engine/网络 |
 | EasyTier managed backend | 已实现九个 ABI 调用与 node lease；更新补丁的真实来源 check/link 仍待执行 |
-| Tailscale / ZeroTier backend | 明确 `ProviderUnavailable`，没有替代路径 |
+| Tailscale backend | 新增固定 `hp_ts` ABI 候选与独立 C fixture，见下节；不等于真实 tsnet 节点或网络验证 |
+| ZeroTier backend | 明确 `ProviderUnavailable`，没有替代路径 |
 | GUI/SSHSocket、系统安全存储、稳定 node identity、真实 overlay TCP | 未接入／未验证；默认入口拒绝启动 |
 | iOS、Android、Windows、Linux 的本段运行 | 未验证；C fixture 当前仅 Unix 构建 |
 | 15 格单网络、20 格前台并发矩阵 | 本段不新增任何通过格，继续按[原矩阵](../../docs/09-prototype-validation.md)验收 |
@@ -108,3 +109,38 @@ CARGO_TARGET_DIR=/private/tmp/herdr-portable-stream-target cargo test --locked -
 [transport-rust](../transport-rust/README.md#显式-overlay-byte-transport2026-11-06) 已新增真正的 Tokio `AsyncRead + AsyncWrite` adapter，使用本 runtime 的 Future 和精确 `open_node` → `open_revision`；`open_node` 另检查 NodeLease 的原 runtime。`NodeLease::identity_ref()` 只公开安全存储引用，供实际 stream 的持久 recovery route 绑定。它不公开 native epoch，也不表示身份已实现持久稳定。默认仍缺桥拒绝；本段不新增真实节点、GUI overlay 或设备验证。
 
 `Failure::ReadTimedOut` 只表示同步 read 已返回、没有读取任何字节且没有迟到 read。EasyTier 固定 ABI 的 read `-2` 映射到此值；transport 在原 Operation 完成后以有界 timer 继续读取，正常空闲不关闭连接，write 仍不自动重试。本轮 native fixture 24 项和默认门禁 1 项通过，新增 timeout 回归证明之后可写入并读到同一流的数据。其余历史测试与真实网络边界继续按上文和 transport README 区分。
+
+
+## Tailscale managed backend 候选（2026-11-06）
+
+[`tailscale.rs`](src/tailscale.rs) 使用 [`hp_ts.h`](../native/tailscale-runtime/hp_ts.h) 的固定 ABI v1。`linked-tailscale` 必须给出绝对 `HP_TS_LIB_DIR`，库名为 `libhp_tailscale`；没有自动下载、系统库发现、系统 TCP／DNS、文件 StateStore 或合成 fixture fallback。`tailscale-fixture` 只链接独立 C ABI 故障 fixture，不是 Go engine。两 provider 的 NodeEntry 共用原 admission、owner／revision、取消、迟到清理、8 node／32 stream 配额及显式 cleanup 重试；没有平行 lifecycle manager。
+
+`NativeStateSource::load(&NodeSpec)` 在原 lifecycle worker 上为完整不可变 spec 提供 `NativeNodeConfig`。配置携带原 spec、宿主已核验的独立 app-private 目录、公共 hostname／HTTPS control URL，以及 `Arc<dyn NativeStateStore>`；backend 再次比较完整 spec。`NativeVettedDirectory` 只核对绝对／干净路径，权限、所有权、symlink 与独立目录的原生验证由宿主负责，不能把此构造器当系统安全证明。当前 hostname 取单个 ASCII DNS label，URL 采用较严格 ASCII HTTPS authority 策略，不支持 IPv6 literal；control URL 不允许 query。没有 auth key 或环境凭据入口。
+
+StateStore 接口只传 key/value bytes：key 0–1024 bytes、value 0–262144 bytes，完整任意 key（包括空、NUL、非 UTF-8）不改写；`Missing` 与 `Unavailable` 区分，present-empty 与 absent、`write(None)` 删除与 `write(Some(empty))` 存空区分。值、配置与 store 没有 Debug／Clone／serde。read 返回的原 Rust allocation 一直持有到 Go 的精确 release 回调，随后尽力覆写；write 借用原 buffer，不额外留副本。每个 context 最多 32 个未归还 read buffer。宿主 store 必须线程安全、不得 panic 或记录 key/value；JNI/系统错误必须转 `Unavailable`，不能伪装 Missing 或建新身份。
+
+callback context 与函数表由进程级单调 ID registry 持有，只有 `hp_ts_node_release == OK` 证明真实 close、原调用与回调已收敛后才释放。此契约要求 Go bridge 在每个 node 的 StateStore 上显式设门：engine close 成功后拒绝新的 host callback，等待已进入的 callback 返回，才允许 closeDone／release OK；不假设上游 tsnet.Close 已隐式 join 所有后台 StateStore 使用者。旧 engine 对已退休 store 的迟到调用必须在 Go gate 内返回 unavailable，不能再次进入已释放 Rust/JNI context。close timeout／IO、取消、失败 start 和 Rust runtime Drop 都不能提前释放 store；无法收敛的 owner 保守保留并占最多 8 个 context，不把泄漏当成功回收。宿主需保留 runtime 以执行原 revision 的显式 cleanup；这不提供强制擦除或失败后无限开节点能力。
+
+状态区分 `Starting / NeedsLogin / NeedsMachineAuth / Running / Closing / Stopped`。EngineStarted 不代表可用网络；mobile 层只有 Tailscale Running 才提供 dialer，最终仍由该原 node 的 native dial 决定是否能连接。`begin_node_login`／mobile `begin_login` 是显式动作，返回粗粒度状态与仅经审查的 HTTPS auth URL，不返回原始日志；URL 的 Debug 被隐藏，也不自动打开浏览器。Running 仍不是设备、peer、route 或 SSH 验证。read TIMEOUT 仅映射原 read 已结束且 0 bytes 的可重试空闲；其他未收敛错误关闭原流，write UNKNOWN 不重放。半关闭必须保留读方向，底层不支持时拒绝而不伪造 full close。
+
+离线 C ABI 复验（不启动真实节点）：
+
+```sh
+CARGO_TARGET_DIR=/private/tmp/herdr-overlay-runtime-ts-target cargo test --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --features tailscale-fixture
+CARGO_TARGET_DIR=/private/tmp/herdr-overlay-runtime-both-target cargo test --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --features native-fixture,tailscale-fixture
+CARGO_TARGET_DIR=/private/tmp/herdr-overlay-runtime-both-target cargo clippy --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --all-targets --features native-fixture,tailscale-fixture -- -D warnings
+CARGO_TARGET_DIR=/private/tmp/herdr-transport-overlay-target cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml mobile_nodes --features overlay-native-fixture,overlay-tailscale-fixture
+```
+
+本批 C fixture 实际验证 store key／missing／empty／delete、取消迟到 start、stop 失败持有原 store、原 spec 不能换绑、身份不可用和超限不变 Missing、显式 login／状态、半关闭、read idle timeout，以及相同目标地址下两 provider 流与 stop 隔离。它没有创建 socket、读取真实身份或运行 tsnet。mobile Binding 新增可选 `provider`；旧 JSON 缺省仍 EasyTier，Tailscale 用明确的 `with_provider` 和 `start_tailscale`，不会经旧 EasyTier 入口加载别的 provider 身份。进程 attempt 不进入持久 route，旧 attempt／dialer 无法跟随新节点。
+
+已有受控 Go 候选库时，可只链接并运行不启动节点的 ABI probe：
+
+```sh
+HP_TS_LIB_DIR=/absolute/verified/library/directory CARGO_TARGET_DIR=/private/tmp/herdr-overlay-runtime-ts-linked cargo build --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --features linked-tailscale --example tailscale_abi_presence
+# macOS: run the built binary directly; cargo run can rewrite loader variables.
+DYLD_LIBRARY_PATH=/absolute/verified/library/directory /private/tmp/herdr-overlay-runtime-ts-linked/debug/examples/tailscale_abi_presence
+# Linux uses LD_LIBRARY_PATH instead; Windows requires its explicit DLL search path.
+```
+
+build 只证明本 adapter 所用符号能链接；动态库能否找到与加载必须由目标平台 loader 路径和直接运行的独立结果确认。直接运行只读 ABI version 与无效 node 0 的 status，不调用 new/start/login/dial/StateStore。cargo run 的 loader discovery 失败不能冒充加载成功，也不要求把库复制进仓库或修改系统搜索路径。真实库来源、补丁、SHA 与加载结果由上层交付记录另记；C fixture 或 link/load 不能替代真实登录、加密身份重启、手机、overlay TCP、15 格单网和 20 格前台并发矩阵。

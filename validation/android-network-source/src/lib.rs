@@ -284,3 +284,6 @@ mod tests {
 
 #[cfg(feature = "jvm-fixture")]
 mod jvm_fixture;
+
+mod tailscale;
+pub use tailscale::{AndroidTailscaleSource, bind_tailscale, is_tailscale_initialized};

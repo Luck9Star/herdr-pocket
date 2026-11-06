@@ -1,0 +1,111 @@
+--- a/tsnet/tsnet.go
++++ b/tsnet/tsnet.go
+@@ -221,6 +221,12 @@
+ //
+ // Its exported fields may be changed until the first method call.
+ type Server struct {
++	// ExplicitAuthOnly is a downstream opt-in for an embedded application.
++	// It disables ambient credentials/control URL, OAuth/WIF resolution,
++	// automatic interactive login, and auth URL logging. The caller explicitly
++	// supplies AuthKey or invokes LocalClient.StartLoginInteractive.
++	ExplicitAuthOnly bool
++
+ 	// Dir specifies the name of the directory to use for
+ 	// state. If empty, a directory is selected automatically
+ 	// under os.UserConfigDir (https://golang.org/pkg/os/#UserConfigDir).
+@@ -761,6 +767,9 @@
+ 	if v := s.AuthKey; v != "" {
+ 		return v
+ 	}
++	if s.ExplicitAuthOnly {
++		return ""
++	}
+ 	if v := os.Getenv("TS_AUTHKEY"); v != "" {
+ 		return v
+ 	}
+@@ -771,6 +780,9 @@
+ 	if v := s.ControlURL; v != "" {
+ 		return v
+ 	}
++	if s.ExplicitAuthOnly {
++		return ""
++	}
+ 	return os.Getenv("TS_CONTROL_URL")
+ }
+ 
+@@ -778,6 +790,9 @@
+ 	if v := s.ClientSecret; v != "" {
+ 		return v
+ 	}
++	if s.ExplicitAuthOnly {
++		return ""
++	}
+ 	return os.Getenv("TS_CLIENT_SECRET")
+ }
+ 
+@@ -785,6 +800,9 @@
+ 	if v := s.ClientID; v != "" {
+ 		return v
+ 	}
++	if s.ExplicitAuthOnly {
++		return ""
++	}
+ 	return os.Getenv("TS_CLIENT_ID")
+ }
+ 
+@@ -792,6 +810,9 @@
+ 	if v := s.IDToken; v != "" {
+ 		return v
+ 	}
++	if s.ExplicitAuthOnly {
++		return ""
++	}
+ 	return os.Getenv("TS_ID_TOKEN")
+ }
+ 
+@@ -799,7 +820,15 @@
+ 	if v := s.Audience; v != "" {
+ 		return v
+ 	}
++	if s.ExplicitAuthOnly {
++		return ""
++	}
+ 	return os.Getenv("TS_AUDIENCE")
++}
++
++// Explicit mode short-circuits before even inspecting force-login environment.
++func (s *Server) shouldStartInteractive(state ipn.State) bool {
++	return !s.ExplicitAuthOnly && (state == ipn.NeedsLogin || envknob.Bool("TSNET_FORCE_LOGIN"))
+ }
+ 
+ func (s *Server) start() (reterr error) {
+@@ -997,7 +1026,7 @@
+ 		return fmt.Errorf("starting backend: %w", err)
+ 	}
+ 	st := lb.State()
+-	if st == ipn.NeedsLogin || envknob.Bool("TSNET_FORCE_LOGIN") {
++	if s.shouldStartInteractive(st) {
+ 		s.logf("LocalBackend state is %v; running StartLoginInteractive...", st)
+ 		if err := s.lb.StartLoginInteractive(s.shutdownCtx); err != nil {
+ 			return fmt.Errorf("StartLoginInteractive: %w", err)
+@@ -1005,7 +1034,9 @@
+ 	} else if authKey != "" {
+ 		s.logf("Authkey is set; but state is %v. Ignoring authkey. Re-run with TSNET_FORCE_LOGIN=1 to force use of authkey.", st)
+ 	}
+-	go s.printAuthURLLoop()
++	if !s.ExplicitAuthOnly {
++		go s.printAuthURLLoop()
++	}
+ 
+ 	// Run the localapi handler, to allow fetching LetsEncrypt certs.
+ 	lah := localapi.NewHandler(localapi.HandlerConfig{
+@@ -1035,6 +1066,9 @@
+ }
+ 
+ func (s *Server) resolveAuthKey() (string, error) {
++	if s.ExplicitAuthOnly {
++		return s.AuthKey, nil
++	}
+ 	authKey := s.getAuthKey()
+ 	var err error
+ 	// Try to use an OAuth secret to generate an auth key if that functionality

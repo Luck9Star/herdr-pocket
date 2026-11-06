@@ -56,3 +56,14 @@ artifact 包含：
 ## Managed node 源扩展（2026-11-06，未运行真实节点）
 
 portable candidate 增加独立、不可复用 epoch 的 managed-node start/status/stop/node-stream-connect 四符号，保留旧五个 stream 符号。它直接持有固定 instance，不依赖旧可替换 key；native stop 超时保留资源，stream drain 后才停止节点。精确来源、身份文件 adapter 审查与剩余限制见 [source audit](managed-source-audit.json) 和 [runtime 说明](../overlay-runtime/README.md)。随后新补丁在 Linux、Windows、macOS 完成固定 Heeler 编译、链接及九符号加载；来源和各次结果见 [离线证据](evidence/2026-11-06-managed-node-offline.json)。没有启动真实节点，Android/iOS 的库编译和设备验证仍未执行；上面的历史库 hash 不适用于新补丁。
+
+## Tailscale managed runtime 源扩展（2026-11-06）
+
+新增 [`hp_ts` 候选](tailscale-runtime/README.md)、固定版本显式授权补丁和独立准备／构建工具。该批与上面的历史 import/Dial 类型探针不同：实际编译管理节点、opaque stream 和原生 StateStore 回调；Mac 动态库加载只检查未 Start 节点的保留／状态／释放，绝不启动真实节点。Rust 与 Android 加密存储／JNI 的实现、独立结果与待接 GUI 项见[完整记录](../../docs/25-tailscale-native-custody.md)。没有新增设备或真实三网通过格，也没有触发 CI。
+
+```sh
+python3 validation/native/tool/tailscale_candidate.py prepare /absolute/fresh/work --cache /absolute/dedicated/cache
+python3 validation/native/tool/tailscale_candidate.py build /absolute/fresh/work --cache /absolute/dedicated/cache
+```
+
+工具只使用已有 Go 和 C 工具，不安装 SDK；下载固定模块并检查 go.sum、源码和补丁 SHA，只修改指定临时副本。`sync` 可显式更新本项目 runtime 源码副本；构建前同时核对源清单与实际复制字节，拒绝未经同步的修改。当前完整构建只在 Mac arm64 执行，不能推断其他平台的工具链／loader 已兼容。

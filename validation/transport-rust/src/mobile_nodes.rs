@@ -1,9 +1,14 @@
 //! Reusable foreground managed-node lifecycle. Public bindings describe saved
 //! configuration; attempt numbers are private and never enter recovery markers.
 //! No default identity source, engine retry, transport fallback or joined claim.
+pub use crate::transport::OverlayProvider as BindingProvider;
 use crate::{Cancellation, Result, overlay::OverlayDialer};
 use overlay_runtime::nodes::{NodeLease, NodeStatus};
 pub use overlay_runtime::nodes::{NodeSpec, SecretConfig, SecureConfigSource};
+pub use overlay_runtime::tailscale::{
+    NativeNodeConfig, NativeStateSource, NativeStateStore, NativeVettedDirectory, StateStoreError,
+    StateStoreResult,
+};
 use overlay_runtime::{Failure, MAX_DEADLINE, OverlayRuntime, ProfileKey, Provider};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -22,10 +27,21 @@ pub const MAX_PROFILE_HISTORY: usize = 32;
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Binding {
+    #[serde(
+        default = "default_provider",
+        skip_serializing_if = "is_default_provider"
+    )]
+    provider: BindingProvider,
     profile_id: String,
     profile_revision: u32,
     network_name: String,
     identity_ref: String,
+}
+fn default_provider() -> BindingProvider {
+    BindingProvider::EasyTier
+}
+fn is_default_provider(provider: &BindingProvider) -> bool {
+    *provider == BindingProvider::EasyTier
 }
 impl Binding {
     pub fn new(
@@ -34,7 +50,23 @@ impl Binding {
         network_name: String,
         identity_ref: String,
     ) -> Result<Self> {
+        Self::with_provider(
+            BindingProvider::EasyTier,
+            profile_id,
+            profile_revision,
+            network_name,
+            identity_ref,
+        )
+    }
+    pub fn with_provider(
+        provider: BindingProvider,
+        profile_id: String,
+        profile_revision: u32,
+        network_name: String,
+        identity_ref: String,
+    ) -> Result<Self> {
         let binding = Self {
+            provider,
             profile_id,
             profile_revision,
             network_name,
@@ -61,6 +93,9 @@ impl Binding {
         }
         Ok(())
     }
+    pub fn provider(&self) -> &BindingProvider {
+        &self.provider
+    }
     pub fn profile_id(&self) -> &str {
         &self.profile_id
     }
@@ -75,7 +110,11 @@ impl Binding {
     }
     fn profile(&self) -> ProfileKey {
         ProfileKey {
-            provider: Provider::EasyTier,
+            provider: match self.provider {
+                BindingProvider::EasyTier => Provider::EasyTier,
+                BindingProvider::Tailscale => Provider::Tailscale,
+                BindingProvider::ZeroTier => Provider::ZeroTier,
+            },
             id: self.profile_id.clone(),
         }
     }
@@ -97,10 +136,45 @@ impl Binding {
 pub enum State {
     Starting,
     EngineStarted,
+    NeedsLogin,
+    NeedsMachineAuth,
+    Running,
     Closing,
     Stopped,
 }
 
+impl State {
+    fn from_native(state: NodeStatus) -> Self {
+        match state {
+            NodeStatus::Starting => Self::Starting,
+            NodeStatus::EngineStarted => Self::EngineStarted,
+            NodeStatus::NeedsLogin => Self::NeedsLogin,
+            NodeStatus::NeedsMachineAuth => Self::NeedsMachineAuth,
+            NodeStatus::Running => Self::Running,
+            NodeStatus::Closing => Self::Closing,
+            NodeStatus::Stopped => Self::Stopped,
+        }
+    }
+    fn live(self) -> bool {
+        !matches!(self, Self::Closing | Self::Stopped)
+    }
+}
+#[derive(Clone, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginSnapshot {
+    pub binding: Binding,
+    pub state: State,
+    pub auth_url: Option<String>,
+}
+impl std::fmt::Debug for LoginSnapshot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoginSnapshot")
+            .field("binding", &self.binding)
+            .field("state", &self.state)
+            .field("has_auth_url", &self.auth_url.is_some())
+            .finish()
+    }
+}
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
@@ -231,6 +305,32 @@ impl MobileNodeService {
         timeout: Duration,
         cancel: Cancellation,
     ) -> Result<Snapshot> {
+        if binding.provider != BindingProvider::EasyTier {
+            return Err("overlay_provider_unavailable");
+        }
+        self.start_with(binding, StartSource::EasyTier(source), timeout, cancel)
+            .await
+    }
+    pub async fn start_tailscale(
+        &self,
+        binding: Binding,
+        source: Arc<dyn NativeStateSource>,
+        timeout: Duration,
+        cancel: Cancellation,
+    ) -> Result<Snapshot> {
+        if binding.provider != BindingProvider::Tailscale {
+            return Err("overlay_provider_unavailable");
+        }
+        self.start_with(binding, StartSource::Tailscale(source), timeout, cancel)
+            .await
+    }
+    async fn start_with(
+        &self,
+        binding: Binding,
+        source: StartSource,
+        timeout: Duration,
+        cancel: Cancellation,
+    ) -> Result<Snapshot> {
         binding.validate()?;
         deadline(timeout)?;
         if cancel.is_cancelled() {
@@ -267,7 +367,8 @@ impl MobileNodeService {
                 // Vault identity generations have their own unique reference.
                 if binding.profile_revision < entry.binding.profile_revision
                     || (binding.profile_revision == entry.binding.profile_revision
-                        && binding.network_name != entry.binding.network_name)
+                        && (binding.network_name != entry.binding.network_name
+                            || binding.provider != entry.binding.provider))
                 {
                     return Err("overlay_stale_revision");
                 }
@@ -277,11 +378,19 @@ impl MobileNodeService {
             }
             let attempt = registry.next_attempt;
             registry.next_attempt = attempt.checked_add(1).ok_or("mobile_node_capacity")?;
-            let operation = self
-                .inner
-                .runtime
-                .start_easytier_profile(binding.spec(attempt), Some(source), timeout)
-                .map_err(code)?;
+            let operation = match source {
+                StartSource::EasyTier(source) => self.inner.runtime.start_easytier_profile(
+                    binding.spec(attempt),
+                    Some(source),
+                    timeout,
+                ),
+                StartSource::Tailscale(source) => self.inner.runtime.start_tailscale_profile(
+                    binding.spec(attempt),
+                    Some(source),
+                    timeout,
+                ),
+            }
+            .map_err(code)?;
             registry.entries.insert(
                 binding.profile_id.clone(),
                 Entry {
@@ -306,6 +415,18 @@ impl MobileNodeService {
             value = operation => value.map_err(code)?,
         };
         guard.claimed_native = true;
+        let initial_state = if binding.provider == BindingProvider::Tailscale {
+            let status = self.inner.runtime.node_status(&node).map_err(code)?;
+            tokio::select! { biased;
+                _=cancel.wait()=>return Err("cancelled"),
+                value=status=>State::from_native(value.map_err(code)?),
+            }
+        } else {
+            State::EngineStarted
+        };
+        if !initial_state.live() {
+            return Err("mobile_node_failed");
+        }
         if cancel.is_cancelled() {
             return Err("cancelled");
         }
@@ -324,12 +445,69 @@ impl MobileNodeService {
                 return Err("cancelled");
             }
             entry.node = Some(node);
-            entry.state = State::EngineStarted;
+            entry.state = initial_state;
         }
         guard.armed = false;
         Ok(Snapshot {
             binding,
-            state: State::EngineStarted,
+            state: initial_state,
+        })
+    }
+
+    pub async fn begin_login(
+        &self,
+        binding: &Binding,
+        timeout: Duration,
+        cancel: Cancellation,
+    ) -> Result<LoginSnapshot> {
+        binding.validate()?;
+        deadline(timeout)?;
+        if binding.provider != BindingProvider::Tailscale {
+            return Err("overlay_provider_unavailable");
+        }
+        let (attempt, node) = {
+            let registry = lock(&self.inner.registry);
+            let entry = registry
+                .entries
+                .get(binding.profile_id())
+                .ok_or("mobile_node_not_started")?;
+            if entry.binding != *binding {
+                return Err("mobile_node_binding_mismatch");
+            }
+            if !entry.state.live() {
+                return Err("mobile_node_not_started");
+            }
+            (
+                entry.attempt,
+                entry.node.clone().ok_or("mobile_node_not_started")?,
+            )
+        };
+        if cancel.is_cancelled() {
+            return Err("cancelled");
+        }
+        let operation = self
+            .inner
+            .runtime
+            .begin_node_login(&node, timeout)
+            .map_err(code)?;
+        let login = tokio::select! { biased; _=cancel.wait()=>return Err("cancelled"),result=operation=>result.map_err(code)? };
+        let mut registry = lock(&self.inner.registry);
+        let entry = registry
+            .entries
+            .get_mut(binding.profile_id())
+            .ok_or("overlay_stale_revision")?;
+        if entry.attempt != attempt
+            || entry.binding != *binding
+            || !entry.state.live()
+            || cancel.is_cancelled()
+        {
+            return Err("cancelled");
+        }
+        entry.state = State::from_native(login.state);
+        Ok(LoginSnapshot {
+            binding: binding.clone(),
+            state: entry.state,
+            auth_url: login.auth_url.map(|url| url.as_str().to_owned()),
         })
     }
 
@@ -378,12 +556,7 @@ impl MobileNodeService {
         {
             Err(Failure::ProfileMissing) => State::Stopped,
             Err(error) => return Err(code(error)),
-            Ok(operation) => match operation.await.map_err(code)? {
-                NodeStatus::Starting => State::Starting,
-                NodeStatus::EngineStarted => State::EngineStarted,
-                NodeStatus::Closing => State::Closing,
-                NodeStatus::Stopped => State::Stopped,
-            },
+            Ok(operation) => State::from_native(operation.await.map_err(code)?),
         };
         let mut registry = lock(&self.inner.registry);
         let entry = registry
@@ -396,10 +569,8 @@ impl MobileNodeService {
         // An earlier status response cannot reopen an entry retired by stop or
         // attach a node whose start result has not been claimed by its caller.
         entry.state = match (entry.state, state) {
-            (State::Closing | State::Stopped, State::Starting | State::EngineStarted) => {
-                entry.state
-            }
-            (State::Starting, State::EngineStarted) if entry.node.is_none() => State::Starting,
+            (State::Closing | State::Stopped, next) if next.live() => entry.state,
+            (State::Starting, next) if next.live() && entry.node.is_none() => State::Starting,
             _ => state,
         };
         if entry.state == State::Stopped {
@@ -513,7 +684,12 @@ impl MobileNodeService {
         if entry.binding != *binding {
             return Err("mobile_node_binding_mismatch");
         }
-        if entry.state != State::EngineStarted {
+        let ready = match binding.provider {
+            BindingProvider::EasyTier => entry.state == State::EngineStarted,
+            BindingProvider::Tailscale => entry.state == State::Running,
+            BindingProvider::ZeroTier => false,
+        };
+        if !ready {
             return Err("mobile_node_not_started");
         }
         OverlayDialer::new(
@@ -522,6 +698,10 @@ impl MobileNodeService {
             timeout,
         )
     }
+}
+enum StartSource {
+    EasyTier(Arc<dyn SecureConfigSource>),
+    Tailscale(Arc<dyn NativeStateSource>),
 }
 struct Starting {
     inner: Arc<Inner>,

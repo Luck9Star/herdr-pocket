@@ -1,0 +1,8 @@
+{
+  "sourceSHA": "007e20d293fbc333ebd65a7baf7f2dcb7827bff7",
+  "failure": {
+    "stage": "response_authorized",
+    "errorClass": "TestFailure",
+    "line": 48
+  }
+}

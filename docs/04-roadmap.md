@@ -4,6 +4,8 @@
 
 2026-11-06 已在 API 35 云模拟器通过两条路线的[手机配对、主机看板与持续观察](15-mobile-gui-validation.md)，包含本机设备密钥、真实 SSH 公钥核验、明确 pane 选择、full/delta 和主动停止。原版 herdr 的只读检查收到 0 字节输入。下一阶段先走手机的逐键/草稿与发送结果未知恢复，再验证多标签跨网和设备行为，随后推进桌面真实分屏；框架选型保留待测项。此前 18/18 项 CLI 对照及独立 fixture 仍按各自来源保存。[M1a 手动快照](12-mobile-remote-readonly.md) · [M1b 看板与持续观察](13-mobile-dashboard-observe.md)
 
+随后手机批次已接入受理回执、Ctrl／Alt、隐藏恢复和加密主机资料迁移。Tauri API 35 收到两笔匹配回执、精确 10 bytes；Flutter 最新构建与 100 项测试通过，Android 授权确认及后续输入仍有待验项。先将已定位的状态提交与模拟器清理修复并入下一批，再接网络 profile／偏好迁移和前台跨网络标签，接着完善桌面分屏与独立焦点。手机真机、三网和发行许可分别记录，继续集中构建。[实现与三轮结果](16-mobile-input-and-config.md) · [许可审查](17-license-and-distribution-review.md)
+
 里程碑基线：2026-10-29，当时只有设计文档；2026-10-30已进入验证壳阶段，进度以上方执行记录为准。里程碑以可复现证据验收，不以代码量或功能勾选替代结果。
 
 **首版目标是五端统一产品，手机优先、桌面紧随，三网络全部纳入设计与集成**：App 内 Tailscale + EasyTier 为首版必需，ZeroTier 并行验证与集成。按手机终端 A/B → 统一基础与五端验证 → 直连闭环 → provider × 平台接入 → 公开发布矩阵推进；Windows 原生桥风险同步做最小验证。范围见[产品设计](05-product-design.md)，实现契约见[架构](02-architecture.md)及 [ADR-0004](adr/0004-mvp-reliability-boundaries.md)。

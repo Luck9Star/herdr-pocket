@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "milestone": "M1c-pairing-dashboard-observe",
+  "sourceSHA": "8daf1bcb081903cb0c4fe3c8982c346b315200d3",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42141054727",
+  "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+  "runnerImage": {
+    "imageOS": "ubuntu24",
+    "imageVersion": "20261101.360.1"
+  },
+  "herdr": {
+    "version": "0.9.5",
+    "sourceCommit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+    "asset": "https://github.com/herdrdev/herdr/releases/download/v0.9.5/herdr-linux-x86_64",
+    "sha256": "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d"
+  },
+  "status": "passed",
+  "checks": [
+    {
+      "adapter": "tauri-android",
+      "testId": "reviewed-device-key-to-observe",
+      "status": "passed",
+      "paired": true,
+      "paneChosen": true,
+      "fullRendered": true,
+      "deltaRendered": true,
+      "stoppedStale": true,
+      "fullRenderAcknowledgements": 1,
+      "deltaRenderAcknowledgements": 1,
+      "inputQueueAccepted": false,
+      "hiddenReentryFreshFull": false,
+      "keyStore": "Android API 35 emulator AndroidKeyStore-wrapped device key",
+      "device": "ephemeral Android emulator",
+      "uiDriver": "debug WebView CDP input",
+      "temporaryHostApprovedRequest": true,
+      "matchedDeviceKeyInSshd": true,
+      "revokedFixtureKey": true,
+      "receivedInputBytes": 0
+    }
+  ],
+  "scope": "API35 emulator WebView and AndroidKeyStore-wrapped identity",
+  "unverified": [
+    "physical phone",
+    "camera",
+    "real IME",
+    "overlay networks",
+    "pixel rendering",
+    "hardware key protection",
+    "production deployment",
+    "remote input from this GUI"
+  ],
+  "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+  "readinessSnapshot": {
+    "pocket-probe": {
+      "resultType": "session_snapshot",
+      "flatKnownFields": {
+        "version": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        },
+        "protocol": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        }
+      },
+      "snapshotPresent": true,
+      "snapshotType": "dict",
+      "nestedKnownFields": {
+        "version": {
+          "present": true,
+          "type": "str",
+          "value": "0.9.5"
+        },
+        "protocol": {
+          "present": true,
+          "type": "int",
+          "value": 22
+        }
+      }
+    },
+    "pocket-other": {
+      "resultType": "session_snapshot",
+      "flatKnownFields": {
+        "version": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        },
+        "protocol": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        }
+      },
+      "snapshotPresent": true,
+      "snapshotType": "dict",
+      "nestedKnownFields": {
+        "version": {
+          "present": true,
+          "type": "str",
+          "value": "0.9.5"
+        },
+        "protocol": {
+          "present": true,
+          "type": "int",
+          "value": 22
+        }
+      }
+    }
+  },
+  "crossSessionFixture": {
+    "bothSessionsExist": true,
+    "samePaneId": true,
+    "expected": "reject mismatched socket/session before publishing full"
+  },
+  "frameEvidence": "xterm parser callback after consuming a frame",
+  "receivedInputBytes": 0,
+  "fixtureSharedBetweenAdapters": false,
+  "observeFixture": {
+    "syntheticTickIntervalMs": 200,
+    "changedTerminalRow": 23,
+    "selection": "GUI chooses a pane button from the current snapshot",
+    "backpressureScope": "decoded single-frame byte high-water only, not JSON line, SSH buffers or whole-process memory"
+  },
+  "sharedPty": {
+    "noObservedResize": true,
+    "numericRecord": {
+      "captureErrors": 0,
+      "changes": 0,
+      "columns": 119,
+      "elapsedMs": 33862,
+      "endReason": 1,
+      "initialColumns": 119,
+      "initialRows": 40,
+      "maxSampleGapMs": 87,
+      "readErrors": 0,
+      "rows": 40,
+      "sampleIntervalMs": 50,
+      "samples": 669,
+      "schemaVersion": 1,
+      "signalAvailable": 1,
+      "signalSamples": 0,
+      "signalsMayCoalesce": 1,
+      "state": 2,
+      "terminationSignal": 0,
+      "winchHandlers": 0
+    }
+  },
+  "cleanup": {
+    "ownedProcessesStopped": true,
+    "ephemeralKeysRemoved": true,
+    "userAuthorizationFilesTouched": false,
+    "rawLogsUploaded": false
+  }
+}

@@ -79,3 +79,14 @@ Tauri 官方不建议以 events 承载低延迟/高吞吐数据，Channel 提供
 **定案规则：**先过正确性和原生能力门槛，再比较实测资源、输入体验以及为通过同一 fixture 所需的补丁/维护面。Tauri 若手机核心流程不退步，且终端正确性或维护成本表现出可复现优势，可取代 Flutter；两者均通过但无明确优势时保留 Flutter 的手机优先验证路径。两者均失败则调整终端或桥接组件，不降低可靠性要求。框架确定后更新 ADR-0001，并把最终依赖版本、预算与平台限制写入[路线图](04-roadmap.md)及支持矩阵。
 
 许可单独设门槛：核查版本的 Tauri 为 MIT/Apache-2.0 双许可、xterm.js 为 MIT、russh 为 Apache-2.0；这些不覆盖原生依赖、字体及本项目再分发义务。用户希望衍生持续开源，允许进一步评估 Flutter 的 `xterm3` AGPL 路径，但仍须通过实际组件、链接/分发方式的兼容审查及完整终端实测；不因此自动更换候选或认定全部组合合规。最终许可证审查后确定，本轮不新增 LICENSE。来源：[Tauri 清单](https://github.com/tauri-apps/tauri/blob/tauri-v2.12.5/Cargo.toml)、[xterm.js 清单](https://github.com/xtermjs/xterm.js/blob/6.0.0/package.json)、[russh 清单](https://github.com/Eugeny/russh/blob/v0.65.0/russh/Cargo.toml)。
+
+## 2026-11-06 手机闭环复评
+
+Flutter 与 Tauri 使用同一提交、同一 API 35 AVD 配置和受控 SSH/herdr 目标，均通过“生成设备身份 → 审查 helper 响应 → 实际 SSH 认证 → 会话看板 → 选定 pane → full/delta → 主动停止”。两端用 AndroidKeyStore 包装本机 Ed25519 种子，临时 sshd 以实际接受的公钥指纹核对 GUI 候选。两种 debug 安装包和自动化变体分别标记来源。[证据与下载](15-mobile-gui-validation.md)
+
+| 路线 | 已观察到的维护与正确性证据 | 仍需独立判断 |
+| --- | --- | --- |
+| Flutter | 目录记录类型和 Android 目录同步均发现并修正实际错误；独立原生签名探针通过验签和删除。修补过的 terminal_view 仍须维护组合重音回归。 | 真机 IME、选择/粘贴、TUI、设备休眠与终端性能 |
+| Tauri | 原生目录锁曾阻断 Android 配对；改用平台可用的文件锁后，正式 WebView 路径通过设备身份认证和连续观察。iOS 模拟器包已经编译链接。 | WebView 逐键输入、手机相机、平台生命周期及 native bridge 的维护成本 |
+
+首个只读手机闭环已有两条可运行路线，继续并行评估。下一关先验证安全输入在断线、目标切换和结果未知时的正确性，再比较同一设备上的性能。以上结果没有提供框架定案所需的真机 IME、字体、三网并发或长期运行对照。

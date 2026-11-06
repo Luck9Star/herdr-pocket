@@ -1,5 +1,7 @@
 # herdr-pocket 验证入口
 
+2026-11-06 两个 Android API 35 的正式 GUI 路径都通过设备签名、主机看板与持续观察。[最新两份 APK、SHA 和实际运行记录](../docs/15-mobile-gui-validation.md)。
+
 2026-11-05 手机工作台已接入 GUI 配对审查、设备签名、主机目录、多标签与持续观察。当前实现、两份 Android 基线包、失败及尚待实测的项目见[手机配对工作台](../docs/14-mobile-pairing-workbench.md)。
 
 2026-10-30 看板、持续观察、配对与设备密钥结果及测试包见 [M1b 记录](../docs/13-mobile-dashboard-observe.md)。Penpot v2 视觉基线见 [UI v2 记录](../docs/11-ui-v2-integration.md)。下方前阶段测试包保留各自源码版本，不能当作新版已验收。

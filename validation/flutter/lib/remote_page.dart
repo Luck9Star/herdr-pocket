@@ -54,7 +54,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   String? draftTarget;
   final drafts = <String,String>{};
   final auxiliaryModifiers = AuxiliaryModifiers();
-  late final inputGate = RemoteInputGate((target,bytes,current) =>
+  late final RemoteInputGate inputGate = RemoteInputGate((target,bytes,current) =>
     adapter.sendInput(target,bytes,stillCurrent:current),onChanged:() {
       if (!inputGate.canInput || inputGate.mode != RemoteInputMode.direct || inputGate.sending) auxiliaryModifiers.reset();
       if (mounted) setState(() {});

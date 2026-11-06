@@ -46,6 +46,7 @@ jobs:
     uses: ./.github/workflows/paired-android-emulator.yml
     with:
       guarded_input: ${{ needs.build-input-fixture.result == 'success' }}
+      flutter_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-input-flutter-') }}
   transport:
     if: >-
       !startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-') &&

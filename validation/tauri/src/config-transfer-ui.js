@@ -54,6 +54,7 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
     const exportPass = password('导出口令（至少 12 个字符，最多 1024 UTF-8 字节）'); const confirmPass = password('再次输入口令'); exportBox.append(exportPass.label, confirmPass.label);
     const selectedNetworkInputs=[];
     exportBox.append(el('p','独立网络配置（已选主机所需网络会自动包含）'));
+    if (!catalog) exportBox.append(el('p','网络目录读取未确认，暂不能导出；请核查当前状态。'));
     for(const network of catalog?.profiles || []) {const label=el('label',null,'config-option');const cb=el('input');cb.type='checkbox';cb.value=network.id;label.append(cb,document.createTextNode(` ${network.label} · ${network.provider}`));exportBox.append(label);selectedNetworkInputs.push(cb);}
     const prefLabel=el('label',null,'config-option'), exportPrefs=el('input');exportPrefs.type='checkbox';prefLabel.append(exportPrefs,document.createTextNode(' 包含终端字号偏好'));exportBox.append(prefLabel);
     const exp = el('button', '加密并保存'); exp.type = 'button'; exp.disabled = busy || !catalog;
@@ -70,7 +71,7 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
             else { const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes)], { type: 'application/octet-stream' })); const a = el('a'); a.href = url; a.download = 'herdr-pocket.hpkt'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); message('已发起下载；请核查保存结果。'); }
           });
       } catch (error) { message(String(error)==='transfer_network_unavailable' ? '所选主机绑定了网络配置；当前版本暂不支持安全导出，请等待网络配置迁移支持。' : '导出或保存未确认，请核查文件；不会自动重试。'); }
-      finally { clearSecrets(); busy = false; exp.disabled = false; close.disabled = false; if (!previewIsCurrent(current, epoch) && !panel.hidden) render(); }
+      finally { clearSecrets(); busy = false; exp.disabled = !catalog; close.disabled = false; if (!previewIsCurrent(current, epoch) && !panel.hidden) render(); }
     }; exportBox.append(exp); panel.append(exportBox);
     const importBox = el('fieldset'); importBox.append(el('legend', '导入配置'));
     let file;
@@ -121,16 +122,24 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
       apply.onclick = async () => {
         if (busy) return;
         let choices; try { choices = buildImportChoices(plan.entries, selections); } catch { message('请逐条选择操作；同一冲突不能被多条同时替换。'); return; }
-        const usedTicket = ticket, selectedNetworkKeys=[...selectedNetworks], shouldApplyPreferences=applyPreferences; ticket = null; plan = null; selections.clear(); selectedNetworks.clear(); applyPreferences=false; busy = true; apply.disabled = true; close.disabled = true;
-        try { const result = await invoke('config_apply', { ticket: usedTicket, choices, selectedNetworks:selectedNetworkKeys, applyPreferences:shouldApplyPreferences }); await onApplied(result); await refreshHosts(); busy = false; render(); panel.querySelector('[role=status]').textContent = `导入完成：新增 ${result.added.length}，保留停用身份 ${result.retired.length}，移除旧资料 ${result.removedIds.length}。新目标需重新配对。`; }
-        catch { await refreshHosts(); busy = false; render(); panel.querySelector('[role=status]').textContent = '导入失败、预览已过期或保存结果未知；请核查主机列表后重新预览，不会自动重试。'; }
-        finally { busy = false; clearSecrets(); }
+        const usedTicket = ticket, selectedNetworkKeys=[...selectedNetworks], shouldApplyPreferences=applyPreferences, current=epoch; ticket = null; plan = null; selections.clear(); selectedNetworks.clear(); applyPreferences=false; catalog=null; busy = true; exp.disabled=true; apply.disabled = true; close.disabled = true;
+        let result=null, confirmed=false, refreshFailed=false;
+        try { result = await invoke('config_apply', { ticket: usedTicket, choices, selectedNetworks:selectedNetworkKeys, applyPreferences:shouldApplyPreferences }); await onApplied(result); confirmed=true; }
+        catch { /* the single-use write may have completed; never replay */ }
+        try { await refreshHosts(); } catch { refreshFailed=true; }
+        let updated=null;
+        try { updated=await invoke('network_list'); if (!updated || !Array.isArray(updated.profiles)) throw Error('invalid_catalog'); } catch { updated=null; }
+        busy=false; clearSecrets();
+        if (!previewIsCurrent(current,epoch) || panel.hidden) return;
+        catalog=updated; render();
+        const outcome=confirmed ? `导入完成：主机新增 ${result.added.length}，主机旧身份停用保留 ${result.retired.length}，移除旧主机资料 ${result.removedIds.length}。网络配置请核对当前状态；字号偏好${shouldApplyPreferences ? '已按选择应用' : '未选择覆盖'}。新目标需重新配对。` : '导入结果未确认；请先核对主机、网络配置和字号的当前状态，不会自动重试。';
+        panel.querySelector('[role=status]').textContent=outcome + (!catalog ? ' 网络目录读取未确认，暂不能导出。' : '') + (refreshFailed ? ' 主机目录读取未确认。' : '');
       }; previewBox.append(apply); panel.append(previewBox);
     }
     panel.append(status);
   }
   function password(text) { const label = el('label', text); const input = el('input'); input.type = 'password'; input.autocomplete = 'new-password'; input.maxLength = 1024; label.append(input); return { label, input }; }
-  opener.onclick = async () => { invalidate(); platform = null; panel.hidden = false; render(); if (native) { try { platform = await invoke('config_document_platform'); catalog = await invoke('network_list'); } catch { platform = null; } render(); } panel.querySelector('h2').focus?.(); };
+  opener.onclick = async () => { invalidate(); const current=epoch; platform = null; catalog=null; panel.hidden = false; render(); if (native) { let nextPlatform=null, nextCatalog=null; try { nextPlatform=await invoke('config_document_platform'); } catch {} if(nextPlatform) { try { nextCatalog=await invoke('network_list'); if (!nextCatalog || !Array.isArray(nextCatalog.profiles)) nextCatalog=null; } catch {} } if(!previewIsCurrent(current,epoch) || panel.hidden)return; platform=nextPlatform;catalog=nextCatalog;render(); } panel.querySelector('h2').focus?.(); };
   document.addEventListener('visibilitychange', () => { if (document.hidden) { if (pickerPending) { clearSecrets(); return; } invalidate(); if (!panel.hidden) render(); } });
   window.addEventListener('pagehide', invalidate);
   return () => { invalidate(); panel.hidden = true; };

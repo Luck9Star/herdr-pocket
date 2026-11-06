@@ -5,11 +5,14 @@ on:
       guarded_input:
         type: boolean
         default: false
+      flutter_only:
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   android-device-key:
-    if: startsWith(github.ref, 'refs/heads/codex/')
+    if: startsWith(github.ref, 'refs/heads/codex/') && !inputs.flutter_only
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:

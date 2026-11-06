@@ -388,12 +388,12 @@ class HostCatalog extends ChangeNotifier {
     if (profile.revision != 1 || list.any((p) => p.id == profile.id)) throw const RemoteFailure('network_profile_stale');
     return [...list,profile];
   });
-  Future<void> updateNetwork(NetworkProfile profile,{VoidCallback? beforeCommit,String? expectedRevision}) => _mutate((list) => list,networkAction:(list) {
+  Future<void> updateNetwork(NetworkProfile profile,{VoidCallback? beforeCommit,String? expectedRevision,Future<void> Function()? beforeChange}) => _mutate((list) => list,networkAction:(list) {
     if (expectedRevision != null && revision != expectedRevision) throw const RemoteFailure('network_profile_stale');
     final index = list.indexWhere((p) => p.id == profile.id);
     if (index < 0 || profile.expectedPrevious != jsonEncode(list[index].toJson()) || profile.revision != list[index].revision+1) throw const RemoteFailure('network_profile_stale');
     list[index] = profile; return list;
-  },beforeSave:beforeCommit);
+  },beforeSave:beforeCommit,beforeSaveCheck:beforeChange);
   Future<void> removeNetwork(NetworkProfile profile,{VoidCallback? beforeCommit,String? expectedRevision,
       Future<void> Function()? beforeRemove}) => _mutate((list) {
     if (expectedRevision != null && revision != expectedRevision) throw const RemoteFailure('network_profile_stale');

@@ -1,0 +1,27 @@
+[package]
+name = "herdr-flutter-network-runtime"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+publish = false
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+network-easytier = ["herdr-readonly-transport/overlay-linked-easytier"]
+# Explicit Unix synthetic ABI tests only. Never enable for an Android app.
+native-fixture = ["herdr-readonly-transport/overlay-native-fixture", "overlay-runtime/native-fixture"]
+
+[dependencies]
+herdr-readonly-transport = { version = "=0.1.0", path = "../transport-rust" }
+herdr-android-network-source = { version = "=0.1.0", path = "../android-network-source" }
+overlay-runtime = { package = "herdr-overlay-runtime-probe", version = "=0.1.0", path = "../overlay-runtime" }
+jni = "=0.21.1"
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "sync", "time", "io-util", "macros"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+zeroize = "=1.9.1"
+
+[workspace]

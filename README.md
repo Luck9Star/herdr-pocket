@@ -12,7 +12,9 @@
 
 后续源码已接入 Android EasyTier 本机入网资料的创建、状态与显式移除，以及 Rust overlay→SSH 字节流适配。38 项 JVM、Tauri JS/Rust 和隔离传输检查通过；Flutter 新测试、Android 原生构建和完整组网接线尚待验收，未发布新包。[本机资料与传输接线](docs/19-mobile-network-identity.md)
 
-最新源码继续连接 vault 内部固定配置、JNI、共享节点生命周期和 Tauri 手机显式路由；配置版本与启动编号分开，单主机解绑不停止共享节点。默认原生库门禁保留，Android feature 和真实组网尚未验证，Flutter 平台流待接入。[节点接线与验证范围](docs/20-mobile-node-routing.md)
+此前源码批次连接 vault 内部固定配置、JNI、共享节点生命周期和 Tauri 手机显式路由；配置版本与启动编号分开，单主机解绑不停止共享节点。默认原生库门禁保留，Android feature 和真实组网尚未验证。[节点接线与验证范围](docs/20-mobile-node-routing.md)
+
+最新批次补齐 Flutter 节点 GUI、私有 native scope 与实际 overlay SSH socket，并准备同源原生库 → 两套 Android 包的显式批次流程。隔离 Rust/JVM 与来源材料检查已通过，Android 构建和设备运行尚未执行；本批没有触发新 Actions。[Flutter 原生通道与证据](docs/21-flutter-native-network.md)
 
 ## 首版做什么
 
@@ -38,6 +40,7 @@ Heeler 已有三网络的源码实现可供按许可移植：EasyTier 使用 no-
 
 | 文件 | 内容 |
 | --- | --- |
+| [`docs/21-flutter-native-network.md`](docs/21-flutter-native-network.md) | Flutter 手机原生通道、路由恢复和 Android 同源分层构建 |
 | [`docs/20-mobile-node-routing.md`](docs/20-mobile-node-routing.md) | JNI 安全配置源、节点生命周期与 Tauri 手机路由 |
 | [`docs/19-mobile-network-identity.md`](docs/19-mobile-network-identity.md) | Android 本机入网资料、身份影响串行与 overlay SSH 适配 |
 | [`docs/18-mobile-network-profiles.md`](docs/18-mobile-network-profiles.md) | 手机网络配置、v2 迁移、字号和节点生命周期 |

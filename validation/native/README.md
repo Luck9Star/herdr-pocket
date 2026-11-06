@@ -55,4 +55,4 @@ artifact 包含：
 
 ## Managed node 源扩展（2026-11-06，未运行真实节点）
 
-portable candidate 增加独立、不可复用 epoch 的 managed-node start/status/stop/node-stream-connect 四符号，保留旧五个 stream 符号。它直接持有固定 instance，不依赖旧可替换 key；native stop 超时保留资源，stream drain 后才停止节点。精确来源、身份文件 adapter 审查与剩余限制见 [source audit](managed-source-audit.json) 和 [runtime 说明](../overlay-runtime/README.md)。本机只运行 fake engine/C ABI fixture、旧 portable loopback；新 patch 的真实固定 Heeler 编译/链接尚未执行，不沿用上面的历史库 hash 或桌面通过格。
+portable candidate 增加独立、不可复用 epoch 的 managed-node start/status/stop/node-stream-connect 四符号，保留旧五个 stream 符号。它直接持有固定 instance，不依赖旧可替换 key；native stop 超时保留资源，stream drain 后才停止节点。精确来源、身份文件 adapter 审查与剩余限制见 [source audit](managed-source-audit.json) 和 [runtime 说明](../overlay-runtime/README.md)。随后新补丁在 Linux、Windows、macOS 完成固定 Heeler 编译、链接及九符号加载；来源和各次结果见 [离线证据](evidence/2026-11-06-managed-node-offline.json)。没有启动真实节点，Android/iOS 的库编译和设备验证仍未执行；上面的历史库 hash 不适用于新补丁。

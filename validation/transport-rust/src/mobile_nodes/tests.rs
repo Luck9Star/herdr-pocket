@@ -279,6 +279,49 @@ mod native {
     }
 
     #[tokio::test]
+    async fn captured_attempt_cannot_stop_or_observe_restarted_same_binding_or_another_service() {
+        let _serial = isolated().await;
+        let service = MobileNodeService::new();
+        let saved = binding("captured-attempt");
+        assert!(service.capture_attempt(&saved).unwrap().is_none());
+        start(&service, &saved, Arc::new(Source::default())).await;
+        let old = service.capture_attempt(&saved).unwrap().unwrap();
+        assert_eq!(
+            service.status_attempt(&old).await.unwrap().state,
+            State::EngineStarted
+        );
+        stop(&service, &saved).await;
+        start(&service, &saved, Arc::new(Source::default())).await;
+        let current = service.capture_attempt(&saved).unwrap().unwrap();
+        assert_eq!(
+            service.stop_attempt(&old, TIME).await.unwrap_err(),
+            "overlay_stale_revision"
+        );
+        assert_eq!(
+            service.status_attempt(&old).await.unwrap_err(),
+            "overlay_stale_revision"
+        );
+        let foreign = MobileNodeService::new();
+        assert_eq!(
+            foreign.stop_attempt(&current, TIME).await.unwrap_err(),
+            "overlay_wrong_owner"
+        );
+        assert_eq!(
+            foreign.status_attempt(&current).await.unwrap_err(),
+            "overlay_wrong_owner"
+        );
+        assert_eq!(
+            service.status(&saved).await.unwrap().state,
+            State::EngineStarted
+        );
+        assert_eq!(metric(9), 1);
+        assert_eq!(
+            service.stop_attempt(&current, TIME).await.unwrap().state,
+            State::Stopped
+        );
+    }
+
+    #[tokio::test]
     async fn stopped_profile_history_is_bounded_without_evicting_known_binding_guards() {
         let _serial = isolated().await;
         let service = MobileNodeService::new();

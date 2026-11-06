@@ -27,7 +27,7 @@
   "managedNodeExtension": {
     "manifest": "patches/portable-manifest.json",
     "sourceAudit": "managed-source-audit.json",
-    "status": "source + isolated fake-engine/C-ABI tests only; updated real-source check/link and platform/device/network tests not run",
+    "status": "pinned Heeler compile/link and nine-symbol load completed on Linux, Windows and macOS; Android/iOS, real node and network validation not run",
     "abi": "stream v1 unchanged; additive managed-node v1 (four symbols)"
   }
 }

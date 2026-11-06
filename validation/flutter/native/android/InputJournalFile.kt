@@ -21,9 +21,11 @@ class InputJournalFile(context: Context) {
                 '[', ']' -> error("nested journal")
             }
         }
-        check(!quoted && colons == fields.size && braces == 2)
+        check(!quoted && braces == 2)
         val obj = JSONObject(record)
-        check(obj.keys().asSequence().toSet() == fields)
+        val version = obj.opt("schemaVersion")
+        val expected = if (version == 1) fields else if (version == 2) fields + "route" else error("invalid version")
+        check(colons == expected.size && obj.keys().asSequence().toSet() == expected)
         fun integer(name: String, min: Long, max: Long): Long {
             val raw = obj.get(name)
             check(raw is Int || raw is Long)
@@ -33,7 +35,12 @@ class InputJournalFile(context: Context) {
             val value = obj.get(name); check(value is String && value.isNotEmpty() && value.length <= max)
             check(value.none { it.code < 32 || it.code == 127 }); return value
         }
-        integer("schemaVersion",1,1); integer("port",1,65535); integer("generation",1,2147483647)
+        integer("schemaVersion",1,2); integer("port",1,65535); integer("generation",1,2147483647)
+        if (version == 2 && !obj.isNull("route")) {
+            val route = text("route",256)
+            val match = Regex("easy-tier:([a-f0-9]{32}):([1-9][0-9]{0,9}):([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})").matchEntire(route)
+            check(match != null && match.groupValues[2].toLong() <= 2147483647L)
+        }
         check(text("requestId",32).matches(Regex("[a-f0-9]{32}")))
         check(text("host",253).matches(Regex("[A-Za-z0-9:.\\[\\]_-]+")))
         val user = text("username",128); check(!user.startsWith("-") && user.none { it.isWhitespace() })

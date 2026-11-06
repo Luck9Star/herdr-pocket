@@ -145,6 +145,27 @@ void main() {
     expect(gate.canInput,isFalse); expect(gate.canAcknowledgeUnknown,isTrue);
     expect(calls,0);
   });
+  test('durable route is actual overlay identity and legacy markers mean system', () {
+    const route = 'easy-tier:0123456789abcdef0123456789abcdef:3:a0000000-0000-4000-8000-000000000001';
+    final base = target();
+    final overlay = RemoteInputTarget(connection:Object(),generation:base.generation,host:base.host,port:base.port,
+      username:base.username,hostFingerprint:base.hostFingerprint,session:base.session,socketPath:base.socketPath,
+      paneId:base.paneId,terminalId:base.terminalId,route:route);
+    final marker = RemoteInputPending.create('a'*32,overlay);
+    final parsed = RemoteInputPending.parse(marker.raw);
+    expect(parsed.target.route,route); expect(parsed.target.sameEndpoint(overlay),isTrue);
+    expect(parsed.target.sameEndpoint(base),isFalse);
+    final data = jsonDecode(marker.raw) as Map<String,dynamic>;
+    for (final invalid in ['easy-tier:0123456789abcdef0123456789abcdef:03:a0000000-0000-4000-8000-000000000001',
+      'easy-tier:0123456789abcdef0123456789abcdef:2147483648:a0000000-0000-4000-8000-000000000001',
+      'tailscale:0123456789abcdef0123456789abcdef:3:a0000000-0000-4000-8000-000000000001']) {
+      expect(() => RemoteInputPending.parse(jsonEncode({...data,'route':invalid})),throwsFormatException);
+    }
+    final old = RemoteInputPending.create('b'*32,base);
+    expect(RemoteInputPending.parse(old.raw).target.route,'system');
+    final nullRoute = jsonEncode({...jsonDecode(old.raw) as Map<String,dynamic>,'schemaVersion':2,'route':null});
+    expect(RemoteInputPending.parse(nullRoute).target.route,'system');
+  });
   test('writer exceptions are unknown and journal-unavailable pre-write rejection disables input', () async {
     final gate = RemoteInputGate((t,b,current) async { throw StateError('synthetic'); });
     ready(gate,target()); await gate.submit(gate.capture()!,'once'); expect(gate.unknown,isNotNull);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,8 @@ import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/network_profiles.dart';
 import 'package:herdr_flutter_probe/network_profiles_page.dart';
+import 'package:herdr_flutter_probe/network_runtime.dart';
+import 'package:herdr_flutter_probe/network_identity.dart';
 import 'package:herdr_flutter_probe/remote_page.dart';
 import 'host_catalog_test.dart' show MemoryCatalogStorage,saveCatalogProfile;
 import 'config_transfer_test.dart' show portable;
@@ -13,8 +16,60 @@ import 'network_profiles_test.dart' show testNetwork;
 import 'pairing_gui_test.dart' show TestDeviceKeys,tapVisible,authorizedResponse;
 import 'remote_page_test.dart' show PendingAdapter;
 import 'remote_test_data.dart';
+import 'network_identity_test.dart' show MemoryNetworkIdentity,identityReply;
+
+class PendingNodeRuntime extends NativeNetworkRuntime {
+  final pending = Completer<NetworkNodeSnapshot>();
+  NetworkNodeBinding? binding;
+  bool reportStopped = false;
+  int starts = 0,stops = 0;
+  @override bool get supported => true;
+  @override Future<bool> available() async => true;
+  @override Future<NetworkNodeSnapshot> status(String id) async => binding == null || reportStopped
+    ? const NetworkNodeSnapshot('stopped',null) : NetworkNodeSnapshot('starting',binding);
+  @override Future<NetworkNodeSnapshot> start(NetworkNodeBinding value,List<String> peers) {
+    starts++; binding = value; return pending.future;
+  }
+  @override Future<NetworkNodeSnapshot> stop(NetworkNodeBinding value) async {
+    expect(value.same(binding!),isTrue); stops++; return const NetworkNodeSnapshot('stopped',null);
+  }
+}
 
 void main() {
+  testWidgets('status read during pending start cannot clear an unknown start result',(tester) async {
+    final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+    final profile = testNetwork('easytier'); await catalog.addNetwork(profile);
+    final identities = MemoryNetworkIdentity()..current = NetworkIdentityRecord.checked(identityReply(profile),profile);
+    final runtime = PendingNodeRuntime();
+    await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(catalog:catalog,closeTabs:(_) {},identityStore:identities,runtime:runtime)));
+    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
+    await tapVisible(tester,'network-node-start-${profile.id}'); await tester.pump(); await tester.pump();
+    runtime.reportStopped = true;
+    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pump();
+    runtime.pending.completeError(StateError('unknown')); await tester.pump(); await tester.pump();
+    final start = find.byKey(ValueKey('network-node-start-${profile.id}'));
+    expect(tester.widget<TextButton>(start).onPressed,isNull);
+    expect(find.textContaining('启动结果或期间状态未确认'),findsOneWidget);
+    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pump();
+    expect(tester.widget<TextButton>(start).onPressed,isNotNull);
+    await tester.pumpWidget(const SizedBox()); catalog.dispose();
+  });
+  testWidgets('pending node start can be refreshed and stopped; late start cannot overwrite stopped',(tester) async {
+    final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+    final profile = testNetwork('easytier'); await catalog.addNetwork(profile);
+    final identities = MemoryNetworkIdentity()..current = NetworkIdentityRecord.checked(identityReply(profile),profile);
+    final runtime = PendingNodeRuntime();
+    await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(catalog:catalog,closeTabs:(_) {},identityStore:identities,runtime:runtime)));
+    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
+    await tapVisible(tester,'network-node-start-${profile.id}'); await tester.pump(); await tester.pump();
+    expect(runtime.starts,1); expect(find.textContaining('正在启动'),findsOneWidget);
+    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pump();
+    await tapVisible(tester,'network-node-stop-${profile.id}'); await tester.pump();
+    expect(runtime.stops,1); expect(find.textContaining('已停止'),findsOneWidget);
+    runtime.pending.complete(NetworkNodeSnapshot('engine-started',runtime.binding)); await tester.pump();
+    expect(find.text('节点：已停止'),findsOneWidget); expect(find.text('节点：引擎已启动 · 入网与 SSH 未验证'),findsNothing);
+    await tester.pumpWidget(const SizedBox()); catalog.dispose();
+  });
   testWidgets('normal 360px host board exposes network manager and creates a reusable profile',(tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(360,780);
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);

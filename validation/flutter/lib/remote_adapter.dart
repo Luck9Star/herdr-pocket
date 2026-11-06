@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:pointycastle/digests/sha256.dart';
 import 'remote_input.dart';
+import 'network_runtime.dart' show RoutedSSHSocket;
 
 /// Stable safe codes only: never include server output, config or private keys.
 class RemoteFailure implements Exception {
@@ -515,7 +516,8 @@ class RemoteReadOnlyAdapter {
       _check(a);
       a.inputTarget = RemoteInputTarget(connection:a,generation:a.generation,
         host:config.host,port:config.port,username:config.username,hostFingerprint:config.expectedFingerprint,
-        session:config.session,socketPath:config.socketPath,paneId:selected.paneId,terminalId:selected.terminalId);
+        session:config.session,socketPath:config.socketPath,paneId:selected.paneId,terminalId:selected.terminalId,
+        route:socket is RoutedSSHSocket ? socket.actualRoute : 'system');
       final observe = await _wait(a,client.execute(config.observeCommand(selected.terminalId)),disposeLate:(s) => s.channel.destroy());
       a.observe = observe;
       final budget = ObserveByteBudget(continuous:onDashboard != null);

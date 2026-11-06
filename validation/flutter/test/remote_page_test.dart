@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
+import 'package:herdr_flutter_probe/network_profiles.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'package:herdr_flutter_probe/remote_page.dart';
+import 'network_profiles_test.dart' show testNetwork;
 import 'remote_test_data.dart';
 
 class PendingAdapter extends RemoteReadOnlyAdapter {
@@ -25,6 +27,7 @@ class PendingAdapter extends RemoteReadOnlyAdapter {
   @override
   Future<void> cancel() async { generation++; cancels++; }
 }
+class BindingChanges extends ChangeNotifier { void emit() => notifyListeners(); }
 Finder field(String name) => find.byKey(ValueKey('remote-$name'));
 
 void restoreResumedLifecycle(WidgetTester tester) {
@@ -45,6 +48,10 @@ Future<void> prepare(WidgetTester tester,PendingAdapter adapter,Size size) async
   addTearDown(tester.view.resetViewInsets);
   final tokens = (await tester.runAsync(DesignTokens.load))!;
   await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:RemotePage(tokens:tokens,adapter:adapter)));
+  await fillRemoteFixture(tester);
+}
+
+Future<void> fillRemoteFixture(WidgetTester tester) async {
   final values = fixtureConfig();
   for (final entry in values.entries) {
     if (entry.key == 'schemaVersion' || entry.key == 'reviewConfirmed' || entry.key == 'paneId') continue;
@@ -55,6 +62,64 @@ Future<void> prepare(WidgetTester tester,PendingAdapter adapter,Size size) async
 }
 
 void main() {
+  testWidgets('reused system page is permanently locked when changed to overlay and back', (tester) async {
+    final adapter = PendingAdapter();
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    final binding = ValueNotifier<NetworkConnectionBinding?>(null);
+    addTearDown(binding.dispose);
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:ValueListenableBuilder<NetworkConnectionBinding?>(
+      valueListenable:binding,builder:(_,value,__) => RemotePage(tokens:tokens,adapter:adapter,networkBinding:value))));
+    await fillRemoteFixture(tester);
+    await tester.ensureVisible(field('review')); await tester.tap(field('review')); await tester.pump();
+    await tester.ensureVisible(field('connect')); await tester.tap(field('connect')); await tester.pump();
+    expect(adapter.calls,1);
+    final originalState = tester.state(find.byType(RemotePage));
+    final overlay = NetworkConnectionBinding(testNetwork('easytier'),() => true);
+    binding.value = overlay; await tester.pump();
+    expect(identical(tester.state(find.byType(RemotePage)),originalState),isTrue);
+    expect(adapter.cancels,greaterThan(0));
+    expect(tester.widget<CheckboxListTile>(field('review')).onChanged,isNull);
+    expect(tester.widget<FilledButton>(field('connect')).onPressed,isNull);
+    expect(find.byKey(const ValueKey('remote-network-invalidated')),findsOneWidget);
+    adapter.pending.complete(const RemoteSnapshot(1,'probe','w1:p1','LATE OLD ROUTE'));
+    await tester.pump();
+    expect(find.textContaining('LATE OLD ROUTE'),findsNothing);
+    binding.value = null; await tester.pump();
+    expect(identical(tester.state(find.byType(RemotePage)),originalState),isTrue);
+    expect(tester.widget<CheckboxListTile>(field('review')).onChanged,isNull);
+    expect(tester.widget<FilledButton>(field('connect')).onPressed,isNull);
+    expect(adapter.calls,1);
+  });
+  testWidgets('reused overlay page cannot reconnect after switching to system route', (tester) async {
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    final overlay = NetworkConnectionBinding(testNetwork('easytier'),() => true);
+    final adapter = PendingAdapter();
+    final binding = ValueNotifier<NetworkConnectionBinding?>(overlay);
+    addTearDown(binding.dispose);
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:ValueListenableBuilder<NetworkConnectionBinding?>(
+      valueListenable:binding,builder:(_,value,__) => RemotePage(tokens:tokens,adapter:adapter,networkBinding:value))));
+    final originalState = tester.state(find.byType(RemotePage));
+    binding.value = null; await tester.pump();
+    expect(identical(tester.state(find.byType(RemotePage)),originalState),isTrue);
+    expect(tester.widget<CheckboxListTile>(field('review')).onChanged,isNull);
+    expect(tester.widget<FilledButton>(field('connect')).onPressed,isNull);
+    expect(find.byKey(const ValueKey('remote-network-invalidated')),findsOneWidget);
+    expect(adapter.calls,0);
+  });
+  testWidgets('revoked binding stays locked even if its current callback later recovers', (tester) async {
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    final changes = BindingChanges(); addTearDown(changes.dispose);
+    var current = true;
+    final binding = NetworkConnectionBinding(null,() => current,changes:changes);
+    final adapter = PendingAdapter();
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:RemotePage(tokens:tokens,adapter:adapter,networkBinding:binding)));
+    current = false; changes.emit(); await tester.pump();
+    current = true; changes.emit(); await tester.pump();
+    expect(tester.widget<CheckboxListTile>(field('review')).onChanged,isNull);
+    expect(tester.widget<FilledButton>(field('connect')).onPressed,isNull);
+    expect(find.byKey(const ValueKey('remote-network-invalidated')),findsOneWidget);
+    expect(adapter.calls,0);
+  });
   testWidgets('mobile review resets on edit, keys clear and cancelled late full cannot appear', (tester) async {
     final adapter = PendingAdapter();
     await prepare(tester,adapter,const Size(360,780));

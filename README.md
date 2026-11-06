@@ -24,11 +24,11 @@ Flutter 真实 widget 经自建 OpenSSH/herdr 已走通 **配对审查 → 主�
 | 看板与观察 | 持续会话状态、full/delta、独立标签、隐藏暂停、同 SSH 显式恢复及停止已进入新包 | 长期运行和真实设备生命周期 |
 | 输入与迁移 | 受保护输入、按目标隔离的未知记录、加密配置迁移；未知结果不重放 | 真实中文 IME、快捷键、TUI、触控及键盘变化 |
 | 原生网络 | 两包包含 EasyTier＋Tailscale，原生与手机接线完成构建／静态核对；EasyTier 桌面移植有历史记录 | 真实节点／SSH、Android 动态加载、逐平台并发 |
-| ZeroTier 后续源码 | 单设备身份托管、固定来源与原生安全补丁；151 JVM 检查、6 个翻译单元编译和 4 个离线程序通过 | 上游 ECC shift 诊断未解决；manager、KeyStore 包装、JNI、GUI 和实际节点尚未接入 |
+| ZeroTier 后续源码 | ECC 未定义左移已修复；共享设备 owner／多网络租约和 AndroidKeyStore 包装；115 项 manager、36＋151 项 JVM 检查，以及 Mac 114 TU 整库／离线初始化通过 | 定向 socket、JNI、GUI 和实际节点仍未接通；设备 KeyStore 与逐平台运行未验证 |
 | 分发 | 同源两份 debug 包已下载核对 | 安装、签名、真机运行和五端支持分别验收 |
 
-**ZeroTier 基础代码不在上述 APK 中。** [后续源码与证据](https://github.com/Luck9Star/herdr-pocket/blob/b2c652876d33c9973dbf5af67465dd7fb4c0259f/docs/28-zerotier-native-foundation.md)保留 ECC 文件的 UBSan 局部排除，不能称完整 UBSan 或实际节点运行通过。严格 transport Clippy 另有 12 项已有诊断。五个平台、三种网络及并发矩阵继续逐格验收。
+**ZeroTier 后续代码不在上述 APK 中。** [源码 `98473a6` 与验证记录](https://github.com/Luck9Star/herdr-pocket/blob/98473a699a055006e60b8c5c92ecdd54a28c13d3/docs/29-zerotier-managed-device.md)已删除 ECC sanitizer 排除，公开向量／独立大整数差分及旧源码负控制通过。Mac 完整库以 ASan／UBSan 插桩并加载，probe 只做两轮未启动节点的初始化／退休，不能外推为实际网络或其他平台通过。严格 transport Clippy 另有 12 项已有诊断。本次没有新 Actions 或 APK，五个平台、三种网络及并发矩阵继续逐格验收。
 
 历史 `040eb26` 云模拟器结果、`546c3eb` 独立标签包与各次失败保留原 SHA 和范围，不外推为本批设备运行通过。[历史手机结果](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/18-mobile-network-profiles.md) · [前一测试包](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/22-mobile-terminal-tabs.md) · [Penpot 设计与覆盖](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/design/README.md) · [配对与设备密钥](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/14-mobile-pairing-workbench.md) · [终端绘制与 EasyTier 移植修复](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/10-blocker-repair.md)
 
-下一批先消除 ZeroTier ECC 诊断边界，再完成单设备 owner、多网络租约、定向 socket 与 Android／手机 GUI 接线，积累一批功能后集中验证。桌面分屏紧随手机闭环。两路线使用相同字体与 fixture，先判断正确性，再比较性能和维护成本；断线或结果未知不自动重放输入，布局不隐式修改远端共享 PTY。[产品设计](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/05-product-design.md) · [云构建与分发](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/07-build-and-release.md)
+下一批在现有设备 owner／多网络租约上完成定向 socket、Android JNI 与手机 GUI 接线，继续走通配对 → 看板 → 持续观察，积累一批功能后集中验证。桌面分屏紧随手机闭环。两路线使用相同字体与 fixture，先判断正确性，再比较性能和维护成本；断线或结果未知不自动重放输入，布局不隐式修改远端共享 PTY。[产品设计](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/05-product-design.md) · [云构建与分发](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/07-build-and-release.md)

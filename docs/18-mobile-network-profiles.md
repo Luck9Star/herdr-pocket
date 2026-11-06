@@ -39,6 +39,8 @@ Mac 使用独立应用标识及合成公开资料，未创建设备密钥或真�
 
 本批使用 `codex/batch/android-input-networks-*` 集中运行：两套 Android 普通测试包与独立 stock／guarded AVD、共享迁移与生命周期测试、三个桌面 runner 的真实 fixed-source native 编译／链接。原生库、GUI 和输入 helper 保持各自产物并记录同一源码版本。两套包 manifest 新增网络配置和 v2 迁移样例 SHA-256，正式 Release 与商店提交不在此批内。
 
+源码 `040eb26` 已启动[集中运行 42158644225](https://github.com/Luck9Star/herdr-pocket/actions/runs/42158644225)。首个 macOS job 在分配 runner 前取消，注解为 `The configuration 'macos-14-arm64-us-default' is not supported`，没有编译步骤。2026-11-06 按 Context7 library → docs 核对[官方镜像表](https://github.com/actions/runner-images/blob/main/README.md)和[退役公告](https://github.com/actions/runner-images/issues/13518)，将余下的 `macos-14` 工作流固定为 `macos-15` arm64。原生候选增加仅 Mac 的 `codex/native-macos/**` 补验入口，避免重跑 Android 与其他已完成任务。runner 系统版本和应用最低运行版本分别记录。
+
 ## 下一步
 
 先根据本批结果修复 Flutter 授权与输入驱动及新增模型回归，再完成设备安全存储与原生节点适配，打通显式 overlay 绑定下的配对接入、看板与持续观察。随后完善跨网络手机标签、断线／迟到数据和输入恢复，反馈到 Penpot 的连接受阻与配置迁移页面。桌面真实分屏和独立焦点排在手机闭环之后。没有真机或网络证据的格子继续标为未验证。

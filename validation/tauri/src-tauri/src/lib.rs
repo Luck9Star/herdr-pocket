@@ -152,7 +152,7 @@ async fn network_identity_write(id:String,expected_catalog:String,expected_revis
     #[cfg(target_os="android")]
     nodes.stop_profile(&id).await?;
     #[cfg(target_os="android")]
-    {tauri::async_runtime::spawn_blocking(move|| {if action=="create" {android_keys::network_identity(&app,"networkIdentityCreate",&id,&mode,&secret).and_then(|v|if v.is_some(){Ok(())}else{Err("network_identity_unavailable".into())})} else {android_keys::delete_network_identity(&app,&id,expected_handle.as_deref().ok_or("invalid_network_identity")?)}}).await.map_err(|_|"network_identity_result_unknown")?.map_err(|_|"network_identity_result_unknown")}
+    {tauri::async_runtime::spawn_blocking(move|| {if action=="create" {android_keys::network_identity(&app,"networkIdentityCreate",&id,&mode,&secret).and_then(|v|if v.is_some(){Ok(())}else{Err("network_identity_unavailable".into())})} else {android_keys::delete_network_identity(&app,&id,expected_handle.as_deref().ok_or("invalid_network_identity")?)}}).await.map_err(|_|"network_identity_result_unknown".to_owned())?.map_err(|_|"network_identity_result_unknown".to_owned())}
 }
 #[tauri::command]
 async fn network_node_status(id:String,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,app:tauri::AppHandle)->Result<network_nodes::View,String>{

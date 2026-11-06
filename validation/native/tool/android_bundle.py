@@ -22,7 +22,8 @@ FLUTTER_JNI = [BIND_NATIVE] + [
     for name in ('nativeCreateScope', 'nativeReserveOpen', 'nativeCall', 'nativeCloseScope')
 ]
 SYSTEM = {'libc.so', 'libm.so', 'libdl.so', 'liblog.so', 'libandroid.so', 'libz.so',
-          'libjnigraphics.so', 'libEGL.so', 'libGLESv2.so', 'libOpenSLES.so', 'libvulkan.so', 'libstdc++.so'}
+          'libjnigraphics.so', 'libEGL.so', 'libGLESv2.so', 'libOpenSLES.so', 'libvulkan.so', 'libstdc++.so',
+          'libnativewindow.so'}  # Public NDK library since API 26; this verifier requires API 35.
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -34,7 +35,7 @@ def elf(path, readelf, required=(), needed=(), allowed=()):
     dynamic = subprocess.check_output([readelf, '-d', str(path)], text=True)
     dependencies = set(re.findall(r'\(NEEDED\).*?\[([^]]+)\]', dynamic))
     if not set(needed) <= dependencies or dependencies - SYSTEM - set(needed) - set(allowed):
-        raise ValueError('unexpected or missing DT_NEEDED: ' + str(sorted(dependencies)))
+        raise ValueError('unexpected or missing DT_NEEDED in ' + path.name + ': ' + str(sorted(dependencies)))
     if required:
         symbols = subprocess.check_output([readelf, '--dyn-syms', '--wide', str(path)], text=True)
         found = {line.split()[-1].split('@')[0] for line in symbols.splitlines()

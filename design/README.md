@@ -85,3 +85,14 @@ macOS首轮发现 terminal_view 0.5.0 的 ASCII组合重音绘制缺陷，已增
 增量脚本是本次编辑记录，不是同步覆盖命令；`extend-v2-recovery.js` 拒绝重复新建。首次执行的参数／名称错误已按实际部分状态修复，只有最终重载读回和已导出的画板作为完成证据。`verify-v2.js` 是只读核验入口。官方 MCP 2.15.4 对 Penpot 2.19.0 的版本警告仍存在；Context7 library 查询成功，docs 两次网络 fetch failed，本次 API 依据实际官方 MCP `high_level_overview`／`penpot_api_info`，未从旧训练知识推断成功。
 
 2026-11-06 的[手机状态增量交接](penpot/mobile-state-handoff-20261106.md)与 [S17 原型入口](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=61ebadac-98b5-8013-8008-e6e7917e7a2b)记录主机受理、隐藏恢复、配置冲突和辅助键状态。后续冲突流程增加新增／保留／替换选中态与各自结果，当前读回 26 画板、149 交互、无悬空目的地；查看器实际点击 S19 → 替换 S23 → 确认 S24 → 返回 S19，其余分支未逐条手点。[读回与点击记录](evidence/v2-conflict-flow-20261106.json) · [查看器截图](evidence/v2-conflict-viewer-result-20261106.jpg)。这是演示，不执行导入；真机验收仍待完成。
+
+## 网络配置与迁移反馈（2026-11-06）
+
+根据 [macOS 合成配置交互记录](../docs/evidence/mobile-pair-gui/macos-network-config.json) 和 [网络契约](../validation/network-profiles/README.md)，在既有 v2 页面增量添加 S27–S30：网络列表、编辑与受影响主机、加密迁移审查、导入结果。[从网络配置开始预览](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=b9d502c0-514c-80a9-8008-e7033d91f34d)。主机看板的网络入口可到达 S27。
+
+设计明确区分配置已保存、桥接不可用和本地配对可操作；网络导入为新建停用，偏好默认不覆盖，结果未知时先核对。保留原有 Tech Indigo／Slate、其他画板和组件；新画板不代表真实设备、三网授权或连接成功。独立原生画板重载后共 30 个，新增 19 个导航对象目的地有效；Chrome 查看器实际点击 S27 → S28 → S27 和 S27 → S29 → S30 → S27。其余入口只读回，未逐个手点。[重载读回](evidence/v2-network-after-reload-20261106.json) · [执行前后对象读回](evidence/v2-network-feedback-readback-20261106.json) · [本轮覆盖](v2-coverage.md)。
+
+![网络配置画板](evidence/v2-network-list-20261106.png)
+![迁移审查画板](evidence/v2-network-import-20261106.png)
+
+Mac 测试只证明合成配置和系统文件交互，未取得可用的应用截图；手机真机视觉／触控、辅助技术、设备身份和真实三网仍待分别验证。Penpot 插件 2.15.4 对服务 2.19.0 仍提示版本不匹配；本次增量脚本只记录本次执行，不应重复运行。临时查看器、插件和本轮启动的本地服务已关闭，原编辑器保留。

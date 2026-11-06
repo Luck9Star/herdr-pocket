@@ -1,0 +1,123 @@
+{
+  "result": {
+    "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "page": "7a22df08-251d-8016-8008-de03541c11da",
+    "boardCount": 30,
+    "boards": [
+      {
+        "id": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+        "name": "S27 · 网络配置"
+      },
+      {
+        "id": "b9d502c0-514c-80a9-8008-e7033da721eb",
+        "name": "S28 · 编辑网络与影响"
+      },
+      {
+        "id": "b9d502c0-514c-80a9-8008-e7033db44885",
+        "name": "S29 · 审查网络迁移"
+      },
+      {
+        "id": "b9d502c0-514c-80a9-8008-e7033dc11f0a",
+        "name": "S30 · 导入后的网络"
+      }
+    ],
+    "links": [
+      {
+        "source": "action · 编辑工作网络",
+        "dest": "b9d502c0-514c-80a9-8008-e7033da721eb",
+        "valid": true
+      },
+      {
+        "source": "编辑工作网络",
+        "dest": "b9d502c0-514c-80a9-8008-e7033da721eb",
+        "valid": true
+      },
+      {
+        "source": "action · 审查加密迁移",
+        "dest": "b9d502c0-514c-80a9-8008-e7033db44885",
+        "valid": true
+      },
+      {
+        "source": "审查加密迁移",
+        "dest": "b9d502c0-514c-80a9-8008-e7033db44885",
+        "valid": true
+      },
+      {
+        "source": "action · 返回主机看板",
+        "dest": "7a22df08-251d-8016-8008-de045ec11db9",
+        "valid": true
+      },
+      {
+        "source": "返回主机看板",
+        "dest": "7a22df08-251d-8016-8008-de045ec11db9",
+        "valid": true
+      },
+      {
+        "source": "action · 演示保存并返回",
+        "dest": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+        "valid": true
+      },
+      {
+        "source": "演示保存并返回",
+        "dest": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+        "valid": true
+      },
+      {
+        "source": "action · 取消，返回网络",
+        "dest": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+        "valid": true
+      },
+      {
+        "source": "取消，返回网络",
+        "dest": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+        "valid": true
+      },
+      {
+        "source": "action · 演示确认导入",
+        "dest": "b9d502c0-514c-80a9-8008-e7033dc11f0a",
+        "valid": true
+      },
+      {
+        "source": "演示确认导入",
+        "dest": "b9d502c0-514c-80a9-8008-e7033dc11f0a",
+        "valid": true
+      },
+      {
+        "source": "action · 取消，返回网络",
+        "dest": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+        "valid": true
+      },
+      {
+        "source": "取消，返回网络",
+        "dest": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+        "valid": true
+      },
+      {
+        "source": "action · 返回网络配置",
+        "dest": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+        "valid": true
+      },
+      {
+        "source": "返回网络配置",
+        "dest": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+        "valid": true
+      },
+      {
+        "source": "action · 返回迁移审查",
+        "dest": "b9d502c0-514c-80a9-8008-e7033db44885",
+        "valid": true
+      },
+      {
+        "source": "返回迁移审查",
+        "dest": "b9d502c0-514c-80a9-8008-e7033db44885",
+        "valid": true
+      },
+      {
+        "source": "网络配置 · 入口",
+        "dest": "b9d502c0-514c-80a9-8008-e7033d91f34d",
+        "valid": true
+      }
+    ]
+  },
+  "log": ""
+}

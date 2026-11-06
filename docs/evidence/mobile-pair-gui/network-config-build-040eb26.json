@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "batch": {
+    "runId": 42158644225,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42158644225",
+    "branch": "codex/batch/android-input-networks-20261106-040eb26",
+    "sourceSHA": "040eb26ba7c31e071048616a39591e17c74c99ab",
+    "conclusion": "cancelled",
+    "jobs": {
+      "overlay-isolation": "success",
+      "build-input-fixture": "success",
+      "native-linux": "success",
+      "native-windows": "success",
+      "native-macos-14": "cancelled",
+      "android-device-key": "success",
+      "flutter-device-key": "failure",
+      "android-emulator-legacy-job": "skipped",
+      "paired-input": "skipped"
+    },
+    "failureSummary": "Flutter analyzer/widget-test and guarded Android evidence failed after artifacts were preserved. macOS-14 runner configuration annotation says macos-14-arm64-us-default unsupported; no runner was allocated. This does not turn the batch into a successful run."
+  },
+  "macosNativeFollowup": {
+    "runId": 42159392366,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42159392366",
+    "sourceSHA": "1fc7dce2f5bec67360180550499089785541ec0e",
+    "job": "portable (macos-15)",
+    "conclusion": "success",
+    "artifactId": 13477075011,
+    "relationship": "separate runner correction follow-up; original macos-14 cancelled record remains unchanged"
+  },
+  "nativeCandidates": [
+    {
+      "platform": "Linux",
+      "arch": "x86_64",
+      "artifactId": 13476275992,
+      "sourceSHA": "040eb26ba7c31e071048616a39591e17c74c99ab",
+      "artifactBytes": 68995,
+      "check": "passed",
+      "link": "passed",
+      "load": "passed",
+      "loopbackTests": {
+        "passed": 9,
+        "failed": 0
+      },
+      "commandsExitZero": 24,
+      "abiSymbols": {
+        "stream": 5,
+        "managedNode": 4
+      },
+      "nodeStarted": false,
+      "overlayDial": "not run",
+      "deviceValidation": "not run",
+      "library": {
+        "includedInArtifact": false,
+        "bytes": 353993696,
+        "sha256": "52477f3ff8713e76c0334b71a2a7d3c7546b5c9d840cac9b1f466277d227037b"
+      }
+    },
+    {
+      "platform": "Windows",
+      "arch": "AMD64",
+      "artifactId": 13476172232,
+      "sourceSHA": "040eb26ba7c31e071048616a39591e17c74c99ab",
+      "artifactBytes": 71571,
+      "check": "passed",
+      "link": "passed",
+      "load": "passed",
+      "loopbackTests": {
+        "passed": 8,
+        "failed": 0
+      },
+      "commandsExitZero": 24,
+      "abiSymbols": {
+        "stream": 5,
+        "managedNode": 4
+      },
+      "nodeStarted": false,
+      "overlayDial": "not run",
+      "deviceValidation": "not run",
+      "library": {
+        "includedInArtifact": false,
+        "bytes": 32855552,
+        "sha256": "190e7752ecb28e50184c1df23382947a9f6c3a5bfca8b80a0b084721eec06c33"
+      }
+    },
+    {
+      "platform": "Darwin",
+      "arch": "arm64",
+      "artifactId": 13477075011,
+      "sourceSHA": "1fc7dce2f5bec67360180550499089785541ec0e",
+      "artifactBytes": 68964,
+      "check": "passed",
+      "link": "passed",
+      "load": "passed",
+      "loopbackTests": {
+        "passed": 9,
+        "failed": 0
+      },
+      "commandsExitZero": 24,
+      "abiSymbols": {
+        "stream": 5,
+        "managedNode": 4
+      },
+      "nodeStarted": false,
+      "overlayDial": "not run",
+      "deviceValidation": "not run",
+      "library": {
+        "includedInArtifact": false,
+        "bytes": 67242392,
+        "sha256": "d366ff8a033fd91260a2ebc7fac751f43f9b27208d96c91f4f801eccec21e071"
+      }
+    }
+  ],
+  "nativePatchSha256": "98897e41300496ad20b4708172c1c111f8ecab08e7cb279530b5a10f0e3620d7",
+  "androidPackages": {
+    "flutter": {
+      "artifactId": 13476846146,
+      "artifactBytes": 153434624,
+      "sourceSHA": "040eb26ba7c31e071048616a39591e17c74c99ab",
+      "apk": "flutter-android-debug.apk",
+      "apkBytes": 157351963,
+      "apkSha256": "12346fd09e22e6d0c03d2c37fc5ff34c5f52d0325fd3358a07b33c09d3e92ff7",
+      "abis": [
+        "arm64-v8a",
+        "armeabi-v7a",
+        "x86_64"
+      ],
+      "buildPackageStatus": 0,
+      "devicePackageEvidence": "separate API35 AVD reports"
+    },
+    "tauri": {
+      "artifactId": 13475774527,
+      "artifactBytes": 58764361,
+      "sourceSHA": "040eb26ba7c31e071048616a39591e17c74c99ab",
+      "apk": "app-arm64-v8a-debug.apk",
+      "apkBytes": 177077085,
+      "apkSha256": "6e660b0138cb7b2fc5772efd428212b68e5706bfafc85ca2bd58c58526bebd8c",
+      "abis": [
+        "arm64-v8a"
+      ],
+      "buildOutcome": "success",
+      "deviceResult": "separate API35 AVD evidence"
+    }
+  },
+  "sharedPayload": {
+    "configTransferV2Sha256": "cc28a27461d3d0a43b39d06b294608362434527295e22232d741d1f91cff70ba",
+    "networkProfilesV1Sha256": "760ac476afa5fe25a87b736b8991cf0ef8d11e844555de4864541359f31db328",
+    "fixtureSha256": "ad2eca3667445764d501ecb6ab53079232850c913626f433b167d1cdb97d7ab3",
+    "fontSourceBundle": {
+      "files": 35,
+      "fontSha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c"
+    },
+    "apkFontBoundary": {
+      "flutter": {
+        "sharedFontFiles": 35,
+        "additional": "MaterialIcons-Regular.otf",
+        "totalFontEntries": 36
+      },
+      "tauri": {
+        "fontPathEntries": 0,
+        "webviewEmbeddedFontPayload": "not verified"
+      }
+    },
+    "nativeNotices": {
+      "assets/BOUNCY-CASTLE-LICENSE.md": "0e01f1549c9022f406392ac2947d32223b7c2e977d21ea2f8c182fdeb4dae5fd",
+      "assets/QR-NOTICE.txt": "7fc1888ae1ad783c0f318834a9e3263299530434c1ac0ac2077f385c33e018a4",
+      "assets/ZXING-APACHE-2.0.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verifiedInBothApks": true
+    },
+    "checksumFiles": "Both APK packaging manifests and both shared source SHA256SUMS were checked successfully."
+  },
+  "androidGui": {
+    "flutterStock": {
+      "artifactId": 13476940824,
+      "status": "passed",
+      "firstSequence": 1,
+      "deltaSequence": 5,
+      "frameCountLowerBound": 2,
+      "deltaCountLowerBound": 1,
+      "inputQueueAccepted": false,
+      "receivedInputBytes": 0,
+      "cleanup": "passed"
+    },
+    "tauriStock": {
+      "artifactId": 13475908970,
+      "status": "passed",
+      "fullRenderAcknowledgements": 1,
+      "deltaRenderAcknowledgements": 1,
+      "inputQueueAccepted": false,
+      "receivedInputBytes": 0,
+      "pty": {
+        "noObservedResize": true,
+        "samples": 887,
+        "elapsedMs": 44841,
+        "columns": 119,
+        "rows": 40,
+        "changes": 0,
+        "captureErrors": 0,
+        "readErrors": 0
+      }
+    },
+    "flutterGuardedInput": {
+      "artifactId": 13476970736,
+      "status": "failed",
+      "failure": {
+        "stage": "response_source_confirm",
+        "errorClass": "TestFailure",
+        "line": 212
+      },
+      "matchedDeviceKeyInSshd": false,
+      "sshAuthenticationEvidence": "not established by this stage report"
+    },
+    "tauriGuardedInput": {
+      "artifactId": 13475824325,
+      "status": "passed",
+      "inputReceipts": [
+        {
+          "acceptedBytes": 1,
+          "paneId": "w1:p1",
+          "terminalId": "term_65f93add09a4a1"
+        },
+        {
+          "acceptedBytes": 9,
+          "paneId": "w1:p1",
+          "terminalId": "term_65f93add09a4a1"
+        }
+      ],
+      "receivedInputBytes": 10,
+      "fullRenderAcknowledgements": 1,
+      "deltaRenderAcknowledgements": 1,
+      "hiddenReentryFreshFull": true,
+      "pty": {
+        "noObservedResize": true,
+        "samples": 991,
+        "elapsedMs": 50129,
+        "columns": 119,
+        "rows": 40,
+        "changes": 0,
+        "captureErrors": 0,
+        "readErrors": 0
+      }
+    }
+  },
+  "flutterRegression": {
+    "analyzer": "failed: test/network_profiles_test.dart:61:78 undefined PendingDevicePairing.toPublicRecord",
+    "unitWidget": "failed: compile errors cascade to network_profiles_widget_test.dart and config_transfer_v2_test.dart; config_transfer_test.dart:137 expected <3>, actual <4>",
+    "rendererRegression": "passed 10/10"
+  },
+  "limits": [
+    "API 35 emulator evidence is not physical-phone, camera, real-IME, overlay-network or production-deployment proof.",
+    "Native candidate libraries were hashed but not included in the small source-check artifacts.",
+    "The two large appmain artifacts were separately downloaded and locally checksum-checked; their build/package status is not by itself real-device evidence."
+  ],
+  "reportDirectory": "docs/evidence/mobile-pair-gui/gui-040eb26/",
+  "postRunCommit": {
+    "sha": "61a6b09f64cd135dd444a22bcf6c8c89c90df1bc",
+    "scope": "later Flutter test/driver fixes and Tauri migration page/tests; not contained in run 42158644225 source SHA 040eb26 or appmain artifacts; no CI rerun per parent instruction"
+  }
+}

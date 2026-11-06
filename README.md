@@ -2,13 +2,13 @@
 
 > 面向 herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
-**当前进度 · 2026-11-06**　Flutter 与 Tauri 两条路线都已在 Android API 35 云模拟器完成**配对 → 主机与会话看板 → 选中 pane → 持续观察 → 手动停止**。临时 OpenSSH 主机确认接受了 GUI 审查的设备公钥；两端均消费 full 和 delta，只读用例的远端输入为 0。手机扫码、中文 IME、真实三网与五端完整交互仍需独立验收。[手机 GUI 实测与下载](docs/15-mobile-gui-validation.md) · [本次成功运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593)
+**当前进度 · 2026-11-06**　Flutter 与 Tauri 两条路线在同源 `040eb26` 的 Android API 35 云模拟器完成**配对 → 主机与会话看板 → 选中 pane → 持续观察 → 手动停止**，只读用例远端输入为 0。两份 Android 测试包已下载核对，Tauri 受保护输入通过；Flutter 受保护用例与新增回归有失败，随后源码修复尚待下一批复验。手机扫码、中文 IME、真实三网与五端完整交互仍需独立验收。[当前结果与下载](docs/18-mobile-network-profiles.md) · [历史手机 GUI 基线](docs/15-mobile-gui-validation.md)
 
 手机优先。两套工作壳已实现待授权请求恢复、设备身份审查、按主机查看标签和受阻窗格优先；桌面沿用同一目标标识。当前使用用户选定的 Penpot v2 靛蓝／Slate 方案，后续按真机和输入正确性收敛框架及组件状态。[新版设计与覆盖](design/README.md) · [配对步骤](docs/14-mobile-pairing-workbench.md) · [历史共享 SSH 对照](docs/13-mobile-dashboard-observe.md)
 
-手机逐键／组合键、主机回执、隐藏恢复和加密主机资料迁移已接入两套 GUI。Tauri API 35 受保护输入通过，Flutter 新包构建与 100 项测试通过，Android 授权确认仍有失败。两份最新测试包、源码与边界见[本批验证及下载](docs/16-mobile-input-and-config.md)。Penpot 已保存 26 个画板、149 条有效交互。[设计与实点记录](design/README.md)
+手机逐键／组合键、主机回执、隐藏恢复和加密迁移已接入两套 GUI。Tauri 本批收到 1 和 9 bytes 两笔匹配回执，隐藏后恢复需要原目标新 full 和主动确认。此前构建和失败保留在[输入批次记录](docs/16-mobile-input-and-config.md)。Penpot v2 已保存 30 个画板，补齐网络配置与迁移流程。[设计与实点记录](design/README.md)
 
-后续源码已加入独立网络配置、主机绑定、加密迁移 v2 与终端字号；停用网络仍可完成本地配对审查，实际连接继续检查组件可用性。EasyTier 节点生命周期已通过隔离回归，真实节点与 GUI 桥接待验。[本批实现与验收](docs/18-mobile-network-profiles.md)
+两套源码已加入独立网络配置、主机绑定、加密迁移 v2 与终端字号；停用网络仍可完成本地配对审查，实际连接继续检查组件可用性。EasyTier 节点生命周期隔离回归及三桌面固定源码编译／链接／符号加载已通过，真实节点与 GUI 桥接待验。[本批实现与验收](docs/18-mobile-network-profiles.md)
 
 ## 首版做什么
 

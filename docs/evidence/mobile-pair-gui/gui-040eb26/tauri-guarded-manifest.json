@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "milestone": "M1d-mobile-guarded-input",
+  "sourceSHA": "040eb26ba7c31e071048616a39591e17c74c99ab",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42158644225",
+  "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+  "runnerImage": {
+    "imageOS": "ubuntu24",
+    "imageVersion": "20261101.360.1"
+  },
+  "herdr": {
+    "sourceSHA": "040eb26ba7c31e071048616a39591e17c74c99ab",
+    "upstreamSHA": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+    "patchSHA256": "c07a1637e3b72b13c660dc4cc3c2cca50ef383b66d0400a3208bd9079434ab00",
+    "buildProfile": "dev",
+    "configDirectory": "herdr",
+    "scope": "isolated validation fixture",
+    "binarySHA256": "4bc21805f02ad092ca07ede35792876781c9e4783239da98fef90a328cace4b5",
+    "binaryDebugAssertions": false,
+    "readinessAndCapabilitySmokePassed": true
+  },
+  "status": "passed",
+  "checks": [
+    {
+      "adapter": "tauri-android",
+      "testId": "reviewed-device-key-to-direct-and-draft",
+      "status": "passed",
+      "paired": true,
+      "paneChosen": true,
+      "fullRendered": true,
+      "deltaRendered": true,
+      "stoppedStale": true,
+      "fullRenderAcknowledgements": 1,
+      "deltaRenderAcknowledgements": 1,
+      "inputQueueAccepted": true,
+      "hiddenReentryFreshFull": true,
+      "keyStore": "Android API 35 emulator AndroidKeyStore-wrapped device key",
+      "device": "ephemeral Android emulator",
+      "uiDriver": "debug WebView CDP input",
+      "inputReceipts": [
+        {
+          "requestId": "55b0e681e87a423df7007ab6156f8749",
+          "paneId": "w1:p1",
+          "terminalId": "term_65f93add09a4a1",
+          "acceptedBytes": 1
+        },
+        {
+          "requestId": "7ee1c102b346e164a6495f63d8e1cd2e",
+          "paneId": "w1:p1",
+          "terminalId": "term_65f93add09a4a1",
+          "acceptedBytes": 9
+        }
+      ],
+      "temporaryHostApprovedRequest": true,
+      "matchedDeviceKeyInSshd": true,
+      "revokedFixtureKey": true,
+      "receivedInputBytes": 10
+    }
+  ],
+  "scope": "API35 emulator WebView and AndroidKeyStore-wrapped identity",
+  "unverified": [
+    "physical phone",
+    "camera",
+    "real IME",
+    "overlay networks",
+    "pixel rendering",
+    "hardware key protection",
+    "production deployment"
+  ],
+  "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+  "readinessSnapshot": {
+    "pocket-probe": {
+      "resultType": "session_snapshot",
+      "flatKnownFields": {
+        "version": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        },
+        "protocol": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        }
+      },
+      "snapshotPresent": true,
+      "snapshotType": "dict",
+      "nestedKnownFields": {
+        "version": {
+          "present": true,
+          "type": "str",
+          "value": "0.9.5"
+        },
+        "protocol": {
+          "present": true,
+          "type": "int",
+          "value": 22
+        }
+      }
+    },
+    "pocket-other": {
+      "resultType": "session_snapshot",
+      "flatKnownFields": {
+        "version": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        },
+        "protocol": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        }
+      },
+      "snapshotPresent": true,
+      "snapshotType": "dict",
+      "nestedKnownFields": {
+        "version": {
+          "present": true,
+          "type": "str",
+          "value": "0.9.5"
+        },
+        "protocol": {
+          "present": true,
+          "type": "int",
+          "value": 22
+        }
+      }
+    }
+  },
+  "crossSessionFixture": {
+    "bothSessionsExist": true,
+    "samePaneId": true,
+    "expected": "reject mismatched socket/session before publishing full"
+  },
+  "frameEvidence": "xterm parser callback after consuming a frame",
+  "receivedInputBytes": 10,
+  "fixtureSharedBetweenAdapters": false,
+  "observeFixture": {
+    "syntheticTickIntervalMs": 200,
+    "changedTerminalRow": 23,
+    "selection": "GUI chooses a pane button from the current snapshot",
+    "backpressureScope": "decoded single-frame byte high-water only, not JSON line, SSH buffers or whole-process memory"
+  },
+  "sharedPty": {
+    "noObservedResize": true,
+    "numericRecord": {
+      "captureErrors": 0,
+      "changes": 0,
+      "columns": 119,
+      "elapsedMs": 50129,
+      "endReason": 1,
+      "initialColumns": 119,
+      "initialRows": 40,
+      "maxSampleGapMs": 81,
+      "readErrors": 0,
+      "rows": 40,
+      "sampleIntervalMs": 50,
+      "samples": 991,
+      "schemaVersion": 1,
+      "signalAvailable": 1,
+      "signalSamples": 0,
+      "signalsMayCoalesce": 1,
+      "state": 2,
+      "terminationSignal": 0,
+      "winchHandlers": 0
+    }
+  },
+  "cleanup": {
+    "ownedProcessesStopped": true,
+    "ephemeralKeysRemoved": true,
+    "userAuthorizationFilesTouched": false,
+    "rawLogsUploaded": false
+  }
+}

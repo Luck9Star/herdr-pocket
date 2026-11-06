@@ -198,14 +198,33 @@ void main() {
     stage('response_enter');
     final responseControl = find.byKey(const ValueKey('pair-response'));
     await tester.ensureVisible(responseControl); await tester.enterText(responseControl,response); await tester.pump();
+    stage('response_finish_edit');
+    // Finish the actual editor before scrolling to review controls. Keeping a
+    // native multiline IME open can change the viewport between ensureVisible
+    // and tap. This is a GUI input action, not a permission/state assignment.
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump(const Duration(milliseconds:350));
+    expect(tester.widget<TextField>(responseControl).controller!.text == response,isTrue);
     stage('response_preview');
     expect(find.byKey(const ValueKey('pair-response-preview')),findsOneWidget);
     stage('response_source_confirm');
     await tapKey(tester,'pair-source-review');
+    expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('pair-source-review'))).value,isTrue);
     stage('response_accept');
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('pair-accept'))).onPressed,isNotNull);
     await tapKey(tester,'pair-accept');
     stage('response_authorized');
-    await until(tester,() => find.textContaining('authorized-unverified').evaluate().isNotEmpty);
+    await until(tester,() {
+      if (find.textContaining('authorized-unverified').evaluate().isNotEmpty) return true;
+      final statusControl = find.byKey(const ValueKey('pair-status'));
+      if (statusControl.evaluate().length != 1) return false;
+      final message = tester.widget<Text>(statusControl).data ?? '';
+      final failedStage = message.startsWith('响应无效') ? 'response_rejected'
+        : message.startsWith('响应核验后本机保存未确认') ? 'response_save_unconfirmed'
+        : message.startsWith('响应审查期间页面已变化') ? 'response_review_invalidated' : null;
+      if (failedStage != null) { stage(failedStage); throw StateError('response_not_accepted'); }
+      return false;
+    });
     stage('response_open_remote');
     await tapKey(tester,'pair-connect');
     await until(tester,() => find.byType(RemotePage).evaluate().length == 1);

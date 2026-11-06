@@ -42,7 +42,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   HostProfile? savedProfile;
   bool profileBlocked = false,identityAvailable = true;
   Map<String,dynamic>? target;
-  bool busy = false, targetReviewed = false, sourceReviewed = false;
+  bool busy = false, accepting = false, targetReviewed = false, sourceReviewed = false;
   bool creationUnknown = false,scanning = false;
   String provider = 'unspecified';
   bool get pageVisible => widget.visibility?.value ?? true;
@@ -101,8 +101,11 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       if (['awaiting-host','authorized-unverified'].contains(p.state)) p.cancel();
       if (['connecting','paired'].contains(p.state)) { p.generation++; p.state = 'waiting-connectivity'; }
     }
-    if (widget.catalog != null && savedProfile != null) unawaited(persistPairing().catchError((Object _) {}));
-    if (mounted) setState(() { busy = false; targetReviewed = false; sourceReviewed = false; status = '已取消等待 · 主机授权可能已发生，请在主机核验'; });
+    if (!accepting && widget.catalog != null && savedProfile != null) unawaited(persistPairing().catchError((Object _) {}));
+    if (mounted) setState(() { busy = accepting; targetReviewed = false; sourceReviewed = false;
+      if (accepting) profileBlocked = true;
+      status = accepting ? '响应保存期间已取消 · 原页禁止重试，请关闭后重新读取核验'
+        : '已取消等待 · 主机授权可能已发生，请在主机核验'; });
   }
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -175,16 +178,41 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     }
   }
   Future<void> accept() async {
-    final p = pairing; if (p == null || busy || scanning || !pageVisible || profileBlocked || widget.catalog?.ready == false) return;
-    final ticket = revision;
-    setState(() { busy = true; });
+    final p = pairing; if (p == null || busy || accepting || scanning || !pageVisible || profileBlocked ||
+      !sourceReviewed || responsePreview == null || widget.catalog?.ready == false) return;
+    final ticket = revision, generation = p.generation, originalProfile = savedProfile;
+    setState(() { busy = true; accepting = true; status = '正在核验响应并保存本机状态 · 不代表 SSH 已连通'; });
     try {
-      p.accept(response.text,now:now,reviewed:sourceReviewed);
-      await persistPairing();
-      if (!mounted || ticket != revision) return;
-      setState(() { busy = false; sourceReviewed = false; response.clear(); responsePreview = null; status = p.state == 'revoked'
+      // Verify a detached candidate. The visible object remains unapproved until
+      // the catalog CAS succeeds; a lost save reply must not publish permission.
+      final candidate = restoreDevicePairing(p.toPublicRecord(),now);
+      candidate.accept(response.text,now:now,reviewed:sourceReviewed);
+      await persistPairing(candidate:candidate);
+      if (!mounted) return;
+      if (ticket != revision || p.generation != generation || !identical(pairing,p) || !pageVisible ||
+          (originalProfile != null && (savedProfile?.id != originalProfile.id ||
+            !sameHostTarget(savedProfile!.target,originalProfile.target) ||
+            savedProfile!.pairingRecord['handle'] != originalProfile.pairingRecord['handle']))) {
+        setState(() { busy = false; sourceReviewed = false; profileBlocked = true;
+          status = '响应审查期间页面已变化 · 原页禁止重试，请关闭后从主机页重新读取核验；不会自动连接'; });
+        return;
+      }
+      if (widget.catalog == null) PairingPage.retainedPairing = candidate;
+      setState(() { pairing = candidate; busy = false; sourceReviewed = false; response.clear(); responsePreview = null; status = candidate.state == 'revoked'
         ? '已审查匹配的主机撤销响应 · 此请求不能再授权' : '主机报告已授权 · 尚未验证 SSH，需主动连接'; });
-    } catch (_) { if (mounted && ticket == revision) setState(() { busy = false; sourceReviewed = false; status = '响应无效或保存未确认 · 已停止；请核验目录与绑定，不重放'; }); }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() { busy = false; sourceReviewed = false;
+        if (profileBlocked || widget.catalog?.ready == false) {
+          profileBlocked = true;
+          status = '响应核验后本机保存未确认 · 原页禁止重试，请关闭后重新读取核验；不会自动连接';
+        } else { status = switch (error is RemoteFailure ? error.code : '') {
+          'pairing_binding_mismatch' => '响应无效 · 与原请求账号、主机、设备或请求编号不匹配，请重新核验来源',
+          'pairing_replay' => '响应无效 · 原请求已处理、到期或响应期限超出原请求，请核验原状态',
+          _ => '响应无效 · 格式、设备时钟或期限不符合要求，请重新核验',
+        }; }
+      });
+    } finally { accepting = false; }
   }
   Future<void> connect() async {
     final p = pairing; if (p == null || busy || scanning || !pageVisible || !identityAvailable || profileBlocked || widget.catalog?.ready == false || savedProfile?.enabled == false) return;
@@ -220,15 +248,15 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     final ticket = revision;
     try {
       final actual = await keys.public(p.handle);
-      if (!mounted || ticket != revision) return;
+      if (!mounted || ticket != revision || profileBlocked || !pageVisible || !identical(pairing,p)) return;
       if (actual != p.request['public_key']) throw const RemoteFailure('device_key_changed');
       setState(() { identityAvailable = true; status = '本机原身份已匹配 · 请核验主机指纹后主动审查连接'; });
     } catch (_) {
-      if (mounted && ticket == revision) setState(() { identityAvailable = false; status = '原设备密钥丢失、锁定或公钥不符 · 连接禁用，不生成替代身份；可保留资料核验或明确删除'; });
+      if (mounted && ticket == revision && !profileBlocked && pageVisible && identical(pairing,p)) setState(() { identityAvailable = false; status = '原设备密钥丢失、锁定或公钥不符 · 连接禁用，不生成替代身份；可保留资料核验或明确删除'; });
     }
   }
-  Future<void> persistPairing() async {
-    final catalog = widget.catalog, p = pairing, old = savedProfile;
+  Future<void> persistPairing({PendingDevicePairing? candidate}) async {
+    final catalog = widget.catalog, p = candidate ?? pairing, old = savedProfile;
     if (catalog == null || p == null || old == null) return;
     try {
       final next = old.change(pairing:p,now:now); await catalog.update(next); savedProfile = next;
@@ -272,7 +300,9 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
         // resetting this tab's frozen identity or overwriting a newer record.
         savedProfile = current.single; provider = current.single.provider;
       }
-      if (mounted) setState(() { status = '标签已返回 · 目标与草稿保留；请主动重新审查连接，默认观察'; });
+      if (mounted) setState(() { status = profileBlocked
+        ? '原页面状态已失效 · 请关闭后从主机页重新读取核验，不再接受响应或自动连接'
+        : '标签已返回 · 目标与草稿保留；请主动重新审查连接，默认观察'; });
       if (pairing != null && !profileBlocked) unawaited(checkExistingIdentity());
       return;
     }
@@ -288,7 +318,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     } else if (busy && PairingPage.retainedCreationUnknown) {
       creationUnknown = true;
     }
-    if (mounted) setState(() { busy = false; status = message; });
+    if (mounted) setState(() { busy = accepting; status = message; });
   }
   Future<void> scanResponse() async {
     final p = pairing;
@@ -347,7 +377,8 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
           if (responsePreview != null) Text('待审查响应\n账号 ${responsePreview!['account']}\n主机 ${responsePreview!['host_key']}\n设备 ${responsePreview!['fingerprint']}\n状态 ${responsePreview!['status']} · 新增授权 ${responsePreview!['authorization_added']}\n期限 ${responsePreview!['issued_at']} → ${responsePreview!['expires_at']}',key:const ValueKey('pair-response-preview')),
           CheckboxListTile(key:const ValueKey('pair-source-review'),value:sourceReviewed,
             onChanged:busy ? null : (v) => setState(() { sourceReviewed = v == true; }),title:const Text('我已独立核验响应来源、账号与两端指纹')),
-          FilledButton(key:const ValueKey('pair-accept'),onPressed:sourceReviewed && !busy && !scanning ? accept : null,child:const Text('审查并接受绑定响应')),
+          FilledButton(key:const ValueKey('pair-accept'),onPressed:sourceReviewed && responsePreview != null && !busy && !scanning &&
+            pageVisible && !profileBlocked && widget.catalog?.ready != false ? accept : null,child:const Text('审查并接受绑定响应')),
           if (['authorized-unverified','waiting-connectivity','paired'].contains(p.state)) FilledButton(
             key:const ValueKey('pair-connect'),onPressed:busy || !identityAvailable || profileBlocked || widget.catalog?.ready == false ? null : connect,child:const Text('主动审查连接并读取看板')),
           if (savedProfile != null && !identityAvailable) TextButton(key:const ValueKey('pair-recheck-key'),onPressed:busy ? null : checkExistingIdentity,child:const Text('仅重新核验原设备身份')),

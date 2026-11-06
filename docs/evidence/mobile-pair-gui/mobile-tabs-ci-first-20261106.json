@@ -1,0 +1,30 @@
+{
+  "recordedOn": "2026-11-06",
+  "kind": "actual-cloud-run-failure",
+  "repository": "Luck9Star/herdr-pocket",
+  "commit": "cc3f988e476527e9dd67bd12d197767aca4f7051",
+  "runId": 42184737889,
+  "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42184737889",
+  "conclusion": "failure",
+  "jobTotals": {"success": 2, "failure": 3},
+  "jobs": [
+    {"id": 127782276288, "name": "transport-source", "conclusion": "success", "scope": "fixed source verification and isolated Rust SSH tests"},
+    {"id": 127782276547, "name": "flutter-source", "conclusion": "failure", "causes": ["trace callback void Function(String) incompatible with void Function(String?)", "actualRoute unavailable on static SSHSocket type"], "combiningRendererTests": {"passed": 10}, "isolatedSshGui": "skipped"},
+    {"id": 127782276619, "name": "native", "conclusion": "success", "scope": "Android arm64 candidate compilation and static inspection; uploaded bundle incomplete"},
+    {"id": 127783990326, "name": "apps (flutter)", "conclusion": "failure", "cause": "artifact hash mismatch: portable-stream/.gitignore", "apkBuild": "skipped"},
+    {"id": 127783990330, "name": "apps (tauri)", "conclusion": "failure", "cause": "artifact hash mismatch: portable-stream/.gitignore", "apkBuild": "skipped"}
+  ],
+  "artifacts": [
+    {"id": 13487320820, "kind": "transport source test log"},
+    {"id": 13487226221, "kind": "Flutter source logs and verified lock; failed source checks"},
+    {"id": 13486972894, "kind": "native source bundle", "consumerVerification": "failed: manifest file omitted by upload-artifact default"}
+  ],
+  "newApkArtifacts": [],
+  "repair": {
+    "flutter": "Nullable-safe trace handling plus explicit actual-socket route interface cast and regression cases",
+    "artifact": "include-hidden-files enabled only for generated native success/failure bundles; manifest verification unchanged",
+    "documentation": "https://github.com/actions/upload-artifact/blob/v4/README.md#uploading-hidden-files",
+    "verificationAtCapture": "pending follow-up cloud run"
+  },
+  "boundaries": ["No Android APK was built in this run", "No physical device, IME or real overlay network result", "No real host credentials or authorization files used", "No local GUI test application opened"]
+}

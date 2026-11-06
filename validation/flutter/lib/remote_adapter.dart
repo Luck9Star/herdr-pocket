@@ -156,6 +156,10 @@ typedef FrameConsumer = FutureOr<void> Function(int generation, String paneId, R
 typedef RemoteProgress = void Function(int generation, String phase);
 typedef SocketConnector = Future<SSHSocket> Function(String host, int port);
 
+/// Route metadata is read from the actual socket, never from GUI selection.
+String connectedSocketRoute(SSHSocket socket) => socket is RoutedSSHSocket
+  ? (socket as RoutedSSHSocket).actualRoute : 'system';
+
 /// Shared by all views, including system TCP; an interrupted pending dial keeps
 /// its slot until the late socket has been retired.
 class RemoteConnectionBudget {
@@ -200,7 +204,8 @@ class ChannelRetirementTracker {
     } else if (_confirmations > 0) { _confirmations--; }
     _pending--; _notify();
   }
-  void trace(String message) {
+  void trace(Object? message) {
+    if (message is! String) return;
     final prefix = '<- $socketText: ';
     if (!message.startsWith(prefix)) return;
     final event = message.substring(prefix.length);
@@ -683,7 +688,7 @@ class RemoteReadOnlyAdapter {
         selected = await _wait(a,a.selection.future,timed:false);
       }
       _check(a);
-      final route = socket is RoutedSSHSocket ? socket.actualRoute : 'system';
+      final route = connectedSocketRoute(socket);
       var needsSnapshot = a.observationEpoch != 0;
       while (true) {
         while (a.observationPaused) {

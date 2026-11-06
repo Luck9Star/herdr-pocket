@@ -1,6 +1,6 @@
 # 手机独立终端标签与保留连接
 
-2026-11-06，延续 [Flutter 原生网络通道](21-flutter-native-network.md)。本批推进手机从配对、看板进入多个独立终端视图：同一主机可打开不同 pane，隐藏视图撤销输入并暂停观察，回到前台后由用户显式恢复。**当前记录的是源码集成和隔离验收；集中云构建结果尚待补入。** 此前 Android 测试包仍对应 `040eb26`，不能用来验收本批代码。[上一批包与失败记录](18-mobile-network-profiles.md)
+2026-11-06，延续 [Flutter 原生网络通道](21-flutter-native-network.md)。本批推进手机从配对、看板进入多个独立终端视图：同一主机可打开不同 pane，隐藏视图撤销输入并暂停观察，回到前台后由用户显式恢复。**首轮集中云构建已执行并失败，未生成新 APK；修复后的复验待执行。** 此前 Android 测试包仍对应 `040eb26`，不能用来验收本批代码。[上一批包与失败记录](18-mobile-network-profiles.md)
 
 ## 两套 GUI 的共同契约
 
@@ -35,7 +35,9 @@ Flutter 使用固定 `dartssh2 4.1.0` 的消息 trace 识别入站通道确认�
 
 首次本机沙盒拒绝 loopback bind，11 项测试因此失败；在仅允许自建隔离测试的执行环境复跑后通过。原版 russh 的同用例失败已复现，候选通过；官方归档、90 文件还原和三 Cargo 根唯一候选由父代理独立核对。整库严格 Clippy 仍有 12 项既有诊断，两个 vendor 内部单测因离线开发依赖缺项未运行，均未标通过。
 
-集中 Actions run ID、两包下载与校验值仍待实际构建。Flutter 类型分析与新增 widget 测试在云端实际完成前不能标为通过；tree-sitter 仅检查语法。Tauri 合成 DOM 测试不等于手机触控或 IME 通过。
+首轮 [Actions 42184737889](https://github.com/Luck9Star/herdr-pocket/actions/runs/42184737889) 对应 `cc3f988e476527e9dd67bd12d197767aca4f7051`，5 个 job 中 2 成功、3 失败。共享传输测试通过；Flutter 组合字符绘制 10 项通过，但分析和 mobile widget 测试被两个编译错误阻断：`SSHPrintHandler` 接受可空字符串，原 trace 回调参数不可空；`SSHSocket` 的路由接口需显式转换。已修复类型并增加空值、非字符串和实际 socket 路由回归，复验完成前仍不标通过。
+
+Android 原生库编译和静态检查成功，但上传默认遗漏 `portable-stream/.gitignore`，两套 APK job 均被来源清单校验拦下，未进入 APK 构建。仅对全新生成的 `android-native` 来源包启用 `include-hidden-files`，保留原清单严格校验；该目录与构建 worktree、认证文件分离，输入仅为固定来源归档、候选源码和构建记录。[官方上传规则](https://github.com/actions/upload-artifact/blob/v4/README.md#uploading-hidden-files)已经 Context7 查询核实。原生 job 成功不能代表其上传产物可用；隔离 SSH GUI 检查本轮跳过。详见[首轮失败记录](evidence/mobile-pair-gui/mobile-tabs-ci-first-20261106.json)。Tauri 合成 DOM 测试不等于手机触控或 IME 通过。
 
 ## 新包的手机验收步骤
 

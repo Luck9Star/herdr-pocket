@@ -2,13 +2,15 @@
 
 > 面向 herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
-**当前进度 · 2026-11-06**　Flutter 与 Tauri 的同源 `546c3eb` Android arm64 测试包已完成云端构建，原生来源、APK 库字节、ABI、JNI 和动态依赖检查通过。[Flutter 下载](https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281/artifacts/13498293296) · [Tauri 下载](https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281/artifacts/13498208754) · [CI 5 项 job 全部成功](https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281) · [来源、SHA 与测试步骤](docs/22-mobile-terminal-tabs.md)
+**当前进度 · 2026-11-07**　Flutter 与 Tauri 的同源 `750798fe` Android arm64 测试包已重建，[CI 五个 job 全部成功](https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105)。两份归档已实际下载，并核对来源、ZIP／APK 哈希、ABI、JNI、动态依赖和包内原生库字节。[Flutter 下载](https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105/artifacts/13519144162) · [Tauri 下载](https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105/artifacts/13518524214) · [校验和、失败记录与测试步骤](docs/27-mobile-tailscale-cloud.md)
 
-本批 Flutter 真实 widget 与隔离 OpenSSH/herdr 已走通 **配对审查 → 看板 → 选定 pane → 持续观察 → 隐藏后保留同一 SSH 并显式恢复 → 主动停止**，远端输入为 0，共享 PTY 尺寸未变。身份签名使用明确的临时测试替身；这不是 Android 安装、KeyStore 或真实组网证据。Flutter analyzer、182 项常规测试及 10 项绘制回归通过；1 项 opt-in SSH 用例在常规 suite 跳过后由隔离 job 单独执行通过。前三轮失败保留在[批次记录](docs/22-mobile-terminal-tabs.md)。
+本批包含手机持续看板、独立终端标签、按目标隔离的未知输入，以及 Tailscale 本机身份、显式登录和原节点路由。Flutter analyzer、248 项常规测试及 10 项绘制回归通过；1 项 opt-in SSH 用例另在隔离 job 执行通过。共享 Rust 95＋1、Tauri JS 115 通过，两路线 Android target 编译通过；Tauri Rust 测试 suite 未在本批重复执行。
 
-两套 GUI 源码已接入配对与设备密钥、网络配置及加密迁移、EasyTier 节点与实际 route、独立终端标签和有界恢复。输入结果未知不重放，隐藏时撤销输入，恢复后重新核验原 pane／terminal 和新 full，布局不修改远端共享 PTY。手机优先，沿用已认可的 Penpot v2 靛蓝／Slate 方案；框架尚未定案。[设计与覆盖](design/README.md) · [配对流程](docs/14-mobile-pairing-workbench.md) · [原生通道](docs/21-flutter-native-network.md)
+Flutter 真实 widget 经自建 OpenSSH/herdr，已走通 **配对审查 → 看板 → 选定 pane → 持续观察 → 隐藏后保留同一 SSH 并显式恢复 → 主动停止**。远端输入为 0，共享 PTY 始终 119×40。签名与存储使用明确的测试替身；这是 Ubuntu 隔离链路证据，不是当前 APK 的安装、Android KeyStore 或真实组网结果。[原始隔离记录](docs/evidence/mobile-pair-gui/mobile-tailscale-flutter-ssh-20261107.json)
 
-历史 `040eb26` 两路线 Android API 35 云模拟器的配对／观察闭环和 Tauri 两笔受保护输入证据仍单独保留；不外推为本批设备运行通过。后续[手机看板持续状态](docs/23-mobile-session-watch.md)与[按目标隔离的未知输入记录](docs/24-target-input-recovery.md)源码已接入两路线，Rust／Tauri 和原生存储隔离回归通过，Flutter 类型与运行验证待集中 CI；这些后续源码不包含在当前下载包内，严格 Clippy 仍有 12 项诊断。后续 [Tailscale 原生候选与 Android 状态托管](docs/25-tailscale-native-custody.md)及[两套手机 GUI 登录／路由接线](docs/26-mobile-tailscale-login.md)已落源码：显式授权、本机身份与配对 → 看板 → 持续观察共用原节点绑定，隔离检查通过；Android 双 provider 同源装包工作流已补齐，但尚未运行新批次，当前包不含这些改动。接下来先推进 ZeroTier，再集中云验收。真机触控、中文 IME、相机、真实三网、iOS 签名和五端完整交互仍需独立验收。[历史手机结果](docs/18-mobile-network-profiles.md)
+手机继续优先，沿用 Penpot v2 靛蓝／Slate 方案；框架尚未定案。未知输入不重放，隐藏时撤销输入，恢复前核验原 pane／terminal 和新 full，布局不修改远端共享 PTY。当前两包含 EasyTier＋Tailscale；ZeroTier 后续源码不在其中。真机触控、中文 IME、相机、真实三网、iOS 签名与五端并发仍未验证，严格 transport Clippy 的 12 项诊断仍保留。[设计与覆盖](design/README.md) · [配对与设备密钥](docs/14-mobile-pairing-workbench.md) · [手机 Tailscale 接线](docs/26-mobile-tailscale-login.md)
+
+历史 `040eb26` 云模拟器、`546c3eb` 独立终端标签包及各次失败保留原 SHA 与范围，不外推为本批设备运行通过。[ZeroTier 身份与原生安全基础](docs/28-zerotier-native-foundation.md)已有源码和 Mac 隔离证据，尚有 ECC 诊断与运行接线缺口；下一批继续网络租约与手机接线，再集中云验收；桌面分屏紧随手机闭环。[历史手机结果](docs/18-mobile-network-profiles.md) · [前一测试包](docs/22-mobile-terminal-tabs.md)
 
 ## 首版做什么
 
@@ -34,6 +36,8 @@ Heeler 已有三网络的源码实现可供按许可移植：EasyTier 使用 no-
 
 | 文件 | 内容 |
 | --- | --- |
+| [`docs/28-zerotier-native-foundation.md`](docs/28-zerotier-native-foundation.md) | ZeroTier 单设备身份、事件／退休修复与尚未消除的阻断项 |
+| [`docs/27-mobile-tailscale-cloud.md`](docs/27-mobile-tailscale-cloud.md) | 最新双网络 Android 测试包、实际 CI、隔离 SSH 与验收步骤 |
 | [`docs/26-mobile-tailscale-login.md`](docs/26-mobile-tailscale-login.md) | 两套手机 Tailscale 身份、显式登录、原节点路由与双库装包边界 |
 | [`docs/25-tailscale-native-custody.md`](docs/25-tailscale-native-custody.md) | Tailscale 原生候选、Android 加密状态与 JNI、实编及未验证边界 |
 | [`docs/24-target-input-recovery.md`](docs/24-target-input-recovery.md) | 多目标输入恢复、精确租约、迁移与独立验收边界 |

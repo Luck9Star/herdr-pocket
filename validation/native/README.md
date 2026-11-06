@@ -68,4 +68,12 @@ python3 validation/native/tool/tailscale_candidate.py build /absolute/fresh/work
 
 工具只使用已有 Go 和 C 工具，不安装 SDK；下载固定模块并检查 go.sum、源码和补丁 SHA，只修改指定临时副本。`sync` 可显式更新本项目 runtime 源码副本；构建前同时核对源清单与实际复制字节，拒绝未经同步的修改。当前完整构建只在 Mac arm64 执行，不能推断其他平台的工具链／loader 已兼容。
 
-Android 双 provider 装包扩展由 `tool/android_bundle.py build <新bundle目录> --tailscale` 调用 `tool/android_tailscale.py`，仅限 CI，固定 Go 1.27.3／NDK 28.2.13676358／API 35／arm64。除了独立库字节，验证从固定 go.sum 重算上游 module zip h1，再核对补丁后 tar 全部文件；GUI 校验两个库、JNI 和 DT_NEEDED。该 Android 扩展尚未实际构建或加载，不能引用历史单 EasyTier 包证明通过。[手机接线与批次边界](../../docs/26-mobile-tailscale-login.md)
+Android 双 provider 装包扩展由 `tool/android_bundle.py build <新bundle目录> --tailscale` 调用 `tool/android_tailscale.py`，仅限 CI，固定 Go 1.27.3／NDK 28.2.13676358／API 35／arm64。除了独立库字节，验证从固定 go.sum 重算上游 module zip h1，再核对补丁后 tar 全部文件；GUI 校验两个库、JNI 和 DT_NEEDED。2026-11-06 源码阶段尚未实际构建或加载；后续构建结果见下一节，动态加载仍未验证。[手机接线与批次边界](../../docs/26-mobile-tailscale-login.md)
+
+## 双网络 Android 集中结果（2026-11-07）
+
+上述历史探针与源码阶段之后，`750798fe` 在 [run 42247482105](https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105) 实际构建 Android arm64/API 35 EasyTier＋Tailscale 库，两套 GUI 同源消费；原生来源、APK 内库字节、ABI／JNI／动态依赖与下载校验通过。完整来源包、两 APK、失败历史和手机步骤见[集中验收](../../docs/27-mobile-tailscale-cloud.md)。它不覆盖 ZeroTier，也不证明 Android 安装、KeyStore 或真实节点运行。
+
+## ZeroTier 安全基础（2026-11-07，未接运行时）
+
+新增[固定来源准备工具](tool/zerotier_candidate.py)、[候选补丁与四个离线程序](candidates/zerotier/README.md)及[来源／前后文件锁](zerotier-candidate.json)。设备级身份核心与真实回归边界见[本批记录](../../docs/28-zerotier-native-foundation.md)。六个 Mac 翻译单元实编不等于共享库或 Android/Windows 支持；上游 ECC shift-base 诊断仍未解决，不能将选择性 sanitizer 检查记成完整通过。

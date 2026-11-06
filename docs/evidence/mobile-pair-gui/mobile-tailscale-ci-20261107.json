@@ -1,0 +1,306 @@
+{
+  "repository": "Luck9Star/herdr-pocket",
+  "workflow": ".github/workflows/android-network-experiment.yml",
+  "previousRun": {
+    "id": 42243620730,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42243620730",
+    "sourceCommit": "ff28d8581fafd61e89827b52b6e85b1a39e8a6eb",
+    "conclusion": "failure",
+    "failureSummary": [
+      "transport C fixture failed strict compile due to six -Werror=misleading-indentation diagnostics",
+      "flutter-source analyzer/test failures"
+    ],
+    "logs": [
+      {
+        "path": "/tmp/herdr-pocket-run-42243620730-transport.log",
+        "sha256": "227de26b493e9ed9d61272306cb4ab8b8714ef73d6f0ede4b97d96700c1cdee8"
+      },
+      {
+        "path": "/tmp/herdr-pocket-run-42243620730-flutter-source.log",
+        "sha256": "d99b62b1b8c5129421a32ba73c75842d0b18ad29defbed7fc071744b2d0bc287"
+      }
+    ]
+  },
+  "currentRun": {
+    "id": 42247482105,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105",
+    "branch": "codex/network-batch/2026-11-06-750798fe",
+    "event": "push",
+    "sourceCommit": "750798fe6bf5e396768333c1abe8c96ff0dd2178",
+    "status": "completed",
+    "conclusion": "success",
+    "attempt": 1,
+    "jobs": {
+      "flutter-source": "success",
+      "transport-source": "success",
+      "native": "success",
+      "apps (flutter)": "success",
+      "apps (tauri)": "success"
+    },
+    "sourceChecks": "Flutter analyzer, mobile state/input unit/widget, combining-character renderer, pairing and isolated SSH observation all passed",
+    "transportChecks": "shared Rust isolated SSH and unit checks passed",
+    "nativeChecks": "Android arm64 build and static inspection passed; API 35, NDK 28.2.13676358, Rust 1.95.0",
+    "workflowBoundary": "No Android install/runtime or real overlay network validation; ZeroTier code was not part of this CI batch."
+  },
+  "artifacts": [
+    {
+      "id": 13519531564,
+      "name": "android-network-transport-source-750798fe6bf5e396768333c1abe8c96ff0dd2178",
+      "expiresAt": "2026-11-20T15:56:26Z",
+      "zipSha256": "5eaaa9aeb84ca0001b6dff31ceeb9d54cb9bbd54bde1890c254f333dfa6bc5f6",
+      "localDownloadVerified": false,
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105/artifacts/13519531564"
+    },
+    {
+      "id": 13519144162,
+      "name": "android-flutter-network-750798fe6bf5e396768333c1abe8c96ff0dd2178",
+      "expiresAt": "2026-11-20T16:06:49Z",
+      "zipSha256": "c5eab5cd9c996c7b76086d79298c714e076cde52705f75a5d72768a9860a5156",
+      "localZip": "/tmp/herdr-pocket-run-42247482105-flutter.zip",
+      "localDownloadVerified": true,
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105/artifacts/13519144162"
+    },
+    {
+      "id": 13519007557,
+      "name": "android-network-flutter-ssh-750798fe6bf5e396768333c1abe8c96ff0dd2178",
+      "expiresAt": "2026-11-20T15:57:44Z",
+      "zipSha256": "f778cbf4251ef563d97653bc4467db6945094054714e50a3f6272aebcf8eedf1",
+      "localDownloadVerified": true,
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105/artifacts/13519007557",
+      "localZip": "/tmp/herdr-pocket-run-42247482105-ssh-complete.zip"
+    },
+    {
+      "id": 13518524214,
+      "name": "android-tauri-network-750798fe6bf5e396768333c1abe8c96ff0dd2178",
+      "expiresAt": "2026-11-20T16:08:38Z",
+      "zipSha256": "b9d56d8cd3623a47994a9e124c6338faff1e9d2c46cfd2205c9ffaca6a6ddda2",
+      "localDownloadVerified": true,
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105/artifacts/13518524214",
+      "localZip": "/tmp/herdr-pocket-run-42247482105-tauri-complete.zip"
+    },
+    {
+      "id": 13518118351,
+      "name": "android-native-750798fe6bf5e396768333c1abe8c96ff0dd2178",
+      "expiresAt": "2026-11-20T16:01:52Z",
+      "zipSha256": "d131b90a4b3e8d121149c463dfdcbd28fabb194215e2a3e93599a41ccfaa8be9",
+      "localZip": "/tmp/herdr-pocket-run-42247482105-native.zip",
+      "localDownloadVerified": true,
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105/artifacts/13518118351"
+    },
+    {
+      "id": 13517898163,
+      "name": "android-network-flutter-source-750798fe6bf5e396768333c1abe8c96ff0dd2178",
+      "expiresAt": "2026-11-20T15:57:46Z",
+      "zipSha256": "785abbd1f6090b4c344280b222dcd76569ffc78100623a43675cfb5992a2da96",
+      "localDownloadVerified": false,
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105/artifacts/13517898163"
+    }
+  ],
+  "downloadedPayloadVerification": {
+    "nativeArtifactZipSha256": "d131b90a4b3e8d121149c463dfdcbd28fabb194215e2a3e93599a41ccfaa8be9",
+    "nativeSHA256SUMS": "passed",
+    "nativeManifest": {
+      "sourceCommit": "750798fe6bf5e396768333c1abe8c96ff0dd2178",
+      "abi": "arm64-v8a",
+      "api": 35,
+      "staticInspection": "passed",
+      "androidLoad": "not run",
+      "installation": "not run",
+      "node": "not run",
+      "sourcesSha256": "684d2fced643a9234e308dcbc988fd44670517080caf05cc46ae9eea9610e94b"
+    },
+    "nativeLibraries": {
+      "libheeler_easytier.so": {
+        "bytes": 365042104,
+        "sha256": "588bfe374822f399c5f04a80f344e681e3b88b39ea23a7802fe2a01579248560"
+      },
+      "libhp_tailscale.so": {
+        "bytes": 30406096,
+        "sha256": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+      }
+    },
+    "flutterArtifactZipSha256": "c5eab5cd9c996c7b76086d79298c714e076cde52705f75a5d72768a9860a5156",
+    "flutterSHA256SUMS": "passed",
+    "flutterReport": {
+      "sourceCommit": "750798fe6bf5e396768333c1abe8c96ff0dd2178",
+      "abi": "arm64-v8a",
+      "api": 35,
+      "build": "passed",
+      "sourceChecks": "success",
+      "transportChecks": "success",
+      "staticInspection": "passed",
+      "androidLoad": "not run",
+      "installation": "not run",
+      "node": "not run",
+      "apkSha256": "a82ba20373b978148c3e4e79578762f15fe70db506b042302ba22bba8688d856"
+    },
+    "flutterApk": {
+      "bytes": 483705420,
+      "sha256": "a82ba20373b978148c3e4e79578762f15fe70db506b042302ba22bba8688d856"
+    },
+    "flutterApkBundledNativeLibraries": {
+      "libheeler_easytier.so": "588bfe374822f399c5f04a80f344e681e3b88b39ea23a7802fe2a01579248560",
+      "libhp_tailscale.so": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+    },
+    "tauri": {
+      "artifactId": 13518524214,
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105/artifacts/13518524214",
+      "expiresAt": "2026-11-20T16:08:38Z",
+      "expectedZipSha256": "b9d56d8cd3623a47994a9e124c6338faff1e9d2c46cfd2205c9ffaca6a6ddda2",
+      "localZip": "/tmp/herdr-pocket-run-42247482105-tauri-complete.zip",
+      "localZipBytes": 162576160,
+      "localZipSha256": "b9d56d8cd3623a47994a9e124c6338faff1e9d2c46cfd2205c9ffaca6a6ddda2",
+      "sha256Sums": "passed",
+      "apk": {
+        "path": "/tmp/herdr-pocket-run-42247482105-tauri-complete/app.apk",
+        "bytes": 591434055,
+        "sha256": "c9d29debe48e7766938b0e7b9586ceb5d0507bce96194bc58bcc0063be6b5edf"
+      },
+      "report": {
+        "sourceCommit": "750798fe6bf5e396768333c1abe8c96ff0dd2178",
+        "abi": "arm64-v8a",
+        "api": 35,
+        "build": "passed",
+        "sourceChecks": "success",
+        "transportChecks": "success",
+        "staticInspection": "passed",
+        "androidLoad": "not run",
+        "installation": "not run",
+        "node": "not run"
+      },
+      "nativeLibraries": {
+        "libheeler_easytier.so": {
+          "bytes": 365042104,
+          "sha256": "588bfe374822f399c5f04a80f344e681e3b88b39ea23a7802fe2a01579248560"
+        },
+        "libhp_tailscale.so": {
+          "bytes": 30406096,
+          "sha256": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+        },
+        "libherdr_pocket_tauri_probe_lib.so": {
+          "bytes": 185821080,
+          "sha256": "860a2df19d1788dc9bd76bc3d194cc03498583dfe94932b276ec46f205226659"
+        }
+      }
+    }
+  },
+  "localPaths": {
+    "nativeZip": "/tmp/herdr-pocket-run-42247482105-native.zip",
+    "nativeExtracted": "/tmp/herdr-pocket-run-42247482105-native",
+    "flutterZip": "/tmp/herdr-pocket-run-42247482105-flutter.zip",
+    "flutterExtracted": "/tmp/herdr-pocket-run-42247482105-flutter",
+    "tauriZip": "/tmp/herdr-pocket-run-42247482105-tauri-complete.zip",
+    "tauriExtracted": "/tmp/herdr-pocket-run-42247482105-tauri-complete"
+  },
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-07 Asia/Shanghai",
+  "testCounts": {
+    "flutterSource": {
+      "mainSuite": "248 passed, 1 skipped",
+      "rendererRegressionSuite": "10 passed",
+      "analyzer": "success"
+    },
+    "transportRust": [
+      "95 passed; 0 failed; 0 ignored",
+      "1 passed; 0 failed; 0 ignored",
+      "0 tests"
+    ],
+    "tauriJavaScript": {
+      "passed": 115,
+      "failed": 0,
+      "skipped": 0
+    },
+    "tauriRust": "Rust Android target compilation succeeded as part of APK build; no Rust test suite was run in apps (tauri)"
+  },
+  "downloadIssue": {
+    "resolved": true,
+    "initialFailureModes": [
+      "sandbox DNS resolution failure for temporary artifact host",
+      "one partial/incomplete transfer"
+    ],
+    "successfulMethod": "fresh GitHub connector artifact download URL followed by direct curl outside sandbox with bounded retries",
+    "noCredentialsRead": true
+  },
+  "verificationBoundary": "Both APK artifacts and the separate SSH artifact are locally hash-verified. No Android install/runtime loading, physical device, real network identity, or real overlay validation. ZeroTier was not part of this CI run.",
+  "supplementaryVerification": {
+    "tauri": {
+      "artifactId": 13518524214,
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105/artifacts/13518524214",
+      "expiresAt": "2026-11-20T16:08:38Z",
+      "expectedZipSha256": "b9d56d8cd3623a47994a9e124c6338faff1e9d2c46cfd2205c9ffaca6a6ddda2",
+      "localZip": "/tmp/herdr-pocket-run-42247482105-tauri-complete.zip",
+      "localZipBytes": 162576160,
+      "localZipSha256": "b9d56d8cd3623a47994a9e124c6338faff1e9d2c46cfd2205c9ffaca6a6ddda2",
+      "sha256Sums": "passed",
+      "apk": {
+        "path": "/tmp/herdr-pocket-run-42247482105-tauri-complete/app.apk",
+        "bytes": 591434055,
+        "sha256": "c9d29debe48e7766938b0e7b9586ceb5d0507bce96194bc58bcc0063be6b5edf"
+      },
+      "report": {
+        "sourceCommit": "750798fe6bf5e396768333c1abe8c96ff0dd2178",
+        "abi": "arm64-v8a",
+        "api": 35,
+        "build": "passed",
+        "sourceChecks": "success",
+        "transportChecks": "success",
+        "staticInspection": "passed",
+        "androidLoad": "not run",
+        "installation": "not run",
+        "node": "not run"
+      },
+      "nativeLibraries": {
+        "libheeler_easytier.so": {
+          "bytes": 365042104,
+          "sha256": "588bfe374822f399c5f04a80f344e681e3b88b39ea23a7802fe2a01579248560"
+        },
+        "libhp_tailscale.so": {
+          "bytes": 30406096,
+          "sha256": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+        },
+        "libherdr_pocket_tauri_probe_lib.so": {
+          "bytes": 185821080,
+          "sha256": "860a2df19d1788dc9bd76bc3d194cc03498583dfe94932b276ec46f205226659"
+        }
+      }
+    },
+    "sshEvidence": {
+      "artifactId": 13519007557,
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42247482105/artifacts/13519007557",
+      "expiresAt": "2026-11-20T15:57:44Z",
+      "expectedZipSha256": "f778cbf4251ef563d97653bc4467db6945094054714e50a3f6272aebcf8eedf1",
+      "localZip": "/tmp/herdr-pocket-run-42247482105-ssh-complete.zip",
+      "localZipBytes": 19901,
+      "localZipSha256": "f778cbf4251ef563d97653bc4467db6945094054714e50a3f6272aebcf8eedf1",
+      "sha256Sums": "passed",
+      "manifest": "/tmp/herdr-pocket-run-42247482105-ssh-complete/manifest.json",
+      "scope": "isolated Ubuntu 24.04 x86_64 loopback OpenSSH; Flutter widget with explicit test-only Dart signer and runner-generated temporary identity; matched device public key in fixture sshd; key removed at cleanup; no host authorization files touched",
+      "observed": {
+        "status": "passed",
+        "frameCount": 6,
+        "fullRendered": true,
+        "deltaFrames": 4,
+        "deltaRendered": true,
+        "localViewportChanges": 2,
+        "receivedInputBytes": 0,
+        "sharedPtyInitial": "119 cols x 40 rows",
+        "sharedPtyFinal": "119 cols x 40 rows",
+        "noObservedResize": true,
+        "signalsMayCoalesce": true,
+        "remoteWrites": 0
+      }
+    }
+  },
+  "parentVerification": {
+    "workflowJobs": "GitHub API readback: all five completed success",
+    "flutterApkSha256": "a82ba20373b978148c3e4e79578762f15fe70db506b042302ba22bba8688d856",
+    "tauriApkSha256": "c9d29debe48e7766938b0e7b9586ceb5d0507bce96194bc58bcc0063be6b5edf",
+    "tauriZipDigest": "verified",
+    "sshZipDigest": "verified",
+    "sshManifest": "read back; fixture signer, zero remote input, shared PTY 119x40 unchanged"
+  },
+  "receiptDigests": {
+    "herdr-pocket-network-batch-receipt-2026-11-07.json": "4240d227b98f1c853f71a1cbd3347bafc8debb1430f3f958fd1b7999a537b978",
+    "herdr-pocket-network-batch-receipt-2026-11-07-complete.json": "389b697589f2ad229de9ea86e073b9a039a7ca4958609b80c35c18a8e73bf232"
+  }
+}

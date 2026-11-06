@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "reference": {
+    "repository": "Ylarod/heeler-overlay-natives",
+    "commit": "6a2817fc02aeb552df251d9478753c22fd4738bb",
+    "lockGitBlob": "8afee8d0328f4191a490f4c83476a142c7e833d3"
+  },
+  "sources": [
+    {
+      "name": "libzt",
+      "repository": "Ylarod/libzt",
+      "commit": "7e5d0f99a2de81c45faa28e44289bcd19d933bf2",
+      "destination": ".",
+      "sha256": "ba9ade19877d6f35b061600d8e2d0df6d6273f11099f07b05c9d9793fb447e0c"
+    },
+    {
+      "name": "ZeroTierOne",
+      "repository": "zerotier/ZeroTierOne",
+      "commit": "fc5c3ec22090b5b2a0f274e863651fe9ca489bf4",
+      "destination": "ext/ZeroTierOne",
+      "sha256": "5f48e6a9492cc2a31f28f9f15e7fad5e1b4a82e95fe451464ff2b32d6bed9fa4"
+    },
+    {
+      "name": "lwip",
+      "repository": "joseph-henry/lwip",
+      "commit": "32708c0a8b140efb545cc35101ee5fdeca6d6489",
+      "destination": "ext/lwip",
+      "sha256": "49e5a5a1c5b4eedcc749abd60e839d4552618fbbe72a6920447e7dcacb3ea4bf"
+    },
+    {
+      "name": "lwip-contrib",
+      "repository": "joseph-henry/lwip-contrib",
+      "commit": "4fd612c9c72dfcd1db6618bd59c1a17d9f5b55f8",
+      "destination": "ext/lwip-contrib",
+      "sha256": "8d0f2c9c54dc2f51e213afc52ebc3be1615a2269d4aa0f93198de86ac67178f3"
+    }
+  ],
+  "upstreamPatches": [
+    {
+      "path": "patches/libzt/0001-independent-root-sets.patch",
+      "sha256": "b082d29c410f2e69ecdcf829ad57f6575173bb03add85b08253539790bacba43"
+    },
+    {
+      "path": "patches/libzt/0002-managed-gateway-routes.patch",
+      "sha256": "ec02c07070d6a252e8042a5e1dfcdcfe2bcc4409e40a1bee758081982f03efdd"
+    },
+    {
+      "path": "patches/libzt/0003-metrics-saver-on-demand.patch",
+      "sha256": "abb698416801341e03971a69c676ecc0e7d425b2e9c7c76a12b511729750984b"
+    },
+    {
+      "path": "patches/libzt/0004-rebind-defunct-udp-sockets.patch",
+      "sha256": "50e352bb77487dfd0e4d4f5f229822014f4f93e5c700132be183e7e6de742365"
+    }
+  ],
+  "scope": "Pinned source preparation and offline validation only. No node start, network join, real identities or platform support claim."
+}

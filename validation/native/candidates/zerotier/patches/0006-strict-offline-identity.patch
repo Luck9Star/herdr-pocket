@@ -1,0 +1,112 @@
+herdr-pocket: strict private identity pair and temporary-secret wiping
+
+--- a/ext/ZeroTierOne/node/ECC.hpp
++++ b/ext/ZeroTierOne/node/ECC.hpp
+@@ -6,6 +6,9 @@
+  * https://www.zerotier.com/
+  */
+
++/* Modified by herdr-pocket contributors (2026): bounded native identity,
++ * event projection and observable worker retirement; see candidate README. */
++
+ /*
+  * This file defines the elliptic curve crypto used for ZeroTier V1. The normal
+  * public version uses C25519 and Ed25519, while the FIPS version uses NIST.
+@@ -88,6 +91,19 @@
+ 		_calcPubED(kp);
+ 		return kp;
+ 	}
++
++    // herdr-pocket (2026): validate both private-key halves without signing or
++    // networking. The temporary private copy is burned before returning.
++    static inline Public derivePublic(const Private& secret)
++    {
++        Pair pair;
++        pair.priv = secret;
++        _calcPubDH(pair);
++        _calcPubED(pair);
++        const Public result = pair.pub;
++        Utils::burn(&pair, sizeof(pair));
++        return result;
++    }
+
+ 	/**
+ 	 * Generate a key pair satisfying a condition
+--- a/ext/ZeroTierOne/node/Identity.cpp
++++ b/ext/ZeroTierOne/node/Identity.cpp
+@@ -5,6 +5,9 @@
+  * (c) ZeroTier, Inc.
+  * https://www.zerotier.com/
+  */
++
++/* Modified by herdr-pocket contributors (2026): bounded native identity,
++ * event projection and observable worker retirement; see candidate README. */
+
+ #include "Identity.hpp"
+
+@@ -97,6 +100,7 @@
+ 		_privateKey = new ECC::Private();
+ 	}
+ 	*_privateKey = kp.priv;
++	Utils::burn(&kp,sizeof(kp));
+
+ 	delete[] genmem;
+ }
+@@ -144,6 +148,7 @@
+ 		return false;
+ 	}
+ 	char tmp[ZT_IDENTITY_STRING_BUFFER_LENGTH];
++	struct WipeTmp { char* data; ~WipeTmp(){Utils::burn(data,ZT_IDENTITY_STRING_BUFFER_LENGTH);} } wipe_tmp{tmp};
+ 	if (! Utils::scopy(tmp, sizeof(tmp), str)) {
+ 		_address.zero();
+ 		return false;
+--- a/src/NodeService.cpp
++++ b/src/NodeService.cpp
+@@ -28,6 +28,7 @@
+
+ #include "HpEventProjection.hpp"
+ #include "HpEventOwnership.hpp"
++#include "hp_zt.h"
+ #include <stdlib.h>
+
+ #include "NodeService.hpp"
+@@ -1574,22 +1575,23 @@
+
+ int NodeService::setIdentity(const char* keypair, unsigned int len)
+ {
+-    if (keypair == NULL || len < ZT_IDENTITY_STRING_BUFFER_LENGTH) {
+-        //   return ZTS_ERR_ARG;
+-    }
+-    // Double check user-provided keypair
+-    Identity id;
+-    if ((strlen(keypair) > 32) && (keypair[10] == ':')) {
+-        if (! id.fromString(keypair)) {
+-            return id.locallyValidate();
+-        }
+-    }
+-    Mutex::Lock _lr(_run_m);
+-    if (_run) {
+-        return ZTS_ERR_SERVICE;
+-    }
+-    Mutex::Lock _ls(_store_m);
+-    memcpy(_secretIdStr, keypair, len);
++    if (!keypair || (len!=HP_ZT_IDENTITY_BYTES && len!=ZT_IDENTITY_STRING_BUFFER_LENGTH)) {
++        return ZTS_ERR_ARG;
++    }
++    for (unsigned int i=HP_ZT_IDENTITY_BYTES; i<len; ++i) {
++        if (keypair[i]!=0) { return ZTS_ERR_ARG; }
++    }
++    uint64_t node_id=0;
++    if (hp_zt_identity_validate(reinterpret_cast<const uint8_t*>(keypair),HP_ZT_IDENTITY_BYTES,&node_id)!=HP_ZT_OK) {
++        return ZTS_ERR_ARG;
++    }
++    Mutex::Lock run(_run_m);
++    if (_run || _stopRequested) { return ZTS_ERR_SERVICE; }
++    Mutex::Lock store(_store_m);
++    Utils::burn(_secretIdStr,sizeof(_secretIdStr));
++    Utils::burn(_publicIdStr,sizeof(_publicIdStr));
++    memcpy(_secretIdStr,keypair,HP_ZT_IDENTITY_BYTES);
++    memcpy(_publicIdStr,keypair,141);
+     return ZTS_ERR_OK;
+ }
+

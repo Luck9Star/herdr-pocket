@@ -134,3 +134,9 @@ Penpot 能力依据：[组件](https://help.penpot.app/user-guide/design-systems
 观察页在 full 后显示会话与目标，增量只在当前目标有效。停止观察后保留最后画面并标为陈旧；隐藏标签返回后需主动获取新 full。当前真实 GUI 证据支持这些状态的实现交接，终端像素、手机真实输入法、相机识别和三网并发继续单独验证。[当前核心原型](../design/README.md) · [手机阶段结果及后续顺序](15-mobile-gui-validation.md)
 
 后续 [Tailscale 手机登录源码](26-mobile-tailscale-login.md)明确拆开本机身份、请求授权、浏览器打开、等待管理员批准和 Running；后台清除 URL／reviewToken，返回只读原节点，SSH／herdr 继续独立审查。保存和导入提前拒绝 native 不支持的控制 URL，避免到启动时才报错。这些是源码与隔离验证反馈，本轮未修改 Penpot 文件，手机视觉、授权往返和真实网络未验证。
+
+## 手机闭环的本批反馈（2026-11-07）
+
+`750798fe` 两套 Android 测试包完成同源云构建，Flutter 248 项常规测试、10 项绘制回归与隔离真实 SSH 的配对 → 看板 → 持续观察通过；范围和下载见[集中记录](27-mobile-tailscale-cloud.md)。这是 headless widget／链路证据，尚不收敛手机触控、IME、无障碍和最终 UI 框架。本批未修改 Penpot 文件，继续沿用已认可的 v2 配色与现有流程。
+
+[ZeroTier 基础实现](28-zerotier-native-foundation.md)明确一个设备身份被多个网络共享。后续 GUI 和 Penpot 增量须显示全体受影响网络；退出单网与忘记设备身份分开，创建／删除结果未知保留原对象，等待授权不映射为就绪。不可读身份恢复须保留可信来源与明确二步确认；暂未接线的状态不得画成实际成功。这些新增画板与设备运行尚未完成。

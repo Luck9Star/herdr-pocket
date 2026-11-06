@@ -2,21 +2,13 @@
 
 > 面向 herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
-**当前进度 · 2026-11-06**　Flutter 与 Tauri 两条路线在同源 `040eb26` 的 Android API 35 云模拟器完成**配对 → 主机与会话看板 → 选中 pane → 持续观察 → 手动停止**，只读用例远端输入为 0。两份 Android 测试包已下载核对，Tauri 受保护输入通过；Flutter 受保护用例与新增回归有失败，随后源码修复尚待下一批复验。手机扫码、中文 IME、真实三网与五端完整交互仍需独立验收。[当前结果与下载](docs/18-mobile-network-profiles.md) · [历史手机 GUI 基线](docs/15-mobile-gui-validation.md)
+**当前进度 · 2026-11-06**　Flutter 与 Tauri 的同源 `546c3eb` Android arm64 测试包已完成云端构建，原生来源、APK 库字节、ABI、JNI 和动态依赖检查通过。[Flutter 下载](https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281/artifacts/13498293296) · [Tauri 下载](https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281/artifacts/13498208754) · [CI 5 项 job 全部成功](https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281) · [来源、SHA 与测试步骤](docs/22-mobile-terminal-tabs.md)
 
-手机优先。两套工作壳已实现待授权请求恢复、设备身份审查、按主机查看标签和受阻窗格优先；桌面沿用同一目标标识。当前使用用户选定的 Penpot v2 靛蓝／Slate 方案，后续按真机和输入正确性收敛框架及组件状态。[新版设计与覆盖](design/README.md) · [配对步骤](docs/14-mobile-pairing-workbench.md) · [历史共享 SSH 对照](docs/13-mobile-dashboard-observe.md)
+本批 Flutter 真实 widget 与隔离 OpenSSH/herdr 已走通 **配对审查 → 看板 → 选定 pane → 持续观察 → 隐藏后保留同一 SSH 并显式恢复 → 主动停止**，远端输入为 0，共享 PTY 尺寸未变。身份签名使用明确的临时测试替身；这不是 Android 安装、KeyStore 或真实组网证据。Flutter analyzer、182 项常规测试及 10 项绘制回归通过；1 项 opt-in SSH 用例在常规 suite 跳过后由隔离 job 单独执行通过。前三轮失败保留在[批次记录](docs/22-mobile-terminal-tabs.md)。
 
-手机逐键／组合键、主机回执、隐藏恢复和加密迁移已接入两套 GUI。Tauri 本批收到 1 和 9 bytes 两笔匹配回执，隐藏后恢复需要原目标新 full 和主动确认。此前构建和失败保留在[输入批次记录](docs/16-mobile-input-and-config.md)。Penpot v2 已保存 30 个画板，补齐网络配置与迁移流程。[设计与实点记录](design/README.md)
+两套 GUI 源码已接入配对与设备密钥、网络配置及加密迁移、EasyTier 节点与实际 route、独立终端标签和有界恢复。输入结果未知不重放，隐藏时撤销输入，恢复后重新核验原 pane／terminal 和新 full，布局不修改远端共享 PTY。手机优先，沿用已认可的 Penpot v2 靛蓝／Slate 方案；框架尚未定案。[设计与覆盖](design/README.md) · [配对流程](docs/14-mobile-pairing-workbench.md) · [原生通道](docs/21-flutter-native-network.md)
 
-两套源码已加入独立网络配置、主机绑定、加密迁移 v2 与终端字号；停用网络仍可完成本地配对审查，实际连接继续检查组件可用性。EasyTier 节点生命周期隔离回归及三桌面固定源码编译／链接／符号加载已通过，真实节点与 GUI 桥接待验。[本批实现与验收](docs/18-mobile-network-profiles.md)
-
-后续源码已接入 Android EasyTier 本机入网资料的创建、状态与显式移除，以及 Rust overlay→SSH 字节流适配。38 项 JVM、Tauri JS/Rust 和隔离传输检查通过；Flutter 新测试、Android 原生构建和完整组网接线尚待验收，未发布新包。[本机资料与传输接线](docs/19-mobile-network-identity.md)
-
-此前源码批次连接 vault 内部固定配置、JNI、共享节点生命周期和 Tauri 手机显式路由；配置版本与启动编号分开，单主机解绑不停止共享节点。默认原生库门禁保留，Android feature 和真实组网尚未验证。[节点接线与验证范围](docs/20-mobile-node-routing.md)
-
-此前批次已补齐 Flutter 节点 GUI、私有 native scope 与实际 overlay SSH socket，并准备同源原生库 → 两套 Android 包的显式批次流程。隔离 Rust/JVM 与来源材料检查已通过，Android 构建和设备运行仍需独立验收。[Flutter 原生通道与证据](docs/21-flutter-native-network.md)
-
-当前整合手机独立终端标签：同主机多 pane、隐藏时撤销输入并保留 SSH、主动恢复后重新核对目标和新 full，旧回执不覆盖新草稿。两套源码已接入，固定 SSH 依赖的通道清理修复与集中云验收正在收口；未把新增源码当作 Android 已验证功能。[本批实现、依赖修复与验证记录](docs/22-mobile-terminal-tabs.md)
+历史 `040eb26` 两路线 Android API 35 云模拟器的配对／观察闭环和 Tauri 两笔受保护输入证据仍单独保留；不外推为本批设备运行通过。下一批正在实现手机看板的会话／pane 状态持续更新，之后补按目标隔离的未知输入记录与 Tailscale／ZeroTier 原生桥。真机触控、中文 IME、相机、真实三网、iOS 签名和五端完整交互仍需独立验收。[历史手机结果](docs/18-mobile-network-profiles.md)
 
 ## 首版做什么
 

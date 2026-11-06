@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "name": "tailscale-settings-v1",
+  "scope": "Synthetic public settings; no identities/auth keys/network evidence",
+  "encoding": "UTF-8 of herdr-tailscale-config-v1 + NUL + effectiveControlUrl + NUL + effectiveHostname; SHA-256 lowercase hex prefixed ts1:",
+  "vectors": [
+    {
+      "controlUrl": "",
+      "hostname": "",
+      "effectiveControlUrl": "https://controlplane.tailscale.com",
+      "effectiveHostname": "herdr-pocket",
+      "networkName": "ts1:9eab543cd8eabbd62b93d66aa75994ad1c6f04e4a0a4b088ede5bef115f54f22"
+    },
+    {
+      "controlUrl": "https://controlplane.tailscale.com",
+      "hostname": "herdr-pocket",
+      "effectiveControlUrl": "https://controlplane.tailscale.com",
+      "effectiveHostname": "herdr-pocket",
+      "networkName": "ts1:9eab543cd8eabbd62b93d66aa75994ad1c6f04e4a0a4b088ede5bef115f54f22"
+    },
+    {
+      "controlUrl": "https://headscale.example:8443/control",
+      "hostname": "mobile-a",
+      "effectiveControlUrl": "https://headscale.example:8443/control",
+      "effectiveHostname": "mobile-a",
+      "networkName": "ts1:626696f526d8b824d7332543b8461aea1ab11a1f16a838eedb6cbd3328d75638"
+    },
+    {
+      "controlUrl": "https://control.example/path%20name",
+      "hostname": "Phone-2",
+      "effectiveControlUrl": "https://control.example/path%20name",
+      "effectiveHostname": "Phone-2",
+      "networkName": "ts1:165d8eda00297f77a9c71e8453854d1c584fe8b5c0989c17831a2bb8b5cfe81c"
+    }
+  ],
+  "invalid": [
+    {
+      "controlUrl": "http://example.com",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://u:p@example.com",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://example.com?auth=secret",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://example.com#x",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://example.com:0",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://example.com:65536",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://example.com/%",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://example.com/%0",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://example.com/%gg",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://[::1]",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://example..com",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://-example.com",
+      "hostname": ""
+    },
+    {
+      "controlUrl": " https://example.com",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "hostname": ""
+    },
+    {
+      "controlUrl": "",
+      "hostname": "-x"
+    },
+    {
+      "controlUrl": "",
+      "hostname": "x-"
+    },
+    {
+      "controlUrl": "",
+      "hostname": "two labels"
+    },
+    {
+      "controlUrl": "",
+      "hostname": "a.b"
+    },
+    {
+      "controlUrl": "",
+      "hostname": "中"
+    },
+    {
+      "controlUrl": "",
+      "hostname": "\u0000"
+    },
+    {
+      "controlUrl": "",
+      "hostname": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}

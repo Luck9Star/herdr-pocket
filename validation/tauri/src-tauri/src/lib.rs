@@ -62,6 +62,20 @@ pub extern "system" fn Java_org_herdr_network_AndroidEasyTierConfig_bindNative(
 )->herdr_android_network_source::jni::sys::jboolean {
     if herdr_android_network_source::bind(&mut env,class,context) {1} else {0}
 }
+#[cfg(target_os="android")]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_herdr_network_AndroidTailscaleConfig_bindNative(
+    mut env:herdr_android_network_source::jni::JNIEnv<'_>,class:herdr_android_network_source::jni::objects::JClass<'_>,context:herdr_android_network_source::jni::objects::JObject<'_>
+)->herdr_android_network_source::jni::sys::jboolean {
+    if herdr_android_network_source::bind_tailscale(&mut env,class,context) {1} else {0}
+}
+// Host unit tests compile the real Nodes methods against a deliberately rejecting
+// IPC boundary. This is type/logic coverage, not an Android plugin substitute.
+#[cfg(all(test,not(target_os="android")))]
+mod android_keys {
+ pub fn network_identity(_: &tauri::AppHandle,_:&str,_:&str,_:&str,_:&str,_:&str)->Result<Option<crate::network_identity::Metadata>,String>{Err("test_android_ipc_unavailable".into())}
+ pub fn open_network_auth(_: &tauri::AppHandle,_:&str)->Result<(),String>{Err("test_android_ipc_unavailable".into())}
+}
 mod hosts;
 mod remote_sessions;
 mod dashboard_watch;
@@ -109,8 +123,9 @@ async fn network_delete(id:String,expected_catalog:String,expected_revision:u32,
     if catalog.revision!=expected_catalog || profile.revision!=expected_revision {return Err("network_changed".into());}
     if catalog.bindings.iter().any(|b|b.profile_id==id) {return Err("network_in_use".into());}
     #[cfg(target_os="android")]
-    if profile.provider==networks::Provider::Easytier {
-        let app=app.clone();let id=id.clone();let status=tauri::async_runtime::spawn_blocking(move||android_keys::network_identity(&app,"networkIdentityStatus",&id,"","")).await.map_err(|_|"network_identity_unavailable")?;
+    if matches!(profile.provider,networks::Provider::Easytier|networks::Provider::Tailscale) {
+        let provider=network_nodes::provider_name(profile.provider)?;
+        let app=app.clone();let id=id.clone();let status=tauri::async_runtime::spawn_blocking(move||android_keys::network_identity(&app,"networkIdentityStatus",&id,provider,"","")).await.map_err(|_|"network_identity_unavailable")?;
         match status {Ok(Some(_))=>return Err("network_identity_in_use".into()),Ok(None)=>{},Err(e)=>return Err(e)}
     }
     #[cfg(not(target_os="android"))] {let _=(app,profile);}
@@ -125,58 +140,89 @@ fn network_bind(host_id:String,profile_id:Option<String>,expected_catalog:String
     if old.network_profile_id!=profile_id {let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(std::slice::from_ref(&host_id),&mut g);}
     hosts.bind_network(&host_id,profile_id,&expected_catalog)
 }
-#[cfg_attr(not(target_os="android"),allow(dead_code))]
-fn reviewed_identity_profile(hosts:&Hosts,id:&str,revision:u32,catalog_revision:&str,affected:&[String])->Result<(),String>{
+fn reviewed_identity_profile(hosts:&Hosts,id:&str,revision:u32,catalog_revision:&str,affected:&[String])->Result<networks::NetworkProfile,String>{
     let catalog=hosts.networks()?;let p=catalog.profiles.iter().find(|p|p.id==id).ok_or("network_profile_missing")?;
     let mut actual:Vec<_>=catalog.bindings.iter().filter(|b|b.profile_id==id).map(|b|b.host_id.clone()).collect();actual.sort();let mut supplied=affected.to_vec();supplied.sort();
     if catalog.revision!=catalog_revision || p.revision!=revision || actual!=supplied{return Err("network_changed".into());}
-    if p.provider!=networks::Provider::Easytier{return Err("network_identity_provider_unavailable".into());}Ok(())
+    network_nodes::provider_name(p.provider)?;Ok(p.clone())
 }
 #[tauri::command]
 async fn network_identity_status(id:String,hosts:State<'_,Hosts>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<network_identity::Status,String>{
     let _op=ops.enter()?;let catalog=hosts.networks()?;let p=catalog.profiles.iter().find(|p|p.id==id).ok_or("network_profile_missing")?;
-    if p.provider!=networks::Provider::Easytier {return Err("network_identity_provider_unavailable".into());}
+    let provider=network_nodes::provider_name(p.provider)?;
     #[cfg(target_os="android")]
-    {let result=tauri::async_runtime::spawn_blocking(move||android_keys::network_identity(&app,"networkIdentityStatus",&id,"","")).await.map_err(|_|"network_identity_unavailable")?;match result {Ok(metadata)=>Ok(network_identity::Status::from_metadata(metadata)),Err(e)=>Err(e)}}
+    {if !network_nodes::provider_available(p.provider){return Ok(network_identity::Status::unsupported());}
+     let result=tauri::async_runtime::spawn_blocking(move||android_keys::network_identity(&app,"networkIdentityStatus",&id,provider,"","")).await.map_err(|_|"network_identity_unavailable")?;result.map(network_identity::Status::from_metadata)}
     #[cfg(not(target_os="android"))]
-    {let _=(id,app);Ok(network_identity::Status::unsupported())}
+    {let _=(id,app,provider);Ok(network_identity::Status::unsupported())}
 }
 #[tauri::command]
 async fn network_identity_write(id:String,expected_catalog:String,expected_revision:u32,affected:Vec<String>,action:String,mode:String,secret:String,expected_handle:Option<String>,hosts:State<'_,Hosts>,ops:State<'_,network_identity::Operations>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>,app:tauri::AppHandle,nodes:State<'_,network_nodes::Nodes>)->Result<(),String>{
     let secret=zeroize::Zeroizing::new(secret);let _op=ops.enter()?;
+    let profile=reviewed_identity_profile(&hosts,&id,expected_revision,&expected_catalog,&affected)?;
+    let provider=network_nodes::provider_name(profile.provider)?;
     network_identity::validate_expected_handle(&action,expected_handle.as_deref())?;
-    if action=="create" {network_identity::validate_input(&mode,&secret)?;} else if action!="delete" || !mode.is_empty() || !secret.is_empty() {return Err("invalid_network_identity".into());}
+    if action=="create" {network_identity::validate_provider_input(profile.provider,&mode,&secret)?;} else if action!="delete" || !mode.is_empty() || !secret.is_empty() {return Err("invalid_network_identity".into());}
     #[cfg(not(target_os="android"))]
-    {let _=(id,expected_catalog,expected_revision,affected,hosts,flow,gate,app,secret,expected_handle,nodes);return Err("network_identity_unavailable".into());}
+    {let _=(flow,gate,app,secret,expected_handle,nodes,provider);Err("network_identity_unavailable".into())}
     #[cfg(target_os="android")]
-    {let mut f=flow.lock().map_err(|_|"state_unavailable")?;reviewed_identity_profile(&hosts,&id,expected_revision,&expected_catalog,&affected)?;{let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(&affected,&mut g);}}
-    #[cfg(target_os="android")]
-    nodes.stop_profile(&id).await?;
-    #[cfg(target_os="android")]
-    {tauri::async_runtime::spawn_blocking(move|| {if action=="create" {android_keys::network_identity(&app,"networkIdentityCreate",&id,&mode,&secret).and_then(|v|if v.is_some(){Ok(())}else{Err("network_identity_unavailable".into())})} else {android_keys::delete_network_identity(&app,&id,expected_handle.as_deref().ok_or("invalid_network_identity")?)}}).await.map_err(|_|"network_identity_result_unknown".to_owned())?.map_err(|_|"network_identity_result_unknown".to_owned())}
+    {if !network_nodes::provider_available(profile.provider){return Err("network_identity_unavailable".into());}
+     {let mut f=flow.lock().map_err(|_|"state_unavailable")?;let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(&affected,&mut g);}
+     nodes.stop_profile(&id).await?;
+     reviewed_identity_profile(&hosts,&id,expected_revision,&expected_catalog,&affected)?;
+     tauri::async_runtime::spawn_blocking(move|| {if action=="create" {android_keys::network_identity(&app,"networkIdentityCreate",&id,provider,&mode,&secret).and_then(|v|if v.is_some(){Ok(())}else{Err("network_identity_unavailable".into())})} else {android_keys::delete_network_identity(&app,&id,provider,expected_handle.as_deref().ok_or("invalid_network_identity")?)}}).await.map_err(|_|"network_identity_result_unknown".to_owned())?.map_err(|_|"network_identity_result_unknown".to_owned())}
 }
 #[tauri::command]
 async fn network_node_status(id:String,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,app:tauri::AppHandle)->Result<network_nodes::View,String>{
     let catalog=hosts.networks()?;let p=catalog.profiles.iter().find(|p|p.id==id).ok_or("network_profile_missing")?;
-    if p.provider!=networks::Provider::Easytier{return Err("overlay_provider_unavailable".into());}nodes.status(&app,&id).await
+    network_nodes::provider_name(p.provider)?;nodes.status(&app,p).await
 }
 #[tauri::command]
-async fn network_node_start(id:String,expected_catalog:String,expected_revision:u32,affected:Vec<String>,expected_handle:String,hosts:State<'_,Hosts>,ops:State<'_,network_identity::Operations>,nodes:State<'_,network_nodes::Nodes>,app:tauri::AppHandle)->Result<(),String>{
+async fn network_node_start(id:String,expected_catalog:String,expected_revision:u32,affected:Vec<String>,expected_handle:String,hosts:State<'_,Hosts>,ops:State<'_,network_identity::Operations>,nodes:State<'_,network_nodes::Nodes>,app:tauri::AppHandle,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>)->Result<(),String>{
     let _op=ops.enter()?;if !network_identity::valid_handle(&expected_handle){return Err("invalid_network_identity".into());}
-    reviewed_identity_profile(&hosts,&id,expected_revision,&expected_catalog,&affected)?;
-    let profile=hosts.networks()?.profiles.into_iter().find(|p|p.id==id).ok_or("network_profile_missing")?;if !profile.enabled{return Err("network_profile_disabled".into());}
-    #[cfg(all(target_os="android",feature="network-easytier"))]
-    {let app=app.clone();let key=id.clone();let identity=tauri::async_runtime::spawn_blocking(move||android_keys::network_identity(&app,"networkIdentityStatus",&key,"","")).await.map_err(|_|"network_identity_unavailable")??.ok_or("network_identity_missing")?;
-     if identity.handle!=expected_handle{return Err("network_identity_changed".into());}if identity.mode!="PRIVATE"{return Err("network_public_mode_unsupported".into());}nodes.start(&profile,expected_handle).await}
-    #[cfg(not(all(target_os="android",feature="network-easytier")))]
-    {let _=(nodes,app,profile);Err("overlay_provider_unavailable".into())}
+    let profile=reviewed_identity_profile(&hosts,&id,expected_revision,&expected_catalog,&affected)?;if !profile.enabled{return Err("network_profile_disabled".into());}
+    #[cfg(target_os="android")]
+    {if !network_nodes::provider_available(profile.provider){return Err("overlay_provider_unavailable".into());}
+     let provider=network_nodes::provider_name(profile.provider)?;let app=app.clone();let key=id.clone();let identity=tauri::async_runtime::spawn_blocking(move||android_keys::network_identity(&app,"networkIdentityStatus",&key,provider,"","")).await.map_err(|_|"network_identity_unavailable")??.ok_or("network_identity_missing")?;
+     if identity.handle!=expected_handle{return Err("network_identity_changed".into());}network_identity::validate_runtime_mode(profile.provider,&identity.mode)?;
+     reviewed_identity_profile(&hosts,&id,expected_revision,&expected_catalog,&affected)?;
+     {let mut f=flow.lock().map_err(|_|"state_unavailable")?;let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(&affected,&mut g);}
+     nodes.start(&profile,expected_handle).await}
+    #[cfg(not(target_os="android"))]
+    {let _=(nodes,app,profile,flow,gate);Err("overlay_provider_unavailable".into())}
 }
 #[tauri::command]
 async fn network_node_stop(id:String,expected_catalog:String,expected_revision:u32,affected:Vec<String>,binding:herdr_readonly_transport::mobile_nodes::Binding,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>)->Result<(),String>{
     reviewed_identity_profile(&hosts,&id,expected_revision,&expected_catalog,&affected)?;
     if binding.profile_id()!=id {return Err("mobile_node_binding_mismatch".into());}
+    // Stop may target an older saved binding; never silently substitute the new one.
     {let mut f=flow.lock().map_err(|_|"state_unavailable")?;f.tabs.cancel_binding(&binding);if f.node_binding.as_ref()==Some(&binding){let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(&affected,&mut g);}}
     nodes.stop_exact(&id,binding).await
+}
+fn reviewed_login_binding(hosts:&Hosts,id:&str,revision:u32,catalog:&str,affected:&[String],binding:&herdr_readonly_transport::mobile_nodes::Binding)->Result<networks::NetworkProfile,String>{
+    let p=reviewed_identity_profile(hosts,id,revision,catalog,affected)?;
+    if !p.enabled || p.provider!=networks::Provider::Tailscale || network_nodes::binding_for(&p,binding.identity_ref().into())?!=*binding{return Err("mobile_node_binding_mismatch".into());}Ok(p)
+}
+#[tauri::command]
+async fn network_node_login(id:String,expected_catalog:String,expected_revision:u32,affected:Vec<String>,binding:herdr_readonly_transport::mobile_nodes::Binding,hosts:State<'_,Hosts>,ops:State<'_,network_identity::Operations>,nodes:State<'_,network_nodes::Nodes>,app:tauri::AppHandle)->Result<network_nodes::View,String>{
+    let _op=ops.enter()?;let p=reviewed_login_binding(&hosts,&id,expected_revision,&expected_catalog,&affected,&binding)?;
+    #[cfg(target_os="android")]
+    {let key=id.clone();let identity=tauri::async_runtime::spawn_blocking(move||android_keys::network_identity(&app,"networkIdentityStatus",&key,"tailscale","","")).await.map_err(|_|"network_identity_unavailable")??.ok_or("network_identity_missing")?;
+     if identity.handle!=binding.identity_ref() || identity.mode!="DEVICE_STATE"{return Err("network_identity_changed".into());}
+     reviewed_login_binding(&hosts,&id,expected_revision,&expected_catalog,&affected,&binding)?;nodes.login(binding).await}
+    #[cfg(not(target_os="android"))]
+    {let _=(p,nodes,app);Err("overlay_provider_unavailable".into())}
+}
+#[tauri::command]
+async fn network_node_login_status(id:String,expected_catalog:String,expected_revision:u32,affected:Vec<String>,binding:herdr_readonly_transport::mobile_nodes::Binding,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>)->Result<network_nodes::View,String>{
+    let p=reviewed_login_binding(&hosts,&id,expected_revision,&expected_catalog,&affected,&binding)?;
+    let result=nodes.login_status(&p,&binding).await?;
+    reviewed_login_binding(&hosts,&id,expected_revision,&expected_catalog,&affected,&binding)?;Ok(result)
+}
+#[tauri::command]
+async fn network_node_open_auth(id:String,expected_catalog:String,expected_revision:u32,affected:Vec<String>,binding:herdr_readonly_transport::mobile_nodes::Binding,expected_auth_url:String,review_token:String,hosts:State<'_,Hosts>,ops:State<'_,network_identity::Operations>,nodes:State<'_,network_nodes::Nodes>,app:tauri::AppHandle)->Result<(),String>{
+    let _op=ops.enter()?;reviewed_login_binding(&hosts,&id,expected_revision,&expected_catalog,&affected,&binding)?;
+    nodes.open_auth(&app,&binding,&review_token,&expected_auth_url).await
 }
 #[tauri::command]
 fn host_list(hosts:State<'_,Hosts>)->Result<Vec<hosts::View>,String>{hosts.list()}
@@ -530,7 +576,7 @@ pub fn run() {
             let flow=RemoteFlow {recovery:Some(recovery),..Default::default()};
             app.manage(Arc::new(Mutex::new(flow))); Ok(())
         })
-        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,network_node_status,network_node_start,network_node_stop,
+        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,network_node_status,network_node_start,network_node_stop,network_node_login,network_node_login_status,network_node_open_auth,
             config_document_platform,config_document_open,config_document_save,config_export,config_preview,config_apply,config_discard])
         .run(tauri::generate_context!())
         .expect("Tauri probe startup failed");

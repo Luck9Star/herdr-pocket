@@ -120,7 +120,7 @@ class InputJournalFile(context: Context) {
         integer("schemaVersion",1,2); integer("port",1,65535); integer("generation",1,2147483647)
         if (version == 2 && !obj.isNull("route")) {
             val route = text("route",256)
-            val match = Regex("easy-tier:([a-f0-9]{32}):([1-9][0-9]{0,9}):([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})").matchEntire(route)
+            val match = Regex("(?:easy-tier|tailscale):([a-f0-9]{32}):([1-9][0-9]{0,9}):([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})").matchEntire(route)
             check(match != null && match.groupValues[2].toLong() <= 2147483647L)
         }
         check(text("requestId",32).matches(Regex("[a-f0-9]{32}")))

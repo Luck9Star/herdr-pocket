@@ -132,3 +132,5 @@ Penpot 能力依据：[组件](https://help.penpot.app/user-guide/design-systems
 两套 Android 候选已在 API 35 验证“配对 → 看板 → 持续观察”。设计继续沿用 Penpot v2 的靛蓝／Slate 语义色。等待授权时须展示可核对的原请求和设备指纹；切后台返回后需清除先前勾选的来源确认。响应审查通过与实际 SSH 认证完成是两个独立状态。看板将主机明确报告为受阻的窗格稳定置顶；标签和状态仅供展示，点击绑定仍使用 pane 与 terminal 的稳定 ID。
 
 观察页在 full 后显示会话与目标，增量只在当前目标有效。停止观察后保留最后画面并标为陈旧；隐藏标签返回后需主动获取新 full。当前真实 GUI 证据支持这些状态的实现交接，终端像素、手机真实输入法、相机识别和三网并发继续单独验证。[当前核心原型](../design/README.md) · [手机阶段结果及后续顺序](15-mobile-gui-validation.md)
+
+后续 [Tailscale 手机登录源码](26-mobile-tailscale-login.md)明确拆开本机身份、请求授权、浏览器打开、等待管理员批准和 Running；后台清除 URL／reviewToken，返回只读原节点，SSH／herdr 继续独立审查。保存和导入提前拒绝 native 不支持的控制 URL，避免到启动时才报错。这些是源码与隔离验证反馈，本轮未修改 Penpot 文件，手机视觉、授权往返和真实网络未验证。

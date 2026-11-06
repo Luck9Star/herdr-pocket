@@ -145,7 +145,7 @@ fn public_uri(s:&str,schemes:&[&str],peer:bool)->bool {
 pub fn validate_network(provider:Provider,label:&str,settings:&NetworkSettings)->Result<(), &'static str> {
     if !clean(label,96) {return Err("transfer_invalid_schema");}
     let valid=match (provider,settings) {
-        (Provider::Tailscale,NetworkSettings::Tailscale{control_url,hostname}) => (control_url.is_empty() || public_uri(control_url,&["https"],false)) && (hostname.is_empty() || (hostname.len()<=63 && hostname.is_ascii() && hostname.bytes().next().is_some_and(|b|b.is_ascii_alphanumeric()) && hostname.bytes().last().is_some_and(|b|b.is_ascii_alphanumeric()) && hostname.bytes().all(|b|b.is_ascii_alphanumeric() || b==b'-'))),
+        (Provider::Tailscale,NetworkSettings::Tailscale{control_url,hostname}) => crate::tailscale_settings::TailscaleSettings::new(control_url,hostname).is_ok(),
         (Provider::Easytier,NetworkSettings::Easytier{network_name,peers})=>clean(network_name,64) && (1..=16).contains(&peers.len()) && peers.iter().all(|p|public_uri(p,&["tcp","udp","ws","wss"],true)) && peers.iter().collect::<std::collections::HashSet<_>>().len()==peers.len(),
         (Provider::Zerotier,NetworkSettings::Zerotier{network_id})=>hex_id(network_id,16) && network_id.bytes().any(|b|b!=b'0'),
         _=>false,

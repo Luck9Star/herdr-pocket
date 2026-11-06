@@ -14,6 +14,9 @@ trait ManagedBackend: Backend {
     fn managed_login(&self, _deadline: Duration) -> Result<LoginStatus> {
         Err(Failure::ProviderUnavailable)
     }
+    fn managed_login_status(&self, _deadline: Duration) -> Result<LoginStatus> {
+        Err(Failure::ProviderUnavailable)
+    }
 }
 impl ManagedBackend for EasyTierBackend {
     fn managed_status(&self) -> Result<NodeStatus> {
@@ -33,6 +36,9 @@ impl ManagedBackend for TailscaleBackend {
     }
     fn managed_login(&self, deadline: Duration) -> Result<LoginStatus> {
         self.begin_login(deadline)
+    }
+    fn managed_login_status(&self, deadline: Duration) -> Result<LoginStatus> {
+        self.login_status(deadline)
     }
 }
 
@@ -145,6 +151,9 @@ pub(super) struct NodeEntry {
     backend: Arc<dyn ManagedBackend>,
     pending: AtomicBool,
     admission_retired: AtomicBool,
+    // Covers admission through native login/status return. Stop closes
+    // admission first and waits for this lease before native teardown.
+    login_busy: AtomicBool,
     start_cancelled: Arc<AtomicBool>,
     start_completion: Mutex<Option<Weak<Completion<NodeLease>>>>,
     closing: AtomicBool,
@@ -153,10 +162,28 @@ pub(super) struct NodeEntry {
     stopped: AtomicBool,
 }
 
+struct LoginAdmission<'a>(&'a NodeEntry);
+impl<'a> LoginAdmission<'a> {
+    fn acquire(entry: &'a NodeEntry) -> Result<Self> {
+        // SeqCst pairs with retire_admission + the stop worker's busy load:
+        // either stop sees this claim or this worker sees retirement.
+        entry
+            .login_busy
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .map_err(|_| Failure::Busy)?;
+        Ok(Self(entry))
+    }
+}
+impl Drop for LoginAdmission<'_> {
+    fn drop(&mut self) {
+        self.0.login_busy.store(false, Ordering::Release);
+    }
+}
+
 impl NodeEntry {
     /// Called with the runtime registry held, shared with start activation.
     pub(super) fn retire_admission(&self) -> bool {
-        self.admission_retired.store(true, Ordering::Release);
+        self.admission_retired.store(true, Ordering::SeqCst);
         self.profile.active.store(false, Ordering::Release);
         let pending = self.pending.load(Ordering::Acquire);
         if pending {
@@ -202,7 +229,7 @@ impl<T> NodeOperation<T> {
         }
     }
     pub fn cancel(&self) {
-        if !self.cancelled.swap(true, Ordering::AcqRel) {
+        if !self.cancelled.swap(true, Ordering::SeqCst) {
             if let Some(callback) = &self.on_cancel {
                 callback();
             }
@@ -342,6 +369,7 @@ impl OverlayRuntime {
             backend,
             pending: AtomicBool::new(true),
             admission_retired: AtomicBool::new(false),
+            login_busy: AtomicBool::new(false),
             start_cancelled: Arc::new(AtomicBool::new(false)),
             start_completion: Mutex::new(None),
             closing: AtomicBool::new(false),
@@ -541,11 +569,50 @@ impl OverlayRuntime {
         Ok(operation)
     }
     /// Explicit login only. No retry and no raw backend logs. Cancellation
-    /// discards publication; native callbacks retain their original owner.
+    /// before admission prevents dispatch; after admission it discards the
+    /// result. Stop waits for admitted work before native teardown. No retry.
     pub fn begin_node_login(
         &self,
         lease: &NodeLease,
         deadline: Duration,
+    ) -> Result<NodeOperation<LoginStatus>> {
+        self.login_operation(lease, deadline, true, None)
+    }
+    /// Native worker checks the caller's original cancellation at admission.
+    /// The checker must be nonblocking and observe the caller's cancellation
+    /// using sequentially consistent atomic operations.
+    pub fn begin_node_login_with_cancel_check(
+        &self,
+        lease: &NodeLease,
+        deadline: Duration,
+        check: Arc<dyn Fn() -> bool + Send + Sync>,
+    ) -> Result<NodeOperation<LoginStatus>> {
+        self.login_operation(lease, deadline, true, Some(check))
+    }
+    /// Read only; never reissues interactive authentication. Native keeps URLs
+    /// hidden until an explicit login was requested on this exact node.
+    pub fn node_login_status(
+        &self,
+        lease: &NodeLease,
+        deadline: Duration,
+    ) -> Result<NodeOperation<LoginStatus>> {
+        self.login_operation(lease, deadline, false, None)
+    }
+    /// Read-only counterpart with the same original-cancellation admission check.
+    pub fn node_login_status_with_cancel_check(
+        &self,
+        lease: &NodeLease,
+        deadline: Duration,
+        check: Arc<dyn Fn() -> bool + Send + Sync>,
+    ) -> Result<NodeOperation<LoginStatus>> {
+        self.login_operation(lease, deadline, false, Some(check))
+    }
+    fn login_operation(
+        &self,
+        lease: &NodeLease,
+        deadline: Duration,
+        begin: bool,
+        external_cancel: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
     ) -> Result<NodeOperation<LoginStatus>> {
         if !valid_deadline(deadline) {
             return Err(Failure::InvalidDeadline);
@@ -554,18 +621,54 @@ impl OverlayRuntime {
         if entry.closing.load(Ordering::Acquire)
             || entry.stopped.load(Ordering::Acquire)
             || entry.pending.load(Ordering::Acquire)
+            || entry.admission_retired.load(Ordering::Acquire)
         {
             return Err(Failure::ProfileUnavailable);
         }
         let operation = NodeOperation::new(None);
         let completion = operation.completion.clone();
+        let cancelled = operation.cancelled.clone();
         if thread::Builder::new()
             .name("overlay-node-login".into())
             .spawn(move || {
-                let result = entry.backend.managed_login(deadline);
+                let result = {
+                    // Claim before checking retirement: stop either observes
+                    // this lease, or retires first and this worker refuses.
+                    // No queued worker can call a backend after a completed
+                    // stop. Concurrent polls/logins return Busy, never replay.
+                    let check_external = || {
+                        external_cancel.as_ref().is_some_and(|check| {
+                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check()))
+                                .unwrap_or(true)
+                        })
+                    };
+                    // Early rejection is not admission. The CAS below is the
+                    // linearization point shared with retirement and stop.
+                    let admission = if check_external() {
+                        Err(Failure::Cancelled)
+                    } else {
+                        LoginAdmission::acquire(&entry)
+                    };
+                    match admission {
+                        Err(error) => Err(error),
+                        Ok(_admission) => {
+                            if cancelled.load(Ordering::SeqCst)
+                                || check_external()
+                                || entry.admission_retired.load(Ordering::SeqCst)
+                            {
+                                Err(Failure::Cancelled)
+                            } else if begin {
+                                entry.backend.managed_login(deadline)
+                            } else {
+                                entry.backend.managed_login_status(deadline)
+                            }
+                        }
+                    }
+                };
                 completion.finish(
                     if entry.closing.load(Ordering::Acquire)
                         || entry.stopped.load(Ordering::Acquire)
+                        || entry.admission_retired.load(Ordering::Acquire)
                     {
                         Err(Failure::Cancelled)
                     } else {
@@ -685,6 +788,7 @@ impl Inner {
                 let mut native_stop_attempted = false;
                 let result = loop {
                     let drained = !owned.pending.load(Ordering::Acquire)
+                        && !owned.login_busy.load(Ordering::SeqCst)
                         && !lock(&inner.registry)
                             .entries
                             .values()

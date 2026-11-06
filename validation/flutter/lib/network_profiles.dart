@@ -1,11 +1,62 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show Listenable;
+import 'package:pointycastle/digests/sha256.dart';
 import 'remote_adapter.dart';
 
 const maxNetworkProfiles = 32;
 const overlayProviders = ['tailscale','easytier','zerotier'];
 const maxNetworkRevision = 2147483647;
+const defaultTailscaleControlUrl = 'https://controlplane.tailscale.com';
+const defaultTailscaleHostname = 'herdr-pocket';
+
+bool _tailscaleDnsLabel(String value,{bool limitLength=true}) =>
+  value.isNotEmpty && (!limitLength || value.length <= 63) &&
+  RegExp(r'^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$').hasMatch(value);
+
+/// Shared authority rules; control settings additionally limit each DNS label.
+/// Read the raw spelling so URI normalization cannot erase an invalid port.
+bool isValidTailscaleAuthority(String authority,{bool limitLabelLength=true,int? maxLength}) {
+  if (authority.isEmpty || (maxLength != null && authority.length > maxLength) ||
+      RegExp(r'[@%\[\]]').hasMatch(authority)) return false;
+  final separator = authority.lastIndexOf(':');
+  final host = separator < 0 ? authority : authority.substring(0,separator);
+  if (host.isEmpty || host.length > 253 ||
+      host.split('.').any((label) => !_tailscaleDnsLabel(label,limitLength:limitLabelLength))) return false;
+  if (separator >= 0) {
+    final rawPort = authority.substring(separator+1);
+    if (!RegExp(r'^[0-9]+$').hasMatch(rawPort)) return false;
+    final port = int.tryParse(rawPort);
+    if (port == null || port < 1 || port > 65535) return false;
+  }
+  return true;
+}
+
+/// Mirrors shared TailscaleSettings before save/import, preserving URL bytes.
+bool isValidTailscaleControlUrl(String value) {
+  if (value.length > 2048 || !value.startsWith('https://') ||
+      !RegExp(r'^[\x21-\x7e]+$').hasMatch(value) || RegExp(r'[\\?#]').hasMatch(value) ||
+      RegExp(r'%(?![0-9A-Fa-f]{2})').hasMatch(value)) return false;
+  final authority = value.substring(8).split('/').first;
+  return isValidTailscaleAuthority(authority) && _publicUri(value,{'https'}) != null;
+}
+
+/// Public configuration, using the same defaults and byte sequence as native.
+/// No URI normalization: a reviewed spelling is part of the binding identity.
+Map<String,String> tailscaleEffectiveSettings(NetworkProfile profile) {
+  if (profile.provider != 'tailscale') throw const RemoteFailure('invalid_network_profile');
+  return Map<String,String>.unmodifiable({
+    'controlUrl':profile.settings['controlUrl'] == '' ? defaultTailscaleControlUrl : profile.settings['controlUrl'] as String,
+    'hostname':profile.settings['hostname'] == '' ? defaultTailscaleHostname : profile.settings['hostname'] as String,
+  });
+}
+
+String tailscaleNetworkName(NetworkProfile profile) {
+  final settings = tailscaleEffectiveSettings(profile);
+  final bytes = Uint8List.fromList(utf8.encode('herdr-tailscale-config-v1\u0000${settings['controlUrl']}\u0000${settings['hostname']}'));
+  return 'ts1:${SHA256Digest().process(bytes).map((b) => b.toRadixString(16).padLeft(2,'0')).join()}';
+}
 
 bool _publicText(dynamic value,int limit,{bool empty=false}) => value is String &&
   (empty || value.trim().isNotEmpty) && utf8.encode(value).length <= limit &&
@@ -50,8 +101,8 @@ class NetworkProfile {
     switch (value['provider']) {
       case 'tailscale':
         if (!exact({'controlUrl','hostname'}) || settings['controlUrl'] is! String || settings['hostname'] is! String ||
-            (settings['controlUrl'] != '' && _publicUri(settings['controlUrl'],{'https'}) == null) ||
-            (settings['hostname'] != '' && !RegExp(r'^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$').hasMatch(settings['hostname'] as String))) {
+            (settings['controlUrl'] != '' && !isValidTailscaleControlUrl(settings['controlUrl'] as String)) ||
+            (settings['hostname'] != '' && !_tailscaleDnsLabel(settings['hostname'] as String))) {
           throw const RemoteFailure('invalid_network_profile');
         }
       case 'easytier':
@@ -88,8 +139,8 @@ class NetworkProfile {
   }
 }
 
-/// A connection freezes one explicit provider revision. Production overlay
-/// transport is intentionally unavailable until a real mobile bridge is wired.
+/// A connection freezes one explicit provider revision. Readiness must come
+/// from the native provider and exact local identity, never a GUI label.
 class NetworkConnectionBinding {
   const NetworkConnectionBinding(this.profile,this.stillCurrent,{this.changes,this.fontSize});
   final NetworkProfile? profile;
@@ -100,6 +151,6 @@ class NetworkConnectionBinding {
   String get label => profile == null ? '系统直连（沿用系统路由）' : '${profile!.label} · ${profile!.provider}';
   void requireTransport({bool overlayReady=false}) {
     if (!stillCurrent()) throw const RemoteFailure('network_binding_changed');
-    if (profile != null && (!overlayReady || !profile!.enabled || profile!.provider != 'easytier')) throw const RemoteFailure('provider_unavailable');
+    if (profile != null && (!overlayReady || !profile!.enabled || !{'easytier','tailscale'}.contains(profile!.provider))) throw const RemoteFailure('provider_unavailable');
   }
 }

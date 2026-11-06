@@ -74,7 +74,7 @@ class _NetworkIdentityDialogState extends State<NetworkIdentityDialog> with Widg
   late final NetworkIdentitySession session;
   late final String capturedRevision;
   late final List<HostProfile> affected;
-  String mode = 'PRIVATE';
+  late String mode = widget.profile.provider == 'tailscale' ? 'DEVICE_STATE' : 'PRIVATE';
   bool reviewed = false;
   String? inputError;
   // Our own serialized identity operation sets writing without changing the
@@ -102,6 +102,9 @@ class _NetworkIdentityDialogState extends State<NetworkIdentityDialog> with Widg
         state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
       secret.clear();
       if (mounted) setState(() { reviewed = false; });
+      session.suspend();
+    } else if (state == AppLifecycleState.resumed && current()) {
+      session.resume();
     }
   }
   @override
@@ -117,7 +120,7 @@ class _NetworkIdentityDialogState extends State<NetworkIdentityDialog> with Widg
       return;
     }
     final bytes = Uint8List.fromList(utf8.encode(secret.text));
-    try { validateNetworkSecret(mode,bytes); }
+    try { validateNetworkIdentityInput(widget.profile,mode,bytes); }
     catch (_) {
       bytes.fillRange(0,bytes.length,0);
       setState(() { inputError = '加入密码须为 1–1024 个 UTF-8 字节且不含 NUL；无密码网络请明确选择对应模式。'; });
@@ -151,7 +154,7 @@ class _NetworkIdentityDialogState extends State<NetworkIdentityDialog> with Widg
       content:SizedBox(width:420,child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
         Text('${widget.profile.label} · ${widget.profile.provider}'),
         const Text('与公开网络配置和 SSH 配对密钥分开保存；不随配置导入导出。保存资料不代表节点已启动或可以连通。'),
-        if (!session.supported) const Text('此平台或网络类型的本机存储尚未接入。当前仅 Android EasyTier 提供此入口，不会使用明文存储。'),
+        if (!session.supported) const Text('此平台或网络类型的本机存储尚未接入。当前 Android Tailscale / EasyTier 提供原生入口；桥不可用时拒绝。'),
         if (!current()) const Text('公开配置已经变化 · 请关闭后按最新资料重新审查。'),
         if (session.busy) const Padding(padding:EdgeInsets.symmetric(vertical:12),child:LinearProgressIndicator()),
         if (session.notice != null) Text(session.notice!,key:const ValueKey('network-identity-notice')),
@@ -159,13 +162,18 @@ class _NetworkIdentityDialogState extends State<NetworkIdentityDialog> with Widg
           const Text('本机状态未确认 · 先读取状态，创建与移除暂不可用。'),
         if (session.record != null) ...[
           const Text('已找到本机资料 · 连通尚未验证',key:ValueKey('network-identity-present')),
-          Text(session.record!.mode == 'PRIVATE' ? '模式：有加入密码' : '模式：明确无加入密码'),
+          Text(switch (session.record!.mode) {
+            'DEVICE_STATE' => '模式：本机设备状态 · 原生加密保管',
+            'PRIVATE' => '模式：有加入密码', _ => '模式：明确无加入密码',
+          }),
           TextButton(key:const ValueKey('network-identity-delete'),onPressed:session.canDelete ? remove : null,
             child:const Text('移除本机入网资料…')),
         ],
         if (session.supported && session.known && session.record == null) ...[
           const Text('本设备尚未配置',key:ValueKey('network-identity-absent')),
-          DropdownButtonFormField<String>(key:const ValueKey('network-identity-mode'),initialValue:mode,isExpanded:true,
+          if (widget.profile.provider == 'tailscale')
+            const Text('创建此设备专属的加密状态空间。无需 auth key 或加入密码；启动节点后单独授权，身份不会随配置迁移。'),
+          if (widget.profile.provider == 'easytier') DropdownButtonFormField<String>(key:const ValueKey('network-identity-mode'),initialValue:mode,isExpanded:true,
             items:const [DropdownMenuItem(value:'PRIVATE',child:Text('使用加入密码')),
               DropdownMenuItem(value:'PUBLIC_NO_SECRET',child:Text('明确使用无密码网络'))],
             onChanged:session.busy ? null : (value) { if (value != null) setState(() {

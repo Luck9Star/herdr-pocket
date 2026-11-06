@@ -1,0 +1,537 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-06",
+  "baseCommit": "e19e7a1396b170fc5aaf7de75a7c1aa0ba97d501",
+  "scope": "Flutter/Tauri Android Tailscale GUI and native wiring; isolated source validation only",
+  "ciTriggered": false,
+  "newApk": false,
+  "guiOpened": false,
+  "realCredentialsUsed": false,
+  "realNodeStarted": false,
+  "currentApkSourceCommit": "546c3eb34bf166a22effa033d9862544641a308a",
+  "currentApkRun": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281",
+  "checks": [
+    {
+      "name": "shared-transport",
+      "executedBy": "parent",
+      "result": "passed",
+      "count": 95,
+      "scope": "plus 1 CLI; synthetic dual native ABI and owned loopback SSH/TCP",
+      "log": "/private/tmp/herdr-ts-gui-transport-parent-final2-20261106.log",
+      "logSha256": "a029e0833c40d7d153190dd432256437363e89f6430882ab0c6657c69bf2ee8d"
+    },
+    {
+      "name": "overlay",
+      "executedBy": "parent",
+      "result": "passed",
+      "count": 33,
+      "scope": "synthetic native ABI; later cancellation fix rerun by worker",
+      "log": "/private/tmp/herdr-ts-gui-overlay-parent-20261106.log",
+      "logSha256": "c1791ca57e49f63330cd15fc1c897d0fb3ebd34f3fbb5dd3a60e1f3badb63828"
+    },
+    {
+      "name": "overlay-final",
+      "executedBy": "worker",
+      "result": "passed",
+      "count": 33,
+      "scope": "includes final original-cancellation admission fix",
+      "log": "/private/tmp/herdr-ts-cancel-overlay.log",
+      "logSha256": "7a847e939b4cf90003eb36ebe34260da44ae45b28b76d2b93ec93690a91d6a44"
+    },
+    {
+      "name": "flutter-native-final",
+      "executedBy": "worker",
+      "result": "passed",
+      "count": 13,
+      "scope": "shared runtime plus Flutter host; no Android",
+      "log": "/private/tmp/herdr-ts-cancel-flutter-fixture.log",
+      "logSha256": "4ce577d71fcda4e96f841c303e653201ec34a044eceb632cdeef25106a23b526"
+    },
+    {
+      "name": "tauri-rust",
+      "executedBy": "parent",
+      "result": "passed",
+      "count": 42,
+      "scope": "real reusable host methods; Android IPC refuses via test stub",
+      "log": "/private/tmp/herdr-ts-gui-tauri-rust-parent-20261106.log",
+      "logSha256": "3e2e6a0a44e693c4a164d3fd8d780b8cc213f9405a3df789b9426bb98fcfd8e9"
+    },
+    {
+      "name": "tauri-js",
+      "executedBy": "parent",
+      "result": "passed",
+      "count": 115,
+      "scope": "unit/fake DOM; visibilitychange/resume exercised",
+      "log": "/private/tmp/herdr-ts-gui-tauri-node-parent-20261106.log",
+      "logSha256": "f8edc0eb786e282b0d1577dcc633683b3bc209e926fd80ca80b8423c3c0b0858"
+    },
+    {
+      "name": "native-build-tools",
+      "executedBy": "parent",
+      "result": "passed",
+      "count": 29,
+      "scope": "mock readelf/ELF/APK; real isolated archive logic",
+      "log": "/private/tmp/herdr-ts-gui-native-tools-parent-20261106.log",
+      "logSha256": "2977d9b89b40b1e84eb55a593df040bcf0a501c10b3f744987902616541894f0"
+    },
+    {
+      "name": "flutter-build-tools",
+      "executedBy": "parent",
+      "result": "passed",
+      "count": 8,
+      "scope": "preparation/provenance only; no SDK",
+      "log": "/private/tmp/herdr-ts-gui-flutter-tools-parent-20261106.log",
+      "logSha256": "9966a6091fed81161e2a62b49084357570594f5188d4fb226702d2b2ff4b651d"
+    },
+    {
+      "name": "overlay-strict-clippy",
+      "executedBy": "worker",
+      "result": "passed",
+      "scope": "final source; passed -D warnings",
+      "log": "/private/tmp/herdr-ts-cancel-overlay-clippy.log",
+      "logSha256": "0bb7e2f22f827a1ca6e685950d413f3d4859b54f56cd565f8901e00dfc9b9e60"
+    },
+    {
+      "name": "tauri-vite",
+      "executedBy": "parent",
+      "result": "passed",
+      "scope": "web asset build only",
+      "log": "/private/tmp/herdr-ts-gui-tauri-vite-parent-20261106.log",
+      "logSha256": "bb3d419a7ae5ac4f6ff08b8b100e37e7f4c189533e42681e27916a5de4bd2dff"
+    },
+    {
+      "name": "fixed-upstream-h1-and-patched-tar",
+      "executedBy": "parent",
+      "result": "passed",
+      "scope": "actual preexisting fixed Go module zip, whole patched tree; no download",
+      "log": "/private/tmp/herdr-ts-gui-upstream-parent-20261106.log",
+      "logSha256": "5ddff66f90f4fa5961a40b4c3be011c91a348801ee0f29ba5ca5be1827d70488"
+    },
+    {
+      "name": "flutter-jni",
+      "executedBy": "worker",
+      "result": "passed",
+      "scope": "48 -Xcheck:jni assertions; desktop synthetic class",
+      "log": "/private/tmp/herdr-flutter-ts-jni.log",
+      "logSha256": "30cab7e5f6582d517327663b6bac9d7ae046b5c08a65173b15943e2c7258ac13"
+    },
+    {
+      "name": "flutter-kotlin",
+      "executedBy": "worker",
+      "result": "passed",
+      "scope": "production channel/stub compile; 15 gate and 14 identity checks",
+      "log": "/private/tmp/herdr-flutter-ts-kotlin.log",
+      "logSha256": "086d9654015ac8fbf1289fdb74f083db1bbe72bb9e75ba038a13c954bbcc5c5a"
+    },
+    {
+      "name": "flutter-input-journal",
+      "executedBy": "worker",
+      "result": "passed",
+      "scope": "64 checks; temp files/JVM, Android fsync stub",
+      "log": "/private/tmp/herdr-ts-route-journal.log",
+      "logSha256": "718c3d7ec4f238ef381356526adf65ab3acd184c582f0eaafc48486ab922d1b1"
+    },
+    {
+      "name": "tauri-kotlin",
+      "executedBy": "worker",
+      "result": "passed",
+      "scope": "26 checks; actual plugin/helper with synthetic SDK/Tauri/store",
+      "log": "/private/tmp/herdr-tauri-ts-kotlin-sol.log",
+      "logSha256": "31f14b024bc8980438661ec450712df200496f6581ae3ecd5dcde58f948dc1e6"
+    },
+    {
+      "name": "cancel-before-admission",
+      "executedBy": "worker",
+      "result": "passed",
+      "scope": "original token cancelled while outer future not repolled; native login count zero",
+      "log": "/private/tmp/herdr-ts-cancel-admission-regression.log",
+      "logSha256": "c11d4fa45da8c0aed1674d54ce4a1db77ee117d742c23b5079baa576d7aa16f1"
+    },
+    {
+      "name": "cancel-after-admission",
+      "executedBy": "worker",
+      "result": "passed",
+      "scope": "retired result discarded, stop drains original operation, no replay",
+      "log": "/private/tmp/herdr-ts-cancel-after-admission.log",
+      "logSha256": "5125d606f5b4a32ca27129c793563362779484c7393b5f43706c9436e19a3be0"
+    },
+    {
+      "name": "transport-strict-clippy",
+      "executedBy": "parent",
+      "result": "failed",
+      "diagnosticCount": 12,
+      "diagnostics": [
+        {
+          "code": "clippy::collapsible_if",
+          "file": "src/config_transfer.rs",
+          "line": 159,
+          "message": "this `if` statement can be collapsed"
+        },
+        {
+          "code": "clippy::collapsible_if",
+          "file": "src/input.rs",
+          "line": 86,
+          "message": "this `if` statement can be collapsed"
+        },
+        {
+          "code": "clippy::collapsible_if",
+          "file": "src/input.rs",
+          "line": 101,
+          "message": "this `if` statement can be collapsed"
+        },
+        {
+          "code": "clippy::collapsible_if",
+          "file": "src/input.rs",
+          "line": 366,
+          "message": "this `if` statement can be collapsed"
+        },
+        {
+          "code": "clippy::nonminimal_bool",
+          "file": "src/lib.rs",
+          "line": 107,
+          "message": "this boolean expression can be simplified"
+        },
+        {
+          "code": "clippy::collapsible_if",
+          "file": "src/lib.rs",
+          "line": 781,
+          "message": "this `if` statement can be collapsed"
+        },
+        {
+          "code": "clippy::result_unit_err",
+          "file": "src/lib.rs",
+          "line": 830,
+          "message": "this returns a `Result<_, ()>`"
+        },
+        {
+          "code": "clippy::too_many_arguments",
+          "file": "src/lib.rs",
+          "line": 855,
+          "message": "this function has too many arguments (8/7)"
+        },
+        {
+          "code": "clippy::too_many_arguments",
+          "file": "src/lib.rs",
+          "line": 883,
+          "message": "this function has too many arguments (8/7)"
+        },
+        {
+          "code": "clippy::too_many_arguments",
+          "file": "src/lib.rs",
+          "line": 911,
+          "message": "this function has too many arguments (9/7)"
+        },
+        {
+          "code": "clippy::type_complexity",
+          "file": "src/input_loopback_test.rs",
+          "line": 21,
+          "message": "very complex type used. Consider factoring parts into `type` definitions"
+        },
+        {
+          "code": "clippy::field_reassign_with_default",
+          "file": "src/input.rs",
+          "line": 406,
+          "message": "field assignment outside of initializer for an instance created with Default::default()"
+        }
+      ],
+      "log": "/private/tmp/herdr-ts-gui-transport-clippy-parent-final-20261106.jsonl",
+      "logSha256": "bf71663bb67a8e5cf7d08596dc013b9a62354dc6993b79e2efcfa71228b31146"
+    },
+    {
+      "name": "flutter-dart-syntax",
+      "executedBy": "parent",
+      "result": "passed",
+      "count": 57,
+      "scope": "tree-sitter syntax only; no analyzer or Flutter runtime",
+      "log": "/private/tmp/herdr-ts-gui-dart-syntax-parent-20261106.log",
+      "logSha256": "3ac712e2bafbbd55132fa23bc30f52bf9284dd7c578fda5b8c80e04981a9f0b8"
+    }
+  ],
+  "flutterDart": {
+    "syntaxFiles": 57,
+    "newTestCasesAwaitingCI": 29,
+    "analyzer": "not run",
+    "flutterTests": "not run",
+    "syntaxCheckOnly": true
+  },
+  "sharedFixture": {
+    "path": "validation/shared/tailscale-settings-v1.json",
+    "vectors": 4,
+    "invalid": 21,
+    "checksumsVerified": 46
+  },
+  "failuresRetained": [
+    {
+      "scope": "parent first full transport",
+      "result": "sandbox loopback denied and new stop-test error-code expectation mismatch; own process terminated, expectations corrected, final full rerun passed"
+    },
+    {
+      "scope": "worker cancellation full transport",
+      "result": "sandbox 70 passed / 24 PermissionDenied failures; final outside-sandbox 95 library + 1 CLI passed"
+    },
+    {
+      "scope": "transport strict Clippy",
+      "result": "12 diagnostics remain; not declared passed"
+    }
+  ],
+  "notVerified": [
+    "Android Go cross-compilation and final ELF/Gradle APK of this batch",
+    "Android loader, KeyStore and real authorization/browser roundtrip",
+    "Flutter analyzer and 29 new cases in this source batch",
+    "Real Tailscale/EasyTier concurrent SSH/herdr",
+    "Phone IME, touch, camera, performance and long-running lifecycle",
+    "Apple/Windows/Linux new managed Tailscale host wiring",
+    "15 platform/provider and 20 concurrent-provider cells",
+    "All binary distribution license obligations; final product license and framework selection"
+  ],
+  "knownLimits": [
+    "A dual-linked host needs every required native DSO; missing either prevents host load",
+    "IPv6 control-server authority rejected consistently in current prototype",
+    "Flutter Apple input journal remains EasyTier-only until Apple Tailscale wiring",
+    "Existing downloadable APK remains 546c3eb; this batch has no new download"
+  ],
+  "sources": [
+    {
+      "path": "validation/flutter-network-runtime/Cargo.toml",
+      "sha256": "96b47ecea77ea860320f6d196d31484615fd9931ea7b0c75428a5a0366d4ffa6"
+    },
+    {
+      "path": "validation/flutter-network-runtime/src/lib.rs",
+      "sha256": "ca95168c8281613fdc034729e645a8f91ad9a211f6494519702015316b6979e5"
+    },
+    {
+      "path": "validation/flutter-network-runtime/src/native.rs",
+      "sha256": "29c738eb08ae46fdd31eee04621557a03a4825eba499deda29874cb78b65f0ac"
+    },
+    {
+      "path": "validation/flutter-network-runtime/src/tests.rs",
+      "sha256": "c22071524170d80ef89a6155ced231d98ff56e93f8ea19fa8c4383ebbe698515"
+    },
+    {
+      "path": "validation/flutter-network-runtime/tests/java/dev/herdr/pocket/NetworkRuntimeChannel.java",
+      "sha256": "6908e83fdde8ebbe73f9b8d8e2c8a51871a12ab80fcf65dce56f596069e46b09"
+    },
+    {
+      "path": "validation/flutter/lib/network_identity.dart",
+      "sha256": "db8afe6e223b5b2369b0f70cd567aaba56d652d5ab1bcadd255585d20148068e"
+    },
+    {
+      "path": "validation/flutter/lib/network_identity_dialog.dart",
+      "sha256": "94c900ef84291a6d39a5f3d3fcf29097743211272e35f4e85b2f92579d100bc8"
+    },
+    {
+      "path": "validation/flutter/lib/network_profiles.dart",
+      "sha256": "f04e2f2e1c53f1e3188bfa7a5c518bd3f18138ef4db9c1cbe9ff6aee6c870b34"
+    },
+    {
+      "path": "validation/flutter/lib/network_profiles_page.dart",
+      "sha256": "67f90d7668daa45fd82aeffc1ac614b77af4d90aab5cb394da535c9e3249c59b"
+    },
+    {
+      "path": "validation/flutter/lib/network_runtime.dart",
+      "sha256": "6c72235d4c985ed734f745ca28411c5bbd93e4b3d1d444e3588f9317e2f8aa60"
+    },
+    {
+      "path": "validation/flutter/lib/remote_input.dart",
+      "sha256": "6e8af4fb754e5f6c20f49603b01740329b2cfb6c87f6c5f9dd7f01d8ceed7eea"
+    },
+    {
+      "path": "validation/flutter/lib/network_login.dart",
+      "sha256": "8ac37f6c5e44f2587fc48170bdf3301403538e21f5396f55d9b02888e7e2f352"
+    },
+    {
+      "path": "validation/flutter/lib/network_login_dialog.dart",
+      "sha256": "8bbddebf526af50f657d4ef576bb87194889e56403257066a71d00f5198f9ea1"
+    },
+    {
+      "path": "validation/flutter/native/android/InputJournalFile.kt",
+      "sha256": "54fb2353ce0815bb6f49172e92e8da87e6fc9e14341ada5fd298aabf55fce7e2"
+    },
+    {
+      "path": "validation/flutter/native/android/MainActivity.kt",
+      "sha256": "a642700d4b20af820f5204099ac432cbcadcc2fe7ade5cdcaa87dee5e4e59a17"
+    },
+    {
+      "path": "validation/flutter/native/android/NetworkIdentityChannel.kt",
+      "sha256": "f8357c1093ceb365d40464e949074f11c530df30fb0f998ff2e803c984a0ce7e"
+    },
+    {
+      "path": "validation/flutter/native/android/NetworkRuntimeChannel.kt",
+      "sha256": "2170cdd09463a13b797c4c9728f43ea0b10dc73f62d5c1d0e80ef0b0e856857f"
+    },
+    {
+      "path": "validation/flutter/native/android/tests/InputJournalProbe.kt",
+      "sha256": "7130eda74aad73945a2e1f0f8359f91e50d473c8c07eb0d65203c9503f5edae1"
+    },
+    {
+      "path": "validation/flutter/native/android/tests/run_input_journal_probe.py",
+      "sha256": "437948f31e2de3744063c2ba2dddcc19823b0b792abdc7c6a4ec4172dae3e492"
+    },
+    {
+      "path": "validation/flutter/native/android/tests/NetworkIdentityProbe.kt",
+      "sha256": "6a90b83023ff0a20617f6f03045faea871dff9a355ad4b8fb7a2ae7f53bc4787"
+    },
+    {
+      "path": "validation/flutter/native/android/tests/NetworkLoginGateProbe.kt",
+      "sha256": "5b4f53406a8769e1da04b7de0f96683a90163437380c476d4415c29dd5fcbc59"
+    },
+    {
+      "path": "validation/flutter/pubspec.yaml",
+      "sha256": "da2578ae9d75e110b9e37a8e8dc3df69fc116f27d1f92f4dd4daa5d2e376f20f"
+    },
+    {
+      "path": "validation/flutter/tool/check-network-kotlin.py",
+      "sha256": "51920524ceddd63d648f1a2545882818b21d2e13d669dc517129b3ad01f47eea"
+    },
+    {
+      "path": "validation/flutter/tool/ci.py",
+      "sha256": "578640c9b050328f05065d34ab55b909701ad84e6d7b47ae0ce2d78d888db356"
+    },
+    {
+      "path": "validation/flutter/test/network_login_test.dart",
+      "sha256": "a5e3694e31946270287c70abee73317f32f46a615900230d3c8034ee2f970ab3"
+    },
+    {
+      "path": "validation/flutter/test/network_tailscale_test.dart",
+      "sha256": "24bba536cb032fd4a0d919b6ca0887f494ae988cea3d6736d34b026516d91802"
+    },
+    {
+      "path": "validation/flutter/test/network_tailscale_widget_test.dart",
+      "sha256": "3faff4adef8ad3a4816157648d6c5bc07e781b04524e567aa14bc4d9248883f0"
+    },
+    {
+      "path": "validation/native/tool/android_bundle.py",
+      "sha256": "d409e0e04ee35cac82f6eb9dffabd3a4bb257ba42a11bd45494947fdd6ce06c3"
+    },
+    {
+      "path": "validation/native/tool/android_tailscale.py",
+      "sha256": "9fb01f4e9afb8194d3ae5ccfaa6ec88a02f7374fe777096685a2d8047fc0c60f"
+    },
+    {
+      "path": "validation/native/tool/test_android_tailscale.py",
+      "sha256": "8c7355d01f95b9e1d455ecae6ea5addb59fcc977f7e2a37c810c4510d6c19e46"
+    },
+    {
+      "path": "validation/overlay-runtime/src/nodes.rs",
+      "sha256": "8bca1f7e2035d3ea7cf2ccc6375f8ceaa6dae6382e6ee1036be0f0222a3e5434"
+    },
+    {
+      "path": "validation/overlay-runtime/src/tailscale.rs",
+      "sha256": "da8a0870d35fd1c87ee330fb38aa8930be93486556e1619fbdd447ba42a01cdf"
+    },
+    {
+      "path": "validation/overlay-runtime/tests/tailscale_fixture.c",
+      "sha256": "ddeebdd590c5284e2e830255ff0e1d3c763fce450143a2163e18839b84e031bc"
+    },
+    {
+      "path": "validation/shared/SHA256SUMS",
+      "sha256": "9eb0ff87a40dd8536bfe18308cc1dd272ede9fa71df51a96e3ebc3f1d40f8829"
+    },
+    {
+      "path": "validation/shared/tailscale-settings-v1.json",
+      "sha256": "7e6a12a927a66688e3aef622a5278085a6ac7363a4d0ad3d50e847d1a31b82d9"
+    },
+    {
+      "path": "validation/tauri/android/DeviceKeysPlugin.kt",
+      "sha256": "a8f614429fa952046c6d135753f14070153b60b8b4137045c3809493d2bbd121"
+    },
+    {
+      "path": "validation/tauri/android/NetworkAuthReview.kt",
+      "sha256": "d8c2e8a079cf3f114f395b8559ad4c0d074446843ce75e09b35953e4347b3736"
+    },
+    {
+      "path": "validation/tauri/scripts/wire-android.py",
+      "sha256": "993d51c3171f338e76a7c142510bf980b82caacd3fe5a5866a2965c6eee9d9ac"
+    },
+    {
+      "path": "validation/tauri/src-tauri/Cargo.toml",
+      "sha256": "ff297873125de7b61544e8ffc0f5cef4e7af909c8c1b98c250256e7c9e41e6a7"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/android_keys.rs",
+      "sha256": "43478ada17ba78b4ab5bdd7446be38f6158fb1b23d0fb88d88bb7fd5817ca9c8"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/lib.rs",
+      "sha256": "f850d2c4f824e76f9c66118877ef9d09cea270085762b5609fd1debf28e341df"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/network_identity.rs",
+      "sha256": "52d7f927efe003b34e3effcccee5b9226c37e429ec63eb60274613aa856485d1"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/network_nodes.rs",
+      "sha256": "4e5297430f13a81d6c58817e5002166b8c59b984df8f14ff50fa594ef9fbcd2c"
+    },
+    {
+      "path": "validation/tauri/src/network-login-poll.js",
+      "sha256": "cf0a3498815c56b8d2841691e55c7b92c93375503dacc718e8228067f292c427"
+    },
+    {
+      "path": "validation/tauri/src/network-node-state.js",
+      "sha256": "ac2d91fdf76c15185c105cd4b6aecb5f95dad2195e99467597e86554dd7c4981"
+    },
+    {
+      "path": "validation/tauri/src/network-ui.js",
+      "sha256": "978e8f4311ff50d5ca9c96dcedeb0c9aaa6ab92de8059cad8c6afc917cd9a4f6"
+    },
+    {
+      "path": "validation/tauri/test/NetworkPluginProbe.kt",
+      "sha256": "fbb8f6f7ee2937739f6e472ef364d8730e9581090f8d24fad9cee36b04389675"
+    },
+    {
+      "path": "validation/tauri/test/android-network-plugin-test.py",
+      "sha256": "7a2b748790c6e7f6be4b516878f57ec7174f44ab058485d8a431a09a75ae8c84"
+    },
+    {
+      "path": "validation/tauri/test/network-login.test.mjs",
+      "sha256": "debd9217b350250d1bc26b63c3d273b5afe9c7798c06bf7f5e5e186ac5a5dd02"
+    },
+    {
+      "path": "validation/transport-rust/src/config_transfer.rs",
+      "sha256": "1df90a3a8b516e740704195d88ed326d0e6ebdcb21ab453440aa07571dbe0599"
+    },
+    {
+      "path": "validation/transport-rust/src/lib.rs",
+      "sha256": "72de1e95f7f0ce754db7a15ae29c10cfb6e976393413031db9047fbf4b298a2c"
+    },
+    {
+      "path": "validation/transport-rust/src/mobile_nodes.rs",
+      "sha256": "7adea3f2090f5bb0586d41b113c512bc483c5d70da21b6764c8f3567942ea2b6"
+    },
+    {
+      "path": "validation/transport-rust/src/mobile_nodes/tests.rs",
+      "sha256": "d3a0cef3af8b028c46efc836d3498ee814575fd9abf3bcf761b734aad2a4556b"
+    },
+    {
+      "path": "validation/transport-rust/src/tailscale_settings.rs",
+      "sha256": "3583d8a4aae96b257fb13969446e068bfa03d3f9c2853e2bc2d28fc24f77bccd"
+    }
+  ],
+  "workflow": {
+    "path": ".github/workflows/android-network-experiment.yml",
+    "sha256": "c6e97711549a0376d1614fdf6694ba6a761bd75a887a694c3e609a8b4568ed45",
+    "yamlParsed": true,
+    "executed": false,
+    "nativeProviders": [
+      "easytier",
+      "tailscale"
+    ],
+    "go": "1.27.3",
+    "ndk": "28.2.13676358",
+    "api": 35,
+    "abi": "arm64-v8a"
+  },
+  "documentationQueries": {
+    "context7": {
+      "library": "/golang/go/go1.27.3",
+      "commands": 3,
+      "result": "resolved; returned general cgo/linker tests; Android-specific configuration checked against primary documentation"
+    },
+    "primary": [
+      "https://pkg.go.dev/cmd/cgo",
+      "https://developer.android.com/ndk/guides/other_build_systems",
+      "https://developer.android.com/guide/practices/page-sizes"
+    ]
+  }
+}

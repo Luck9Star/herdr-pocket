@@ -2,11 +2,15 @@ package dev.herdr.pocket
 
 import android.app.Activity
 import android.os.Build
+import android.content.Intent
+import android.net.Uri
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import org.herdr.network.AndroidEasyTierConfig
 import org.herdr.network.AndroidNetworkSecretStore
+import org.herdr.network.AndroidTailscaleStateStore
+import org.herdr.network.AndroidTailscaleConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ArrayBlockingQueue
@@ -14,6 +18,26 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+
+/** Epoch admission for user-reviewed login URLs; does not store URL or credentials. */
+internal class LoginReviewGate {
+    private var foreground = false
+    private var epoch = 0L
+    private var review: String? = null
+    @Synchronized fun foreground(value: Boolean) {
+        foreground = value
+        if (!value) { epoch++; review = null }
+    }
+    @Synchronized fun invalidate(): Long { review = null; epoch++; return epoch }
+    @Synchronized fun admit(): Long? { if (!foreground) return null; return invalidate() }
+    @Synchronized fun active(expected: Long): Boolean = foreground && epoch == expected
+    @Synchronized fun install(expected: Long, token: String?): Boolean {
+        if (!foreground || epoch != expected) return false
+        review = token; return true
+    }
+    @Synchronized fun capture(token: String): Long? = if (foreground && review == token) epoch else null
+    @Synchronized fun valid(expected: Long, token: String): Boolean = foreground && epoch == expected && review == token
+}
 
 /** One private native scope per Flutter engine. No scope or config secret comes from Dart. */
 class NetworkRuntimeChannel(private val activity: Activity, messenger: BinaryMessenger) {
@@ -33,6 +57,10 @@ class NetworkRuntimeChannel(private val activity: Activity, messenger: BinaryMes
     private val closed = AtomicBoolean(false)
     private val lifecycle = Any()
     @Volatile private var scope: Long = 0
+    @Volatile private var easyTierBound = false
+    @Volatile private var tailscaleBound = false
+    private val loginGate = LoginReviewGate()
+    fun setForeground(value: Boolean) { loginGate.foreground(value) }
     private fun pool(name: String, count: Int, capacity: Int) = ThreadPoolExecutor(
         count, count, 0L, TimeUnit.MILLISECONDS, ArrayBlockingQueue<Runnable>(capacity),
         { task -> Thread(task, "pocket-network-$name").apply { isDaemon = true } }
@@ -51,18 +79,21 @@ class NetworkRuntimeChannel(private val activity: Activity, messenger: BinaryMes
         // Library loading and native registration happen off the UI thread.
         fast.execute {
             if (!closed.get() && Build.VERSION.SDK_INT >= 35) {
+                // A linked runtime may require both shared libraries; if any DT_NEEDED
+                // is absent the runtime itself refuses to load, never a fallback.
+                val etLibrary = try { System.loadLibrary("heeler_easytier"); true } catch (_: LinkageError) { false }
+                val tsLibrary = try { System.loadLibrary("hp_tailscale"); true } catch (_: LinkageError) { false }
                 try {
-                    System.loadLibrary("heeler_easytier")
                     System.loadLibrary("herdr_flutter_network_runtime")
-                    if (AndroidEasyTierConfig.bindNative(activity.applicationContext)) {
-                        val created = nativeCreateScope()
-                        synchronized(lifecycle) {
-                            if (closed.get()) { if (created != 0L) nativeCloseScope(created) }
-                            else scope = created
-                        }
+                    easyTierBound = etLibrary && try { AndroidEasyTierConfig.bindNative(activity.applicationContext) } catch (_: LinkageError) { false } catch (_: Exception) { false }
+                    tailscaleBound = tsLibrary && try { AndroidTailscaleConfig.bindNative(activity.applicationContext) } catch (_: LinkageError) { false } catch (_: Exception) { false }
+                    val created = nativeCreateScope()
+                    synchronized(lifecycle) {
+                        if (closed.get()) { if (created != 0L) nativeCloseScope(created) }
+                        else scope = created
                     }
-                } catch (_: LinkageError) { /* Explicit missing-library gate. */ }
-                  catch (_: Exception) { /* Do not expose native/Java exception contents. */ }
+                } catch (_: LinkageError) { /* Required shared library absent. */ }
+                  catch (_: Exception) { /* Do not expose exception contents. */ }
             }
         }
         channel.setMethodCallHandler(::handle)
@@ -127,12 +158,19 @@ class NetworkRuntimeChannel(private val activity: Activity, messenger: BinaryMes
     }
     private fun binding(value: Any?): Map<String, Any?> {
         val b = map(value)
-        exact(b, setOf("profileId", "profileRevision", "networkName", "identityRef"))
+        val ts = b["provider"] == "tailscale"
+        exact(b, if (ts) setOf("profileId", "profileRevision", "networkName", "identityRef", "provider") else setOf("profileId", "profileRevision", "networkName", "identityRef"))
         if (!profilePattern.matches(string(b["profileId"], 32)) || !identityPattern.matches(string(b["identityRef"], 36)))
             throw BridgeFailure("invalid_network_binding")
         integer(b["profileRevision"], 1, Int.MAX_VALUE.toLong())
-        if (string(b["networkName"], 64).isBlank()) throw BridgeFailure("invalid_network_binding")
+        if (string(b["networkName"], 256).isBlank()) throw BridgeFailure("invalid_network_binding")
         return b
+    }
+    private fun checkTailscaleIdentity(b: Map<String, Any?>) {
+        val record = AndroidTailscaleStateStore(activity.applicationContext).status(b["profileId"] as String)
+            ?: throw BridgeFailure("network_identity_missing")
+        if (record.profileId != b["profileId"] || record.provider != "tailscale" || record.handle != b["identityRef"])
+            throw BridgeFailure("network_identity_changed")
     }
     private fun encoded(args: Map<String, Any?>): String = JSONObject(args).toString().also {
         if (it.toByteArray(Charsets.UTF_8).size > MAX_IO) throw BridgeFailure("invalid_network_request")
@@ -178,14 +216,15 @@ class NetworkRuntimeChannel(private val activity: Activity, messenger: BinaryMes
             val args = if (call.arguments == null) emptyMap() else map(call.arguments)
             when (call.method) {
                 "available" -> {
-                    exact(args, emptySet())
+                    if (args.isNotEmpty()) { exact(args, setOf("provider")); if (args["provider"] != "tailscale") throw BridgeFailure("invalid_network_request") }
                     submit(fast, result) {
-                        if (scope == 0L || closed.get()) mapOf("available" to false, "reason" to "overlay_provider_unavailable")
+                        val bound = if (args["provider"] == "tailscale") tailscaleBound else easyTierBound
+                        if (scope == 0L || closed.get() || !bound) mapOf("available" to false, "reason" to "overlay_provider_unavailable")
                         else callNative(currentScope(), "available", args)
                     }
                 }
                 "nodeStatus" -> {
-                    exact(args, setOf("profileId"))
+                    if (args.containsKey("provider")) { exact(args, setOf("profileId", "provider")); if (args["provider"] != "tailscale") throw BridgeFailure("invalid_network_request") } else exact(args, setOf("profileId"))
                     if (!profilePattern.matches(string(args["profileId"], 32))) throw BridgeFailure("invalid_network_request")
                     submit(statuses, result) {
                         if (scope == 0L) mapOf("state" to "unavailable", "binding" to null)
@@ -193,21 +232,74 @@ class NetworkRuntimeChannel(private val activity: Activity, messenger: BinaryMes
                     }
                 }
                 "nodeStart" -> {
-                    exact(args, setOf("binding", "peers")); val b = binding(args["binding"])
-                    val peers = args["peers"] as? List<*> ?: throw BridgeFailure("invalid_network_request")
-                    if (peers.size !in 1..16 || peers.any { string(it, 2048).any { char -> char.code !in 33..126 } })
-                        throw BridgeFailure("invalid_network_request")
+                    val b = binding(args["binding"]); val ts = b["provider"] == "tailscale"
+                    if (ts) {
+                        exact(args, setOf("binding", "settings"))
+                        val settings = map(args["settings"]); exact(settings, setOf("controlUrl", "hostname"))
+                        string(settings["controlUrl"], 4096); string(settings["hostname"], 63)
+                    } else {
+                        exact(args, setOf("binding", "peers"))
+                        val peers = args["peers"] as? List<*> ?: throw BridgeFailure("invalid_network_request")
+                        if (peers.size !in 1..16 || peers.any { string(it, 2048).any { char -> char.code !in 33..126 } })
+                            throw BridgeFailure("invalid_network_request")
+                    }
+                    loginGate.invalidate()
                     submit(starts, result) {
                         val owned = currentScope()
-                        val record = AndroidNetworkSecretStore(activity.applicationContext).status(b["profileId"] as String, "easytier")
-                            ?: throw BridgeFailure("network_identity_missing")
-                        if (record.handle != b["identityRef"]) throw BridgeFailure("network_identity_changed")
-                        if (record.mode != AndroidNetworkSecretStore.SecretMode.PRIVATE) throw BridgeFailure("network_public_mode_unsupported")
+                        if (ts) {
+                            if (!tailscaleBound) throw BridgeFailure("overlay_provider_unavailable")
+                            checkTailscaleIdentity(b)
+                        } else {
+                            if (!easyTierBound) throw BridgeFailure("overlay_provider_unavailable")
+                            val record = AndroidNetworkSecretStore(activity.applicationContext).status(b["profileId"] as String, "easytier")
+                                ?: throw BridgeFailure("network_identity_missing")
+                            if (record.handle != b["identityRef"]) throw BridgeFailure("network_identity_changed")
+                            if (record.mode != AndroidNetworkSecretStore.SecretMode.PRIVATE) throw BridgeFailure("network_public_mode_unsupported")
+                        }
                         callNative(owned, call.method, args)
+                    }
+                }
+                "nodeLogin", "nodeLoginStatus" -> {
+                    exact(args, setOf("binding")); val b = binding(args["binding"])
+                    if (b["provider"] != "tailscale") throw BridgeFailure("invalid_network_binding")
+                    val epoch = loginGate.admit() ?: throw BridgeFailure("network_login_changed")
+                    submit(statuses, result) {
+                        if (!loginGate.active(epoch)) throw BridgeFailure("network_login_changed")
+                        checkTailscaleIdentity(b)
+                        if (!loginGate.active(epoch)) throw BridgeFailure("network_login_changed")
+                        val value = callNative(currentScope(), call.method, args)
+                        val response = map(value)
+                        val url = response["authUrl"]; val review = response["reviewToken"]
+                        if ((url == null) != (review == null) || (review != null && review !is String))
+                            throw BridgeFailure("network_native_invalid_response")
+                        if (closed.get() || !loginGate.install(epoch, review as? String)) throw BridgeFailure("network_login_changed")
+                        value
+                    }
+                }
+                "openLogin" -> {
+                    exact(args, setOf("binding", "url", "reviewToken")); val b = binding(args["binding"])
+                    if (b["provider"] != "tailscale") throw BridgeFailure("invalid_network_binding")
+                    val url = string(args["url"], 4096); val reviewToken = token(args["reviewToken"])
+                    val epoch = loginGate.capture(reviewToken) ?: throw BridgeFailure("network_login_changed")
+                    submit(statuses, result) {
+                        val owned = currentScope()
+                        checkTailscaleIdentity(b)
+                        val current = map(callNative(owned, "nodeAuthorizeOpen", mapOf("binding" to b, "url" to url, "reviewToken" to reviewToken)))
+                        if (current != mapOf("reviewed" to true)) throw BridgeFailure("network_login_changed")
+                        activity.runOnUiThread {
+                            if (closed.get() || scope != owned || !loginGate.valid(epoch, reviewToken)) {
+                                fail(result, "network_login_changed")
+                            } else {
+                                try { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))); succeed(result, mapOf("opened" to true)) }
+                                catch (_: Exception) { fail(result, "network_login_unavailable") }
+                            }
+                        }
+                        DeferredResult
                     }
                 }
                 "nodeStop" -> {
                     exact(args, setOf("binding")); binding(args["binding"])
+                    loginGate.invalidate()
                     submit(stops, result) { callNative(currentScope(), call.method, args) }
                 }
                 "streamOpen" -> {
@@ -269,6 +361,7 @@ class NetworkRuntimeChannel(private val activity: Activity, messenger: BinaryMes
     /** Retire only this engine scope. Native cleanup remains accounted until confirmed. */
     fun close() {
         if (!closed.compareAndSet(false, true)) return
+        loginGate.foreground(false)
         channel.setMethodCallHandler(null)
         val owned = synchronized(lifecycle) { val value = scope; scope = 0; value }
         // Native retirement is nonblocking, but still never call JNI on the UI thread.

@@ -460,6 +460,81 @@ impl MobileNodeService {
         timeout: Duration,
         cancel: Cancellation,
     ) -> Result<LoginSnapshot> {
+        self.login_checked(binding, None, timeout, cancel, true)
+            .await
+    }
+    pub async fn begin_login_attempt(
+        &self,
+        attempt: &NodeAttempt,
+        timeout: Duration,
+        cancel: Cancellation,
+    ) -> Result<LoginSnapshot> {
+        self.owns_attempt(attempt)?;
+        self.login_checked(
+            &attempt.binding,
+            Some(attempt.attempt),
+            timeout,
+            cancel,
+            true,
+        )
+        .await
+    }
+    /// Poll an existing authorization; never calls begin_login again.
+    pub async fn login_status(
+        &self,
+        binding: &Binding,
+        timeout: Duration,
+        cancel: Cancellation,
+    ) -> Result<LoginSnapshot> {
+        self.login_checked(binding, None, timeout, cancel, false)
+            .await
+    }
+    /// Used for a previously published auth review, including same-Binding
+    /// restarts. A stale review must not read or authorize a replacement node.
+    pub async fn login_status_attempt(
+        &self,
+        attempt: &NodeAttempt,
+        timeout: Duration,
+        cancel: Cancellation,
+    ) -> Result<LoginSnapshot> {
+        self.owns_attempt(attempt)?;
+        self.login_checked(
+            &attempt.binding,
+            Some(attempt.attempt),
+            timeout,
+            cancel,
+            false,
+        )
+        .await
+    }
+    async fn login_checked(
+        &self,
+        binding: &Binding,
+        expected_attempt: Option<u64>,
+        timeout: Duration,
+        cancel: Cancellation,
+        begin: bool,
+    ) -> Result<LoginSnapshot> {
+        let original = cancel.clone();
+        self.login_checked_with_cancel_check(
+            binding,
+            expected_attempt,
+            timeout,
+            cancel,
+            begin,
+            Arc::new(move || original.is_cancelled()),
+        )
+        .await
+    }
+    async fn login_checked_with_cancel_check(
+        &self,
+        binding: &Binding,
+        expected_attempt: Option<u64>,
+        timeout: Duration,
+        cancel: Cancellation,
+        begin: bool,
+        worker_cancel: Arc<dyn Fn() -> bool + Send + Sync>,
+    ) -> Result<LoginSnapshot> {
         binding.validate()?;
         deadline(timeout)?;
         if binding.provider != BindingProvider::Tailscale {
@@ -474,6 +549,9 @@ impl MobileNodeService {
             if entry.binding != *binding {
                 return Err("mobile_node_binding_mismatch");
             }
+            if expected_attempt.is_some_and(|expected| expected != entry.attempt) {
+                return Err("overlay_stale_revision");
+            }
             if !entry.state.live() {
                 return Err("mobile_node_not_started");
             }
@@ -485,11 +563,16 @@ impl MobileNodeService {
         if cancel.is_cancelled() {
             return Err("cancelled");
         }
-        let operation = self
-            .inner
-            .runtime
-            .begin_node_login(&node, timeout)
-            .map_err(code)?;
+        let operation = if begin {
+            self.inner
+                .runtime
+                .begin_node_login_with_cancel_check(&node, timeout, worker_cancel)
+        } else {
+            self.inner
+                .runtime
+                .node_login_status_with_cancel_check(&node, timeout, worker_cancel)
+        }
+        .map_err(code)?;
         let login = tokio::select! { biased; _=cancel.wait()=>return Err("cancelled"),result=operation=>result.map_err(code)? };
         let mut registry = lock(&self.inner.registry);
         let entry = registry

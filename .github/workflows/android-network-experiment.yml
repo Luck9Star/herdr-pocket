@@ -24,7 +24,7 @@ jobs:
           rustup toolchain install 1.96.0 --profile minimal
           rustup default 1.96.0
           python3 validation/vendor/verify-russh.py
-          cargo test --manifest-path validation/transport-rust/Cargo.toml --locked 2>&1 | tee "$RUNNER_TEMP/transport-tests.log"
+          cargo test --manifest-path validation/transport-rust/Cargo.toml --locked --features overlay-native-fixture,overlay-tailscale-fixture 2>&1 | tee "$RUNNER_TEMP/transport-tests.log"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -110,10 +110,14 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'ndk;28.2.13676358'
           rustup toolchain install 1.95.0 --profile minimal
           rustup target add --toolchain 1.95.0 aarch64-linux-android
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.27.3'
+          cache: false
       - name: Build and statically inspect candidate
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          python3 validation/native/tool/android_bundle.py build "$RUNNER_TEMP/android-native"
+          python3 validation/native/tool/android_bundle.py build "$RUNNER_TEMP/android-native" --tailscale
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: android-native-${{ github.sha }}
@@ -162,6 +166,7 @@ jobs:
           echo "CXX_aarch64_linux_android=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang++" >> "$GITHUB_ENV"
           echo "AR_aarch64_linux_android=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> "$GITHUB_ENV"
           echo "HEELER_ET_LIB_DIR=$RUNNER_TEMP/android-native" >> "$GITHUB_ENV"
+          echo "HP_TS_LIB_DIR=$RUNNER_TEMP/android-native" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang" >> "$GITHUB_ENV"
           echo "READELF=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" >> "$GITHUB_ENV"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -180,8 +185,8 @@ jobs:
           npm run tauri -- android init --ci
           python3 scripts/wire-android.py
           mkdir -p src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a
-          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/
-          npm run tauri -- android build --debug --target aarch64 --features network-easytier --apk --ci
+          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$HP_TS_LIB_DIR/libhp_tailscale.so" src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/
+          npm run tauri -- android build --debug --target aarch64 --features network-easytier,network-tailscale --apk --ci
           mapfile -t apks < <(find src-tauri/gen/android -name '*.apk' -type f)
           test "${#apks[@]}" -eq 1
           cp "${apks[0]}" "$RUNNER_TEMP/app.apk"
@@ -202,9 +207,9 @@ jobs:
           python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
           python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
           cp "$RUNNER_TEMP/flutter-source/pubspec.lock" "$RUNNER_TEMP/flutter-probe/pubspec.lock"
-          cargo build --manifest-path validation/flutter-network-runtime/Cargo.toml --locked --target aarch64-linux-android --features network-easytier
+          cargo build --manifest-path validation/flutter-network-runtime/Cargo.toml --locked --target aarch64-linux-android --features network-easytier,network-tailscale
           mkdir -p "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a"
-          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
+          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$HP_TS_LIB_DIR/libhp_tailscale.so" "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
           cp validation/flutter-network-runtime/target/aarch64-linux-android/debug/libherdr_flutter_network_runtime.so "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
           cd "$RUNNER_TEMP/flutter-probe"
           flutter pub get --enforce-lockfile
@@ -229,6 +234,7 @@ jobs:
           fi
           cp validation/shared/mobile-tabs-v1.json "$RUNNER_TEMP/app-output/mobile-tabs-v1.json"
           cp validation/shared/session-watch-v1.json "$RUNNER_TEMP/app-output/session-watch-v1.json"
+          cp validation/shared/tailscale-settings-v1.json "$RUNNER_TEMP/app-output/tailscale-settings-v1.json"
           cp validation/shared/target-input-journal-v1.json "$RUNNER_TEMP/app-output/target-input-journal-v1.json"
           cp validation/vendor/RUSSH-NOTICE.md validation/vendor/russh-0.65.0-source.json validation/vendor/russh-0.65.0-local-close.patch "$RUNNER_TEMP/app-output/"
           cp validation/vendor/russh-0.65.0-LICENSE-APACHE "$RUNNER_TEMP/app-output/russh-LICENSE"

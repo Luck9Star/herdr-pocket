@@ -64,6 +64,15 @@ pub extern "system" fn Java_org_herdr_network_AndroidEasyTierConfig_bindNative(
 }
 
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_org_herdr_network_AndroidTailscaleConfig_bindNative(
+    mut env: JNIEnv<'_>,
+    class: JClass<'_>,
+    context: JObject<'_>,
+) -> jboolean {
+    herdr_android_network_source::bind_tailscale(&mut env, class, context) as jboolean
+}
+
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_pocket_NetworkRuntimeChannel_nativeCreateScope(
     mut env: JNIEnv<'_>,
     _: JClass<'_>,

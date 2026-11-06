@@ -172,6 +172,76 @@ mod fixture {
         fn create(&self, _: &Binding, _: Vec<String>) -> Result<Arc<dyn SecureConfigSource>> {
             Ok(Arc::new(SyntheticSource { mode: self.mode }))
         }
+        #[cfg(feature = "tailscale-fixture")]
+        fn available_for(&self, provider: &BindingProvider) -> Result<()> {
+            match provider {
+                BindingProvider::EasyTier | BindingProvider::Tailscale => Ok(()),
+                _ => Err("overlay_provider_unavailable"),
+            }
+        }
+        #[cfg(feature = "tailscale-fixture")]
+        fn create_tailscale(
+            &self,
+            _: &Binding,
+            settings: &TailscaleSettings,
+        ) -> Result<Arc<dyn NativeStateSource>> {
+            Ok(Arc::new(SyntheticTsSource {
+                host: settings.hostname().into(),
+                url: settings.control_url().into(),
+                store: Arc::new(SyntheticTsStore::default()),
+            }))
+        }
+    }
+    #[cfg(feature = "tailscale-fixture")]
+    #[derive(Default)]
+    struct SyntheticTsStore(Mutex<HashMap<Vec<u8>, Vec<u8>>>);
+    #[cfg(feature = "tailscale-fixture")]
+    impl herdr_readonly_transport::mobile_nodes::NativeStateStore for SyntheticTsStore {
+        fn read(
+            &self,
+            key: &[u8],
+        ) -> herdr_readonly_transport::mobile_nodes::StateStoreResult<Vec<u8>> {
+            lock(&self.0)
+                .get(key)
+                .cloned()
+                .ok_or(herdr_readonly_transport::mobile_nodes::StateStoreError::Missing)
+        }
+        fn write(
+            &self,
+            key: &[u8],
+            value: Option<&[u8]>,
+        ) -> herdr_readonly_transport::mobile_nodes::StateStoreResult<()> {
+            let mut m = lock(&self.0);
+            if let Some(v) = value {
+                m.insert(key.to_vec(), v.to_vec());
+            } else {
+                m.remove(key);
+            }
+            Ok(())
+        }
+    }
+    #[cfg(feature = "tailscale-fixture")]
+    struct SyntheticTsSource {
+        host: String,
+        url: String,
+        store: Arc<SyntheticTsStore>,
+    }
+    #[cfg(feature = "tailscale-fixture")]
+    impl NativeStateSource for SyntheticTsSource {
+        fn load(
+            &self,
+            spec: &herdr_readonly_transport::mobile_nodes::NodeSpec,
+        ) -> overlay_runtime::Result<herdr_readonly_transport::mobile_nodes::NativeNodeConfig>
+        {
+            use herdr_readonly_transport::mobile_nodes::{NativeNodeConfig, NativeVettedDirectory};
+            NativeNodeConfig::for_spec(
+                spec,
+                NativeVettedDirectory::from_native_vetted("/native-vetted/fixture".into())?,
+                self.host.clone(),
+                self.url.clone(),
+                self.store.clone(),
+            )
+        }
     }
     fn bridge(mode: &'static str) -> Arc<Bridge> {
         Bridge::new(Arc::new(SyntheticFactory { mode })).unwrap()
@@ -192,7 +262,8 @@ mod fixture {
                     scope,
                     StartArgs {
                         binding: saved.clone(),
-                        peers: vec!["fixture://explicit".into()]
+                        peers: Some(vec!["fixture://explicit".into()]),
+                        settings: None
                     }
                 )
                 .await
@@ -505,7 +576,8 @@ mod fixture {
                         scope,
                         StartArgs {
                             binding: task_saved,
-                            peers: vec!["fixture://explicit".into()],
+                            peers: Some(vec!["fixture://explicit".into()]),
+                            settings: None,
                         },
                     )
                     .await
@@ -690,13 +762,14 @@ mod fixture {
                             binding: saved.clone(),
                             cancel: cancel.clone(),
                             start_pending: true,
+                            auth_review: None,
                         },
                     );
                     generation
                 };
                 assert_eq!(
                     bridge
-                        .status_node(scope, saved.profile_id())
+                        .status_node(scope, saved.profile_id(), None)
                         .await
                         .unwrap()
                         .value["state"],
@@ -716,7 +789,8 @@ mod fixture {
                             other,
                             StartArgs {
                                 binding: saved.clone(),
-                                peers: vec!["fixture://explicit".into()]
+                                peers: Some(vec!["fixture://explicit".into()]),
+                                settings: None
                             }
                         )
                         .await
@@ -749,6 +823,180 @@ mod fixture {
             assert_eq!(metric(8), 3);
             assert_eq!(metric(9), 3);
             assert_eq!(bridge.service.reserved_nodes(), 0);
+        });
+    }
+    #[cfg(feature = "tailscale-fixture")]
+    #[test]
+    fn tailscale_binding_review_and_route_remain_owned_across_restart() {
+        unsafe extern "C" {
+            fn hp_ts_fixture_all_running();
+            fn hp_ts_fixture_metric(index: i32) -> i32;
+        }
+        let _serial = isolated();
+        let bridge = bridge("");
+        let scope = bridge.new_scope().unwrap();
+        bridge.executor.block_on(async {
+            let settings =
+                TailscaleSettings::new("https://controlplane.tailscale.com", "herdr-pocket")
+                    .unwrap();
+            let saved = Binding::with_provider(
+                BindingProvider::Tailscale,
+                "b".repeat(32),
+                7,
+                settings.network_name().into(),
+                "11111111-1111-4111-8111-111111111111".into(),
+            )
+            .unwrap();
+            let args = || StartArgs {
+                binding: saved.clone(),
+                peers: None,
+                settings: Some(SettingsArgs {
+                    control_url: settings.control_url().into(),
+                    hostname: settings.hostname().into(),
+                }),
+            };
+            let mut mismatch = args();
+            mismatch.settings.as_mut().unwrap().hostname = "different".into();
+            assert_eq!(
+                bridge.start_node(scope, mismatch).await.err(),
+                Some("mobile_node_binding_mismatch")
+            );
+            assert_eq!(unsafe { hp_ts_fixture_metric(2) }, 0);
+            assert_eq!(
+                bridge.start_node(scope, args()).await.unwrap().value["state"],
+                "needs-login"
+            );
+            let initial = bridge
+                .login_node(scope, saved.clone(), false)
+                .await
+                .unwrap()
+                .value;
+            assert!(initial["authUrl"].is_null() && initial["reviewToken"].is_null());
+            let first = bridge
+                .login_node(scope, saved.clone(), true)
+                .await
+                .unwrap()
+                .value;
+            let url = first["authUrl"].as_str().unwrap().to_owned();
+            let token = first["reviewToken"].as_str().unwrap().to_owned();
+            let current = bridge
+                .login_node(scope, saved.clone(), false)
+                .await
+                .unwrap()
+                .value;
+            let newer = current["reviewToken"].as_str().unwrap().to_owned();
+            assert_ne!(token, newer);
+            let review = |t: &str| OpenLoginArgs {
+                binding: saved.clone(),
+                url: url.clone(),
+                review_token: t.into(),
+            };
+            assert_eq!(
+                bridge.review_open(scope, review(&token)).await.err(),
+                Some("network_login_changed")
+            );
+            assert_eq!(
+                bridge
+                    .review_open(scope, review(&newer))
+                    .await
+                    .unwrap()
+                    .value,
+                json!({"reviewed":true})
+            );
+            assert_eq!(
+                bridge.review_open(scope, review(&newer)).await.err(),
+                Some("network_login_changed")
+            );
+            let et = binding('a');
+            start(&bridge, scope, &et).await;
+            bridge.reserve_open(scope, "1").unwrap();
+            let denied = bridge
+                .open_stream(
+                    scope,
+                    OpenArgs {
+                        binding: saved.clone(),
+                        host: "target.invalid".into(),
+                        port: 22,
+                        open_id: "1".into(),
+                    },
+                )
+                .await;
+            assert!(denied.is_err());
+            unsafe { hp_ts_fixture_all_running() };
+            let _ = bridge
+                .status_node(scope, saved.profile_id(), Some(BindingProvider::Tailscale))
+                .await
+                .unwrap();
+            let opened = open(&bridge, scope, &saved, 2, "target.invalid").await;
+            assert_eq!(opened.value["route"]["provider"], "tailscale");
+            assert_eq!(opened.value["route"]["identity_ref"], saved.identity_ref());
+            let token_stream = opened.value["streamId"].as_str().unwrap();
+            bridge.stream(scope, token_stream, false).unwrap().retire();
+            until(|| bridge.service.reserved_streams() == 0).await;
+            stop(&bridge, scope, &saved).await;
+            bridge.start_node(scope, args()).await.unwrap();
+            let replacement = bridge
+                .login_node(scope, saved.clone(), true)
+                .await
+                .unwrap()
+                .value;
+            assert_eq!(replacement["authUrl"], url);
+            assert_ne!(replacement["reviewToken"], newer);
+            assert_eq!(
+                bridge.review_open(scope, review(&newer)).await.err(),
+                Some("network_login_changed")
+            );
+            stop(&bridge, scope, &saved).await;
+            stop(&bridge, scope, &et).await;
+            bridge.close_scope(scope).unwrap();
+        });
+    }
+    #[cfg(feature = "tailscale-fixture")]
+    #[test]
+    fn tailscale_unknown_stop_retains_owner_until_explicit_retry() {
+        unsafe extern "C" {
+            fn hp_ts_fixture_control(op: i32);
+            fn hp_ts_fixture_metric(index: i32) -> i32;
+        }
+        let _serial = isolated();
+        let bridge = bridge("");
+        let scope = bridge.new_scope().unwrap();
+        bridge.executor.block_on(async {
+            let settings =
+                TailscaleSettings::new("https://controlplane.tailscale.com", "stop-fail").unwrap();
+            let saved = Binding::with_provider(
+                BindingProvider::Tailscale,
+                "d".repeat(32),
+                7,
+                settings.network_name().into(),
+                "11111111-1111-4111-8111-111111111111".into(),
+            )
+            .unwrap();
+            let args = || StartArgs {
+                binding: saved.clone(),
+                peers: None,
+                settings: Some(SettingsArgs {
+                    control_url: settings.control_url().into(),
+                    hostname: settings.hostname().into(),
+                }),
+            };
+            bridge.start_node(scope, args()).await.unwrap();
+            assert!(bridge.stop_node(scope, saved.clone()).await.is_err());
+            let attempts = unsafe { hp_ts_fixture_metric(4) };
+            assert!(attempts > 0);
+            assert!(
+                lock(&bridge.registry)
+                    .nodes
+                    .contains_key(saved.profile_id())
+            );
+            assert_eq!(
+                bridge.start_node(scope, args()).await.err(),
+                Some("mobile_node_busy")
+            );
+            assert_eq!(unsafe { hp_ts_fixture_metric(4) }, attempts);
+            unsafe { hp_ts_fixture_control(3) };
+            stop(&bridge, scope, &saved).await;
+            bridge.close_scope(scope).unwrap();
         });
     }
 }

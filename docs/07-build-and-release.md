@@ -143,3 +143,5 @@ artifact / cache 等存储存在额度、保留和计费规则，不能从计算
 Android 组网候选另设[显式批次同源实验工作流](../.github/workflows/android-network-experiment.yml)：先产出 arm64/API 35 原生库与来源材料，再由两套 GUI 校验后消费。它只匹配新的 `codex/network-batch/**`，不匹配常规开发或既有 `codex/batch/**`，不改变常规包的 feature/ABI。手动入口须先在默认分支注册，不能依赖未注册的原型分支 dispatch。工作流目前只有源码和静态检查证据，尚无实际运行；动态加载、安装、节点与 SSH 另验，详见[本批记录](21-flutter-native-network.md)。
 
 手机独立标签批次继续使用同一个组网工作流：Flutter 先固定组合重音修复候选与依赖锁，分别分析、运行 widget／绘制和隔离 SSH GUI；共享 Rust 单独运行受控观察测试。两包报告保留 `sourceChecks`、`transportChecks`、打包和 Android 运行状态，不以成功打包抹去测试失败。新增 russh 固定源码候选的完整 Apache 许可证、变更声明、补丁与来源摘要随构建 assets 和下载证据交付；来源还原检查不替代实际编译或运行。[标签、依赖修复与集中结果](22-mobile-terminal-tabs.md)
+
+Tailscale 手机源码批次将同一组网工作流扩为 EasyTier＋Tailscale 双库：固定 Go module zip 的 h1、补丁后 tar 全文件、两库 APK 字节、JNI 与 DT_NEEDED 同时校验。此工作流扩展尚未运行，不继承旧 546c3eb 的 Android 编译或安装结果；仍按功能批次集中执行。[接线与新来源门禁](26-mobile-tailscale-login.md)

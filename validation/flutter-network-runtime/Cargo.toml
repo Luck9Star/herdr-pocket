@@ -11,6 +11,8 @@ crate-type = ["rlib", "cdylib"]
 [features]
 default = []
 network-easytier = ["herdr-readonly-transport/overlay-linked-easytier"]
+network-tailscale = ["herdr-readonly-transport/overlay-linked-tailscale"]
+tailscale-fixture = ["herdr-readonly-transport/overlay-tailscale-fixture"]
 # Explicit Unix synthetic ABI tests only. Never enable for an Android app.
 native-fixture = ["herdr-readonly-transport/overlay-native-fixture", "overlay-runtime/native-fixture"]
 

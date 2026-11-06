@@ -2,7 +2,11 @@
 
 herdr-pocket 是手机优先的远端 herdr 图形客户端原型，目标覆盖 iOS、Android、Windows、macOS 和 Linux。手机从配对和主机看板进入完整终端，桌面共享信息模型并提供分屏。项目独立于 herdr 官方；具体许可证待依赖与分发审查后确定。
 
-**当前进度 · 2026-11-06**　Flutter 与 Tauri 的同源 `546c3eb` Android arm64 测试包已完成云端构建，原生来源、APK 库字节、ABI、JNI 和动态依赖检查通过。两份归档已实际下载，并独立核对 ZIP digest、包内校验和与来源提交。[公开原型分支](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [CI 5 项 job 全部成功](https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281) · [详细验证与前三轮失败记录](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/22-mobile-terminal-tabs.md)
+**最新源码 · 2026-11-06 · [ff28d85](https://github.com/Luck9Star/herdr-pocket/commit/ff28d8581fafd61e89827b52b6e85b1a39e8a6eb)**　两套手机 GUI 已接入持续会话状态、按目标隔离的未知输入记录，以及 Tailscale 本机身份、显式登录和原节点路由，复用配对 → 看板 → 持续观察。共享 Rust 95＋1、Tauri Rust 42／JS 115 和原生隔离检查通过；Flutter 新增 29 条场景待集中 CI，Android 新接线和真实组网未验证，严格 transport Clippy 仍有 12 项诊断。[本批实现与边界](https://github.com/Luck9Star/herdr-pocket/blob/ff28d8581fafd61e89827b52b6e85b1a39e8a6eb/docs/26-mobile-tailscale-login.md) · [验证记录](https://github.com/Luck9Star/herdr-pocket/blob/ff28d8581fafd61e89827b52b6e85b1a39e8a6eb/docs/evidence/mobile-pair-gui/tailscale-mobile-source-20261106.json)
+
+**下面的下载包仍为旧源码 `546c3eb`，不包含上述后续功能。** 本批未新增 Actions 或 APK，双 provider 同源构建脚本已补齐，继续积累功能后统一验收。
+
+**现有测试包 · 2026-11-06**　Flutter 与 Tauri 的同源 `546c3eb` Android arm64 测试包已完成云端构建，原生来源、APK 库字节、ABI、JNI 和动态依赖检查通过。两份归档已实际下载，并独立核对 ZIP digest、包内校验和与来源提交。[公开原型分支](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [CI 5 项 job 全部成功](https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281) · [详细验证与前三轮失败记录](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/22-mobile-terminal-tabs.md)
 
 | Android 测试路线 | 下载 | 解压后的 app.apk SHA256 |
 | --- | --- | --- |
@@ -17,11 +21,11 @@ herdr-pocket 是手机优先的远端 herdr 图形客户端原型，目标覆盖
 | --- | --- | --- |
 | 设计 | Penpot v2 保存 30 个画板，包含新版配色、配对、终端、网络与迁移流程 | 真机交互、无障碍及实测反馈 |
 | 配对与密钥 | 两套 GUI 源码接入审查、设备密钥和恢复；本批 Flutter 隔离链路通过 | 当前包的设备存储、相机、锁屏与重启恢复 |
-| 看板与观察 | full/delta、独立标签、隐藏暂停、同 SSH 显式恢复及主动停止 | 下一批会话状态订阅；长期运行和真实设备生命周期 |
-| 输入与迁移 | 受保护输入、加密配置迁移和网络偏好已有实现；未知结果不重放 | 真实中文 IME、快捷键、TUI、触控；按目标隔离未知记录 |
-| 原生网络 | EasyTier 三桌面参考桥与隔离生命周期有记录；两 Android 包完成原生接线和静态校验 | 当前包原生加载、真实节点／SSH、Tailscale／ZeroTier 与逐平台并发 |
+| 看板与观察 | full/delta、独立标签、隐藏暂停、同 SSH 显式恢复及主动停止 | 持续状态订阅已在后续源码实现；新包、长期运行和真实设备生命周期待验收 |
+| 输入与迁移 | 受保护输入、加密配置迁移和网络偏好已有实现；未知结果不重放 | 按目标隔离未知记录已在后续源码实现；真实中文 IME、快捷键、TUI、触控待验收 |
+| 原生网络 | EasyTier 三桌面参考桥与隔离生命周期有记录；两 Android 包完成原生接线和静态校验 | Tailscale 原生与手机 GUI 已有后续源码和隔离检查；新包加载、真实节点／SSH、ZeroTier 和逐平台并发待验收 |
 | 分发 | 同源两份 debug 包已下载核对 | 安装、签名、真机运行和五端支持分别验收 |
 
 历史 `040eb26` 两路线 Android API 35 云模拟器的配对／观察闭环及 Tauri 两笔受保护输入证据单独保留，不外推到本批设备运行。[历史手机结果](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/18-mobile-network-profiles.md) · [设计与覆盖](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/design/README.md) · [配对与设备密钥](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/14-mobile-pairing-workbench.md) · [终端绘制与 EasyTier 移植修复](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/10-blocker-repair.md)
 
-下一批优先手机看板的持续状态更新，再补按目标隔离的未知输入记录与 Tailscale／ZeroTier 原生桥；这些后续改动不包含在本次 `546c3eb` 包中。桌面分屏紧随手机闭环。两路线使用相同字体与 fixture，先判断正确性，再比较性能和维护成本，框架尚未定案。断线或结果未知不自动重放输入，布局不隐式修改远端共享 PTY。[产品设计](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/05-product-design.md) · [云构建与分发](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/07-build-and-release.md)
+下一批优先 ZeroTier 状态托管、逻辑 socket 与并发隔离，再集中构建、验证累积的两套手机 GUI 和 Android 包；后续源码均不包含在现有 `546c3eb` 包中。桌面分屏紧随手机闭环。两路线使用相同字体与 fixture，先判断正确性，再比较性能和维护成本，框架尚未定案。断线或结果未知不自动重放输入，布局不隐式修改远端共享 PTY。[产品设计](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/05-product-design.md) · [云构建与分发](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/07-build-and-release.md)

@@ -650,10 +650,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "herdr-overlay-runtime-probe"
+version = "0.1.0"
+
+[[package]]
 name = "herdr-readonly-transport"
 version = "0.1.0"
 dependencies = [
  "base64ct",
+ "herdr-overlay-runtime-probe",
  "libc",
  "ring",
  "russh",

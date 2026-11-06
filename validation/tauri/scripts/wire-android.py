@@ -14,6 +14,9 @@ text += '''
 val sharedDeviceKeys = rootProject.projectDir.resolve("../../../../pairing/native/android").canonicalFile
 extensions.extraProperties["herdrDeviceKeysDir"] = sharedDeviceKeys
 apply(from = sharedDeviceKeys.resolve("device-keys.gradle"))
+val sharedNetworkVault = rootProject.projectDir.resolve("../../../../network-profiles/native/android").canonicalFile
+extensions.extraProperties["herdrNetworkSecretsDir"] = sharedNetworkVault
+apply(from = sharedNetworkVault.resolve("network-secrets.gradle"))
 '''
 gradle.write_text(text)
 target=app/'src/main/java/org/herdr/pocket/DeviceKeysPlugin.kt'

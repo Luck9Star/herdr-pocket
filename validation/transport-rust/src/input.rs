@@ -184,6 +184,8 @@ enum Mode {
 #[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InputIdentity {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route: Option<crate::transport::OverlayRouteIdentity>,
     pub host: String,
     pub port: u16,
     pub user: String,

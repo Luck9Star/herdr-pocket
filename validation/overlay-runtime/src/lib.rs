@@ -52,6 +52,9 @@ pub enum Failure {
     WorkerUnavailable,
     NativeRejected(i32),
     NativeRead(i32),
+    /// Read deadline expired after a cancel-safe native read returned without
+    /// consuming bytes. Unlike an unknown write, the same read may continue.
+    ReadTimedOut,
     UnknownWrite,
     ClosePending,
     WaitTimeout,
@@ -67,6 +70,8 @@ pub trait Backend: Send + Sync + 'static {
     fn provider(&self) -> Provider;
     fn evidence(&self) -> Evidence;
     fn open(&self, host: &str, port: u16, deadline: Duration) -> Result<u64>;
+    /// ReadTimedOut is allowed only after this call has fully stopped without
+    /// consuming bytes; no late native read may remain in flight.
     fn read(&self, handle: u64, max: usize, deadline: Duration) -> Result<Vec<u8>>;
     /// A positive count is only the locally accepted prefix, not remote delivery.
     fn write(&self, handle: u64, bytes: &[u8], deadline: Duration) -> Result<usize>;

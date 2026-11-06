@@ -155,7 +155,9 @@ pub fn config_apply(
     flow: State<'_, Arc<Mutex<RemoteFlow>>>,
     gate: State<'_, Mutex<AttemptGate>>,
     pairing: State<'_, PairingState>,
+    network_ops: State<'_, crate::network_identity::Operations>,
 ) -> Result<ImportResult, String> {
+    let _network_lease = network_ops.enter()?;
     let _lease = pairing.enter()?;
     let mut flow = flow.lock().map_err(|_| "state_unavailable")?;
     let mut gate = gate.lock().map_err(|_| "state_unavailable")?;

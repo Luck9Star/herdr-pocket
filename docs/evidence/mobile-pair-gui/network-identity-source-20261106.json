@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-11-06",
+  "baseCommit": "85b6e8b61a3ef9c79b45c261f313761c5d60a417",
+  "scope": "mobile network identity GUI and explicit overlay SSH transport source batch",
+  "ciStarted": false,
+  "newApkBuilt": false,
+  "applicationStarted": false,
+  "realCredentialsAccessed": false,
+  "realNodeStarted": false,
+  "checks": [
+    {
+      "name": "Android vault pure JVM",
+      "result": "passed",
+      "checks": 38,
+      "actualPosixPermissionDenied": "passed",
+      "parentRepeated": true,
+      "deviceProof": false
+    },
+    {
+      "name": "independent vault process contention",
+      "result": "passed",
+      "processes": 8,
+      "successfulCreates": 1,
+      "rejectedCreates": 7,
+      "scope": "temporary JVM fixture, memory backend only"
+    },
+    {
+      "name": "shared Android Java stub compile",
+      "result": "passed",
+      "scope": "temporary stub, not Android SDK"
+    },
+    {
+      "name": "Tauri Rust final integration",
+      "result": "passed",
+      "tests": 20,
+      "parentRepeated": true,
+      "command": "cargo test --locked --offline --manifest-path validation/tauri/src-tauri/Cargo.toml --lib"
+    },
+    {
+      "name": "Tauri JavaScript",
+      "result": "passed",
+      "tests": 65,
+      "build": "passed",
+      "parentRepeatedSubset": {
+        "networkUiTests": 9
+      }
+    },
+    {
+      "name": "transport suite",
+      "result": "passed",
+      "libraryTests": 42,
+      "cliTests": 1,
+      "parentRepeatedSubset": {
+        "overlayAdapterTests": 11
+      },
+      "feature": "overlay-native-fixture"
+    },
+    {
+      "name": "runtime",
+      "result": "passed",
+      "nativeFixtureTests": 24,
+      "defaultGateTests": 1
+    },
+    {
+      "name": "transport default offline check",
+      "result": "passed"
+    },
+    {
+      "name": "transport strict Clippy",
+      "result": "failed",
+      "remainingDiagnostics": 12,
+      "scope": "existing config_transfer, input, legacy APIs and loopback tests; not claimed clean"
+    },
+    {
+      "name": "Flutter syntax",
+      "result": "passed",
+      "dartFiles": 53,
+      "scope": "tree-sitter only, not type checking or compilation"
+    },
+    {
+      "name": "Flutter Python tooling",
+      "result": "passed",
+      "tests": 8
+    },
+    {
+      "name": "Flutter scaffold transformation",
+      "result": "passed",
+      "scope": "temporary fake flutter-create output; source copy and Gradle references; not platform build"
+    },
+    {
+      "name": "Tauri scaffold transformation",
+      "result": "passed",
+      "scope": "temporary generated-layout fixture; not platform build"
+    },
+    {
+      "name": "new Flutter tests",
+      "result": "not_run",
+      "reason": "no local Flutter SDK; retained for next consolidated cloud batch"
+    },
+    {
+      "name": "Android Kotlin/Gradle and Keystore runtime",
+      "result": "not_run"
+    },
+    {
+      "name": "physical phone and actual overlay connections",
+      "result": "not_run"
+    }
+  ],
+  "reviewCorrections": [
+    "Files metadata errors are not absence: only NoSuchFileException yields missing record",
+    "Tauri deletion binds reviewed UUID handle, never resolves a replacement at mutation time",
+    "Tauri mutable IPC arguments retained until invoke settlement, not cleared before deferred serialization",
+    "Flutter identity and public catalog writes share serialized queue with frozen revision and affected hosts",
+    "Idle native read timeout resumes only after prior operation returned, no write retry",
+    "Input recovery route identity derives from actual stream; legacy markers remain system-only"
+  ],
+  "limits": [
+    "Native vault to SecureConfigSource/engine startup and GUI overlay route are not wired end-to-end",
+    "Only Android EasyTier vault implemented; no other platform/provider extrapolation",
+    "Corrupt/missing-key destructive recovery not implemented; orphan aliases/pending files possible after crash; no rollback protection",
+    "Best-effort byte overwrite is not proof of erasing managed-runtime strings or engine copies",
+    "Android source/build/runtime and Flutter analyzer/widget/AVD remain unverified"
+  ],
+  "sourceFiles": [
+    {
+      "path": "validation/flutter/lib/host_catalog.dart",
+      "sha256": "6064d11bc487fd6d229b8705361efe7e3c57cf1e1178a934a83ba69d0e3ba922"
+    },
+    {
+      "path": "validation/flutter/lib/network_identity.dart",
+      "sha256": "0991dfc904f94281c010bcd3b0d1f1569e0cf2a500a64a052a36ed2189a74b0a"
+    },
+    {
+      "path": "validation/flutter/lib/network_identity_dialog.dart",
+      "sha256": "12e91d1ff5a722a0961a7d7a5e01f0f6ea972d7d8d97e8331b8e39e005264ee8"
+    },
+    {
+      "path": "validation/flutter/lib/network_profiles_page.dart",
+      "sha256": "1062a26ddbd17eafba25635b446e9bc6e27b062de8faf91072a334cab6505a6d"
+    },
+    {
+      "path": "validation/flutter/native/android/MainActivity.kt",
+      "sha256": "e12fc99c33369e40cc0488a07a3d2d7d015894091033697397bc6979295c4b60"
+    },
+    {
+      "path": "validation/flutter/native/android/NetworkIdentityChannel.kt",
+      "sha256": "5102a98f11b08cc559339d3cd3f67dd25b607527cc93fa07f4fa1788a6e86a4b"
+    },
+    {
+      "path": "validation/flutter/test/network_identity_catalog_test.dart",
+      "sha256": "9371eae82d3a13a1193b9055d1d361e85c2b7d4ab71315da21f057a2788d3476"
+    },
+    {
+      "path": "validation/flutter/test/network_identity_test.dart",
+      "sha256": "7df18b787441a9db7c57fbc44c346a691561b757255615bc726c1f3372a4c8a6"
+    },
+    {
+      "path": "validation/flutter/tool/ci.py",
+      "sha256": "3ccf4f02572baeeb31e10405d5b13c18f66d0d793929b35eebbfba45ed493fc1"
+    },
+    {
+      "path": "validation/network-profiles/native/android/AndroidNetworkEnvelope.java",
+      "sha256": "e57f31f3213752dcf02c8b610a6472b359636ff9ae7300baee36c2f5808a2e64"
+    },
+    {
+      "path": "validation/network-profiles/native/android/AndroidNetworkSecretStore.java",
+      "sha256": "e5c0b15b53691f7c67b5c73af265415bcea818b390d0da980589394f02acdfc1"
+    },
+    {
+      "path": "validation/network-profiles/native/android/NetworkSecretStoreCore.java",
+      "sha256": "843c4fb3f8e2a49fa8e12a98ef09ab28be9c053b5f516d334cc102ccadad06ff"
+    },
+    {
+      "path": "validation/network-profiles/native/android/network-secrets.gradle",
+      "sha256": "8aab699f9d78bba899fc872591efbb87cb113ad8169e23a5cb93c77773403506"
+    },
+    {
+      "path": "validation/network-profiles/native/android/tests/NetworkSecretStoreCoreTest.java",
+      "sha256": "95d3ea9a85bd2c4626b1a85f01f2b03c3ec046990badcc4338b1edb18bef45c0"
+    },
+    {
+      "path": "validation/network-profiles/native/android/tests/run.sh",
+      "sha256": "387b9995bb612d920f5af0a868368b110af22aa4972527605ed8b03c7f497686"
+    },
+    {
+      "path": "validation/overlay-runtime/src/easytier.rs",
+      "sha256": "55d0b8cdc2a760983b954be12bcf2a9715df249c77675e1e6c2c1f32d674e31e"
+    },
+    {
+      "path": "validation/overlay-runtime/src/lib.rs",
+      "sha256": "0b8b644acdb22474b88a81cda6ae97f655027ee2c5aefb7c486141288772beee"
+    },
+    {
+      "path": "validation/overlay-runtime/src/nodes.rs",
+      "sha256": "d5fbeeb4f099fcdc65957a72a85ef16bd8c7ccbfaf80471034ec245728502e41"
+    },
+    {
+      "path": "validation/overlay-runtime/src/tests.rs",
+      "sha256": "85ddc04f37cb7afbbe98ffe6b2a1fa7cc265d1e0b5f7a4f42f09d4659ce83836"
+    },
+    {
+      "path": "validation/tauri/android/DeviceKeysPlugin.kt",
+      "sha256": "4e4cdc13274a9a0c29e7a38f209a8fedf8b499254dc5575ebcc0e85f828433ba"
+    },
+    {
+      "path": "validation/tauri/scripts/package-artifacts.py",
+      "sha256": "187a7e03fd47423db81f7ba55469bfe31192d3f30e0c59123a380a0e6bc9c026"
+    },
+    {
+      "path": "validation/tauri/scripts/wire-android.py",
+      "sha256": "eac26de887259033b9bc187aa86d9eac4608c3f39fbd6b1a4e4687080c14ca78"
+    },
+    {
+      "path": "validation/tauri/src-tauri/Cargo.lock",
+      "sha256": "53dafc8ee85b61b099374019c768050a43e5d8bc96748ff7848492332ef04e19"
+    },
+    {
+      "path": "validation/tauri/src-tauri/Cargo.toml",
+      "sha256": "00ac60d69a011b2375c5c2aa44c29cd1f2580d743f301335d176dd4c06da5c92"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/android_keys.rs",
+      "sha256": "4b82371f52eeb63dc6ab9f9bbd1007726e21ee89ed001e0c2e4a8c22da282000"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/config_exchange.rs",
+      "sha256": "3b02ef0ab375b57885301c8a96892c8716b1ea76c1b82b2498611dbf5b1ef605"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/hosts.rs",
+      "sha256": "2fab60355933f2d9cc7497e2e5e723e5d66079db9d45bbc63ac442b6b08c9b59"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/lib.rs",
+      "sha256": "2a16f2a0414941cc3e9d85c04e9d29f02cb2bf937b5b45b95a8edba79fbbda0b"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/network_identity.rs",
+      "sha256": "0c23f2a1bd2acbd0c9aabfd866c0c896f92c1ca79c4b96b7d0e904b871e0c3c7"
+    },
+    {
+      "path": "validation/tauri/src/network-ui.js",
+      "sha256": "fe561e8d2dea293c75e27093c1b98c9d5a9fdbf4845008d35aaa8f32b5bce2d9"
+    },
+    {
+      "path": "validation/tauri/test/network-ui.test.mjs",
+      "sha256": "fce8325f70cac4e22c4b205193109caccd74319d039dfe06db37aaead53ec832"
+    },
+    {
+      "path": "validation/transport-rust/Cargo.lock",
+      "sha256": "963b7433113ffc922b2f9a40416a54ee61adc23e7a75c6a049a6bdbc527e63fd"
+    },
+    {
+      "path": "validation/transport-rust/Cargo.toml",
+      "sha256": "a51ef151b179865c28b881b88cdaf47174d03da36f4696d06af27d45f55d11d6"
+    },
+    {
+      "path": "validation/transport-rust/src/input.rs",
+      "sha256": "cad45adf5e792c5a7a00719c2e9d7e6b0afcb5259bb4b11e46e8784494948b27"
+    },
+    {
+      "path": "validation/transport-rust/src/lib.rs",
+      "sha256": "497f185419fdecede1b8bb84f2efa7e2e04ad7060764d732f9e1233d8153e32a"
+    },
+    {
+      "path": "validation/transport-rust/src/overlay.rs",
+      "sha256": "7f83b5ea01e58fcbb86744e76e8687c3fea05248d58a2f8af7929a8cf61c2fd1"
+    },
+    {
+      "path": "validation/transport-rust/src/overlay/tests.rs",
+      "sha256": "cc6a227a867ba34bcc2b3f4c745270bb99aa71a0dea214cc9a7e2c16972eac41"
+    },
+    {
+      "path": "validation/transport-rust/src/overlay/tests/ssh.rs",
+      "sha256": "fbc956ec72b2941b1f27e4306b06c26749005b8bbe2cd120b9acb4e21760b484"
+    },
+    {
+      "path": "validation/transport-rust/src/recovery.rs",
+      "sha256": "308425e3fd01616d8d28f06c1dcbe154202c95df8d4d300515c2946b166dd4d9"
+    },
+    {
+      "path": "validation/transport-rust/src/transport.rs",
+      "sha256": "dde6af9d5e3b2eecc50c5c69bf243d40e8db2a99a5499adb83f43c9004c5f6f0"
+    }
+  ]
+}

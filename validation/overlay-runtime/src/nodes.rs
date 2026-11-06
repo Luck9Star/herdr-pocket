@@ -68,6 +68,10 @@ impl NodeLease {
     pub fn revision(&self) -> u64 {
         self.entry.spec.revision
     }
+    /// Safe-storage reference only, never identity state or secret config.
+    pub fn identity_ref(&self) -> &str {
+        &self.entry.spec.identity_ref
+    }
     pub fn evidence(&self) -> Evidence {
         self.entry.backend.evidence()
     }
@@ -361,6 +365,19 @@ impl OverlayRuntime {
             return Err(Failure::WrongOwner);
         }
         Ok(lease.entry.clone())
+    }
+    /// Open only the exact app-owned node epoch, never a same-name node from
+    /// another runtime. Admission/revision is checked again by open_revision.
+    pub fn open_node(
+        &self,
+        owner: &Owner,
+        node: &NodeLease,
+        host: &str,
+        port: u16,
+        deadline: Duration,
+    ) -> Result<Operation<StreamLease>> {
+        self.owned_node(node)?;
+        self.open_revision(owner, node.profile(), node.revision(), host, port, deadline)
     }
     pub fn node_status(&self, lease: &NodeLease) -> Result<NodeOperation<NodeStatus>> {
         let entry = self.owned_node(lease)?;

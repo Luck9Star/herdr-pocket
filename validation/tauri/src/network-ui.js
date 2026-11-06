@@ -10,22 +10,41 @@ export async function settleNetworkOperation(work, affected, onAffected, load) {
 // Network configuration is public metadata; provider identities remain native.
 export function initNetworkUI({native, invoke, getHosts, onAffected}) {
   const panel=document.getElementById('network-panel'), open=document.getElementById('network-open');
-  let catalog=null, editing=null, busy=false;
+  let catalog=null, editing=null, identityEditor=null, identityStates=new Map(), busy=false, loadRevision=0;
+  function clearSecrets() {panel.querySelectorAll('input[type=password]').forEach(input=>{input.value='';});}
   const el=(tag,text='',className='')=>{const n=document.createElement(tag);n.textContent=text;if(className)n.className=className;return n;};
   const button=(text,fn)=>{const b=el('button',text);b.type='button';b.disabled=busy;b.onclick=fn;return b;};
   const label=(text,input)=>{const l=el('label',text);l.append(input);return l;};
   const field=(value='',placeholder='')=>{const n=document.createElement('input');n.value=value;n.placeholder=placeholder;n.autocomplete='off';return n;};
   const names=ids=>ids.map(id=>getHosts().find(h=>h.id===id)?.name || id).join('、') || '无';
-  async function load(message='') {try {catalog=await invoke('network_list');render(message);}catch {catalog=null;panel.replaceChildren(el('p','网络配置读取失败，当前状态未知；请稍后核对。'));}}
+  async function load(message='') {const revision=++loadRevision;try {
+    const fresh=await invoke('network_list');const states=new Map();
+    for(const profile of fresh.profiles) {if(profile.provider==='easytier') {try {const value=await invoke('network_identity_status',{id:profile.id});states.set(profile.id,value && typeof value.supported==='boolean' ? value : null);}catch {states.set(profile.id,null);}}}
+    if(revision!==loadRevision || panel.hidden)return;catalog=fresh;identityStates=states;render(message);
+  }catch {if(revision!==loadRevision || panel.hidden)return;catalog=null;identityStates.clear();clearSecrets();panel.replaceChildren(el('p','网络配置读取失败，当前状态未知；请稍后核对。'));}}
   async function operation(work,affected) {if(busy)return;busy=true;try {await settleNetworkOperation(async()=>{await work();editing=null;},affected,onAffected,async message=>{busy=false;await load(message);});}finally{busy=false;}}
+  async function identityOperation(profile,affected,action,mode,secret,expectedHandle=null) {
+    if(busy)return;busy=true;
+    const args={id:profile.id,expectedCatalog:catalog.revision,expectedRevision:profile.revision,affected,action,mode,secret,expectedHandle};
+    try {
+      await settleNetworkOperation(async()=>{try {return await invoke('network_identity_write',args);} finally {args.secret='';secret='';}},affected,onAffected,async message=>{busy=false;await load(message);});
+    } finally {busy=false;}
+  }
   function render(message='') {
-    if(!catalog)return;panel.replaceChildren();panel.append(el('h2','网络配置'),el('p','管理公开配置；设备身份由原生网络组件单独管理，不在此采集或导出。当前三种桥接均不可用。'));
+    if(!catalog)return;clearSecrets();panel.replaceChildren();panel.append(el('h2','网络配置'),el('p','公开配置和本机网络身份分开保存；身份不随配置导出。网络连接桥接尚未接入。'));
     const status=el('p',message);status.setAttribute('role','status');panel.append(status);
     for(const profile of catalog.profiles) {
       const affected=catalog.bindings.filter(b=>b.profileId===profile.id).map(b=>b.hostId);
       const card=el('article','','saved-host-card');card.append(el('h3',profile.label),el('p',`${profile.provider} · ${profile.enabled?'已启用':'已停用'} · 桥接不可用 · 受影响主机：${names(affected)}`));
+      const identity=identityStates.get(profile.id);
+      const identityText=profile.provider!=='easytier'?'本机身份：待接入':identity===null || identity===undefined?'本机身份状态未知，请核查设备':!identity.supported?'本平台本机身份待接入':!identity.available?'本机身份状态未知，请核查设备':identity.present?`本机身份已保存 · ${identity.mode==='PRIVATE'?'私有网络':'公开无秘密'}；节点未启动`:'本机身份尚未创建';
+      card.append(el('p',identityText));
       const actions=el('div','','saved-host-actions');actions.append(button('编辑',()=>{editing=profile;render();}),button(profile.enabled?'停用':'启用',()=>{if(!confirm(`将${profile.enabled?'停用':'启用'} ${profile.label}。受影响主机：${names(affected)}。继续？`))return;void operation(()=>invoke('network_save',{profile:{...profile,enabled:!profile.enabled},expectedCatalog:catalog.revision,expectedRevision:profile.revision,affected}),affected);}));
-      const del=button('删除',()=>{if(affected.length){status.textContent=`仍被主机引用：${names(affected)}。请先逐一更换或解除绑定。`;return;}if(confirm(`删除 ${profile.label}？`))void operation(()=>invoke('network_delete',{id:profile.id,expectedCatalog:catalog.revision,expectedRevision:profile.revision}),[]);});actions.append(del);card.append(actions);panel.append(card);
+      if(profile.provider==='easytier' && identity?.supported && identity.available) {
+        if(identity.present && identity.handle)actions.append(button('删除本机身份',()=>{if(!confirm(`删除 ${profile.label} 的本机网络身份？受影响主机：${names(affected)}。此操作不会删除 SSH 配对密钥。`))return;void identityOperation(profile,affected,'delete','','',identity.handle);}));
+        else if(!identity.present)actions.append(button('配置本机身份',()=>{identityEditor=profile;editing=null;render();}));
+      }
+      const del=button('删除',()=>{if(affected.length){status.textContent=`仍被主机引用：${names(affected)}。请先逐一更换或解除绑定。`;return;}if(profile.provider==='easytier' && (!identity || (identity.supported && (!identity.available || identity.present)))){status.textContent=identity?.present?'请先明确删除此设备上的网络身份。':'本机身份状态未确认，不能删除配置。';return;}if(confirm(`删除 ${profile.label}？`))void operation(()=>invoke('network_delete',{id:profile.id,expectedCatalog:catalog.revision,expectedRevision:profile.revision}),[]);});actions.append(del);card.append(actions);panel.append(card);
     }
     panel.append(button('新增网络配置',()=>{editing={id:'0'.repeat(32),label:'',provider:'tailscale',enabled:true,revision:1,settings:{controlUrl:'',hostname:''}};render();}));
     if(editing) {
@@ -42,10 +61,19 @@ export function initNetworkUI({native, invoke, getHosts, onAffected}) {
       const save=el('button','保存配置');save.type='submit';form.append(save,button('取消',()=>{editing=null;render();}));
       form.onsubmit=e=>{e.preventDefault();const profile={...editing,label:name.value,provider:provider.value,settings:Object.fromEntries(Object.entries(inputs).map(([k,v])=>[k,k==='peers'?v.value.split('\n').map(s=>s.trim()).filter(Boolean):v.value]))};const exists=catalog.profiles.some(p=>p.id===editing.id);const affected=catalog.bindings.filter(b=>b.profileId===editing.id).map(b=>b.hostId);if(exists && !confirm(`保存将停止受影响连接：${names(affected)}。继续？`))return;void operation(()=>invoke('network_save',{profile,expectedCatalog:catalog.revision,expectedRevision:exists?editing.revision:null,affected}),affected);};panel.append(form);
     }
+    if(identityEditor) {
+      const p=identityEditor, affected=catalog.bindings.filter(b=>b.profileId===p.id).map(b=>b.hostId);const form=el('form','','network-editor');form.append(el('h3',`配置本机身份 · ${p.label}`),el('p',`本机保存不代表入网或连接；受影响主机：${names(affected)}。`));
+      const select=document.createElement('select');for(const [value,title] of [['PRIVATE','私有网络（需要秘密）'],['PUBLIC_NO_SECRET','公开网络（无秘密）']]) {const option=el('option',title);option.value=value;select.append(option);}select.value='PRIVATE';form.append(label('网络模式',select));
+      const secret=field('','输入本机网络秘密');secret.type='password';secret.autocomplete='off';secret.maxLength=1024;const secretLabel=label('网络秘密',secret);form.append(secretLabel);select.onchange=()=>{secret.value='';secret.disabled=select.value==='PUBLIC_NO_SECRET';};
+      const save=el('button','保存本机身份');save.type='submit';form.append(save,button('取消',()=>{secret.value='';identityEditor=null;render();}));
+      form.onsubmit=e=>{e.preventDefault();if(busy)return;const mode=select.value, value=secret.value;const bytes=new TextEncoder().encode(value);const valid=bytes.length<=1024 && !value.includes('\0') && (mode==='PRIVATE'?bytes.length>0:mode==='PUBLIC_NO_SECRET'&&bytes.length===0);bytes.fill(0);if(!valid){secret.value='';status.textContent='私有网络需输入 1–1024 字节秘密；公开网络必须为空，不能包含 NUL。';return;}if(!confirm(`为 ${p.label} 保存本机网络身份？受影响主机：${names(affected)}。`)){secret.value='';return;}secret.value='';identityEditor=null;void identityOperation(p,affected,'create',mode,value);};panel.append(form);
+    }
     const hostSection=el('section');hostSection.append(el('h3','主机网络绑定'));for(const host of getHosts().filter(h=>!h.retired)) {
       const row=el('div','','network-binding');row.append(el('strong',host.name));const select=document.createElement('select');const direct=el('option','系统连接（原有方式）');direct.value='';select.append(direct);for(const p of catalog.profiles){const o=el('option',`${p.label} · ${p.provider}${p.enabled?'':'（已停用）'}`);o.value=p.id;o.disabled=!p.enabled;select.append(o);}select.value=host.networkProfileId || '';row.append(select,button('应用',()=>{const profileId=select.value || null;if(profileId===(host.networkProfileId || null))return;const isDirect=!!host.networkProfileId && !profileId;if(!confirm(isDirect?`解除 ${host.name} 的网络绑定并改为系统直连？这会停止该主机连接。`:`更改 ${host.name} 的网络绑定并停止其连接？`))return;void operation(()=>invoke('network_bind',{hostId:host.id,profileId,expectedCatalog:catalog.revision,confirmedDirect:isDirect}),[host.id]);}));hostSection.append(row);
     }panel.append(hostSection);
   }
-  open.disabled=!native;open.onclick=()=>{panel.hidden=!panel.hidden;if(!panel.hidden)void load();};
-  return {refresh:()=>{if(!panel.hidden)void load();},close:()=>{panel.hidden=true;}};
+  open.disabled=!native;open.onclick=()=>{loadRevision++;clearSecrets();identityEditor=null;panel.hidden=!panel.hidden;if(!panel.hidden)void load();};
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){clearSecrets();identityEditor=null;}});
+  window.addEventListener('pagehide',clearSecrets);
+  return {refresh:()=>{if(!panel.hidden)void load();},close:()=>{loadRevision++;clearSecrets();identityEditor=null;panel.hidden=true;}};
 }

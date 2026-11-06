@@ -245,7 +245,7 @@ class HostCatalog extends ChangeNotifier {
     } catch (_) { if (ticket == generation) { profiles = const []; networkProfiles = const []; ready = false; status = '资料损坏、存储锁定或不可用 · 已停止，不覆盖原记录或自动创建密钥'; } }
     if (ticket == generation) _notify();
   }
-  Future<void> _mutate(List<HostProfile> Function(List<HostProfile>) action,{Map<String,dynamic>? pending,bool replacePending=false,VoidCallback? beforeSave,List<NetworkProfile> Function(List<NetworkProfile>)? networkAction,int? fontSize}) {
+  Future<void> _mutate(List<HostProfile> Function(List<HostProfile>) action,{Map<String,dynamic>? pending,bool replacePending=false,VoidCallback? beforeSave,Future<void> Function()? beforeSaveCheck,List<NetworkProfile> Function(List<NetworkProfile>)? networkAction,int? fontSize}) {
     final captured = generation;
     final operation = _tail.then((_) async {
       if (_disposed || !ready || generation != captured) throw const RemoteFailure('catalog_unavailable');
@@ -261,6 +261,9 @@ class HostCatalog extends ChangeNotifier {
         final text = jsonEncode({'schemaVersion':4,'profiles':next.map((p) => p.toJson()).toList(),'pendingCreation':nextPending,'networkProfiles':nextNetworks.map((p) => p.toJson()).toList(),'preferences':{'terminalFontSize':nextFontSize}});
         if (utf8.encode(text).length > maxCatalogBytes) throw const RemoteFailure('catalog_limit');
         if (_disposed || generation != captured || !ready) throw const RemoteFailure('catalog_stale');
+        // This hook is a read-only precondition, never another queued mutation.
+        if (beforeSaveCheck != null) await beforeSaveCheck();
+        if (_disposed || generation != captured || !ready) throw const RemoteFailure('catalog_stale');
         beforeSave?.call();
         saveStarted = true;
         final updated = await storage.save(revision,text);
@@ -275,6 +278,33 @@ class HostCatalog extends ChangeNotifier {
       finally { writing = false; _notify(); }
     });
     _tail = operation.catchError((Object _) {}); return operation;
+  }
+  /// Serialize one explicit native identity operation with public catalog writes.
+  /// Callbacks must not enqueue another catalog operation on this same queue.
+  Future<T> guardedNetworkOperation<T>(NetworkProfile profile,{required String expectedRevision,
+      required Future<T> Function() operation,VoidCallback? beforeDispatch}) {
+    final captured = generation;
+    final pending = _tail.then((_) async {
+      if (_disposed || !ready || generation != captured || revision != expectedRevision) {
+        throw const RemoteFailure('network_profile_stale');
+      }
+      final matches = networkProfiles.where((p) => p.id == profile.id).toList();
+      if (matches.length != 1 || jsonEncode(matches.single.toJson()) != jsonEncode(profile.toJson())) {
+        throw const RemoteFailure('network_profile_stale');
+      }
+      writing = true; _notify();
+      try {
+        if (_disposed || !ready || generation != captured || revision != expectedRevision) {
+          throw const RemoteFailure('network_profile_stale');
+        }
+        beforeDispatch?.call();
+        return await operation();
+      } finally { writing = false; _notify(); }
+    });
+    // An unknown native result releases serialization without retrying it or
+    // changing the catalog. The identity session may only read status next.
+    _tail = pending.then<void>((_) {},onError:(Object _,StackTrace __) {});
+    return pending;
   }
   Future<void> beginCreation(Map<String,dynamic> target,String label,{String? sourceProfileId}) {
     if (pendingCreation != null || (profiles.length >= maxHostProfiles && sourceProfileId == null)) throw const RemoteFailure('catalog_creation_pending');
@@ -364,7 +394,8 @@ class HostCatalog extends ChangeNotifier {
     if (index < 0 || profile.expectedPrevious != jsonEncode(list[index].toJson()) || profile.revision != list[index].revision+1) throw const RemoteFailure('network_profile_stale');
     list[index] = profile; return list;
   },beforeSave:beforeCommit);
-  Future<void> removeNetwork(NetworkProfile profile,{VoidCallback? beforeCommit,String? expectedRevision}) => _mutate((list) {
+  Future<void> removeNetwork(NetworkProfile profile,{VoidCallback? beforeCommit,String? expectedRevision,
+      Future<void> Function()? beforeRemove}) => _mutate((list) {
     if (expectedRevision != null && revision != expectedRevision) throw const RemoteFailure('network_profile_stale');
     if (list.any((p) => p.networkProfileId == profile.id)) throw const RemoteFailure('network_in_use');
     return list;
@@ -372,7 +403,7 @@ class HostCatalog extends ChangeNotifier {
     final matches = list.where((p) => p.id == profile.id).toList();
     if (matches.length != 1 || jsonEncode(matches.single.toJson()) != jsonEncode(profile.toJson())) throw const RemoteFailure('network_profile_stale');
     return list.where((p) => p.id != profile.id).toList();
-  },beforeSave:beforeCommit);
+  },beforeSave:beforeCommit,beforeSaveCheck:beforeRemove);
 
   Future<void> updateTerminalFontSize(int fontSize,{String? expectedRevision}) => _mutate((list) {
     if (expectedRevision != null && expectedRevision != revision) throw const RemoteFailure('catalog_profile_stale');

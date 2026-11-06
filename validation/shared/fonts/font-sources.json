@@ -1,0 +1,560 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-06",
+  "overallStatus": "partial provenance and notice collection; remaining items explicitly pending",
+  "font": {
+    "file": "JetBrainsMonoNerdFontMono-Regular.ttf",
+    "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+    "nerdFontsVersion": "3.4.0",
+    "nerdFontsCommit": "fa7b859994228a9c8759f99c55a8d31ee92a1b5e",
+    "baseFamily": "JetBrains Mono",
+    "baseVersion": "2.304",
+    "fontBytesChanged": false
+  },
+  "protectedExistingFiles": {
+    "JetBrainsMonoNerdFontMono-Regular.ttf": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+    "LICENSE-JetBrainsMono.txt": "30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad",
+    "LICENSE-Nerd-Fonts.txt": "1f6ad4edae6479aaace3112ede5279a23284ae54b2a34db66357aef5f64df160"
+  },
+  "sourcePatcher": {
+    "url": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/font-patcher",
+    "sha256": "994fbbf6be2330bde2bdcd1498a01e6efe751f479eceef00e56bb442d2194c3b",
+    "version": "4.20.3",
+    "nerdFontsVersion": "3.4.0",
+    "method": "read-only patch_set and cmap checks; no FontForge execution; no outline-by-outline provenance proof"
+  },
+  "collectedFiles": [
+    {
+      "file": "licenses/LICENSE-Codicons-CC-BY-4.0.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/codicons/LICENSE.txt",
+      "sha256": "d6239afa918961b465b07bf7411cbe34ff6685854f58553db7966f4881a0211f",
+      "bytes": 19047,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Font-Awesome-Free-vendored.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/font-awesome/LICENSE.txt",
+      "sha256": "de784a808496d49f5f80dd9d1d6e9a51cff712cfbc339e7c25155631ae3cdb5d",
+      "bytes": 7427,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Material-Design-Icons.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/materialdesign/LICENSE",
+      "sha256": "3bae6305bcaa6d10219b999f65c342034c2d40b1c0e8567fa08605e73ccba829",
+      "bytes": 992,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Octicons-MIT.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/octicons/LICENSE",
+      "sha256": "4f886642f9e8d99eeadd484acdac011c3fde8a338faf52f5ca1408c13b9a9b63",
+      "bytes": 1068,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Pomicons-OFL-1.1.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/pomicons/LICENSE",
+      "sha256": "cb4797a9745683f287c28833db596e9d68ec43082d59359b3a49c504f0f610ce",
+      "bytes": 4395,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Powerline-Extra-MIT.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/powerline-extra/LICENSE",
+      "sha256": "544307a58e6826c24145b2af1c3578b53e2e21ae0e6c67ab4c6abd544304d26a",
+      "bytes": 1072,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Powerline-Symbols-MIT.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/powerline-symbols/LICENSE.txt",
+      "sha256": "46d5355e4734468135d8e4a30d0916292cc4df2b3ec30aa68c866f82497933be",
+      "bytes": 1132,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Weather-Icons-OFL-1.1.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/weather-icons/OFL.txt",
+      "sha256": "69cdedc8a4f57a30d68e4f045af8b9cce0ec3b1a6e7eec1ad41737c894f26790",
+      "bytes": 4692,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Hack-MIT-Bitstream-Vera.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/unpatched-fonts/Hack/LICENSE.md",
+      "sha256": "1f61bb7c790c59b4b0ecdf304628b94e42ae4c8020094a8c3da73381ab212623",
+      "bytes": 3744,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Font-Logos-Unlicense.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/Lukas-W/font-logos/e92426e28ee5bbf4ca328b33e3a393b7a5045f01/LICENSE",
+      "sha256": "88d9b4eb60579c191ec391ca04c16130572d7eedc4a86daa58bf28c6e14c9bcd",
+      "bytes": 1210,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Devicon-2.16.0-MIT.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/devicons/devicon/6910f0503efdd315c8f9b858234310c06e04d9c0/LICENSE",
+      "sha256": "121194741d4a915b9f5890fdd6dd95121f9b1f816517c792358d72d7c838d664",
+      "bytes": 1072,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-IEC-Power-Symbols-MIT.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/jloughry/Unicode/4c79c6a81f29584e18f827b07c0bf6f02fc3ebbe/LICENSE.txt",
+      "sha256": "11aef1cdf2d58d822e6857e2574870ccc59d4900052bf5c098e319d750e7ac3d",
+      "bytes": 1078,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Font-Awesome-Extension-MIT.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/AndreLZGava/font-awesome-extension/09d80249058ee8018a45da30add4339289dbb466/LICENCE",
+      "sha256": "b47b15d771c4507a75ff65beca3a78168d6af4cca9b45177a1aa817139c64ba5",
+      "bytes": 1073,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Seti-0.8.1-MIT.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/jesseweed/seti-ui/6c358eb9ce5cc20bccd72cc4d7179fd485cd8fe7/LICENSE.md",
+      "sha256": "d4d2d888c6a0a220a7b0e2d6013cf37539b0e05ef937002b3b33bdb364575b88",
+      "bytes": 1054,
+      "kind": "license",
+      "status": "reference; exact historical per-SVG import mapping pending",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Vorillaz-Devicons-reference-MIT.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/vorillaz/devicons/8947499eeac633315de2a76fde08fc71619dd4ba/LICENSE",
+      "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1",
+      "bytes": 1036,
+      "kind": "license",
+      "status": "reference; 2026 grant; exact historical source match pending",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Apache-2.0.txt",
+      "sourceUrl": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "licenses/LICENSE-Font-Awesome-Free-6.5.1.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/FortAwesome/Font-Awesome/6.5.1/LICENSE.txt",
+      "sha256": "0aa8f86525273b2efa4f40f4272a188e187704252170e979dc06879adf68d43c",
+      "bytes": 7427,
+      "kind": "license",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/glyphs-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/README.md",
+      "sha256": "8538467a6f1f67b9d7fb7f95da492796ac1f02046121aa4138c07026e85c5fb2",
+      "bytes": 378,
+      "kind": "upstream source/modification note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/glyphs-codicons-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/codicons/README.md",
+      "sha256": "86fd7d1b3b215633d6a8457fe0dbf561bda25af01c5c1ca4a4c53ec4e7c9ffea",
+      "bytes": 239,
+      "kind": "upstream source/modification note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/glyphs-devicons-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/devicons/README.md",
+      "sha256": "4d5547fb89112b934f117d1688872dc29389f1ac1cd7e831fc938561a1023aea",
+      "bytes": 480,
+      "kind": "upstream source/modification note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/glyphs-devicons-vorillaz-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/devicons/vorillaz/README.md",
+      "sha256": "4772f570f66011a1f0d2b1358f48809c472cea8439cfca54f66a9ed9ad34c828",
+      "bytes": 620,
+      "kind": "upstream source/modification note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/glyphs-devicons-fixed-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/devicons/fixed/README.md",
+      "sha256": "35b5b8e221383cc1bf87e37d4298b37a05f1395e43edd452c7a79c8225e9e788",
+      "bytes": 218,
+      "kind": "upstream source/modification note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/glyphs-font-awesome-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/font-awesome/README.md",
+      "sha256": "83a5c255a5c182d1697086313265bf83788c22fe9f2c160777ecda3e32d8d76c",
+      "bytes": 419,
+      "kind": "upstream source/modification note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/glyphs-materialdesign-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/materialdesign/README.md",
+      "sha256": "7afc59be7303f6877297db80c1ea8f506bcf4e18290ff85e1bba1584ffa0555b",
+      "bytes": 1212,
+      "kind": "upstream source/modification note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/glyphs-pomicons-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/pomicons/README.md",
+      "sha256": "c0de5db022d38bc135ceb3d1d0c892b2a36a0deb2d4df5e728c964e952edeacd",
+      "bytes": 127,
+      "kind": "upstream source/modification note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/glyphs-powerline-extra-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/powerline-extra/README.md",
+      "sha256": "5c79ad0af0366752aac6a0887126554e74c84cecff9b56e1e411758000d3e8cc",
+      "bytes": 674,
+      "kind": "upstream source/modification note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/glyphs-powerline-symbols-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/powerline-symbols/README.md",
+      "sha256": "c6cde819271276da3f8faa35a1163d902f2a903e9eb375646dd473c0c582cdef",
+      "bytes": 250,
+      "kind": "upstream source/modification note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/svgs-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/svgs/README.md",
+      "sha256": "9dec4f69fe88de80eacd07aca4f9a626ef066707be52660d5a38647f3c9948fc",
+      "bytes": 583,
+      "kind": "upstream source/modification note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/Font-Logos-1.3.0-README.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/Lukas-W/font-logos/e92426e28ee5bbf4ca328b33e3a393b7a5045f01/README.md",
+      "sha256": "b7c98abe0c74e0804e5852fa508ee2bc51b44a4aee45a8384204938a705fabf8",
+      "bytes": 22485,
+      "kind": "upstream source/trademark note",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    },
+    {
+      "file": "source-notes/Nerd-Fonts-3.4.0-license-audit.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/license-audit.md",
+      "sha256": "22c490a48e08adcabab0b06d317fe6c6310a420e081d8ebff7f44d0210096cd1",
+      "bytes": 7954,
+      "kind": "historical audit; Font Logos Unlicensed label corrected by exact Unlicense provenance",
+      "status": "collected",
+      "bytePreservation": "verbatim; original BOM and line endings retained"
+    }
+  ],
+  "inspectedSourceFonts": [
+    {
+      "sourcePath": "src/glyphs/original-source.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/original-source.otf",
+      "sha256": "3fed9b17232a907588d8abf27ba44a00f443c1d48786c4e61d6e12e52270cba2",
+      "bytes": 167512,
+      "embeddedNames": [
+        {
+          "nameId": 0,
+          "value": "Nerd Fonts"
+        },
+        {
+          "nameId": 1,
+          "value": "Nerd Font File Types"
+        },
+        {
+          "nameId": 5,
+          "value": "3.3.0"
+        },
+        {
+          "nameId": 11,
+          "value": "https://github.com/ryanoasis/nerd-fonts"
+        }
+      ],
+      "shippedInThisNoticeBundle": false
+    },
+    {
+      "sourcePath": "src/glyphs/font-awesome-extension.ttf",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/font-awesome-extension.ttf",
+      "sha256": "b3c40985a8f23bbe450926e87b55fb3937b0aee742805ea4a6443242e224ea33",
+      "bytes": 49316,
+      "embeddedNames": [
+        {
+          "nameId": 1,
+          "value": "font-awesome-extension"
+        },
+        {
+          "nameId": 5,
+          "value": "Version 1.0"
+        }
+      ],
+      "shippedInThisNoticeBundle": false
+    },
+    {
+      "sourcePath": "src/glyphs/Unicode_IEC_symbol_font.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/Unicode_IEC_symbol_font.otf",
+      "sha256": "6fac775371f33ea71d2136d5c516ea46287c8627576fb673de1a21bd1b0a7f89",
+      "bytes": 3168,
+      "embeddedNames": [
+        {
+          "nameId": 1,
+          "value": "IEC symbols Unicode"
+        },
+        {
+          "nameId": 5,
+          "value": "Version 1.0"
+        }
+      ],
+      "shippedInThisNoticeBundle": false
+    },
+    {
+      "sourcePath": "src/glyphs/devicons/devicons.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/devicons/devicons.otf",
+      "sha256": "5d25c4140c64dde78b4ab273e537ae22f2bc4f5a6f21482bdae396fb4a36fb58",
+      "bytes": 1121728,
+      "embeddedNames": [
+        {
+          "nameId": 0,
+          "value": "See https://github.com/devicons/devicon"
+        },
+        {
+          "nameId": 1,
+          "value": "Devicons Nerd Font"
+        },
+        {
+          "nameId": 5,
+          "value": "v2.16.0.tar.gz; 3.4.0"
+        },
+        {
+          "nameId": 11,
+          "value": "https://github.com/ryanoasis/nerd-fonts"
+        }
+      ],
+      "shippedInThisNoticeBundle": false
+    },
+    {
+      "sourcePath": "src/glyphs/materialdesign/MaterialDesignIconsDesktop.ttf",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/materialdesign/MaterialDesignIconsDesktop.ttf",
+      "sha256": "a10085e807b1df0e311402659b04a8468be37f382dbf4edfe7cb18a4ed3233f3",
+      "bytes": 1109996,
+      "embeddedNames": [
+        {
+          "nameId": 1,
+          "value": "Material Design Icons Desktop"
+        },
+        {
+          "nameId": 5,
+          "value": "Version 1.0"
+        },
+        {
+          "nameId": 11,
+          "value": "http://fontello.com"
+        }
+      ],
+      "shippedInThisNoticeBundle": false
+    },
+    {
+      "sourcePath": "src/glyphs/weather-icons/weathericons-regular-webfont.ttf",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/weather-icons/weathericons-regular-webfont.ttf",
+      "sha256": "176bda6661f213dde47c2114d76e476ec8ca9aae07dd54f9550d2d28fe02b4fd",
+      "bytes": 99564,
+      "embeddedNames": [
+        {
+          "nameId": 0,
+          "value": "Weather Icons licensed under SIL OFL 1.1 — Code licensed under MIT License — Documentation licensed under CC BY 3.0"
+        },
+        {
+          "nameId": 1,
+          "value": "Weather Icons"
+        },
+        {
+          "nameId": 5,
+          "value": "Version 1.100;PS 001.100;hotconv 1.0.70;makeotf.lib2.5.58329"
+        },
+        {
+          "nameId": 9,
+          "value": "Erik Flowers, Lukas Bischoff (v1 Art)"
+        }
+      ],
+      "shippedInThisNoticeBundle": false
+    },
+    {
+      "sourcePath": "src/glyphs/octicons/octicons.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/octicons/octicons.otf",
+      "sha256": "65549010f09586c48eccd00e4c32b381834ef537a4a5b6c2ef7dcd6b3911acea",
+      "bytes": 194864,
+      "embeddedNames": [
+        {
+          "nameId": 0,
+          "value": "GitHub Inc."
+        },
+        {
+          "nameId": 1,
+          "value": "Octicons Nerd Font"
+        },
+        {
+          "nameId": 5,
+          "value": "v18.3.0.tar.gz; 3.4.0"
+        },
+        {
+          "nameId": 11,
+          "value": "https://github.com/ryanoasis/nerd-fonts"
+        }
+      ],
+      "shippedInThisNoticeBundle": false
+    },
+    {
+      "sourcePath": "src/glyphs/codicons/codicon.ttf",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/codicons/codicon.ttf",
+      "sha256": "9fa329ff7420642ec65d17085249dc639a635d83d6a58952b2431cfc934689e6",
+      "bytes": 70048,
+      "embeddedNames": [
+        {
+          "nameId": 1,
+          "value": "codicon"
+        },
+        {
+          "nameId": 5,
+          "value": "Version 1.10"
+        },
+        {
+          "nameId": 11,
+          "value": "http://fontello.com"
+        }
+      ],
+      "shippedInThisNoticeBundle": false
+    },
+    {
+      "sourcePath": "src/glyphs/font-awesome/FontAwesome.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/font-awesome/FontAwesome.otf",
+      "sha256": "c88532152e2d58a29d3677c8f069ecfc3a4fdbbd618d11f3f914f468792f63df",
+      "bytes": 976192,
+      "embeddedNames": [
+        {
+          "nameId": 0,
+          "value": "Fonticons, Inc"
+        },
+        {
+          "nameId": 1,
+          "value": "FA Nerd Font"
+        },
+        {
+          "nameId": 5,
+          "value": "fontawesome-free-6.5.1-desktop.zip; 3.2.0"
+        },
+        {
+          "nameId": 11,
+          "value": "https://github.com/ryanoasis/nerd-fonts"
+        }
+      ],
+      "shippedInThisNoticeBundle": false
+    },
+    {
+      "sourcePath": "src/glyphs/font-logos.ttf",
+      "sourceUrl": "https://raw.githubusercontent.com/ryanoasis/nerd-fonts/fa7b859994228a9c8759f99c55a8d31ee92a1b5e/src/glyphs/font-logos.ttf",
+      "sha256": "7f0b055275bb3710afee586519884f3e302ec295a2f4ff4158daacf437c49852",
+      "bytes": 48592,
+      "embeddedNames": [
+        {
+          "nameId": 0,
+          "value": "Copyright (c) 2014-2024, Lukas W"
+        },
+        {
+          "nameId": 1,
+          "value": "font-logos"
+        },
+        {
+          "nameId": 5,
+          "value": "1.3.0"
+        },
+        {
+          "nameId": 11,
+          "value": "https://github.com/Lukas-W/font-logos"
+        }
+      ],
+      "shippedInThisNoticeBundle": false
+    }
+  ],
+  "exactMatches": [
+    {
+      "name": "Font Logos 1.3.0",
+      "upstreamCommit": "e92426e28ee5bbf4ca328b33e3a393b7a5045f01",
+      "releaseUrl": "https://github.com/lukas-w/font-logos/releases/download/v1.3.0/font-logos-1.3.0.zip",
+      "releaseSha256": "53376d5496cfbc78035ca60f58791ba5b2bfec6a9e751ac521aace6acdacb012",
+      "fontSha256": "7f0b055275bb3710afee586519884f3e302ec295a2f4ff4158daacf437c49852",
+      "licenseIntroducedCommit": "0b10f1ca42d323f27d0e41f2f38c695ff28f0eae",
+      "licenseIntroducedAt": "2016-03-10",
+      "comparison": "vendor font == release TTF; same-version LICENSE == release LICENSE"
+    },
+    {
+      "name": "Font Awesome Extension",
+      "tag": "v.0.0.3",
+      "tagCommit": "bbfbc8c7e21a206e24489b30ddc695995913169e",
+      "licenseCommit": "09d80249058ee8018a45da30add4339289dbb466",
+      "fontSha256": "b3c40985a8f23bbe450926e87b55fb3937b0aee742805ea4a6443242e224ea33",
+      "comparison": "vendor TTF == tag TTF == TTF in fixed MIT-license commit"
+    },
+    {
+      "name": "IEC Power Symbols",
+      "upstreamCommit": "4c79c6a81f29584e18f827b07c0bf6f02fc3ebbe",
+      "fontSha256": "6fac775371f33ea71d2136d5c516ea46287c8627576fb673de1a21bd1b0a7f89",
+      "comparison": "vendor OTF == OTF in fixed MIT-license commit"
+    }
+  ],
+  "pending": [
+    "Map each historical Seti SVG and Nerd custom original icon to its original source revision/author; fixed Seti 0.8.1 MIT is retained as a reference, not proof for every merged SVG.",
+    "Resolve the exact pre-1.8.0/default-branch Vorillaz legacy SVG subset described by Nerd Fonts and match it to the retained 2026 MIT grant; do not treat the current license as a proven historical mapping.",
+    "Weather Icons vendored OFL copyright/RFN fields contain placeholders; retain exact source text and embedded artist credits, and verify the intended copyright years/RFN rather than inventing values.",
+    "Confirm whether the 160 box-drawing glyphs were retained from JetBrains Mono or replaced by the conditional extraglyphs path; cmap presence alone cannot prove outline provenance.",
+    "Complete per-icon copyright/NOTICE exceptions for Material Design Icons as described in its collection license; the collection statement is not an exhaustive icon-author map.",
+    "Validate notice inclusion in each native distributable; this data collection does not wire app assets, update the shared SHA256SUMS, or inspect a built package."
+  ]
+}

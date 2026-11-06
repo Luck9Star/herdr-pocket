@@ -65,7 +65,9 @@ guarded GUI 在完成相同配对、full/delta 后，显式选择逐键输入并
 
 `result.json` 的 guarded `case` 为 `android-native-pairing-guarded-input`，保留原配对、帧和清理证据；`observeMode`、`directModeDisabled`、`draftModeDisabled` 此时表示停止后的状态。新增严格布尔项为 `guardedInput`、`directInputAccepted`、`draftInputAccepted`、`hiddenTabStopped`、`hiddenTabManualRecovery`、`unsentDraftRestored`、`postStopInputDisabled`。`inputReceipts` 是两项 `{requestId,paneId,terminalId,acceptedBytes}`，请求 ID 必须不同、目标相同、长度分别为 1 和 9；`acceptedByteCounts` 为 `[1,9]`。它们来自页面可见回执行，只有完整匹配响应 ID、稳定 terminal ID、pane 和长度才生成，证明队列受理。共享 harness 还须独立核验接收器精确收到 UTF-8 `kPocket测`（10 bytes）、临时主机设备指纹及真实 PTY 尺寸，才可报告通过。
 
-新增阶段名为 `guarded_direct`、`guarded_hidden_draft`、`guarded_reconnect`、`guarded_draft_review`。本入口不注入未知响应／网络失败，未知结果后的人工恢复由 `remote_input_widget_test.dart` 的隔离替身回归检查；真实断线及进程重启恢复仍需单独验收。草稿测试用 `enterText` 提交文字，不能声称 Android 中文 IME 或实体触控通过。
+逐键阶段细分为 `guarded_direct_available`、`guarded_direct_select`、`guarded_direct_focus`、`guarded_direct_commit`、`guarded_direct_ack`、`guarded_direct_receipt`，随后仍是 `guarded_hidden_draft`、`guarded_reconnect`、`guarded_draft_review`。固定 Flutter 的 [integration binding](https://github.com/flutter/flutter/blob/c197ca5199e9ee5661e865596c9c07294dfab51c/packages/integration_test/lib/integration_test.dart) 不注册假 IME；[测试输入 API](https://github.com/flutter/flutter/blob/c197ca5199e9ee5661e865596c9c07294dfab51c/packages/flutter_test/lib/src/test_text_input.dart) 明确允许未注册时向已连接的 GUI 客户端合成提交。入口实际点按 TerminalView，核对其 `hasInputConnection` 与焦点，再用 `TestTextInput.enterText` 合成 `k`。草稿用 `tester.enterText`。这两项是 GUI 自动化输入，不证明物理 IME、中文组成过程或实体触控。
+
+本入口不注入未知响应／网络失败，未知结果后的人工恢复由 `remote_input_widget_test.dart` 的隔离替身回归检查；真实断线及进程重启恢复仍需单独验收。失败时只公开 `failure.json` 的静态阶段、白名单异常类型和测试源码行号；不写异常正文、原始 stack、公开响应或输入文本，原异常仍会重新抛出。
 
 ## 共享 harness 与独立 job
 

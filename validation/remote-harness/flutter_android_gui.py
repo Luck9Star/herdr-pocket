@@ -27,12 +27,17 @@ STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'ha
           'public_key_failed', 'profile_save_failed', 'create_not_available', 'host_board', 'public_request', 'restore_pending', 'host_authorization',
           'response_review', 'ssh_and_dashboard', 'observe_frames', 'stop',
           'delete_local_identity', 'complete', 'guarded_direct', 'guarded_hidden_draft',
-          'guarded_reconnect', 'guarded_draft_review'}
+          'guarded_reconnect', 'guarded_draft_review', 'fixture_validation',
+          'response_enter', 'response_preview', 'response_source_confirm', 'response_accept',
+          'response_authorized', 'response_open_remote', 'response_remote_identity',
+          'guarded_direct_available', 'guarded_direct_select', 'guarded_direct_focus',
+          'guarded_direct_commit', 'guarded_direct_ack', 'guarded_direct_receipt'}
 STOCK_CASE = 'android-native-pairing-observe'
 GUARDED_CASE = 'android-native-pairing-guarded-input'
 GUARDED_FIELDS = ('guardedInput', 'directInputAccepted', 'draftInputAccepted', 'hiddenTabStopped',
                   'hiddenTabManualRecovery', 'unsentDraftRestored', 'postStopInputDisabled')
-PUBLIC_LIMITS = {'request.json': 2048, 'result.json': 8192, 'signer.json': 1024, 'stage': 40}
+PUBLIC_LIMITS = {'request.json': 2048, 'result.json': 8192, 'signer.json': 1024, 'stage': 40,
+                 'failure.json': 512}
 SIGNER_CHALLENGE = b'herdr-pocket-android-signer-probe-v1'
 REQUEST_FIELDS = {'version', 'type', 'request_id', 'account', 'host_key',
                   'issued_at', 'expires_at', 'device', 'public_key'}
@@ -40,6 +45,17 @@ REQUEST_FIELDS = {'version', 'type', 'request_id', 'account', 'host_key',
 
 class DeviceFailure(ValueError):
     """Only static phase codes may leave this module."""
+
+
+def safe_test_failure(value):
+    kinds = {'TestFailure', 'StateError', 'TypeError', 'RemoteFailure', 'FormatException',
+             'TimeoutException', 'other'}
+    if (not isinstance(value, dict) or set(value) != {'stage', 'errorClass', 'line'} or
+            not isinstance(value['stage'], str) or not isinstance(value['errorClass'], str) or
+            value['stage'] not in STAGES or value['errorClass'] not in kinds or
+            type(value['line']) is not int or not 0 <= value['line'] <= 10000):
+        raise DeviceFailure('flutter_android_failure_metadata_invalid')
+    return {key: value[key] for key in ('stage', 'errorClass', 'line')}
 
 
 def require_cloud(env, root, application, config):
@@ -244,11 +260,13 @@ def checked_public_payload(raw, name):
                 not isinstance(value['publicKey'], str) or not isinstance(value['signature'], str) or
                 value['deleteReturned'] is not True or value['readRejected'] is not True):
             raise DeviceFailure(invalid)
+    elif name == 'failure.json':
+        safe_test_failure(value)
     return raw
 
 
 def read_public(relative, limit):
-    if not re.fullmatch(r'cache/herdr-flutter-android-[0-9]+/(?:request\.json|result\.json|signer\.json|stage)', relative):
+    if not re.fullmatch(r'cache/herdr-flutter-android-[0-9]+/(?:request\.json|result\.json|signer\.json|failure\.json|stage)', relative):
         raise DeviceFailure('flutter_android_public_path_invalid')
     name = relative.rsplit('/', 1)[1]
     if type(limit) is not int or limit != PUBLIC_LIMITS[name]:
@@ -382,6 +400,17 @@ def _run(args, root, env, config, approval, owned_process):
             if code:
                 raise DeviceFailure(failure_stage(relative, 'flutter_android_test_failed'))
     finally:
+        # Only fixed stage/class names and a bounded source line may leave the
+        # device. Never copy exception text or the raw Flutter/SSH logs.
+        failure = None
+        try:
+            raw_failure = read_public(relative + '/failure.json', PUBLIC_LIMITS['failure.json'])
+            if raw_failure is not None:
+                failure = safe_test_failure(json.loads(raw_failure))
+        except (DeviceFailure, ValueError):
+            pass
+        (output / 'flutter-android-test-failure.json').write_text(
+            json.dumps({'sourceSHA': env['GITHUB_SHA'], 'failure': failure}, indent=2) + '\n', encoding='utf-8')
         if signer_evidence['stage'] != 'complete':
             try:
                 label = read_public(relative + '/stage', 40)

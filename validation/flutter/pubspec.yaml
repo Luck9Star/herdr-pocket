@@ -22,6 +22,10 @@ flutter:
     - assets/shared/SHA256SUMS
     - assets/shared/fonts/LICENSE-JetBrainsMono.txt
     - assets/shared/fonts/LICENSE-Nerd-Fonts.txt
+    - assets/shared/fonts/FONT-NOTICES.md
+    - assets/shared/fonts/font-sources.json
+    - assets/shared/fonts/licenses/
+    - assets/shared/fonts/source-notes/
   fonts:
     - family: ProbeNerd
       fonts:

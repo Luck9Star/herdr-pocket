@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -72,6 +71,15 @@ void publish(Directory dir, String name, String text) {
   pending.writeAsStringSync(text,flush:true); pending.renameSync('${dir.path}/$name');
 }
 
+Map<String,Object> boundedFailure(Object error,StackTrace stack,String stage) {
+  const classes = {'TestFailure','StateError','RemoteFailure','FormatException','TimeoutException'};
+  final name = error.runtimeType.toString();
+  final errorClass = error is TypeError ? 'TypeError' : classes.contains(name) ? name : 'other';
+  final match = RegExp(r'android_pairing_observe_test\.dart:([0-9]+)(?::[0-9]+)?').firstMatch(stack.toString());
+  final parsed = match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
+  return {'stage':stage,'errorClass':errorClass,'line':parsed >= 1 && parsed <= 10000 ? parsed : 0};
+}
+
 Map<String,Object> visibleReceipt(WidgetTester tester, String paneId, int count) {
   final control = find.byKey(const ValueKey('remote-input-receipt'));
   final value = tester.widget<Text>(control).data!;
@@ -119,11 +127,18 @@ Future<void> nativeSignerProbe(Directory exchange, void Function(String) stage) 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('Android native identity through production host catalog to guarded or stock SSH',(tester) async {
+    Directory? failureDirectory;
+    var currentStage = 'fixture_validation';
+    try {
     final target = checkedTarget();
     final exchange = Directory(publicDirectory);
     if (exchange.existsSync()) throw StateError('android_public_exchange_already_exists');
     exchange.createSync(recursive:true);
-    void stage(String name) => publish(exchange,'stage',name);
+    failureDirectory = exchange;
+    void stage(String name) {
+      if (!RegExp(r'^[a-z][a-z0-9_]{0,39}$').hasMatch(name)) throw StateError('invalid_public_stage');
+      currentStage = name; publish(exchange,'stage',name);
+    }
     await nativeSignerProbe(exchange,stage);
     stage('host_board');
     await app.main();
@@ -180,13 +195,21 @@ void main() {
     await until(tester,responseFile.existsSync);
     final response = responseFile.readAsStringSync();
     expect(utf8.encode(response).length,lessThanOrEqualTo(2048));
-    stage('response_review');
+    stage('response_enter');
     final responseControl = find.byKey(const ValueKey('pair-response'));
     await tester.ensureVisible(responseControl); await tester.enterText(responseControl,response); await tester.pump();
+    stage('response_preview');
     expect(find.byKey(const ValueKey('pair-response-preview')),findsOneWidget);
-    await tapKey(tester,'pair-source-review'); await tapKey(tester,'pair-accept');
+    stage('response_source_confirm');
+    await tapKey(tester,'pair-source-review');
+    stage('response_accept');
+    await tapKey(tester,'pair-accept');
+    stage('response_authorized');
     await until(tester,() => find.textContaining('authorized-unverified').evaluate().isNotEmpty);
+    stage('response_open_remote');
     await tapKey(tester,'pair-connect');
+    await until(tester,() => find.byType(RemotePage).evaluate().length == 1);
+    stage('response_remote_identity');
     final remotePage = tester.widget<RemotePage>(find.byType(RemotePage));
     expect(remotePage.adapter,isNull); expect(remotePage.deviceKeys,isA<NativeDeviceKeys>());
     expect(remotePage.pairedTarget,isNotNull);
@@ -211,20 +234,26 @@ void main() {
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
     final inputReceipts = <Map<String,Object>>[];
     if (guardedInput) {
-      stage('guarded_direct');
+      stage('guarded_direct_available');
       expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNotNull);
+      stage('guarded_direct_select');
       await tapKey(tester,'remote-mode-direct');
       final terminalView = find.byType(TerminalView);
-      await tester.ensureVisible(terminalView); await tester.pump(const Duration(milliseconds:200));
-      expect(tester.widget<TerminalView>(terminalView).focusNode!.hasFocus,isTrue);
+      stage('guarded_direct_focus');
+      await tap(tester,terminalView);
+      await until(tester,() => tester.widget<TerminalView>(terminalView).focusNode!.hasFocus &&
+        tester.state<TerminalViewState>(terminalView).hasInputConnection);
       // Submit a committed character through TerminalView's normal TextInput
       // path. A hardware key event alone need not generate printable text on
-      // Android. This is GUI automation, not proof of a physical IME.
-      expect(tester.testTextInput.isRegistered,isTrue);
-      tester.testTextInput.updateEditingValue(const TextEditingValue(text:'k',
-        selection:TextSelection.collapsed(offset:1),composing:TextRange.empty));
+      // Android. The fixed integration binding does not register a fake IME;
+      // TestTextInput.enterText supports this debug-client path. This is an
+      // automated GUI commit, not validation of a physical IME or composition.
+      stage('guarded_direct_commit');
+      tester.testTextInput.enterText('k');
       await tester.pump();
+      stage('guarded_direct_ack');
       await accepted(tester);
+      stage('guarded_direct_receipt');
       inputReceipts.add(visibleReceipt(tester,target['paneId'] as String,1));
 
       stage('guarded_hidden_draft');
@@ -294,5 +323,13 @@ void main() {
     };
     publish(exchange,'result.json',jsonEncode(report));
     binding.reportData = report;
+    } catch (error,stack) {
+      final directory = failureDirectory;
+      if (directory != null) {
+        try { publish(directory,'failure.json',jsonEncode(boundedFailure(error,stack,currentStage))); }
+        catch (_) { /* Preserve the original test failure if diagnostics fail. */ }
+      }
+      rethrow;
+    }
   },timeout:const Timeout(Duration(minutes:6)));
 }

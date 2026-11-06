@@ -33,7 +33,27 @@ void main() {
     await tapVisible(tester,'pair-target-review'); await tapVisible(tester,'pair-create'); await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('pair-request')),findsOneWidget); expect(keys.creates,1); expect(keys.signCalls,0);
     expect(catalog.profiles.length,1); expect(catalog.profiles.single.hasIdentity,isTrue);
+    expect((catalog.profiles.single.pairingRecord['request'] as Map)['issued_at'],catalog.clock());
     expect(catalog.profiles.single.id,isNot(imported.id)); expect(catalog.pendingCreation,isNull);
+    await tester.pumpWidget(const SizedBox()); catalog.dispose();
+  });
+  testWidgets('imported profile board disable, re-enable and delete never restore or delete an absent device identity', (tester) async {
+    final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+    final imported = HostProfile.imported(portable(),1000); await catalog.add(imported);
+    final keys = TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,keys:keys,
+      offlineBuilder:(_) => const SizedBox()))); await tester.pumpAndSettle();
+    expect(catalog.profiles.single.hasIdentity,isFalse); expect(tester.takeException(),isNull);
+    await tapVisible(tester,'host-disable-${imported.id}'); await tester.pumpAndSettle();
+    expect(catalog.profiles.single.enabled,isFalse); expect(catalog.profiles.single.hasIdentity,isFalse);
+    expect(tester.widget<FilledButton>(find.byKey(ValueKey('host-open-${imported.id}'))).onPressed,isNull);
+    await tapVisible(tester,'host-disable-${imported.id}'); await tester.pumpAndSettle();
+    expect(catalog.profiles.single.enabled,isTrue); expect(catalog.profiles.single.hasIdentity,isFalse);
+    await tapVisible(tester,'host-delete-${imported.id}'); await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton,'仅删除本机')); await tester.pumpAndSettle();
+    expect(catalog.profiles,isEmpty); expect(keys.deleted,isFalse); expect(keys.creates,0); expect(keys.signCalls,0);
+    expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
   testWidgets('file cancellation and malformed envelope never create a plan, write catalog, or expose identity export', (tester) async {

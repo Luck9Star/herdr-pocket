@@ -134,7 +134,10 @@ void main() {
       final catalog = HostCatalog(storage:disk,clock:() => 1000); await catalog.load();
       expect(catalog.ready,isTrue); expect(catalog.profiles.single.id,profile.id); expect(disk.writes,0);
       final plan = catalog.previewImport([portable()]); await catalog.applyImport(plan,[const ConfigImportChoice(ConfigImportAction.keep)]);
-      expect((jsonDecode(disk.contents) as Map)['schemaVersion'],3);
+      final migrated = jsonDecode(disk.contents) as Map;
+      expect(migrated['schemaVersion'],4);
+      expect(migrated['networkProfiles'],isEmpty);
+      expect(migrated['preferences'],{'terminalFontSize':14});
       expect(catalog.profiles.single.pairingRecord['handle'],profile.pairingRecord['handle']);
       catalog.dispose(); first.dispose();
     }

@@ -58,7 +58,7 @@ void main() {
     HostProfile host(String label,NetworkProfile network,String handle) {
       final pairing = catalogPairing();
       final profile = HostProfile.create(label,fixtureConfig(),pairing,1000,networkProfileId:network.id);
-      return HostProfile.fromJson({...profile.toJson(),'pairing':{...pairing.toPublicRecord(),'handle':handle}},1000);
+      return HostProfile.fromJson({...profile.toJson(),'pairing':{...profile.pairingRecord,'handle':handle}},1000);
     }
     final one = host('A',a,'opaque-a'),two = host('B',b,'opaque-b'); await catalog.add(one); await catalog.add(two);
     final frozen = catalog.freezeNetwork(one),tabs = HostTabs();

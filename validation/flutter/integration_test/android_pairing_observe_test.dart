@@ -57,6 +57,41 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
   await tester.pump(const Duration(milliseconds:350));
 }
 Future<void> tapKey(WidgetTester tester, String key) => tap(tester,find.byKey(ValueKey(key)));
+/// Observe the real view after the editor's done action. Do not override view
+/// metrics, assign review state, or retry the consent tap if it is not checked.
+Future<Finder> sourceReviewCheckbox(WidgetTester tester) async {
+  final tile = find.byKey(const ValueKey('pair-source-review'));
+  final checkbox = find.descendant(of:tile,matching:find.byType(Checkbox));
+  List<double> previousViewport = const [];
+  var stableSamples = 0;
+  bool viewportStable() {
+    final view = tester.view;
+    final sample = <double>[view.physicalSize.width,view.physicalSize.height,view.devicePixelRatio,
+      view.viewInsets.left,view.viewInsets.top,view.viewInsets.right,view.viewInsets.bottom];
+    final unchanged = sample.length == previousViewport.length &&
+      sample.asMap().entries.every((entry) => previousViewport[entry.key] == entry.value);
+    previousViewport = sample;
+    return view.viewInsets.bottom == 0 && unchanged;
+  }
+  await until(tester,() {
+    stableSamples = viewportStable() && checkbox.evaluate().length == 1 ? stableSamples+1 : 0;
+    return stableSamples >= 3;
+  },seconds:10);
+  await tester.ensureVisible(checkbox);
+  Rect? previousBounds;
+  stableSamples = 0;
+  await until(tester,() {
+    if (!viewportStable() || checkbox.hitTestable().evaluate().length != 1) {
+      stableSamples = 0; previousBounds = null; return false;
+    }
+    final bounds = tester.getRect(checkbox);
+    stableSamples = previousBounds == bounds ? stableSamples+1 : 0;
+    previousBounds = bounds;
+    return stableSamples >= 3 && tester.widget<Checkbox>(checkbox).onChanged != null;
+  },seconds:10);
+  expect(tester.widget<CheckboxListTile>(tile).value,isFalse);
+  return checkbox.hitTestable();
+}
 Finder hostOpen() => find.byWidgetPredicate((widget) => widget is FilledButton &&
   widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('host-open-'));
 int? displayedSequence(WidgetTester tester) {
@@ -208,7 +243,9 @@ void main() {
     stage('response_preview');
     expect(find.byKey(const ValueKey('pair-response-preview')),findsOneWidget);
     stage('response_source_confirm');
-    await tapKey(tester,'pair-source-review');
+    final sourceCheckbox = await sourceReviewCheckbox(tester);
+    await tester.tap(sourceCheckbox); // One real pointer action on the checkbox.
+    await tester.pump(const Duration(milliseconds:350));
     expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('pair-source-review'))).value,isTrue);
     stage('response_accept');
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('pair-accept'))).onPressed,isNotNull);

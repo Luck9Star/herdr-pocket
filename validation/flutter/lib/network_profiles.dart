@@ -14,6 +14,14 @@ bool _publicText(dynamic value,int limit,{bool empty=false}) => value is String 
 Uri? _publicUri(dynamic value,Set<String> schemes) {
   if (value is! String || value.length > 2048 || value.contains('?') || value.contains('#') || value.contains('\\') || !RegExp(r'^[\x21-\x7e]+$').hasMatch(value)) return null;
   try {
+    // Uri can normalize an explicit :0 away for schemes without a registered
+    // default port. Check the original authority before parsing/normalization.
+    final separator = value.indexOf('://');
+    if (separator >= 0) {
+      final start = separator+3,end = value.indexOf('/',start);
+      final authority = value.substring(start,end < 0 ? value.length : end);
+      if (RegExp(r':0+$').hasMatch(authority)) return null;
+    }
     final uri = Uri.parse(value);
     if (!schemes.contains(uri.scheme) || !uri.hasAuthority || uri.host.isEmpty || uri.authority.contains('@') || uri.userInfo.isNotEmpty ||
         uri.hasQuery || uri.hasFragment || (uri.hasPort && (uri.port < 1 || uri.port > 65535))) return null;

@@ -27,6 +27,19 @@ void main() {
         throwsA(isA<RemoteFailure>()),reason:entry['name'] as String);
     }
   });
+  test('explicit zero port is rejected from raw authority for each peer scheme',() {
+    for (final peer in ['ws://relay.example.test:0','wss://relay.example.test:00',
+      'wss://[::1]:0/path','tcp://relay.example.test:0','udp://relay.example.test:000']) {
+      expect(() => NetworkProfile.create('Mesh','easytier',{'networkName':'mesh','peers':[peer]}),
+        throwsA(isA<RemoteFailure>()),reason:peer);
+    }
+    for (final peer in ['ws://relay.example.test','wss://relay.example.test:443/path',
+      'wss://[::1]:443/path','tcp://relay.example.test:1']) {
+      expect(NetworkProfile.create('Mesh','easytier',{'networkName':'mesh','peers':[peer]}).settings['peers'],[peer]);
+    }
+    expect(() => NetworkProfile.create('Tailnet','tailscale',{'controlUrl':'https://control.example.test:0','hostname':''}),
+      throwsA(isA<RemoteFailure>()));
+  });
   test('profile revisions advance for edits and toggles; settings are immutable and overflow fails',() {
     final original = testNetwork('easytier'),changed = original.change(enabled:false);
     expect(changed.revision,2); expect(changed.id,original.id);

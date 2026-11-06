@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' as foundation;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' as services;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
@@ -17,6 +19,12 @@ import 'pairing_gui_test.dart' show TestDeviceKeys,tapVisible,authorizedResponse
 import 'remote_page_test.dart' show PendingAdapter;
 import 'remote_test_data.dart';
 import 'network_identity_test.dart' show MemoryNetworkIdentity,identityReply;
+
+class CountingDeviceKeys extends TestDeviceKeys {
+  CountingDeviceKeys(super.pem);
+  int publicCalls = 0;
+  @override Future<String> public(String handle) { publicCalls++; return super.public(handle); }
+}
 
 class PendingNodeRuntime extends NativeNetworkRuntime {
   final pending = Completer<NetworkNodeSnapshot>();
@@ -132,9 +140,11 @@ void main() {
     await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
   testWidgets('every overlay stops before SSH adapter or device signing; explicit revision is displayed',(tester) async {
+    foundation.debugDefaultTargetPlatformOverride = foundation.TargetPlatform.linux;
+    addTearDown(() { foundation.debugDefaultTargetPlatformOverride = null; });
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     for (final provider in overlayProviders) {
-      final adapter = PendingAdapter(),keys = TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
+      final adapter = PendingAdapter(),keys = CountingDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
       final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
       final network = testNetwork(provider),original = await saveCatalogProfile(catalog); await catalog.addNetwork(network);
       final bound = original.change(networkProfileId:network.id,replaceNetwork:true,now:1000); await catalog.update(bound);
@@ -144,8 +154,30 @@ void main() {
       await tapVisible(tester,'remote-review'); await tapVisible(tester,'remote-connect'); await tester.pumpAndSettle();
       expect(find.textContaining('provider_unavailable'),findsOneWidget);
       expect(find.textContaining(network.label),findsOneWidget);
-      expect(adapter.calls,0); expect(keys.signCalls,0); expect(keys.creates,0);
+      expect(adapter.calls,0); expect(keys.publicCalls,0); expect(keys.signCalls,0); expect(keys.creates,0);
       await tester.pumpWidget(const SizedBox()); catalog.dispose();
     }
+  });
+  testWidgets('Android runtime channel failure stops overlay before credentials or system dial',(tester) async {
+    foundation.debugDefaultTargetPlatformOverride = foundation.TargetPlatform.android;
+    addTearDown(() { foundation.debugDefaultTargetPlatformOverride = null; });
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final calls = <String>[];
+    messenger.setMockMethodCallHandler(NativeNetworkRuntime.channel,(call) async {
+      calls.add(call.method); throw services.PlatformException(code:'overlay_provider_unavailable');
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(NativeNetworkRuntime.channel,null));
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    final adapter = PendingAdapter(),keys = CountingDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
+    final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+    final network = testNetwork('easytier'),original = await saveCatalogProfile(catalog); await catalog.addNetwork(network);
+    final bound = original.change(networkProfileId:network.id,replaceNetwork:true,now:1000); await catalog.update(bound);
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:RemotePage(tokens:tokens,adapter:adapter,
+      pairedTarget:bound.target,deviceKeys:keys,keyHandle:bound.pairingRecord['handle'] as String,
+      devicePublicKey:fixtureConfig()['expectedHostKey'] as String,networkBinding:catalog.freezeNetwork(bound))));
+    await tapVisible(tester,'remote-review'); await tapVisible(tester,'remote-connect'); await tester.pumpAndSettle();
+    expect(find.textContaining('节点状态或连接桥不可确认'),findsOneWidget);
+    expect(calls,['available']); expect(adapter.calls,0); expect(keys.publicCalls,0); expect(keys.signCalls,0);
+    await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
 }

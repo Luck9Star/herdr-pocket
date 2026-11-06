@@ -11,12 +11,13 @@ import 'remote_adapter.dart';
 /// Status remains a read, including the verification after an unknown write.
 class CatalogNetworkIdentityStore implements NetworkIdentityStore {
   CatalogNetworkIdentityStore({required this.catalog,required this.profile,required this.expectedRevision,
-    required this.closeAffected,required this.delegate});
+    required this.closeAffected,required this.delegate,this.runtime=const NativeNetworkRuntime()});
   final HostCatalog catalog;
   final NetworkProfile profile;
   final String expectedRevision;
   final void Function() closeAffected;
   final NetworkIdentityStore delegate;
+  final NativeNetworkRuntime runtime;
   @override
   bool get supported => delegate.supported;
   void check(NetworkProfile requested) {
@@ -39,7 +40,7 @@ class CatalogNetworkIdentityStore implements NetworkIdentityStore {
     check(requested);
     return catalog.guardedNetworkOperation(profile,expectedRevision:expectedRevision,
       beforeDispatch:closeAffected,operation:() async {
-        await const NativeNetworkRuntime().stopBeforeChange(profile);
+        await runtime.stopBeforeChange(profile);
         checkCurrent();
         return delegate.create(profile,mode,secret);
       });
@@ -49,7 +50,7 @@ class CatalogNetworkIdentityStore implements NetworkIdentityStore {
     check(requested);
     return catalog.guardedNetworkOperation(profile,expectedRevision:expectedRevision,
       beforeDispatch:closeAffected,operation:() async {
-        await const NativeNetworkRuntime().stopBeforeChange(profile);
+        await runtime.stopBeforeChange(profile);
         checkCurrent();
         return delegate.delete(profile,identity);
       });
@@ -58,11 +59,12 @@ class CatalogNetworkIdentityStore implements NetworkIdentityStore {
 
 class NetworkIdentityDialog extends StatefulWidget {
   const NetworkIdentityDialog({super.key,required this.profile,required this.catalog,
-    required this.closeTabs,required this.store});
+    required this.closeTabs,required this.store,this.runtime=const NativeNetworkRuntime()});
   final NetworkProfile profile;
   final HostCatalog catalog;
   final void Function(Set<String>) closeTabs;
   final NetworkIdentityStore store;
+  final NativeNetworkRuntime runtime;
   @override
   State<NetworkIdentityDialog> createState() => _NetworkIdentityDialogState();
 }
@@ -87,7 +89,7 @@ class _NetworkIdentityDialogState extends State<NetworkIdentityDialog> with Widg
     affected = List<HostProfile>.unmodifiable(widget.catalog.networkImpact(widget.profile.id));
     final affectedIds = Set<String>.unmodifiable(affected.map((p) => p.id));
     final guarded = CatalogNetworkIdentityStore(catalog:widget.catalog,profile:widget.profile,
-      expectedRevision:capturedRevision,closeAffected:() => widget.closeTabs(affectedIds),delegate:widget.store);
+      expectedRevision:capturedRevision,closeAffected:() => widget.closeTabs(affectedIds),delegate:widget.store,runtime:widget.runtime);
     session = NetworkIdentitySession(profile:widget.profile,store:guarded,stillCurrent:current,
       closeAffected:() {});
     session.addListener(changed); widget.catalog.addListener(changed);

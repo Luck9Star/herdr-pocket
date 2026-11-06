@@ -1,0 +1,26 @@
+{
+  "recordedOn": "2026-11-06",
+  "kind": "actual-cloud-run-failure",
+  "commit": "027a61e73281f5ccd560075c6a58c8a57a98c5a5",
+  "runId": 42206577343,
+  "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42206577343",
+  "conclusion": "failure",
+  "jobTotals": {"success": 2, "failure": 3},
+  "jobs": [
+    {"id": 127854633576, "name": "transport-source", "conclusion": "success"},
+    {"id": 127854633741, "name": "native", "conclusion": "success"},
+    {"id": 127854633792, "name": "flutter-source", "conclusion": "failure", "analyzer": "passed", "mobileTests": {"passed": 180, "skipped": 1, "failed": 2}, "mobileFailure": "platform override not restored before widget framework invariant check", "combiningRendererTests": {"passed": 10}, "isolatedSshGui": "skipped"},
+    {"id": 127856476821, "name": "apps (tauri)", "conclusion": "failure", "cause": "Android-only network_identity_write tail expression returns Result<(), &str>, expected Result<(), String>", "apkBuild": "failed"},
+    {"id": 127856477061, "name": "apps (flutter)", "conclusion": "failure", "apkBuild": "passed", "heelerByteEquality": "passed before the later ELF dependency failure", "apkInspection": "unlisted public system dependency libnativewindow.so; original diagnostic does not identify the offending APK object", "apkUpload": "skipped"}
+  ],
+  "artifacts": [
+    {"id": 13497191087, "kind": "native source bundle", "sizeBytes": 98607966},
+    {"id": 13496663699, "kind": "transport source test log", "sizeBytes": 4645},
+    {"id": 13496519070, "kind": "Flutter source logs and verified lock; failed source checks", "sizeBytes": 156552}
+  ],
+  "newApkArtifacts": [],
+  "pendingRepairs": ["restore platform override in widget test body finally", "owned error String in Android Tauri identity mutation", "API 35 public nativewindow dependency allowance with private/missing dependency rejection retained and object-specific diagnostics"],
+  "source": "https://developer.android.com/ndk/guides/stable_apis#android_native_application_apis",
+  "localRepairChecks": {"nativeBundleTests": "10 passed", "flutterWidgetRepair": "static review only; execution pending", "tauriAndroidRepair": "type correction; Android compilation pending"},
+  "boundaries": ["No downloadable APK in this run", "No physical device, Android load or real overlay result", "No local GUI test app opened"]
+}

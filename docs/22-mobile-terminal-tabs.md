@@ -1,6 +1,6 @@
 # 手机独立终端标签与保留连接
 
-2026-11-06，延续 [Flutter 原生网络通道](21-flutter-native-network.md)。本批推进手机从配对、看板进入多个独立终端视图：同一主机可打开不同 pane，隐藏视图撤销输入并暂停观察，回到前台后由用户显式恢复。**两轮集中云构建已执行，均未产生通过产物校验的新 APK；已汇总后续修复待复验。** 此前 Android 测试包仍对应 `040eb26`，不能用来验收本批代码。[上一批包与失败记录](18-mobile-network-profiles.md)
+2026-11-06，延续 [Flutter 原生网络通道](21-flutter-native-network.md)。本批推进手机从配对、看板进入多个独立终端视图：同一主机可打开不同 pane，隐藏视图撤销输入并暂停观察，回到前台后由用户显式恢复。**三轮集中云构建已执行，均未产生通过全部产物校验的新 APK；已汇总后续修复待复验。** 此前 Android 测试包仍对应 `040eb26`，不能用来验收本批代码。[上一批包与失败记录](18-mobile-network-profiles.md)
 
 ## 两套 GUI 的共同契约
 
@@ -46,6 +46,10 @@ Android 原生库编译和静态检查成功，但上传默认遗漏 `portable-s
 - Flutter APK 编译成功，但实装 Heeler 库 SHA 与原生来源包不一致，严格校验拦截后没有上传。当前推断是 Gradle 打包时移除符号；按[官方 `keepDebugSymbols` 配置](https://developer.android.com/reference/tools/gradle-api/8.0/com/android/build/api/dsl/JniLibsPackaging#keepDebugSymbols())，仅保留 `libheeler_easytier.so` 原始字节。两壳应用同一配置，下一轮仍须通过原有逐字节与 ELF 校验，不能以此配置本身证明原因或修复已验证。
 
 完整 job、产物 ID 和边界见[第二轮记录](evidence/mobile-pair-gui/mobile-tabs-ci-second-20261106.json)。修复后本机 Python 构建辅助 8 项、原生包检查 9 项通过；Dart 51 文件仅语法检查通过，尚无修复后的 analyzer／widget 结果。
+
+第三轮 [Actions 42206577343](https://github.com/Luck9Star/herdr-pocket/actions/runs/42206577343) 对应 `027a61e73281f5ccd560075c6a58c8a57a98c5a5`，仍是 2 成功、3 失败，但已确认 Flutter analyzer 通过、原 5 项失败消失、移动测试 180 通过／1 跳过／2 失败、绘制 10 通过。新失败来自两个测试的 `debugDefaultTargetPlatformOverride` 在 widget 不变量检查之后才清理；已改为测试体 `try/finally`，原行为断言保留，待复验。隔离 SSH GUI 仍跳过，不能标为本批通过。
+
+Tauri 已越过缺图标阶段，Android 专用身份写入路径暴露返回 `&str` 而非 `String` 的编译错误，已显式转换错误字符串。Flutter APK 构建成功，Heeler 逐字节核对也已通过，后续遍历 APK 原生对象时被未列入系统清单的 `libnativewindow.so` 拦截。原日志没有对象文件名，不能归因到 Heeler；现补充对象名诊断，并依据[Android 官方 NDK 库清单](https://developer.android.com/ndk/guides/stable_apis#android_native_application_apis)在固定 API 35 校验中允许此公开库。未知／私有库和缺少必需依赖仍拒绝，新增反例随本机原生包 10 项测试通过；APK 实际复验尚待执行。[第三轮完整记录](evidence/mobile-pair-gui/mobile-tabs-ci-third-20261106.json)
 
 ## 新包的手机验收步骤
 

@@ -48,6 +48,16 @@ class BundleTests(unittest.TestCase):
         with self.assertRaises(ValueError): bundle.verify(self.path, 'b' * 40, 'readelf')
         with self.assertRaises(ValueError): bundle.verify(self.path, 'a' * 40, 'readelf')
 
+    def test_public_native_window_does_not_admit_private_or_missing_dependencies(self):
+        dynamic = '  (NEEDED) Shared library: [libnativewindow.so]\n'
+        with mock.patch.object(bundle.subprocess, 'check_output', return_value=dynamic):
+            self.assertEqual(bundle.elf(self.lib, 'readelf'), ['libnativewindow.so'])
+            with self.assertRaisesRegex(ValueError, 'DT_NEEDED in libheeler_easytier.so'):
+                bundle.elf(self.lib, 'readelf', needed=['libheeler_easytier.so'])
+        with mock.patch.object(bundle.subprocess, 'check_output', return_value=dynamic + '  (NEEDED) Shared library: [libprivate-fixture.so]\n'):
+            with self.assertRaisesRegex(ValueError, 'libprivate-fixture.so'):
+                bundle.elf(self.lib, 'readelf')
+
     def prepare_bundle(self):
         native = bundle.ROOT / 'validation/native'
         names = ['upstream-sources.lock', 'Heeler-Cargo.lock', 'reference-source.tar',

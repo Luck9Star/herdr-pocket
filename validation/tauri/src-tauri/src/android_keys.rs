@@ -118,21 +118,84 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all="camelCase")]
-struct IdentityArgs<'a> { profile_id:&'a str, provider:&'a str, mode:&'a str, secret:&'a str, expected_handle:&'a str }
-#[derive(Deserialize)]
-#[serde(rename_all="camelCase")]
-struct IdentityReply { present:bool, mode:Option<String>, supported:Option<bool>, handle:Option<String>, instance_id:Option<String> }
-pub(crate) fn network_identity<R:Runtime>(app:&tauri::AppHandle<R>, operation:&str, profile_id:&str, mode:&str, secret:&str)->std::result::Result<Option<crate::network_identity::Metadata>,String> {
-    let bridge=app.try_state::<ConfigRoot<R>>().ok_or("network_identity_unavailable")?;
-    let reply:IdentityReply=bridge.0.run_mobile_plugin(operation, IdentityArgs{profile_id,provider:"easytier",mode,secret,expected_handle:""}).map_err(|_|"network_identity_unavailable")?;
-    if reply.supported==Some(false) {return Err("network_identity_unsupported".into());}
-    if !reply.present {return Ok(None)}
-    let (Some(mode),Some(handle),Some(instance))=(reply.mode,reply.handle,reply.instance_id) else {return Err("network_identity_unavailable".into())};
-    if !matches!(mode.as_str(),"PRIVATE"|"PUBLIC_NO_SECRET") || !crate::network_identity::valid_handle(&handle) || !crate::network_identity::valid_handle(&instance) {return Err("network_identity_unavailable".into())}
-    Ok(Some(crate::network_identity::Metadata{mode,handle}))
+#[serde(rename_all = "camelCase")]
+struct IdentityArgs<'a> {
+    profile_id: &'a str,
+    provider: &'a str,
+    mode: &'a str,
+    secret: &'a str,
+    expected_handle: &'a str,
 }
-pub(crate) fn delete_network_identity<R:Runtime>(app:&tauri::AppHandle<R>,profile_id:&str,expected_handle:&str)->std::result::Result<(),String> {
-    let bridge=app.try_state::<ConfigRoot<R>>().ok_or("network_identity_unavailable")?;
-    let _:serde_json::Value=bridge.0.run_mobile_plugin("networkIdentityDelete",IdentityArgs{profile_id,provider:"easytier",mode:"",secret:"",expected_handle}).map_err(|_|"network_identity_unavailable")?;Ok(())
+pub(crate) fn network_identity<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    operation: &str,
+    profile_id: &str,
+    provider: &str,
+    mode: &str,
+    secret: &str,
+) -> std::result::Result<Option<crate::network_identity::Metadata>, String> {
+    if !matches!(provider, "easytier" | "tailscale") {
+        return Err("network_identity_provider_unavailable".into());
+    }
+    let bridge = app
+        .try_state::<ConfigRoot<R>>()
+        .ok_or("network_identity_unavailable")?;
+    let reply: crate::network_identity::IdentityReply = bridge
+        .0
+        .run_mobile_plugin(
+            operation,
+            IdentityArgs {
+                profile_id,
+                provider,
+                mode,
+                secret,
+                expected_handle: "",
+            },
+        )
+        .map_err(|_| "network_identity_unavailable")?;
+    crate::network_identity::checked_metadata(reply, provider, profile_id)
+}
+pub(crate) fn delete_network_identity<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    profile_id: &str,
+    provider: &str,
+    expected_handle: &str,
+) -> std::result::Result<(), String> {
+    let bridge = app
+        .try_state::<ConfigRoot<R>>()
+        .ok_or("network_identity_unavailable")?;
+    let _: serde_json::Value = bridge
+        .0
+        .run_mobile_plugin(
+            "networkIdentityDelete",
+            IdentityArgs {
+                profile_id,
+                provider,
+                mode: "",
+                secret: "",
+                expected_handle,
+            },
+        )
+        .map_err(|_| "network_identity_unavailable")?;
+    Ok(())
+}
+#[derive(Serialize)]
+struct AuthArgs<'a> {
+    url: &'a str,
+}
+pub(crate) fn open_network_auth<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    url: &str,
+) -> std::result::Result<(), String> {
+    if !crate::network_nodes::reviewed_auth_url(url) {
+        return Err("network_auth_url_invalid".into());
+    }
+    let bridge = app
+        .try_state::<ConfigRoot<R>>()
+        .ok_or("network_auth_open_unavailable")?;
+    let _: serde_json::Value = bridge
+        .0
+        .run_mobile_plugin("openNetworkAuthUrl", AuthArgs { url })
+        .map_err(|_| "network_auth_open_unavailable")?;
+    Ok(())
 }

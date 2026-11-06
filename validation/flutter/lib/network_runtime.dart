@@ -13,26 +13,40 @@ import 'remote_input.dart';
 
 /// Public binding only; identity material remains in the native vault.
 class NetworkNodeBinding {
-  const NetworkNodeBinding(this.profileId,this.profileRevision,this.networkName,this.identityRef);
-  final String profileId,networkName,identityRef;
+  const NetworkNodeBinding(this.profileId,this.profileRevision,this.networkName,this.identityRef,{this.provider='easytier'});
+  final String profileId,networkName,identityRef,provider;
   final int profileRevision;
+  String get routeProvider => provider == 'easytier' ? 'easy-tier' : provider;
   Map<String,Object> toMap() => {'profileId':profileId,'profileRevision':profileRevision,
-    'networkName':networkName,'identityRef':identityRef};
+    'networkName':networkName,'identityRef':identityRef,if (provider != 'easytier') 'provider':provider};
   factory NetworkNodeBinding.fromMap(Object? value) {
-    if (value is! Map || value.length != 4 || !{'profileId','profileRevision','networkName','identityRef'}.containsAll(value.keys) ||
+    if (value is! Map || (value.length != 4 && value.length != 5) ||
+        !{'profileId','profileRevision','networkName','identityRef','provider'}.containsAll(value.keys) ||
+        (value.containsKey('provider') && !{'tailscale','easy-tier','easytier'}.contains(value['provider'])) ||
         value['profileId'] is! String || value['profileRevision'] is! int || value['networkName'] is! String || value['identityRef'] is! String) {
       throw const RemoteFailure('network_runtime_unavailable');
     }
     final binding = NetworkNodeBinding(value['profileId'] as String,value['profileRevision'] as int,
-      value['networkName'] as String,value['identityRef'] as String);
-    if (!isValidOverlayRoute('easy-tier:${binding.profileId}:${binding.profileRevision}:${binding.identityRef}') ||
-        binding.networkName.trim().isEmpty || utf8.encode(binding.networkName).length > 64 || RegExp(r'[\x00-\x1f\x7f-\x9f]').hasMatch(binding.networkName)) {
+      value['networkName'] as String,value['identityRef'] as String,
+      provider:value['provider'] == 'tailscale' ? 'tailscale' : 'easytier');
+    if (!isValidOverlayRoute('${binding.routeProvider}:${binding.profileId}:${binding.profileRevision}:${binding.identityRef}') ||
+        (binding.provider == 'tailscale' ? !RegExp(r'^ts1:[a-f0-9]{64}$').hasMatch(binding.networkName) :
+          binding.networkName.trim().isEmpty || utf8.encode(binding.networkName).length > 64 || RegExp(r'[\x00-\x1f\x7f-\x9f]').hasMatch(binding.networkName))) {
       throw const RemoteFailure('network_runtime_unavailable');
     }
     return binding;
   }
   bool same(NetworkNodeBinding other) => profileId == other.profileId && profileRevision == other.profileRevision &&
-    networkName == other.networkName && identityRef == other.identityRef;
+    networkName == other.networkName && identityRef == other.identityRef && provider == other.provider;
+  factory NetworkNodeBinding.forProfile(NetworkProfile profile,NetworkIdentityRecord identity) {
+    if (identity.profileId != profile.id || identity.provider != profile.provider ||
+        (profile.provider == 'tailscale' ? identity.mode != 'DEVICE_STATE' : profile.provider != 'easytier' || identity.mode != 'PRIVATE')) {
+      throw const RemoteFailure('network_identity_unavailable');
+    }
+    return NetworkNodeBinding.fromMap(NetworkNodeBinding(profile.id,profile.revision,
+      profile.provider == 'tailscale' ? tailscaleNetworkName(profile) : profile.settings['networkName'] as String,
+      identity.handle,provider:profile.provider).toMap());
+  }
 }
 
 class NetworkNodeSnapshot {
@@ -41,11 +55,52 @@ class NetworkNodeSnapshot {
   final NetworkNodeBinding? binding;
   factory NetworkNodeSnapshot.fromMap(Object? value) {
     if (value is! Map || value.length != 2 || !value.containsKey('state') || !value.containsKey('binding') ||
-        !{'unavailable','starting','engine-started','closing','stopped'}.contains(value['state'])) {
+        !{'unavailable','starting','engine-started','needs-login','needs-machine-auth','running','closing','stopped'}.contains(value['state'])) {
       throw const RemoteFailure('network_runtime_unavailable');
     }
-    return NetworkNodeSnapshot(value['state'] as String,value['binding'] == null ? null : NetworkNodeBinding.fromMap(value['binding']));
+    final snapshot = NetworkNodeSnapshot(value['state'] as String,value['binding'] == null ? null : NetworkNodeBinding.fromMap(value['binding']));
+    if ((!{'stopped','unavailable'}.contains(snapshot.state) && snapshot.binding == null) ||
+        ({'needs-login','needs-machine-auth','running'}.contains(snapshot.state) && snapshot.binding?.provider != 'tailscale') ||
+        (snapshot.state == 'engine-started' && snapshot.binding?.provider != 'easytier')) {
+      throw const RemoteFailure('network_runtime_unavailable');
+    }
+    return snapshot;
   }
+}
+
+/// Ephemeral authorization response; never serialized into the host catalog.
+class NetworkLoginSnapshot {
+  const NetworkLoginSnapshot(this.state,this.binding,this.authUrl,this.reviewToken);
+  final String state;
+  final NetworkNodeBinding binding;
+  final String? authUrl,reviewToken;
+  factory NetworkLoginSnapshot.fromMap(Object? value,NetworkNodeBinding expected) {
+    if (value is! Map || value.length != 4 || !{'state','binding','authUrl','reviewToken'}.containsAll(value.keys) ||
+        (value['authUrl'] != null && value['authUrl'] is! String) ||
+        (value['reviewToken'] != null && value['reviewToken'] is! String)) throw const RemoteFailure('network_runtime_unavailable');
+    final node = NetworkNodeSnapshot.fromMap({'state':value['state'],'binding':value['binding']});
+    if (expected.provider != 'tailscale' || node.binding == null || !node.binding!.same(expected)) {
+      throw const RemoteFailure('network_binding_changed');
+    }
+    final url = value['authUrl'] as String?;
+    final token = value['reviewToken'] as String?;
+    if ((url == null) != (token == null) || (token != null && !isValidTailscaleReviewToken(token)) ||
+        (url != null && (!{'needs-login','needs-machine-auth'}.contains(node.state) || !isValidTailscaleAuthUrl(url)))) {
+      throw const RemoteFailure('network_runtime_unavailable');
+    }
+    return NetworkLoginSnapshot(node.state,node.binding!,url,token);
+  }
+}
+
+bool isValidTailscaleReviewToken(String token) => RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(token);
+
+bool isValidTailscaleAuthUrl(String url) {
+  // Native reviewed_https allows queries and at most 4096 ASCII bytes. Its
+  // authority policy is narrower than Uri.parse, and does not normalize URLs.
+  if (url.length > 4096 || !url.startsWith('https://') ||
+      !RegExp(r'^[\x21-\x7e]+$').hasMatch(url) || RegExp(r'[\\#]').hasMatch(url)) return false;
+  final authority = url.substring(8).split(RegExp(r'[/\?]')).first;
+  return isValidTailscaleAuthority(authority,limitLabelLength:false,maxLength:259);
 }
 
 class NativeNetworkRuntime {
@@ -63,24 +118,64 @@ class NativeNetworkRuntime {
   }
   Future<bool> available() async {
     if (!supported) return false;
-    final reply = await call('available',{});
+    return _available({});
+  }
+  Future<bool> providerAvailable(String provider) async {
+    if (provider == 'easytier') return available();
+    if (!supported || provider != 'tailscale') return false;
+    return _available({'provider':provider});
+  }
+  Future<bool> _available(Map<String,Object> args) async {
+    final reply = await call('available',args);
     if (reply is! Map || reply.length != 2 || !reply.containsKey('available') || !reply.containsKey('reason') || reply['available'] is! bool ||
         (reply['reason'] != null && reply['reason'] is! String)) throw const RemoteFailure('network_runtime_unavailable');
     return reply['available'] == true;
   }
-  Future<NetworkNodeSnapshot> status(String profileId) async {
+  Future<NetworkNodeSnapshot> status(String profileId) => _status(profileId,{'profileId':profileId});
+  Future<NetworkNodeSnapshot> profileStatus(NetworkProfile profile) async {
+    if (profile.provider == 'easytier') return status(profile.id);
+    if (profile.provider != 'tailscale') throw const RemoteFailure('provider_unavailable');
+    return _status(profile.id,{'profileId':profile.id,'provider':'tailscale'},expectedProvider:'tailscale');
+  }
+  Future<NetworkNodeSnapshot> _status(String profileId,Map<String,Object> args,{String expectedProvider='easytier'}) async {
     final epoch = _stopEpoch[profileId] ?? 0;
     final duringStop = (_stopsInFlight[profileId] ?? 0) != 0;
-    final result = NetworkNodeSnapshot.fromMap(await call('nodeStatus',{'profileId':profileId}));
-    if (result.binding != null && result.binding!.profileId != profileId) throw const RemoteFailure('network_binding_changed');
+    final result = NetworkNodeSnapshot.fromMap(await call('nodeStatus',args));
+    if (result.binding != null && (result.binding!.profileId != profileId || result.binding!.provider != expectedProvider)) {
+      throw const RemoteFailure('network_binding_changed');
+    }
     if (result.state == 'stopped' && !duringStop && (_stopsInFlight[profileId] ?? 0) == 0 &&
         (_stopEpoch[profileId] ?? 0) == epoch) _uncertainStops.remove(profileId);
     return result;
   }
   Future<NetworkNodeSnapshot> start(NetworkNodeBinding binding,List<String> peers) async {
+    if (binding.provider != 'easytier') throw const RemoteFailure('network_binding_changed');
     final result = NetworkNodeSnapshot.fromMap(await call('nodeStart',{'binding':binding.toMap(),'peers':peers}));
     if (result.binding != null && !result.binding!.same(binding)) throw const RemoteFailure('network_binding_changed');
     return result;
+  }
+  Future<NetworkNodeSnapshot> startTailscale(NetworkNodeBinding binding,NetworkProfile profile) async {
+    if (binding.provider != 'tailscale' || binding.profileId != profile.id || binding.profileRevision != profile.revision ||
+        profile.provider != 'tailscale' || binding.networkName != tailscaleNetworkName(profile)) {
+      throw const RemoteFailure('network_binding_changed');
+    }
+    final result = NetworkNodeSnapshot.fromMap(await call('nodeStart',{
+      'binding':binding.toMap(),'settings':tailscaleEffectiveSettings(profile)}));
+    if (result.binding == null || !result.binding!.same(binding)) throw const RemoteFailure('network_binding_changed');
+    return result;
+  }
+  Future<NetworkLoginSnapshot> login(NetworkNodeBinding binding) async {
+    if (binding.provider != 'tailscale') throw const RemoteFailure('network_binding_changed');
+    return NetworkLoginSnapshot.fromMap(await call('nodeLogin',{'binding':binding.toMap()}),binding);
+  }
+  Future<NetworkLoginSnapshot> loginStatus(NetworkNodeBinding binding) async {
+    if (binding.provider != 'tailscale') throw const RemoteFailure('network_binding_changed');
+    return NetworkLoginSnapshot.fromMap(await call('nodeLoginStatus',{'binding':binding.toMap()}),binding);
+  }
+  Future<void> openLogin(NetworkNodeBinding binding,String url,String reviewToken) async {
+    if (binding.provider != 'tailscale' || !isValidTailscaleAuthUrl(url) || !isValidTailscaleReviewToken(reviewToken)) throw const RemoteFailure('network_binding_changed');
+    final result = await call('openLogin',{'binding':binding.toMap(),'url':url,'reviewToken':reviewToken});
+    if (result is! Map || result.length != 1 || result['opened'] != true) throw const RemoteFailure('network_runtime_unavailable');
   }
   Future<NetworkNodeSnapshot> stop(NetworkNodeBinding binding) async {
     final id = binding.profileId;
@@ -101,12 +196,14 @@ class NativeNetworkRuntime {
   }
 
   Future<NetworkNodeBinding> freeze(NetworkProfile profile,NetworkIdentityStore identities) async {
-    if (!supported || profile.provider != 'easytier' || !profile.enabled || !await available()) throw const RemoteFailure('provider_unavailable');
+    if (stopUncertain(profile.id)) throw const RemoteFailure('network_stop_unknown');
+    if (!supported || !{'easytier','tailscale'}.contains(profile.provider) || !profile.enabled ||
+        !await providerAvailable(profile.provider)) throw const RemoteFailure('provider_unavailable');
     final identity = await identities.status(profile);
-    if (identity == null || identity.mode != 'PRIVATE') throw const RemoteFailure('network_identity_unavailable');
-    final binding = NetworkNodeBinding(profile.id,profile.revision,profile.settings['networkName'] as String,identity.handle);
-    final snapshot = await status(profile.id);
-    if (snapshot.state != 'engine-started' || snapshot.binding == null || !snapshot.binding!.same(binding)) {
+    if (identity == null) throw const RemoteFailure('network_identity_unavailable');
+    final binding = NetworkNodeBinding.forProfile(profile,identity);
+    final snapshot = await profileStatus(profile);
+    if (snapshot.state != (profile.provider == 'tailscale' ? 'running' : 'engine-started') || snapshot.binding == null || !snapshot.binding!.same(binding)) {
       throw const RemoteFailure('network_node_not_started');
     }
     return binding;
@@ -115,13 +212,13 @@ class NativeNetworkRuntime {
   /// Used before changing public configuration or local identity. A stop with
   /// unknown result never authorizes the subsequent write.
   Future<void> stopBeforeChange(NetworkProfile profile) async {
-    if (!supported || profile.provider != 'easytier') return;
-    final current = await status(profile.id);
+    if (!supported || !{'easytier','tailscale'}.contains(profile.provider)) return;
+    final current = await profileStatus(profile);
     if (current.state == 'stopped' && !stopUncertain(profile.id)) return;
     // Status is checked first so an already owned node is not hidden by a
     // later capability change. Only explicit unavailable with no binding and
     // a negative capability result permits offline configuration changes.
-    if (current.state == 'unavailable' && current.binding == null && !stopUncertain(profile.id) && !await available()) return;
+    if (current.state == 'unavailable' && current.binding == null && !stopUncertain(profile.id) && !await providerAvailable(profile.provider)) return;
     if (stopUncertain(profile.id)) throw const RemoteFailure('network_stop_unknown');
     if (current.binding == null || current.binding!.profileId != profile.id) throw const RemoteFailure('network_runtime_unavailable');
     final stopped = await stop(current.binding!);
@@ -160,7 +257,7 @@ class NativeNetworkRuntime {
     final id = result['streamId'] as String,route = result['route'] as Map;
     if (!RegExp(r'^[A-Za-z0-9_-]{1,96}$').hasMatch(id) || route.length != 4 ||
         !{'provider','profile_id','profile_revision','identity_ref'}.containsAll(route.keys) ||
-        route['provider'] != 'easy-tier' || route['profile_id'] != binding.profileId ||
+        route['provider'] != binding.routeProvider || route['profile_id'] != binding.profileId ||
         route['profile_revision'] != binding.profileRevision || route['identity_ref'] != binding.identityRef) {
       unawaited(call('streamClose',{'streamId':id}).then<void>((_) {},onError:(Object _,StackTrace __) {}));
       throw const RemoteFailure('network_binding_changed');

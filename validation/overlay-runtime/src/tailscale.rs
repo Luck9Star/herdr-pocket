@@ -815,6 +815,17 @@ impl TailscaleBackend {
             Err(Failure::ProviderUnavailable)
         }
     }
+    pub(crate) fn login_status(&self, deadline: Duration) -> Result<LoginStatus> {
+        #[cfg(feature = "linked-tailscale")]
+        {
+            self.native.status(deadline)
+        }
+        #[cfg(not(feature = "linked-tailscale"))]
+        {
+            let _ = deadline;
+            Err(Failure::ProviderUnavailable)
+        }
+    }
     pub(crate) fn stop_node(&self, deadline: Duration) -> Result<()> {
         #[cfg(feature = "linked-tailscale")]
         {

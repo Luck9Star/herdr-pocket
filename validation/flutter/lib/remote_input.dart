@@ -218,7 +218,7 @@ class RemoteInputTarget {
 
 /// Only public, stable metadata identifying the actual overlay socket route.
 bool isValidOverlayRoute(String route) {
-  final match = RegExp(r'^easy-tier:([a-f0-9]{32}):([1-9][0-9]{0,9}):([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$').firstMatch(route);
+  final match = RegExp(r'^(?:easy-tier|tailscale):([a-f0-9]{32}):([1-9][0-9]{0,9}):([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$').firstMatch(route);
   return match != null && int.parse(match.group(2)!) <= 2147483647;
 }
 

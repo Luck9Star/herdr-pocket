@@ -5,7 +5,11 @@ compile_error!("synthetic native fixture is forbidden in Android app builds");
 
 use herdr_readonly_transport::{
     Cancellation,
-    mobile_nodes::{Binding, MobileNodeService, SecureConfigSource, Snapshot, State},
+    mobile_nodes::{
+        Binding, BindingProvider, MobileNodeService, NativeStateSource, SecureConfigSource,
+        Snapshot, State,
+    },
+    tailscale_settings::TailscaleSettings,
     transport::{ByteStream, Dialer},
 };
 use serde::Deserialize;
@@ -40,6 +44,19 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 trait SourceFactory: Send + Sync {
     fn available(&self) -> Result<()>;
     fn create(&self, binding: &Binding, peers: Vec<String>) -> Result<Arc<dyn SecureConfigSource>>;
+    fn available_for(&self, provider: &BindingProvider) -> Result<()> {
+        match provider {
+            BindingProvider::EasyTier => self.available(),
+            _ => Err("overlay_provider_unavailable"),
+        }
+    }
+    fn create_tailscale(
+        &self,
+        _binding: &Binding,
+        _settings: &TailscaleSettings,
+    ) -> Result<Arc<dyn NativeStateSource>> {
+        Err("overlay_provider_unavailable")
+    }
 }
 struct AndroidSource;
 impl SourceFactory for AndroidSource {
@@ -63,6 +80,42 @@ impl SourceFactory for AndroidSource {
         )
         .map(|source| Arc::new(source) as Arc<dyn SecureConfigSource>)
     }
+    fn available_for(&self, provider: &BindingProvider) -> Result<()> {
+        match provider {
+            BindingProvider::EasyTier => self.available(),
+            BindingProvider::Tailscale => {
+                if !cfg!(feature = "network-tailscale") {
+                    return Err("overlay_provider_unavailable");
+                }
+                if !herdr_android_network_source::is_tailscale_initialized() {
+                    return Err("network_native_context_unavailable");
+                }
+                Ok(())
+            }
+            _ => Err("overlay_provider_unavailable"),
+        }
+    }
+    fn create_tailscale(
+        &self,
+        binding: &Binding,
+        settings: &TailscaleSettings,
+    ) -> Result<Arc<dyn NativeStateSource>> {
+        self.available_for(&BindingProvider::Tailscale)?;
+        herdr_android_network_source::AndroidTailscaleSource::new(
+            binding.profile_id().into(),
+            binding.profile_revision(),
+            binding.network_name().into(),
+            binding.identity_ref().into(),
+            settings.hostname().into(),
+            settings.control_url().into(),
+        )
+        .map(|source| Arc::new(source) as Arc<dyn NativeStateSource>)
+    }
+}
+
+enum StartSource {
+    EasyTier(Arc<dyn SecureConfigSource>),
+    Tailscale(Arc<dyn NativeStateSource>),
 }
 
 #[derive(Default)]
@@ -77,6 +130,12 @@ struct NodeOwner {
     binding: Binding,
     cancel: Cancellation,
     start_pending: bool,
+    auth_review: Option<AuthReview>,
+}
+struct AuthReview {
+    attempt: herdr_readonly_transport::mobile_nodes::NodeAttempt,
+    url: String,
+    token: String,
 }
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum OpenState {
@@ -337,12 +396,25 @@ impl Bridge {
         }
         self.reap_locked(&mut registry);
     }
-    async fn status_node(&self, scope: u64, profile: &str) -> Result<Reply> {
+    async fn status_node(
+        &self,
+        scope: u64,
+        profile: &str,
+        provider: Option<BindingProvider>,
+    ) -> Result<Reply> {
         valid_profile(profile)?;
         let owner = {
             let registry = lock(&self.registry);
             Self::scope(&registry, scope, true)?;
             match registry.nodes.get(profile) {
+                Some(owner)
+                    if owner.scope == scope
+                        && provider
+                            .as_ref()
+                            .is_some_and(|value| owner.binding.provider() != value) =>
+                {
+                    return Err("mobile_node_binding_mismatch");
+                }
                 Some(owner) if owner.scope == scope => Some((
                     owner.binding.clone(),
                     owner.generation,
@@ -382,7 +454,11 @@ impl Bridge {
                 serde_json::to_value(snapshot).map_err(|_| "network_failed")?,
             ));
         }
-        let state = if self.factory.available().is_ok() {
+        let state = if self
+            .factory
+            .available_for(&provider.unwrap_or(BindingProvider::EasyTier))
+            .is_ok()
+        {
             "stopped"
         } else {
             "unavailable"
@@ -390,8 +466,30 @@ impl Bridge {
         Ok(Reply::value(json!({"state":state,"binding":null})))
     }
     async fn start_node(&self, scope: u64, args: StartArgs) -> Result<Reply> {
-        self.factory.available()?;
-        let source = self.factory.create(&args.binding, args.peers)?;
+        let provider = args.binding.provider();
+        let source = match provider {
+            BindingProvider::EasyTier => {
+                let peers = args.peers.ok_or("invalid_network_request")?;
+                if args.settings.is_some() {
+                    return Err("invalid_network_request");
+                }
+                self.factory.available_for(provider)?;
+                StartSource::EasyTier(self.factory.create(&args.binding, peers)?)
+            }
+            BindingProvider::Tailscale => {
+                if args.peers.is_some() {
+                    return Err("invalid_network_request");
+                }
+                let settings = args.settings.ok_or("invalid_network_request")?;
+                let settings = TailscaleSettings::new(&settings.control_url, &settings.hostname)?;
+                if settings.network_name() != args.binding.network_name() {
+                    return Err("mobile_node_binding_mismatch");
+                }
+                self.factory.available_for(provider)?;
+                StartSource::Tailscale(self.factory.create_tailscale(&args.binding, &settings)?)
+            }
+            _ => return Err("overlay_provider_unavailable"),
+        };
         let (generation, cancel) = {
             let mut registry = lock(&self.registry);
             Self::scope(&registry, scope, false)?;
@@ -409,15 +507,25 @@ impl Bridge {
                     binding: args.binding.clone(),
                     cancel: cancel.clone(),
                     start_pending: true,
+                    auth_review: None,
                 },
             );
             (generation, cancel)
         };
-        let result = tokio::time::timeout(
-            DEADLINE,
-            self.service
-                .start(args.binding.clone(), source, DEADLINE, cancel.clone()),
-        )
+        let result = tokio::time::timeout(DEADLINE, async {
+            match source {
+                StartSource::EasyTier(source) => {
+                    self.service
+                        .start(args.binding.clone(), source, DEADLINE, cancel.clone())
+                        .await
+                }
+                StartSource::Tailscale(source) => {
+                    self.service
+                        .start_tailscale(args.binding.clone(), source, DEADLINE, cancel.clone())
+                        .await
+                }
+            }
+        })
         .await;
         if let Some(owner) = lock(&self.registry)
             .nodes
@@ -514,6 +622,157 @@ impl Bridge {
         Ok(Reply::value(
             serde_json::to_value(snapshot).map_err(|_| "network_failed")?,
         ))
+    }
+    fn login_owner(
+        &self,
+        scope: u64,
+        binding: &Binding,
+    ) -> Result<(
+        u64,
+        Cancellation,
+        herdr_readonly_transport::mobile_nodes::NodeAttempt,
+    )> {
+        let registry = lock(&self.registry);
+        Self::scope(&registry, scope, false)?;
+        let owner = registry
+            .nodes
+            .get(binding.profile_id())
+            .ok_or("mobile_node_not_started")?;
+        if owner.scope != scope {
+            return Err("network_scope_mismatch");
+        }
+        if &owner.binding != binding {
+            return Err("mobile_node_binding_mismatch");
+        }
+        if binding.provider() != &BindingProvider::Tailscale {
+            return Err("overlay_provider_unavailable");
+        }
+        let attempt = self
+            .service
+            .capture_attempt(binding)?
+            .ok_or("mobile_node_not_started")?;
+        Ok((owner.generation, owner.cancel.clone(), attempt))
+    }
+    async fn login_node(&self, scope: u64, binding: Binding, begin: bool) -> Result<Reply> {
+        let (generation, cancel, attempt) = self.login_owner(scope, &binding)?;
+        if begin {
+            let mut registry = lock(&self.registry);
+            Self::scope(&registry, scope, false)?;
+            let owner = registry
+                .nodes
+                .get_mut(binding.profile_id())
+                .ok_or("cancelled")?;
+            if owner.scope != scope || owner.generation != generation || cancel.is_cancelled() {
+                return Err("cancelled");
+            }
+            owner.auth_review = None;
+        }
+        let mut login = if begin {
+            self.service
+                .begin_login_attempt(&attempt, DEADLINE, cancel.clone())
+                .await?
+        } else {
+            self.service
+                .login_status_attempt(&attempt, DEADLINE, cancel.clone())
+                .await?
+        };
+        if !matches!(login.state, State::NeedsLogin | State::NeedsMachineAuth) {
+            login.auth_url = None;
+        }
+        let mut registry = lock(&self.registry);
+        Self::scope(&registry, scope, false)?;
+        let valid = registry
+            .nodes
+            .get(binding.profile_id())
+            .is_some_and(|owner| {
+                owner.scope == scope
+                    && owner.generation == generation
+                    && owner.binding == binding
+                    && !cancel.is_cancelled()
+            });
+        if !valid {
+            return Err("cancelled");
+        }
+        let review_token = if login.auth_url.is_some() {
+            let id = registry.next_token;
+            registry.next_token = id.checked_add(1).ok_or("network_capacity")?;
+            Some(format!("review-{id:x}"))
+        } else {
+            None
+        };
+        let owner = registry
+            .nodes
+            .get_mut(binding.profile_id())
+            .ok_or("cancelled")?;
+        owner.auth_review =
+            login
+                .auth_url
+                .as_ref()
+                .zip(review_token.as_ref())
+                .map(|(url, token)| AuthReview {
+                    attempt,
+                    url: url.clone(),
+                    token: token.clone(),
+                });
+        let mut value = serde_json::to_value(login).map_err(|_| "network_failed")?;
+        value["reviewToken"] = json!(review_token);
+        Ok(Reply::value(value))
+    }
+
+    async fn review_open(&self, scope: u64, args: OpenLoginArgs) -> Result<Reply> {
+        let (generation, cancel, attempt, reviewed_url) = {
+            let registry = lock(&self.registry);
+            Self::scope(&registry, scope, false)?;
+            let owner = registry
+                .nodes
+                .get(args.binding.profile_id())
+                .ok_or("mobile_node_not_started")?;
+            if owner.scope != scope {
+                return Err("network_scope_mismatch");
+            }
+            if owner.binding != args.binding {
+                return Err("mobile_node_binding_mismatch");
+            }
+            let review = owner.auth_review.as_ref().ok_or("network_login_changed")?;
+            if review.url != args.url || review.token != args.review_token {
+                return Err("network_login_changed");
+            }
+            (
+                owner.generation,
+                owner.cancel.clone(),
+                review.attempt.clone(),
+                review.url.clone(),
+            )
+        };
+        let login = self
+            .service
+            .login_status_attempt(&attempt, DEADLINE, cancel.clone())
+            .await?;
+        if login.binding != args.binding
+            || login.auth_url.as_deref() != Some(reviewed_url.as_str())
+            || !matches!(login.state, State::NeedsLogin | State::NeedsMachineAuth)
+        {
+            return Err("network_login_changed");
+        }
+        let mut registry = lock(&self.registry);
+        Self::scope(&registry, scope, false)?;
+        let owner = registry
+            .nodes
+            .get_mut(args.binding.profile_id())
+            .ok_or("network_login_changed")?;
+        if owner.scope != scope
+            || owner.generation != generation
+            || owner.binding != args.binding
+            || cancel.is_cancelled()
+            || owner
+                .auth_review
+                .as_ref()
+                .is_none_or(|r| r.url != reviewed_url || r.token != args.review_token)
+        {
+            return Err("network_login_changed");
+        }
+        owner.auth_review = None;
+        Ok(Reply::value(json!({"reviewed":true})))
     }
     async fn open_stream(self: &Arc<Self>, scope: u64, args: OpenArgs) -> Result<Reply> {
         let id = open_id(&args.open_id)?;
@@ -693,16 +952,28 @@ impl Bridge {
         match method {
             "available" => {
                 Self::scope(&lock(&self.registry), scope, true)?;
-                let available = self.factory.available();
+                let available_args: AvailableArgs = parse(args)?;
+                let provider = available_args.provider.unwrap_or(BindingProvider::EasyTier);
+                let available = self.factory.available_for(&provider);
                 Ok(Reply::value(
                     json!({"available":available.is_ok(),"reason":available.err()}),
                 ))
             }
             "nodeStatus" => {
-                self.status_node(scope, &parse::<ProfileArgs>(args)?.profile_id)
+                let args: ProfileArgs = parse(args)?;
+                self.status_node(scope, &args.profile_id, args.provider)
                     .await
             }
             "nodeStart" => self.start_node(scope, parse(args)?).await,
+            "nodeLogin" | "nodeLoginStatus" => {
+                self.login_node(
+                    scope,
+                    parse::<BindingArgs>(args)?.binding,
+                    method == "nodeLogin",
+                )
+                .await
+            }
+            "nodeAuthorizeOpen" => self.review_open(scope, parse(args)?).await,
             "nodeStop" => {
                 self.stop_node(scope, parse::<BindingArgs>(args)?.binding)
                     .await
@@ -763,6 +1034,7 @@ fn parse<T: serde::de::DeserializeOwned>(args: &str) -> Result<T> {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ProfileArgs {
     profile_id: String,
+    provider: Option<BindingProvider>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -773,7 +1045,26 @@ struct BindingArgs {
 #[serde(deny_unknown_fields)]
 struct StartArgs {
     binding: Binding,
-    peers: Vec<String>,
+    peers: Option<Vec<String>>,
+    settings: Option<SettingsArgs>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OpenLoginArgs {
+    binding: Binding,
+    url: String,
+    review_token: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SettingsArgs {
+    control_url: String,
+    hostname: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AvailableArgs {
+    provider: Option<BindingProvider>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

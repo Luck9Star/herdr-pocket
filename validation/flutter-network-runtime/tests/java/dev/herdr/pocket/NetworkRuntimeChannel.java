@@ -21,6 +21,11 @@ public final class NetworkRuntimeChannel {
         check(scope > 0);
         check(call(scope, "available", "{}", null).contains("\"available\":false"));
         check(call(scope, "available", "{}", null).contains("overlay_provider_unavailable"));
+        check(call(scope, "available", "{\"provider\":\"tailscale\"}", null).contains("overlay_provider_unavailable"));
+        check(call(scope, "available", "{\"provider\":\"bogus\"}", null).contains("invalid_network_request"));
+        check(call(scope, "nodeStatus", "{\"profileId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"provider\":\"tailscale\"}", null).contains("unavailable"));
+        check(call(scope, "nodeStart", "{\"binding\":{\"provider\":\"tailscale\",\"profileId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"profileRevision\":7,\"networkName\":\"bad-hash\",\"identityRef\":\"11111111-1111-4111-8111-111111111111\"},\"settings\":{\"controlUrl\":\"https://controlplane.tailscale.com\",\"hostname\":\"herdr-pocket\"}}", null).contains("mobile_node_binding_mismatch"));
+        check(call(scope, "nodeLoginStatus", "{\"binding\":{\"provider\":\"tailscale\",\"profileId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"profileRevision\":7,\"networkName\":\"bad-hash\",\"identityRef\":\"11111111-1111-4111-8111-111111111111\"}}", null).contains("mobile_node_not_started"));
         check(call(0, "available", "{}", null).contains("network_scope_unavailable"));
         check(call(scope, "unknown", "{}", null).contains("invalid_network_request"));
         check(call(scope, "available", "{}", new byte[1]).contains("invalid_network_request"));

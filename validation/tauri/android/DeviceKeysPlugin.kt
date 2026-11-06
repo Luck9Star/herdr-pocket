@@ -1,6 +1,8 @@
 package org.herdr.pocket
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.webkit.WebView
 import android.util.Base64
@@ -13,6 +15,8 @@ import app.tauri.plugin.Plugin
 import org.herdr.pairing.AndroidDeviceKeyStore
 import org.herdr.network.AndroidNetworkSecretStore
 import org.herdr.network.AndroidEasyTierConfig
+import org.herdr.network.AndroidTailscaleConfig
+import org.herdr.network.AndroidTailscaleStateStore
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -21,6 +25,9 @@ import androidx.appcompat.app.AppCompatActivity
 
 @InvokeArg
 class NetworkIdentityArgs { var profileId: String = ""; var provider: String = ""; var mode: String = ""; var secret: String = ""; var expectedHandle: String = "" }
+
+@InvokeArg
+class NetworkAuthArgs { var url: String = "" }
 
 @InvokeArg
 class KeyArgs { var handle: String = ""; var payload: String = "" }
@@ -32,10 +39,11 @@ class DeviceKeysPlugin(private val activity: Activity): Plugin(activity) {
         super.load(webView)
         // Context registration only. No identity read, engine start or retry loop.
         try { AndroidEasyTierConfig.bindNative(activity.applicationContext) } catch (_:LinkageError) {} catch (_:Exception) {}
+        try { AndroidTailscaleConfig.bindNative(activity.applicationContext) } catch (_:LinkageError) {} catch (_:Exception) {}
     }
     private val networkExecutor = ThreadPoolExecutor(1,1,0L,TimeUnit.MILLISECONDS,ArrayBlockingQueue<Runnable>(1))
     private class NetworkTask(val invoke:Invoke,val args:NetworkIdentityArgs,val block:()->JSObject):Runnable {
-        override fun run() { try { invoke.resolve(block()) } catch (_:Exception) { invoke.reject("network_identity_unavailable") } finally { args.secret="" } }
+        override fun run() { try { val result=try {block()} finally {args.secret=""}; invoke.resolve(result) } catch (_:Exception) { args.secret="";invoke.reject("network_identity_unavailable") } }
         fun abort() { args.secret=""; try { invoke.reject("network_identity_unavailable") } catch (_:Exception) {} }
     }
     private fun networkOperation(invoke: Invoke,args:NetworkIdentityArgs,block: () -> JSObject) {
@@ -48,28 +56,61 @@ class DeviceKeysPlugin(private val activity: Activity): Plugin(activity) {
     }
     private fun metadata(result: AndroidNetworkSecretStore.Result?): JSObject = JSObject().apply {
         put("present", result != null)
-        if (result != null) { put("mode", result.mode.name); put("handle", result.handle); put("instanceId", result.instanceId) }
+        if (result != null) { put("provider",result.provider);put("profileId",result.profileId);put("mode", result.mode.name); put("handle", result.handle); put("instanceId", result.instanceId) }
+    }
+    private fun tailscaleMetadata(result: AndroidTailscaleStateStore.Result?): JSObject = JSObject().apply {
+        put("present",result != null)
+        if (result != null) {put("provider",result.provider);put("profileId",result.profileId);put("mode","DEVICE_STATE");put("handle",result.handle);put("instanceId",result.instanceId)}
     }
     @Command fun networkIdentityStatus(invoke: Invoke) {
         val args=invoke.parseArgs(NetworkIdentityArgs::class.java)
-        networkOperation(invoke,args) { if (Build.VERSION.SDK_INT < 35) JSObject().apply {put("supported", false);put("present", false)} else metadata(AndroidNetworkSecretStore(activity.applicationContext).status(args.profileId,args.provider)) }
+        networkOperation(invoke,args) {
+            require(args.mode.isEmpty() && args.secret.isEmpty() && args.expectedHandle.isEmpty())
+            if (Build.VERSION.SDK_INT < 35) JSObject().apply {put("supported", false);put("present", false)}
+            else when(args.provider) {
+                "easytier" -> metadata(AndroidNetworkSecretStore(activity.applicationContext).status(args.profileId,args.provider))
+                "tailscale" -> tailscaleMetadata(AndroidTailscaleStateStore(activity.applicationContext).status(args.profileId))
+                else -> throw IllegalArgumentException()
+            }
+        }
     }
     @Command fun networkIdentityCreate(invoke: Invoke) {
         val args=invoke.parseArgs(NetworkIdentityArgs::class.java)
         networkOperation(invoke,args) {
-            val bytes=args.secret.toByteArray(Charsets.UTF_8); args.secret=""
-            try {
-                val mode=AndroidNetworkSecretStore.SecretMode.valueOf(args.mode)
-                metadata(AndroidNetworkSecretStore(activity.applicationContext).create(args.profileId,args.provider,mode,bytes))
-            } finally { bytes.fill(0) }
+            require(args.expectedHandle.isEmpty())
+            if(args.provider=="tailscale") {
+                require(args.mode=="DEVICE_STATE" && args.secret.isEmpty())
+                tailscaleMetadata(AndroidTailscaleStateStore(activity.applicationContext).create(args.profileId))
+            } else {
+                require(args.provider=="easytier")
+                val bytes=args.secret.toByteArray(Charsets.UTF_8); args.secret=""
+                try {metadata(AndroidNetworkSecretStore(activity.applicationContext).create(args.profileId,args.provider,AndroidNetworkSecretStore.SecretMode.valueOf(args.mode),bytes))} finally {bytes.fill(0)}
+            }
         }
     }
     @Command fun networkIdentityDelete(invoke: Invoke) {
         val args=invoke.parseArgs(NetworkIdentityArgs::class.java)
         networkOperation(invoke,args) {
-            val store=AndroidNetworkSecretStore(activity.applicationContext)
-            store.delete(args.profileId,args.provider,args.expectedHandle); JSObject()
+            require(args.mode.isEmpty() && args.secret.isEmpty())
+            when(args.provider) {
+                "easytier" -> AndroidNetworkSecretStore(activity.applicationContext).delete(args.profileId,args.provider,args.expectedHandle)
+                "tailscale" -> AndroidTailscaleStateStore(activity.applicationContext).delete(args.profileId,args.expectedHandle)
+                else -> throw IllegalArgumentException()
+            }; JSObject()
         }
+    }
+    // Rust alone calls this after validating the catalog, original node attempt,
+    // current auth URL and ephemeral review token. No generic opener is exposed.
+    @Command fun openNetworkAuthUrl(invoke:Invoke) {
+        val args=invoke.parseArgs(NetworkAuthArgs::class.java)
+        try {
+            require(NetworkAuthReview.validUrl(args.url))
+            val uri=Uri.parse(args.url)
+            activity.runOnUiThread {
+                try {require(!activity.isFinishing && !activity.isDestroyed);activity.startActivity(Intent(Intent.ACTION_VIEW,uri));invoke.resolve(JSObject())}
+                catch (_:Exception) {invoke.reject("network_auth_open_unavailable")}
+            }
+        } catch (_:Exception) {invoke.reject("network_auth_open_unavailable")}
     }
     private fun operation(invoke: Invoke, block: () -> JSObject) {
         try { invoke.resolve(block()) } catch (_: Exception) { invoke.reject("device_key_unavailable") }

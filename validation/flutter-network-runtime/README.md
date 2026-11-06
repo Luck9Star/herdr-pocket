@@ -1,23 +1,25 @@
 # Flutter Android owned overlay bridge
 
-2026-11-06，源码验证。此独立 crate 输出 `libherdr_flutter_network_runtime.so`，把 [MobileNodeService](../transport-rust/src/mobile_nodes.rs)、[JNI vault source](../android-network-source/README.md) 与真实 `OverlayDialer` 字节流接到 Flutter。默认不链接 EasyTier，也不读 vault；没有系统 TCP、DNS、localhost relay、其他 provider 或测试 fixture fallback。本批未安装 SDK/NDK、未触发 CI、未启动真实节点或读取真实身份；Android 编译和设备运行另验。
+2026-11-06，源码验证。此独立 crate 输出 `libherdr_flutter_network_runtime.so`，把 [MobileNodeService](../transport-rust/src/mobile_nodes.rs)、[JNI vault source](../android-network-source/README.md) 与真实 `OverlayDialer` 字节流接到 Flutter。默认不链接任何 overlay 库，也不读 vault；支持显式 EasyTier 和 Tailscale，不回退系统 TCP、DNS、localhost relay、其他 provider 或测试 fixture。本批未安装 SDK/NDK、未触发 CI、未启动真实节点或读取真实身份；Android 编译和设备运行另验。
 
 ## Native packaging
 
-`network-easytier` 显式转发既有 `overlay-linked-easytier`；受控候选库目录继续使用 `HEELER_ET_LIB_DIR`。依赖固定在本目录 Cargo.lock，直接依赖沿用 `jni 0.21.1 / tokio 1.54.1 / serde 1.0.229 / serde_json 1.0.154 / zeroize 1.9.1`。Android source 以 rlib 链入本 cdylib，不加载独立 source cdylib。
+`network-easytier` 和 `network-tailscale` 分别显式转发既有的 provider 链接特性；受控候选库目录继续使用 `HEELER_ET_LIB_DIR`。依赖固定在本目录 Cargo.lock，直接依赖沿用 `jni 0.21.1 / tokio 1.54.1 / serde 1.0.229 / serde_json 1.0.154 / zeroize 1.9.1`。Android source 以 rlib 链入本 cdylib，不加载独立 source cdylib。
 
-Android API 35+ 的 Kotlin channel 按顺序加载 `heeler_easytier`、`herdr_flutter_network_runtime`，再调用 `AndroidEasyTierConfig.bindNative(applicationContext)` 和 `nativeCreateScope()`；任何失败都保持不可用。两个库的架构、同源 manifest、SHA、其余 `DT_NEEDED` 和打包证据须由构建层验证。显式 `native-fixture` 只链接 Unix 合成 C ABI；若用于 Android target，编译直接拒绝。
+Android API 35+ 的 Kotlin channel 尝试加载各 provider 的 `heeler_easytier` / `hp_tailscale`，加载 `herdr_flutter_network_runtime` 后分别绑定 `AndroidEasyTierConfig` / `AndroidTailscaleConfig` 与 applicationContext，再创建 scope。provider capability 还须同时具备对应编译特性及 Context 绑定。**单个 runtime 的所有 DT_NEEDED 都是加载前提**：双 provider runtime 缺任一必需 so 时整个 runtime 不可用；不承诺损坏包中另一个 provider 可继续运行。单 provider 构建可独立装配，不回退。两个库的架构、同源 manifest、SHA、其余 `DT_NEEDED` 和打包证据须由构建层验证。显式 `native-fixture` 只链接 Unix 合成 C ABI；若用于 Android target，编译直接拒绝。
 
 ## MethodChannel contract
 
-通道为 `dev.herdr/network-runtime`。Kotlin 每个 Flutter engine 私有一个 native scope，Dart 不接收、不指定 scope。所有方法参数为严格 key 的 map；所有错误为脱敏 `PlatformException.code`。`Binding` 恰为 `{profileId, profileRevision, networkName, identityRef}`：ID 为目录 32 位小写十六进制，revision 为正 int32，identityRef 为 vault UUIDv4 handle。它不是 instanceId 或原生 node ID。
+通道为 `dev.herdr/network-runtime`。Kotlin 每个 Flutter engine 私有一个 native scope，Dart 不接收、不指定 scope。所有方法参数为严格 key 的 map；所有错误为脱敏 `PlatformException.code`。ET 的 `Binding` 恰为 `{profileId, profileRevision, networkName, identityRef}`，TS 增加 `provider:"tailscale"`：ID 为目录 32 位小写十六进制，revision 为正 int32，identityRef 为 vault UUIDv4 handle。它不是 instanceId 或原生 node ID。
 
 | Method | Arguments | Success result |
 | --- | --- | --- |
-| `available` | none / `{}` | `{available:bool, reason:String|null}` |
-| `nodeStatus` | `{profileId}` | `{state,binding:Binding|null}` |
-| `nodeStart` | `{binding,peers:List<String>}` | `{state,binding}` |
+| `available` | none / `{}`（ET），TS 为 `{provider:"tailscale"}` | `{available:bool, reason:String|null}` |
+| `nodeStatus` | `{profileId}`；TS 为 `{profileId,provider:"tailscale"}` | `{state,binding:Binding|null}` |
+| `nodeStart` | ET `{binding,peers:List<String>}`；TS `{binding,settings:{controlUrl,hostname}}` | `{state,binding}` |
 | `nodeStop` | `{binding}` | `{state,binding}` |
+| `nodeLogin` / `nodeLoginStatus` | `{binding}`（TS） | `{state,binding,authUrl,reviewToken}` |
+| `openLogin` | `{binding,url,reviewToken}`（TS，显式用户动作） | `{opened:true}` |
 | `streamOpen` | `{binding,host,port,openId:String}` | `{streamId,route}` |
 | `cancelOpen` | `{openId:String}` | `{cancelled:true}` |
 | `streamRead` | `{streamId,maxBytes:1..65536}` | `{bytes:Uint8List,eof:bool}` |
@@ -26,9 +28,19 @@ Android API 35+ 的 Kotlin channel 按顺序加载 `heeler_easytier`、`herdr_fl
 | `streamShutdown` | `{streamId}` | `{shutdown:true}` |
 | `streamClose` | `{streamId}` | `{closed:true}` |
 
-节点 state 为 `unavailable / starting / engine-started / closing / stopped`。只有 stop 返回 `stopped` 才是原节点清理确认；错误、超时或 Closing 不能当成功。EngineStarted 只代表引擎接受启动，不表示入网、peer 可达或 SSH 准备好。nodeStart 的 Java vault config builder 和 Kotlin 入口均明确拒绝 PUBLIC_NO_SECRET，不隐式改变模式。
+节点 state 为 `unavailable / starting / engine-started / needs-login / needs-machine-auth / running / closing / stopped`。TS 只有 Running 可拨号。只有 stop 返回 `stopped` 才是原节点清理确认；错误、超时或 Closing 不能当成功。EngineStarted 只代表引擎接受启动，不表示入网、peer 可达或 SSH 准备好。nodeStart 的 Java vault config builder 和 Kotlin 入口均明确拒绝 PUBLIC_NO_SECRET，不隐式改变模式。
 
-`route` 只取自实际连接的 `ByteStream::route_identity()`，恰为 `{provider:"easy-tier",profile_id,profile_revision,identity_ref}`；不加入 caller 提供的 instanceId、临时 attempt 或 owner。复用同一保存配置重启时 route 保持稳定，换 vault handle 后 route 改变；未知输入恢复必须与实际 route 精确比较。公开 peers 不在 Binding 中，由可信 GUI 目录 CAS 保证相同 revision 不变；本服务不能识别同 revision 偷换 peers。资料只在 Java vault → Rust source → native engine 内部流动，不回 Dart。
+`route` 只取自实际连接的 `ByteStream::route_identity()`，恰为 `{provider,profile_id,profile_revision,identity_ref}`；不加入 caller 提供的 instanceId、临时 attempt 或 owner。复用同一保存配置重启时 route 保持稳定，换 vault handle 后 route 改变；未知输入恢复必须与实际 route 精确比较。公开 peers 不在 Binding 中，由可信 GUI 目录 CAS 保证相同 revision 不变；本服务不能识别同 revision 偷换 peers。资料只在 Java vault → Rust source → native engine 内部流动，不回 Dart。
+
+TS 设置先经共享 `TailscaleSettings` 验证、填充默认值并计算配置 hash；
+只有 hash 与 binding 的 networkName 完全一致才允许创建身份源。TS 身份
+channel 的 create 仅接收 profileId/provider，公开 mode 为 DEVICE_STATE；
+status 返回引用，delete 和 nodeStart 精确核对 handle，state 字节从不经 GUI。
+登录只有显式 `nodeLogin` 发起；`nodeLoginStatus` 只读。授权 URL 与一次性
+reviewToken 成对返回，native 保存原 attempt，并在 `openLogin` 前再次核对原
+attempt、URL 与 token。前后台切换、其他登录请求、start/stop 或 scope 关闭会
+撤销 Kotlin 的待打开资格；仅用户点击时通过 ACTION_VIEW 打开已核对 URL。
+旧 token 不在相同持久 binding 的新节点上复用。
 
 ## Bounded ownership and I/O
 
@@ -65,11 +77,11 @@ nativeCloseScope(scope: Long): String
 
 ```sh
 CARGO_TARGET_DIR=/private/tmp/herdr-flutter-network-runtime-target cargo test --locked --offline --manifest-path validation/flutter-network-runtime/Cargo.toml
-CARGO_TARGET_DIR=/private/tmp/herdr-flutter-network-runtime-target cargo test --locked --offline --manifest-path validation/flutter-network-runtime/Cargo.toml --features native-fixture
+CARGO_TARGET_DIR=/private/tmp/herdr-flutter-network-runtime-target cargo test --locked --offline --manifest-path validation/flutter-network-runtime/Cargo.toml --features native-fixture,tailscale-fixture
 CARGO_TARGET_DIR=/private/tmp/herdr-flutter-network-runtime-target cargo clippy --locked --offline --manifest-path validation/flutter-network-runtime/Cargo.toml --all-targets --features native-fixture --no-deps -- -D warnings
 sh validation/flutter-network-runtime/tests/run-jvm.sh
 ```
 
 默认测试验证缺桥与 scope/open admission；显式 C ABI 测试验证 actual service/dialer route、空闲读继续、读写并发、partial/UNKNOWN、半关闭/EOF、取消先到及迟到 open、32 个失败 close 的预算、retired scope 配额和 detach 只影响自己的节点。JVM 测试用桌面 JDK、self-created Java fixture 和 `-Xcheck:jni`，不加载 Android 类或 vault；它验证 JNI envelope、边界、null、scope、高水位与默认门禁。以上不是 Android SDK/Kotlin 编译、Flutter widget、真实 EasyTier 或设备证明。
 
-本批本机结果：默认 3 项、显式 C fixture 11 项、JVM 38 项断言通过；本 crate 两配置 `cargo clippy --all-targets --no-deps -- -D warnings` 通过。fixture 含停住旧 cleanup executor 后新 scope 以同 Binding 重启的回归，以及 4 种 pre-admission 状态；shared service 的 10 项聚焦测试通过。`--no-deps` 不代表既有 transport crate 的 12 项严格 Clippy 诊断已修复。
+本批离线结果以实际测试日志为准；双 C fixture、桌面 JVM 和 Kotlin stub 不代表 Android 真机或真实组网。fixture 含停住旧 cleanup executor 后新 scope 以同 Binding 重启的回归，以及 4 种 pre-admission 状态；shared service 的 10 项聚焦测试通过。`--no-deps` 不代表既有 transport crate 的 12 项严格 Clippy 诊断已修复。

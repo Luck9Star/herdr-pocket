@@ -41,7 +41,7 @@ public static class DartExecutor { public BinaryMessenger getBinaryMessenger() {
 import android.content.Context; import android.content.Intent; import io.flutter.embedding.engine.FlutterEngine;
 public class FlutterActivity extends Context { public void configureFlutterEngine(FlutterEngine engine) {}
 public void runOnUiThread(Runnable task) { task.run(); }
-protected void onActivityResult(int requestCode,int resultCode,Intent data) {} protected void onDestroy() {} }""",
+protected void onActivityResult(int requestCode,int resultCode,Intent data) {} protected void onResume() {} protected void onPause() {} protected void onDestroy() {} }""",
         "dev/herdr/herdr_flutter_probe/PairScanChannel.java": """package dev.herdr.herdr_flutter_probe;
 import io.flutter.plugin.common.BinaryMessenger; import android.content.Intent; import io.flutter.embedding.android.FlutterActivity;
 public class PairScanChannel { public PairScanChannel(FlutterActivity a,BinaryMessenger b) {} public boolean handle(int x,int y,Intent i) { return false; } public void close() {} }""",
@@ -53,7 +53,7 @@ import io.flutter.plugin.common.BinaryMessenger; import io.flutter.embedding.and
 public class NetworkIdentityChannel { public NetworkIdentityChannel(FlutterActivity a,BinaryMessenger b) {} public void close() {} }""",
         "dev/herdr/pocket/NetworkRuntimeChannel.java": """package dev.herdr.pocket;
 import io.flutter.plugin.common.BinaryMessenger; import io.flutter.embedding.android.FlutterActivity;
-public class NetworkRuntimeChannel { public NetworkRuntimeChannel(FlutterActivity a,BinaryMessenger b) {} public void close() {} }""",
+public class NetworkRuntimeChannel { public NetworkRuntimeChannel(FlutterActivity a,BinaryMessenger b) {} public void setForeground(boolean value) {} public void close() {} }""",
         "org/herdr/pairing/AndroidDeviceKeyStore.java": """package org.herdr.pairing;
 import android.content.Context;
 public class AndroidDeviceKeyStore { public AndroidDeviceKeyStore(Context context) {} public static class Created { public String getHandle() { return "fixture"; } }

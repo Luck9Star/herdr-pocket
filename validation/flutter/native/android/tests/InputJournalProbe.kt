@@ -69,6 +69,24 @@ object InputJournalProbe {
         fields.put("route","easy-tier:0123456789abcdef0123456789abcdef:3:a0000000-0000-4000-8000-000000000001")
         val routed = fields.toString(); val legacyLease = journal.prepare(original); val routedLease = sibling.prepare(routed)
         checkValue(journal.readAll().size == 2); journal.complete(original,legacyLease); sibling.complete(routed,routedLease)
+        val easyTier = fields.toString()
+        fields.put("route","tailscale:0123456789abcdef0123456789abcdef:3:a0000000-0000-4000-8000-000000000001")
+        val tailscale = fields.toString()
+        val easyLease = journal.prepare(easyTier); val tailscaleLease = sibling.prepare(tailscale)
+        checkValue(journal.readAll() == listOf(easyTier,tailscale))
+        rejects { journal.complete(tailscale,easyLease) }; rejects { sibling.resolve(tailscale) }
+        fields.put("requestId","f".repeat(32)); rejects { sibling.prepare(fields.toString()) }
+        fields.put("requestId","e".repeat(32))
+        journal.complete(easyTier,easyLease); sibling.complete(tailscale,tailscaleLease)
+        for (invalid in listOf("easy_tier", "easytier", "TAILSCALE", "tailscale-extra", "system")) {
+            fields.put("route", "$invalid:0123456789abcdef0123456789abcdef:3:a0000000-0000-4000-8000-000000000001")
+            rejects { journal.prepare(fields.toString()) }
+        }
+        fields.put("route","tailscale:0123456789abcdef0123456789abcdef:0:a0000000-0000-4000-8000-000000000001")
+        rejects { journal.prepare(fields.toString()) }
+        fields.put("route","tailscale:0123456789abcdef0123456789abcdef:2147483648:a0000000-0000-4000-8000-000000000001")
+        rejects { journal.prepare(fields.toString()) }
+        checkValue(journal.readAll().isEmpty())
         fields.put("schemaVersion",1).remove("route")
         val leases = mutableListOf<Pair<String,String>>()
         for (i in 0 until 32) {

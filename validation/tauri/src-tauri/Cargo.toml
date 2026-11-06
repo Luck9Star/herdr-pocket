@@ -21,6 +21,7 @@ tauri-utils = { version = "=2.10.2", features = ["build-2"] }
 [features]
 default = []
 network-easytier = ["herdr-readonly-transport/overlay-linked-easytier"]
+network-tailscale = ["herdr-readonly-transport/overlay-linked-tailscale"]
 
 [dependencies]
 tauri = { version = "=2.12.5", features = [] }
@@ -38,3 +39,7 @@ base64ct = { version = "=1.8.3", features = ["alloc"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 base64ct = { version = "=1.8.3", features = ["alloc"] }
+
+[dev-dependencies]
+# Host type-checks the actual source adapter; no JVM/context/node is started.
+herdr-android-network-source = { path = "../../android-network-source" }

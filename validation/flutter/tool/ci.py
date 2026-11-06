@@ -77,7 +77,7 @@ def prepare(destination):
     script += 'apply(from = "' + network_native + '/network-secrets.gradle")\n'
     # Preserve the exact prebuilt candidate bytes checked against its source
     # bundle. AGP otherwise strips native debug symbols during APK packaging.
-    script += '\nandroid { packaging { jniLibs.keepDebugSymbols += "**/libheeler_easytier.so" } }\n'
+    script += '\nandroid { packaging { jniLibs.keepDebugSymbols += setOf("**/libheeler_easytier.so", "**/libhp_tailscale.so") } }\n'
     gradle.write_text(script)
     # Generated Swift files include the shared source verbatim at scaffold time;
     # the repository keeps only one storage implementation. No Keychain calls
@@ -174,11 +174,12 @@ def pairing_provenance(platform, android_notice):
                                'sources': [source_record('validation/flutter/native/' + name) for name in ['android/InputJournalFile.kt', 'apple/InputJournalFile.swift']]},
         'networkIdentity': {
             'api': ['create', 'status', 'delete'], 'secretReadApi': False,
-            'scope': 'Android API 35 EasyTier local secret envelope and stable instance metadata; not node-start or connectivity proof',
+            'scope': 'Android API 35 EasyTier secret envelope and Tailscale device StateStore; no secret export; not node-start or connectivity proof',
             'runtime': 'NOT RUN by build/package workflow',
             'sources': [source_record('validation/network-profiles/native/android/' + name) for name in
                         ['AndroidNetworkSecretStore.java', 'AndroidNetworkEnvelope.java', 'NetworkSecretStoreCore.java',
-                         'AndroidEasyTierConfig.java', 'EasyTierConfigBuilder.java', 'network-secrets.gradle']] +
+                         'AndroidEasyTierConfig.java', 'EasyTierConfigBuilder.java', 'AndroidTailscaleConfig.java',
+                         'AndroidTailscaleStateStore.java', 'AndroidTailscaleEnvelope.java', 'TailscaleStateStoreCore.java', 'network-secrets.gradle']] +
                        [source_record('validation/flutter/' + name) for name in
                         ['lib/network_identity.dart', 'lib/network_identity_dialog.dart', 'native/android/NetworkIdentityChannel.kt']],
         },

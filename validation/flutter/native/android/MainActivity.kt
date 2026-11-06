@@ -85,6 +85,8 @@ class MainActivity : FlutterActivity() {
                 }
             }
     }
+    override fun onResume() { super.onResume(); networkRuntime?.setForeground(true) }
+    override fun onPause() { networkRuntime?.setForeground(false); super.onPause() }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (scanner?.handle(requestCode, resultCode, data) != true &&
             documents?.handle(requestCode, resultCode, data) != true) super.onActivityResult(requestCode, resultCode, data)

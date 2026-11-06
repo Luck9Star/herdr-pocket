@@ -902,6 +902,237 @@ mod tailscale_native {
         service.stop(&binding, TIME).await.unwrap();
     }
     #[tokio::test]
+    async fn auth_polling_and_old_attempt_never_reissue_login() {
+        let _serial = isolated().await;
+        let service = MobileNodeService::new();
+        let binding = saved("ts-auth-attempt");
+        let source = source("fixture");
+        service
+            .start_tailscale(
+                binding.clone(),
+                source.clone(),
+                TIME,
+                Cancellation::default(),
+            )
+            .await
+            .unwrap();
+        let old = service.capture_attempt(&binding).unwrap().unwrap();
+        let before = service
+            .login_status_attempt(&old, TIME, Cancellation::default())
+            .await
+            .unwrap();
+        assert_eq!(before.state, State::NeedsLogin);
+        assert!(before.auth_url.is_none());
+        assert_eq!(metric(5), 0);
+        let login = service
+            .begin_login_attempt(&old, TIME, Cancellation::default())
+            .await
+            .unwrap();
+        assert!(login.auth_url.is_some());
+        for _ in 0..3 {
+            assert_eq!(
+                service
+                    .login_status_attempt(&old, TIME, Cancellation::default())
+                    .await
+                    .unwrap()
+                    .auth_url,
+                login.auth_url
+            );
+        }
+        assert_eq!(metric(5), 1);
+        service.stop(&binding, TIME).await.unwrap();
+        until(|| service.reserved_nodes() == 0).await;
+        service
+            .start_tailscale(binding.clone(), source, TIME, Cancellation::default())
+            .await
+            .unwrap();
+        assert_eq!(
+            service
+                .begin_login_attempt(&old, TIME, Cancellation::default())
+                .await
+                .unwrap_err(),
+            "overlay_stale_revision"
+        );
+        assert_eq!(
+            service
+                .login_status_attempt(&old, TIME, Cancellation::default())
+                .await
+                .unwrap_err(),
+            "overlay_stale_revision"
+        );
+        assert!(
+            service
+                .login_status(&binding, TIME, Cancellation::default())
+                .await
+                .unwrap()
+                .auth_url
+                .is_none()
+        );
+        assert_eq!(metric(5), 1);
+        service.stop(&binding, TIME).await.unwrap();
+    }
+    #[tokio::test]
+    async fn original_cancel_before_login_admission_needs_no_future_repoll() {
+        use std::future::Future;
+        use std::task::{Context, Poll, Waker};
+        let _serial = isolated().await;
+        let service = MobileNodeService::new();
+        let binding = saved("ts-cancel-before-admission");
+        service
+            .start_tailscale(
+                binding.clone(),
+                source("fixture"),
+                TIME,
+                Cancellation::default(),
+            )
+            .await
+            .unwrap();
+        let original = Cancellation::default();
+        let attempt = service.capture_attempt(&binding).unwrap().unwrap();
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let (checked_tx, checked_rx) = std::sync::mpsc::channel();
+        let release_rx = Mutex::new(release_rx);
+        let first = std::sync::atomic::AtomicBool::new(true);
+        let original_for_worker = original.clone();
+        let check: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(move || {
+            if first.swap(false, Ordering::SeqCst) {
+                entered_tx.send(()).unwrap();
+                lock(&release_rx).recv().unwrap();
+                // Model an early check that saw the still-live token before
+                // its pause. The decisive check is after the admission CAS.
+                false
+            } else {
+                let cancelled = original_for_worker.is_cancelled();
+                checked_tx.send(cancelled).unwrap();
+                cancelled
+            }
+        });
+        let mut future = Box::pin(service.login_checked_with_cancel_check(
+            &binding,
+            Some(attempt.attempt),
+            TIME,
+            original.clone(),
+            true,
+            check,
+        ));
+        let waker = Waker::noop();
+        let mut context = Context::from_waker(waker);
+        assert!(matches!(future.as_mut().poll(&mut context), Poll::Pending));
+        entered_rx.recv_timeout(TIME).unwrap();
+        // Do not poll the service future after cancelling; its select! cannot
+        // yet drop NodeOperation or propagate cancellation on our behalf.
+        original.cancel();
+        release_tx.send(()).unwrap();
+        assert!(checked_rx.recv_timeout(TIME).unwrap());
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(metric(9), 0, "native login must not be admitted");
+        assert_eq!(future.await.unwrap_err(), "cancelled");
+        service.stop(&binding, TIME).await.unwrap();
+        until(|| metric(2) == 0).await;
+    }
+    #[tokio::test]
+    async fn cancel_after_login_admission_discards_result_and_stop_waits() {
+        let _serial = isolated().await;
+        let service = MobileNodeService::new();
+        let binding = saved("ts-cancel-after-admission");
+        service
+            .start_tailscale(
+                binding.clone(),
+                source("fixture"),
+                TIME,
+                Cancellation::default(),
+            )
+            .await
+            .unwrap();
+        struct ReleaseLogin;
+        impl Drop for ReleaseLogin {
+            fn drop(&mut self) {
+                unsafe { hp_ts_fixture_control(5) };
+            }
+        }
+        unsafe { hp_ts_fixture_control(4) };
+        let release = ReleaseLogin;
+        let original = Cancellation::default();
+        let task_cancel = original.clone();
+        let worker = service.clone();
+        let target = binding.clone();
+        let task =
+            tokio::spawn(async move { worker.begin_login(&target, TIME, task_cancel).await });
+        until(|| metric(9) == 1).await;
+        original.cancel();
+        assert_eq!(task.await.unwrap().unwrap_err(), "cancelled");
+        assert_eq!(
+            service
+                .stop(&binding, Duration::from_millis(20))
+                .await
+                .unwrap_err(),
+            "mobile_node_cleanup_pending"
+        );
+        assert_eq!(metric(4), 0, "native stop must wait for admitted login");
+        drop(release);
+        until(|| metric(5) == 1).await;
+        service.stop(&binding, TIME).await.unwrap();
+        assert_eq!(metric(9), 1, "cancelled login must not replay");
+        until(|| metric(2) == 0).await;
+    }
+    #[tokio::test]
+    async fn stop_retains_node_until_admitted_login_returns_without_replay() {
+        let _serial = isolated().await;
+        let service = MobileNodeService::new();
+        let binding = saved("ts-login-stop-drain");
+        service
+            .start_tailscale(
+                binding.clone(),
+                source("fixture"),
+                TIME,
+                Cancellation::default(),
+            )
+            .await
+            .unwrap();
+        struct ReleaseLogin;
+        impl Drop for ReleaseLogin {
+            fn drop(&mut self) {
+                unsafe { hp_ts_fixture_control(5) };
+            }
+        }
+        unsafe { hp_ts_fixture_control(4) };
+        let release = ReleaseLogin;
+        let worker = service.clone();
+        let target = binding.clone();
+        let task = tokio::spawn(async move {
+            worker
+                .begin_login(&target, TIME, Cancellation::default())
+                .await
+        });
+        until(|| metric(9) == 1).await;
+        assert_eq!(
+            service
+                .begin_login(&binding, TIME, Cancellation::default())
+                .await
+                .unwrap_err(),
+            "mobile_node_busy"
+        );
+        assert_eq!(
+            service
+                .stop(&binding, Duration::from_millis(20))
+                .await
+                .unwrap_err(),
+            "mobile_node_cleanup_pending"
+        );
+        assert_eq!(service.reserved_nodes(), 1);
+        assert_eq!(metric(4), 0, "native stop must wait for admitted login");
+        assert_eq!(metric(9), 1, "a concurrent login must not be dispatched");
+        drop(release);
+        assert!(
+            task.await.unwrap().is_err(),
+            "retired login result must not be published"
+        );
+        service.stop(&binding, TIME).await.unwrap();
+        assert_eq!(metric(5), 1, "no automatic authentication replay");
+        until(|| metric(2) == 0).await;
+    }
+    #[tokio::test]
     async fn cancelled_tailscale_start_uses_original_attempt_cleanup_without_replaying_source() {
         let _serial = isolated().await;
         unsafe { hp_ts_fixture_control(1) };

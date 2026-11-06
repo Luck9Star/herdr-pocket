@@ -8,7 +8,7 @@
 
 两套 GUI 源码已接入配对与设备密钥、网络配置及加密迁移、EasyTier 节点与实际 route、独立终端标签和有界恢复。输入结果未知不重放，隐藏时撤销输入，恢复后重新核验原 pane／terminal 和新 full，布局不修改远端共享 PTY。手机优先，沿用已认可的 Penpot v2 靛蓝／Slate 方案；框架尚未定案。[设计与覆盖](design/README.md) · [配对流程](docs/14-mobile-pairing-workbench.md) · [原生通道](docs/21-flutter-native-network.md)
 
-历史 `040eb26` 两路线 Android API 35 云模拟器的配对／观察闭环和 Tauri 两笔受保护输入证据仍单独保留；不外推为本批设备运行通过。后续[手机看板持续状态](docs/23-mobile-session-watch.md)与[按目标隔离的未知输入记录](docs/24-target-input-recovery.md)源码已接入两路线，Rust／Tauri 和原生存储隔离回归通过，Flutter 类型与运行验证待集中 CI；这些后续源码不包含在当前下载包内，严格 Clippy 仍有 12 项诊断。本批又完成 [Tailscale 原生候选与 Android 状态托管](docs/25-tailscale-native-custody.md)：固定 Go 运行时在 Mac 编译／加载通过，Rust 和 JNI 隔离回归通过；手机 GUI 登录与宿主接线、其他平台运行和真实组网仍待完成，随后推进 ZeroTier。真机触控、中文 IME、相机、真实三网、iOS 签名和五端完整交互仍需独立验收。[历史手机结果](docs/18-mobile-network-profiles.md)
+历史 `040eb26` 两路线 Android API 35 云模拟器的配对／观察闭环和 Tauri 两笔受保护输入证据仍单独保留；不外推为本批设备运行通过。后续[手机看板持续状态](docs/23-mobile-session-watch.md)与[按目标隔离的未知输入记录](docs/24-target-input-recovery.md)源码已接入两路线，Rust／Tauri 和原生存储隔离回归通过，Flutter 类型与运行验证待集中 CI；这些后续源码不包含在当前下载包内，严格 Clippy 仍有 12 项诊断。后续 [Tailscale 原生候选与 Android 状态托管](docs/25-tailscale-native-custody.md)及[两套手机 GUI 登录／路由接线](docs/26-mobile-tailscale-login.md)已落源码：显式授权、本机身份与配对 → 看板 → 持续观察共用原节点绑定，隔离检查通过；Android 双 provider 同源装包工作流已补齐，但尚未运行新批次，当前包不含这些改动。接下来先推进 ZeroTier，再集中云验收。真机触控、中文 IME、相机、真实三网、iOS 签名和五端完整交互仍需独立验收。[历史手机结果](docs/18-mobile-network-profiles.md)
 
 ## 首版做什么
 
@@ -34,6 +34,7 @@ Heeler 已有三网络的源码实现可供按许可移植：EasyTier 使用 no-
 
 | 文件 | 内容 |
 | --- | --- |
+| [`docs/26-mobile-tailscale-login.md`](docs/26-mobile-tailscale-login.md) | 两套手机 Tailscale 身份、显式登录、原节点路由与双库装包边界 |
 | [`docs/25-tailscale-native-custody.md`](docs/25-tailscale-native-custody.md) | Tailscale 原生候选、Android 加密状态与 JNI、实编及未验证边界 |
 | [`docs/24-target-input-recovery.md`](docs/24-target-input-recovery.md) | 多目标输入恢复、精确租约、迁移与独立验收边界 |
 | [`docs/23-mobile-session-watch.md`](docs/23-mobile-session-watch.md) | 后续源码：手机看板持续状态、目标核验与独立验证边界 |

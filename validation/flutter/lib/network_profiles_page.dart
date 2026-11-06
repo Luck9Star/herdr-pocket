@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'host_catalog.dart';
 import 'network_profiles.dart';
 import 'network_identity.dart';
 import 'network_identity_dialog.dart';
 import 'network_runtime.dart';
+import 'network_login_dialog.dart';
 import 'remote_adapter.dart';
 
 class NetworkProfilesPage extends StatefulWidget {
@@ -15,7 +17,7 @@ class NetworkProfilesPage extends StatefulWidget {
   @override
   State<NetworkProfilesPage> createState() => _NetworkProfilesPageState();
 }
-class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
+class _NetworkProfilesPageState extends State<NetworkProfilesPage> with WidgetsBindingObserver {
   HostCatalog get catalog => widget.catalog;
   late final identities = widget.identityStore ?? NativeNetworkIdentityStore();
   late final runtime = widget.runtime ?? const NativeNetworkRuntime();
@@ -27,31 +29,39 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
   final cancelledStarts = <String>{};
   final uncertainStarts = <String,NetworkNodeBinding>{};
   final stoppedStarts = <String>{};
+  bool foreground = true;
+  bool currentProfile(NetworkProfile profile) => catalog.ready &&
+    catalog.networkProfiles.any((p) => jsonEncode(p.toJson()) == jsonEncode(profile.toJson()));
   int nextEpoch(String id) => epochs[id] = (epochs[id] ?? 0) + 1;
-  bool currentEpoch(String id,int value) => mounted && epochs[id] == value;
+  bool currentEpoch(String id,int value) => mounted && foreground && epochs[id] == value;
   bool canChange(NetworkProfile profile) => available && !pendingStarts.contains(profile.id) &&
     !pendingStops.contains(profile.id) && !uncertainStarts.containsKey(profile.id) && !runtime.stopUncertain(profile.id);
   void closeAffected(NetworkProfile profile) => widget.closeTabs(catalog.networkImpact(profile.id).map((p) => p.id).toSet());
   Future<void> beforeChange(NetworkProfile profile) async {
     closeAffected(profile);
     await runtime.stopBeforeChange(profile);
+    nextEpoch(profile.id);
+    // This path also permits proven-unavailable offline edits. Do not turn
+    // that exception into a claim that a native node was observed Stopped.
+    if (mounted) setState(() { nodes[profile.id] = const NetworkNodeSnapshot('unknown',null); });
   }
   Future<void> nodeStatus(NetworkProfile profile) async {
     final epoch = nextEpoch(profile.id);
     try {
-      final result = await runtime.status(profile.id);
-      if (currentEpoch(profile.id,epoch)) setState(() {
+      final result = await runtime.profileStatus(profile);
+      if (currentEpoch(profile.id,epoch) && currentProfile(profile)) setState(() {
         nodes[profile.id] = result;
         if (!pendingStarts.contains(profile.id)) uncertainStarts.remove(profile.id);
       });
     } catch (_) {
-      if (currentEpoch(profile.id,epoch)) setState(() {
+      if (currentEpoch(profile.id,epoch) && currentProfile(profile)) setState(() {
         nodes[profile.id] = NetworkNodeSnapshot('unknown',nodes[profile.id]?.binding ?? startingBindings[profile.id]);
       });
     }
   }
   Future<void> startNode(NetworkProfile profile) async {
-    if (!canChange(profile) || !profile.enabled || profile.provider != 'easytier' || nodes[profile.id]?.state != 'stopped') return;
+    if (!canChange(profile) || !profile.enabled || !{'easytier','tailscale'}.contains(profile.provider) ||
+        nodes[profile.id]?.state != 'stopped') return;
     final revision = catalog.revision;
     stoppedStarts.remove(profile.id);
     pendingStarts.add(profile.id);
@@ -59,11 +69,11 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
     NetworkNodeBinding? dispatched;
     setState(() { notice = null; });
     try {
-      if (!await runtime.available()) throw const RemoteFailure('provider_unavailable');
+      if (!await runtime.providerAvailable(profile.provider)) throw const RemoteFailure('provider_unavailable');
       final identity = await identities.status(profile);
       if (identity == null) throw const RemoteFailure('network_identity_unavailable');
-      if (identity.mode != 'PRIVATE') throw const RemoteFailure('network_public_unsupported');
-      final binding = NetworkNodeBinding(profile.id,profile.revision,profile.settings['networkName'] as String,identity.handle);
+      if (profile.provider == 'easytier' && identity.mode != 'PRIVATE') throw const RemoteFailure('network_public_unsupported');
+      final binding = NetworkNodeBinding.forProfile(profile,identity);
       if (!currentEpoch(profile.id,epoch)) return;
       startingBindings[profile.id] = binding;
       setState(() { nodes[profile.id] = NetworkNodeSnapshot('starting',binding); });
@@ -71,7 +81,8 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
         operation:() {
           if (cancelledStarts.contains(profile.id)) throw const RemoteFailure('network_start_cancelled');
           dispatched = binding;
-          return runtime.start(binding,(profile.settings['peers'] as List).cast<String>());
+          return profile.provider == 'tailscale' ? runtime.startTailscale(binding,profile)
+            : runtime.start(binding,(profile.settings['peers'] as List).cast<String>());
         });
       if (currentEpoch(profile.id,epoch)) setState(() { nodes[profile.id] = result; });
       else if (dispatched != null && !stoppedStarts.contains(profile.id)) {
@@ -110,12 +121,30 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
   }
   bool busy = false;
   String? notice;
-  bool get available => catalog.ready && !catalog.writing && !busy;
+  bool get available => foreground && catalog.ready && !catalog.writing && !busy;
   @override
-  void initState() { super.initState(); catalog.addListener(changed); }
+  void initState() { super.initState(); catalog.addListener(changed); WidgetsBinding.instance.addObserver(this); }
   void changed() { if (mounted) setState(() {}); }
   @override
-  void dispose() { catalog.removeListener(changed); super.dispose(); }
+  void dispose() { WidgetsBinding.instance.removeObserver(this); catalog.removeListener(changed); super.dispose(); }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      foreground = false;
+      for (final profile in catalog.networkProfiles) {
+        nextEpoch(profile.id);
+        final binding = nodes[profile.id]?.binding ?? startingBindings[profile.id];
+        if (binding != null) nodes[profile.id] = NetworkNodeSnapshot('unknown',binding);
+      }
+      if (mounted) setState(() {});
+    } else {
+      foreground = true;
+      if (mounted) setState(() {});
+      for (final profile in catalog.networkProfiles) {
+        if ({'easytier','tailscale'}.contains(profile.provider) && runtime.supported) nodeStatus(profile);
+      }
+    }
+  }
   Future<void> action(Future<void> Function() work) async {
     if (!available) return;
     setState(() { busy = true; notice = null; });
@@ -164,7 +193,7 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
     if (!await confirm(profile,'删除',affected) || !mounted) return;
     await action(() => catalog.removeNetwork(profile,expectedRevision:captured,
       beforeRemove:() async {
-        if (profile.provider == 'easytier' && identities.supported && await identities.status(profile) != null) {
+        if ({'easytier','tailscale'}.contains(profile.provider) && identities.supported && await identities.status(profile) != null) {
           throw const RemoteFailure('network_identity_present');
         }
         await beforeChange(profile);
@@ -174,29 +203,43 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> {
     if (!canChange(profile)) return;
     await showDialog<void>(context:context,builder:(_) => NetworkIdentityDialog(profile:profile,catalog:catalog,
       closeTabs:widget.closeTabs,store:identities,runtime:runtime));
+    if (mounted && currentProfile(profile) && runtime.supported) await nodeStatus(profile);
+  }
+  bool loginReady(NetworkProfile profile) {
+    final binding = nodes[profile.id]?.binding;
+    return canChange(profile) && profile.enabled && profile.provider == 'tailscale' &&
+      binding != null && binding.provider == 'tailscale' && binding.profileRevision == profile.revision &&
+      binding.networkName == tailscaleNetworkName(profile) &&
+      {'starting','needs-login','needs-machine-auth','running'}.contains(nodes[profile.id]?.state);
+  }
+  Future<void> login(NetworkProfile profile) async {
+    if (!loginReady(profile)) return;
+    await showDialog<void>(context:context,builder:(_) => TailscaleLoginDialog(profile:profile,
+      binding:nodes[profile.id]!.binding!,catalog:catalog,runtime:runtime));
+    if (mounted && currentProfile(profile) && foreground) await nodeStatus(profile);
   }
   @override
   Widget build(BuildContext context) => Scaffold(appBar:AppBar(title:const Text('网络管理 · 公开配置')),
     body:SafeArea(child:ListView(padding:const EdgeInsets.all(16),children:[
       const Text('Tailscale、EasyTier、ZeroTier 公开配置可由多台主机复用。本机入网资料单独保管，不随配置导出，也不复制 SSH 私钥或三网身份。'),
-      const Text('Android EasyTier 原型可明确启动和停止节点；引擎已启动不代表已入网、可达或 SSH 成功。缺少原生桥时返回 provider_unavailable，不改走系统 TCP / DNS。旧主机的 provider 标签仍只是资料。'),
+      const Text('Android Tailscale / EasyTier 原型可明确启动和停止节点。Tailscale 需本机设备身份与显式授权，等待管理员批准与已就绪分别显示；入网不等于 SSH 或 herdr 成功。缺少原生桥时返回 provider_unavailable。旧主机的 provider 标签仍只是资料。'),
       if (notice != null) Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(notice!,key:const ValueKey('networks-notice'))),
       FilledButton.icon(key:const ValueKey('networks-add'),onPressed:available && catalog.networkProfiles.length < maxNetworkProfiles ? () => edit() : null,
         icon:const Icon(Icons.add),label:const Text('新增网络配置')),
       for (final profile in catalog.networkProfiles) Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
         Text(profile.label,style:Theme.of(context).textTheme.titleMedium),
-        Text('${profile.provider} · ${profile.enabled ? '本机启用' : '本机停用'} · 入网未知'),
-        if (profile.provider == 'easytier') ...[
-          Text('节点：${switch (nodes[profile.id]?.state) {
-            'starting' => '正在启动 · 入网未知', 'engine-started' => '引擎已启动 · 入网与 SSH 未验证',
-            'closing' => '正在停止 · 清理尚未确认', 'stopped' => '已停止', 'unavailable' => '运行时不可用', _ => '状态未知 · 请刷新',
-          }}',key:ValueKey('network-node-status-${profile.id}')),
+        Text('${profile.provider} · ${profile.enabled ? '本机启用' : '本机停用'}'),
+        if ({'easytier','tailscale'}.contains(profile.provider)) ...[
+          Text('节点：${networkNodeStateLabel(nodes[profile.id]?.state)}',key:ValueKey('network-node-status-${profile.id}')),
+          if (profile.provider == 'tailscale') const Text('先配置本机入网资料 → 刷新并启动节点 → 授权 / 等待批准 → 主机配对与看板。节点就绪后仍需主动连接。'),
           if (uncertainStarts.containsKey(profile.id)) const Text('启动结果或期间状态未确认 · 启动和配置写入已锁定；请刷新状态或停止原绑定。'),
           if (runtime.stopUncertain(profile.id)) const Text('停止尚未确认 · 配置写入已锁定；请刷新状态或明确停止原绑定。'),
           Wrap(spacing:8,children:[
             TextButton(key:ValueKey('network-node-refresh-${profile.id}'),onPressed:runtime.supported ? () => nodeStatus(profile) : null,child:const Text('刷新节点状态')),
             TextButton(key:ValueKey('network-node-start-${profile.id}'),onPressed:canChange(profile) && profile.enabled && nodes[profile.id]?.state == 'stopped' ? () => startNode(profile) : null,child:const Text('启动节点')),
             TextButton(key:ValueKey('network-node-stop-${profile.id}'),onPressed:(nodes[profile.id]?.binding != null || startingBindings.containsKey(profile.id) || uncertainStarts.containsKey(profile.id)) && !pendingStops.contains(profile.id) ? () => stopNode(profile) : null,child:const Text('停止原节点')),
+            if (profile.provider == 'tailscale') TextButton(key:ValueKey('network-node-login-${profile.id}'),
+              onPressed:loginReady(profile) ? () => login(profile) : null,child:const Text('设备授权与入网状态')),
           ]),
         ],
         Text('引用主机 ${catalog.networkImpact(profile.id).length} 个'),
@@ -248,7 +291,7 @@ class _NetworkEditorState extends State<_NetworkEditor> {
       DropdownButtonFormField<String>(key:const ValueKey('network-provider'),initialValue:provider,isExpanded:true,
         items:[for (final p in overlayProviders) DropdownMenuItem(value:p,child:Text(p))],
         onChanged:widget.profile != null ? null : (value) { if (value != null) setState(() { provider = value; error = null; }); }),
-      if (provider == 'tailscale') ...[input('controlUrl','控制服务器 HTTPS URL（空为默认）'),input('hostname','本机名（空为自动，ASCII 标签）')],
+      if (provider == 'tailscale') ...[input('controlUrl','控制服务器 HTTPS URL（空为默认）'),input('hostname','本机名（空为 herdr-pocket，ASCII 标签）')],
       if (provider == 'easytier') ...[input('networkName','公开网络名称（不含加入密码）'),input('peers','公开 peer URI（每行一个，1–16 个）',multiline:true),const Text('支持 tcp / udp / ws / wss；tcp、udp 必须填写端口。')],
       if (provider == 'zerotier') input('networkId','公开 network ID（16 位小写十六进制）'),
       const Padding(padding:EdgeInsets.only(top:12),child:Text('保存不会启动网络、加入网络或授权主机。')),

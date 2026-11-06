@@ -1,8 +1,8 @@
 # Tauri + xterm.js 验证壳
 
-状态：2026-10-30，包含独立的 **M1b 远端看板／持续只读入口（保留 M1a 一次性 CLI）**与**离线终端/原生 IPC 实验室**。使用 xterm.js 6.0.0、Tauri 2.12.5 与固定 russh 0.65.0；没有设备安全存储、远端输入或 overlay 接线。当前实际云端/设备验收以 evidence 记录为准；编译或纯 Rust `SessionGuard` 测试不是 SSH 握手、herdr 或手机验收。
+状态：2026-11-06。当前源码包含设备配对、主机配置、持续看板／终端观察与受控输入，以及下文的 Android Tailscale／EasyTier 条件接线；保留离线终端／原生 IPC 实验室。使用 xterm.js 6.0.0、Tauri 2.12.5 与固定 russh 0.65.0。源码、隔离测试或编译不建立手机运行与真实网络支持；云端／设备验收以对应 evidence 记录为准。
 
-## 手机优先的远端只读入口
+## 手机优先的远端只读入口（早期基线）
 
 默认页按手机顺序审查目标、核验主机公钥、提供实验临时凭据，然后显式读取当前会话看板并选择pane持续观察。控件至少 44 px，360/390 px 单列，键盘仅改变本地视口。未提供任意命令、远端 resize、自动重试或输入发送。浏览器预览明确显示原生 SSH 不可用，并禁用连接，不返回假快照。
 
@@ -12,7 +12,7 @@
 
 本轮本机已执行前端单元测试/build、Rust transport tests 与 Mac native cargo check。只有独立 CI driver 的实际运行可证明 loopback SSH/herdr 正负例；手机触控、IME、安装、相机、三网络和远端完整输入仍未验证。
 
-## Penpot v2 视觉接入
+## Penpot v2 视觉接入（2026-10-30 记录）
 
 2026-10-30 将用户认可的 Tech Indigo / Slate 配色接入本壳：主操作、选中标签和活动焦点用靛蓝，终端背景使用 `#0B0F17`。从 `../shared/design-tokens-v2.json` 读取语义颜色、组件圆角与固定 16 色 ANSI 工程基线；与 Flutter 使用同一字节 fixture、字体、80×24 网格和选择高亮透明度。ANSI 16 色是共享比较约定，不宣称是 Penpot 导出值。
 
@@ -119,3 +119,32 @@ CARGO_TARGET_DIR=/private/tmp/herdr-tauri-watch-target cargo test --locked --off
 恢复按钮经人工确认后，调用 `remote_tab_input_mode` 的 `mode:observe, review:true`，取得当前输入 epoch 后再调用原恢复命令。`review` 为可选参数，省略或 false 的普通 observe／失焦仍撤销焦点；true 只接受 observe，不能以该标记启用 direct/draft。原 visible、Active、generation、观察 epoch 与输入 epoch 门禁均保留，不在恢复命令内隐式申请新 epoch。审查焦点自身不授予发送权限，恢复完成后仍需显式选择输入模式。
 
 新增 Node 回归核对按钮确认、review 参数、普通 blur 不带 review、冻结输入 epoch 和迟到审查回执拒绝；原生 Rust 测试调用实际 command 使用的焦点映射 helper。共享传输另以真实 loopback SSH／`LiveInput` 验证 ordinary observe 拒绝、active 请求不能人工清理、失焦使旧 review epoch 失效，以及显式新 review 的原记录清理。这是分层执行证据，尚未运行 Tauri GUI 到 SSH 的人工恢复闭环。
+
+## Android Tailscale 本机身份与显式登录（2026-11-06 源码批次）
+
+网络面板保留 Penpot v2 控件与布局，现增加 Tailscale 的创建／读取／删除本机身份、启动／停止节点、显式登录、等待管理员审批与手动打开授权页面。身份模式固定为 `DEVICE_STATE`，没有 auth key 或 Tailscale 秘密输入。页面与配置导出只接收公开身份句柄；加密 `fullStateStore`、运行目录与 StateStore 回调由 Android 原生实现持有，不进入 JavaScript／IPC。
+
+Android 插件 load 只调用 EasyTier／Tailscale 的 `bindNative` 注册应用 context 和 class loader，不读取身份、不启动节点。身份修改／删除及公开配置修改前，后端先撤销受影响标签的输入和 SSH，再等待原节点明确 `Stopped`；失败或结果未知时不提交身份替换，不自动重试。删除要求用户已审查的原 handle，且 catalog revision、profile revision、受影响主机集合均重新比较。
+
+Tailscale 的公开 control URL 与 hostname 经共享 `TailscaleSettings` 同时供应 native source 和 Binding，空值使用同一固定默认值。Binding 的 network name 为共享 `ts1:` SHA-256 配置摘要，包含实际 provider、profile、revision 与设备状态 identity ref。实际 SSH 路径仍走共享 `OverlayDialer`，恢复记录的 route 来自实际 stream 的元数据；绑定 overlay 的主机没有系统 TCP fallback。只有 Tailscale `Running` 可以 dial；`starting`、`needs-login`、`needs-machine-auth`、`running`、`closing`、`stopped` 均按原语义显示，不映射成 EasyTier `engine-started` 或“SSH 已连接”。看板、持续观察和标签继续使用原 pane＋terminal 目标审查、输入 unknown gate 与固定终端尺寸。
+
+“登录 Tailscale”是显式写操作，只执行一次 `begin_login_attempt`。host 在派发前捕获原私有 `NodeAttempt`，将授权 URL 审查与该 attempt 绑定。页面只拿到成对 nullable 的 `authUrl`／瞬时 `reviewToken`，不拿 private attempt。review 不保存到配置或导出；停止、重启或配置变化会退休旧 review，迟到登录不能重新发布它。即使同 Binding 重启返回同 URL，旧 token 仍被拒绝。
+
+“打开授权页面”必须由用户点击。Rust 重新比较原 catalog／Binding／review token，使用 `login_status_attempt` 核验原节点当前 URL 后才调用 Android `ACTION_VIEW`；Rust 和 Kotlin 都限制 HTTPS、无 userinfo／fragment、ASCII 与 4096 字节上限。不提供通用 URL opener，也不自动打开网页。返回应用会重新读取配置与节点状态。状态轮询只读，不再次发起登录；每次可见审查最多 30 次串行读取、60 秒内发布，关闭面板、后台、停止或新操作使旧读取失去发布权限。仍在执行的原生读取可能稍后才返回。
+
+构建需显式启用 `network-tailscale`；EasyTier 使用 `network-easytier`，两者可以同时选择。Android 包须包含 host `.so`、`libhp_tailscale.so`，同时启用 EasyTier 时还须包含 `libheeler_easytier.so`，并复制 `DeviceKeysPlugin.kt`、`NetworkAuthReview.kt` 及共享 network Java 源。静态链接的宿主依赖全部启用的库；缺库可能使整个宿主无法加载，不能声称损坏包仍有单 provider 能力。完整包内仍按 provider feature 与对应 JNI context 判断能力；没有库／context 不会使用 fixture 或系统连接替代。具体打包入口由仓库构建脚本负责，本批没有生成 Android APK。
+
+本目录可重复的离线检查：
+
+```sh
+npm test
+npm run build
+CARGO_TARGET_DIR=/private/tmp/herdr-tauri-watch-target cargo test --locked --offline --manifest-path src-tauri/Cargo.toml --lib
+python3 test/android-network-plugin-test.py /private/tmp/herdr-kotlin-2.2.21-check
+```
+
+最后一条需要已有且 SHA-256 符合 Flutter 共用工具 manifest 的 Kotlin 2.2.21 jars；不下载工具或 SDK。它编译真实 Kotlin plugin／URL validator，用合成 Android、Tauri 与 store API 检查 mode、参数、原 handle 删除、bind-only 初始化和显式 URL 打开，不访问真实 Android store。Rust host 单测在 `cfg(test)` 编译实际 Nodes runtime 方法与真实 Android source crate，仅移动端 IPC 是明确返回 unavailable 的替身。这些与 Node 合成 DOM／IPC 测试、Vite build 均不证明 Android Gradle／JNI 实际加载、Keystore、系统浏览器往返、设备锁定、真实 Tailscale 登录／管理员审批、真实 SSH／herdr、多标签跨网络或手机触控已验证；本批没有启 GUI、真实节点／身份、网络或 CI。
+
+本批最终轻量验收计数以日志为准：42 项 Rust host 单测、115 项 Node 单测、Vite 生产构建与 Kotlin 隔离 probe 已执行通过；它们使用当前共享运行时源码，不能外推设备或真实网络结果。
+
+外部页面打开 API 已用 Context7 `library Android` → `/websites/developer_android` → `docs` 对照 [Android 官方 URL intent 说明](https://developer.android.com/training/package-visibility/use-cases)：`ACTION_VIEW` 可能交给浏览器、支持该 URL 的应用或选择器；没有 handler 的异常被处理为打开结果未确认，不自动改用其他入口。

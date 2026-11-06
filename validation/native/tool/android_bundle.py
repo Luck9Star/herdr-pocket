@@ -11,6 +11,7 @@ import struct
 import subprocess
 import sys
 import zipfile
+import android_tailscale
 
 ROOT = Path(__file__).resolve().parents[3]
 SYMBOLS = ['heeler_et_stream_connect', 'heeler_et_stream_read', 'heeler_et_stream_write',
@@ -54,6 +55,10 @@ def verify(bundle, commit, readelf):
     if manifest['sourcesSha256'] != sha(ROOT / 'validation/native/sources.json') or manifest['patchManifestSha256'] != sha(ROOT / 'validation/native/patches/portable-manifest.json'):
         raise ValueError('native sources or patch manifest mismatch')
     files = manifest['files']
+    if manifest.get('schemaVersion', 1) not in (1, 2):
+        raise ValueError('unsupported native manifest schema')
+    if (manifest.get('schemaVersion', 1) == 2) != ('tailscale' in manifest):
+        raise ValueError('Tailscale manifest/provider mismatch')
     required_files = {'libheeler_easytier.so', 'upstream-sources.lock', 'Heeler-Cargo.lock',
                       'reference-source.tar', 'easytier-source.tar', 'candidate-provenance.json',
                       'sources.json', 'build-details.json'}
@@ -84,9 +89,11 @@ def verify(bundle, commit, readelf):
     if json.loads((bundle / 'candidate-provenance.json').read_text()) != portable:
         raise ValueError('candidate provenance mismatch')
     elf(bundle / 'libheeler_easytier.so', readelf, SYMBOLS)
+    if 'tailscale' in manifest:
+        android_tailscale.verify(bundle, manifest['tailscale'], files, readelf, elf)
     return manifest
 
-def build(out):
+def build(out, tailscale=False):
     import portable_candidate as candidate
     base = candidate.base
     if os.environ.get('GITHUB_ACTIONS') != 'true':
@@ -121,28 +128,38 @@ def build(out):
     shutil.copytree(ROOT / 'validation/native/patches', out / 'patches')
     shutil.copy2(ROOT / 'validation/native/sources.json', out / 'sources.json')
     (out / 'build-details.json').write_text(json.dumps(base.CURRENT, indent=2) + '\n')
+    ts_record = None
+    if tailscale:
+        ts_record = android_tailscale.build(out.resolve(), base.WORK / 'tailscale',
+            base.WORK / 'go-cache', Path(os.environ['ANDROID_HOME']) / 'ndk/28.2.13676358')
     files = {p.relative_to(out).as_posix(): sha(p) for p in sorted(out.rglob('*')) if p.is_file()}
     manifest = {'schemaVersion': 1, 'sourceCommit': os.environ['GITHUB_SHA'], 'abi': 'arm64-v8a', 'api': 35,
                 'ndk': '28.2.13676358', 'rust': '1.95.0', 'sourcesSha256': sha(ROOT / 'validation/native/sources.json'),
                 'patchManifestSha256': sha(ROOT / 'validation/native/patches/portable-manifest.json'), 'files': files,
                 'staticInspection': 'passed', 'androidLoad': 'not run', 'installation': 'not run', 'node': 'not run'}
+    if ts_record:
+        manifest.update(schemaVersion=2, tailscale=ts_record)
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     (out / 'SHA256SUMS').write_text(''.join(f'{v}  {k}\n' for k, v in files.items()))
     verify(out, os.environ['GITHUB_SHA'], str(ndk / 'llvm-readelf'))
 
 def apk(path, bundle, commit, readelf, app):
-    verify(bundle, commit, readelf)
+    manifest = verify(bundle, commit, readelf)
+    providers = ['libheeler_easytier.so']
+    if isinstance(manifest, dict) and 'tailscale' in manifest:
+        providers.append(android_tailscale.LIBRARY)
     app_lib = {'flutter': 'libherdr_flutter_network_runtime.so', 'tauri': 'libherdr_pocket_tauri_probe_lib.so'}[app]
     with zipfile.ZipFile(path) as archive:
         libs = [x for x in archive.namelist() if x.startswith('lib/') and x.endswith('.so')]
         if any(not x.startswith('lib/arm64-v8a/') for x in libs):
             raise ValueError('APK contains another ABI')
-        for name in ['libheeler_easytier.so', app_lib]:
+        for name in providers + [app_lib]:
             key = 'lib/arm64-v8a/' + name
             if libs.count(key) != 1:
                 raise ValueError('missing or duplicate APK library: ' + name)
-        if hashlib.sha256(archive.read('lib/arm64-v8a/libheeler_easytier.so')).hexdigest() != sha(bundle / 'libheeler_easytier.so'):
-            raise ValueError('APK native library differs from verified bundle')
+        for name in providers:
+            if hashlib.sha256(archive.read('lib/arm64-v8a/' + name)).hexdigest() != sha(bundle / name):
+                raise ValueError('APK native library differs from verified bundle: ' + name)
         import tempfile
         with tempfile.TemporaryDirectory() as directory:
             names = [Path(x).name for x in libs]
@@ -152,21 +169,23 @@ def apk(path, bundle, commit, readelf, app):
                 name = Path(entry).name
                 extracted = Path(directory) / name
                 extracted.write_bytes(archive.read(entry))
-                needed = ['libheeler_easytier.so'] if name == app_lib else []
+                needed = providers if name == app_lib else []
                 required = (FLUTTER_JNI if app == 'flutter' else [BIND_NATIVE]) if name == app_lib else []
+                if name == app_lib and android_tailscale.LIBRARY in providers:
+                    required = list(required) + [android_tailscale.JNI_BIND]
                 elf(extracted, readelf, required=required, needed=needed, allowed=set(names) - {name})
 
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest='command', required=True)
-    p = sub.add_parser('build'); p.add_argument('bundle', type=Path)
+    p = sub.add_parser('build'); p.add_argument('bundle', type=Path); p.add_argument('--tailscale', action='store_true')
     p = sub.add_parser('verify'); p.add_argument('bundle', type=Path); p.add_argument('--commit', required=True); p.add_argument('--readelf', required=True)
     p = sub.add_parser('report'); p.add_argument('output', type=Path); p.add_argument('--commit', required=True); p.add_argument('--app', choices=['flutter', 'tauri'], required=True)
     p.add_argument('--checks', choices=['success', 'failure', 'cancelled', 'skipped', 'not_run'], default='not_run')
     p.add_argument('--transport-checks', choices=['success', 'failure', 'cancelled', 'skipped', 'not_run'], default='not_run')
     p = sub.add_parser('apk'); p.add_argument('apk', type=Path); p.add_argument('bundle', type=Path); p.add_argument('--commit', required=True); p.add_argument('--readelf', required=True); p.add_argument('--app', choices=['flutter', 'tauri'], required=True)
     a = parser.parse_args()
-    if a.command == 'build': build(a.bundle)
+    if a.command == 'build': build(a.bundle, a.tailscale)
     elif a.command == 'verify': verify(a.bundle, a.commit, a.readelf)
     elif a.command == 'report':
         report = {'sourceCommit': a.commit, 'app': a.app, 'abi': 'arm64-v8a', 'api': 35,

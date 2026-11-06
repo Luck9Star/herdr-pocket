@@ -12,12 +12,13 @@ static pthread_mutex_t mu=PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cv=PTHREAD_COND_INITIALIZER;
 static Node nodes[8]; static Stream streams[32];
 static uint64_t next_node=1,next_stream=1;
-static int start_gate=1,metrics[12];
+static int start_gate=1,login_gate=1,metrics[12];
 static Node *find_node(uint64_t id) { for(int i=0;i<8;i++) if(nodes[i].id==id && id) return &nodes[i]; return NULL; }
 static Stream *find_stream(uint64_t id) { for(int i=0;i<32;i++) if(streams[i].id==id && id) return &streams[i]; return NULL; }
-void hp_ts_fixture_reset(void) { pthread_mutex_lock(&mu); memset(metrics,0,sizeof(metrics));start_gate=1;pthread_mutex_unlock(&mu); }
+void hp_ts_fixture_reset(void) { pthread_mutex_lock(&mu); memset(metrics,0,sizeof(metrics));start_gate=1;login_gate=1;pthread_mutex_unlock(&mu); }
 void hp_ts_fixture_control(int op) { pthread_mutex_lock(&mu); if(op==1)start_gate=0; if(op==2)start_gate=1;
- if(op==3)for(int i=0;i<8;i++)nodes[i].stop_fail=0; pthread_cond_broadcast(&cv);pthread_mutex_unlock(&mu); }
+ if(op==3)for(int i=0;i<8;i++)nodes[i].stop_fail=0; if(op==4)login_gate=0; if(op==5)login_gate=1;
+ pthread_cond_broadcast(&cv);pthread_mutex_unlock(&mu); }
 int hp_ts_fixture_metric(int index) { pthread_mutex_lock(&mu);int out=(index>=0 && index<12)?metrics[index]:-1;pthread_mutex_unlock(&mu);return out; }
 uint32_t hp_ts_abi_version(void) {return 1;}
 int32_t hp_ts_node_new(uint8_t *config,uint32_t len,hp_ts_store_callbacks *store,uint64_t ctx,uint64_t *out) {
@@ -62,6 +63,7 @@ int32_t hp_ts_node_status(uint64_t id,uint32_t timeout,uint8_t *data,uint32_t ca
 int32_t hp_ts_node_begin_login(uint64_t id,uint32_t timeout) {
  if(!timeout || timeout>60000)return HP_TS_INVALID;
  pthread_mutex_lock(&mu);Node *n=find_node(id);if(!n){pthread_mutex_unlock(&mu);return HP_TS_NOT_FOUND;}
+ metrics[9]++;while(!login_gate)pthread_cond_wait(&cv,&mu);
  n->login=1;n->state=2;metrics[5]++;pthread_mutex_unlock(&mu);return HP_TS_OK;
 }
 int32_t hp_ts_node_dial(uint64_t id,uint8_t *address,uint32_t len,uint32_t timeout,uint64_t *out) {

@@ -2,6 +2,8 @@
 
 2026-11-06，延续[按目标隔离的输入恢复](24-target-input-recovery.md)。本批完成固定来源的 Go 原生候选、共享 Rust 节点接入，以及 Android 完整加密 StateStore 与 JNI 状态源。它们尚未接通 Flutter／Tauri 宿主和登录页面，不是可用的手机 Tailscale 功能，也未包含在当前 `546c3eb` Android 下载包中。本批不触发 Actions 或发布；继续累积手机功能后集中验收。
 
+后续手机宿主、登录与路由已进入下一源码批次，见[手机接线与独立边界](26-mobile-tailscale-login.md)。下文保留本批完成时的范围。
+
 ## 固定来源与显式授权
 
 实际依赖保持 **Tailscale v1.104.1 / `9a522a9786c97eb7910c01ccb7bd66557b04c910`**，复用 Heeler 锁定来源的完整 go.mod／go.sum，只修改本项目 module 名。当前 Context7 的 v1.104.4 文档用于背景核查，没有据此升级依赖。原 fd shim 使用 Unix Socketpair／SCM_RIGHTS，不能直接作为五端实现；本批使用 opaque `net.Conn` 句柄。原始观察保存在 [audit](../validation/native/tailscale-adapter-audit.json)，精确源码与补丁 SHA 在 [来源清单](../validation/native/tailscale-runtime-source.json)。
@@ -41,7 +43,7 @@ Tailscale 和 EasyTier 共用现有 Rust NodeEntry、owner／revision、取消�
 | Rust overlay | 默认 3、双 ABI fixture 33；严格 Clippy 通过 | 独立合成 C ABI，含跨 provider 隔离 |
 | 共享 Rust transport | 89 library + 1 CLI 通过 | 双 ABI fixture、自建 loopback SSH；没有真实 overlay |
 | Android 加密存储 | 211 项与接口检查通过 | 临时 JCE 密钥、真实临时 POSIX 文件，Android 包装为桩 |
-| Android JNI | Tailscale 1090 个断言、EasyTier 52 项通过 | `-Xcheck:jni`、生产 bridge、合成 vault；断言数含逐字节清零，不是 1086 个场景 |
+| Android JNI | Tailscale 1090 个断言、EasyTier 52 项通过 | `-Xcheck:jni`、生产 bridge、合成 vault；断言数含逐字节清零，不是 1090 个场景 |
 | Tauri Rust 宿主 | 32 项通过 | 补齐新状态的 wire 映射及序列化回归；未运行 GUI |
 | Flutter 原生 Rust 宿主 | 默认 3 项通过 | 共享状态扩展的编译兼容；不是 Dart／Flutter GUI 测试 |
 | 构建工具 | 13 项通过 | 固定锁、准备目录、复制内容漂移、symlink 与环境隔离 |

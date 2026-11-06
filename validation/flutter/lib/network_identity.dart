@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show ChangeNotifier,TargetPlatform,defaultTargetPlatform,kIsWeb;
 import 'package:flutter/services.dart' show MethodChannel;
@@ -18,7 +19,8 @@ class NetworkIdentityRecord {
         value['profileId'] != profile.id || value['provider'] != profile.provider ||
         value['handle'] is! String || !_identityUuid.hasMatch(value['handle'] as String) ||
         value['instanceId'] is! String || !_identityUuid.hasMatch(value['instanceId'] as String) ||
-        !networkSecretModes.contains(value['mode'])) throw const RemoteFailure('network_identity_unavailable');
+        !(profile.provider == 'tailscale' ? value['mode'] == 'DEVICE_STATE' :
+          profile.provider == 'easytier' && networkSecretModes.contains(value['mode']))) throw const RemoteFailure('network_identity_unavailable');
     return NetworkIdentityRecord._(profile.id,profile.provider,value['handle'] as String,
       value['instanceId'] as String,value['mode'] as String);
   }
@@ -31,6 +33,13 @@ void validateNetworkSecret(String mode,Uint8List secret) {
   }
   try { utf8.decode(secret,allowMalformed:false); }
   catch (_) { throw const RemoteFailure('invalid_network_secret'); }
+}
+
+void validateNetworkIdentityInput(NetworkProfile profile,String mode,Uint8List secret) {
+  if (profile.provider == 'tailscale') {
+    if (mode != 'DEVICE_STATE' || secret.isNotEmpty) throw const RemoteFailure('invalid_network_secret');
+  } else if (profile.provider == 'easytier') { validateNetworkSecret(mode,secret); }
+  else { throw const RemoteFailure('network_identity_unsupported'); }
 }
 
 abstract interface class NetworkIdentityStore {
@@ -46,7 +55,7 @@ class NativeNetworkIdentityStore implements NetworkIdentityStore {
   @override
   bool get supported => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   void check(NetworkProfile profile) {
-    if (!supported || profile.provider != 'easytier') throw const RemoteFailure('network_identity_unsupported');
+    if (!supported || !{'easytier','tailscale'}.contains(profile.provider)) throw const RemoteFailure('network_identity_unsupported');
   }
   Map<String,Object> args(NetworkProfile profile) => {'profileId':profile.id,'provider':profile.provider};
   @override
@@ -59,11 +68,11 @@ class NativeNetworkIdentityStore implements NetworkIdentityStore {
   }
   @override
   Future<NetworkIdentityRecord> create(NetworkProfile profile,String mode,Uint8List secret) async {
-    check(profile); validateNetworkSecret(mode,secret);
+    check(profile); validateNetworkIdentityInput(profile,mode,secret);
     final bytes = Uint8List.fromList(secret);
     try {
       return NetworkIdentityRecord.checked(await channel.invokeMethod<Object?>('create',
-        {...args(profile),'mode':mode,'secret':bytes}),profile);
+        {...args(profile),if (profile.provider == 'easytier') ...{'mode':mode,'secret':bytes}}),profile);
     } catch (_) { throw const RemoteFailure('network_identity_write_unknown'); }
     finally { bytes.fillRange(0,bytes.length,0); }
   }
@@ -88,29 +97,50 @@ class NetworkIdentitySession extends ChangeNotifier {
   final bool Function() stillCurrent;
   final void Function() closeAffected;
   NetworkIdentityRecord? record;
-  bool known = false,busy = false,_disposed = false;
+  bool known = false,busy = false,_disposed = false,_foreground = true,_refreshQueued = false;
+  int _readEpoch = 0;
   String? notice;
-  bool get supported => store.supported && profile.provider == 'easytier';
-  bool get canCreate => supported && known && record == null && !busy && stillCurrent();
-  bool get canDelete => supported && known && record != null && !busy && stillCurrent();
+  bool get supported => store.supported && {'easytier','tailscale'}.contains(profile.provider);
+  bool get canCreate => supported && _foreground && known && record == null && !busy && stillCurrent();
+  bool get canDelete => supported && _foreground && known && record != null && !busy && stillCurrent();
   void publish() { if (!_disposed) notifyListeners(); }
   Future<bool> readStatus() async {
     record = null; known = false;
-    try { record = await store.status(profile); known = true; return true; }
+    final epoch = ++_readEpoch;
+    if (!_foreground || _disposed || !stillCurrent()) return false;
+    try {
+      final result = await store.status(profile);
+      if (epoch != _readEpoch || !_foreground || _disposed || !stillCurrent()) return false;
+      record = result; known = true; return true;
+    }
     catch (_) { return false; }
   }
   Future<void> refresh() async {
-    if (busy || _disposed || !supported) return;
+    if (busy || _disposed || !_foreground || !supported || !stillCurrent()) return;
+    _refreshQueued = false;
     busy = true; notice = null; publish();
     final read = await readStatus();
     if (!read) notice = '本机资料不可读取 · 请解锁设备后重新读取；不会新建或替换身份。';
+    finishWork();
+  }
+  void suspend() {
+    _foreground = false; _readEpoch++; record = null; known = false; publish();
+  }
+  Future<void> resume() async {
+    if (_disposed) return;
+    _foreground = true;
+    if (busy) { _refreshQueued = true; return; }
+    await refresh();
+  }
+  void finishWork() {
     busy = false; publish();
+    if (_refreshQueued && _foreground && !_disposed) { _refreshQueued = false; unawaited(refresh()); }
   }
   Future<void> create(String mode,Uint8List secret) async {
     // Own and clear this short-lived input even when a stale/duplicate action is refused.
     try {
       if (!canCreate || _disposed) return;
-      validateNetworkSecret(mode,secret);
+      validateNetworkIdentityInput(profile,mode,secret);
       busy = true; known = false; notice = null; publish();
       NetworkIdentityRecord? created;
       try {
@@ -125,7 +155,7 @@ class NetworkIdentitySession extends ChangeNotifier {
       notice = matched
         ? '本机入网资料已保存 · 尚未启动节点或验证连通，不会自动连接。'
         : '保存结果未确认 · 已重新读取本机状态；先核对，不会重发或替换身份。';
-      busy = false; publish();
+      finishWork();
     } finally { secret.fillRange(0,secret.length,0); }
   }
   Future<void> delete() async {
@@ -142,7 +172,7 @@ class NetworkIdentitySession extends ChangeNotifier {
     notice = acknowledged && read && record == null
       ? '本机入网资料已移除 · SSH 配对密钥和其他网络未改动。'
       : '移除结果未确认 · 先读取并核对当前状态，不会重复删除。';
-    busy = false; publish();
+    finishWork();
   }
   @override
   void dispose() { _disposed = true; super.dispose(); }

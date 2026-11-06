@@ -67,3 +67,5 @@ python3 validation/native/tool/tailscale_candidate.py build /absolute/fresh/work
 ```
 
 工具只使用已有 Go 和 C 工具，不安装 SDK；下载固定模块并检查 go.sum、源码和补丁 SHA，只修改指定临时副本。`sync` 可显式更新本项目 runtime 源码副本；构建前同时核对源清单与实际复制字节，拒绝未经同步的修改。当前完整构建只在 Mac arm64 执行，不能推断其他平台的工具链／loader 已兼容。
+
+Android 双 provider 装包扩展由 `tool/android_bundle.py build <新bundle目录> --tailscale` 调用 `tool/android_tailscale.py`，仅限 CI，固定 Go 1.27.3／NDK 28.2.13676358／API 35／arm64。除了独立库字节，验证从固定 go.sum 重算上游 module zip h1，再核对补丁后 tar 全部文件；GUI 校验两个库、JNI 和 DT_NEEDED。该 Android 扩展尚未实际构建或加载，不能引用历史单 EasyTier 包证明通过。[手机接线与批次边界](../../docs/26-mobile-tailscale-login.md)

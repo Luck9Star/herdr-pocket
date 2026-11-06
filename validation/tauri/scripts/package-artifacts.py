@@ -27,10 +27,17 @@ def android_apks():
             not candidate.resolve().is_relative_to(runner_temp)):
         raise SystemExit('ANDROID_APK_PATH must name a runner-owned APK')
     return [candidate.resolve()]
-config_transfer_fixture = repo/'validation/shared/config-transfer-v1.json'
-config_transfer_fixture_sha256 = sha(config_transfer_fixture)
-if config_transfer_fixture_sha256 + '  config-transfer-v1.json' not in (repo/'validation/shared/SHA256SUMS').read_text().splitlines():
-    raise SystemExit('Config transfer fixture checksum mismatch')
+fixture_checksums = (repo/'validation/shared/SHA256SUMS').read_text().splitlines()
+fixture_provenance = {}
+for field, filename in {
+    'configTransferFixtureSHA256': 'config-transfer-v1.json',
+    'configTransferV2FixtureSHA256': 'config-transfer-v2.json',
+    'networkProfileFixtureSHA256': 'network-profiles-v1.json',
+}.items():
+    digest = sha(repo/'validation/shared'/filename)
+    if digest + '  ' + filename not in fixture_checksums:
+        raise SystemExit('Shared fixture checksum mismatch: ' + filename)
+    fixture_provenance[field] = digest
 source_sha = os.environ.get('GITHUB_SHA', '')
 if len(source_sha) not in (40, 64) or any(ch not in '0123456789abcdef' for ch in source_sha.lower()):
     raise SystemExit('GITHUB_SHA must identify the exact source commit before packaging')
@@ -49,7 +56,7 @@ manifest = {
     'pairingDependenciesSHA256':sha(repo/'validation/pairing/sources.json'),
     'remoteBehavior':{'mode':'explicit-pane-continuous-readonly','remoteInput':'stock server read-only; explicit guarded capability required','ptyResize':False,'credentialStorage':{'android':'API35 wrapped Ed25519', 'linux':'volatile test signer', 'macos':'volatile test signer'}.get(os.getenv('PROBE_PLATFORM'),'device pairing unavailable'),'browserTransport':'unavailable','deviceResult':'unverified'},
     'fixtureSHA256':sha(repo/'validation/shared/fixture.json'),
-    'configTransferFixtureSHA256':config_transfer_fixture_sha256,
+    **fixture_provenance,
     'fontSHA256':sha(repo/'validation/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'),
     'designTokensSHA256':sha(repo/'validation/shared/design-tokens-v2.json'),
     'visualBaseline':'herdr-pocket-v2-tech-indigo; shared 16 ANSI colors; fixed 80x24 fixture',

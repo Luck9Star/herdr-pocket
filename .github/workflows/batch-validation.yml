@@ -71,9 +71,10 @@ jobs:
       flutter_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-observe-') }}
   overlay-isolation:
     if: >-
-      !startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-') &&
+      startsWith(github.ref, 'refs/heads/codex/batch/android-input-networks-') ||
+      (!startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-') &&
       !startsWith(github.ref, 'refs/heads/codex/batch/android-observe-') &&
-      !startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
+      !startsWith(github.ref, 'refs/heads/codex/batch/android-input-'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -84,8 +85,10 @@ jobs:
         run: |
           rustup toolchain install 1.96.0 --profile minimal
           cargo +1.96.0 test --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --features native-fixture
+      - name: Verify v1 and v2 portable configuration golden fixtures
+        run: cargo +1.96.0 test --locked --manifest-path validation/transport-rust/Cargo.toml config_transfer
   native:
-    if: inputs.full || startsWith(github.ref, 'refs/heads/codex/batch/full-')
+    if: inputs.full || startsWith(github.ref, 'refs/heads/codex/batch/full-') || startsWith(github.ref, 'refs/heads/codex/batch/android-input-networks-')
     uses: ./.github/workflows/native-candidate-validation.yml
   original-network-probes:
     if: inputs.full || startsWith(github.ref, 'refs/heads/codex/batch/full-')

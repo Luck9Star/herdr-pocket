@@ -1,20 +1,27 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "referenceCommit": "6a2817fc02aeb552df251d9478753c22fd4738bb",
   "patch": "0001-portable-stream-handles.patch",
-  "patchSha256": "c6cf73a5e26bab665c226f37c81d55671f801e84d67d340bd18dc670529b06a4",
+  "patchSha256": "98897e41300496ad20b4708172c1c111f8ecab08e7cb279530b5a10f0e3620d7",
   "originalFiles": {
     "native/easytier/src/lib.rs": "34bca319f85822ae410cea3c3d108024611d9bb26f9b0f98796b0ceee1eef537",
     "native/easytier/Cargo.toml": "96034733949f653592893999adea7e99b6d816803fa4b168b4c7657d0b31c0c9",
     "native/easytier/include/heeler_easytier.h": "e10ddd95d85ed7e2de3d593fbb2298b79fc92dec6dca29794efec8ec238ab9fe"
   },
   "patchedFiles": {
-    "native/easytier/src/lib.rs": "36f6cefac460c05bb3701fb650ee03e9a109ec433427314d240dbd7023b2dc36",
+    "native/easytier/src/lib.rs": "91d829b94381f45970f0f9c3864ff7421a9ed9f8dd5b4095e2dcc85cd2973e00",
     "native/easytier/Cargo.toml": "fcc972f1a251f177fc9763e9f05658ddd065ab6eb44f7dc3fe140d53dc418df1",
-    "native/easytier/include/heeler_easytier.h": "c6dde554fd9126696054cdaad081d11a316aea30910bdaca4e5cea556269878a"
+    "native/easytier/include/heeler_easytier.h": "f61db5b607268bd8588af93c3c7d1623cf0e410ec6da93553af105f03a87c9c5"
   },
   "copiedModules": {
     "src/lib.rs": "2fa47339bacac80d6b4a16af56b500e89fcabe560e5ccddfdb0eb2e418e07c36",
     "src/tests.rs": "f369f6b7c28dbe0b7d28519891524d574f0a87e5af896e6955816fed78b85a2f"
-  }
+  },
+  "sourceTemplates": {
+    "header.txt": "d5774b51b0baaf5b76b506ef70b06e72d0a1f66e83f753124c6522b24b48d6d4",
+    "ffi.txt": "0e80ef6a2b4caa7dcef09d180804e75c5e3248ee8f777cfb45c110f27b353590",
+    "nodes.txt": "512820437596cde7130669c319aed2285938fadb61db176c92ae9f755bf83931",
+    "tests/managed_nodes.rs": "db691629237ff6123cb6334638f8b1f0cf038e55967e65ddaf08193a57d1434b"
+  },
+  "managedNodeAbiVersion": 1
 }

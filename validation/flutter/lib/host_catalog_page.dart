@@ -7,6 +7,7 @@ import 'pairing_page.dart';
 import 'host_tabs.dart';
 import 'remote_adapter.dart';
 import 'config_transfer_page.dart';
+import 'network_profiles_page.dart';
 
 class HostCatalogPage extends StatefulWidget {
   const HostCatalogPage({super.key,required this.tokens,required this.offlineBuilder,this.catalog,this.keys,this.tabs,this.adapterFactory});
@@ -26,7 +27,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
   bool busy = false;
   @override
   void initState() { super.initState(); catalog.addListener(changed); tabs.addListener(tabChanged); unawaited(catalog.load()); }
-  void changed() { if (catalog.ready) tabs.reconcile(catalog.profiles); if (mounted) setState(() {}); }
+  void changed() { tabs.reconcile(catalog.ready ? catalog.profiles : const [],catalog.networkProfiles); if (mounted) setState(() {}); }
   void tabChanged() { if (mounted) setState(() {}); }
   @override
   void dispose() { catalog.removeListener(changed); tabs.removeListener(tabChanged); if (widget.tabs == null) tabs.dispose(); if (widget.catalog == null) catalog.dispose(); super.dispose(); }
@@ -38,7 +39,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
   }
   Future<void> open([HostProfile? profile]) async {
     if (busy || !catalog.ready || catalog.writing || profile?.enabled == false) return;
-    if (profile != null && profile.hasIdentity) { tabs.open(profile,adapter:tabs.find(profile.id) == null ? widget.adapterFactory?.call(profile) : null); return; }
+    if (profile != null && profile.hasIdentity) {
+      tabs.open(profile,networks:catalog.networkProfiles,adapter:tabs.find(profile.id) == null ? widget.adapterFactory?.call(profile) : null); return; }
     tabs.select(null);
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,
       catalog:catalog,profileId:profile?.id)));
@@ -51,6 +53,51 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
       closeTabs:(ids) { for (final id in ids) { tabs.close(id); } })));
     if (mounted) setState(() {});
   }
+  Future<void> terminalPreferences() async {
+    if (busy || !catalog.ready || catalog.writing) return;
+    final captured = catalog.revision;
+    var size = catalog.terminalFontSize;
+    final result = await showDialog<int>(context:context,builder:(context) => StatefulBuilder(builder:(context,update) => AlertDialog(
+      title:const Text('终端字号'),content:Column(mainAxisSize:MainAxisSize.min,children:[
+        Text('$size px',key:const ValueKey('terminal-font-preview')),
+        Slider(key:const ValueKey('terminal-font-slider'),value:size.toDouble(),min:10,max:28,divisions:18,label:'$size px',
+          onChanged:(value) => update(() { size = value.round(); })),
+        const Text('仅改变本机文字显示。不会调整远端共享终端尺寸或发送输入。'),
+      ]),actions:[TextButton(onPressed:() => Navigator.pop(context),child:const Text('取消')),
+        FilledButton(key:const ValueKey('terminal-font-save'),onPressed:() => Navigator.pop(context,size),child:const Text('保存本机字号'))])));
+    if (result != null) await action(() => catalog.updateTerminalFontSize(result,expectedRevision:captured));
+  }
+
+  Future<void> networks() async {
+    if (busy || !catalog.ready || catalog.writing) return;
+    tabs.select(null);
+    await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => NetworkProfilesPage(catalog:catalog,
+      closeTabs:(ids) { for (final id in ids) { tabs.close(id); } })));
+    if (mounted) setState(() {});
+  }
+  Future<void> configureNetwork(HostProfile profile) async {
+    final captured = catalog.revision;
+    var selected = profile.networkProfileId ?? '';
+    final result = await showDialog<String>(context:context,builder:(context) => StatefulBuilder(builder:(context,update) => AlertDialog(
+      title:const Text('主机网络绑定'),scrollable:true,content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        const Text('选择可复用的公开网络配置。旧 provider 标签不会改变路由。系统直连沿用当前操作系统路由；overlay 无连接桥时会明确停止。'),
+        DropdownButtonFormField<String>(key:const ValueKey('host-network-choice'),initialValue:selected,isExpanded:true,
+          items:[const DropdownMenuItem(value:'',child:Text('系统直连（沿用系统路由）')),
+            for (final network in catalog.networkProfiles) DropdownMenuItem(value:network.id,enabled:network.enabled,
+              child:Text('${network.label} · ${network.provider}${network.enabled ? '' : ' · 停用'}',overflow:TextOverflow.ellipsis))],
+          onChanged:(value) { if (value != null) update(() { selected = value; }); }),
+      ]),actions:[TextButton(onPressed:() => Navigator.pop(context),child:const Text('取消')),
+        FilledButton(key:const ValueKey('host-network-preview'),onPressed:() => Navigator.pop(context,selected),child:const Text('预览绑定影响'))])));
+    if (result == null || !mounted || result == (profile.networkProfileId ?? '')) return;
+    final confirmed = await showDialog<bool>(context:context,builder:(context) => AlertDialog(title:const Text('确认主机网络更换'),
+      content:Text('实际受影响主机：${profile.label}\n将先停止此主机的本地标签与输入。${result.isEmpty ? '解除绑定后将改为系统直连，沿用系统路由。' : '将使用指定网络配置；手机桥未接入时返回 provider_unavailable。'}其他主机标签不变；不会自动连接或重放。'),
+      actions:[TextButton(onPressed:() => Navigator.pop(context,false),child:const Text('取消')),
+        FilledButton(key:const ValueKey('host-network-confirm'),onPressed:() => Navigator.pop(context,true),child:const Text('确认更换并停止此主机'))]));
+    if (confirmed != true || !mounted) return;
+    await action(() => catalog.update(profile.change(networkProfileId:result.isEmpty ? null : result,replaceNetwork:true,now:catalog.clock()),
+      expectedRevision:captured,beforeCommit:() => tabs.close(profile.id)));
+  }
+
   Future<void> rename(HostProfile profile) async {
     final controller = TextEditingController(text:profile.label);
     final label = await showDialog<String>(context:context,builder:(context) => AlertDialog(title:const Text('重命名本机资料'),
@@ -82,7 +129,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
     await action(() async {
       // Persist disabled before deleting the key. A crash between the two never
       // leaves an enabled profile pointing to an identity deliberately removed.
-      await catalog.update(profile.change(enabled:false,now:catalog.clock()));
+      await catalog.update(profile.change(enabled:false,now:catalog.clock()),beforeCommit:() => tabs.close(profile.id));
       if (profile.hasIdentity) await (widget.keys ?? NativeDeviceKeys()).delete(profile.restore(catalog.clock()).handle);
       await catalog.remove(profile.id);
       if (mounted) notice = '本机已删除 · 主机授权未因此撤销';
@@ -94,6 +141,10 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
     const SizedBox(height:12),
     FilledButton.icon(key:const ValueKey('hosts-add'),onPressed:catalog.ready && !busy && !catalog.writing && catalog.profiles.length < maxHostProfiles && catalog.pendingCreation == null ? () => open() : null,
       icon:const Icon(Icons.add),label:const Text('新增主机与设备配对')),
+    OutlinedButton.icon(key:const ValueKey('hosts-terminal-preferences'),onPressed:catalog.ready && !busy && !catalog.writing ? terminalPreferences : null,
+      icon:const Icon(Icons.text_fields),label:Text('终端字号 · ${catalog.terminalFontSize} px')),
+    OutlinedButton.icon(key:const ValueKey('hosts-networks'),onPressed:catalog.ready && !busy && !catalog.writing ? networks : null,
+      icon:const Icon(Icons.hub_outlined),label:const Text('网络管理 · Tailscale / EasyTier / ZeroTier')),
     OutlinedButton.icon(key:const ValueKey('hosts-transfer'),onPressed:catalog.ready && !busy && !catalog.writing && catalog.pendingCreation == null ? transfer : null,
       icon:const Icon(Icons.import_export),label:const Text('加密导出／导入公开主机资料')),
     if (catalog.pendingCreation != null) ...[
@@ -106,6 +157,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
     ],
     for (final profile in catalog.profiles) Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Text(profile.label,style:Theme.of(context).textTheme.titleMedium),
+      Text(profile.networkProfileId == null ? '系统直连（沿用系统路由）' : '网络绑定：${catalog.networkFor(profile)?.label} · ${catalog.networkFor(profile)?.enabled == true ? '本机启用' : '本机停用'}'),
       Text('${hostProviderLabel(profile.provider)} · 入网状态未知\n${profile.target['username']}@${profile.target['host']}:${profile.target['port']}\n会话 ${profile.target['session']} · ${profile.retired ? '已替换停用，保留原身份待撤销' : profile.enabled ? '本机启用' : '本机停用'}\n${profile.hasIdentity ? profile.restore(catalog.clock()).state : '导入未配对 · 无本机身份'} · 在线与主机授权需重新核验'),
       if (profile.retired && profile.hasIdentity) ExpansionTile(title:const Text('原配对公开请求（供主机核验撤销）'),
         children:[SelectableText(profile.restore(catalog.clock()).wire)]),
@@ -114,8 +166,9 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
         child:Text(profile.hasIdentity ? '审查此主机并主动连接' : '审查导入目标并在此设备配对')),
       Wrap(spacing:8,children:[
         TextButton(key:ValueKey('host-rename-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => rename(profile),child:const Text('重命名')),
-        TextButton(key:ValueKey('host-provider-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => configureProvider(profile),child:const Text('网络 provider 资料')),
-        TextButton(key:ValueKey('host-disable-${profile.id}'),onPressed:busy || !catalog.ready || profile.retired ? null : () => action(() => catalog.update(profile.change(enabled:!profile.enabled,now:catalog.clock()))),
+        TextButton(key:ValueKey('host-network-${profile.id}'),onPressed:busy || !catalog.ready || profile.retired ? null : () => configureNetwork(profile),child:const Text('选择／解除网络绑定')),
+        TextButton(key:ValueKey('host-provider-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => configureProvider(profile),child:const Text('旧 provider 标签（仅资料）')),
+        TextButton(key:ValueKey('host-disable-${profile.id}'),onPressed:busy || !catalog.ready || profile.retired ? null : () => action(() => catalog.update(profile.change(enabled:!profile.enabled,now:catalog.clock()),beforeCommit:() => tabs.close(profile.id))),
           child:Text(profile.enabled ? '本机停用（不撤销主机）' : '本机启用（仍需审查）')),
         TextButton(key:ValueKey('host-delete-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => remove(profile),child:const Text('删除本机资料与身份')),
       ]),
@@ -149,7 +202,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> {
   ]),body:SafeArea(child:Column(children:[
     tabBar(),
     if (tabs.notice != null) Padding(padding:const EdgeInsets.symmetric(horizontal:16),child:Text(tabs.notice!)),
-    if (tabs.active != null) Padding(padding:const EdgeInsets.symmetric(horizontal:16,vertical:4),child:Text('${hostProviderLabel(tabs.active!.provider)} · 仅配置，入网状态未知；隐藏标签停止观察，不终止远端任务',style:Theme.of(context).textTheme.bodySmall)),
+    if (tabs.active != null) Padding(padding:const EdgeInsets.symmetric(horizontal:16,vertical:4),child:Text('旧 provider 标签：${hostProviderLabel(tabs.active!.provider)} · 入网状态未知；实际网络按连接页审查，隐藏标签停止观察',style:Theme.of(context).textTheme.bodySmall)),
     Expanded(child:IndexedStack(index:tabs.activeIndex+1,children:[board(),for (final tab in tabs.tabs) KeyedSubtree(key:ValueKey('host-tab-view-${tab.id}'),child:tabNavigator(tab))])),
   ]))));
 }

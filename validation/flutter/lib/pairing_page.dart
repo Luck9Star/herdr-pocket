@@ -161,7 +161,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
         hostKey:checked.expectedFingerprint,device:device,now:now);
       if (widget.catalog != null) {
         phase = '保存主机资料';
-        final profile = HostProfile.create(label,values,p,now,provider:provider);
+        final profile = HostProfile.create(label,values,p,now,provider:provider,networkProfileId:savedProfile?.networkProfileId);
         await widget.catalog!.completeCreation(profile); savedProfile = profile;
         if (!mounted || ticket != revision) return;
       }
@@ -216,10 +216,11 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   }
   Future<void> connect() async {
     final p = pairing; if (p == null || busy || scanning || !pageVisible || !identityAvailable || profileBlocked || widget.catalog?.ready == false || savedProfile?.enabled == false) return;
+    final networkBinding = savedProfile == null ? null : widget.catalog?.freezeNetwork(savedProfile!);
     var ticket = p.generation;
     setState(() { busy = true; status = '请在连接页再次审查冻结目标；只有实际 pin 与 SSH 认证成功才标记已配对'; });
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => RemotePage(tokens:widget.tokens,
-      adapter:widget.adapter,visibility:widget.visibility,pairedTarget:target,deviceKeys:keys,keyHandle:p.handle,
+      adapter:widget.adapter,visibility:widget.visibility,networkBinding:networkBinding,pairedTarget:target,deviceKeys:keys,keyHandle:p.handle,
       devicePublicKey:p.request['public_key'] as String,onConnecting:() { ticket = p.connect(); },onAuthenticated:() { p.connectionResult(ticket,true); if (mounted) setState(() {}); },
       onStopped:() { if (['connecting','paired'].contains(p.state)) { p.generation++; p.state = 'waiting-connectivity'; } })));
     if (!mounted) return;
@@ -290,7 +291,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       final catalog = widget.catalog, previous = savedProfile;
       if (catalog != null && previous != null) {
         final current = catalog.profiles.where((p) => p.id == previous.id && p.enabled).toList();
-        if (!catalog.ready || current.length != 1 || !sameHostTarget(current.single.target,previous.target) ||
+        if (!catalog.ready || current.length != 1 || !sameHostTarget(current.single.target,previous.target) || current.single.networkProfileId != previous.networkProfileId ||
             jsonEncode(current.single.pairingRecord) != jsonEncode(previous.pairingRecord)) {
           profileBlocked = true;
           if (mounted) setState(() { status = '本机绑定或授权资料已改变 · 请关闭此标签重新读取审查，不沿用旧状态'; });
@@ -365,7 +366,8 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
           FilledButton(key:const ValueKey('pair-create'),onPressed:targetReviewed && !busy && !creationUnknown && !profileBlocked && platformAvailable ? create : null,
             child:const Text('在此设备创建独立身份并生成公开请求')),
         ] else ...[
-          if (savedProfile != null) Text('${hostProviderLabel(savedProfile!.provider)} · 入网状态未知；每标签独立连接'),
+          if (savedProfile != null) Text(savedProfile!.networkProfileId == null ? '系统直连（沿用系统路由） · 在线状态未知；每标签独立连接'
+            : '网络：${widget.catalog?.networkFor(savedProfile!)?.label} · ${widget.catalog?.networkFor(savedProfile!)?.provider} · 入网状态未知；每标签独立连接'),
           Text('状态 ${p.state} · 主机授权 ${p.authorization}',key:const ValueKey('pair-state')),
           Text('账号 ${p.request['account']}\n主机 ${p.request['host_key']}\n设备 ${pairingFingerprint(p.request['public_key'] as String)}\n到期 ${p.request['expires_at']}'),
           const SizedBox(height:12), SelectableText(p.wire,key:const ValueKey('pair-request')),

@@ -52,3 +52,7 @@ artifact 包含：
 ## 实验性移植修复
 
 后续独立 [portable stream 候选](portable-stream/README.md) 保留上述原始来源失败，新增 `uint64_t` handle 字节流 ABI，避免把 Windows SOCKET 作为 Unix fd。候选源码 `d60b8d0` 在 [run 40993901952](https://github.com/Luck9Star/herdr-pocket/actions/runs/40993901952) 三桌面完成真实 Heeler check、嵌入 loopback／取消测试、cdylib 链接及有限符号加载验证；具体 hash 与范围见该目录。仍无任何节点入网或真实 overlay TCP 结果，也尚未接入 GUI。
+
+## Managed node 源扩展（2026-11-06，未运行真实节点）
+
+portable candidate 增加独立、不可复用 epoch 的 managed-node start/status/stop/node-stream-connect 四符号，保留旧五个 stream 符号。它直接持有固定 instance，不依赖旧可替换 key；native stop 超时保留资源，stream drain 后才停止节点。精确来源、身份文件 adapter 审查与剩余限制见 [source audit](managed-source-audit.json) 和 [runtime 说明](../overlay-runtime/README.md)。本机只运行 fake engine/C ABI fixture、旧 portable loopback；新 patch 的真实固定 Heeler 编译/链接尚未执行，不沿用上面的历史库 hash 或桌面通过格。

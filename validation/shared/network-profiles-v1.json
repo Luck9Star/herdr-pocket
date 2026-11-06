@@ -1,0 +1,664 @@
+{
+  "schemaVersion": 1,
+  "scope": "Synthetic public profile validation only; no credentials, node identity, connectivity, or native platform evidence.",
+  "validProfiles": [
+    {
+      "name": "tailscale-custom-control",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "tailscale-default-control",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "",
+          "hostname": ""
+        }
+      }
+    },
+    {
+      "name": "easytier-public-peer-list",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "herdr-team",
+          "peers": [
+            "tcp://relay.example.test:11010",
+            "udp://[2001:db8::1]:11010",
+            "wss://relay.example.test/socket"
+          ]
+        }
+      }
+    },
+    {
+      "name": "zerotier-disabled-profile",
+      "profile": {
+        "id": "33333333333333333333333333333333",
+        "label": "Lab network",
+        "provider": "zerotier",
+        "enabled": false,
+        "revision": 1,
+        "settings": {
+          "networkId": "0123456789abcdef"
+        }
+      }
+    }
+  ],
+  "invalidProfiles": [
+    {
+      "name": "unknown-public-field",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        },
+        "secret": "synthetic-rejected"
+      }
+    },
+    {
+      "name": "unsupported-provider",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "direct",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "invalid-id",
+      "profile": {
+        "id": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "revision-zero",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 0,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "revision-boolean",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": true,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "revision-fraction",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1.5,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "revision-overflow",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 2147483648,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "enabled-integer",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": 1,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "blank-label",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "  ",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "label-c1-control",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "badlabel",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "label-utf8-too-long",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "测测测测测测测测测测测测测测测测测测测测测测测测测测测测测测测测测",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "control-http",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "http://control.example.test",
+          "hostname": ""
+        }
+      }
+    },
+    {
+      "name": "control-userinfo",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://user@control.example.test",
+          "hostname": ""
+        }
+      }
+    },
+    {
+      "name": "control-query",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test?token=synthetic",
+          "hostname": ""
+        }
+      }
+    },
+    {
+      "name": "control-empty-query",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test?",
+          "hostname": ""
+        }
+      }
+    },
+    {
+      "name": "control-fragment",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test#fragment",
+          "hostname": ""
+        }
+      }
+    },
+    {
+      "name": "control-whitespace",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test/a b",
+          "hostname": ""
+        }
+      }
+    },
+    {
+      "name": "hostname-trailing-hyphen",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "",
+          "hostname": "phone-"
+        }
+      }
+    },
+    {
+      "name": "hostname-too-long",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "",
+          "hostname": "pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"
+        }
+      }
+    },
+    {
+      "name": "wrong-provider-settings",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "networkId": "0123456789abcdef"
+        }
+      }
+    },
+    {
+      "name": "unknown-setting",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test/tenant",
+          "hostname": "pocket-phone",
+          "authKey": "synthetic-rejected"
+        }
+      }
+    },
+    {
+      "name": "empty-network-name",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "",
+          "peers": [
+            "tcp://relay.example.test:11010"
+          ]
+        }
+      }
+    },
+    {
+      "name": "network-name-utf8-too-long",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "测测测测测测测测测测测测测测测测测测测测测测",
+          "peers": [
+            "tcp://relay.example.test:11010"
+          ]
+        }
+      }
+    },
+    {
+      "name": "no-peers",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "mesh",
+          "peers": []
+        }
+      }
+    },
+    {
+      "name": "duplicate-peer",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "mesh",
+          "peers": [
+            "tcp://relay.example.test:11010",
+            "tcp://relay.example.test:11010"
+          ]
+        }
+      }
+    },
+    {
+      "name": "tcp-missing-port",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "mesh",
+          "peers": [
+            "tcp://relay.example.test"
+          ]
+        }
+      }
+    },
+    {
+      "name": "peer-port-zero",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "mesh",
+          "peers": [
+            "tcp://relay.example.test:0"
+          ]
+        }
+      }
+    },
+    {
+      "name": "peer-port-too-large",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "mesh",
+          "peers": [
+            "udp://relay.example.test:65536"
+          ]
+        }
+      }
+    },
+    {
+      "name": "tcp-path",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "mesh",
+          "peers": [
+            "tcp://relay.example.test:11010/path"
+          ]
+        }
+      }
+    },
+    {
+      "name": "peer-with-userinfo",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "mesh",
+          "peers": [
+            "wss://user@relay.example.test/socket"
+          ]
+        }
+      }
+    },
+    {
+      "name": "peer-query",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "mesh",
+          "peers": [
+            "wss://relay.example.test/socket?key=synthetic"
+          ]
+        }
+      }
+    },
+    {
+      "name": "peer-empty-fragment",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "mesh",
+          "peers": [
+            "wss://relay.example.test/#"
+          ]
+        }
+      }
+    },
+    {
+      "name": "peer-non-string",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "mesh",
+          "peers": [
+            false
+          ]
+        }
+      }
+    },
+    {
+      "name": "network-id-zero",
+      "profile": {
+        "id": "33333333333333333333333333333333",
+        "label": "Lab network",
+        "provider": "zerotier",
+        "enabled": false,
+        "revision": 1,
+        "settings": {
+          "networkId": "0000000000000000"
+        }
+      }
+    },
+    {
+      "name": "network-id-uppercase",
+      "profile": {
+        "id": "33333333333333333333333333333333",
+        "label": "Lab network",
+        "provider": "zerotier",
+        "enabled": false,
+        "revision": 1,
+        "settings": {
+          "networkId": "0123456789ABCDEF"
+        }
+      }
+    },
+    {
+      "name": "network-id-length",
+      "profile": {
+        "id": "33333333333333333333333333333333",
+        "label": "Lab network",
+        "provider": "zerotier",
+        "enabled": false,
+        "revision": 1,
+        "settings": {
+          "networkId": "0123456789abcde"
+        }
+      }
+    },
+    {
+      "name": "control-non-ascii",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test/测试",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "control-backslash",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test\\path",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "control-zero-port",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https://control.example.test:0",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "control-empty-authority",
+      "profile": {
+        "id": "11111111111111111111111111111111",
+        "label": "Office tailnet",
+        "provider": "tailscale",
+        "enabled": true,
+        "revision": 1,
+        "settings": {
+          "controlUrl": "https:////control.example.test",
+          "hostname": "pocket-phone"
+        }
+      }
+    },
+    {
+      "name": "websocket-zero-port",
+      "profile": {
+        "id": "22222222222222222222222222222222",
+        "label": "Team mesh",
+        "provider": "easytier",
+        "enabled": true,
+        "revision": 3,
+        "settings": {
+          "networkName": "herdr-team",
+          "peers": [
+            "wss://relay.example.test:0"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -62,3 +62,9 @@ M1b [run 41060251076](../../docs/evidence/mobile-observe/41060251076/README.md) 
 Linux Tauri 用 WebKitWebDriver 驱动窗口，观测 xterm 写回调消费的 full/delta、停止后的陈旧状态。Flutter Widget 驱动产品配对页和同一适配器，使用明确注入的测试 signer／写入标记存储。Android Tauri 另建 API35 x86_64 临时模拟器，以 adb reverse 连接同一 runner 的 loopback sshd，驱动真实 WebView 和 AndroidKeyStore 签名路径。每个场景单独记录实际结果。构建脚本存在不等于设备结果。
 
 WebDriver 测试采用官方 [Tauri 测试说明](https://v2.tauri.app/develop/tests/webdriver/)，固定 tauri-driver 2.1.0。Android AVD 使用[官方命令行工具](https://developer.android.com/studio/run/emulator-commandline)，记录实际 image/emulator revision，使用完成后关闭本次启动的 AVD。编译上游候选只在临时 checkout，不更新用户主机。
+
+### Android 逐键、草稿与隐藏标签
+
+`codex/batch/android-input-*` 集中运行两个手机候选。每条路线先在独立 API 35 AVD 中运行原版主机用例，必须收到零字节。受保护输入用例另开一次性 AVD，要求同时指定 `--android-guarded-input` 和 `--input-fixture`。runner 核对同一来源构建的二进制、固定上游 commit、补丁字节、能力自检和 SHA，再创建临时 host/helper。两种模式各自输出 manifest。
+
+用户在已选 pane 上发送单个 `k`，编辑尚未发送的草稿 `Pocket测`，回到看板，再主动打开原标签、连接、取得该 pane 的新 full。只有再次预览并确认后才发送草稿。验收要求两笔请求 ID 不同、分别受理 1 和 9 字节，pane 与稳定 terminal ID 均匹配主机独立查询的快照。真实临时 PTY 最终须恰好收到 UTF-8 的 `kPocket测`（共 10 字节，无回车）。清理后再次核对内容，拒绝额外输入。产物仅保留数字、公开测试标识与清理状态。此流程覆盖模拟器 GUI 和隔离 SSH 链路，物理设备、真实中文输入法与组网状态需要另验。

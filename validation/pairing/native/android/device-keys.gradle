@@ -10,6 +10,7 @@ android {
     sourceSets {
         main {
             java.srcDir sharedKeys
+            java.srcDir new File(sharedKeys, '../../../config-transfer/android').canonicalFile
             java.exclude 'tests/**'
             assets.srcDir new File(sharedKeys, 'notices')
         }

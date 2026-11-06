@@ -16,7 +16,7 @@ class HostTab {
   final navigator = GlobalKey<NavigatorState>();
   final visible = ValueNotifier<bool>(false);
   static String bindingFor(HostProfile p) => jsonEncode({'id':p.id,'target':p.target,
-    'handle':p.pairingRecord['handle'],'publicKey':(p.pairingRecord['request'] as Map)['public_key']});
+    'handle':p.pairingRecord['handle'],'publicKey':p.hasIdentity ? (p.pairingRecord['request'] as Map)['public_key'] : null});
   void dispose() { visible.value = false; visible.dispose(); }
 }
 
@@ -31,7 +31,7 @@ class HostTabs extends ChangeNotifier {
   HostTab? get active => activeIndex < 0 ? null : _tabs[activeIndex];
   HostTab? find(String id) { final matches = _tabs.where((t) => t.id == id); return matches.isEmpty ? null : matches.single; }
   bool open(HostProfile profile,{RemoteReadOnlyAdapter? adapter}) {
-    if (!profile.enabled) return false;
+    if (!profile.enabled || profile.retired || !profile.hasIdentity) return false;
     var tab = find(profile.id);
     if (tab == null) {
       if (_tabs.length >= maxOpenHostTabs) { notice = '最多保留 $maxOpenHostTabs 个标签 · 请先关闭不需要的本地视图'; notifyListeners(); return false; }

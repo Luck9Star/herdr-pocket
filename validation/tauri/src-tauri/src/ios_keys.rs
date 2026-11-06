@@ -38,6 +38,26 @@ struct RootPath {
 struct Scan {
     text: String,
 }
+#[derive(Deserialize)]
+struct DocumentOpen { data: Option<String> }
+#[derive(Deserialize)]
+struct DocumentSave { saved: bool }
+
+pub async fn open_document<R: Runtime>(app: &tauri::AppHandle<R>) -> std::result::Result<Option<Vec<u8>>, String> {
+    let plugin=app.try_state::<IOSPlugin<R>>().ok_or("document_unavailable")?;
+    let reply:DocumentOpen=plugin.0.run_mobile_plugin_async("openDocument", serde_json::json!({})).await.map_err(|_|"document_unavailable")?;
+    let Some(data)=reply.data else {return Ok(None)};
+    if data.len()>87448 {return Err("document_invalid".into());}
+    let bytes=Base64::decode_vec(&data).map_err(|_|"document_invalid")?;
+    if bytes.is_empty() || bytes.len()>65586 {return Err("document_invalid".into());}
+    Ok(Some(bytes))
+}
+pub async fn save_document<R: Runtime>(app: &tauri::AppHandle<R>, bytes: &[u8]) -> std::result::Result<bool, String> {
+    if bytes.is_empty() || bytes.len()>65586 {return Err("document_invalid".into());}
+    let plugin=app.try_state::<IOSPlugin<R>>().ok_or("document_unavailable")?;
+    let reply:DocumentSave=plugin.0.run_mobile_plugin_async("saveDocument",serde_json::json!({"data":Base64::encode_string(bytes)})).await.map_err(|_|"document_unavailable")?;
+    Ok(reply.saved)
+}
 
 struct IOSStore<R: Runtime>(PluginHandle<R>);
 struct IOSPlugin<R: Runtime>(PluginHandle<R>);

@@ -20,3 +20,4 @@ target=app/'src/main/java/org/herdr/pocket/DeviceKeysPlugin.kt'
 target.parent.mkdir(parents=True,exist_ok=True)
 shutil.copyfile(root/'android/DeviceKeysPlugin.kt',target)
 shutil.copyfile(root/'android/PairScanPlugin.kt',target.with_name('PairScanPlugin.kt'))
+shutil.copyfile(root/'android/ConfigDocumentPlugin.kt',target.with_name('ConfigDocumentPlugin.kt'))

@@ -15,29 +15,42 @@ concurrency:
   cancel-in-progress: false
 jobs:
   helper:
-    if: "!startsWith(github.ref, 'refs/heads/codex/batch/android-observe-')"
+    if: >-
+      !startsWith(github.ref, 'refs/heads/codex/batch/android-observe-') &&
+      !startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
     uses: ./.github/workflows/helper-validation.yml
   pairing:
     if: >-
       !startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-') &&
-      !startsWith(github.ref, 'refs/heads/codex/batch/android-observe-')
+      !startsWith(github.ref, 'refs/heads/codex/batch/android-observe-') &&
+      !startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
     uses: ./.github/workflows/pairing-validation.yml
   flutter:
+    if: "!startsWith(github.ref, 'refs/heads/codex/batch/android-input-')"
     uses: ./.github/workflows/flutter-candidate-validation.yml
     with:
       android_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-') || startsWith(github.ref, 'refs/heads/codex/batch/phones-') }}
       include_ios: ${{ startsWith(github.ref, 'refs/heads/codex/batch/phones-') }}
   tauri:
+    if: "!startsWith(github.ref, 'refs/heads/codex/batch/android-input-')"
     uses: ./.github/workflows/tauri-validation.yml
     with:
       android_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-') || startsWith(github.ref, 'refs/heads/codex/batch/phones-') }}
       include_ios: ${{ startsWith(github.ref, 'refs/heads/codex/batch/phones-') && !startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-') }}
   android-emulator:
+    if: "!startsWith(github.ref, 'refs/heads/codex/batch/android-input-')"
     uses: ./.github/workflows/paired-android-emulator.yml
+  android-input-emulator:
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/heads/codex/batch/android-input-') }}
+    needs: build-input-fixture
+    uses: ./.github/workflows/paired-android-emulator.yml
+    with:
+      guarded_input: ${{ needs.build-input-fixture.result == 'success' }}
   transport:
     if: >-
       !startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-') &&
-      !startsWith(github.ref, 'refs/heads/codex/batch/android-observe-')
+      !startsWith(github.ref, 'refs/heads/codex/batch/android-observe-') &&
+      !startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
     uses: ./.github/workflows/mobile-remote-validation.yml
   build-input-fixture:
     if: >-
@@ -45,18 +58,21 @@ jobs:
       !startsWith(github.ref, 'refs/heads/codex/batch/android-observe-')
     uses: ./.github/workflows/input-extension-validation.yml
   paired-input:
+    if: "!startsWith(github.ref, 'refs/heads/codex/batch/android-input-')"
     needs: build-input-fixture
     uses: ./.github/workflows/paired-gui-validation.yml
     with:
       input_fixture: true
   paired-gui:
+    if: "!startsWith(github.ref, 'refs/heads/codex/batch/android-input-')"
     uses: ./.github/workflows/paired-gui-validation.yml
     with:
       flutter_only: ${{ startsWith(github.ref, 'refs/heads/codex/batch/android-observe-') }}
   overlay-isolation:
     if: >-
       !startsWith(github.ref, 'refs/heads/codex/batch/phones-observe-') &&
-      !startsWith(github.ref, 'refs/heads/codex/batch/android-observe-')
+      !startsWith(github.ref, 'refs/heads/codex/batch/android-observe-') &&
+      !startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

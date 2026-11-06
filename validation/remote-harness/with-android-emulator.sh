@@ -3,6 +3,19 @@
 set -euo pipefail
 [[ ${GITHUB_ACTIONS:-} = true && ${GITHUB_REF:-} = refs/heads/codex/* && $# -gt 0 ]]
 : "${RUNNER_TEMP:?}" "${ANDROID_HOME:?}"
+avd_evidence=${AVD_EVIDENCE_DIR:-"$RUNNER_TEMP/avd-evidence"}
+temp_real=$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$RUNNER_TEMP")
+evidence_candidate=$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$avd_evidence")
+case "$evidence_candidate" in
+  "$temp_real"/*) ;;
+  *) echo 'AVD_EVIDENCE_DIR must be inside RUNNER_TEMP' >&2; exit 1 ;;
+esac
+mkdir -p "$evidence_candidate"
+evidence_real=$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$evidence_candidate")
+case "$evidence_real" in
+  "$temp_real"/*) ;;
+  *) echo 'AVD_EVIDENCE_DIR must be inside RUNNER_TEMP' >&2; exit 1 ;;
+esac
 export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 export ANDROID_SERIAL=emulator-5554
 export ANDROID_AVD_HOME
@@ -17,12 +30,14 @@ fi
 if [[ ! -w /dev/kvm ]]; then
   sudo setfacl -m "u:$(id -un):rw" /dev/kvm
 fi
-sdkmanager --install 'emulator' 'platform-tools' "$image"
+if [[ ! -x "$ANDROID_HOME/emulator/emulator" || ! -x "$ANDROID_HOME/platform-tools/adb" ||
+      ! -f "$ANDROID_HOME/system-images/android-35/google_apis/x86_64/source.properties" ]]; then
+  sdkmanager --install 'emulator' 'platform-tools' "$image"
+fi
 # Save actual tool/image revisions as the SDK registry can update this package.
-mkdir -p "$RUNNER_TEMP/avd-evidence"
-cp "$ANDROID_HOME/system-images/android-35/google_apis/x86_64/source.properties" "$RUNNER_TEMP/avd-evidence/image.properties"
+cp "$ANDROID_HOME/system-images/android-35/google_apis/x86_64/source.properties" "$evidence_real/image.properties"
 # The launcher sets its private library path. Check the actual launcher.
-emulator -version > "$RUNNER_TEMP/avd-evidence/emulator-version.txt"
+emulator -version > "$evidence_real/emulator-version.txt"
 printf 'no\n' | avdmanager create avd --name "$name" --package "$image" --device pixel_5
 emulator -avd "$name" -port 5554 -accel on -no-window -no-audio -no-boot-anim -no-snapshot -gpu software > "$RUNNER_TEMP/avd.log" 2>&1 &
 avd_pid=$!

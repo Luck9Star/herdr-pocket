@@ -18,6 +18,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+from guarded_input import EvidenceError, expected_bytes, validate_mode
 
 REPO = Path(__file__).resolve().parents[2]
 HERDR_SHA = '14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d'
@@ -185,6 +186,37 @@ def gui_report_fields(route, result, input_fixture=False):
     return fields
 
 
+def load_input_fixture(path, env):
+    expected = Path(env['RUNNER_TEMP']).resolve() / 'input-fixture'
+    if path.resolve() != expected or path.is_symlink():
+        raise ProbeFailure('unexpected_fixture_path')
+    manifest, executable = expected / 'manifest.json', expected / 'herdr'
+    if (manifest.is_symlink() or executable.is_symlink() or not manifest.is_file() or
+            not executable.is_file() or not 0 < manifest.stat().st_size <= 4096 or
+            not 0 < executable.stat().st_size <= 200 * 1024 * 1024):
+        raise ProbeFailure('input_fixture_file_invalid')
+    metadata = json.loads(manifest.read_bytes())
+    patch = REPO / 'validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch'
+    archived_patch = expected / patch.name
+    if (archived_patch.is_symlink() or not archived_patch.is_file() or
+            archived_patch.stat().st_size != patch.stat().st_size or archived_patch.read_bytes() != patch.read_bytes()):
+        raise ProbeFailure('input_fixture_patch_mismatch')
+    source = {'sourceSHA': env['GITHUB_SHA'], 'upstreamSHA': HERDR_COMMIT,
+              'patchSHA256': hashlib.sha256(patch.read_bytes()).hexdigest(),
+              'buildProfile': 'dev', 'configDirectory': 'herdr',
+              'scope': 'isolated validation fixture'}
+    if (not isinstance(metadata, dict) or any(metadata.get(k) != v for k, v in source.items())
+            or metadata.get('binaryDebugAssertions') is not False
+            or metadata.get('readinessAndCapabilitySmokePassed') is not True):
+        raise ProbeFailure('input_fixture_source_mismatch')
+    binary = executable.read_bytes()
+    digest = hashlib.sha256(binary).hexdigest()
+    if digest != metadata.get('binarySHA256'):
+        raise ProbeFailure('input_fixture_digest_mismatch')
+    return binary, dict(source, binarySHA256=digest, binaryDebugAssertions=False,
+                        readinessAndCapabilitySmokePassed=True)
+
+
 PTY_FIELDS = {'schemaVersion','state','endReason','initialRows','initialColumns','rows','columns',
               'samples','changes','readErrors','captureErrors','winchHandlers','signalSamples',
               'signalAvailable','signalsMayCoalesce','elapsedMs','sampleIntervalMs','maxSampleGapMs','terminationSignal'}
@@ -233,9 +265,14 @@ def main():
     parser.add_argument('--paired-gui', choices=('flutter', 'tauri', 'tauri-android', 'flutter-android'))
     parser.add_argument('--tauri-app', type=Path)
     parser.add_argument('--input-fixture', type=Path)
+    parser.add_argument('--android-guarded-input', action='store_true')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     require_runner(os.environ)
+    try:
+        validate_mode(args.paired_gui, bool(args.input_fixture), args.android_guarded_input)
+    except EvidenceError as exc:
+        raise ProbeFailure(str(exc)) from None
     if ((args.paired_gui in ('tauri','tauri-android') and not args.tauri_app) or
             (args.paired_gui not in ('tauri','tauri-android') and not args.flutter_app)):
         parser.error('provide the application built for this route')
@@ -325,18 +362,7 @@ def main():
         version_text = (version.stdout + version.stderr).decode('ascii', errors='replace').strip()
         report['openSshVersion'] = version_text if re.fullmatch(r'OpenSSH_[ -~]{1,240}', version_text) else 'not_recorded'
         if args.input_fixture:
-            candidate = args.input_fixture.resolve()
-            if not args.paired_gui or candidate != Path(os.environ['RUNNER_TEMP']).resolve() / 'input-fixture':
-                raise ProbeFailure('unexpected_fixture_path')
-            metadata = json.loads((candidate / 'manifest.json').read_text())
-            patch = REPO/'validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch'
-            if (metadata.get('upstreamSHA') != HERDR_COMMIT or metadata.get('sourceSHA') != os.environ['GITHUB_SHA']
-                    or metadata.get('patchSHA256') != hashlib.sha256(patch.read_bytes()).hexdigest()):
-                raise ProbeFailure('input_fixture_source_mismatch')
-            binary = (candidate / 'herdr').read_bytes()
-            if len(binary) > 200 * 1024 * 1024 or hashlib.sha256(binary).hexdigest() != metadata.get('binarySHA256'):
-                raise ProbeFailure('input_fixture_digest_mismatch')
-            report['herdr'] = metadata
+            binary, report['herdr'] = load_input_fixture(args.input_fixture, env)
         else:
             with urllib.request.urlopen(HERDR_URL, timeout=60) as response:
                 binary = response.read(100 * 1024 * 1024 + 1)
@@ -415,7 +441,8 @@ LogLevel VERBOSE
         if args.paired_gui:
             # Import the pairing dependencies only for the isolated GUI workflow.
             from paired_gui import run_gui
-            report.update(milestone='M1c-pairing-dashboard-observe',
+            milestone = 'M1d-mobile-guarded-input' if args.android_guarded_input else 'M1c-pairing-dashboard-observe'
+            report.update(milestone=milestone,
                           **gui_report_fields(args.paired_gui, {'status': 'failed'}, bool(args.input_fixture)))
             report.pop('cancelScope', None)
             result = run_gui(args, root, env, config)
@@ -496,6 +523,15 @@ LogLevel VERBOSE
             report['sharedPty'] = final_pty_evidence(root)
             if report['status'] == 'passed' and not report['sharedPty']['noObservedResize']:
                 report.update(status='failed', errorCode='shared_pty_size_not_confirmed')
+            if report['status'] == 'passed':
+                try:
+                    with (root / 'received.bin').open('rb') as sink:
+                        captured = sink.read(4097)
+                    report['receivedInputBytes'] = len(captured)
+                    if captured != expected_bytes(args.paired_gui, bool(args.input_fixture)):
+                        report.update(status='failed', errorCode='final_received_input_mismatch')
+                except OSError:
+                    report.update(status='failed', errorCode='final_received_input_unavailable')
         stopped = True
         for proc, handle in reversed(processes):
             if proc.poll() is None:

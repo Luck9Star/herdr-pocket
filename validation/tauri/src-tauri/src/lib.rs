@@ -56,6 +56,12 @@ async fn remote_read_once(config:RemoteConfig,on_event:Channel<RemoteProgress>,s
     result.map(|snapshot|RemoteReply{generation,snapshot}).map_err(str::to_string)
 }
 mod hosts;
+mod config_document;
+#[cfg(target_os = "macos")]
+mod macos_documents;
+mod config_exchange;
+use config_document::{config_document_open, config_document_platform, config_document_save};
+use config_exchange::{config_apply, config_discard, config_export, config_preview};
 use hosts::{Hosts, Target};
 #[tauri::command]
 async fn host_init(app:tauri::AppHandle,hosts:State<'_,Hosts>)->Result<(),String> {
@@ -182,6 +188,7 @@ async fn pair_reset(state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteF
 #[derive(Default)]
 struct RemoteFlow {
     owner: Option<u64>,
+    host_id: Option<String>,
     cancelled_through: u64,
     select: Option<(u64, tokio::sync::oneshot::Sender<String>)>,
     ack: Option<(u64, u64, tokio::sync::oneshot::Sender<()>)>,
@@ -201,7 +208,7 @@ impl RemoteFlow {
     }
     fn finish(&mut self, client_generation:u64, generation:u64, gate:&mut AttemptGate)->bool {
         if self.owner!=Some(client_generation) { return false; }
-        self.select=None; self.ack=None; self.owner=None; if let Some((_,input))=self.input.take() {input.invalidate();}
+        self.select=None; self.ack=None; self.owner=None; self.host_id=None; if let Some((_,input))=self.input.take() {input.invalidate();}
         gate.finish(generation)
     }
 }
@@ -228,8 +235,21 @@ enum ObserveEvent {
     InputReady { generation:u64, unknown:bool, recovery_status:&'static str },
 }
 #[tauri::command]
-async fn remote_observe(config:RemoteConfig,device:bool,client_generation:u64,on_event:Channel<ObserveEvent>,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>)->Result<(),String> {
-    let (generation,cancel)={ let mut f=flow.lock().map_err(|_|"state_unavailable")?; if pairing.restore_required.load(Ordering::SeqCst) {return Err("host_restore_required".into());} let mut g=state.lock().map_err(|_|"state_unavailable")?; f.begin(client_generation,&mut g).map_err(str::to_string)? };
+async fn remote_observe(config:RemoteConfig,device:bool,host_id:Option<String>,client_generation:u64,on_event:Channel<ObserveEvent>,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>,hosts:State<'_,Hosts>)->Result<(),String> {
+    let (generation,cancel)={
+        let mut f=flow.lock().map_err(|_|"state_unavailable")?;
+        if pairing.restore_required.load(Ordering::SeqCst) {return Err("host_restore_required".into());}
+        if let Some(id) = &host_id {
+            let record = hosts.get(id)?;
+            if !record.enabled || record.retired || record.target != Target::from_config(&config) {
+                return Err("host_selection_changed".into());
+            }
+        }
+        let mut g=state.lock().map_err(|_|"state_unavailable")?;
+        let attempt = f.begin(client_generation,&mut g).map_err(str::to_string)?;
+        f.host_id = host_id;
+        attempt
+    };
     let device_auth=if device {
         let lease=pairing.enter();
         if let Err(e)=lease { let mut f=flow.lock().map_err(|_|"state_unavailable")?; let mut g=state.lock().map_err(|_|"state_unavailable")?; f.finish(client_generation,generation,&mut g); return Err(e); }
@@ -288,10 +308,19 @@ fn remote_input_recover(generation:u64,epoch:u64,flow:State<'_,Arc<Mutex<RemoteF
     current_input(&flow,generation)?.acknowledge_unknown(epoch).map_err(str::to_string)
 }
 #[tauri::command]
-async fn remote_input_send(generation:u64,epoch:u64,bytes:Vec<u8>,draft:bool,flow:State<'_,Arc<Mutex<RemoteFlow>>>) -> Result<&'static str,String> {
+async fn remote_input_send(generation:u64,epoch:u64,bytes:Vec<u8>,draft:bool,flow:State<'_,Arc<Mutex<RemoteFlow>>>) -> Result<serde_json::Value,String> {
     use herdr_readonly_transport::input::SendOutcome;
     let input=current_input(&flow,generation)?;
-    input.send(epoch,bytes,draft).await.map(|outcome|match outcome {SendOutcome::Accepted=>"accepted",SendOutcome::Rejected=>"rejected",SendOutcome::Unknown=>"unknown"}).map_err(str::to_string)
+    let outcome = input.send(epoch, bytes, draft).await.map_err(str::to_string)?;
+    Ok(match outcome {
+        SendOutcome::Accepted(receipt) => serde_json::json!({"status":"accepted","receipt":receipt}),
+        SendOutcome::Rejected => serde_json::json!({"status":"rejected"}),
+        SendOutcome::RecoveryLocked { receipt: Some(receipt) } =>
+            serde_json::json!({"status":"accepted","receipt":receipt,"recoveryRequired":true}),
+        SendOutcome::RecoveryLocked { receipt: None } =>
+            serde_json::json!({"status":"rejected","recoveryRequired":true}),
+        SendOutcome::Unknown => serde_json::json!({"status":"unknown"}),
+    })
 }
 #[tauri::command]
 fn remote_select(generation:u64,pane_id:String,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
@@ -332,19 +361,21 @@ pub fn run() {
     #[cfg(target_os="windows")]
     let builder=builder.manage(PairingState::new(Arc::new(UnavailableKeyStore)));
     #[cfg(target_os="android")]
-    let builder=builder.plugin(android_keys::init()).plugin(camera::android_plugin());
+    let builder=builder.plugin(android_keys::init()).plugin(camera::android_plugin()).plugin(config_document::android_plugin());
     #[cfg(target_os="ios")]
     let builder=builder.plugin(ios_keys::init());
     builder
         .manage(Mutex::new(Streams::default()))
         .manage(Mutex::new(AttemptGate::default()))
         .manage(Hosts::default())
+        .manage(config_exchange::Transfers::default())
         .setup(|app| {
             let recovery=app.path().app_local_data_dir().ok().map(|p|herdr_readonly_transport::recovery::Recovery::open(p.join("remote-input-v1"))).unwrap_or_else(herdr_readonly_transport::recovery::Recovery::disabled);
             let flow=RemoteFlow {recovery:Some(recovery),..Default::default()};
             app.manage(Arc::new(Mutex::new(flow))); Ok(())
         })
-        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove])
+        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,
+            config_document_platform,config_document_open,config_document_save,config_export,config_preview,config_apply,config_discard])
         .run(tauri::generate_context!())
         .expect("Tauri probe startup failed");
 }

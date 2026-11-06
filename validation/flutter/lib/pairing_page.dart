@@ -64,10 +64,19 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
         final matches = catalog.profiles.where((p) => p.id == widget.profileId && p.enabled).toList();
         if (matches.length != 1) { profileBlocked = true; status = '指定主机资料不存在或已停用 · 不回退其他主机'; }
         else {
-          savedProfile = matches.single; provider = savedProfile!.provider; pairing = savedProfile!.restore(now); target = savedProfile!.target;
-          identityAvailable = false;
-          status = '已恢复原主机与设备身份 · 正在核验本机句柄；不会自动连接';
-          unawaited(checkExistingIdentity());
+          savedProfile = matches.single; provider = savedProfile!.provider; target = savedProfile!.target;
+          if (savedProfile!.hasIdentity) {
+            pairing = savedProfile!.restore(now); identityAvailable = false;
+            status = '已恢复原主机与设备身份 · 正在核验本机句柄；不会自动连接';
+            unawaited(checkExistingIdentity());
+          } else {
+            for (final entry in fields.entries) {
+              if (target![entry.key] != null) entry.value.text = target![entry.key].toString();
+            }
+            profileBlocked = catalog.pendingCreation != null;
+            status = profileBlocked ? '上次创建结果待核实 · 禁止创建替代身份'
+              : '已导入公开连接资料 · 未带入信任或设备身份；核验目标后在此设备明确创建新配对';
+          }
         }
       }
     } else {
@@ -122,10 +131,10 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       final device = fields['device']!.text;
       if (!RegExp(r'^[A-Za-z0-9 -]{1,48}$').hasMatch(device)) throw const RemoteFailure('invalid_pairing');
       final fullLabel = '${checked.host} / ${checked.session}';
-      final label = fullLabel.length > 64 ? fullLabel.substring(0,64) : fullLabel;
+      final label = savedProfile?.label ?? (fullLabel.length > 64 ? fullLabel.substring(0,64) : fullLabel);
       if (widget.catalog != null) {
         phase = '保存创建意图';
-        await widget.catalog!.beginCreation(values,label);
+        await widget.catalog!.beginCreation(values,label,sourceProfileId:savedProfile?.hasIdentity == false ? savedProfile!.id : null);
         if (!mounted || ticket != revision) { await widget.catalog!.clearUnstartedCreation(widget.catalog!.pendingCreation!['id'] as String); return; }
       }
       createStarted = true; PairingPage.retainedCreationUnknown = true;
@@ -155,7 +164,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
         status = '等待主机审查 · 授权结果未知；公开请求有效 600 秒'; });
       widget.onRequest?.call(Map.unmodifiable(p.request));
     } catch (_) {
-      if (handle != null && savedProfile == null) { try { await keys.delete(handle); if (widget.catalog?.pendingCreation?['handle'] == handle) await widget.catalog!.clearDeletedCreation(handle); PairingPage.retainedOrphan = null; } catch (_) { PairingPage.retainedOrphan = handle; } }
+      if (handle != null && (savedProfile == null || !savedProfile!.hasIdentity)) { try { await keys.delete(handle); if (widget.catalog?.pendingCreation?['handle'] == handle) await widget.catalog!.clearDeletedCreation(handle); PairingPage.retainedOrphan = null; } catch (_) { PairingPage.retainedOrphan = handle; } }
       PairingPage.retainedCreationUnknown = createStarted;
       if (mounted && ticket == revision) setState(() { busy = false; targetReviewed = false;
         creationUnknown = createStarted;
@@ -250,7 +259,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       final catalog = widget.catalog, previous = savedProfile;
       if (catalog != null && previous != null) {
         final current = catalog.profiles.where((p) => p.id == previous.id && p.enabled).toList();
-        if (!catalog.ready || current.length != 1 || jsonEncode(current.single.target) != jsonEncode(previous.target) ||
+        if (!catalog.ready || current.length != 1 || !sameHostTarget(current.single.target,previous.target) ||
             jsonEncode(current.single.pairingRecord) != jsonEncode(previous.pairingRecord)) {
           profileBlocked = true;
           if (mounted) setState(() { status = '本机绑定或授权资料已改变 · 请关闭此标签重新读取审查，不沿用旧状态'; });
@@ -299,7 +308,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     } finally { if (mounted && ticket == revision) setState(() { scanning = false; }); }
   }
   Widget input(String name,String label) => Padding(padding:const EdgeInsets.only(bottom:12),
-    child:TextField(key:ValueKey('pair-$name'),controller:fields[name],enabled:!busy && pairing == null,
+    child:TextField(key:ValueKey('pair-$name'),controller:fields[name],enabled:!busy && pairing == null && (savedProfile == null || name == 'device'),
       autocorrect:false,maxLength:name == 'expectedHostKey' ? 4096 : 1024,decoration:InputDecoration(labelText:label,counterText:''),
       onChanged:(_) { revision++; setState(() { targetReviewed = false; }); }));
   @override

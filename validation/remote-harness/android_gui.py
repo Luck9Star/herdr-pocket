@@ -106,6 +106,41 @@ class AndroidWebView:
         if self.read(selector, 'value') != str(value):
             raise GuiFailure('android_text_input_mismatch')
 
+    def direct_key(self, key):
+        # Dispatch a real key through the focused xterm textarea, without Enter.
+        if key != 'k' or not self.evaluate("document.activeElement === document.querySelector('#remote-terminal .xterm-helper-textarea')"):
+            raise GuiFailure('android_direct_focus_missing')
+        for kind in ('keyDown', 'keyUp'):
+            params = {'type': kind, 'key': key, 'code': 'KeyK', 'windowsVirtualKeyCode': 75}
+            if kind == 'keyDown':
+                params.update({'text': key, 'unmodifiedText': key})
+            self.call('Input.dispatchKeyEvent', params)
+
+    def hidden_key_probe(self):
+        # Exercise the old view after navigation; receiver must remain unchanged.
+        for kind in ('keyDown', 'keyUp'):
+            params = {'type': kind, 'key': 'z', 'code': 'KeyZ', 'windowsVirtualKeyCode': 90}
+            if kind == 'keyDown':
+                params.update({'text': 'z', 'unmodifiedText': 'z'})
+            self.call('Input.dispatchKeyEvent', params)
+
+    def receipt(self, previous, pane, length):
+        def read_receipt():
+            raw = self.evaluate("document.querySelector('#remote-input-status').dataset.receipt || null")
+            if not raw or raw == previous:
+                return False
+            try:
+                value = json.loads(raw)
+            except (ValueError, TypeError):
+                raise GuiFailure('android_input_receipt_invalid') from None
+            if (not isinstance(value, dict) or set(value) != {'requestId', 'paneId', 'terminalId', 'acceptedBytes'} or
+                not isinstance(value['requestId'], str) or not re.fullmatch(r'[0-9a-f]{32}', value['requestId']) or
+                value['paneId'] != pane or not isinstance(value['terminalId'], str) or
+                not value['terminalId'] or type(value['acceptedBytes']) is not int or value['acceptedBytes'] != length):
+                raise GuiFailure('android_input_receipt_invalid')
+            return raw, value
+        return wait_for(read_receipt, 'android_input_receipt_missing', timeout=60)
+
     def close(self):
         try:
             self.ws.close()
@@ -114,6 +149,8 @@ class AndroidWebView:
 
 
 def run_android(args, root, env, config, approval):
+    if bool(getattr(args, 'android_guarded_input', False)) != bool(getattr(args, 'input_fixture', None)):
+        raise GuiFailure('android_guarded_input_fixture_mismatch')
     if (os.environ.get('GITHUB_ACTIONS') != 'true' or
             os.environ.get('ANDROID_SERIAL') != SERIAL or
             config.get('host') != '127.0.0.1' or
@@ -193,10 +230,64 @@ def run_android(args, root, env, config, approval):
             return browser.evaluate(f"Number(document.querySelector('#remote-captured').dataset.{attr}Frames || 0)")
         full = wait_for(lambda: rendered('full'), 'android_full_render_ack_missing', timeout=60)
         deltas = wait_for(lambda: rendered('delta'), 'android_delta_render_ack_missing', timeout=60)
+        receipts = []
+        if getattr(args, 'input_fixture', None):
+            wait_for(lambda: browser.evaluate("!document.querySelector('#remote-input-controls').hidden"),
+                     'android_input_controls_missing', timeout=60)
+            browser.click('#remote-input-direct')
+            wait_for(lambda: '逐键输入已启用' in (browser.read('#remote-input-status') or ''),
+                     'android_direct_mode_missing')
+            browser.direct_key('k')
+            raw, first = browser.receipt(None, config['paneId'], 1)
+            receipts.append(first)
+            browser.click('#remote-input-draft-mode')
+            wait_for(lambda: '草稿仅在核对' in (browser.read('#remote-input-status') or ''),
+                     'android_draft_mode_missing')
+            browser.fill('#remote-input-draft', 'Pocket测')
+            browser.click('#host-return-home')
+            wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
+            if browser.evaluate("document.activeElement.matches('#remote-input-draft, #remote-terminal .xterm-helper-textarea')"):
+                raise GuiFailure('android_hidden_input_still_focused')
+            browser.hidden_key_probe()
+            browser.click('#host-list .saved-host-actions button')
+            wait_for(lambda: browser.evaluate("!document.querySelector('#host-restore-panel').hidden"),
+                     'android_restore_panel_missing')
+            if browser.read('#remote-input-draft', 'value') != 'Pocket测':
+                raise GuiFailure('android_draft_not_retained')
+            browser.click('#host-restore-review')
+            browser.click('#host-restore')
+            wait_for(lambda: browser.evaluate("document.querySelector('#host-restore-panel').hidden"),
+                     'android_identity_restore_missing', timeout=60)
+            browser.click('#remote-review')
+            browser.click('#remote-connect')
+            button = wait_for(lambda: browser.read(selector), 'android_reentry_dashboard_missing', timeout=60)
+            if not button.startswith(config['paneId']+' · '):
+                raise GuiFailure('android_reentry_target_mismatch')
+            browser.click(selector)
+            wait_for(lambda: rendered('full'), 'android_reentry_full_missing', timeout=60)
+            wait_for(lambda: browser.evaluate("!document.querySelector('#remote-input-controls').hidden"),
+                     'android_reentry_input_controls_missing', timeout=60)
+            browser.click('#remote-input-draft-mode')
+            wait_for(lambda: '草稿仅在核对' in (browser.read('#remote-input-status') or ''),
+                     'android_reentry_draft_mode_missing')
+            if browser.read('#remote-input-draft', 'value') != 'Pocket测':
+                raise GuiFailure('android_reentry_draft_changed')
+            browser.click('#remote-input-preview')
+            if browser.read('#remote-input-preview-text') != 'Pocket测':
+                raise GuiFailure('android_draft_preview_mismatch')
+            browser.click('#remote-input-confirm')
+            _, second = browser.receipt(raw, config['paneId'], len('Pocket测'.encode('utf-8')))
+            if second['requestId'] == first['requestId'] or second['terminalId'] != first['terminalId']:
+                raise GuiFailure('android_input_receipt_target_mismatch')
+            if browser.read('#remote-input-draft', 'value'):
+                raise GuiFailure('android_submitted_draft_retained')
+            receipts.append(second)
         browser.click('#remote-cancel')
         wait_for(lambda: '陈旧' in (browser.read('#remote-captured') or ''), 'android_stale_marker_missing')
         return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                 'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
+                'inputQueueAccepted':bool(receipts), 'inputReceipts':receipts,
+                'hiddenReentryFreshFull':bool(receipts),
                 'keyStore':'Android API 35 emulator AndroidKeyStore-wrapped device key',
                 'device':'ephemeral Android emulator', 'uiDriver':'debug WebView CDP input'}
     finally:

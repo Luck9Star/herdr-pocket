@@ -10,10 +10,12 @@ import android.content.Intent
 /** Four operations only. All seed/envelope work stays in shared native code. */
 class MainActivity : FlutterActivity() {
     private var scanner: PairScanChannel? = null
+    private var documents: ConfigDocumentChannel? = null
     private val worker = Executors.newSingleThreadExecutor()
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
         scanner = PairScanChannel(this, engine.dartExecutor.binaryMessenger)
+        documents = ConfigDocumentChannel(this, engine.dartExecutor.binaryMessenger)
         MethodChannel(engine.dartExecutor.binaryMessenger, "herdr.pocket/input_journal")
             .setMethodCallHandler { call, result ->
                 if (call.method !in listOf("read", "prepare", "clear")) result.notImplemented()
@@ -75,7 +77,8 @@ class MainActivity : FlutterActivity() {
             }
     }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (scanner?.handle(requestCode, resultCode, data) != true) super.onActivityResult(requestCode, resultCode, data)
+        if (scanner?.handle(requestCode, resultCode, data) != true &&
+            documents?.handle(requestCode, resultCode, data) != true) super.onActivityResult(requestCode, resultCode, data)
     }
-    override fun onDestroy() { scanner?.close(); worker.shutdown(); super.onDestroy() }
+    override fun onDestroy() { scanner?.close(); documents?.close(); worker.shutdown(); super.onDestroy() }
 }

@@ -2,7 +2,7 @@
 
 此入口在一次性 API35 x86_64 云 AVD 内运行正式 `main()` → `HostCatalogPage` → 配对页 → 远程页。它创建实际 Android 原生身份，以公开字段和点击完成临时主机批准、SSH 签名认证、snapshot 看板、选择 pane、消费 full/delta、主动停止及删除本机身份。测试不注入 signer、catalog、适配器、MethodChannel 响应或终端帧。
 
-截至 2026-11-06，云端接线已完成，23 项 Flutter Android 隔离测试、13 项现有 harness 回归及 Dart 语法解析通过；本入口尚未运行 Flutter analyzer、Android 构建或 AVD。源码存在不能记作手机验收通过。现有 Widget＋内存 signer 和 Tauri Android 的历史结果仍各自独立。
+原版只读入口已在 2026-11-06 的 `307c863` 云 API35 AVD 通过，来源和范围见[手机验证记录](../../../docs/15-mobile-gui-validation.md)。本批新增的 guarded 分支及焦点／未知结果回归尚未运行 Flutter analyzer、Android 构建或 AVD，不能继承历史运行结果。
 
 ## 执行边界
 
@@ -54,6 +54,18 @@ flutter test --no-pub --no-uninstall --reporter expanded -d emulator-5554 \
 ```
 
 此集成测试 APK 含测试入口及 fixture 公开目标，只用于本次 AVD；不得替代或打包成正常产品安装包。
+
+## 独立的 guarded 输入场景
+
+同一入口使用 `--dart-define=POCKET_GUARDED_INPUT=true`（或公开 define 文件内 JSON 布尔值 `true`）选择隔离候选主机场景。未传时保持原版只读和 0 bytes 断言；该开关只选择测试动作，不能赋予不支持能力查询的主机写权限。实际产品仍须新 full、匹配能力、持久发送标记、显式模式及有效焦点。
+
+公开 target JSON 继续使用原来的 schemaVersion 1 和十个字段，不新增命令或写入正文。guarded 主机来源、候选补丁摘要及 `--input-fixture` 由共享 harness 单独核验；不能给 stock 场景偷偷换主机。
+
+guarded GUI 在完成相同配对、full/delta 后，显式选择逐键输入并从焦点终端发送 ASCII `k`。读取生产页面显示的匹配回执后，切草稿输入 `Pocket测`；切回主机列表会停止旧连接。返回原标签不得自动恢复，必须重新审查连接、选同 pane、取得新 full，再从保留草稿预览确认发送。两次写入均不补回车。停止后模式关闭，再给终端键事件不得产生额外输入。
+
+`result.json` 的 guarded `case` 为 `android-native-pairing-guarded-input`，保留原配对、帧和清理证据；`observeMode`、`directModeDisabled`、`draftModeDisabled` 此时表示停止后的状态。新增严格布尔项为 `guardedInput`、`directInputAccepted`、`draftInputAccepted`、`hiddenTabStopped`、`hiddenTabManualRecovery`、`unsentDraftRestored`、`postStopInputDisabled`。`inputReceipts` 是两项 `{requestId,paneId,terminalId,acceptedBytes}`，请求 ID 必须不同、目标相同、长度分别为 1 和 9；`acceptedByteCounts` 为 `[1,9]`。它们来自页面可见回执行，只有完整匹配响应 ID、稳定 terminal ID、pane 和长度才生成，证明队列受理。共享 harness 还须独立核验接收器精确收到 UTF-8 `kPocket测`（10 bytes）、临时主机设备指纹及真实 PTY 尺寸，才可报告通过。
+
+新增阶段名为 `guarded_direct`、`guarded_hidden_draft`、`guarded_reconnect`、`guarded_draft_review`。本入口不注入未知响应／网络失败，未知结果后的人工恢复由 `remote_input_widget_test.dart` 的隔离替身回归检查；真实断线及进程重启恢复仍需单独验收。草稿测试用 `enterText` 提交文字，不能声称 Android 中文 IME 或实体触控通过。
 
 ## 共享 harness 与独立 job
 

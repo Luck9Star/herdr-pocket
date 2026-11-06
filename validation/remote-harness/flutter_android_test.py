@@ -63,7 +63,7 @@ class PreparedFixture(unittest.TestCase):
             (self.source / folder).mkdir(parents=True)
         for name in ('main.dart', 'device_keys.dart', 'host_catalog.dart', 'pairing_page.dart', 'remote_adapter.dart'):
             (self.source / 'lib' / name).write_text('// synthetic source integrity fixture\n')
-        for name in ('MainActivity.kt', 'PairScanChannel.kt', 'HostCatalogFile.kt', 'InputJournalFile.kt'):
+        for name in tool.PRODUCTION_CHANNELS:
             (self.source / 'native/android' / name).write_text('// synthetic native source fixture\n')
         (self.source / 'integration_test/android_pairing_observe_test.dart').write_text('// integration fixture\n')
         pubspec = 'name: synthetic\ndev_dependencies:\n  flutter_test:\n    sdk: flutter\n'
@@ -107,7 +107,7 @@ class ScaffoldGuards(PreparedFixture):
         self.assertEqual(self.gradle.read_bytes(), gradle)
         self.assertIn('  integration_test:\n    sdk: flutter', (self.app / 'pubspec.yaml').read_text())
         self.assertEqual(set(proof['addedPackages']), tool.SDK_ADDITIONS)
-        self.assertEqual(len(proof['productionAndroidChannels']), 4)
+        self.assertEqual(len(proof['productionAndroidChannels']), 5)
 
     def test_local_wrong_branch_wrong_source_and_source_checkout_are_refused_before_mutation(self):
         for changes in ({'GITHUB_ACTIONS': 'false'}, {'GITHUB_REF': 'refs/heads/main'},
@@ -170,6 +170,21 @@ class RunnerGuards(PreparedFixture):
         with patch.object(gui, 'adb') as adb:
             with self.assertRaises(gui.DeviceFailure): gui._run(args, self.fixture_root, self.env, self.config, Mock(), Mock())
             adb.assert_not_called()
+
+    def test_stock_and_guarded_device_reports_cannot_substitute_for_each_other(self):
+        first = {'requestId': 'a' * 32, 'terminalId': 'term_ab', 'paneId': 'w1:p1', 'acceptedBytes': 1}
+        second = dict(first, requestId='b' * 32, acceptedBytes=9)
+        report = device_report(case=gui.GUARDED_CASE, acceptedByteCounts=[1, 9],
+                               inputReceipts=[first, second], **dict.fromkeys(gui.GUARDED_FIELDS, True))
+        self.assertEqual(gui.safe_device_result(report, guarded=True)['inputReceipts'], [first, second])
+        with self.assertRaises(gui.DeviceFailure):
+            gui.safe_device_result(report)
+        with self.assertRaises(gui.DeviceFailure):
+            gui.safe_device_result(device_report(), guarded=True)
+        for changes in ({'acceptedByteCounts': [True, 9]}, {'unsentDraftRestored': False},
+                        {'inputReceipts': [first, dict(second, requestId=first['requestId'])]}):
+            with self.assertRaises(gui.DeviceFailure):
+                gui.safe_device_result(dict(report, **changes), guarded=True)
 
     def test_existing_package_and_additional_device_are_never_removed_or_used(self):
         self.prepared(); args = self.args(); launch = Mock()

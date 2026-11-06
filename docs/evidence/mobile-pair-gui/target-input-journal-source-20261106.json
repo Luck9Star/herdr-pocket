@@ -1,0 +1,381 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-11-06",
+  "milestone": "per-target-input-journal-source",
+  "baseCommit": "fdf40ad917d332a8cdee2faed6829f27cae2189d",
+  "observationScope": "Reviewed worktree before scoped commit; hashes identify exact files. No new cloud CI or APK.",
+  "sourceFiles": [
+    {
+      "path": ".github/workflows/android-network-experiment.yml",
+      "sha256": "b867674129f059d63ba9cad7d9f388e9eb88bf5e76ff66a54599aa5dc6a9db7c"
+    },
+    {
+      "path": "README.md",
+      "sha256": "6dd8ccef9b4a5dc0149c1d0406525c6a37951e46b111590594686e6fb7c30853"
+    },
+    {
+      "path": "docs/23-mobile-session-watch.md",
+      "sha256": "e81b66fb48f465adbb60317797cd3c7737821b6308d637030e81ec2f37ebc3fc"
+    },
+    {
+      "path": "docs/24-target-input-recovery.md",
+      "sha256": "33deff6ae4c25bf8f2a1603b8989554ef6dd20f178afb20c719e794a795d6630"
+    },
+    {
+      "path": "validation/flutter/README.md",
+      "sha256": "cf138b57a116c9aff3ae585df3d74b774a46082b15b1171058ca100ab26099ec"
+    },
+    {
+      "path": "validation/flutter/lib/remote_adapter.dart",
+      "sha256": "ebeeaf00ea0cbdb86e13ced8a89e0aa8ad6bf9e2a738ecf6c587ae259b77e38d"
+    },
+    {
+      "path": "validation/flutter/lib/remote_input.dart",
+      "sha256": "fc255b3374bf7a2cf7932aff7129b11e80d5e9ecaec2005ff33071b00790e4c9"
+    },
+    {
+      "path": "validation/flutter/lib/remote_input_platform.dart",
+      "sha256": "bf2f0fb4a10e644de2025411cb9fd81abdd390fc3f62386b014de4c4b4141b5d"
+    },
+    {
+      "path": "validation/flutter/lib/remote_page.dart",
+      "sha256": "52be91c8b9094e2ffbd64368eeb5dc4f627b2f0f1395ee676ecde08b8e999b30"
+    },
+    {
+      "path": "validation/flutter/native/android/InputJournalFile.kt",
+      "sha256": "ab2896ded75cffcf74d6b39f0a5db8b1e39616b8da51f87c12bee681a7cf8c96"
+    },
+    {
+      "path": "validation/flutter/native/android/MainActivity.kt",
+      "sha256": "a261767a75f4dcdc436adc4a78d356595246bdd5fbba947b4d11d806807c912d"
+    },
+    {
+      "path": "validation/flutter/native/android/tests/InputJournalProbe.kt",
+      "sha256": "b152d5d4e1c7e805367807cb0f5b763a7f77ef5066c74dca789b642a10eec900"
+    },
+    {
+      "path": "validation/flutter/native/android/tests/run_input_journal_probe.py",
+      "sha256": "bc93b4972e5afb0ecd65a2cab3b76b292072520062bca59b677c4b60be9ec7a5"
+    },
+    {
+      "path": "validation/flutter/native/apple/HostCatalogFile.swift",
+      "sha256": "0137784cb43fe4f475e15b6e77428c85ff46365d106cf2c8d2d9ba9d1939520a"
+    },
+    {
+      "path": "validation/flutter/native/apple/InputJournalFile.swift",
+      "sha256": "92c2dc36a6a7b30a382e1aad91c0a6c1d98197f4602b453bbda07adc80e3e509"
+    },
+    {
+      "path": "validation/flutter/native/apple/tests/HostCatalogProbe.swift",
+      "sha256": "ffe4791d1e80f221c91f3ec2d642935c83a6dce00fb1e86457005f033dcb27f0"
+    },
+    {
+      "path": "validation/flutter/native/apple/tests/InputJournalProbe.swift",
+      "sha256": "a3d7f3ef43e7a27473f42cb5fbb2544a90c582bd04be35e9a3acbb891e2dd226"
+    },
+    {
+      "path": "validation/flutter/native/apple/tests/run_input_journal_probe.py",
+      "sha256": "361fc835e738b761d611b40f405fe996f594ecd82bdafc14cf8fd9edecafd0f3"
+    },
+    {
+      "path": "validation/flutter/test/pairing_gui_ssh_test.dart",
+      "sha256": "528ef3eb57a8fbefa2ed3de93a48cac5c51beb7dafec5bd2f4149f858bafb57a"
+    },
+    {
+      "path": "validation/flutter/test/remote_input_platform_test.dart",
+      "sha256": "aa0ff09fa91708b6af9ab7864592f694acb4ad5e7af8aceb0cebc11c60fd6e6b"
+    },
+    {
+      "path": "validation/flutter/test/remote_input_test.dart",
+      "sha256": "357b29dad8fc7f96c73f0b4978cae4aeef46c881df5e91d823a10ba40d131daf"
+    },
+    {
+      "path": "validation/flutter/test/remote_input_widget_test.dart",
+      "sha256": "49e1406a893db2da14b97a3a06f731a2b295131c94b2684f5c2800ff71f7879c"
+    },
+    {
+      "path": "validation/flutter/test/remote_input_journal_test.dart",
+      "sha256": "56ffff26e22c03c403ef0de42b4dc4b4997ed4f28d9b19f7e42388143b431ef1"
+    },
+    {
+      "path": "validation/flutter/tool/ci.py",
+      "sha256": "325be6e827d037d7040742ddf009766dda5bd0dee50b089931485f430a8c4d9d"
+    },
+    {
+      "path": "validation/shared/README.md",
+      "sha256": "e4e2dc5cd59aff1ce3649e477079d1e41450a4e6a6adc57403b04def1b10c7a8"
+    },
+    {
+      "path": "validation/shared/SHA256SUMS",
+      "sha256": "07f2b24140bcbfce6303a37c8154445c4abc5cbf651bc9c00e0258353d234546"
+    },
+    {
+      "path": "validation/shared/target-input-journal-v1.json",
+      "sha256": "71ac930ea6fdb482541d90954929350b5f81b1fec3975ddc03b159added2ffbe"
+    },
+    {
+      "path": "validation/tauri/README.md",
+      "sha256": "37f6bc109e4a82c02d3ae2d315013bc9d97099de0a7495d24e9e1a33a347deef"
+    },
+    {
+      "path": "validation/tauri/src-tauri/src/remote_tab_commands.rs",
+      "sha256": "afc89f0dc53c26622af9216e5b6414ce2f6ecd4da0dae05cae8d7beda6a80989"
+    },
+    {
+      "path": "validation/tauri/src/tab-workspace.js",
+      "sha256": "382478accf4ba0bcc545ba32476207fc019cd9b7395159e76a2ddf5ba3018136"
+    },
+    {
+      "path": "validation/tauri/test/tab-workspace.test.mjs",
+      "sha256": "750ee5caa63abdf1eacfe80e6387f65704ea6ca517d2340fcaf4eb1d9f64ad73"
+    },
+    {
+      "path": "validation/transport-rust/README.md",
+      "sha256": "f2af73fc431b28196100454db2417da117fa74907d1848c72eeae857b278d75c"
+    },
+    {
+      "path": "validation/transport-rust/src/controlled/tests.rs",
+      "sha256": "06a22ca998f062d6c4cb55161b1de338585f544e8842ceb7539f8bf7314cc027"
+    },
+    {
+      "path": "validation/transport-rust/src/input.rs",
+      "sha256": "2211e5cd1fa5cdebab7c73f3ad71372c2f4b0034695f6cd748d98f78af5fad33"
+    },
+    {
+      "path": "validation/transport-rust/src/input_loopback_test.rs",
+      "sha256": "48b0a69450b9c1dee3471ddee56e76ddb64c91a0ab96ba721f7e3826593aea9b"
+    },
+    {
+      "path": "validation/transport-rust/src/mobile_nodes/tests.rs",
+      "sha256": "a13e7ea5b044b965c714633ff2f398b3daf68bc3f828aa63078eb9624004d4bc"
+    },
+    {
+      "path": "validation/transport-rust/src/recovery.rs",
+      "sha256": "0f3f2259cea5252f8b6a7a8d4af2f71e3f5122dcf464ff50cae3faaca7556b97"
+    }
+  ],
+  "checks": [
+    {
+      "name": "shared-transport-default",
+      "status": "passed",
+      "verifiedBy": "parent independent execution",
+      "command": "CARGO_TARGET_DIR=/private/tmp/herdr-watch-target cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml",
+      "scope": "Temporary files and self-created loopback SSH, no real credentials; before the final added review assertions, which are covered by the final feature run below.",
+      "library": 76,
+      "cli": 1,
+      "localLog": "/private/tmp/herdr-target-recovery-root.log",
+      "logSha256": "20bd77eae1b0be4d8a6e8b23ce41eb8670779ae89121af39662bea6483fa3128"
+    },
+    {
+      "name": "shared-transport-native-fixture-final",
+      "status": "passed",
+      "verifiedBy": "parent independent execution",
+      "command": "CARGO_TARGET_DIR=/private/tmp/herdr-watch-target cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml --features overlay-native-fixture",
+      "scope": "Final frozen sources; real loopback SSH with synthetic native ABI, not a real overlay network.",
+      "library": 85,
+      "cli": 1,
+      "localLog": "/private/tmp/herdr-target-journal-native-final-root.log",
+      "logSha256": "ea1f4980f3e72863a10b1daca57b38b34f0541532ade483e3ce61fd01ae67144"
+    },
+    {
+      "name": "tauri-native",
+      "status": "passed",
+      "verifiedBy": "parent independent execution",
+      "command": "CARGO_TARGET_DIR=/private/tmp/herdr-node-overlay-target cargo test --locked --offline --manifest-path validation/tauri/src-tauri/Cargo.toml --lib",
+      "scope": "Native source tests; no GUI opened.",
+      "tests": 31,
+      "localLog": "/private/tmp/herdr-target-journal-tauri-rust-root.log",
+      "logSha256": "0e297b6fb3e6884c46792a2e33ef54cb2c5f87f6f2f6ae1fa8a63bc732760903"
+    },
+    {
+      "name": "tauri-node",
+      "status": "passed",
+      "verifiedBy": "parent independent execution",
+      "command": "npm test (validation/tauri)",
+      "scope": "Node and synthetic DOM, not WebView or device runtime.",
+      "tests": 106,
+      "localLog": "/private/tmp/herdr-target-journal-tauri-node-root.log",
+      "logSha256": "89297a390fa84b3a45cdafb4cf5fdbcb372785a2ac3e00014dc4f568ad1ba281"
+    },
+    {
+      "name": "tauri-build",
+      "status": "passed",
+      "verifiedBy": "parent independent execution",
+      "command": "npm run build (validation/tauri)",
+      "scope": "Vite production build; no GUI opened.",
+      "localLog": "/private/tmp/herdr-target-journal-tauri-build-root.log",
+      "logSha256": "a5d065dd0967a7d3383032ac4964c8f30b0a701b972c8fd8032f55162fdcc318"
+    },
+    {
+      "name": "swift-native-journal-and-catalog",
+      "status": "passed",
+      "verifiedBy": "parent independent execution",
+      "command": "python3 validation/flutter/native/apple/tests/run_input_journal_probe.py",
+      "scope": "Real Swift journal/catalog, temporary directories and child processes on macOS; Flutter channel and DeviceKeyError stubs. No iOS or Keychain.",
+      "journalChecks": 59,
+      "catalogChecks": 14,
+      "localLog": "/private/tmp/herdr-target-journal-swift-final-root.log",
+      "logSha256": "1d0477a338d2a5dde37e914881da288fed5a083ebc203ffda0cf4df814c203dd"
+    },
+    {
+      "name": "kotlin-native-journal",
+      "status": "passed",
+      "verifiedBy": "parent independent execution",
+      "command": "python3 validation/flutter/native/android/tests/run_input_journal_probe.py --kotlin-dir /private/tmp/herdr-kotlin-2.2.21-check",
+      "scope": "Real journal/catalog/MainActivity compiled with Kotlin 2.2.21 and org.json 20250517; JVM temporary files and child processes. Android/Flutter stubs, Os.fsync is a no-op; no Android or KeyStore runtime.",
+      "checks": 52,
+      "localLog": "/private/tmp/herdr-target-journal-kotlin-final-root.log",
+      "logSha256": "bbad41b5f1a481ee109a4f20b25d299d4a3463452b42264825328ad7c4cbefad"
+    },
+    {
+      "name": "flutter-python-tools",
+      "status": "passed",
+      "verifiedBy": "parent independent execution",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s validation/flutter/tool -v",
+      "scope": "Python build helpers only.",
+      "tests": 8,
+      "localLog": "/private/tmp/herdr-target-journal-python-root.log",
+      "logSha256": "54f9d1173d5770f5c440b405724e2de890bf41a4393d0637043ceba4c10c0a01"
+    },
+    {
+      "name": "dart-syntax-only",
+      "status": "passed",
+      "verifiedBy": "parent independent execution",
+      "command": "existing tree_sitter_dart in /private/tmp/herdr-m1c-venv",
+      "scope": "lib/*.dart, test/*.dart and tool/remote_probe.dart; not analyzer, type checking or execution.",
+      "files": 53,
+      "localLog": "/private/tmp/herdr-target-journal-dart-syntax-root.json",
+      "logSha256": "4732647667e1578d6e3b482d92792738ae5cbf0650af7c3a0ab916906d584a3e"
+    },
+    {
+      "name": "shared-fixture-checksums",
+      "status": "passed",
+      "verifiedBy": "parent independent SHA256 recomputation",
+      "files": 44
+    },
+    {
+      "name": "strict-clippy",
+      "status": "failed",
+      "verifiedBy": "child execution; parent inspected machine-readable diagnostics",
+      "command": "CARGO_TARGET_DIR=/private/tmp/herdr-watch-target cargo clippy --locked --offline --manifest-path validation/transport-rust/Cargo.toml --all-targets --message-format=json -- -D warnings",
+      "exitCode": 101,
+      "diagnostics": [
+        {
+          "code": "clippy::collapsible_if",
+          "file": "src/config_transfer.rs",
+          "line": 159,
+          "message": "this `if` statement can be collapsed"
+        },
+        {
+          "code": "clippy::collapsible_if",
+          "file": "src/input.rs",
+          "line": 86,
+          "message": "this `if` statement can be collapsed"
+        },
+        {
+          "code": "clippy::collapsible_if",
+          "file": "src/input.rs",
+          "line": 101,
+          "message": "this `if` statement can be collapsed"
+        },
+        {
+          "code": "clippy::collapsible_if",
+          "file": "src/input.rs",
+          "line": 366,
+          "message": "this `if` statement can be collapsed"
+        },
+        {
+          "code": "clippy::nonminimal_bool",
+          "file": "src/lib.rs",
+          "line": 106,
+          "message": "this boolean expression can be simplified"
+        },
+        {
+          "code": "clippy::collapsible_if",
+          "file": "src/lib.rs",
+          "line": 780,
+          "message": "this `if` statement can be collapsed"
+        },
+        {
+          "code": "clippy::result_unit_err",
+          "file": "src/lib.rs",
+          "line": 829,
+          "message": "this returns a `Result<_, ()>`"
+        },
+        {
+          "code": "clippy::too_many_arguments",
+          "file": "src/lib.rs",
+          "line": 854,
+          "message": "this function has too many arguments (8/7)"
+        },
+        {
+          "code": "clippy::too_many_arguments",
+          "file": "src/lib.rs",
+          "line": 882,
+          "message": "this function has too many arguments (8/7)"
+        },
+        {
+          "code": "clippy::too_many_arguments",
+          "file": "src/lib.rs",
+          "line": 910,
+          "message": "this function has too many arguments (9/7)"
+        },
+        {
+          "code": "clippy::type_complexity",
+          "file": "src/input_loopback_test.rs",
+          "line": 21,
+          "message": "very complex type used. Consider factoring parts into `type` definitions"
+        },
+        {
+          "code": "clippy::field_reassign_with_default",
+          "file": "src/input.rs",
+          "line": 406,
+          "message": "field assignment outside of initializer for an instance created with Default::default()"
+        }
+      ],
+      "oldBaselineCompared": false,
+      "scope": "No claim that all diagnostics predate this patch."
+    }
+  ],
+  "reviewRepairs": [
+    "An old Flutter target error must not revoke the new target input mode or queue.",
+    "Different Flutter endpoints have independent bounded lanes; same endpoint remains ordered through original future settlement.",
+    "An old Flutter page can reconcile an explicitly resolved marker only on a current full-frame read ticket.",
+    "Tauri explicit review sets observation focus without granting input; ordinary blur still revokes review.",
+    "Apple dangling catalog symlink fails closed.",
+    "An already-seen catalog disappearing in this process fails closed.",
+    "Swift target/raw ownership uses exact UTF-8 bytes, not canonical Unicode equality."
+  ],
+  "negativeControls": {
+    "verifiedBy": "child temporary-directory repro; parent reran repaired final suites",
+    "cases": [
+      "Old Apple catalog reports dangling symlink as empty.",
+      "Old Swift and Kotlin journals report deleted known file as empty."
+    ],
+    "parentRepeatedOldImplementation": false
+  },
+  "notRun": [
+    "Flutter analyzer/type checking",
+    "Flutter unit/widget tests for this batch",
+    "Flutter GUI/native channel/SSH timing integration for this batch",
+    "Actual Android fsync and Activity/engine lifecycle",
+    "iOS signing/install/runtime",
+    "Windows journal rename/directory-sync runtime",
+    "Real three-overlay networks",
+    "New Android packaging"
+  ],
+  "knownLimitations": [
+    "Flutter historical v1/v2 markers do not bind herdr executable path; no value invented during migration.",
+    "New process owner lock cannot constrain legacy binaries that never took it; concurrent old/new writers are unsupported.",
+    "External deletion before process restart cannot be distinguished from a fresh installation using this file alone.",
+    "Native journal load-to-save CAS conflict window was not separately fault-injected; shared catalog CAS and concurrent owner probes were exercised."
+  ],
+  "lastDeliveredApkSource": "546c3eb34bf166a22effa033d9862544641a308a",
+  "lastDeliveredCi": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281",
+  "includedInLastDeliveredApks": false,
+  "newCiTriggered": false,
+  "guiApplicationsOpened": false,
+  "originalUntrackedPreserved": {
+    "design/penpot/build-v2.js": "34d9928f02e6fac2e24dc45ed643e7656a8ff1e796e46b70cc7346b5fff52957"
+  }
+}

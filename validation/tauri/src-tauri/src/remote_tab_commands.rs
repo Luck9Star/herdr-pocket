@@ -121,17 +121,25 @@ pub async fn remote_tab_control(tab_id:String,client_generation:u64,generation:u
     ack.await.map_err(str::to_string)
 }
 
+// Review focus permits only explicit observation-mode journal confirmation.
+// It never grants a direct/draft write lease or changes observation identity.
+fn input_mode_focus(mode:&str,review:Option<bool>)->Result<bool,&'static str> {
+    if !matches!(mode,"observe"|"direct"|"draft") {return Err("invalid_mode");}
+    if review==Some(true) && mode!="observe" {return Err("invalid_review_mode");}
+    Ok(mode!="observe" || review==Some(true))
+}
+
 #[tauri::command]
-pub fn remote_tab_input_mode(tab_id:String,client_generation:u64,generation:u64,epoch:u64,mode:String,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<u64,String> {
+pub fn remote_tab_input_mode(tab_id:String,client_generation:u64,generation:u64,epoch:u64,mode:String,review:Option<bool>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<u64,String> {
     let mut f=flow.lock().map_err(|_|"state_unavailable")?;
-    if mode!="draft" && mode!="direct" && mode!="observe" {return Err("invalid_mode".into());}
+    let focused=input_mode_focus(&mode,review).map_err(str::to_string)?;
     let key=(tab_id.clone(),client_generation,generation,epoch);
     if f.tabs.visible.as_ref()!=Some(&(tab_id.clone(),client_generation,generation)){return Err("input_stale".into());}
     if mode!="observe" && f.tabs.focus.as_ref().is_some_and(|active|active!=&key){return Err("focus_busy".into());}
     let s=f.tabs.get(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation).ok_or("tab_stale")?;
     if s.control.as_ref().is_none_or(|c| {let v=c.snapshot();v.epoch!=epoch || v.phase!=herdr_readonly_transport::ObservationPhase::Active}) {return Err("input_stale".into());}
     let input=s.input.as_ref().filter(|(g,e,_)|*g==generation && *e==epoch).map(|(_,_,v)|v.clone()).ok_or("input_stale")?;
-    let result=input.set_mode(&mode,mode!="observe").map_err(str::to_string)?;
+    let result=input.set_mode(&mode,focused).map_err(str::to_string)?;
     if mode!="observe" {f.tabs.focus=Some(key);} else if f.tabs.focus.as_ref()==Some(&key) {f.tabs.focus=None;}
     Ok(result)
 }
@@ -177,4 +185,20 @@ pub fn remote_tab_input_recover(tab_id:String,client_generation:u64,generation:u
         s.input.as_ref().filter(|(g,e,_)|*g==generation && *e==epoch).map(|(_,_,v)|v.clone()).ok_or("input_stale")?
     };
     input.acknowledge_unknown(input_epoch).map_err(str::to_string)
+}
+
+#[cfg(test)]
+mod input_review_tests {
+    use super::*;
+    #[test]
+    fn explicit_observe_review_has_focus_but_blur_and_write_modes_cannot_impersonate_it() {
+        assert_eq!(input_mode_focus("observe",None),Ok(false));
+        assert_eq!(input_mode_focus("observe",Some(false)),Ok(false));
+        assert_eq!(input_mode_focus("observe",Some(true)),Ok(true));
+        assert_eq!(input_mode_focus("direct",None),Ok(true));
+        assert_eq!(input_mode_focus("draft",None),Ok(true));
+        assert_eq!(input_mode_focus("direct",Some(true)),Err("invalid_review_mode"));
+        assert_eq!(input_mode_focus("draft",Some(true)),Err("invalid_review_mode"));
+        assert_eq!(input_mode_focus("unknown",Some(true)),Err("invalid_mode"));
+    }
 }

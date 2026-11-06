@@ -23,13 +23,17 @@ class MainActivity : FlutterActivity() {
         networkIdentity = NetworkIdentityChannel(this, engine.dartExecutor.binaryMessenger)
         MethodChannel(engine.dartExecutor.binaryMessenger, "herdr.pocket/input_journal")
             .setMethodCallHandler { call, result ->
-                if (call.method !in listOf("read", "prepare", "clear")) result.notImplemented()
+                if (call.method !in listOf("read", "readAll", "prepare", "complete", "abandon", "resolve", "clear")) result.notImplemented()
                 else worker.execute {
                     try {
                         val store = InputJournalFile(applicationContext)
                         val value: Any? = when (call.method) {
                             "read" -> store.read()
-                            "prepare" -> { store.prepare(call.argument<String>("record") ?: error("record")); null }
+                            "readAll" -> store.readAll()
+                            "prepare" -> store.prepare(call.argument<String>("record") ?: error("record"))
+                            "complete" -> { store.complete(call.argument<String>("record") ?: error("record"), call.argument<String>("lease") ?: error("lease")); null }
+                            "abandon" -> { store.abandon(call.argument<String>("record") ?: error("record"), call.argument<String>("lease") ?: error("lease")); null }
+                            "resolve" -> { store.resolve(call.argument<String>("record") ?: error("record")); null }
                             "clear" -> { store.clear(call.argument<String>("record") ?: error("record")); null }
                             else -> error("operation")
                         }

@@ -21,6 +21,20 @@ class InputFixtureAdapter extends base.PendingAdapter {
   Completer<RemoteInputResult>? delayedResult;
   Completer<bool>? delayedAcknowledgement;
   int acknowledgements = 0;
+  final pendingRecords = <String,RemoteInputPending>{};
+  final reviewedRecords = <String>[];
+  int journalRevision = 0;
+  RemoteInputJournalReadTicket? beginJournalFull({int observationEpoch=0}) {
+    final current = selectedTarget;
+    if (current == null) return null;
+    final review = captureInputJournalReview?.call(current);
+    final revision = ++journalRevision;
+    return review == null ? null : RemoteInputJournalReadTicket(review,current,observationEpoch,revision);
+  }
+  @override bool isInputJournalReadCurrent(RemoteInputJournalReadTicket ticket) =>
+    !paused && identical(selectedTarget,ticket.target) && ticket.revision == journalRevision &&
+    pendingRecords[ticket.target.endpointKey] == null;
+  @override RemoteInputPending? get pendingInput => selectedTarget == null ? null : pendingRecords[selectedTarget!.endpointKey];
   RemoteInputTarget? selectedTarget;
   RemoteInputTarget? pausedTarget;
   int pauses = 0,resumes = 0;
@@ -55,12 +69,20 @@ class InputFixtureAdapter extends base.PendingAdapter {
       return const RemoteInputResult.rejected('input_cancelled_before_write');
     }
     received.add(Uint8List.fromList(bytes));
-    return delayedResult == null ? nextResult : await delayedResult!.future;
+    final result = delayedResult == null ? nextResult : await delayedResult!.future;
+    if (result.disposition == RemoteInputDisposition.unknown || result.requiresJournalRecovery) {
+      final pending = RemoteInputPending.create(received.length.toRadixString(16).padLeft(32,'0'),target);
+      pendingRecords[target.endpointKey] = pending;
+      return result.withPending(pending);
+    }
+    return result;
   }
-  @override Future<bool> acknowledgeInputUnknown(RemoteInputTarget target) async {
-    acknowledgements++;
-    if (delayedAcknowledgement != null) return await delayedAcknowledgement!.future;
-    return identical(target,selectedTarget);
+  @override Future<bool> acknowledgeInputUnknown(RemoteInputTarget target,{required String reviewedRecord}) async {
+    acknowledgements++; reviewedRecords.add(reviewedRecord);
+    if (!identical(target,selectedTarget) || pendingRecords[target.endpointKey]?.raw != reviewedRecord) return false;
+    final allowed = delayedAcknowledgement == null ? true : await delayedAcknowledgement!.future;
+    if (!allowed || pendingRecords[target.endpointKey]?.raw != reviewedRecord) return false;
+    pendingRecords.remove(target.endpointKey); return true;
   }
 }
 
@@ -148,6 +170,64 @@ void main() {
     adapter.delayedAcknowledgement!.complete(true); await tester.pump();
     expect(find.textContaining('发送结果待核实'),findsOneWidget);
     expect(adapter.received.length,1); expect(adapter.acknowledgements,1);
+  });
+  testWidgets('a new full coordinates an exact marker resolved by another adapter; delta and old read cannot unlock it', (tester) async {
+    final adapter = InputFixtureAdapter()..nextResult = const RemoteInputResult.unknown();
+    await start(tester,adapter); await mode(tester,'direct');
+    final enter = find.byKey(const ValueKey('remote-key-Enter'));
+    await tester.ensureVisible(enter); await tester.tap(enter); await tester.pump();
+    final old = adapter.beginJournalFull()!;
+    final current = adapter.beginJournalFull()!;
+    adapter.pendingRecords.remove(adapter.inputTarget!.endpointKey); // Explicit resolution in the other adapter fixture.
+    adapter.frame!(adapter.generation,'w1:p1',RemoteFrame(1,false,'DELTA',inputJournalRead:current)); await tester.pump();
+    expect(find.textContaining('发送结果待核实'),findsOneWidget);
+    adapter.frame!(adapter.generation,'w1:p1',RemoteFrame(2,true,'STALE READ',inputJournalRead:old)); await tester.pump();
+    expect(find.textContaining('发送结果待核实'),findsOneWidget);
+    adapter.frame!(adapter.generation,'w1:p1',RemoteFrame(3,true,'AUTHORITATIVE FULL',inputJournalRead:current)); await tester.pump();
+    expect(find.textContaining('发送结果待核实'),findsNothing);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNotNull);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+    expect(adapter.received.length,1); await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('known receipt survives authoritative full coordination and does not remain an unknown lock', (tester) async {
+    final receipt = RemoteInputReceipt('1'.padLeft(32,'0'),'w1:p1','term_abcd',1);
+    final adapter = InputFixtureAdapter()..nextResult = RemoteInputResult.journalLocked(RemoteInputDisposition.accepted,receipt:receipt);
+    await start(tester,adapter); await mode(tester,'direct');
+    final enter = find.byKey(const ValueKey('remote-key-Enter'));
+    await tester.ensureVisible(enter); await tester.tap(enter); await tester.pump();
+    final read = adapter.beginJournalFull()!; adapter.pendingRecords.remove(adapter.inputTarget!.endpointKey);
+    adapter.frame!(adapter.generation,'w1:p1',RemoteFrame(1,true,'KNOWN FULL',inputJournalRead:read)); await tester.pump();
+    expect(find.byKey(const ValueKey('remote-input-acknowledge')),findsNothing);
+    expect(find.text(receipt.label),findsOneWidget); expect(adapter.received.length,1);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('IJ03 human resolution keeps the clicked original raw when a new pending record arrives', (tester) async {
+    final adapter = InputFixtureAdapter()..nextResult = const RemoteInputResult.unknown();
+    await start(tester,adapter); await mode(tester,'direct');
+    final enter = find.byKey(const ValueKey('remote-key-Enter'));
+    await tester.ensureVisible(enter); await tester.tap(enter); await tester.pump();
+    await tester.ensureVisible(base.field('cancel')); await tester.tap(base.field('cancel')); await tester.pump();
+    await tester.ensureVisible(base.field('privateKeyPem'));
+    await tester.enterText(base.field('privateKeyPem'),fixtureConfig()['privateKeyPem'] as String);
+    await tester.ensureVisible(base.field('review')); await tester.tap(base.field('review')); await tester.pump();
+    await tester.ensureVisible(base.field('connect')); await tester.tap(base.field('connect')); await tester.pump();
+    adapter.publish(); await tester.pump();
+    final pane = find.byKey(const ValueKey('remote-pane-w1:p1'));
+    await tester.ensureVisible(pane); await tester.tap(pane); await tester.pump();
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'NEW CONNECTION')); await tester.pump();
+    final oldRaw = adapter.pendingInput!.raw;
+    adapter.delayedAcknowledgement = Completer<bool>();
+    final acknowledge = find.byKey(const ValueKey('remote-input-acknowledge'));
+    await tester.ensureVisible(acknowledge); await tester.tap(acknowledge); await tester.pump();
+    expect(adapter.reviewedRecords,[oldRaw]);
+    final replacement = RemoteInputPending.create('f'*32,adapter.inputTarget!);
+    adapter.pendingRecords[adapter.inputTarget!.endpointKey] = replacement;
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(1,true,'NEW PENDING RECORD')); await tester.pump();
+    adapter.delayedAcknowledgement!.complete(true); await tester.pump();
+    expect(adapter.reviewedRecords,[oldRaw]); expect(adapter.pendingInput!.raw,replacement.raw);
+    expect(find.textContaining('发送结果待核实'),findsOneWidget); expect(adapter.received.length,1);
+    await tester.pumpWidget(const SizedBox());
   });
   testWidgets('Ctrl and Alt hold only explicit auxiliary input, then release; cancel and focus loss send nothing', (tester) async {
     final adapter = InputFixtureAdapter(); await start(tester,adapter); await mode(tester,'direct');

@@ -251,11 +251,12 @@ class DashboardInvalidations {
   void resetSubscription() { dirty = false; lost = false; }
 }
 class RemoteFrame {
-  const RemoteFrame(this.seq, this.full, this.ansi,{this.observationEpoch=0});
+  const RemoteFrame(this.seq, this.full, this.ansi,{this.observationEpoch=0,this.inputJournalRead});
   final int seq;
   final int observationEpoch;
   final bool full;
   final String ansi;
+  final RemoteInputJournalReadTicket? inputJournalRead;
 }
 typedef DashboardConsumer = void Function(RemoteDashboard dashboard);
 // Awaited consumption provides backpressure: no unbounded UI frame queue.
@@ -417,17 +418,27 @@ class RemoteReadOnlyAdapter {
   final SocketConnector _connector;
   final RemoteConnectionBudget _budget;
   final RemoteInputJournal? inputJournal;
+  RemoteInputJournalReview? Function(RemoteInputTarget target)? captureInputJournalReview;
   int generation = 0, _connectionCount = 0;
   _Attempt? _attempt;
   bool _activeRead = false, _dialPending = false;
   RemoteEvidence evidence = RemoteEvidence();
-  RemoteInputTarget? _unknownInputTarget;
-  RemoteInputPending? _pendingInput;
-  bool _journalReady = false;
-  RemoteInputPending? get pendingInput => _pendingInput;
+  late final RemoteInputJournalSession? _journalState = inputJournal == null ? null : RemoteInputJournalSession(inputJournal!);
+  RemoteInputPending? get pendingInput {
+    final target = inputTarget;
+    return target == null ? null : _journalState?.pendingFor(target);
+  }
   RemoteInputTarget? get inputTarget => _attempt?.inputTarget;
-  RemoteInputCapability? get inputCapability => _attempt?.inputCapability;
+  RemoteInputCapability? get inputCapability => _journalState?.ready == true ? _attempt?.inputCapability : null;
   RemoteDashboard? get currentDashboard => _attempt?.dashboard;
+  bool isInputJournalReadCurrent(RemoteInputJournalReadTicket ticket) {
+    final a = _attempt,state = _journalState;
+    return a != null && state != null && _valid(a) && a.failure == null && !a.observationPaused &&
+      a.evidence.fullFrameReceived && a.observationEpoch == ticket.observationEpoch &&
+      identical(a.inputTarget,ticket.target) && identical(ticket.review.refreshTarget,ticket.target) &&
+      state.isCurrentRead(ticket.revision) &&
+      !state.hasClaimFor(ticket.target) && state.pendingFor(ticket.target) == null;
+  }
 
   bool _valid(_Attempt a) => identical(a,_attempt) && a.generation == generation && !a.closed;
   void _check(_Attempt a) {
@@ -677,19 +688,24 @@ class RemoteReadOnlyAdapter {
     identical(target,a.inputTarget) && identical(target.connection,a) &&
     a.inputCapability != null && a.evidence.hostKeyMatched && a.evidence.fullFrameReceived;
 
-  /// A new full of the same endpoint plus an explicit human action is required.
-  Future<bool> acknowledgeInputUnknown(RemoteInputTarget target) async {
-    final a = _attempt, previous = _unknownInputTarget;
-    if (a == null || previous == null || !_canWrite(a,target) || a.inputBusy ||
-        !_journalReady || inputJournal == null ||
-        identical(target.connection,previous.connection) || !target.sameEndpoint(previous)) return false;
-    if (_pendingInput == null) { _unknownInputTarget = null; return true; }
-    final pending = _pendingInput!;
+  /// Resolve exactly the raw marker reviewed at the click, on a new full and
+  /// connection for its endpoint. A later read can never substitute a new raw.
+  Future<bool> acknowledgeInputUnknown(RemoteInputTarget target,{required String reviewedRecord}) async {
+    final a = _attempt,state = _journalState;
+    if (a == null || state == null || !_canWrite(a,target) || a.inputBusy || !state.ready) return false;
+    RemoteInputPending reviewed;
+    try { reviewed = RemoteInputPending.parse(reviewedRecord); } catch (_) { return false; }
+    final original = state.pendingFor(target);
+    if (original == null || original.raw != reviewedRecord || !target.sameEndpoint(reviewed.target) ||
+        identical(target.connection,original.target.connection)) return false;
     a.inputBusy = true;
     try {
-      await inputJournal!.clear(pending.raw).timeout(const Duration(seconds:10));
-      if (!identical(pending,_pendingInput)) return false;
-      _pendingInput = null; _unknownInputTarget = null; return true;
+      await state.refresh().timeout(const Duration(seconds:10));
+      final current = state.pendingFor(target);
+      if (!_canWrite(a,target) || current == null || current.raw != reviewedRecord ||
+          identical(target.connection,current.target.connection)) return false;
+      await state.resolve(reviewedRecord).timeout(const Duration(seconds:10));
+      return state.pendingFor(target) == null;
     } catch (_) { return false; }
     finally { a.inputBusy = false; }
   }
@@ -704,7 +720,12 @@ class RemoteReadOnlyAdapter {
     // those errors here as well as the observe zone; never log raw transport data.
     runZonedGuarded(() async {
       try { result.complete(await _sendInput(target,bytes,stillCurrent:stillCurrent)); }
-      catch (_) { if (!result.isCompleted) result.complete(const RemoteInputResult.unknown()); }
+      catch (_) {
+        final pending = _journalState?.pendingFor(target);
+        if (!result.isCompleted) result.complete(pending == null
+          ? const RemoteInputResult.rejected('input_journal_unavailable')
+          : const RemoteInputResult.unknown());
+      }
     },(error,stack) {
       if (owned != null) _fail(owned,const RemoteFailure('async_input_transport_failed'));
       else if (!result.isCompleted) result.complete(const RemoteInputResult.rejected('input_not_ready'));
@@ -715,70 +736,97 @@ class RemoteReadOnlyAdapter {
   Future<RemoteInputResult> _sendInput(RemoteInputTarget target, Uint8List bytes,
       {required bool Function() stillCurrent}) async {
     bytes = Uint8List.fromList(bytes);
-    final a = _attempt;
-    if (a == null || !_canWrite(a,target) || _unknownInputTarget != null || a.inputBusy ||
-        !_journalReady || inputJournal == null || _pendingInput != null ||
+    final a = _attempt,state = _journalState;
+    if (a == null || !_canWrite(a,target) || a.inputBusy || state == null || !state.ready ||
         !stillCurrent() || bytes.isEmpty || bytes.length > a.inputCapability!.maxBytes) {
       return const RemoteInputResult.rejected('input_not_ready');
     }
     a.inputBusy = true;
     var submitted = false;
     RemoteInputPending? pending;
+    RemoteInputJournalClaim? claim;
     SSHForwardChannel? channel;
+    Future<String>? responseFuture;
     RemoteInputResult result = const RemoteInputResult.rejected('input_cancelled_before_write');
     try {
+      // Refresh for this actual target, then acquire the native atomic endpoint
+      // lease. Another adapter's marker for another endpoint is irrelevant.
+      await _wait(a,state.refresh(),input:true);
+      final blocked = state.pendingFor(target);
+      if (blocked != null) return const RemoteInputResult.rejected('input_target_pending').withPending(blocked);
+      if (!_canWrite(a,target) || !stillCurrent()) return result;
       final opened = await _openChannel<SSHForwardChannel>(a,() => a.client!.forwardLocalUnix(a.config!.socketPath),
         (c) => c.destroy(),input:true);
-      channel = opened;
-      a.inputForward = opened;
-      if (!_canWrite(a,target) || _unknownInputTarget != null || !stillCurrent()) return result;
+      channel = opened; a.inputForward = opened;
+      if (!_canWrite(a,target) || !stillCurrent()) return result;
       final id = _requestId();
       final request = utf8.encode('${jsonEncode({'id':id,'method':'pocket.input.send','params':{
         'pane_id':target.paneId,'expected_terminal_id':target.terminalId,'bytes_base64':base64Encode(bytes),
       }})}\n');
       pending = RemoteInputPending.create(id,target);
-      // Before any write, persist an exact public target + request marker. A
-      // crash/cancel during preparation leaves the slot locked, never replayed.
-      _pendingInput = pending;
-      await _wait(a,inputJournal!.prepare(pending.raw),input:true);
+      claim = state.prepare(pending);
+      await _wait(a,claim.prepared,input:true);
       if (!_canWrite(a,target) || !stillCurrent()) {
-        await inputJournal!.clear(pending.raw).timeout(const Duration(seconds:10));
-        _pendingInput = null;
-        return result;
+        // Cancellation after persistence keeps the exact marker even though
+        // this local path can prove it never submitted request bytes.
+        return const RemoteInputResult.journalLocked(RemoteInputDisposition.rejected).withPending(pending);
       }
-      // Set before sink.add: even an error here cannot prove remote rejection.
-      submitted = true;
+      submitted = true; // Even sink.add failure cannot prove remote rejection.
       opened.sink.add(request);
-      final line = await _wait(a,boundedLines(opened.stream,maxTotal:16384).first,input:true);
+      responseFuture = boundedLines(opened.stream,maxTotal:16384).first;
+      final line = await _wait(a,responseFuture,input:true);
       result = parseInputResponse(_decodeObject(line),id,target,bytes.length);
       if (result.disposition != RemoteInputDisposition.unknown) {
-        // Only a matching accepted ACK or proven pre-queue rejection clears it.
-        try {
-          await inputJournal!.clear(pending.raw).timeout(const Duration(seconds:10));
-          _pendingInput = null;
-        } catch (_) {
-          // The remote result is known; a local persistence failure must not
-          // erase that fact. Keep the durable lock until explicit recovery.
-          result = RemoteInputResult.journalLocked(result.disposition,receipt:result.receipt);
-        }
+        try { await state.complete(claim).timeout(const Duration(seconds:10)); }
+        catch (_) { result = RemoteInputResult.journalLocked(result.disposition,receipt:result.receipt); }
       }
     } catch (_) {
       result = submitted ? const RemoteInputResult.unknown()
-        : RemoteInputResult.rejected(pending == null ? 'input_cancelled_before_write' : 'input_journal_unavailable');
-      if (pending != null && !submitted) {
-        _journalReady = false; a.inputCapability = null;
+        : RemoteInputResult.rejected(pending == null ? 'input_journal_unavailable' : 'input_cancelled_before_write');
+      if (!submitted && pending != null) {
+        // An error/timeout does not prove prepare never persisted. Keep the
+        // original claim until it settles; refresh can distinguish a foreign
+        // same-endpoint marker from unreadable storage without retrying input.
+        try { await state.refresh().timeout(const Duration(seconds:10)); } catch (_) { /* ready is false */ }
+        final blocked = state.pendingFor(target);
+        if (blocked != null) {
+          result = blocked.raw == pending.raw
+            ? const RemoteInputResult.journalLocked(RemoteInputDisposition.rejected).withPending(blocked)
+            : const RemoteInputResult.rejected('input_target_pending').withPending(blocked);
+        }
       }
     } finally {
-      channel?.destroy();
+      var retired = true;
+      try { channel?.destroy(); }
+      catch (_) { retired = false; _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout')); }
       if (identical(a.inputForward,channel)) a.inputForward = null;
-      if (channel != null && _valid(a) && a.channels != null) {
-        try { await _retireChannel(a,channel); }
-        catch (_) { if (_valid(a)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout')); }
+      if (channel != null) {
+        try {
+          if (_valid(a) && retired) { await _retireChannel(a,channel); }
+          else { await _close(a); }
+        } catch (_) {
+          retired = false; _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
+          try { await _close(a); retired = true; } catch (_) { /* retain active lease */ }
+        }
+      }
+      final ownedClaim = claim,ownedResponse = responseFuture;
+      if (ownedClaim != null && retired) {
+        unawaited(() async {
+          // Cancellation of _wait is not settlement of the underlying stream
+          // or prepare/complete. Hold this lease until every original operation
+          // and channel cleanup has converged, then abandon only its own raw.
+          try { await ownedResponse; } catch (_) { /* unknown response */ }
+          await state.retire(ownedClaim);
+        }().then<void>((_) {},onError:(Object _,StackTrace __) {}));
       }
       a.inputBusy = false;
     }
-    if (_pendingInput != null) _unknownInputTarget = target;
-    return result;
+    if (result.pending != null) return result;
+    if (pending != null && (result.disposition == RemoteInputDisposition.unknown || result.requiresJournalRecovery)) {
+      return result.withPending(pending);
+    }
+    final unresolved = state.pendingFor(target);
+    return unresolved == null ? result : result.withPending(unresolved);
   }
 
   Future<RemoteSnapshot> _run(RemoteConfig config, {RemoteProgress? onProgress,
@@ -925,14 +973,11 @@ class RemoteReadOnlyAdapter {
         }
         capabilityChannel.destroy(); a.forward = null;
         await _retireChannel(a,capabilityChannel);
-        _journalReady = false;
         if (a.inputCapability != null) {
           try {
-            if (inputJournal == null) throw const RemoteFailure('input_journal_unavailable');
-            final pending = await _wait(a,inputJournal!.read());
-            _pendingInput = pending == null ? null : RemoteInputPending.parse(pending);
-            if (_pendingInput != null) _unknownInputTarget = _pendingInput!.target;
-            _journalReady = true;
+            final state = _journalState;
+            if (state == null) throw const RemoteFailure('input_journal_unavailable');
+            await _wait(a,state.refresh());
           } catch (_) { a.inputCapability = null; }
         }
       }
@@ -1159,6 +1204,16 @@ class RemoteReadOnlyAdapter {
             checkObservation();
             if (a.failure != null) throw a.failure!;
             final frame = frames.current;
+            RemoteInputJournalReadTicket? inputJournalRead;
+            if (frame.full && a.inputCapability != null) {
+              final inputTarget = a.inputTarget!;
+              final review = captureInputJournalReview?.call(inputTarget);
+              try {
+                final revision = await _wait(a,_journalState!.refresh(),observation:true);
+                if (review != null) inputJournalRead = RemoteInputJournalReadTicket(review,inputTarget,epoch,revision);
+              } catch (_) { a.inputCapability = null; }
+              checkObservation();
+            }
             e.frameCount++; if (!frame.full) e.deltaFrames++;
             e.lastSeq = frame.seq; e.fullFrameReceived = true;
             final byteLength = utf8.encode(frame.ansi).length;
@@ -1167,7 +1222,7 @@ class RemoteReadOnlyAdapter {
             first = false;
             completed = RemoteSnapshot(a.generation,config.session,selected.paneId,frame.ansi);
             if (onFrame != null) await _wait(a,Future<void>.sync(() => onFrame(a.generation,selected.paneId,
-              RemoteFrame(frame.seq,frame.full,frame.ansi,observationEpoch:epoch))),timed:false,observation:true);
+              RemoteFrame(frame.seq,frame.full,frame.ansi,observationEpoch:epoch,inputJournalRead:inputJournalRead))),timed:false,observation:true);
             checkObservation();
             if (onDashboard == null) break;
           }

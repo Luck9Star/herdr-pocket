@@ -109,6 +109,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void initState() {
     super.initState(); WidgetsBinding.instance.addObserver(this);
     originalNetworkBinding = widget.networkBinding;
+    adapter.captureInputJournalReview = inputGate.captureJournalRefresh;
     draft.addListener(draftChanged);
     terminalFocus.addListener(terminalFocusChanged);
     widget.visibility?.addListener(visibilityChanged);
@@ -190,6 +191,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     widget.visibility?.removeListener(visibilityChanged);
     widget.networkBinding?.changes?.removeListener(networkChanged);
     WidgetsBinding.instance.removeObserver(this); request++; identityLease?.cancel();
+    adapter.captureInputJournalReview = null;
     inputGate.onChanged = null; inputGate.invalidate();
     terminalFocus.removeListener(terminalFocusChanged); terminalFocus.dispose(); draft.removeListener(draftChanged); draft.dispose();
     unawaited(adapter.cancel()); terminal?.dispose();
@@ -266,7 +268,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             if (draftTarget != null) drafts[draftTarget!] = draft.text;
             draft.text = drafts[key] ?? ''; draftTarget = key;
           }
+          final journalRead = frame.inputJournalRead;
+          final reconciled = journalRead != null && adapter.isInputJournalReadCurrent(journalRead) &&
+            inputGate.reconcileJournalRefresh(journalRead.review);
           inputGate.bind(target,adapter.inputCapability);
+          if (reconciled && journalRead != null && identical(inputGate.target,journalRead.target)) inputGate.lastResult = journalRead.review.knownResult;
           if (adapter.pendingInput != null) inputGate.restorePending(adapter.pendingInput!);
         }
         bindTerminalOutput();
@@ -436,11 +442,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     bool panelCurrent() => observationEpoch == panelObservationEpoch && inputGate.epoch == panelInputEpoch &&
       identical(inputGate.target,panelTarget) && widget.visibility?.value != false && !viewPaused;
     final result = inputGate.lastResult;
+    final reviewedUnknown = inputGate.unknown,reviewedRaw = inputGate.unknown?.pendingRaw;
+    final receipt = reviewedUnknown != null ? reviewedUnknown.receipt : result?.receipt;
     final message = inputGate.unknown != null
       ? switch (inputGate.unknown!.knownDisposition) {
         RemoteInputDisposition.accepted => '服务端已接收 · 本机发送锁未清理，输入已锁定，不会重放',
-        RemoteInputDisposition.rejected => '服务端已明确拒绝 · 本机发送锁未清理，输入已锁定',
-        _ => '发送结果待核实 · 输入已锁定，不会重放',
+        RemoteInputDisposition.rejected => '此次输入已确认未受理 · 本目标本机发送锁未清理，输入已锁定',
+        _ => '发送结果待核实 · 仅本目标输入已锁定，不会重放',
       }
       : inputGate.sending ? '正在发送 · 同一动作不会重复提交'
       : result?.disposition == RemoteInputDisposition.accepted ? '服务端已接收 · 仅确认队列受理，请查看终端反馈'
@@ -454,7 +462,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       if (!available) const Padding(padding:EdgeInsets.symmetric(vertical:8),child:Text(
         '原厂 herdr 0.9.5 保持只读。输入需要已核验的原子 terminal ID 保护扩展；不会改用 pane 名称写入或自动接管尺寸。')),
       Semantics(liveRegion:true,child:Text(message,key:const ValueKey('remote-input-status'))),
-      if (result?.receipt != null) Text(result!.receipt!.label,key:const ValueKey('remote-input-receipt')),
+      if (receipt != null) Text(receipt.label,key:const ValueKey('remote-input-receipt')),
       Wrap(spacing:8,runSpacing:8,children:[
         for (final entry in const {
           RemoteInputMode.observe:'观察',RemoteInputMode.direct:'逐键输入',RemoteInputMode.draft:'草稿编辑',
@@ -468,16 +476,18 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         ExpansionTile(title:const Text('查看本机保留的待核实内容'),children:[
           SelectableText(inputGate.unknown!.bytes.isEmpty
             ? '上次进程仅持久保存了目标与尝试编号，正文未保存。请从远端画面核实。' : inputGate.unknown!.text)]),
-        const Text('先停止并重新连接同一目标、取得新 full，查看远端后再人工确认。确认只解除锁定，不会重发。'),
+        const Text('此记录只锁定同一远端目标，其他目标可独立输入。先停止并重新连接同一目标、取得新 full，查看远端后再人工确认。确认仅解除本条记录，不会重发。'),
         TextButton(key:const ValueKey('remote-input-acknowledge'),
-          onPressed:inputGate.canAcknowledgeUnknown && !inputGate.sending && !acknowledgingInput ? () async {
-            if (acknowledgingInput || !panelCurrent()) return;
+          onPressed:reviewedRaw != null && inputGate.canAcknowledgeUnknown && !inputGate.sending && !acknowledgingInput ? () async {
+            if (acknowledgingInput || !panelCurrent() || !identical(inputGate.unknown,reviewedUnknown)) return;
             final target = inputGate.target!;
             final ticket = observationEpoch,leaseEpoch = inputGate.epoch;
             setState(() { acknowledgingInput = true; });
-            final cleared = await adapter.acknowledgeInputUnknown(target);
+            final cleared = await adapter.acknowledgeInputUnknown(target,reviewedRecord:reviewedRaw);
             if (!mounted) return;
-            if (cleared && observationEpoch == ticket && inputGate.epoch == leaseEpoch && identical(inputGate.target,target)) inputGate.acknowledgeUnknown();
+            if (cleared && observationEpoch == ticket && inputGate.epoch == leaseEpoch && identical(inputGate.target,target)) {
+              inputGate.acknowledgeUnknown(reviewed:reviewedUnknown);
+            }
             setState(() { acknowledgingInput = false; });
           } : null,child:const Text('我已核实新画面，解除未知结果锁定')),
       ],

@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "name": "target-input-journal-v1",
+  "scope": "Synthetic public metadata and acceptance contract; not execution or device evidence.",
+  "limits": {
+    "maxTargets": 32,
+    "maxRecordUtf8Bytes": 8192,
+    "maxStoreUtf8Bytes": 262144,
+    "maxActivePerTarget": 1
+  },
+  "identity": {
+    "durable": [
+      "actualRouteIdentity",
+      "host",
+      "port",
+      "username",
+      "hostKeyFingerprint",
+      "session",
+      "socketPath",
+      "paneId",
+      "terminalId"
+    ],
+    "notIdentity": [
+      "tabId",
+      "hostDisplayId",
+      "connectionGeneration",
+      "inputEpoch",
+      "requestId",
+      "createdAt"
+    ],
+    "rustAdditionalBinding": [
+      "herdrExecutablePath"
+    ],
+    "flutterLegacyBoundary": "v1/v2 did not record herdr executable path; preserve this historical limitation explicitly instead of inventing a value"
+  },
+  "flutterBridge": {
+    "channel": "herdr.pocket/input_journal",
+    "readAll": {
+      "arguments": null,
+      "returns": "List<String> raw canonical public markers"
+    },
+    "prepare": {
+      "arguments": [
+        "record"
+      ],
+      "returns": "opaque process-owner lease string"
+    },
+    "complete": {
+      "arguments": [
+        "record",
+        "lease"
+      ],
+      "effect": "known outcome or proven unsent; exact active lease and raw record only"
+    },
+    "abandon": {
+      "arguments": [
+        "record",
+        "lease"
+      ],
+      "effect": "retire only this active attempt; never remove durable record"
+    },
+    "resolve": {
+      "arguments": [
+        "record"
+      ],
+      "effect": "explicit reviewed original raw record only; reject while target active"
+    },
+    "envelope": {
+      "schemaVersion": 3,
+      "records": [
+        "{\"schemaVersion\":1,\"requestId\":\"11111111111111111111111111111111\",\"host\":\"127.0.0.1\",\"port\":2222,\"username\":\"fixture\",\"hostFingerprint\":\"SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"session\":\"fixture\",\"socketPath\":\"/fixture/herdr/sessions/fixture/herdr.sock\",\"paneId\":\"w1:p1\",\"terminalId\":\"term_abc\",\"generation\":1,\"createdAt\":\"2026-11-06T00:00:00.000Z\"}",
+        "{\"schemaVersion\":1,\"requestId\":\"22222222222222222222222222222222\",\"host\":\"127.0.0.1\",\"port\":2222,\"username\":\"fixture\",\"hostFingerprint\":\"SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"session\":\"fixture\",\"socketPath\":\"/fixture/herdr/sessions/fixture/herdr.sock\",\"paneId\":\"w1:p2\",\"terminalId\":\"term_def\",\"generation\":1,\"createdAt\":\"2026-11-06T00:00:00.000Z\"}"
+      ]
+    }
+  },
+  "rules": [
+    "Persist before network write. Never store input bytes or replay unknown input.",
+    "One pending marker per durable remote target, shared across tabs and attempts.",
+    "Different targets may prepare independently; one target being active or unknown cannot clear or block an unrelated valid target.",
+    "Same-target active ownership lasts through asynchronous original-operation settlement. A late completion/abandon cannot retire a newer attempt.",
+    "Known server receipt and explicit human resolution are different operations; neither may delete a different request record.",
+    "Legacy single record remains bound to its original recorded identity. Do not fill missing identity fields using the currently selected host.",
+    "Migration preserves an original unknown record or fails closed; no automatic deletion, eviction, input retry, or silent corruption repair.",
+    "Corrupt/unsupported/oversized store is unavailable rather than empty. Persistent failure cannot silently unlock writes.",
+    "No implicit shared PTY resize or input focus transfer."
+  ],
+  "cases": [
+    {
+      "id": "IJ01",
+      "scenario": "A unknown, B different terminal can persist and write; resolving B leaves A byte-exact"
+    },
+    {
+      "id": "IJ02",
+      "scenario": "Same target via two tabs cannot have concurrent writes or duplicate pending markers"
+    },
+    {
+      "id": "IJ03",
+      "scenario": "A old receipt/abandon/resolve cannot clear or retire a newer A request"
+    },
+    {
+      "id": "IJ04",
+      "scenario": "Manual resolution rejects an active write owned by another adapter or native instance"
+    },
+    {
+      "id": "IJ05",
+      "scenario": "Legacy single v1/v2 becomes one original entry on mutation; no fields rebound"
+    },
+    {
+      "id": "IJ06",
+      "scenario": "Changed route profile/revision/identity, host pin, host/user/socket/session/pane/terminal cannot clear old target"
+    },
+    {
+      "id": "IJ07",
+      "scenario": "Corrupt/truncated/duplicate/unknown-version/symlink store never treated as empty"
+    },
+    {
+      "id": "IJ08",
+      "scenario": "32-target and byte capacities reject new record without evicting existing unknown entries"
+    },
+    {
+      "id": "IJ09",
+      "scenario": "Prepare times out after persistence; caller never submits/replays and preserves original ownership until settlement"
+    },
+    {
+      "id": "IJ10",
+      "scenario": "Known receipt with local clear failure stays known-and-locked; unrelated target remains independent when storage is readable"
+    },
+    {
+      "id": "IJ11",
+      "scenario": "Concurrent prepare/clear conflicts preserve all unrelated records and exact request binding"
+    },
+    {
+      "id": "IJ12",
+      "scenario": "After process restart no active request is assumed; durable unknown requires original target new full and explicit review"
+    }
+  ]
+}

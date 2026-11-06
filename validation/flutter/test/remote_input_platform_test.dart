@@ -3,53 +3,79 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/remote_input.dart';
 import 'package:herdr_flutter_probe/remote_input_platform.dart';
 import 'remote_input_test.dart' show target;
+import 'remote_input_journal_test.dart' show MemoryTargetInputJournal;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const journal = PlatformRemoteInputJournal();
   final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   tearDown(() { messenger.setMockMethodCallHandler(PlatformRemoteInputJournal.channel,null); });
-  test('native journal stores a public marker and clear preserves its exact original string', () async {
-    String? slot;
-    final calls = <MethodCall>[];
+  test('bridge uses exact raw/lease arguments and unrelated target records coexist', () async {
+    final backend = MemoryTargetInputJournal(),calls = <MethodCall>[];
     messenger.setMockMethodCallHandler(PlatformRemoteInputJournal.channel,(call) async {
       calls.add(call);
-      if (call.method == 'read') return slot;
-      final raw = (call.arguments as Map)['record'] as String;
-      if (call.method == 'prepare') {
-        if (slot != null) throw PlatformException(code:'input_journal_not_empty');
-        slot = raw;
-      } else if (call.method == 'clear') {
-        if (slot != raw) throw PlatformException(code:'input_journal_mismatch');
-        slot = null;
-      }
-      return null;
+      try {
+        if (call.method == 'readAll') return backend.readAll();
+        final args = call.arguments as Map,raw = args['record'] as String;
+        switch (call.method) {
+          case 'prepare': return backend.prepare(raw);
+          case 'complete': await backend.complete(raw,args['lease'] as String); return null;
+          case 'abandon': await backend.abandon(raw,args['lease'] as String); return null;
+          case 'resolve': await backend.resolve(raw); return null;
+          default: throw PlatformException(code:'input_journal_unavailable');
+        }
+      } catch (_) { throw PlatformException(code:'input_journal_unavailable'); }
     });
     final first = RemoteInputPending.create('a'*32,target()).raw;
-    final other = RemoteInputPending.create('b'*32,target()).raw;
-    expect(await journal.read(),isNull);
-    await journal.prepare(first); expect(await journal.read(),first);
-    await expectLater(journal.prepare(other),throwsA(isA<PlatformException>()));
-    await expectLater(journal.clear(other),throwsA(isA<PlatformException>()));
-    expect(await journal.read(),first);
-    await journal.clear(first); expect(await journal.read(),isNull);
-    for (final call in calls.where((c) => c.method != 'read')) {
-      expect((call.arguments as Map).keys,['record']);
-      expect((call.arguments as Map)['record'],isNot(contains('bytes_base64')));
+    final other = RemoteInputPending.create('b'*32,target(term:'term_1234')).raw;
+    expect(await journal.readAll(),isEmpty);
+    final a = await journal.prepare(first),b = await journal.prepare(other);
+    expect(await journal.readAll(),[first,other]);
+    await expectLater(journal.resolve(first),throwsA(isA<PlatformException>()));
+    await expectLater(journal.complete(first,b),throwsA(isA<PlatformException>()));
+    await journal.abandon(first,a); expect(await journal.readAll(),[first,other]);
+    await journal.resolve(first); expect(await journal.readAll(),[other]);
+    await journal.complete(other,b); expect(await journal.readAll(),isEmpty);
+    expect(calls.every((call) => !{'read','clear'}.contains(call.method)),isTrue);
+    for (final call in calls) {
+      if (call.method == 'readAll') { expect(call.arguments,isNull); continue; }
+      final args = call.arguments as Map;
+      expect(args.keys.toSet(),{'record',if ({'complete','abandon'}.contains(call.method)) 'lease'});
+      expect(args['record'],isIn([first,other])); expect(args['record'],isNot(contains('bytes_base64')));
     }
   });
-  test('missing native bridge has no storage fallback', () async {
-    await expectLater(journal.read(),throwsA(isA<MissingPluginException>()));
-    await expectLater(journal.prepare(RemoteInputPending.create('c'*32,target()).raw),
-      throwsA(isA<MissingPluginException>()));
+  test('missing native bridge has no single-slot or storage fallback', () async {
+    await expectLater(journal.readAll(),throwsA(isA<MissingPluginException>()));
+    await expectLater(journal.prepare(RemoteInputPending.create('c'*32,target()).raw),throwsA(isA<MissingPluginException>()));
   });
-  test('malformed native read and private/extra fields fail closed before writing', () async {
+  test('readAll rejects malformed, duplicate endpoint and non-string records', () async {
+    final raw = RemoteInputPending.create('d'*32,target()).raw;
+    final duplicate = RemoteInputPending.create('e'*32,target(generation:2)).raw;
+    for (final response in <Object?>[null,raw,[raw,7],[raw,'{}'],[raw,duplicate]]) {
+      messenger.setMockMethodCallHandler(PlatformRemoteInputJournal.channel,(call) async => response);
+      await expectLater(journal.readAll(),throwsFormatException);
+    }
+  });
+  test('private records and malformed leases never reach the native bridge', () async {
     var calls = 0;
-    messenger.setMockMethodCallHandler(PlatformRemoteInputJournal.channel,(call) async {
-      calls++; return call.method == 'read' ? '{"text":"must-not-store"}' : null;
-    });
-    await expectLater(journal.read(),throwsFormatException);
+    messenger.setMockMethodCallHandler(PlatformRemoteInputJournal.channel,(call) async { calls++; return null; });
+    final raw = RemoteInputPending.create('f'*32,target()).raw;
     await expectLater(journal.prepare('{"privateKeyPem":"must-not-store"}'),throwsFormatException);
-    expect(calls,1);
+    for (final lease in ['', 'not-a-lease', 'A'*32, 'a'*31]) {
+      await expectLater(journal.complete(raw,lease),throwsFormatException);
+      await expectLater(journal.abandon(raw,lease),throwsFormatException);
+    }
+    expect(calls,0);
+  });
+  test('native prepare must return an opaque 32 lower-case hex lease; mutations must return null', () async {
+    final raw = RemoteInputPending.create('f'*32,target()).raw;
+    for (final response in <Object?>[null,true,7,'a'*31,'A'*32]) {
+      messenger.setMockMethodCallHandler(PlatformRemoteInputJournal.channel,(call) async => response);
+      await expectLater(journal.prepare(raw),throwsFormatException);
+    }
+    messenger.setMockMethodCallHandler(PlatformRemoteInputJournal.channel,(call) async => true);
+    await expectLater(journal.complete(raw,'1'*32),throwsFormatException);
+    await expectLater(journal.abandon(raw,'1'*32),throwsFormatException);
+    await expectLater(journal.resolve(raw),throwsFormatException);
   });
 }

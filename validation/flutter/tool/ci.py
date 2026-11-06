@@ -168,7 +168,9 @@ def pairing_provenance(platform, android_notice):
         'recovery': 'versioned public host catalog with device handles, pending creation intent and native CAS; restart requires original-key verification and manual target review; phone runtime NOT RUN',
         'hostCatalogSources': [source_record('validation/flutter/' + name) for name in
                                ['lib/host_catalog.dart', 'lib/host_catalog_page.dart', 'native/android/HostCatalogFile.kt', 'native/apple/HostCatalogFile.swift']],
-        'unknownInputMarker': {'scope': 'separate native single public marker, no command body; prepare/clear use exact record and atomic CAS; device runtime NOT RUN',
+        'unknownInputMarker': {'scope': 'bounded per-target native public markers, no command body; atomic CAS and process-owner lease; legacy single marker retained; device runtime NOT RUN',
+                               'api': ['readAll', 'prepare', 'complete', 'abandon', 'resolve'],
+                               'limits': {'targets': 32, 'recordBytes': 8192, 'storeBytes': 262144},
                                'sources': [source_record('validation/flutter/native/' + name) for name in ['android/InputJournalFile.kt', 'apple/InputJournalFile.swift']]},
         'networkIdentity': {
             'api': ['create', 'status', 'delete'], 'secretReadApi': False,

@@ -495,7 +495,7 @@ mod native {
         let new_target = recovery_target(new_route);
         let request = "0123456789abcdef0123456789abcdef";
         recovery.prepare(&old_target, request).unwrap();
-        recovery.end_attempt();
+        recovery.end_attempt(&old_target,request);
         assert_eq!(
             recovery.clear_confirmed(&new_target, None),
             Err("input_original_target_required")
@@ -503,7 +503,7 @@ mod native {
         assert!(recovery.unknown());
         recovery.clear_confirmed(&old_target, None).unwrap();
         recovery.prepare(&new_target, request).unwrap();
-        recovery.end_attempt();
+        recovery.end_attempt(&new_target,request);
         assert_eq!(
             recovery.clear_confirmed(&old_target, None),
             Err("input_original_target_required")

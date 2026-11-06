@@ -26,6 +26,12 @@ struct Stats {
     terminal: Mutex<String>,
     writes: Mutex<Vec<Vec<u8>>>,
     hold_receipt: AtomicBool,
+    hold_panes: Mutex<HashSet<String>>,
+    released_requests: Mutex<HashSet<String>>,
+    requests: Mutex<Vec<(String, String, String)>>,
+    receipts: Mutex<Vec<(String, bool)>>,
+    input_journal: Mutex<Option<PathBuf>>,
+    persisted_before_input: AtomicUsize,
     receipt: Notify,
     block_after_exec: AtomicBool,
     block_reads: AtomicBool,
@@ -99,7 +105,9 @@ impl server::Handler for Peer {
     ) -> std::result::Result<(), Self::Error> {
         self.stats.closes.fetch_add(1, Ordering::SeqCst);
         if locked(&self.stats.snapshot_fault_channels).remove(&channel) {
-            self.stats.snapshot_fault_closed.fetch_add(1, Ordering::SeqCst);
+            self.stats
+                .snapshot_fault_closed
+                .fetch_add(1, Ordering::SeqCst);
         }
         Ok(())
     }
@@ -111,7 +119,9 @@ impl server::Handler for Peer {
         _: &mut server::Session,
     ) -> std::result::Result<(), Self::Error> {
         if self.stats.hold_streamlocal_open.load(Ordering::SeqCst) {
-            self.stats.held_streamlocal_count.fetch_add(1, Ordering::SeqCst);
+            self.stats
+                .held_streamlocal_count
+                .fetch_add(1, Ordering::SeqCst);
             // Retain both objects: dropping the reply would auto-reject rather
             // than emulate a server that never confirms the open.
             locked(&self.stats.held_streamlocal).push((channel, reply));
@@ -234,23 +244,59 @@ impl server::Handler for Peer {
                     let bytes =
                         Base64::decode_vec(request["params"]["bytes_base64"].as_str().unwrap())
                             .unwrap();
+                    if let Some(path) = locked(&stats.input_journal).as_ref() {
+                        let ledger: Value = serde_json::from_slice(
+                            &std::fs::read(path.join("pending.json")).unwrap(),
+                        )
+                        .unwrap();
+                        assert!(
+                            ledger["records"].as_array().unwrap().iter().any(|raw| {
+                                let marker: Value =
+                                    serde_json::from_str(raw.as_str().unwrap()).unwrap();
+                                marker["request_id"] == request["id"]
+                                    && marker["target"]["pane"] == request["params"]["pane_id"]
+                                    && marker["target"]["terminal"]
+                                        == request["params"]["expected_terminal_id"]
+                            }),
+                            "remote input arrived before its exact durable marker"
+                        );
+                        stats.persisted_before_input.fetch_add(1, Ordering::SeqCst);
+                    }
                     locked(&stats.writes).push(bytes.clone());
-                    while stats.hold_receipt.load(Ordering::SeqCst) {
+                    let id = request["id"].as_str().unwrap().to_owned();
+                    let pane = request["params"]["pane_id"].as_str().unwrap().to_owned();
+                    locked(&stats.requests).push((
+                        id.clone(),
+                        pane.clone(),
+                        request["params"]["expected_terminal_id"]
+                            .as_str()
+                            .unwrap()
+                            .to_owned(),
+                    ));
+                    let held = || {
+                        (stats.hold_receipt.load(Ordering::SeqCst)
+                            || locked(&stats.hold_panes).contains(&pane))
+                            && !locked(&stats.released_requests).contains(&id)
+                    };
+                    while held() {
                         let wake = stats.receipt.notified();
                         tokio::pin!(wake);
                         wake.as_mut().enable();
-                        if !stats.hold_receipt.load(Ordering::SeqCst) {
+                        if !held() {
                             break;
                         }
                         wake.await;
                     }
-                    serde_json::json!({"id":request["id"],"result":{"type":"pocket_input_accepted","pane_id":"w1:p1","terminal_id":"term_abc","accepted_bytes":bytes.len()}})
+                    serde_json::json!({"id":request["id"],"result":{"type":"pocket_input_accepted","pane_id":request["params"]["pane_id"],"terminal_id":request["params"]["expected_terminal_id"],"accepted_bytes":bytes.len()}})
                 }
                 _ => return,
             };
             let mut bytes = serde_json::to_vec(&response).unwrap();
             bytes.push(b'\n');
-            let _ = stream.write_all(&bytes).await;
+            let written = stream.write_all(&bytes).await.is_ok();
+            if method == "pocket.input.send" {
+                locked(&stats.receipts).push((request["id"].as_str().unwrap().into(), written));
+            }
             let _ = stream.shutdown().await;
         });
         Ok(())
@@ -420,7 +466,20 @@ struct View {
 }
 impl View {
     fn launch(config: RemoteConfig, recovery: Option<recovery::SharedRecovery>) -> Self {
+        Self::launch_inner(config, recovery, false)
+    }
+    fn launch_watched(config: RemoteConfig, recovery: Option<recovery::SharedRecovery>) -> Self {
+        Self::launch_inner(config, recovery, true)
+    }
+    fn launch_inner(
+        config: RemoteConfig,
+        recovery: Option<recovery::SharedRecovery>,
+        watched: bool,
+    ) -> Self {
         let control = ObservationControl::new();
+        if watched {
+            control.set_dashboard_listener(Arc::new(|_| {})).unwrap();
+        }
         let cancel = Cancellation::default();
         let dials = Arc::new(Counting {
             dials: AtomicUsize::new(0),
@@ -619,11 +678,7 @@ async fn pause_submitted_input_is_unknown_and_late_receipt_never_clears_new_epoc
     let harness = Harness::new().await;
     harness.stats.hold_receipt.store(true, Ordering::SeqCst);
     let recovery = harness.recovery("journal");
-    let mut view = View::launch(harness.config.clone(), Some(recovery.clone()));
-    // Exercise the existing unknown-write contract with live watch channels.
-    view.control
-        .set_dashboard_listener(Arc::new(|_| {}))
-        .unwrap();
+    let mut view = View::launch_watched(harness.config.clone(), Some(recovery.clone()));
     view.accept().await;
     let (_, old) = view.input().await;
     let mut other_config = harness.config.clone();
@@ -1451,4 +1506,241 @@ async fn watch_fault_oversized_watch_retries_do_not_accumulate_channels() {
     assert_eq!(h.stats.auths.load(Ordering::SeqCst), 1);
     assert!(locked(&h.stats.writes).is_empty());
     view.stop().await;
+}
+
+fn input_identity(h: &Harness, pane: &str, terminal: &str) -> input::InputIdentity {
+    input::InputIdentity {
+        route: None,
+        host: h.config.host.clone(),
+        port: h.config.port,
+        user: h.config.username.clone(),
+        host_key: h.config.expected_host_key.clone(),
+        socket: h.config.socket_path.clone(),
+        herdr: h.config.herdr_path.clone(),
+        session: h.config.session.clone(),
+        pane: pane.into(),
+        terminal: terminal.into(),
+    }
+}
+fn release_receipt(h: &Harness, id: &str) {
+    locked(&h.stats.released_requests).insert(id.into());
+    h.stats.receipt.notify_waiters();
+}
+fn request_for(h: &Harness, pane: &str, index: usize) -> String {
+    locked(&h.stats.requests)
+        .iter()
+        .filter(|(_, p, _)| p == pane)
+        .nth(index)
+        .unwrap()
+        .0
+        .clone()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn target_recovery_real_ssh_unknown_a_does_not_block_b_and_old_ack_guard_review_cannot_clear_new_requests()
+ {
+    let h = Harness::new().await;
+    let recovery = h.recovery("target-journal");
+    *locked(&h.stats.input_journal) = Some(h.temp.0.join("target-journal"));
+    let identity_a = input_identity(&h, "w1:p1", "term_abc");
+    let identity_b = input_identity(&h, "w1:p2", "term_def");
+    let mut a = View::launch_watched(h.config.clone(), Some(recovery.clone()));
+    a.accept().await;
+    let (_, input_a) = a.input().await;
+    let mut config_b = h.config.clone();
+    config_b.pane_id = "w1:p2".into();
+    let mut b = View::launch(config_b, Some(recovery.clone()));
+    b.accept().await;
+    let (_, input_b) = b.input().await;
+    locked(&h.stats.hold_panes).extend(["w1:p1".into(), "w1:p2".into()]);
+    let mode_a = input_a.set_mode("direct", true).unwrap();
+    let send_a =
+        tokio::spawn(async move { input_a.send(mode_a, b"a-old-once".to_vec(), false).await });
+    until(|| locked(&h.stats.requests).len() == 1).await;
+    // A's active marker must not deny a different pane's actual SSH write.
+    assert_eq!(input_b.recovery_status(), "ready");
+    let mode_b = input_b.set_mode("direct", true).unwrap();
+    let pending_b = input_b.clone();
+    let send_b = tokio::spawn(async move {
+        pending_b
+            .send(mode_b, b"b-first-once".to_vec(), false)
+            .await
+    });
+    until(|| locked(&h.stats.requests).len() == 2).await;
+    let old_a = request_for(&h, "w1:p1", 0);
+    let first_b = request_for(&h, "w1:p2", 0);
+    assert_eq!(
+        recovery.pending_id(&identity_a).unwrap().as_deref(),
+        Some(old_a.as_str())
+    );
+    assert_eq!(
+        recovery.pending_id(&identity_b).unwrap().as_deref(),
+        Some(first_b.as_str())
+    );
+    a.control.pause().unwrap().await.unwrap();
+    assert_eq!(send_a.await.unwrap().unwrap(), SendOutcome::Unknown);
+    // The cancelled A guard has run. B's independent original operation is
+    // still active and cannot be human-cleared by this or any other adapter.
+    assert_eq!(
+        recovery.clear_reviewed(&identity_b, &first_b),
+        Err("input_write_pending")
+    );
+    release_receipt(&h, &first_b);
+    let SendOutcome::Accepted(receipt) = send_b.await.unwrap().unwrap() else {
+        panic!("B must receive its own matching receipt")
+    };
+    assert_eq!(receipt.request_id, first_b);
+    assert_eq!(receipt.pane_id, "w1:p2");
+    assert_eq!(receipt.terminal_id, "term_def");
+    assert_eq!(receipt.accepted_bytes, b"b-first-once".len());
+    assert_eq!(
+        recovery.pending_id(&identity_a).unwrap(),
+        Some(old_a.clone())
+    );
+    assert_eq!(input_b.recovery_status(), "ready");
+    let resume = a.control.resume().unwrap();
+    a.accept().await;
+    resume.await.unwrap();
+    let (_, fresh_a) = a.input().await;
+    // An alias has the exact same remote identity, not a new journal key.
+    // It freezes the old pending ID at a separately consumed fresh full.
+    let mut reviewer = View::launch(h.config.clone(), Some(recovery.clone()));
+    reviewer.accept().await;
+    let (_, stale_review) = reviewer.input().await;
+    let stale_epoch = stale_review.set_mode("observe", true).unwrap();
+    assert!(stale_review.unknown());
+    let reviewed = fresh_a.set_mode("observe", true).unwrap();
+    fresh_a.acknowledge_unknown(reviewed).unwrap();
+    let mode = fresh_a.set_mode("direct", true).unwrap();
+    let sending_a = fresh_a.clone();
+    let newer_a =
+        tokio::spawn(async move { sending_a.send(mode, b"a-new-once".to_vec(), false).await });
+    until(|| locked(&h.stats.requests).len() == 3).await;
+    let sending_b = input_b.clone();
+    let newer_b =
+        tokio::spawn(async move { sending_b.send(mode_b, b"b-new-once".to_vec(), false).await });
+    until(|| locked(&h.stats.requests).len() == 4).await;
+    let new_a = request_for(&h, "w1:p1", 1);
+    let new_b = request_for(&h, "w1:p2", 1);
+    assert_ne!(old_a, new_a);
+    // Release only the old A reply. Neither newer request has a result yet.
+    release_receipt(&h, &old_a);
+    until(|| locked(&h.stats.receipts).iter().any(|(id, _)| id == &old_a)).await;
+    assert_eq!(
+        recovery.pending_id(&identity_a).unwrap(),
+        Some(new_a.clone())
+    );
+    assert_eq!(
+        recovery.pending_id(&identity_b).unwrap(),
+        Some(new_b.clone())
+    );
+    assert_eq!(
+        recovery.clear_reviewed(&identity_a, &new_a),
+        Err("input_write_pending")
+    );
+    assert_eq!(
+        recovery.clear_reviewed(&identity_b, &new_b),
+        Err("input_write_pending")
+    );
+    assert_eq!(
+        stale_review.acknowledge_unknown(stale_epoch),
+        Err("input_original_target_required")
+    );
+    a.control.pause().unwrap().await.unwrap();
+    assert_eq!(newer_a.await.unwrap().unwrap(), SendOutcome::Unknown);
+    b.control.pause().unwrap().await.unwrap();
+    assert_eq!(newer_b.await.unwrap().unwrap(), SendOutcome::Unknown);
+    // Even after active retirement, a late review from the old full cannot
+    // clear the newer same-target request. Nor can another target clear it.
+    assert_eq!(
+        stale_review.acknowledge_unknown(stale_epoch),
+        Err("input_original_target_required")
+    );
+    assert_eq!(
+        recovery.pending_id(&identity_a).unwrap(),
+        Some(new_a.clone())
+    );
+    assert_eq!(
+        recovery.pending_id(&identity_b).unwrap(),
+        Some(new_b.clone())
+    );
+    assert_eq!(
+        locked(&h.stats.writes).as_slice(),
+        [
+            b"a-old-once".to_vec(),
+            b"b-first-once".to_vec(),
+            b"a-new-once".to_vec(),
+            b"b-new-once".to_vec()
+        ]
+    );
+    assert_eq!(h.stats.persisted_before_input.load(Ordering::SeqCst), 4);
+    assert_eq!(a.dials.dials.load(Ordering::SeqCst), 1);
+    assert_eq!(b.dials.dials.load(Ordering::SeqCst), 1);
+    assert_eq!(h.stats.auths.load(Ordering::SeqCst), 3);
+    release_receipt(&h, &new_a);
+    release_receipt(&h, &new_b);
+    for view in [a, b, reviewer] {
+        view.cancel.cancel();
+        assert!(view.task.await.unwrap().is_err());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn target_recovery_real_ssh_same_identity_alias_cannot_write_or_resolve_active_other_view() {
+    let h = Harness::new().await;
+    let recovery = h.recovery("same-target-journal");
+    *locked(&h.stats.input_journal) = Some(h.temp.0.join("same-target-journal"));
+    let mut a = View::launch(h.config.clone(), Some(recovery.clone()));
+    a.accept().await;
+    let (_, input_a) = a.input().await;
+    let mut alias = View::launch(h.config.clone(), Some(recovery.clone()));
+    alias.accept().await;
+    let (_, input_alias) = alias.input().await;
+    locked(&h.stats.hold_panes).insert("w1:p1".into());
+    let mode = input_a.set_mode("direct", true).unwrap();
+    let sending =
+        tokio::spawn(async move { input_a.send(mode, b"only-one".to_vec(), false).await });
+    until(|| locked(&h.stats.requests).len() == 1).await;
+    let alias_mode = input_alias.set_mode("direct", true).unwrap();
+    assert_eq!(
+        input_alias
+            .send(alias_mode, b"must-not-send".to_vec(), false)
+            .await,
+        Err("input_stale")
+    );
+    assert_eq!(locked(&h.stats.requests).len(), 1);
+    // A view obtaining a new full during the active request captures its ID,
+    // but cannot turn that into permission to clear an operation still active.
+    let mut reviewer = View::launch(h.config.clone(), Some(recovery.clone()));
+    reviewer.accept().await;
+    let (_, input_review) = reviewer.input().await;
+    // Match the native mode-command mapping: ordinary observe/blur must not
+    // gain review focus, even with a fresh full and the correct pending ID.
+    let blurred = input_review.set_mode("observe", false).unwrap();
+    assert_eq!(
+        input_review.acknowledge_unknown(blurred),
+        Err("input_stale")
+    );
+    let mode = input_review.set_mode("observe", true).unwrap();
+    assert_eq!(
+        input_review.acknowledge_unknown(mode),
+        Err("input_write_pending")
+    );
+    a.control.pause().unwrap().await.unwrap();
+    assert_eq!(sending.await.unwrap().unwrap(), SendOutcome::Unknown);
+    let lost_focus = input_review.set_mode("observe", false).unwrap();
+    assert_ne!(mode, lost_focus);
+    assert_eq!(input_review.acknowledge_unknown(mode), Err("input_stale"));
+    let reviewed_epoch = input_review.set_mode("observe", true).unwrap();
+    input_review.acknowledge_unknown(reviewed_epoch).unwrap();
+    assert_eq!(recovery.status(), "ready");
+    assert_eq!(locked(&h.stats.writes).as_slice(), [b"only-one".to_vec()]);
+    assert_eq!(h.stats.persisted_before_input.load(Ordering::SeqCst), 1);
+    let old = request_for(&h, "w1:p1", 0);
+    release_receipt(&h, &old);
+    until(|| locked(&h.stats.receipts).iter().any(|(id, _)| id == &old)).await;
+    for view in [a, alias, reviewer] {
+        view.cancel.cancel();
+        assert!(view.task.await.unwrap().is_err());
+    }
 }

@@ -299,7 +299,10 @@ async fn run_case(corrupt: bool) {
     assert_eq!(result, SendOutcome::Unknown);
     let marker = std::fs::read_to_string(dir.join("pending.json")).unwrap();
     let marker_json: Value = serde_json::from_str(&marker).unwrap();
-    assert_eq!(marker_json["request_id"], writes.lock().unwrap()[0].0);
+    assert_eq!(
+        serde_json::from_str::<Value>(marker_json["records"][0].as_str().unwrap()).unwrap()["request_id"],
+        writes.lock().unwrap()[0].0
+    );
     assert!(!marker.contains("fixture-secret-body"));
     assert!(!marker.contains(&Base64::encode_string(b"fixture-secret-body")));
     assert!(first.set_mode("observe", true).is_err());
@@ -334,7 +337,10 @@ async fn run_case(corrupt: bool) {
     original.acknowledge_unknown(observe).unwrap();
     assert_eq!(reopened.status(), "ready");
     assert_eq!(original.acknowledge_unknown(observe), Err("input_stale"));
-    assert!(!dir.join("pending.json").exists());
+    let cleared: Value =
+        serde_json::from_slice(&std::fs::read(dir.join("pending.json")).unwrap()).unwrap();
+    assert_eq!(cleared["version"], 2);
+    assert_eq!(cleared["records"], serde_json::json!([]));
     tokio::time::sleep(Duration::from_millis(150)).await;
     assert_eq!(writes.lock().unwrap().len(), 1);
     assert!(connections.load(Ordering::SeqCst) >= 3);

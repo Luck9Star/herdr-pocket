@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-06",
+  "branch": "codex/core-prototype-validation",
+  "baseCommit": "2c31309b441f16429726586fb9f3c24e1703902f",
+  "scope": "source integration and isolated checks only; source hashes identify this batch without self-referential commit hash",
+  "newActionsRun": false,
+  "newApk": false,
+  "existingApkSource": "040eb26ba7c31e071048616a39591e17c74c99ab",
+  "currentArtifactRun": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42158644225",
+  "checks": [
+    {
+      "name": "Android vault JVM",
+      "result": "passed",
+      "count": 38,
+      "executedBy": [
+        "author",
+        "root",
+        "independent-reviewer"
+      ],
+      "scope": "temporary memory-key backend; no AndroidKeyStore"
+    },
+    {
+      "name": "fixed EasyTier configuration JVM",
+      "result": "passed",
+      "count": 33,
+      "executedBy": [
+        "author",
+        "root",
+        "independent-reviewer"
+      ],
+      "scope": "synthetic records; Python tomllib independently parses emitted TOML"
+    },
+    {
+      "name": "JNI source Rust unit",
+      "result": "passed",
+      "count": 2,
+      "executedBy": [
+        "root",
+        "independent-reviewer"
+      ],
+      "command": "cargo test --locked --offline --manifest-path validation/android-network-source/Cargo.toml"
+    },
+    {
+      "name": "JNI source desktop JVM",
+      "result": "passed",
+      "count": 52,
+      "executedBy": [
+        "root",
+        "independent-reviewer"
+      ],
+      "command": "sh validation/android-network-source/tests/run-jvm.sh",
+      "scope": "-Xcheck:jni; synthetic Context and callback; not Android SDK or vault"
+    },
+    {
+      "name": "JNI source strict Clippy",
+      "result": "passed",
+      "executedBy": [
+        "root"
+      ],
+      "scope": "default all-targets"
+    },
+    {
+      "name": "transport native-fixture complete",
+      "result": "passed",
+      "libraryTests": 51,
+      "cliTests": 1,
+      "executedBy": [
+        "mobile-node-service-agent"
+      ],
+      "scope": "synthetic native ABI and isolated SSH; final loopback suite outside sandbox after bind permissions blocked original run"
+    },
+    {
+      "name": "transport default complete",
+      "result": "passed",
+      "libraryTests": 43,
+      "cliTests": 1,
+      "executedBy": [
+        "mobile-node-service-agent"
+      ]
+    },
+    {
+      "name": "mobile-node-service focused",
+      "result": "passed",
+      "count": 9,
+      "executedBy": [
+        "author",
+        "root"
+      ],
+      "scope": "fixture mode, stable persisted recovery identity, exact old lease, cancellation, bounded cleanup/history"
+    },
+    {
+      "name": "runtime native-fixture",
+      "result": "passed",
+      "count": 25,
+      "executedBy": [
+        "author",
+        "root"
+      ]
+    },
+    {
+      "name": "runtime default gate",
+      "result": "passed",
+      "count": 1,
+      "executedBy": [
+        "mobile-node-service-agent"
+      ]
+    },
+    {
+      "name": "runtime strict Clippy",
+      "result": "passed",
+      "executedBy": [
+        "mobile-node-service-agent"
+      ],
+      "scope": "default and native-fixture"
+    },
+    {
+      "name": "transport strict Clippy",
+      "result": "failed",
+      "existingDiagnostics": 12,
+      "executedBy": [
+        "mobile-node-service-agent"
+      ],
+      "scope": "existing config_transfer/input/lib/input_loopback; no new mobile_nodes/overlay diagnostic; not reported clean"
+    },
+    {
+      "name": "Tauri default Rust library",
+      "result": "passed",
+      "count": 23,
+      "executedBy": [
+        "author",
+        "root"
+      ]
+    },
+    {
+      "name": "Tauri JS complete and frontend build",
+      "result": "passed",
+      "count": 73,
+      "executedBy": [
+        "phone-network-tauri-agent"
+      ]
+    },
+    {
+      "name": "Flutter packaging Python tools",
+      "result": "passed",
+      "count": 8,
+      "executedBy": [
+        "root"
+      ],
+      "scope": "only source provenance changed; not Flutter/Dart compile"
+    },
+    {
+      "name": "Tauri node UI focused",
+      "result": "passed",
+      "count": 17,
+      "executedBy": [
+        "author",
+        "root",
+        "independent-reviewer"
+      ],
+      "scope": "including deferred start, explicit exact-binding stop, unknown result readback and late completion; independent two-order completion checks"
+    }
+  ],
+  "review": {
+    "nativeBoundary": "independent reviewer found no blocking defect; additional all non-NUL C0/C1/DEL, injection and supplementary Unicode TOML roundtrip, four malformed UTF-8 cases rejected",
+    "guiFinding": "pending start prevented explicit stop; fixed independent stop lane, actual binding readback and late-result handling. Independent reviewer passed both completion orders; no unresolved finding in this scoped review."
+  },
+  "unverified": [
+    "Android+network-easytier Rust cfg, Kotlin and Gradle build",
+    "Android JNI and AndroidKeyStore runtime",
+    "fixed real EasyTier parser/start/dial",
+    "actual overlay SSH/herdr end-to-end",
+    "Flutter platform stream and node GUI (not implemented)",
+    "mobile IME/touch/camera/lifecycle",
+    "Tailscale/ZeroTier native runtime and concurrent networks",
+    "iOS signing/install and remaining platform matrix"
+  ],
+  "limits": [
+    "fixed engine rejects PUBLIC_NO_SECRET; GUI and backend refuse explicitly",
+    "EngineStarted is not joined or connected",
+    "default applications have no linked Android engine and fail closed",
+    "8 retained nodes; 32 profile history IDs per service",
+    "owned buffer clearing does not guarantee VM/provider copies erased",
+    "no real authorization files, identities, credentials or nodes accessed"
+  ],
+  "toolsCleanup": "Only isolated command-line/JVM processes used; no GUI test app opened in this batch; temporary JVM directories removed by runner.",
+  "sourceReferences": {
+    "jni": "0.21.1",
+    "zeroize": "1.9.1",
+    "heeler": "6a2817fc02aeb552df251d9478753c22fd4738bb",
+    "easytier": "728ba94b5029240add6204eed591f22e4e039e6b",
+    "easytierConfigBlob": "81692860334e6e1547d6953d2b9df9e197a56382",
+    "documentation": "Context7 lookup then fixed jni 0.21.1 source/API; fixed EasyTier config schema read, not executed"
+  },
+  "protectedFile": {
+    "path": "design/penpot/build-v2.js",
+    "sha256": "34d9928f02e6fac2e24dc45ed643e7656a8ff1e796e46b70cc7346b5fff52957"
+  },
+  "sources": {
+    "README.md": "721950b6f2e55114785e5af88f9c56af882a89c5428d2b10bc6468aee7da37f6",
+    "docs/04-roadmap.md": "ff21f97ce929113c9273b77b82aa51ec0783641de2b2c395d7841e2f370687a6",
+    "docs/19-mobile-network-identity.md": "6faaece1b81ad7f5fc0bf741772baa13af2af0a57d2cadb3d7551938143828c3",
+    "docs/20-mobile-node-routing.md": "2bdb40913669151095e1051fd22b316ae177086cca1bb702b397abb3e635c84c",
+    "validation/android-network-source/.gitignore": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368",
+    "validation/android-network-source/Cargo.lock": "12bf1a7f0f0bd221958043b8079a9571c9f62d9892bbbfe151b85b3cc2b80637",
+    "validation/android-network-source/Cargo.toml": "0c10bfedbf59b53c778ae09b5ad308366fa6e355cb20cf7a09079c45a76e6e92",
+    "validation/android-network-source/README.md": "8febcd2618c1895cdbec26bd07674b837dd7799d083ad55e795c80960628509f",
+    "validation/android-network-source/src/jvm_fixture.rs": "8fe18e4238718b2f364a4ded2b3e199ca33b894dc1c72054ba6a43a0d76611d7",
+    "validation/android-network-source/src/lib.rs": "08dfaa5bb801e89ac50e217f35e0344d173ce6ea12318d6048faf0f94af19faf",
+    "validation/android-network-source/tests/java/android/content/Context.java": "ea08454364560a0f8a8480cb9c8ab03302dd3ec9a1be581c024bf50ebb745bc5",
+    "validation/android-network-source/tests/java/org/herdr/network/AndroidEasyTierConfig.java": "8d26d3dd66ffcc66ab3f044947c5941feeb8b6e9c67d4e7a7c8085fea9cbcf27",
+    "validation/android-network-source/tests/java/org/herdr/network/NetworkSourceFixture.java": "9f0ad16bdb10874aa895f95d06a20dea52b5a69a77f1068807ddea0d4b70f5bd",
+    "validation/android-network-source/tests/run-jvm.sh": "a237cd3ec8d645952e9382f8481134ebe9aa096c3fa4a01770c0f8ff3c2cfcc1",
+    "validation/flutter/tool/ci.py": "18edcd395866073877d4b231647bb4327ba72178969a58b5072cf3297e8dd466",
+    "validation/network-profiles/native/android/AndroidEasyTierConfig.java": "1733e1fb41121b93b9715592e47eafb1b6a3b7cd127d00a7b6ba16c2fcb4de69",
+    "validation/network-profiles/native/android/AndroidNetworkSecretStore.java": "94b746bc637e5329bdda38d6b85a3b0e5439759d7299e981dfc3fd795a7cd55d",
+    "validation/network-profiles/native/android/EasyTierConfigBuilder.java": "031497d530ca8df5b99b40bf4343ea7d53222bdea903852b787f4f642eb699e9",
+    "validation/network-profiles/native/android/NetworkSecretStoreCore.java": "ae6b79d8867efed9909dd789420da0a2c769bdc95964983363fbf4f34a8886ec",
+    "validation/network-profiles/native/android/README.md": "df0173cd4028c901bc43c6db471bc52389179e6f5df57e6f66c159b8de553e75",
+    "validation/network-profiles/native/android/tests/EasyTierConfigTest.java": "d9c2a7ce4274d660f46a4e6ddaafe55a85a0d2c1bcba92a56aa468bbfd5b6c4a",
+    "validation/network-profiles/native/android/tests/run.sh": "9a57fbdb2f9775104691bf743fbb5f0b25068ca4969396359dfc705df00c177b",
+    "validation/overlay-runtime/src/lib.rs": "8d3752ead015c8e01e2de4404d615c93377054fc445f78b416cdaa368fac349d",
+    "validation/overlay-runtime/src/nodes.rs": "97732bdac0dec6478ab3b6a57dc6d656472d7a558ad44729faabc700a235df53",
+    "validation/overlay-runtime/src/tests.rs": "17a8dca2b84927bdd32494e550e764112b89dbec982d6509585ef047c0bee901",
+    "validation/tauri/android/DeviceKeysPlugin.kt": "910e54618f58edd22ce6648cdb9cf60c726a71f8bef1b97d25bc7ec5e933d165",
+    "validation/tauri/scripts/package-artifacts.py": "6487ffedc26a11b5abd2d6c04182e606419309a66b25f89779be91b78da93077",
+    "validation/tauri/src-tauri/Cargo.lock": "80a71a9c2d106c82d61dc7b62eaa33d084df2eaf67adaa245527e86b90652fde",
+    "validation/tauri/src-tauri/Cargo.toml": "8c06a9531f06b2e71c17d92ad8a6881a3b4d9cfc7a9744c30c291e936fdf7893",
+    "validation/tauri/src-tauri/src/hosts.rs": "3912405437bcd96c1916e5937171d5c9e781211d8a61fb186cc864a3d219de16",
+    "validation/tauri/src-tauri/src/lib.rs": "b2ac5a3f5e107ffeef7c83325db01183f03f6535b1e009504f22bcc01fd6a0d8",
+    "validation/tauri/src-tauri/src/network_nodes.rs": "9314d8ca978a27913b318bc2ce1b0ddd8d6d538d7a82dc36b5541846d31c9375",
+    "validation/tauri/src/network-node-state.js": "86cc5b764d20da40e1c9760a36ae3ef50e787311f15d7d7af33b7a761fa89818",
+    "validation/tauri/src/network-ui.js": "0a518c6fdc458bd383c826251f3b1dd804e24e94d90864cf6d3bbcb71321919c",
+    "validation/tauri/src/remote.js": "077f8404a160bb5a6fdde145eac9d8b6c575cd4992ee7681b35998538bf50284",
+    "validation/tauri/test/network-node-state.test.mjs": "8cd45793eafb21153613932051042c925b4389209d294ecffa71d62081b307b0",
+    "validation/tauri/test/network-ui.test.mjs": "15bc2f2af7ed764f981fa0da16dc724a7b13e97568372d2aa02f20050c2ac3ba",
+    "validation/transport-rust/README.md": "549337277670283108c9128a126de9539f9ef8f8b71355df2b8932f8abfa6d9a",
+    "validation/transport-rust/src/lib.rs": "4a1491b8efbba9796c1e34652387ac6b42fab965bc00786ab76ffc0187b7a9ea",
+    "validation/transport-rust/src/mobile_nodes.rs": "4713cbcb87ed9a2855182ae1900b47e798045818def247d85caa5bf8e0493e81",
+    "validation/transport-rust/src/mobile_nodes/tests.rs": "fa469a6561a8d75b2af6b51c648758f984cf7c62e9c6c85a032f2bc5160c3b38",
+    "validation/transport-rust/src/overlay.rs": "538348196ad645dfe6253e86efbdba224c57842ea9a44dde812c9f8c13f86c43",
+    "validation/transport-rust/src/overlay/tests.rs": "66a98f42a78467f7b7e5454da34045db6014680e0883f876f1f02b83b46d79e9",
+    "validation/transport-rust/src/overlay/tests/ssh.rs": "c62d666cb852e32ce1ed269a3db8c29b7076f7bb7e5d609247381974d25c7712",
+    "validation/transport-rust/src/transport.rs": "266bde4312e10df66a52701f13227fc6a15e00605e22539190a6c38d596447e0"
+  }
+}

@@ -1,4 +1,4 @@
-//! App-owned node leases. No secure-store implementation is shipped here;
+//! App-owned node leases. This runtime has no built-in secure-store implementation;
 //! absent one, startup refuses before reading state or entering native code.
 use super::*;
 use crate::easytier::EasyTierBackend;
@@ -9,7 +9,10 @@ pub const MAX_NODES: usize = 8;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NodeSpec {
     pub profile: ProfileKey,
+    /// Strictly increasing process-local start attempt, never durable identity.
     pub revision: u64,
+    /// Persisted public configuration revision; stable across stop/restart.
+    pub profile_revision: u32,
     pub network: String,
     pub identity_ref: String,
 }
@@ -44,7 +47,7 @@ impl Drop for SecretConfig {
 }
 /// Host integration must load only this device's safe-storage reference and
 /// construct an in-memory configuration. Do not implement a plaintext fallback.
-/// No implementation of this trait is provided for any production platform.
+/// Host crates inject their own platform implementation; none is built in here.
 pub trait SecureConfigSource: Send + Sync + 'static {
     fn load(&self, spec: &NodeSpec) -> Result<SecretConfig>;
 }
@@ -55,7 +58,7 @@ pub enum NodeStatus {
     Closing,
     Stopped,
 }
-/// Immutable profile revision + native node epoch. Never exposes the native ID.
+/// Immutable saved binding + one runtime start attempt. Never exposes native ID.
 #[derive(Clone)]
 pub struct NodeLease {
     entry: Arc<NodeEntry>,
@@ -67,6 +70,9 @@ impl NodeLease {
     }
     pub fn revision(&self) -> u64 {
         self.entry.spec.revision
+    }
+    pub fn profile_revision(&self) -> u32 {
+        self.entry.spec.profile_revision
     }
     /// Safe-storage reference only, never identity state or secret config.
     pub fn identity_ref(&self) -> &str {
@@ -220,6 +226,7 @@ impl OverlayRuntime {
         }
         if spec.profile.provider != Provider::EasyTier
             || spec.revision == 0
+            || spec.profile_revision == 0
             || spec.profile.id.is_empty()
             || spec.profile.id.len() > 128
             || !spec
@@ -376,8 +383,44 @@ impl OverlayRuntime {
         port: u16,
         deadline: Duration,
     ) -> Result<Operation<StreamLease>> {
-        self.owned_node(node)?;
-        self.open_revision(owner, node.profile(), node.revision(), host, port, deadline)
+        let entry = self.owned_node(node)?;
+        if !lock(&self.inner.registry)
+            .nodes
+            .get(node.profile())
+            .is_some_and(|current| Arc::ptr_eq(current, &entry))
+        {
+            return Err(Failure::StaleRevision);
+        }
+        // Exact profile Arc is checked again while open holds the admission
+        // lock, so even a same-revision replacement cannot race this lease.
+        self.open_checked(
+            owner,
+            node.profile(),
+            OpenRoute::Node(&entry.profile),
+            host,
+            port,
+            deadline,
+        )
+    }
+    /// Observe one exact attempt, including pending/failed start cleanup for
+    /// which no NodeLease was delivered. Never follows a replacement attempt.
+    pub fn node_status_revision(
+        &self,
+        key: &ProfileKey,
+        revision: u64,
+    ) -> Result<NodeOperation<NodeStatus>> {
+        let entry = lock(&self.inner.registry)
+            .nodes
+            .get(key)
+            .cloned()
+            .ok_or(Failure::ProfileMissing)?;
+        if entry.spec.revision != revision {
+            return Err(Failure::StaleRevision);
+        }
+        self.node_status(&NodeLease {
+            entry,
+            runtime: Arc::downgrade(&self.inner),
+        })
     }
     pub fn node_status(&self, lease: &NodeLease) -> Result<NodeOperation<NodeStatus>> {
         let entry = self.owned_node(lease)?;
@@ -474,10 +517,13 @@ impl Inner {
         completion: Option<Arc<Completion<()>>>,
     ) {
         // Admission closes under the same registry mutex used by open/start ready.
-        {
+        let was_pending = {
             let _registry = lock(&self.registry);
             entry.closing.store(true, Ordering::Release);
-            entry.profile.active.store(false, Ordering::Release);
+            entry.retire_admission()
+        };
+        if was_pending {
+            entry.wake_detached_start();
         }
         if entry.stopped.load(Ordering::Acquire) {
             if let Some(c) = completion {
@@ -584,6 +630,7 @@ mod unavailable_tests {
                 id: "no-bridge".into(),
             },
             revision: 1,
+            profile_revision: 1,
             network: "synthetic".into(),
             identity_ref: "synthetic-ref".into(),
         };

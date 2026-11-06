@@ -2,6 +2,7 @@ package org.herdr.pocket
 
 import android.app.Activity
 import android.os.Build
+import android.webkit.WebView
 import android.util.Base64
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -11,6 +12,7 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import org.herdr.pairing.AndroidDeviceKeyStore
 import org.herdr.network.AndroidNetworkSecretStore
+import org.herdr.network.AndroidEasyTierConfig
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -26,6 +28,11 @@ class KeyArgs { var handle: String = ""; var payload: String = "" }
 // This plugin is registered only for calls from Rust; no seed crosses the bridge.
 @TauriPlugin
 class DeviceKeysPlugin(private val activity: Activity): Plugin(activity) {
+    override fun load(webView: WebView) {
+        super.load(webView)
+        // Context registration only. No identity read, engine start or retry loop.
+        try { AndroidEasyTierConfig.bindNative(activity.applicationContext) } catch (_:LinkageError) {} catch (_:Exception) {}
+    }
     private val networkExecutor = ThreadPoolExecutor(1,1,0L,TimeUnit.MILLISECONDS,ArrayBlockingQueue<Runnable>(1))
     private class NetworkTask(val invoke:Invoke,val args:NetworkIdentityArgs,val block:()->JSObject):Runnable {
         override fun run() { try { invoke.resolve(block()) } catch (_:Exception) { invoke.reject("network_identity_unavailable") } finally { args.secret="" } }

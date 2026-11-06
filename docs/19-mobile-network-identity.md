@@ -2,6 +2,8 @@
 
 2026-11-06，后续源码批次。本批接入两套手机 GUI 的 EasyTier 本机秘密管理，并为 Rust SSH 传输增加显式 overlay 字节流适配。**没有重建 Android 包或触发 Actions；[上一批下载和设备证据](18-mobile-network-profiles.md)仍对应 `040eb26`。本批尚未把 Android vault、原生节点启动和 GUI SSH 连成可运行的组网闭环。**
 
+后续源码已增加 JNI 配置源、共享节点服务和 Tauri 手机显式路由，Android 构建与真实组网仍待验收；最新状态见 [节点接线记录](20-mobile-node-routing.md)。以下保留本批次原验证边界。
+
 ## 手机入口与本机资料
 
 Flutter 和 Tauri 的网络管理页在公开配置之外提供本机入网资料入口。Android API 35 起使用同一份 [Java vault](../validation/network-profiles/native/android/README.md)；其他平台或 provider 明确显示尚未接入。资料保存不表示节点启动、加入网络或连接成功。

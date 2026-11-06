@@ -63,7 +63,7 @@ CI-only probe 增加 `observe-positive`（至少三帧及一个 delta）、`obse
 - 原生 read 的 `-2` 明确映射 `ReadTimedOut`，只在同步 FFI 已返回、原 read slot 已释放后，以 Tokio timer 至少间隔 10 ms 再提交 read。正常空闲保持 pending；迟到 read 未返回时不再提交。这里依据固定 portable `Registry::read` 对 cancel-safe Tokio `read` 的 timeout；其他 read 错误仍关闭。write timeout 不走这条继续路径。SSH 握手的整体 8 秒限时和首帧限时继续由共享上层执行。
 - `shutdown` 是异步半关闭，保留读取；`close`、取消和 Drop 请求退休本 owner 的流。它们不是 cleanup 成功凭据：宿主保留 runtime，通过 `reserved_streams()` 及节点 cleanup 状态观察尚未返回/清理失败的配额，需要时显式重试原 revision 的 cleanup。
 
-recovery marker 现在绑定**实际连接 stream**提供的 `provider/profile_id/profile_revision/identity_ref`，并继续比较原 SSH host/key/user/socket/session/pane/terminal。没有让 GUI caller 自行传 `None`。旧 marker 缺少 `route` 字段时只表示 legacy/system，overlay 不能清除它；不同 provider、profile、revision 或设备安全存储引用均不能确认同一未知输入。持久 route 不含仅本进程有效的 node epoch/owner，profile 的 network 或 identity 改变必须提升持久 revision。
+recovery marker 现在绑定**实际连接 stream**提供的 `provider/profile_id/profile_revision/identity_ref`，并继续比较原 SSH host/key/user/socket/session/pane/terminal。没有让 GUI caller 自行传 `None`。旧 marker 缺少 `route` 字段时只表示 legacy/system，overlay 不能清除它；不同 provider、profile、revision 或设备安全存储引用均不能确认同一未知输入。持久 route 不含仅本进程有效的 node epoch/owner；公开网络设置改变必须提升持久 revision，独立 vault 身份换代由新的 `identity_ref` 区分。
 
 feature `overlay-linked-easytier` 明确链接既定候选库；`overlay-native-fixture` 明确启用合成 C ABI，不能作为真实网络证据或缺桥 fallback。`OverlayDialer` 不能在未启用 fixture feature 时接收 `SyntheticNativeFixture` node。路径依赖 `herdr-overlay-runtime-probe = 0.1.0` 固定在本仓库，未新增外部依赖版本。
 
@@ -82,3 +82,17 @@ CARGO_TARGET_DIR=/private/tmp/herdr-overlay-runtime-target cargo test --locked -
 新增测试只使用合成 Backend、受控 C ABI、Unix socketpair 及原有自建 loopback SSH fixture。Unix socketpair 测试经过真正的 `OverlayStream → russh` key exchange，分别证明只读和 guarded 入口在错 pin 时认证计数为零。它们没有启动真实 overlay node、访问真实凭据或连接用户主机，不新增任何设备/真实组网矩阵通过格。GUI 的实际 native packaging、系统安全存储和 node identity 仍由各宿主另行验收。
 
 严格 `cargo clippy --all-targets --features overlay-native-fixture -- -D warnings` 本轮没有通过：剩余诊断位于原有 config transfer、input、legacy API 和 loopback test 的 `collapsible_if`、`nonminimal_bool`、`result_unit_err`、`too_many_arguments`、`type_complexity`、`field_reassign_with_default`。本批没有把它写成无警告结果。
+
+## 手机 managed-node 生命周期服务（2026-11-06，后续源码批次）
+
+`mobile_nodes::MobileNodeService::new()` 为 app 创建独立 runtime；可供 Tauri Rust 与后续 Flutter native 接线共用。`start(binding, source, deadline, cancellation)` 每次显式注入 `Arc<dyn SecureConfigSource>`，`status(&binding)`、`status_profile(profile_id)`、`stop(&binding, deadline)` 为异步入口，`dialer(&binding, deadline)` 只捕获成功领取的精确 `NodeLease`。没有默认 source、秘密读取 GUI API、启动重试或普通 TCP fallback；默认缺桥在读取 source 前拒绝。
+
+不可变 `Binding` 只含 `profileId / profileRevision:u32 / networkName / identityRef`。`NodeSpec.profile_revision` 是持久目录 revision；`NodeSpec.revision:u64` 仅为 runtime 内单调递增的启动 attempt。停止再启动同一配置保留 recovery route 的持久 revision 与身份引用，同时获得新的 attempt；旧 dialer/lease 不能转向重启节点。网络名或其他公开网络设置变化必须提升目录 revision。独立 vault 删除／重建生成新 `identityRef`，在旧节点明确 Stopped 且清理完成后，可用相同目录 revision 显式启动；两种身份不能互相清除未知输入标记。
+
+**可信调用方契约：** service 的 Binding 不含 peers，不能识别调用方在相同 revision 下偷换 peers。宿主须在取得目录 CAS 审核的不可变配置后创建本次 source；任何公开 peers 变化必须提升持久 revision。source 在 worker 内核对 `profile.id / profile_revision / network / identity_ref`，按该绑定载入本机安全资料与已固定 peers，不能把临时 `spec.revision` 当目录 revision。source 失败只返回脱敏错误，不降级为其他身份、文件或配置。
+
+Starting、EngineStarted、Closing、Stopped 只描述本机生命周期；EngineStarted 不表示入网、peer 可达或 SSH 可用。取消或丢弃 pending start 会退休其原 attempt，迟到结果不能附着；未返回的 start、失败清理与 drain 都占原 runtime 的 8 个 node 配额。失败 stop 只能由宿主显式调用同 Binding 的 stop 重试；不能把 Closing 当 Stopped 或重试 start。`status_profile` 返回 service 实际保留的旧 Binding，供 vault 已删除／换代时先撤销其 SSH 再停止原节点。service 自身立即关闭 node admission；SSH 页面状态与取消仍须宿主同步撤销。
+
+每个 service 最多保留 32 个不同 profile ID（含 Stopped 历史），以保留本 runtime 的 revision／网络名防降级检查；第 33 个新 ID 在读取 source 前返回 `mobile_node_history_capacity`，已知 ID 仍可重启。不会静默淘汰历史。清空历史须在旧 runtime 资源明确清理后，由 app 重建 service/runtime；这不是自动恢复或真实安全存储防回滚保证。
+
+本批复验仅使用显式 `overlay-native-fixture` 的合成 C ABI、自建临时 recovery 目录与已有隔离 SSH fixture；没有新 CI 构建、平台 SDK 安装、真实凭据读取、socket 转发或真实节点启动。测试命令沿用上面的 `/private/tmp/herdr-transport-overlay-target` 与 `/private/tmp/herdr-overlay-runtime-target`；GUI、真实 engine 与设备验收分别记录。

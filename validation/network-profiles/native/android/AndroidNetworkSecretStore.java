@@ -44,6 +44,11 @@ public final class AndroidNetworkSecretStore {
     public void delete(String profileId, String provider, String handle) throws Exception {
         requireUnlocked(); core.delete(profileId, provider, handle);
     }
+    // JNI-only purpose-specific output; caller clears the returned buffer.
+    byte[] easyTierConfig(String profileId, String handle, String networkName, String[] peers) throws Exception {
+        requireUnlocked();
+        return core.easyTierConfig(profileId, handle, networkName, peers);
+    }
     // Only same-package native network adapters may call this; never expose it through a GUI bridge.
     interface SecretOperation { void run(byte[] secret) throws Exception; }
     void withSecret(String profileId, String provider, String handle, SecretOperation operation) throws Exception {

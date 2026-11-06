@@ -10,6 +10,8 @@
 
 随后源码批次完成 Android EasyTier 本机入网资料 GUI 和共享 vault、Rust overlay 字节流到 SSH 的显式适配，以及恢复标记的网络身份绑定。暂未触发新 Actions；下一依赖为 native 内部安全配置→真实节点→GUI 路由，再完成手机跨网络标签和其他 provider。损坏／缺 key 的显式恢复与 Flutter 新回归一并保留。[源码批次与验证边界](19-mobile-network-identity.md)
 
+后续已连接固定 Java 配置构建、JNI source、区分持久 revision 与启动 attempt 的节点服务，以及 Tauri 手机显式启动／停止／观察路由。默认缺库继续拒绝；Android feature 与真实组网尚未验证，Flutter 平台流尚待完成。先补原生 Android 包与两路线接线，再集中云验收；随后跨网标签，桌面分屏后置。[当前源码进展](20-mobile-node-routing.md)
+
 里程碑基线：2026-10-29，当时只有设计文档；2026-10-30已进入验证壳阶段，进度以上方执行记录为准。里程碑以可复现证据验收，不以代码量或功能勾选替代结果。
 
 **首版目标是五端统一产品，手机优先、桌面紧随，三网络全部纳入设计与集成**：App 内 Tailscale + EasyTier 为首版必需，ZeroTier 并行验证与集成。按手机终端 A/B → 统一基础与五端验证 → 直连闭环 → provider × 平台接入 → 公开发布矩阵推进；Windows 原生桥风险同步做最小验证。范围见[产品设计](05-product-design.md)，实现契约见[架构](02-architecture.md)及 [ADR-0004](adr/0004-mvp-reliability-boundaries.md)。

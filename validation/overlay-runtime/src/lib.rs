@@ -99,6 +99,11 @@ struct Profile {
     revision: u64,
     active: AtomicBool,
 }
+enum OpenRoute<'a> {
+    Legacy,
+    Revision(u64),
+    Node(&'a Arc<Profile>),
+}
 struct OwnerState {
     runtime: Arc<()>,
     active: AtomicBool,
@@ -118,7 +123,8 @@ impl StreamLease {
     pub fn evidence(&self) -> Evidence {
         self.entry.profile.backend.evidence()
     }
-    /// Zero denotes the legacy, externally-managed backend experiment.
+    /// Runtime admission revision (managed start attempt), not the persisted
+    /// public profile revision. Zero denotes the legacy external backend.
     pub fn profile_revision(&self) -> u64 {
         self.entry.profile.revision
     }
@@ -310,7 +316,7 @@ impl OverlayRuntime {
         port: u16,
         deadline: Duration,
     ) -> Result<Operation<StreamLease>> {
-        self.open_checked(owner, key, None, host, port, deadline)
+        self.open_checked(owner, key, OpenRoute::Legacy, host, port, deadline)
     }
     pub fn open_revision(
         &self,
@@ -321,13 +327,20 @@ impl OverlayRuntime {
         port: u16,
         deadline: Duration,
     ) -> Result<Operation<StreamLease>> {
-        self.open_checked(owner, key, Some(revision), host, port, deadline)
+        self.open_checked(
+            owner,
+            key,
+            OpenRoute::Revision(revision),
+            host,
+            port,
+            deadline,
+        )
     }
     fn open_checked(
         &self,
         owner: &Owner,
         key: &ProfileKey,
-        revision: Option<u64>,
+        route: OpenRoute<'_>,
         host: &str,
         port: u16,
         deadline: Duration,
@@ -348,9 +361,10 @@ impl OverlayRuntime {
                 .get(key)
                 .cloned()
                 .ok_or(Failure::ProfileMissing)?;
-            if match revision {
-                Some(expected) => expected != profile.revision,
-                None => profile.revision != 0,
+            if match route {
+                OpenRoute::Revision(expected) => expected != profile.revision,
+                OpenRoute::Legacy => profile.revision != 0,
+                OpenRoute::Node(expected) => !Arc::ptr_eq(expected, &profile),
             } {
                 return Err(Failure::StaleRevision);
             }

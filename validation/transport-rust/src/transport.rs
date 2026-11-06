@@ -16,7 +16,8 @@ pub enum OverlayProvider {
 }
 
 /// Durable route identity, excluding process-local node epochs and owners.
-/// A profile revision must change when its network or local identity changes.
+/// A profile revision changes with network settings; a recreated vault identity
+/// is independently distinguished by identity_ref even at the same revision.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OverlayRouteIdentity {

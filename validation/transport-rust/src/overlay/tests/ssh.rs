@@ -130,6 +130,7 @@ async fn readonly_and_guarded_routes_reject_wrong_hostkey_before_auth() {
             Duration::from_secs(2),
             cancel.clone(),
             "synthetic-identity",
+            0,
         ))));
         let server_key = key(1);
         let client_key = key(2);

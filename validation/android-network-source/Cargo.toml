@@ -1,0 +1,21 @@
+[package]
+name = "herdr-android-network-source"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+publish = false
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+# Desktop JVM with self-created Java classes only; never an app fallback.
+jvm-fixture = []
+
+[dependencies]
+jni = "=0.21.1"
+overlay-runtime = { package = "herdr-overlay-runtime-probe", version = "=0.1.0", path = "../overlay-runtime" }
+zeroize = "=1.9.1"
+
+[workspace]

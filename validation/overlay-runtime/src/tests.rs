@@ -562,6 +562,7 @@ fn node_spec(id: &str, revision: u64) -> crate::nodes::NodeSpec {
     crate::nodes::NodeSpec {
         profile: key(Provider::EasyTier, id),
         revision,
+        profile_revision: 1,
         network: format!("network-{id}"),
         identity_ref: format!("synthetic-ref-{id}"),
     }
@@ -663,6 +664,11 @@ fn managed_node_epoch_revision_and_drain_do_not_retire_another_profile() {
         Err(Failure::StaleRevision)
     ));
     let replacement = start_node(&runtime, "first", 2, "");
+    // Exact node Arc identity is checked before any revision-based admission.
+    assert!(matches!(
+        runtime.open_node(&owner, &first, "echo", 22, TIME),
+        Err(Failure::StaleRevision)
+    ));
     assert!(matches!(
         runtime.open_revision(&owner, first.profile(), 1, "echo", 22, TIME),
         Err(Failure::StaleRevision)
@@ -749,6 +755,30 @@ fn cancelled_late_start_keeps_its_quota_and_never_attaches_to_new_revision() {
         .unwrap()
         .wait(TIME)
         .unwrap();
+    nodes_drained(&runtime);
+}
+
+#[test]
+fn exact_node_lease_rejects_even_a_forced_same_attempt_replacement() {
+    let _serial = isolated();
+    let runtime = OverlayRuntime::new();
+    let owner = runtime.new_owner();
+    let old = start_node(&runtime, "forced-collision", 1, "");
+    runtime.stop_node(&old, TIME).unwrap().wait(TIME).unwrap();
+    // Only this adversarial test bypasses the monotonic-start guard. Opening
+    // still has an independent exact-Arc contract under its admission lock.
+    lock(&runtime.inner.registry).revisions.remove(old.profile());
+    let replacement = start_node(&runtime, "forced-collision", 1, "");
+    assert_eq!(old.revision(), replacement.revision());
+    assert!(matches!(
+        runtime.open_node(&owner, &old, "echo", 22, TIME),
+        Err(Failure::StaleRevision)
+    ));
+    assert_eq!(metric(1), 0);
+    let stream = runtime.open_node(&owner, &replacement, "echo", 22, TIME)
+        .unwrap().wait(TIME).unwrap();
+    assert!(stream.is_active());
+    runtime.stop_node(&replacement, TIME).unwrap().wait(TIME).unwrap();
     nodes_drained(&runtime);
 }
 

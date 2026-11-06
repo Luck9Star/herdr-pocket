@@ -88,6 +88,9 @@ if manifest['platform']=='android' and manifest['buildOutcome']=='success':
     manifest['androidNetworkVaultSources']={f.name:sha(f) for f in sorted(network_vault.glob('*.java'))}
     manifest['androidNetworkVaultGradleSHA256']=sha(network_vault/'network-secrets.gradle')
     manifest['androidNetworkBridgeSHA256']=sha(root/'android/DeviceKeysPlugin.kt')
+    network_source=repo/'validation/android-network-source'
+    manifest['androidNetworkSourceSHA256']={str(f.relative_to(network_source)):sha(f) for f in [network_source/'Cargo.toml',network_source/'Cargo.lock',network_source/'src/lib.rs']}
+    manifest['androidNetworkEngine']='feature-gated; runtime and device unverified'
     manifest['androidNetworkVaultDeviceResult']='unverified'
     manifest['androidPackagedNotices']={apk.name:verify_packaged_notices(apk) for apk in native_packages if apk.suffix=='.apk'}
     manifest['androidApkSha256']={apk.name:sha(apk) for apk in native_packages if apk.suffix=='.apk'}

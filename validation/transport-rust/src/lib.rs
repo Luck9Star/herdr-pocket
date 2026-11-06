@@ -30,6 +30,7 @@ use tokio::net::TcpStream;
 
 pub mod transport;
 pub mod overlay;
+pub mod mobile_nodes;
 pub mod file_lock;
 pub mod config_transfer;
 #[cfg(all(test, unix))]

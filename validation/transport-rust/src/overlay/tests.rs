@@ -117,6 +117,7 @@ async fn synthetic_stream(backend: Arc<Synthetic>) -> (Arc<OverlayRuntime>, Over
         Duration::from_secs(2),
         Cancellation::default(),
         "synthetic-identity",
+        0,
     );
     (runtime, stream)
 }
@@ -344,6 +345,7 @@ async fn owner_and_profile_do_not_cross_even_for_same_virtual_destination() {
         Duration::from_secs(2),
         Cancellation::default(),
         "synthetic-identity",
+        0,
     );
     let mut stream_b = OverlayStream::new(
         runtime.clone(),
@@ -352,6 +354,7 @@ async fn owner_and_profile_do_not_cross_even_for_same_virtual_destination() {
         Duration::from_secs(2),
         Cancellation::default(),
         "synthetic-identity",
+        0,
     );
     stream_a.write_all(b"a").await.unwrap();
     stream_a.close();
@@ -367,6 +370,7 @@ mod native {
     use super::*;
     use overlay_runtime::nodes::{NodeSpec, SecretConfig, SecureConfigSource};
     unsafe extern "C" {
+        fn fixture_reset();
         fn fixture_control(operation: i32);
         fn fixture_metric(metric: i32) -> i32;
     }
@@ -378,6 +382,8 @@ mod native {
     }
     #[tokio::test]
     async fn managed_route_cancelled_late_open_and_foreign_runtime_are_isolated() {
+        let _serial = crate::mobile_nodes::NATIVE_FIXTURE_SERIAL.lock().await;
+        unsafe { fixture_reset() };
         let runtime = Arc::new(OverlayRuntime::new());
         let key = profile("managed-fixture");
         let node = runtime
@@ -385,6 +391,7 @@ mod native {
                 NodeSpec {
                     profile: key.clone(),
                     revision: 7,
+                    profile_revision: 3,
                     network: "synthetic-network".into(),
                     identity_ref: "fixture-only".into(),
                 },

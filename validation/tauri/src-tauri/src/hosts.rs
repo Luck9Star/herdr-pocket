@@ -927,15 +927,15 @@ mod tests {
         let fixture:serde_json::Value=serde_json::from_str(include_str!("../../../shared/config-transfer-v2.json")).unwrap();let a=herdr_readonly_transport::config_transfer::PortableArchive::parse(fixture["validPlaintexts"][1]["plaintext"].as_str().unwrap().as_bytes()).unwrap().into_v2();let plan=hosts.preview_v2(&a).unwrap();hosts.apply_v2(&a,&plan.revision,&[],&[a.networks[0].key.clone()],false,|_|Ok(())).unwrap();assert_eq!(hosts.networks().unwrap().profiles.len(),1);
     }
     #[test]
-    fn offline_pairing_survives_unavailable_and_disabled_overlay_but_connect_is_blocked() {
+    fn offline_pairing_survives_enabled_and_disabled_overlay_configuration() {
         use crate::networks::Settings;
         let temp=Temp::new();let hosts=Hosts::default();hosts.init(temp.0.clone()).unwrap();let target=target();let host=hosts.save(None,"fixture",target.clone(),None).unwrap();let mut second_target=target.clone();second_target.host="other.invalid".into();let second=hosts.save(None,"other",second_target.clone(),None).unwrap();
         let p=NetworkProfile{id:"0".repeat(32),label:"overlay".into(),provider:Provider::Tailscale,enabled:true,revision:1,settings:Settings::Tailscale{control_url:String::new(),hostname:String::new()}};
         let cat=hosts.networks().unwrap();hosts.save_network(p,&cat.revision,None,&[]).unwrap();let cat=hosts.networks().unwrap();let mut p=cat.profiles[0].clone();hosts.bind_network(&host.id,Some(p.id.clone()),&cat.revision).unwrap();let cat=hosts.networks().unwrap();hosts.bind_network(&second.id,Some(p.id.clone()),&cat.revision).unwrap();
-        let record=hosts.get(&host.id).unwrap();assert_eq!(crate::require_transport_route(&hosts,&record),Err("provider_unavailable".into()));
+        let record=hosts.get(&host.id).unwrap();assert!(hosts.route(&record).unwrap().is_some());
         let keys=std::sync::Arc::new(VolatileKeyStore::default());let pair=crate::create_offline_pair(keys.clone(),&target.config(),"Pocket",100).unwrap();let reference=pair.pending_reference(&target.config()).unwrap();hosts.attach_pending(&host.id,&target,reference.clone()).unwrap();
         let restored=crate::restore_offline_pair(keys.clone(),&reference,&target.config(),true,101).unwrap();assert_eq!(restored.request_json().unwrap(),pair.request_json().unwrap());
-        let cat=hosts.networks().unwrap();p.enabled=false;hosts.save_network(p,&cat.revision,Some(1),&[host.id.clone(),second.id.clone()]).unwrap();let record=hosts.get(&host.id).unwrap();assert_eq!(crate::require_transport_route(&hosts,&record),Err("network_profile_disabled".into()));
+        let cat=hosts.networks().unwrap();p.enabled=false;hosts.save_network(p,&cat.revision,Some(1),&[host.id.clone(),second.id.clone()]).unwrap();let record=hosts.get(&host.id).unwrap();assert!(matches!(hosts.route(&record),Err(e) if e=="network_profile_disabled"));
         let restored=crate::restore_offline_pair(keys.clone(),&reference,&target.config(),true,101).unwrap();assert_eq!(restored.request_json().unwrap(),pair.request_json().unwrap());
         let second_pair=crate::create_offline_pair(keys,&second_target.config(),"Pocket 2",101).unwrap();hosts.attach_pending(&second.id,&second_target,second_pair.pending_reference(&second_target.config()).unwrap()).unwrap();
     }

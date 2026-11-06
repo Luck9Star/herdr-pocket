@@ -24,6 +24,7 @@ final class NetworkSecretStoreCore {
     private static final Object PROCESS_LOCK = new Object();
     interface SecretOperation { void run(byte[] secret) throws Exception; }
     interface PayloadOperation { void run(byte[] payload) throws Exception; }
+    private interface VerifiedOperation { void run(Result result, byte[] secret) throws Exception; }
     interface Backend {
         byte[] create(String handle, byte[] aad, byte[] payload) throws Exception;
         void open(String handle, byte[] aad, byte[] envelope, PayloadOperation operation) throws Exception;
@@ -150,7 +151,7 @@ final class NetworkSecretStoreCore {
             return bytes;
         }
     }
-    private Result inspect(String profileId, String provider, String expectedHandle, SecretOperation operation) throws Exception {
+    private Result inspect(String profileId, String provider, String expectedHandle, VerifiedOperation operation) throws Exception {
         byte[] bytes = read(file(profileId));
         String handle = checkedHandle(new String(bytes, 4, 36, StandardCharsets.US_ASCII));
         if (expectedHandle != null && !handle.equals(checkedHandle(expectedHandle))) throw new IOException("handle mismatch");
@@ -164,7 +165,7 @@ final class NetworkSecretStoreCore {
             result[0] = new Result(profileId, provider, handle, instance, publicNetwork);
             if (operation != null) {
                 byte[] secret = Arrays.copyOfRange(payload, 37, payload.length);
-                try { operation.run(secret); } finally { Arrays.fill(secret, (byte) 0); }
+                try { operation.run(result[0], secret); } finally { Arrays.fill(secret, (byte) 0); }
             }
         });
         if (result[0] == null) throw new IOException("backend did not verify record");
@@ -177,7 +178,27 @@ final class NetworkSecretStoreCore {
     void withSecret(String profileId, String provider, String handle, SecretOperation operation) throws Exception {
         checkProfile(profileId, provider); checkedHandle(handle);
         if (operation == null) throw new IllegalArgumentException("operation required");
-        locked(() -> { inspect(profileId, provider, handle, operation); return null; });
+        locked(() -> { inspect(profileId, provider, handle, (result, secret) -> operation.run(secret)); return null; });
+    }
+    // Purpose-specific result: one authenticated read under one lock; never bridge to a GUI.
+    byte[] easyTierConfig(String profileId, String expectedHandle, String networkName, String[] peers) throws Exception {
+        checkProfile(profileId, "easytier"); checkedHandle(expectedHandle);
+        EasyTierConfigBuilder.Input input = EasyTierConfigBuilder.validate(networkName, peers);
+        return locked(() -> {
+            final byte[][] output = new byte[1][];
+            try {
+                inspect(profileId, "easytier", expectedHandle, (result, secret) -> {
+                    if (result.publicNetwork) throw new IllegalStateException("public_network_secret_unsupported");
+                    checkUtf8(secret);
+                    output[0] = EasyTierConfigBuilder.build(input, result.instanceId, secret);
+                });
+                if (output[0] == null) throw new IOException("config unavailable");
+                return output[0];
+            } catch (Exception failure) {
+                if (output[0] != null) Arrays.fill(output[0], (byte) 0);
+                throw failure;
+            }
+        });
     }
     void delete(String profileId, String provider, String handle) throws Exception {
         checkProfile(profileId, provider); checkedHandle(handle);

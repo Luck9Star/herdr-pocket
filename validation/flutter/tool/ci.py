@@ -166,7 +166,8 @@ def pairing_provenance(platform, android_notice):
             'scope': 'Android API 35 EasyTier local secret envelope and stable instance metadata; not node-start or connectivity proof',
             'runtime': 'NOT RUN by build/package workflow',
             'sources': [source_record('validation/network-profiles/native/android/' + name) for name in
-                        ['AndroidNetworkSecretStore.java', 'AndroidNetworkEnvelope.java', 'NetworkSecretStoreCore.java', 'network-secrets.gradle']] +
+                        ['AndroidNetworkSecretStore.java', 'AndroidNetworkEnvelope.java', 'NetworkSecretStoreCore.java',
+                         'AndroidEasyTierConfig.java', 'EasyTierConfigBuilder.java', 'network-secrets.gradle']] +
                        [source_record('validation/flutter/' + name) for name in
                         ['lib/network_identity.dart', 'lib/network_identity_dialog.dart', 'native/android/NetworkIdentityChannel.kt']],
         },

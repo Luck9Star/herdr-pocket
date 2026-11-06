@@ -26,17 +26,20 @@ class Element {
   setAttribute(k,v){this.attrs[k]=v;}
   descendants(){return this.children.flatMap(c=>[c,...c.descendants()]);}
   querySelectorAll(selector){return selector==='input[type=password]'?this.descendants().filter(n=>n.tagName==='input'&&n.type==='password'):[];}
+  querySelector(selector){return selector==='[role=status]'?this.descendants().find(n=>n.attrs.role==='status'):null;}
 }
-async function identityUI({supported=true,unknownWrite=false,readError=false,publicMode=false,existing=false,replaceBeforeDelete=false,deferredSerialization=false}={}) {
+async function identityUI({supported=true,unknownWrite=false,readError=false,publicMode=false,existing=false,replaceBeforeDelete=false,deferredSerialization=false,nodeAction=null,nodeFails=false,nodeStateOverride=null}={}) {
   const {initNetworkUI}=await import('../src/network-ui.js');const previous={document:globalThis.document,window:globalThis.window,confirm:globalThis.confirm};
   const panel=new Element('section'),open=new Element('button');panel.hidden=true;
   globalThis.document={hidden:false,getElementById:id=>id==='network-panel'?panel:open,createElement:tag=>new Element(tag),addEventListener(){}};globalThis.window={addEventListener(){}};globalThis.confirm=()=>true;
-  let mode=existing?'PRIVATE':null,writes=0,reads=0,sent=null,affectedCalls=0;let handle='11111111-1111-4111-8111-111111111111',argsReference=null;
+  let mode=existing?'PRIVATE':null,writes=0,reads=0,sent=null,affectedCalls=0;let handle='11111111-1111-4111-8111-111111111111',argsReference=null,nodeState=nodeStateOverride || (nodeAction==='stop'?'engine-started':'stopped'),nodeWrites=0,nodeSent=null;
   const profile={id:'a'.repeat(32),label:'Team',provider:'easytier',enabled:true,revision:1,settings:{networkName:'team',peers:['tcp://host:12']}};
-  const invoke=async(name,args)=>{if(name==='network_list')return {revision:'r',profiles:[profile],bindings:[{hostId:'h1',profileId:profile.id}]};if(name==='network_identity_status'){reads++;if(readError)throw Error('locked');return {supported,available:supported,present:!!mode,mode,handle:mode?handle:null};}if(name==='network_identity_write'){writes++;argsReference=args;if(deferredSerialization)await new Promise(resolve=>setImmediate(resolve));sent={...args};if(args.action==='delete' && replaceBeforeDelete){handle='22222222-2222-4222-8222-222222222222';if(args.expectedHandle!==handle)throw Error('stale_handle');}mode=args.action==='delete'?null:args.mode;if(unknownWrite)throw Error('unknown');return;}throw Error(name);};
+  const invoke=async(name,args)=>{if(name==='network_list')return {revision:'r',profiles:[profile],bindings:[{hostId:'h1',profileId:profile.id}]};if(name==='network_identity_status'){reads++;if(readError)throw Error('locked');return {supported,available:supported,present:!!mode,mode,handle:mode?handle:null};}if(name==='network_node_status')return {state:nodeState,binding:nodeState==='stopped'?null:{profileId:profile.id,profileRevision:1,networkName:'team',identityRef:handle}};if(name==='network_node_start'||name==='network_node_stop'){nodeWrites++;nodeSent={...args};if(nodeFails)throw Error('unknown');nodeState=name==='network_node_start'?'engine-started':'stopped';return;}if(name==='network_identity_write'){writes++;argsReference=args;if(deferredSerialization)await new Promise(resolve=>setImmediate(resolve));sent={...args};if(args.action==='delete' && replaceBeforeDelete){handle='22222222-2222-4222-8222-222222222222';if(args.expectedHandle!==handle)throw Error('stale_handle');}mode=args.action==='delete'?null:args.mode;if(unknownWrite)throw Error('unknown');return;}throw Error(name);};
   try {initNetworkUI({native:true,invoke,getHosts:()=>[{id:'h1',name:'host',retired:false}],onAffected:async()=>{affectedCalls++;}});open.onclick();await new Promise(resolve=>setImmediate(resolve));
     const btn=text=>panel.descendants().find(n=>n.tagName==='button'&&n.textContent===text);const texts=()=>panel.descendants().map(n=>n.textContent);
     if(!supported||readError)return {texts:texts(),create:!!btn('配置本机身份')};
+    if(nodeAction==='view')return {texts:texts(),start:!!btn('启动节点'),stop:!!btn('停止节点')};
+    if(nodeAction){btn(nodeAction==='start'?'启动节点':'停止节点').onclick();await new Promise(resolve=>setImmediate(resolve));await new Promise(resolve=>setImmediate(resolve));return {texts:texts(),nodeWrites,nodeSent,affectedCalls};}
     if(existing){btn('删除本机身份').onclick();await new Promise(resolve=>setImmediate(resolve));await new Promise(resolve=>setImmediate(resolve));return {texts:texts(),writes,reads,sent,affectedCalls};}
     btn('配置本机身份').onclick();const secret=panel.descendants().find(n=>n.tagName==='input'&&n.type==='password');secret.value='fixture-secret';const form=secret.parent.parent;if(publicMode){const select=form.descendants().find(n=>n.tagName==='select');select.value='PUBLIC_NO_SECRET';select.onchange();}form.onsubmit({preventDefault(){}});const cleared=secret.value;await new Promise(resolve=>setImmediate(resolve));await new Promise(resolve=>setImmediate(resolve));
     return {texts:texts(),writes,reads,sent,cleared,affectedCalls,argsReference};
@@ -59,3 +62,30 @@ test('explicit identity deletion rechecks status without deleting SSH keys',asyn
 test('delayed delete retains reviewed identity A when identity B has replaced it',async()=>{const v=await identityUI({existing:true,replaceBeforeDelete:true});assert.equal(v.writes,1);assert.equal(v.sent.expectedHandle,'11111111-1111-4111-8111-111111111111');assert.ok(v.reads>=2);assert.ok(v.texts.some(s=>s.includes('操作结果未确认')));assert.ok(v.texts.some(s=>s.includes('本机身份已保存')));});
 
 test('deferred invoke sees the secret until serialization and clears it after settlement',async()=>{const v=await identityUI({deferredSerialization:true});assert.equal(v.cleared,'');assert.equal(v.sent.secret,'fixture-secret');assert.equal(v.argsReference.secret,'');assert.equal(v.writes,1);});
+
+test('explicit private node start uses reviewed handle and never claims connectivity',async()=>{const v=await identityUI({existing:true,nodeAction:'start'});assert.equal(v.nodeWrites,1);assert.equal(v.nodeSent.expectedHandle,'11111111-1111-4111-8111-111111111111');assert.equal(v.affectedCalls,1);assert.ok(v.texts.some(s=>s.includes('入网及 SSH 尚未确认')));});
+test('unknown stop is not replayed and retains original frozen node binding',async()=>{const v=await identityUI({existing:true,nodeAction:'stop',nodeFails:true});assert.equal(v.nodeWrites,1);assert.equal(v.nodeSent.binding.identityRef,'11111111-1111-4111-8111-111111111111');assert.equal(v.affectedCalls,1);assert.ok(v.texts.some(s=>s.includes('操作结果未确认')));});
+
+test('busy and unknown node states are shown without enabling start',async()=>{const busy=await identityUI({existing:true,nodeAction:'view',nodeStateOverride:'starting'});assert.equal(busy.start,false);assert.equal(busy.stop,true);assert.ok(busy.texts.some(s=>s.includes('节点启动中')));const unknown=await identityUI({existing:true,nodeAction:'view',nodeStateOverride:'unknown'});assert.equal(unknown.start,false);assert.equal(unknown.stop,false);assert.ok(unknown.texts.some(s=>s.includes('节点状态未确认')));});
+
+test('pending start permits reviewed exact stop and ignores late start result',async()=>{
+  const {initNetworkUI}=await import('../src/network-ui.js');const previous={document:globalThis.document,window:globalThis.window,confirm:globalThis.confirm};
+  const panel=new Element('section'),open=new Element('button');panel.hidden=true;
+  globalThis.document={hidden:false,getElementById:id=>id==='network-panel'?panel:open,createElement:tag=>new Element(tag),addEventListener(){}};globalThis.window={addEventListener(){}};globalThis.confirm=()=>true;
+  const handle='11111111-1111-4111-8111-111111111111',id='a'.repeat(32),binding={profileId:id,profileRevision:1,networkName:'team',identityRef:handle};
+  const profile={id,label:'Team',provider:'easytier',enabled:true,revision:1,settings:{networkName:'team',peers:['tcp://host:12']}};
+  let state='stopped',startCalls=0,stopCalls=0,statusCalls=0,stopArgs,resolveStart;
+  const pendingStart=new Promise(resolve=>{resolveStart=resolve;});
+  const invoke=async(name,args)=>{if(name==='network_list')return {revision:'r',profiles:[profile],bindings:[{hostId:'h1',profileId:id}]};if(name==='network_identity_status')return {supported:true,available:true,present:true,mode:'PRIVATE',handle};if(name==='network_node_status'){statusCalls++;return {state,binding:state==='stopped'?null:binding};}if(name==='network_node_start'){startCalls++;state='starting';return pendingStart;}if(name==='network_node_stop'){stopCalls++;stopArgs=args;state='stopped';return;}throw Error(name);};
+  try {
+    initNetworkUI({native:true,invoke,getHosts:()=>[{id:'h1',name:'host',retired:false}],onAffected:async()=>{}});open.onclick();await new Promise(r=>setImmediate(r));
+    const btn=text=>panel.descendants().find(n=>n.tagName==='button'&&n.textContent===text);
+    btn('启动节点').onclick();await new Promise(r=>setImmediate(r));
+    assert.equal(startCalls,1);assert.equal(btn('刷新节点状态').disabled,false);btn('刷新节点状态').onclick();await new Promise(r=>setImmediate(r));
+    assert.ok(btn('停止节点'));assert.equal(btn('停止节点').disabled,false);assert.equal(btn('编辑').disabled,true);
+    btn('停止节点').onclick();await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
+    assert.equal(stopCalls,1);assert.deepEqual(stopArgs.binding,binding);assert.equal(state,'stopped');
+    const readsBeforeLate=statusCalls;resolveStart({state:'engine-started'});await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
+    assert.ok(statusCalls>readsBeforeLate);assert.equal(startCalls,1);assert.equal(stopCalls,1);assert.ok(!panel.descendants().some(n=>n.textContent.includes('本机引擎已启动')));assert.ok(panel.descendants().some(n=>n.textContent==='节点已停止'));
+  } finally {globalThis.document=previous.document;globalThis.window=previous.window;globalThis.confirm=previous.confirm;}
+});

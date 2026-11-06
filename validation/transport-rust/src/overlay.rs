@@ -100,6 +100,7 @@ impl Dialer for OverlayDialer {
                 self.deadline,
                 cancel,
                 self.node.identity_ref(),
+                u64::from(self.node.profile_revision()),
             )) as Box<dyn ByteStream>)
         })
     }
@@ -154,6 +155,7 @@ impl OverlayStream {
         deadline: Duration,
         cancel: Cancellation,
         identity_ref: &str,
+        profile_revision: u64,
     ) -> Self {
         let route = OverlayRouteIdentity {
             provider: match lease.profile().provider {
@@ -162,7 +164,7 @@ impl OverlayStream {
                 overlay_runtime::Provider::ZeroTier => OverlayProvider::ZeroTier,
             },
             profile_id: lease.profile().id.clone(),
-            profile_revision: lease.profile_revision(),
+            profile_revision,
             identity_ref: identity_ref.into(),
         };
         Self {
@@ -187,7 +189,7 @@ impl OverlayStream {
         self.lease.profile()
     }
     pub fn profile_revision(&self) -> u64 {
-        self.lease.profile_revision()
+        self.route.profile_revision
     }
     pub fn evidence(&self) -> Evidence {
         self.lease.evidence()

@@ -2,13 +2,9 @@
 
 > 面向 herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
-状态：**M0.5 并行验证阶段，尚非正式产品**。2026-10-30 已保存 Penpot 核心交互原型，新增 Flutter/Tauri 离线验证壳与实际云构建测试产物，并完成 [macOS 有限原生 smoke](docs/evidence/mobile-observe/macos/verification.json)。完整远端交互闭环、手机 IME、三网络运行及跨平台支持仍待验证。见[实际证据与完整矩阵](docs/09-prototype-validation.md)、[验证入口](validation/README.md)。
+**当前进度 · 2026-11-06**　Flutter 与 Tauri 两条路线都已在 Android API 35 云模拟器完成**配对 → 主机与会话看板 → 选中 pane → 持续观察 → 手动停止**。临时 OpenSSH 主机确认接受了 GUI 审查的设备公钥；两端均消费 full 和 delta，只读用例的远端输入为 0。手机扫码、中文 IME、真实三网与五端完整交互仍需独立验收。[手机 GUI 实测与下载](docs/15-mobile-gui-validation.md) · [本次成功运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593)
 
-新版视觉沿用用户认可的 Penpot 靛蓝／Slate 方案，已补恢复与核验状态，并接入两条验证壳；本轮结果及后续集成顺序见[UI v2 接线记录](docs/11-ui-v2-integration.md)。视觉确认不等于框架定案。
-
-当前按手机优先推进[会话看板与持续观察](docs/13-mobile-dashboard-observe.md)：两条适配器已在同一云端临时 SSH/herdr 目标完成 **18/18** 项真实对照，覆盖显式 pane 选择后的 full/delta、主动停止和手动再次连接，远端输入为 0。配对 v2 契约、Apple 内存签名探针与 Android 桥编译同步推进。手机界面布景、真实 SSH CLI、原生包构建分别记录；GUI 真实接入、设备密钥存储、手机运行与完整输入仍待验证。
-
-手机设备配对、主机目录、待授权恢复、多标签和受保护输入已进入两套工作壳。两份 Android 基线包与测试步骤见[手机配对工作台](docs/14-mobile-pairing-workbench.md)，新版 APK、云端失败及 Mac 实际入口检查见[手机 GUI 验证记录](docs/15-mobile-gui-validation.md)。
+手机优先。两套工作壳已实现待授权请求恢复、设备身份审查、按主机查看标签和受阻窗格优先；桌面沿用同一目标标识。当前使用用户选定的 Penpot v2 靛蓝／Slate 方案，后续按真机和输入正确性收敛框架及组件状态。[新版设计与覆盖](design/README.md) · [配对步骤](docs/14-mobile-pairing-workbench.md) · [历史共享 SSH 对照](docs/13-mobile-dashboard-observe.md)
 
 ## 首版做什么
 

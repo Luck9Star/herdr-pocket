@@ -1,5 +1,7 @@
 # 手机配对、主机看板与终端工作台
 
+2026-11-06 最新结果：Flutter 和 Tauri 同一提交的 Android API 35 配对与持续观察均已通过。下载两份当前 APK 请到[手机 GUI 验证记录](15-mobile-gui-validation.md#当前可下载的手机测试包)。下文保留基线包与中间失败版本的来源。
+
 2026-11-05。`main` 首页已更新，公开实现位于 `codex/core-prototype-validation`。先重建了 10 月 30 日已验证源码的两份 Android 基线 APK，随后在原型分支开发设备配对、主机管理、多标签终端和安全输入。项目仍处于原型阶段。[公开首页提交](https://github.com/Luck9Star/herdr-pocket/commit/fb6d39035920064e2dded62bb8a1d4e2df061a40) · [上一阶段的传输与设计证据](13-mobile-dashboard-observe.md)
 
 ## Android 基线包

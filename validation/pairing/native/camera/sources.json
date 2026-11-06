@@ -1,15 +1,21 @@
 {
-  "checked": "2026-11-05",
+  "checked": "2026-11-06",
   "embedded": {
     "coordinate": "com.journeyapps:zxing-android-embedded:4.3.0",
     "source": "https://github.com/journeyapps/zxing-android-embedded/tree/v4.3.0",
-    "license": "Apache-2.0"
+    "license": "Apache-2.0",
+    "mavenArtifact": "https://repo.maven.apache.org/maven2/com/journeyapps/zxing-android-embedded/4.3.0/zxing-android-embedded-4.3.0.aar",
+    "artifactBytes": 151839,
+    "artifactSHA256": "4ab03353127c34e55cbb80fbc9a34031decbcfb1ec5e8f991944d2d494621a33"
   },
   "core": {
     "coordinate": "com.google.zxing:core:3.5.3",
     "source": "https://github.com/zxing/zxing/tree/zxing-3.5.3",
-    "license": "Apache-2.0"
+    "license": "Apache-2.0",
+    "mavenArtifact": "https://repo.maven.apache.org/maven2/com/google/zxing/core/3.5.3/core-3.5.3.jar",
+    "artifactBytes": 607650,
+    "artifactSHA256": "8d8064c1636fdaef7189dd9055c7d59950a8940a12f2293956446ec3c109fd82"
   },
   "apple": "AVFoundation metadata QR reader",
-  "boundaries": "Pinned source API inspected. Maven artifact bytes were not independently downloaded locally (connection reset). Test package compilation and real phone camera evidence are separate."
+  "boundaries": "Public Maven Central artifacts independently downloaded, compared against the published SHA-1 sidecars and hashed locally with SHA-256. This check identifies the exact upstream files; it does not execute the camera or establish physical device behavior."
 }

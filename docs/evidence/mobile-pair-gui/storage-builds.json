@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "purpose": "storage repair batch Android package provenance and isolated GUI/API35 emulator observations; physical devices not tested",
+  "repository": "Luck9Star/herdr-pocket",
+  "branch": "codex/batch/android-device-storage-20261106",
+  "sourceSHA": "307c863baf568af0b154d4ff6d414a69f3cf4274",
+  "run": {
+    "runId": 42132730593,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593",
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "androidBuilds": {
+    "flutter": {
+      "status": "success",
+      "jobId": 127613755398,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/jobs/127613755398",
+      "artifactId": 13464856670,
+      "artifactName": "flutter-candidate-android-307c863baf568af0b154d4ff6d414a69f3cf4274",
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/artifacts/13464856670",
+      "artifactArchiveSHA256": "8dbf521e1ba18599871f80dfbc1fc33cf84bbba27931c120b69a55cc7ed69233",
+      "sourceSHA": "307c863baf568af0b154d4ff6d414a69f3cf4274",
+      "candidateChecks": "success",
+      "manifest": "tmp-probe/android-20261106/storage/flutter/manifest.json",
+      "manifestSHA256": "2f6b42e252603f45dd21f3c5bd90db9547a5367555a9fe1c300d47ac5c2d3a6c",
+      "checksums": "tmp-probe/android-20261106/storage/flutter/SHA256SUMS",
+      "checksumsSHA256": "31095269a24632b04b502e2756019f2df8d1c1341704d9f658b37aa39621fe98",
+      "packagedArchive": "tmp-probe/android-20261106/storage/flutter/flutter-android-debug.zip",
+      "packagedArchiveSHA256": "6f310ecd8f47c770b9ac9ce6e26673eaf21ad0a12e244250fb8f6bd26a8b242b",
+      "apk": "tmp-probe/android-20261106/storage/flutter/app-debug.apk",
+      "apkBytes": 157182374,
+      "apkSHA256": "c5c1c5452b23e5fd0cf6cdbee4cfc94bc35884c04f86ee12a3e9cd4c5425eb7f",
+      "signing": "development test build; no production signing or notarization"
+    },
+    "tauri": {
+      "status": "success; source SHA, manifest, SHA256SUMS, APK, and notices verified",
+      "jobId": 127613103177,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/jobs/127613103177",
+      "artifactId": 13463534127,
+      "artifactName": "tauri-android-307c863baf568af0b154d4ff6d414a69f3cf4274",
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/artifacts/13463534127",
+      "artifactArchiveSHA256": "6282b9f022d25c414f73bc7400046f3787a6e30d045a49cc3a94d17e28a111c7",
+      "sourceSHA": "307c863baf568af0b154d4ff6d414a69f3cf4274",
+      "manifest": "tmp-probe/android-20261106/storage/tauri/build-manifest.json",
+      "manifestSHA256": "45e27930ab16c96f31f08afc865da13f4253ccbdb937b5f55054000c26379499",
+      "checksums": "tmp-probe/android-20261106/storage/tauri/SHA256SUMS",
+      "checksumsSHA256": "d5d50e58317b476d358dbd1abd4dde6227778ffc616daafed3fe07c610090849",
+      "apk": "tmp-probe/android-20261106/storage/tauri/app-universal-debug.apk",
+      "apkBytes": 172928645,
+      "apkSHA256": "77921d9b8648b448fb329b4d3dc85b907d7db32eb1485af4aa28da92ba721daa",
+      "signing": "ephemeral-debug-key",
+      "deviceResult": "unverified"
+    }
+  },
+  "androidNotices": {
+    "assets/BOUNCY-CASTLE-LICENSE.md": {
+      "bytes": 1171,
+      "sha256": "0e01f1549c9022f406392ac2947d32223b7c2e977d21ea2f8c182fdeb4dae5fd",
+      "matchesSourceAtRunSHA": true
+    },
+    "assets/QR-NOTICE.txt": {
+      "bytes": 339,
+      "sha256": "7fc1888ae1ad783c0f318834a9e3263299530434c1ac0ac2077f385c33e018a4",
+      "matchesSourceAtRunSHA": true
+    },
+    "assets/ZXING-APACHE-2.0.txt": {
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "matchesSourceAtRunSHA": true
+    }
+  },
+  "stockGui": {
+    "status": "success; Linux loopback OpenSSH GUI test, not a physical phone",
+    "jobId": 127613103511,
+    "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/jobs/127613103511",
+    "artifactId": 13464726079,
+    "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/artifacts/13464726079",
+    "paired": true,
+    "paneChosen": true,
+    "fullRendered": true,
+    "deltaRendered": true,
+    "stoppedStale": true,
+    "reopenedPendingRequest": true,
+    "signCalls": 1,
+    "frameCount": 4,
+    "deltaFrames": 3,
+    "temporaryHostApprovedRequest": true,
+    "matchedDeviceKeyInSshd": true,
+    "revokedFixtureKey": true,
+    "receivedInputBytes": 0,
+    "cleanup": {
+      "ownedProcessesStopped": true,
+      "ephemeralKeysRemoved": true,
+      "userAuthorizationFilesTouched": false,
+      "rawLogsUploaded": false
+    }
+  },
+  "androidEmulators": {
+    "flutterApi35": {
+      "status": "success",
+      "jobId": 127613102734,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/jobs/127613102734",
+      "artifactId": 13464612477,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/artifacts/13464612477",
+      "case": "android-native-pairing-observe",
+      "productionMain": true,
+      "defaultHostCatalog": true,
+      "uninjectedNativeDeviceKeys": true,
+      "publicRequestShown": true,
+      "pendingRequestReopened": true,
+      "originalDeviceKeyRevalidated": true,
+      "authorizationReviewed": true,
+      "pairedStateVisible": true,
+      "paneChosen": true,
+      "fullRendered": true,
+      "deltaRendered": true,
+      "stoppedStale": true,
+      "directModeDisabled": true,
+      "draftModeDisabled": true,
+      "localIdentityDeleted": true,
+      "firstSequence": 2,
+      "deltaSequence": 3,
+      "identityCreationActions": 1,
+      "frameCountLowerBound": 2,
+      "deltaCountLowerBound": 1,
+      "keyStore": "API35 emulator production AndroidKeyStore AES-wrapped seed; native software Ed25519 signing",
+      "storageMocked": false,
+      "signerInjected": false,
+      "framesInjected": false,
+      "temporaryHostApprovedRequest": true,
+      "matchedDeviceKeyInSshd": true,
+      "revokedFixtureKey": true,
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false,
+        "ownedPackageInitiallyAbsent": true,
+        "ownedPackageAbsent": true,
+        "appProcessGone": true,
+        "reverseRemoved": true,
+        "ownedForwardsRemoved": true,
+        "flutterToolStopped": true
+      }
+    },
+    "tauriApi35": {
+      "status": "success",
+      "jobId": 127613103048,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/jobs/127613103048",
+      "artifactId": 13463404526,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/artifacts/13463404526",
+      "paired": true,
+      "paneChosen": true,
+      "fullRendered": true,
+      "deltaRendered": true,
+      "stoppedStale": true,
+      "fullRenderAcknowledgements": 1,
+      "deltaRenderAcknowledgements": 1,
+      "keyStore": "Android API 35 emulator AndroidKeyStore-wrapped device key",
+      "temporaryHostApprovedRequest": true,
+      "matchedDeviceKeyInSshd": true,
+      "revokedFixtureKey": true,
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      }
+    }
+  },
+  "scope": {
+    "transport": "isolated loopback OpenSSH and disposable Android API35 emulators",
+    "physicalDevice": "not tested",
+    "productionSigning": "not performed"
+  }
+}

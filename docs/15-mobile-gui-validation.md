@@ -2,6 +2,17 @@
 
 2026-11-06。用户从主机页新增目标，核对主机身份和设备公钥，将公开请求交给 helper。在手机上粘贴或扫描响应并再次审查，主动连接后才能查看该命名会话的 pane。看板支持恢复同一台设备的待授权请求，终端页要求用户选定 pane 才开始持续观察。[配对工作台和测试步骤](14-mobile-pairing-workbench.md) · [Penpot 文件与覆盖清单](../design/README.md)
 
+## 当前可下载的手机测试包
+
+两包来自同一提交 `307c863baf568af0b154d4ff6d414a69f3cf4274`，对应的 Flutter 与 Tauri 应用路径都在 API 35 云模拟器通过配对和只读观察。下载的是供试用的 debug APK；自动化另行构建了同源的 AVD 测试变体。[成功运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593) · [安装与手动验收步骤](14-mobile-pairing-workbench.md#测试包怎么试)
+
+| 应用 | 下载与解包 | 实际 APK SHA-256 |
+| --- | --- | --- |
+| Flutter | [Android debug](https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/artifacts/13464856670)；解压 artifact，再解压 `flutter-android-debug.zip` 取得 `app-debug.apk`。 | `c5c1c5452b23e5fd0cf6cdbee4cfc94bc35884c04f86ee12a3e9cd4c5425eb7f` |
+| Tauri | [Android arm64 debug](https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/artifacts/13463534127)；artifact 顶层为 `app-universal-debug.apk`。 | `77921d9b8648b448fb329b4d3dc85b907d7db32eb1485af4aa28da92ba721daa` |
+
+两份 APK 均已在本机解包核对 SHA-256、随包清单和三份原生库声明。GitHub 测试 artifact 有保留期限，记录中保留了可复跑的分支、提交与产物名称。[两包来源及实测记录](evidence/mobile-pair-gui/storage-builds.json)
+
 ## 已有云端记录
 
 | 源码和运行 | 可复核的结果 |
@@ -35,8 +46,22 @@ Flutter 分析通过，12 项目录／widget 用例失败，其中 7 项追到�
 
 ### Android 目录锁和持续观察
 
-在聚焦复验 `f2d5594` 中，Flutter analyzer、76 项单元／widget 测试及 10 项终端渲染回归通过；1 项真实 SSH widget 用例由独立 job 运行。Flutter iOS 使用 macOS 15 runner 完成无签名构建。真实 Flutter GUI 探针在公开请求后超时，API 35 Flutter 在公开请求阶段退出。Tauri 的 API 35 报告将错误定位到保存主机目录，尚未创建设备身份。[聚焦复验](https://github.com/Luck9Star/herdr-pocket/actions/runs/42129682652)
+在聚焦复验 `f2d5594` 中，Flutter analyzer、76 项单元／widget 测试及 10 项终端渲染回归通过；1 项真实 SSH widget 用例由独立 job 运行。Flutter iOS 使用 macOS 15 runner 完成无签名构建。真实 Flutter GUI 探针在公开请求后超时，API 35 Flutter 在公开请求阶段退出。Tauri 的 API 35 报告将错误定位到保存主机目录，尚未创建设备身份。[聚焦复验](https://github.com/Luck9Star/herdr-pocket/actions/runs/42129682652) · [该批产物与失败阶段](evidence/mobile-pair-gui/observe-builds.json)
 
 Rust 1.96 的标准库对 Android 的 `File::try_lock` 固定返回 Unsupported；此前目录初始化错误被 UI 丢弃，后续保存只报告资料不可用。实现已改用非阻塞 `flock`，仍持有原文件描述符至仓库关闭，并同步修复未知输入记录使用的锁。桌面实测两个独立文件描述符会竞争，释放后能重新获取；Android 运行需修复后的 APK 独立验收。[固定 Rust 源码](https://github.com/rust-lang/rust/blob/1.96.0/library/std/src/sys/fs/unix.rs#L1529-L1590)
 
 看板将主机明确报告为 blocked 的窗格稳定置顶，同组保留快照顺序；陈旧数据单独标注。后续验收在临时测试 PTY 采样真实行列数，并分别记录 GUI、独立 Android 签名挑战与本地窗口尺寸变化，单项通过不能替代另一项。
+
+### 设备签名与主机看板 307c863
+
+Flutter Linux widget 已走通“主机列表 → 生成公开请求 → 返回并重开原请求 → 审查 helper 响应 → 主动连接 → 选定 pane → 持续观察 → 手动停止”。隔离 sshd 日志核对了本次批准的设备公钥；测试签名器调用 1 次，收到 1 个 full 与 3 个 delta，接收端输入为 0 字节。两次本地窗口尺寸变化期间，真实远端共享 PTY 的 407 次取样始终为 119 列 × 40 行，未观测到尺寸变化；最大采样间隔 54 ms。已撤销 fixture 公钥、关闭进程并清理临时身份。此项检查使用测试签名器，终端帧证据来自 widget 状态与 parser；字体像素、Android 系统存储及真机体验分别验收。[已核验的 GUI 记录](evidence/mobile-pair-gui/gui-307c863/flutter-widget.json) · [实际 job](https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593/job/127613103511)
+
+该批 Flutter analyzer 通过，79 项常规测试及 10 项渲染回归通过，1 项 opt-in SSH 测试由上面的独立 job 执行。[Android 聚焦运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42132730593)
+
+同一主流程也已在 Tauri Linux 原生 GTK/WebKit 应用走通。使用该进程新建的临时设备身份，sshd 确认接受了已审查的公钥；用户选择的 pane 产生 1 个 full 和 1 个 delta，均收到 xterm parser 回调。停止后保留陈旧画面，输入 0 字节，fixture 公钥已撤销、测试进程已关闭。此次源码为 `f2d5594`，并非与 Flutter 同 SHA 的性能对照。[Tauri 原生 GUI 记录](evidence/mobile-pair-gui/gui-f2d5594/tauri-linux.json) · [实际 job](https://github.com/Luck9Star/herdr-pocket/actions/runs/42129682652/job/127602837581)
+
+**Flutter Android API 35 通过手机闭环。** 一次性云 AVD 运行正式 `app.main`、主机目录与原生设备密钥桥。页面重新打开同一待授权请求并核验原公钥，用户审查响应后主动连接；隔离 sshd 匹配已批准的设备指纹。选定 pane 的 full 和增量在同一终端对象上将显示序号从 2 推进到 3，停止后显示陈旧状态。接收端收到 0 字节，测试没有注入 key store、签名器或帧。独立临时身份完成 Ed25519 挑战验签、删除并拒绝再次读取。GUI 本机身份已删除，主机 fixture 授权已撤销，应用进程、测试包与专用 ADB 转发均已清理。此处通过的是 API 35 模拟器与手动输入公开响应的路径；实机摄像头、真实 IME、强硬件密钥等级及三网仍待验证。[Android GUI 报告](evidence/mobile-pair-gui/gui-307c863/flutter-android.json) · [独立签名报告](evidence/mobile-pair-gui/gui-307c863/flutter-android-signer-probe.json) · [清理记录](evidence/mobile-pair-gui/gui-307c863/flutter-android-device-cleanup.json)
+
+**Tauri Android API 35 同样通过。** 原生应用在 WebView 内完成公开请求及响应审查，临时主机接受了 GUI 对应的 Android 设备公钥。选定 pane 后，xterm parser 回调确认消费了 1 个 full、1 个 delta；手动停止后画面标为陈旧，接收端输入为 0。该次设备观察期间的 837 次采样均为 119 × 40，未观测到共享 PTY 尺寸变化。fixture 公钥已撤销，自建测试进程已关闭。[Android GUI 报告](evidence/mobile-pair-gui/gui-307c863/tauri-android.json)
+
+两条路线的手机第一闭环因此有同版本、同 API 级别的实证。下一步优先验证**受保护的逐键／草稿输入、断线后结果核实、隐藏标签恢复**，再做手机真机相机、IME 与三网并发测试；完成正确性对照后决定框架。原型的配色与信息模型继续沿用当前版本。

@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-11-06",
+  "milestone": "mobile-tabs-retained-ssh-android-delivery",
+  "sourceCommit": "546c3eb34bf166a22effa033d9862544641a308a",
+  "run": {
+    "id": 42208702281,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "id": 127861706385,
+        "name": "transport-source",
+        "conclusion": "success"
+      },
+      {
+        "id": 127861706619,
+        "name": "flutter-source",
+        "conclusion": "success"
+      },
+      {
+        "id": 127861706630,
+        "name": "native",
+        "conclusion": "success"
+      },
+      {
+        "id": 127863650272,
+        "name": "apps (tauri)",
+        "conclusion": "success"
+      },
+      {
+        "id": 127863650320,
+        "name": "apps (flutter)",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "id": 13498486570,
+      "name": "android-network-flutter-ssh-546c3eb34bf166a22effa033d9862544641a308a",
+      "sizeBytes": 19900,
+      "zipDigest": "sha256:7c43d874f05d5af98b47830fa51225d67f10d44a7e6da9f113240c7aefdd5a37",
+      "expired": false,
+      "expiresAt": "2026-11-20T11:16:31Z"
+    },
+    {
+      "id": 13498327009,
+      "name": "android-native-546c3eb34bf166a22effa033d9862544641a308a",
+      "sizeBytes": 98605280,
+      "zipDigest": "sha256:3892c91c359b46da3ff53680d6b5d0190331f20b5ca3d8dd64b8649914c371de",
+      "expired": false,
+      "expiresAt": "2026-11-20T11:18:26Z"
+    },
+    {
+      "id": 13498293296,
+      "name": "android-flutter-network-546c3eb34bf166a22effa033d9862544641a308a",
+      "sizeBytes": 136231677,
+      "zipDigest": "sha256:72cf1fc4be2c4a5b401685feb73ca6b86f87705a88410ae6341a7c4732759764",
+      "expired": false,
+      "expiresAt": "2026-11-20T11:23:03Z"
+    },
+    {
+      "id": 13498281958,
+      "name": "android-network-flutter-source-546c3eb34bf166a22effa033d9862544641a308a",
+      "sizeBytes": 155333,
+      "zipDigest": "sha256:c199fe2fee97df371bf8b744982e10b3d8f762c9cdc2a6f63f06d949c2208b18",
+      "expired": false,
+      "expiresAt": "2026-11-20T11:16:33Z"
+    },
+    {
+      "id": 13498208754,
+      "name": "android-tauri-network-546c3eb34bf166a22effa033d9862544641a308a",
+      "sizeBytes": 145512636,
+      "zipDigest": "sha256:96001a387a87facbab0cf11cd93911de8d8d4f8149b15a2e87f8623f86aaa31a",
+      "expired": false,
+      "expiresAt": "2026-11-20T11:25:36Z"
+    },
+    {
+      "id": 13498206863,
+      "name": "android-network-transport-source-546c3eb34bf166a22effa033d9862544641a308a",
+      "sizeBytes": 4640,
+      "zipDigest": "sha256:0425ba333a9525ce63e74865c328c10670e19b28b24ee0bfcf80e82512d00a68",
+      "expired": false,
+      "expiresAt": "2026-11-20T11:15:19Z"
+    }
+  ],
+  "downloadVerification": {
+    "commit": "546c3eb34bf166a22effa033d9862544641a308a",
+    "runId": 42208702281,
+    "artifacts": [
+      {
+        "app": "flutter",
+        "artifactId": 13498293296,
+        "artifactZipSha256": "72cf1fc4be2c4a5b401685feb73ca6b86f87705a88410ae6341a7c4732759764",
+        "artifactDigestCompared": true,
+        "apkSha256": "0e71db3d2e8bb3799cf5ace33ecf6bf5c5639ed53c62302e57bfd0a2c0166fab",
+        "apkBytes": 452169182,
+        "manifestMembersChecked": 11,
+        "apkLibraries": [
+          "lib/arm64-v8a/libVkLayer_khronos_validation.so",
+          "lib/arm64-v8a/libflutter.so",
+          "lib/arm64-v8a/libheeler_easytier.so",
+          "lib/arm64-v8a/libherdr_flutter_network_runtime.so"
+        ],
+        "report": {
+          "sourceCommit": "546c3eb34bf166a22effa033d9862544641a308a",
+          "app": "flutter",
+          "abi": "arm64-v8a",
+          "api": 35,
+          "sourceChecks": "success",
+          "transportChecks": "success",
+          "transportChecksScope": "shared Rust isolated SSH and unit checks; not Android runtime or real overlay",
+          "sourceChecksScope": "Flutter analyzer, unit/widget, renderer and isolated SSH GUI checks",
+          "apkSha256": "0e71db3d2e8bb3799cf5ace33ecf6bf5c5639ed53c62302e57bfd0a2c0166fab",
+          "nativeManifestSha256": "cb4c873556a9fbd73215f6f49333348fdbd3b413f53d139df8276ee6348dc0f5",
+          "build": "passed",
+          "staticInspection": "passed",
+          "androidLoad": "not run",
+          "installation": "not run",
+          "node": "not run",
+          "terminalCandidateManifestSha256": "3c7edef36fbbfece251b8c84fc246cec94196ce4554be26d70636f40b6572df3"
+        },
+        "scope": "downloaded bytes, source equality and ZIP/native hashes; not install or runtime"
+      },
+      {
+        "app": "tauri",
+        "artifactId": 13498208754,
+        "artifactZipSha256": "96001a387a87facbab0cf11cd93911de8d8d4f8149b15a2e87f8623f86aaa31a",
+        "artifactDigestCompared": true,
+        "apkSha256": "f9c75e2608b67afa0ec31b03a687740bb1a6d5a08df322cfbe8449da9512a59f",
+        "apkBytes": 553750689,
+        "manifestMembersChecked": 8,
+        "apkLibraries": [
+          "lib/arm64-v8a/libheeler_easytier.so",
+          "lib/arm64-v8a/libherdr_pocket_tauri_probe_lib.so"
+        ],
+        "report": {
+          "sourceCommit": "546c3eb34bf166a22effa033d9862544641a308a",
+          "app": "tauri",
+          "abi": "arm64-v8a",
+          "api": 35,
+          "sourceChecks": "success",
+          "transportChecks": "success",
+          "transportChecksScope": "shared Rust isolated SSH and unit checks; not Android runtime or real overlay",
+          "sourceChecksScope": "JavaScript unit tests; Rust target compilation is part of build",
+          "apkSha256": "f9c75e2608b67afa0ec31b03a687740bb1a6d5a08df322cfbe8449da9512a59f",
+          "nativeManifestSha256": "cb4c873556a9fbd73215f6f49333348fdbd3b413f53d139df8276ee6348dc0f5",
+          "build": "passed",
+          "staticInspection": "passed",
+          "androidLoad": "not run",
+          "installation": "not run",
+          "node": "not run"
+        },
+        "scope": "downloaded bytes, source equality and ZIP/native hashes; not install or runtime"
+      }
+    ],
+    "devicesTested": [],
+    "guiApplicationsOpened": false
+  },
+  "checks": {
+    "flutterAnalyzer": "passed; No issues found",
+    "flutterMobileTests": {
+      "passed": 182,
+      "skipped": 1,
+      "failed": 0,
+      "skipReason": "opt-in SSH GUI test is run separately"
+    },
+    "flutterRenderer": {
+      "passed": 10,
+      "failed": 0
+    },
+    "remoteHarness": {
+      "passed": 31,
+      "failed": 0
+    },
+    "flutterIsolatedSshGui": {
+      "passed": 1,
+      "failed": 0,
+      "manifest": "mobile-tabs-flutter-ssh-20261106.json",
+      "scope": "Ubuntu headless widget; temporary test signer/catalog/journal; real loopback OpenSSH and stock herdr 0.9.5"
+    },
+    "transportSource": "passed; isolated SSH and unit checks",
+    "tauriNodeTests": "passed; synthetic Node/DOM checks",
+    "androidBuilds": "both passed",
+    "nativeStaticInspection": "passed in CI; ABI, JNI, required/allowed DT_NEEDED and native-source byte equality",
+    "localIndependentVerification": "both ZIP digests and every SHA256SUMS member; APK/report SHA; source commit; native manifest and APK Heeler bytes; shared fixture and russh source materials; Flutter terminal candidate manifest"
+  },
+  "historicalFailedRuns": [
+    42184737889,
+    42187302052,
+    42206577343
+  ],
+  "notVerified": [
+    "physical phones",
+    "installation or native library loading for these APKs",
+    "AndroidKeyStore runtime for this source",
+    "camera",
+    "real Chinese IME",
+    "real overlay connectivity or concurrency",
+    "iOS signing",
+    "five-platform runtime",
+    "performance or production APK size",
+    "framework selection"
+  ],
+  "deliveryPolicy": {
+    "testOnly": true,
+    "releaseCreated": false,
+    "storeSubmission": false,
+    "productMergedToMain": false,
+    "debugNativeBytesPreserved": true,
+    "futureSessionWatchBatchIncluded": false
+  },
+  "cleanup": {
+    "localGuiAppsOpened": false,
+    "ciOwnedProcessesStopped": true,
+    "realHostAuthorizationFilesTouched": false
+  }
+}

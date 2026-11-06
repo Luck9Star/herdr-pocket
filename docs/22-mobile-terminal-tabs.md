@@ -1,6 +1,21 @@
 # 手机独立终端标签与保留连接
 
-2026-11-06，延续 [Flutter 原生网络通道](21-flutter-native-network.md)。本批推进手机从配对、看板进入多个独立终端视图：同一主机可打开不同 pane，隐藏视图撤销输入并暂停观察，回到前台后由用户显式恢复。**三轮集中云构建已执行，均未产生通过全部产物校验的新 APK；已汇总后续修复待复验。** 此前 Android 测试包仍对应 `040eb26`，不能用来验收本批代码。[上一批包与失败记录](18-mobile-network-profiles.md)
+2026-11-06，延续 [Flutter 原生网络通道](21-flutter-native-network.md)。本批推进手机从配对、看板进入多个独立终端视图：同一主机可打开不同 pane，隐藏视图撤销输入并暂停观察，回到前台后由用户显式恢复。**第四轮 `546c3eb` 已完成同源两份 Android arm64 测试包，5 个 CI job 全部成功，下载字节与来源核对通过。** 前三轮失败完整保留在下文；旧 `040eb26` 手机模拟器结果不代替本批设备运行。[历史手机结果](18-mobile-network-profiles.md)
+
+## 当前下载与验证结果
+
+[Actions 42208702281](https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281) 对应 `546c3eb34bf166a22effa033d9862544641a308a`。两份归档均已实际下载，GitHub ZIP digest、包内 SHA256SUMS、APK、原生 manifest、Heeler 实装字节及共享来源材料均匹配。[完整构建与下载核对记录](evidence/mobile-pair-gui/mobile-tabs-ci-final-20261106.json)
+
+| 路线 | 下载 | 解压后 APK SHA256 | APK 字节数 |
+| --- | --- | --- | --- |
+| Flutter | [测试归档](https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281/artifacts/13498293296) | `0e71db3d2e8bb3799cf5ace33ecf6bf5c5639ed53c62302e57bfd0a2c0166fab` | 452169182 |
+| Tauri | [测试归档](https://github.com/Luck9Star/herdr-pocket/actions/runs/42208702281/artifacts/13498208754) | `f9c75e2608b67afa0ec31b03a687740bb1a6d5a08df322cfbe8449da9512a59f` | 553750689 |
+
+下载 ZIP 后解压 `app.apk`，对照 SHA256 并保留 `report.json`、来源 manifest 与声明文件。当前测试目标为 API 35、arm64-v8a；包保留调试符号以核对原生来源字节，体积不代表正式包。Artifacts 保留至 2026-11-20；没有创建 Release 或商店版本。
+
+Flutter analyzer 无问题；常规移动测试 182 通过、1 个 opt-in SSH 用例跳过；独立隔离 job 随后执行该 SSH GUI 用例并通过，绘制回归 10 通过，harness 31 通过。真实 widget 经 runner 生成的临时测试身份签名、隔离 OpenSSH 和 herdr 0.9.5，完成待授权恢复、配对审查、看板、full/delta、同一 SSH 隐藏恢复及主动停止，签名 1 次，5 帧（3 delta），远端输入 0；共享 PTY 始终 119×40，临时授权撤销与自有进程清理已核对。[原始脱敏 manifest](evidence/mobile-pair-gui/mobile-tabs-flutter-ssh-20261106.json)
+
+此处是 Ubuntu headless widget／loopback 证据，设备签名和 journal 为明确的测试替身；不是 AndroidKeyStore、Android 动态加载、真机触控、IME、相机或真实 overlay 的通过证明。本批 Tauri 是 Node 测试、Android 构建与静态校验通过，没有新增其手机 GUI runtime 结果。框架仍未定案；看板事件订阅的后续源码不包含在这两份包中。
 
 ## 两套 GUI 的共同契约
 
@@ -61,13 +76,13 @@ Tauri 已越过缺图标阶段，Android 专用身份写入路径暴露返回 `&
 4. 关闭 A，确认 B 没有被关闭、激活或停止其共享节点；修改 B 所依赖的网络版本或身份，旧 B 视图必须要求关闭重开。创建到上限以及快速关闭重开时，尚在清理的连接继续占额，界面应明确拒绝超额连接。
 5. 应用进入后台再回来，所有隐藏与可见连接均须已关闭，不能自动拨号。分别记录 Android 版本、设备、输入法、网络条件、源码 SHA、实际步骤和失败状态；验证后关闭测试应用。原生库能装包、设备能加载、节点入网和 overlay SSH 是四项独立结果。
 
-## 三网络的后续顺序
+## 手机优先的后续顺序
 
 本批补查 [固定 Tailscale 源码与适配缺口](../validation/native/tailscale-adapter-audit.json)。Heeler 现有 libtailscale 的 Unix socketpair／文件描述符路径不能直接作为 Windows 桥；此前 tsnet 编译成功也不能证明该桥可用。后续需要可取消的 opaque stream 接口、独立节点生命周期，以及不会读取环境认证资料的显式授权流程。本机身份存储须实现完整 StateStore 契约，不能复用 EasyTier 的单份入网秘密作为 Tailscale 状态。
 
-1. 完成本批两包与隔离链路集中验收，保留失败，先修手机配对 → 看板 → 观察／输入 → 多标签恢复。
-2. 验证 Android 原生加载、设备身份重启恢复及真实 EasyTier SSH；现有隔离 ABI 或构建检查不新增真实组网通过项。
-3. 分别实现 Tailscale 和 ZeroTier 的身份、生命周期与字节流适配，再验证跨 provider 并发。没有将 EasyTier 的成功外推到其他网络。
+1. 本批两包与隔离链路已验收；下一批让手机看板持续接收会话／pane 状态变化。事件仅触发权威快照刷新，丢失或断流立即标为旧状态；隐藏退休订阅，显式恢复后在原 SSH 重建观察，不自动重放输入。
+2. 将未知输入记录按主机、会话和稳定终端目标隔离；保留每个目标的未决锁定及人工核实入口，避免 A 的未决写入阻止 B 的独立输入。
+3. 分别实现 Tailscale 和 ZeroTier 的身份、生命周期与字节流适配，再验证跨 provider 并发。设备条件具备时补 Android 原生加载、身份重启恢复及真实 EasyTier SSH；不以隔离 ABI 或 EasyTier 的成功外推到其他网络。
 4. 根据手机结果完善 Penpot v2 的恢复、未知结果与组件状态，再进入桌面分屏和焦点适配。现有 30 画板本批未改；框架尚未定案。
 
 未读取真实凭据、修改主机授权或安装本机完整 SDK。本批未打开本机 GUI 测试应用。

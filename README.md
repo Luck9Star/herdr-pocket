@@ -10,7 +10,7 @@ Flutter 真实 widget 经自建 OpenSSH/herdr，已走通 **配对审查 → 看
 
 手机继续优先，沿用 Penpot v2 靛蓝／Slate 方案；框架尚未定案。未知输入不重放，隐藏时撤销输入，恢复前核验原 pane／terminal 和新 full，布局不修改远端共享 PTY。当前两包含 EasyTier＋Tailscale；ZeroTier 后续源码不在其中。真机触控、中文 IME、相机、真实三网、iOS 签名与五端并发仍未验证，严格 transport Clippy 的 12 项诊断仍保留。[设计与覆盖](design/README.md) · [配对与设备密钥](docs/14-mobile-pairing-workbench.md) · [手机 Tailscale 接线](docs/26-mobile-tailscale-login.md)
 
-历史 `040eb26` 云模拟器、`546c3eb` 独立终端标签包及各次失败保留原 SHA 与范围，不外推为本批设备运行通过。[ZeroTier 身份与原生安全基础](docs/28-zerotier-native-foundation.md)已有源码和 Mac 隔离证据，尚有 ECC 诊断与运行接线缺口；下一批继续网络租约与手机接线，再集中云验收；桌面分屏紧随手机闭环。[历史手机结果](docs/18-mobile-network-profiles.md) · [前一测试包](docs/22-mobile-terminal-tabs.md)
+历史 `040eb26` 云模拟器、`546c3eb` 独立终端标签包及各次失败保留原 SHA 与范围，不外推为本批设备运行通过。[ZeroTier 后续实现](docs/29-zerotier-managed-device.md)已修复 ECC 未定义左移并移除排除，新增共享设备 owner／多网络租约和 AndroidKeyStore 包装；Mac 整库 114 TU、动态加载及未启动节点的初始化／退休通过。定向 socket、JNI、GUI 和真实节点仍未完成，不在上述 APK 内；下一批继续这些手机接线，再集中云验收。桌面分屏紧随手机闭环。[历史手机结果](docs/18-mobile-network-profiles.md) · [前一测试包](docs/22-mobile-terminal-tabs.md)
 
 ## 首版做什么
 
@@ -36,6 +36,7 @@ Heeler 已有三网络的源码实现可供按许可移植：EasyTier 使用 no-
 
 | 文件 | 内容 |
 | --- | --- |
+| [`docs/29-zerotier-managed-device.md`](docs/29-zerotier-managed-device.md) | ECC 修复、设备／多网络管理、Android 包装与 Mac 整库证据 |
 | [`docs/28-zerotier-native-foundation.md`](docs/28-zerotier-native-foundation.md) | ZeroTier 单设备身份、事件／退休修复与尚未消除的阻断项 |
 | [`docs/27-mobile-tailscale-cloud.md`](docs/27-mobile-tailscale-cloud.md) | 最新双网络 Android 测试包、实际 CI、隔离 SSH 与验收步骤 |
 | [`docs/26-mobile-tailscale-login.md`](docs/26-mobile-tailscale-login.md) | 两套手机 Tailscale 身份、显式登录、原节点路由与双库装包边界 |

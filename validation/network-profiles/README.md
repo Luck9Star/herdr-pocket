@@ -48,3 +48,5 @@
 ## ZeroTier 设备级身份基础（2026-11-07）
 
 `native/android/ZeroTierDeviceStoreCore.java` 是独立设备 namespace 的托管核心，151 个临时 JCE／JVM 检查通过。它保留跨进程 owner 租约、原生退休证明接口及明确的创建／删除恢复；不复用首个 profile 作为全局身份。不可读身份的两步丢弃仅针对同实例此前认证过的 handle；跨重启缺少可信引用仍阻断。尚未接 AndroidKeyStore、JNI、network manager 或 GUI，不在当前测试包中。[实现与完整边界](../../docs/28-zerotier-native-foundation.md)
+
+后续已新增 `AndroidZeroTierDeviceStore`／`AndroidZeroTierEnvelope` 的真实 AndroidKeyStore 包装源码，36 项实际包装＋JVM stubs 检查通过；原有 core 151 项复验通过。尚未接 JNI／GUI，也没有设备 KeyStore 证据。独立 native control-plane 管理设备 owner 和多网络租约，尚无 socket。见[宿主契约](native/android/ZeroTierAndroidStore.md)和[后续完整记录](../../docs/29-zerotier-managed-device.md)。

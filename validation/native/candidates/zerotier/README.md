@@ -31,20 +31,32 @@ native vault 必须先完成原子加密持久化，再允许初始化／start�
 来源准备、archive／gitlink／Heeler patch hash、完整树清单和主构建入口由上层 `zerotier_candidate.py` 与来源 manifest 管理。本目录构建插入顺序：
 
 1. 固定完整 libzt＋三个 gitlink，验证并应用原四 Heeler patches。
-2. 依序应用本目录两个 patch。
+2. 依序应用本目录 `0005`、`0006`、`0007` 三个 patch。
 3. 将 `shim/hp_zt.h`、`hp_zt_identity.cpp`、`hp_zt_lifecycle.cpp` 复制到 libzt `src/`。现有 CMake `src/*.cpp` glob 会纳入它们；源码目录内不得留下 binary、object、日志或构建目录。
 4. 运行离线 runner，输出必须为源码树外一个尚不存在的目录：
 
 ```sh
 python3 validation/native/candidates/zerotier/tests/run_offline.py \
-  /private/tmp/herdr-zt-native-20261106-v2/libzt \
-  --output /private/tmp/herdr-zt-offline-20261107-final
+  /private/tmp/herdr-zt-ecc-20261107/libzt \
+  --output /private/tmp/herdr-zt-ecc-offline-repeat
 ```
 
 runner 不下载工具或 SDK，使用已有 clang++。它编译实际 Controls／Events／NodeService／VirtualTap 与两个 shim 翻译单元，再执行四个 native-only 离线程序：严格身份 ABI、真实 projection helper、worker/frame helper、实际 Events TU（仅未使用的 NodeService 查询边界为显式 stub）。事件反例运行实际队列的 disable／满 1024 拒收，调用生产 RAII helper 的可计数 typed deleter 检查四种地址各仅释放一次；成功 transfer 不执行 sender deleter，实际消费销毁路径保留，borrowed STORE 不误删。这不等于执行真实 NodeService 节点。身份临时值仅在 native 内存中，不输出 secret。环境显式固定 `UBSAN_OPTIONS=halt_on_error=1`、`ASAN_OPTIONS=abort_on_error=1`，诊断必须失败，不能靠默认 exit 0 计 pass。
 
-固定上游 `ECC.cpp` 的 Curve25519 参考算术会触发 signed-negative shift UBSan 诊断；初轮已确认并记录脱敏摘要。只有该 TU 显式使用 `-fno-sanitize=shift-base`，ASan 和其他 UBSan 检查保留，候选其余 TU 不作该排除。因此不得称完整上游 UBSan 已通过。
+`0007-defined-ecc-shifts.patch` 修复固定 `ECC.cpp` 的 signed-negative shift：历史运行观察到 27 个诊断位置，补丁覆盖 28 个潜在的 signed 左移表达式（23 个 limb／carry、5 个 equality mask），不改变 26／25-bit limb 表示、Montgomery ladder、clamping、SHA512 派生或 96-byte 签名布局。runner 已删除原 ECC TU 的 `-fno-sanitize=shift-base`；五个 crypto TU 和全部执行的 C++ 离线测试使用 ASan＋UBSan，无 sanitizer 排除。前述六个 production TU 仍是编译接线检查，不是完整节点运行。
 
-本轮已有六个实际翻译单元实编及上述四个离线程序执行证据；它们不证明实际 node lifecycle、完整共享库链接／加载、Android／Windows／iOS、设备存储、授权、真实 ZeroTier／SSH／herdr、GUI 或跨 provider 并发。本轮没有启动节点、入网、GUI 或 CI，也没有安装 SDK。
+算术依据与边界：
 
-补丁文本 whitespace 边界：`0005-native-safety.patch` 有两处固定上游 preimage／context 空白行空格；`0006-strict-offline-identity.patch` 有 15 处标准 diff context 前缀空格＋原源码 tab，以及一个末尾空 context 行。`git diff --no-index --check` 会报告这些 patch 文本行，不为通过文本检查而改变被验证的 preimage。其余候选文件检查通过；源码 fresh-apply、postimage hash 与离线检查单独验收，不能将 patch 文本检查报告为全绿。
+- 输入 limb 的绝对值小于 `2^27` 时，`fproduct`／`fsquare_inner` 每个系数小于 `14*2^54`。degree reduction 的原 `16x + 2x + x` 改用有符号常数乘法，每一步及最终 low＋19×high 的绝对值小于 `280*2^54 < 2^63`，没有用 unsigned wrap 掩盖 signed 溢出。
+- coefficient reduction 保留原截零除法／进位顺序。后续输入上界 `281*2^54 < 2^63`，carry 乘 `2^25`／`2^26` 在 `int64_t` 中可表示。固定 [Chromium Donna 参考源码](https://chromium.googlesource.com/chromium/src/+/32352ad08ee673a4d43e8593ce988b224f6482d3/crypto/curve25519-donna.c)（blob `f141ac028b0f7bba419c218aad66275b507eb8c3`）已有相同常数乘法 carry 写法；本补丁保留本项目固定算法及轮次。
+- equality 使用 `uint32_t` 执行相同的 AND／shift 位传播，最高位为全部 32 个原始相等位的 AND；最后仅将 `0/1` 转为 `s32` 再取负，严格得到 `0/-1`。不增加按 secret 分支或表查询。原 two's-complement／arithmetic-right-shift 前提及编译检查保留，本批没有改写右移，也不构成机器码 constant-time 证明。
+
+新增 `ecc_driver.cpp` 直接包含实际 patched `ECC.cpp` 来测试其 private helpers，没有新增生产 crypto API。`ecc_reference_test.py` 用 Python 无界整数作为独立 oracle，代码注明 RFC 来源及许可，先用公开 [RFC 7748 §5.2／6.1](https://www.rfc-editor.org/rfc/rfc7748.txt) 和 [RFC 8032 §7.1](https://www.rfc-editor.org/rfc/rfc8032.txt) 向量校验 oracle，再比较 native 输出。Python oracle 是可变时间离线测试代码，不能用于产品。
+
+每个配置执行 5016 个公开、确定性操作／5083 次比较：equality 全符号及每一位差异、degree／carry 极值、模 p 两侧 canonical encoding、26／27-bit limb 乘法与平方、非 canonical X25519 输入、RFC 1000 次迭代每一轮、额外 128 个 X25519 差分，以及 67 个 Ed25519 公钥＋完整 ZeroTier 签名差分及 native 篡改拒绝。ECC 分别使用 C++11/O0、C++11/O2、C++17/O2、C++20/O2；其他链接的 crypto 对象保持 C++11/O1。测试不输出 seed／scalar／临时身份，失败日志也脱敏 UBSan 操作数。
+
+runner 另在输出目录反向应用 `0007`，用 SHA256 `9a9aa9ce6d15745f22babfad7e9905661532f67e9d87fc2518ca75e43cfc581b` 确认精确原始 `ECC.cpp`，以同一 C++11 ASan／UBSan 配置执行三项公开负控制（equality、degree、carry）。每项必须非零退出并出现预期负移位诊断；只有崩溃、放宽 flag 或误用另一源码都不能算通过。反向恢复和故意失败均在输出目录，已验证的源码树不被改动。
+
+本轮在 macOS arm64、Apple clang 21 上已有六个实际翻译单元实编、四组 ECC 差分和上述四个离线程序执行证据；它们不证明全部输入的形式化密码学等价、其他编译器／架构、实际 node lifecycle、完整共享库链接／加载、Android／Windows／iOS、设备存储、授权、真实 ZeroTier／SSH／herdr、GUI 或跨 provider 并发。本轮没有启动节点、入网、GUI 或 CI，也没有安装 SDK。
+
+补丁文本 whitespace 边界：`0005-native-safety.patch` 有两处固定上游 preimage／context 空白行空格；`0006-strict-offline-identity.patch` 有 15 处标准 diff context 前缀空格＋原源码 tab，以及一个末尾空 context 行；`0007-defined-ecc-shifts.patch` 有 29 处 context 前缀空格＋原源码 tab、9 处空 context 行。`git diff --no-index --check` 会报告这些 patch 文本行，不为通过文本检查而改变被验证的 preimage。实际 ECC source diff 和其余候选文件没有 whitespace 诊断；源码 fresh-apply、postimage hash 与离线检查单独验收，不能将 patch 文本检查报告为全绿。

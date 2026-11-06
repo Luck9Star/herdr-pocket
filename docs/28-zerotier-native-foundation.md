@@ -2,6 +2,8 @@
 
 2026-11-07。本批落地设备级身份托管核心、固定源码准备工具及原生身份／事件／退休补丁。它尚未接入 Android KeyStore 包装、JNI、网络 manager 或 GUI，**不在 `750798fe` 的两份 APK 中**。没有启动 ZeroTier 节点、读取真实身份、安装 SDK 或为此另开 Actions。结果与源文件哈希见[证据](evidence/mobile-pair-gui/zerotier-foundation-20261107.json)。
 
+**后续更新：** 本页保留 `b2c6528` 基础批次的历史边界。随后已修复 ECC 左移并移除排除，新增设备／网络 control-plane manager 和 AndroidKeyStore 包装，完成 Mac 整库链接／离线初始化；详情见[后续实现与实测](29-zerotier-managed-device.md)。JNI、定向 socket、GUI 和实际网络仍未完成，旧记录中的“未解决／未接入”不代表这些后续源码的当前状态。
+
 ## 一个设备身份，多条网络租约
 
 固定 libzt 是进程级单节点。多个 ZeroTier profile 应引用同一设备身份，每条连接仍保留自己的 profile、配置版本、network ID 与 device handle；不能把第一个 profile 当作全局身份，也不能为每个 profile 建一个 libzt node。退出网络 A 不能销毁网络 B 共用的身份。

@@ -231,7 +231,7 @@ function watchWorkspace(fixedTarget=null,options={}) {
   const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
   globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
   globalThis.window={confirm:()=>true};const calls=[],channels=[],observed=[];let terminal;
-  const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe'){observed.push(args);return options.observe?options.observe(args):new Promise(()=>{});}if(name==='remote_tab_select' && options.select)return options.select(args);if(name==='remote_tab_input_mode')return Promise.resolve(5);return Promise.resolve();};
+  const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe'){observed.push(args);return options.observe?options.observe(args):new Promise(()=>{});}if(name==='remote_tab_select' && options.select)return options.select(args);if(name==='remote_tab_input_mode')return options.mode?options.mode(args):Promise.resolve(5);return Promise.resolve();};
   const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>{
     terminal={options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},dispose(){},focus(){document.activeElement=this.textarea;},onData(fn){this.data=fn;}};return terminal;
   }});
@@ -374,5 +374,33 @@ test('SW07: an explicit new SSH attempt accepts epoch one after the prior attemp
     assert.ok(h.calls.some(c=>c.name==='remote_tab_ack' && c.args.epoch===1));
     assert.equal(h.calls.filter(c=>c.name==='remote_tab_reserve').length,2);
     assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
+  } finally {h.restore();}
+});
+
+test('IJ04 IJ12: recovery confirmation alone requests observe review focus with the captured input epoch',async()=>{
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try {
+    await h.start();h.observation(1,'starting');h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});h.observation(1,'active');
+    h.emit({kind:'input_ready',epoch:1,unknown:true,recovery_status:'pending'});
+    window.confirm=()=>false;h.find('已核实原目标结果，恢复输入').onclick();await flush();
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_mode').length,0);
+    window.confirm=()=>true;h.find('已核实原目标结果，恢复输入').onclick();await flush();await flush();
+    const mode=h.calls.find(c=>c.name==='remote_tab_input_mode').args,recover=h.calls.find(c=>c.name==='remote_tab_input_recover').args;
+    assert.equal(mode.mode,'observe');assert.equal(mode.review,true);assert.equal(mode.epoch,1);assert.equal(mode.generation,9);
+    assert.equal(recover.epoch,mode.epoch);assert.equal(recover.generation,mode.generation);assert.equal(recover.inputEpoch,5);
+    assert.equal(h.find('发送草稿').disabled,true,'review does not enable direct or draft input');
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
+    h.find('逐键输入').onclick();await flush();await flush();document.activeElement=null;h.terminal().textarea.event_blur();await flush();
+    const blur=h.calls.filter(c=>c.name==='remote_tab_input_mode' && c.args.mode==='observe').at(-1).args;
+    assert.equal(blur.review,undefined,'ordinary blur must remain unfocused observe');
+  } finally {h.restore();}
+});
+
+test('IJ03 IJ12: a delayed review-mode result cannot resolve the next observation epoch',async()=>{
+  let reviewResult;const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{mode:args=>args.review?new Promise(resolve=>{reviewResult=resolve;}):Promise.resolve(5)});try {
+    await h.start();h.observation(1,'starting');h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:true,recovery_status:'pending'});
+    h.find('已核实原目标结果，恢复输入').onclick();await flush();assert.ok(reviewResult);
+    h.observation(3,'resuming');h.emit({kind:'frame',epoch:3,frame:{seq:1,full:true,bytes:[66]}});h.observation(3,'active');h.emit({kind:'input_ready',epoch:3,unknown:true,recovery_status:'pending'});
+    reviewResult(8);await flush();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_recover').length,0);
+    assert.equal(h.find('逐键输入').disabled,true);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
   } finally {h.restore();}
 });

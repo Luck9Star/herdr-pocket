@@ -24,11 +24,29 @@ final class HostCatalogFile {
     }
     private func current(_ dir: URL) throws -> Data? {
         let file = dir.appendingPathComponent("catalog.json")
-        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
-        let props = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-        guard props.isRegularFile == true, props.isSymbolicLink != true,
-              let size = props.fileSize, (1...262144).contains(size) else { throw DeviceKeyError.invalidHandle }
-        let bytes = try Data(contentsOf: file)
+        // Checking fileExists first follows a dangling link and mistakes it for
+        // an empty store. Open the final component without following links;
+        // only actual ENOENT means that no catalog has been created.
+        let fd = Darwin.open(file.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+        if fd < 0 {
+            if errno == ENOENT { return nil }
+            throw DeviceKeyError.invalidHandle
+        }
+        defer { Darwin.close(fd) }
+        var metadata = stat()
+        guard fstat(fd, &metadata) == 0, (metadata.st_mode & S_IFMT) == S_IFREG,
+              (1...262144).contains(metadata.st_size) else { throw DeviceKeyError.invalidHandle }
+        var bytes = Data(), buffer = [UInt8](repeating: 0, count: 8192)
+        while true {
+            let count = Darwin.read(fd, &buffer, buffer.count)
+            if count < 0 {
+                if errno == EINTR { continue }
+                throw DeviceKeyError.invalidHandle
+            }
+            if count == 0 { break }
+            guard bytes.count + count <= 262144 else { throw DeviceKeyError.invalidHandle }
+            bytes.append(contentsOf: buffer.prefix(count))
+        }
         guard (1...262144).contains(bytes.count), String(data: bytes, encoding: .utf8) != nil else { throw DeviceKeyError.invalidHandle }
         return bytes
     }

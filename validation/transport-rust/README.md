@@ -105,7 +105,7 @@ Starting、EngineStarted、Closing、Stopped 只描述本机生命周期；Engin
 
 暂停先同步撤销原 `LiveInput`，再关闭本地 observation channel，成功 ACK 后进入 Paused，保留原 SSH、实际 route、host pin、用户、session、pane 和 terminal。ACK 表示**本地 channel sender 已退休、Close 请求已处理**；它不证明对端收到 Close 或观察进程退出。暂停没有持续 frame 缓冲，也不依赖悬挂 frame ACK。恢复只在同一 SSH 上重新 snapshot，核对原 pane 仍对应同 terminal，再创建新的 observe channel；首帧必须 seq=1/full，且其 callback 完成后才进入 Active／发布新 `LiveInput`。新输入仍从 observe 模式开始，没有自动 dial、重连、resize 或输入重放。初次 pane 选择可一直等待用户，取消或 control epoch 变化仍可打断。
 
-未决输入在暂停后失去资格，保留 durable unknown marker；迟到的成功 receipt 不能清除它。observation epoch 的取消只退休原输入，整连接 cancellation 仍中断网络和输入。Recovery 本轮继续只有一个全局 marker：A 的未知结果可能阻止 B 发送，B 的独立观察和暂停／恢复继续工作；不同目标不能清除 A 的标记。恢复 marker 的持久 route 不增加 observation epoch，也不弱化原有身份校验。
+未决输入在暂停后失去资格，保留 durable unknown marker；迟到的成功 receipt 不能清除它。observation epoch 的取消只退休原输入，整连接 cancellation 仍中断网络和输入。该历史批次的 Recovery 只有一个全局 marker，可能由 A 未知阻止 B 发送；后续按目标隔离见下节。不同目标仍不能清除 A 的标记。恢复 marker 的持久 route 不增加 observation epoch，也不弱化原有身份校验。
 
 单次本地 Close 处理最多 5 秒，snapshot／capability RPC 同样显式退休自己的 channel；EOF 单独不算退休。关闭错误、超限或超时会取消原 SSH。`ObservationAck` 从创建起设 10 秒截止时间，等待时到期或丢弃当前未完成 ACK 会撤销整连接；被覆盖旧 ACK 的迟到 Drop 不影响新命令。宿主必须 await ACK 并处理错误，不能丢弃 Pause 后继续使用原输入。连接入口正常返回前会取消网络并等待其 pending dial Future 与 SSH driver 所拥有的实际 ByteStream 完成 Drop；宿主的连接额度必须保留到入口结束，不能以收到 Closed 状态代替释放。overlay 的迟到 native open／failed cleanup 另受 runtime 的 32 stream 预算约束；宿主的 8 个 SSH 额度不表示 native reservation 已全部归零。
 
@@ -139,3 +139,29 @@ python3 validation/vendor/reproduce-local-close.py --archive /private/tmp/herdr-
 父审补修 RPC 失败的通道清理：读写失败、超限和读取超时也要先退休原 channel，再允许 watch 重试。若 channel open 无法确认，无法取得精确 recipient ID，因此取消原 SSH，防止迟到 open 持续累积。这里只关闭自有连接，不重放输入或操作共享 PTY。
 
 父代理独立运行默认完整 suite，**64 项单元 + 1 项 CLI 报告测试通过**。四项新增故障回归通过真实自建 loopback SSH，覆盖多次超限、watch 自动重试、8 秒读取超时与未确认 open；检查同连接恢复、旧通道 CLOSE 顺序和没有重新拨号。子代理在临时隔离副本恢复旧的提前返回缺陷，watch 重试用例按预期失败。所有密钥和 peer 为临时 fixture；这不是实际 herdr 进程、手机、overlay 或 GUI 的验收，也不包含在已发布的 546c3eb Android 包内。
+
+
+## 按目标隔离未知输入记录（2026-11-06 后续源码）
+
+`Recovery` 以实际 `InputIdentity` 的完整相等关系分组：实际 stream 的持久 route、host/port、user、完整主机公钥 pin、socket、herdr 可执行路径、命名 session、pane 和 terminal。相同绑定的不同 tab／主机显示别名共用一条未决记录；连接 generation 和观察 epoch 不成为新的持久目标。A 未知时，合法的不同目标 B 可独立落盘和发送；旧目标、其他 route 或其他请求 ID 都不能清除 A。
+
+`pending.json` 原子升级为 `{version:2, records:[原始公开 Marker JSON 字符串]}`。旧 version 1 单记录可严格读取，首次成功修改时完整迁入，缺少 route 继续只表示 system；迁移和清理其他目标保持原记录字符串字节不变，不从当前主机补字段。升级文件需由支持 v2 的客户端读取。每目标最多一条 pending，总计最多 32 个目标、单条原始 UTF-8 记录 8192 bytes、完整文件 262144 bytes；未退休 active 目标也占目标额度，不淘汰未知记录。封装／转义也计入总文件上限，因此两个容量条件同时生效。
+
+同一 app-private 目录的 `owner.lock` 与进程内 mutex 串行修改，POSIX 路径先写入 0600 staging、同步文件，再 rename 替换并同步目录，成功后才允许网络写入。没有 remove-destination 再 rename 的降级路径。坏格式、重复目标、未知版本、超限、符号链接、当前 runtime 已知 ledger 消失或锁文件被替换都会拒绝写入；rename 前失败保留旧文件。rename 后目录同步失败会将当前 runtime 保持为 unavailable，普通状态读取不能解除该锁定。重开时仍检查实际持久文件，不能把坏记录当作 empty。
+
+`status()`／`unknown()` 保留全局诊断；`status_for(target)`、`unknown_for(target)` 和 `pending_id(target)` 供目标级输入状态使用。`prepare` 原子检查 pending／active 并持久化。active 按 target＋request ID 退休，旧 guard 的 Drop 不改变其他请求。已知服务端结果以精确 ID 清理；人工恢复使用 `clear_reviewed(target, id)`，同时拒绝该目标仍在途的写入。`LiveInput` 在新 full 创建句柄时冻结 pending ID，迟到的人工确认不能清除随后出现的新请求；存储兼容入口 `clear_confirmed(target, None)` 不用于 GUI 人工恢复。
+
+Tauri 的可选 `review:true` 仅允许 observe 模式，用于当前可见、Active、原 generation／观察 epoch 的显式人工核查。普通 observe／失焦仍撤销焦点；review 不授予 direct/draft 发送权限。恢复沿用 mode 返回的原 input epoch，后端不会自行换一个 epoch 绕过迟到意图；原有新 full、目标绑定和未知不重放规则保持。
+
+维护者可在已有 Rust 工具链上复验：
+
+```sh
+CARGO_TARGET_DIR=/private/tmp/herdr-watch-target cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml
+CARGO_TARGET_DIR=/private/tmp/herdr-watch-target cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml --features overlay-native-fixture
+```
+
+本批 13 项存储回归使用自建临时目录，覆盖 v1 迁移、原始字节保留、并发冲突、容量、坏文件／symlink、锁替换以及 rename 前／目录同步阶段的实际权限错误。两项新增 loopback SSH 回归实际记录 4 笔和 1 笔精确输入，peer 在每笔输入到达前核对其精确 marker 已落盘：A 取消 guard 后 B 仍 active；B 可取得匹配回执而 A 未知保留；旧 A 回执不能清新 A／B；同目标别名不能重复输入或清理 active；普通失焦与过期 review epoch 被真实 `LiveInput` 拒绝。共同条件见 [target-input-journal-v1.json](../shared/target-input-journal-v1.json)。
+
+本批严格 `cargo clippy --all-targets -- -D warnings` 执行失败，当前诊断按位置与内容去重为 12 项；未另建 `fdf40ad` 基线独立对照，因此不能将其全部归因为历史，也不将单元测试通过写成全门禁通过。
+
+上述运行限本机 macOS 与自建 SSH peer／合成 native ABI，没有运行真实 herdr、overlay 网络、GUI 或新 CI。Windows 的目录同步和覆盖 rename、Android／Apple 设备文件系统、断电恢复与文件回滚防护尚未验证；没有安装平台 SDK、读取真实身份或自动修复／清空未知记录。

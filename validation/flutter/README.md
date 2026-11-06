@@ -16,7 +16,13 @@
 
 这是对固定 dartssh2 **4.1.0** 的实验性适配：`destroy()` 的本地完成不代表内部 channel 已移除。代码只识别完整匹配的入站 confirmation／close trace 和本地 channel ID，不输出或保存 trace；snapshot、输入和观察 channel 均计数，每条 SSH 的已确认活跃 channel 和未结束的 open 各自上限为 8（同一 open 在确认后返回前会被两边暂时计数，二者计数之和最多 16）。暂停后最多等待 2 秒回收，否则关闭整条 SSH。归档 SHA-256 为 `39359aceafcf5940b868249e3c9c6d86e4e0f989eec7417d033c943157c84c51`；已逐文件核对归档中 `ssh_client.dart`、`ssh_channel.dart` 和 `msg_channel.dart`。trace 不是稳定公开协议，升级依赖前必须重新核验并执行回归；这不是设备验证证明。
 
-当前持久化输入日志是全局单槽；一个视图的未知结果可能限制其他视图输入，不会据此取消其他视图观察，也不会清除另一目标的记录。草稿提交时先从可发送编辑框移出；旧观察 epoch 返回明确拒绝时，原文只进入该目标的本机只读找回区，不覆盖新草稿或自动发送。共享要求见 [`../shared/mobile-tabs-v1.json`](../shared/mobile-tabs-v1.json)；新增 Widget、连接预算与可选隔离 SSH 测试尚未运行，不能视为编译、真实网络、手机或五平台通过。
+持久化输入日志现在使用按目标隔离的候选表：实际 socket route、host／port／用户／host key、session／socket、pane＋terminal 完全相同才共用锁；generation、tab 与 request ID 不改变目标身份。A 的有效未知记录只锁 A，B 可独立准备和输入；任何损坏、重复目标或无法读取的记录仍使存储整体不可用。每个新 full 和发送前刷新整表，未选 pane 时不把其他记录显示为本页未知。
+
+原生桥改为 `readAll`、`prepare → lease`、`complete(record, lease)`、`abandon(record, lease)` 与显式 `resolve(record)`；旧 `read`／`clear` 不再使用。最多 32 个目标、每条原 marker 8192 UTF-8 bytes、schemaVersion 3 存储 envelope 262144 bytes；marker 本身继续保留原 v1/v2 字段与精确字符串，首次成功原生变更才迁移，不能把旧记录绑到当前目标。v1/v2 未保存 herdr 可执行路径，本批不凭当前配置补造该字段；这仍是 Flutter 历史身份边界，Rust 的额外路径绑定不因此减弱。
+
+同目标跨 adapter 的原子锁由 native lease 负责。页内输入队列也按 endpoint 隔离，最多 32 个未收敛 lane；不同目标可独立启动，同目标切换观察 epoch 仍等待原 writer 收敛并保持顺序。旧目标的迟到错误不撤销新目标的模式或队列。prepare 超时／取消不代表未落盘：保留原 Future，原 prepare／complete、响应 stream 和 channel 清理均收敛后，仅 abandon 原 lease 并保留未知 marker。已知 ACK 清理失败仍保留已知结果与 receipt；不重放输入。人工恢复必须重连同目标、取得新 full，并冻结点击时展示的原 raw；异步期间出现新记录不得替换解除对象，active 目标不能人工解锁。另一 adapter 已明确解除原 marker 后，本页只在新 full 前后匹配同一旧 unknown 对象／raw、UI epoch、实际连接与最新成功整表读 ticket，且本目标无未收敛本地 claim 时协调旧展示；delta、旧读、失败或新 unknown 不解锁。读空不承诺以后不会出现其他 adapter 的新 active，最终仍由 native prepare 原子守门。已知 receipt 在协调后仅作为本目标的只读既有结果显示。
+
+草稿提交时先从可发送编辑框移出；旧观察 epoch 返回明确拒绝时，原文只进入该目标的本机只读找回区，不覆盖新草稿或自动发送。共享要求见 [`../shared/mobile-tabs-v1.json`](../shared/mobile-tabs-v1.json) 和 [`../shared/target-input-journal-v1.json`](../shared/target-input-journal-v1.json)。新增多记录／lease／迟到结果、MethodChannel 参数与 Widget 反例尚未在 Flutter SDK 下运行；语法解析不是 analyzer、Dart 测试、原生存储、真实 SSH、手机或五平台验证。
 
 ## 固定输入与边界
 

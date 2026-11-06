@@ -210,6 +210,9 @@ pub struct LiveInput {
     state: Mutex<State>,
     recovery: Recovery,
     identity: InputIdentity,
+    // Captured only when this fresh-full input lease is constructed. A later
+    // human confirmation must not resolve another request on the same target.
+    reviewed_pending: Option<String>,
 }
 impl LiveInput {
     pub(crate) fn new(
@@ -218,6 +221,7 @@ impl LiveInput {
         cancel: Cancellation,
         recovery: Recovery,
     ) -> Self {
+        let reviewed_pending = recovery.pending_id(&identity).ok().flatten();
         Self {
             ssh,
             socket: identity.socket.clone(),
@@ -231,6 +235,7 @@ impl LiveInput {
             }),
             recovery,
             identity,
+            reviewed_pending,
         }
     }
     pub(crate) fn new_observation(
@@ -256,10 +261,10 @@ impl LiveInput {
         self.cancel.cancel();
     }
     pub fn unknown(&self) -> bool {
-        self.recovery.unknown()
+        self.recovery.unknown_for(&self.identity)
     }
     pub fn recovery_status(&self) -> &'static str {
-        self.recovery.status()
+        self.recovery.status_for(&self.identity)
     }
     fn mark_unknown(&self) { /* the durable marker was written before network I/O */
     }
@@ -298,8 +303,13 @@ impl LiveInput {
         {
             return Err("input_stale");
         }
-        self.recovery.clear_confirmed(&self.identity, None)?;
-        s.epoch += 1;
+        let next = s.epoch.checked_add(1).ok_or("input_stale")?;
+        let id = self
+            .reviewed_pending
+            .as_deref()
+            .ok_or("input_original_target_required")?;
+        self.recovery.clear_reviewed(&self.identity, id)?;
+        s.epoch = next;
         Ok(())
     }
     pub fn invalidate(&self) {
@@ -330,10 +340,10 @@ impl LiveInput {
             self.recovery.prepare(&self.identity, &id)?;
             s.inflight = true;
         }
-        struct Pending<'a>(&'a LiveInput, bool);
+        struct Pending<'a>(&'a LiveInput, String, bool);
         impl Drop for Pending<'_> {
             fn drop(&mut self) {
-                if !self.1 {
+                if !self.2 {
                     self.0.mark_unknown();
                     self.0.invalidate();
                     self.0.cancel.cancel();
@@ -341,13 +351,13 @@ impl LiveInput {
                         self.0.connection_cancel.cancel();
                     }
                 }
-                self.0.recovery.end_attempt();
+                self.0.recovery.end_attempt(&self.0.identity, &self.1);
                 if let Ok(mut s) = self.0.state.lock() {
                     s.inflight = false;
                 }
             }
         }
-        let mut pending = Pending(self, false);
+        let mut pending = Pending(self, id.clone(), false);
         let request = json!({"id":id,"method":"pocket.input.send","params":{"pane_id":self.pane,"expected_terminal_id":self.terminal,"bytes_base64":Base64::encode_string(&data)}});
         let result = match rpc(&self.ssh, &self.socket, &self.cancel, request).await {
             Ok(raw) => outcome(&raw, &id, &self.pane, &self.terminal, data.len()),
@@ -364,7 +374,7 @@ impl LiveInput {
                     .clear_confirmed(&self.identity, Some(&id))
                     .is_ok()
                 {
-                    pending.1 = true;
+                    pending.2 = true;
                     return Ok(result);
                 }
                 return Ok(match result {

@@ -110,3 +110,12 @@ CARGO_TARGET_DIR=/private/tmp/herdr-tauri-watch-target cargo test --locked --off
 本批实际为 **104 项 Node 测试、前端生产构建和 30 项 Tauri crate Rust 单元测试通过**。新增覆盖乱序 watch 更新、新 pane、旧 row 的 terminal 复用、隐藏／显式恢复、unsupported 单次快照、选择回执跨 epoch、终端 full 不解除看板 stale／输入 unknown，以及直接输入焦点保持。Node 交互使用合成 DOM／IPC，Rust 测试验证实际 command 委托的缓存与选择 helper；它们不证明 Tauri GUI 到真实 herdr 的事件闭环。
 
 未启动 GUI、触发 CI、生成或安装新手机包。本节不新增真机 IME／触控、真实 SSH/herdr watch、overlay 或五端支持通过项。共享核心的 channel 清理须以其独立回归结果为准；本层测试不替代传输资源生命周期验证。
+
+
+## 按目标未知输入与人工恢复（2026-11-06 后续源码）
+
+手机标签调用的共享 `LiveInput` 已按实际远端身份分组读取安全记录。不同目标可独立输入，同一目标的别名视图仍共同受阻；人工确认绑定新 full 创建时冻结的原请求 ID，不能确认后来出现的新请求。存储格式、32 目标／字节上限和迁移边界见 [共享传输说明](../transport-rust/README.md)。
+
+恢复按钮经人工确认后，调用 `remote_tab_input_mode` 的 `mode:observe, review:true`，取得当前输入 epoch 后再调用原恢复命令。`review` 为可选参数，省略或 false 的普通 observe／失焦仍撤销焦点；true 只接受 observe，不能以该标记启用 direct/draft。原 visible、Active、generation、观察 epoch 与输入 epoch 门禁均保留，不在恢复命令内隐式申请新 epoch。审查焦点自身不授予发送权限，恢复完成后仍需显式选择输入模式。
+
+新增 Node 回归核对按钮确认、review 参数、普通 blur 不带 review、冻结输入 epoch 和迟到审查回执拒绝；原生 Rust 测试调用实际 command 使用的焦点映射 helper。共享传输另以真实 loopback SSH／`LiveInput` 验证 ordinary observe 拒绝、active 请求不能人工清理、失焦使旧 review epoch 失效，以及显式新 review 的原记录清理。这是分层执行证据，尚未运行 Tauri GUI 到 SSH 的人工恢复闭环。

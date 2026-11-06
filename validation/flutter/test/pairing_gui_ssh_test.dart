@@ -12,26 +12,21 @@ import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'package:herdr_flutter_probe/remote_input.dart';
 import 'pairing_gui_test.dart' as helpers;
 import 'host_catalog_test.dart' show MemoryCatalogStorage;
+import 'remote_input_journal_test.dart' show MemoryTargetInputJournal;
 
 /// Explicit public-marker memory double, never a production fallback. This
 /// exercises the production adapter's prepare/clear ordering and exact-record
 /// matching; it does not establish file durability or native storage behavior.
-class GuiSshMemoryInputJournal implements RemoteInputJournal {
-  String? marker, lastPrepared;
+class GuiSshMemoryInputJournal extends MemoryTargetInputJournal {
+  String? lastPrepared;
+  String? get marker => records.isEmpty ? null : records.values.single;
   int reads = 0, prepares = 0, clears = 0;
-  @override
-  Future<String?> read() async { reads++; return marker; }
-  @override
-  Future<void> prepare(String record) async {
-    RemoteInputPending.parse(record);
-    if (marker != null) throw StateError('test journal is not empty');
-    prepares++; marker = record; lastPrepared = record;
+  @override Future<List<String>> readAll() async { reads++; return super.readAll(); }
+  @override Future<String> prepare(String record) async {
+    final lease = await super.prepare(record); prepares++; lastPrepared = record; return lease;
   }
-  @override
-  Future<void> clear(String record) async {
-    RemoteInputPending.parse(record);
-    if (marker != record) throw StateError('test journal record mismatch');
-    clears++; marker = null;
+  @override Future<void> complete(String record,String lease) async {
+    await super.complete(record,lease); clears++;
   }
 }
 

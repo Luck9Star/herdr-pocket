@@ -79,7 +79,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       enable.onclick=()=>void enableInput(tab);actions.append(enable);
       const send=document.createElement('button');send.type='button';send.textContent='发送草稿';send.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || tab.inputEpoch==null;
       send.onclick=()=>void sendDraft(tab);actions.append(send);
-      if(tab.recoveryStatus==='pending'){const recover=document.createElement('button');recover.type='button';recover.textContent='已核实原目标结果，恢复输入';recover.disabled=tab.state!=='active' || tab.inputBusy;recover.onclick=()=>void recoverInput(tab);actions.append(recover);}
+      if(tab.recoveryStatus==='pending'){const recover=document.createElement('button');recover.type='button';recover.textContent='已核实原目标结果，恢复输入';recover.disabled=!tab.target || tab.state!=='active' || tab.inputBusy;recover.onclick=()=>void recoverInput(tab);actions.append(recover);}
       body.append(actions);
     }
     if(tab.rejectedDrafts.length){const heading=document.createElement('p');heading.textContent='服务器明确拒绝的原文（只读，不会自动发送）：';body.append(heading);
@@ -160,10 +160,10 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(directCurrent(tab,key))void pumpDirect(tab);else tab.queue.clear();
   }
   async function recoverInput(tab) {
-    if(document.hidden || tabs.activeId!==tab.id || tab.state!=='active' || tab.recoveryStatus!=='pending' || tab.inputBusy)return;
+    if(document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.recoveryStatus!=='pending' || tab.inputBusy)return;
     if(!window.confirm('已在此原目标核实上一笔发送结果？'))return;
     const binding=lease(tab);tab.inputBusy=true;render();const token=binding.token,epoch=binding.epoch;
-    try {const inputEpoch=await invoke('remote_tab_input_mode',{tabId:tab.id,clientGeneration:token.generation,generation:tab.nativeGeneration,epoch,mode:'observe'});
+    try {const inputEpoch=await invoke('remote_tab_input_mode',{tabId:tab.id,clientGeneration:token.generation,generation:binding.generation,epoch,mode:'observe',review:true});
       if(!sameLease(tab,binding))return;
       await invoke('remote_tab_input_recover',{tabId:tab.id,clientGeneration:token.generation,generation:binding.generation,epoch,inputEpoch});
       if(sameLease(tab,binding)){tab.unknown=false;tab.recoveryStatus='ready';tab.inputEpoch=null;tab.message='原目标结果已核实；请重新启用输入。';}

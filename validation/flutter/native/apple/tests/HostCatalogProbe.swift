@@ -36,6 +36,13 @@ struct HostCatalogProbe {
         try rejects { _ = try store.load() }
         try rejects { _ = try store.save(expected: "", contents: "{}") }
         try check(try String(contentsOf: victim, encoding: .utf8) == "UNCHANGED")
+        try FileManager.default.removeItem(at:file)
+        let missing = base.appendingPathComponent("absent-target")
+        try FileManager.default.createSymbolicLink(at:file,withDestinationURL:missing)
+        try rejects { _ = try store.load() }
+        try rejects { _ = try store.save(expected:"",contents:"{}") }
+        try check(try FileManager.default.destinationOfSymbolicLink(atPath:file.path) == missing.path)
+        try check(!FileManager.default.fileExists(atPath:missing.path))
         print("{\"checks\":\(checks),\"scope\":\"temporary public metadata files; Flutter channel and system key stores NOT RUN\"}")
     }
 }

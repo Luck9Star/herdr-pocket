@@ -120,6 +120,94 @@ void main() {
     expect(gate.acknowledgeUnknown(),isTrue); expect(gate.mode,RemoteInputMode.observe);
     expect(calls,1); // Acknowledging/rebinding never replays anything.
   });
+  test('IJ01 late A unknown cannot discard B live input or transfer A bytes to B', () async {
+    final first = Completer<RemoteInputResult>(),second = Completer<RemoteInputResult>();
+    final writes = <String>[];
+    final gate = RemoteInputGate((t,b,current) {
+      writes.add(t.terminalId); return writes.length == 1 ? first.future : second.future;
+    });
+    final a = target(),b = target(term:'term_1234');
+    ready(gate,a); final sentA = gate.submit(gate.capture()!,'A only');
+    ready(gate,b); final sentB = gate.submit(gate.capture()!,'B independent');
+    expect(writes,['term_abcd','term_1234']); // B starts while A is still unresolved.
+    expect(first.isCompleted,isFalse);
+    first.complete(const RemoteInputResult.unknown()); await sentA;
+    expect(writes,['term_abcd','term_1234']); expect(gate.unknown,isNull);
+    expect(gate.mode,RemoteInputMode.direct);
+    second.complete(const RemoteInputResult.accepted()); await sentB;
+    expect(gate.canInput,isTrue); expect(gate.lastResult!.disposition,RemoteInputDisposition.accepted);
+    ready(gate,target(generation:2));
+    expect(gate.unknown!.text,'A only'); expect(gate.canInput,isFalse); expect(writes.length,2);
+  });
+  test('an old A journal-unavailable result cannot invalidate B mode or its queued bytes', () async {
+    final aReply = Completer<RemoteInputResult>(),bReply = Completer<RemoteInputResult>();
+    final writes = <String>[];
+    final gate = RemoteInputGate((t,b,current) {
+      writes.add(utf8.decode(b));
+      if (t.terminalId == 'term_abcd') return aReply.future;
+      return writes.where((value) => value.startsWith('B')).length == 1 ? bReply.future
+        : Future.value(const RemoteInputResult.accepted());
+    });
+    ready(gate,target()); final sentA = gate.submit(gate.capture()!,'A');
+    ready(gate,target(term:'term_1234')); final bLease = gate.capture()!;
+    final firstB = gate.submit(bLease,'B1'),secondB = gate.submit(bLease,'B2');
+    expect(writes,['A','B1']);
+    aReply.complete(const RemoteInputResult.rejected('input_journal_unavailable')); await sentA;
+    expect(gate.current(bLease),isTrue); expect(gate.mode,RemoteInputMode.direct); expect(gate.sending,isTrue);
+    bReply.complete(const RemoteInputResult.accepted()); await firstB; await secondB;
+    expect(writes,['A','B1','B2']); expect(gate.canInput,isTrue);
+  });
+  test('same-endpoint lanes keep a later observation ordered behind its unsettled writer', () async {
+    final reply = Completer<RemoteInputResult>(); var writes = 0;
+    final gate = RemoteInputGate((t,b,current) { writes++; return writes == 1 ? reply.future
+      : Future.value(const RemoteInputResult.accepted()); });
+    ready(gate,target()); final first = gate.submit(gate.capture()!,'old');
+    ready(gate,target(generation:2)); final second = gate.submit(gate.capture()!,'new');
+    expect(writes,1); reply.complete(const RemoteInputResult.accepted()); await first; await second;
+    expect(writes,2); expect(gate.canInput,isTrue);
+  });
+  test('unsettled independent target lanes are bounded without evicting older ownership', () async {
+    final replies = <Completer<RemoteInputResult>>[],sent = <Future<RemoteInputResult>>[];
+    final gate = RemoteInputGate((t,bytes,current) {
+      final reply = Completer<RemoteInputResult>(); replies.add(reply); return reply.future;
+    });
+    for (var i = 0; i < 32; i++) {
+      ready(gate,target(pane:'w1:p$i',term:'term_${(i+1).toRadixString(16)}'));
+      sent.add(gate.submit(gate.capture()!,'one'));
+    }
+    expect(replies.length,32);
+    ready(gate,target(pane:'w1:p33',term:'term_ff'));
+    expect((await gate.submit(gate.capture()!,'not-started')).code,'input_buffer_full');
+    expect(replies.length,32); expect(replies.every((reply) => !reply.isCompleted),isTrue);
+    for (final reply in replies) { reply.complete(const RemoteInputResult.accepted()); }
+    await Future.wait(sent); expect(gate.mode,RemoteInputMode.observe);
+  });
+  test('IJ01 resolving reviewed A never removes B unknown and old records cannot unlock replacements', () async {
+    final gate = RemoteInputGate((t,b,current) async => const RemoteInputResult.unknown());
+    ready(gate,target()); await gate.submit(gate.capture()!,'A');
+    ready(gate,target(term:'term_1234')); await gate.submit(gate.capture()!,'B');
+    ready(gate,target(generation:2)); final reviewedA = gate.unknown!;
+    expect(gate.acknowledgeUnknown(reviewed:reviewedA),isTrue);
+    ready(gate,target(term:'term_1234',generation:2)); expect(gate.unknown!.text,'B');
+    final reviewedB = gate.unknown!;
+    final replacement = RemoteInputPending.create('9'*32,target(term:'term_1234',generation:3));
+    gate.restorePending(replacement);
+    expect(gate.acknowledgeUnknown(reviewed:reviewedB),isFalse);
+    expect(gate.unknown!.pendingRaw,replacement.raw); expect(gate.canInput,isFalse);
+  });
+  test('IJ10 known receipt stays attached to the exact pending raw across new full and target switches', () async {
+    final a = target(),pending = RemoteInputPending.create('8'*32,target());
+    final receipt = RemoteInputReceipt(pending.requestId,a.paneId,a.terminalId,4);
+    final gate = RemoteInputGate((t,b,current) async => RemoteInputResult.journalLocked(
+      RemoteInputDisposition.accepted,receipt:receipt).withPending(pending));
+    ready(gate,a); await gate.submit(gate.capture()!,'once');
+    final original = gate.unknown!;
+    ready(gate,target(term:'term_1234')); expect(gate.unknown,isNull); expect(gate.canInput,isTrue);
+    gate.bind(target(generation:2),const RemoteInputCapability(4096)); gate.restorePending(pending);
+    expect(identical(gate.unknown,original),isTrue); expect(gate.unknown!.receipt,receipt);
+    expect(gate.unknown!.knownDisposition,RemoteInputDisposition.accepted);
+    expect(gate.unknown!.pendingRaw,pending.raw); expect(gate.lastResult,isNull);
+  });
   test('MT08 MT09 hide revokes queued bytes and preserves the submitted unknown on its original target', () async {
     final reply = Completer<RemoteInputResult>(); var calls = 0;
     final gate = RemoteInputGate((t,b,current) { calls++; return reply.future; });
@@ -157,6 +245,7 @@ void main() {
       jsonEncode({...data,'text':'must-not-store'}),jsonEncode({...data,'requestId':'bad'}),
       jsonEncode({...data,'terminalId':'pane-alias'}),jsonEncode({...data,'session':'default'}),
       jsonEncode({...data,'host':'host\nsecret'}),jsonEncode({...data,'generation':0}),
+      jsonEncode({...data,'schemaVersion':true}),jsonEncode({...data,'schemaVersion':1.0}),jsonEncode({...data,'schemaVersion':1.5}),
       jsonEncode({...data,'hostFingerprint':'SHA256:short'}),jsonEncode({...data,'socketPath':'/tmp/../other'}),
       '{"schemaVersion":1,${pending.raw.substring(1)}', ' ${pending.raw}',
     ]) { expect(() => RemoteInputPending.parse(invalid),throwsFormatException); }
@@ -190,6 +279,15 @@ void main() {
     expect(RemoteInputPending.parse(old.raw).target.route,'system');
     final nullRoute = jsonEncode({...jsonDecode(old.raw) as Map<String,dynamic>,'schemaVersion':2,'route':null});
     expect(RemoteInputPending.parse(nullRoute).target.route,'system');
+    expect(() => parseRemoteInputJournalRecords([old.raw,nullRoute]),throwsFormatException);
+  });
+  test('a known result cannot hide a newly discovered same-target pending marker', () async {
+    final pending = RemoteInputPending.create('a'*32,target(generation:2));
+    final gate = RemoteInputGate((t,b,current) async => const RemoteInputResult.accepted().withPending(pending));
+    ready(gate,target()); final result = await gate.submit(gate.capture()!,'known old input');
+    expect(result.disposition,RemoteInputDisposition.accepted);
+    expect(gate.unknown!.pendingRaw,pending.raw); expect(gate.unknown!.bytes,isEmpty);
+    expect(gate.unknown!.knownDisposition,isNull); expect(gate.canInput,isFalse);
   });
   test('writer exceptions are unknown and journal-unavailable pre-write rejection disables input', () async {
     final gate = RemoteInputGate((t,b,current) async { throw StateError('synthetic'); });

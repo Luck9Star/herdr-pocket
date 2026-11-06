@@ -11,6 +11,7 @@ import 'package:herdr_flutter_probe/network_profiles.dart';
 import 'package:herdr_flutter_probe/network_profiles_page.dart';
 import 'package:herdr_flutter_probe/network_runtime.dart';
 import 'package:herdr_flutter_probe/network_identity.dart';
+import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'package:herdr_flutter_probe/remote_page.dart';
 import 'host_catalog_test.dart' show MemoryCatalogStorage,saveCatalogProfile;
 import 'config_transfer_test.dart' show portable;
@@ -24,6 +25,19 @@ class CountingDeviceKeys extends TestDeviceKeys {
   CountingDeviceKeys(super.pem);
   int publicCalls = 0;
   @override Future<String> public(String handle) { publicCalls++; return super.public(handle); }
+}
+
+/// Explicit stopped Tailscale node; avoids relying on the host test platform or a real bridge.
+class StoppedTailscaleRuntime extends NativeNetworkRuntime {
+  int statusCalls = 0;
+  @override bool get supported => true;
+  @override Future<Object?> call(String method,Map<String,Object> args) async {
+    if (method != 'nodeStatus' || args['provider'] != 'tailscale' || args['profileId'] is! String) {
+      throw const RemoteFailure('unexpected_fixture_method');
+    }
+    statusCalls++;
+    return {'state':'stopped','binding':null};
+  }
 }
 
 class PendingNodeRuntime extends NativeNetworkRuntime {
@@ -99,8 +113,8 @@ void main() {
     final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
     final network = testNetwork(),original = await saveCatalogProfile(catalog); await catalog.addNetwork(network);
     await catalog.update(original.change(networkProfileId:network.id,replaceNetwork:true,now:1000));
-    final closed = <String>{};
-    await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(catalog:catalog,closeTabs:closed.addAll)));
+    final closed = <String>{},runtime = StoppedTailscaleRuntime();
+    await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(catalog:catalog,closeTabs:closed.addAll,runtime:runtime)));
     await tapVisible(tester,'network-delete-${network.id}'); await tester.pumpAndSettle();
     expect(find.textContaining('Fixture host'),findsOneWidget);
     await tapVisible(tester,'network-confirm'); await tester.pumpAndSettle();
@@ -109,6 +123,7 @@ void main() {
     await tapVisible(tester,'network-toggle-${network.id}'); await tester.pumpAndSettle();
     await tapVisible(tester,'network-confirm'); await tester.pumpAndSettle();
     expect(catalog.networkProfiles.single.enabled,isFalse); expect(closed,{original.id});
+    expect(runtime.statusCalls,1);
     expect(catalog.profiles.single.networkProfileId,network.id);
     await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });

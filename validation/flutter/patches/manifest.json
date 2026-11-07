@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "name": "terminal_view-0.5.0-combining-experiment",
+  "name": "terminal_view-0.5.0-combining-selectors-experiment",
   "version": "0.5.0",
   "archiveUrl": "https://pub.dev/api/archives/terminal_view-0.5.0.tar.gz",
   "archiveSha256": "5f8cf2e999b9b98224430b7ef2a32d378062073fa4e566f1f52d89ac9d9ac9cf",
   "patch": "terminal_view-0.5.0-combining.patch",
-  "patchSha256": "2d0fb1d7283b034eb8161651f5c1cee0343df2877ebd6863e6639782ad8e5833",
+  "patchSha256": "17f7be40e51ffb43df48d67d111376e958a67edf71051fbb660a39b3c5ab6f29",
   "files": {
     "lib/src/ui/painter.dart": {
       "beforeSha256": "3d482e223a21ec62cb690006b46178c1c58b7a95ff5747d13479dfa82af00258",
@@ -14,8 +14,27 @@
     "lib/src/ui/render.dart": {
       "beforeSha256": "c1584eb282e5f9ee243ef6b42ca988caa341cb6f7d4d7494ab688383454f46fc",
       "afterSha256": "a3baef20bcc5e5094a61898051348fc6eff88b5573e2c6c9887bca1ce70da9a5"
+    },
+    "lib/src/core/buffer/buffer.dart": {
+      "beforeSha256": "d35cac4015a4cbf191b8e28c346985dec0adf23de34429e42e927a6837c807d5",
+      "afterSha256": "0d9d45425d3652bfd35b5fc8ee805d7076ca8599fbba4bf7b1e789a2fb31177b"
     }
   },
   "license": "MIT; upstream LICENSE and NOTICE retained inside candidate tree",
-  "scope": "Experimental renderer-only patch; no normalization or parser/width changes; not a framework selection."
+  "scope": "Experimental combining renderer and original VS15/VS16 suffix storage; preserves existing width, placeholder and cursor decisions. No normalization or width reconstruction; not framework selection or device proof.",
+  "candidateRevision": 2,
+  "previousCandidate": {
+    "patchSha256": "2d0fb1d7283b034eb8161651f5c1cee0343df2877ebd6863e6639782ad8e5833",
+    "sourceCommit": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+    "scope": "Prior downloadable APK candidate; does not include selector-storage repair"
+  },
+  "upstreamLicenseFiles": {
+    "LICENSE": "fa9c766d83aeeaca6e8994be904afcc1940ece6b10cd9754919ee09bc0aa3530",
+    "NOTICE": "c307f60f6ada98062e4fd2634497e7e335741e09545f3caa54d48155621871a3"
+  },
+  "selectorRegression": {
+    "source": "regression/selector_preservation.dart",
+    "sha256": "c49f1ab56d30680fc76b9702a7d7715dc589b5d05e92fed61f6a1c15c11b08db",
+    "scope": "Candidate-only default flutter test wrapper; the same pure Dart module also runs locally against original and patched core. Painting and device behavior require separate validation."
+  }
 }

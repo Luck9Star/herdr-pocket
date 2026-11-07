@@ -70,3 +70,5 @@ Tauri 在目标启用括号粘贴时，发送确认计入首尾标记的字节�
 四份归档均核对了 GitHub SHA-256 和内部校验和。各自的共享 PTY 始终为 119×40，尺寸变化和 SIGWINCH 记录均为 0。应用及临时模拟器结束后已清理。
 
 **该次 Actions 总状态仍为失败。** Flutter 回归组合步骤的退出状态为 1，analyzer 报告测试文件中一项多余导入，314 项 unit/widget 和 10 项绘制测试通过，另有 1 项环境限定用例跳过。两份 Flutter 模拟器证据均记录 `stock=0 guarded=0`。后续源码已移除多余导入，完整 Flutter analyzer 随下一批集中运行。上方 arm64 包仍来自 `a9914fe`。本次没有重新分发，也没有真机或真实组网结果。
+
+下一批源码已加入[手机终端选区、复制和 Unicode 列宽对照](37-mobile-terminal-selection.md)，其设备与包验证单独记录。

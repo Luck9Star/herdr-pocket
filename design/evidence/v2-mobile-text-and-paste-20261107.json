@@ -1,0 +1,140 @@
+{
+  "fileId": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+  "pageId": "7a22df08-251d-8016-8008-de03541c11da",
+  "totalBoards": 42,
+  "previousBoards": 38,
+  "rootOrphans": 0,
+  "textOutsideNewBoards": 0,
+  "boards": {
+    "S02": {
+      "id": "7a22df08-251d-8016-8008-de04a20d928d",
+      "actions": [
+        {
+          "name": "button / secondary",
+          "target": "S39"
+        },
+        {
+          "name": "选择终端文本",
+          "target": "S39"
+        }
+      ]
+    },
+    "S33": {
+      "id": "2a5fd934-a163-8057-8008-e823087a9fc9",
+      "actions": [
+        {
+          "name": "查看追加超限示例",
+          "target": "S41"
+        },
+        {
+          "name": "查看追加超限示例",
+          "target": "S41"
+        }
+      ]
+    },
+    "S39": {
+      "id": "ff7bd149-6597-80a5-8008-e88156484822",
+      "actions": [
+        {
+          "name": "复制选区",
+          "target": "S40"
+        },
+        {
+          "name": "复制选区",
+          "target": "S40"
+        },
+        {
+          "name": "关闭并返回观察",
+          "target": "S02"
+        },
+        {
+          "name": "关闭并返回观察",
+          "target": "S02"
+        }
+      ]
+    },
+    "S40": {
+      "id": "ff7bd149-6597-80a5-8008-e881ed65c617",
+      "actions": [
+        {
+          "name": "继续选择文本",
+          "target": "S39"
+        },
+        {
+          "name": "继续选择文本",
+          "target": "S39"
+        },
+        {
+          "name": "返回观察",
+          "target": "S02"
+        },
+        {
+          "name": "返回观察",
+          "target": "S02"
+        }
+      ]
+    },
+    "S41": {
+      "id": "ff7bd149-6597-80a5-8008-e881ed74ebc9",
+      "actions": [
+        {
+          "name": "替换本地草稿",
+          "target": "S42"
+        },
+        {
+          "name": "替换本地草稿",
+          "target": "S42"
+        },
+        {
+          "name": "取消并返回粘贴示例",
+          "target": "S33"
+        },
+        {
+          "name": "取消并返回粘贴示例",
+          "target": "S33"
+        }
+      ]
+    },
+    "S42": {
+      "id": "ff7bd149-6597-80a5-8008-e881ed84e161",
+      "actions": [
+        {
+          "name": "返回超限示例",
+          "target": "S41"
+        },
+        {
+          "name": "返回超限示例",
+          "target": "S41"
+        },
+        {
+          "name": "返回终端观察",
+          "target": "S02"
+        },
+        {
+          "name": "返回终端观察",
+          "target": "S02"
+        }
+      ]
+    }
+  },
+  "viewerClicks": [
+    "S39 → S40",
+    "S41 → S42"
+  ],
+  "pngExports": {
+    "v2-S39-mobile-text-20261107.png": {
+      "pngPixels": [
+        390,
+        844
+      ],
+      "sha256": "c544e48587c2ce8d1b1fa996b685ee62d43bf81ce464bcf51be13a66639ac11c"
+    },
+    "v2-S41-mobile-text-20261107.png": {
+      "pngPixels": [
+        390,
+        844
+      ],
+      "sha256": "4fa3cc5eafdb964a0c712c53afc1b6f4e592cd4a249f3dc489644221d5c6cce7"
+    }
+  }
+}

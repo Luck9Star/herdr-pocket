@@ -5,6 +5,8 @@ root = Path(__file__).resolve().parents[1]
 repo = root.parents[1]
 sys.path.insert(0, str(repo / 'validation/shared'))
 from android_notices import verify as verify_packaged_notices
+sys.path.insert(0, str(root / 'scripts'))
+from js_notices import collect as collect_js_notices, verify_zip as verify_js_notices
 out = root / 'artifacts'
 out.mkdir(exist_ok=True)
 def version(command):
@@ -68,7 +70,15 @@ if os.getenv('PROBE_PLATFORM')=='android':
 for f in [root/'package-lock.json',root/'src-tauri/Cargo.lock',root/'core/Cargo.lock',repo/'validation/transport-rust/Cargo.lock']:
     if f.exists(): shutil.copy2(f,out/f'{f.parent.name}-{f.name}')
 shutil.copytree(repo/'validation/shared',out/'shared',dirs_exist_ok=True,ignore=shutil.ignore_patterns('.gitattributes'))
+js_notices = collect_js_notices(root)
+js_notice_manifest = {}
+for filename, record in js_notices.items():
+    (out/filename).write_bytes(record['data'])
+    js_notice_manifest[filename] = {key:value for key,value in record.items() if key != 'data'}
+(out/'js-notices.json').write_text(json.dumps(js_notice_manifest,indent=2)+'\n')
 if (root/'dist').exists(): zip_tree(root/'dist',out/'browser-preview.zip')
+if (out/'browser-preview.zip').exists():
+    verify_js_notices(out/'browser-preview.zip',js_notices,'dist/js-notices/')
 for pattern in ['src-tauri/target/release/bundle/deb/*.deb','src-tauri/target/release/bundle/nsis/*.exe']:
     for f in root.glob(pattern): shutil.copy2(f,out/f.name)
 for f in android_apks(): shutil.copy2(f,out/f.name)
@@ -93,6 +103,8 @@ if manifest['platform']=='android' and manifest['buildOutcome']=='success':
     manifest['androidNetworkEngine']='feature-gated; runtime and device unverified'
     manifest['androidNetworkVaultDeviceResult']='unverified'
     manifest['androidPackagedNotices']={apk.name:verify_packaged_notices(apk) for apk in native_packages if apk.suffix=='.apk'}
+    manifest['tauriJavaScriptNotices']={apk.name:verify_js_notices(apk,js_notices,'assets/') for apk in native_packages if apk.suffix=='.apk'}
+    manifest['tauriJavaScriptNoticeSources']=js_notice_manifest
     manifest['androidApkSha256']={apk.name:sha(apk) for apk in native_packages if apk.suffix=='.apk'}
     manifest['androidSignerNoticeSHA256']=sha(native/'notices/BOUNCY-CASTLE-LICENSE.md')
 

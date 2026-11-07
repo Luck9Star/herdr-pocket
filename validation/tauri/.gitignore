@@ -2,6 +2,7 @@ node_modules/
 dist/
 public/shared/
 public/rust-notices/
+public/js-notices/
 core/target/
 src-tauri/target/
 src-tauri/gen/

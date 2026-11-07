@@ -1,3 +1,4 @@
+import {createUnicodeTerminal} from './terminal-unicode.js';
 import { Terminal } from '@xterm/xterm';
 import { invoke, Channel, isTauri } from '@tauri-apps/api/core';
 import '@xterm/xterm/css/xterm.css';
@@ -31,7 +32,7 @@ async function cancelNative(p) { p.waits.cancel(); const lease=p.lease; p.lease=
 function cancelWrites(p) { for (const resolve of p.writes.values()) resolve(false); p.writes.clear(); }
 function buildTerminal(p) {
   cancelWrites(p); p.term?.dispose(); p.host.replaceChildren(); p.composing=null; p.keyToken=null;
-  const t = new Terminal({cols:80,rows:24,fontFamily:'ProbeNerd, monospace',fontSize:14,scrollback:fixture.terminal.scrollback,disableStdin:true,cursorBlink:false,convertEol:false,allowProposedApi:false,theme:theme.terminal});
+  const t = createUnicodeTerminal(Terminal,{cols:80,rows:24,fontFamily:'ProbeNerd, monospace',fontSize:14,scrollback:fixture.terminal.scrollback,disableStdin:true,cursorBlink:false,convertEol:false,theme:theme.terminal});
   p.term=t; t.open(p.host);
   // xterm owns platform IME. We bind its committed data to the view/focus at composition start.
   t.textarea.addEventListener('compositionstart', () => { p.composing=p.gate.token(); }, true);

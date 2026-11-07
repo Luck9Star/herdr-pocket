@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderObject;
 import 'package:flutter/services.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
@@ -9,6 +10,8 @@ import 'remote_input.dart';
 import 'remote_input_review.dart';
 import 'remote_auxiliary.dart';
 import 'remote_input_platform.dart';
+import 'remote_screen_text.dart';
+import 'remote_screen_viewport.dart';
 import 'device_keys.dart';
 import 'network_profiles.dart';
 import 'network_runtime.dart';
@@ -78,7 +81,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   String? dashboardSyncSource;
   Terminal? terminal;
   final terminalFocus = FocusNode();
+  final terminalViewportKey = GlobalKey();
   final draft = TextEditingController();
+  final screenText = TextEditingController();
+  final screenTextFocus = FocusNode();
+  Object? screenSelectionTicket;
+  String? screenSelectionOrigin;
+  bool Function()? screenSelectionCurrent;
+  bool get selectingScreen => screenSelectionTicket != null;
   int draftRevision = 0;
   final rejectedDrafts = <({String target,String text})>[];
   bool rendering = false, previewOpen = false, readingPaste = false, acknowledgingInput = false;
@@ -90,6 +100,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final auxiliaryModifiers = AuxiliaryModifiers();
   late final RemoteInputGate inputGate = RemoteInputGate((target,bytes,current) =>
     adapter.sendInput(target,bytes,stillCurrent:current),onChanged:() {
+      if (selectingScreen && screenSelectionCurrent?.call() != true) clearScreenSelection();
       if (!inputGate.canInput || inputGate.mode != RemoteInputMode.direct || inputGate.sending) auxiliaryModifiers.reset();
       if (mounted) setState(() {});
       reportView();
@@ -153,6 +164,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(RemotePage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.pairedTarget,widget.pairedTarget) || !identical(oldWidget.adapter,widget.adapter) ||
+        oldWidget.keyHandle != widget.keyHandle || oldWidget.devicePublicKey != widget.devicePublicKey) clearScreenSelection();
     if (!identical(oldWidget.networkBinding,widget.networkBinding) || !identical(oldWidget.requestedTarget,widget.requestedTarget)) {
       networkBindingInvalidated = true;
       oldWidget.networkBinding?.changes?.removeListener(networkChanged);
@@ -173,7 +186,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   void visibilityChanged() {
     if (widget.visibility?.value == false) {
-      retirePendingPasteRead();
+      clearScreenSelection(); retirePendingPasteRead();
       widget.summaryLease?.invalidate(); summaryAttempt = null;
       inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
       if (!adapter.pauseObservation()) {
@@ -204,7 +217,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) stop('应用已暂停，连接已取消；请重新核验后主动连接');
   }
   void stop([String message = '已取消；不会重连或发送输入']) {
-    retirePendingPasteRead();
+    clearScreenSelection(); retirePendingPasteRead();
     widget.summaryLease?.invalidate(); summaryAttempt = null;
     inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
     request++; frozenNode = null; identityLease?.cancel(); unawaited(adapter.cancel());
@@ -222,6 +235,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this); request++; identityLease?.cancel();
     adapter.captureInputJournalReview = null;
     inputGate.onChanged = null; inputGate.invalidate();
+    clearScreenSelection(); screenText.dispose(); screenTextFocus.dispose();
     terminalFocus.removeListener(terminalFocusChanged); terminalFocus.dispose(); draft.removeListener(draftChanged); draft.dispose();
     unawaited(adapter.cancel()); terminal?.dispose();
     widget.onViewState?.call(inputGate.unknown != null || adapter.pendingInput != null ? 'unknown' : 'stale',
@@ -233,6 +247,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Future<void> connect() async {
     if (networkBindingInvalidated || !identical(originalNetworkBinding,widget.networkBinding) ||
         !reviewed || busy || widget.visibility?.value == false) return;
+    clearScreenSelection();
     final ticket = ++request;
     observationEpoch = 0;
     summaryAttempt = widget.summaryLease?.begin();
@@ -290,6 +305,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         if (!mounted || ticket != request || widget.visibility?.value == false || viewPaused || frame.observationEpoch != observationEpoch ||
             dashboard?.generation != generation || selectedPane != paneId) return;
         if (frame.full) {
+          clearScreenSelection();
           terminal?.dispose();
           terminal = Terminal(maxLines:24,reflowEnabled:false)..resize(80,24);
         }
@@ -328,10 +344,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           _ => '正在核验',
         }; });
       });
+      if (mounted && ticket == request) stop('远端观察已结束 · 请重新审查连接，输入关闭');
     } catch (error) {
       if (!mounted || ticket != request) return;
       widget.summaryLease?.invalidate(); summaryAttempt = null;
       identityLease?.cancel(); widget.onStopped?.call();
+      clearScreenSelection();
       inputGate.invalidate(); terminalFocus.unfocus();
       final code = error is RemoteFailure ? error.code : 'connection_failed';
       setState(() { busy = false; live = false; reviewed = false; viewPaused = false; dashboardFresh = false;
@@ -370,6 +388,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         board.generation != adapter.generation ||
         !board.selectable ||
         board.panes.where((p) => p.paneId == pane.paneId && p.terminalId == pane.terminalId).length != 1) return;
+    clearScreenSelection();
     setState(() { selectedPane = pane.paneId; selectedTarget = pane; live = false; status = '目标已选择 · 等待新 full'; });
     reportView();
     try { adapter.selectTarget(board.generation,pane); }
@@ -381,7 +400,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final lease = inputGate.capture();
     if (source == null) return;
     source.onOutput = (text) {
-      if (!mounted || rendering || previewOpen || !identical(source,terminal) || !terminalFocus.hasFocus ||
+      if (!mounted || rendering || previewOpen || selectingScreen || !identical(source,terminal) || !terminalFocus.hasFocus ||
           lease == null || lease.mode != RemoteInputMode.direct || !inputGate.current(lease)) return;
       // An IME/multiline insertion also goes through preview. Enter generated
       // by the terminal component is CR and remains an explicit key action.
@@ -391,7 +410,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   void setInputMode(RemoteInputMode mode) {
-    if (!live || viewPaused || widget.visibility?.value == false || !inputGate.fresh ||
+    if (selectingScreen || !live || viewPaused || widget.visibility?.value == false || !inputGate.fresh ||
         (mode != RemoteInputMode.observe && (inputGate.target == null || inputGate.capability == null || inputGate.unknown != null))) return;
     // Re-selecting the active chip is not a mode change. Preserve the current
     // editor/client, focus and IME composition instead of replacing its epoch.
@@ -408,8 +427,103 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
   }
 
+  // This surface owns only a frozen page of this terminal. Clearing its
+  // controller also invalidates late native selection/context-menu callbacks.
+  void clearScreenSelection() {
+    if (!selectingScreen) return;
+    screenSelectionTicket = null; screenSelectionCurrent = null; screenSelectionOrigin = null;
+    screenTextFocus.unfocus(); screenText.clear();
+    ContextMenuController.removeAny();
+  }
+
+  void openScreenSelection() {
+    final source = terminal,currentSnapshot = snapshot,pane = selectedTarget;
+    if (selectingScreen || source == null || currentSnapshot == null || !live || viewPaused ||
+        widget.visibility?.value == false || previewOpen || readingPaste || inputGate.sending) return;
+    RenderTerminal? rendered;
+    void findTerminal(RenderObject object) {
+      if (object is RenderTerminal) { rendered = object; return; }
+      object.visitChildren(findTerminal);
+    }
+    final viewport = terminalViewportKey.currentContext?.findRenderObject();
+    if (viewport != null) findTerminal(viewport);
+    final cells = rendered == null ? null : visibleRemoteScreenCells(source,rendered!,Offset.zero & MediaQuery.sizeOf(context));
+    final text = cells == null ? null : captureRemoteScreenText(source,cells);
+    if (text == null || cells == null) {
+      setState(() { status = '尚无完整可见的文本单元格，或文本超过 64 KiB · 未复制；请先滚动露出终端文本再选择'; }); return;
+    }
+    // Revoke direct/queued/IME leases before exposing any selectable text.
+    // Closing this surface leaves observe mode; it never restores input focus.
+    retirePendingPasteRead(); auxiliaryModifiers.reset();
+    inputGate.setFocused(false); inputGate.setMode(RemoteInputMode.observe);
+    terminalFocus.unfocus(); FocusScope.of(context).unfocus(); bindTerminalOutput();
+    final ticket = Object(),connectionRequest = request;
+    final pageEpoch = observationEpoch,gateEpoch = inputGate.epoch;
+    screenSelectionCurrent = () => mounted && identical(screenSelectionTicket,ticket) &&
+      request == connectionRequest && observationEpoch == pageEpoch && inputGate.epoch == gateEpoch &&
+      identical(terminal,source) && identical(selectedTarget,pane) && live && !viewPaused &&
+      widget.visibility?.value != false && snapshot?.generation == currentSnapshot.generation &&
+      snapshot?.paneId == currentSnapshot.paneId;
+    setState(() {
+      screenSelectionTicket = ticket;
+      screenSelectionOrigin = '${currentSnapshot.session} / ${currentSnapshot.paneId} / ${pane?.terminalId ?? '未知 terminal'} · 打开时 seq $sequence · 屏幕行 ${cells.firstRow + 1}–${cells.endRow}，列 ${cells.firstColumn + 1}–${cells.endColumn}';
+      screenText.value = TextEditingValue(text:text,selection:const TextSelection.collapsed(offset:0));
+    });
+  }
+
+  Future<void> copySelectedScreen(Object ticket) async {
+    if (!identical(screenSelectionTicket,ticket) || screenSelectionCurrent?.call() != true) return;
+    final value = screenText.value,selection = screenText.selection;
+    if (!selection.isValid || selection.isCollapsed || selection.end > value.text.length) return;
+    final selected = selection.textInside(value.text);
+    try { await Clipboard.setData(ClipboardData(text:selected)); }
+    catch (_) {
+      if (mounted && identical(screenSelectionTicket,ticket) && screenSelectionCurrent?.call() == true) {
+        setState(() { status = '系统复制未确认 · 可重新选择后主动复制'; });
+      }
+    }
+  }
+
+  Widget screenSelectionPanel() {
+    final ticket = screenSelectionTicket!;
+    bool current() => identical(screenSelectionTicket,ticket) && screenSelectionCurrent?.call() == true;
+    return Column(key:const ValueKey('remote-screen-selection'),crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Text('选择终端文本',style:Theme.of(context).textTheme.titleMedium),
+      Text(screenSelectionOrigin!,key:const ValueKey('remote-screen-selection-origin')),
+      const Text('打开时终端实际可见区域的快照，只含完整可见的行列，不读取未显示的内容或其他标签。整行可见时按终端复制语义拼接软折行；横向裁切的行保留分隔，避免误拼。保留硬换行及已写入空格，省略行尾未写入的空白单元格。新输出不会改写这份快照。'),
+      const Text('长按并拖动原生选区，再明确复制。仅在本页内存保留，关闭、隐藏、目标或阶段变化时清除；关闭后保持观察，输入不会自动恢复。'),
+      const SizedBox(height:8),
+      SizedBox(height:360,child:TextField(key:const ValueKey('remote-screen-selection-text'),
+        controller:screenText,focusNode:screenTextFocus,readOnly:true,showCursor:false,
+        keyboardType:TextInputType.none,enableInteractiveSelection:true,
+        enableIMEPersonalizedLearning:false,enableSuggestions:false,autocorrect:false,
+        maxLines:null,expands:true,textAlignVertical:TextAlignVertical.top,
+        style:const TextStyle(fontFamily:'ProbeNerd',fontSize:14),
+        decoration:const InputDecoration(labelText:'终端可见区域文本 · 只读'),
+        contextMenuBuilder:(context,editable) => AdaptiveTextSelectionToolbar.buttonItems(
+          anchors:editable.contextMenuAnchors,buttonItems:[
+            if (current() && screenText.selection.isValid && !screenText.selection.isCollapsed)
+              ContextMenuButtonItem(type:ContextMenuButtonType.copy,label:'复制选区',onPressed:() {
+                ContextMenuController.removeAny(); unawaited(copySelectedScreen(ticket));
+              }),
+            for (final item in editable.contextMenuButtonItems)
+              if (item.type == ContextMenuButtonType.selectAll) ContextMenuButtonItem(
+                type:item.type,label:item.label,onPressed:() { if (current()) item.onPressed?.call(); }),
+          ]))),
+      Wrap(spacing:8,children:[
+        TextButton(key:const ValueKey('remote-screen-selection-cancel'),onPressed:() {
+          if (current()) setState(clearScreenSelection);
+        },child:const Text('取消并清除文本')),
+        ValueListenableBuilder<TextEditingValue>(valueListenable:screenText,builder:(context,value,_) =>
+          FilledButton(key:const ValueKey('remote-screen-selection-copy'),
+            onPressed:current() && value.selection.isValid && !value.selection.isCollapsed
+              ? () => copySelectedScreen(ticket) : null,child:const Text('复制选区'))),
+      ]),
+    ]);
+  }
+
   Future<void> previewInput(String text, RemoteInputLease lease, {bool fromDraft = false}) async {
-    if (previewOpen || inputGate.sending || !inputGate.current(lease) || text.isEmpty) return;
+    if (selectingScreen || previewOpen || inputGate.sending || !inputGate.current(lease) || text.isEmpty) return;
     if (utf8ByteLength(text) > remoteInputReviewByteLimit) {
       setState(() { status = '文本超过 4096 bytes · 未发送'; }); return;
     }
@@ -469,7 +583,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Future<void> pasteInput() async {
     final lease = inputGate.capture();
-    if (lease == null || previewOpen || readingPaste || inputGate.sending) return;
+    if (selectingScreen || lease == null || previewOpen || readingPaste || inputGate.sending) return;
     final ticket = Object();
     final key = targetKey(lease.target),original = draft.text,version = draftVersions[targetKey(lease.target)];
     final pasteEpoch = observationEpoch;
@@ -519,7 +633,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   bool get auxiliaryReady => live && inputGate.canInput && inputGate.mode == RemoteInputMode.direct &&
-    terminalFocus.hasFocus && !previewOpen && !inputGate.sending;
+    terminalFocus.hasFocus && !previewOpen && !selectingScreen && !inputGate.sending;
 
   void auxiliaryInput(String name) {
     final lease = inputGate.capture();
@@ -533,7 +647,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget inputPanel() {
     final available = live && inputGate.capability != null && inputGate.fresh;
-    final enabled = available && inputGate.unknown == null;
+    final enabled = available && inputGate.unknown == null && !selectingScreen;
     final panelObservationEpoch = observationEpoch,panelInputEpoch = inputGate.epoch;
     final panelTarget = inputGate.target;
     bool panelCurrent() => observationEpoch == panelObservationEpoch && inputGate.epoch == panelInputEpoch &&
@@ -741,6 +855,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final terminalObservationEpoch = observationEpoch,terminalInputEpoch = inputGate.epoch;
+    final selectionSource = terminal,selectionSnapshot = snapshot,selectionRequest = request;
     return PopScope(
     onPopInvokedWithResult:(didPop,result) { if (didPop) stop(); },
     child:Scaffold(appBar:AppBar(title:const Text('远端接入 · 只读'),
@@ -825,8 +940,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           if (snapshot != null && terminal != null) ...[
             const SizedBox(height:12),
             Text('${snapshot!.session} / ${snapshot!.paneId}\n${live ? inputGate.mode == RemoteInputMode.observe ? '只读观察中' : '实时终端 · 显式输入模式' : '旧画面 · 已停止'} · seq $sequence\n更新于 ${capturedAt!.toLocal().toIso8601String()} · 固定 80×24'),
+            OutlinedButton.icon(key:const ValueKey('remote-screen-select'),
+              onPressed:live && !viewPaused && widget.visibility?.value != false && !selectingScreen &&
+                !previewOpen && !readingPaste && !inputGate.sending ? () {
+                  if (identical(terminal,selectionSource) && identical(snapshot,selectionSnapshot) &&
+                      request == selectionRequest && observationEpoch == terminalObservationEpoch && inputGate.epoch == terminalInputEpoch) openScreenSelection();
+                } : null,icon:const Icon(Icons.text_fields),label:const Text('选择终端文本')),
             const SizedBox(height:8),
-            SizedBox(height:360,child:ClipRRect(borderRadius:BorderRadius.circular(12),
+            if (selectingScreen) screenSelectionPanel() else SizedBox(height:360,child:ClipRRect(key:terminalViewportKey,borderRadius:BorderRadius.circular(12),
               child:TerminalView(terminal!,key:ValueKey('remote-terminal-${inputGate.epoch}'),
                 focusNode:terminalFocus,theme:widget.tokens.terminalTheme,
                 autoResize:false,readOnly:!live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput,
@@ -835,7 +956,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 textStyle:TerminalStyle(fontFamily:'ProbeNerd',fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble()),shortcuts:const {},
                 onKeyEvent:(node,event) {
                   if (observationEpoch != terminalObservationEpoch || inputGate.epoch != terminalInputEpoch || viewPaused ||
-                      widget.visibility?.value == false || !live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput || previewOpen) return KeyEventResult.handled;
+                      widget.visibility?.value == false || !live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput || previewOpen || selectingScreen) return KeyEventResult.handled;
                   if (event is KeyDownEvent && (((HardwareKeyboard.instance.isControlPressed || HardwareKeyboard.instance.isMetaPressed) &&
                       event.logicalKey == LogicalKeyboardKey.keyV) ||
                       (HardwareKeyboard.instance.isShiftPressed && event.logicalKey == LogicalKeyboardKey.insert))) {

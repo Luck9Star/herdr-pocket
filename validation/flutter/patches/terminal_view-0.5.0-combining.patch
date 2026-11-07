@@ -99,3 +99,31 @@
      );
    }
  }
+--- a/lib/src/core/buffer/buffer.dart
++++ b/lib/src/core/buffer/buffer.dart
+@@ -145,11 +145,13 @@
+     }
+ 
+     if (codePoint == _textPresentationSelector) {
++      _appendToPreviousCell(codePoint);
+       return;
+     }
+ 
+     if (codePoint == _emojiPresentationSelector) {
+       _applyEmojiPresentation();
++      _appendToPreviousCell(codePoint);
+       return;
+     }
+ 
+@@ -215,7 +217,11 @@
+     final codePoint = line.getCodePoint(x);
+     if (codePoint == 0) return;
+ 
++    // setCell resets suffix storage. Keep the actual input sequence; a later
++    // selector must not discard combining marks or earlier selectors.
++    final combined = line.getCombined(x);
+     line.setCell(x, codePoint, 2, terminal.cursor);
++    if (combined != null) line.setCombined(x, combined);
+     line.setCell(_cursorX, 0, 0, terminal.cursor);
+     _cursorX++;
+   }

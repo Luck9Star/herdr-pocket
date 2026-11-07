@@ -17,6 +17,8 @@ class Element {
     this.textContent = '';
   }
   append(...nodes) { this.children.push(...nodes); }
+  prepend(...nodes) { this.children.unshift(...nodes); }
+  remove() { this.removed=true; }
   replaceChildren(...nodes) { this.children = [...nodes]; }
   setAttribute(key, value) { this.attrs[key] = value; }
   addEventListener(name, fn) { (this.events[name] ??= []).push(fn); }
@@ -84,6 +86,7 @@ async function setup({ inputMode = () => 1 } = {}) {
   nodes['pair-device'].value = 'Fixture';
 
   globalThis.document = {
+    body: new Element('body'),
     hidden: false,
     activeElement: null,
     getElementById: id => nodes[id] ?? null,
@@ -155,11 +158,13 @@ async function setup({ inputMode = () => 1 } = {}) {
     constructor(options) {
       terminal = this;
       this.options = options;
+      this.unicode = {};
       this.textarea = new Element();
       this.focusedAs = [];
       this.modes = { bracketedPasteMode: false };
       this.parser = { registerOscHandler() {} };
     }
+    loadAddon() {}
     open() {}
     dispose() {}
     focus() {
@@ -869,4 +874,22 @@ test('late old send cannot block or unlock the new connection send owner', async
     assert.equal(n['remote-input-draft'].value,'不可并发提交');
     assert.equal(n['remote-rejected-drafts'].children.length,2);
   } finally {h.finish();await flush();h.restore();}
+});
+
+
+test('paired entry revokes direct input during selection and does not restore it on close', async () => {
+  const h=await setup(),oldStyle=globalThis.getComputedStyle;
+  try {
+    document.querySelectorAll=()=>[];document.documentElement={clientWidth:100,clientHeight:100};document.elementsFromPoint=()=>[h.terminal.element];globalThis.getComputedStyle=()=>({});
+    await openInput(h);h.terminal.element={contains:()=>true,querySelector:()=>({parentElement:null,getBoundingClientRect:()=>({left:0,top:0,width:10,height:10})})};h.terminal.cols=1;h.terminal.rows=1;h.terminal.buffer={active:{viewportY:0,getLine:()=>({length:1,isWrapped:false,getCell:()=>({getChars:()=> 'A',getWidth:()=>1}),translateToString:()=> 'A'})}};
+    h.nodes['remote-input-direct'].click();await flush();
+    const select=h.nodes['remote-result'].all().find(n=>n.textContent==='选择终端文本');assert.ok(select);
+    let prevented=false;select.onpointerdown({preventDefault(){prevented=true;}});assert.equal(prevented,true);select.click();
+    const panel=document.body.children.at(-1);assert.equal(panel.attrs['aria-label'],'选择终端文本');assert.equal(h.terminal.options.disableStdin,true);
+    h.nodes['remote-input-direct'].click();h.terminal.textarea.focus();h.terminal.data('x');await flush();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_mode' && c.args.mode==='direct').length,1);
+    panel.children[2].focus();panel.children.at(-1).children.at(-1).click();assert.equal(panel.removed,true);assert.notEqual(document.activeElement,h.terminal.textarea);
+    h.terminal.data('x');await flush();assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
+  } finally {globalThis.getComputedStyle=oldStyle;h.restore();}
 });

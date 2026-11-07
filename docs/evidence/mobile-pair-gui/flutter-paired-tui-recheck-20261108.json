@@ -115,5 +115,157 @@
       },
       "ownedAvdStopped": true
     }
+  },
+  "controlsRecheck": {
+    "run": {
+      "conclusion": "failure",
+      "created_at": "2026-11-07T19:39:09Z",
+      "head_sha": "b4bcf9695a218a3302faea3696d3a2721f907693",
+      "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42407250343",
+      "id": 42407250343,
+      "run_attempt": 1,
+      "status": "completed",
+      "updated_at": "2026-11-07T19:58:38Z"
+    },
+    "sourceChecks": {
+      "analyze": "No issues found",
+      "testsPassed": 400,
+      "testsSkipped": 1,
+      "rendererPassed": 10
+    },
+    "emulators": {
+      "stock": {
+        "artifact": {
+          "id": 13588775933,
+          "size_in_bytes": 42788,
+          "digest": "sha256:996ea498262877ccb6a1b14f4fdc3037ba8a0ad64f509e38094cdc9b067c36d6",
+          "expires_at": "2026-11-21T19:58:29Z"
+        },
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42407250343/artifacts/13588775933",
+        "status": "passed",
+        "failure": null,
+        "signer": {
+          "stage": "complete",
+          "signatureVerified": true,
+          "deleteReturned": true,
+          "readRejected": true
+        },
+        "case": {
+          "paired": true,
+          "publicRequestShown": true,
+          "profileCreationActionsBeforeReview": 0,
+          "identityCreationActions": 1,
+          "profileFieldsMatched": true,
+          "profileFingerprintMatched": true,
+          "originalDeviceKeyRevalidated": true,
+          "authorizationReviewed": true,
+          "paneChosen": true,
+          "firstSequence": 1,
+          "deltaSequence": 3,
+          "stoppedStale": true,
+          "localIdentityDeleted": true,
+          "localFontMarkerColumns": [
+            15,
+            15,
+            15,
+            15,
+            15,
+            15,
+            15,
+            15
+          ],
+          "observerCanvas": {
+            "cols": 120,
+            "rows": 40,
+            "wideMarkerMatched": true,
+            "wideMarkerVisible": true,
+            "readingPositionRestored": true
+          },
+          "keyStore": "API35 emulator production AndroidKeyStore AES-wrapped seed; native software Ed25519 signing",
+          "temporaryHostApprovedRequest": true,
+          "matchedDeviceKeyInSshd": true,
+          "revokedFixtureKey": true
+        },
+        "receivedInputBytesOutsideCurses": 0,
+        "sharedPty": {
+          "columns": 119,
+          "rows": 40,
+          "samples": 4737,
+          "changes": 0,
+          "captureErrors": 0,
+          "readErrors": 0
+        },
+        "cleanup": {
+          "ownedPackageInitiallyAbsent": true,
+          "ownedPackageAbsent": true,
+          "appProcessGone": true,
+          "reverseRemoved": true,
+          "ownedForwardsRemoved": true,
+          "flutterToolStopped": true,
+          "rawLogsUploaded": false,
+          "status": "passed"
+        },
+        "hostCleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        },
+        "ownedAvdStopped": true
+      },
+      "guarded": {
+        "artifact": {
+          "id": 13588895556,
+          "size_in_bytes": 42102,
+          "digest": "sha256:30f96dcf7b29057898ac8baaece4969b8de55a9ae88217a85b7b192329ab9c33",
+          "expires_at": "2026-11-21T19:58:30Z"
+        },
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42407250343/artifacts/13588895556",
+        "status": "failed",
+        "failure": {
+          "stage": "tui_resume_full",
+          "errorClass": "TestFailure",
+          "line": 68
+        },
+        "signer": {
+          "stage": "complete",
+          "signatureVerified": true,
+          "deleteReturned": true,
+          "readRejected": true
+        },
+        "case": {
+          "temporaryHostApprovedRequest": true,
+          "matchedDeviceKeyInSshd": true,
+          "revokedFixtureKey": true,
+          "errorCode": "flutter_android_test_exited_tui_resume_full"
+        },
+        "receivedInputBytesOutsideCurses": 10,
+        "sharedPty": {
+          "columns": 119,
+          "rows": 40,
+          "samples": 2817,
+          "changes": 0,
+          "captureErrors": 0,
+          "readErrors": 0
+        },
+        "cleanup": {
+          "ownedPackageInitiallyAbsent": true,
+          "ownedPackageAbsent": true,
+          "appProcessGone": true,
+          "reverseRemoved": true,
+          "ownedForwardsRemoved": true,
+          "flutterToolStopped": true,
+          "rawLogsUploaded": false,
+          "status": "passed"
+        },
+        "hostCleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        },
+        "ownedAvdStopped": true
+      }
+    }
   }
 }

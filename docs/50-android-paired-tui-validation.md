@@ -1,6 +1,6 @@
 # 手机配对、观察与远端 TUI 的 Android 验收
 
-2026-11-08。Flutter 和 Tauri 的手机 GUI 已接入首次主机资料审查、设备密钥、授权回执、看板和持续观察。两条路线在上一批均用 Android API 35 模拟器完成过原版 herdr 的只读闭环。本批 Tauri 进一步在同一配对目标上完成远端 curses 的十个按键和撤销。Flutter 在模拟器启动前遇到依赖检查失败。[上批闭环](46-android-pairing-handoff-validation.md) · [本批逐项数据](evidence/mobile-pair-gui/android-paired-tui-batch-20261108.json)
+2026-11-08。Flutter 和 Tauri 的手机 GUI 都已在 API 35 模拟器走通资料与授权审查、本机设备密钥 SSH、看板、持续观察和停止。Tauri 的结果来自 APK 构建批次；Flutter 的结果来自随后只修改测试与验证流程的定向复测。Tauri 另完成同一配对目标上的十个远端 TUI 按键和手机撤销。Flutter 的受保护输入在恢复观察时仍有阻断。[APK 构建与 Tauri 证据](evidence/mobile-pair-gui/android-paired-tui-batch-20261108.json) · [Flutter 两轮复测](evidence/mobile-pair-gui/flutter-paired-tui-recheck-20261108.json) · [上批基线](46-android-pairing-handoff-validation.md)
 
 ## 下载与核验
 
@@ -45,6 +45,15 @@ Tauri 的十个按键依次为下移、Tab、Backspace、Shift+Tab、Insert、De
 两场远端均收到 0 字节。该轮设备任务总结果为失败。普通场景的超时行是多个等待条件共用的一行，无法仅凭该归档区分具体等待点。
 
 驱动随后把画布操作拆成打开、选择、确认三个阶段。它通过当前弹层中可用的整行控件选择 120×40，滚入视口、待位置稳定后只点一次，再核对表单值。首次配对仍须显式勾选一次；点击后读取控件选中状态，同时核对资料原样、创建操作为零、设备身份与公开请求均未出现。Mac 上十项指针与状态反例、78 项驱动测试通过。
+
+### 两处手机控件修订后的结果
+
+源码 `b4bcf96` 在同一 Flutter 版本和 API 35 上完成两场复测。静态分析、400 项测试和 10 项绘制回归通过，1 项测试跳过。两场均成功签名并核验签名，隔离主机的 sshd 均确认认证公钥与获批的手机公钥一致。[定向运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42407250343)
+
+- **原版 herdr 的手机闭环通过。** 首次审查前设备创建动作是 0，明确操作后创建 1 次。重新打开原请求并核验原设备密钥，审查主机回执，主动连接、选择 pane，收到首帧序号 1 和增量序号 3，停止后显示陈旧状态。远端收到 0 字节。120×40 观察画布的标记、横向阅读与位置恢复通过，字体样例八行的标记均在第 15 列。共享 PTY 采样 4,737 次保持 119×40。[只读场景](https://github.com/Luck9Star/herdr-pocket/actions/runs/42407250343/artifacts/13588775933)
+- **受保护输入部分通过。** 主机在 curses 程序之外收到前两笔共 10 字节。手机进入 `tui_resume_full` 后超时，未取得后续十笔按键回执或程序最终状态。共享 PTY 采样 2,817 次保持 119×40。两场临时授权均已撤销，应用进程、转发、Flutter 工具和独占模拟器均已清理。该轮工作流总状态为失败。[受保护输入场景](https://github.com/Luck9Star/herdr-pocket/actions/runs/42407250343/artifacts/13588895556)
+
+该失败阶段包含切换标签、恢复观察、核对新的终端对象和候选画面、检查输入许可。现有记录没有指出哪一个条件未满足。下一批先单独记录这些条件，再验收十个按键；保留一次点击对应一次发送以及结果未知时禁止重放的约束。
 
 ## 在测试环境复测
 

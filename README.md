@@ -6,6 +6,10 @@
 
 **手机端进度 · 2026-11-08**　手机审查主机指纹并创建设备密钥，主机明确授权后，手机复核回执、主动连接，在看板选择终端，接收首帧及后续增量。Flutter 和 Tauri 的原版 herdr 只读闭环均有 API 35 模拟器记录。本次 Tauri 还完成同一 SSH 连接上的十步远端 TUI 与手机撤销。Flutter 定向复测也走通了只读闭环，首帧序号 1、增量序号 3，停止时远端共收到 0 字节。其带输入场景送达前 10 字节后，在恢复终端观察时超时。[上批双路线只读验收](https://github.com/Luck9Star/herdr-pocket/blob/343b5b6b0d926044d6884b33ea73bec3a5b6b174/docs/46-android-pairing-handoff-validation.md) · [本批逐场结果](https://github.com/Luck9Star/herdr-pocket/blob/71ce10191c2c282bc4d5258f1bfc191a3cbfb882/docs/50-android-paired-tui-validation.md) · [Flutter 定向复测](https://github.com/Luck9Star/herdr-pocket/actions/runs/42407250343)
 
+## 原型分支上的新进度
+
+手机看板现在可从受阻清单点选具体窗格。打开历史记录时会重新核对主机、会话、窗格和终端，再由用户确认连接。手机终端的「字体与字符诊断」也已加入 Powerlevel10k 和 Oh My Posh 的真实输出样例。两条路线已完成对应的 Mac 检查，Android 设备验证仍待本轮重建。[受阻窗格入口与验证范围](https://github.com/Luck9Star/herdr-pocket/blob/d5a6dc06a876d05ef98815759595c042b05b1cfd/docs/51-mobile-blocked-targets.md) · [主题样例、实测数据与已保存的 Penpot 原型](https://github.com/Luck9Star/herdr-pocket/blob/d5a6dc06a876d05ef98815759595c042b05b1cfd/docs/52-mobile-theme-prompts.md)
+
 ## Android 测试包
 
 两份 arm64-v8a debug APK 来自同一提交 [`2b497ea`](https://github.com/Luck9Star/herdr-pocket/commit/2b497ea261c33dbf5fafeac2287bad1220ca5166)。登录 GitHub 下载归档，分别解压，用 `shasum -a 256 app.apk` 核对。两个包的摘要、原生库和共享字体资产均已实际核验。下载于北京时间 **11 月 22 日 02:58（Flutter）及 03:00（Tauri）** 到期。arm64 真机安装未验证。[构建记录](https://github.com/Luck9Star/herdr-pocket/actions/runs/42402903055)

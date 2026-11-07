@@ -10,12 +10,15 @@ import 'package:herdr_flutter_probe/main.dart' as app;
 import 'package:herdr_flutter_probe/device_keys.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
+import 'package:herdr_flutter_probe/pairing_public_key.dart';
 import 'package:herdr_flutter_probe/remote_page.dart';
 
 const packageName = 'dev.herdr.herdr_flutter_probe';
 const fixtureEnabled = String.fromEnvironment('HERDR_ANDROID_NATIVE_PAIRING');
 const runId = String.fromEnvironment('HERDR_ANDROID_RUN_ID');
 const publicTarget = String.fromEnvironment('HERDR_ANDROID_TARGET_JSON');
+const publicProfile = String.fromEnvironment('HERDR_ANDROID_PROFILE_JSON');
+const hostFingerprint = String.fromEnvironment('HERDR_ANDROID_HOST_FINGERPRINT');
 const publicDirectory = String.fromEnvironment('HERDR_ANDROID_PUBLIC_DIR');
 const guardedInput = bool.fromEnvironment('POCKET_GUARDED_INPUT');
 // Set only by the isolated runner after its single API35 AVD/fresh-package
@@ -42,6 +45,16 @@ Map<String,dynamic> checkedTarget() {
       value['session'] != 'pocket-probe' || value['herdrPath'] is! String || value['socketPath'] is! String ||
       !RegExp('^/tmp/hp-mobile-$runId-' r'[A-Za-z0-9_-]+/herdr$').hasMatch(value['herdrPath'] as String) ||
       value['socketPath'] != '${(value['herdrPath'] as String).substring(0,(value['herdrPath'] as String).length-6)}/config/herdr/sessions/pocket-probe/herdr.sock') {
+    throw StateError('invalid_public_android_target');
+  }
+  final profile = jsonDecode(publicProfile);
+  const profileFields = {'version','type','host','port','username','provider','session','socketPath','herdrPath','expectedHostKey'};
+  if (utf8.encode(publicProfile).length > 2048 || profile is! Map<String,dynamic> ||
+      profile.length != profileFields.length || !profile.keys.every(profileFields.contains) ||
+      profile['version'] != 1 || profile['type'] != 'herdr-connection-profile' || profile['provider'] != 'direct' ||
+      !RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$').hasMatch(hostFingerprint) ||
+      pairingFingerprint(value['expectedHostKey'] as String) != hostFingerprint ||
+      ['host','port','username','session','socketPath','herdrPath','expectedHostKey'].any((key) => profile[key] != value[key])) {
     throw StateError('invalid_public_android_target');
   }
   return value;
@@ -259,11 +272,34 @@ void main() {
     final pairingPage = tester.widget<PairingPage>(find.byType(PairingPage));
     expect(pairingPage.keys,isNull); expect(pairingPage.adapter,isNull); expect(pairingPage.catalog,isNotNull);
     stage('public_request');
-    for (final name in ['host','port','username','session','socketPath','herdrPath','expectedHostKey']) {
-      final field = find.byKey(ValueKey('pair-$name'));
-      await tester.ensureVisible(field);
-      await tester.enterText(field,target[name].toString()); await tester.pump();
+    stage('profile_enter');
+    final catalog = pairingPage.catalog!;
+    expect(catalog.profiles,isEmpty); expect(catalog.pendingCreation,isNull);
+    expect(PairingPage.retainedPairing,isNull);
+    expect(find.byKey(const ValueKey('pair-request')),findsNothing);
+    final publicInput = find.byKey(const ValueKey('profile-input'));
+    await tester.ensureVisible(publicInput); await tester.enterText(publicInput,publicProfile); await tester.pump();
+    stage('profile_preview');
+    final preview = find.byKey(const ValueKey('profile-preview'));
+    await until(tester,() => preview.evaluate().length == 1);
+    final previewText = tester.widget<SelectableText>(preview).data!;
+    for (final name in ['host','port','username','session','socketPath','herdrPath']) {
+      expect(previewText,contains(target[name].toString()));
     }
+    expect(previewText,contains('direct'));
+    expect(previewText,contains(hostFingerprint));
+    expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('pair-target-review'))).value,isFalse);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('pair-create'))).onPressed,isNull);
+    expect(catalog.profiles,isEmpty); expect(catalog.pendingCreation,isNull); expect(PairingPage.retainedPairing,isNull);
+    expect(find.byKey(const ValueKey('pair-request')),findsNothing);
+    stage('profile_fill');
+    await tapKey(tester,'profile-fill');
+    expect(find.byKey(const ValueKey('profile-preview')),findsNothing);
+    expect(tester.state<FormFieldState<String>>(find.byKey(const ValueKey('pair-provider'))).value,'direct');
+    expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('pair-target-review'))).value,isFalse);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('pair-create'))).onPressed,isNull);
+    expect(catalog.profiles,isEmpty); expect(catalog.pendingCreation,isNull); expect(PairingPage.retainedPairing,isNull);
+    expect(find.byKey(const ValueKey('pair-request')),findsNothing);
     final reviewedFields = <String,String>{
       for (final name in ['host','port','username','session','socketPath','herdrPath','expectedHostKey'])
         name:tester.widget<TextField>(find.byKey(ValueKey('pair-$name'))).controller!.text,
@@ -602,6 +638,8 @@ void main() {
     final report = <String,Object?>{
       'case':guardedInput ? 'android-native-pairing-guarded-input' : 'android-native-pairing-observe','buildMode':'debug',
       'productionMain':true,'defaultHostCatalog':true,'uninjectedNativeDeviceKeys':true,
+      'profilePreviewShown':true,'profileFieldsMatched':true,'profileFingerprintMatched':true,
+      'profileTargetUnreviewed':true,'profileNoCreationIntent':true,'profileCreationActionsBeforeReview':0,
       'publicRequestShown':true,'pendingRequestReopened':true,'originalDeviceKeyRevalidated':true,
       'authorizationReviewed':true,'pairedStateVisible':true,'paneChosen':true,
       'fullRendered':true,'deltaRendered':true,'stoppedStale':true,'observeMode':true,

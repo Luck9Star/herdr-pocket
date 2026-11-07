@@ -11,7 +11,9 @@ import subprocess
 import urllib.request
 
 from paired_gui import GuiFailure, wait_for
-from flutter_android_gui import DeviceFailure, public_ime_diagnostic, wait_system_ime
+from flutter_android_gui import (
+    DeviceFailure, public_host_fingerprint, public_ime_diagnostic, public_profile_json, wait_system_ime,
+)
 
 PACKAGE = 'dev.herdrpocket.tauriprobe'
 SERIAL = 'emulator-5554'
@@ -48,8 +50,8 @@ class AndroidProgress:
         'draft_input_receipt','stop_observation','complete',
         'keyboard_observe_hidden','keyboard_direct_shown','keyboard_direct_hidden','keyboard_direct_reopened',
         'keyboard_draft_shown','keyboard_draft_back_request','keyboard_draft_back_hidden',
-        'keyboard_draft_back_reopened','keyboard_draft_hidden'}
-    COMPLETED = {'authorizationReviewed','paneChosen','fullRendered','deltaRendered',
+        'keyboard_draft_back_reopened','keyboard_draft_hidden','local_revocation_review'}
+    COMPLETED = {'publicProfileReviewed','publicRequestCopyReported','revocationReviewed','authorizationReviewed','paneChosen','fullRendered','deltaRendered',
         'fontDiagnosticsCompleted','directKeyboardCompleted','directReceiptVerified',
         'draftKeyboardCompleted','pasteReviewCompleted','draftRestored','draftReceiptVerified','stoppedStale'}
     ERROR_CODES = {'android_system_ime_target_mismatch','android_system_ime_evidence_unavailable',
@@ -589,10 +591,28 @@ def run_android(args, root, env, config, approval):
         browser = wait_for(connect, 'android_webview_not_ready', timeout=60)
         progress.phase('pairing')
         browser.click('#host-open-remote')
+        browser.fill('#connection-profile-raw', public_profile_json(config))
+        browser.click('#connection-profile-preview')
+        fingerprint = public_host_fingerprint(config['expectedHostKey'])
+        wait_for(lambda: (browser.read('#connection-profile-fingerprint') or '').endswith(fingerprint),
+                 'android_profile_fingerprint_missing')
+        if browser.read('#remote-host', 'value') or browser.read('#pair-request', 'value'):
+            raise GuiFailure('android_profile_preview_changed_target')
+        browser.click('#connection-profile-apply')
         for field, key in [('host','host'), ('port','port'), ('user','username'), ('session','session'),
                            ('herdr','herdrPath'), ('socket','socketPath'), ('pin','expectedHostKey')]:
-            browser.fill('#remote-'+field, config[key])
-        browser.click('#pair-mode')
+            if browser.read('#remote-'+field, 'value') != str(config[key]):
+                raise GuiFailure('android_profile_target_mismatch')
+        require_unreviewed = """(() => {
+          const el = id => document.getElementById(id);
+          return el('remote-profile-provider').value === 'direct' && el('pair-mode').checked &&
+            !el('pair-target-review').checked && !el('pair-source-review').checked &&
+            !el('remote-review').checked && el('pair-create').disabled &&
+            el('remote-connect').disabled && !el('pair-request').value;
+        })()"""
+        if browser.evaluate(require_unreviewed) is not True:
+            raise GuiFailure('android_profile_review_already_granted')
+        progress.mark('publicProfileReviewed')
         browser.click('#pair-target-review')
         browser.click('#pair-create')
         try:
@@ -610,6 +630,13 @@ def run_android(args, root, env, config, approval):
             raise GuiFailure('android_public_request_'+(phase if phase in allowed else 'unknown')) from None
         if len(request.encode('utf-8')) > 2048:
             raise GuiFailure('android_public_request_oversize')
+        # A clipboard permission failure may still use the displayed public
+        # request. Preserve the rest of the device-key/SSH result in that case.
+        browser.click('#pair-request-copy')
+        handoff = wait_for(lambda: browser.read('#pair-handoff-status'), 'android_request_copy_not_reported')
+        copy_reported = handoff.startswith('已复制')
+        if copy_reported:
+            progress.mark('publicRequestCopyReported')
         response = approval.approve(request.encode('utf-8'))
         browser.fill('#pair-response', response.decode('utf-8'))
         browser.click('#pair-preview')
@@ -697,8 +724,25 @@ def run_android(args, root, env, config, approval):
         progress.phase('stop_observation')
         browser.click('#remote-cancel')
         wait_for(lambda: '陈旧' in (browser.read('#remote-captured') or ''), 'android_stale_marker_missing')
-        progress.mark('stoppedStale'); progress.success=True
-        return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
+        progress.mark('stoppedStale')
+        progress.phase('local_revocation_review')
+        wait_for(lambda: browser.evaluate("document.querySelector('#remote-cancel').disabled"),
+                 'android_observer_still_active')
+        # The disposable host's real helper removes the key first. The GUI
+        # separately reviews the returned bytes; it cannot edit the host.
+        receipt = approval.revoke()
+        browser.fill('#pair-response', receipt.decode('utf-8'))
+        browser.click('#pair-preview')
+        if browser.evaluate("document.querySelector('#pair-source-review').checked || !document.querySelector('#pair-accept').disabled"):
+            raise GuiFailure('android_revoke_missing_independent_review')
+        browser.click('#pair-source-review')
+        browser.click('#pair-accept')
+        wait_for(lambda: '目录已确认撤销' in (browser.read('#pair-status') or ''), 'android_revoke_not_persisted')
+        if browser.evaluate("!document.querySelector('#remote-connect').disabled || !document.querySelector('#pair-create').disabled"):
+            raise GuiFailure('android_revoked_target_still_enabled')
+        progress.mark('revocationReviewed'); progress.success=True
+        return {'paired':True, 'publicProfileReviewed':True, 'publicRequestCopyReported':copy_reported,
+                'revocationReviewed':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                 'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                 'inputQueueAccepted':bool(receipts), 'inputReceipts':receipts,
                 'fontDiagnosticEvidence':font_diagnostic_evidence,

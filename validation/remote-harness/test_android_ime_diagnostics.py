@@ -114,8 +114,6 @@ class ProgressTests(unittest.TestCase):
     def test_normal_stock_entry_failure_keeps_prior_evidence_and_cleanup(self):
         view=Mock()
         view.evaluate.side_effect=lambda expression: 'fresh' if 'dataset.dashboardPhase' in expression else (3 if 'Frames' in expression else True)
-        view.read.side_effect=lambda selector,*_: {'#pair-request':'synthetic request',
-            '#pair-status':'授权响应已审查','#remote-panes button':'p · synthetic-terminal'}[selector]
         approval=Mock();approval.approve.return_value=b'synthetic response'
         def adb(*parts,**_):
             return {('devices',):'List of devices attached\nemulator-5554\tdevice',
@@ -134,8 +132,23 @@ class ProgressTests(unittest.TestCase):
             base=Path(temporary).resolve();output=base/'evidence';output.mkdir()
             apk=base/'synthetic.apk';apk.write_bytes(b'fixture')
             args=types.SimpleNamespace(android_guarded_input=False,input_fixture=None,tauri_app=apk,output=output)
-            config={'host':'127.0.0.1','port':2222,'username':'synthetic','session':'synthetic',
-                'herdrPath':'/fixture/herdr','socketPath':'/fixture/socket','expectedHostKey':'synthetic','paneId':'p'}
+            public_key = (Path(__file__).resolve().parents[1] / 'pairing/fixtures/host-public-key.txt').read_text().strip()
+            config={'schemaVersion':1,'reviewConfirmed':True,'host':'127.0.0.1','port':2222,'username':'synthetic','session':'synthetic',
+                'herdrPath':'/fixture/herdr','socketPath':'/fixture/herdr/sessions/synthetic/herdr.sock','expectedHostKey':public_key,'paneId':'p'}
+            def read(selector, *args):
+                clicked = {call.args[0] for call in view.click.call_args_list}
+                if selector == '#connection-profile-fingerprint':
+                    return shared.public_host_fingerprint(public_key)
+                if selector == '#pair-request':
+                    return 'synthetic request' if '#pair-create' in clicked else ''
+                if selector == '#remote-host' and '#connection-profile-apply' not in clicked:
+                    return ''
+                values = {'#remote-'+suffix:str(config[key]) for suffix,key in
+                    [('host','host'),('port','port'),('user','username'),('session','session'),
+                     ('herdr','herdrPath'),('socket','socketPath'),('pin','expectedHostKey')]}
+                return {**values,'#pair-handoff-status':'已复制','#pair-status':'授权响应已审查',
+                        '#remote-panes button':'p · synthetic-terminal'}[selector]
+            view.read.side_effect = read
             with patch.dict(os.environ,{'RUNNER_TEMP':str(base),'GITHUB_ACTIONS':'true','ANDROID_SERIAL':android.SERIAL}), \
                     patch.object(android,'adb',side_effect=adb) as command, \
                     patch.object(android,'AndroidWebView',return_value=view), \
@@ -147,7 +160,7 @@ class ProgressTests(unittest.TestCase):
             self.assertEqual(report['stage'],'keyboard_observe_hidden')
             self.assertEqual(report['status'],'failed')
             self.assertEqual(report['errorCode'],'android_system_ime_target_mismatch')
-            for key in ('authorizationReviewed','paneChosen','fullRendered','deltaRendered','fontDiagnosticsCompleted'):
+            for key in ('publicProfileReviewed','publicRequestCopyReported','authorizationReviewed','paneChosen','fullRendered','deltaRendered','fontDiagnosticsCompleted'):
                 self.assertTrue(report['completed'][key])
             self.assertFalse(report['completed']['stoppedStale'])
             self.assertEqual(report['fullRenderAcknowledgements'],3)

@@ -13,3 +13,17 @@ test('camera bytes must match the request and device before an unauthenticated r
  validatePairingCameraResponse(JSON.stringify(response),request,'SHA256:device',102);
  for(const change of [{request_id:'b'.repeat(32)},{host_key:'foreign'},{account:'other'},{fingerprint:'foreign'},{version:1},{type:'herdr-connection-profile'},{issued_at:103},{expires_at:102},{expires_at:701}])assert.throws(()=>validatePairingCameraResponse(JSON.stringify({...response,...change}),request,'SHA256:device',102));
 });
+test('an expired native request is retained only as an identity record for a fresh revocation receipt',()=>{
+ const historical=pairingCameraRequest(JSON.stringify(request),'demo',1000,{allowExpired:true});assert.deepEqual(historical,request);
+ const receipt={...response,status:'revoked',issued_at:999,expires_at:1100};
+ for(const state of ['expired','cancelled','authorized-unverified','waiting-connectivity','paired']) {
+  validatePairingCameraResponse(JSON.stringify(receipt),historical,'SHA256:device',1000,{state,revocationOnly:true});
+  assert.throws(()=>validatePairingCameraResponse(JSON.stringify({...receipt,status:'authorized'}),historical,'SHA256:device',1000,{state,revocationOnly:true}));
+ }
+ assert.throws(()=>validatePairingCameraResponse(JSON.stringify(receipt),historical,'SHA256:device',1000,{state:'revoked',revocationOnly:true}));
+});
+test('explicit revocation review and already-authorized state reject another authorization even before original expiry',()=>{
+ assert.throws(()=>validatePairingCameraResponse(JSON.stringify(response),request,'SHA256:device',102,{revocationOnly:true}));
+ assert.throws(()=>validatePairingCameraResponse(JSON.stringify(response),request,'SHA256:device',102,{state:'authorized-unverified'}));
+ validatePairingCameraResponse(JSON.stringify({...response,status:'revoked'}),request,'SHA256:device',102,{state:'authorized-unverified'});
+});

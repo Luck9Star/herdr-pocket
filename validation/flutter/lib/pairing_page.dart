@@ -222,6 +222,21 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
         status = createStarted ? '${phase}未完成 · 设备安全存储不可用或创建结果未知 · 请核验原身份，不会重放创建' : '${phase}未完成 · 未创建设备身份'; });
     }
   }
+  bool requestAvailable(PendingDevicePairing p) => p.state == 'awaiting-host' && !p.consumed && now < (p.request['expires_at'] as int);
+  Future<void> copyRequest() async {
+    final p = pairing;
+    if (p == null || busy || scanning || profileBlocked || !pageVisible || !appResumed || !requestAvailable(p)) return;
+    final ticket = revision, generation = p.generation, wire = p.wire;
+    try {
+      await Clipboard.setData(ClipboardData(text:wire));
+      if (!mounted || !identical(pairing,p) || ticket != revision || generation != p.generation || !pageVisible || !appResumed) return;
+      setState(() { status = requestAvailable(p) ? '公开请求已复制 · 请独立核对请求编号、账号与两端指纹，再交给主机审查' : '复制完成时请求已失效 · 请勿交付剪贴板中的旧请求'; });
+    } catch (_) {
+      if (mounted && identical(pairing,p) && ticket == revision && generation == p.generation && pageVisible && appResumed) {
+        setState(() { status = requestAvailable(p) ? '复制未确认 · 可手动选择下方公开请求全文；交付前核对编号与期限' : '复制未确认且请求已失效 · 请勿交付旧请求'; });
+      }
+    }
+  }
   Future<void> accept() async {
     final p = pairing; if (p == null || busy || accepting || scanning || !pageVisible || !appResumed || profileBlocked ||
       !sourceReviewed || responsePreview == null || widget.catalog?.ready == false) return;
@@ -390,17 +405,24 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   Future<void> scanResponse() async {
     final p = pairing;
     if (!scanAvailable || scanning || busy || profileBlocked || !pageVisible || !appResumed || p == null ||
-        ['cancelled','expired','revoked'].contains(p.state) || now >= (p.request['expires_at'] as int)) return;
+        p.state == 'revoked') return;
     final ticket = revision, generation = p.generation, requestId = p.request['request_id'], pairingState = p.state;
     bool current() => mounted && ticket == revision && identical(pairing,p) && p.generation == generation &&
-      p.request['request_id'] == requestId && p.state == pairingState && pageVisible && appResumed && now < (p.request['expires_at'] as int) &&
-      !['cancelled','expired','revoked'].contains(p.state);
+      p.request['request_id'] == requestId && p.state == pairingState && pageVisible && appResumed && p.state != 'revoked';
     setState(() { scanning = true; sourceReviewed = false; status = '扫描公开响应 · 返回后仍需独立审查'; });
     try {
       final text = await const MethodChannel('herdr.pocket/pair_scan').invokeMethod<String>('scan');
-      if (!await scannerForeground(ticket,expiresAt:p.request['expires_at'] as int) || !current()) return;
+      Map<String,dynamic>? scanned;
+      if (text != null && text.isNotEmpty) {
+        try {
+          scanned = decodePairing(Uint8List.fromList(utf8.encode(text)),now);
+          if (scanned['type'] != 'pairing-binding-response') scanned = null;
+        } catch (_) { scanned = null; }
+      }
+      if (!await scannerForeground(ticket,expiresAt:scanned?['expires_at'] as int?) || !current()) return;
       if (text == null || text.isEmpty) { setState(() { status = '已取消扫描 · 可继续手动输入响应'; }); return; }
-      if (utf8.encode(text).length > 2048) { setState(() { status = '扫码内容超过公开响应上限 · 未填入，可手动核验'; }); return; }
+      if (scanned == null || now >= (scanned['expires_at'] as int)) { setState(() { status = '扫码响应无效或已过期 · 未填入，请重新核验'; }); return; }
+      if (scanned['status'] != 'revoked' && !requestAvailable(p)) { setState(() { status = '原请求已取消、处理或过期 · 只可审查新鲜撤销回执'; }); return; }
       response.text = text; previewResponse(edited:false);
       setState(() { sourceReviewed = false; status = '扫码文本已填入候审框 · 尚未接受授权，请核验响应摘要与来源'; });
     } catch (_) {
@@ -483,14 +505,17 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
           if (savedProfile != null && !needsNetworkBinding) Text(savedProfile!.networkProfileId == null ? '系统直连（沿用系统路由） · 在线状态未知；每标签独立连接'
             : '网络：${widget.catalog?.networkFor(savedProfile!)?.label} · ${widget.catalog?.networkFor(savedProfile!)?.provider} · 入网状态未知；每标签独立连接'),
           Text('状态 ${p.state} · 主机授权 ${p.authorization}',key:const ValueKey('pair-state')),
-          Text('账号 ${p.request['account']}\n主机 ${p.request['host_key']}\n设备 ${pairingFingerprint(p.request['public_key'] as String)}\n到期 ${p.request['expires_at']}'),
-          const SizedBox(height:12), SelectableText(p.wire,key:const ValueKey('pair-request')),
-          TextButton(key:const ValueKey('pair-copy'),onPressed:p.state == 'awaiting-host' ? () => Clipboard.setData(ClipboardData(text:p.wire)) : null,child:const Text('复制公开请求')),
+          SelectableText('原请求编号 ${p.request['request_id']}\n账号 ${p.request['account']}\n主机指纹 ${p.request['host_key']}\n设备指纹 ${pairingFingerprint(p.request['public_key'] as String)}\n请求到期 ${p.request['expires_at']} · ${requestAvailable(p) ? '当前有效' : '不可再交付授权请求'}',key:const ValueKey('pair-handoff-summary')),
+          const Text('只将有效的公开请求交给主机。主机操作者应先用 helper preview 独立核对编号、账号和两端指纹，再用 authorize 明确确认；取消等待不会撤销主机授权。'),
+          const Text('需要撤销时，在主机 helper 目录运行 python -m herdr_pocket_helper revoke --host-public-key <主机公钥.pub> --request-id <原请求编号> 并明确确认；独立核验新鲜撤销回执。本机身份不会自动删除，已有 SSH 不会自动断开。'),
+          if (requestAvailable(p)) ...[const SizedBox(height:12), SelectableText(p.wire,key:const ValueKey('pair-request')),
+            const Text('复制不可用时，可手动选择上方公开请求全文；不要交付过期请求。')],
+          TextButton(key:const ValueKey('pair-copy'),onPressed:!busy && !scanning && !profileBlocked && pageVisible && appResumed && requestAvailable(p) ? copyRequest : null,child:const Text('复制当前公开请求')),
           const Text('响应本身没有来源认证。请独立核验主机生成的响应来源、账号与两端指纹；粘贴不等于信任。'),
-          if (scanAvailable) TextButton.icon(key:const ValueKey('pair-scan'),onPressed:busy || scanning || !pageVisible || ['cancelled','expired','revoked'].contains(p.state) || now >= (p.request['expires_at'] as int) ? null : scanResponse,icon:const Icon(Icons.qr_code_scanner),label:const Text('扫描主机响应')),
+          if (scanAvailable) TextButton.icon(key:const ValueKey('pair-scan'),onPressed:busy || scanning || profileBlocked || !pageVisible || !appResumed || p.state == 'revoked' ? null : scanResponse,icon:const Icon(Icons.qr_code_scanner),label:const Text('扫描主机响应')),
           TextField(key:const ValueKey('pair-response'),controller:response,enabled:!busy,maxLength:2048,minLines:3,maxLines:6,
             decoration:const InputDecoration(labelText:'公开授权／撤销响应 JSON'),onChanged:(_) => previewResponse()),
-          if (responsePreview != null) Text('待审查响应\n账号 ${responsePreview!['account']}\n主机 ${responsePreview!['host_key']}\n设备 ${responsePreview!['fingerprint']}\n状态 ${responsePreview!['status']} · 新增授权 ${responsePreview!['authorization_added']}\n期限 ${responsePreview!['issued_at']} → ${responsePreview!['expires_at']}',key:const ValueKey('pair-response-preview')),
+          if (responsePreview != null) Text('待审查响应\n请求编号 ${responsePreview!['request_id']}\n账号 ${responsePreview!['account']}\n主机 ${responsePreview!['host_key']}\n设备 ${responsePreview!['fingerprint']}\n状态 ${responsePreview!['status']} · 新增授权 ${responsePreview!['authorization_added']}\n期限 ${responsePreview!['issued_at']} → ${responsePreview!['expires_at']}',key:const ValueKey('pair-response-preview')),
           CheckboxListTile(key:const ValueKey('pair-source-review'),value:sourceReviewed,
             onChanged:busy || scanning || !appResumed ? null : (v) => setState(() { sourceReviewed = v == true; }),title:const Text('我已独立核验响应来源、账号与两端指纹')),
           FilledButton(key:const ValueKey('pair-accept'),onPressed:sourceReviewed && responsePreview != null && !busy && !scanning &&

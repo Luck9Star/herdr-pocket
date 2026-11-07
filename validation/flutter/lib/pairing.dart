@@ -3,7 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'pairing_public_key.dart';
 export 'pairing_public_key.dart';
-import 'remote_adapter.dart';
+import 'remote_failure.dart';
 
 /// Flat v2 wire grammar: rejecting duplicate decoded keys before JSON decoding
 /// also catches escaped duplicates. Nested values, non-UTF8, BOM and controls

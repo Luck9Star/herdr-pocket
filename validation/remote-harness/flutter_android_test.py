@@ -41,7 +41,7 @@ def block(name, source='sdk', version='0.0.0'):
 
 def device_report(**changes):
     value = {'case': 'android-native-pairing-observe', 'buildMode': 'debug',
-        **{name: True for name in gui.BOOL_FIELDS}, 'identityCreationActions': 1,
+        **{name: True for name in gui.BOOL_FIELDS}, 'profileCreationActionsBeforeReview': 0, 'identityCreationActions': 1,
         'localFontMarkerColumns': [15] * 8,
         'firstSequence': 5, 'deltaSequence': 7, 'frameCountLowerBound': 2, 'deltaCountLowerBound': 1}
     value.update(changes)
@@ -92,7 +92,7 @@ class PreparedFixture(unittest.TestCase):
         self.addCleanup(root_temp.cleanup)
         self.fixture_root = Path(root_temp.name).resolve()
         self.config = {'schemaVersion': 1, 'host': '127.0.0.1', 'port': 2222, 'username': 'fixture',
-            'expectedHostKey': 'public-fixture-only', 'socketPath': str(self.fixture_root / 'config/herdr/sessions/pocket-probe/herdr.sock'),
+            'expectedHostKey': 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea', 'socketPath': str(self.fixture_root / 'config/herdr/sessions/pocket-probe/herdr.sock'),
             'herdrPath': str(self.fixture_root / 'herdr'), 'session': 'pocket-probe', 'paneId': 'w1:p1', 'reviewConfirmed': True}
 
     def prepared(self):
@@ -157,6 +157,42 @@ class ScaffoldGuards(PreparedFixture):
 
 
 class RunnerGuards(PreparedFixture):
+    def test_public_profile_wire_is_exact_allowlist_without_local_identity_or_private_material(self):
+        raw = gui.public_profile_json(self.config)
+        data = json.loads(raw)
+        self.assertEqual(set(data), {'version', 'type', 'host', 'port', 'username', 'provider',
+                                     'session', 'socketPath', 'herdrPath', 'expectedHostKey'})
+        self.assertEqual(data['version'], 1)
+        self.assertEqual(data['type'], 'herdr-connection-profile')
+        self.assertEqual(data['provider'], 'direct')
+        for name in ('host', 'port', 'username', 'session', 'socketPath', 'herdrPath', 'expectedHostKey'):
+            self.assertEqual(data[name], self.config[name])
+        self.assertLessEqual(len(raw.encode('utf-8')), 2048)
+        self.assertEqual(gui.public_host_fingerprint(data['expectedHostKey']),
+                         'SHA256:bbXpuKG6zhzdmnxq256TlqzFBzRl2f6OOg722cYNbU8')
+        self.assertNotIn('paneId', raw)
+        self.assertNotIn('reviewConfirmed', raw)
+        for bad in ({**self.config, 'privateKeyPem':'NEVER'}, {**self.config, 'port':True},
+                    {**self.config, 'host':'x'*2049}, {**self.config, 'expectedHostKey':'invalid'}):
+            with self.subTest(bad=list(bad)), self.assertRaises(gui.DeviceFailure):
+                gui.public_profile_json(bad)
+
+    def test_public_fingerprint_rejects_noncanonical_and_malformed_blobs(self):
+        valid = self.config['expectedHostKey']
+        for value in (valid + ' comment', valid + '=', 'ssh-rsa ' + valid.split(' ')[1],
+                      'ssh-ed25519 AAAA', None):
+            with self.subTest(value=value), self.assertRaises(gui.DeviceFailure):
+                gui.public_host_fingerprint(value)
+
+    def test_profile_evidence_requires_true_observations_and_zero_pre_review_actions(self):
+        for field in ('profilePreviewShown', 'profileFieldsMatched', 'profileFingerprintMatched',
+                      'profileTargetUnreviewed', 'profileNoCreationIntent'):
+            with self.subTest(field=field), self.assertRaises(gui.DeviceFailure):
+                gui.safe_device_result(device_report(**{field: False}))
+        for bad in (1, True, None, '0'):
+            with self.subTest(count=bad), self.assertRaises(gui.DeviceFailure):
+                gui.safe_device_result(device_report(profileCreationActionsBeforeReview=bad))
+
     def test_first_target_review_failures_are_bounded_and_distinguish_consent_from_disabled_creation(self):
         for stage in ('target_finish_edit', 'target_review_ready', 'target_review_unchecked', 'target_create_unavailable'):
             record = {'stage': stage, 'errorClass': 'TestFailure', 'line': 240}
@@ -536,6 +572,9 @@ class CleanupGuards(PreparedFixture):
             defines = json.loads((self.fixture_root / 'flutter-android-public-defines.json').read_text())
             self.assertEqual(defines['HERDR_ANDROID_API35_CLIPBOARD_FIXTURE'], 'true' if guarded else 'false')
             self.assertEqual(defines['HERDR_ANDROID_API35_KEYBOARD_FIXTURE'], 'true')
+            self.assertEqual(defines['HERDR_ANDROID_PROFILE_JSON'], gui.public_profile_json(self.config))
+            self.assertNotIn('privateKeyPem', defines['HERDR_ANDROID_PROFILE_JSON'])
+            self.assertEqual(defines['HERDR_ANDROID_HOST_FINGERPRINT'], gui.public_host_fingerprint(self.config['expectedHostKey']))
             state['installed'] = True; forwards.add(owned)
             try:
                 yield Process()
@@ -740,7 +779,7 @@ class SharedRouteGuards(unittest.TestCase):
             env = {'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '123',
                 'GITHUB_REF': 'refs/heads/codex/unit'}
             config = {'host': '127.0.0.1', 'username': 'fixture',
-                'expectedHostKey': 'public-fixture-only'}
+                'expectedHostKey': 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea'}
             args = SimpleNamespace(paired_gui='flutter-android', input_fixture=None)
             host = object()
             approval = Mock(spec=['verify_ssh', 'revoke', 'applied', 'fingerprint_authenticated'])
@@ -761,7 +800,7 @@ class SharedRouteGuards(unittest.TestCase):
                     patch.object(subprocess, 'run', side_effect=AssertionError('unexpected process')):
                 result = paired_gui.run_gui(args, root, env, config)
             host_factory.assert_called_once()
-            self.assertEqual(host_factory.call_args.args[1:], ('fixture', 'public-fixture-only'))
+            self.assertEqual(host_factory.call_args.args[1:], ('fixture', config['expectedHostKey']))
             self.assertEqual(host_factory.call_args.args[0].parent, root)
             approval_factory.assert_called_once_with(root, config, host)
             exercise.assert_called_once_with(args, root, env, config, approval)

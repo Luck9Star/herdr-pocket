@@ -117,6 +117,7 @@ pub enum ReferenceStatus {
     Authorized,
     AwaitingHost,
     Cancelled,
+    Revoked,
 }
 #[derive(Clone)]
 pub struct Pairing {
@@ -294,6 +295,7 @@ impl Pairing {
         }
         let state = match pending_now {
             None => "authorized-unverified",
+            Some(_) if reference.status == ReferenceStatus::Revoked => "revoked",
             Some(_) if reference.status == ReferenceStatus::Cancelled => "cancelled",
             Some(now) if now >= request.expires_at => "expired",
             Some(_) => "awaiting-host",
@@ -304,10 +306,10 @@ impl Pairing {
             request,
             target: Some(Target::from_config(config)),
             state,
-            authorization: if pending_now.is_some() {
-                "unknown"
-            } else {
-                "authorized"
+            authorization: match reference.status {
+                ReferenceStatus::Authorized => "authorized",
+                ReferenceStatus::Revoked => "revoked",
+                ReferenceStatus::AwaitingHost | ReferenceStatus::Cancelled => "unknown",
             },
             authorization_added: None,
         })
@@ -357,7 +359,9 @@ impl Pairing {
         Ok(())
     }
     pub fn cancel(&mut self) {
-        self.state = "cancelled";
+        if self.authorization != "revoked" {
+            self.state = "cancelled";
+        }
     }
     pub fn delete_local(&self) -> Result<()> {
         self.store.delete(&self.handle)
@@ -630,6 +634,38 @@ mod tests {
             .unwrap();
         store.delete(&reference.handle).unwrap();
         assert!(Pairing::restore_pending(store, &reference, &config, true, 101).is_err());
+    }
+    #[test]
+    fn revoked_reference_restores_original_identity_without_connection_authority() {
+        let host = new_host();
+        let config = config(&host);
+        let store = Arc::new(VolatileKeyStore::default());
+        let mut original =
+            Pairing::create(store.clone(), "fixture-user", &host, "Pocket", 100).unwrap();
+        original.bind_target(&config).unwrap();
+        let mut reference = original.pending_reference(&config).unwrap();
+        let mut fresh: serde_json::Value = serde_json::from_str(&response(&original, "revoked")).unwrap();
+        fresh["issued_at"] = 900.into();
+        fresh["expires_at"] = 1500.into();
+        let mut expired = Pairing::restore_pending(store.clone(), &reference, &config, true, 901).unwrap();
+        expired.accept(&fresh.to_string(), 901, true).unwrap();
+        reference.status = ReferenceStatus::Revoked;
+        let saved = serde_json::to_string(&reference).unwrap();
+        let reloaded: PairingReference = serde_json::from_str(&saved).unwrap();
+        assert!(Pairing::restore(store.clone(), &reloaded, &config, true).is_err());
+        let mut restored = Pairing::restore_pending(store.clone(), &reloaded, &config, true, 905).unwrap();
+        assert_eq!((restored.state, restored.authorization), ("revoked","revoked"));
+        assert_eq!(restored.request_json().unwrap(), reference.request_json);
+        assert_eq!(restored.public_fingerprint().unwrap(), original.public_fingerprint().unwrap());
+        restored.cancel();
+        assert_eq!(restored.state, "revoked");
+        assert!(restored.accept(&fresh.to_string(), 905, true).is_err());
+        fresh["status"] = "authorized".into();
+        assert!(restored.accept(&fresh.to_string(), 905, true).is_err());
+        assert!(restored.begin(&config).is_err());
+        assert!(restored.persistable(&config).is_err());
+        restored.delete_local().unwrap();
+        assert!(store.public(&reference.handle).is_err());
     }
     #[test]
     fn deleted_handle_never_recreates_key() {

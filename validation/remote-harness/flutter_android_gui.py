@@ -19,11 +19,14 @@ SERIAL = 'emulator-5554'
 TARGET_FIELDS = {'schemaVersion', 'host', 'port', 'username', 'expectedHostKey',
                  'socketPath', 'herdrPath', 'session', 'paneId', 'reviewConfirmed'}
 BOOL_FIELDS = ('productionMain', 'defaultHostCatalog', 'uninjectedNativeDeviceKeys',
+    'profilePreviewShown', 'profileFieldsMatched', 'profileFingerprintMatched',
+    'profileTargetUnreviewed', 'profileNoCreationIntent',
     'publicRequestShown', 'pendingRequestReopened', 'originalDeviceKeyRevalidated',
     'authorizationReviewed', 'pairedStateVisible', 'paneChosen', 'fullRendered',
     'deltaRendered', 'stoppedStale', 'observeMode', 'directModeDisabled',
     'draftModeDisabled', 'localIdentityDeleted')
 STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'handle_save_failed',
+          'profile_enter', 'profile_preview', 'profile_fill',
           'signer_create', 'signer_public', 'signer_sign', 'signer_delete', 'signer_read_deleted',
           'public_key_failed', 'profile_save_failed', 'create_not_available', 'host_board', 'public_request', 'restore_pending', 'host_authorization',
           'target_finish_edit', 'target_review_ready', 'target_review_unchecked', 'target_create_unavailable',
@@ -233,6 +236,41 @@ def safe_test_failure(value):
     return {key: value[key] for key in ('stage', 'errorClass', 'line')}
 
 
+def public_host_fingerprint(key):
+    """Compute OpenSSH SHA256 over a canonical Ed25519 public key blob."""
+    try:
+        if not isinstance(key, str) or not re.fullmatch(r'ssh-ed25519 [A-Za-z0-9+/]+={0,2}', key):
+            raise ValueError()
+        encoded = key.split(' ')[1]
+        blob = base64.b64decode(encoded, validate=True)
+        if (base64.b64encode(blob).decode('ascii') != encoded or len(blob) != 51 or
+                blob[:15] != b'\x00\x00\x00\x0bssh-ed25519' or blob[15:19] != b'\x00\x00\x00\x20'):
+            raise ValueError()
+        return 'SHA256:' + base64.b64encode(hashlib.sha256(blob).digest()).decode('ascii').rstrip('=')
+    except (ValueError, binascii.Error):
+        raise DeviceFailure('flutter_android_invalid_public_target') from None
+
+
+def public_profile_json(config):
+    """Make the scanner wire only from explicitly named public target fields."""
+    if not isinstance(config, dict) or set(config) != TARGET_FIELDS:
+        raise DeviceFailure('flutter_android_invalid_public_target')
+    data = {'version': 1, 'type': 'herdr-connection-profile',
+            'host': config['host'], 'port': config['port'], 'username': config['username'],
+            'provider': 'direct', 'session': config['session'],
+            'socketPath': config['socketPath'], 'herdrPath': config['herdrPath'],
+            'expectedHostKey': config['expectedHostKey']}
+    if (type(data['port']) is not int or
+            any(not isinstance(data[key], str) for key in ('host', 'username', 'session',
+                'socketPath', 'herdrPath', 'expectedHostKey'))):
+        raise DeviceFailure('flutter_android_invalid_public_target')
+    public_host_fingerprint(data['expectedHostKey'])
+    raw = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+    if not 1 <= len(raw.encode('utf-8')) <= 2048:
+        raise DeviceFailure('flutter_android_invalid_public_target')
+    return raw
+
+
 def require_cloud(env, root, application, config):
     run_id, sha = env.get('GITHUB_RUN_ID', ''), env.get('GITHUB_SHA', '')
     if (env.get('GITHUB_ACTIONS') != 'true' or not re.fullmatch(r'\d+', run_id) or
@@ -302,7 +340,7 @@ def safe_device_result(raw, guarded=False):
             any(type(col) is not int or not (col == 0 or 3 <= col <= 16) for col in columns)):
         raise DeviceFailure('flutter_android_font_measurement_invalid')
     clean['localFontMarkerColumns'] = columns.copy()
-    for field, expected in (('identityCreationActions', 1), ('frameCountLowerBound', 2), ('deltaCountLowerBound', 1)):
+    for field, expected in (('profileCreationActionsBeforeReview', 0), ('identityCreationActions', 1), ('frameCountLowerBound', 2), ('deltaCountLowerBound', 1)):
         if type(raw.get(field)) is not int or raw[field] != expected:
             raise DeviceFailure('flutter_android_result_counter_invalid')
         clean[field] = expected
@@ -677,6 +715,8 @@ def _run(args, root, env, config, approval, owned_process):
         'HERDR_ANDROID_API35_CLIPBOARD_FIXTURE': 'true' if guarded else 'false',
         'HERDR_ANDROID_API35_KEYBOARD_FIXTURE': 'true',
         'HERDR_ANDROID_TARGET_JSON': json.dumps(config, separators=(',', ':')),
+        'HERDR_ANDROID_PROFILE_JSON': public_profile_json(config),
+        'HERDR_ANDROID_HOST_FINGERPRINT': public_host_fingerprint(config['expectedHostKey']),
         'HERDR_ANDROID_PUBLIC_DIR': '/data/user/0/' + PACKAGE + '/' + relative}), encoding='utf-8')
     defines.chmod(0o600)
     command = ['flutter', 'test', '--no-pub', '--no-uninstall', '--reporter', 'expanded', '-d', SERIAL,
@@ -731,7 +771,8 @@ def _run(args, root, env, config, approval, owned_process):
             try:
                 label = read_public(relative + '/stage', 40)
                 if label is not None and label.decode('ascii') in {
-                        'signer_create', 'signer_public', 'signer_sign', 'signer_delete', 'signer_read_deleted'}:
+                        'profile_enter', 'profile_preview', 'profile_fill',
+          'signer_create', 'signer_public', 'signer_sign', 'signer_delete', 'signer_read_deleted'}:
                     signer_evidence['stage'] = label.decode('ascii')
             except DeviceFailure:
                 pass

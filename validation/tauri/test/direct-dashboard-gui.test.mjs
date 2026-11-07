@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import {createPublicRequestClipboard} from '../src/public-request-clipboard.js';
+
+const connectionProfiles=JSON.parse(await readFile(new URL('../../shared/connection-profile-v1.json',import.meta.url),'utf8'));
 
 class Element {
   constructor(id = '') {
@@ -32,6 +35,8 @@ class Element {
   }
   click() { this.onclick?.({ target: this, preventDefault() {} }); }
   checkValidity() { return true; }
+  select(){this.selected=true;}
+  setSelectionRange(start,end){this.selection=[start,end];}
   focus() {
     if (document.activeElement === this) return;
     document.activeElement?.blur();
@@ -72,7 +77,7 @@ async function importedRemote() {
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest='request' } = {}) {
+async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
@@ -139,7 +144,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
       return readOverride ? readOverride(name, value) : value;
     }
     if (name === 'host_select') return structuredClone(records.find(h=>h.id===args.id));
-    if (name === 'host_restore') return {state:'authorized-unverified',fingerprint:'device-fingerprint',request:pairRequest};
+    if (name === 'host_restore') return {state:records.find(x=>x.id===args.id)?.pairingStatus==='revoked'?'revoked':'authorized-unverified',fingerprint:'device-fingerprint',request:pairRequest};
     if (name === 'host_save') {
       if (!records.length) {
         records = [{
@@ -154,10 +159,11 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
       records[0].pairingStatus = 'awaiting-host';
       return { stored: true, state: 'awaiting-host', request: pairRequest, fingerprint: 'device-fingerprint' };
     }
-    if (name === 'pair_cancel' || name === 'pair_reset') return;
+    if (name === 'pair_cancel') {records[0].pairingStatus='cancelled';return;}
+    if (name === 'pair_reset') {records[0].deviceFingerprint=null;records[0].pairingStatus=null;return;}
     if (name === 'pair_accept') {
-      records[0].pairingStatus = 'authorized';
-      return { state: 'authorized-unverified', fingerprint: 'device-fingerprint' };
+      const revoked=JSON.parse(args.response).status==='revoked';if(!revoked || pairAcceptStored)records[0].pairingStatus=revoked?'revoked':'authorized';
+      return { state: revoked?'revoked':'authorized-unverified', fingerprint: 'device-fingerprint',stored:pairAcceptStored };
     }
     if (name === 'remote_observe') {
       channel = args.onEvent;
@@ -191,7 +197,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
   }
   globalThis.__directGuiDeps = { Terminal, invoke, Channel };
   const { initRemote } = await importedRemote();
-  initRemote({ native: true, theme: { terminal: {} }, onFixture() {}, onLeaveFixture() {}, clipboardRead, keyboardRequest });
+  initRemote({ native: true, theme: { terminal: {} }, onFixture() {}, onLeaveFixture() {}, clipboardRead, keyboardRequest, clipboardWrite });
   await flush();
   await flush();
 
@@ -229,9 +235,10 @@ async function pairAndConnect(h) {
   n['pair-target-review'].checked = true;
   n['pair-create'].click();
   await flush(); await flush(); await flush();
-  n['pair-response'].value = JSON.stringify({
-    account: 'u', host_key: 'host-key', fingerprint: 'device-fingerprint',
-    status: 'authorized', request_id: 'request', issued_at: 1, expires_at: 2,
+  const request=JSON.parse(n['pair-request'].value);
+  n['pair-response'].value = JSON.stringify({version:2,type:'pairing-binding-response',
+    account: request.account, host_key: request.host_key, fingerprint: 'device-fingerprint',
+    status: 'authorized', request_id: request.request_id, issued_at: request.issued_at, expires_at: request.expires_at,
     authorization_added: true,
   });
   n['pair-preview'].click();
@@ -1201,7 +1208,6 @@ for(const [code,pattern] of [['host_key_mismatch',/主机公钥不匹配.*独立
   });
 }
 
-const connectionProfiles=JSON.parse(await readFile(new URL('../../shared/connection-profile-v1.json',import.meta.url),'utf8'));
 test('normal new host entry previews profile, fills every target field without writes, then requires independent device review',async()=>{
   const h=await setup(),n=h.nodes;
   try {
@@ -1399,4 +1405,96 @@ test('response scan rejects another request/device and connection-profile bytes 
   const h=await setup({pairRequest:fixture.request,scanResponse:()=>kind==='connection-profile'?connectionProfiles.valid[0].raw:JSON.stringify(wrong)}),n=h.nodes;
   try{await createCameraPair(h);await n['pair-scan'].onclick();assert.equal(n['pair-response'].value,'');assert.equal(n['connection-profile-raw'].value,'');assert.equal(n['pair-accept'].disabled,true);assert.notEqual(n['pair-preview'].textContent,'重新查看本次响应扫描');}finally{h.restore();}
  }
+});
+
+async function reviewResponse(h,raw,{accept=false}={}) {
+ const n=h.nodes;n['pair-response'].value=raw;n['remote-form'].dispatch('input',{target:n['pair-response']});n['pair-preview'].click();
+ if(accept){n['pair-source-review'].checked=true;n['remote-form'].dispatch('input',{target:n['pair-source-review']});n['pair-accept'].click();await flush();await flush();await flush();}
+}
+function revokedResponse(fixture,now=Math.floor(Date.now()/1000),changes={}) {
+ return JSON.stringify({...JSON.parse(fixture.response),status:'revoked',issued_at:now,expires_at:now+120,...changes});
+}
+test('explicit public-request copy uses the exact awaiting-host bytes and displays independent handoff details',async()=>{
+ const copied=[],fixture=pairingCameraFixture(),h=await setup({pairRequest:fixture.request,clipboardWrite:raw=>{copied.push(raw);return Promise.resolve();}}),n=h.nodes;
+ try{await createCameraPair(h);const before=h.calls.length;
+  assert.equal(n['pair-request-copy'].disabled,false);for(const value of ['c'.repeat(32),'u','host-key','device-fingerprint',String(fixture.expires)])assert.ok(n['pair-request-summary'].textContent.includes(value),value);
+  await n['pair-request-copy'].onclick();assert.deepEqual(copied,[fixture.request]);assert.equal(n['pair-request'].value,fixture.request);assert.match(n['pair-handoff-status'].textContent,/已复制/);
+  assert.equal(h.calls.length,before);assert.equal(n['pair-source-review'].checked,false);assert.equal(n['remote-review'].checked,false);
+ }finally{h.restore();}
+});
+test('clipboard denial retains the readonly original and supports explicit system selection',async()=>{
+ const fixture=pairingCameraFixture(),h=await setup({pairRequest:fixture.request,clipboardWrite:()=>Promise.reject(Error('NotAllowedError'))}),n=h.nodes;
+ try{await createCameraPair(h);await n['pair-request-copy'].onclick();assert.equal(n['pair-request'].value,fixture.request);assert.match(n['pair-handoff-status'].textContent,/系统剪贴板写入不可用/);n['pair-request-select'].click();assert.equal(n['pair-request'].selected,true);assert.deepEqual(n['pair-request'].selection,[0,fixture.request.length]);}finally{h.restore();}
+});
+for(const reason of ['hidden','navigation','edit'])test(`late public clipboard completion cannot publish old handoff status after ${reason}`,async()=>{
+ let finish;const pending=new Promise(resolve=>finish=resolve),copied=[],h=await setup({clipboardWrite:raw=>{copied.push(raw);return pending;}}),n=h.nodes;
+ try{await createCameraPair(h);const original=n['pair-request'].value,work=n['pair-request-copy'].onclick();assert.deepEqual(copied,[original]);
+  if(reason==='hidden')h.background();if(reason==='navigation'){n['host-return-home'].click();await flush();await flush();await flush();n['host-open-remote'].click();await flush();await flush();}if(reason==='edit')n['remote-form'].dispatch('input',{target:n['pair-response']});
+  finish();await work;assert.equal(n['pair-handoff-status'].textContent,'');assert.equal(copied.length,1);
+  if(reason==='navigation'){assert.equal(n['pair-request'].value,'');assert.equal(n['pair-request-summary'].textContent,'');}
+ }finally{h.restore();}
+});
+for(const condition of ['expired','cancelled','authorized','explicit-revocation'])test(`request handoff is locked for ${condition}`,async()=>{
+ const realNow=Date.now;let clock=realNow();Date.now=()=>clock;const fixture=pairingCameraFixture(Math.floor(clock/1000)),copied=[],h=await setup({pairRequest:fixture.request,clipboardWrite:raw=>copied.push(raw)}),n=h.nodes;
+ try{await createCameraPair(h);if(condition==='expired')clock=(fixture.expires+1)*1000;if(condition==='cancelled'){n['pair-cancel'].click();await flush();}if(condition==='authorized')await reviewResponse(h,fixture.response,{accept:true});if(condition==='explicit-revocation'){n['pair-revocation-mode'].checked=true;n['remote-form'].dispatch('input',{target:n['pair-revocation-mode']});}
+  await n['pair-request-copy'].onclick();assert.equal(n['pair-request-copy'].disabled,true);assert.deepEqual(copied,[]);
+ }finally{h.restore();Date.now=realNow;}
+});
+for(const state of ['expired','cancelled','authorized'])test(`fresh manual revocation of an ${state} original rejects authorization and invalidates retained device without deleting it`,async()=>{
+ const realNow=Date.now;let clock=realNow();Date.now=()=>clock;const fixture=pairingCameraFixture(Math.floor(clock/1000)),h=await setup({pairRequest:fixture.request}),n=h.nodes;
+ try{await createCameraPair(h);if(state==='expired')clock=(fixture.expires+10)*1000;if(state==='cancelled'){n['pair-cancel'].click();await flush();}if(state==='authorized')await reviewResponse(h,fixture.response,{accept:true});
+  const baseline=h.calls.length,now=Math.floor(clock/1000),authorization=JSON.stringify({...JSON.parse(fixture.response),issued_at:now,expires_at:now+120});
+  await reviewResponse(h,authorization,{accept:true});assert.equal(h.calls.slice(baseline).filter(x=>x.name==='pair_accept').length,0);assert.equal(n['pair-accept'].disabled,true);
+  await reviewResponse(h,revokedResponse(fixture,now));assert.equal(n['pair-revocation-mode'].checked,true);assert.equal(n['pair-source-review'].checked,false);
+  n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});n['remote-form'].dispatch('submit');n['pair-create'].click();await flush();assert.equal(h.calls.slice(baseline).filter(x=>x.name==='remote_observe'||x.name==='pair_create').length,0);
+  await reviewResponse(h,revokedResponse(fixture,now),{accept:true});assert.match(n['pair-status'].textContent,/目录已确认撤销/);assert.equal(n['remote-connect'].disabled,true);assert.equal(n['pair-request-copy'].disabled,true);
+  assert.equal(h.calls.slice(baseline).filter(x=>x.name==='pair_accept').length,1);assert.equal(h.calls.slice(baseline).filter(x=>x.name==='pair_reset').length,0);
+  const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');assert.equal(actions.children.find(x=>x.textContent==='新终端标签').disabled,true);
+  assert.ok(n['pair-request-summary'].textContent.includes('device-fingerprint'));
+ }finally{h.restore();Date.now=realNow;}
+});
+for(const originalState of ['expired','cancelled','authorized'])for(const timing of ['before-visible','after-visible'])test(`${originalState} original accepts only fresh revocation camera return ${timing}`,async()=>{
+ const realNow=Date.now;let clock=realNow();Date.now=()=>clock;const fixture=pairingCameraFixture(Math.floor(clock/1000));let finish;const pending=new Promise(resolve=>finish=resolve),h=await setup({pairRequest:fixture.request,scanResponse:()=>pending}),n=h.nodes;
+ try{await createCameraPair(h);if(originalState==='cancelled'){n['pair-cancel'].click();await flush();}if(originalState==='authorized')await reviewResponse(h,fixture.response,{accept:true});clock=(fixture.expires+10)*1000;n['remote-form'].dispatch('input',{target:n['pair-response']});assert.equal(n['pair-scan'].disabled,false);
+  const previous=n['pair-response'].value,work=n['pair-scan'].onclick();h.background();if(timing==='after-visible')h.foreground();const receipt=revokedResponse(fixture,Math.floor(clock/1000));finish(receipt);await work;if(timing==='before-visible')h.foreground();
+  assert.equal(n['pair-response'].value,previous);n['pair-preview'].click();assert.equal(n['pair-response'].value,receipt);assert.equal(n['pair-source-review'].checked,false);assert.equal(n['pair-accept'].disabled,true);
+  n['pair-source-review'].checked=true;n['remote-form'].dispatch('input',{target:n['pair-source-review']});n['pair-accept'].click();await flush();await flush();await flush();assert.match(n['pair-status'].textContent,/目录已确认撤销/);
+ }finally{h.restore();Date.now=realNow;}
+});
+test('manual and scanned revocation reject wrong identities, old receipts and future receipts identically',async()=>{
+ for(const changes of [{request_id:'d'.repeat(32)},{account:'other'},{host_key:'foreign'},{fingerprint:'other-device'},{issued_at:1,expires_at:2},{issued_at:Math.floor(Date.now()/1000)+60}]){
+  const fixture=pairingCameraFixture(),raw=revokedResponse(fixture,Math.floor(Date.now()/1000),changes),h=await setup({pairRequest:fixture.request,scanResponse:()=>raw}),n=h.nodes;
+  try{await createCameraPair(h);n['pair-cancel'].click();await flush();const before=h.calls.length;await reviewResponse(h,raw,{accept:true});await n['pair-scan'].onclick();n['pair-preview'].click();assert.equal(n['pair-accept'].disabled,true);assert.equal(h.calls.slice(before).filter(x=>x.name==='pair_accept').length,0);}finally{h.restore();}
+ }
+});
+test('revocation persistence failure locks runtime routes without claiming durable success or deleting the key',async()=>{
+ const fixture=pairingCameraFixture(),h=await setup({pairRequest:fixture.request,pairAcceptStored:false}),n=h.nodes;
+ try{await createCameraPair(h);await reviewResponse(h,fixture.response,{accept:true});const baseline=h.calls.length;await reviewResponse(h,revokedResponse(fixture),{accept:true});
+  assert.match(n['pair-status'].textContent,/本次运行已停用/);assert.match(n['pair-status'].textContent,/保存未确认/);assert.doesNotMatch(n['pair-status'].textContent,/目录已确认撤销/);assert.equal(n['remote-connect'].disabled,true);
+  n['host-return-home'].click();await flush();await flush();await flush();const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');assert.equal(actions.children.find(x=>x.textContent==='新终端标签').disabled,true);actions.children.find(x=>x.textContent==='打开').click();await flush();
+  assert.equal(h.calls.slice(baseline).filter(x=>['host_restore','host_select','pair_reset','remote_observe'].includes(x.name)).length,0);assert.match(n['host-home-status'].textContent,/不能恢复旧授权/);
+ }finally{h.restore();}
+});
+test('restoring a retained revoked record displays the original but cannot copy, create or connect',async()=>{
+ const fixture=pairingCameraFixture(),h=await setup({pairRequest:fixture.request}),n=h.nodes;
+ try{await createCameraPair(h);await reviewResponse(h,revokedResponse(fixture),{accept:true});n['host-return-home'].click();await flush();await flush();await flush();const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');actions.children.find(x=>x.textContent==='打开').click();await flush();await flush();
+  n['host-restore-review'].checked=true;n['host-restore'].click();await flush();await flush();assert.match(n['pair-status'].textContent,/原设备记录已撤销/);assert.equal(n['pair-request'].value,fixture.request);assert.equal(n['pair-request-copy'].disabled,true);assert.equal(n['pair-create'].disabled,true);assert.equal(n['remote-connect'].disabled,true);
+ }finally{h.restore();}
+});
+test('an existing observation remains guarded until explicit stop before revocation review',async()=>{
+ const h=await setup(),n=h.nodes;try{await pairAndConnect(h);h.emit({kind:'stage',generation:9,stage:'authenticated'});const fixture={response:n['pair-response'].value};n['pair-response'].value=revokedResponse(fixture);const before=h.calls.length;n['pair-preview'].click();n['pair-source-review'].checked=true;n['pair-accept'].click();await flush();assert.equal(h.calls.slice(before).filter(x=>x.name==='pair_accept').length,0);
+  n['remote-cancel'].click();h.finish();await flush();await flush();await reviewResponse(h,revokedResponse(fixture),{accept:true});assert.match(n['pair-status'].textContent,/目录已确认撤销/);assert.equal(n['remote-input-controls'].hidden,true);
+ }finally{h.restore();}
+});
+test('a successful native revoke still requires matching catalog readback before durable confirmation',async()=>{
+ const fixture=pairingCameraFixture(),h=await setup({pairRequest:fixture.request}),n=h.nodes;
+ try{await createCameraPair(h);h.setRead((name,value)=>name==='host_list'?value.map(host=>({...host,pairingStatus:'authorized'})):value);
+  await reviewResponse(h,revokedResponse(fixture),{accept:true});assert.match(n['pair-status'].textContent,/目录读回未确认/);assert.doesNotMatch(n['pair-status'].textContent,/目录已确认撤销/);assert.equal(n['remote-connect'].disabled,true);
+  const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');assert.equal(actions.children.find(x=>x.textContent==='新终端标签').disabled,true);
+ }finally{h.restore();}
+});
+
+test('ordinary Android pairing handoff sends only matching native record IDs and checks page completion identity',async()=>{
+ const commands=[],fixture=pairingCameraFixture(),copy=createPublicRequestClipboard({shell:{current:()=> 'android'},callNative:async(name,args)=>{commands.push({name,args});return {...args,copied:true};},webClipboard:()=>{throw Error('must not fall back');}}),h=await setup({pairRequest:fixture.request,clipboardWrite:copy}),n=h.nodes;
+ try{await createCameraPair(h);await n['pair-request-copy'].onclick();assert.deepEqual(commands,[{name:'pair_copy_request',args:{hostId:'a'.repeat(32),requestId:'c'.repeat(32)}}]);assert.match(n['pair-handoff-status'].textContent,/已复制/);assert.equal(n['pair-request'].value,fixture.request);}finally{h.restore();}
 });

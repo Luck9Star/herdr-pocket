@@ -26,7 +26,8 @@ jobs:
     uses: ./.github/workflows/paired-android-emulator.yml
     with:
       guarded_input: ${{ startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-') }}
-      android_tui: ${{ startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-tui-') }}
+      android_tui: ${{ startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-tui-') || startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-recheck-flutter-tui-') }}
+      flutter_only: ${{ startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-recheck-flutter-tui-') }}
   transport-source:
     if: "!startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-recheck-')"
     runs-on: ubuntu-24.04

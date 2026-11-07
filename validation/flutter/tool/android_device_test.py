@@ -11,6 +11,9 @@ import os
 from pathlib import Path
 import re
 import shutil
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import terminal_view_ime
 
 ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / 'validation/flutter'
@@ -55,7 +58,7 @@ def checked_app(destination, env):
     value = json.loads(marker.read_text(encoding='utf-8'))
     if value.get('kind') != 'herdr-flutter-validation' or value.get('sourceCommit') != env['GITHUB_SHA']:
         raise DevicePreparationFailure('android_device_scaffold_source_mismatch')
-    for relative in ('lib', 'tool', 'pubspec.yaml', 'pubspec.lock', 'candidate-manifest.json', 'android/app/build.gradle.kts'):
+    for relative in ('lib', 'tool', 'pubspec.yaml', 'pubspec.lock', 'candidate-manifest.json', 'pubspec_overrides.yaml', 'candidate', 'candidate/terminal_view', 'android/app/build.gradle.kts'):
         scoped_path(app, relative)
     return app
 
@@ -98,13 +101,32 @@ def sdk_footer(text):
     return text.split('\nsdks:\n', 1)[1] if '\nsdks:\n' in text else ''
 
 
+def candidate_boundary(app, lock_text):
+    if not scoped_path(app, 'candidate/terminal_view').is_dir():
+        raise DevicePreparationFailure('android_device_candidate_missing')
+    override = scoped_path(app, 'pubspec_overrides.yaml')
+    if override.read_text(encoding='utf-8') != ('dependency_overrides:\n  terminal_view:\n'
+                                                '    path: candidate/terminal_view\n'):
+        raise DevicePreparationFailure('android_device_candidate_override_mismatch')
+    current = packages(lock_text)
+    source = packages((SOURCE / 'pubspec.lock').read_text(encoding='utf-8'))
+    if not source.keys() <= current.keys() or any(current[name] != source[name] for name in source if name != 'terminal_view'):
+        raise DevicePreparationFailure('android_device_candidate_dependency_drift')
+    expected = ('    dependency: "direct main"\n    description:\n'
+                '      path: "candidate/terminal_view"\n      relative: true\n'
+                '    source: path\n    version: "0.5.0"')
+    if current['terminal_view'] != expected:
+        raise DevicePreparationFailure('android_device_candidate_lock_mismatch')
+
+
 def prepare(destination, env=None):
     env = os.environ if env is None else env
     app = checked_app(destination, env)
     if any((app / path).exists() or (app / path).is_symlink() for path in (MARKER, BASELINE, 'integration_test')):
         raise DevicePreparationFailure('android_device_preparation_already_exists')
     original = (SOURCE / 'pubspec.yaml').read_text(encoding='utf-8')
-    if (app / 'pubspec.yaml').read_text(encoding='utf-8') != original or original.count('dev_dependencies:\n') != 1:
+    expected_pubspec = terminal_view_ime.reference_pubspec(original)
+    if (app / 'pubspec.yaml').read_text(encoding='utf-8') != expected_pubspec or original.count('dev_dependencies:\n') != 1:
         raise DevicePreparationFailure('android_device_pubspec_source_mismatch')
     if re.search(r'^  integration_test:', original, flags=re.M):
         raise DevicePreparationFailure('android_device_sdk_dependency_already_in_source')
@@ -120,8 +142,8 @@ def prepare(destination, env=None):
         if expected not in script:
             raise DevicePreparationFailure('android_device_package_mismatch')
     baseline = (app / 'pubspec.lock').read_text(encoding='utf-8')
-    packages(baseline)
-    replacement = original.replace('dev_dependencies:\n', 'dev_dependencies:\n  integration_test:\n    sdk: flutter\n', 1)
+    candidate_boundary(app, baseline)
+    replacement = expected_pubspec.replace('dev_dependencies:\n', 'dev_dependencies:\n  integration_test:\n    sdk: flutter\n', 1)
     (app / BASELINE).parent.mkdir(exist_ok=True)
     (app / BASELINE).write_text(baseline, encoding='utf-8')
     shutil.copytree(SOURCE / 'integration_test', app / 'integration_test')
@@ -155,6 +177,12 @@ def verify_lock(destination, env=None):
     production_sources(app)
     old_text = (app / BASELINE).read_text(encoding='utf-8')
     new_text = (app / 'pubspec.lock').read_text(encoding='utf-8')
+    candidate_boundary(app, old_text)
+    candidate_boundary(app, new_text)
+    expected_pubspec = terminal_view_ime.reference_pubspec((SOURCE / 'pubspec.yaml').read_text(encoding='utf-8')).replace(
+        'dev_dependencies:\n', 'dev_dependencies:\n  integration_test:\n    sdk: flutter\n', 1)
+    if (app / 'pubspec.yaml').read_text(encoding='utf-8') != expected_pubspec:
+        raise DevicePreparationFailure('android_device_pubspec_source_mismatch')
     before, after = packages(old_text), packages(new_text)
     if not before.keys() <= after.keys() or any(after[name] != block for name, block in before.items()):
         raise DevicePreparationFailure('android_device_existing_dependency_drift')
@@ -183,8 +211,11 @@ def main():
     try:
         proof = (prepare if args.command == 'prepare' else verify_lock)(args.destination)
         print(json.dumps({'status': 'passed', 'step': args.command, 'lockVerified': proof['lockVerified']}))
-    except (DevicePreparationFailure, OSError, ValueError, KeyError):
-        print(json.dumps({'status': 'failed', 'errorCode': 'android_device_preparation_failed'}))
+    except (OSError, ValueError, KeyError) as error:
+        report = {'status': 'failed', 'step': args.command, 'errorCode': 'android_device_preparation_failed'}
+        if isinstance(error, DevicePreparationFailure) and re.fullmatch(r'android_device_[a-z_]{1,64}', str(error)):
+            report['reason'] = str(error)
+        print(json.dumps(report))
         return 1
     return 0
 

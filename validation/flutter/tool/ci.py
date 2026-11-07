@@ -45,11 +45,7 @@ def prepare(destination):
         (destination / 'pubspec.lock').unlink(missing_ok=True)
     terminal_view_ime.prepare_reference(destination, source)
     pubspec = destination / 'pubspec.yaml'
-    before = '  terminal_view: 0.5.0\n'
-    if pubspec.read_text(encoding='utf-8').count(before) != 1:
-        raise ValueError('Unexpected terminal_view pubspec dependency')
-    pubspec.write_text(pubspec.read_text(encoding='utf-8').replace(before,
-        '  terminal_view:\n    path: candidate/reference_terminal_view\n', 1), encoding='utf-8')
+    pubspec.write_text(terminal_view_ime.reference_pubspec(pubspec.read_text(encoding='utf-8')), encoding='utf-8')
     lock = destination / 'pubspec.lock'
     if lock.exists():
         text = lock.read_text(encoding='utf-8')

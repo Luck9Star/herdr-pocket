@@ -13,6 +13,14 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def reference_pubspec(original):
+    """The only pubspec transformation performed by ci.prepare."""
+    before = '  terminal_view: 0.5.0\n'
+    if original.count(before) != 1:
+        raise ValueError('Unexpected terminal_view pubspec dependency')
+    return original.replace(before, '  terminal_view:\n    path: candidate/reference_terminal_view\n', 1)
+
+
 def metadata(source):
     source = Path(source)
     result = json.loads((source / 'patches/ime-observation-manifest.json').read_text(encoding='utf-8'))

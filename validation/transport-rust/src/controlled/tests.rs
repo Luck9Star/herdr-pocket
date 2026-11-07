@@ -3,6 +3,7 @@ use super::*;
 use crate::input::SendOutcome;
 use russh::{Channel, ChannelId, server};
 use std::{collections::HashSet, path::PathBuf, process::Command, sync::atomic::AtomicUsize};
+use std::collections::VecDeque;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     sync::mpsc,
@@ -1101,6 +1102,7 @@ struct DirectView {
     task: tokio::task::JoinHandle<Result<()>>,
     dials: Arc<Counting>,
     seen_frames: Vec<(u64, bool)>,
+    pending_events: VecDeque<ObserveEvent>,
 }
 impl DirectView {
     fn launch(h: &Harness, device: Option<(String, Arc<dyn DeviceSigner>)>) -> Self {
@@ -1116,14 +1118,21 @@ impl DirectView {
         let task = tokio::spawn(async move {
             runner.run(config, device, Arc::new(Audit::default()), Arc::new(|_| {}), emit, recovery, dialer.as_ref()).await
         });
-        Self { bridge, events, task, dials, seen_frames: Vec::new() }
+        Self { bridge, events, task, dials, seen_frames: Vec::new(), pending_events: VecDeque::new() }
     }
     async fn next(&mut self, predicate: impl Fn(&ObserveEvent) -> bool) -> ObserveEvent {
+        // Dashboard publication wakes the selector before its listener emits
+        // Fresh. With two workers, SelectionReady may arrive on either side of
+        // Fresh; waiting for one must not discard the other (or an ACK frame).
+        if let Some(index) = self.pending_events.iter().position(&predicate) {
+            return self.pending_events.remove(index).unwrap();
+        }
         timeout(Duration::from_secs(7), async {
             loop {
                 let event = self.events.recv().await.expect("observation ended before expected event");
                 if let ObserveEvent::Frame { frame, .. } = &event { self.seen_frames.push((frame.seq, frame.full)); }
                 if predicate(&event) { return event; }
+                self.pending_events.push_back(event);
             }
         }).await.unwrap()
     }
@@ -1157,6 +1166,45 @@ impl DirectView {
     }
 }
 
+// No peer is needed to prove the consumer keeps both event kinds. Closing the
+// sender makes the old drop-unmatched implementation fail immediately rather
+// than relying on a timing threshold. The SSH/ACK test below covers the bridge.
+#[tokio::test]
+async fn direct_view_retains_ready_and_fresh_in_both_arrival_and_wait_orders() {
+    for ready_arrives_first in [false, true] {
+        for wait_for_ready_first in [false, true] {
+            let (tx, events) = mpsc::unbounded_channel();
+            let ready = ObserveEvent::SelectionReady { generation: 73, epoch: 1 };
+            let fresh = ObserveEvent::DashboardWatch {
+                generation: 73,
+                update: session_watch::SessionWatchUpdate {
+                    epoch: 1, revision: 3, phase: session_watch::SessionWatchPhase::Fresh,
+                    reason: "snapshot", panes: Some(vec![]),
+                },
+            };
+            let ordered = if ready_arrives_first { [ready, fresh] } else { [fresh, ready] };
+            for event in ordered { tx.send(event).unwrap_or_else(|_| panic!("fixture receiver closed")); }
+            drop(tx);
+            let mut view = DirectView {
+                bridge: DirectObservation::new(73, Cancellation::default()), events,
+                task: tokio::spawn(async { Ok(()) }),
+                dials: Arc::new(Counting { dials: AtomicUsize::new(0) }),
+                seen_frames: Vec::new(), pending_events: VecDeque::new(),
+            };
+            if wait_for_ready_first {
+                assert_eq!(view.ready().await, 1);
+                assert_eq!(view.fresh().await.revision, 3);
+            } else {
+                assert_eq!(view.fresh().await.revision, 3);
+                assert_eq!(view.ready().await, 1);
+            }
+            assert!(view.pending_events.is_empty());
+            assert!(view.events.try_recv().is_err());
+            assert_eq!(view.task.await.unwrap(), Ok(()));
+        }
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn direct_paired_bridge_watch_and_terminal_share_signer_and_full_delta_ack() {
     use crate::pairing::{KeyStore, VolatileKeyStore};
@@ -1176,8 +1224,8 @@ async fn direct_paired_bridge_watch_and_terminal_share_signer_and_full_delta_ack
     let signer = Arc::new(Signer { store, handle, calls: calls.clone() });
     let signer_lifetime = Arc::downgrade(&signer);
     let mut view = DirectView::launch(&h, Some((public, signer)));
-    // Attach announces epoch before any dashboard event. Both early fresh and
-    // late selection-ready are deliverable without dropping the initial rows.
+    // Attach announces epoch before dashboard events. Fresh and SelectionReady
+    // come from concurrent tasks; retain both regardless of arrival order.
     assert!(matches!(view.events.recv().await, Some(ObserveEvent::Observation { generation: 73, snapshot: ObservationSnapshot { epoch: 1, phase: ObservationPhase::Starting } })));
     let first = view.fresh().await;
     assert_eq!(view.ready().await, first.epoch);

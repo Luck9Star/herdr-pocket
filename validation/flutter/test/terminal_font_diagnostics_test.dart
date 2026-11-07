@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -43,8 +45,12 @@ Future<void> press(WidgetTester tester, String key) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late List<Map<String, dynamic>> samples;
   setUpAll(() async {
-    await rootBundle.loadString('assets/shared/terminal-font-diagnostics-v1.json');
+    final fixture = jsonDecode(await rootBundle.loadString(
+      'assets/shared/terminal-font-diagnostics-v1.json',
+    )) as Map<String, dynamic>;
+    samples = (fixture['samples'] as List).cast<Map<String, dynamic>>();
     final font = FontLoader('ProbeNerd')
       ..addFont(rootBundle.load('assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'));
     await font.load();
@@ -181,12 +187,31 @@ void main() {
         expect(find.textContaining('不含行号、标记竖线和补齐空格'), findsOneWidget);
         expect(find.textContaining('不能识别系统实际选用的 fallback'), findsOneWidget);
         expect(find.textContaining('无图标纯文本 prompt'), findsOneWidget);
+        for (var index = 0; index < samples.length; index++) {
+          final sample = samples[index];
+          final label = find.byKey(ValueKey(
+            'terminal-font-diagnostic-sample-${sample['id']}',
+          ));
+          expect(label, findsOneWidget);
+          expect(tester.widget<Text>(label).data, '${index + 1}. ${sample['label']}');
+          // Distinct samples can legitimately have the same cell count. Bind
+          // the legend to its sample row instead of assuming page-wide text
+          // uniqueness, including when glyphs repeat in the terminal preview.
+          final row = find.ancestor(of: label, matching: find.byType(Wrap));
+          expect(row, findsOneWidget);
+          expect(
+            find.descendant(of: row, matching: find.text('预期 ${sample['cells']} 列')),
+            findsOneWidget,
+          );
+        }
+        final nerd = samples.singleWhere((sample) => sample['id'] == 'nerd');
         expect(
-          find.byKey(const ValueKey('terminal-font-diagnostic-sample-nerd')),
-          findsOneWidget,
+          find.descendant(
+            of: find.byKey(const ValueKey('terminal-font-diagnostics')),
+            matching: find.text(nerd['text'] as String),
+          ),
+          findsNothing,
         );
-        expect(find.text('预期 3 列'), findsOneWidget);
-        expect(find.text('󰟀'), findsNothing);
         expect(
           find.bySemanticsLabel('独立本地只读终端样例，16 列 8 行。按字符样例对照竖线边界与预期单元格数。'),
           findsOneWidget,

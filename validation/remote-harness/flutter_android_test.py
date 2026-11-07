@@ -73,9 +73,11 @@ class PreparedFixture(unittest.TestCase):
         for name in tool.PRODUCTION_CHANNELS:
             (self.source / 'native/android' / name).write_text('// synthetic native source fixture\n')
         (self.source / 'integration_test/android_pairing_observe_test.dart').write_text('// integration fixture\n')
-        pubspec = 'name: synthetic\ndev_dependencies:\n  flutter_test:\n    sdk: flutter\n'
+        pubspec = 'name: synthetic\ndependencies:\n  terminal_view: 0.5.0\ndev_dependencies:\n  flutter_test:\n    sdk: flutter\n'
         (self.source / 'pubspec.yaml').write_text(pubspec)
-        (self.app / 'pubspec.yaml').write_text(pubspec)
+        (self.app / 'pubspec.yaml').write_text(tool.terminal_view_ime.reference_pubspec(pubspec))
+        (self.app / 'pubspec_overrides.yaml').write_text('dependency_overrides:\n  terminal_view:\n    path: candidate/terminal_view\n')
+        (self.app / 'candidate/terminal_view').mkdir(parents=True)
         shutil.copytree(self.source / 'lib', self.app / 'lib')
         native = self.app / 'android/app/src/main/kotlin/dev/herdr/herdr_flutter_probe'
         shutil.copytree(self.source / 'native/android', native)
@@ -83,6 +85,8 @@ class PreparedFixture(unittest.TestCase):
         self.gradle.write_text('namespace = "dev.herdr.herdr_flutter_probe"\napplicationId = "dev.herdr.herdr_flutter_probe"\n'
             'compileOptions { sourceCompatibility = JavaVersion.VERSION_17 }\nkotlinOptions { jvmTarget = "17" }\n')
         self.baseline = 'packages:\n' + ''.join(block(name) for name in ('flutter', 'flutter_test', 'terminal_view', 'dartssh2'))
+        (self.source / 'pubspec.lock').write_text(self.baseline)
+        self.baseline = self.baseline.replace(block('terminal_view'), '  terminal_view:\n    dependency: "direct main"\n    description:\n      path: "candidate/terminal_view"\n      relative: true\n    source: path\n    version: "0.5.0"\n')
         self.footer = 'sdks:\n  dart: ">=3.11.0 <4.0.0"\n'
         (self.app / 'pubspec.lock').write_text(self.baseline + self.footer)
         (self.app / '.herdr-generated-probe.json').write_text(json.dumps({'kind': 'herdr-flutter-validation', 'sourceCommit': self.env['GITHUB_SHA']}))
@@ -106,6 +110,20 @@ class PreparedFixture(unittest.TestCase):
 
 
 class ScaffoldGuards(PreparedFixture):
+    def test_preparation_cli_reports_static_guard_and_omits_external_errors(self):
+        for error, reason in (
+            (tool.DevicePreparationFailure('android_device_pubspec_source_mismatch'), 'android_device_pubspec_source_mismatch'),
+            (OSError('private fixture path'), None),
+        ):
+            with self.subTest(reason=reason), patch.object(tool, 'prepare', side_effect=error), \
+                    patch('sys.argv', ['probe', 'prepare', '--destination', str(self.app)]), patch('builtins.print') as output:
+                self.assertEqual(tool.main(), 1)
+                report = json.loads(output.call_args.args[0])
+                expected = {'status': 'failed', 'step': 'prepare', 'errorCode': 'android_device_preparation_failed'}
+                if reason is not None:
+                    expected['reason'] = reason
+                self.assertEqual(report, expected)
+
     def test_only_generated_app_gains_sdk_test_dependency_and_jvm_targets_stay_identical(self):
         pubspec = (self.source / 'pubspec.yaml').read_bytes(); gradle = self.gradle.read_bytes()
         proof = self.prepared()
@@ -137,6 +155,32 @@ class ScaffoldGuards(PreparedFixture):
         with self.assertRaises(tool.DevicePreparationFailure):
             tool.prepare(self.app, self.env)
         self.assertEqual((self.source / 'pubspec.yaml').read_bytes(), original)
+
+    def test_unapproved_pubspec_and_override_are_rejected_before_and_after_prepare(self):
+        spec = self.app / 'pubspec.yaml'
+        expected = spec.read_text()
+        spec.write_text(expected.replace('candidate/reference_terminal_view', '../other'))
+        with self.assertRaises(tool.DevicePreparationFailure): tool.prepare(self.app, self.env)
+        spec.write_text(expected)
+        override = self.app / 'pubspec_overrides.yaml'
+        correct = override.read_text()
+        override.write_text(correct.replace('candidate/terminal_view', '../other'))
+        with self.assertRaises(tool.DevicePreparationFailure): tool.prepare(self.app, self.env)
+        override.write_text(correct)
+        tool.prepare(self.app, self.env)
+        (self.app / 'pubspec.lock').write_text(self.baseline + ''.join(block(name) for name in sorted(tool.SDK_ADDITIONS)) + self.footer)
+        override.write_text(correct.replace('candidate/terminal_view', '../other'))
+        with self.assertRaises(tool.DevicePreparationFailure): tool.verify_lock(self.app, self.env)
+
+    def test_wrong_candidate_lock_rejected_even_with_matching_manifest_hash(self):
+        lock = self.app / 'pubspec.lock'
+        lock.write_text(lock.read_text().replace('candidate/terminal_view', '../other'))
+        manifest = self.app / 'candidate-manifest.json'
+        value = json.loads(manifest.read_text())
+        value['candidateLockSha256'] = tool.digest(lock)
+        manifest.write_text(json.dumps(value))
+        with self.assertRaises(tool.DevicePreparationFailure): tool.prepare(self.app, self.env)
+        self.assertFalse((self.app / tool.MARKER).exists())
 
     def test_existing_dependency_drift_and_non_sdk_integration_package_are_rejected(self):
         tool.prepare(self.app, self.env)

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/remote_input.dart' as remoteInput;
@@ -38,7 +39,12 @@ void main() {
 
       await press(tester, 'remote-keyboard-hide');
       expect(tester.testTextInput.isVisible, isFalse);
-      expect(focus.hasFocus, isTrue);
+      // Retiring the direct-input epoch replaces the editable TerminalView
+      // with an observe-only view, which no longer owns this focus node.
+      expect(focus.hasFocus, isFalse);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+      await tester.pump();
+      expect(adapter.received, isEmpty);
       expect(
         tester
             .widget<ChoiceChip>(

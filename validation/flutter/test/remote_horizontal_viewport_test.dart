@@ -18,6 +18,8 @@ void main() {
     ScrollController controller() => tester.widget<SingleChildScrollView>(
       find.byKey(const ValueKey('remote-horizontal-scroll'))).controller!;
     await show('host/session/pane/terminal-a',200,14);
+    expect(find.byKey(const ValueKey('remote-horizontal-slider')),findsOneWidget);
+    expect(tester.getSize(find.byType(ColoredBox)).height,312);
     expect(controller().position.maxScrollExtent,greaterThan(0));
     controller().jumpTo(controller().position.maxScrollExtent / 2); await tester.pump();
     final column = anchors['host/session/pane/terminal-a']!;
@@ -31,6 +33,8 @@ void main() {
     await show('host/session/pane/terminal-a',2000,14);
     expect(controller().offset,0);
     expect(anchors['host/session/pane/terminal-a'],0);
+    expect(find.byKey(const ValueKey('remote-horizontal-slider')),findsNothing);
+    expect(tester.getSize(find.byType(ColoredBox)).height,360);
   });
   testWidgets('missing identities are never shared and saved anchors are bounded', (tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(1000,800);

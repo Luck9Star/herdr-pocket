@@ -61,9 +61,9 @@ class _TerminalFontDiagnosticsState extends State<TerminalFontDiagnostics> {
       final rows = decoded['rows'] as int;
       final markerColumn = decoded['markerColumn'] as int;
       final samples = decoded['samples'] as List;
-      if (columns < 1 ||
-          rows < 1 ||
-          markerColumn < 1 ||
+      if (columns != 16 ||
+          rows != 8 ||
+          markerColumn != 15 ||
           samples.length != rows ||
           samples.any(
             (sample) =>
@@ -78,7 +78,9 @@ class _TerminalFontDiagnosticsState extends State<TerminalFontDiagnostics> {
           'invalid terminal font diagnostic dimensions or samples',
         );
       }
-      localTerminal = Terminal(maxLines: rows, reflowEnabled: false)
+      // terminal_view initializes both buffers at 80×24 before its first
+      // resize. They need room for those rows even on this 16×8 sample.
+      localTerminal = Terminal(maxLines: 24, reflowEnabled: false)
         ..resize(columns, rows)
         ..write(decoded['write'] as String);
       if (!mounted) {

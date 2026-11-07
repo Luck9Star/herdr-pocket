@@ -6,10 +6,25 @@ import 'package:terminal_view/terminal_view.dart';
 import 'remote_input_widget_test.dart' as input;
 
 Future<void> press(WidgetTester tester, String key) async {
+  final opening = key == 'remote-font-diagnostics-open';
+  if (opening) {
+    // Load the real packaged asset on the engine's IO clock. An animated
+    // loading indicator can otherwise keep the fake widget clock running.
+    await tester.runAsync(() async {
+      await rootBundle.loadString(
+        'assets/shared/terminal-font-diagnostics-v1.json',
+      );
+    });
+  }
   final button = find.byKey(ValueKey(key));
   await tester.ensureVisible(button);
   await tester.tap(button);
-  await tester.pumpAndSettle();
+  final panel = find.byKey(const ValueKey('terminal-font-diagnostics-view'));
+  for (var frame = 0; frame < 12; frame++) {
+    await tester.pump(const Duration(milliseconds: 16));
+    if (panel.evaluate().isNotEmpty == opening) break;
+  }
+  expect(panel, opening ? findsOneWidget : findsNothing);
 }
 
 void main() {
@@ -170,6 +185,14 @@ void main() {
         expect(localView.hardwareKeyboardOnly, isTrue);
         expect(localView.textStyle.fontFamily, 'ProbeNerd');
         expect(localView.textStyle.fontSize, 14);
+        final sample = localView.terminal;
+        expect(sample.viewWidth, 16);
+        expect(sample.viewHeight, 8);
+        for (var row = 0; row < sample.viewHeight; row++) {
+          final line = sample.buffer.lines[row];
+          expect(line.getCodePoint(0), 0x31 + row);
+          expect(line.getCodePoint(14), 0x7c, reason: 'sample row ${row + 1}');
+        }
         expect(adapter.received, isEmpty);
         expect(adapter.calls, calls);
         expect(adapter.generation, generation);

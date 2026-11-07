@@ -26,6 +26,7 @@ STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'ha
           'signer_create', 'signer_public', 'signer_sign', 'signer_delete', 'signer_read_deleted',
           'public_key_failed', 'profile_save_failed', 'create_not_available', 'host_board', 'public_request', 'restore_pending', 'host_authorization',
           'target_finish_edit', 'target_review_ready', 'target_review_unchecked', 'target_create_unavailable',
+          'target_create_ready', 'target_create_one_tap', 'target_request_wait',
           'response_review', 'ssh_and_dashboard', 'observe_frames', 'stop',
           'host_task_summary_authoritative', 'host_task_summary_stale', 'local_font_diagnostic',
           'delete_local_identity', 'complete', 'guarded_direct', 'guarded_hidden_draft',

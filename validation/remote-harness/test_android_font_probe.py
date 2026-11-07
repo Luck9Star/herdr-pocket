@@ -1,5 +1,6 @@
 """Offline tests for the Tauri Android local-font DOM measurement contract."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import time
@@ -70,7 +71,7 @@ class FakeBrowser:
                     'inputControlsPresent': True, 'inputControlsHidden': False,
                     'remoteDraftFocused': False, 'keyboardShowDisabled': True,
                     'keyboardHideDisabled': True, 'remoteTextareaReadOnly': True,
-                    'remoteTextareaInputMode': 'none', 'remoteTextareaFocused': False}
+                    'remoteTextareaInputMode': json.loads('"none"'), 'remoteTextareaFocused': False}
         if "document.querySelector('#remote-font-diagnostics')?.disabled===false" in expression:
             return True
         if "document.activeElement===document.querySelector('#remote-font-diagnostics')" in expression:

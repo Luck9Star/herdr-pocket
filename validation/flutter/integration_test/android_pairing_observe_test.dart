@@ -281,9 +281,25 @@ void main() {
     for (final entry in reviewedFields.entries) {
       expect(tester.widget<TextField>(find.byKey(ValueKey('pair-${entry.key}'))).controller!.text,entry.value);
     }
-    final createButton = tester.widget<FilledButton>(find.byKey(const ValueKey('pair-create')));
-    if (createButton.onPressed == null) { stage('target_create_unavailable'); fail('target_create_unavailable'); }
-    await tapKey(tester,'pair-create'); // The only create action uses native AndroidKeyStore.
+    stage('target_create_ready');
+    final createButton = find.byKey(const ValueKey('pair-create'));
+    if (tester.widget<FilledButton>(createButton).onPressed == null) {
+      stage('target_create_unavailable'); fail('target_create_unavailable');
+    }
+    await Scrollable.ensureVisible(tester.element(createButton),alignment:0.5);
+    Rect? previousBounds;
+    var stable = 0;
+    await until(tester,() {
+      final bounds = tester.getRect(createButton);
+      stable = tester.view.viewInsets.bottom == 0 && createButton.hitTestable().evaluate().length == 1 &&
+        bounds == previousBounds && tester.widget<FilledButton>(createButton).onPressed != null ? stable + 1 : 0;
+      previousBounds = bounds;
+      return stable >= 3;
+    },seconds:12);
+    stage('target_create_one_tap');
+    await tester.tap(createButton.hitTestable()); // Only one native creation attempt.
+    await tester.pump();
+    stage('target_request_wait');
     final requestControl = find.byKey(const ValueKey('pair-request'));
     const errors = {'核验连接资料':'target_invalid','保存创建意图':'catalog_intent_failed',
       '创建设备身份':'device_create_failed','保存本机密钥引用':'handle_save_failed',

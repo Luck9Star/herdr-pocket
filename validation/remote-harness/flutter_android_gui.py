@@ -56,6 +56,8 @@ KEYBOARD_CHECKPOINTS = ('keyboard-direct-shown', 'keyboard-direct-hidden',
     'keyboard-draft-back-hidden', 'keyboard-draft-back-reopened', 'keyboard-draft-hidden')
 KEYBOARD_OBSERVE_CHECKPOINT = 'keyboard-observe-hidden'
 TUI_CHECKPOINT = 'tui-start'
+TUI_RESUME_STAGES = frozenset({'tui_find_board','tui_return_tab','tui_find_resume','tui_resume_full'})
+STAGES.update(TUI_RESUME_STAGES)
 STAGES.update({'tui_start','tui_resume_full','tui_initial','tui_select_next','tui_focus_detail',
     'tui_erase_character','tui_focus_list','tui_insert_row','tui_delete_row','tui_open_help',
     'tui_close_help','tui_refresh','tui_finish'})
@@ -302,15 +304,57 @@ def wait_system_ime(read_dump, package, visible, timeout=12):
                            {**last, 'attempts': attempts, 'expectedVisible': visible, 'timedOut': True})
 
 
+def safe_tui_resume(value):
+    """No terminal strings, host identity, path or arbitrary keys may leave the AVD."""
+    integer_bounds = {'schemaVersion': (1,1), 'actionsCompleted': (0,3),
+        'boardCount': (0,2), 'tabCount': (0,2), 'resumeCount': (0,2), 'viewCount': (0,2),
+        'sequence': (-1,9_007_199_254_740_991), 'cols': (0,512), 'rows': (0,512),
+        'bufferRows': (0,512), 'directCount': (0,2), 'rowsChecked': (0,24),
+        'rowMatchMask': (0,0xffffff), 'firstMismatchRow': (-1,23), 'titleRowMask': (0,0xffffff)}
+    booleans = {'terminalReplaced','sequencePresent','cursorKeysMode','directEnabled','tailRowsBlank'}
+    invalid = 'flutter_android_failure_metadata_invalid'
+    if not isinstance(value,dict) or set(value) != set(integer_bounds) | booleans:
+        raise DeviceFailure(invalid)
+    for key,(low,high) in integer_bounds.items():
+        if type(value[key]) is not int or not low <= value[key] <= high:
+            raise DeviceFailure(invalid)
+    if any(type(value[key]) is not bool for key in booleans):
+        raise DeviceFailure(invalid)
+    if value['sequencePresent'] != (value['sequence'] >= 0) or value['rowsChecked'] not in (0,24):
+        raise DeviceFailure(invalid)
+    if value['viewCount'] != 1 and (value['terminalReplaced'] or value['cols'] or value['rows'] or
+            value['bufferRows'] or value['cursorKeysMode'] or value['rowsChecked']):
+        raise DeviceFailure(invalid)
+    if value['directCount'] != 1 and value['directEnabled']:
+        raise DeviceFailure(invalid)
+    if value['rowsChecked'] == 0:
+        if value['rowMatchMask'] or value['titleRowMask'] or value['firstMismatchRow'] != -1 or value['tailRowsBlank']:
+            raise DeviceFailure(invalid)
+    else:
+        first = next((row for row in range(24) if not value['rowMatchMask'] & (1 << row)), -1)
+        if ((value['cols'],value['rows'],value['bufferRows']) != (80,24,24) or
+                value['firstMismatchRow'] != first or
+                value['tailRowsBlank'] != ((value['rowMatchMask'] & 0xffff80) == 0xffff80) or
+                bool(value['titleRowMask'] & 1) != bool(value['rowMatchMask'] & 1) or
+                value['titleRowMask'] & value['rowMatchMask'] & 0xfffffe):
+            raise DeviceFailure(invalid)
+    return {key:value[key] for key in (*integer_bounds,*sorted(booleans))}
+
+
 def safe_test_failure(value):
     kinds = {'TestFailure', 'StateError', 'TypeError', 'RemoteFailure', 'FormatException',
              'TimeoutException', 'other'}
-    if (not isinstance(value, dict) or set(value) != {'stage', 'errorClass', 'line'} or
+    if (not isinstance(value, dict) or set(value) not in ({'stage', 'errorClass', 'line'}, {'stage','errorClass','line','tuiResume'}) or
             not isinstance(value['stage'], str) or not isinstance(value['errorClass'], str) or
             value['stage'] not in STAGES or value['errorClass'] not in kinds or
             type(value['line']) is not int or not 0 <= value['line'] <= 10000):
         raise DeviceFailure('flutter_android_failure_metadata_invalid')
-    return {key: value[key] for key in ('stage', 'errorClass', 'line')}
+    clean = {key: value[key] for key in ('stage', 'errorClass', 'line')}
+    if 'tuiResume' in value:
+        if value['stage'] not in TUI_RESUME_STAGES:
+            raise DeviceFailure('flutter_android_failure_metadata_invalid')
+        clean['tuiResume'] = safe_tui_resume(value['tuiResume'])
+    return clean
 
 
 def public_host_fingerprint(key):

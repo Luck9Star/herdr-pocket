@@ -48,6 +48,15 @@ def device_report(**changes):
     return value
 
 
+def tui_resume_report(**changes):
+    value = {'schemaVersion':1,'actionsCompleted':3,'boardCount':1,'tabCount':1,'resumeCount':0,
+        'viewCount':1,'terminalReplaced':True,'sequencePresent':True,'sequence':5,
+        'cols':80,'rows':24,'bufferRows':24,'cursorKeysMode':True,'directCount':1,'directEnabled':True,
+        'rowsChecked':24,'rowMatchMask':0xffffff,'firstMismatchRow':-1,'tailRowsBlank':True,'titleRowMask':1}
+    value.update(changes)
+    return value
+
+
 def checkpoint_payload(label):
     return {'checkpoint': label, **({'viewInsetBottom': 300 if label.endswith(('-shown', '-reopened', '-request')) else 0,
         'editorFocused': True, 'modeReselected': False} if label not in gui.CLIPBOARD_CHECKPOINTS else {})}
@@ -754,6 +763,22 @@ class CleanupGuards(PreparedFixture):
         for field, expected in gui.CLIPBOARD_COUNTS.items():
             self.assertEqual(result[field], expected)
 
+    def test_finally_collects_only_validated_resume_diagnostics_in_existing_failure_artifact(self):
+        record={'stage':'tui_resume_full','errorClass':'TestFailure','line':68,'tuiResume':tui_resume_report()}
+        with patch.object(gui,'read_public',return_value=json.dumps(record).encode()):
+            self.exercise(fail_checkpoint='receiver')
+        output=json.loads((self.runner/'output/flutter-android-test-failure.json').read_text())
+        self.assertEqual(output,{'sourceSHA':self.env['GITHUB_SHA'],'failure':record})
+
+    def test_finally_rejects_a_resume_failure_with_unapproved_payload(self):
+        payload={'stage':'tui_resume_full','errorClass':'TestFailure','line':68,
+                 'tuiResume':tui_resume_report(),'message':'PRIVATE'}
+        with patch.object(gui,'read_public',return_value=json.dumps(payload).encode()):
+            self.exercise(fail_checkpoint='receiver')
+        output=json.loads((self.runner/'output/flutter-android-test-failure.json').read_text())
+        self.assertEqual(output,{'sourceSHA':self.env['GITHUB_SHA'],'failure':None})
+        self.assertNotIn('PRIVATE',json.dumps(output))
+
     def test_failed_cleanup_is_recorded_and_cannot_return_passed(self):
         result, cleanup = self.exercise(fail_reverse_cleanup=True)
         self.assertIsNone(result)
@@ -1006,6 +1031,82 @@ class ClipboardCheckpointGuards(unittest.TestCase):
                 with self.assertRaisesRegex(gui.DeviceFailure, '^bounded_failure$'):
                     gui.wait_public(proc, self.relative, 'result.json', 8192, timeout=1, checkpoints=state)
                 state.approval.verify_ssh.assert_not_called(); adb.assert_not_called()
+
+
+class TuiResumeDiagnosticGuards(unittest.TestCase):
+    def test_all_resume_substages_roundtrip_bounded_false_predicates_without_text(self):
+        for stage in gui.TUI_RESUME_STAGES:
+            diagnostic=tui_resume_report(cursorKeysMode=False,rowMatchMask=0xffffef,firstMismatchRow=4)
+            record={'stage':stage,'errorClass':'TestFailure','line':68,'tuiResume':diagnostic}
+            raw=json.dumps(record,separators=(',',':')).encode()
+            self.assertLessEqual(len(raw),gui.PUBLIC_LIMITS['failure.json'])
+            self.assertEqual(gui.safe_test_failure(record),record)
+            self.assertEqual(gui.checked_public_payload(raw,'failure.json'),raw)
+            self.assertFalse(gui.safe_test_failure(record)['tuiResume']['cursorKeysMode'])
+        # Legacy three-field failures stay byte-for-byte compatible.
+        old={'stage':'tui_resume_full','errorClass':'TestFailure','line':68}
+        self.assertEqual(gui.safe_test_failure(old),old)
+        worst={'stage':'tui_find_resume','errorClass':'TimeoutException','line':10000,
+            'tuiResume':tui_resume_report(boardCount=2,tabCount=2,resumeCount=2,directCount=2,
+                directEnabled=False,cursorKeysMode=False,sequence=9_007_199_254_740_991)}
+        self.assertEqual(gui.safe_test_failure(worst),worst)
+        self.assertLessEqual(len(json.dumps(worst,separators=(',',':')).encode()),512)
+
+    def test_reject_unknown_identity_path_text_and_wrong_typed_or_unbounded_values(self):
+        for field,value in (('terminalText','PRIVATE'),('path','PRIVATE'),('terminalId','PRIVATE'),
+                            ('rowMatchMask',True),('rowMatchMask',1<<24),('schemaVersion',True),
+                            ('cols',513),('sequence',9_007_199_254_740_992),('directEnabled',1),
+                            ('boardCount',3),('firstMismatchRow',24),('rowsChecked',1),('actionsCompleted',4)):
+            record={'stage':'tui_resume_full','errorClass':'TestFailure','line':68,
+                    'tuiResume':tui_resume_report(**{field:value})}
+            with self.subTest(field=field,value=value),self.assertRaises(gui.DeviceFailure):gui.safe_test_failure(record)
+        for diagnostic in (None,[],{},dict(tui_resume_report(),titleRowMask='PRIVATE')):
+            with self.subTest(diagnostic=diagnostic),self.assertRaises(gui.DeviceFailure):
+                gui.safe_test_failure({'stage':'tui_resume_full','errorClass':'TestFailure','line':68,'tuiResume':diagnostic})
+        with self.assertRaises(gui.DeviceFailure):
+            gui.safe_test_failure({'stage':'guarded_direct','errorClass':'TestFailure','line':68,'tuiResume':tui_resume_report()})
+
+    def test_reject_inconsistent_masks_geometry_missing_views_and_sequence_presence(self):
+        for changes in ({'rowMatchMask':0xffffef}, {'tailRowsBlank':False}, {'cols':120},
+                        {'viewCount':0}, {'directCount':0}, {'sequencePresent':False},
+                        {'sequence':-1}, {'rowsChecked':0}, {'firstMismatchRow':7}):
+            with self.subTest(changes=changes),self.assertRaises(gui.DeviceFailure):gui.safe_tui_resume(tui_resume_report(**changes))
+        missing=tui_resume_report(viewCount=0,terminalReplaced=False,sequencePresent=False,sequence=-1,
+            cols=0,rows=0,bufferRows=0,cursorKeysMode=False,directEnabled=False,
+            rowsChecked=0,rowMatchMask=0,firstMismatchRow=-1,tailRowsBlank=False,titleRowMask=0)
+        self.assertEqual(gui.safe_tui_resume(missing),missing)
+        wrong_geometry={**missing,'viewCount':1,'cols':120,'rows':40,'bufferRows':40,'cursorKeysMode':True}
+        self.assertEqual(gui.safe_tui_resume(wrong_geometry),wrong_geometry)
+
+    def test_same_failure_public_reader_limit_is_bounded_and_extra_fields_are_not_exported(self):
+        record={'stage':'tui_resume_full','errorClass':'TestFailure','line':68,'tuiResume':tui_resume_report()}
+        raw=json.dumps(record,separators=(',',':')).encode()
+        relative='cache/herdr-flutter-android-123/failure.json'
+        with patch.object(gui,'adb',return_value=subprocess.CompletedProcess([],0,raw,b'')) as adb:
+            self.assertEqual(gui.read_public(relative,gui.PUBLIC_LIMITS['failure.json']),raw)
+            self.assertIn(str(gui.PUBLIC_LIMITS['failure.json']+1),adb.call_args.args)
+        with patch.object(gui,'adb',return_value=subprocess.CompletedProcess([],0,b'x'*(gui.PUBLIC_LIMITS['failure.json']+1),b'')):
+            with self.assertRaisesRegex(gui.DeviceFailure,'oversize'):gui.read_public(relative,gui.PUBLIC_LIMITS['failure.json'])
+        with self.assertRaises(gui.DeviceFailure):
+            gui.checked_public_payload(json.dumps({**record,'message':'PRIVATE'}).encode(),'failure.json')
+
+    def test_resume_instrumentation_retains_acceptance_and_one_click_without_replay_or_extra_time(self):
+        source=(REPO/'validation/flutter/integration_test/android_pairing_observe_test.dart').read_text()
+        flow=source[source.index("  stage('tui_find_board');"):source.index("  stage('tui_initial');")]
+        self.assertEqual(flow.count('await tap('),3)
+        self.assertEqual(flow.count('onPoll:sample'),3)
+        self.assertNotIn('seconds:',flow)
+        for predicate in ('!identical(tester.widget<TerminalView>',"currentTuiScreen(tester,'initial')",'onSelected != null'):
+            self.assertIn(predicate,flow)
+        self.assertLess(flow.index("stage('tui_find_board')"),flow.index("stage('tui_return_tab')"))
+        self.assertLess(flow.index("stage('tui_find_resume')"),flow.index("stage('tui_resume_full')"))
+        snapshot=source[source.index('Map<String,Object> tuiResumeSnapshot'):source.index('Future<void> visibleTuiScreen')]
+        self.assertNotIn('publish(',snapshot);self.assertNotIn('write(',snapshot)
+        self.assertIn("actual == 'Pocket TUI'",snapshot)
+        fields=set(re.findall(r"'([A-Za-z]+)':",snapshot))
+        self.assertEqual(fields,set(gui.safe_tui_resume(tui_resume_report())))
+        self.assertIn("'tuiResume':tuiResume",source)
+        self.assertIn("'failure.json',jsonEncode(boundedFailure",source)
 
 
 class TuiGuards(unittest.TestCase):

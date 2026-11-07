@@ -23,6 +23,7 @@ const hostFingerprint = String.fromEnvironment('HERDR_ANDROID_HOST_FINGERPRINT')
 const publicDirectory = String.fromEnvironment('HERDR_ANDROID_PUBLIC_DIR');
 const guardedInput = bool.fromEnvironment('POCKET_GUARDED_INPUT');
 const guardedTui = bool.fromEnvironment('HERDR_ANDROID_GUARDED_TUI');
+const tuiResumeStages = {'tui_find_board','tui_return_tab','tui_find_resume','tui_resume_full'};
 // Set only by the isolated runner after its single API35 AVD/fresh-package
 // checks. This test never reads or saves a pre-existing clipboard value.
 const syntheticClipboardEnabled = bool.fromEnvironment('HERDR_ANDROID_API35_CLIPBOARD_FIXTURE');
@@ -69,12 +70,14 @@ Future<void> until(WidgetTester tester, bool Function() ready, {int seconds = 60
     await tester.pump(const Duration(milliseconds:100));
   }
 }
-Future<void> tap(WidgetTester tester, Finder finder) async {
-  await until(tester,() => finder.evaluate().length == 1);
+Future<void> tap(WidgetTester tester, Finder finder,{VoidCallback? onPoll}) async {
+  await until(tester,() { onPoll?.call(); return finder.evaluate().length == 1; });
   await tester.ensureVisible(finder);
   await tester.pump(const Duration(milliseconds:150));
+  onPoll?.call();
   await tester.tap(finder);
   await tester.pump(const Duration(milliseconds:350));
+  onPoll?.call();
 }
 Future<void> tapKey(WidgetTester tester, String key) => tap(tester,find.byKey(ValueKey(key)));
 
@@ -235,13 +238,14 @@ Future<void> keyboardCheckpoint(WidgetTester tester,Directory exchange,String la
   await until(tester,() => ack.existsSync() && ack.readAsStringSync() == jsonEncode({'checkpoint':label}));
 }
 
-Map<String,Object> boundedFailure(Object error,StackTrace stack,String stage) {
+Map<String,Object> boundedFailure(Object error,StackTrace stack,String stage,{Map<String,Object>? tuiResume}) {
   const classes = {'TestFailure','StateError','RemoteFailure','FormatException','TimeoutException'};
   final name = error.runtimeType.toString();
   final errorClass = error is TypeError ? 'TypeError' : classes.contains(name) ? name : 'other';
   final match = RegExp(r'android_pairing_observe_test\.dart:([0-9]+)(?::[0-9]+)?').firstMatch(stack.toString());
   final parsed = match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
-  return {'stage':stage,'errorClass':errorClass,'line':parsed >= 1 && parsed <= 10000 ? parsed : 0};
+  return {'stage':stage,'errorClass':errorClass,'line':parsed >= 1 && parsed <= 10000 ? parsed : 0,
+    if (tuiResume != null && tuiResumeStages.contains(stage)) 'tuiResume':tuiResume};
 }
 
 Map<String,Object> visibleReceipt(WidgetTester tester, String paneId, int count) {
@@ -291,6 +295,48 @@ bool currentTuiScreen(WidgetTester tester,String marker) {
   }
   return true;
 }
+/// Synthetic-fixture diagnostics only: no row text, paths, target identity or
+/// arbitrary status strings cross the public exchange. A count of 2 means 2+.
+Map<String,Object> tuiResumeSnapshot(WidgetTester tester,Terminal before,String tabKey,int actionsCompleted) {
+  int count(Finder finder) => finder.evaluate().length.clamp(0,2).toInt();
+  final view = find.byType(TerminalView),direct = find.byKey(const ValueKey('remote-mode-direct'));
+  final sequence = displayedSequence(tester);
+  final result = <String,Object>{
+    'schemaVersion':1,'actionsCompleted':actionsCompleted,
+    'boardCount':count(find.byKey(const ValueKey('hosts-board-tab'))),
+    'tabCount':count(find.byKey(ValueKey(tabKey))),
+    'resumeCount':count(find.byKey(const ValueKey('remote-resume'))),
+    'viewCount':count(view),'terminalReplaced':false,
+    'sequencePresent':sequence != null,'sequence':sequence ?? -1,
+    'cols':0,'rows':0,'bufferRows':0,'cursorKeysMode':false,
+    'directCount':count(direct),'directEnabled':false,
+    'rowsChecked':0,'rowMatchMask':0,'firstMismatchRow':-1,'tailRowsBlank':false,'titleRowMask':0,
+  };
+  if (result['directCount'] == 1) result['directEnabled'] = tester.widget<ChoiceChip>(direct).onSelected != null;
+  if (result['viewCount'] != 1) return result;
+  final terminal = tester.widget<TerminalView>(view).terminal;
+  result.addAll({'terminalReplaced':!identical(terminal,before),
+    'cols':terminal.viewWidth.clamp(0,512).toInt(),'rows':terminal.viewHeight.clamp(0,512).toInt(),
+    'bufferRows':terminal.buffer.height.clamp(0,512).toInt(),'cursorKeysMode':terminal.cursorKeysMode});
+  // Scan independently of cursor mode so a mode failure is distinguishable
+  // from matching text. Keep the original acceptance predicate unchanged.
+  if (terminal.viewWidth != 80 || terminal.viewHeight != 24 || terminal.buffer.height != 24) return result;
+  final expected = tuiRows('initial');
+  var mask = 0,titleMask = 0,first = -1;
+  for (var y = 0; y < 24; y++) {
+    final actual = String.fromCharCodes(List.generate(80,(x) {
+      final code = terminal.buffer.lines[y].getCodePoint(x);
+      return code == 0 ? 32 : code;
+    })).trimRight();
+    if (actual == (y < expected.length ? expected[y] : '')) { mask |= 1 << y; }
+    else if (first == -1) { first = y; }
+    if (actual == 'Pocket TUI') titleMask |= 1 << y;
+  }
+  result.addAll({'rowsChecked':24,'rowMatchMask':mask,'firstMismatchRow':first,
+    'tailRowsBlank':(mask & 0xffff80) == 0xffff80,'titleRowMask':titleMask});
+  return result;
+}
+
 Future<void> visibleTuiScreen(WidgetTester tester,String marker) async {
   await until(tester,() => currentTuiScreen(tester,marker),seconds:20);
   final view = find.byType(TerminalView);
@@ -324,7 +370,8 @@ Future<void> visibleTuiScreen(WidgetTester tester,String marker) async {
   expect(tester.widget<TerminalView>(view).autoResize,isFalse);
 }
 Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
-    Map<String,dynamic> target,String tabKey,List<Map<String,Object>> prior,void Function(String) stage) async {
+    Map<String,dynamic> target,String tabKey,List<Map<String,Object>> prior,void Function(String) stage,
+    void Function(Map<String,Object>) recordResume) async {
   expect(guardedInput && guardedTui,isTrue);
   final terminalId = prior.first['terminalId'] as String;
   expect(prior.last['terminalId'],terminalId);
@@ -335,14 +382,26 @@ Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
   // Explicit resume provides an unambiguous post-start full on the same PTY.
   // This retires old authorization; a later full within this new channel does
   // not authorize a different target, nor require changing the user's mode.
-  stage('tui_resume_full');
+  stage('tui_find_board');
   final before = tester.widget<TerminalView>(find.byType(TerminalView)).terminal;
-  await tapKey(tester,'hosts-board-tab'); await tapKey(tester,tabKey);
-  await tapKey(tester,'remote-resume');
-  await until(tester,() => find.byType(TerminalView).evaluate().length == 1 &&
-    !identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal,before) &&
-    currentTuiScreen(tester,'initial') &&
-    tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected != null);
+  var actionsCompleted = 0;
+  void sample() => recordResume(tuiResumeSnapshot(tester,before,tabKey,actionsCompleted));
+  await tap(tester,find.byKey(const ValueKey('hosts-board-tab')),onPoll:sample);
+  actionsCompleted = 1; sample();
+  stage('tui_return_tab');
+  await tap(tester,find.byKey(ValueKey(tabKey)),onPoll:sample);
+  actionsCompleted = 2; sample();
+  stage('tui_find_resume');
+  await tap(tester,find.byKey(const ValueKey('remote-resume')),onPoll:sample);
+  actionsCompleted = 3; sample();
+  stage('tui_resume_full');
+  await until(tester,() {
+    sample();
+    return find.byType(TerminalView).evaluate().length == 1 &&
+      !identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal,before) &&
+      currentTuiScreen(tester,'initial') &&
+      tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected != null;
+  });
   expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
   stage('tui_initial'); await visibleTuiScreen(tester,'initial');
   await tapKey(tester,'remote-mode-direct');
@@ -409,6 +468,7 @@ void main() {
   testWidgets('Android native identity through production host catalog to guarded or stock SSH',(tester) async {
     Directory? failureDirectory;
     var currentStage = 'fixture_validation';
+    Map<String,Object>? tuiResumeDiagnostic;
     try {
     expect(tester.testTextInput.isRegistered,isFalse);
     final target = checkedTarget();
@@ -862,7 +922,8 @@ void main() {
       inputReceipts.add(visibleReceipt(tester,target['paneId'] as String,9));
       expect(inputReceipts.last['terminalId'],inputReceipts.first['terminalId']);
       expect(tester.widget<TextField>(draftControl).controller!.text,isEmpty);
-      if (guardedTui) tuiEvidence = await exerciseTui(tester,exchange,target,originalTabKey,inputReceipts,stage);
+      if (guardedTui) tuiEvidence = await exerciseTui(tester,exchange,target,originalTabKey,inputReceipts,stage,
+        (value) { tuiResumeDiagnostic = value; });
     } else {
       expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
       expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-draft'))).onSelected,isNull);
@@ -926,7 +987,7 @@ void main() {
     } catch (error,stack) {
       final directory = failureDirectory;
       if (directory != null) {
-        try { publish(directory,'failure.json',jsonEncode(boundedFailure(error,stack,currentStage))); }
+        try { publish(directory,'failure.json',jsonEncode(boundedFailure(error,stack,currentStage,tuiResume:tuiResumeDiagnostic))); }
         catch (_) { /* Preserve the original test failure if diagnostics fail. */ }
       }
       rethrow;

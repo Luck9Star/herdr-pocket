@@ -859,3 +859,62 @@ test('touch clipboard ignores pending read when tab hides',async()=>{
  let release;const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{clipboardRead:()=>new Promise(r=>release=r)});
  try{await readyPaste(h);h.find('粘贴并审查').onclick();h.ui.prepareHide();release('迟到');await flush();assert.equal(h.find('追加到草稿'),undefined);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);}finally{h.restore();}
 });
+
+test('saved tab preserves local column viewport across redraw, hide/resume full and explicit reconnect',async()=>{
+  const oldDocument=globalThis.document;
+  const make=tag=>Object.assign(new Element(tag),{clientWidth:320,scrollWidth:800,clientHeight:200,scrollHeight:400,scrollLeft:0,scrollTop:0});
+  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,make('div')]));
+  globalThis.document={hidden:false,getElementById:id=>nodes[id],createElement:make};
+  const calls=[],channels=[],observations=[];let fontSize=14;
+  const invoke=(name,args)=>{
+    calls.push({name,args});
+    if(name==='remote_tab_reserve')return Promise.resolve(20+observations.length);
+    if(name==='remote_tab_observe')return new Promise(resolve=>observations.push({args,resolve}));
+    return Promise.resolve();
+  };
+  const terminalFactory=options=>({options,cols:80,element:{querySelector:()=>({getBoundingClientRect:()=>({width:800*options.fontSize/14})})},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},dispose(){},onData(){}});
+  try {
+    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{host:id,port:22,username:'u',expectedHostKey:'pin',session:'s'},hostFingerprint:'pin',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory});
+    const a=ui.create('first',{paneId:'w1:p1',terminalId:'term_a001'});
+    const find=label=>nodes['view-content'].all().find(n=>n.textContent===label);
+    const viewport=()=>nodes['view-content'].all().find(n=>n.className==='term-scroll');
+    const connect=async()=>{const check=nodes['view-content'].all().find(n=>n.tagName==='input');check.checked=true;check.onchange();find('连接').onclick();await flush();await flush();};
+    await connect();let g=observations[0].args.generation;
+    const emit=(channel,epoch,phase)=>channels[channel].onmessage({kind:'observation',generation:g,snapshot:{epoch,phase}});
+    const full=(channel,epoch,seq=1)=>channels[channel].onmessage({kind:'frame',generation:g,epoch,frame:{seq,full:true,bytes:[65]}});
+    emit(0,1,'active');full(0,1);viewport().scrollLeft=240;viewport().scrollTop=50;viewport().event_scroll();
+    const b=ui.create('second',{paneId:'w2:p2',terminalId:'term_b002'});
+    assert.equal(viewport().scrollLeft,240,'unrelated render must retain local scroll');
+    await ui.select(b);assert.equal(viewport().scrollLeft,0,'other host/terminal must not inherit');
+    emit(0,2,'paused');await ui.select(a);
+    find('恢复观察').onclick();await flush();emit(0,3,'active');
+    assert.equal(viewport().scrollLeft,0,'new wrapper waits for a new full');
+    full(0,3);assert.equal(viewport().scrollLeft,240);assert.equal(viewport().scrollTop,50);
+    fontSize=21;ui.setFont(fontSize);viewport().scrollWidth=1200;
+    // A geometry observer performs the same local restore in the browser.
+    emit(0,3,'active');viewport().scrollWidth=1200;full(0,3,2);
+    assert.equal(viewport().scrollLeft,360,'font change retains local column 24');
+    observations[0].resolve();await flush();await flush();await connect();g=observations[1].args.generation;
+    emit(1,1,'active');full(1,1);assert.equal(viewport().scrollLeft,360,'font change retains column 24');
+    const before=calls.length;viewport().scrollLeft=150;viewport().event_scroll();assert.equal(calls.length,before);
+    assert.equal(calls.filter(c=>c.name.includes('resize') || c.name==='remote_tab_input_send').length,0);
+  } finally {globalThis.document=oldDocument;}
+});
+
+for(const [error,pattern] of [['host_key_mismatch',/主机公钥不匹配.*认证未开始.*独立可信渠道/],['authentication_failed',/公钥认证失败/],['secret transport details',/连接或观察未完成/]]) {
+  test(`saved tab shows bounded recovery for ${error} without retrying or changing host pin`,async()=>{
+    const oldDocument=globalThis.document,nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+    globalThis.document={hidden:false,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+    const calls=[],host={target:{host:'fixture.invalid',port:22,username:'u',expectedHostKey:'pin'},hostFingerprint:'pin',deviceFingerprint:'device'};
+    const invoke=async(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return 9;if(name==='remote_tab_observe')throw error;};
+    try {
+      const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:()=>host,channelFactory:()=>({}),terminalFactory:()=>{throw Error('must not render');}});
+      ui.create('host',{paneId:'w1:p1',terminalId:'term_a001'});const check=nodes['view-content'].all().find(n=>n.tagName==='input');check.checked=true;check.onchange();
+      nodes['view-content'].all().find(n=>n.textContent==='连接').onclick();await flush();await flush();
+      const message=nodes['view-content'].all().find(n=>n.attrs.role==='status').textContent;
+      assert.match(message,pattern);assert.doesNotMatch(message,/secret transport details/);
+      assert.equal(calls.filter(c=>c.name==='remote_tab_observe').length,1);assert.equal(host.target.expectedHostKey,'pin');
+      assert.equal(nodes['view-content'].all().find(n=>n.textContent==='连接').disabled,true);
+    } finally {globalThis.document=oldDocument;}
+  });
+}

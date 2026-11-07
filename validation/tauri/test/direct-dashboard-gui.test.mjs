@@ -88,6 +88,9 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest } = {
   nodes['fixture-workbench'].hidden = true;
   nodes['remote-port'].value = '22';
   nodes['pair-device'].value = 'Fixture';
+  const viewport=new Element('remote-viewport');
+  Object.assign(viewport,{clientWidth:320,scrollWidth:800,clientHeight:200,scrollHeight:400,scrollLeft:0,scrollTop:0});
+  nodes['remote-terminal'].parentElement=viewport;
 
   const documentEvents={},windowEvents={};
   globalThis.document = {
@@ -134,6 +137,8 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest } = {
         : { revision: 'r1', profiles: [], bindings: [], preferences: { terminalFontSize: 14 } };
       return readOverride ? readOverride(name, value) : value;
     }
+    if (name === 'host_select') return structuredClone(records.find(h=>h.id===args.id));
+    if (name === 'host_restore') return {state:'authorized-unverified',fingerprint:'device-fingerprint',request:'request'};
     if (name === 'host_save') {
       if (!records.length) {
         records = [{
@@ -164,6 +169,8 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest } = {
     constructor(options) {
       terminal = this;
       this.options = options;
+      this.cols=options.cols;
+      this.element={querySelector:()=>({getBoundingClientRect:()=>({width:800*this.options.fontSize/14})})};
       this.unicode = {};
       this.textarea = new Element();
       this.focusedAs = [];
@@ -195,7 +202,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest } = {
     windowEvent: name => (windowEvents[name] || []).forEach(fn=>fn()),
     background: () => { document.hidden=true;(documentEvents.visibilitychange || []).forEach(fn=>fn()); },
     finish: () => resolveObserve?.(),
-    fail: () => rejectObserve?.(Error('fixture failure')),
+    fail: (error=Error('fixture failure')) => rejectObserve?.(error),
     restore() {
       globalThis.document = previous.document;
       globalThis.window = previous.window;
@@ -1155,3 +1162,38 @@ test('touch clipboard reports denial and oversized text without exposing it',asy
 test('browser non-text clipboard is rejected with visible feedback',async()=>{
  const h=await setup(),n=h.nodes;try{await readyDirectPaste(h);h.terminal.textarea.dispatch('paste',{preventDefault(){},stopImmediatePropagation(){},clipboardData:{types:['image/png'],getData:()=> 'not text'}});await flush();assert.equal(n['remote-paste-review'].hidden,true);assert.match(n['remote-input-status'].textContent,/纯文本/);}finally{h.finish();await flush();h.restore();}
 });
+
+test('fresh pairing viewport returns through saved identity only after new full, keeping local columns',async()=>{
+  const h=await setup(),n=h.nodes,v=n['remote-terminal'].parentElement;
+  try {
+    await openInput(h);v.scrollLeft=240;v.scrollTop=60;v.dispatch('scroll');
+    n['host-return-home'].click();h.finish();await flush();await flush();
+    const open=n['host-list'].all().find(e=>e.tagName==='button' && e.textContent==='打开');assert.ok(open);open.click();await flush();
+    n['host-restore-review'].checked=true;n['host-restore'].click();await flush();await flush();
+    n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});
+    n['remote-form'].dispatch('submit');await flush();
+    v.scrollLeft=0;v.scrollTop=0;publishDashboard(h,blockedPane());
+    n['remote-panes'].children.find(e=>e.tagName==='button' && e.textContent.startsWith('w1:p1')).click();
+    h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});
+    assert.equal(v.scrollLeft,0,'target proof alone must not restore before a new full');
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,bytes:[66]}});
+    assert.equal(v.scrollLeft,240);assert.equal(v.scrollTop,60);
+    const count=h.calls.length;v.scrollLeft=180;v.dispatch('scroll');
+    assert.equal(h.calls.length,count,'local scrolling must not invoke transport');
+    assert.equal(h.calls.filter(c=>c.name.includes('resize') || c.name==='remote_input_send').length,0);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+for(const [code,pattern] of [['host_key_mismatch',/主机公钥不匹配.*独立可信渠道.*不要直接替换/],['authentication_failed',/公钥认证失败/],['secret transport details',/连接或观察未完成/]]) {
+  test(`fresh pairing failure explains ${code} without changing pin or retrying`,async()=>{
+    const h=await setup();try {
+      await pairAndConnect(h);const before=h.calls.filter(c=>c.name==='remote_observe').length;
+      h.fail(code);await flush();await flush();
+      assert.match(h.nodes['remote-status'].textContent,pattern);
+      assert.doesNotMatch(h.nodes['remote-status'].textContent,/secret transport details/);
+      assert.equal(h.nodes['remote-pin'].value,h.target.expectedHostKey);
+      assert.equal(h.calls.filter(c=>c.name==='remote_observe').length,before);
+      assert.equal(h.nodes['remote-connect'].disabled,true,'fresh review is required');
+    } finally {h.finish();await flush();h.restore();}
+  });
+}

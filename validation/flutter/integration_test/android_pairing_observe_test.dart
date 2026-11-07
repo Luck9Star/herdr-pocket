@@ -62,6 +62,39 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
   await tester.pump(const Duration(milliseconds:350));
 }
 Future<void> tapKey(WidgetTester tester, String key) => tap(tester,find.byKey(ValueKey(key)));
+
+/// Read only the bundled sample screen. A zero denotes a missing row or
+/// marker; keep the actual reading even when a candidate disagrees with the
+/// expected column. The remote terminal can contain private output.
+Future<List<int>> readFontDiagnostic(WidgetTester tester) async {
+  await tapKey(tester,'remote-font-diagnostics-open');
+  final preview = find.byKey(const ValueKey('terminal-font-diagnostics-view'));
+  await until(tester,() => preview.evaluate().length == 1);
+  await tester.ensureVisible(preview);
+  await tester.pump();
+  final view = tester.widget<TerminalView>(preview);
+  expect(view.readOnly,isTrue);
+  expect(view.autoResize,isFalse);
+  expect(view.textStyle.fontFamily,'ProbeNerd');
+  final sample = view.terminal;
+  expect(sample.viewWidth,16);
+  expect(sample.viewHeight,8);
+  final markers = List<int>.filled(8,0);
+  for (var y = 0; y < 8; y++) {
+    final line = sample.buffer.lines[y];
+    // Match the numbered prefix rather than assuming wrapping preserved the
+    // original row. Count the right-hand separator, excluding the prefix.
+    final row = line.getCodePoint(0) - 0x31;
+    if (row < 0 || row >= markers.length || line.getCodePoint(1) != 0x7c) continue;
+    for (var x = 2; x < sample.viewWidth; x++) {
+      if (line.getCodePoint(x) == 0x7c) markers[row] = x + 1;
+    }
+  }
+  await tapKey(tester,'terminal-font-diagnostics-close');
+  expect(preview,findsNothing);
+  expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+  return markers;
+}
 /// Observe the real view after the editor's done action. Do not override view
 /// metrics, assign review state, or retry the consent tap if it is not checked.
 Future<Finder> stableReviewCheckbox(WidgetTester tester,String key) async {
@@ -352,7 +385,11 @@ void main() {
       identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal,fullTerminal));
     final deltaSequence = displayedSequence(tester)!;
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+    stage('local_font_diagnostic');
+    final fontMarkerColumns = await readFontDiagnostic(tester);
+    await until(tester,() => (displayedSequence(tester) ?? -1) > deltaSequence);
     final inputReceipts = <Map<String,Object>>[];
+    List<int>? restoredViewport;
     if (guardedInput) {
       stage('guarded_direct_available');
       expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNotNull);
@@ -470,6 +507,15 @@ void main() {
       expect(tester.widget<TerminalView>(terminalView).autoResize,isFalse);
       expect(find.text('预览发送文本'),findsNothing);
       await clipboardCheckpoint(tester,exchange,'paste-local-append');
+      stage('viewport_pan');
+      final viewport = find.byKey(const ValueKey('remote-horizontal-scroll'));
+      await tester.ensureVisible(viewport);
+      await tester.pump();
+      ScrollPosition position() => tester.widget<SingleChildScrollView>(viewport).controller!.position;
+      expect(position().maxScrollExtent,greaterThan(80));
+      await tester.timedDrag(viewport,const Offset(-96,0),const Duration(milliseconds:450));
+      await until(tester,() => !position().isScrollingNotifier.value && position().pixels >= 12);
+      final previousOffset = position().pixels;
       await tapKey(tester,'hosts-board-tab');
       await tapKey(tester,originalTabKey);
       await until(tester,() => find.byKey(const ValueKey('remote-resume')).evaluate().length == 1);
@@ -490,6 +536,10 @@ void main() {
       final restoredTargetLabel = tester.widget<Text>(find.textContaining('当前输入目标：')).data;
       expect(restoredTargetLabel,contains(inputReceipts.first['paneId'] as String));
       expect(restoredTargetLabel,contains(inputReceipts.first['terminalId'] as String));
+      stage('viewport_restored');
+      await until(tester,() => viewport.evaluate().length == 1 &&
+        (position().pixels - previousOffset).abs() <= 1);
+      restoredViewport = [previousOffset.round(),position().pixels.round()];
       await tapKey(tester,'remote-mode-draft');
       expect(tester.widget<TextField>(draftControl).controller!.text,'Pocket测');
       stage('guarded_draft_review');
@@ -541,12 +591,14 @@ void main() {
       'fullRendered':true,'deltaRendered':true,'stoppedStale':true,'observeMode':true,
       'directModeDisabled':true,'draftModeDisabled':true,'localIdentityDeleted':true,
       'identityCreationActions':1,'firstSequence':firstSequence,'deltaSequence':deltaSequence,
+      'localFontMarkerColumns':fontMarkerColumns,
       'frameCountLowerBound':2,'deltaCountLowerBound':1,
       if (guardedInput) ...{
         'guardedInput':true,'directInputAccepted':true,'draftInputAccepted':true,
         'hiddenTabStopped':true,'hiddenTabManualRecovery':true,'unsentDraftRestored':true,
         'postStopInputDisabled':true,'inputReceipts':inputReceipts,
         'acceptedByteCounts':[1,9],
+        'restoredViewportLogicalPixels':restoredViewport,
         'syntheticClipboardSet':true,'pasteReviewCancelled':true,'pasteCancelPreservedDraft':true,
         'pasteReviewReopened':true,'pasteAppendedLocally':true,'pasteTargetVerified':true,
         'pasteReceiptUnchanged':true,'pasteKeptFixedSize':true,

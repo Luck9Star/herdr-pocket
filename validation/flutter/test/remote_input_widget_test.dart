@@ -107,6 +107,51 @@ Future<void> mode(WidgetTester tester,String value) async {
 }
 
 void main() {
+  testWidgets('horizontal scrollbar remains draggable in direct input mode', (tester) async {
+    final adapter = InputFixtureAdapter(); await start(tester,adapter);
+    await mode(tester,'direct');
+    final viewport = find.byKey(const ValueKey('remote-horizontal-scroll'));
+    await tester.ensureVisible(viewport); await tester.pump();
+    final controller = tester.widget<SingleChildScrollView>(viewport).controller!;
+    expect(controller.position.maxScrollExtent,greaterThan(0));
+    final rect = tester.getRect(viewport);
+    await tester.dragFrom(Offset(rect.left + 24,rect.bottom - 6),const Offset(100,0));
+    await tester.pump();
+    expect(controller.offset,greaterThan(0));
+    expect(adapter.received,isEmpty);
+  });
+  testWidgets('terminal horizontal position survives pause and a fresh full frame', (tester) async {
+    final visibility = ValueNotifier(true); addTearDown(visibility.dispose);
+    final adapter = InputFixtureAdapter();
+    await start(tester,adapter,visibility:visibility);
+    final viewport = find.byKey(const ValueKey('remote-horizontal-scroll'));
+    await tester.ensureVisible(viewport); await tester.pump();
+    ScrollController controller() => tester.widget<SingleChildScrollView>(viewport).controller!;
+    expect(controller().position.maxScrollExtent,greaterThan(0));
+    controller().jumpTo(controller().position.maxScrollExtent / 2); await tester.pump();
+    final offset = controller().offset;
+    visibility.value = false; await tester.pump();
+    visibility.value = true; await tester.pump();
+    final resume = find.byKey(const ValueKey('remote-resume'));
+    await tester.ensureVisible(resume); await tester.tap(resume); await tester.pump();
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'FRESH',observationEpoch:1));
+    await tester.pump(); await tester.pump();
+    expect(controller().offset,closeTo(offset,0.1));
+    expect(adapter.received,isEmpty);
+    expect(adapter.calls,1);
+  });
+  testWidgets('hidden observation failure remains visible when returning', (tester) async {
+    final visibility = ValueNotifier(true); addTearDown(visibility.dispose);
+    final adapter = InputFixtureAdapter();
+    await start(tester,adapter,visibility:visibility);
+    visibility.value = false; await tester.pump();
+    adapter.pending.completeError(const RemoteFailure('host_key_mismatch'));
+    await tester.pump();
+    visibility.value = true; await tester.pump();
+    expect(find.textContaining('主机指纹不符'),findsOneWidget);
+    expect(adapter.calls,1);
+    expect(tester.widget<FilledButton>(base.field('connect')).onPressed,isNull);
+  });
   for (final disposition in [RemoteInputDisposition.accepted,RemoteInputDisposition.rejected]) {
     testWidgets('MT10 late $disposition receipt cannot modify a new epoch draft or status', (tester) async {
       final visibility = ValueNotifier(true); addTearDown(visibility.dispose);

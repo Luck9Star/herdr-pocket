@@ -267,6 +267,142 @@ def restore_reviewed_draft(browser, pane_id, terminal_id, rendered):
         raise GuiFailure('android_reentry_draft_changed')
 
 
+FONT_DIAGNOSTIC_GEOMETRY = r'''(()=>{
+  const dialog=document.querySelector('.terminal-font-diagnostics[open]');
+  const screen=dialog?.querySelector('.xterm-screen');
+  if(!dialog)return null;
+  const rowHost=screen?.querySelector('.xterm-rows');
+  const rows=rowHost?[...rowHost.children]:[];
+  const rect=(row,find)=>{
+    const walker=document.createTreeWalker(row,NodeFilter.SHOW_TEXT);
+    let node,chosen=null,offset=-1;
+    while((node=walker.nextNode())){
+      const index=find(node.data);
+      if(index>=0){chosen=node;offset=index;}
+    }
+    if(!chosen)return null;
+    const range=document.createRange();range.setStart(chosen,offset);range.setEnd(chosen,offset+1);
+    const box=range.getBoundingClientRect();
+    return box.width>0&&box.height>0?{left:box.left,width:box.width}:null;
+  };
+  const first=rect(rows[0]||document.createElement('div'),text=>text.indexOf('1'));
+  const box=screen?.getBoundingClientRect();
+  const cellWidth=first?.width||null, screenWidth=box?.width||null;
+  const columns=cellWidth&&screenWidth?screenWidth/cellWidth:null;
+  const markerColumns=rows.map(row=>{
+    const marker=rect(row,text=>text.lastIndexOf('|'));
+    return marker&&first&&cellWidth?1+Math.round((marker.left+marker.width/2-first.left-first.width/2)/cellWidth):null;
+  });
+  const markerOffsets=rows.map(row=>{
+    const marker=rect(row,text=>text.lastIndexOf('|'));
+    return marker&&first&&cellWidth?1+(marker.left+marker.width/2-first.left-first.width/2)/cellWidth:null;
+  });
+  return {rowCount:rows.length,columns:columns?Math.round(columns):null,columnRatio:columns,
+    markerColumns,markerOffsets,cellWidthPx:cellWidth,screenWidthPx:screenWidth};
+})()'''
+
+
+def font_diagnostic_geometry(browser):
+    value = browser.evaluate(FONT_DIAGNOSTIC_GEOMETRY)
+    if not isinstance(value, dict):
+        raise GuiFailure('android_font_diagnostic_dom_unavailable')
+    if value.get('rowCount') not in (0, 8):
+        raise GuiFailure('android_font_diagnostic_geometry_invalid')
+    width = value.get('screenWidthPx')
+    if width is not None and (not isinstance(width, (int, float)) or width <= 0):
+        raise GuiFailure('android_font_diagnostic_geometry_invalid')
+    ratio = value.get('columnRatio')
+    if ratio is not None and (not isinstance(ratio, (int, float)) or abs(ratio - 16) > 0.2):
+        raise GuiFailure('android_font_diagnostic_geometry_invalid')
+    offsets = value.get('markerOffsets')
+    if not isinstance(offsets, list) or len(offsets) not in (0, 8):
+        raise GuiFailure('android_font_diagnostic_geometry_invalid')
+    measured = [item is not None for item in offsets]
+    if any(measured) and not all(measured):
+        marker_status = 'partially_measurable'
+    elif offsets and all(measured):
+        if any(not isinstance(item, (int, float)) or abs(item - 15) > 0.2 for item in offsets):
+            raise GuiFailure('android_font_diagnostic_marker_position_invalid')
+        marker_status = 'verified'
+    else:
+        marker_status = 'unmeasurable'
+    cell_width = value.get('cellWidthPx')
+    if cell_width is not None and (not isinstance(cell_width, (int, float)) or cell_width <= 0):
+        raise GuiFailure('android_font_diagnostic_geometry_invalid')
+    if value.get('columns') is not None and value['columns'] != 16:
+        raise GuiFailure('android_font_diagnostic_geometry_invalid')
+    markers = value.get('markerColumns')
+    if not isinstance(markers, list) or len(markers) != len(offsets):
+        raise GuiFailure('android_font_diagnostic_geometry_invalid')
+    if marker_status == 'verified' and markers != [15] * 8:
+        raise GuiFailure('android_font_diagnostic_marker_position_invalid')
+    return {'rowCount': value['rowCount'], 'columns': value.get('columns'),
+            'markerPositionStatus': marker_status,
+            'markerColumn': 15 if marker_status == 'verified' else None,
+            'markerColumnZeroBased': 14 if marker_status == 'verified' else None,
+            'markerColumns': markers,
+            'cellWidthPx': round(cell_width, 3) if cell_width is not None else None,
+            'screenWidthPx': round(width, 3) if width is not None else None,
+            'columnRatio': round(ratio, 4) if ratio is not None else None}
+
+
+def exercise_font_diagnostics(browser, approval, rendered):
+    """Open the production local sample, measure rendered xterm cells, then resume observation."""
+    if not browser.evaluate("document.querySelector('#remote-font-diagnostics')?.disabled===false"):
+        raise GuiFailure('android_font_diagnostic_control_unavailable')
+    before = rendered('delta')
+    browser.click('#remote-font-diagnostics')
+    wait_for(lambda: browser.evaluate("!!document.querySelector('.terminal-font-diagnostics[open]')"),
+             'android_font_diagnostic_dialog_missing')
+    rendered_sample = wait_for(lambda: browser.evaluate("(()=>{const s=document.querySelector('.terminal-font-diagnostics [role=status]')?.textContent||'';return s.startsWith('示例已绘制')?'ready':s.startsWith('本地诊断样例不可用')?'failed':false})()"),
+             'android_font_diagnostic_sample_missing')
+    if rendered_sample != 'ready':
+        raise GuiFailure('android_font_diagnostic_sample_unavailable')
+    geometry = font_diagnostic_geometry(browser)
+    state = browser.evaluate('''(()=>{const d=document.querySelector('.terminal-font-diagnostics[open]');
+      const close=d?.querySelector('button');const trigger=document.querySelector('#remote-font-diagnostics');
+      const area=document.querySelector('#remote-input-controls');const remote=document.querySelector('#remote-terminal .xterm-helper-textarea');
+      const draft=document.querySelector('#remote-input-draft');
+      return {dialogOpen:!!d,nativeModal:!!d&&d.matches(':modal'),ariaModal:d?.getAttribute('aria-modal')==='true',
+        closeFocused:!!close&&document.activeElement===close,
+        triggerEnabled:!!trigger&&!trigger.disabled,inputControlsPresent:!!area,
+        inputControlsHidden:!!area&&area.hidden,
+        keyboardShowDisabled:document.querySelector('#remote-keyboard-show')?.disabled===true,
+        keyboardHideDisabled:document.querySelector('#remote-keyboard-hide')?.disabled===true,
+        remoteTextareaReadOnly:!!remote&&remote.readOnly,
+        remoteTextareaInputMode:remote?.getAttribute('inputmode')||null,
+        remoteTextareaFocused:!!remote&&document.activeElement===remote,
+        remoteDraftFocused:!!draft&&document.activeElement===draft};})()''')
+    expected_state = {'dialogOpen': True, 'nativeModal': True, 'ariaModal': True,
+        'closeFocused': True, 'triggerEnabled': True,
+        'keyboardShowDisabled': True, 'keyboardHideDisabled': True,
+        'remoteTextareaReadOnly': True, 'remoteTextareaInputMode': 'none', 'remoteTextareaFocused': False}
+    if (not isinstance(state, dict) or any(state.get(key) is not value for key, value in expected_state.items()) or
+            state.get('remoteDraftFocused') is not False or
+            type(state.get('inputControlsPresent')) is not bool or
+            type(state.get('inputControlsHidden')) is not bool):
+        raise GuiFailure('android_font_diagnostic_input_or_focus_guard_failed')
+    approval.verify_ssh(b'')
+    during = rendered('delta')
+    browser.click('.terminal-font-diagnostics button')
+    wait_for(lambda: browser.evaluate("!document.querySelector('.terminal-font-diagnostics')"),
+             'android_font_diagnostic_close_missing')
+    focus = browser.evaluate("document.activeElement===document.querySelector('#remote-font-diagnostics')")
+    if focus is not True:
+        raise GuiFailure('android_font_diagnostic_focus_not_restored')
+    def resumed_delta():
+        count = rendered('delta')
+        return count if count > during else False
+    after = wait_for(resumed_delta, 'android_font_diagnostic_observation_not_resumed', timeout=30)
+    approval.verify_ssh(b'')
+    return {'geometry': geometry, 'inputLocked': True, 'safeFocus': True,
+            'inputControlsPresent': state['inputControlsPresent'],
+            'inputControlsHidden': state['inputControlsHidden'],
+            'focusRestored': True, 'observationContinued': True,
+            'deltaFramesBefore': before, 'deltaFramesDuring': during, 'deltaFramesAfter': after,
+            'receivedInputBytesDuringProbe': 0}
+
+
 def exercise_local_paste(browser, approval, receipt, raw_receipt):
     # Seed only synthetic text. Copy's temporary editor value is replaced before
     # either production clipboard read; no pre-existing clipboard is inspected.
@@ -402,6 +538,7 @@ def run_android(args, root, env, config, approval):
             return browser.evaluate(f"Number(document.querySelector('#remote-captured').dataset.{attr}Frames || 0)")
         full = wait_for(lambda: rendered('full'), 'android_full_render_ack_missing', timeout=60)
         deltas = wait_for(lambda: rendered('delta'), 'android_delta_render_ack_missing', timeout=60)
+        font_diagnostic_evidence = exercise_font_diagnostics(browser, approval, rendered)
         receipts = []
         paste_evidence = {}
         keyboard_evidence = []
@@ -454,6 +591,7 @@ def run_android(args, root, env, config, approval):
         return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                 'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                 'inputQueueAccepted':bool(receipts), 'inputReceipts':receipts,
+                'fontDiagnosticEvidence':font_diagnostic_evidence,
                 **paste_evidence,
                 'systemKeyboardEvidence': {'checkpoints': keyboard_evidence, 'showWithHardwareKeyboard': True,
                     'scope': 'owned API35 IME service window; CDP commits are not IME touch/composition proof'},

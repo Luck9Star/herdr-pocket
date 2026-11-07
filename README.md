@@ -19,6 +19,8 @@ herdr-pocket 是手机优先的远端 herdr 图形客户端原型，目标覆盖
 
 **原型分支新进度 · 手机选区与复制**　两个 GUI 都已接入只读选区。两套真实终端缓冲区在相同的 10 组字符上复制一致，后续标记的列位置也一致。Tauri 在 Mac 浏览器的两个入口、两种手机视口通过复制与裁剪检查。Flutter 新选区仍待 widget 和手机运行验收。上面的两份 APK 均早于此项改动。[选区实测与复核步骤](https://github.com/Luck9Star/herdr-pocket/blob/6ffab0606ce88f404cada602b8330f0ce69f2411/docs/37-mobile-terminal-selection.md) · [Penpot 四个新增状态](https://github.com/Luck9Star/herdr-pocket/blob/6ffab0606ce88f404cada602b8330f0ce69f2411/design/evidence/v2-mobile-text-and-paste-20261107.json)
 
+**手机原型最新源码 · 配对后的持续看板**　Tauri 在刚配对的主机上复用同一条已认证 SSH，打开终端后看板仍继续更新。Mac 上的隔离 SSH 测试验证了订阅、帧确认与取消，两种手机视口验证了目标切换；Flutter 和 Tauri 同时补齐了系统粘贴审查。上表两份 APK 对应较早的 `a9914fe`。[持续看板与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/d56ca78a9b31f288acbaf0d2c477312cd50e9808/docs/39-mobile-paired-dashboard.md) · [系统粘贴与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/d56ca78a9b31f288acbaf0d2c477312cd50e9808/docs/38-mobile-system-paste.md)
+
 ## 历史绿批及既有记录
 
 以下记录保留了 `e54f23c` 上一批只读观察和 7 项云任务通过时的下载与验收入口。

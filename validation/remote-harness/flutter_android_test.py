@@ -685,6 +685,8 @@ class CleanupGuards(PreparedFixture):
         owned = (gui.SERIAL, 'tcp:56000', 'tcp:56001')
         forwards = {original}
         calls = []
+        blocked = [{'paneId': 'w2:p1', 'terminalId': 'term_abc'},
+                   {'paneId': 'w3:p1', 'terminalId': 'term_def'}]
         class Process:
             def poll(self): return 0
             def wait(self, timeout): return 0
@@ -697,6 +699,7 @@ class CleanupGuards(PreparedFixture):
             defines = json.loads((self.fixture_root / 'flutter-android-public-defines.json').read_text())
             self.assertEqual(defines['HERDR_ANDROID_API35_CLIPBOARD_FIXTURE'], 'true' if guarded else 'false')
             self.assertEqual(defines['HERDR_ANDROID_API35_KEYBOARD_FIXTURE'], 'true')
+            self.assertEqual(json.loads(defines['HERDR_ANDROID_BLOCKED_TARGETS']), [] if guarded else blocked)
             self.assertEqual(defines['HERDR_ANDROID_PROFILE_JSON'], gui.public_profile_json(self.config))
             self.assertNotIn('privateKeyPem', defines['HERDR_ANDROID_PROFILE_JSON'])
             self.assertEqual(defines['HERDR_ANDROID_HOST_FINGERPRINT'], gui.public_host_fingerprint(self.config['expectedHostKey']))
@@ -728,6 +731,8 @@ class CleanupGuards(PreparedFixture):
                 return gui.SERIAL + ' tcp:2222 tcp:2222' if state['reverse'] else ''
             return ''
         approval = Mock(); approval.approve.return_value = b'{"public":"response"}'
+        approval.blocked_targets = blocked
+        approval.verify_blocked_targets.return_value = blocked
         if fail_checkpoint == 'receiver':
             approval.verify_ssh.side_effect = gui.DeviceFailure('synthetic_checkpoint_receiver_failure')
         report = device_report()
@@ -736,6 +741,9 @@ class CleanupGuards(PreparedFixture):
             report.update(case=gui.GUARDED_CASE, acceptedByteCounts=[1, 9], restoredViewportLogicalPixels=[96, 96],
                 inputReceipts=[first, dict(first, requestId='b' * 32, acceptedBytes=9)],
                 **dict.fromkeys(gui.GUARDED_FIELDS, True), **gui.CLIPBOARD_COUNTS)
+        else:
+            report['blockedTargetEvidence'] = dict(blocked[1], listedRows=2, reviewRequired=True,
+                observing=True, markerMatched=True, otherMarkerAbsent=True)
         public = iter((b'{"public":"signer"}', b'{"public":"request"}', json.dumps(report).encode()))
         def wait_public(*args, checkpoints=None, **kwargs):
             if checkpoints is not None:

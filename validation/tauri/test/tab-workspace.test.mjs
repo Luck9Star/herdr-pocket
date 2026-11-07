@@ -269,7 +269,7 @@ function watchWorkspace(fixedTarget=null,options={}) {
   const emit=event=>channels.at(-1).onmessage({generation:9,...event});
   const watch=(epoch,revision,phase='fresh',panes=[{paneId:'w1:p1',terminalId:'term_a001',agentStatus:'working'}])=>emit({kind:'dashboard_watch',update:{epoch,revision,phase,reason:'fixture',panes}});
   const observation=(epoch,phase)=>emit({kind:'observation',snapshot:{epoch,phase}});
-  return {ui,id,calls,nodes,all,find,start,emit,watch,observation,terminal:()=>terminal,restore(){globalThis.document=oldDocument;globalThis.window=oldWindow;}};
+  return {ui,id,calls,nodes,all,find,start,emit,watch,observation,terminal:()=>terminal,channel:()=>channels.at(-1),restore(){globalThis.document=oldDocument;globalThis.window=oldWindow;}};
 }
 
 test('SW01 SW09: watch selection awaits native receiver and freezes pane plus terminal and revision',async()=>{
@@ -1092,4 +1092,26 @@ test('normal saved-tab font page switches real theme samples locally and closes 
   for(const sample of themes.samples){choice.focus();choice.value=sample.id;choice.onchange();await flush();await flush();assert.equal(document.activeElement,choice);assert.deepEqual(h.terminal().writes,[sample.ansi]);assert.equal(h.terminal().createdOptions.cols,40);assert.equal(h.terminal().createdOptions.rows,3);assert.equal(h.terminal().textarea.disabled,true);const status=panel.all().find(e=>e.attrs.role==='status');assert.equal(status.dataset.expectedCursorColumn,String(sample.cursorColumn));assert.equal(status.dataset.sampleId,sample.id);assert.equal(status.dataset.columns,'40');assert.equal(status.dataset.rows,'3');}
   assert.equal(h.calls.length,before);assert.equal(observed.options.disableStdin,true);const id=h.ui.create('other',{paneId:'w2:p1',terminalId:'term_a002'});await h.ui.select(id);assert.equal(panel.removed,true);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send'||/resize/.test(c.name)).length,0);
  }finally{h.restore();globalThis.fetch=prior;}
+});
+
+for(const failure of ['host_key_mismatch','authentication_failed','native secret privateKeyPem must not show'])test(`saved-tab connection diagnostics retain exact facts after ${failure.split(' ')[0]}`,async()=>{
+ let reject;const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{observe:()=>new Promise((_resolve,deny)=>reject=deny)});
+ try {
+  await h.start();const old=h.channel(),row=id=>h.all().find(e=>e.dataset.connectionStage===id);
+  assert.equal(row('network').dataset.stageState,'pending');if(failure!=='host_key_mismatch')h.emit({kind:'stage',stage:'host-key-verified'});
+  reject(failure);await flush();await flush();assert.equal(row('hostKey').dataset.stageState,failure==='host_key_mismatch'?'failed':'verified');assert.equal(row('authentication').dataset.stageState,failure==='authentication_failed'?'failed':'unknown');assert.equal(row('terminal').dataset.stageState,'unknown');assert.equal(h.all().some(e=>e.textContent.includes('must not show')),false);
+  old.onmessage({generation:9,kind:'stage',stage:'authenticated'});assert.equal(row('authentication').dataset.stageState,failure==='authentication_failed'?'failed':'unknown');
+  await h.start();assert.equal(row('hostKey').dataset.stageState,'unknown');old.onmessage({generation:9,kind:'stage',stage:'authenticated'});assert.equal(row('authentication').dataset.stageState,'unknown');
+  assert.equal(h.calls.filter(c=>c.name==='remote_tab_observe').length,2);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send'||/resize/.test(c.name)).length,0);
+ }finally{h.restore();}
+});
+
+test('saved-tab diagnostics isolate same-host tabs and only acknowledge the bound target full render',async()=>{
+ const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try {
+  const row=id=>h.all().find(e=>e.dataset.connectionStage===id);await h.start();const first=h.channel();h.emit({kind:'stage',stage:'host-key-verified'});h.emit({kind:'stage',stage:'authenticated'});h.observation(1,'starting');h.watch(1,1);assert.equal(row('dashboard').dataset.stageState,'verified');assert.equal(row('terminal').dataset.stageState,'unknown');
+  h.emit({kind:'target_bound',epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});assert.equal(row('terminal').dataset.stageState,'pending');h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});h.observation(1,'active');assert.equal(row('terminal').dataset.stageState,'verified');
+  const second=h.ui.create('fixture',{paneId:'w1:p2',terminalId:'term_a002'});await h.ui.select(second);assert.equal(row('hostKey'),undefined);await h.start();assert.equal(row('hostKey').dataset.stageState,'unknown');first.onmessage({generation:9,kind:'stage',stage:'authenticated'});assert.equal(row('authentication').dataset.stageState,'unknown');
+  h.ui.prepareAffected(['fixture']);assert.ok(h.all().some(e=>e.dataset.attemptState==='ended'));assert.equal(row('hostKey').dataset.stageState,'unknown');
+  assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send'||/resize/.test(c.name)).length,0);
+ }finally{h.restore();}
 });

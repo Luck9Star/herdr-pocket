@@ -13,6 +13,7 @@ import urllib.request
 
 from paired_gui import GuiFailure, wait_for
 from paired_tui import STEPS
+from mobile_blocked_result import checked_targets, checked_receipt
 from flutter_android_gui import (
     DeviceFailure, public_host_fingerprint, public_ime_diagnostic, public_profile_json, wait_system_ime,
     safe_theme_prompt_cursors, theme_prompt_expectations,
@@ -50,15 +51,15 @@ class AndroidProgress:
     """Bounded per-stage evidence survives a later failure; no raw dumps/text."""
     PHASES = {'setup','pairing','canvas_selection','dashboard','observe_full','observe_delta','canvas_marker','font_diagnostics',
         'direct_mode','draft_mode','direct_input_receipt','paste_review','hidden_recovery',
-        'draft_input_receipt','tui','stop_observation','complete',
+        'draft_input_receipt','tui','stop_observation','blocked_target_entry','complete',
         'keyboard_observe_hidden','keyboard_direct_shown','keyboard_direct_hidden','keyboard_direct_reopened',
         'keyboard_draft_shown','keyboard_draft_back_request','keyboard_draft_back_hidden',
         'keyboard_draft_back_reopened','keyboard_draft_hidden','local_revocation_review'}
     COMPLETED = {'publicProfileReviewed','publicRequestCopyReported','revocationReviewed','authorizationReviewed','paneChosen','fullRendered','deltaRendered',
         'canvasSelectionVerified','canvasGeometryVerified','canvasMarkerVisible','canvasViewportRestored',
         'fontDiagnosticsCompleted','directKeyboardCompleted','directReceiptVerified',
-        'draftKeyboardCompleted','pasteReviewCompleted','draftRestored','draftReceiptVerified','tuiCompleted','stoppedStale'}
-    ERROR_CODES = {'android_system_ime_target_mismatch','android_system_ime_evidence_unavailable',
+        'draftKeyboardCompleted','pasteReviewCompleted','draftRestored','draftReceiptVerified','tuiCompleted','stoppedStale','blockedTargetVerified'}
+    ERROR_CODES = {'android_blocked_target_evidence_invalid','android_blocked_card_missing','android_blocked_same_label_missing','android_blocked_review_required','android_blocked_render_missing','android_blocked_original_form_missing','android_system_ime_target_mismatch','android_system_ime_evidence_unavailable',
         'android_system_ime_show_unconfirmed','android_system_ime_hide_unconfirmed',
         'android_system_ime_expected_state_invalid','android_driver_failure',
         'android_canvas_default_invalid','android_canvas_selection_failed','android_canvas_viewport_missing',
@@ -335,6 +336,19 @@ class AndroidWebView:
             self.call('Input.dispatchMouseEvent', {'type': kind, 'x': point['x'], 'y': point['y'],
                                                  'button': 'left', 'clickCount': 1})
 
+    def click_named(self, scope, label):
+        """Activate a unique visible named button through actual CDP pointer input."""
+        expression = r'''(()=>{const root=document.querySelector(%s);if(!root)return null;
+          const buttons=[...root.querySelectorAll('button')].filter(e=>e.textContent.trim()===%s &&
+            !e.matches(':disabled') && !e.closest('[hidden]') && e.getClientRects().length);
+          if(buttons.length!==1)return null;const e=buttons[0];e.scrollIntoView({block:'center',inline:'center'});
+          const r=e.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;
+          return r.width>0 && r.height>0 && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
+            e.contains(document.elementFromPoint(x,y))?{x,y}:null})()''' % (json.dumps(scope),json.dumps(label))
+        point=wait_for(lambda:self.evaluate(expression),'android_blocked_card_missing')
+        for kind in ('mousePressed','mouseReleased'):
+            self.call('Input.dispatchMouseEvent',{'type':kind,'x':point['x'],'y':point['y'],'button':'left','clickCount':1})
+
     def fill(self, selector, value):
         expression = '''(()=>{const e=document.querySelector(%s); if(!e || !e.getClientRects().length || e.matches(':disabled') || e.readOnly) return false;
           e.scrollIntoView({block:'center'}); e.focus(); e.select(); return document.activeElement===e})()''' % json.dumps(selector)
@@ -410,6 +424,96 @@ class AndroidWebView:
             pass
 
 
+def primary_pane_selector(pane_id):
+    if not isinstance(pane_id,str) or not re.fullmatch(r'[A-Za-z0-9:_-]{1,128}',pane_id):
+        raise GuiFailure('android_unexpected_dashboard_pane')
+    return '#remote-panes button[data-pane-id="'+pane_id+'"]'
+
+
+def _blocked_card(browser,targets):
+    bindings=[row['paneId']+'/'+row['terminalId'] for row in targets]
+    expression=r'''(()=>{const home=document.querySelector('#host-home');if(!home || home.hidden)return null;
+      const expected=%s,cards=[...home.querySelectorAll('#host-list > .saved-host-card')];
+      const matches=cards.map((card,index)=>{const rows=[...card.querySelectorAll('.blocked-target-list button[data-blocked-target]')];
+        const ids=rows.map(row=>row.dataset.blockedTarget);
+        if(rows.length!==2 || new Set(ids).size!==2 || !expected.every(id=>ids.includes(id)))return null;
+        return {selector:'#host-list > .saved-host-card:nth-child('+(index+1)+')',listedRows:rows.length,
+          sameLabel:rows.every(row=>row.textContent.trim().split(' · ').slice(3).join(' · ')==='pocket-blocked')};
+      }).filter(Boolean);return matches.length===1?matches[0]:null})()''' % json.dumps(bindings)
+    value=wait_for(lambda:browser.evaluate(expression),'android_blocked_card_missing')
+    if (not isinstance(value,dict) or set(value)!={'selector','listedRows','sameLabel'} or
+            not isinstance(value['selector'],str) or not re.fullmatch(r'#host-list > \.saved-host-card:nth-child\([1-9][0-9]{0,2}\)',value['selector']) or
+            type(value['listedRows']) is not int or value['listedRows']!=2):
+        raise GuiFailure('android_blocked_target_evidence_invalid')
+    if value['sameLabel'] is not True:
+        raise GuiFailure('android_blocked_same_label_missing')
+    return value
+
+
+def exercise_blocked_target(browser,approval,config):
+    """Observe synthetic B from the real stale host card, then restore pairing UI."""
+    try:
+        targets=checked_targets(approval.blocked_targets)
+        if checked_targets(approval.verify_blocked_targets())!=targets:
+            raise ValueError()
+    except (ValueError,TypeError,AttributeError):
+        raise GuiFailure('android_blocked_target_evidence_invalid') from None
+    target=targets[1]
+    browser.click('#host-return-home')
+    wait_for(lambda:browser.evaluate("!document.querySelector('#host-home').hidden"),'android_home_not_visible')
+    card=_blocked_card(browser,targets)
+    browser.click(card['selector']+' .blocked-target-list button[data-blocked-target="'+target['paneId']+'/'+target['terminalId']+'"]')
+    review=r'''(()=>{const view=document.querySelector('#view-content');if(!view || view.closest('[hidden]'))return false;
+      const checks=[...view.querySelectorAll('input[type=checkbox]')],buttons=[...view.querySelectorAll('button')].filter(e=>e.textContent.trim()==='连接');
+      return checks.length===1 && !checks[0].checked && buttons.length===1 && buttons[0].disabled &&
+        !view.querySelector('.terminal-host .xterm-screen') && view.textContent.includes(%s) && view.textContent.includes(%s)})()''' % (json.dumps(target['paneId']),json.dumps(target['terminalId']))
+    wait_for(lambda:browser.evaluate(review) is True,'android_blocked_review_required')
+    browser.click('#view-content input[type=checkbox]')
+    wait_for(lambda:browser.evaluate("document.querySelector('#view-content input[type=checkbox]')?.checked===true"),'android_blocked_review_required')
+    browser.click_named('#view-content','连接')
+    measurement=r'''(()=>{const view=document.querySelector('#view-content'),term=view?.querySelector('.terminal-host');
+      if(!view || !term || term.closest('[hidden]') || !term.getClientRects().length)return null;
+      const title=[...view.children].find(e=>e.tagName==='P')?.textContent.split(' · ') || [];
+      const paneId=title.at(-2),terminalId=title.at(-1),expected=%s;
+      const rows=[...term.querySelectorAll('.xterm-rows > div')].map(e=>e.textContent.replace(/\u00a0/g,' ').trim());
+      const area=term.querySelector('.xterm-helper-textarea'),mode=view.querySelector('p[aria-live=polite]');
+      const verified=view.querySelector('[data-connection-stage=terminal]')?.dataset.stageState==='verified';
+      const observing=mode?.textContent==='观察模式；输入已关闭。' && !!area && area.readOnly &&
+        area.getAttribute('inputmode')==='none' && document.activeElement!==area;
+      const markerMatched=rows.some(line=>/^POCKET-BLOCKED-B(?: frame [0-9]+)?$/.test(line));
+      const otherMarkerAbsent=rows.length>0 && rows.every(line=>!line.includes('POCKET-BLOCKED-A'));
+      if(paneId!==expected.paneId || terminalId!==expected.terminalId || !verified || !observing || !markerMatched || !otherMarkerAbsent)return null;
+      return {paneId,terminalId,observing,markerMatched,otherMarkerAbsent}})()''' % json.dumps(target)
+    raw=wait_for(lambda:browser.evaluate(measurement),'android_blocked_render_missing',timeout=60)
+    if not isinstance(raw,dict):
+        raise GuiFailure('android_blocked_target_evidence_invalid')
+    raw={**raw,'listedRows':card['listedRows'],'reviewRequired':True}
+    try:
+        if checked_targets(approval.verify_blocked_targets())!=targets:
+            raise ValueError()
+        evidence=checked_receipt(raw,targets)
+    except (ValueError,TypeError):
+        raise GuiFailure('android_blocked_target_evidence_invalid') from None
+    approval.verify_ssh(b'')
+    browser.click_named('#view-content','关闭此标签')
+    wait_for(lambda:browser.evaluate("document.querySelector('#tab-workspace').hidden"),'android_blocked_original_form_missing')
+    browser.click('#host-return-home')
+    wait_for(lambda:browser.evaluate("!document.querySelector('#host-home').hidden"),'android_home_not_visible')
+    card=_blocked_card(browser,targets)
+    browser.click_named(card['selector']+' .saved-host-actions','打开')
+    wait_for(lambda:browser.evaluate("!document.querySelector('#host-restore-panel').hidden"),'android_blocked_original_form_missing')
+    for field,key in [('host','host'),('port','port'),('user','username'),('session','session'),('herdr','herdrPath'),('socket','socketPath'),('pin','expectedHostKey')]:
+        if browser.read('#remote-'+field,'value')!=str(config[key]):
+            raise GuiFailure('android_blocked_original_form_missing')
+    browser.click('#host-restore-review')
+    browser.click('#host-restore')
+    wait_for(lambda:browser.evaluate("document.querySelector('#host-restore-panel').hidden"),'android_blocked_original_form_missing')
+    if (not browser.read('#pair-request','value') or
+            browser.evaluate("document.querySelector('#remote-review').checked || !document.querySelector('#remote-connect').disabled") is not False):
+        raise GuiFailure('android_blocked_original_form_missing')
+    return evidence
+
+
 def restore_reviewed_draft(browser, pane_id, terminal_id, rendered):
     # A saved host is not a terminal target: restore the identity and explicitly
     # choose the same pane and terminal before asserting draft recovery.
@@ -421,9 +525,9 @@ def restore_reviewed_draft(browser, pane_id, terminal_id, rendered):
              'android_identity_restore_missing', timeout=60)
     browser.click('#remote-review')
     browser.click('#remote-connect')
-    selector = '#remote-panes button'
+    selector = primary_pane_selector(pane_id)
     button = wait_for(lambda: browser.evaluate(
-        "document.querySelector('#remote-panes button')?.firstChild?.textContent || null"),
+        'document.querySelector('+json.dumps(selector)+')?.firstChild?.textContent || null'),
         'android_reentry_dashboard_missing', timeout=60)
     if button != f'{pane_id} · {terminal_id}':
         raise GuiFailure('android_reentry_target_mismatch')
@@ -879,7 +983,7 @@ def run_android(args, root, env, config, approval):
         browser.select_observer_canvas(guarded);progress.mark('canvasSelectionVerified');progress.phase('dashboard')
         browser.click('#remote-review')
         browser.click('#remote-connect')
-        selector = '#remote-panes button'
+        selector = primary_pane_selector(config['paneId'])
         button = wait_for(lambda: browser.read(selector), 'android_pane_dashboard_missing', timeout=60)
         if not button.startswith(config['paneId']+' · '):
             raise GuiFailure('android_unexpected_dashboard_pane')
@@ -970,6 +1074,11 @@ def run_android(args, root, env, config, approval):
         browser.click('#remote-cancel')
         wait_for(lambda: '陈旧' in (browser.read('#remote-captured') or ''), 'android_stale_marker_missing')
         progress.mark('stoppedStale')
+        blocked_evidence=None
+        if not guarded:
+            progress.phase('blocked_target_entry')
+            blocked_evidence=exercise_blocked_target(browser,approval,config)
+            progress.mark('blockedTargetVerified')
         progress.phase('local_revocation_review')
         wait_for(lambda: browser.evaluate("document.querySelector('#remote-cancel').disabled"),
                  'android_observer_still_active')
@@ -992,6 +1101,7 @@ def run_android(args, root, env, config, approval):
                 'revocationReviewed':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                 'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                 'inputQueueAccepted':bool(receipts), 'inputReceipts':receipts,
+                **({'blockedTargetEvidence':blocked_evidence} if blocked_evidence is not None else {}),
                 'fontDiagnosticEvidence':font_diagnostic_evidence, 'observerCanvasEvidence':canvas_evidence,
                 **({'tui': tui_evidence} if tui_evidence is not None else {}),
                 **paste_evidence,

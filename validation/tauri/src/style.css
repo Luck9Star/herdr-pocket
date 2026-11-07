@@ -88,3 +88,7 @@
 .font-diagnostics-choice { display: block; width: 100%; min-height: 44px; margin-top: 6px; padding: 8px 10px; color: var(--hp-textPrimary); background: var(--hp-card); border: 1px solid var(--hp-borderStrong); border-radius: 8px; font: inherit; }
 .font-diagnostics-legend li { overflow-wrap: anywhere; }
 .font-diagnostics-theme-legend { grid-template-columns: minmax(0, 1fr); }
+.connection-diagnostics { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--hp-borderStrong); border-radius: 10px; }
+.connection-diagnostics summary { min-height: 44px; display: list-item; cursor: pointer; line-height: 44px; }
+.connection-diagnostics p,.connection-diagnostics li { overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
+.connection-diagnostics ol { padding-inline-start: 20px; }

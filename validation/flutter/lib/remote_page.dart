@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
+import 'connection_diagnostics.dart';
 import 'remote_adapter.dart';
 import 'remote_input.dart';
 import 'remote_input_review.dart';
@@ -77,6 +78,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   int observationEpoch = 0;
   HostDashboardAttempt? summaryAttempt;
   String status = '审查接入 → 会话 pane 看板 → 选择目标观察';
+  ConnectionDiagnostics? connectionDiagnostics;
   RemoteDashboard? dashboard;
   String? selectedPane;
   RemotePane? selectedTarget;
@@ -359,6 +361,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     widget.summaryLease?.invalidate(); summaryAttempt = null;
     inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
     request++; frozenNode = null; identityLease?.cancel(); unawaited(adapter.cancel());
+    connectionDiagnostics?.stopped();
     widget.onStopped?.call();
     fields['privateKeyPem']!.clear();
     if (mounted) setState(() { busy = false; live = false; reviewed = false; viewPaused = false; dashboardFresh = false; showingFontDiagnostics = false; status = message; });
@@ -390,7 +393,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final ticket = ++request;
     observationEpoch = 0;
     summaryAttempt = widget.summaryLease?.begin();
-    setState(() { busy = true; });
+    final beforeGeneration = adapter.generation;
+    setState(() { busy = true; connectionDiagnostics = ConnectionDiagnostics(); });
     try {
       final network = widget.networkBinding;
       if (network?.profile != null) {
@@ -399,6 +403,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         if (!mounted || ticket != request) return;
         network.requireTransport(overlayReady:true);
       } else { network?.requireTransport(); }
+      if (mounted && ticket == request) setState(() { connectionDiagnostics?.localRouteReady(); });
       widget.onConnecting?.call();
       final values = {
         'schemaVersion':1,for (final e in fields.entries) if (e.key != 'port' && e.key != 'privateKeyPem') e.key:e.value.text,
@@ -446,7 +451,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             ? '会话看板为空 · 未发现 pane，不代表主机没有任务' : '会话看板已核验 · 请选择一个明确 pane 开始观察'; });
         if (!viewPaused && widget.visibility?.value != false && value.observationEpoch == observationEpoch) summaryAttempt?.publish(value);
         if (requested != null && selectedTarget == null && selectedPane == requested.paneId && canSelect) {
-          adapter.selectTarget(value.generation,requested); selectedTarget = requested; reportView();
+          adapter.selectTarget(value.generation,requested); selectedTarget = requested;
+          connectionDiagnostics?.targetSelected(requested.paneId,requested.terminalId); reportView();
         }
       },onFrame:(generation,paneId,frame) {
         if (!mounted || ticket != request || widget.visibility?.value == false || viewPaused || frame.observationEpoch != observationEpoch ||
@@ -504,12 +510,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           if (!live) status = '';
           snapshot = RemoteSnapshot(generation,config.session,paneId,frame.ansi);
           capturedAt = DateTime.now(); sequence = frame.seq; live = true;
+          if (frame.full) connectionDiagnostics?.frameAccepted();
         });
         if (frame.full && widget.requestedTarget is BlockedSummaryTarget) blockedEntryConfirmed = true;
         reportView();
       },onProgress:(generation,phase) {
         if (!mounted || ticket != request) return;
         if (phase == 'snapshot') widget.onAuthenticated?.call();
+        setState(() { connectionDiagnostics?.progress(phase); });
         if (live || phase == 'snapshot_received' || phase == 'full_received') return;
         setState(() { status = switch (phase) {
           'connecting' => '正在连接 · 尚未信任主机',
@@ -526,6 +534,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       clearScreenSelection();
       inputGate.invalidate(); terminalFocus.unfocus();
       final code = error is RemoteFailure ? error.code : 'connection_failed';
+      final evidence = adapter.evidence;
+      final sameAttempt = evidence.generation > beforeGeneration;
+      connectionDiagnostics?.fail(code,hostChecked:sameAttempt && evidence.hostKeyChecked,
+        hostMatched:sameAttempt && evidence.hostKeyMatched,authStarted:sameAttempt && evidence.authStarted);
       setState(() { busy = false; live = false; reviewed = false; viewPaused = false; dashboardFresh = false;
         status = switch (code) {
           'provider_unavailable' => 'provider_unavailable · 此平台或网络的连接桥不可用，已停止；不会改走系统 TCP 或 DNS',
@@ -565,7 +577,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     showingFontDiagnostics = false; resetKeyboardControls(); dismissPasteReview(); clearScreenSelection();
     setState(() { selectedPane = pane.paneId; selectedTarget = pane; live = false; status = '目标已选择 · 等待新 full'; });
     reportView();
-    try { adapter.selectTarget(board.generation,pane); }
+    try { adapter.selectTarget(board.generation,pane); connectionDiagnostics?.targetSelected(pane.paneId,pane.terminalId); }
     on RemoteFailure { stop('目标选择已失效 · 请重新审查连接'); }
   }
 
@@ -1099,6 +1111,23 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       draftRevision++; // Consumes this clear review even for an archived target.
     });
   }
+  Widget connectionDiagnosticsPanel(ConnectionDiagnostics value) {
+    Widget row(String key,String title,ConnectionStepState state,{String? detail}) => Padding(
+      padding:const EdgeInsets.symmetric(vertical:4),child:Text('$title · ${ConnectionDiagnostics.label(state)}${detail == null ? '' : ' · $detail'}',key:ValueKey('remote-diagnostic-$key')));
+    return ExpansionTile(key:const ValueKey('remote-connection-diagnostics'),tilePadding:EdgeInsets.zero,
+      title:const Text('本次连接核验'),subtitle:const Text('展开查看最后一次主动连接的阶段与建议'),
+      children:[
+        row('network','网络路径',value.network,detail:value.localNetworkReady && value.network != ConnectionStepState.passed ? '本机路径已选，目标连通尚未证实' : null),
+        row('host-key','主机指纹',value.hostKey),
+        row('authentication','SSH 公钥认证',value.authentication),
+        row('dashboard','会话看板',value.dashboard),
+        row('first-frame','终端首帧',value.firstFrame),
+        if (value.selectedPane != null) Text('已选目标：${value.selectedPane} · ${value.selectedTerminal}',key:const ValueKey('remote-diagnostic-target')),
+        Text(value.guidance,key:const ValueKey('remote-diagnostic-guidance')),
+        const Text('仅本页保留本次结果；不记录认证凭据、终端内容或网络秘密。'),
+      ]);
+  }
+
   Widget unsentDraftPanel() {
     final retained = <String,String>{...drafts,if (draftTarget != null) draftTarget!:draft.text};
     final entries = retained.entries.where((entry) => entry.value.isNotEmpty && draftOrigins.containsKey(entry.key) &&
@@ -1193,6 +1222,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           if (widget.networkBinding != null) Text('冻结网络：${widget.networkBinding!.label}',key:const ValueKey('remote-network-binding')),
           Semantics(liveRegion:true,child:Text(displayStatus,key:const ValueKey('remote-status'),
             style:TextStyle(color:widget.tokens.color('textSecondary')))),
+          if (connectionDiagnostics != null) connectionDiagnosticsPanel(connectionDiagnostics!),
           Text(dashboardSyncedAt == null ? '会话看板：尚无已确认的同步时间' :
             '上次已核验会话看板：$dashboardSyncSource\n同步于 ${dashboardSyncedAt!.toLocal().toIso8601String()} · 此时间不代表终端画面已更新',
             key:const ValueKey('remote-dashboard-sync')),

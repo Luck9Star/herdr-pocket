@@ -12,6 +12,7 @@ import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/pairing_public_key.dart';
 import 'package:herdr_flutter_probe/remote_page.dart';
+import 'package:herdr_flutter_probe/remote_adapter.dart' show RemotePane;
 import 'package:herdr_flutter_probe/remote_screen_viewport.dart';
 import 'package:herdr_flutter_probe/theme_prompt_samples.dart';
 
@@ -20,6 +21,7 @@ const fixtureEnabled = String.fromEnvironment('HERDR_ANDROID_NATIVE_PAIRING');
 const runId = String.fromEnvironment('HERDR_ANDROID_RUN_ID');
 const publicTarget = String.fromEnvironment('HERDR_ANDROID_TARGET_JSON');
 const publicProfile = String.fromEnvironment('HERDR_ANDROID_PROFILE_JSON');
+const blockedTargetsRaw = String.fromEnvironment('HERDR_ANDROID_BLOCKED_TARGETS',defaultValue:'[]');
 const hostFingerprint = String.fromEnvironment('HERDR_ANDROID_HOST_FINGERPRINT');
 const publicDirectory = String.fromEnvironment('HERDR_ANDROID_PUBLIC_DIR');
 const guardedInput = bool.fromEnvironment('POCKET_GUARDED_INPUT');
@@ -62,6 +64,65 @@ Map<String,dynamic> checkedTarget() {
     throw StateError('invalid_public_android_target');
   }
   return value;
+}
+
+List<({String paneId,String terminalId})> checkedBlockedTargets(Map<String,dynamic> target) {
+  if (utf8.encode(blockedTargetsRaw).length > 1024) throw StateError('invalid_blocked_targets');
+  // Flat JSON records are parsed before decoding each string so duplicate
+  // keys, unknown values and trailing input cannot be silently normalized.
+  var at=0;
+  void ws() { while (at<blockedTargetsRaw.length && ' \t\r\n'.contains(blockedTargetsRaw[at])) { at++; } }
+  bool take(String token) { ws(); if (at<blockedTargetsRaw.length && blockedTargetsRaw[at]==token) { at++; return true; } return false; }
+  String string() {
+    ws(); final match=RegExp(r'"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"').matchAsPrefix(blockedTargetsRaw,at);
+    if (match==null) throw StateError('invalid_blocked_targets');
+    at=match.end; return jsonDecode(match[0]!) as String;
+  }
+  if (!take('[')) throw StateError('invalid_blocked_targets');
+  final decoded=<Map<String,dynamic>>[];
+  if (!take(']')) {
+    while (true) {
+      if (!take('{')) throw StateError('invalid_blocked_targets');
+      final item=<String,dynamic>{};
+      while (true) {
+        final key=string();
+        if (item.containsKey(key) || !take(':')) throw StateError('invalid_blocked_targets');
+        item[key]=string();
+        if (take('}')) break;
+        if (!take(',')) throw StateError('invalid_blocked_targets');
+      }
+      decoded.add(item);
+      if (take(']')) break;
+      if (!take(',')) throw StateError('invalid_blocked_targets');
+    }
+  }
+  ws(); if (at != blockedTargetsRaw.length || decoded.length != (guardedInput ? 0 : 2)) throw StateError('invalid_blocked_targets');
+  final panes=<String>{},terminals=<String>{},result=<({String paneId,String terminalId})>[];
+  for (final item in decoded) {
+    if (item.length != 2 || !item.containsKey('paneId') || !item.containsKey('terminalId')) {
+      throw StateError('invalid_blocked_targets');
+    }
+    final pane=item['paneId'],terminal=item['terminalId'];
+    if (pane is! String || terminal is! String || !RegExp(r'^[A-Za-z0-9:_-]{1,128}$').hasMatch(pane) ||
+        !RegExp(r'^term_[0-9a-f]{1,123}$').hasMatch(terminal) || pane == target['paneId'] ||
+        !panes.add(pane) || !terminals.add(terminal)) throw StateError('invalid_blocked_targets');
+    result.add((paneId:pane,terminalId:terminal));
+  }
+  return List.unmodifiable(result);
+}
+
+/// Scan code points without constructing or exporting arbitrary screen text.
+bool screenHasMarker(Terminal terminal,String marker,{int firstRow=0,int? endRow,int firstColumn=0,int? endColumn}) {
+  final chars=marker.codeUnits,rows=endRow ?? terminal.viewHeight,cols=endColumn ?? terminal.viewWidth;
+  for (var y=firstRow;y<rows;y++) {
+    final line=terminal.buffer.lines[y];
+    for (var x=firstColumn;x+chars.length<=cols;x++) {
+      var matches=true;
+      for (var i=0;i<chars.length;i++) { if (line.getCodePoint(x+i)!=chars[i]) { matches=false; break; } }
+      if (matches) return true;
+    }
+  }
+  return false;
 }
 
 Future<void> until(WidgetTester tester, bool Function() ready, {int seconds = 60}) async {
@@ -502,6 +563,7 @@ void main() {
     try {
     expect(tester.testTextInput.isRegistered,isFalse);
     final target = checkedTarget();
+    final blockedTargets = checkedBlockedTargets(target);
     final exchange = Directory(publicDirectory);
     if (exchange.existsSync()) throw StateError('android_public_exchange_already_exists');
     exchange.createSync(recursive:true);
@@ -789,6 +851,7 @@ void main() {
     final fontDiagnostics = await readFontDiagnostic(tester);
     await until(tester,() => (displayedSequence(tester) ?? -1) > deltaSequence);
     final inputReceipts = <Map<String,Object>>[];
+    Map<String,Object>? blockedTargetEvidence;
     List<int>? restoredViewport;
     Map<String,Object>? tuiEvidence;
     if (guardedInput) {
@@ -976,9 +1039,90 @@ void main() {
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-draft'))).onSelected,isNull);
     if (guardedInput) await tester.sendKeyEvent(LogicalKeyboardKey.keyX,character:'x');
+    // Capture the visible original tab identity, not the host profile id.
+    final originalTabs = !guardedInput
+      ? tester.widgetList<TextButton>(hostTab()).map((w) => (w.key! as ValueKey<String>).value).toSet() : <String>{};
+    if (!guardedInput) expect(originalTabs.length,1);
     await tap(tester,find.byTooltip('返回离线验证')); // Production remote page's explicit back control.
     await tester.pump(const Duration(milliseconds:400));
     await tapKey(tester,'hosts-board-tab');
+    if (!guardedInput) {
+      stage('blocked_history');
+      final summary = find.byKey(ValueKey('host-task-summary-$id'));
+      await until(tester,() => summary.evaluate().length == 1 &&
+        tester.widgetList<Text>(find.descendant(of:summary,matching:find.byType(Text))).any((w) => (w.data ?? '').contains('上次主机报告')));
+      final group = find.byKey(ValueKey(blockedSummaryGroupKey(id)));
+      await until(tester,() => group.evaluate().length == 1);
+      await tap(tester,group);
+      stage('blocked_list');
+      final rows = find.descendant(of:group,matching:find.byWidgetPredicate((widget) => widget is ListTile &&
+        widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('host-blocked-target-')));
+      await until(tester,() => rows.evaluate().length == 2);
+      expect(rows,findsNWidgets(2));
+      final listedRows=rows.evaluate().length;
+      for (final item in blockedTargets) {
+        final key=blockedSummaryTargetKey(id,RemotePane(item.paneId,item.terminalId));
+        expect(find.byKey(ValueKey(key)),findsOneWidget);
+      }
+      final b=blockedTargets[1];
+      stage('blocked_target_open');
+      final bKey=blockedSummaryTargetKey(id,RemotePane(b.paneId,b.terminalId));
+      await tap(tester,find.byKey(ValueKey(bKey))); // One explicit tap on B.
+      await until(tester,() => hostTab().evaluate().length == 2);
+      final currentTabs=tester.widgetList<TextButton>(hostTab()).map((w) => (w.key! as ValueKey<String>).value).toSet();
+      expect(currentTabs.length,2); expect(currentTabs.containsAll(originalTabs),isTrue);
+      expect(currentTabs.difference(originalTabs).length,1);
+      stage('blocked_identity_review');
+      final connectPair=find.byKey(const ValueKey('pair-connect'));
+      await until(tester,() => connectPair.evaluate().length == 1 &&
+        tester.widget<FilledButton>(connectPair).onPressed != null && find.textContaining('本机原身份已匹配').evaluate().isNotEmpty);
+      await tap(tester,connectPair);
+      await until(tester,() => find.byType(RemotePage).evaluate().length == 1);
+      stage('blocked_ssh_review');
+      final review=find.byKey(const ValueKey('remote-review')),connect=find.byKey(const ValueKey('remote-connect'));
+      expect(tester.widget<CheckboxListTile>(review).value,isFalse);
+      expect(tester.widget<FilledButton>(connect).onPressed,isNull);
+      final check=await stableReviewCheckbox(tester,'remote-review');
+      await tester.tap(check); await tester.pump(const Duration(milliseconds:150));
+      checkPointerError(tester);
+      expect(tester.widget<CheckboxListTile>(review).value,isTrue);
+      expect(tester.widget<FilledButton>(connect).onPressed,isNotNull);
+      await tap(tester,connect); // One explicit connection after a fresh review.
+      stage('blocked_observe');
+      await until(tester,() => find.byType(TerminalView).evaluate().length == 1 &&
+        find.textContaining('只读观察中').evaluate().length == 1 && displayedSequence(tester) != null &&
+        find.textContaining('当前输入目标：').evaluate().length == 1);
+      expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+      expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
+      expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-draft'))).onSelected,isNull);
+      // This label is generated from inputGate.target, which production sets
+      // from adapter.inputTarget only after its validated full frame; it is not
+      // the requested target or the host-list row used to initiate this tab.
+      final boundText=tester.widget<Text>(find.textContaining('当前输入目标：')).data!;
+      final parts=boundText.split(' / ');
+      expect(parts.length,4); expect(parts[1],target['session']);
+      final actualPane=parts[2],actualTerminal=parts[3];
+      expect(actualPane,b.paneId); expect(actualTerminal,b.terminalId);
+      final view=find.byType(TerminalView),viewport=find.byKey(const ValueKey('remote-horizontal-scroll'));
+      await tester.ensureVisible(viewport); await tester.pump(const Duration(milliseconds:150));
+      stage('blocked_marker');
+      bool visibleB() {
+        if (view.evaluate().length != 1) return false;
+        final term=tester.widget<TerminalView>(view).terminal;
+        final render=tester.state<TerminalViewState>(view).renderTerminal;
+        final bounds=Offset.zero & tester.view.physicalSize / tester.view.devicePixelRatio;
+        final cells=visibleRemoteScreenCells(term,render,bounds);
+        return cells != null && screenHasMarker(term,'POCKET-BLOCKED-B',firstRow:cells.firstRow,endRow:cells.endRow,
+          firstColumn:cells.firstColumn,endColumn:cells.endColumn) && !screenHasMarker(term,'POCKET-BLOCKED-A');
+      }
+      await until(tester,visibleB,seconds:30); expect(visibleB(),isTrue);
+      expect(tester.widget<TerminalView>(view).readOnly,isTrue);
+      expect(tester.widget<TerminalView>(view).autoResize,isFalse);
+      blockedTargetEvidence={'paneId':actualPane,'terminalId':actualTerminal,'listedRows':listedRows,
+        'reviewRequired':true,'observing':true,'markerMatched':true,'otherMarkerAbsent':true};
+      stage('blocked_return');
+      await tapKey(tester,'hosts-board-tab');
+    }
     stage('delete_local_identity');
     await tapKey(tester,'host-delete-$id');
     await tap(tester,find.widgetWithText(FilledButton,'仅删除本机'));
@@ -986,6 +1130,7 @@ void main() {
       find.textContaining('本机已删除 · 主机授权未因此撤销').evaluate().isNotEmpty);
     expect(tester.takeException(),isNull);
     stage('complete');
+    if (!guardedInput) expect(blockedTargetEvidence,isNotNull);
     final report = <String,Object?>{
       'case':guardedInput ? 'android-native-pairing-guarded-input' : 'android-native-pairing-observe','buildMode':'debug',
       'productionMain':true,'defaultHostCatalog':true,'uninjectedNativeDeviceKeys':true,
@@ -998,7 +1143,7 @@ void main() {
       'identityCreationActions':identityCreationActions,'firstSequence':firstSequence,'deltaSequence':deltaSequence,
       'localFontMarkerColumns':fontDiagnostics.markers,
       'localThemePromptCursors':fontDiagnostics.themes,
-      if (!guardedInput) 'observerCanvas':observerCanvas,
+      if (!guardedInput) ...{'observerCanvas':observerCanvas,'blockedTargetEvidence':blockedTargetEvidence},
       'frameCountLowerBound':2,'deltaCountLowerBound':1,
       if (guardedInput) ...{
         'guardedInput':true,'directInputAccepted':true,'draftInputAccepted':true,

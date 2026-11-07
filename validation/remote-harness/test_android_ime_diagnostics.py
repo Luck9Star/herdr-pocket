@@ -147,7 +147,7 @@ class ProgressTests(unittest.TestCase):
                     [('host','host'),('port','port'),('user','username'),('session','session'),
                      ('herdr','herdrPath'),('socket','socketPath'),('pin','expectedHostKey')]}
                 return {**values,'#pair-handoff-status':'已复制','#pair-status':'授权响应已审查',
-                        '#remote-panes button':'p · synthetic-terminal'}[selector]
+                        '#remote-panes button[data-pane-id="p"]':'p · synthetic-terminal'}[selector]
             view.read.side_effect = read
             with patch.dict(os.environ,{'RUNNER_TEMP':str(base),'GITHUB_ACTIONS':'true','ANDROID_SERIAL':android.SERIAL}), \
                     patch.object(android,'adb',side_effect=adb) as command, \

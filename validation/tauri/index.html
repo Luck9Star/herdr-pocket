@@ -81,6 +81,7 @@
 <div class="remote-actions"><button id="remote-connect" type="submit" class="primary" disabled>核验并读取看板</button><button id="remote-cancel" type="button" disabled>停止观察</button><button id="remote-hide-keyboard" type="button">收起键盘</button><button id="remote-clear-key" type="button">清除临时私钥</button></div>
 </form>
 <p id="remote-status" class="remote-status" role="status" aria-live="polite"></p>
+<div id="remote-connection-diagnostics"></div>
 <section id="tab-workspace" class="remote-result" hidden aria-label="终端标签"><div class="remote-result-heading"><strong>终端标签</strong><nav id="view-tabs" class="terminal-tabs" aria-label="终端标签"></nav></div><div id="view-content"></div></section>
 <section id="remote-dashboard" class="remote-result" hidden aria-label="当前会话 pane"><h2>当前会话 pane</h2><p>选择会话中的一个 pane 开始只读观察。</p><div id="remote-panes" class="remote-actions"></div></section>
 <section id="remote-result" class="remote-result" hidden aria-label="远端终端观察"><div class="remote-result-heading"><strong>远端终端</strong><p id="remote-captured"></p></div><button type="button" id="remote-font-diagnostics" disabled>字体与字符诊断</button><div class="term-scroll"><div id="remote-terminal" class="terminal-host"></div></div><p>可滚动查看完整观察画布；窗口和键盘变化仅影响本地视口。</p>

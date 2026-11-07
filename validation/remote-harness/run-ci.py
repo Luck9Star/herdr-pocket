@@ -19,6 +19,7 @@ import tempfile
 import time
 import urllib.request
 from guarded_input import EvidenceError, expected_bytes, validate_mode
+from blocked_fixture import BlockedFixtureFailure, BlockedTargets
 
 REPO = Path(__file__).resolve().parents[2]
 HERDR_SHA = '14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d'
@@ -315,6 +316,8 @@ def main():
     root = Path(tempfile.mkdtemp(prefix='hp-mobile-' + os.environ['GITHUB_RUN_ID'] + '-', dir='/tmp'))
     os.chmod(root, 0o700)
     processes = []
+    blocked_fixture = None
+    args.blocked_targets = []
     env = {k: v for k, v in os.environ.items()
            if not k.startswith('HERDR_') and k not in ('SSH_AUTH_SOCK', 'SSH_AGENT_PID', 'BASH_ENV')}
     env.update(XDG_CONFIG_HOME=str(root / 'config'), XDG_STATE_HOME=str(root / 'state'),
@@ -434,6 +437,11 @@ LogLevel VERBOSE
         command(['sudo', 'mkdir', '-p', '/run/sshd'])
         command(['sudo', '/usr/sbin/sshd', '-t', '-f', root / 'sshd_config'])
         spawn(['sudo', '/usr/sbin/sshd', '-D', '-e', '-f', root / 'sshd_config'], 'sshd.log')
+        # These are runner-owned servers, never the operator's live sessions.
+        # No fixture needs background downloads or binary/manifest self-updates.
+        fixture_config = root / 'config/herdr'
+        fixture_config.mkdir(parents=True,exist_ok=True)
+        (fixture_config/'config.toml').write_text('[update]\nversion_check = false\nmanifest_check = false\n')
         sock = start_session('pocket-probe')
 
         # Fixture creation is privileged test setup, separate from both adapters.
@@ -469,6 +477,11 @@ LogLevel VERBOSE
                   'socketPath': str(sock),
                   'herdrPath': str(herdr), 'session': 'pocket-probe', 'paneId': pane,
                   'reviewConfirmed': True}
+        if (args.paired_gui in ('tauri-android','flutter-android') and
+                not args.input_fixture and not args.android_guarded_input and not args.android_tui):
+            # Additional workspaces keep the primary input/observer PTY intact.
+            blocked_fixture = BlockedTargets(root,config,command)
+            args.blocked_targets = blocked_fixture.prepare()
         if args.paired_gui:
             # Import the pairing dependencies only for the isolated GUI workflow.
             from paired_gui import run_gui
@@ -547,12 +560,20 @@ LogLevel VERBOSE
             sources.append((args.flutter_app / 'pubspec.lock', 'flutter-pubspec.lock'))
         for source, dest in sources:
             shutil.copy2(source, out / dest)
-    except ProbeFailure as exc:
+    except (ProbeFailure,BlockedFixtureFailure) as exc:
         report['errorCode'] = str(exc)
     except Exception:
         # Never stringify exceptions that can contain stdout or connection data.
         report['errorCode'] = 'fixture_setup_failed'
     finally:
+        if blocked_fixture is not None:
+            try:
+                report['blockedTargetsFixture'] = blocked_fixture.stop()
+            except (OSError,ValueError):
+                report['blockedTargetsFixture'] = {'ownedWaitingProcessesStopped':False,
+                    'noObservedResize':False,'receivedInputBytes':None}
+                if report['status'] == 'passed':
+                    report.update(status='failed',errorCode='blocked_fixture_cleanup_unconfirmed')
         (root / 'stop-capture').write_text('stop')
         if args.paired_gui and (root/'capture-ready').is_file():
             report['sharedPty'] = final_pty_evidence(root)

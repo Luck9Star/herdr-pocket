@@ -19,6 +19,7 @@ from pairing import fingerprint
 from herdr_pocket_helper.store import Host
 from guarded_input import ANDROID_ROUTES, DIRECT, DRAFT, EvidenceError, expected_bytes, mobile_receipts, mobile_tui_evidence
 from paired_tui import validate_report
+from blocked_fixture import BlockedFixtureFailure, bindings as blocked_bindings, snapshot as blocked_snapshot
 
 
 class GuiFailure(Exception):
@@ -104,7 +105,7 @@ def bounded_wire(path, limit=2048):
 
 
 class FixtureApproval:
-    def __init__(self, root, config, host):
+    def __init__(self, root, config, host, *, blocked_targets=None):
         self.root = root
         self.config = config
         self.host = host
@@ -115,6 +116,19 @@ class FixtureApproval:
         self.tui_terminal_id = None
         self.tui_started = False
         self.tui_verified = False
+        self.blocked_targets = []
+        if blocked_targets:
+            try:
+                self.blocked_targets = blocked_bindings(blocked_snapshot(config['socketPath']),blocked_targets)
+            except BlockedFixtureFailure:
+                raise GuiFailure('blocked_fixture_binding_invalid') from None
+
+    def verify_blocked_targets(self):
+        """Read back the two synthetic bindings, independently of GUI summaries."""
+        try:
+            return blocked_bindings(blocked_snapshot(self.config['socketPath']),self.blocked_targets)
+        except BlockedFixtureFailure:
+            raise GuiFailure('blocked_fixture_binding_invalid') from None
 
     def approve(self, raw):
         now = int(time.time())
@@ -433,7 +447,9 @@ def run_gui(args, root, env, config):
         import tempfile
         with tempfile.TemporaryDirectory(dir=root, prefix='fixture-home-') as scratch:
             host = Host(Path(scratch), config['username'], config['expectedHostKey'])
-            approval = FixtureApproval(root, config, host)
+            blocked_targets = getattr(args,'blocked_targets',None)
+            approval = (FixtureApproval(root,config,host,blocked_targets=blocked_targets) if blocked_targets
+                        else FixtureApproval(root,config,host))
             terminal = None
             try:
                 if args.paired_gui == 'tauri-android':

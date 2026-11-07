@@ -13,6 +13,7 @@ import re
 import subprocess
 import time
 from guarded_input import EvidenceError, mobile_receipts, mobile_tui_evidence, validate_mode
+from mobile_blocked_result import checked_receipt, checked_targets
 
 PACKAGE = 'dev.herdr.herdr_flutter_probe'
 SERIAL = 'emulator-5554'
@@ -58,6 +59,8 @@ KEYBOARD_OBSERVE_CHECKPOINT = 'keyboard-observe-hidden'
 TUI_CHECKPOINT = 'tui-start'
 TUI_RESUME_STAGES = frozenset({'tui_find_board','tui_return_tab','tui_find_resume','tui_resume_full'})
 STAGES.update(TUI_RESUME_STAGES)
+STAGES.update({'blocked_history', 'blocked_list', 'blocked_target_open', 'blocked_identity_review',
+               'blocked_ssh_review', 'blocked_observe', 'blocked_marker', 'blocked_return'})
 STAGES.update({'tui_start','tui_resume_full','tui_initial','tui_select_next','tui_focus_detail',
     'tui_erase_character','tui_focus_list','tui_insert_row','tui_delete_row','tui_open_help',
     'tui_close_help','tui_refresh','tui_finish'})
@@ -924,12 +927,14 @@ def _run(args, root, env, config, approval, owned_process):
     before_forwards = forward_set()
     relative = 'cache/herdr-flutter-android-' + env['GITHUB_RUN_ID']
     defines = root / 'flutter-android-public-defines.json'
+    targets = [] if guarded else checked_targets(approval.blocked_targets)
     defines.write_text(json.dumps({'HERDR_ANDROID_NATIVE_PAIRING': '1', 'HERDR_ANDROID_RUN_ID': env['GITHUB_RUN_ID'],
         'POCKET_GUARDED_INPUT': 'true' if guarded else 'false',
         'HERDR_ANDROID_GUARDED_TUI': 'true' if tui else 'false',
         'HERDR_ANDROID_API35_CLIPBOARD_FIXTURE': 'true' if guarded else 'false',
         'HERDR_ANDROID_API35_KEYBOARD_FIXTURE': 'true',
         'HERDR_ANDROID_TARGET_JSON': json.dumps(config, separators=(',', ':')),
+        'HERDR_ANDROID_BLOCKED_TARGETS': json.dumps(targets, separators=(',', ':')),
         'HERDR_ANDROID_PROFILE_JSON': public_profile_json(config),
         'HERDR_ANDROID_HOST_FINGERPRINT': public_host_fingerprint(config['expectedHostKey']),
         'HERDR_ANDROID_PUBLIC_DIR': '/data/user/0/' + PACKAGE + '/' + relative}), encoding='utf-8')
@@ -959,7 +964,15 @@ def _run(args, root, env, config, approval, owned_process):
             raw = wait_public(process, relative, 'result.json', 8192, timeout=580 if tui else 400, checkpoints=checkpoints)
             if checkpoints is not None:
                 checkpoints.require_complete()
-            result = safe_device_result(json.loads(raw.decode('utf-8')), guarded=guarded,tui=tui)
+            raw_result = json.loads(raw.decode('utf-8'))
+            result = safe_device_result(raw_result, guarded=guarded,tui=tui)
+            if guarded and 'blockedTargetEvidence' in raw_result:
+                raise DeviceFailure('android_blocked_target_evidence_invalid')
+            if not guarded:
+                fresh_targets = approval.verify_blocked_targets()
+                if fresh_targets != targets:
+                    raise DeviceFailure('android_blocked_target_evidence_invalid')
+                result['blockedTargetEvidence'] = checked_receipt(raw_result.get('blockedTargetEvidence'), fresh_targets)
             result['systemKeyboardEvidence'] = {'checkpoints': checkpoints.keyboard_evidence,
                 'scope': 'owned API35 docked IME window and real view insets; automated commits are not IME touch/composition proof',
                 'showWithHardwareKeyboard': True}

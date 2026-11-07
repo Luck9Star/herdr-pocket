@@ -1671,3 +1671,23 @@ test('normal paired font page switches both real theme samples without input or 
   panel.children.find(e=>e.textContent==='关闭诊断').click();assert.equal(document.activeElement,h.nodes['remote-font-diagnostics']);assert.ok(reads.includes('/shared/theme-prompt-samples-v1.json'));
  } finally {h.finish();await flush();h.restore();globalThis.fetch=prior;}
 });
+
+test('paired normal entry retains staged connection facts after auth failure without disclosing native content',async()=>{
+ const h=await setup(),n=h.nodes;try{
+  await pairAndConnect(h);const box=n['remote-connection-diagnostics'],row=id=>box.all().find(e=>e.dataset.connectionStage===id);
+  assert.equal(row('network').dataset.stageState,'pending');h.emit({kind:'stage',generation:9,stage:'host-key-verified'});assert.equal(row('hostKey').dataset.stageState,'verified');assert.equal(row('network').dataset.stageState,'verified');
+  h.fail('authentication_failed');await flush();await flush();assert.equal(row('hostKey').dataset.stageState,'verified');assert.equal(row('authentication').dataset.stageState,'failed');assert.equal(row('dashboard').dataset.stageState,'unknown');assert.equal(row('terminal').dataset.stageState,'unknown');
+  h.emit({kind:'stage',generation:9,stage:'authenticated'});assert.equal(row('authentication').dataset.stageState,'failed');
+  n['host-return-home'].click();await flush();await flush();n['host-list'].children[0].all().find(e=>e.textContent==='打开').click();await flush();await flush();assert.equal(box.children[0].hidden,false);assert.equal(row('hostKey').dataset.stageState,'verified');
+  assert.equal(h.calls.filter(c=>c.name==='remote_observe').length,1);assert.equal(h.calls.filter(c=>c.name==='remote_input_send'||/resize/.test(c.name)).length,0);
+ }finally{h.finish();await flush();h.restore();}
+});
+
+test('paired diagnostics require accepted dashboard and original target full render; pane selectors bind actual ids',async()=>{
+ const h=await setup(),n=h.nodes;try{
+  await pairAndConnect(h);h.emit({kind:'stage',generation:9,stage:'host-key-verified'});h.emit({kind:'stage',generation:9,stage:'authenticated'});publishDashboard(h,blockedPane());const row=id=>n['remote-connection-diagnostics'].all().find(e=>e.dataset.connectionStage===id);
+  assert.equal(row('dashboard').dataset.stageState,'verified');assert.equal(row('terminal').dataset.stageState,'unknown');
+  const button=n['remote-panes'].children.find(e=>e.dataset.paneId==='w1:p1');assert.equal(button.dataset.terminalId,'term_a001');button.click();await flush();h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});assert.equal(row('terminal').dataset.stageState,'pending');
+  h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});assert.equal(row('terminal').dataset.stageState,'verified');n['remote-cancel'].click();assert.equal(row('terminal').dataset.stageState,'verified');assert.match(n['remote-connection-diagnostics'].all().find(e=>e.dataset.attemptState).children[2].textContent,/已结束/);
+ }finally{h.finish();await flush();h.restore();}
+});

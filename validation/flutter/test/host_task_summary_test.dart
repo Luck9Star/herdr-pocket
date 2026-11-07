@@ -40,6 +40,34 @@ void main() {
     expect(summaries.forHost(profile.id)!.blockedCount,2); expect(summaries.forHost(profile.id)!.syncedAt,value.syncedAt);
     summaries.dispose(); catalog.dispose();
   });
+  test('blocked selection binds the exact report and rejects replaced, changed or retired targets',() async {
+    final profile=summaryProfile('A'),catalog=await catalogWith(profile),summaries=HostTaskSummaries(catalog);
+    final lease=summaries.open(profile),attempt=lease.begin()!;
+    attempt.publish(summaryBoard(profile,blocked:2));
+    final first=summaries.forHost(profile.id)!,pane=first.blockedPanes.first;
+    expect(summaries.blockedTarget(profile.id,first,pane),isA<BlockedSummaryTarget>());
+    expect(summaries.blockedTarget(profile.id,first,const RemotePane('w1:p99','term_unknown')),isNull);
+    lease.invalidate();
+    expect(summaries.blockedTarget(profile.id,first,pane),isNull);
+    final stale=summaries.forHost(profile.id)!;
+    expect(summaries.blockedTarget(profile.id,stale,pane),isA<BlockedSummaryTarget>());
+    lease.begin()!.publish(summaryBoard(profile,blocked:0));
+    expect(summaries.blockedTarget(profile.id,stale,pane),isNull);
+    final refreshed=summaries.forHost(profile.id)!; expect(refreshed.blockedPanes,isEmpty);
+    await catalog.update(profile.change(enabled:false,now:1000));
+    expect(summaries.blockedTarget(profile.id,refreshed,pane),isNull);
+    summaries.dispose(); catalog.dispose();
+  });
+  test('duplicate exact identities are never admitted as a blocked target',() async {
+    final profile=summaryProfile('A'),catalog=await catalogWith(profile),summaries=HostTaskSummaries(catalog);
+    final attempt=summaries.open(profile).begin()!;
+    const pane=RemotePane('w1:p1','term_a',agentStatus:'blocked');
+    attempt.publish(RemoteDashboard(1,'probe',const [pane,pane],freshness:DashboardFreshness.fresh,
+      revision:1,source:summarySource(profile),syncedAt:DateTime.utc(2026,11,7)));
+    final value=summaries.forHost(profile.id)!;
+    expect(summaries.blockedTarget(profile.id,value,pane),isNull);
+    summaries.dispose(); catalog.dispose();
+  });
   test('missing provenance or snapshot time never turns unknown into zero',() async {
     final profile=summaryProfile('A'),catalog=await catalogWith(profile),summaries=HostTaskSummaries(catalog),attempt=summaries.open(profile).begin()!;
     attempt.publish(const RemoteDashboard(1,'probe',[],freshness:DashboardFreshness.fresh));

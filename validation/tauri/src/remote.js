@@ -21,6 +21,7 @@ import { invalidatePairReview } from './pairing-lifecycle.js';
 import { dashboardPresentation, paneStatusText } from './dashboard-presentation.js';
 import { initConfigTransfer } from './config-transfer-ui.js';
 import { HostDashboardSummary, hostSummaryIdentity, hostSummaryText } from './host-dashboard-summary.js';
+import {blockedTargetList} from './blocked-target-list.js';
 import { DirectDashboardSummary } from './direct-dashboard-summary.js';
 import { previewPaste, applyPaste } from './paste-review.js';
 import { readClipboardForPaste, clipboardPasteMessage } from './mobile-clipboard.js';
@@ -564,6 +565,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       const title=document.createElement('h3');title.textContent=host.name;card.append(title);
       const detail=document.createElement('p');detail.textContent=`${host.target.username}@${host.target.host}:${host.target.port} · ${host.keyDeletionPending?(host.keyCleanupMode==='identity'?'仅清设备身份待确认，原主机公开资料将保留':'移除主机资料待确认，原引用保留'):host.retired?'已替换并停用，身份保留供删除或撤销':host.enabled?'已启用':'已停用'} · ${host.networkProfileId?'已绑定网络（连接需核验）':'系统连接'} · ${runtimeRevokedHosts.has(host.id) && host.pairingStatus!=='revoked'?'本次运行已停用，撤销回执保存未确认':host.pairingStatus==='revoked'?'已登记主机撤销，原设备记录保留待显式清理':host.pairingStatus==='awaiting-host'?'待主机响应':host.pairingStatus==='cancelled'?'配对已取消，需核查授权':host.deviceFingerprint?'设备资料已存':'未保存设备身份'} · ${hostStatuses.get(host.id) || '尚未在本次运行中连接'}`;card.append(detail);
       const taskSummary=document.createElement('p');taskSummary.textContent=hostSummaryText(hostSummaries.get(host));taskSummary.setAttribute('data-host-task-summary',host.id);card.append(taskSummary);
+      card.append(blockedTargetList({store:hostSummaries,host,disabled:pairBusy,onOpen:target=>void openBlockedTarget(host.id,target)}));
       const name=document.createElement('input');name.value=host.name;name.maxLength=96;name.setAttribute('aria-label',`重命名 ${host.name}`);card.append(name);
       const actions=document.createElement('div');actions.className='saved-host-actions';
       const button=(label,callback)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=callback;b.disabled=pairBusy;actions.append(b);return b;};
@@ -616,13 +618,31 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     activeHostId=view.id;unsavedHostOpen=false;await refreshHosts();render();$('host-save-status').textContent='已保存本机公开资料；不代表主机已验证或仍授权。';return view;
   }
   function summaryHost(host) {return {...host,networkRevision:host.networkProfileId ? networkRevisions.get(host.networkProfileId) : null};}
-  let summaryRenderPending=false;
+  async function openBlockedTarget(hostId,target) {
+    const current=()=>{const host=hostRecords.find(h=>h.id===hostId);return host && !runtimeRevokedHosts.has(hostId) && hostSummaries.blockedTarget(summaryHost(host),target);};
+    if(pairBusy || !current())return;
+    const navigation=++hostNavigation;
+    try {
+      await waitForOldConnection(navigation);
+      if(navigation!==hostNavigation || pairBusy || !current())return;
+      const id=workspace.createBlocked(hostId,target);showRemotePage();await workspace.select(id);
+    } catch {hostMessage('无法重新核查原受阻目标；请刷新资料并核对八标签上限。');}
+  }
+  let summaryRenderPending=false,liveSummaryRenderPending=false;
   function renderLiveSummary() {
-    const panel=$('host-task-board');panel.replaceChildren();panel.hidden=!hostRecords.length;
+    const panel=$('host-task-board');
+    // A live snapshot must not detach the task button currently being read or
+    // operated. Its old ticket remains revoked; publish the replacement on exit.
+    if(panel.contains(document.activeElement)){
+      if(!liveSummaryRenderPending){const note=document.createElement('p');note.setAttribute('role','status');note.dataset.summaryDeferred='true';note.textContent='清单已更新；移开焦点后重新核查当前清单。';panel.append(note);}
+      liveSummaryRenderPending=true;return;
+    }
+    liveSummaryRenderPending=false;panel.replaceChildren();panel.hidden=!hostRecords.length;
     if(panel.hidden)return;
     const heading=document.createElement('h2');heading.textContent='主机任务摘要';panel.append(heading);
     for(const host of hostSummaries.order(hostRecords.map(summaryHost))) {
       const line=document.createElement('p');line.textContent=`${host.name} · ${hostSummaryText(hostSummaries.get(host))}`;line.setAttribute('data-live-host-summary',host.id);panel.append(line);
+      panel.append(blockedTargetList({store:hostSummaries,host,disabled:pairBusy,onOpen:target=>void openBlockedTarget(host.id,target)}));
     }
   }
   function renderSummaryChanges() {
@@ -632,6 +652,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     summaryRenderPending=false;renderHosts();
   }
   $('host-list').addEventListener('focusout',()=>queueMicrotask(()=>{if(summaryRenderPending && !$('host-list').contains(document.activeElement))renderSummaryChanges();}));
+  $('host-task-board').addEventListener('focusout',()=>queueMicrotask(()=>{if(liveSummaryRenderPending && !$('host-task-board').contains(document.activeElement))renderLiveSummary();}));
   function onWorkspaceDashboard(event) {
     const host=hostRecords.find(h=>h.id===event.hostId);if(!host)return;
     const current=summaryHost(host),identity=hostSummaryIdentity(current);

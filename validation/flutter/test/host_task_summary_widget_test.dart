@@ -81,6 +81,43 @@ void main() {
       expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
     });
   }
+  testWidgets('stale blocked row opens a separate review-only tab for the exact target',(tester) async {
+    final catalog=HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+    final profile=tabProfile('Host','probe','127.0.0.1','direct','summary'); await catalog.add(profile);
+    final tabs=HostTabs(),adapters=<String,SummaryWidgetAdapter>{}; await setup(tester,catalog,tabs,adapters);
+    final original=await connectHost(tester,profile,adapters); original.emit(blocked:2); await pumpReports(tester);
+    final oldTab=tabs.active!.id;
+    await tapVisible(tester,'hosts-board-tab'); await tester.pumpAndSettle(); await revealHost(tester,profile.id);
+    await tapVisible(tester,'host-blocked-${profile.id}'); await tester.pumpAndSettle();
+    expect(find.textContaining('上次报告 · 点击后重新核查此目标'),findsOneWidget);
+    await tapVisible(tester,blockedSummaryTargetKey(profile.id,const RemotePane('w1:p1','term_abcd'))); await tester.pumpAndSettle();
+    expect(tabs.tabs.length,2); expect(tabs.active!.id,isNot(oldTab));
+    expect(tabs.active!.requestedTarget,isA<BlockedSummaryTarget>());
+    expect(tabs.active!.requestedTarget!.paneId,'w1:p1'); expect(tabs.active!.requestedTarget!.terminalId,'term_abcd');
+    expect(original.calls,1); expect(original.writes,0);
+    final second=adapters[profile.id]!; expect(second.calls,0); expect(second.writes,0);
+    expect(find.byKey(const ValueKey('pair-connect')),findsOneWidget);
+    await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
+  });
+  testWidgets('compact workspace exposes stable exact target and reports the tab limit',(tester) async {
+    final catalog=HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+    final profile=tabProfile('Host','probe','127.0.0.1','direct','summary'); await catalog.add(profile);
+    final tabs=HostTabs(),adapters=<String,SummaryWidgetAdapter>{};
+    for (var i=0;i<maxOpenHostTabs-1;i++) { expect(tabs.open(profile),isTrue); }
+    tabs.select(null); await setup(tester,catalog,tabs,adapters);
+    final adapter=await connectHost(tester,profile,adapters); adapter.emit(blocked:2); await pumpReports(tester);
+    expect(tabs.tabs.length,maxOpenHostTabs);
+    await tester.tap(find.byKey(const ValueKey('workspace-task-summaries'))); await tester.pumpAndSettle();
+    await tapVisible(tester,blockedSummaryGroupKey(profile.id,compact:true)); await tester.pumpAndSettle();
+    const pane=RemotePane('w1:p1','term_abcd',label:'same',agentStatus:'blocked');
+    final key=blockedSummaryTargetKey(profile.id,pane,compact:true);
+    expect(key,blockedSummaryTargetKey(profile.id,const RemotePane('w1:p1','term_abcd',label:'renamed'),compact:true));
+    expect(key,isNot(blockedSummaryTargetKey(profile.id,const RemotePane('w1:p1','different'),compact:true)));
+    await tapVisible(tester,key); await tester.pump();
+    expect(tabs.tabs.length,maxOpenHostTabs); expect(tabs.notice,contains('最多保留'));
+    expect(adapter.calls,1); expect(adapter.writes,0);
+    await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
+  });
   testWidgets('empty authority differs from unknown, while stale failure retains prior count and time',(tester) async {
     final catalog=HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
     final profile=tabProfile('Host','probe','127.0.0.1','direct','summary'); await catalog.add(profile);
@@ -103,6 +140,8 @@ void main() {
     expect(workspaceTitle(tester),contains('主机报告 · 受阻 1 个'));
     expect(workspaceTitle(tester),contains('持续更新不可用（单次快照）'));
     expect(find.textContaining('当前主机摘要 · 主机报告 · 受阻 1 个'),findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('workspace-task-summaries'))); await tester.pumpAndSettle();
+    expect(find.text('持续更新不可用 · 单次确认报告，打开前重新核查此目标'),findsOneWidget);
     expect(adapter.calls,1); expect(adapter.writes,0); await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
   });
   testWidgets('fresh workspace summary tolerates landscape and keyboard-constrained height',(tester) async {

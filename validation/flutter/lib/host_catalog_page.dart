@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'design_tokens.dart';
 import 'device_keys.dart';
@@ -9,6 +10,10 @@ import 'remote_adapter.dart';
 import 'config_transfer_page.dart';
 import 'network_profiles_page.dart';
 import 'host_task_summary.dart';
+
+String blockedSummaryGroupKey(String hostId,{bool compact=false}) => '${compact ? 'workspace' : 'host'}-blocked-$hostId';
+String blockedSummaryTargetKey(String hostId,RemotePane pane,{bool compact=false}) =>
+  '${compact ? 'workspace' : 'host'}-blocked-target-${jsonEncode([hostId,pane.paneId,pane.terminalId])}';
 
 class HostCatalogPage extends StatefulWidget {
   const HostCatalogPage({super.key,required this.tokens,required this.offlineBuilder,this.catalog,this.keys,this.tabs,this.adapterFactory});
@@ -61,6 +66,22 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     if (matches.length != 1 || HostTab.bindingFor(matches.single,catalog.networkProfiles) != source.binding) return;
     final profile = matches.single;
     tabs.open(profile,networks:catalog.networkProfiles,requestedTarget:pane,adapter:widget.adapterFactory?.call(profile));
+  }
+  void openBlocked(HostProfile profile,HostTaskSummary report,RemotePane pane) {
+    if (busy || !catalog.ready || catalog.writing) return;
+    final target = summaries.blockedTarget(profile.id,report,pane);
+    final matches = catalog.profiles.where((p) => p.id == profile.id && p.enabled && !p.retired && p.hasIdentity).toList();
+    if (target == null || matches.length != 1 ||
+        HostTab.bindingFor(matches.single,catalog.networkProfiles) != HostTab.bindingFor(profile,catalog.networkProfiles)) {
+      setState(() { notice = '原受阻报告或主机身份已改变 · 请重新核查，不会选择替代目标'; });
+      return;
+    }
+    if (tabs.tabs.length >= maxOpenHostTabs) {
+      tabs.open(matches.single,networks:catalog.networkProfiles,requestedTarget:target);
+      return;
+    }
+    tabs.open(matches.single,networks:catalog.networkProfiles,requestedTarget:target,
+      adapter:widget.adapterFactory?.call(matches.single));
   }
   Future<void> transfer() async {
     if (busy || !catalog.ready || catalog.writing || catalog.pendingCreation != null) return;
@@ -154,9 +175,24 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   List<HostProfile> get orderedHosts => summaries.orderedHosts;
   Widget hostSummary(HostProfile profile,{bool compact=false}) {
     final value = summaries.forHost(profile.id);
+    final distinct = <String,RemotePane>{};
+    for (final pane in value?.blockedPanes ?? const <RemotePane>[]) {
+      distinct.putIfAbsent(jsonEncode([pane.paneId,pane.terminalId]),() => pane);
+    }
     return Column(key:ValueKey('${compact ? 'workspace' : 'host'}-task-summary-${profile.id}'),crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Text(value?.label ?? '任务状态未知 · 尚无此主机的有效会话快照'),
       if (value != null) Text(value.detail),
+      if (value != null && distinct.isNotEmpty)
+        ExpansionTile(key:ValueKey(blockedSummaryGroupKey(profile.id,compact:compact)),tilePadding:EdgeInsets.zero,
+          title:Text('受阻窗格 · ${value.blockedCount} 个'),
+          subtitle:Text(value.current ? '打开前仍需审查连接及原目标' : value.freshness == DashboardFreshness.unavailable
+            ? '持续更新不可用 · 单次确认报告，打开前重新核查此目标' : '上次报告 · 点击后重新核查此目标'),
+          children:[for (final pane in distinct.values)
+            ListTile(key:ValueKey(blockedSummaryTargetKey(profile.id,pane,compact:compact)),
+              title:Text(pane.label ?? '受阻窗格'),
+              subtitle:Text('主机 ${profile.label} · 原会话 ${value.source.session}\npane ${pane.paneId} · terminal ${pane.terminalId}'),
+              trailing:const Icon(Icons.chevron_right),
+              onTap:busy || !catalog.ready || catalog.writing ? null : () => openBlocked(profile,value,pane))]),
     ]);
   }
   Widget workspaceSummary() {

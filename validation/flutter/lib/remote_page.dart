@@ -421,6 +421,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       FocusScope.of(context).unfocus();
       inputGate.invalidate();
       setState(() { busy = true; live = false; dashboardFresh = false; dashboard = null; selectedPane = null; selectedTarget = null; sequence = null; snapshot = null; capturedAt = null; terminal?.dispose(); terminal = null; status = '正在连接并核验主机身份'; });
+      var blockedEntryRejected = false, blockedEntryConfirmed = false;
       await adapter.observe(config,onDashboard:(value) {
         if (!mounted || ticket != request || value.generation != adapter.generation ||
             (value.source != null && value.observationEpoch != observationEpoch) ||
@@ -428,6 +429,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         final requested = widget.requestedTarget;
         final canSelect = value.selectable && !viewPaused && widget.visibility?.value != false;
         if (requested != null && selectedTarget == null && canSelect && value.panes.where((p) => p.paneId == requested.paneId && p.terminalId == requested.terminalId).length != 1) {
+          throw const RemoteFailure('resume_target_changed');
+        }
+        if (requested is BlockedSummaryTarget && !blockedEntryConfirmed && canSelect &&
+            !stillBlockedSummaryTarget(requested,value)) {
+          blockedEntryRejected = true;
           throw const RemoteFailure('resume_target_changed');
         }
         setState(() { dashboard = value; reviewed = false; dashboardFresh = value.freshness == DashboardFreshness.fresh && !viewPaused && widget.visibility?.value != false;
@@ -445,6 +451,15 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       },onFrame:(generation,paneId,frame) {
         if (!mounted || ticket != request || widget.visibility?.value == false || viewPaused || frame.observationEpoch != observationEpoch ||
             dashboard?.generation != generation || selectedPane != paneId) return;
+        final requested = widget.requestedTarget;
+        if (requested is BlockedSummaryTarget && !blockedEntryConfirmed) {
+          final current = dashboard;
+          if (blockedEntryRejected || !frame.full || current == null || !current.selectable ||
+              !stillBlockedSummaryTarget(requested,current)) {
+            blockedEntryRejected = true;
+            throw const RemoteFailure('resume_target_changed');
+          }
+        }
         if (frame.full) {
           clearScreenSelection();
           terminal?.dispose();
@@ -490,6 +505,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           snapshot = RemoteSnapshot(generation,config.session,paneId,frame.ansi);
           capturedAt = DateTime.now(); sequence = frame.seq; live = true;
         });
+        if (frame.full && widget.requestedTarget is BlockedSummaryTarget) blockedEntryConfirmed = true;
         reportView();
       },onProgress:(generation,phase) {
         if (!mounted || ticket != request) return;

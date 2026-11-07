@@ -1637,3 +1637,24 @@ test('paired frame updates preserve accurate input status without repeating live
     n['remote-cancel'].click();assert.match(n['remote-captured'].textContent,/陈旧/);
   } finally {h.restore();}
 });
+
+test('live task snapshots retain focused task buttons, revoke old tickets and refresh after focus leaves',async()=>{
+ const h=await setup(),n=h.nodes;
+ try {
+  await pairAndConnect(h);publishDashboard(h,blockedPane());
+  const panel=n['host-task-board'],button=panel.all().find(e=>e.dataset.blockedTarget);
+  assert.ok(button);button.focus();const oldChildren=[...panel.children];
+  h.emit({kind:'dashboard_watch',generation:9,update:{epoch:1,revision:2,phase:'fresh',reason:'updated',panes:blockedPane()}});
+  assert.equal(document.activeElement,button);assert.ok(panel.contains(button));assert.deepEqual(panel.children.slice(0,oldChildren.length),oldChildren);
+  assert.equal(panel.children.filter(e=>e.dataset.summaryDeferred).length,1);
+  h.emit({kind:'dashboard_watch',generation:9,update:{epoch:1,revision:3,phase:'fresh',reason:'updated again',panes:blockedPane()}});
+  assert.equal(panel.children.filter(e=>e.dataset.summaryDeferred).length,1);button.click();await flush();
+  assert.equal(n['view-tabs'].children.length,0,'old ticket cannot open a new target after a newer snapshot');
+  document.activeElement=n['remote-cancel'];panel.dispatch('focusout',{relatedTarget:n['remote-cancel']});await flush();
+  assert.ok(!panel.contains(button));assert.equal(panel.children.filter(e=>e.dataset.summaryDeferred).length,0);assert.match(panel.all().find(e=>e.dataset.blockedTarget).textContent,/观察受阻目标/);
+  const current=panel.all().find(e=>e.dataset.blockedTarget);current.focus();h.finish();await flush();assert.ok(panel.contains(current));
+  document.activeElement=document.body;panel.dispatch('focusout',{relatedTarget:document.body});await flush();
+  assert.match(panel.all().find(e=>e.dataset.blockedTarget).textContent,/重新核查此目标/);
+  assert.equal(h.calls.filter(c=>c.name==='remote_input_send'||c.name==='remote_tab_input_send'||/resize/.test(c.name)).length,0);
+ } finally {h.finish();await flush();h.restore();}
+});

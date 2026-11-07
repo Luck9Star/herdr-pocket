@@ -8,14 +8,15 @@ import 'remote_input.dart' show isValidOverlayRoute;
 
 /// A single session snapshot, never a sum of duplicate views or routes.
 class HostTaskSummary {
-  const HostTaskSummary(this.source,this.syncedAt,this.paneCount,this.blockedCount,this.unknownCount,this.freshness);
+  const HostTaskSummary(this.source,this.syncedAt,this.paneCount,this.blockedCount,this.unknownCount,this.freshness,this.blockedPanes);
   final RemoteDashboardSource source;
   final DateTime syncedAt;
   final int paneCount,blockedCount,unknownCount;
   final DashboardFreshness freshness;
+  final List<RemotePane> blockedPanes;
   bool get current => freshness == DashboardFreshness.fresh;
   bool get priority => current && blockedCount > 0;
-  HostTaskSummary stale() => HostTaskSummary(source,syncedAt,paneCount,blockedCount,unknownCount,DashboardFreshness.stale);
+  HostTaskSummary stale() => HostTaskSummary(source,syncedAt,paneCount,blockedCount,unknownCount,DashboardFreshness.stale,blockedPanes);
   String get label => '${current || freshness == DashboardFreshness.unavailable ? '主机报告' : '上次主机报告'} · 受阻${unknownCount > 0 ? '至少' : ''} $blockedCount 个${unknownCount > 0 ? '＋$unknownCount 个状态未知' : ''}${paneCount == 0 ? ' · 快照确认为空' : ' · 共 $paneCount 个窗格'}${current ? '' : freshness == DashboardFreshness.unavailable ? ' · 持续更新不可用（单次快照）' : ' · 状态待确认'}';
   String get detail => '原会话 ${source.session} · 最后同步 ${syncedAt.toLocal().toIso8601String()}';
 }
@@ -23,8 +24,10 @@ class HostTaskSummary {
 /// Includes identity/endpoint/session/profile revision, but no private material.
 String hostSummaryBinding(HostProfile profile,List<NetworkProfile> networks) => jsonEncode({
   'id':profile.id,'target':profile.target,'networkProfileId':profile.networkProfileId,
+  'requiresNetworkBinding':profile.requiresNetworkBinding,
   'network':networks.where((p) => p.id == profile.networkProfileId).map((p) => p.toJson()).toList(),
   'handle':profile.pairingRecord['handle'],'request':profile.pairingRecord['request'],
+  'authorization':profile.pairingRecord['authorization'],'consumed':profile.pairingRecord['consumed'],
 });
 
 /// Local memory only. The catalog is the authority for which row owns a report.
@@ -99,6 +102,18 @@ class HostTaskSummaries extends ChangeNotifier {
     final network = matches.single,provider = network.provider == 'easytier' ? 'easy-tier' : network.provider;
     return source.route.startsWith('$provider:${network.id}:${network.revision}:');
   }
+  /// A click is valid only for the still-current report and unchanged owner.
+  /// Historical rows identify what to recheck, never authorize input or connect.
+  RemotePane? blockedTarget(String hostId,HostTaskSummary captured,RemotePane target) {
+    if (_disposed || !_foreground || !identical(_values[hostId],captured)) return null;
+    final profile = _profile(hostId);
+    if (profile == null || profile.requiresNetworkBinding ||
+        hostSummaryBinding(profile,catalog.networkProfiles) != _bindings[hostId] || !_matches(profile,captured.source)) return null;
+    final matches = captured.blockedPanes.where((pane) => pane.paneId == target.paneId &&
+      pane.terminalId == target.terminalId && pane.agentStatus == 'blocked').toList();
+    if (target.paneId.isEmpty || target.terminalId.isEmpty || matches.length != 1) return null;
+    return BlockedSummaryTarget(matches.single,captured.source.endpointKey);
+  }
   void _stale(HostDashboardLease lease) {
     if (identical(_owners[lease.hostId],lease) && _values.containsKey(lease.hostId)) {
       _values[lease.hostId] = _values[lease.hostId]!.stale(); _publish();
@@ -122,7 +137,8 @@ class HostTaskSummaries extends ChangeNotifier {
     attempt.source = source.endpointKey;
     _values[lease.hostId] = HostTaskSummary(source,board.syncedAt!,board.panes.length,
       board.panes.where((pane) => pane.agentStatus == 'blocked').length,
-      board.panes.where((pane) => !{'working','blocked','idle','done'}.contains(pane.agentStatus)).length,board.freshness);
+      board.panes.where((pane) => !{'working','blocked','idle','done'}.contains(pane.agentStatus)).length,board.freshness,
+      List<RemotePane>.unmodifiable(board.panes.where((pane) => pane.agentStatus == 'blocked')));
     _bindings[lease.hostId] = lease.binding; _owners[lease.hostId] = lease; _publish();
   }
   @override void dispose() {

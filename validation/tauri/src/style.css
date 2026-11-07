@@ -81,3 +81,7 @@
 .terminal-more-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); gap: 8px; margin-top: 8px; }
 .terminal-more-keys[hidden] { display: none; }
 .terminal-more-keys button { min-width: 0; min-height: 44px; overflow-wrap: anywhere; }
+
+.blocked-target-list { display: grid; gap: 8px; margin: 12px 0; min-width: 0; }
+.blocked-target-list p { margin: 0; }
+.blocked-target-list button { min-height: 44px; width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; }

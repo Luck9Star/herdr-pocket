@@ -37,3 +37,14 @@ test('one-shot blocked remains informative but does not outrank a live blocked h
 test('catalog read failure preserves old snapshot but permanently revokes all old source owners',()=>{
  const store=new HostDashboardSummary(),a=host('a'),b=host('b'),sourceA={},sourceB={};store.begin(a,sourceA);store.publish(a,sourceA,board(['blocked'],'fresh',1234));store.begin(b,sourceB);store.publish(b,sourceB,board([],'fresh',5678));assert.equal(store.suspendAll(),true);assert.equal(store.get(a).current,false);assert.equal(store.get(a).capturedAt,1234);assert.equal(store.get(b).current,false);assert.equal(store.publish(a,sourceA,board(['blocked'],'fresh',9999)),false);store.reconcile([a,b]);assert.equal(store.get(a).capturedAt,1234);const fresh={};store.begin(a,fresh);assert.equal(store.publish(a,fresh,board([],'fresh',10000)),true);assert.equal(store.get(a).current,true);assert.equal(store.get(b).current,false);
 });
+
+test('blocked pair rows are immutable, host scoped, and superseded by a newer authoritative snapshot',()=>{
+ const store=new HostDashboardSummary(),a=host('a'),token={};store.begin(a,token);
+ const pane={paneId:'w1:p1',terminalId:'term_a001',agentStatus:'blocked',label:'same name'};
+ store.publish(a,token,{panes:[pane,{paneId:'w1:p2',terminalId:'term_a002',agentStatus:'working'}],capturedAt:1000,phase:'fresh',epoch:1,revision:1});
+ const target=store.get(a).blocked[0];assert.equal(store.get(a).blocked.length,1);assert.equal(Object.isFrozen(target),true);pane.terminalId='term_ffff';
+ assert.equal(target.terminalId,'term_a001');assert.equal(store.blockedTarget(a,target),true);store.invalidateHost(a.id);assert.equal(store.blockedTarget(a,target),true);
+ assert.equal(store.blockedTarget(host('b'),target),false);assert.equal(store.blockedTarget(host('a',{networkProfileId:'n',networkRevision:2}),target),false);
+ assert.equal(store.publish(a,token,{panes:[],capturedAt:2000,phase:'fresh',epoch:1,revision:1}),false);
+ assert.equal(store.publish(a,token,{panes:[],capturedAt:2000,phase:'fresh',epoch:1,revision:2}),true);assert.equal(store.blockedTarget(a,target),false);assert.equal(store.get(a).blocked.length,0);
+});

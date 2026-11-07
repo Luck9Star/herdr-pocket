@@ -996,3 +996,89 @@ test('saved tab mode status stays truthful across frames, draft, unknown and sto
   await h.ui.hide();assert.ok(h.find('输入结果待核实；输入已锁定。'));
  } finally {h.restore();}
 });
+
+for(const scenario of ['blocked','done','unknown','replacement','empty','network','directory','late proof'])test(`host blocked entry rechecks exact original target: ${scenario}`,async()=>{
+ const oldDocument=globalThis.document;
+ const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+ globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+ const {hostSummaryIdentity}=await import('../src/host-dashboard-summary.js');
+ let host={id:'h',enabled:true,target:{host:'fixture.invalid',username:'u',port:22,session:'original',socketPath:'/tmp/fixture.sock'},deviceFingerprint:'d',networkProfileId:'n',networkRevision:1};
+ const calls=[],channels=[];let observed;
+ const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(7);if(name==='remote_tab_observe'){observed=args;return new Promise(()=>{});}return Promise.resolve();};
+ const terminal=()=>({options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},onData(){},write(_b,done){done();},reset(){},dispose(){}});
+ try {
+  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:()=> 'same name',hostInfo:()=>host,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:terminal});
+  const intent={hostId:'h',identity:hostSummaryIdentity(host),paneId:'w1:p1',terminalId:'term_a001'};ui.createBlocked('h',intent);
+  const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();nodes['view-content'].all().find(n=>n.textContent==='连接').onclick();await flush();await flush();
+  assert.equal(observed.paneId,'');assert.equal(observed.terminalId,'');
+  const emit=event=>channels[0].onmessage({generation:7,...event});emit({kind:'observation',snapshot:{epoch:1,phase:'starting'}});
+  if(scenario==='network')host={...host,networkRevision:2};if(scenario==='directory')host={...host,target:{...host.target,socketPath:'/tmp/replaced.sock'}};
+  const panes=scenario==='empty'?[]:[{paneId:'w1:p1',terminalId:scenario==='replacement'?'term_a002':'term_a001',agentStatus:scenario==='done'?'done':scenario==='unknown'?null:'blocked',label:'same name'}];
+  const board=(revision,rows)=>emit({kind:'dashboard_watch',update:{epoch:1,revision,phase:'fresh',reason:'',panes:rows}});
+  board(1,panes);assert.equal(calls.filter(c=>c.name==='remote_tab_select').length,0,'no selection before receiver ready');emit({kind:'selection_ready',epoch:1});await flush();
+  const valid=['blocked','late proof'].includes(scenario);assert.equal(calls.filter(c=>c.name==='remote_tab_select').length,valid?1:0);
+  if(valid){emit({kind:'selection_ready',epoch:1});await flush();assert.equal(calls.filter(c=>c.name==='remote_tab_select').length,1,'duplicate receiver-ready cannot replay the selection');}
+  if(valid){const selected=calls.find(c=>c.name==='remote_tab_select').args;assert.equal(selected.paneId,intent.paneId);assert.equal(selected.terminalId,intent.terminalId);assert.equal(selected.revision,1);
+   if(scenario==='late proof')board(2,panes);emit({kind:'target_bound',epoch:1,pane_id:intent.paneId,terminal_id:intent.terminalId});
+   if(scenario==='blocked'){emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});emit({kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});assert.equal(nodes['view-content'].all().find(n=>n.tagName==='textarea' && n.attrs['aria-label']==='当前标签草稿').value,'');board(2,[{...panes[0],agentStatus:'done'}]);assert.equal(calls.filter(c=>c.name==='remote_tab_select').length,1,'already bound observation continues without rechecking completed status');}
+  }
+  await flush();assert.equal(calls.some(c=>c.name==='remote_tab_input_send' || c.name==='remote_tab_input_mode' || /resize/.test(c.name)),false);
+  assert.equal(calls.some(c=>c.name==='remote_tab_cancel'),scenario!=='blocked');
+ } finally {globalThis.document=oldDocument;}
+});
+
+test('blocked entry opens an independent observation tab without source draft or direct mode',async()=>{
+ const oldDocument=globalThis.document,oldWindow=globalThis.window;
+ const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+ globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};globalThis.window={confirm:()=>true};
+ const {hostSummaryIdentity}=await import('../src/host-dashboard-summary.js');
+ const host={id:'h',enabled:true,target:{host:'fixture.invalid',username:'u',port:22,session:'original'},deviceFingerprint:'d'};
+ const calls=[],channels=[],observed=[];
+ const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(observed.length+1);if(name==='remote_tab_observe'){observed.push(args);return new Promise(()=>{});}if(name==='remote_tab_input_mode')return Promise.resolve(5);return Promise.resolve();};
+ const terminal=()=>({options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),focus(){document.activeElement=this.textarea;},open(){},onData(fn){this.data=fn;},write(_b,done){done();},reset(){},dispose(){}});
+ try {
+  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:()=> 'host',hostInfo:()=>host,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:terminal});
+  const pair={paneId:'w1:p1',terminalId:'term_a001'};ui.create('h',pair);
+  const find=text=>nodes['view-content'].all().find(n=>n.textContent===text);
+  const connect=async()=>{const check=nodes['view-content'].all().find(n=>n.tagName==='input');check.checked=true;check.onchange();find('连接').onclick();await flush();await flush();};
+  const emit=(i,event)=>channels[i].onmessage({generation:i+1,...event});
+  await connect();emit(0,{kind:'observation',snapshot:{epoch:1,phase:'active'}});emit(0,{kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});emit(0,{kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
+  let draft=nodes['view-content'].all().find(n=>n.attrs['aria-label']==='当前标签草稿');draft.value='source draft never sent';draft.oninput();find('逐键输入').onclick();await flush();await flush();
+  assert.equal(calls.filter(c=>c.name==='remote_tab_input_mode' && c.args.mode==='direct').length,1);
+  const id=ui.createBlocked('h',{hostId:'h',identity:hostSummaryIdentity(host),...pair});await ui.select(id);await connect();
+  assert.equal(observed[1].paneId,'');assert.equal(observed[1].terminalId,'');
+  emit(1,{kind:'observation',snapshot:{epoch:1,phase:'starting'}});emit(1,{kind:'dashboard_watch',update:{epoch:1,revision:1,phase:'fresh',reason:'',panes:[{...pair,agentStatus:'blocked'}]}});emit(1,{kind:'selection_ready',epoch:1});await flush();emit(1,{kind:'target_bound',epoch:1,pane_id:pair.paneId,terminal_id:pair.terminalId});emit(1,{kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});emit(1,{kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
+  draft=nodes['view-content'].all().find(n=>n.attrs['aria-label']==='当前标签草稿');assert.equal(draft.value,'');assert.ok(nodes['view-content'].all().some(n=>n.textContent==='观察未运行；输入已关闭。' || n.textContent==='观察模式；输入已关闭。'));
+  assert.equal(calls.filter(c=>c.name==='remote_tab_input_mode' && c.args.mode==='direct').length,1);assert.equal(calls.some(c=>c.name==='remote_tab_input_send' || /resize/.test(c.name)),false);
+ } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
+});
+
+for(const scenario of ['done before full','replacement before full','stale before full','duplicate pane','duplicate terminal','pause before full','done during render','valid full then done'])test(`blocked entry preserves authority through first full: ${scenario}`,async()=>{
+ const old=globalThis.document,nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+ globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+ const {hostSummaryIdentity}=await import('../src/host-dashboard-summary.js');
+ const host={id:'h',enabled:true,target:{session:'original'},deviceFingerprint:'d'},pair={paneId:'w1:p1',terminalId:'term_a001'},calls=[],channels=[];let writes=0,commit;
+ const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(7);if(name==='remote_tab_observe')return new Promise(()=>{});return Promise.resolve();};
+ const terminal=()=>({options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},onData(){},write(_bytes,done){writes++;commit=done;},reset(){},dispose(){}});
+ try {
+  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:()=> 'host',hostInfo:()=>host,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:terminal});
+  ui.createBlocked('h',{hostId:'h',identity:hostSummaryIdentity(host),...pair});const review=nodes['view-content'].all().find(e=>e.tagName==='input');review.checked=true;review.onchange();nodes['view-content'].all().find(e=>e.textContent==='连接').onclick();await flush();await flush();
+  const emit=event=>channels[0].onmessage({generation:7,...event}),board=(revision,panes,phase='fresh')=>emit({kind:'dashboard_watch',update:{epoch:1,revision,phase,reason:'',panes}});
+  emit({kind:'observation',snapshot:{epoch:1,phase:'starting'}});board(1,[{...pair,agentStatus:'blocked'}]);emit({kind:'selection_ready',epoch:1});await flush();emit({kind:'target_bound',epoch:1,pane_id:pair.paneId,terminal_id:pair.terminalId});
+  const frame=()=>emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
+  if(scenario==='done before full')board(2,[{...pair,agentStatus:'done'}]);
+  if(scenario==='replacement before full')board(2,[{...pair,terminalId:'term_a002',agentStatus:'blocked'}]);
+  if(scenario==='stale before full')board(2,null,'refreshing');
+  if(scenario==='duplicate pane')board(2,[{...pair,agentStatus:'blocked'},{...pair,terminalId:'term_a002',agentStatus:'blocked'}]);
+  if(scenario==='duplicate terminal')board(2,[{...pair,agentStatus:'blocked'},{...pair,paneId:'w1:p2',agentStatus:'blocked'}]);
+  if(scenario==='pause before full')await ui.hide();
+  frame();
+  if(['done during render','valid full then done'].includes(scenario)){
+   assert.equal(writes,1);const provisional=nodes['view-content'].all().find(e=>e.className==='terminal-host');assert.equal(provisional.hidden,true,'no provisional full is displayed before commit');
+   if(scenario==='done during render')board(2,[{...pair,agentStatus:'done'}]);commit();
+   if(scenario==='valid full then done'){assert.equal(provisional.hidden,false);board(2,[{...pair,agentStatus:'done'}]);emit({kind:'frame',epoch:1,frame:{seq:2,full:false,cols:80,rows:24,bytes:[66]}});commit();assert.equal(writes,2);assert.equal(calls.filter(c=>c.name==='remote_tab_ack').length,2);assert.equal(calls.some(c=>c.name==='remote_tab_cancel'),false);}
+   else {assert.equal(provisional.hidden,true);assert.equal(calls.filter(c=>c.name==='remote_tab_ack').length,0);}
+  }else {assert.equal(writes,0);assert.equal(calls.filter(c=>c.name==='remote_tab_ack').length,0);}
+  await flush();assert.equal(calls.some(c=>c.name==='remote_tab_input_send'||/resize/.test(c.name)),false);
+ } finally {globalThis.document=old;}
+});

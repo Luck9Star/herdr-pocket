@@ -134,6 +134,14 @@ class RemotePane {
     'working' => '工作中', 'blocked' => '受阻', 'idle' => '空闲', 'done' => '已完成', _ => '状态未知',
   };
 }
+/// An observation opened from a blocked report requires the same endpoint,
+/// pane and terminal to remain blocked until its first complete frame.
+class BlockedSummaryTarget extends RemotePane {
+  BlockedSummaryTarget(RemotePane pane,this.endpointKey) : super(pane.paneId,pane.terminalId,label:pane.label,
+    agent:pane.agent,agentStatus:pane.agentStatus,workspace:pane.workspace,tab:pane.tab);
+  final String endpointKey;
+}
+
 enum DashboardFreshness { stale, refreshing, fresh, unavailable }
 
 /// Public provenance from the actual connected socket, never a GUI provider label.
@@ -162,6 +170,17 @@ class RemoteDashboard {
   bool get selectable => freshness == DashboardFreshness.fresh || freshness == DashboardFreshness.unavailable;
   RemoteDashboard withFreshness(DashboardFreshness value,{int? revision}) => RemoteDashboard(generation,session,panes,
     freshness:value,revision:revision ?? this.revision,syncedAt:syncedAt,source:source,observationEpoch:observationEpoch);
+}
+/// Revalidate only before the first complete frame of a blocked-row intent.
+bool stillBlockedSummaryTarget(BlockedSummaryTarget target,RemoteDashboard board) {
+  if (board.source?.endpointKey != target.endpointKey) return false;
+  final matches = board.panes.where((p) => p.paneId == target.paneId && p.terminalId == target.terminalId).toList();
+  return matches.length == 1 && matches.single.agentStatus == 'blocked';
+}
+void requireInitialBlockedObservation(RemotePane target,RemoteDashboard board) {
+  if (target is BlockedSummaryTarget && !stillBlockedSummaryTarget(target,board)) {
+    throw const RemoteFailure('resume_target_changed');
+  }
 }
 /// Selection and automatic requested-target restoration share this guard.
 /// A matching ID in an old row is never permission to observe it.
@@ -1010,10 +1029,14 @@ class RemoteReadOnlyAdapter {
       }
       // A watch owns one subscription channel and at most one snapshot at a
       // time. Event payloads are only invalidations, never row mutations.
+      var initialBlockedObservationCompleted = false;
       void publishBoard(DashboardFreshness state,[RemoteDashboard? authority]) {
         if (!_valid(a) || a.observationPaused || onDashboard == null) return;
         if ((state == DashboardFreshness.fresh || state == DashboardFreshness.unavailable) && authority != null && a.selectedTarget != null) {
-          try { requireOriginalObservationTarget(a.selectedTarget!,authority); }
+          try {
+            requireOriginalObservationTarget(a.selectedTarget!,authority);
+            if (!initialBlockedObservationCompleted) requireInitialBlockedObservation(a.selectedTarget!,authority);
+          }
           on RemoteFailure catch (failure) {
             _fail(a,failure); a.observe?.channel.destroy(); return;
           }
@@ -1204,6 +1227,7 @@ class RemoteReadOnlyAdapter {
             final fresh = await snapshot(observation:true); checkObservation();
             checkObservation();
             requireOriginalObservationTarget(selected,fresh);
+            if (!initialBlockedObservationCompleted) requireInitialBlockedObservation(selected,fresh);
           }
           checkObservation();
           a.inputTarget = RemoteInputTarget(connection:a,generation:a.generation,
@@ -1251,6 +1275,7 @@ class RemoteReadOnlyAdapter {
               RemoteFrame(frame.seq,frame.full,frame.ansi,cols:frame.cols,rows:frame.rows,
                 observationEpoch:epoch,inputJournalRead:inputJournalRead))),timed:false,observation:true);
             checkObservation();
+            if (frame.full) initialBlockedObservationCompleted = true;
             if (onDashboard == null) break;
           }
           checkObservation();

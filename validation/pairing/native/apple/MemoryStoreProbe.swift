@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import Security
 
 // No AppleKeychainSeedBackend instance is constructed or called in this probe.
 final class MemorySeedBackend: SeedBackend {
@@ -15,7 +16,8 @@ final class MemorySeedBackend: SeedBackend {
         return value
     }
     func delete(handle: String) throws {
-        guard !locked, values.removeValue(forKey: handle) != nil else { throw DeviceKeyError.missing }
+        guard !locked else { throw DeviceKeyError.missing }
+        values.removeValue(forKey: handle)
     }
 }
 
@@ -35,6 +37,11 @@ final class MemorySeedBackend: SeedBackend {
         catch DeviceKeyError.missing { }
         backend.locked = false
         try store.delete(handle)
+        try store.delete(handle)
+        try checkedDeviceKeyDeletionStatus(errSecSuccess)
+        try checkedDeviceKeyDeletionStatus(errSecItemNotFound)
+        do { try checkedDeviceKeyDeletionStatus(errSecInteractionNotAllowed); fatalError("locked status accepted as deletion") }
+        catch DeviceKeyError.osStatus(let status) { guard status == errSecInteractionNotAllowed else { throw DeviceKeyError.osStatus(status) } }
         do { _ = try store.publicKey(handle); fatalError("deleted key regenerated") }
         catch DeviceKeyError.missing { }
         print("{\"scope\":\"CryptoKit-memory-double-only\",\"signVerify\":true,\"lockedReject\":true,\"deleteReject\":true,\"systemKeychainCalls\":0}")

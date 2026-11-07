@@ -77,7 +77,7 @@ async function importedRemote() {
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true } = {}) {
+async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
@@ -159,6 +159,8 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
       records[0].pairingStatus = 'awaiting-host';
       return { stored: true, state: 'awaiting-host', request: pairRequest, fingerprint: 'device-fingerprint' };
     }
+    if (name === 'host_remove' && hostRemove) return hostRemove(args,records);
+    if (name === 'host_cleanup_retry' && hostCleanupRetry) return hostCleanupRetry(args,records);
     if (name === 'pair_cancel') {records[0].pairingStatus='cancelled';return;}
     if (name === 'pair_reset') {records[0].deviceFingerprint=null;records[0].pairingStatus=null;return;}
     if (name === 'pair_accept') {
@@ -1497,4 +1499,38 @@ test('a successful native revoke still requires matching catalog readback before
 test('ordinary Android pairing handoff sends only matching native record IDs and checks page completion identity',async()=>{
  const commands=[],fixture=pairingCameraFixture(),copy=createPublicRequestClipboard({shell:{current:()=> 'android'},callNative:async(name,args)=>{commands.push({name,args});return {...args,copied:true};},webClipboard:()=>{throw Error('must not fall back');}}),h=await setup({pairRequest:fixture.request,clipboardWrite:copy}),n=h.nodes;
  try{await createCameraPair(h);await n['pair-request-copy'].onclick();assert.deepEqual(commands,[{name:'pair_copy_request',args:{hostId:'a'.repeat(32),requestId:'c'.repeat(32)}}]);assert.match(n['pair-handoff-status'].textContent,/已复制/);assert.equal(n['pair-request'].value,fixture.request);}finally{h.restore();}
+});
+
+
+for(const mode of ['identity','host'])test(`pending ${mode} cleanup retains its narrow intent across a failed retry and requires fresh confirmation`,async()=>{
+ let attempts=0;const h=await setup({hostCleanupRetry:(args,records)=>{attempts++;assert.deepEqual(args,{id:'a'.repeat(32)});if(attempts===1)throw Error('device_key_delete_unconfirmed');if(mode==='host')records.length=0;else Object.assign(records[0],{keyDeletionPending:false,keyCleanupMode:null,deviceFingerprint:null,pairingStatus:null});return {hostId:args.id,keyDeleted:true,hostRemoved:mode==='host',mode};}}),n=h.nodes;
+ try{
+  await createCameraPair(h);h.updateHost({keyDeletionPending:true,keyCleanupMode:mode,enabled:false});n['host-return-home'].click();await flush();await flush();
+  const actions=()=>n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');
+  assert.ok(n['host-list'].children[0].children.some(x=>x.textContent.includes('待确认')));
+  assert.equal(actions().children.find(x=>x.textContent==='打开').disabled,true);assert.equal(actions().children.some(x=>x.textContent==='启用'),false);
+  const retryLabel=mode==='identity'?'重试仅清理设备身份':'重试移除主机资料';
+  let retry=actions().children.find(x=>x.textContent===retryLabel);retry.click();await flush();assert.equal(attempts,0);
+  if(mode==='identity')assert.match(retry.textContent,/仅清身份，保留主机资料/);retry.click();await flush();await flush();assert.equal(attempts,1);
+  assert.ok(n['host-list'].children.length);assert.match(n['host-home-status'].textContent,/删除未确认/);assert.doesNotMatch(n['host-home-status'].textContent,/连接已停用/);
+  retry=actions().children.find(x=>x.textContent===retryLabel);retry.click();await flush();assert.equal(attempts,1);
+  retry.click();await flush();await flush();assert.equal(attempts,2);assert.equal(n['host-list'].children.length,mode==='host'?0:1);
+  assert.equal(h.calls.filter(x=>x.name==='host_remove').length,0);
+  if(mode==='identity'){assert.match(n['host-home-status'].textContent,/主机公开资料已保留/);assert.equal(n['host-list'].children[0].children[0].textContent,'Fixture');assert.ok(actions().children.find(x=>x.textContent==='启用'));}
+ }finally{h.restore();}
+});
+for(const error of ['connection_active','host_storage_unavailable'])test(`delete failure before disable (${error}) never claims the host stopped`,async()=>{
+ const h=await setup({hostRemove:()=>{throw Error(error);}}),n=h.nodes;
+ try{await createCameraPair(h);n['host-return-home'].click();await flush();await flush();
+  const actions=()=>n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');const remove=actions().children.find(x=>x.textContent==='移除');remove.click();remove.click();await flush();await flush();
+  assert.match(n['host-home-status'].textContent,/本机删除未确认/);assert.doesNotMatch(n['host-home-status'].textContent,/连接已停用|原引用保留/);assert.equal(actions().children.find(x=>x.textContent==='打开').disabled,false);
+ }finally{h.restore();}
+});
+
+test('delete failure with unavailable directory readback still reports an unconfirmed result neutrally',async()=>{
+ let failed=false;const h=await setup({hostRemove:()=>{failed=true;throw Error('host_storage_unavailable');}}),n=h.nodes;
+ try{await createCameraPair(h);n['host-return-home'].click();await flush();await flush();h.setRead((name,value)=>{if(failed && name==='host_list')throw Error('readback_unavailable');return value;});
+  const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');const remove=actions.children.find(x=>x.textContent==='移除');remove.click();remove.click();await flush();await flush();
+  assert.match(n['host-home-status'].textContent,/本机删除未确认/);assert.doesNotMatch(n['host-home-status'].textContent,/连接已停用|原引用保留/);
+ }finally{h.restore();}
 });

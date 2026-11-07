@@ -1,4 +1,4 @@
-"""Preview a public request, explicitly authorize it, or revoke one owned entry."""
+"""Share public coordinates, review pairing, or explicitly change authorization."""
 import argparse
 import json
 import os
@@ -39,9 +39,9 @@ def confirm(action, req):
     return req['request_id']
 
 
-def emit_response(raw, output_format):
+def emit_response(raw, output_format, *, newline=True):
     if output_format == 'json':
-        sys.stdout.buffer.write(raw + b'\n')
+        sys.stdout.buffer.write(raw + (b'\n' if newline else b''))
         return
     import qrcode
     from qrcode.image.svg import SvgPathFillImage
@@ -61,13 +61,31 @@ def main(argv=None):
             cmd.add_argument('--request', required=True, metavar='FILE|-')
         if action != 'preview':
             cmd.add_argument('--format', choices=('json','svg'), default='json')
+    profile = sub.add_parser('profile', help='输出公开连接资料；不会添加设备授权')
+    profile.add_argument('--host-public-key', required=True, metavar='FILE.pub')
+    profile.add_argument('--host', required=True)
+    profile.add_argument('--port', required=True, type=int)
+    profile.add_argument('--provider', required=True, choices=('direct', 'tailscale', 'easytier', 'zerotier'))
+    profile.add_argument('--session', required=True)
+    profile.add_argument('--socket-path', required=True)
+    profile.add_argument('--herdr-path', required=True)
+    profile.add_argument('--format', choices=('json', 'svg'), default='json')
     args = parser.parse_args(argv)
     try:
         if os.name != 'posix' or os.getuid() != os.geteuid() or os.geteuid() == 0:
             raise ValueError('use a non-root POSIX SSH login account')
         import pwd
-        from .store import Host
         account = pwd.getpwuid(os.geteuid())
+        if args.action == 'profile':
+            from .profile import encode_profile
+            raw = encode_profile({'version': 1, 'type': 'herdr-connection-profile',
+                                  'host': args.host, 'port': args.port, 'username': account.pw_name,
+                                  'provider': args.provider, 'session': args.session,
+                                  'socketPath': args.socket_path, 'herdrPath': args.herdr_path,
+                                  'expectedHostKey': read_host_public(args.host_public_key)})
+            emit_response(raw, args.format, newline=False)
+            return 0
+        from .store import Host
         host = Host(Path(account.pw_dir), account.pw_name, read_host_public(args.host_public_key))
         if getattr(args, 'format', 'json') == 'svg':
             # Resolve optional format support before any authorization change.
@@ -87,6 +105,9 @@ def main(argv=None):
         emit_response(raw, args.format)
         return 0
     except (OSError, ValueError, KeyError, TypeError, ImportError):
+        if args.action == 'profile':
+            print('未生成连接资料。请核对显式目标、端口、命名会话、绝对路径和主机 .pub 公钥；资料仅用于连接审查，不能授权设备。', file=sys.stderr)
+            return 1
         print('配对操作未确认完成。核对账号、请求期限、文件权限及本机收据后重试；如授权状态未知，请按原请求 ID 核查。', file=sys.stderr)
         return 1
 

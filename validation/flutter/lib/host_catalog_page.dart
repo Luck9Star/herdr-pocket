@@ -48,6 +48,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   Future<void> open([HostProfile? profile]) async {
     if (busy || !catalog.ready || catalog.writing || profile?.enabled == false) return;
     if (profile != null && profile.hasIdentity) {
+      if (profile.requiresNetworkBinding) { setState(() { notice = '请先通过主机的“选择／解除网络绑定”选择相同 provider 的本机网络，再新建视图；不会使用系统直连。'; }); return; }
       tabs.open(profile,networks:catalog.networkProfiles,adapter:widget.adapterFactory?.call(profile)); return; }
     tabs.select(null);
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,
@@ -95,10 +96,10 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     var selected = profile.networkProfileId ?? '';
     final result = await showDialog<String>(context:context,builder:(context) => StatefulBuilder(builder:(context,update) => AlertDialog(
       title:const Text('主机网络绑定'),scrollable:true,content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        const Text('选择可复用的公开网络配置。旧 provider 标签不会改变路由。系统直连沿用当前操作系统路由；overlay 无连接桥时会明确停止。'),
+        Text(profile.requiresNetworkBinding ? '此公开资料首次须绑定 ${profile.provider} 本机网络；请先在网络管理中创建并启用对应配置。' : '选择可复用的公开网络配置。旧 provider 标签不会改变路由。系统直连沿用当前操作系统路由；overlay 无连接桥时会明确停止。'),
         DropdownButtonFormField<String>(key:const ValueKey('host-network-choice'),initialValue:selected,isExpanded:true,
-          items:[const DropdownMenuItem(value:'',child:Text('系统直连（沿用系统路由）')),
-            for (final network in catalog.networkProfiles) DropdownMenuItem(value:network.id,enabled:network.enabled,
+          items:[DropdownMenuItem(value:'',enabled:!profile.requiresNetworkBinding,child:Text(profile.requiresNetworkBinding ? '请选择对应网络' : '系统直连（沿用系统路由）')),
+            for (final network in catalog.networkProfiles) DropdownMenuItem(value:network.id,enabled:network.enabled && (!profile.requiresNetworkBinding || network.provider == profile.provider),
               child:Text('${network.label} · ${network.provider}${network.enabled ? '' : ' · 停用'}',overflow:TextOverflow.ellipsis))],
           onChanged:(value) { if (value != null) update(() { selected = value; }); }),
       ]),actions:[TextButton(onPressed:() => Navigator.pop(context),child:const Text('取消')),
@@ -195,7 +196,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     for (final profile in orderedHosts) Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Text(profile.label,style:Theme.of(context).textTheme.titleMedium),
       hostSummary(profile),
-      Text(profile.networkProfileId == null ? '系统直连（沿用系统路由）' : '网络绑定：${catalog.networkFor(profile)?.label} · ${catalog.networkFor(profile)?.enabled == true ? '本机启用' : '本机停用'}'),
+      Text(profile.requiresNetworkBinding ? '待绑定 ${profile.provider} · 请先在网络管理中配置并选择该网络' : profile.networkProfileId == null ? '系统直连（沿用系统路由）' : '网络绑定：${catalog.networkFor(profile)?.label} · ${catalog.networkFor(profile)?.enabled == true ? '本机启用' : '本机停用'}'),
       Text('${hostProviderLabel(profile.provider)} · 入网状态未知\n${profile.target['username']}@${profile.target['host']}:${profile.target['port']}\n会话 ${profile.target['session']} · ${profile.retired ? '已替换停用，保留原身份待撤销' : profile.enabled ? '本机启用' : '本机停用'}\n${profile.hasIdentity ? profile.restore(catalog.clock()).state : '导入未配对 · 无本机身份'} · 在线与主机授权需重新核验'),
       if (profile.retired && profile.hasIdentity) ExpansionTile(title:const Text('原配对公开请求（供主机核验撤销）'),
         children:[SelectableText(profile.restore(catalog.clock()).wire)]),
@@ -205,7 +206,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       Wrap(spacing:8,children:[
         TextButton(key:ValueKey('host-rename-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => rename(profile),child:const Text('重命名')),
         TextButton(key:ValueKey('host-network-${profile.id}'),onPressed:busy || !catalog.ready || profile.retired ? null : () => configureNetwork(profile),child:const Text('选择／解除网络绑定')),
-        TextButton(key:ValueKey('host-provider-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => configureProvider(profile),child:const Text('旧 provider 标签（仅资料）')),
+        TextButton(key:ValueKey('host-provider-${profile.id}'),onPressed:busy || !catalog.ready || profile.requiresNetworkBinding ? null : () => configureProvider(profile),child:const Text('旧 provider 标签（仅资料）')),
         TextButton(key:ValueKey('host-disable-${profile.id}'),onPressed:busy || !catalog.ready || profile.retired ? null : () => action(() => catalog.update(profile.change(enabled:!profile.enabled,now:catalog.clock()),beforeCommit:() => tabs.closeHost(profile.id))),
           child:Text(profile.enabled ? '本机停用（不撤销主机）' : '本机启用（仍需审查）')),
         TextButton(key:ValueKey('host-delete-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => remove(profile),child:const Text('删除本机资料与身份')),

@@ -72,7 +72,7 @@ async function importedRemote() {
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest } = {}) {
+async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest='request' } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
@@ -126,6 +126,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest } = {
   const invoke = async (name, args = {}) => {
     calls.push({ name, args });
     if (['host_init', 'host_new', 'remote_cancel', 'remote_select', 'remote_ack'].includes(name)) return;
+    if (name === 'pair_scan_response') return scanResponse ? scanResponse() : '';
     if (name === 'remote_input_mode') return inputMode(args);
     if (name === 'remote_input_send' && sendResult) return sendResult;
     if (name === 'remote_input_send') return {
@@ -138,12 +139,12 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest } = {
       return readOverride ? readOverride(name, value) : value;
     }
     if (name === 'host_select') return structuredClone(records.find(h=>h.id===args.id));
-    if (name === 'host_restore') return {state:'authorized-unverified',fingerprint:'device-fingerprint',request:'request'};
+    if (name === 'host_restore') return {state:'authorized-unverified',fingerprint:'device-fingerprint',request:pairRequest};
     if (name === 'host_save') {
       if (!records.length) {
         records = [{
           id: 'a'.repeat(32), name: 'Fixture', enabled: true, retired: false,
-          target, deviceFingerprint: null, hostFingerprint: 'host-key', networkProfileId: null,
+          target, requiresNetworkBinding:['tailscale','easytier','zerotier'].includes(args.providerHint), provider: args.providerHint || 'unspecified', deviceFingerprint: null, hostFingerprint: 'host-key', networkProfileId: null,
         }];
       }
       return structuredClone(records[0]);
@@ -151,8 +152,9 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest } = {
     if (name === 'pair_create') {
       records[0].deviceFingerprint = 'device-fingerprint';
       records[0].pairingStatus = 'awaiting-host';
-      return { stored: true, state: 'awaiting-host', request: 'request', fingerprint: 'device-fingerprint' };
+      return { stored: true, state: 'awaiting-host', request: pairRequest, fingerprint: 'device-fingerprint' };
     }
+    if (name === 'pair_cancel' || name === 'pair_reset') return;
     if (name === 'pair_accept') {
       records[0].pairingStatus = 'authorized';
       return { state: 'authorized-unverified', fingerprint: 'device-fingerprint' };
@@ -201,6 +203,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest } = {
     emit: event => channel.onmessage(event),
     windowEvent: name => (windowEvents[name] || []).forEach(fn=>fn()),
     background: () => { document.hidden=true;(documentEvents.visibilitychange || []).forEach(fn=>fn()); },
+    foreground: () => { document.hidden=false;(documentEvents.visibilitychange || []).forEach(fn=>fn()); },
     finish: () => resolveObserve?.(),
     fail: (error=Error('fixture failure')) => rejectObserve?.(error),
     restore() {
@@ -1197,3 +1200,203 @@ for(const [code,pattern] of [['host_key_mismatch',/主机公钥不匹配.*独立
     } finally {h.finish();await flush();h.restore();}
   });
 }
+
+const connectionProfiles=JSON.parse(await readFile(new URL('../../shared/connection-profile-v1.json',import.meta.url),'utf8'));
+test('normal new host entry previews profile, fills every target field without writes, then requires independent device review',async()=>{
+  const h=await setup(),n=h.nodes;
+  try {
+    n['host-open-remote'].click();await flush();await flush();
+    const before=h.calls.length;
+    n['pair-target-review'].checked=true;n['pair-source-review'].checked=true;n['remote-review'].checked=true;n['host-restore-review'].checked=true;
+    n['remote-private-key'].value='discard this temporary fixture';
+    n['connection-profile-raw'].value=connectionProfiles.valid[3].raw;
+    await n['connection-profile-preview'].onclick();
+    assert.equal(h.calls.length,before);assert.equal(n['remote-host'].value,'');
+    assert.ok(n['connection-profile-details'].textContent.includes(connectionProfiles.valid[3].fingerprint));
+    n['connection-profile-apply'].click();
+    const expected=JSON.parse(connectionProfiles.valid[3].raw);
+    for(const [id,key] of [['remote-host','host'],['remote-port','port'],['remote-user','username'],['remote-session','session'],['remote-socket','socketPath'],['remote-herdr','herdrPath'],['remote-pin','expectedHostKey'],['remote-profile-provider','provider']]) assert.equal(String(n[id].value),String(expected[key]));
+    assert.equal(h.calls.length,before);assert.equal(n['pair-mode'].checked,true);assert.equal(n['remote-private-key'].value,'');
+    for(const id of ['pair-target-review','pair-source-review','remote-review','host-restore-review'])assert.equal(n[id].checked,false,id);
+    assert.equal(n['pair-create'].disabled,true);n['pair-create'].click();await flush();assert.equal(h.calls.length,before);
+    n['pair-target-review'].checked=true;n['remote-form'].dispatch('input',{target:n['pair-target-review']});
+    n['pair-create'].click();await flush();await flush();await flush();
+    assert.equal(h.calls.filter(x=>x.name==='pair_create').length,1);
+    const created=h.calls.find(x=>x.name==='pair_create');assert.equal(created.args.config.expectedHostKey,expected.expectedHostKey);
+    assert.equal(created.args.config.session,expected.session);assert.equal(h.calls.find(x=>x.name==='host_save').args.providerHint,expected.provider);assert.equal(n['remote-connect'].disabled,true);assert.equal(h.calls.filter(x=>x.name==='remote_observe').length,0);
+    assert.equal(n['connection-profile-preview'].disabled,true);
+    await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();
+    assert.equal(h.calls.filter(x=>x.name==='pair_create').length,1);
+  }finally{h.restore();}
+});
+test('real new host camera entry previews before fill and rejects edits / saved-host identity',async()=>{
+  const h=await setup({scanResponse:()=>connectionProfiles.valid[0].raw}),n=h.nodes;
+  try {
+    n['host-open-remote'].click();await flush();await flush();const before=h.calls.length;
+    await n['connection-profile-scan'].onclick();assert.equal(h.calls.length,before+1);assert.equal(n['remote-host'].value,'');
+    n['remote-host'].value='edited.invalid';n['remote-form'].dispatch('input',{target:n['remote-host']});
+    n['connection-profile-apply'].click();assert.equal(n['remote-host'].value,'edited.invalid');
+    await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();
+    assert.equal(n['remote-host'].value,JSON.parse(connectionProfiles.valid[0].raw).host);
+    n['host-save'].click();await flush();await flush();await flush();
+    assert.equal(n['connection-profile-preview'].disabled,true);
+    const pin=n['remote-pin'].value;await n['connection-profile-scan'].onclick();assert.equal(n['remote-pin'].value,pin);
+    assert.equal(h.calls.filter(x=>x.name==='pair_scan_response').length,1);
+    assert.equal(h.calls.filter(x=>x.name==='pair_create'||x.name==='remote_observe').length,0);
+  }finally{h.restore();}
+});
+test('real camera entry discards a result after home navigation, background or form edit',async()=>{
+ for(const reason of ['home','background','edit']){
+  let finish;const result=new Promise(resolve=>finish=resolve),h=await setup({scanResponse:()=>result}),n=h.nodes;
+  try{n['host-open-remote'].click();await flush();await flush();const work=n['connection-profile-scan'].onclick();
+   if(reason==='home')n['host-return-home'].click();if(reason==='background')h.background();if(reason==='edit'){n['remote-host'].value='manual.invalid';n['remote-form'].dispatch('input',{target:n['remote-host']});}
+   finish(connectionProfiles.valid[0].raw);await work;await flush();await flush();
+   assert.equal(n['connection-profile-raw'].value,'');assert.equal(n['connection-profile-apply'].disabled,true);
+   assert.equal(h.calls.filter(x=>['host_save','pair_create','remote_observe'].includes(x.name)).length,0);
+  }finally{h.restore();}
+ }
+});
+
+test('applied profile retains its visible overlay intent after target edits without retaining trust',async()=>{
+ const h=await setup(),n=h.nodes;try{
+  n['host-open-remote'].click();await flush();await flush();
+  n['connection-profile-raw'].value=connectionProfiles.valid[2].raw;await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();
+  assert.match(n['remote-profile-network-note'].textContent,/zerotier/);
+  n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});n['remote-form'].dispatch('submit');await flush();
+  assert.equal(h.calls.filter(x=>x.name==='remote_observe').length,0);
+  n['pair-target-review'].checked=true;
+  n['remote-host'].value='manual-change.invalid';n['remote-form'].dispatch('input',{target:n['remote-host']});
+  n['remote-port'].value='2202';n['remote-form'].dispatch('input',{target:n['remote-port']});
+  assert.equal(n['remote-profile-provider'].value,'zerotier');assert.equal(n['pair-target-review'].checked,false);
+  assert.equal(n['remote-review'].checked,false);assert.equal(n['connection-profile-fingerprint'].hidden,true);
+  assert.equal(n['connection-profile-apply'].disabled,true);assert.equal(n['remote-connect'].disabled,true);
+  n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});n['remote-form'].dispatch('submit');await flush();
+  assert.equal(h.calls.filter(x=>x.name==='remote_observe').length,0);
+  n['host-save'].click();await flush();await flush();await flush();
+  const saved=h.calls.find(x=>x.name==='host_save');assert.equal(saved.args.providerHint,'zerotier');
+  assert.equal(saved.args.config.host,'manual-change.invalid');assert.equal(saved.args.config.port,2202);
+  n['host-save'].click();await flush();await flush();await flush();
+  assert.equal(Object.hasOwn(h.calls.filter(x=>x.name==='host_save')[1].args,'providerHint'),false);
+ }finally{h.restore();}
+});
+test('a saved bound overlay host keeps the ordinary reviewed pairing connection route',async()=>{
+ const h=await setup(),n=h.nodes;try{
+  n['host-open-remote'].click();await flush();await flush();n['connection-profile-raw'].value=connectionProfiles.valid[1].raw;
+  await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();n['host-save'].click();await flush();await flush();await flush();
+  h.updateHost({provider:'tailscale',requiresNetworkBinding:true,networkProfileId:'net-fixture',deviceFingerprint:'device-fixture'});
+  n['host-return-home'].click();await flush();await flush();await flush();
+  const open=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions').children.find(x=>x.textContent==='打开');open.click();await flush();await flush();
+  assert.equal(n['remote-profile-provider'].value,'tailscale');assert.equal(n['remote-connect'].disabled,true);
+  n['host-restore-review'].checked=true;n['host-restore'].click();await flush();await flush();
+  n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});
+  assert.equal(n['remote-connect'].disabled,false);n['remote-form'].dispatch('submit');await flush();
+  assert.equal(h.calls.filter(x=>x.name==='remote_observe').length,1);assert.equal(h.calls.find(x=>x.name==='remote_observe').args.hostId,'a'.repeat(32));
+  h.finish();await flush();
+ }finally{h.restore();}
+});
+
+test('manual targets do not receive provider hints, and rebuilding a new host isolates prior network intent',async()=>{
+ const h=await setup(),n=h.nodes;try{
+  n['host-open-remote'].click();await flush();await flush();
+  n['remote-host'].value='manual.invalid';n['remote-form'].dispatch('input',{target:n['remote-host']});
+  n['host-save'].click();await flush();await flush();await flush();
+  assert.equal(Object.hasOwn(h.calls.find(x=>x.name==='host_save').args,'providerHint'),false);
+  n['host-return-home'].click();await flush();await flush();await flush();
+  n['host-open-remote'].click();await flush();await flush();
+  n['connection-profile-raw'].value=connectionProfiles.valid[3].raw;await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();
+  assert.equal(n['remote-profile-provider'].value,'easytier');
+  n['host-save'].click();await flush();await flush();await flush();
+  assert.equal(h.calls.filter(x=>x.name==='host_save')[1].args.providerHint,'easytier');
+  n['host-return-home'].click();await flush();await flush();await flush();
+  n['host-open-remote'].click();await flush();await flush();
+  assert.equal(n['remote-profile-provider'].value,'');assert.equal(n['remote-host'].value,'');
+  n['remote-host'].value='another-manual.invalid';n['remote-form'].dispatch('input',{target:n['remote-host']});
+  n['host-save'].click();await flush();await flush();await flush();
+  assert.equal(Object.hasOwn(h.calls.filter(x=>x.name==='host_save')[2].args,'providerHint'),false);
+ }finally{h.restore();}
+});
+test('explicitly adopting another profile changes network intent while a source edit alone does not',async()=>{
+ const h=await setup(),n=h.nodes;try{
+  n['host-open-remote'].click();await flush();await flush();
+  n['connection-profile-raw'].value=connectionProfiles.valid[1].raw;await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();
+  n['connection-profile-raw'].value=connectionProfiles.valid[0].raw;n['connection-profile-raw'].dispatch('input');
+  assert.equal(n['remote-profile-provider'].value,'tailscale');assert.equal(n['remote-connect'].disabled,true);
+  await n['connection-profile-preview'].onclick();assert.equal(n['remote-profile-provider'].value,'tailscale');
+  n['connection-profile-apply'].click();assert.equal(n['remote-profile-provider'].value,'direct');
+  n['host-save'].click();await flush();await flush();await flush();
+  assert.equal(h.calls.find(x=>x.name==='host_save').args.providerHint,'direct');
+ }finally{h.restore();}
+});
+
+for(const timing of ['before-visible','after-visible'])test(`ordinary new-host native scan survives its single Activity round trip ${timing} without preserving trust`,async()=>{
+ let finish;const pending=new Promise(resolve=>finish=resolve),h=await setup({scanResponse:()=>pending}),n=h.nodes;
+ try{
+  n['host-open-remote'].click();await flush();await flush();
+  n['remote-private-key'].value='fixture temporary credential';n['pair-target-review'].checked=true;
+  n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});
+  const before=h.calls.length,work=n['connection-profile-scan'].onclick();h.background();
+  assert.equal(n['remote-private-key'].value,'');assert.equal(n['pair-target-review'].checked,false);assert.equal(n['remote-review'].checked,false);
+  if(timing==='after-visible')h.foreground();finish(connectionProfiles.valid[0].raw);await work;
+  assert.equal(n['remote-host'].value,'');assert.equal(n['connection-profile-raw'].value,'');assert.equal(n['connection-profile-apply'].disabled,true);
+  if(timing==='before-visible')h.foreground();
+  assert.equal(n['connection-profile-preview'].textContent,'重新查看本次扫描结果');assert.equal(n['connection-profile-preview'].disabled,false);
+  await n['connection-profile-preview'].onclick();assert.equal(n['remote-host'].value,'');assert.equal(n['connection-profile-apply'].disabled,false);
+  assert.deepEqual(h.calls.slice(before).filter(x=>x.name!=='network_list').map(x=>x.name),['pair_scan_response']);
+  n['connection-profile-apply'].click();assert.equal(n['remote-host'].value,JSON.parse(connectionProfiles.valid[0].raw).host);
+  assert.deepEqual(h.calls.slice(before).filter(x=>x.name!=='network_list').map(x=>x.name),['pair_scan_response']);assert.equal(n['pair-target-review'].checked,false);assert.equal(n['remote-review'].checked,false);
+ }finally{h.restore();}
+});
+
+function pairingCameraFixture(now=Math.floor(Date.now()/1000)) {
+ const request={version:2,type:'pairing-public-key-request',request_id:'c'.repeat(32),account:'u',host_key:'host-key',device:'Fixture',public_key:JSON.parse(connectionProfiles.valid[0].raw).expectedHostKey,issued_at:now,expires_at:now+300};
+ const response={version:2,type:'pairing-binding-response',request_id:request.request_id,account:request.account,host_key:request.host_key,fingerprint:'device-fingerprint',issued_at:now,expires_at:now+200,status:'authorized',authorization_added:true};
+ return {request:JSON.stringify(request),response:JSON.stringify(response),expires:request.expires_at};
+}
+async function createCameraPair(h) {
+ const n=h.nodes;n['host-open-remote'].click();await flush();await flush();
+ const fields={'remote-host':h.target.host,'remote-port':'22','remote-user':'u','remote-pin':h.target.expectedHostKey,'remote-socket':h.target.socketPath,'remote-herdr':h.target.herdrPath,'remote-session':'work','host-save-name':'Fixture'};
+ for(const [id,value] of Object.entries(fields))n[id].value=value;
+ n['pair-mode'].checked=true;n['pair-target-review'].checked=true;n['pair-create'].click();await flush();await flush();await flush();
+}
+for(const timing of ['before-visible','after-visible','foreground'])test(`response scanner ${timing} requires explicit original-request re-view and separate authorization review`,async()=>{
+ const fixture=pairingCameraFixture();let finish;const pending=new Promise(resolve=>finish=resolve),h=await setup({pairRequest:fixture.request,scanResponse:()=>pending}),n=h.nodes;
+ try{
+  await createCameraPair(h);assert.equal(n['pair-scan'].disabled,false);
+  n['pair-source-review'].checked=true;n['remote-review'].checked=true;n['remote-private-key'].value='temporary fixture';
+  const before=h.calls.length,work=n['pair-scan'].onclick();
+  if(timing!=='foreground'){h.background();assert.equal(n['pair-source-review'].checked,false);assert.equal(n['remote-review'].checked,false);assert.equal(n['remote-private-key'].value,'');}
+  if(timing==='after-visible')h.foreground();finish(fixture.response);await work;
+  assert.equal(n['pair-response'].value,'');assert.equal(n['pair-accept'].disabled,true);assert.equal(n['pair-response-preview'].hidden,true);
+  if(timing==='before-visible')h.foreground();
+  assert.equal(n['pair-preview'].textContent,'重新查看本次响应扫描');n['pair-preview'].click();
+  assert.equal(n['pair-response'].value,fixture.response);assert.equal(n['pair-response-preview'].hidden,false);assert.equal(n['pair-source-review'].checked,false);assert.equal(n['pair-accept'].disabled,true);
+  assert.equal(n['remote-review'].checked,false);assert.deepEqual(h.calls.slice(before).filter(x=>x.name!=='network_list').map(x=>x.name),['pair_scan_response']);
+  n['pair-accept'].click();await flush();assert.equal(h.calls.filter(x=>x.name==='pair_accept').length,0);
+  n['pair-source-review'].checked=true;n['remote-form'].dispatch('input',{target:n['pair-source-review']});n['pair-accept'].click();await flush();await flush();await flush();
+  assert.equal(h.calls.filter(x=>x.name==='pair_accept').length,1);assert.equal(h.calls.filter(x=>x.name==='pair_create').length,1);assert.equal(h.calls.filter(x=>x.name==='remote_observe').length,0);
+ }finally{h.restore();}
+});
+for(const reason of ['edit','session','host-switch','expiry','cancel','pagehide','second-background'])test(`response scanner drops a late callback after ${reason}`,async()=>{
+ const realNow=Date.now;let clock=realNow();Date.now=()=>clock;
+ const fixture=pairingCameraFixture(Math.floor(clock/1000));let finish;const pending=new Promise(resolve=>finish=resolve),h=await setup({pairRequest:fixture.request,scanResponse:()=>pending}),n=h.nodes;
+ try{
+  await createCameraPair(h);const work=n['pair-scan'].onclick();h.background();
+  if(reason==='edit'){n['pair-response'].value='manual';n['remote-form'].dispatch('input',{target:n['pair-response']});}
+  if(reason==='session'){n['remote-session'].value='other';n['remote-form'].dispatch('input',{target:n['remote-session']});}
+  if(reason==='host-switch'){h.foreground();n['host-return-home'].click();await flush();await flush();await flush();n['host-open-remote'].click();await flush();await flush();}
+  if(reason==='expiry')clock=fixture.expires*1000+1;
+  if(reason==='cancel'){h.foreground();n['pair-cancel'].click();await flush();}
+  if(reason==='pagehide')h.windowEvent('pagehide');if(reason==='second-background'){h.foreground();h.background();}
+  finish(fixture.response);await work;h.foreground();await flush();await flush();
+  assert.notEqual(n['pair-preview'].textContent,'重新查看本次响应扫描');n['pair-preview'].click();
+  assert.notEqual(n['pair-response'].value,fixture.response);assert.equal(n['pair-accept'].disabled,true);
+  assert.equal(h.calls.filter(x=>x.name==='pair_accept'||x.name==='remote_observe').length,0);
+ }finally{h.restore();Date.now=realNow;}
+});
+test('response scan rejects another request/device and connection-profile bytes without crossing purposes',async()=>{
+ for(const kind of ['other-request','other-device','connection-profile']){
+  const fixture=pairingCameraFixture(),wrong=JSON.parse(fixture.response);if(kind==='other-request')wrong.request_id='d'.repeat(32);if(kind==='other-device')wrong.fingerprint='foreign-device';
+  const h=await setup({pairRequest:fixture.request,scanResponse:()=>kind==='connection-profile'?connectionProfiles.valid[0].raw:JSON.stringify(wrong)}),n=h.nodes;
+  try{await createCameraPair(h);await n['pair-scan'].onclick();assert.equal(n['pair-response'].value,'');assert.equal(n['connection-profile-raw'].value,'');assert.equal(n['pair-accept'].disabled,true);assert.notEqual(n['pair-preview'].textContent,'重新查看本次响应扫描');}finally{h.restore();}
+ }
+});

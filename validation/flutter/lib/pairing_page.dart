@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'connection_profile.dart';
 import 'design_tokens.dart';
 import 'device_keys.dart';
 import 'host_catalog.dart';
@@ -30,8 +31,9 @@ class PairingPage extends StatefulWidget {
   static Map<String,dynamic>? retainedTarget;
   static String? retainedOrphan;
   static bool retainedCreationUnknown = false;
+  static bool retainedRequiresNetworkBinding = false;
   @visibleForTesting
-  static void resetMemorySession() { retainedPairing = null; retainedTarget = null; retainedOrphan = null; retainedCreationUnknown = false; }
+  static void resetMemorySession() { retainedPairing = null; retainedTarget = null; retainedOrphan = null; retainedCreationUnknown = false; retainedRequiresNetworkBinding = false; }
   final int Function()? clock;
   @override
   State<PairingPage> createState() => _PairingPageState();
@@ -43,18 +45,50 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       name:TextEditingController(text:name == 'port' ? '22' : name == 'device' ? 'Pocket phone' : ''),
   };
   final response = TextEditingController();
+  final profileInput = TextEditingController();
+  ConnectionProfile? profilePreview;
+  bool get canImportProfile => savedProfile == null && widget.profileId == null && pairing == null && target == null && !profileBlocked && !creationUnknown && !busy && pageVisible;
   PendingDevicePairing? pairing;
   HostProfile? savedProfile;
-  bool profileBlocked = false,identityAvailable = true;
+  bool profileBlocked = false,identityAvailable = true,widgetBindingChanged = false;
   Map<String,dynamic>? target;
   bool busy = false, accepting = false, targetReviewed = false, sourceReviewed = false;
   bool creationUnknown = false,scanning = false;
   String provider = 'unspecified';
+  String? importedOverlayProvider;
+  // Snapshot the retained session's restriction with its identity and target.
+  // Another page may replace the process-wide retained session later.
+  bool retainedNetworkBinding = false;
+  bool get needsNetworkBinding => savedProfile?.requiresNetworkBinding ?? (importedOverlayProvider != null || retainedNetworkBinding);
   bool get pageVisible => widget.visibility?.value ?? true;
   bool get scanAvailable => !kIsWeb && [TargetPlatform.android,TargetPlatform.iOS].contains(defaultTargetPlatform);
   bool get platformAvailable => widget.keys != null || (!kIsWeb && [TargetPlatform.android,TargetPlatform.iOS,TargetPlatform.macOS].contains(defaultTargetPlatform));
   String status = '先审查目标，再由此设备生成独立身份。仅公开请求可以交给主机。';
   int revision = 0;
+  bool appResumed = true;
+  Completer<void>? scannerResume;
+  void releaseScannerWaiter() {
+    final waiter = scannerResume; scannerResume = null;
+    if (waiter != null && !waiter.isCompleted) waiter.complete();
+  }
+  void invalidateScan() { revision++; scanning = false; releaseScannerWaiter(); }
+  Future<bool> scannerForeground(int ticket,{int? expiresAt}) async {
+    if (!mounted || ticket != revision || !pageVisible) return false;
+    if (!appResumed) {
+      // A native result can arrive while the app is paused. Keep it briefly
+      // for the scanner's normal activity round trip, never indefinitely.
+      final remaining = expiresAt == null ? 60 : expiresAt - now;
+      if (remaining <= 0) return false;
+      final limit = Duration(seconds:remaining < 60 ? remaining : 60);
+      final elapsed = Stopwatch()..start();
+      final waiter = Completer<void>(); scannerResume = waiter;
+      final expiry = Timer(limit,() { if (!waiter.isCompleted) waiter.complete(); });
+      try { await waiter.future; } finally { expiry.cancel(); }
+      if (identical(scannerResume,waiter)) scannerResume = null;
+      if (elapsed.elapsed >= limit || (expiresAt != null && now >= expiresAt)) return false;
+    }
+    return mounted && ticket == revision && pageVisible && appResumed;
+  }
   Timer? timer;
   Map<String,dynamic>? responsePreview;
   // A catalog-backed page must use the same clock for request creation and
@@ -63,7 +97,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   int get now => widget.clock?.call() ?? widget.catalog?.clock() ?? DateTime.now().millisecondsSinceEpoch ~/ 1000;
   @override
   void initState() {
-    super.initState(); WidgetsBinding.instance.addObserver(this); widget.visibility?.addListener(visibilityChanged);
+    super.initState(); appResumed = WidgetsBinding.instance.lifecycleState == null || WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed; WidgetsBinding.instance.addObserver(this); widget.visibility?.addListener(visibilityChanged);
     if (widget.catalog != null) {
       final catalog = widget.catalog!;
       if (!catalog.ready || (widget.profileId == null && catalog.pendingCreation != null)) {
@@ -89,6 +123,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       }
     } else {
       pairing = PairingPage.retainedPairing; target = PairingPage.retainedTarget;
+      retainedNetworkBinding = pairing != null && target != null && PairingPage.retainedRequiresNetworkBinding;
       creationUnknown = PairingPage.retainedCreationUnknown;
       if (pairing != null) status = '已恢复本进程保留的原身份 · 不会重新创建；请核验状态或明确删除';
       if (creationUnknown) status = '上次身份创建或清理结果未知 · 不会重放创建；可删除已返回的原身份引用';
@@ -100,7 +135,8 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     });
   }
   void cancelWaiting() {
-    revision++; scanning = false;
+    if (widgetBindingChanged) return;
+    invalidateScan();
     final p = pairing;
     if (p != null) {
       if (['awaiting-host','authorized-unverified'].contains(p.state)) p.cancel();
@@ -114,8 +150,11 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   }
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    appResumed = state == AppLifecycleState.resumed;
+    if (appResumed) releaseScannerWaiter();
     if (scanning) return; // The OS may pause this activity for its own scanner.
-    if (state == AppLifecycleState.resumed) {
+    if (appResumed) {
+      if (mounted) setState(() {});
       if (pageVisible && pairing != null && !profileBlocked) unawaited(checkExistingIdentity());
       return;
     }
@@ -123,11 +162,11 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   }
   @override
   void dispose() {
-    revision++; timer?.cancel(); widget.visibility?.removeListener(visibilityChanged); WidgetsBinding.instance.removeObserver(this);
-    if (widget.catalog == null) pairing?.cancel(); for (final field in fields.values) { field.dispose(); } response.dispose(); super.dispose();
+    invalidateScan(); timer?.cancel(); widget.visibility?.removeListener(visibilityChanged); WidgetsBinding.instance.removeObserver(this);
+    if (widget.catalog == null) pairing?.cancel(); for (final field in fields.values) { field.dispose(); } response.dispose(); profileInput.dispose(); super.dispose();
   }
   Future<void> create() async {
-    if (busy || pairing != null || !targetReviewed || creationUnknown || profileBlocked || !pageVisible || !platformAvailable) return;
+    if (busy || scanning || !appResumed || pairing != null || !targetReviewed || creationUnknown || profileBlocked || !pageVisible || !platformAvailable) return;
     final ticket = ++revision;
     String? handle;
     var createStarted = false;
@@ -166,11 +205,12 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
         hostKey:checked.expectedFingerprint,device:device,now:now);
       if (widget.catalog != null) {
         phase = '保存主机资料';
-        final profile = HostProfile.create(label,values,p,now,provider:provider,networkProfileId:savedProfile?.networkProfileId);
+        final profile = HostProfile.create(label,values,p,now,provider:provider,networkProfileId:savedProfile?.networkProfileId,requiresNetworkBinding:savedProfile?.requiresNetworkBinding ?? (importedOverlayProvider != null));
         await widget.catalog!.completeCreation(profile); savedProfile = profile;
         if (!mounted || ticket != revision) return;
       }
-      PairingPage.retainedPairing = p; PairingPage.retainedTarget = Map.unmodifiable(values); PairingPage.retainedOrphan = null; PairingPage.retainedCreationUnknown = false;
+      retainedNetworkBinding = savedProfile?.requiresNetworkBinding ?? (importedOverlayProvider != null);
+      PairingPage.retainedPairing = p; PairingPage.retainedRequiresNetworkBinding = retainedNetworkBinding; PairingPage.retainedTarget = Map.unmodifiable(values); PairingPage.retainedOrphan = null; PairingPage.retainedCreationUnknown = false;
       setState(() { pairing = p; identityAvailable = true; target = Map.unmodifiable(values); busy = false; targetReviewed = false;
         status = '等待主机审查 · 授权结果未知；公开请求有效 600 秒'; });
       widget.onRequest?.call(Map.unmodifiable(p.request));
@@ -183,7 +223,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     }
   }
   Future<void> accept() async {
-    final p = pairing; if (p == null || busy || accepting || scanning || !pageVisible || profileBlocked ||
+    final p = pairing; if (p == null || busy || accepting || scanning || !pageVisible || !appResumed || profileBlocked ||
       !sourceReviewed || responsePreview == null || widget.catalog?.ready == false) return;
     final ticket = revision, generation = p.generation, originalProfile = savedProfile;
     setState(() { busy = true; accepting = true; status = '正在核验响应并保存本机状态 · 不代表 SSH 已连通'; });
@@ -202,7 +242,11 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
           status = '响应审查期间页面已变化 · 原页禁止重试，请关闭后从主机页重新读取核验；不会自动连接'; });
         return;
       }
-      if (widget.catalog == null) PairingPage.retainedPairing = candidate;
+      if (widget.catalog == null) {
+        PairingPage.retainedPairing = candidate;
+        PairingPage.retainedTarget = Map.unmodifiable(target!);
+        PairingPage.retainedRequiresNetworkBinding = needsNetworkBinding;
+      }
       setState(() { pairing = candidate; busy = false; sourceReviewed = false; response.clear(); responsePreview = null; status = candidate.state == 'revoked'
         ? '已审查匹配的主机撤销响应 · 此请求不能再授权' : '主机报告已授权 · 尚未验证 SSH，需主动连接'; });
     } catch (error) {
@@ -221,6 +265,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   }
   Future<void> connect() async {
     final p = pairing; if (p == null || busy || scanning || !pageVisible || !identityAvailable || profileBlocked || widget.catalog?.ready == false || savedProfile?.enabled == false) return;
+    if (needsNetworkBinding) { setState(() { status = '请返回主机列表，选择／解除网络绑定，先明确绑定相同 provider 的本机网络；不会使用系统直连'; }); return; }
     final networkBinding = savedProfile == null ? null : widget.catalog?.freezeNetwork(savedProfile!);
     var ticket = p.generation;
     setState(() { busy = true; status = '请在连接页再次审查冻结目标；只有实际 pin 与 SSH 认证成功才标记已配对'; });
@@ -238,15 +283,19 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     setState(() { busy = false; status = '连接已停止 · ${p.state}；只能主动重新审查连接'; });
   }
   Future<void> delete() async {
-    final p = pairing; if (p == null || busy) return;
-    revision++; p.cancel(); sourceReviewed = false; targetReviewed = false; final ticket = revision;
+    final p = pairing; if (p == null || busy || widgetBindingChanged) return;
+    invalidateScan(); p.cancel(); sourceReviewed = false; targetReviewed = false; final ticket = revision;
     setState(() { busy = true; });
     try {
       if (widget.catalog != null && savedProfile != null) await widget.catalog!.update(savedProfile!.change(enabled:false,now:now));
       await keys.delete(p.handle);
       if (widget.catalog != null && savedProfile != null) await widget.catalog!.remove(savedProfile!.id);
       if (!mounted || ticket != revision) return;
-      PairingPage.resetMemorySession(); savedProfile = null;
+      if (widget.catalog == null && PairingPage.retainedPairing?.handle == p.handle &&
+          PairingPage.retainedPairing?.request['request_id'] == p.request['request_id']) {
+        PairingPage.retainedPairing = null; PairingPage.retainedTarget = null; PairingPage.retainedRequiresNetworkBinding = false;
+      }
+      savedProfile = null;
       setState(() { busy = false; pairing = null; target = null; creationUnknown = false; response.clear(); responsePreview = null; status = '本机身份已删除 · 主机授权未因此撤销；需要新配对时请明确创建'; });
     } catch (_) {
       if (mounted && ticket == revision) setState(() { busy = false; status = '密钥删除未确认 · 保留原身份引用，不会自动替换；主机授权仍需核验撤销'; });
@@ -270,23 +319,23 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     try {
       final matches = catalog.profiles.where((current) => current.id == old.id && current.enabled && !current.retired).toList();
       if (!catalog.ready || matches.length != 1 || !sameHostTarget(matches.single.target,old.target) ||
-          matches.single.networkProfileId != old.networkProfileId || !samePairingBinding(matches.single,old)) {
+          matches.single.networkProfileId != old.networkProfileId || matches.single.requiresNetworkBinding != old.requiresNetworkBinding || !samePairingBinding(matches.single,old)) {
         throw const RemoteFailure('catalog_binding_changed');
       }
       final next = matches.single.change(pairing:p,now:now); await catalog.update(next); savedProfile = next;
     } catch (_) { profileBlocked = true; rethrow; }
   }
   Future<void> deleteOrphan() async {
-    final handle = PairingPage.retainedOrphan; if (handle == null || busy) return;
+    final handle = PairingPage.retainedOrphan; if (handle == null || busy || widgetBindingChanged) return;
     setState(() { busy = true; });
     try {
       await keys.delete(handle);
-      if (PairingPage.retainedOrphan == handle) PairingPage.resetMemorySession();
+      if (PairingPage.retainedOrphan == handle) { PairingPage.retainedOrphan = null; PairingPage.retainedCreationUnknown = false; }
       if (mounted) setState(() { busy = false; creationUnknown = false; status = '原身份已删除 · 主机授权不因此撤销'; });
     } catch (_) { if (mounted) setState(() { busy = false; status = '原身份删除未确认 · 已保留引用；不自动替换'; }); }
   }
   void previewResponse({bool edited = true}) {
-    if (edited) { revision++; scanning = false; }
+    if (edited) invalidateScan();
     Map<String,dynamic>? preview;
     try { preview = decodePairing(Uint8List.fromList(utf8.encode(response.text)),now); } catch (_) { /* invalid is not trusted */ }
     setState(() { sourceReviewed = false; responsePreview = preview; });
@@ -294,6 +343,10 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(PairingPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.profileId != widget.profileId || oldWidget.catalog != widget.catalog || oldWidget.keys != widget.keys) {
+      widgetBindingChanged = true; profileBlocked = true;
+      pauseReview('目标或本机身份来源已改变 · 请关闭此页并重新打开，不沿用旧扫描或信任');
+    }
     if (oldWidget.visibility != widget.visibility) {
       oldWidget.visibility?.removeListener(visibilityChanged); widget.visibility?.addListener(visibilityChanged);
       visibilityChanged();
@@ -304,7 +357,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       final catalog = widget.catalog, previous = savedProfile;
       if (catalog != null && previous != null) {
         final current = catalog.profiles.where((p) => p.id == previous.id && p.enabled).toList();
-        if (!catalog.ready || current.length != 1 || !sameHostTarget(current.single.target,previous.target) || current.single.networkProfileId != previous.networkProfileId ||
+        if (!catalog.ready || current.length != 1 || !sameHostTarget(current.single.target,previous.target) || current.single.networkProfileId != previous.networkProfileId || current.single.requiresNetworkBinding != previous.requiresNetworkBinding ||
             !samePairingBinding(current.single,previous)) {
           profileBlocked = true;
           if (mounted) setState(() { status = '本机绑定或授权资料已改变 · 请关闭此标签重新读取审查，不沿用旧状态'; });
@@ -323,7 +376,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     pauseReview('标签已暂停 · 不发送输入、不重连；远端任务未终止');
   }
   void pauseReview(String message) {
-    revision++; scanning = false; targetReviewed = false; sourceReviewed = false;
+    invalidateScan(); targetReviewed = false; sourceReviewed = false; profilePreview = null;
     final p = pairing;
     if (p != null) {
       identityAvailable = false;
@@ -336,16 +389,16 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   }
   Future<void> scanResponse() async {
     final p = pairing;
-    if (!scanAvailable || scanning || busy || !pageVisible || p == null ||
+    if (!scanAvailable || scanning || busy || profileBlocked || !pageVisible || !appResumed || p == null ||
         ['cancelled','expired','revoked'].contains(p.state) || now >= (p.request['expires_at'] as int)) return;
     final ticket = revision, generation = p.generation, requestId = p.request['request_id'], pairingState = p.state;
     bool current() => mounted && ticket == revision && identical(pairing,p) && p.generation == generation &&
-      p.request['request_id'] == requestId && p.state == pairingState && pageVisible && now < (p.request['expires_at'] as int) &&
+      p.request['request_id'] == requestId && p.state == pairingState && pageVisible && appResumed && now < (p.request['expires_at'] as int) &&
       !['cancelled','expired','revoked'].contains(p.state);
     setState(() { scanning = true; sourceReviewed = false; status = '扫描公开响应 · 返回后仍需独立审查'; });
     try {
       final text = await const MethodChannel('herdr.pocket/pair_scan').invokeMethod<String>('scan');
-      if (!current()) return;
+      if (!await scannerForeground(ticket,expiresAt:p.request['expires_at'] as int) || !current()) return;
       if (text == null || text.isEmpty) { setState(() { status = '已取消扫描 · 可继续手动输入响应'; }); return; }
       if (utf8.encode(text).length > 2048) { setState(() { status = '扫码内容超过公开响应上限 · 未填入，可手动核验'; }); return; }
       response.text = text; previewResponse(edited:false);
@@ -354,10 +407,45 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       if (current()) setState(() { sourceReviewed = false; status = '相机不可用、权限被拒绝或扫描取消 · 可继续手动输入响应'; });
     } finally { if (mounted && ticket == revision) setState(() { scanning = false; }); }
   }
+  void previewProfile() {
+    invalidateScan();
+    ConnectionProfile? preview;
+    try { preview = ConnectionProfile.parse(profileInput.text); } catch (_) { /* untrusted input */ }
+    setState(() { profilePreview = preview; });
+  }
+  Future<void> scanProfile() async {
+    if (!scanAvailable || scanning || !canImportProfile || !appResumed) return;
+    final ticket = revision;
+    bool current() => mounted && ticket == revision && canImportProfile && appResumed;
+    setState(() { scanning = true; targetReviewed = false; profilePreview = null; status = '扫描公开连接资料 · 返回后仍需预览和审查'; });
+    try {
+      final text = await const MethodChannel('herdr.pocket/pair_scan').invokeMethod<String>('scan');
+      if (!await scannerForeground(ticket) || !current()) return;
+      if (text == null || text.isEmpty) { setState(() { status = '已取消扫描 · 可手动粘贴公开资料'; }); return; }
+      final preview = ConnectionProfile.parse(text);
+      setState(() { profileInput.text = text; profilePreview = preview; status = '公开资料待预览 · 尚未填入或建立信任'; });
+    } catch (_) {
+      if (current()) setState(() { status = '扫描不可用或资料无效 · 未填入表单，可手动粘贴'; });
+    } finally { if (mounted && ticket == revision) setState(() { scanning = false; }); }
+  }
+  void fillProfile() {
+    final preview = profilePreview;
+    if (!canImportProfile || scanning || !appResumed || preview == null) return;
+    revision++;
+    setState(() {
+      for (final name in ['host','port','username','session','socketPath','herdrPath','expectedHostKey']) {
+        fields[name]!.text = preview.values[name].toString();
+      }
+      provider = preview.values['provider'] as String;
+      importedOverlayProvider = ['tailscale','easytier','zerotier'].contains(provider) ? provider : null;
+      profilePreview = null; profileInput.clear(); targetReviewed = false;
+      status = '资料已填入未审查表单 · 请独立核验指纹与目标后再创建设备身份';
+    });
+  }
   Widget input(String name,String label) => Padding(padding:const EdgeInsets.only(bottom:12),
     child:TextField(key:ValueKey('pair-$name'),controller:fields[name],enabled:!busy && pairing == null && (savedProfile == null || name == 'device'),
       autocorrect:false,maxLength:name == 'expectedHostKey' ? 4096 : 1024,decoration:InputDecoration(labelText:label,counterText:''),
-      onChanged:(_) { revision++; setState(() { targetReviewed = false; }); }));
+      onChanged:(_) { invalidateScan(); setState(() { targetReviewed = false; profilePreview = null; }); }));
   @override
   Widget build(BuildContext context) {
     final p = pairing;
@@ -366,20 +454,33 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
         Semantics(liveRegion:true,child:Text(status,key:const ValueKey('pair-status'))),
         const SizedBox(height:12),
         if (!platformAvailable) const Text('此平台的设备安全存储桥不可用 · 设备配对已禁用，可返回手动隔离实验'),
-        if (widget.catalog == null && PairingPage.retainedOrphan != null) TextButton(key:const ValueKey('pair-delete-orphan'),onPressed:busy ? null : deleteOrphan,child:const Text('明确删除原身份引用')),
+        if (widget.catalog == null && PairingPage.retainedOrphan != null) TextButton(key:const ValueKey('pair-delete-orphan'),onPressed:busy || widgetBindingChanged ? null : deleteOrphan,child:const Text('明确删除原身份引用')),
         if (p == null) ...[
-          DropdownButtonFormField<String>(key:const ValueKey('pair-provider'),initialValue:provider,decoration:const InputDecoration(labelText:'网络 provider（仅配置，入网未知）'),items:[for (final p in hostProviders) DropdownMenuItem(value:p,child:Text(hostProviderLabel(p)))],onChanged:busy ? null : (value) { if (value != null) setState(() { provider = value; targetReviewed = false; revision++; }); }),
+          if (canImportProfile) ...[
+            const Text('公开连接资料不证明主机身份；请通过可信渠道独立核验指纹。'),
+            if (scanAvailable) TextButton.icon(key:const ValueKey('profile-scan'),onPressed:scanning ? null : scanProfile,
+              icon:const Icon(Icons.qr_code_scanner),label:const Text('扫描公开连接资料')),
+            TextField(key:const ValueKey('profile-input'),controller:profileInput,maxLength:2048,minLines:2,maxLines:5,
+              decoration:const InputDecoration(labelText:'粘贴公开连接资料 JSON'),onChanged:(_) => previewProfile()),
+            if (profilePreview != null) ...[
+              SelectableText('待预览（尚未信任）\n主机 ${profilePreview!.values['host']}:${profilePreview!.values['port']}\n账号 ${profilePreview!.values['username']}\n网络 ${profilePreview!.values['provider']}\n会话 ${profilePreview!.values['session']}\nsocket ${profilePreview!.values['socketPath']}\nherdr ${profilePreview!.values['herdrPath']}\n主机指纹 ${profilePreview!.fingerprint}',key:const ValueKey('profile-preview')),
+              TextButton(key:const ValueKey('profile-fill'),onPressed:scanning ? null : fillProfile,child:const Text('明确填入未审查表单')),
+            ],
+          ],
+          DropdownButtonFormField<String>(key:const ValueKey('pair-provider'),initialValue:provider,decoration:const InputDecoration(labelText:'网络 provider（仅配置，入网未知）'),items:[for (final p in hostProviders) DropdownMenuItem(value:p,child:Text(hostProviderLabel(p)))],onChanged:busy || importedOverlayProvider != null ? null : (value) { if (value != null) setState(() { provider = value; targetReviewed = false; profilePreview = null; invalidateScan(); }); }),
+          if (importedOverlayProvider != null) Text('公开资料声明 $importedOverlayProvider · 配对后请在主机列表明确绑定同类本机网络，首次绑定前禁止连接。'),
           const SizedBox(height:12),
           input('host','SSH 主机 / IP'), input('port','SSH 端口'), input('username','主机账号'),
           input('session','命名会话（非 default）'), input('socketPath','命名会话 socket 绝对路径'),
           input('herdrPath','herdr 可执行文件绝对路径'), input('expectedHostKey','可信渠道核验的 Ed25519 主机公钥'), input('device','设备名称（英文、数字、空格）'),
           CheckboxListTile(key:const ValueKey('pair-target-review'),value:targetReviewed,
-            onChanged:busy ? null : (value) => setState(() { targetReviewed = value == true; }),
+            onChanged:busy || scanning || !appResumed ? null : (value) => setState(() { targetReviewed = value == true; }),
             title:const Text('我已通过可信渠道核验账号、主机公钥与命名会话资料')),
-          FilledButton(key:const ValueKey('pair-create'),onPressed:targetReviewed && !busy && !creationUnknown && !profileBlocked && platformAvailable ? create : null,
+          FilledButton(key:const ValueKey('pair-create'),onPressed:targetReviewed && !busy && !scanning && appResumed && !creationUnknown && !profileBlocked && platformAvailable ? create : null,
             child:const Text('在此设备创建独立身份并生成公开请求')),
         ] else ...[
-          if (savedProfile != null) Text(savedProfile!.networkProfileId == null ? '系统直连（沿用系统路由） · 在线状态未知；每标签独立连接'
+          if (needsNetworkBinding) const Text('需先返回主机列表，选择／解除网络绑定，明确绑定相同 provider 的本机网络；不会自动使用系统直连。',key:ValueKey('pair-network-required')),
+          if (savedProfile != null && !needsNetworkBinding) Text(savedProfile!.networkProfileId == null ? '系统直连（沿用系统路由） · 在线状态未知；每标签独立连接'
             : '网络：${widget.catalog?.networkFor(savedProfile!)?.label} · ${widget.catalog?.networkFor(savedProfile!)?.provider} · 入网状态未知；每标签独立连接'),
           Text('状态 ${p.state} · 主机授权 ${p.authorization}',key:const ValueKey('pair-state')),
           Text('账号 ${p.request['account']}\n主机 ${p.request['host_key']}\n设备 ${pairingFingerprint(p.request['public_key'] as String)}\n到期 ${p.request['expires_at']}'),
@@ -391,14 +492,14 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
             decoration:const InputDecoration(labelText:'公开授权／撤销响应 JSON'),onChanged:(_) => previewResponse()),
           if (responsePreview != null) Text('待审查响应\n账号 ${responsePreview!['account']}\n主机 ${responsePreview!['host_key']}\n设备 ${responsePreview!['fingerprint']}\n状态 ${responsePreview!['status']} · 新增授权 ${responsePreview!['authorization_added']}\n期限 ${responsePreview!['issued_at']} → ${responsePreview!['expires_at']}',key:const ValueKey('pair-response-preview')),
           CheckboxListTile(key:const ValueKey('pair-source-review'),value:sourceReviewed,
-            onChanged:busy ? null : (v) => setState(() { sourceReviewed = v == true; }),title:const Text('我已独立核验响应来源、账号与两端指纹')),
+            onChanged:busy || scanning || !appResumed ? null : (v) => setState(() { sourceReviewed = v == true; }),title:const Text('我已独立核验响应来源、账号与两端指纹')),
           FilledButton(key:const ValueKey('pair-accept'),onPressed:sourceReviewed && responsePreview != null && !busy && !scanning &&
-            pageVisible && !profileBlocked && widget.catalog?.ready != false ? accept : null,child:const Text('审查并接受绑定响应')),
+            pageVisible && appResumed && !profileBlocked && widget.catalog?.ready != false ? accept : null,child:const Text('审查并接受绑定响应')),
           if (['authorized-unverified','waiting-connectivity','paired'].contains(p.state)) FilledButton(
-            key:const ValueKey('pair-connect'),onPressed:busy || !identityAvailable || profileBlocked || widget.catalog?.ready == false ? null : connect,child:const Text('主动审查连接并读取看板')),
+            key:const ValueKey('pair-connect'),onPressed:busy || !identityAvailable || profileBlocked || needsNetworkBinding || widget.catalog?.ready == false ? null : connect,child:const Text('主动审查连接并读取看板')),
           if (savedProfile != null && !identityAvailable) TextButton(key:const ValueKey('pair-recheck-key'),onPressed:busy ? null : checkExistingIdentity,child:const Text('仅重新核验原设备身份')),
-          TextButton(key:const ValueKey('pair-cancel'),onPressed:busy ? null : cancelWaiting,child:const Text('取消等待（不撤销主机授权）')),
-          TextButton(key:const ValueKey('pair-delete'),onPressed:busy ? null : delete,child:const Text('删除本机身份（不撤销主机授权）')),
+          TextButton(key:const ValueKey('pair-cancel'),onPressed:busy || widgetBindingChanged ? null : cancelWaiting,child:const Text('取消等待（不撤销主机授权）')),
+          TextButton(key:const ValueKey('pair-delete'),onPressed:busy || widgetBindingChanged ? null : delete,child:const Text('删除本机身份（不撤销主机授权）')),
         ],
       ]))));
   }

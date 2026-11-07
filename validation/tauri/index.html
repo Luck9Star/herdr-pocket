@@ -25,9 +25,21 @@
 <p id="remote-native-note" class="mode-message" data-tone="warning">浏览器预览没有原生 SSH 适配器。真实读取仅在测试安装包中可用，预览不会伪造连接成功。</p>
 <form id="remote-form" autocomplete="off">
 <fieldset id="remote-fields"><legend>1. 审查目标与来源</legend>
+<section class="remote-key-section" aria-labelledby="connection-profile-title">
+<h3 id="connection-profile-title">扫描 / 粘贴主机公开连接资料</h3>
+<p>先打开无设备身份的新主机表单，再扫描主机展示的连接二维码，或手动粘贴公开资料（最多 2048 UTF-8 字节）。与下方设备授权响应不同；读取与预览只在本地进行。</p>
+<label>公开连接资料 JSON<textarea id="connection-profile-raw" rows="5" maxlength="2048" spellcheck="false" autocapitalize="none" autocomplete="off"></textarea></label>
+<div class="remote-actions"><button id="connection-profile-scan" type="button">扫描主机连接资料</button><button id="connection-profile-preview" type="button">预览连接资料与指纹</button><button id="connection-profile-cancel" type="button">取消连接资料预览</button></div>
+<pre id="connection-profile-details" hidden></pre>
+<p id="connection-profile-fingerprint" hidden></p>
+<button id="connection-profile-apply" type="button" disabled>明确填入新主机表单（清除审查）</button>
+<p id="connection-profile-status" role="status" aria-live="polite"></p>
+</section>
 <p class="remote-help">从独立可信渠道核对主机公钥与路径。本轮仅支持 release herdr 0.9.5 的非 default 命名会话。</p>
 <div class="remote-fields-grid">
 <label>主机地址<input id="remote-host" type="text" required maxlength="253" placeholder="主机 IP 或域名" spellcheck="false" autocapitalize="none" autocomplete="off"></label>
+<label>连接资料声明的网络<input id="remote-profile-provider" type="text" readonly placeholder="手动填写 / 未导入"></label>
+<p id="remote-profile-network-note" class="remote-help">网络声明仅供核对，不会自动选择本机节点或绑定网络。Tailscale、EasyTier、ZeroTier 请在网络配置中单独审查、授权与绑定。</p>
 <label>SSH 端口<input id="remote-port" type="number" required min="1" max="65535" value="22" inputmode="numeric"></label>
 <label>SSH 用户名<input id="remote-user" type="text" required maxlength="128" spellcheck="false" autocapitalize="none" autocomplete="off"></label>
 <label>命名会话<input id="remote-session" type="text" required maxlength="64" pattern="[A-Za-z0-9_-]+" placeholder="work" spellcheck="false" autocapitalize="none"></label>

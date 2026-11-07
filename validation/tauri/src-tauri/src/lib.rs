@@ -140,6 +140,7 @@ fn network_bind(host_id:String,profile_id:Option<String>,expected_catalog:String
     let _op=ops.enter()?;let mut f=flow.lock().map_err(|_|"state_unavailable")?;let old=hosts.get(&host_id)?; if old.network_profile_id.is_some() && profile_id.is_none() && !confirmed_direct{return Err("network_direct_confirmation_required".into());}
     let catalog=hosts.networks()?;if catalog.revision!=expected_catalog {return Err("network_changed".into());}
     if profile_id.as_ref().is_some_and(|id|!catalog.profiles.iter().any(|p|&p.id==id && p.enabled)) {return Err("network_profile_missing".into());}
+    old.review_network_binding(profile_id.as_ref().and_then(|id|catalog.profiles.iter().find(|p|&p.id==id)))?;
     if old.network_profile_id!=profile_id {let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(std::slice::from_ref(&host_id),&mut g);}
     hosts.bind_network(&host_id,profile_id,&expected_catalog)
 }
@@ -230,14 +231,15 @@ async fn network_node_open_auth(id:String,expected_catalog:String,expected_revis
 #[tauri::command]
 fn host_list(hosts:State<'_,Hosts>)->Result<Vec<hosts::View>,String>{hosts.list()}
 #[tauri::command]
-fn host_save(id:Option<String>,name:String,config:RemoteConfig,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<hosts::View,String>{
+fn host_save(id:Option<String>,name:String,config:RemoteConfig,provider_hint:Option<herdr_readonly_transport::config_transfer::Provider>,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<hosts::View,String>{
+    if id.is_some() && provider_hint.is_some() {return Err("host_provider_hint_existing".into());}
     let _lease=pairing.enter()?; let mut f=flow.lock().map_err(|_|"state_unavailable")?;
     if f.owner.is_some(){return Err("connection_active".into());}
     if let Some(id)=id.as_ref() {if hosts.get(id)?.target!=Target::from_config(&config){f.tabs.cancel_hosts(std::slice::from_ref(id));}}
     config.validate_pair_target().map_err(str::to_string)?;
     let current=pairing.current.lock().map_err(|_|"state_unavailable")?;
     let reference=match current.as_ref() {Some(p) if p.authorization=="authorized"=>Some(p.persistable(&config).map_err(str::to_string)?),_=>None};
-    hosts.save(id.as_deref(),&name,Target::from_config(&config),reference)
+    hosts.save_with_provider_hint(id.as_deref(),&name,Target::from_config(&config),reference,provider_hint)
 }
 #[tauri::command]
 fn host_new(hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String>{
@@ -417,6 +419,11 @@ use herdr_readonly_transport::direct_observation::{DirectObservation, ObserveEve
 #[tauri::command]
 async fn remote_observe(config:RemoteConfig,device:bool,host_id:Option<String>,client_generation:u64,on_event:Channel<ObserveEvent>,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<(),String> {
     let network_lease=ops.enter()?;
+    if device {
+        let current=pairing.current.lock().map_err(|_|"state_unavailable")?;
+        let p=current.as_ref().ok_or("pairing_missing")?;
+        hosts.review_device_host(host_id.as_deref(),p.local_handle(),&Target::from_config(&config))?;
+    }
     let (dialer,node_binding):(Box<dyn herdr_readonly_transport::transport::Dialer>,Option<herdr_readonly_transport::mobile_nodes::Binding>)=if let Some(id)=&host_id {
         let record=hosts.get(id)?;if !record.enabled || record.retired || record.target!=Target::from_config(&config){return Err("host_selection_changed".into());}
         let profile=hosts.route(&record)?;
@@ -440,14 +447,19 @@ async fn remote_observe(config:RemoteConfig,device:bool,host_id:Option<String>,c
         if pairing.restore_required.load(Ordering::SeqCst) {return Err("host_restore_required".into());}
         let mut g=state.lock().map_err(|_|"state_unavailable")?;
         let attempt = f.begin(client_generation,&mut g).map_err(str::to_string)?;
-        f.host_id = host_id; f.node_binding=node_binding;
+        f.host_id = host_id.clone(); f.node_binding=node_binding;
         attempt
     };
     let device_auth=if device {
         let lease=pairing.enter();
         if let Err(e)=lease { let mut f=flow.lock().map_err(|_|"state_unavailable")?; let mut g=state.lock().map_err(|_|"state_unavailable")?; f.finish(client_generation,generation,&mut g); return Err(e); }
         let _lease=lease.unwrap();
-        let result=pairing.current.lock().map_err(|_|"state_unavailable")?.as_mut().ok_or("pairing_missing").and_then(|p| p.begin(&config));
+        let result=(|| -> Result<_,String> {
+            let mut current=pairing.current.lock().map_err(|_|"state_unavailable")?;
+            let p=current.as_mut().ok_or("pairing_missing")?;
+            hosts.review_device_host(host_id.as_deref(),p.local_handle(),&Target::from_config(&config))?;
+            p.begin(&config).map_err(str::to_string)
+        })();
         match result { Ok(v)=>Some(v), Err(e)=> { let mut f=flow.lock().map_err(|_|"state_unavailable")?; let mut g=state.lock().map_err(|_|"state_unavailable")?; f.finish(client_generation,generation,&mut g); return Err(e.into()); } }
     } else { None };
     drop(network_lease);

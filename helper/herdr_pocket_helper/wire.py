@@ -34,8 +34,8 @@ def fingerprint(value: str) -> str:
     return 'SHA256:' + base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip('=')
 
 
-def encode(obj: dict) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode('ascii')
+def encode(obj: dict, *, ensure_ascii: bool = True) -> bytes:
+    return json.dumps(obj, sort_keys=True, separators=(',', ':'), ensure_ascii=ensure_ascii).encode('utf-8')
 
 
 def decode(raw: bytes, *, now: int) -> dict:

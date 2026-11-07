@@ -71,6 +71,8 @@ pub struct Record {
     pub retired: bool,
     #[serde(default, rename = "networkProfileId")]
     pub network_profile_id: Option<String>,
+    #[serde(default, rename = "requiresNetworkBinding", skip_serializing_if = "is_false")]
+    pub requires_network_binding: bool,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -95,8 +97,17 @@ pub struct View {
     pub provider: Provider,
     pub retired: bool,
     pub network_profile_id: Option<String>,
+    pub requires_network_binding: bool,
 }
 impl Record {
+    pub fn review_network_binding(&self, profile:Option<&NetworkProfile>) -> Result<(),String> {
+        if self.requires_network_binding {
+            let profile=profile.ok_or("network_binding_required")?;
+            if !profile.enabled {return Err("network_profile_missing".into());}
+            if profile.provider!=self.provider {return Err("network_provider_mismatch".into());}
+        }
+        Ok(())
+    }
     fn validate(&self) -> Result<(), String> {
         if self.id.len() != 32
             || !self
@@ -105,6 +116,7 @@ impl Record {
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
             || !valid_name(&self.name)
             || (self.retired && self.enabled)
+            || (self.requires_network_binding && (!overlay_provider(self.provider) || self.network_profile_id.is_some()))
         {
             return Err("invalid_host_record".into());
         }
@@ -139,8 +151,13 @@ impl Record {
             provider: self.provider,
             retired: self.retired,
             network_profile_id: self.network_profile_id.clone(),
+            requires_network_binding: self.requires_network_binding,
         })
     }
+}
+fn is_false(value: &bool) -> bool { !*value }
+fn overlay_provider(provider: Provider) -> bool {
+    matches!(provider, Provider::Tailscale | Provider::Easytier | Provider::Zerotier)
 }
 fn valid_name(name: &str) -> bool {
     !name.trim().is_empty() && name.len() <= 96 && !name.chars().any(char::is_control)
@@ -347,6 +364,22 @@ impl Hosts {
         target: Target,
         pairing: Option<PairingReference>,
     ) -> Result<View, String> {
+        self.save_with_provider_hint(id, name, target, pairing, None)
+    }
+    pub fn save_with_provider_hint(
+        &self,
+        id: Option<&str>,
+        name: &str,
+        target: Target,
+        pairing: Option<PairingReference>,
+        provider_hint: Option<Provider>,
+    ) -> Result<View, String> {
+        if id.is_some() && provider_hint.is_some() {
+            return Err("host_provider_hint_existing".into());
+        }
+        if provider_hint == Some(Provider::Unspecified) {
+            return Err("invalid_provider_hint".into());
+        }
         self.with(|r| {
             if !valid_name(name) {
                 return Err("invalid_host_name".into());
@@ -377,9 +410,10 @@ impl Hosts {
                     enabled: true,
                     target,
                     pairing,
-                    provider: Provider::Unspecified,
+                    provider: provider_hint.unwrap_or_default(),
                     retired: false,
                     network_profile_id: None,
+                    requires_network_binding: provider_hint.is_some_and(overlay_provider),
                 });
                 id
             };
@@ -528,12 +562,41 @@ impl Hosts {
     pub fn bind_network(&self, host_id:&str, profile_id:Option<String>, expected_catalog:&str) -> Result<(),String> { self.with(|r| {
         if r.revision!=expected_catalog {return Err("network_changed".into());}
         if let Some(id)=&profile_id {if !r.profiles.iter().any(|p|&p.id==id && p.enabled) {return Err("network_profile_missing".into());}}
-        let mut list=r.items.clone(); let h=list.iter_mut().find(|h|h.id==host_id && !h.retired).ok_or("host_missing")?;h.network_profile_id=profile_id; r.commit(list)
+        let mut list=r.items.clone();
+        let h=list.iter_mut().find(|h|h.id==host_id && !h.retired).ok_or("host_missing")?;
+        let profile=profile_id.as_ref().and_then(|id|r.profiles.iter().find(|p|&p.id==id));
+        h.review_network_binding(profile)?;
+        h.requires_network_binding=false;
+        h.network_profile_id=profile_id;
+        r.commit(list)
     }) }
     pub fn route(&self, host:&Record) -> Result<Option<NetworkProfile>,String> { self.with(|r| {
-        let Some(id)=&host.network_profile_id else {return Ok(None)};let p=r.profiles.iter().find(|p|&p.id==id).ok_or("network_profile_missing")?;
-        if !p.enabled {return Err("network_profile_disabled".into());} Ok(Some(p.clone()))
+        let current=r.items.iter().find(|h|h.id==host.id).ok_or("host_missing")?;
+        if current.target!=host.target || current.network_profile_id!=host.network_profile_id
+            || current.provider!=host.provider || current.requires_network_binding!=host.requires_network_binding {
+            return Err("host_selection_changed".into());
+        }
+        r.route(current)
     }) }
+    // Device authentication must identify the record that owns its local key.
+    // An omitted/wrong id cannot select a separate system-network path.
+    pub fn review_device_host(&self, host_id:Option<&str>, handle:&str, target:&Target) -> Result<Record,String> {self.with(|r| {
+        let host=r.items.iter().find(|h|h.pairing.as_ref().is_some_and(|p|p.handle==handle)).ok_or("host_selection_changed")?;
+        if host_id!=Some(host.id.as_str()) || !host.enabled || host.retired || &host.target!=target {
+            return Err("host_selection_changed".into());
+        }
+        r.route(host)?;
+        Ok(host.clone())
+    }) }
+}
+impl Repository {
+    fn route(&self, host:&Record) -> Result<Option<NetworkProfile>,String> {
+        if host.requires_network_binding {return Err("network_binding_required".into());}
+        let Some(id)=&host.network_profile_id else {return Ok(None)};
+        let p=self.profiles.iter().find(|p|&p.id==id).ok_or("network_profile_missing")?;
+        if !p.enabled {return Err("network_profile_disabled".into());}
+        Ok(Some(p.clone()))
+    }
 }
 
 impl From<&Target> for PortableTarget {
@@ -643,7 +706,7 @@ impl Hosts {
                     .iter()
                     .find(|h| &h.id == id && !h.retired)
                     .ok_or("host_missing")?;
-                if h.network_profile_id.is_some() { return Err("transfer_network_unavailable".into()); }
+                if h.network_profile_id.is_some() || h.requires_network_binding { return Err("transfer_network_unavailable".into()); }
                 hosts.push(PortableHost {
                     label: h.name.clone(),
                     provider: h.provider,
@@ -779,6 +842,7 @@ impl Hosts {
                     provider: host.provider,
                     retired: false,
                     network_profile_id: None,
+                    requires_network_binding: false,
                 });
                 added_ids.push(id);
             }
@@ -821,7 +885,7 @@ impl Hosts {
     let mut included=network_ids.to_vec();for h in &chosen {if let Some(id)=&h.network_profile_id {if !included.contains(id){included.push(id.clone());}}}
     if included.len()>16 {return Err("transfer_invalid_selection".into());}
     let networks:Vec<PortableNetwork>=included.iter().enumerate().map(|(i,id)| {let p=r.profiles.iter().find(|p|&p.id==id).ok_or("network_profile_missing")?;Ok(PortableNetwork{key:format!("n{i}"),label:p.label.clone(),provider:p.provider,settings:p.settings.clone()})}).collect::<Result<_,String>>()?;
-    let hosts=chosen.iter().map(|h|{let profile=h.network_profile_id.as_ref().and_then(|id|included.iter().position(|p|p==id));PortableHostV2{label:h.name.clone(),provider:profile.map(|i|networks[i].provider).unwrap_or(h.provider),target:PortableTarget::from(&h.target),network_key:profile.map(|i|networks[i].key.clone())}}).collect();
+    let hosts=chosen.iter().map(|h|{let profile=h.network_profile_id.as_ref().and_then(|id|included.iter().position(|p|p==id));PortableHostV2{label:h.name.clone(),provider:profile.map(|i|networks[i].provider).unwrap_or(h.provider),target:PortableTarget::from(&h.target),network_key:profile.map(|i|networks[i].key.clone()),requires_network_binding:h.requires_network_binding}}).collect();
     let a=ArchiveV2{version:2,hosts,networks,preferences:include_preferences.then(||r.preferences.clone())};a.validate().map_err(str::to_string)?;Ok(a)
  })}
  pub fn preview_v2(&self,a:&ArchiveV2)->Result<ImportPlanV2,String>{a.validate().map_err(str::to_string)?;self.with(|r|{
@@ -840,7 +904,7 @@ impl Hosts {
     let mut list=r.items.clone();let(mut added_ids,mut retired_ids,mut removed_ids,mut replaced)=(Vec::new(),Vec::new(),Vec::new(),Vec::new());
     for choice in choices {let h=&a.hosts[choice.index];let mut expected=conflict_ids_v2(&r.items,h);expected.sort();let mut selected=choice.replace_ids.clone();selected.sort();if choice.action!=ImportAction::Replace && !selected.is_empty(){return Err("transfer_invalid_choice".into());}if choice.action==ImportAction::Keep {continue;}
         if choice.action==ImportAction::Replace {if expected.is_empty() || selected!=expected {return Err("transfer_invalid_choice".into());}for id in selected {let pos=list.iter().position(|h|h.id==id && !h.retired).ok_or("transfer_conflict_changed")?;replaced.push(list[pos].clone());if list[pos].pairing.is_some(){list[pos].retired=true;list[pos].enabled=false;retired_ids.push(id);}else{list.remove(pos);removed_ids.push(id);}}}
-        let target=Target::from(&h.target);if list.iter().any(|x|!x.retired && x.target==target){return Err("transfer_target_conflict".into());}let id=random_public_id().map_err(str::to_string)?;list.push(Record{id:id.clone(),name:h.label.clone(),enabled:true,target,pairing:None,provider:h.provider,retired:false,network_profile_id:h.network_key.as_ref().map(|key|ids.get(key).cloned().ok_or("transfer_invalid_schema")).transpose()?});added_ids.push(id);
+        let target=Target::from(&h.target);if list.iter().any(|x|!x.retired && x.target==target){return Err("transfer_target_conflict".into());}let id=random_public_id().map_err(str::to_string)?;list.push(Record{id:id.clone(),name:h.label.clone(),enabled:true,target,pairing:None,provider:h.provider,retired:false,requires_network_binding:h.requires_network_binding,network_profile_id:h.network_key.as_ref().map(|key|ids.get(key).cloned().ok_or("transfer_invalid_schema")).transpose()?});added_ids.push(id);
     }
     let added=added_ids.iter().map(|id|list.iter().find(|h|&h.id==id).unwrap().view()).collect::<Result<Vec<_>,_>>()?;let retired=retired_ids.iter().map(|id|list.iter().find(|h|&h.id==id).unwrap().view()).collect::<Result<Vec<_>,_>>()?;
     let prefs=if apply_preferences {a.preferences.clone().ok_or("transfer_invalid_choice")?}else{r.preferences.clone()};Repository::validate_items(&list,&profiles,&prefs)?;before_commit(&replaced)?;r.commit_state(list,profiles,prefs)?;Ok(ImportResult{added,retired,removed_ids})
@@ -876,6 +940,139 @@ mod tests {
             socket_path: "/tmp/root/herdr/sessions/work/herdr.sock".into(),
             herdr_path: "/usr/bin/herdr".into(),
             session: "work".into(),
+        }
+    }
+    fn add_network(hosts: &Hosts, provider: Provider, enabled: bool) -> NetworkProfile {
+        use crate::networks::Settings;
+        let settings=match provider {
+            Provider::Tailscale=>Settings::Tailscale{control_url:String::new(),hostname:String::new()},
+            Provider::Easytier=>Settings::Easytier{network_name:"team".into(),peers:vec!["tcp://example.test:1234".into()]},
+            Provider::Zerotier=>Settings::Zerotier{network_id:"0123456789abcdef".into()},
+            _=>panic!("overlay fixture required"),
+        };
+        let cat=hosts.networks().unwrap();
+        hosts.save_network(NetworkProfile{id:"0".repeat(32),label:"fixture".into(),provider,enabled,revision:1,settings},&cat.revision,None,&[]).unwrap();
+        hosts.networks().unwrap().profiles.last().unwrap().clone()
+    }
+    #[test]
+    fn scanned_overlay_requires_binding_after_save_rename_and_reopen() {
+        let temp=Temp::new();let hosts=Hosts::default();hosts.init(temp.0.clone()).unwrap();
+        let mut ids=Vec::new();
+        for provider in [Provider::Tailscale,Provider::Easytier,Provider::Zerotier] {
+            let t=target();let view=hosts.save_with_provider_hint(None,"scan",t.clone(),None,Some(provider)).unwrap();
+            assert_eq!(view.provider,provider);assert!(view.requires_network_binding);assert!(view.network_profile_id.is_none());
+            let record=hosts.get(&view.id).unwrap();
+            assert!(matches!(hosts.route(&record),Err(e) if e=="network_binding_required"));
+            let before=fs::read(temp.0.join("hosts.json")).unwrap();
+            assert!(matches!(hosts.save_with_provider_hint(Some(&view.id),"overwrite",t.clone(),None,Some(Provider::Direct)),Err(e) if e=="host_provider_hint_existing"));
+            assert!(matches!(hosts.save_with_provider_hint(None,"duplicate",t.clone(),None,Some(Provider::Direct)),Err(e) if e=="host_already_exists"));
+            assert_eq!(fs::read(temp.0.join("hosts.json")).unwrap(),before);
+            hosts.save(Some(&view.id),"renamed",t,None).unwrap();
+            assert!(hosts.get(&view.id).unwrap().requires_network_binding);
+            let json=serde_json::to_value(hosts.get(&view.id).unwrap().view().unwrap()).unwrap();
+            assert_eq!(json["requiresNetworkBinding"],true);
+            ids.push(view.id);
+        }
+        assert!(hosts.save_with_provider_hint(None,"invalid hint",target(),None,Some(Provider::Unspecified)).is_err());
+        let manual=hosts.save(None,"manual",target(),None).unwrap();
+        let direct=hosts.save_with_provider_hint(None,"scan direct",target(),None,Some(Provider::Direct)).unwrap();
+        assert!(!manual.requires_network_binding);assert!(!direct.requires_network_binding);
+        assert!(hosts.route(&hosts.get(&manual.id).unwrap()).unwrap().is_none());
+        drop(hosts);let reopened=Hosts::default();reopened.init(temp.0.clone()).unwrap();
+        for id in ids {assert!(reopened.get(&id).unwrap().requires_network_binding);assert!(reopened.route(&reopened.get(&id).unwrap()).is_err());}
+        // Missing optional fields in old disk records still mean the legacy rule.
+        assert!(!reopened.get(&manual.id).unwrap().requires_network_binding);
+        let disk:serde_json::Value=serde_json::from_slice(&fs::read(temp.0.join("hosts.json")).unwrap()).unwrap();
+        assert!(disk["hosts"].as_array().unwrap().iter().find(|h|h["id"]==manual.id).unwrap().get("requiresNetworkBinding").is_none());
+    }
+    #[test]
+    fn first_network_binding_checks_provider_enablement_revision_and_atomic_commit() {
+        let temp=Temp::new();let hosts=Hosts::default();hosts.init(temp.0.clone()).unwrap();
+        let h=hosts.save_with_provider_hint(None,"scan",target(),None,Some(Provider::Tailscale)).unwrap();
+        let stale=hosts.get(&h.id).unwrap();
+        let wrong=add_network(&hosts,Provider::Easytier,true);
+        let disabled=add_network(&hosts,Provider::Tailscale,false);
+        let matching=add_network(&hosts,Provider::Tailscale,true);
+        let cat=hosts.networks().unwrap();let before=fs::read(temp.0.join("hosts.json")).unwrap();
+        assert!(matches!(hosts.bind_network(&h.id,None,&cat.revision),Err(e) if e=="network_binding_required"));
+        assert!(matches!(hosts.bind_network(&h.id,Some(wrong.id.clone()),&cat.revision),Err(e) if e=="network_provider_mismatch"));
+        assert!(matches!(hosts.bind_network(&h.id,Some(disabled.id.clone()),&cat.revision),Err(e) if e=="network_profile_missing"));
+        assert!(matches!(hosts.bind_network(&h.id,Some(matching.id.clone()),"stale"),Err(e) if e=="network_changed"));
+        assert_eq!(fs::read(temp.0.join("hosts.json")).unwrap(),before);
+        assert_eq!(hosts.networks().unwrap().revision,cat.revision);
+        // Force the atomic rename to fail: neither the flag nor the binding may advance in memory.
+        fs::rename(temp.0.join("hosts.json"),temp.0.join("saved.json")).unwrap();
+        fs::create_dir(temp.0.join("hosts.json")).unwrap();
+        assert!(matches!(hosts.bind_network(&h.id,Some(matching.id.clone()),&cat.revision),Err(e) if e=="host_storage_unavailable"));
+        assert!(hosts.get(&h.id).unwrap().requires_network_binding);
+        assert!(hosts.get(&h.id).unwrap().network_profile_id.is_none());
+        fs::remove_dir(temp.0.join("hosts.json")).unwrap();
+        fs::rename(temp.0.join("saved.json"),temp.0.join("hosts.json")).unwrap();
+        hosts.bind_network(&h.id,Some(matching.id.clone()),&cat.revision).unwrap();
+        let bound=hosts.get(&h.id).unwrap();assert!(!bound.requires_network_binding);
+        assert_eq!(hosts.route(&bound).unwrap().unwrap().id,matching.id);
+        assert!(matches!(hosts.route(&stale),Err(e) if e=="host_selection_changed"));
+        drop(hosts);let reopened=Hosts::default();reopened.init(temp.0.clone()).unwrap();
+        let record=reopened.get(&h.id).unwrap();assert!(!record.requires_network_binding);assert_eq!(record.network_profile_id,Some(matching.id));
+        // After explicit first binding, the existing rebind/clear workflow stays available.
+        let cat=reopened.networks().unwrap();reopened.bind_network(&h.id,Some(wrong.id.clone()),&cat.revision).unwrap();
+        assert_eq!(reopened.route(&reopened.get(&h.id).unwrap()).unwrap().unwrap().id,wrong.id);
+        let cat=reopened.networks().unwrap();reopened.bind_network(&h.id,None,&cat.revision).unwrap();
+        assert!(reopened.route(&reopened.get(&h.id).unwrap()).unwrap().is_none());
+    }
+    #[test]
+    fn device_auth_requires_owning_host_id_and_obeys_pending_route() {
+        let temp=Temp::new();let hosts=Hosts::default();hosts.init(temp.0.clone()).unwrap();
+        let t=target();let h=hosts.save_with_provider_hint(None,"scan",t.clone(),None,Some(Provider::Tailscale)).unwrap();
+        let other=hosts.save(None,"manual",target(),None).unwrap();
+        let keys=std::sync::Arc::new(VolatileKeyStore::default());
+        let p=crate::create_offline_pair(keys,&t.config(),"Pocket",100).unwrap();
+        let reference=p.pending_reference(&t.config()).unwrap();
+        hosts.attach_pending(&h.id,&t,reference.clone()).unwrap();
+        for id in [None,Some(other.id.as_str())] {
+            assert!(matches!(hosts.review_device_host(id,&reference.handle,&t),Err(e) if e=="host_selection_changed"));
+        }
+        assert!(matches!(hosts.review_device_host(Some(&h.id),&reference.handle,&t),Err(e) if e=="network_binding_required"));
+        assert!(hosts.review_device_host(Some(&h.id),"unknown-handle",&t).is_err());
+        let network=add_network(&hosts,Provider::Tailscale,true);let cat=hosts.networks().unwrap();hosts.bind_network(&h.id,Some(network.id),&cat.revision).unwrap();
+        assert_eq!(hosts.review_device_host(Some(&h.id),&reference.handle,&t).unwrap().id,h.id);
+        let mut changed=t;changed.port=23;assert!(hosts.review_device_host(Some(&h.id),&reference.handle,&changed).is_err());
+        // Independent manual records retain their original system route.
+        assert!(hosts.route(&hosts.get(&other.id).unwrap()).unwrap().is_none());
+    }
+    #[test]
+    fn pending_scan_v2_transfer_preserves_restriction_and_v1_export_rejects_loss() {
+        let temp=Temp::new();let hosts=Hosts::default();hosts.init(temp.0.clone()).unwrap();
+        let h=hosts.save_with_provider_hint(None,"scan",target(),None,Some(Provider::Zerotier)).unwrap();
+        assert!(matches!(hosts.export_portable(&[h.id.clone()]),Err(e) if e=="transfer_network_unavailable"));
+        let archive=hosts.export_v2(&[h.id.clone()],&[],false).unwrap();
+        assert!(archive.hosts[0].requires_network_binding);assert!(archive.hosts[0].network_key.is_none());assert!(archive.networks.is_empty());
+        let bytes=serde_json::to_vec(&archive).unwrap();
+        let parsed=herdr_readonly_transport::config_transfer::PortableArchive::parse(&bytes).unwrap().into_v2();
+        let plan=hosts.preview_v2(&parsed).unwrap();
+        let before=fs::read(temp.0.join("hosts.json")).unwrap();
+        let choice=ImportChoice{index:0,action:ImportAction::Replace,replace_ids:vec![h.id.clone()]};
+        assert!(hosts.apply_v2(&parsed,&plan.revision,&[choice],&[],false,|_|Err("simulated_stop_failure".into())).is_err());
+        assert_eq!(fs::read(temp.0.join("hosts.json")).unwrap(),before);
+        let choice=ImportChoice{index:0,action:ImportAction::Replace,replace_ids:vec![h.id.clone()]};
+        let applied=hosts.apply_v2(&parsed,&plan.revision,&[choice],&[],false,|_|Ok(())).unwrap();
+        let imported=&applied.added[0];assert!(imported.requires_network_binding);assert!(imported.network_profile_id.is_none());
+        assert!(hosts.route(&hosts.get(&imported.id).unwrap()).is_err());
+        assert!(matches!(hosts.get(&h.id),Err(e) if e=="host_missing"));
+        let next=hosts.export_v2(&[imported.id.clone()],&[],false).unwrap();assert_eq!(next.hosts[0],archive.hosts[0]);
+        drop(hosts);let reopened=Hosts::default();reopened.init(temp.0.clone()).unwrap();assert!(reopened.get(&imported.id).unwrap().requires_network_binding);
+    }
+    #[test]
+    fn corrupt_pending_flag_with_bound_network_or_direct_provider_is_rejected() {
+        for provider in [Provider::Direct,Provider::Tailscale] {
+            let temp=Temp::new();let hosts=Hosts::default();hosts.init(temp.0.clone()).unwrap();
+            let h=hosts.save(None,"legacy",target(),None).unwrap();
+            if provider==Provider::Tailscale {let profile=add_network(&hosts,provider,true);let cat=hosts.networks().unwrap();hosts.bind_network(&h.id,Some(profile.id),&cat.revision).unwrap();}
+            drop(hosts);
+            let path=temp.0.join("hosts.json");let mut disk:serde_json::Value=serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            disk["hosts"][0]["provider"]=serde_json::to_value(provider).unwrap();disk["hosts"][0]["requiresNetworkBinding"]=true.into();
+            fs::write(&path,serde_json::to_vec(&disk).unwrap()).unwrap();
+            assert!(Hosts::default().init(temp.0.clone()).is_err());
         }
     }
     #[test]

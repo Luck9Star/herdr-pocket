@@ -1,0 +1,206 @@
+{
+  "valid": [
+    {
+      "name": "direct",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}",
+      "fingerprint": "SHA256:bbXpuKG6zhzdmnxq256TlqzFBzRl2f6OOg722cYNbU8"
+    },
+    {
+      "name": "tailscale-ipv4",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"192.0.2.38\",\"port\":1,\"username\":\"demo\",\"provider\":\"tailscale\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}",
+      "fingerprint": "SHA256:bbXpuKG6zhzdmnxq256TlqzFBzRl2f6OOg722cYNbU8"
+    },
+    {
+      "name": "zerotier-ipv6",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"2001:db8::9\",\"port\":65535,\"username\":\"demo\",\"provider\":\"zerotier\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}",
+      "fingerprint": "SHA256:bbXpuKG6zhzdmnxq256TlqzFBzRl2f6OOg722cYNbU8"
+    },
+    {
+      "name": "easytier-unicode-path",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"easytier\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/\u5f00\u53d1 \u5de5\u5177/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}",
+      "fingerprint": "SHA256:bbXpuKG6zhzdmnxq256TlqzFBzRl2f6OOg722cYNbU8"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unknown-type",
+      "raw": "{\"version\":1,\"type\":\"pairing-binding-response\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "unknown-version",
+      "raw": "{\"version\":2,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "bool-port",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":true,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "string-port",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":\"22\",\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "zero-port",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":0,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "over-port",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":65536,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "fraction-port",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22.5,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "provider-reference",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"my network\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "unspecified",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"unspecified\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "wrong-user",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"-wrong\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "empty-session",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "default-session",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"default\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "socket-other-session",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"other\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "socket-missing-root",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "bad-path-component",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/tmp/../bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "path-trailing-slash",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/foo/\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "path-slash",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "path-empty-component",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/a//herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "c1-control",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/\u0085herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "utf8-path-limit",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\u6c49\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "long-dns-label",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "dns-empty-label",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"bad..invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "dns-control",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"x.invalid\\n\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "dns-trailing-dot",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"x.invalid.\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "ipv6-zone",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"fe80::1%eth0\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "bracketed-ipv6",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"[::1]\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "malformed-ipv6",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"1::2::3\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "short-ssh-blob",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 QUJD\"}"
+    },
+    {
+      "name": "trailing-ssh-comment",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea demo\"}"
+    },
+    {
+      "name": "extra-secret-field",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\",\"password\":\"synthetic-extra\"}"
+    },
+    {
+      "name": "review-injection",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\",\"reviewConfirmed\":true}"
+    },
+    {
+      "name": "foreign-device-handle",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\",\"deviceId\":\"synthetic-only\"}"
+    },
+    {
+      "name": "overlay-reference",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\",\"networkProfileId\":\"synthetic-only\"}"
+    },
+    {
+      "name": "duplicate-key",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\",\"host\":\"other.invalid\"}"
+    },
+    {
+      "name": "escaped-duplicate",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\",\"\\u0068ost\":\"other.invalid\"}"
+    },
+    {
+      "name": "float-version",
+      "raw": "{\"version\":1.0,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "float-port",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22.0,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "exponent-port",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22e0,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "missing-key",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\"}"
+    },
+    {
+      "name": "oversized-by-one",
+      "raw": "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      {\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "unpaired-surrogate",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/\\ud800/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "array",
+      "raw": "[{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}]"
+    },
+    {
+      "name": "trailing-text",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"buildbox.example.invalid\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}extra"
+    },
+    {
+      "name": "uri-ipvfuture",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"v1.fe:abc\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    },
+    {
+      "name": "ipv4-mapped-leading-zero",
+      "raw": "{\"version\":1,\"type\":\"herdr-connection-profile\",\"host\":\"::ffff:192.00.2.1\",\"port\":22,\"username\":\"demo\",\"provider\":\"direct\",\"session\":\"work\",\"socketPath\":\"/home/demo/.config/herdr/sessions/work/herdr.sock\",\"herdrPath\":\"/opt/herdr/bin/herdr\",\"expectedHostKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINdamAGCsQq31Uv+08lkBzoO4XLz2qYjJa8CGmj3B1Ea\"}"
+    }
+  ]
+}

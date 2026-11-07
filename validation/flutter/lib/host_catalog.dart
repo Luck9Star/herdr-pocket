@@ -61,22 +61,23 @@ dynamic decodeCatalogJson(String raw) {
 }
 
 class HostProfile {
-  HostProfile._(this.id,this.label,this.enabled,this.target,this.pairingRecord,this.provider,this.retired,this.networkProfileId,[this.expectedPrevious]);
+  HostProfile._(this.id,this.label,this.enabled,this.target,this.pairingRecord,this.provider,this.retired,this.networkProfileId,this.requiresNetworkBinding,[this.expectedPrevious]);
   final String id,label,provider;
   final String? expectedPrevious,networkProfileId;
-  final bool enabled,retired;
+  final bool enabled,retired,requiresNetworkBinding;
   bool get hasIdentity => pairingRecord.isNotEmpty;
   final Map<String,dynamic> target, pairingRecord;
   static const targetFields = {'host','port','username','expectedHostKey','socketPath','herdrPath','session','paneId'};
   factory HostProfile.fromJson(Map<String,dynamic> data,int now) {
-    const fields = {'id','label','enabled','target','pairing','provider','retired','networkProfileId'};
+    const fields = {'id','label','enabled','target','pairing','provider','retired','networkProfileId','requiresNetworkBinding'};
     // Missing retired is accepted only as a legacy record normalization.
-    data = {...data,if (!data.containsKey('retired')) 'retired':false,if (!data.containsKey('networkProfileId')) 'networkProfileId':null};
+    data = {...data,if (!data.containsKey('retired')) 'retired':false,if (!data.containsKey('networkProfileId')) 'networkProfileId':null,if (!data.containsKey('requiresNetworkBinding')) 'requiresNetworkBinding':false};
     if (data.length != fields.length || !data.keys.every(fields.contains) || data['id'] is! String ||
         !RegExp(r'^[a-f0-9]{32}$').hasMatch(data['id'] as String) || data['label'] is! String ||
         (data['label'] as String).trim().isEmpty || ((data['label'] as String).length > 64 && utf8.encode(data['label'] as String).length > 96) ||
         RegExp(r'[\x00-\x1f\x7f]').hasMatch(data['label'] as String) || data['enabled'] is! bool ||
         (data['networkProfileId'] != null && (data['networkProfileId'] is! String || !RegExp(r'^[a-f0-9]{32}$').hasMatch(data['networkProfileId'] as String))) ||
+        data['requiresNetworkBinding'] is! bool || (data['requiresNetworkBinding'] == true && (data['networkProfileId'] != null || !['tailscale','easytier','zerotier'].contains(data['provider']))) ||
         !hostProviders.contains(data['provider']) || data['retired'] is! bool || (data['retired'] == true && data['enabled'] == true) ||
         data['target'] is! Map<String,dynamic> || (data['pairing'] != null && data['pairing'] is! Map<String,dynamic>)) throw const RemoteFailure('invalid_catalog');
     final target = Map<String,dynamic>.from(data['target'] as Map);
@@ -86,28 +87,31 @@ class HostProfile {
     final p = data['pairing'] == null ? null : restoreDevicePairing(Map<String,dynamic>.from(data['pairing'] as Map),now);
     if (p != null && (p.request['account'] != checked.username || p.request['host_key'] != checked.expectedFingerprint)) throw const RemoteFailure('invalid_catalog');
     return HostProfile._(data['id'] as String,data['label'] as String,data['enabled'] as bool,
-      Map<String,dynamic>.unmodifiable({for (final key in targetFields) key:target[key]}),Map<String,dynamic>.unmodifiable(p?.toPublicRecord() ?? {}),data['provider'] as String,data['retired'] as bool,data['networkProfileId'] as String?);
+      Map<String,dynamic>.unmodifiable({for (final key in targetFields) key:target[key]}),Map<String,dynamic>.unmodifiable(p?.toPublicRecord() ?? {}),data['provider'] as String,data['retired'] as bool,data['networkProfileId'] as String?,data['requiresNetworkBinding'] as bool);
   }
-  factory HostProfile.create(String label,Map<String,dynamic> target,PendingDevicePairing pairing,int now,{String provider='unspecified',String? networkProfileId}) {
+  factory HostProfile.create(String label,Map<String,dynamic> target,PendingDevicePairing pairing,int now,{String provider='unspecified',String? networkProfileId,bool requiresNetworkBinding=false}) {
     final random = Random.secure();
     return HostProfile.fromJson({'id':List.generate(16,(_) => random.nextInt(256).toRadixString(16).padLeft(2,'0')).join(),
-      'label':label,'enabled':true,'provider':provider,'networkProfileId':networkProfileId,'target':{for (final k in targetFields) k:target[k]},'pairing':pairing.toPublicRecord()},now);
+      'label':label,'enabled':true,'provider':provider,'networkProfileId':networkProfileId,'requiresNetworkBinding':requiresNetworkBinding,'target':{for (final k in targetFields) k:target[k]},'pairing':pairing.toPublicRecord()},now);
   }
   factory HostProfile.imported(PortableHost host,int now,{String? networkProfileId}) {
     if (host.networkKey != null && networkProfileId == null) throw const RemoteFailure('catalog_binding_changed');
     final random = Random.secure();
     return HostProfile.fromJson({'id':List.generate(16,(_) => random.nextInt(256).toRadixString(16).padLeft(2,'0')).join(),
-      'label':host.label,'enabled':true,'retired':false,'provider':host.provider,'networkProfileId':networkProfileId,'target':{...host.target,'paneId':''},'pairing':null},now);
+      'label':host.label,'enabled':true,'retired':false,'provider':host.provider,'networkProfileId':networkProfileId,'requiresNetworkBinding':host.requiresNetworkBinding,'target':{...host.target,'paneId':''},'pairing':null},now);
   }
-  Map<String,dynamic> toJson() => {'id':id,'label':label,'enabled':enabled,'retired':retired,'provider':provider,'networkProfileId':networkProfileId,'target':target,'pairing':hasIdentity ? pairingRecord : null};
+  Map<String,dynamic> toJson() => {'id':id,'label':label,'enabled':enabled,'retired':retired,'provider':provider,'networkProfileId':networkProfileId,if (requiresNetworkBinding) 'requiresNetworkBinding':true,'target':target,'pairing':hasIdentity ? pairingRecord : null};
   PendingDevicePairing restore(int now) => restoreDevicePairing(Map<String,dynamic>.from(pairingRecord),now);
   HostProfile change({String? label,String? provider,bool? enabled,bool? retired,PendingDevicePairing? pairing,String? networkProfileId,bool replaceNetwork=false,required int now}) {
+    if (requiresNetworkBinding && provider != null && provider != this.provider) throw const RemoteFailure('network_binding_required');
+    if (requiresNetworkBinding && replaceNetwork && networkProfileId == null) throw const RemoteFailure('network_binding_required');
     if (this.retired && retired == false) throw const RemoteFailure('catalog_retired');
     final checked = HostProfile.fromJson({...toJson(),if (label != null) 'label':label,if (enabled != null) 'enabled':enabled,if (provider != null) 'provider':provider,
-      if (pairing != null) 'pairing':pairing.toPublicRecord(),if (replaceNetwork) 'networkProfileId':networkProfileId},now);
+      if (pairing != null) 'pairing':pairing.toPublicRecord(),if (replaceNetwork) 'networkProfileId':networkProfileId,
+      if (requiresNetworkBinding && replaceNetwork) 'requiresNetworkBinding':false},now);
     final finalRetired = retired ?? this.retired;
     if (finalRetired && checked.enabled) throw const RemoteFailure('catalog_retired');
-    return HostProfile._(checked.id,checked.label,checked.enabled,checked.target,checked.pairingRecord,checked.provider,finalRetired,checked.networkProfileId,jsonEncode(toJson()));
+    return HostProfile._(checked.id,checked.label,checked.enabled,checked.target,checked.pairingRecord,checked.provider,finalRetired,checked.networkProfileId,checked.requiresNetworkBinding,jsonEncode(toJson()));
   }
 }
 
@@ -338,7 +342,7 @@ class HostCatalog extends ChangeNotifier {
       final sourceId = pendingCreation?['sourceProfileId'];
       if (sourceId != null) {
         final source = list.where((p) => p.id == sourceId && !p.hasIdentity && !p.retired && p.enabled).toList();
-        if (source.length != 1 || !sameHostTarget(source.single.target,profile.target) || source.single.networkProfileId != profile.networkProfileId) throw const RemoteFailure('catalog_binding_changed');
+        if (source.length != 1 || !sameHostTarget(source.single.target,profile.target) || source.single.networkProfileId != profile.networkProfileId || source.single.requiresNetworkBinding != profile.requiresNetworkBinding || (profile.requiresNetworkBinding && source.single.provider != profile.provider)) throw const RemoteFailure('catalog_binding_changed');
         list.removeWhere((p) => p.id == sourceId);
       }
       if (list.any((p) => p.id == profile.id || (p.hasIdentity && p.pairingRecord['handle'] == profile.pairingRecord['handle']))) throw const RemoteFailure('catalog_duplicate');
@@ -362,6 +366,10 @@ class HostCatalog extends ChangeNotifier {
     final i = list.indexWhere((p) => p.id == profile.id); if (i < 0) throw const RemoteFailure('catalog_missing');
     if (profile.expectedPrevious == null || profile.expectedPrevious != jsonEncode(list[i].toJson())) throw const RemoteFailure('catalog_profile_stale');
     if (!sameHostTarget(list[i].target,profile.target) || list[i].pairingRecord['handle'] != profile.pairingRecord['handle']) throw const RemoteFailure('catalog_binding_changed');
+    if (list[i].requiresNetworkBinding && !profile.requiresNetworkBinding) {
+      final selected = networkProfiles.where((n) => n.id == profile.networkProfileId && n.enabled && n.provider == list[i].provider).toList();
+      if (selected.length != 1) throw const RemoteFailure('network_binding_required');
+    }
     if (list[i].retired && (!profile.retired || profile.enabled)) throw const RemoteFailure('catalog_retired');
     list[i] = profile; return list;
   },beforeSave:beforeCommit);
@@ -375,12 +383,13 @@ class HostCatalog extends ChangeNotifier {
     return found.single;
   }
   NetworkConnectionBinding freezeNetwork(HostProfile host) {
+    if (host.requiresNetworkBinding) throw const RemoteFailure('network_binding_required');
     final network = networkFor(host);
     final binding = jsonEncode({'networkProfileId':host.networkProfileId,'network':network?.toJson()});
     return NetworkConnectionBinding(network,() {
       if (!ready || _disposed) return false;
       final current = profiles.where((p) => p.id == host.id && p.enabled && !p.retired).toList();
-      if (current.length != 1 || !sameHostTarget(current.single.target,host.target) ||
+      if (current.length != 1 || current.single.requiresNetworkBinding || !sameHostTarget(current.single.target,host.target) ||
           !samePairingBinding(current.single,host)) return false;
       try {
         final n = networkFor(current.single);
@@ -424,7 +433,7 @@ class HostCatalog extends ChangeNotifier {
     return PortableConfig.fromJson({'version':2,'hosts':[for (final host in hosts) {
       'label':host.label,'provider':host.provider,'target':{for (final key in transferTargetFields) key:host.target[key]},
       if (host.networkProfileId != null) 'provider':networks.singleWhere((n) => n.id == host.networkProfileId).provider,
-      'networkKey':keys[host.networkProfileId],
+      'networkKey':keys[host.networkProfileId],if (host.requiresNetworkBinding) 'requiresNetworkBinding':true,
     }],'networks':[for (final network in networks) {'key':keys[network.id],'label':network.label,'provider':network.provider,'settings':network.settings}],
       'preferences':includePreferences ? {'terminalFontSize':terminalFontSize} : null});
   }

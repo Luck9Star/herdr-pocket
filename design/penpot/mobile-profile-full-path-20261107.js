@@ -1,0 +1,4 @@
+if(penpot.currentFile?.id!=='b55064db-d93d-80f9-8008-ddd22e6d398f'||penpot.currentPage?.id!=='7a22df08-251d-8016-8008-de03541c11da') throw Error('Wrong file/page');
+const boards=penpot.root.children.filter(s=>s.type==='board');
+const replacements=[['S48 ·','目标详情','buildbox.example.invalid:22\n账号 demo  ·  网络 direct\n会话 work\nsocket /home/demo/.config/herdr/\nsessions/work/herdr.sock'],['S49 ·','待核验详情','demo @ buildbox.example.invalid:22\n网络 direct  ·  会话 work\n/home/demo/.config/herdr/\nsessions/work/herdr.sock\n/opt/herdr/bin/herdr'],['S51 ·','目标详情','demo @ buildbox.example.invalid:22\n网络 direct  ·  会话 work\n/home/demo/.config/herdr/\nsessions/work/herdr.sock\n/opt/herdr/bin/herdr']];
+return replacements.map(([prefix,name,value])=>{const b=boards.find(x=>x.name.startsWith(prefix));const s=b?.children.find(x=>x.name===name&&x.type==='text');if(!s) throw Error('Missing shape '+prefix);s.characters=value;return {board:b.id,shape:s.id,text:s.characters};});

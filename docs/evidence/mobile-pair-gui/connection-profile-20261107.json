@@ -1,0 +1,176 @@
+{
+  "date": "2026-11-07",
+  "baseCommit": "bdac3774529075285c8470f8c1ade8072ff0b882",
+  "sourceSHA256": {
+    ".github/workflows/helper-validation.yml": "7ade659ca177aad9f70c28cfb8a9c66e1d04f33fd26f4d07d9cdd2b8f8b06d2e",
+    "helper/herdr_pocket_helper/__main__.py": "8d8cfdd9754323f806876ed2dec5e7dbf31df27d02d472c577fd2aca25c1714a",
+    "helper/herdr_pocket_helper/profile.py": "c2929cef9c73baf0b1b806b3d10b536507400f33cdff018f173f2fc2c13ae196",
+    "helper/herdr_pocket_helper/wire.py": "9554b56d140728e05bae30f9900ec8053c938cc9fe574c94f6257d711641ca6a",
+    "helper/tests/test_profile.py": "67c969b786b74f87a88bd891f2483e318adcb8365daf636007f8cd80fa90fbfa",
+    "validation/flutter/lib/config_transfer.dart": "ba06b96540c235ddd070a2be6a07d5cf5718d45e2aa6d6d44a33c10812c0bbf0",
+    "validation/flutter/lib/connection_profile.dart": "3f29665ed89a01bbd0c266fb9813ea36734c7c6fb25c1e53add94f9a27c58622",
+    "validation/flutter/lib/host_catalog.dart": "0395365e82153a1bf7bde5dc6dd16b36e47b6e51ede995c35d69b0695f2f7cd6",
+    "validation/flutter/lib/host_catalog_page.dart": "5d66d43c6f199f3f749e9a67e121fa1e41389d094f1a2045435327997d018465",
+    "validation/flutter/lib/host_tabs.dart": "47eaac68f9e4af8bae889bc7975baf225ec4d2b054e8ed2fb3cc5d0dc119b337",
+    "validation/flutter/lib/pairing.dart": "5bc470abd185fd85284ade78f2ed4a2f860d02a721787542f1f544f89eb0836d",
+    "validation/flutter/lib/pairing_page.dart": "40c85e90bc0e4c04529eb57f0fa03a6cb2957e1a0de95a174d5fd834d8fd13b4",
+    "validation/flutter/lib/pairing_public_key.dart": "5e5e105303ad78297e54e57cab07ed70022cca4364c607ff5945e1582aadcdaa",
+    "validation/flutter/lib/remote_adapter.dart": "8f886e294ba09205f4a125e111dbe6cbda30feff72d68dd4f6b849b62d85ac11",
+    "validation/flutter/lib/remote_failure.dart": "cf352dd1bca70563d6d2b29003c70bf32b451b531238f0dda60076caf866f2f6",
+    "validation/flutter/test/connection_profile_test.dart": "a08b04ee268e32c5c7b3d79290309e8ef7ae1bf64e6ff1176dca0d6e90a2cce6",
+    "validation/flutter/test/host_network_binding_guard_test.dart": "83b16378c64c270b5aeab34ddfe3f29a10acc4625ff881c383e53961ed304d1e",
+    "validation/flutter/test/profile_retention_test.dart": "b50987bef76c2e57cfaa997f2575c4e7d4403f14bf2cd3605f4ea00504847a17",
+    "validation/flutter/test/profile_scan_lifecycle_test.dart": "ac60afa78b8bed0864c0969dd07a3f5e2a4734721ab1cda6d077036e91a0aa72",
+    "validation/shared/SHA256SUMS": "874f55f6b944675d815c2dc0c322c7877ce8c6861b70abf8fe271cbbeb45c9fc",
+    "validation/shared/connection-profile-v1.json": "1a77875462280ce21bd85cd55a0081e814630311c33940de6a08b838975854fd",
+    "validation/tauri/index.html": "6c7b41d5d6a6e749ac4c0bf98fdd78b3fc7e104d2f3724852ed93c893469ca82",
+    "validation/tauri/src/connection-profile-ui.js": "9bedd80354f56d64b4bd947a56bb2a6bfd43b144006c90f2b5b6540278becf97",
+    "validation/tauri/src/connection-profile.js": "e61af4da603f676e106561a543c3f7b258881b06b8a3122997a57fd2e79d88b7",
+    "validation/tauri/src/native-camera-return.js": "b452341b8172489959f500d6392b6804071dff67c83254cc99fcee5c3f1d8403",
+    "validation/tauri/src/pairing-camera.js": "3c9cab32bffbdbf7e80cd31c6a25ef1fdb19a448fd7325f8b01de120ab7a4979",
+    "validation/tauri/src/remote.js": "ae50a5ea3f2de55608062276857f71c2c0ce76a11f4616883d196eef511ae092",
+    "validation/tauri/test/connection-profile-ui.test.mjs": "3f7695afcd980a897fa5a91de7b1edf36e6e2de907aaefd23e661093f75957b7",
+    "validation/tauri/test/connection-profile.test.mjs": "e1297d12ddada9bdcc95311a7b5fe9d7ed106365e23dd1c85af75fcdf801799f",
+    "validation/tauri/test/direct-dashboard-gui.test.mjs": "b895fac6e01db399845e31e2c3bbf19f80713c64042d6a8d87ef0e92aee41ad7",
+    "validation/tauri/test/native-camera-return.test.mjs": "b21e67caae71b1cf5d5e1ccb4f483188ac9dcccbe190b12301e83584090ad612",
+    "validation/tauri/test/pairing-camera.test.mjs": "115fef2de9a426f37636c57d248436b4d5b6853f418e0b818e86ce3e92bceae3",
+    "validation/tauri/src-tauri/src/hosts.rs": "f29eb9f4f8e0b5b8b82ec1b2bef4b30772d09e2932fabd01f241ced7f717f5a7",
+    "validation/tauri/src-tauri/src/lib.rs": "634ba4fc897a9d42faea829e12d5cc640c7c556ad69158229ab25e80eaf52e09",
+    "validation/transport-rust/src/config_transfer.rs": "d3cc9f06ebc6c8d3343dfb184016a3fd0989f6bcf91ccb4d1d0774d0c99372be"
+  },
+  "scope": "First-host public profile, separate device authorization review, initial local overlay binding. Mac and cloud evidence below have different source revisions.",
+  "currentSource": {
+    "dart": {
+      "sdk": "3.11.0",
+      "validProfiles": 4,
+      "rejectedProfiles": 45,
+      "fullPublicKeyFingerprintMatched": true,
+      "flutterSourceSyntaxFiles": 14,
+      "widgetTestsExecuted": false
+    },
+    "helper": {
+      "shippedModuleTests": 13,
+      "isolatedPackageEntry": "Executed the Actions packaging shell on macOS with a synthetic .pub and a temporary output directory. Verified the shipped profile subcommand from the package itself.",
+      "qr": {
+        "source": "local CLI with synthetic public test key",
+        "renderer": "AppKit NSImage, 230x230 PNG",
+        "decoder": "ZXing core 3.5.3",
+        "utf8Bytes": 345,
+        "matchesDirectJSON": true,
+        "sha256": {
+          "output.svg": "b003f87cf046f799bfccbd3727a16cb01ca9d76a8747d532813ebeb87dace062",
+          "output.png": "96a8345cfe7436ac9d00cacd22857d49984947518d4081d7ffc30d68b56125bf",
+          "direct.json": "74c4d9249d464a5feb7a78370eb4e5641fb9d4efdb64df13aba93a0ab964d21f",
+          "decoded.json": "74c4d9249d464a5feb7a78370eb4e5641fb9d4efdb64df13aba93a0ab964d21f"
+        }
+      }
+    },
+    "tauri": {
+      "node": "v22.22.2",
+      "passed": 345,
+      "failed": 0,
+      "viteModules": 59,
+      "browser": {
+        "320": {
+          "staleScanDiscarded": true,
+          "backgroundReturn": "before foreground",
+          "explicitReinspection": true,
+          "realDocumentVisibility": true,
+          "calculatedFingerprint": "SHA256:bbXpuKG6zhzdmnxq256TlqzFBzRl2f6OOg722cYNbU8",
+          "visibleFingerprintBounds": {
+            "x": 25,
+            "width": 270,
+            "h": 58,
+            "client": 270,
+            "scroll": 270
+          },
+          "reviewedAfterApply": false,
+          "explicitPublicSaves": 1,
+          "deviceCreates": 0,
+          "connections": 0,
+          "providerHint": "easytier",
+          "pageWidth": 320
+        },
+        "390": {
+          "staleScanDiscarded": true,
+          "backgroundReturn": "after foreground",
+          "explicitReinspection": true,
+          "realDocumentVisibility": true,
+          "calculatedFingerprint": "SHA256:bbXpuKG6zhzdmnxq256TlqzFBzRl2f6OOg722cYNbU8",
+          "visibleFingerprintBounds": {
+            "x": 25,
+            "width": 340,
+            "h": 58,
+            "client": 340,
+            "scroll": 340
+          },
+          "reviewedAfterApply": false,
+          "explicitPublicSaves": 1,
+          "deviceCreates": 0,
+          "connections": 0,
+          "providerHint": "easytier",
+          "pageWidth": 390
+        },
+        "platform": "Mac headless Chrome with touch events",
+        "native": "in-page test double; camera, host catalog and SSH are not a device",
+        "responseCamera": {
+          "viewport": 390,
+          "backgroundReturn": "before foreground",
+          "explicitReinspection": true,
+          "explicitSourceReview": true,
+          "acceptedBeforeSourceReview": 0,
+          "nativeFixtureCalls": {
+            "pair_create": 1,
+            "pair_accept": 1,
+            "remote_observe": 0,
+            "remote_tab_observe": 0
+          }
+        },
+        "chrome": "Chrome/156.0.8078.81"
+      }
+    },
+    "rust": {
+      "toolchain": "1.96.0",
+      "lockedOffline": true,
+      "tauriLibraryPassed": 46,
+      "transportLibraryPassed": 87,
+      "transportIncludes": "isolated loopback SSH server and temporary fixture stores; no personal keys",
+      "firstSandboxAttempt": {
+        "passed": 59,
+        "failed": 28,
+        "retryWithLoopback": true
+      }
+    },
+    "design": {
+      "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+      "page": "7a22df08-251d-8016-8008-de03541c11da",
+      "boards": {
+        "S48 · 公开资料预览 · 本地指纹": "ff7bd149-6597-80a5-8008-e8dca4d84f9b",
+        "S49 · 已填入 · 独立核验": "ff7bd149-6597-80a5-8008-e8dca4f7c050",
+        "S50 · 覆盖网络待绑定": "ff7bd149-6597-80a5-8008-e8dca5134ce1",
+        "S51 · 已独立核验 · 继续配对": "ff7bd149-6597-80a5-8008-e8dcfb664d50"
+      },
+      "totalBoards": 51,
+      "danglingTargets": [],
+      "verifiedViewerClicks": 6,
+      "evidence": "design/evidence/v2-mobile-profile-viewer-20261107.json"
+    }
+  },
+  "earlierAndroid": {
+    "source": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+    "workflow": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42374975205",
+    "jobsPassed": 5,
+    "jobsTotal": 8,
+    "flutterArm64Artifact": 13575935931,
+    "tauriArm64Artifact": 13575986671,
+    "includesCurrentProfileChange": false,
+    "scope": "Flutter stock read-only emulator: paired, board, full, delta, stop; three other Android scenarios failed current IME attribution."
+  },
+  "pending": [
+    "New source on Flutter engine and Android API 35",
+    "Physical cameras and arm64 input methods",
+    "Signed iOS installation",
+    "Live overlay connections and cross-network concurrency",
+    "GUI framework selection"
+  ]
+}

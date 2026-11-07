@@ -1,0 +1,983 @@
+{
+  "result": {
+    "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "page": "7a22df08-251d-8016-8008-de03541c11da",
+    "boardCount": 51,
+    "boards": [
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8dca4d84f9b",
+        "name": "S48 · 公开资料预览 · 本地指纹",
+        "width": 390.00000953674316,
+        "height": 843.9999580383301,
+        "visible": true,
+        "children": [
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca4de1603",
+            "name": "产品标识",
+            "type": "text",
+            "x": 24,
+            "y": 18,
+            "width": 342,
+            "height": 20.000000715255737,
+            "text": "HERDR POCKET  /  首次配对",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca4e6033f",
+            "name": "标题",
+            "type": "text",
+            "x": 24,
+            "y": 52,
+            "width": 342,
+            "height": 37.99999976158142,
+            "text": "预览公开连接资料",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca4ecd41a",
+            "name": "副标题",
+            "type": "text",
+            "x": 24,
+            "y": 96,
+            "width": 342,
+            "height": 37.99999976158142,
+            "text": "扫码或粘贴后，仅显示待审查内容。",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca4f2081c",
+            "name": "原型边界",
+            "type": "text",
+            "x": 24,
+            "y": 804,
+            "width": 342,
+            "height": 24.99999976158142,
+            "text": "交互原型 · 示例数据，不会实际配对或连接",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca52b7c43",
+            "name": "目标卡",
+            "type": "rectangle",
+            "x": 24,
+            "y": 144,
+            "width": 342.00000762939453,
+            "height": 150,
+            "text": null,
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca52e8530",
+            "name": "目标标题",
+            "type": "text",
+            "x": 40,
+            "y": 158,
+            "width": 310,
+            "height": 22.99999964237213,
+            "text": "目标与会话",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca534429f",
+            "name": "目标详情",
+            "type": "text",
+            "x": 40,
+            "y": 190,
+            "width": 310,
+            "height": 90,
+            "text": "buildbox.example.invalid:22\n账号 demo  ·  网络 direct\n会话 work\nsocket /home/demo/.config/herdr/\nsessions/work/herdr.sock",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca53b1dca",
+            "name": "路径卡",
+            "type": "rectangle",
+            "x": 24,
+            "y": 306,
+            "width": 342.00000762939453,
+            "height": 66.00000262260437,
+            "text": null,
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca53f0e12",
+            "name": "执行路径",
+            "type": "text",
+            "x": 40,
+            "y": 319,
+            "width": 310,
+            "height": 40.000001668930054,
+            "text": "herdr  /opt/herdr/bin/herdr",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca54573a9",
+            "name": "指纹卡",
+            "type": "rectangle",
+            "x": 24,
+            "y": 384,
+            "width": 342.00000762939453,
+            "height": 123.00000190734863,
+            "text": null,
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5499bf1",
+            "name": "指纹标题",
+            "type": "text",
+            "x": 40,
+            "y": 397,
+            "width": 310,
+            "height": 23.000000596046448,
+            "text": "主机公钥指纹 · 本机计算",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5501be5",
+            "name": "完整指纹",
+            "type": "text",
+            "x": 40,
+            "y": 427,
+            "width": 310,
+            "height": 48.99999809265137,
+            "text": "SHA256:bbXpuKG6zhzdmnxq256TlqzFBzRl\n2f6OOg722cYNbU8",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca557dab9",
+            "name": "信任边界",
+            "type": "text",
+            "x": 40,
+            "y": 480,
+            "width": 310,
+            "height": 18.99999988079071,
+            "text": "请通过可信渠道独立核对。",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5618e54",
+            "name": "action · 填入未审查表单",
+            "type": "rectangle",
+            "x": 24,
+            "y": 528,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dca4f7c050"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5695b1f",
+            "name": "填入未审查表单",
+            "type": "text",
+            "x": 32,
+            "y": 540,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "明确填入未审查表单",
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dca4f7c050"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca572bcc3",
+            "name": "action · 返回配对",
+            "type": "rectangle",
+            "x": 24,
+            "y": 585,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5766d61",
+            "name": "返回配对",
+            "type": "text",
+            "x": 32,
+            "y": 597,
+            "width": 326,
+            "height": 23.999999046325684,
+            "text": "取消 · 返回配对",
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca57e08b3",
+            "name": "action · 查看网络待绑定",
+            "type": "rectangle",
+            "x": 24,
+            "y": 642,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dca5134ce1"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca581eb5d",
+            "name": "查看网络待绑定",
+            "type": "text",
+            "x": 32,
+            "y": 654,
+            "width": 326,
+            "height": 23.999999046325684,
+            "text": "查看 overlay 待绑定示例",
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dca5134ce1"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca58a1a3c",
+            "name": "保留边界",
+            "type": "text",
+            "x": 24,
+            "y": 711,
+            "width": 342,
+            "height": 65.99999809265137,
+            "text": "填入不会创建身份、授权或连接。编辑或切页后，旧扫描结果不能覆盖新内容。",
+            "interactions": []
+          }
+        ]
+      },
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8dca4f7c050",
+        "name": "S49 · 已填入 · 独立核验",
+        "width": 390.00000953674316,
+        "height": 843.9999580383301,
+        "visible": true,
+        "children": [
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca4fbfded",
+            "name": "产品标识",
+            "type": "text",
+            "x": 24,
+            "y": 18,
+            "width": 342,
+            "height": 20.000000715255737,
+            "text": "HERDR POCKET  /  首次配对",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5024276",
+            "name": "标题",
+            "type": "text",
+            "x": 24,
+            "y": 52,
+            "width": 342,
+            "height": 37.99999976158142,
+            "text": "资料已填入表单",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5097223",
+            "name": "副标题",
+            "type": "text",
+            "x": 24,
+            "y": 96,
+            "width": 342,
+            "height": 37.99999976158142,
+            "text": "尚未信任，设备身份尚未创建。",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca50e1fe3",
+            "name": "原型边界",
+            "type": "text",
+            "x": 24,
+            "y": 804,
+            "width": 342,
+            "height": 24.99999976158142,
+            "text": "交互原型 · 示例数据，不会实际配对或连接",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca58fd5ce",
+            "name": "待核验卡",
+            "type": "rectangle",
+            "x": 24,
+            "y": 146,
+            "width": 342.00000762939453,
+            "height": 175,
+            "text": null,
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5935e25",
+            "name": "待核验标题",
+            "type": "text",
+            "x": 40,
+            "y": 160,
+            "width": 310,
+            "height": 24.000000596046448,
+            "text": "待核验目标",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5991ec9",
+            "name": "待核验详情",
+            "type": "text",
+            "x": 40,
+            "y": 193,
+            "width": 310,
+            "height": 108.00000190734863,
+            "text": "demo @ buildbox.example.invalid:22\n网络 direct  ·  会话 work\n/home/demo/.config/herdr/\nsessions/work/herdr.sock\n/opt/herdr/bin/herdr",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca59fc37e",
+            "name": "核验提示",
+            "type": "rectangle",
+            "x": 24,
+            "y": 333,
+            "width": 342.00000762939453,
+            "height": 122.00000286102295,
+            "text": null,
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5a3ac44",
+            "name": "核验标题",
+            "type": "text",
+            "x": 40,
+            "y": 347,
+            "width": 310,
+            "height": 24.000000596046448,
+            "text": "独立核验主机指纹",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5aa05ca",
+            "name": "核验文字",
+            "type": "text",
+            "x": 40,
+            "y": 379,
+            "width": 310,
+            "height": 59.999998569488525,
+            "text": "通过可信渠道比对完整 SHA256 指纹和目标；资料本身不证明身份。",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5af8d75",
+            "name": "未勾选",
+            "type": "rectangle",
+            "x": 24,
+            "y": 468,
+            "width": 342.00000762939453,
+            "height": 62.00000047683716,
+            "text": null,
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dcfb664d50"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5b2e77e",
+            "name": "审查未确认",
+            "type": "text",
+            "x": 40,
+            "y": 484,
+            "width": 310,
+            "height": 32.99999952316284,
+            "text": "☐ 我已独立核验账号、公钥与会话",
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dcfb664d50"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5b8bf63",
+            "name": "action · 示例确认后配对",
+            "type": "rectangle",
+            "x": 24,
+            "y": 550,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dcfb664d50"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5bc79ca",
+            "name": "示例确认后配对",
+            "type": "text",
+            "x": 32,
+            "y": 562,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "演示：确认已独立核验",
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dcfb664d50"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5c42f09",
+            "name": "action · 返回资料预览",
+            "type": "rectangle",
+            "x": 24,
+            "y": 607,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dca4d84f9b"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5c78170",
+            "name": "返回资料预览",
+            "type": "text",
+            "x": 32,
+            "y": 619,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "返回资料预览",
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dca4d84f9b"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5d0998f",
+            "name": "创建边界",
+            "type": "text",
+            "x": 24,
+            "y": 684,
+            "width": 342,
+            "height": 87.99999904632568,
+            "text": "实际流程需先勾选独立核验，再明确创建设备身份；主机授权与 SSH 连接仍是后续独立步骤。",
+            "interactions": []
+          }
+        ]
+      },
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8dca5134ce1",
+        "name": "S50 · 覆盖网络待绑定",
+        "width": 390.00000953674316,
+        "height": 843.9999580383301,
+        "visible": true,
+        "children": [
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca51650f4",
+            "name": "产品标识",
+            "type": "text",
+            "x": 24,
+            "y": 18,
+            "width": 342,
+            "height": 20.000000715255737,
+            "text": "HERDR POCKET  /  首次配对",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca51bb081",
+            "name": "标题",
+            "type": "text",
+            "x": 24,
+            "y": 52,
+            "width": 342,
+            "height": 37.99999976158142,
+            "text": "先绑定本机网络",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5214c60",
+            "name": "副标题",
+            "type": "text",
+            "x": 24,
+            "y": 96,
+            "width": 342,
+            "height": 38,
+            "text": "公开资料已保存 · 尚未选择本机网络",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5262e04",
+            "name": "原型边界",
+            "type": "text",
+            "x": 24,
+            "y": 804,
+            "width": 342,
+            "height": 24.99999976158142,
+            "text": "交互原型 · 示例数据，不会实际配对或连接",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5d67f5a",
+            "name": "网络提示卡",
+            "type": "rectangle",
+            "x": 24,
+            "y": 148,
+            "width": 342.00000762939453,
+            "height": 125.99999904632568,
+            "text": null,
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5da549c",
+            "name": "待绑定标题",
+            "type": "text",
+            "x": 40,
+            "y": 162,
+            "width": 310,
+            "height": 24.99999976158142,
+            "text": "Tailscale · 尚未绑定",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5e0cc14",
+            "name": "待绑定说明",
+            "type": "text",
+            "x": 40,
+            "y": 195,
+            "width": 310,
+            "height": 65.99999809265137,
+            "text": "此资料声明覆盖网络，但未选择本机网络。不会按名称自动绑定，也不会回退系统直连。",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5e6bd94",
+            "name": "离线配对卡",
+            "type": "rectangle",
+            "x": 24,
+            "y": 287,
+            "width": 342.00000762939453,
+            "height": 113.99999856948853,
+            "text": null,
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5eadb2a",
+            "name": "离线标题",
+            "type": "text",
+            "x": 40,
+            "y": 301,
+            "width": 310,
+            "height": 24.000000596046448,
+            "text": "离线配对可继续",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5f1bbfc",
+            "name": "离线说明",
+            "type": "text",
+            "x": 40,
+            "y": 333,
+            "width": 310,
+            "height": 54.99999976158142,
+            "text": "可核验目标、创建设备身份并审查授权；这些操作不代表网络已连通。",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5f75575",
+            "name": "连接前置卡",
+            "type": "rectangle",
+            "x": 24,
+            "y": 414,
+            "width": 342.00000762939453,
+            "height": 100,
+            "text": null,
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca5fc564d",
+            "name": "连接前置",
+            "type": "text",
+            "x": 40,
+            "y": 428,
+            "width": 310,
+            "height": 24.000000596046448,
+            "text": "连接前先选择匹配网络",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca602d352",
+            "name": "连接前置说明",
+            "type": "text",
+            "x": 40,
+            "y": 459,
+            "width": 310,
+            "height": 42.999999046325684,
+            "text": "在网络管理中创建或启用相同 provider，回主机明确绑定。",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca609420b",
+            "name": "action · 去网络配置",
+            "type": "rectangle",
+            "x": 24,
+            "y": 534,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "b9d502c0-514c-80a9-8008-e7033d91f34d"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca60d4b41",
+            "name": "去网络配置",
+            "type": "text",
+            "x": 32,
+            "y": 546,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "去网络配置",
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "b9d502c0-514c-80a9-8008-e7033d91f34d"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca61500ac",
+            "name": "action · 继续离线配对",
+            "type": "rectangle",
+            "x": 24,
+            "y": 591,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca618c704",
+            "name": "继续离线配对",
+            "type": "text",
+            "x": 32,
+            "y": 603,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "继续离线配对",
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca620ef4e",
+            "name": "action · 返回资料预览",
+            "type": "rectangle",
+            "x": 24,
+            "y": 648,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dca4d84f9b"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca624cb1e",
+            "name": "返回资料预览",
+            "type": "text",
+            "x": 32,
+            "y": 660,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "返回公开资料预览",
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dca4d84f9b"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dca62d40ac",
+            "name": "网络边界",
+            "type": "text",
+            "x": 24,
+            "y": 720,
+            "width": 342,
+            "height": 57.999998569488525,
+            "text": "首次绑定后，后续更换或解除仍需明确操作；本页不自动发起连接。",
+            "interactions": []
+          }
+        ]
+      },
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8dcfb664d50",
+        "name": "S51 · 已独立核验 · 继续配对",
+        "width": 390.00000953674316,
+        "height": 843.9999580383301,
+        "visible": true,
+        "children": [
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfb6f64ce",
+            "name": "产品标识",
+            "type": "text",
+            "x": 24,
+            "y": 18,
+            "width": 342,
+            "height": 20.000000715255737,
+            "text": "HERDR POCKET  /  首次配对",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfb7cb9f0",
+            "name": "标题",
+            "type": "text",
+            "x": 24,
+            "y": 52,
+            "width": 342,
+            "height": 38,
+            "text": "已独立核验 · 示例",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfb8895a8",
+            "name": "副标题",
+            "type": "text",
+            "x": 24,
+            "y": 96,
+            "width": 342,
+            "height": 37.99999976158142,
+            "text": "请再次核对目标，再明确创建本机身份。",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfb8f45f5",
+            "name": "目标卡",
+            "type": "rectangle",
+            "x": 24,
+            "y": 146,
+            "width": 342.00000762939453,
+            "height": 154.99999523162842,
+            "text": null,
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfb93d803",
+            "name": "目标标题",
+            "type": "text",
+            "x": 40,
+            "y": 160,
+            "width": 310,
+            "height": 24.000000596046448,
+            "text": "已审查目标",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfb9ac286",
+            "name": "目标详情",
+            "type": "text",
+            "x": 40,
+            "y": 194,
+            "width": 310,
+            "height": 94.99999642372131,
+            "text": "demo @ buildbox.example.invalid:22\n网络 direct  ·  会话 work\n/home/demo/.config/herdr/\nsessions/work/herdr.sock\n/opt/herdr/bin/herdr",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfba304e7",
+            "name": "核验卡",
+            "type": "rectangle",
+            "x": 24,
+            "y": 314,
+            "width": 342.00000762939453,
+            "height": 124.00000095367432,
+            "text": null,
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfba73b58",
+            "name": "核验标题",
+            "type": "text",
+            "x": 40,
+            "y": 328,
+            "width": 310,
+            "height": 23.999999046325684,
+            "text": "☑ 已独立核验账号、公钥与会话",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfbae0fd9",
+            "name": "核验详情",
+            "type": "text",
+            "x": 40,
+            "y": 361,
+            "width": 310,
+            "height": 57.000001668930054,
+            "text": "核验只针对当前内容。编辑目标、切页或更换资料后需要重新核验。",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfbb3d3f0",
+            "name": "action · 创建设备身份",
+            "type": "rectangle",
+            "x": 24,
+            "y": 462,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfbb7b668",
+            "name": "创建设备身份",
+            "type": "text",
+            "x": 32,
+            "y": 474,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "演示：明确创建设备身份",
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfbc04c82",
+            "name": "action · 返回未核验",
+            "type": "rectangle",
+            "x": 24,
+            "y": 519,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dca4f7c050"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfbc3deef",
+            "name": "返回未核验",
+            "type": "text",
+            "x": 32,
+            "y": 531,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "返回未核验表单",
+            "interactions": [
+              {
+                "trigger": "click",
+                "action": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8dca4f7c050"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfbcbc350",
+            "name": "安全边界",
+            "type": "text",
+            "x": 24,
+            "y": 602,
+            "width": 342,
+            "height": 112.00000190734863,
+            "text": "此原型只演示下一步。实际设备身份由本机安全存储创建；主机授权和 SSH 连接仍需独立完成。",
+            "interactions": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8dcfbd22ef9",
+            "name": "原型边界",
+            "type": "text",
+            "x": 24,
+            "y": 804,
+            "width": 342,
+            "height": 24.99999976158142,
+            "text": "交互原型 · 示例数据，不会实际配对或连接",
+            "interactions": []
+          }
+        ]
+      }
+    ],
+    "dangling": [],
+    "entry": [
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8dca632d898",
+        "name": "公开资料入口",
+        "links": 1
+      },
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8dca636db72",
+        "name": "公开资料入口文字",
+        "links": 1
+      }
+    ]
+  },
+  "log": ""
+}

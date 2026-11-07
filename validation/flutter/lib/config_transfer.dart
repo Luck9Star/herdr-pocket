@@ -33,12 +33,15 @@ bool _portableHost(String value) {
 }
 
 class PortableHost {
-  PortableHost._(this.label,this.provider,this.target,[this.networkKey]);
+  PortableHost._(this.label,this.provider,this.target,this.networkKey,this.requiresNetworkBinding);
   final String label,provider;
   final String? networkKey;
+  final bool requiresNetworkBinding;
   final Map<String,dynamic> target;
   factory PortableHost.fromJson(Map<String,dynamic> value,{int version=1}) {
-    if (value.length != (version == 2 ? 4 : 3) || !value.keys.every((version == 2 ? {'label','provider','target','networkKey'} : {'label','provider','target'}).contains) ||
+    if ((version == 2 ? ![4,5].contains(value.length) : value.length != 3) || !value.keys.every((version == 2 ? {'label','provider','target','networkKey','requiresNetworkBinding'} : {'label','provider','target'}).contains) ||
+        (version == 2 && (!value.keys.toSet().containsAll({'label','provider','target','networkKey'}) || (value.containsKey('requiresNetworkBinding') && value['requiresNetworkBinding'] is! bool) ||
+          (value['requiresNetworkBinding'] == true && (value['networkKey'] != null || !['tailscale','easytier','zerotier'].contains(value['provider']))))) ||
         (version == 2 && value['networkKey'] != null && (value['networkKey'] is! String || !RegExp(r'^[A-Za-z0-9_-]{1,32}$').hasMatch(value['networkKey'] as String))) ||
         value['label'] is! String || (value['label'] as String).trim().isEmpty ||
         utf8.encode(value['label'] as String).length > 96 ||
@@ -63,14 +66,17 @@ class PortableHost {
         }
       }
     } catch (_) { throw const TransferFailure('transfer_invalid_schema'); }
-    return PortableHost._(value['label'] as String,value['provider'] as String,Map<String,dynamic>.unmodifiable(target),value['networkKey'] as String?);
+    return PortableHost._(value['label'] as String,value['provider'] as String,Map<String,dynamic>.unmodifiable(target),value['networkKey'] as String?,value['requiresNetworkBinding'] == true);
   }
   factory PortableHost.fromProfile(HostProfile profile) {
-    if (profile.networkProfileId != null) throw const TransferFailure('transfer_network_unavailable');
+    if (profile.networkProfileId != null || profile.requiresNetworkBinding) throw const TransferFailure('transfer_network_unavailable');
     return PortableHost.fromJson({'label':profile.label,'provider':profile.provider,'target':{for (final key in transferTargetFields) key:profile.target[key]}});
   }
-  Map<String,dynamic> toJson() => {'label':label,'provider':provider,'target':target};
-  Map<String,dynamic> toV2Json() => {...toJson(),'networkKey':networkKey};
+  Map<String,dynamic> toJson() {
+    if (requiresNetworkBinding) throw const TransferFailure('transfer_network_unavailable');
+    return {'label':label,'provider':provider,'target':target};
+  }
+  Map<String,dynamic> toV2Json() => {'label':label,'provider':provider,'target':target,'networkKey':networkKey,if (requiresNetworkBinding) 'requiresNetworkBinding':true};
 }
 
 List<PortableHost> decodePortableHosts(Uint8List plaintext) {
@@ -89,7 +95,7 @@ List<PortableHost> decodePortableHosts(Uint8List plaintext) {
 }
 
 Uint8List encodePortableHosts(List<PortableHost> hosts) {
-  if (hosts.any((host) => host.networkKey != null)) throw const TransferFailure('transfer_network_unavailable');
+  if (hosts.any((host) => host.networkKey != null || host.requiresNetworkBinding)) throw const TransferFailure('transfer_network_unavailable');
   final text = Uint8List.fromList(utf8.encode(jsonEncode({'version':1,'hosts':hosts.map((h) => h.toJson()).toList()})));
   decodePortableHosts(text); return text;
 }

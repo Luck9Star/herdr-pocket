@@ -28,6 +28,7 @@ class HostTab {
   bool _disposed = false;
   int _viewRevision = 0;
   static String networkFor(HostProfile p,List<NetworkProfile> networks) {
+    if (p.requiresNetworkBinding) return '待绑定网络';
     if (p.networkProfileId == null) return '系统直连';
     final found = networks.where((n) => n.id == p.networkProfileId).toList();
     return found.length == 1 ? '${found.single.label} · ${found.single.provider}' : '网络未知';
@@ -39,7 +40,7 @@ class HostTab {
     });
   }
   static String bindingFor(HostProfile p,[List<NetworkProfile> networks=const []]) => jsonEncode({'id':p.id,'target':p.target,
-    'networkProfileId':p.networkProfileId,'network':p.networkProfileId == null ? null : networks.where((n) => n.id == p.networkProfileId).map((n) => n.toJson()).toList(),
+    'networkProfileId':p.networkProfileId,'requiresNetworkBinding':p.requiresNetworkBinding,'network':p.networkProfileId == null ? null : networks.where((n) => n.id == p.networkProfileId).map((n) => n.toJson()).toList(),
     'pairing':{'handle':p.pairingRecord['handle'],'request':p.pairingRecord['request']}});
   void dispose() { _disposed = true; summaryLease?.close(); visible.value = false; visible.dispose(); view.dispose(); }
 }
@@ -66,7 +67,7 @@ class HostTabs extends ChangeNotifier {
   HostTab? find(String id) { final matches = _tabs.where((t) => t.id == id); return matches.isEmpty ? null : matches.single; }
   Iterable<HostTab> forHost(String hostId) => _tabs.where((tab) => tab.hostId == hostId);
   bool open(HostProfile profile,{RemoteReadOnlyAdapter? adapter,RemotePane? requestedTarget,List<NetworkProfile> networks=const []}) {
-    if (!profile.enabled || profile.retired || !profile.hasIdentity || (profile.networkProfileId != null && !networks.any((n) => n.id == profile.networkProfileId))) return false;
+    if (!profile.enabled || profile.retired || !profile.hasIdentity || profile.requiresNetworkBinding || (profile.networkProfileId != null && !networks.any((n) => n.id == profile.networkProfileId))) return false;
     if (_tabs.length >= maxOpenHostTabs) { notice = '最多保留 $maxOpenHostTabs 个标签 · 请先关闭不需要的本地视图'; notifyListeners(); return false; }
     final id = '$_instance-${++_nextId}';
     final tab = HostTab(id,profile,adapter:adapter,requestedTarget:requestedTarget,networks:networks); _tabs.add(tab);
@@ -93,7 +94,7 @@ class HostTabs extends ChangeNotifier {
       final currentConsumed = matches.length == 1 && matches.single.pairingRecord['consumed'] == true;
       final authorityReduced = currentAuth == 'revoked' || (tab.authorization == 'authorized' && currentAuth != 'authorized') ||
         (tab.consumed && !currentConsumed);
-      if (matches.length != 1 || authorityReduced || HostTab.bindingFor(matches.single,networks) != tab.binding || (matches.single.networkProfileId != null && !networks.any((n) => n.id == matches.single.networkProfileId))) {
+      if (matches.length != 1 || matches.single.requiresNetworkBinding || authorityReduced || HostTab.bindingFor(matches.single,networks) != tab.binding || (matches.single.networkProfileId != null && !networks.any((n) => n.id == matches.single.networkProfileId))) {
         close(tab.id); notice = '资料已停用、删除或绑定改变 · 对应标签已停止'; changed = true;
       } else {
         tab.authorization = currentAuth as String?; tab.consumed = currentConsumed;

@@ -4,16 +4,10 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:pointycastle/digests/sha256.dart';
+import 'remote_failure.dart';
+export 'remote_failure.dart';
 import 'remote_input.dart';
 import 'network_runtime.dart' show RoutedSSHSocket;
-
-/// Stable safe codes only: never include server output, config or private keys.
-class RemoteFailure implements Exception {
-  const RemoteFailure(this.code);
-  final String code;
-  @override
-  String toString() => 'RemoteFailure($code)';
-}
 
 String shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 

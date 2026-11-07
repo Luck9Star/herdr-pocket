@@ -109,6 +109,8 @@ pub struct PortableHostV2 {
     pub label: String, pub provider: Provider, pub target: PortableTarget,
     #[serde(deserialize_with="required_option")]
     pub network_key: Option<String>,
+    #[serde(default, skip_serializing_if="is_false")]
+    pub requires_network_binding: bool,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -130,6 +132,7 @@ pub struct ArchiveV2 {
     #[serde(deserialize_with="required_option")]
     pub preferences:Option<Preferences>,
 }
+fn is_false(value: &bool) -> bool { !*value }
 fn required_option<'de,D,T>(d:D)->Result<Option<T>,D::Error> where D:serde::Deserializer<'de>,T:Deserialize<'de> {Option::deserialize(d)}
 fn clean(s:&str,max:usize)->bool { !s.trim().is_empty() && s.len()<=max && !s.chars().any(|c| (c as u32)<=31 || (127..=159).contains(&(c as u32))) }
 fn hex_id(s:&str,n:usize)->bool {s.len()==n && s.bytes().all(|b|b.is_ascii_digit() || (b'a'..=b'f').contains(&b))}
@@ -156,7 +159,7 @@ impl ArchiveV2 {
         if self.version!=2 || self.hosts.len()>16 || self.networks.len()>16 || (self.hosts.is_empty() && self.networks.is_empty() && self.preferences.is_none()) || self.preferences.as_ref().is_some_and(|p| !(10..=28).contains(&p.terminal_font_size)) {return Err("transfer_invalid_schema");}
         let mut keys=std::collections::HashSet::new();
         for n in &self.networks {if n.key.is_empty() || n.key.len()>32 || !n.key.bytes().all(|b|b.is_ascii_alphanumeric() || b==b'_' || b==b'-') || !keys.insert(&n.key) {return Err("transfer_invalid_schema");}validate_network(n.provider,&n.label,&n.settings)?;}
-        for h in &self.hosts {if !clean(&h.label,96) {return Err("transfer_invalid_schema");}h.target.validate()?;if let Some(k)=&h.network_key {if !self.networks.iter().any(|n|&n.key==k && n.provider==h.provider) {return Err("transfer_invalid_schema");}}}
+        for h in &self.hosts {if h.requires_network_binding && (!matches!(h.provider, Provider::Tailscale | Provider::Easytier | Provider::Zerotier) || h.network_key.is_some()) {return Err("transfer_invalid_schema");}if !clean(&h.label,96) {return Err("transfer_invalid_schema");}h.target.validate()?;if let Some(k)=&h.network_key {if !self.networks.iter().any(|n|&n.key==k && n.provider==h.provider) {return Err("transfer_invalid_schema");}}}
         Ok(())
     }
 }
@@ -174,7 +177,7 @@ impl PortableArchive {
             _=>Err("transfer_invalid_schema"),
         }
     }
-    pub fn into_v2(self)->ArchiveV2 {match self {Self::V2(a)=>a,Self::V1(a)=>ArchiveV2{version:2,hosts:a.hosts.into_iter().map(|h|PortableHostV2{label:h.label,provider:h.provider,target:h.target,network_key:None}).collect(),networks:vec![],preferences:None}}}
+    pub fn into_v2(self)->ArchiveV2 {match self {Self::V2(a)=>a,Self::V1(a)=>ArchiveV2{version:2,hosts:a.hosts.into_iter().map(|h|PortableHostV2{label:h.label,provider:h.provider,target:h.target,network_key:None,requires_network_binding:false}).collect(),networks:vec![],preferences:None}}}
 }
 fn password_ok(password: &str) -> bool {
     !password.is_empty() && password.len() <= 1024
@@ -276,6 +279,38 @@ pub fn decrypt(password: &str, archive: &[u8]) -> Result<Zeroizing<Vec<u8>>, &'s
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn optional_pending_network_binding_roundtrips_authenticated_v2_and_legacy_defaults() {
+        let fixture:serde_json::Value=serde_json::from_str(include_str!("../../shared/config-transfer-v2.json")).unwrap();
+        let mut value:serde_json::Value=serde_json::from_str(fixture["plaintext"].as_str().unwrap()).unwrap();
+        let old=PortableArchive::parse(&serde_json::to_vec(&value).unwrap()).unwrap().into_v2();
+        assert!(old.hosts.iter().all(|h|!h.requires_network_binding));
+        assert!(serde_json::to_value(&old).unwrap()["hosts"].as_array().unwrap().iter().all(|h|h.get("requiresNetworkBinding").is_none()));
+        value["hosts"][0]["provider"]="tailscale".into();
+        value["hosts"][0]["networkKey"]=serde_json::Value::Null;
+        value["hosts"][0]["requiresNetworkBinding"]=true.into();
+        let plaintext=serde_json::to_vec(&value).unwrap();
+        let password="isolated public migration fixture";
+        let encrypted=encrypt(password,&plaintext).unwrap();
+        let opened=decrypt(password,&encrypted).unwrap();
+        let pending=PortableArchive::parse(&opened).unwrap().into_v2();
+        assert!(pending.hosts[0].requires_network_binding);
+        assert_eq!(serde_json::to_value(&pending).unwrap()["hosts"][0]["requiresNetworkBinding"],true);
+        for bad in [serde_json::json!(null),serde_json::json!(1),serde_json::json!("true")] {
+            let mut malformed=value.clone();malformed["hosts"][0]["requiresNetworkBinding"]=bad;
+            assert!(PortableArchive::parse(&serde_json::to_vec(&malformed).unwrap()).is_err());
+        }
+        for provider in ["direct","unspecified"] {
+            let mut malformed=value.clone();malformed["hosts"][0]["provider"]=provider.into();
+            assert!(PortableArchive::parse(&serde_json::to_vec(&malformed).unwrap()).is_err());
+        }
+        let mut bound=value.clone();bound["hosts"][0]["networkKey"]="n0".into();
+        assert!(PortableArchive::parse(&serde_json::to_vec(&bound).unwrap()).is_err());
+        // Existing v1 archives convert with a false flag and unchanged provider semantics.
+        let v1=Archive{version:1,hosts:vec![PortableHost{label:"legacy".into(),provider:Provider::Tailscale,target:pending.hosts[0].target.clone()}]};
+        let migrated=PortableArchive::parse(&serde_json::to_vec(&v1).unwrap()).unwrap().into_v2();
+        assert!(!migrated.hosts[0].requires_network_binding);assert_eq!(migrated.hosts[0].provider,Provider::Tailscale);
+    }
     #[test]
     fn v2_independent_golden_and_schema_cases() {
         let fixture:serde_json::Value=serde_json::from_str(include_str!("../../shared/config-transfer-v2.json")).unwrap();

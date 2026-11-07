@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-07",
+  "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+  "page": "7a22df08-251d-8016-8008-de03541c11da",
+  "method": "Separate Penpot viewer loaded after saving; checked current-frame after each actual click. Readback is a separate MCP connection after closing and reopening the plugin.",
+  "clicks": [
+    "S48 明确填入未审查表单 → S49",
+    "S49 独立核验勾选 → S51",
+    "S51 返回未核验表单 → S49",
+    "S49 返回资料预览 → S48",
+    "S48 查看 overlay 待绑定示例 → S50",
+    "S50 去网络配置 → S27"
+  ],
+  "notTested": [
+    "other individual links",
+    "real camera",
+    "actual pairing",
+    "SSH",
+    "real overlay network",
+    "mobile device and screen reader"
+  ],
+  "version_warning": "MCP 2.15.4 reports mismatch against Penpot 2.19.0",
+  "images": {
+    "v2-S48-profile-preview-20261107.png": "7728fc4ca6f1410e171dfafda25f914484e8bada77683f86ef682961d3aeb05a",
+    "v2-S49-profile-review-20261107.png": "7895f32f150e15dba0bc1cd947678e8575c79ac4191ce03ed98778996aa39813",
+    "v2-S50-network-binding-20261107.png": "64d5239dd620f726a992af925067b1717c55d55a5e888acf21cefb8ceb24d33c",
+    "v2-S51-profile-confirmed-20261107.png": "eb97af671173b1437542574fb028273b53524fd376a213ee00918d412306e83a"
+  },
+  "visual_revision": "Full socket path wrapped in S48, S49 and S51; interaction navigation unchanged."
+}

@@ -1,0 +1,134 @@
+{
+  "date": "2026-11-08",
+  "platform": "macOS arm64",
+  "featureCommit": "f4bb334717f6ca2a572a91b6619da4eb73c8a392",
+  "harnessCommit": "aeb01e203ed20fa54aca6fa31569ae8efa8b7976",
+  "bundledInPublishedApk": false,
+  "sourceChecks": {
+    "node": "22.22.2",
+    "tauriTestsPassed": 416,
+    "tauriTestsSkipped": 0,
+    "vite": "8.3.5",
+    "modules": 62,
+    "flutterDart": "3.11.0",
+    "dartScope": "summary and blocked guard source exercised with fixture types; isolated sample analyzer clean",
+    "flutterEngineAndWidgetTests": "not run for this change",
+    "pythonFlutterDriverTests": 85,
+    "pythonOtherHarnessTests": 83
+  },
+  "tauriMobileBrowser": {
+    "scope": "Isolated Mac Chrome, actual compiled Tauri front end and touch events, synthetic host catalog, native commands and dashboard snapshots",
+    "base": "71ce10191c2c282bc4d5258f1bfc191a3cbfb882",
+    "cases": [
+      {
+        "width": 320,
+        "scenario": "fresh",
+        "blockedRows": 2,
+        "rowHeight": 58,
+        "overflow": 0,
+        "selectionCalls": 1,
+        "fullAcknowledged": true,
+        "inputOrResize": 0
+      },
+      {
+        "width": 390,
+        "scenario": "stale",
+        "blockedRows": 2,
+        "rowHeight": 44,
+        "overflow": 0,
+        "selectionCalls": 1,
+        "fullAcknowledged": true,
+        "inputOrResize": 0
+      },
+      {
+        "width": 320,
+        "scenario": "completed",
+        "blockedRows": 2,
+        "rowHeight": 58,
+        "overflow": 0,
+        "selectionCalls": 0,
+        "fullAcknowledged": false,
+        "inputOrResize": 0
+      },
+      {
+        "width": 390,
+        "scenario": "replaced",
+        "blockedRows": 2,
+        "rowHeight": 44,
+        "overflow": 0,
+        "selectionCalls": 0,
+        "fullAcknowledged": false,
+        "inputOrResize": 0
+      },
+      {
+        "width": 320,
+        "scenario": "superseded-button",
+        "blockedRows": 2,
+        "extraViews": 0,
+        "extraSelects": 0,
+        "focusPreserved": true
+      },
+      {
+        "width": 390,
+        "scenario": "done-before-full",
+        "blockedRows": 2,
+        "rowHeight": 44,
+        "overflow": 0,
+        "selectionCalls": 1,
+        "fullAcknowledged": false,
+        "inputOrResize": 0,
+        "acknowledgedFrames": 0,
+        "cancelCalled": true
+      },
+      {
+        "width": 320,
+        "scenario": "done-after-full",
+        "blockedRows": 2,
+        "rowHeight": 58,
+        "overflow": 0,
+        "selectionCalls": 1,
+        "fullAcknowledged": true,
+        "inputOrResize": 0,
+        "acknowledgedFrames": 2
+      }
+    ],
+    "failures": [],
+    "chrome": "Chrome/156.0.8078.81"
+  },
+  "testBrowserClosed": true,
+  "flutterTuiDiagnostic": {
+    "priorFailureRun": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42407250343",
+    "priorFailureArtifactId": 13588895556,
+    "priorFailureStage": "tui_resume_full",
+    "newDiagnosticDeviceResult": null,
+    "maxFailureBytes": 512,
+    "maximalValidSampleBytes": 456,
+    "stages": [
+      "tui_find_board",
+      "tui_return_tab",
+      "tui_find_resume",
+      "tui_resume_full"
+    ],
+    "sameTerminalCoreCases": [
+      "matching-screen",
+      "mode-only-failure",
+      "row4-mismatch",
+      "shifted-title",
+      "nonblank-tail",
+      "different-geometry",
+      "view-absent",
+      "multiple-views",
+      "same-parser"
+    ],
+    "fields": "20 allowlisted boolean and integer fields; no identity, exception text or terminal content",
+    "rootCauseConfirmed": false
+  },
+  "notVerified": [
+    "Android runtime for blocked-target entry",
+    "arm64 physical device",
+    "real Chinese IME",
+    "iOS",
+    "live simultaneous overlay networks",
+    "screen reader on device"
+  ]
+}

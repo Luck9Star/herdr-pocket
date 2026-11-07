@@ -317,13 +317,14 @@ jobs:
           flutter analyze lib integration_test
       - name: Run analyzer, Flutter tests and renderer regressions on the verified lock
         if: inputs.guarded_input || startsWith(github.ref, 'refs/heads/codex/batch/android-input-')
+        shell: bash
         run: |
           cd "$RUNNER_TEMP/flutter-android-gui"
           flutter_status=0
           if flutter analyze > "$RUNNER_TEMP/flutter-analyze.log" 2>&1; then :; else flutter_status=1; fi
           cat "$RUNNER_TEMP/flutter-analyze.log"
-          if flutter test --reporter expanded > "$RUNNER_TEMP/flutter-tests.log" 2>&1; then :; else flutter_status=1; fi
-          cat "$RUNNER_TEMP/flutter-tests.log"
+          # A stalled widget suite is a failure; the independent AVD still runs.
+          if timeout --kill-after=30s 12m flutter test --reporter expanded 2>&1 | tee "$RUNNER_TEMP/flutter-tests.log"; then :; else flutter_status=1; fi
           if flutter test diagnostic/combining_render_test.dart regression/combining_patch_test.dart --reporter expanded > "$RUNNER_TEMP/flutter-render-regressions.log" 2>&1; then :; else flutter_status=1; fi
           cat "$RUNNER_TEMP/flutter-render-regressions.log"
           echo "FLUTTER_REGRESSION_STATUS=$flutter_status" >> "$GITHUB_ENV"

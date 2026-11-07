@@ -56,7 +56,8 @@ class AndroidProgress:
         'draftKeyboardCompleted','pasteReviewCompleted','draftRestored','draftReceiptVerified','stoppedStale'}
     ERROR_CODES = {'android_system_ime_target_mismatch','android_system_ime_evidence_unavailable',
         'android_system_ime_show_unconfirmed','android_system_ime_hide_unconfirmed',
-        'android_system_ime_expected_state_invalid','android_driver_failure'}
+        'android_system_ime_expected_state_invalid','android_driver_failure',
+        'android_revoke_clock_invalid','android_revoke_device_time_unready','android_revoke_controls_unconfirmed'}
     def __init__(self, args):
         self.stream = None; self.success = False
         sha = os.environ.get('GITHUB_SHA','')
@@ -115,6 +116,55 @@ class AndroidProgress:
         if self.stream:os.fsync(self.stream.fileno())
     def close(self):
         if self.stream:self.stream.close();self.stream=None
+
+
+def wait_fixture_revocation_clock(browser, receipt, progress=None):
+    """Wait passively for the AVD's own strict receipt window, never relax it."""
+    try:
+        value = json.loads(receipt)
+        issued, expires = value['issued_at'], value['expires_at']
+        if (value.get('status') != 'revoked' or type(issued) is not int or
+                type(expires) is not int or not 0 <= issued < expires <= issued + 600):
+            raise ValueError
+    except (ValueError, TypeError, KeyError):
+        raise GuiFailure('android_revoke_clock_invalid') from None
+    attempts = 0
+    def ready():
+        nonlocal attempts
+        current = browser.evaluate('Math.floor(Date.now()/1000)')
+        if type(current) is not int:
+            raise GuiFailure('android_revoke_clock_invalid')
+        attempts += 1
+        sample = {'attempts': min(attempts, 99), 'issuedAtReached': current >= issued,
+                  'notExpired': current < expires}
+        if progress:
+            progress.data['revocationClock'] = sample
+            progress.publish()
+        return sample['issuedAtReached'] and sample['notExpired']
+    wait_for(ready, 'android_revoke_device_time_unready', timeout=5)
+
+
+def require_revocation_review_controls(browser, progress=None):
+    """Keep a public boolean diagnosis; never expose request or receipt text."""
+    state = browser.evaluate("""(()=>{
+      const accept=document.querySelector('#pair-accept');
+      const source=document.querySelector('#pair-source-review');
+      const preview=document.querySelector('#pair-response-preview');
+      const fields=document.querySelector('#remote-fields');
+      return {acceptPresent:!!accept,acceptDisabled:!accept||accept.matches(':disabled'),
+        sourceChecked:source?.checked===true,previewVisible:!!preview&&!preview.hidden,
+        fieldsDisabled:!fields||fields.disabled,documentHidden:document.hidden};})()""")
+    keys = ('acceptPresent', 'acceptDisabled', 'sourceChecked', 'previewVisible',
+            'fieldsDisabled', 'documentHidden')
+    if not isinstance(state, dict) or any(type(state.get(key)) is not bool for key in keys):
+        raise GuiFailure('android_revoke_controls_unconfirmed')
+    clean = {key: state[key] for key in keys}
+    if progress:
+        progress.data['revocationControls'] = clean
+        progress.publish()
+    if not (clean['acceptPresent'] and clean['sourceChecked'] and clean['previewVisible'] and
+            not clean['acceptDisabled'] and not clean['fieldsDisabled'] and not clean['documentHidden']):
+        raise GuiFailure('android_revoke_controls_unconfirmed')
 
 
 def exercise_keyboard(browser, approval, mode, progress=None):
@@ -731,11 +781,13 @@ def run_android(args, root, env, config, approval):
         # The disposable host's real helper removes the key first. The GUI
         # separately reviews the returned bytes; it cannot edit the host.
         receipt = approval.revoke()
+        wait_fixture_revocation_clock(browser, receipt, progress)
         browser.fill('#pair-response', receipt.decode('utf-8'))
         browser.click('#pair-preview')
         if browser.evaluate("document.querySelector('#pair-source-review').checked || !document.querySelector('#pair-accept').disabled"):
             raise GuiFailure('android_revoke_missing_independent_review')
         browser.click('#pair-source-review')
+        require_revocation_review_controls(browser, progress)
         browser.click('#pair-accept')
         wait_for(lambda: '目录已确认撤销' in (browser.read('#pair-status') or ''), 'android_revoke_not_persisted')
         if browser.evaluate("!document.querySelector('#remote-connect').disabled || !document.querySelector('#pair-create').disabled"):

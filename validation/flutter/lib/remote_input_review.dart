@@ -1,13 +1,38 @@
-import 'remote_input.dart' show utf8ByteLength;
-
 const remoteInputReviewByteLimit = 4096;
 
-/// Counts original bytes; review labels never change the bytes to be sent.
+/// Exact within the limit, otherwise a limit+1 sentinel. Avoid encoding or
+/// walking an arbitrarily large clipboard after it is already unusable.
+int boundedRemoteInputBytes(String text) {
+  var bytes = 0;
+  for (var index = 0; index < text.length; index++) {
+    final unit = text.codeUnitAt(index);
+    if (unit < 0x80) { bytes++; }
+    else if (unit < 0x800) { bytes += 2; }
+    else if (unit >= 0xd800 && unit <= 0xdbff && index + 1 < text.length &&
+        text.codeUnitAt(index + 1) >= 0xdc00 && text.codeUnitAt(index + 1) <= 0xdfff) {
+      bytes += 4; index++;
+    } else { bytes += 3; } // Includes UTF-8 replacement for a lone surrogate.
+    if (bytes > remoteInputReviewByteLimit) return remoteInputReviewByteLimit + 1;
+  }
+  return bytes;
+}
+
+String remoteInputByteLabel(int bytes) => bytes > remoteInputReviewByteLimit
+  ? '超过 $remoteInputReviewByteLimit' : '$bytes';
+
+/// Review labels never change sendable bytes. Oversized clipboard contents are
+/// discarded, so no UI can accidentally render them or offer a partial paste.
 class RemotePasteReview {
-  RemotePasteReview(this.original,this.clipboard) :
-    clipboardBytes = utf8ByteLength(clipboard),appendedBytes = utf8ByteLength(original + clipboard);
+  factory RemotePasteReview(String original,String clipboard) {
+    final originalBytes = boundedRemoteInputBytes(original),clipboardBytes = boundedRemoteInputBytes(clipboard);
+    return RemotePasteReview._(original,clipboardBytes <= remoteInputReviewByteLimit ? clipboard : '',
+      originalBytes,clipboardBytes);
+  }
+  RemotePasteReview._(this.original,this.clipboard,this.originalBytes,this.clipboardBytes);
   final String original,clipboard;
-  final int clipboardBytes,appendedBytes;
+  final int originalBytes,clipboardBytes;
+  int get appendedBytes => originalBytes + clipboardBytes > remoteInputReviewByteLimit
+    ? remoteInputReviewByteLimit + 1 : originalBytes + clipboardBytes;
   bool get canReplace => clipboard.isNotEmpty && clipboardBytes <= remoteInputReviewByteLimit;
   bool get canAppend => canReplace && appendedBytes <= remoteInputReviewByteLimit;
 }

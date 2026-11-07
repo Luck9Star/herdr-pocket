@@ -74,11 +74,23 @@ class AndroidWebView:
         except Exception:
             raise GuiFailure('android_cdp_transport_failed') from None
 
-    def evaluate(self, expression):
-        result = self.call('Runtime.evaluate', {'expression': expression, 'returnByValue': True})
+    def evaluate(self, expression, *, user_gesture=False):
+        result = self.call('Runtime.evaluate', {'expression': expression, 'returnByValue': True,
+                                                'userGesture': user_gesture})
         if 'exceptionDetails' in result:
             raise GuiFailure('android_control_operation_failed')
         return result.get('result', {}).get('value')
+
+    def copy_synthetic_clipboard(self):
+        """Copy only the constant fixture value into this disposable emulator."""
+        self.fill('#remote-input-draft', '测')
+        copied = self.evaluate(
+            "(()=>{const e=document.querySelector('#remote-input-draft');"
+            "if(!e || document.activeElement!==e || e.value!=='测') return false;"
+            "e.focus();e.select();return document.execCommand('copy')})()",
+            user_gesture=True)
+        if copied is not True:
+            raise GuiFailure('android_synthetic_clipboard_copy_failed')
 
     def read(self, selector, prop='textContent'):
         if prop not in ('textContent', 'value'):
@@ -176,6 +188,47 @@ def restore_reviewed_draft(browser, pane_id, terminal_id, rendered):
         raise GuiFailure('android_reentry_draft_changed')
 
 
+def exercise_local_paste(browser, approval, receipt, raw_receipt):
+    # Seed only synthetic text. Copy's temporary editor value is replaced before
+    # either production clipboard read; no pre-existing clipboard is inspected.
+    browser.copy_synthetic_clipboard()
+    browser.fill('#remote-input-draft', 'Pocket')
+
+    def unchanged_receipt():
+        if browser.evaluate("document.querySelector('#remote-input-status').dataset.receipt || null") != raw_receipt:
+            raise GuiFailure('android_paste_receipt_changed')
+        if not browser.evaluate("document.querySelector('#remote-input-preview-area').hidden"):
+            raise GuiFailure('android_paste_opened_send_preview')
+
+    for choice, expected in (('cancel', 'Pocket'), ('append', 'Pocket测')):
+        browser.click('#remote-read-paste')
+        wait_for(lambda: not browser.evaluate("document.querySelector('#remote-paste-review').hidden"),
+                 'android_paste_review_missing')
+        if (browser.read('#remote-paste-preview') != '测' or
+                browser.read('#remote-paste-target') != f"目标：{receipt['paneId']} · {receipt['terminalId']}" or
+                browser.read('#remote-input-draft', 'value') != 'Pocket'):
+            raise GuiFailure('android_paste_review_mismatch')
+        unchanged_receipt()
+        browser.click('#remote-paste-' + choice)
+        wait_for(lambda: browser.evaluate("document.querySelector('#remote-paste-review').hidden"),
+                 'android_paste_' + choice + '_missing')
+        if browser.read('#remote-input-draft', 'value') != expected:
+            raise GuiFailure('android_paste_' + choice + '_changed_draft')
+        unchanged_receipt()
+        # Each checkpoint is before any send-preview/confirmation. The real
+        # receiver must still contain only the earlier direct character.
+        approval.verify_ssh(b'k')
+        if choice == 'cancel':
+            # The paired form returns to observation when a paste is reviewed.
+            browser.click('#remote-input-draft-mode')
+            wait_for(lambda: '草稿仅在核对' in (browser.read('#remote-input-status') or '') and
+                     browser.evaluate("document.activeElement === document.querySelector('#remote-input-draft')"),
+                     'android_draft_focus_after_cancel_missing')
+    return {'syntheticClipboardCopySucceeded': True, 'pasteReviewCancelled': True,
+            'pasteCancelPreservedDraft': True, 'pasteAppendApplied': True,
+            'pasteOperationsNoExtraSshBytes': True}
+
+
 def run_android(args, root, env, config, approval):
     if bool(getattr(args, 'android_guarded_input', False)) != bool(getattr(args, 'input_fixture', None)):
         raise GuiFailure('android_guarded_input_fixture_mismatch')
@@ -185,7 +238,12 @@ def run_android(args, root, env, config, approval):
             not isinstance(config.get('port'), int) or not 1 <= config['port'] <= 65535 or
             not Path(args.tauri_app).is_file()):
         raise GuiFailure('android_unsafe_fixture')
-    if adb('shell', 'getprop', 'ro.kernel.qemu') != '1' or adb('shell', 'getprop', 'ro.build.version.sdk') != '35':
+    devices = [line.split()[:2] for line in adb('devices').splitlines()[1:] if line.strip()]
+    if devices != [[SERIAL, 'device']]:
+        raise GuiFailure('android_existing_or_non_emulator_device')
+    if (adb('shell', 'getprop', 'ro.kernel.qemu') != '1' or
+            adb('shell', 'getprop', 'ro.build.version.sdk') != '35' or
+            adb('shell', 'am', 'get-current-user') != '0'):
         raise GuiFailure('android_emulator_api_mismatch')
     if 'package:' + PACKAGE in adb('shell', 'pm', 'list', 'packages').splitlines():
         raise GuiFailure('android_package_already_present')
@@ -259,6 +317,7 @@ def run_android(args, root, env, config, approval):
         full = wait_for(lambda: rendered('full'), 'android_full_render_ack_missing', timeout=60)
         deltas = wait_for(lambda: rendered('delta'), 'android_delta_render_ack_missing', timeout=60)
         receipts = []
+        paste_evidence = {}
         if getattr(args, 'input_fixture', None):
             wait_for(lambda: browser.evaluate("!document.querySelector('#remote-input-controls').hidden"),
                      'android_input_controls_missing', timeout=60)
@@ -271,7 +330,7 @@ def run_android(args, root, env, config, approval):
             browser.click('#remote-input-draft-mode')
             wait_for(lambda: '草稿仅在核对' in (browser.read('#remote-input-status') or ''),
                      'android_draft_mode_missing')
-            browser.fill('#remote-input-draft', 'Pocket测')
+            paste_evidence = exercise_local_paste(browser, approval, first, raw)
             browser.click('#host-return-home')
             wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
             if browser.evaluate("document.activeElement.matches('#remote-input-draft, #remote-terminal .xterm-helper-textarea')"):
@@ -299,6 +358,7 @@ def run_android(args, root, env, config, approval):
         return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                 'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                 'inputQueueAccepted':bool(receipts), 'inputReceipts':receipts,
+                **paste_evidence,
                 'hiddenReentryFreshFull':bool(receipts),
                 'keyStore':'Android API 35 emulator AndroidKeyStore-wrapped device key',
                 'device':'ephemeral Android emulator', 'uiDriver':'debug WebView CDP input'}

@@ -39,3 +39,5 @@ Flutter 的固定 `terminal_view` 0.5.0 在所测 emoji 变体上采用了预期
 这 10 个输入的复制文本相同，两个真实缓冲区均通过 4 个共享裁剪样例。Tauri 在 Mac Chrome 156 的 320×820、390×820 视口，从配对表单与已存标签分别验证复制一次、左右裁剪和切换后拒绝旧操作。四个场景的远端发送与 PTY 调整均为 0。固定 Nerd Font 通过 HTTP 200、SHA-256 和浏览器字体加载状态三重核对；测试使用隔离的传输与剪贴板替身。隔离源码副本的 199 项 JavaScript 检查和前端构建通过。
 
 Flutter 选区的渲染布局、系统选择手柄、真实中文输入法及两套候选在同一部手机上的性能仍未验证。先保持双路线，在下一批集中构建中运行新增 Flutter widget／绘制回归，再测试手机系统选区和真实剪贴板。当前可下载的两份 APK 仍来自前一批，未包含本页新功能。[可复核读数](evidence/mobile-pair-gui/mobile-terminal-selection-20261107.json) · [现有 Android 测试包](36-mobile-paste-and-auxiliary-input.md#同源云验证与可下载测试包)
+
+手机从系统剪贴板读入、取消、追加和替换的交互及验收步骤见[手机系统粘贴与草稿审查](38-mobile-system-paste.md)。

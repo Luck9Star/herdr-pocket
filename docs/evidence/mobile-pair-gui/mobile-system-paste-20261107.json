@@ -1,0 +1,141 @@
+{
+  "date": "2026-11-07",
+  "baseCommit": "6ffab0606ce88f404cada602b8330f0ce69f2411",
+  "testedOn": "Mac, isolated source copy and synthetic fixtures",
+  "avdRun": false,
+  "newApkBuilt": false,
+  "macBrowser": {
+    "browser": "Chrome/156.0.8078.81",
+    "scope": "Mac headless Chrome, CDP touch, fixture transport and synthetic clipboard stub; not a mobile device",
+    "sourceHashes": {
+      "validation/tauri/index.html": "4163e4e558cbb0ec758f7c650556eac653ea0f1a36a96eb0d36cbf59bc057164",
+      "validation/tauri/src/remote.js": "d4d435669dc4187eb23cbdb70326656db2b7250c7249bcf1c1e9bdb7060a6747",
+      "validation/tauri/src/tab-workspace.js": "1364f425d6340a19e1d7bfc0c0190b303f76d0b6ae061bfaa47ae43f98488043",
+      "validation/tauri/src/mobile-clipboard.js": "0a8362288bf6fdd17164ce154494d023d9424491b1f0de068bf56a1cd580246d",
+      "validation/tauri/src/paste-review.js": "7b7627126dd58e40cfb17c3e34a7527ed9ecfae459a03f3b937617d7d0fdbcbf"
+    },
+    "results": {
+      "tab-390": {
+        "viewport": [
+          390,
+          820
+        ],
+        "cancelPreserved": true,
+        "append": "原稿中",
+        "overflowBytes": [
+          4094,
+          3
+        ],
+        "appendDisabled": true,
+        "replacement": "中",
+        "delayedSwitchRejected": true,
+        "remoteSends": 0,
+        "resizeRequests": 0,
+        "stubReads": 4
+      },
+      "form-390": {
+        "viewport": [
+          390,
+          820
+        ],
+        "cancelPreserved": true,
+        "append": "原稿中",
+        "overflowBytes": [
+          4094,
+          3
+        ],
+        "appendDisabled": true,
+        "replacement": "中",
+        "delayedSwitchRejected": true,
+        "remoteSends": 0,
+        "resizeRequests": 0,
+        "stubReads": 4
+      },
+      "tab-320": {
+        "viewport": [
+          320,
+          820
+        ],
+        "cancelPreserved": true,
+        "append": "原稿中",
+        "overflowBytes": [
+          4094,
+          3
+        ],
+        "appendDisabled": true,
+        "replacement": "中",
+        "delayedSwitchRejected": true,
+        "remoteSends": 0,
+        "resizeRequests": 0,
+        "stubReads": 4
+      },
+      "form-320": {
+        "viewport": [
+          320,
+          820
+        ],
+        "cancelPreserved": true,
+        "append": "原稿中",
+        "overflowBytes": [
+          4094,
+          3
+        ],
+        "appendDisabled": true,
+        "replacement": "中",
+        "delayedSwitchRejected": true,
+        "remoteSends": 0,
+        "resizeRequests": 0,
+        "stubReads": 4
+      }
+    },
+    "lateReadScope": "Exited the selected target to the hosts home before the synthetic read resolved."
+  },
+  "checks": {
+    "tauriJavaScript": 209,
+    "viteBuild": "passed",
+    "macRustHostTests": 43,
+    "kotlin": "Real Kotlin 2.2.21 compiler, production Android plugin, simulated Android/Tauri runtime and focus/MIME/type/byte-limit transitions.",
+    "dart": "3.11.0 arm64 standalone, 510 UTF-8 comparison cases and local paste-review contract checks.",
+    "androidDrivers": {
+      "flutter": 53,
+      "tauri": 11,
+      "sharedHarness": 32,
+      "environment": "Offline driver unit tests with cryptography 46.0.3. Not an emulator."
+    }
+  },
+  "flutterPasteReviewLifecycle": {
+    "sourceBaseCommit": "6ffab0606ce88f404cada602b8330f0ce69f2411",
+    "sourceHashes": {
+      "validation/flutter/lib/remote_page.dart": "2cc3a7a1b81dd13c14b0e6a3265122324375f17bb60bb831ffb7ad953d978b54",
+      "validation/flutter/test/remote_paste_review_test.dart": "fc27c8aff7bd9f20f5fb54b3018f7897bf133abf75ee3fceb046705b8b93d363"
+    },
+    "scope": "Worktree source only; no Android, iOS or desktop runtime proof.",
+    "behavior": [
+      "Hidden page, non-resumed app, disconnect, requested target change and dispose invalidate the paste ticket and clear/remove only the paste-review route.",
+      "A route above the paste review stays in place; an absent paste review does not alter the separate send-confirmation route."
+    ],
+    "checks": {
+      "dart311FormatterParser": "passed with --output=none; no formatter rewrite",
+      "gitDiffCheck": "passed",
+      "flutterWidgetTests": "not run; Flutter SDK unavailable",
+      "dartAnalyzer": "not conclusive; package imports unresolved without Flutter/package config"
+    },
+    "ciTriggered": false
+  },
+  "unverified": [
+    "current source running in Android WebView or Flutter widget",
+    "use of a system clipboard on an Android emulator or physical phone",
+    "iOS, actual IME, assistive technology, real overlays"
+  ],
+  "driverContract": {
+    "target": "next concentrated cloud run, disposable API35 x86_64 AVD only",
+    "guarded": [
+      "seed fixed synthetic text after checking emulator ownership",
+      "cancel first review and compare SSH receiver to initial direct byte",
+      "reopen review and append locally; check receiver again",
+      "only explicit send produces nine UTF-8 bytes in second receipt on same target"
+    ],
+    "stock": "no clipboard access",
+    "observedOnDevice": false
+  }
+}

@@ -18,13 +18,14 @@ import { initConfigTransfer } from './config-transfer-ui.js';
 import { HostDashboardSummary, hostSummaryIdentity, hostSummaryText } from './host-dashboard-summary.js';
 import { DirectDashboardSummary } from './direct-dashboard-summary.js';
 import { previewPaste, applyPaste } from './paste-review.js';
+import { readClipboardForPaste, clipboardPasteMessage } from './mobile-clipboard.js';
 
-export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
+export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboardRead=readClipboardForPaste }) {
   const $ = id => document.getElementById(id), gate = new RemoteViewGate();
   let textSelection=null, selectTextButton=null, selectionReady=false;
   let terminalFontSize=14, terminal = null, showingRemote = true, pairState = 'none', previewResponse = '', pairBusy = false, scanBusy = false, scanRevision = 0;
   let inputGeneration=null, inputEpoch=null, inputMode='observe', inputBusy=null, inputUnknown=false, inputRevision=0, selectedTarget=null, draftPreview=null, switchingFocus=false;
-  let inputComposition=new InputComposition(), focusReset=Promise.resolve(), pasteReview=null, draftRevision=0, draftComposing=false, pasteFocusEpoch=0; const onlineInput=new OnlineInputQueue();
+  let inputComposition=new InputComposition(), focusReset=Promise.resolve(), pasteReview=null, draftRevision=0, draftComposing=false, pasteFocusEpoch=0, pasteReadSequence=0; const onlineInput=new OnlineInputQueue();
   const auxiliaryModifiers=new AuxiliaryModifiers();
   let networkRevisions=new Map();
   const hostSummaries=new HostDashboardSummary();
@@ -241,15 +242,36 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   $('remote-input-draft-mode').onclick=()=>void changeInputMode('draft');
   $('remote-input-draft').addEventListener('blur',()=>{if(!switchingFocus)loseInputFocus();});
   $('remote-input-draft').addEventListener('input',()=>{draftRevision++;clearPasteReview();draftPreview=null; $('remote-input-preview-area').hidden=true;});
-  $('remote-input-draft').addEventListener('compositionstart',()=>{draftComposing=true;});
+  $('remote-input-draft').addEventListener('compositionstart',()=>{pasteReadSequence++;draftComposing=true;});
   $('remote-input-draft').addEventListener('compositionend',()=>{draftComposing=false;});
   $('remote-input-draft').addEventListener('paste',event=>{
     event.preventDefault();event.stopImmediatePropagation();
-    const text=event.clipboardData?.getData('text/plain') || '';
+    pasteReadSequence++;
+    const text=event.clipboardData?.types && !Array.from(event.clipboardData.types).includes('text/plain') ? '' : event.clipboardData?.getData('text/plain') || '';
     void reviewLocalPaste(terminal,text,$('remote-input-draft'));
   },true);
   window.addEventListener('blur',()=>{pasteFocusEpoch++;clearPasteReview();});
-  for(const id of ['remote-input-preview','remote-input-confirm', 'remote-input-recover']) $(id).addEventListener('pointerdown',e=>e.preventDefault());
+  for(const id of ['remote-input-preview','remote-input-confirm', 'remote-input-recover','remote-read-paste']) $(id).addEventListener('pointerdown',e=>e.preventDefault());
+  $('remote-read-paste').onclick=async()=>{
+    const origin=inputMode==='direct'?terminal?.textarea:$('remote-input-draft');
+    const mode=inputMode, boundTerminal=terminal, generation=inputGeneration, epoch=inputEpoch, revision=inputRevision;
+    const target=selectedTarget, hostId=activeHostId, clientGeneration=gate.pendingGeneration;
+    const draftVersion=draftRevision, original=$('remote-input-draft').value, focusEpoch=pasteFocusEpoch;
+    const sequence=++pasteReadSequence;
+    const valid=()=>sequence===pasteReadSequence && showingRemote && !document.hidden && terminal===boundTerminal &&
+      selectedTarget===target && !!target && activeHostId===hostId && gate.accepts(clientGeneration,generation) &&
+      inputGeneration===generation && inputEpoch===epoch && epoch!==null && inputRevision===revision && inputMode===mode &&
+      ['draft','direct'].includes(mode) && !inputUnknown && !inputBusy && document.activeElement===origin &&
+      draftRevision===draftVersion && $('remote-input-draft').value===original && pasteFocusEpoch===focusEpoch &&
+      !(mode==='direct' ? inputComposition.token && !inputComposition.ended : draftComposing);
+    if(!valid()){inputStatus('请先启用输入模式并完成输入法组合，再粘贴。');return;}
+    try {
+      const text=await clipboardRead();
+      if(!valid())return;
+      if(typeof text!=='string' || !text){inputStatus('剪贴板没有可用的纯文本。');return;}
+      await reviewLocalPaste(boundTerminal,text,origin);
+    } catch (error) {if(valid())inputStatus(clipboardPasteMessage(error));}
+  };
   function pasteReviewCurrent(review) {
     return pasteReview===review && showingRemote && !document.hidden && gate.accepts(review.clientGeneration,review.generation) &&
       inputGeneration===review.generation && inputRevision===review.revision && inputMode==='observe' && !inputUnknown && !inputBusy &&
@@ -258,9 +280,10 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   }
   async function reviewLocalPaste(boundTerminal,text,origin) {
     const editor=$('remote-input-draft'), direct=origin===boundTerminal?.textarea;
-    if(!selectedTarget || !boundTerminal || terminal!==boundTerminal || (direct ? inputMode!=='direct' : !['draft','observe'].includes(inputMode)) || inputBusy || inputUnknown || !text)return;
+    if(!selectedTarget || !boundTerminal || terminal!==boundTerminal || (direct ? inputMode!=='direct' : !['draft','observe'].includes(inputMode)) || inputBusy || inputUnknown)return;
+    if(!text){inputStatus('剪贴板没有可用的纯文本。');return;}
     if((direct && inputComposition.token && !inputComposition.ended) || (!direct && draftComposing)){inputStatus('输入法组合尚未结束，请完成后再粘贴。');return;}
-    if(new TextEncoder().encode(text).length>4096){inputStatus('粘贴内容超过 4096 字节；原草稿保留。');return;}
+    if(typeof text!=='string' || text.length>4096 || new TextEncoder().encode(text).length>4096){inputStatus('粘贴内容超过 4096 字节；原草稿保留。');return;}
     const original=editor.value, revision=draftRevision, focusEpoch=pasteFocusEpoch, target=selectedTarget, hostId=activeHostId;
     const generation=inputGeneration, clientGeneration=gate.pendingGeneration;
     if(!target || document.activeElement!==origin || document.hidden || !gate.accepts(clientGeneration,generation))return;
@@ -671,14 +694,15 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
           const keyboardPending=()=>terminal===boundTerminal && inputMode!=='direct' && !boundTerminal.options.disableStdin;
           blockPendingKeys(terminal.textarea,keyboardPending);
           terminal.onData(data=>{ if(terminal!==boundTerminal)return; const token={generation:inputGeneration,epoch:inputEpoch,revision:inputRevision}; if(!inputComposition.accepts(token)) {inputStatus('输入法提交已过期，本次未发送。');return;} renderAuxiliary();if(inputMode==='direct' && document.activeElement===terminal?.textarea) queueDirect(new TextEncoder().encode(data)); });
-          terminal.textarea.addEventListener('compositionstart',()=>{if(terminal===boundTerminal)inputComposition.begin({generation:inputGeneration,epoch:inputEpoch,revision:inputRevision});},true);
+          terminal.textarea.addEventListener('compositionstart',()=>{if(terminal===boundTerminal){pasteReadSequence++;inputComposition.begin({generation:inputGeneration,epoch:inputEpoch,revision:inputRevision});}},true);
           terminal.textarea.addEventListener('compositionend',()=>{if(terminal===boundTerminal)inputComposition.end();},true);
           terminal.textarea.addEventListener('blur',()=>{if(terminal===boundTerminal && !switchingFocus) loseInputFocus();});
           terminal.textarea.addEventListener('paste',event=>{
             if(terminal!==boundTerminal || (!keyboardPending() && inputMode!=='direct'))return;
             event.preventDefault(); event.stopImmediatePropagation();
             if(inputMode!=='direct')return;
-            const text=event.clipboardData?.getData('text/plain') || '';
+            pasteReadSequence++;
+            const text=event.clipboardData?.types && !Array.from(event.clipboardData.types).includes('text/plain') ? '' : event.clipboardData?.getData('text/plain') || '';
             void reviewLocalPaste(boundTerminal,text,boundTerminal.textarea);
           },true);
         } else if(frame.full) {selectionReady=false;if(selectTextButton)selectTextButton.disabled=true;terminal.reset();}

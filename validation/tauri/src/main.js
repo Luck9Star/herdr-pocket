@@ -5,6 +5,7 @@ import graphemesLicense from '../node_modules/@xterm/addon-unicode-graphemes/LIC
 import './style.css';
 import { readTheme } from './theme.js';
 import { initRemote } from './remote.js';
+import { initializePasteClipboard } from './mobile-clipboard.js';
 
 document.getElementById('xterm-license').textContent = xtermLicense;
 document.getElementById('xterm-graphemes-license').textContent = graphemesLicense;
@@ -29,4 +30,6 @@ async function openFixture() {
     document.getElementById('status').textContent = '离线实验室初始化失败，可返回主机看板';
   }
 }
-initRemote({native:isTauri(),theme,onFixture:openFixture,onLeaveFixture:() => workbench?.pause()});
+const native = isTauri();
+void initializePasteClipboard(native);
+initRemote({native,theme,onFixture:openFixture,onLeaveFixture:() => workbench?.pause()});

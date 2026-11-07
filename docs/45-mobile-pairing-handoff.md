@@ -1,5 +1,7 @@
 # 手机配对请求交接与撤销审查
 
+两份 Android 测试包已完成构建，Flutter 和 Tauri 的原版 herdr 只读闭环均在 API 35 模拟器通过。[下载、四场设备结果与后续修复](46-android-pairing-handoff-validation.md)
+
 Flutter 和 Tauri 的手机配对页已接入本机设备身份。首次连接从资料预览开始，用户核对主机指纹后创建设备请求，主机明确授权，手机审查回执，主动连接并从看板选择终端进行持续观察。2026-11-07 的源码为 `7470d5c`。本页记录交接和撤销的边界，Android 安装包与模拟器由同一次云构建产生。[本次源码](https://github.com/Luck9Star/herdr-pocket/commit/7470d5cc2a9c4b4c5fce0802b6bc7789a8b1e67f) · [本批构建](https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360) · [首次连接资料格式](44-mobile-connection-profile.md)
 
 ## 从手机交给主机

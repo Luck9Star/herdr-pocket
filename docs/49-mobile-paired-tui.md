@@ -1,5 +1,7 @@
 # 配对手机操作远端 TUI
 
+最新 APK、Tauri 模拟器十步实测及 Flutter 的单独复测见[Android 设备验证](50-android-paired-tui-validation.md)。
+
 2026-11-08。手机配对完成后，在同一主机上选择终端。从全帧进入逐键模式，后续输出更新时仍显示实际输入状态。草稿、观察和发送结果未知各有独立提示。局部测试覆盖了正在输入时收到增量、同一目标重绘全帧、停止观察与重新核验。配对、撤销和应用清理沿用原有流程。[配对与设备密钥验收](46-android-pairing-handoff-validation.md) · [功能键与宿主模式](48-mobile-terminal-function-keys.md)
 
 ## 怎样证明按键生效

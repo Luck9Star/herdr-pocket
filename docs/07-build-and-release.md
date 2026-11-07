@@ -151,3 +151,5 @@ Tailscale 手机源码批次将同一组网工作流扩为 EasyTier＋Tailscale 
 该输入批次已在 `a9914fe` / [run 42339225239](https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239) 实际运行，最终状态为失败。原生库、共享 Rust、输入夹具、Flutter 源码检查和两个 arm64 包成功；两套 AVD job 失败，四个独立模拟器场景为 1 通过、3 失败。Linux Flutter 隔离 SSH GUI 通过且收到 9 字节。下载包的离线哈希复核、模拟器应用运行、Linux widget 及真实手机分别记证；arm64 包未在设备安装或运行。后续测试专用 AVD 重试必须保留自己的源码 SHA、run、失败／通过和清理记录，不能把本轮改为通过，也不能把调试模拟器结果继承给 arm64 组网 APK。[下载、首轮失败阶段和范围](36-mobile-paste-and-auxiliary-input.md#同源云验证与可下载测试包)
 
 仅复验输入驱动时，使用 `codex/network-batch/with-emulators-input-recheck-*` 分支，沿用已核对的 arm64 分发包，运行同 SHA 的输入夹具和两条 API 35 x86_64 模拟器路线。源码／原生库／分发矩阵跳过。每个场景按 artifact 的 SHA、manifest 和接收端字节数记证，同时保留 analyzer 与整个工作流的真实状态。[首次定向复验](36-mobile-paste-and-auxiliary-input.md#android-定向复验)
+
+Flutter 单路线修订可用 `codex/network-batch/with-emulators-input-recheck-flutter-tui-*`。它只构建同源的隔离宿主，执行 Flutter 静态分析、widget 与绘制回归，然后分别启动普通 herdr 和受保护 TUI 的 API 35 模拟器。两个 arm64 APK 沿用最近的分发批次，各自记录源码提交。[同源 APK 与定向复测](50-android-paired-tui-validation.md)

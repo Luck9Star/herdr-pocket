@@ -15,6 +15,8 @@
 
 ## API 35 x86_64 模拟器
 
+测试手机持有由 AndroidKeyStore 包装的设备签名密钥。隔离主机只接收公开请求，手机保留自己的私钥。Tauri 两场均从 sshd 独立核对实际认证公钥与手机请求公钥相同。[手机配对与主机确认](45-mobile-pairing-handoff.md)
+
 | 场景 | 配对 → 看板 → 持续观察 | 输入、撤销与清理 |
 | --- | --- | --- |
 | [Tauri · 原版 herdr](https://github.com/Luck9Star/herdr-pocket/actions/runs/42402903055/artifacts/13585878798) | 手机先审查资料、发出本机设备公钥请求。隔离主机确认，sshd 认证的公钥匹配。看板打开目标 pane，确认 1 个全帧、2 个增量，主动停止后显示已停止状态。宽画布标记和阅读位置恢复通过。 | 主机收到 0 字节。手机接受撤销回执，helper 撤销临时授权。共享 PTY 采样 1,163 次均为 119×40。 |
@@ -30,6 +32,19 @@ Tauri 的十个按键依次为下移、Tab、Backspace、Shift+Tab、Insert、De
 - Rust 传输库 106 项通过、1 项超时。测试等待看板刷新时可能丢弃先到的“可选择终端”事件。Mac 上按协议允许的顺序复现超时，修订后的等待器保留未匹配事件，同 feature 的 108 项库测试及 1 项二进制测试通过。原始云日志无法还原当次线程调度。[云测试](https://github.com/Luck9Star/herdr-pocket/actions/runs/42402903055/job/128494333913)
 - Flutter 静态分析通过，组合重音绘制专项 10 项通过。widget 等测试 399 项通过、1 项跳过、1 项失败。共享样例中两行都正确标为三列，原测试只允许整页出现一次。修订后逐行核对八个样例，Mac 终端核心探针八行的标记均在第 15 列。[Flutter 云测试](https://github.com/Luck9Star/herdr-pocket/actions/runs/42402903055/job/128495368395)
 - Flutter 设备测试准备与实际生成项目共用同一份依赖转换，并检查候选路径、覆盖及锁定内容。Mac 隔离测试复现原错误并通过修订后的准备流程，Android 驱动 78 项通过。修订没有改动 App 的生产依赖。[修复提交](https://github.com/Luck9Star/herdr-pocket/commit/b16478ec59ee5dce601017ea725f50baf6140fd6) · [Flutter 定向云复测](https://github.com/Luck9Star/herdr-pocket/actions/runs/42404613387)
+
+## Flutter 修复后的定向复测
+
+源码 `b16478e` 通过了之前失败的依赖准备、静态分析、400 项测试及 10 项绘制回归，另有 1 项测试跳过。两个独立的 API 35 模拟器均运行了原生密钥探针，验证签名成功、删除返回以及随后拒绝读取。原生库与 arm64 分发包沿用上面的构建。[复测运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42404613387) · [逐场记录](evidence/mobile-pair-gui/flutter-paired-tui-recheck-20261108.json)
+
+| 场景 | 实际停止位置 | 清理 |
+| --- | --- | --- |
+| [普通 herdr](https://github.com/Luck9Star/herdr-pocket/actions/runs/42404613387/artifacts/13587537278) | 主机已同意手机请求。手机准备选择观察画布时超时，尚未进入 SSH，看板、全帧和增量未验收。 | 临时授权已撤销。应用、转发、Flutter 工具、模拟器均已关闭或移除。共享 PTY 采样 5,343 次保持 119×40。 |
+| [受保护输入](https://github.com/Luck9Star/herdr-pocket/actions/runs/42404613387/artifacts/13587153158) | 在点击资料审查框后，测试未能再次命中控件。失败发生在读取勾选值之前；主机未收到授权请求，未进入 SSH 或 TUI。 | 应用、转发、Flutter 工具、模拟器均已关闭或移除。本场没有临时授权项，889 个共享 PTY 样本保持 119×40。 |
+
+两场远端均收到 0 字节。该轮设备任务总结果为失败。普通场景的超时行是多个等待条件共用的一行，无法仅凭该归档区分具体等待点。
+
+驱动随后把画布操作拆成打开、选择、确认三个阶段。它通过当前弹层中可用的整行控件选择 120×40，滚入视口、待位置稳定后只点一次，再核对表单值。首次配对仍须显式勾选一次；点击后读取控件选中状态，同时核对资料原样、创建操作为零、设备身份与公开请求均未出现。Mac 上十项指针与状态反例、78 项驱动测试通过。
 
 ## 在测试环境复测
 

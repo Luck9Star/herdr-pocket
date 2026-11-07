@@ -78,6 +78,49 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
 }
 Future<void> tapKey(WidgetTester tester, String key) => tap(tester,find.byKey(ValueKey(key)));
 
+/// Read the actual pending framework error in these pointer phases; do not
+/// turn it into a menu timeout or a second consent tap.
+void checkPointerError(WidgetTester tester) {
+  final error = tester.takeException();
+  if (error != null) throw error;
+}
+
+/// Filter each ancestor by route before checking uniqueness: the closed field
+/// may retain another copy of the same DropdownMenuItem/key and an InkWell.
+Finder popupOptionControl(Finder item) => find.ancestor(of:item,matching:find.byElementPredicate((element) {
+  final widget = element.widget;
+  if (widget is! InkWell || widget.onTap == null) return false;
+  final route = ModalRoute.of(element);
+  return route is PopupRoute<dynamic> && route.isCurrent;
+}));
+
+/// Resolve the unique control first, scroll it into view, then require a
+/// stable hit-testable pointer target and tap only once.
+/// Only the canvas dropdown and its enabled popup row use this helper.
+Future<void> tapStablePointer(WidgetTester tester,Finder control) async {
+  await until(tester,() { checkPointerError(tester); return control.evaluate().length == 1; },seconds:10);
+  await Scrollable.ensureVisible(tester.element(control),alignment:0.5);
+  await tester.pump();
+  final pointer = control.hitTestable();
+  Rect? previousBounds;
+  var stable = 0;
+  await until(tester,() {
+    checkPointerError(tester);
+    if (pointer.evaluate().length != 1) { stable = 0; previousBounds = null; return false; }
+    final bounds = tester.getRect(pointer);
+    stable = bounds == previousBounds ? stable+1 : 0;
+    previousBounds = bounds;
+    return stable >= 3;
+  },seconds:10);
+  await tester.tap(pointer); // Exactly one explicit pointer tap; no retry.
+  await tester.pump(const Duration(milliseconds:350));
+}
+
+/// The enabled popup InkWell owns the whole row; its left-aligned item's
+/// center may be blank and need not itself participate in the hit-test path.
+Future<void> tapPopupOption(WidgetTester tester,Finder item) =>
+  tapStablePointer(tester,popupOptionControl(item));
+
 /// Read only the bundled sample screen. A zero denotes a missing row or
 /// marker; keep the actual reading even when a candidate disagrees with the
 /// expected column. The remote terminal can contain private output.
@@ -392,6 +435,7 @@ void main() {
     stage('public_request');
     stage('profile_enter');
     final catalog = pairingPage.catalog!;
+    var identityCreationActions = 0; // Catalog identity only; signer probe is separate.
     expect(catalog.profiles,isEmpty); expect(catalog.pendingCreation,isNull);
     expect(PairingPage.retainedPairing,isNull);
     expect(find.byKey(const ValueKey('pair-request')),findsNothing);
@@ -430,8 +474,15 @@ void main() {
     final targetCheckbox = await stableReviewCheckbox(tester,'pair-target-review');
     await tester.tap(targetCheckbox); await tester.pump(const Duration(milliseconds:150));
     stage('target_review_unchecked');
-    expect(targetCheckbox.hitTestable(),findsOneWidget);
-    expect(tester.widget<Checkbox>(targetCheckbox).value,isTrue);
+    checkPointerError(tester);
+    // Layout/focus may move after the pointer has committed consent. Read the
+    // stable control's actual value; do not require the old hit point to remain.
+    expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('pair-target-review'))).value,isTrue);
+    expect(identityCreationActions,0);
+    expect(catalog.profiles,isEmpty); expect(catalog.pendingCreation,isNull);
+    expect(PairingPage.retainedPairing,isNull); expect(PairingPage.retainedCreationUnknown,isFalse);
+    expect(PairingPage.retainedOrphan,isNull);
+    expect(find.byKey(const ValueKey('pair-request')),findsNothing);
     for (final entry in reviewedFields.entries) {
       expect(tester.widget<TextField>(find.byKey(ValueKey('pair-${entry.key}'))).controller!.text,entry.value);
     }
@@ -451,6 +502,8 @@ void main() {
       return stable >= 3;
     },seconds:12);
     stage('target_create_one_tap');
+    expect(identityCreationActions,0);
+    identityCreationActions++;
     await tester.tap(createButton.hitTestable()); // Only one native creation attempt.
     await tester.pump();
     stage('target_request_wait');
@@ -529,9 +582,30 @@ void main() {
     expect(remotePage.pairedTarget,isNotNull);
     if (!guardedInput) {
       stage('observe_canvas_select');
-      await tapKey(tester,'remote-canvas-size');
-      final option = find.byKey(const ValueKey('remote-canvas-120x40')).hitTestable();
-      await tap(tester,option);
+      final canvas = find.byKey(const ValueKey('remote-canvas-size'));
+      final canvasField = tester.widget<DropdownButtonFormField<int>>(canvas);
+      expect(canvasField.onChanged,isNotNull);
+      expect(tester.state<FormFieldState<int>>(canvas).value,0);
+      final optionKey = const ValueKey('remote-canvas-120x40');
+      final button = find.descendant(of:canvas,matching:find.byType(DropdownButton<int>));
+      expect(button,findsOneWidget);
+      final optionValue = tester.widget<DropdownButton<int>>(button).items!
+        .singleWhere((item) => item.key == optionKey).value;
+      expect(optionValue,1);
+      stage('observe_canvas_open');
+      await tapStablePointer(tester,button);
+      stage('observe_canvas_option');
+      await tapPopupOption(tester,find.byKey(optionKey));
+      stage('observe_canvas_verify');
+      await until(tester,() {
+        checkPointerError(tester);
+        final selected = tester.state<FormFieldState<int>>(canvas).value;
+        if (popupOptionControl(find.byKey(optionKey)).evaluate().isNotEmpty) return false;
+        expect(selected,optionValue,reason:'the visible selection must commit before connecting');
+        return true;
+      },seconds:10);
+      expect(tester.widget<DropdownButtonFormField<int>>(canvas).onChanged,isNotNull);
+      expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('remote-review'))).value,isFalse);
     }
     stage('ssh_and_dashboard');
     await tapKey(tester,'remote-review'); await tapKey(tester,'remote-connect');
@@ -830,7 +904,7 @@ void main() {
       'authorizationReviewed':true,'pairedStateVisible':true,'paneChosen':true,
       'fullRendered':true,'deltaRendered':true,'stoppedStale':true,'observeMode':true,
       'directModeDisabled':true,'draftModeDisabled':true,'localIdentityDeleted':true,
-      'identityCreationActions':1,'firstSequence':firstSequence,'deltaSequence':deltaSequence,
+      'identityCreationActions':identityCreationActions,'firstSequence':firstSequence,'deltaSequence':deltaSequence,
       'localFontMarkerColumns':fontMarkerColumns,
       if (!guardedInput) 'observerCanvas':observerCanvas,
       'frameCountLowerBound':2,'deltaCountLowerBound':1,

@@ -1,0 +1,119 @@
+{
+  "run": {
+    "conclusion": "failure",
+    "created_at": "2026-11-07T19:06:54Z",
+    "head_sha": "b16478ec59ee5dce601017ea725f50baf6140fd6",
+    "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42404613387",
+    "id": 42404613387,
+    "run_attempt": 1,
+    "status": "completed",
+    "updated_at": "2026-11-07T19:23:22Z"
+  },
+  "appBuildSource": "2b497ea261c33dbf5fafeac2287bad1220ca5166",
+  "sourceChecks": {
+    "analyze": "No issues found",
+    "testsPassed": 400,
+    "testsSkipped": 1,
+    "rendererPassed": 10
+  },
+  "emulators": {
+    "stock": {
+      "artifact": {
+        "id": 13587537278,
+        "size_in_bytes": 41810,
+        "digest": "sha256:b8dcdc6ddd06133bd73d91df36760720a141968a1bd7d76fd2f1ccc6cf0f2fa7",
+        "expires_at": "2026-11-21T19:23:15Z"
+      },
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42404613387/artifacts/13587537278",
+      "failure": {
+        "stage": "observe_canvas_select",
+        "errorClass": "TestFailure",
+        "line": 68
+      },
+      "signer": {
+        "stage": "complete",
+        "signatureVerified": true,
+        "deleteReturned": true,
+        "readRejected": true
+      },
+      "pairing": {
+        "adapter": "flutter-android",
+        "testId": "reviewed-device-key-to-observe",
+        "status": "failed",
+        "temporaryHostApprovedRequest": true,
+        "matchedDeviceKeyInSshd": false,
+        "revokedFixtureKey": true,
+        "errorCode": "flutter_android_test_exited_observe_canvas_select"
+      },
+      "receivedInputBytes": 0,
+      "sharedPty": {
+        "columns": 119,
+        "rows": 40,
+        "samples": 5343,
+        "changes": 0,
+        "captureErrors": 0,
+        "readErrors": 0
+      },
+      "cleanup": {
+        "ownedPackageInitiallyAbsent": true,
+        "ownedPackageAbsent": true,
+        "appProcessGone": true,
+        "reverseRemoved": true,
+        "ownedForwardsRemoved": true,
+        "flutterToolStopped": true,
+        "rawLogsUploaded": false,
+        "status": "passed"
+      },
+      "ownedAvdStopped": true
+    },
+    "guarded": {
+      "artifact": {
+        "id": 13587153158,
+        "size_in_bytes": 42057,
+        "digest": "sha256:845c277bfb35ad3129c9008811f1b57825e68050cdf9f525fea660855a452d74",
+        "expires_at": "2026-11-21T19:23:16Z"
+      },
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42404613387/artifacts/13587153158",
+      "failure": {
+        "stage": "target_review_unchecked",
+        "errorClass": "TestFailure",
+        "line": 433
+      },
+      "signer": {
+        "stage": "complete",
+        "signatureVerified": true,
+        "deleteReturned": true,
+        "readRejected": true
+      },
+      "pairing": {
+        "adapter": "flutter-android",
+        "testId": "reviewed-device-key-to-direct-and-draft",
+        "status": "failed",
+        "temporaryHostApprovedRequest": false,
+        "matchedDeviceKeyInSshd": false,
+        "revokedFixtureKey": false,
+        "errorCode": "flutter_android_test_exited_target_review_unchecked"
+      },
+      "receivedInputBytes": 0,
+      "sharedPty": {
+        "columns": 119,
+        "rows": 40,
+        "samples": 889,
+        "changes": 0,
+        "captureErrors": 0,
+        "readErrors": 0
+      },
+      "cleanup": {
+        "ownedPackageInitiallyAbsent": true,
+        "ownedPackageAbsent": true,
+        "appProcessGone": true,
+        "reverseRemoved": true,
+        "ownedForwardsRemoved": true,
+        "flutterToolStopped": true,
+        "rawLogsUploaded": false,
+        "status": "passed"
+      },
+      "ownedAvdStopped": true
+    }
+  }
+}

@@ -32,6 +32,7 @@ STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'ha
           'target_finish_edit', 'target_review_ready', 'target_review_unchecked', 'target_create_unavailable',
           'target_create_ready', 'target_create_one_tap', 'target_request_wait',
           'response_review', 'ssh_and_dashboard', 'observe_frames', 'observe_canvas_select', 'observe_canvas_render', 'stop',
+          'observe_canvas_open', 'observe_canvas_option', 'observe_canvas_verify',
           'host_task_summary_authoritative', 'host_task_summary_stale', 'local_font_diagnostic',
           'delete_local_identity', 'complete', 'guarded_direct', 'guarded_hidden_draft',
           'guarded_reconnect', 'guarded_draft_review', 'fixture_validation', 'viewport_pan', 'viewport_restored',

@@ -1,4 +1,5 @@
 import {createTerminalSelection} from './terminal-selection.js';
+import {createFontDiagnostics} from './terminal-font-diagnostics.js';
 import {RemoteTabs} from './remote-tabs.js';
 import {RemoteFrameQueue,validDashboard} from './remote-state.js';
 import {SessionDashboard} from './dashboard-watch.js';
@@ -16,7 +17,7 @@ import {dashboardPresentation,paneStatusText} from './dashboard-presentation.js'
 export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null,getFontSize=()=>14,channelFactory,terminalFactory,onDashboard=()=>{},clipboardRead=readClipboardForPaste,keyboardRequest=requestMobileKeyboard}) {
   const tabs=new RemoteTabs(), root=document.getElementById('tab-workspace');
   const nav=document.getElementById('view-tabs'), body=document.getElementById('view-content');
-  let switching=false, textSelection=null;
+  let switching=false, textSelection=null, fontDiagnostics=null;
   function boardEvent(tab,type) {if(tab.summaryIdentity && tab.token)onDashboard({type,hostId:tab.hostId,identity:tab.summaryIdentity,source:tab.token,board:tab.board});}
   function status(tab,message) {tab.message=message;if(tabs.activeId===tab.id)render();}
   function lease(tab) {return {token:tab.token,generation:tab.nativeGeneration,epoch:tab.epoch,revision:tab.inputRevision};}
@@ -58,7 +59,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     } finally {if(current(tab,token)){tab.selecting=false;renderDashboard(tab);}}
   }
   function keyboardEditor(tab) {
-    if(document.hidden || switching || tabs.activeId!==tab.id || !current(tab,tab.token) || tab.state!=='active' || tab.wantsPause || tab.closing || tab.invalidated || tab.unknown || !tab.target || tab.inputEpoch===null)return null;
+    if(fontDiagnostics?.valid() || document.hidden || switching || tabs.activeId!==tab.id || !current(tab,tab.token) || tab.state!=='active' || tab.wantsPause || tab.closing || tab.invalidated || tab.unknown || !tab.target || tab.inputEpoch===null)return null;
     if(tab.mode==='direct' && directCurrent(tab,directToken(tab)))return tab.terminal?.textarea || null;
     if(tab.mode==='draft')return tab.draftField || null;
     return null;
@@ -72,6 +73,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   }
   function render() {
     if(textSelection && !textSelection.valid()){textSelection.close();textSelection=null;}
+    if(fontDiagnostics && !fontDiagnostics.valid()){fontDiagnostics.close(false);fontDiagnostics=null;}
     const focused=tabs.get(tabs.activeId);
     if(focused?.mode==='direct' && ownsInputFocus(focused,document.activeElement) && !focused.suppressBlur){renderDashboard(focused);return;}
     // Any unrelated full redraw removes focus from the review; revoke it first.
@@ -185,10 +187,20 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         const currentSelection=()=>!document.hidden && !switching && tabs.activeId===tab.id && current(tab,token) && tab.nativeGeneration===generation && tab.epoch===epoch && tab.target===target && tab.terminal===terminal && tab.state==='active' && !tab.wantsPause && !tab.closing;
         if(!tab.selectionTextReady || !currentSelection())return;
         if(tab.inputBusy || tab.directPending){status(tab,'输入仍在处理，暂不能选择终端文本。');return;}
-        textSelection?.close();textSelection=null;void loseDirect(tab);
+        fontDiagnostics?.close(false);fontDiagnostics=null;textSelection?.close();textSelection=null;void loseDirect(tab);
         try {textSelection=createTerminalSelection({terminal,current:currentSelection,label:`${hostName(tab.hostId)} · ${target.paneId} · ${target.terminalId}`});}
         catch(error) {status(tab,String(error).includes('snapshot_too_large')?'可见终端文本超过 64 KiB，无法选择；未复制内容。':'没有可安全测量的可见终端文本，请滚动终端到屏幕内后重试。');}
       };body.append(selectText);
+      const fontButton=document.createElement('button');fontButton.type='button';fontButton.textContent='字体与字符诊断';fontButton.disabled=!tab.selectionTextReady;fontButton.onpointerdown=event=>event.preventDefault();
+      fontButton.onclick=()=>{
+        const token=tab.token,generation=tab.nativeGeneration,epoch=tab.epoch,target=tab.target,terminal=tab.terminal;
+        const currentDiagnostics=()=>!document.hidden && !switching && tabs.activeId===tab.id && current(tab,token) && tab.nativeGeneration===generation && tab.epoch===epoch && tab.target===target && tab.terminal===terminal && tab.state==='active' && !tab.wantsPause && !tab.closing;
+        if(fontDiagnostics?.valid() || !tab.selectionTextReady || !currentDiagnostics())return;
+        if(tab.inputBusy || tab.directPending){status(tab,'输入仍在处理，暂不能打开字体诊断。');return;}
+        textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;void loseDirect(tab);
+        let view;try {view=createFontDiagnostics({current:currentDiagnostics,terminalFactory,fontSize:getFontSize(),theme:theme.terminal,returnFocus:fontButton,onClose:()=>{if(fontDiagnostics===view)fontDiagnostics=null;}});fontDiagnostics=view;}catch {status(tab,'字体诊断无法安全打开；输入已锁定。');}
+      };tab.fontDiagnosticsButton=fontButton;body.append(fontButton);
+
     }
     const viewport=document.createElement('div');viewport.className='term-scroll';
     if(tab.element)viewport.append(tab.element);body.append(viewport);
@@ -226,7 +238,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     catch(error) {if(String(error)==='control_superseded' || tab.controlRevision!==controlRevision)return;await cancel(tab);status(tab,'恢复未完成，连接已取消。');}
   }
   async function enableInput(tab) {
-    if(textSelection?.valid() || document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.unknown || tab.inputBusy)return;
+    if(fontDiagnostics?.valid() || textSelection?.valid() || document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.unknown || tab.inputBusy)return;
     if(tab.mode==='direct')await loseDirect(tab);
     await tab.focusReset;
     if(document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.unknown)return;
@@ -240,7 +252,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     return !!element && (element===tab.terminal?.textarea || tab.toolbar?.element.contains(element));
   }
   function directCurrent(tab,token) {
-    return !textSelection?.valid() && !document.hidden && !switching && !tab.wantsPause && !tab.closing && !tab.invalidated &&
+    return !fontDiagnostics?.valid() && !textSelection?.valid() && !document.hidden && !switching && !tab.wantsPause && !tab.closing && !tab.invalidated &&
       tabs.activeId===tab.id && current(tab,tab.token) && tab.state==='active' && tab.mode==='direct' &&
       !tab.unknown && tab.inputEpoch!==null && ownsInputFocus(tab,document.activeElement) && OnlineInputQueue.same(token,directToken(tab));
   }
@@ -321,7 +333,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(tab.nativeGeneration!==null && tab.epoch!==null) {tab.focusReset=invoke('remote_tab_input_mode',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration,epoch:tab.epoch,mode:'observe'}).catch(()=>{});await tab.focusReset;}
   }
   async function enableDirect(tab) {
-    if(textSelection?.valid() || document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.unknown || tab.inputBusy || tab.directPending || !tab.terminal)return;
+    if(fontDiagnostics?.valid() || textSelection?.valid() || document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.unknown || tab.inputBusy || tab.directPending || !tab.terminal)return;
     tab.queue.clear();tab.inputRevision++;tab.inputEpoch=null;tab.mode='observe';
     const binding=lease(tab),terminal=tab.terminal,target=tab.target;
     const attempt={invalidated:false};tab.directPending=attempt;let invoked=false,granted=false;
@@ -379,7 +391,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     finally {if(sameLease(tab,binding)){tab.inputBusy=false;render();}}
   }
   async function sendDraft(tab) {
-    if(textSelection?.valid() || document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null || tab.draftComposing)return;
+    if(fontDiagnostics?.valid() || textSelection?.valid() || document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null || tab.draftComposing)return;
     if(tab.draftPending+tab.rejectedDrafts.length>=8){status(tab,'找回区已满，请先处理已拒绝原文。');return;}
     const text=tab.draft,bracketed=tab.terminal?.modes?.bracketedPasteMode===true;
     const bytes=draftBytes(text,bracketed);
@@ -458,11 +470,11 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
           tab.terminal.textarea.addEventListener('compositionend',()=>{tab.composition.end();tab.toolbar?.refresh();refreshKeyboard(tab);},true);
           tab.terminal.textarea.addEventListener('blur',event=>{if(!tab.suppressPasteBlur)tab.pasteFocusRevision++;if(!tab.suppressBlur && tab.directPending){tab.directPending.invalidated=true;tab.inputRevision++;tab.terminal.options.disableStdin=true;tab.terminal.textarea.setAttribute('inputmode','none');}if(!tab.suppressBlur && tab.mode==='direct' && !ownsInputFocus(tab,event?.relatedTarget))void loseDirect(tab);});
           tab.terminal.textarea.addEventListener('paste',event=>void reviewPaste(tab,event,tab.terminal.textarea,tab.composition.token && !tab.composition.ended),true);
-        } else if(event.frame.full) {tab.selectionTextReady=false;tab.terminal.reset();}
+        } else if(event.frame.full) {tab.selectionTextReady=false;if(tab.fontDiagnosticsButton)tab.fontDiagnosticsButton.disabled=true;tab.terminal.reset();}
         const frame=event.frame;tab.terminal.write(Uint8Array.from(frame.bytes),()=>{
           if(!current(tab,token) || tabs.activeId!==tab.id || event.epoch!==tab.epoch)return;
           if(!tab.frames.acknowledge(frame.seq)){void cancel(tab);return;}
-          tab.selectionTextReady=true;if(tab.selectionTextButton)tab.selectionTextButton.disabled=false;
+          tab.selectionTextReady=true;if(tab.selectionTextButton)tab.selectionTextButton.disabled=false;if(tab.fontDiagnosticsButton)tab.fontDiagnosticsButton.disabled=false;
           void invoke('remote_tab_ack',{tabId:tab.id,clientGeneration:token.generation,generation,epoch:event.epoch,seq:frame.seq}).catch(()=>void cancel(tab));
         });
       };
@@ -474,8 +486,8 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   function setFont(size) {for(const tab of tabs.list())if(tab.terminal)tab.terminal.options.fontSize=size;}
   function prepareAffected(ids) {const affected=tabs.affected(ids);for(const tab of affected){retireDirectPending(tab);tab.board.invalidate('configuration_changed');boardEvent(tab,'stale');tab.selectionReady=false;tab.suppressBlur=true;tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';tab.inputRevision++;tab.inputBusy=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;tabs.invalidate(tab.id);tab.closing=true;tab.state='disconnected';}render();for(const tab of affected)tab.suppressBlur=false;}
   function affected(ids) {for(const tab of tabs.affected(ids)){tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';void cancel(tab);}}
-  function background() {for(const tab of tabs.list())tab.pasteReadSequence++;textSelection?.close();textSelection=null;for(const tab of tabs.list()){tab.pasteReview=null;void cancel(tab);}}
-  function prepareHide(){const active=tabs.get(tabs.activeId);if(active)active.pasteReadSequence++;textSelection?.close();textSelection=null;const tab=tabs.get(tabs.activeId);if(tab)tab.suppressBlur=true;}
+  function background() {for(const tab of tabs.list())tab.pasteReadSequence++;textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;for(const tab of tabs.list()){tab.pasteReview=null;void cancel(tab);}}
+  function prepareHide(){const active=tabs.get(tabs.activeId);if(active)active.pasteReadSequence++;textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;const tab=tabs.get(tabs.activeId);if(tab)tab.suppressBlur=true;}
   function cancelPrepareHide(){const tab=tabs.get(tabs.activeId);if(tab){tab.suppressBlur=false;if(tab.mode==='direct' && document.activeElement!==tab.terminal?.textarea)void loseDirect(tab);}}
   async function hide() {textSelection?.close();textSelection=null;const tab=tabs.get(tabs.activeId);if(tab && ['connecting','starting','active','resuming'].includes(tab.state))await pause(tab);else if(tab)tab.suppressBlur=false;}
   globalThis.window?.addEventListener?.('blur',()=>{let changed=false;for(const tab of tabs.list()){tab.pasteFocusRevision++;if(tab.pasteReview){tab.pasteReview=null;changed=true;}}if(changed)render();});

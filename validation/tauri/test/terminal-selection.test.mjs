@@ -92,3 +92,37 @@ test('real terminal groups emoji sequences without shifting common terminal cell
     t.dispose();
   }
 });
+
+test('the bundled diagnostic grid preserves text, attributes and the right column in every row', async () => {
+  const {readFile} = await import('node:fs/promises');
+  const fixture = JSON.parse(await readFile(new URL('../../shared/terminal-font-diagnostics-v1.json', import.meta.url), 'utf8'));
+  const {default: xterm} = await import('@xterm/xterm');
+  const {createUnicodeTerminal} = await importBrowserUnicodeTerminal();
+  const terminal = createUnicodeTerminal(xterm.Terminal, {
+    cols: fixture.columns, rows: fixture.rows, disableStdin: true, scrollback: 0,
+  });
+  try {
+    await new Promise(resolve => terminal.write(fixture.write, resolve));
+    assert.equal(fixture.samples.length, fixture.rows);
+    const buffer = terminal.buffer.active;
+    assert.equal(buffer.length, fixture.rows);
+    for (const [row, sample] of fixture.samples.entries()) {
+      const line = buffer.getLine(row);
+      assert.equal(line.isWrapped, false, sample.id);
+      assert.equal(line.translateToString(false, 0, 2), (row + 1) + '|', sample.id);
+      assert.equal(line.translateToString(false, 2, 2 + sample.cells), sample.text, sample.id);
+      const marker = line.getCell(fixture.markerColumn - 1);
+      assert.equal(marker.getChars(), '|', sample.id);
+      assert.ok(!marker.isBold() && marker.isFgDefault(), sample.id);
+      if (sample.id === 'ansi') {
+        const first = line.getCell(2);
+        assert.ok(first.isBold() && first.isFgPalette(), sample.id);
+        assert.equal(first.getFgColor(), 1);
+      }
+    }
+    assert.equal(buffer.cursorX, fixture.markerColumn);
+    assert.equal(buffer.cursorY, fixture.rows - 1);
+  } finally {
+    terminal.dispose();
+  }
+});

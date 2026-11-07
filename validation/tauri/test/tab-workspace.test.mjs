@@ -9,6 +9,9 @@ class Element {
   append(...xs){for(const x of xs)this.children.push(x);}
   replaceChildren(...xs){this.replaceCount=(this.replaceCount || 0)+1;this.children=[];this.append(...xs);}
   setAttribute(k,v){this.attrs[k]=v;}
+  remove(){this.removed=true;}
+  showModal(){this.previousFocus=document.activeElement;this.open=true;this.modal=true;}
+  close(){this.open=false;this.previousFocus?.focus();}
   addEventListener(name,fn){this['event_'+name]=fn;}
   focus(){globalThis.document.activeElement=this;}
   blur(){if(globalThis.document.activeElement===this){globalThis.document.activeElement=null;this.event_blur?.({relatedTarget:null});}}
@@ -232,7 +235,7 @@ for (const edited of ['new draft', '']) test(`MT08: same-epoch edit ${edited ? '
 function watchWorkspace(fixedTarget=null,options={}) {
   const oldDocument=globalThis.document,oldWindow=globalThis.window;
   const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
-  globalThis.document={hidden:false,hasFocus:()=>true,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+  globalThis.document={hidden:false,hasFocus:()=>true,activeElement:null,body:new Element('body'),getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
   globalThis.window={confirm:()=>true};const calls=[],channels=[],observed=[];let terminal;
   const invoke=(name,args)=>{
     calls.push({name,args});
@@ -246,10 +249,10 @@ function watchWorkspace(fixedTarget=null,options={}) {
     if(name==='remote_tab_input_send' && options.send)return options.send(args);
     return Promise.resolve();
   };
-  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device'}),onDashboard:options.onDashboard,clipboardRead:options.clipboardRead,keyboardRequest:options.keyboardRequest,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>{
+  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device'}),onDashboard:options.onDashboard,clipboardRead:options.clipboardRead,keyboardRequest:options.keyboardRequest,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:(options)=>{
     terminal={
-      options:{},focusReadOnly:[],parser:{registerOscHandler(){}},textarea:new Element('textarea'),
-      open(){},write(_b,done){done();},reset(){},dispose(){},
+      createdOptions:options,options:{},focusReadOnly:[],parser:{registerOscHandler(){}},textarea:new Element('textarea'),
+      open(){},write(bytes,done){(this.writes??=[]).push(bytes);done();},reset(){},dispose(){},
       focus(){this.focusReadOnly.push(this.textarea.readOnly);document.activeElement=this.textarea;},
       onData(fn){this.data=fn;},
     };
@@ -533,6 +536,33 @@ test('saved tab hide during pending direct permission invalidates its late grant
     h.terminal().data('迟到');assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
     assert.equal(h.terminal().textarea.readOnly,true);assert.equal(h.find('展开键盘').disabled,true);
   }finally{h.restore();}
+});
+
+test('saved tab font diagnostics are local, revoke draft permission and close on target switch',async()=>{
+  const prior=globalThis.fetch,fixture=JSON.parse(readFileSync(new URL('../../shared/terminal-font-diagnostics-v1.json',import.meta.url),'utf8'));
+  globalThis.fetch=async()=>({ok:true,json:async()=>fixture});const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
+  try{
+    await readyKeyboard(h);const observed=h.terminal();h.find('启用草稿输入').onclick();await flush();await flush();
+    const draft=h.all().find(n=>n.attrs['aria-label']==='当前标签草稿');draft.value='原目标草稿';draft.oninput();
+    h.find('字体与字符诊断').onclick();await flush();await flush();
+    const panel=document.body.children.find(e=>e.attrs['aria-label']==='字体与字符诊断');assert.ok(panel);assert.equal(panel.tagName,'dialog');assert.equal(panel.modal,true);
+    const modeCount=h.calls.filter(c=>c.name==='remote_tab_input_mode').length;h.find('逐键输入').onclick();h.find('启用草稿输入').onclick();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_mode').length,modeCount);
+    assert.notEqual(h.terminal(),observed);assert.equal(h.terminal().createdOptions.cols,16);assert.equal(h.terminal().createdOptions.rows,8);assert.equal(h.terminal().createdOptions.disableStdin,true);assert.deepEqual(h.terminal().writes,[fixture.write]);assert.equal(h.terminal().textarea.disabled,true);assert.equal(h.terminal().textarea.attrs.tabindex,'-1');assert.ok(h.calls.some(c=>c.name==='remote_tab_input_mode' && c.args.mode==='observe'));
+    const other=h.ui.create('other',{paneId:'w2:p1',terminalId:'term_a002'});await h.ui.select(other);
+    assert.equal(panel.removed,true);assert.notEqual(document.activeElement,h.find('字体与字符诊断'));assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send'||c.name.includes('resize')).length,0);
+  }finally{h.restore();globalThis.fetch=prior;}
+});
+
+test('stock saved tab opens local diagnostics without input_ready',async()=>{
+  const prior=globalThis.fetch,fixture=JSON.parse(readFileSync(new URL('../../shared/terminal-font-diagnostics-v1.json',import.meta.url),'utf8'));
+  globalThis.fetch=async()=>({ok:true,json:async()=>fixture});const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
+  try{
+    await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});h.observation(1,'active');await flush();
+    const observed=h.terminal();assert.equal(h.find('字体与字符诊断').disabled,false);h.find('字体与字符诊断').onclick();await flush();await flush();
+    assert.deepEqual(h.terminal().writes,[fixture.write]);assert.equal(h.terminal().createdOptions.disableStdin,true);
+    assert.equal(observed.options.disableStdin,true);assert.ok(h.calls.filter(c=>c.name==='remote_tab_input_mode').every(c=>c.args.mode==='observe'));
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send'||c.name.includes('resize')).length,0);
+  }finally{h.restore();globalThis.fetch=prior;}
 });
 
 test('mobile direct gesture focuses an editable terminal but sends nothing before native permission', async () => {

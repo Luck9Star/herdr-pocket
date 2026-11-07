@@ -1,0 +1,784 @@
+{
+  "date": "2026-11-07",
+  "baseCommit": "90f939b2aa76b06bb789bcd04aa3103d60df64fc",
+  "previousAndroidBuild": {
+    "source": "1d604faac5c2f0a732ed79f0a502788a02747db9",
+    "run": 42362291867,
+    "includesDiagnostics": false
+  },
+  "fixture": {
+    "sha256": "2eea98fc43db6a8d531739da72363241d11683a60e43b27ed12c3f4d887d1749",
+    "fontSha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+    "columns": 16,
+    "rows": 8,
+    "markerColumn": 15
+  },
+  "penpot": {
+    "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "page": "7a22df08-251d-8016-8008-de03541c11da",
+    "server": "2.15.4",
+    "app": "2.19.0",
+    "versionWarning": true,
+    "observed": {
+      "board": "ff7bd149-6597-80a5-8008-e8b74585bb97",
+      "name": "S45 · 字体与字符诊断",
+      "size": [
+        390.00000953674316,
+        843.9999580383301
+      ],
+      "boards": 45,
+      "markers": [
+        [
+          "右侧列标 1",
+          332
+        ],
+        [
+          "右侧列标 2",
+          332
+        ],
+        [
+          "右侧列标 3",
+          332
+        ],
+        [
+          "右侧列标 4",
+          332
+        ],
+        [
+          "右侧列标 5",
+          332
+        ],
+        [
+          "右侧列标 6",
+          332
+        ],
+        [
+          "右侧列标 7",
+          332
+        ],
+        [
+          "右侧列标 8",
+          332
+        ]
+      ],
+      "controls": [
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8b746242898",
+          "name": "关闭诊断",
+          "height": 47.999998927116394,
+          "links": [
+            [
+              "click",
+              "navigate-to",
+              "7a22df08-251d-8016-8008-de04a20d928d"
+            ]
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8b746294ae2",
+          "name": "关闭诊断标签",
+          "height": 24.000000596046448,
+          "links": [
+            [
+              "click",
+              "navigate-to",
+              "7a22df08-251d-8016-8008-de04a20d928d"
+            ]
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2b07939",
+          "name": "button / secondary",
+          "height": 43.99999901652336,
+          "links": [
+            [
+              "click",
+              "navigate-to",
+              "ff7bd149-6597-80a5-8008-e8b74585bb97"
+            ]
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2b20c14",
+          "name": "⚙️ 终端字体与诊断",
+          "height": 20.000000715255737,
+          "links": [
+            [
+              "click",
+              "navigate-to",
+              "ff7bd149-6597-80a5-8008-e8b74585bb97"
+            ]
+          ]
+        }
+      ]
+    },
+    "illustrationObjects": [
+      [
+        "ff7bd149-6597-80a5-8008-e8b745b9315f",
+        "字形 · Powerline",
+        true,
+        125,
+        24.000000596046448
+      ],
+      [
+        "ff7bd149-6597-80a5-8008-e8b745c6edb8",
+        "字形 · Nerd Font",
+        true,
+        125,
+        24.000000596046448
+      ],
+      [
+        "ff7bd149-6597-80a5-8008-e8b8d97e0c14",
+        "图标轮廓 · Powerline",
+        false,
+        40.5799999833107,
+        25
+      ],
+      [
+        "ff7bd149-6597-80a5-8008-e8b8d987743c",
+        "图标轮廓 · Nerd Font",
+        false,
+        40,
+        25
+      ]
+    ],
+    "viewerClicksAfterReload": [
+      "S45 → S02",
+      "S02 → S45"
+    ],
+    "glyphIllustration": "Static paths from the bundled font. First prototype displayed private-use codes using an unavailable font."
+  },
+  "macOS": "27.2 (26B123)",
+  "coreTextShaping": [
+    {
+      "id": "ascii",
+      "runs": [
+        {
+          "font": "JetBrainsMonoNFM-Regular",
+          "glyphCount": 5,
+          "missingGlyphs": 0
+        }
+      ]
+    },
+    {
+      "id": "powerline",
+      "runs": [
+        {
+          "font": "JetBrainsMonoNFM-Regular",
+          "glyphCount": 2,
+          "missingGlyphs": 0
+        }
+      ]
+    },
+    {
+      "id": "nerd",
+      "runs": [
+        {
+          "font": "JetBrainsMonoNFM-Regular",
+          "glyphCount": 3,
+          "missingGlyphs": 0
+        }
+      ]
+    },
+    {
+      "id": "cjk",
+      "runs": [
+        {
+          "font": "PingFangSC-Regular",
+          "glyphCount": 2,
+          "missingGlyphs": 0
+        }
+      ]
+    },
+    {
+      "id": "combining",
+      "runs": [
+        {
+          "font": "JetBrainsMonoNFM-Regular",
+          "glyphCount": 3,
+          "missingGlyphs": 0
+        }
+      ]
+    },
+    {
+      "id": "emoji",
+      "runs": [
+        {
+          "font": "AppleColorEmoji",
+          "glyphCount": 2,
+          "missingGlyphs": 0
+        }
+      ]
+    },
+    {
+      "id": "grapheme",
+      "runs": [
+        {
+          "font": "AppleColorEmoji",
+          "glyphCount": 2,
+          "missingGlyphs": 0
+        }
+      ]
+    },
+    {
+      "id": "ansi",
+      "runs": [
+        {
+          "font": "JetBrainsMonoNFM-Regular",
+          "glyphCount": 4,
+          "missingGlyphs": 0
+        }
+      ]
+    }
+  ],
+  "chrome": {
+    "browser": "Chrome/156.0.8078.81",
+    "scope": "Mac headless Chrome, real xterm and fixed local font, CDP touch, fixture IPC; not Android or real SSH",
+    "sourceHashes": {
+      "validation/tauri/index.html": "d3e2e2410dbd9de0d16736b36670b89bd472904a425d748a89ae352ae91c65ce",
+      "validation/tauri/src/remote.js": "ad210d7a97f5233d15d3ebcb39df9f8a64a624c4aceafca4f509497ffef2b707",
+      "validation/tauri/src/tab-workspace.js": "8e6b867f0fe4b599bb5114cdd24705b80f220cb6e1c9184c74d4d37b4fe69bd3",
+      "validation/tauri/src/terminal-font-diagnostics.js": "7c588cd10d81b6311e656acfdbc788e72076aed4a435ef6f8592e5568e879a6e",
+      "validation/tauri/src/terminal-unicode.js": "03e01f24b889cc47dd722b65cf4021d9da141708bf56e25d4450f1dc4e644dcf",
+      "validation/tauri/src/style.css": "cbe385984351943c3e0f62f2c36e70a6272ee8b44bc41fe11623d8fb904640bb",
+      "validation/shared/terminal-font-diagnostics-v1.json": "2eea98fc43db6a8d531739da72363241d11683a60e43b27ed12c3f4d887d1749",
+      "validation/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c"
+    },
+    "results": {
+      "tab-390": {
+        "viewport": [
+          390,
+          820
+        ],
+        "details": {
+          "fontLoaded": true,
+          "screen": {
+            "width": 134,
+            "height": 144
+          },
+          "rows": [
+            "1|Hello       |",
+            "2|          |",
+            "3|󰟀         |",
+            "4|中文        |",
+            "5|é Å         |",
+            "6|😀🚀        |",
+            "7|👩‍💻❤️        |",
+            "8|ANSI        | "
+          ],
+          "legend": [
+            "ASCII · 预期 5 列",
+            "Powerline 分隔符 · 预期 2 列",
+            "Nerd Font 图标 · 预期 3 列",
+            "中文宽字符 · 预期 4 列",
+            "组合重音 · 预期 3 列",
+            "Emoji · 预期 4 列",
+            "Emoji 组合 · 预期 4 列",
+            "ANSI 粗体与红色 · 预期 4 列"
+          ],
+          "status": "示例已绘制，字体资源已载入；请自行核对，部分字符可能使用系统回退字体。",
+          "docScrollWidth": 390,
+          "viewport": 390,
+          "dialogWidth": 358,
+          "dialogRole": "dialog",
+          "modal": true,
+          "textareaDisabled": true,
+          "textareaTabIndex": -1,
+          "textarea": "none",
+          "escapeRestoredTrigger": true,
+          "tabStayedOutsideBackgroundControls": true,
+          "rowFonts": [
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "PingFangSC-Regular",
+                "webfont": false,
+                "glyphs": 2
+              },
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              },
+              {
+                "name": "AppleColorEmoji",
+                "webfont": false,
+                "glyphs": 2
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              },
+              {
+                "name": "AppleColorEmoji",
+                "webfont": false,
+                "glyphs": 2
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 16
+              }
+            ]
+          ]
+        },
+        "draftPreserved": "原目标草稿",
+        "diagnosticDisposedOnLeave": true,
+        "remoteSends": 0,
+        "resizeRequests": 0
+      },
+      "form-390": {
+        "viewport": [
+          390,
+          820
+        ],
+        "details": {
+          "fontLoaded": true,
+          "screen": {
+            "width": 134,
+            "height": 144
+          },
+          "rows": [
+            "1|Hello       |",
+            "2|          |",
+            "3|󰟀         |",
+            "4|中文        |",
+            "5|é Å         |",
+            "6|😀🚀        |",
+            "7|👩‍💻❤️        |",
+            "8|ANSI        | "
+          ],
+          "legend": [
+            "ASCII · 预期 5 列",
+            "Powerline 分隔符 · 预期 2 列",
+            "Nerd Font 图标 · 预期 3 列",
+            "中文宽字符 · 预期 4 列",
+            "组合重音 · 预期 3 列",
+            "Emoji · 预期 4 列",
+            "Emoji 组合 · 预期 4 列",
+            "ANSI 粗体与红色 · 预期 4 列"
+          ],
+          "status": "示例已绘制，字体资源已载入；请自行核对，部分字符可能使用系统回退字体。",
+          "docScrollWidth": 390,
+          "viewport": 390,
+          "dialogWidth": 358,
+          "dialogRole": "dialog",
+          "modal": true,
+          "textareaDisabled": true,
+          "textareaTabIndex": -1,
+          "textarea": "none",
+          "escapeRestoredTrigger": true,
+          "tabStayedOutsideBackgroundControls": true,
+          "rowFonts": [
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "PingFangSC-Regular",
+                "webfont": false,
+                "glyphs": 2
+              },
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              },
+              {
+                "name": "AppleColorEmoji",
+                "webfont": false,
+                "glyphs": 2
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              },
+              {
+                "name": "AppleColorEmoji",
+                "webfont": false,
+                "glyphs": 2
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 16
+              }
+            ]
+          ]
+        },
+        "draftPreserved": "原目标草稿",
+        "diagnosticDisposedOnLeave": true,
+        "remoteSends": 0,
+        "resizeRequests": 0
+      },
+      "tab-320": {
+        "viewport": [
+          320,
+          820
+        ],
+        "details": {
+          "fontLoaded": true,
+          "screen": {
+            "width": 134,
+            "height": 144
+          },
+          "rows": [
+            "1|Hello       |",
+            "2|          |",
+            "3|󰟀         |",
+            "4|中文        |",
+            "5|é Å         |",
+            "6|😀🚀        |",
+            "7|👩‍💻❤️        |",
+            "8|ANSI        | "
+          ],
+          "legend": [
+            "ASCII · 预期 5 列",
+            "Powerline 分隔符 · 预期 2 列",
+            "Nerd Font 图标 · 预期 3 列",
+            "中文宽字符 · 预期 4 列",
+            "组合重音 · 预期 3 列",
+            "Emoji · 预期 4 列",
+            "Emoji 组合 · 预期 4 列",
+            "ANSI 粗体与红色 · 预期 4 列"
+          ],
+          "status": "示例已绘制，字体资源已载入；请自行核对，部分字符可能使用系统回退字体。",
+          "docScrollWidth": 320,
+          "viewport": 320,
+          "dialogWidth": 288,
+          "dialogRole": "dialog",
+          "modal": true,
+          "textareaDisabled": true,
+          "textareaTabIndex": -1,
+          "textarea": "none",
+          "escapeRestoredTrigger": true,
+          "tabStayedOutsideBackgroundControls": true,
+          "rowFonts": [
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "PingFangSC-Regular",
+                "webfont": false,
+                "glyphs": 2
+              },
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              },
+              {
+                "name": "AppleColorEmoji",
+                "webfont": false,
+                "glyphs": 2
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              },
+              {
+                "name": "AppleColorEmoji",
+                "webfont": false,
+                "glyphs": 2
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 16
+              }
+            ]
+          ]
+        },
+        "draftPreserved": "原目标草稿",
+        "diagnosticDisposedOnLeave": true,
+        "remoteSends": 0,
+        "resizeRequests": 0
+      },
+      "form-320": {
+        "viewport": [
+          320,
+          820
+        ],
+        "details": {
+          "fontLoaded": true,
+          "screen": {
+            "width": 134,
+            "height": 144
+          },
+          "rows": [
+            "1|Hello       |",
+            "2|          |",
+            "3|󰟀         |",
+            "4|中文        |",
+            "5|é Å         |",
+            "6|😀🚀        |",
+            "7|👩‍💻❤️        |",
+            "8|ANSI        | "
+          ],
+          "legend": [
+            "ASCII · 预期 5 列",
+            "Powerline 分隔符 · 预期 2 列",
+            "Nerd Font 图标 · 预期 3 列",
+            "中文宽字符 · 预期 4 列",
+            "组合重音 · 预期 3 列",
+            "Emoji · 预期 4 列",
+            "Emoji 组合 · 预期 4 列",
+            "ANSI 粗体与红色 · 预期 4 列"
+          ],
+          "status": "示例已绘制，字体资源已载入；请自行核对，部分字符可能使用系统回退字体。",
+          "docScrollWidth": 320,
+          "viewport": 320,
+          "dialogWidth": 288,
+          "dialogRole": "dialog",
+          "modal": true,
+          "textareaDisabled": true,
+          "textareaTabIndex": -1,
+          "textarea": "none",
+          "escapeRestoredTrigger": true,
+          "tabStayedOutsideBackgroundControls": true,
+          "rowFonts": [
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "PingFangSC-Regular",
+                "webfont": false,
+                "glyphs": 2
+              },
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 15
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              },
+              {
+                "name": "AppleColorEmoji",
+                "webfont": false,
+                "glyphs": 2
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 11
+              },
+              {
+                "name": "AppleColorEmoji",
+                "webfont": false,
+                "glyphs": 2
+              }
+            ],
+            [
+              {
+                "name": "JetBrainsMonoNFM-Regular",
+                "webfont": true,
+                "glyphs": 16
+              }
+            ]
+          ]
+        },
+        "draftPreserved": "原目标草稿",
+        "diagnosticDisposedOnLeave": true,
+        "remoteSends": 0,
+        "resizeRequests": 0
+      }
+    }
+  },
+  "publishedImages": {
+    "design/evidence/v2-S45-font-diagnostics-20261107.png": {
+      "sha256": "7665d6f201b124bf172a980059128174b10030d05d0e4f9e37c72fa541deadf9",
+      "pixels": [
+        390,
+        844
+      ]
+    },
+    "docs/evidence/mobile-pair-gui/font-diagnostics-tauri-320-20261107.png": {
+      "sha256": "333a8aecadbe9a01fbc1fead3cae5784d08bb2de28c6586b503f737a557aa919",
+      "pixels": [
+        320,
+        820
+      ]
+    }
+  },
+  "offline": {
+    "node": "22.22.2",
+    "nodeTestsPassed": 235,
+    "nodeTestsSkipped": 0,
+    "viteModules": 54,
+    "packagingTests": 6,
+    "dartSyntaxFiles": 3,
+    "flutterAnalyzerExecuted": false,
+    "flutterWidgetTestsExecuted": false
+  },
+  "unverified": [
+    "Android/iOS rendering and font fallback for this source",
+    "real Powerlevel10k and Oh My Posh prompts, physical IME and touch",
+    "Flutter widget suite for this change",
+    "new Android packages and five-platform selection"
+  ],
+  "sourceSha256": {
+    "validation/shared/terminal-font-diagnostics-v1.json": "2eea98fc43db6a8d531739da72363241d11683a60e43b27ed12c3f4d887d1749",
+    "validation/shared/SHA256SUMS": "664c2324e52111744c5c038aab02b3ba0d516d2a6fc75a39defc76b10cbbb413",
+    "validation/native/tool/mac-font-runs.swift": "4799cffd324d3dfb61202714e0c3a3f017523782b23a60e3c76d751eea23fdc5",
+    "validation/flutter/pubspec.yaml": "a6c47e3fb8783b2749392931ebf67dea4d75cd1ddc0e182ccedec3a995d99186",
+    "validation/flutter/tool/test_ci.py": "ad2d8448fcda4fe0e9e097c1654cbb7c585dfa1aa9b32e630414121c64465915",
+    "validation/flutter/lib/remote_page.dart": "39ab2cfedbd676b805b79e5bbd27f624a6de33f79f7f1f8fcb17bef51cd0c199",
+    "validation/flutter/lib/terminal_font_diagnostics.dart": "77b12642f0102cbfa2e9261fafb1a48f99b58b775b00e6b454b8e67f89b2a03e",
+    "validation/flutter/test/terminal_font_diagnostics_test.dart": "15120251bf34690b0049f897bca35a04aeaaba80432e793403b07825f01f190f",
+    "validation/tauri/index.html": "d3e2e2410dbd9de0d16736b36670b89bd472904a425d748a89ae352ae91c65ce",
+    "validation/tauri/src/remote.js": "ad210d7a97f5233d15d3ebcb39df9f8a64a624c4aceafca4f509497ffef2b707",
+    "validation/tauri/src/tab-workspace.js": "8e6b867f0fe4b599bb5114cdd24705b80f220cb6e1c9184c74d4d37b4fe69bd3",
+    "validation/tauri/src/terminal-font-diagnostics.js": "7c588cd10d81b6311e656acfdbc788e72076aed4a435ef6f8592e5568e879a6e",
+    "validation/tauri/src/style.css": "cbe385984351943c3e0f62f2c36e70a6272ee8b44bc41fe11623d8fb904640bb",
+    "validation/tauri/test/direct-dashboard-gui.test.mjs": "e8a123896252f945a0375bd34b04ef294e1b52cc9593e85d2513ec2da1e26784",
+    "validation/tauri/test/tab-workspace.test.mjs": "56dfae4d67551c92f554fcfbbe5db8aff14fcbe3a2b39af1e83ad8105603fc22",
+    "validation/tauri/test/terminal-selection.test.mjs": "1c65b627969322ce807f8801286ae488a4c59d9239275b43cefe9ee148c3e338"
+  }
+}

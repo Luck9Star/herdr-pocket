@@ -41,3 +41,37 @@
 
 .terminal-notices summary { cursor: pointer; padding: 12px 0; }
 .terminal-notices pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* The fixed-size sample is local and scrolls independently of the remote PTY. */
+.terminal-font-diagnostics {
+  position: fixed;
+  inset: 1rem;
+  max-width: 42rem;
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  padding: 1rem;
+  overflow: auto;
+  background: var(--hp-card);
+  color: var(--hp-textPrimary);
+  border: 1px solid var(--hp-borderStrong);
+  border-radius: 1rem;
+}
+.terminal-font-diagnostics::backdrop { background: #0009; }
+.terminal-font-diagnostics h2 { margin: 0 0 .6rem; font-size: 1.2rem; }
+.terminal-font-diagnostics p, .terminal-font-diagnostics li { font-size: 14px; line-height: 1.5; }
+.terminal-font-diagnostics button { min-height: 44px; }
+.font-diagnostics-scroll {
+  overflow: auto;
+  max-width: 100%;
+  padding: .5rem;
+  background: var(--hp-termBg);
+  border-radius: .5rem;
+}
+.font-diagnostics-terminal { width: max-content; }
+.font-diagnostics-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .4rem .75rem;
+  padding-inline-start: 0;
+  list-style-position: inside;
+}

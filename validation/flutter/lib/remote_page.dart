@@ -11,6 +11,7 @@ import 'remote_auxiliary.dart';
 import 'remote_input_platform.dart';
 import 'remote_screen_text.dart';
 import 'remote_screen_viewport.dart';
+import 'terminal_font_diagnostics.dart';
 import 'device_keys.dart';
 import 'network_profiles.dart';
 import 'network_runtime.dart';
@@ -92,6 +93,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   int draftRevision = 0;
   final rejectedDrafts = <({String target,String text})>[];
   bool rendering = false, previewOpen = false, readingPaste = false, acknowledgingInput = false;
+  bool showingFontDiagnostics = false;
   bool directKeyboardHidden = false;
   bool? lastKeyboardVisible;
   String? inputSuspensionMessage;
@@ -192,7 +194,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     lastKeyboardVisible = keyboardVisible;
   }
   bool get commonKeyboardControlState => live && !viewPaused && widget.visibility?.value != false &&
-    inputGate.fresh && inputGate.unknown == null && !selectingScreen && !previewOpen;
+    inputGate.fresh && inputGate.unknown == null && !selectingScreen && !previewOpen && !showingFontDiagnostics;
   void resetKeyboardControls({bool invalidateKeyboardActions=true}) {
     directKeyboardHidden = false;
     inputSuspensionMessage = null;
@@ -259,6 +261,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.pairedTarget,widget.pairedTarget) || !identical(oldWidget.adapter,widget.adapter) ||
         oldWidget.keyHandle != widget.keyHandle || oldWidget.devicePublicKey != widget.devicePublicKey) {
+      showingFontDiagnostics = false;
       resetKeyboardControls();
       dismissPasteReview(); clearScreenSelection();
     }
@@ -282,6 +285,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   void visibilityChanged() {
     if (widget.visibility?.value == false) {
+      showingFontDiagnostics = false;
       resetKeyboardControls();
       dismissPasteReview(); clearScreenSelection(); retirePendingPasteRead();
       widget.summaryLease?.invalidate(); summaryAttempt = null;
@@ -314,6 +318,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) stop('应用已暂停，连接已取消；请重新核验后主动连接');
   }
   void stop([String message = '已取消；不会重连或发送输入']) {
+    showingFontDiagnostics = false;
     resetKeyboardControls();
     dismissPasteReview(); clearScreenSelection(); retirePendingPasteRead();
     widget.summaryLease?.invalidate(); summaryAttempt = null;
@@ -321,7 +326,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     request++; frozenNode = null; identityLease?.cancel(); unawaited(adapter.cancel());
     widget.onStopped?.call();
     fields['privateKeyPem']!.clear();
-    if (mounted) setState(() { busy = false; live = false; reviewed = false; viewPaused = false; dashboardFresh = false; status = message; });
+    if (mounted) setState(() { busy = false; live = false; reviewed = false; viewPaused = false; dashboardFresh = false; showingFontDiagnostics = false; status = message; });
     reportView();
   }
   @override
@@ -346,7 +351,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Future<void> connect() async {
     if (networkBindingInvalidated || !identical(originalNetworkBinding,widget.networkBinding) ||
         !reviewed || busy || widget.visibility?.value == false) return;
-    resetKeyboardControls(); dismissPasteReview(); clearScreenSelection();
+    showingFontDiagnostics = false; resetKeyboardControls(); dismissPasteReview(); clearScreenSelection();
     final ticket = ++request;
     observationEpoch = 0;
     summaryAttempt = widget.summaryLease?.begin();
@@ -426,7 +431,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             inputGate.reconcileJournalRefresh(journalRead.review);
           final previousInputTarget = inputGate.target;
           inputGate.bind(target,adapter.inputCapability);
-          if (!identical(previousInputTarget,target)) resetKeyboardControls();
+          if (!identical(previousInputTarget,target)) {
+            showingFontDiagnostics = false;
+            resetKeyboardControls();
+          }
           if (reconciled && identical(inputGate.target,journalRead.target)) inputGate.lastResult = journalRead.review.knownResult;
           if (adapter.pendingInput != null) inputGate.restorePending(adapter.pendingInput!);
         }
@@ -490,7 +498,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         board.generation != adapter.generation ||
         !board.selectable ||
         board.panes.where((p) => p.paneId == pane.paneId && p.terminalId == pane.terminalId).length != 1) return;
-    resetKeyboardControls(); dismissPasteReview(); clearScreenSelection();
+    showingFontDiagnostics = false; resetKeyboardControls(); dismissPasteReview(); clearScreenSelection();
     setState(() { selectedPane = pane.paneId; selectedTarget = pane; live = false; status = '目标已选择 · 等待新 full'; });
     reportView();
     try { adapter.selectTarget(board.generation,pane); }
@@ -512,7 +520,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   void setInputMode(RemoteInputMode mode) {
-    if (selectingScreen || !live || viewPaused || widget.visibility?.value == false || !inputGate.fresh ||
+    if (selectingScreen || showingFontDiagnostics || !live || viewPaused || widget.visibility?.value == false || !inputGate.fresh ||
         (mode != RemoteInputMode.observe && (inputGate.target == null || inputGate.capability == null || inputGate.unknown != null))) return;
     // Re-selecting the active chip is not a mode change. Preserve the current
     // editor/client, focus and IME composition instead of replacing its epoch.
@@ -786,9 +794,35 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     unawaited(inputGate.submit(lease,bytes));
   }
 
+  bool get fontDiagnosticsAvailable => live && !viewPaused && widget.visibility?.value != false &&
+    snapshot != null && terminal != null && inputGate.fresh && !inputGate.sending &&
+    !previewOpen && !readingPaste && !selectingScreen;
+
+  void openFontDiagnostics() {
+    if (!fontDiagnosticsAvailable || showingFontDiagnostics || inputGate.target == null) return;
+    // Retire active IME/direct and draft leases before mounting the local-only
+    // terminal. Draft contents remain in their existing controller and map.
+    retirePendingPasteRead();
+    auxiliaryModifiers.reset();
+    inputGate.setFocused(false);
+    inputGate.setMode(RemoteInputMode.observe);
+    terminalFocus.unfocus();
+    draftFocus.unfocus();
+    FocusScope.of(context).unfocus();
+    bindTerminalOutput();
+    setState(() { showingFontDiagnostics = true; });
+  }
+
+  void closeFontDiagnostics() {
+    if (!showingFontDiagnostics) return;
+    // The remote view returns as observe-only; closing diagnostics never
+    // restores a previous sending mode or focus lease.
+    setState(() { showingFontDiagnostics = false; });
+  }
+
   Widget inputPanel() {
     final available = live && inputGate.capability != null && inputGate.fresh;
-    final enabled = available && inputGate.unknown == null && !selectingScreen;
+    final enabled = available && inputGate.unknown == null && !selectingScreen && !showingFontDiagnostics;
     final panelObservationEpoch = observationEpoch,panelInputEpoch = inputGate.epoch;
     final panelTarget = inputGate.target;
     final panelMode = inputGate.mode;
@@ -1013,6 +1047,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final terminalObservationEpoch = observationEpoch,terminalInputEpoch = inputGate.epoch;
     final selectionSource = terminal,selectionSnapshot = snapshot,selectionRequest = request;
+    final diagnosticSource = terminal,diagnosticTarget = inputGate.target;
+    final diagnosticRequest = request,diagnosticObservationEpoch = observationEpoch,diagnosticInputEpoch = inputGate.epoch;
     return PopScope(
     onPopInvokedWithResult:(didPop,result) { if (didPop) stop(); },
     child:Scaffold(appBar:AppBar(title:const Text('远端接入 · 只读'),
@@ -1099,12 +1135,22 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             Text('${snapshot!.session} / ${snapshot!.paneId}\n${live ? inputGate.mode == RemoteInputMode.observe ? '只读观察中' : '实时终端 · 显式输入模式' : '旧画面 · 已停止'} · seq $sequence\n更新于 ${capturedAt!.toLocal().toIso8601String()} · 固定 80×24'),
             OutlinedButton.icon(key:const ValueKey('remote-screen-select'),
               onPressed:live && !viewPaused && widget.visibility?.value != false && !selectingScreen &&
-                !previewOpen && !readingPaste && !inputGate.sending ? () {
+                !showingFontDiagnostics && !previewOpen && !readingPaste && !inputGate.sending ? () {
                   if (identical(terminal,selectionSource) && identical(snapshot,selectionSnapshot) &&
                       request == selectionRequest && observationEpoch == terminalObservationEpoch && inputGate.epoch == terminalInputEpoch) openScreenSelection();
                 } : null,icon:const Icon(Icons.text_fields),label:const Text('选择终端文本')),
+            OutlinedButton.icon(key:const ValueKey('remote-font-diagnostics-open'),
+              onPressed:fontDiagnosticsAvailable && !showingFontDiagnostics ? () {
+                if (identical(terminal,diagnosticSource) && identical(inputGate.target,diagnosticTarget) &&
+                    request == diagnosticRequest && observationEpoch == diagnosticObservationEpoch &&
+                    inputGate.epoch == diagnosticInputEpoch) openFontDiagnostics();
+              } : null,
+              icon:const Icon(Icons.font_download_outlined),label:const Text('字体与字符诊断')),
             const SizedBox(height:8),
-            if (selectingScreen) screenSelectionPanel() else SizedBox(height:360,child:ClipRRect(key:terminalViewportKey,borderRadius:BorderRadius.circular(12),
+            if (showingFontDiagnostics)
+              TerminalFontDiagnostics(tokens:widget.tokens,registeredFontFamily:'ProbeNerd',
+                fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble(),onClose:closeFontDiagnostics)
+            else if (selectingScreen) screenSelectionPanel() else SizedBox(height:360,child:ClipRRect(key:terminalViewportKey,borderRadius:BorderRadius.circular(12),
               child:TerminalView(terminal!,key:ValueKey('remote-terminal-${inputGate.epoch}'),
                 focusNode:terminalFocus,theme:widget.tokens.terminalTheme,
                 autoResize:false,readOnly:!live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput,

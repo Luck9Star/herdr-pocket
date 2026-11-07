@@ -20,6 +20,8 @@ class Element {
   append(...nodes) { this.children.push(...nodes); }
   prepend(...nodes) { this.children.unshift(...nodes); }
   remove() { this.removed=true; }
+  showModal() { this.previousFocus=document.activeElement; this.open=true; this.modal=true; }
+  close() { this.open=false; this.previousFocus?.focus(); }
   replaceChildren(...nodes) { this.children = [...nodes]; }
   setAttribute(key, value) { this.attrs[key] = value; }
   addEventListener(name, fn) { (this.events[name] ??= []).push(fn); }
@@ -176,7 +178,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest } = {
       this.textarea.focus();
     }
     onData(handler) { this.data = handler; }
-    write(_bytes, ack) { ack(); }
+    write(bytes, ack) { (this.writes ??= []).push(bytes);ack(); }
   }
   globalThis.__directGuiDeps = { Terminal, invoke, Channel };
   const { initRemote } = await importedRemote();
@@ -315,6 +317,83 @@ test('paired draft cannot confirm an existing preview during IME composition',as
     draft.dispatch('compositionstart');h.nodes['remote-input-confirm'].click();await flush();
     assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
   }finally{h.finish();await flush();h.restore();}
+});
+
+test('paired font diagnostics use a separate read-only terminal, revoke input and retain draft',async()=>{
+  const prior=globalThis.fetch,fixture=JSON.parse(await readFile(new URL('../../shared/terminal-font-diagnostics-v1.json',import.meta.url),'utf8'));
+  globalThis.fetch=async()=>({ok:true,json:async()=>fixture});const h=await setup();
+  try{
+    await openInput(h);h.nodes['remote-input-draft-mode'].click();await flush();await flush();
+    const draft=h.nodes['remote-input-draft'];draft.value='原目标草稿';draft.dispatch('input');
+    const observed=h.terminal;h.nodes['remote-font-diagnostics'].click();await flush();await flush();
+    const panel=document.body.children.find(e=>e.attrs['aria-label']==='字体与字符诊断');assert.ok(panel);assert.equal(panel.tagName,'dialog');assert.equal(panel.modal,true);
+    const legend=panel.children.find(e=>e.className==='font-diagnostics-legend');assert.deepEqual(legend.children.map(e=>e.textContent),fixture.samples.map(item=>`${item.label} · 预期 ${item.cells} 列`));
+    const sample=h.terminal;assert.notEqual(sample,observed);assert.equal(sample.options.cols,16);assert.equal(sample.options.rows,8);
+    assert.equal(sample.options.disableStdin,true);assert.equal(sample.options.fontFamily,'ProbeNerd, monospace');assert.deepEqual(sample.writes,[fixture.write]);assert.equal(sample.textarea.disabled,true);assert.equal(sample.textarea.attrs.tabindex,'-1');
+    assert.equal(draft.value,'原目标草稿');assert.ok(h.calls.some(c=>c.name==='remote_input_mode' && c.args.mode==='observe'));
+    panel.children.find(e=>e.textContent==='关闭诊断').click();assert.equal(panel.removed,true);assert.equal(document.activeElement,h.nodes['remote-font-diagnostics']);
+    observed.data('旧输入');await flush();assert.equal(h.calls.filter(c=>c.name==='remote_input_send'||c.name.includes('resize')).length,0);
+    assert.equal(draft.value,'原目标草稿');
+  }finally{h.finish();await flush();h.restore();globalThis.fetch=prior;}
+});
+
+test('stock paired observation opens local diagnostics without input_ready',async()=>{
+  const prior=globalThis.fetch,fixture=JSON.parse(await readFile(new URL('../../shared/terminal-font-diagnostics-v1.json',import.meta.url),'utf8'));
+  globalThis.fetch=async()=>({ok:true,json:async()=>fixture});const h=await setup();
+  try{
+    await pairAndConnect(h);publishDashboard(h,blockedPane());h.nodes['remote-panes'].children.find(e=>e.tagName==='button' && e.textContent.startsWith('w1:p1')).click();
+    h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,bytes:[65]}});await flush();
+    const observed=h.terminal;assert.equal(h.nodes['remote-font-diagnostics'].disabled,false);h.nodes['remote-font-diagnostics'].click();await flush();await flush();
+    assert.deepEqual(h.terminal.writes,[fixture.write]);assert.equal(h.terminal.options.disableStdin,true);
+    assert.equal(observed.options.disableStdin,true);assert.equal(h.calls.filter(c=>c.name==='remote_input_mode').length,0);
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_send'||c.name.includes('resize')).length,0);
+  }finally{h.finish();await flush();h.restore();globalThis.fetch=prior;}
+});
+
+test('paired font diagnostics revoke direct input and reject late composition after close',async()=>{
+  const prior=globalThis.fetch,fixture=JSON.parse(await readFile(new URL('../../shared/terminal-font-diagnostics-v1.json',import.meta.url),'utf8'));
+  globalThis.fetch=async()=>({ok:true,json:async()=>fixture});const h=await setup();
+  try{
+    await openInput(h);h.nodes['remote-input-direct'].click();await flush();await flush();const observed=h.terminal;
+    observed.textarea.dispatch('compositionstart');h.nodes['remote-font-diagnostics'].click();await flush();
+    const panel=document.body.children.find(e=>e.attrs['aria-label']==='字体与字符诊断');assert.ok(panel);
+    panel.children.find(e=>e.textContent==='关闭诊断').click();observed.textarea.dispatch('compositionend');observed.data('迟到');await flush();
+    assert.equal(observed.options.disableStdin,true);assert.equal(h.calls.filter(c=>c.name==='remote_input_send'||c.name.includes('resize')).length,0);
+  }finally{h.finish();await flush();h.restore();globalThis.fetch=prior;}
+});
+
+test('paired font diagnostics show local fixture failure without ending observation',async()=>{
+  const prior=globalThis.fetch;globalThis.fetch=async()=>({ok:false});const h=await setup();
+  try{
+    await openInput(h);const observed=h.terminal;h.nodes['remote-font-diagnostics'].click();await flush();await flush();
+    const panel=document.body.children.find(e=>e.attrs['aria-label']==='字体与字符诊断');assert.match(panel.children.find(e=>e.attrs.role==='status').textContent,/本地诊断样例不可用/);
+    assert.equal(h.terminal,observed);assert.equal(h.calls.filter(c=>c.name==='remote_cancel'||c.name==='remote_input_send').length,0);
+    panel.children.find(e=>e.textContent==='关闭诊断').click();assert.equal(panel.removed,true);
+  }finally{h.finish();await flush();h.restore();globalThis.fetch=prior;}
+});
+
+test('paired diagnostics blocks input entry and cancel closes modal safely',async()=>{
+  const prior=globalThis.fetch,fixture=JSON.parse(await readFile(new URL('../../shared/terminal-font-diagnostics-v1.json',import.meta.url),'utf8'));
+  globalThis.fetch=async()=>({ok:true,json:async()=>fixture});const h=await setup();
+  try{
+    await openInput(h);h.nodes['remote-font-diagnostics'].click();await flush();await flush();
+    const panel=document.body.children.find(e=>e.attrs['aria-label']==='字体与字符诊断'),before=h.calls.filter(c=>c.name==='remote_input_mode').length;
+    h.nodes['remote-input-direct'].click();h.nodes['remote-input-draft-mode'].click();await flush();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_mode').length,before);
+    let prevented=false;panel.dispatch('cancel',{preventDefault(){prevented=true;}});assert.equal(prevented,true);assert.equal(panel.removed,true);
+    assert.equal(document.activeElement,h.nodes['remote-font-diagnostics']);assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
+  }finally{h.finish();await flush();h.restore();globalThis.fetch=prior;}
+});
+
+test('paired font diagnostics ignore a fixture arriving after leaving the target',async()=>{
+  const prior=globalThis.fetch;let release;globalThis.fetch=()=>new Promise(r=>release=r);const h=await setup();
+  try{
+    await openInput(h);const observed=h.terminal;h.nodes['remote-font-diagnostics'].click();
+    const panel=document.body.children.find(e=>e.attrs['aria-label']==='字体与字符诊断');assert.ok(panel);
+    h.nodes['host-return-home'].click();release({ok:true,json:async()=>JSON.parse(await readFile(new URL('../../shared/terminal-font-diagnostics-v1.json',import.meta.url),'utf8'))});
+    await flush();await flush();assert.equal(panel.removed,true);assert.notEqual(document.activeElement,h.nodes['remote-font-diagnostics']);assert.equal(h.terminal,observed);
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_send'||c.name.includes('resize')).length,0);
+  }finally{h.finish();await flush();h.restore();globalThis.fetch=prior;}
 });
 
 test('paired form requests an editable keyboard in the click and only sends compositions begun after permission', async () => {

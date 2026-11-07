@@ -8,7 +8,6 @@ import 'package:herdr_flutter_probe/remote_page.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/remote_input.dart';
 import 'remote_input_widget_test.dart' as input;
-import 'remote_input_test.dart' as fixtures show target;
 
 void mockClipboard(Future<Object?> Function(MethodCall) handler) {
   final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -229,12 +228,17 @@ void main() {
     final field = find.byKey(const ValueKey('remote-input-draft')); await tester.ensureVisible(field); await tester.enterText(field,'original');
     final controller = tester.widget<TextField>(field).controller!; await press(tester,'remote-input-draft-paste');
     final staleReplace = tester.widget<TextButton>(find.byKey(const ValueKey('remote-paste-replace'))).onPressed!;
-    final navigator = Navigator.of(tester.element(find.byKey(const ValueKey('remote-paste-review-text'))),rootNavigator:true);
+    final pasteContext = tester.element(find.byKey(const ValueKey('remote-paste-review-text')));
+    final pasteRoute = ModalRoute.of(pasteContext)!;
+    final navigator = Navigator.of(pasteContext,rootNavigator:true);
     navigator.push<void>(MaterialPageRoute<void>(builder:(_) => const Scaffold(body:Text('unrelated top route'))));
     await tester.pumpAndSettle();
+    staleReplace(); await tester.pumpAndSettle();
+    expect(controller.text,'original'); expect(find.text('unrelated top route'),findsOneWidget);
+    expect(pasteRoute.isActive,isTrue); expect(pasteRoute.isCurrent,isFalse);
     visibility.value = false; await tester.pumpAndSettle(); staleReplace();
     expect(find.text('unrelated top route'),findsOneWidget);
-    expect(find.byKey(const ValueKey('remote-paste-review-text')),findsNothing);
+    expect(pasteRoute.isActive,isFalse);
     expect(controller.text,'original'); expect(adapter.received,isEmpty); expect(adapter.resumes,0);
     navigator.pop(); await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox());
@@ -262,7 +266,7 @@ void main() {
     final controller = await startDraft(tester,adapter,'original'); await press(tester,'remote-input-draft-paste');
     final page = tester.widget<RemotePage>(find.byType(RemotePage));
     await tester.pumpWidget(MaterialApp(theme:page.tokens.theme,home:RemotePage(tokens:page.tokens,adapter:adapter,
-      requestedTarget:fixtures.target(connection:adapter.connection,generation:adapter.generation,pane:'w1:p2',term:'term_1234'))));
+      requestedTarget:const RemotePane('w1:p2','term_1234'))));
     await tester.pumpAndSettle();
     expect(find.textContaining('PRIVATE CLIP'),findsNothing); expect(controller.text,'original'); expect(adapter.received,isEmpty);
     expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox());

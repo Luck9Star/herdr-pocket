@@ -19,7 +19,24 @@
 
 本批连同手机草稿找回、看板时间及两条 GUI 的入口回归一起验证。云构建使用同一 Git 提交产生两份 arm64 debug APK；API 35 x86_64 模拟器另行走真实设备密钥与隔离 SSH。前台真实三网、物理设备、系统中文输入法及 iOS 签名仍待逐项验收。既有 Android 测试包和上一轮验证可见[固定来源与校验和](27-mobile-tailscale-cloud.md)。
 
-## 首轮云验收
+## Android 测试包与实测
+
+源码 `e54f23c` 的 7 项云任务全部通过。两份 arm64-v8a debug APK 及独立原生归档已实际下载。归档 digest、包内校验和、源码提交和 APK 哈希已核对；两份 APK 的 EasyTier 和 Tailscale 库分别与独立原生归档内容一致。[完整 CI](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342) · [验证数据](evidence/mobile-pair-gui/host-board-cloud-20261107.json)
+
+| APK | 解压后的 app.apk SHA-256 |
+| --- | --- |
+| [Flutter arm64](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342/artifacts/13556637167) | `aad0a4e04b28650dec872a29d4b554a6993350f614b5ae3c8982e5c8581ce994` |
+| [Tauri arm64](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342/artifacts/13556314095) | `2217b6d7033e68bb3f9632861efd4597c20a6ec8ae02c56084aab822b2c0a3a6` |
+
+两归档在北京时间 2026-11-21 10:26／10:27 到期。下载后解压，按上表核对 `app.apk`，在单独的 Android arm64 测试设备上安装，再执行上面的验收步骤。安装条件和实际设备型号请单独记录。
+
+- 两条 API 35 **x86_64 云模拟器**分别使用应用端设备密钥和临时主机授权，经 SSH 走通配对、主机看板、选择 pane、full/delta 持续观察和主动停止。两端远端输入均为 0，结束后应用和模拟器已关闭。Flutter 还在真实 AndroidKeyStore 包装的密钥上完成签名、删除和再次读取被拒的验证。[Flutter AVD](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342/artifacts/13556572172) · [Tauri AVD](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342/artifacts/13556263219)
+- Flutter 的 Ubuntu 隔离 SSH 测试还验证了返回列表时保留旧摘要、恢复原标签时使用同一连接、等新快照才恢复当前状态。共 7 帧，其中 5 个 delta；两次本地视口变化，234 次采样中共享 PTY 始终 119×40。此路使用测试 signer。[隔离 SSH 证据](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342/artifacts/13555994060)
+- Flutter analyzer、286 项常规测试、10 项绘制回归通过。常规套件跳过的 1 项 SSH 用例在独立步骤通过。Tauri JavaScript 149 项、共享 Rust transport 95＋1 项通过。模拟器执行 stock 只读场景；当前 arm64 真机安装、物理键盘／中文 IME、相机扫码及三网并发仍未验证。
+
+下一步优先在手机上验证输入与恢复，再根据正确性结果调整 Penpot 终端和键盘状态、比较两候选。UI 框架仍待选。
+
+## 前两轮失败与修复
 
 首轮源码为 `c1c040a`。同一提交的隔离副本在 Mac 上通过 149 项 Tauri JavaScript 检查、前端构建和 31 项远端测试驱动单测。Flutter 的 63 个 Dart 文件通过本地语法解析。[提交](https://github.com/Luck9Star/herdr-pocket/commit/c1c040a47712f1e000e2c73aa8356bf69b7dec99)
 

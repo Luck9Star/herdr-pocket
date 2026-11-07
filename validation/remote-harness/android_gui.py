@@ -377,11 +377,17 @@ def exercise_font_diagnostics(browser, approval, rendered):
         'closeFocused': True, 'triggerEnabled': True,
         'keyboardShowDisabled': True, 'keyboardHideDisabled': True,
         'remoteTextareaReadOnly': True, 'remoteTextareaInputMode': 'none', 'remoteTextareaFocused': False}
-    if (not isinstance(state, dict) or any(state.get(key) is not value for key, value in expected_state.items()) or
+    if (not isinstance(state, dict) or
             state.get('remoteDraftFocused') is not False or
             type(state.get('inputControlsPresent')) is not bool or
             type(state.get('inputControlsHidden')) is not bool):
         raise GuiFailure('android_font_diagnostic_input_or_focus_guard_failed')
+    for key, expected in expected_state.items():
+        actual = state.get(key)
+        # CDP decodes fresh JSON strings. Compare their values, and require
+        # exact types so 0 and 1 cannot stand in for boolean focus evidence.
+        if type(actual) is not type(expected) or actual != expected:
+            raise GuiFailure('android_font_guard_' + key.lower())
     approval.verify_ssh(b'')
     during = rendered('delta')
     browser.click('.terminal-font-diagnostics button')

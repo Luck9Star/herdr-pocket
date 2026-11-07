@@ -111,11 +111,18 @@ void main() {
     final adapter = InputFixtureAdapter(); await start(tester,adapter);
     await mode(tester,'direct');
     final viewport = find.byKey(const ValueKey('remote-horizontal-scroll'));
-    await tester.ensureVisible(viewport); await tester.pump();
+    final slider = find.byKey(const ValueKey('remote-horizontal-slider'));
+    await tester.ensureVisible(slider); await tester.pump(); await tester.pump();
     final controller = tester.widget<SingleChildScrollView>(viewport).controller!;
     expect(controller.position.maxScrollExtent,greaterThan(0));
-    final rect = tester.getRect(viewport);
-    await tester.dragFrom(Offset(rect.left + 24,rect.bottom - 6),const Offset(100,0));
+    expect(tester.widget<Slider>(slider).onChanged,isNotNull);
+    expect(slider.hitTestable(at:const Alignment(-.92,0)),findsOneWidget);
+    final rect = tester.getRect(slider);
+    // The custom overlay radius is 14, placing the initial thumb centre at
+    // that inset. Use multiple touch moves beyond slop on the visible thumb.
+    final gesture = await tester.startGesture(Offset(rect.left + 14,rect.center.dy));
+    for (var i=0; i<5; i++) { await gesture.moveBy(const Offset(20,0)); await tester.pump(const Duration(milliseconds:40)); }
+    await gesture.up();
     await tester.pump();
     expect(controller.offset,greaterThan(0));
     expect(adapter.received,isEmpty);

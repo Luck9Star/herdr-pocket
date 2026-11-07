@@ -12,6 +12,9 @@ concurrency:
   group: network-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  android-pairing:
+    if: startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-')
+    uses: ./.github/workflows/paired-android-emulator.yml
   transport-source:
     runs-on: ubuntu-24.04
     timeout-minutes: 30

@@ -133,14 +133,32 @@ class RemotePane {
 }
 enum DashboardFreshness { stale, refreshing, fresh, unavailable }
 
+/// Public provenance from the actual connected socket, never a GUI provider label.
+class RemoteDashboardSource {
+  const RemoteDashboardSource({required this.host,required this.port,required this.username,required this.hostFingerprint,
+    required this.session,required this.socketPath,required this.herdrPath,required this.route});
+  factory RemoteDashboardSource.connected(RemoteConfig config,String route) => RemoteDashboardSource(host:config.host,port:config.port,
+    username:config.username,hostFingerprint:config.expectedFingerprint,session:config.session,socketPath:config.socketPath,herdrPath:config.herdrPath,route:route);
+  final String host,username,hostFingerprint,session,socketPath,herdrPath,route;
+  final int port;
+  String get endpointKey => jsonEncode([route,host,port,username,hostFingerprint,session,socketPath,herdrPath]);
+}
+
 class RemoteDashboard {
   const RemoteDashboard(this.generation, this.session, this.panes,
-      {this.freshness=DashboardFreshness.stale,this.revision=0});
+      {this.freshness=DashboardFreshness.stale,this.revision=0,this.syncedAt,this.source,this.observationEpoch=0});
   final int generation, revision;
   final String session;
   final List<RemotePane> panes;
   final DashboardFreshness freshness;
+  /// Local receipt time of this validated snapshot, independent of terminal frames.
+  /// Legacy/custom sources without such evidence leave it unknown.
+  final DateTime? syncedAt;
+  final RemoteDashboardSource? source;
+  final int observationEpoch;
   bool get selectable => freshness == DashboardFreshness.fresh || freshness == DashboardFreshness.unavailable;
+  RemoteDashboard withFreshness(DashboardFreshness value,{int? revision}) => RemoteDashboard(generation,session,panes,
+    freshness:value,revision:revision ?? this.revision,syncedAt:syncedAt,source:source,observationEpoch:observationEpoch);
 }
 /// Selection and automatic requested-target restoration share this guard.
 /// A matching ID in an old row is never permission to observe it.
@@ -413,9 +431,11 @@ class _Attempt {
 /// Defaults to read-only. Writes require the separate guarded test extension;
 /// stock herdr 0.9.5 never gains input through a pane-ID-only fallback.
 class RemoteReadOnlyAdapter {
-  RemoteReadOnlyAdapter({SocketConnector? connector, this.inputJournal,RemoteConnectionBudget? connectionBudget}) : _budget = connectionBudget ?? _sharedConnectionBudget, _connector = connector ??
+  RemoteReadOnlyAdapter({SocketConnector? connector, this.inputJournal,RemoteConnectionBudget? connectionBudget,DateTime Function()? clock}) : _clock = clock ?? DateTime.now,
+    _budget = connectionBudget ?? _sharedConnectionBudget, _connector = connector ??
     ((host,port) => SSHSocket.connect(host,port,timeout:const Duration(seconds:8)));
   final SocketConnector _connector;
+  final DateTime Function() _clock;
   final RemoteConnectionBudget _budget;
   final RemoteInputJournal? inputJournal;
   RemoteInputJournalReview? Function(RemoteInputTarget target)? captureInputJournalReview;
@@ -618,8 +638,7 @@ class RemoteReadOnlyAdapter {
     if (a.observationPaused) return true;
     a.observationPaused = true; a.observationEpoch++; a.watchEpoch++;
     final board = a.dashboard;
-    if (board != null) a.dashboard = RemoteDashboard(board.generation,board.session,board.panes,
-      freshness:DashboardFreshness.stale,revision:board.revision);
+    if (board != null) a.dashboard = board.withFreshness(DashboardFreshness.stale);
     // Revoke every write proof before any destructor can throw.
     a.evidence.fullFrameReceived = false; a.inputTarget = null;
     a.watchWaits.interrupt(const RemoteFailure('observation_paused')); a.wakeWatch?.call();
@@ -943,7 +962,9 @@ class RemoteReadOnlyAdapter {
             if (rpc['id'] != id || rpc['error'] != null || rpc['ok'] == false || rpc['result'] is! Map) {
               throw const RemoteFailure('snapshot_rejected');
             }
-            return parseSnapshotDashboard(config,Map<String,dynamic>.from(rpc['result'] as Map),a.generation);
+            final parsed = parseSnapshotDashboard(config,Map<String,dynamic>.from(rpc['result'] as Map),a.generation);
+            return RemoteDashboard(parsed.generation,parsed.session,parsed.panes,syncedAt:_clock().toUtc(),
+              source:RemoteDashboardSource.connected(config,connectedSocketRoute(socket)),observationEpoch:observationEpoch);
           } finally {
             channel.destroy(); if (identical(a.forward,channel)) a.forward = null;
             if (_valid(a)) await _retireChannel(a,channel);
@@ -994,8 +1015,7 @@ class RemoteReadOnlyAdapter {
         final source = authority ?? a.dashboard;
         if (source == null) return;
         if (a.dashboardRevision >= 9007199254740991) { _fail(a,const RemoteFailure('dashboard_revision_limit')); return; }
-        final value = RemoteDashboard(a.generation,config.session,source.panes,
-          freshness:state,revision:++a.dashboardRevision);
+        final value = source.withFreshness(state,revision:++a.dashboardRevision);
         a.dashboard = value;
         e.paneCount = value.panes.length;
         onDashboard(value);

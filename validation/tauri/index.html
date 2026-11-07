@@ -14,6 +14,7 @@
 </main>
 <main id="remote-page" class="remote-page" hidden>
 <nav id="host-tabs" class="terminal-tabs host-tabs" aria-label="主机标签"></nav><div class="host-home-actions"><button id="host-return-home" type="button">返回主机看板</button></div>
+<section id="host-task-board" class="controls" aria-label="主机任务摘要" hidden></section>
 <section id="host-restore-panel" class="remote-intro" hidden><h2>恢复已存设备</h2><p id="host-restore-description"></p><label><input id="host-restore-review" type="checkbox"> 我已独立核对上方主机与设备公钥指纹。</label><button id="host-restore" type="button">恢复此设备</button><p id="host-restore-status" role="status" aria-live="polite"></p></section>
 <section class="remote-intro"><span class="eyebrow">REMOTE · READ ONLY</span><h2>查看远端终端</h2><p>手动核验明确的会话，从实际快照选择 pane 并持续只读观察。公开请求与响应需要人工传递及独立审查；实验输入仅在服务器明确提供安全扩展时开放。手机可扫描主机授权响应；实际组网接入按平台单独验证。</p></section>
 <p id="remote-native-note" class="mode-message" data-tone="warning">浏览器预览没有原生 SSH 适配器。真实读取仅在测试安装包中可用，预览不会伪造连接成功。</p>

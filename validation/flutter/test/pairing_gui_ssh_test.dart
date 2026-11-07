@@ -50,7 +50,11 @@ void main() {
     final dir = Directory(env['HERDR_PAIRING_GUI_DIR']!);
     final keys = helpers.TestDeviceKeys(File(env['HERDR_PAIRING_GUI_TEST_KEY']!).readAsStringSync());
     final inputJournal = GuiSshMemoryInputJournal();
-    final adapter = RemoteReadOnlyAdapter(inputJournal:inputJournal);
+    // Timestamp evidence comes from the real adapter's validated snapshot path,
+    // rather than assigning a time to the widget's dashboard double.
+    var snapshotClock = DateTime.utc(2026,11,7,12,30);
+    var snapshotClockReads = 0;
+    final adapter = RemoteReadOnlyAdapter(inputJournal:inputJournal,clock:() { snapshotClockReads++; return snapshotClock; });
     final catalog = HostCatalog(storage:MemoryCatalogStorage());
     final tabs = HostTabs();
     addTearDown(catalog.dispose);
@@ -76,6 +80,20 @@ void main() {
       await tester.pump();
       await tester.tap(control);
       await tester.pump();
+    }
+    Future<void> expectHostSummary(String control, RemoteDashboard snapshot, {required bool retained}) async {
+      final owner = find.byKey(ValueKey(control));
+      final known = snapshot.panes.where((p) => const {'idle','working','done','blocked'}.contains(p.agentStatus));
+      final unknown = snapshot.panes.length - known.length;
+      final blocked = known.where((p) => p.agentStatus == 'blocked').length;
+      final count = unknown == 0 ? '受阻 $blocked 个' : '受阻至少 $blocked 个＋$unknown 个状态未知';
+      final detail = '原会话 ${config['session']} · 最后同步 ${snapshot.syncedAt!.toLocal().toIso8601String()}';
+      await until(() {
+        final labels = tester.widgetList<Text>(find.descendant(of:owner,matching:find.byType(Text)))
+          .map((widget) => widget.data).whereType<String>();
+        return labels.contains(detail) && labels.any((label) => label.contains(count) &&
+          label.contains('共 ${snapshot.panes.length} 个窗格') && label.contains('上次主机报告') == retained);
+      });
     }
     stage('host_board');
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,
@@ -115,7 +133,14 @@ void main() {
     });
     expect(adapter.evidence.hostKeyMatched,isTrue); expect(adapter.evidence.authStarted,isTrue);
     expect(keys.signCalls,greaterThan(0));
+    expect(snapshotClockReads,greaterThan(0));
+    expect(adapter.currentDashboard!.syncedAt,snapshotClock);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('remote-dashboard-sync'))).data,
+      contains(snapshotClock.toLocal().toIso8601String()));
     expect(find.textContaining('状态 paired',skipOffstage:false),findsOneWidget);
+    stage('active_host_summary');
+    const workspaceSummary = 'workspace-task-summaries';
+    await expectHostSummary(workspaceSummary,adapter.currentDashboard!,retained:false);
     stage('observe_frames');
     await tapControl(pane);
     await until(() => adapter.evidence.frameCount >= 1 && find.textContaining('只读观察中').evaluate().isNotEmpty);
@@ -133,15 +158,24 @@ void main() {
     // only an explicit resume may re-open the same target and deliver a full.
     stage('pause_resume_original');
     final tabId = tabs.active!.id,fulls = adapter.evidence.frameCount - adapter.evidence.deltaFrames;
+    final lastVisibleSnapshot = adapter.currentDashboard!;
     await tapControl('hosts-board-tab');
     expect(adapter.evidence.fullFrameReceived,isFalse);
+    stage('retained_host_summary');
+    snapshotClock = snapshotClock.add(const Duration(minutes:1));
+    await expectHostSummary('host-task-summary-$id',lastVisibleSnapshot,retained:true);
     await tapControl('host-tab-$tabId');
     expect(adapter.evidence.connectionCount,1);
+    expect(adapter.currentDashboard!.syncedAt,lastVisibleSnapshot.syncedAt);
+    await expectHostSummary(workspaceSummary,lastVisibleSnapshot,retained:true);
     expect(find.byKey(const ValueKey('remote-resume')),findsOneWidget);
     await tapControl('remote-resume');
     await until(() => adapter.evidence.frameCount - adapter.evidence.deltaFrames > fulls &&
       find.textContaining('只读观察中').evaluate().isNotEmpty);
     expect(adapter.evidence.connectionCount,1);
+    stage('resumed_host_summary');
+    await until(() => adapter.currentDashboard?.syncedAt == snapshotClock && adapter.currentDashboard!.selectable);
+    await expectHostSummary(workspaceSummary,adapter.currentDashboard!,retained:false);
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
     var inputQueueAccepted = false;
     final draftMode = find.byKey(const ValueKey('remote-mode-draft'));
@@ -193,13 +227,16 @@ void main() {
     }
     expect(tester.takeException(),isNull);
     stage('stop');
+    final beforeStop = adapter.currentDashboard!;
     await tapControl('remote-cancel'); await tester.pump();
     expect(find.textContaining('旧画面 · 已停止'),findsOneWidget);
+    await expectHostSummary(workspaceSummary,beforeStop,retained:true);
     expect(adapter.evidence.connectionCount,1);
     final report = {'paired':adapter.evidence.hostKeyMatched && adapter.evidence.authStarted,
       'paneChosen':true,'fullRendered':true,'deltaRendered':true,'stoppedStale':true,'signCalls':keys.signCalls,
       'reopenedPendingRequest':true,'identityCreations':keys.creates,'localViewportChanges':2,
-      'pauseResumeSameConnection':true,
+      'pauseResumeSameConnection':true,'hostSummaryActive':true,'hostSummaryRetained':true,
+      'hostSummaryResumed':true,'hostSummaryStopped':true,
       'frameCount':adapter.evidence.frameCount,'deltaFrames':adapter.evidence.deltaFrames,
       'connectionCount':adapter.evidence.connectionCount,
       'inputRequested':expectInput,'inputQueueAccepted':inputQueueAccepted,

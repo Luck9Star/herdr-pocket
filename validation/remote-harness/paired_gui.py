@@ -53,7 +53,8 @@ def fixture_terminal_id(config):
 def widget_failure(exchange, fallback):
     # Only emit stages chosen by the harness. Never copy widget logs or form data.
     stages = {'host_board', 'public_request', 'host_authorization', 'restore_pending',
-              'response_review', 'ssh_and_dashboard', 'observe_frames', 'pause_resume_original', 'guarded_input', 'stop'}
+              'response_review', 'ssh_and_dashboard', 'active_host_summary', 'observe_frames',
+              'pause_resume_original', 'retained_host_summary', 'resumed_host_summary', 'guarded_input', 'stop'}
     path = exchange / 'stage'
     if path.is_file():
         phase = bounded_wire(path, 40).decode('ascii', errors='ignore')
@@ -192,7 +193,9 @@ def run_flutter(args, root, env, config, approval):
             # Return only named, fixed test-stage failures (never raw widget logs).
             raise widget_failure(exchange, 'widget_pairing_or_observe_failed')
         result = json.loads(bounded_wire(exchange / 'result.json'))
-        required = ('paired', 'paneChosen', 'fullRendered', 'deltaRendered', 'stoppedStale', 'reopenedPendingRequest', 'pauseResumeSameConnection')
+        required = ('paired', 'paneChosen', 'fullRendered', 'deltaRendered', 'stoppedStale',
+                    'reopenedPendingRequest', 'pauseResumeSameConnection', 'hostSummaryActive',
+                    'hostSummaryRetained', 'hostSummaryResumed', 'hostSummaryStopped')
         calls = result.get('signCalls')
         if (not all(result.get(field) is True for field in required) or result.get('identityCreations') != 1
                 or type(calls) != int or not 1 <= calls <= 8):
@@ -314,7 +317,18 @@ def run_tauri(args, root, env, config, approval):
             button = wait_for(lambda:driver.read(pane_selector), 'pane_dashboard_missing')
             if not button.startswith(config['paneId']+' · '):
                 raise GuiFailure('unexpected_dashboard_pane')
+            # The disposable catalog contains just the device-authorized host.
+            # Capture its displayed count and timestamp before opening its pane.
+            summary_selector = '#host-task-board [data-live-host-summary]'
+            current_label = '本次快照（持续更新不可用）'
+            session_label = f" · 会话 {config['session']} · 受阻"
+            def current_summary():
+                label = driver.read(summary_selector)
+                return label if current_label + session_label in label and ' · 同步 ' in label else None
+            summary = wait_for(current_summary, 'direct_host_summary_missing')
+            retained = '上次快照（状态已陈旧）' + summary.split(current_label, 1)[1]
             driver.click(pane_selector)
+            wait_for(lambda: driver.read(summary_selector).endswith(retained), 'direct_host_summary_not_retained')
             def rendered(attr):
                 path = driver.element('#remote-captured')+'/attribute/data-'+attr+'-frames'
                 value = driver.call('GET', path)
@@ -337,7 +351,11 @@ def run_tauri(args, root, env, config, approval):
                 wait_for(lambda: '已接收入队' in driver.read('#remote-input-status'), 'input_ack_missing')
             driver.click('#remote-cancel')
             wait_for(lambda:'陈旧' in driver.read('#remote-captured'), 'stale_marker_missing')
+            driver.click('#host-return-home')
+            wait_for(lambda: driver.read('#host-list [data-host-task-summary]') == retained,
+                     'retained_home_summary_missing')
             return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
+                    'singleHostSnapshotShown':True, 'hostSummaryRetainedOnHome':True,
                     'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                     'localViewportChanges':2, 'inputQueueAccepted':bool(args.input_fixture), 'keyStore':'native process-memory Linux test identity'}
         finally:

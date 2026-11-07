@@ -1,0 +1,236 @@
+{
+  "date": "2026-11-08",
+  "source": "1cea5a27b035b7a36750ce0cf6d4be53ff124da5",
+  "scope": "macOS arm64; frozen source checkout; bundled theme samples; synthetic SSH/native events in browser",
+  "capture": {
+    "repeatInIndependentDirectories": true,
+    "fixtureSha256": "1b86567e91ad08dc8c4d74a593b94da9946dd3515f610c0ca9a11976b92f3e6d",
+    "samples": [
+      {
+        "id": "powerlevel10k",
+        "ansiBytes": 225,
+        "expectedCursor": [
+          14,
+          0
+        ]
+      },
+      {
+        "id": "oh-my-posh",
+        "ansiBytes": 190,
+        "expectedCursor": [
+          15,
+          0
+        ]
+      }
+    ]
+  },
+  "dartCores": {
+    "reference": {
+      "results": [
+        {
+          "id": "powerlevel10k",
+          "expected": [
+            14,
+            0
+          ],
+          "actual": [
+            14,
+            0
+          ],
+          "matches": true
+        },
+        {
+          "id": "oh-my-posh",
+          "expected": [
+            15,
+            0
+          ],
+          "actual": [
+            15,
+            0
+          ],
+          "matches": true
+        }
+      ],
+      "scope": "terminal_view 0.5.0 Dart core only; no Flutter rendering or device"
+    },
+    "candidate": {
+      "results": [
+        {
+          "id": "powerlevel10k",
+          "expected": [
+            14,
+            0
+          ],
+          "actual": [
+            14,
+            0
+          ],
+          "matches": true
+        },
+        {
+          "id": "oh-my-posh",
+          "expected": [
+            15,
+            0
+          ],
+          "actual": [
+            15,
+            0
+          ],
+          "matches": true
+        }
+      ],
+      "scope": "terminal_view 0.5.0 Dart core only; no Flutter rendering or device"
+    }
+  },
+  "tauriBrowser": {
+    "browser": "Chrome/156.0.8078.81",
+    "scope": "Mac Chrome mobile viewport, production bundled Tauri GUI and xterm, synthetic native host and frames",
+    "checks": [
+      {
+        "width": 320,
+        "id": "powerlevel10k",
+        "sampleId": "powerlevel10k",
+        "columns": 40,
+        "rowsReported": 3,
+        "x": 14,
+        "y": 0,
+        "match": true,
+        "readOnly": true,
+        "pageOverflow": 0,
+        "scrollRange": 98,
+        "scrollMoved": 98,
+        "rows": 3,
+        "focus": true,
+        "fontLoaded": true,
+        "fonts": [
+          {
+            "name": "PingFangSC-Regular",
+            "glyphs": 2,
+            "custom": false
+          },
+          {
+            "name": "JetBrainsMonoNFM-Regular",
+            "glyphs": 11,
+            "custom": true
+          }
+        ]
+      },
+      {
+        "width": 320,
+        "id": "oh-my-posh",
+        "sampleId": "oh-my-posh",
+        "columns": 40,
+        "rowsReported": 3,
+        "x": 15,
+        "y": 0,
+        "match": true,
+        "readOnly": true,
+        "pageOverflow": 0,
+        "scrollRange": 98,
+        "scrollMoved": 98,
+        "rows": 3,
+        "focus": true,
+        "fontLoaded": true,
+        "fonts": [
+          {
+            "name": "PingFangSC-Regular",
+            "glyphs": 2,
+            "custom": false
+          },
+          {
+            "name": "JetBrainsMonoNFM-Regular",
+            "glyphs": 12,
+            "custom": true
+          }
+        ]
+      },
+      {
+        "width": 390,
+        "id": "powerlevel10k",
+        "sampleId": "powerlevel10k",
+        "columns": 40,
+        "rowsReported": 3,
+        "x": 14,
+        "y": 0,
+        "match": true,
+        "readOnly": true,
+        "pageOverflow": 0,
+        "scrollRange": 28,
+        "scrollMoved": 28,
+        "rows": 3,
+        "focus": true,
+        "fontLoaded": true,
+        "fonts": [
+          {
+            "name": "PingFangSC-Regular",
+            "glyphs": 2,
+            "custom": false
+          },
+          {
+            "name": "JetBrainsMonoNFM-Regular",
+            "glyphs": 11,
+            "custom": true
+          }
+        ]
+      },
+      {
+        "width": 390,
+        "id": "oh-my-posh",
+        "sampleId": "oh-my-posh",
+        "columns": 40,
+        "rowsReported": 3,
+        "x": 15,
+        "y": 0,
+        "match": true,
+        "readOnly": true,
+        "pageOverflow": 0,
+        "scrollRange": 28,
+        "scrollMoved": 28,
+        "rows": 3,
+        "focus": true,
+        "fontLoaded": true,
+        "fonts": [
+          {
+            "name": "PingFangSC-Regular",
+            "glyphs": 2,
+            "custom": false
+          },
+          {
+            "name": "JetBrainsMonoNFM-Regular",
+            "glyphs": 12,
+            "custom": true
+          }
+        ]
+      }
+    ],
+    "closedToOriginalTrigger": true,
+    "remoteInputOrResize": 0
+  },
+  "testBrowserClosed": true,
+  "checks": {
+    "nodeVersion": "22.22.2",
+    "nodeTestsPassed": 463,
+    "nodeTestsSkipped": 0,
+    "viteVersion": "8.3.5",
+    "viteModules": 63,
+    "flutterScaffoldAndPackaging": 6,
+    "flutterAndroidDriverTests": 89,
+    "otherRemoteHarnessTests": 87,
+    "dartParserAnalyzer": "passed",
+    "flutterWidgetRun": null,
+    "androidThemeRun": null
+  },
+  "initialBrowserAttempt": "Synthetic native events omitted active observation phase. The font control did not become available. Replayed with the normal observation transition; all four measurements above are from the final bundle.",
+  "notMeasured": [
+    "Flutter engine pixels",
+    "real phone",
+    "real IME",
+    "live SSH theme/interactive prompt redraw",
+    "git status segment",
+    "iOS rendering",
+    "Android rendering",
+    "cross-network concurrency"
+  ]
+}

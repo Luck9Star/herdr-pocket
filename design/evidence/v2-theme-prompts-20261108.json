@@ -1,0 +1,42 @@
+{
+  "status": "saved_online_and_viewer_verified",
+  "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+  "page": "7a22df08-251d-8016-8008-de03541c11da",
+  "s45": "ff7bd149-6597-80a5-8008-e8b74585bb97",
+  "frames": {
+    "powerlevel10k": "0d4ede31-cfe7-8093-8008-e9356c1b4337",
+    "ohMyPosh": "0d4ede31-cfe7-8093-8008-e9356c2c8086"
+  },
+  "viewer": {
+    "s45": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8b74585bb97",
+    "powerlevel10k": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=0d4ede31-cfe7-8093-8008-e9356c1b4337",
+    "ohMyPosh": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=0d4ede31-cfe7-8093-8008-e9356c2c8086"
+  },
+  "sourceFixtureSha256": "1b86567e91ad08dc8c4d74a593b94da9946dd3515f610c0ca9a11976b92f3e6d",
+  "s45HeightBefore": 844,
+  "s45HeightAfter": 908,
+  "s45OriginalChildren": 37,
+  "s45OriginalGeometryAndInteractionCountsPreserved": true,
+  "s45ExistingBackTargets": "S02",
+  "viewerSequenceAfterReload": [
+    "S45",
+    "Powerlevel10k",
+    "Oh My Posh",
+    "S45"
+  ],
+  "twoExports": {
+    "powerlevel10k": {
+      "path": "design/evidence/v2-theme-prompts-powerlevel10k-20261108.png",
+      "sha256": "56ab466b8f4d3cdd5dbd3ba176f6f4d191d5afc77e0712ae7a33e119b056ceb3",
+      "bytes": 72119
+    },
+    "oh-my-posh": {
+      "path": "design/evidence/v2-theme-prompts-oh-my-posh-20261108.png",
+      "sha256": "f945fb8abb9477d0d8501f2c33005d23be68566ef3c714c00e7ec35e4a2e124a",
+      "bytes": 72607
+    }
+  },
+  "pluginWarning": "MCP 2.15.4 reported Penpot 2.19.0 version mismatch",
+  "recovery": "A self-navigation action was rejected after creating two boards; exact partial state was read and only those objects were completed. No S45 originals were altered.",
+  "limits": "Static editable illustration and source-font vector outlines; not device rendering, actual cursor result, SSH or functional application proof."
+}

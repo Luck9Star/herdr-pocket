@@ -1,5 +1,7 @@
 # 手机终端的字体与字符诊断
 
+2026-11-08 新增 Powerlevel10k 和 Oh My Posh 的真实提示符样例。两套手机诊断使用同一份引擎输出；列位置、Mac 字体回退与下一批设备步骤见[主题对照记录](52-mobile-theme-prompts.md)。
+
 2026-11-07。Flutter 与 Tauri 候选在手机终端的正常观察页增加了「字体与字符诊断」。新配对和从已保存主机打开的终端均可进入。收到选定目标的全量画面后即可检查字形，原厂只读 herdr 也能使用。结果来自以下源码和 Mac 实验；当前可下载的 Android 包仍为 `1d604fa`。[检查数据](evidence/mobile-pair-gui/terminal-font-diagnostics-20261107.json) · [现有 Android 包与配对链路](40-android-paired-dashboard-validation.md)
 
 ## 在手机上怎么检查

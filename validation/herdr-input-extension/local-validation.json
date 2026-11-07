@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-07T12:51:16.928791+00:00",
+  "scope": "local tool tests only; no real release-profile host binary or production deployment",
+  "platform": {
+    "system": "Darwin",
+    "machine": "arm64"
+  },
+  "toolchains": {
+    "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "zig": "zig_missing"
+  },
+  "tests": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s validation/herdr-input-extension -p 'test_*.py' -v",
+    "passed": 16,
+    "failed": 0,
+    "peer": "synthetic local Unix socket, never herdr",
+    "buildCommands": "explicit test doubles"
+  },
+  "realReleaseBuildExecuted": false,
+  "realHerdrPreflightExecuted": false,
+  "missingPrerequisite": "Zig 0.16.0 unavailable; no upstream checkout/cache was imported or searched",
+  "toolchainsInstalled": false,
+  "actionsTriggered": false,
+  "userAuthorizationFilesTouched": false,
+  "hashes": {
+    "candidate.py": "dfbaa51d64fe5b6fe1371fb987fca60321e9c609172161bc28dc243c0b96870a",
+    "test_candidate.py": "df2b8f49f12abc3ed6784c68417197ab10a7f41b4e71434b2f1bee69a06cd8aa",
+    "herdr-0.9.5-pocket-input.patch": "c07a1637e3b72b13c660dc4cc3c2cca50ef383b66d0400a3208bd9079434ab00"
+  }
+}

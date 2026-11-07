@@ -15,6 +15,11 @@ jobs:
   input-fixture:
     if: startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-')
     uses: ./.github/workflows/input-extension-validation.yml
+  input-host-candidate:
+    if: startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-host-')
+    uses: ./.github/workflows/input-extension-validation.yml
+    with:
+      release_candidate: true
   android-pairing:
     needs: input-fixture
     if: >-

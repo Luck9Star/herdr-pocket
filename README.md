@@ -11,7 +11,7 @@ herdr-pocket 是手机优先的远端 herdr 图形客户端原型，目标覆盖
 | Flutter | [arm64 debug 测试归档](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342/artifacts/13556637167) | `aad0a4e04b28650dec872a29d4b554a6993350f614b5ae3c8982e5c8581ce994` |
 | Tauri | [arm64 debug 测试归档](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342/artifacts/13556314095) | `2217b6d7033e68bb3f9632861efd4597c20a6ec8ae02c56084aab822b2c0a3a6` |
 
-解压后核对 `app.apk` 哈希，保留 `report.json`、校验和及来源声明。归档在北京时间 2026-11-21 10:26／10:27 到期。测试包面向 API 35、arm64-v8a；本轮设备验收使用同源 x86_64 调试构建。物理设备安装和正式分发仍待后续验收。[下载与设备验收步骤](https://github.com/Luck9Star/herdr-pocket/blob/e6d2fc5903adc78f3cf5642a7e4bc3ed0f75ad22/docs/34-mobile-host-task-summary.md)
+登录 GitHub 后点击上表的测试归档；匿名访问下载端点返回 401。解压后核对 `app.apk` 哈希，保留 `report.json`、校验和及来源声明。归档在北京时间 2026-11-21 10:26／10:27 到期。测试包面向 API 35、arm64-v8a；本轮设备验收使用同源 x86_64 调试构建。物理设备安装和正式分发仍待后续验收。[下载与设备验收步骤](https://github.com/Luck9Star/herdr-pocket/blob/e6d2fc5903adc78f3cf5642a7e4bc3ed0f75ad22/docs/34-mobile-host-task-summary.md)
 
 Flutter analyzer、286 项常规测试和 10 项绘制回归通过，常规套件跳过的 1 项 SSH 用例已单独执行。Tauri JavaScript 149 项、共享 Rust transport 95＋1 项通过。前两轮暴露的手工重连测试、跨目标草稿确认及 Android 构建问题均保留在记录中。[完整数据及失败记录](https://github.com/Luck9Star/herdr-pocket/blob/e6d2fc5903adc78f3cf5642a7e4bc3ed0f75ad22/docs/evidence/mobile-pair-gui/host-board-cloud-20261107.json)
 
@@ -31,4 +31,6 @@ Flutter 真实 widget 经隔离 OpenSSH/herdr 验证了同一 SSH 连接上的�
 
 历史 `040eb26` 云模拟器结果、`546c3eb` 独立标签包与各次失败保留原 SHA 和范围，不外推为本批设备运行通过。[历史手机结果](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/18-mobile-network-profiles.md) · [前一测试包](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/22-mobile-terminal-tabs.md) · [Penpot 设计与覆盖](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/design/README.md) · [配对与设备密钥](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/14-mobile-pairing-workbench.md) · [终端绘制与 EasyTier 移植修复](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/10-blocker-repair.md)
 
-手机下一步用云模拟器和 Mac 验证输入、键盘变化及恢复，将结果反馈到 Penpot。真机触控、相机与实网切换单列验收。Flutter 与 Tauri 仍保留为候选。桌面分屏随后验收。[本批实现与未验证项](https://github.com/Luck9Star/herdr-pocket/blob/e6d2fc5903adc78f3cf5642a7e4bc3ed0f75ad22/docs/34-mobile-host-task-summary.md) · [云构建与分发](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/07-build-and-release.md)
+**原型分支后续进度**　Flutter 已修正重复点击当前输入模式打断组字的问题，新增的 3 个 widget 场景待云端运行。Tauri 刚配对的表单和已存主机标签已在 Mac Chrome 的 390×844 视口验证首次可编辑焦点、许可前组字不发送、许可后中文提交一次。本地 159 项 JavaScript 检查和前端构建通过。这些改动将在下一批集中构建时进入 APK。[键盘与组字验证](https://github.com/Luck9Star/herdr-pocket/blob/694b5431760440548c6feac10fefc02713950f12/docs/35-mobile-input-focus.md)
+
+手机下一步在云模拟器验证输入与恢复，将结果反馈到 Penpot。真机触控、相机与实网切换单列验收。Flutter 与 Tauri 仍保留为候选。桌面分屏随后验收。[本批实现与未验证项](https://github.com/Luck9Star/herdr-pocket/blob/e6d2fc5903adc78f3cf5642a7e4bc3ed0f75ad22/docs/34-mobile-host-task-summary.md) · [云构建与分发](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/07-build-and-release.md)

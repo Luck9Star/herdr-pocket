@@ -1,0 +1,18 @@
+{
+  "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+  "page": "7a22df08-251d-8016-8008-de03541c11da",
+  "viewer": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8c46842cb06",
+  "source": "design/penpot/mobile-horizontal-recovery-20261107.js",
+  "readback": "design/evidence/v2-mobile-horizontal-readback-20261107.json",
+  "exports": [
+    "design/evidence/v2-horizontal-s46-20261107.png",
+    "design/evidence/v2-horizontal-s47-20261107.png"
+  ],
+  "observed_viewer_paths": [
+    "S46 -> S47 -> S46 -> S02 -> S46",
+    "S18 -> S46"
+  ],
+  "existing_shape_check": "61/61 S02 and S18 existing shape IDs, names, types, rounded geometry and interaction destinations matched before/after. Text styling, fonts, other boards and tokens were not compared.",
+  "scope": "Penpot desktop viewer and exported images; prototype only, not real phone or network validation.",
+  "version_warning": "Plugin reported target Penpot 2.15.4; running site reported 2.19.0."
+}

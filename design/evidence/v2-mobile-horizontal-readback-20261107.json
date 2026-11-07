@@ -1,0 +1,1184 @@
+{
+  "result": [
+    {
+      "id": "7a22df08-251d-8016-8008-de04a20d928d",
+      "name": "S02 · 终端观察模式 · 安全只读与画面监控",
+      "children": [
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2151fda",
+          "name": "16:40",
+          "type": "text",
+          "x": 24,
+          "y": 13,
+          "w": 54,
+          "h": 20,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a21bd18f",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 147,
+          "y": 9,
+          "w": 96,
+          "h": 24,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a21e0d6c",
+          "name": "5G  100%",
+          "type": "text",
+          "x": 314,
+          "y": 14,
+          "w": 52,
+          "h": 20,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2229cc5",
+          "name": "‹ 看板",
+          "type": "text",
+          "x": 20,
+          "y": 52,
+          "w": 60,
+          "h": 24,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "7a22df08-251d-8016-8008-de045ec11db9"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a225f707",
+          "name": "workstation / agent-a",
+          "type": "text",
+          "x": 80,
+          "y": 50,
+          "w": 210,
+          "h": 24,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a22961b3",
+          "name": "badge / success",
+          "type": "rectangle",
+          "x": 298,
+          "y": 51,
+          "w": 72,
+          "h": 22,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a22b01b1",
+          "name": "● 已连接",
+          "type": "text",
+          "x": 304,
+          "y": 55,
+          "w": 60,
+          "h": 14,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a22f28bc",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 20,
+          "y": 88,
+          "w": 350,
+          "h": 36,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a23181fc",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 22,
+          "y": 90,
+          "w": 120,
+          "h": 32,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a233e795",
+          "name": "● agent-a",
+          "type": "text",
+          "x": 30,
+          "y": 98,
+          "w": 104,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a23918c5",
+          "name": "○ agent-b",
+          "type": "text",
+          "x": 154,
+          "y": 98,
+          "w": 90,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a23e30ee",
+          "name": "+",
+          "type": "text",
+          "x": 332,
+          "y": 96,
+          "w": 24,
+          "h": 20,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a242e1c3",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 20,
+          "y": 132,
+          "w": 350,
+          "h": 38,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a245420a",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 22,
+          "y": 134,
+          "w": 114,
+          "h": 34,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2484ba6",
+          "name": "👁️ 观察模式",
+          "type": "text",
+          "x": 22,
+          "y": 142,
+          "w": 114,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a24d55ea",
+          "name": "⌨️ 逐键输入",
+          "type": "text",
+          "x": 138,
+          "y": 142,
+          "w": 114,
+          "h": 18,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2528911",
+          "name": "✍️ 草稿模式",
+          "type": "text",
+          "x": 254,
+          "y": 142,
+          "w": 114,
+          "h": 18,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2578db9",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 20,
+          "y": 178,
+          "w": 350,
+          "h": 32,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a259f308",
+          "name": "🛡️ 观察模式：按键不会发送到远端 PTY · 触控仅在本地滚动",
+          "type": "text",
+          "x": 28,
+          "y": 186,
+          "w": 334,
+          "h": 16,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a25e5bff",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 20,
+          "y": 218,
+          "w": 350,
+          "h": 480,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a260ddf6",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 20,
+          "y": 218,
+          "w": 350,
+          "h": 32,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a262cabe",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 34,
+          "y": 229,
+          "w": 10,
+          "h": 10,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a264f714",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 50,
+          "y": 229,
+          "w": 10,
+          "h": 10,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a266b640",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 66,
+          "y": 229,
+          "w": 10,
+          "h": 10,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2688e22",
+          "name": "agent-a @ workstation · 80x24",
+          "type": "text",
+          "x": 86,
+          "y": 227,
+          "w": 218,
+          "h": 16,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a26d7d9b",
+          "name": "⤢",
+          "type": "text",
+          "x": 334,
+          "y": 226,
+          "w": 20,
+          "h": 16,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a27209bd",
+          "name": "❯ herdr session attach --target agent-a",
+          "type": "text",
+          "x": 32,
+          "y": 262,
+          "w": 326,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a276d754",
+          "name": "[2026-10-30 16:40:02] Connected via Tail",
+          "type": "text",
+          "x": 32,
+          "y": 284,
+          "w": 326,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a27ae52b",
+          "name": "[HERDR] Session state: WAITING_FOR_INPUT",
+          "type": "text",
+          "x": 32,
+          "y": 306,
+          "w": 326,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a27f3c9e",
+          "name": "[AGENT] Task completed. Waiting for deve",
+          "type": "text",
+          "x": 32,
+          "y": 328,
+          "w": 326,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a28344cc",
+          "name": "[DIFF] Changes in src / core / session.rs (+",
+          "type": "text",
+          "x": 32,
+          "y": 350,
+          "w": 326,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a28793ff",
+          "name": "+ pub struct SessionHandler { pty: Pty",
+          "type": "text",
+          "x": 32,
+          "y": 372,
+          "w": 326,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a28b931c",
+          "name": "+ impl Stream for SessionHandler { ...",
+          "type": "text",
+          "x": 32,
+          "y": 394,
+          "w": 326,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a28fa071",
+          "name": "- legacy_unbuffered_write(data);",
+          "type": "text",
+          "x": 32,
+          "y": 416,
+          "w": 326,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a29d0106",
+          "name": "› Run regression tests before merging.",
+          "type": "text",
+          "x": 32,
+          "y": 438,
+          "w": 326,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2a08e82",
+          "name": "› Press Enter or type command in Direct",
+          "type": "text",
+          "x": 32,
+          "y": 460,
+          "w": 326,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2a3e25e",
+          "name": "› ▍",
+          "type": "text",
+          "x": 32,
+          "y": 482,
+          "w": 326,
+          "h": 18,
+          "links": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2a68242",
+          "name": "button / primary",
+          "type": "rectangle",
+          "x": 20,
+          "y": 712,
+          "w": 350,
+          "h": 42,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2a8737c",
+          "name": "⌨️ 切换至逐键输入模式 (Direct)",
+          "type": "text",
+          "x": 28,
+          "y": 724,
+          "w": 334,
+          "h": 20,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2ab99c1",
+          "name": "button / secondary",
+          "type": "rectangle",
+          "x": 20,
+          "y": 760,
+          "w": 170,
+          "h": 44,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e88156484822"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2ad0f1a",
+          "name": "选择终端文本",
+          "type": "text",
+          "x": 28,
+          "y": 772,
+          "w": 154,
+          "h": 20,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e88156484822"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2b07939",
+          "name": "button / secondary",
+          "type": "rectangle",
+          "x": 200,
+          "y": 760,
+          "w": 170,
+          "h": 44,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e8b74585bb97"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2b20c14",
+          "name": "⚙️ 终端字体与诊断",
+          "type": "text",
+          "x": 208,
+          "y": 772,
+          "w": 154,
+          "h": 20,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e8b74585bb97"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2b54a8f",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 128,
+          "y": 0,
+          "w": 134,
+          "h": 5,
+          "links": []
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220d5ba4e7",
+          "name": "hitarea-7a22df08-251d-8016-8008-de04a2229cc5",
+          "type": "rectangle",
+          "x": 20,
+          "y": 42,
+          "w": 60,
+          "h": 44,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "7a22df08-251d-8016-8008-de045ec11db9"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220d6019ea",
+          "name": "hitarea-7a22df08-251d-8016-8008-de04a24d55ea",
+          "type": "rectangle",
+          "x": 138,
+          "y": 129,
+          "w": 114,
+          "h": 44,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220d64c4cf",
+          "name": "hitarea-7a22df08-251d-8016-8008-de04a2528911",
+          "type": "rectangle",
+          "x": 254,
+          "y": 129,
+          "w": 114,
+          "h": 44,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220d69fe49",
+          "name": "hitarea-7a22df08-251d-8016-8008-de04a2a8737c",
+          "type": "rectangle",
+          "x": 28,
+          "y": 712,
+          "w": 334,
+          "h": 44,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4690b562d",
+          "name": "横向位置说明入口",
+          "type": "rectangle",
+          "x": 32,
+          "y": 636,
+          "w": 326,
+          "h": 44,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e8c46842cb06"
+            }
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4690ef164",
+          "name": "横向位置说明",
+          "type": "text",
+          "x": 40,
+          "y": 648,
+          "w": 310,
+          "h": 24,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e8c46842cb06"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "61ebadac-98b5-8013-8008-e6e791a288bd",
+      "name": "S18 · 隐藏后恢复原目标",
+      "children": [
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e791a6c8ed",
+          "name": "HERDR POCKET / 交互原型",
+          "type": "text",
+          "x": 24,
+          "y": 18,
+          "w": 342,
+          "h": 22,
+          "links": []
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e791ad33c7",
+          "name": "隐藏后恢复原目标",
+          "type": "text",
+          "x": 24,
+          "y": 62,
+          "w": 342,
+          "h": 64,
+          "links": []
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e7920cb1dc",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 24,
+          "y": 140,
+          "w": 342,
+          "h": 170,
+          "links": []
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e7920f8591",
+          "name": "观察暂停 · 输入已关闭",
+          "type": "text",
+          "x": 40,
+          "y": 156,
+          "w": 310,
+          "h": 28,
+          "links": []
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e7921633ba",
+          "name": "workstation-01 / pane-demo / term-demo",
+          "type": "text",
+          "x": 40,
+          "y": 190,
+          "w": 310,
+          "h": 112,
+          "links": []
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e7921c2568",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "x": 24,
+          "y": 330,
+          "w": 342,
+          "h": 180,
+          "links": []
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e7921f261e",
+          "name": "返回后取得新 full",
+          "type": "text",
+          "x": 40,
+          "y": 346,
+          "w": 310,
+          "h": 28,
+          "links": []
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e792257135",
+          "name": "重新核对同一稳定目标，取得当前画面前保持只读；暂停期间的历史不保证补齐。",
+          "type": "text",
+          "x": 40,
+          "y": 380,
+          "w": 310,
+          "h": 122,
+          "links": []
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e7922a6083",
+          "name": "action · 演示：新画面已取得",
+          "type": "rectangle",
+          "x": 24,
+          "y": 548,
+          "w": 342,
+          "h": 48,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "feb2a821-b263-8097-8008-de2255dcbada"
+            }
+          ]
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e7922d85c9",
+          "name": "演示：新画面已取得",
+          "type": "text",
+          "x": 36,
+          "y": 561,
+          "w": 318,
+          "h": 24,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "feb2a821-b263-8097-8008-de2255dcbada"
+            }
+          ]
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e79234e7a0",
+          "name": "action · 查看配置冲突审查",
+          "type": "rectangle",
+          "x": 24,
+          "y": 610,
+          "w": 342,
+          "h": 48,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "61ebadac-98b5-8013-8008-e6e791b41fa6"
+            }
+          ]
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e79237e886",
+          "name": "查看配置冲突审查",
+          "type": "text",
+          "x": 36,
+          "y": 623,
+          "w": 318,
+          "h": 24,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "61ebadac-98b5-8013-8008-e6e791b41fa6"
+            }
+          ]
+        },
+        {
+          "id": "61ebadac-98b5-8013-8008-e6e7923f8e8b",
+          "name": "目标退出或身份变化时重新选择，旧许可不沿用。",
+          "type": "text",
+          "x": 24,
+          "y": 760,
+          "w": 342,
+          "h": 50,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c469001ab3",
+          "name": "横向恢复说明入口",
+          "type": "rectangle",
+          "x": 24,
+          "y": 681,
+          "w": 342,
+          "h": 44,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e8c46842cb06"
+            }
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c469038e73",
+          "name": "横向恢复说明",
+          "type": "text",
+          "x": 32,
+          "y": 691,
+          "w": 326,
+          "h": 24,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e8c46842cb06"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ff7bd149-6597-80a5-8008-e8c46842cb06",
+      "name": "S46 · 横向阅读 · 原目标已恢复",
+      "children": [
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4684bd113",
+          "name": "产品标识",
+          "type": "text",
+          "x": 24,
+          "y": 20,
+          "w": 342,
+          "h": 22,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c46852cf1f",
+          "name": "标题",
+          "type": "text",
+          "x": 24,
+          "y": 58,
+          "w": 342,
+          "h": 40,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468585d3d",
+          "name": "状态说明",
+          "type": "text",
+          "x": 24,
+          "y": 108,
+          "w": 342,
+          "h": 49,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4685df6b6",
+          "name": "状态卡",
+          "type": "rectangle",
+          "x": 24,
+          "y": 173,
+          "w": 342,
+          "h": 86,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4686131c4",
+          "name": "状态标题",
+          "type": "text",
+          "x": 40,
+          "y": 188,
+          "w": 310,
+          "h": 24,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4686675d3",
+          "name": "目标身份",
+          "type": "text",
+          "x": 40,
+          "y": 220,
+          "w": 310,
+          "h": 24,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4686bd6c5",
+          "name": "终端示意",
+          "type": "rectangle",
+          "x": 24,
+          "y": 280,
+          "w": 342,
+          "h": 214,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4686ec1b7",
+          "name": "终端标题",
+          "type": "text",
+          "x": 40,
+          "y": 294,
+          "w": 310,
+          "h": 22,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c46874234d",
+          "name": "屏幕示意",
+          "type": "text",
+          "x": 40,
+          "y": 332,
+          "w": 306,
+          "h": 83,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468798462",
+          "name": "横向轨道",
+          "type": "rectangle",
+          "x": 40,
+          "y": 452,
+          "w": 310,
+          "h": 10,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4687c8d58",
+          "name": "横向位置",
+          "type": "rectangle",
+          "x": 125,
+          "y": 452,
+          "w": 115,
+          "h": 10,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4687ff56a",
+          "name": "列说明",
+          "type": "text",
+          "x": 24,
+          "y": 510,
+          "w": 342,
+          "h": 48,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c46884ab42",
+          "name": "安全边界",
+          "type": "text",
+          "x": 24,
+          "y": 572,
+          "w": 342,
+          "h": 50,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c46889302c",
+          "name": "action · 切换示例",
+          "type": "rectangle",
+          "x": 24,
+          "y": 642,
+          "w": 342,
+          "h": 48,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e8c468485cae"
+            }
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4688c37e7",
+          "name": "切换示例",
+          "type": "text",
+          "x": 32,
+          "y": 654,
+          "w": 326,
+          "h": 24,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e8c468485cae"
+            }
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c46893a2dc",
+          "name": "action · 返回观察",
+          "type": "rectangle",
+          "x": 24,
+          "y": 704,
+          "w": 342,
+          "h": 48,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "7a22df08-251d-8016-8008-de04a20d928d"
+            }
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c46896be47",
+          "name": "返回观察",
+          "type": "text",
+          "x": 32,
+          "y": 716,
+          "w": 326,
+          "h": 24,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "7a22df08-251d-8016-8008-de04a20d928d"
+            }
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c4689d1f6e",
+          "name": "原型边界",
+          "type": "text",
+          "x": 24,
+          "y": 786,
+          "w": 342,
+          "h": 36,
+          "links": []
+        }
+      ]
+    },
+    {
+      "id": "ff7bd149-6597-80a5-8008-e8c468485cae",
+      "name": "S47 · 横向阅读 · 切换目标",
+      "children": [
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468a4ba77",
+          "name": "产品标识",
+          "type": "text",
+          "x": 24,
+          "y": 20,
+          "w": 342,
+          "h": 22,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468acf792",
+          "name": "标题",
+          "type": "text",
+          "x": 24,
+          "y": 58,
+          "w": 342,
+          "h": 40,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468b4f6b6",
+          "name": "状态说明",
+          "type": "text",
+          "x": 24,
+          "y": 108,
+          "w": 342,
+          "h": 49,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468ba17ad",
+          "name": "状态卡",
+          "type": "rectangle",
+          "x": 24,
+          "y": 173,
+          "w": 342,
+          "h": 86,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468bd94f2",
+          "name": "状态标题",
+          "type": "text",
+          "x": 40,
+          "y": 188,
+          "w": 310,
+          "h": 24,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468c2e859",
+          "name": "目标身份",
+          "type": "text",
+          "x": 40,
+          "y": 220,
+          "w": 310,
+          "h": 24,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468c8096e",
+          "name": "终端示意",
+          "type": "rectangle",
+          "x": 24,
+          "y": 280,
+          "w": 342,
+          "h": 214,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468cb41dd",
+          "name": "终端标题",
+          "type": "text",
+          "x": 40,
+          "y": 294,
+          "w": 310,
+          "h": 22,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468d090f8",
+          "name": "屏幕示意",
+          "type": "text",
+          "x": 40,
+          "y": 332,
+          "w": 306,
+          "h": 83,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468d693cc",
+          "name": "横向轨道",
+          "type": "rectangle",
+          "x": 40,
+          "y": 452,
+          "w": 310,
+          "h": 10,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468d99e57",
+          "name": "横向位置",
+          "type": "rectangle",
+          "x": 40,
+          "y": 452,
+          "w": 115,
+          "h": 10,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468dd09b8",
+          "name": "列说明",
+          "type": "text",
+          "x": 24,
+          "y": 510,
+          "w": 342,
+          "h": 48,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468e1d4cf",
+          "name": "安全边界",
+          "type": "text",
+          "x": 24,
+          "y": 572,
+          "w": 342,
+          "h": 50,
+          "links": []
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468e66641",
+          "name": "action · 切换示例",
+          "type": "rectangle",
+          "x": 24,
+          "y": 642,
+          "w": 342,
+          "h": 48,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e8c46842cb06"
+            }
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468e99e0a",
+          "name": "切换示例",
+          "type": "text",
+          "x": 32,
+          "y": 654,
+          "w": 326,
+          "h": 24,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "ff7bd149-6597-80a5-8008-e8c46842cb06"
+            }
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468f09ae3",
+          "name": "action · 返回观察",
+          "type": "rectangle",
+          "x": 24,
+          "y": 704,
+          "w": 342,
+          "h": 48,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "7a22df08-251d-8016-8008-de04a20d928d"
+            }
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468f3f903",
+          "name": "返回观察",
+          "type": "text",
+          "x": 32,
+          "y": 716,
+          "w": 326,
+          "h": 24,
+          "links": [
+            {
+              "trigger": "click",
+              "dest": "7a22df08-251d-8016-8008-de04a20d928d"
+            }
+          ]
+        },
+        {
+          "id": "ff7bd149-6597-80a5-8008-e8c468fab83b",
+          "name": "原型边界",
+          "type": "text",
+          "x": 24,
+          "y": 786,
+          "w": 342,
+          "h": 36,
+          "links": []
+        }
+      ]
+    }
+  ],
+  "log": ""
+}

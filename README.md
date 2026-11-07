@@ -17,6 +17,8 @@ herdr-pocket 是手机优先的远端 herdr 图形客户端原型，目标覆盖
 
 [手机原型 · 选择终端文本](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e88156484822) · [手机原型 · 粘贴超限](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e881ed74ebc9)
 
+**原型分支新进度 · 手机选区与复制**　两个 GUI 都已接入只读选区。两套真实终端缓冲区在相同的 10 组字符上复制一致，后续标记的列位置也一致。Tauri 在 Mac 浏览器的两个入口、两种手机视口通过复制与裁剪检查。Flutter 新选区仍待 widget 和手机运行验收。上面的两份 APK 均早于此项改动。[选区实测与复核步骤](https://github.com/Luck9Star/herdr-pocket/blob/6ffab0606ce88f404cada602b8330f0ce69f2411/docs/37-mobile-terminal-selection.md) · [Penpot 四个新增状态](https://github.com/Luck9Star/herdr-pocket/blob/6ffab0606ce88f404cada602b8330f0ce69f2411/design/evidence/v2-mobile-text-and-paste-20261107.json)
+
 ## 历史绿批及既有记录
 
 以下记录保留了 `e54f23c` 上一批只读观察和 7 项云任务通过时的下载与验收入口。

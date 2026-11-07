@@ -2,28 +2,28 @@
 
 手机优先的远端 [herdr](https://github.com/herdrdev/herdr) 客户端原型。首次配对时，手机审查主机指纹并创建专属设备密钥，主机确认后，手机主动连接，从看板选择会话内的终端并持续观察。目标平台为 iOS、Android、Windows、macOS 和 Linux。
 
-**从这里开始**　[原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [本批验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/343b5b6b0d926044d6884b33ea73bec3a5b6b174/docs/46-android-pairing-handoff-validation.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)
+**从这里开始**　[原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [最新下载、验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/5933435bce26d9a27308abf82de78e91ac841eea/docs/50-android-paired-tui-validation.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)
 
-**手机端进度 · 2026-11-08**　Flutter 和 Tauri 均已接入主机资料审查和本机设备密钥，原版 herdr 的「配对 → 看板 → 持续观察」已在两套 API 35 模拟器场景走通。源码分支另已修复设备密钥删除失败后的恢复，保留用户最初选择的「仅清身份」或「移除主机」。这项后续修复等待下批设备验收。[配对交接与撤销](https://github.com/Luck9Star/herdr-pocket/blob/343b5b6b0d926044d6884b33ea73bec3a5b6b174/docs/45-mobile-pairing-handoff.md) · [后续源码修复](https://github.com/Luck9Star/herdr-pocket/commit/82b499b562f8203b24640e392f926b58a285e560)
+**手机端进度 · 2026-11-08**　手机审查主机指纹并创建设备密钥，主机明确授权后，手机复核回执、主动连接，在看板选择终端，接收首帧及后续增量。Flutter 和 Tauri 的原版 herdr 只读闭环均有 API 35 模拟器记录。本次 Tauri 还完成同一 SSH 连接上的十步远端 TUI 与手机撤销。Flutter 本批停在模拟器准备，修正后的设备证据独立记录。[上批双路线只读验收](https://github.com/Luck9Star/herdr-pocket/blob/343b5b6b0d926044d6884b33ea73bec3a5b6b174/docs/46-android-pairing-handoff-validation.md) · [本批逐场结果](https://github.com/Luck9Star/herdr-pocket/blob/5933435bce26d9a27308abf82de78e91ac841eea/docs/50-android-paired-tui-validation.md) · [Flutter 定向复测](https://github.com/Luck9Star/herdr-pocket/actions/runs/42404613387)
 
 ## Android 测试包
 
-两份 arm64-v8a debug APK 均来自 [`7470d5c`](https://github.com/Luck9Star/herdr-pocket/commit/7470d5cc2a9c4b4c5fce0802b6bc7789a8b1e67f)。登录 GitHub 下载归档，在不同目录解压，以 `shasum -a 256 app.apk` 核对。两个包内的 EasyTier、Tailscale、Nerd Font 和诊断样例均已核实。归档于北京时间 11 月 21 日 23:55（Flutter）及 23:57（Tauri）到期。[同源构建](https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360)
+两份 arm64-v8a debug APK 来自同一提交 [`2b497ea`](https://github.com/Luck9Star/herdr-pocket/commit/2b497ea261c33dbf5fafeac2287bad1220ca5166)。登录 GitHub 下载归档，分别解压，用 `shasum -a 256 app.apk` 核对。两个包的摘要、原生库和共享字体资产均已实际核验。下载于北京时间 **11 月 22 日 02:58（Flutter）及 03:00（Tauri）** 到期。arm64 真机安装未验证。[构建记录](https://github.com/Luck9Star/herdr-pocket/actions/runs/42402903055)
 
 | 路线 | 测试包 | app.apk SHA-256 |
 | --- | --- | --- |
-| Flutter | [下载 arm64 debug](https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/artifacts/13580043770) | `420ff2077356116b3556e0bb47d104e1ddfec966660d06bd5df8f221b5ef9745` |
-| Tauri | [下载 arm64 debug](https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/artifacts/13580602396) | `1242e94e0c6cb85995016bb4d11eb58faa88172b9196156512a24ad657e3f20d` |
+| Flutter | [下载 arm64 debug](https://github.com/Luck9Star/herdr-pocket/actions/runs/42402903055/artifacts/13586616994) | `b9292bed0de3762262ad350abe5dab723ad2375602635c0c5576f0baedaa44b2` |
+| Tauri | [下载 arm64 debug](https://github.com/Luck9Star/herdr-pocket/actions/runs/42402903055/artifacts/13586094449) | `2d0543d00dfdcbc7a4629eca3bf32d64727e9fcd3330e5cd2237f6d929d0f0ca` |
 
-**本批实测**　两套原版 herdr 只读场景均完成配对、公钥认证、看板、首帧、增量和主动停止，远端收到 0 字节。带输入的 Tauri 场景取得两笔回执、10 字节，最终手机撤销确认失败；Flutter 场景收到 1 字节，应用清理失败，首发原因未知。四场共享 PTY 的采样均为 119 × 40。八项实际云任务中五项成功，arm64 真机安装与真实中文输入法待验证。[逐场验收与已知问题](https://github.com/Luck9Star/herdr-pocket/blob/343b5b6b0d926044d6884b33ea73bec3a5b6b174/docs/46-android-pairing-handoff-validation.md) · [前一批记录](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/43-mobile-viewport-recovery.md)
+**本批实测**　Tauri 只读场景远端收到 0 字节。受保护输入场景先收到逐键与草稿两笔，再由手机操作远端 curses，十笔新回执均绑定原目标；手机接受撤销回执并完成清理。两场共享 PTY 均维持 119×40。八个实际构建或验证任务中五个成功，Rust 测试、Flutter 源测试和 Flutter 模拟器准备三个任务失败。[失败、修复与运行边界](https://github.com/Luck9Star/herdr-pocket/blob/5933435bce26d9a27308abf82de78e91ac841eea/docs/50-android-paired-tui-validation.md)
 
 ## 手机端当前进度
 
 | 范围 | 已有证据 | 下一项验收 |
 | --- | --- | --- |
-| 配对 → 看板 → 持续观察 | Flutter、Tauri 在 API 35 模拟器均验证首次资料审查、设备签名 SSH、看板、所选终端首帧与增量、停止；Tauri 只读场景还走通手机接受撤销回执。[四场设备结果](https://github.com/Luck9Star/herdr-pocket/blob/343b5b6b0d926044d6884b33ea73bec3a5b6b174/docs/46-android-pairing-handoff-validation.md) | arm64 安装、物理相机扫码、锁屏和重启恢复 |
-| 终端与阅读位置 | 原型分支的两套手机界面已增加 80×24、120×40、160×50 三档观察画布。Mac 上分别收到对应的全帧和增量，共享 PTY 的 16 个样本均为 119×40。Tauri 在两种窄屏视口能读到右下角，Flutter 已验核心缓冲区。本页 APK 早于画布改动。[画布与阅读实测](https://github.com/Luck9Star/herdr-pocket/blob/20ca93cbe435853875e20cbee608a13e24c23fd3/docs/47-mobile-observer-canvas.md) · [阅读位置恢复](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/43-mobile-viewport-recovery.md) | 两壳在 API 35 复测宽画布与位置恢复，再验真机触控、中文 IME 和长时间观察 |
-| 终端输入 | 原版 herdr 在手机验证链路中提供只读观察。隔离的守卫扩展支持目标绑定的逐键和草稿输入；不确定是否送达时保留记录，不自动重发。[输入能力与恢复](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/24-target-input-recovery.md) | 主机扩展交付、真实交互式 TUI 和设备输入 |
+| 配对 → 看板 → 持续观察 | 两壳均有独立设备密钥 SSH、看板、所选 pane 首帧及增量、主动停止的模拟器证据。本批 Tauri 两场均验收手机撤销。[配对与闭环](https://github.com/Luck9Star/herdr-pocket/blob/5933435bce26d9a27308abf82de78e91ac841eea/docs/50-android-paired-tui-validation.md) | arm64 安装、物理相机扫码、锁屏和重启恢复 |
+| 终端与阅读位置 | 两份包包含三档观察画布。Tauri 只读模拟器场景验收了宽画布、标记及阅读位置恢复。[画布与设备验收](https://github.com/Luck9Star/herdr-pocket/blob/5933435bce26d9a27308abf82de78e91ac841eea/docs/50-android-paired-tui-validation.md) | Flutter 同场设备复测、真机触控与长时间观察 |
+| 终端输入 | 原版 herdr 保持只读。Tauri 在受保护宿主完成逐键、草稿及十个 TUI 按键。发送结果未知时保留记录，供用户核查。[操作与回执](https://github.com/Luck9Star/herdr-pocket/blob/5933435bce26d9a27308abf82de78e91ac841eea/docs/50-android-paired-tui-validation.md) | Flutter 同场设备复测、真实中文 IME、实体键盘 |
 | 组网与平台 | 两份 APK 包含 EasyTier、Tailscale。ZeroTier 的来源、设备管理及离线原生验证另有记录。[原生验证](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/29-zerotier-managed-device.md) | 三网真实节点、并发及五平台矩阵 |
 
 Flutter 与 Tauri 继续并行验证，物理手机的输入正确性、字形、生命周期和性能仍会影响选型。公开仓库提供源码和测试渠道，项目许可证与原生依赖的分发条件仍在审查。[技术栈复评](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/06-technology-evaluation.md) · [分发与许可](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/17-license-and-distribution-review.md)

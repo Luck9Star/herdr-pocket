@@ -7,24 +7,39 @@ import 'remote_input_widget_test.dart' as input;
 
 Future<void> press(WidgetTester tester, String key) async {
   final opening = key == 'remote-font-diagnostics-open';
-  if (opening) {
-    // Load the real packaged asset on the engine's IO clock. An animated
-    // loading indicator can otherwise keep the fake widget clock running.
-    await tester.runAsync(() async {
-      await rootBundle.loadString(
-        'assets/shared/terminal-font-diagnostics-v1.json',
-      );
-    });
-  }
   final button = find.byKey(ValueKey(key));
   await tester.ensureVisible(button);
-  await tester.tap(button);
-  final panel = find.byKey(const ValueKey('terminal-font-diagnostics-view'));
-  for (var frame = 0; frame < 12; frame++) {
-    await tester.pump(const Duration(milliseconds: 16));
-    if (panel.evaluate().isNotEmpty == opening) break;
+  // Scroll may trigger a rebuild and invalidate target/epoch-bound callbacks.
+  await tester.pump();
+  expect(button.hitTestable(), findsOneWidget,
+      reason: '$key must be visible and receive the pointer after scrolling');
+  if (opening) {
+    expect(tester.widget<OutlinedButton>(button).onPressed, isNotNull,
+        reason: 'diagnostics guard must allow this live observation');
+  } else {
+    expect(tester.widget<TextButton>(button).onPressed, isNotNull);
   }
-  expect(panel, opening ? findsOneWidget : findsNothing);
+  await tester.tap(button);
+  await tester.pump();
+  final panel = find.byKey(const ValueKey('terminal-font-diagnostics'));
+  if (!opening) {
+    expect(panel, findsNothing, reason: 'close must unmount diagnostics');
+    return;
+  }
+  expect(panel, findsOneWidget,
+      reason: 'the pointer reached the button but diagnostics did not open; check its target/epoch guard');
+  // Await the real packaged asset on the engine IO clock after the panel is
+  // mounted; do not advance a fake timer while an indeterminate loader spins.
+  await tester.runAsync(() => rootBundle.loadString(
+    'assets/shared/terminal-font-diagnostics-v1.json'));
+  await tester.pump();
+  final error = find.byKey(const ValueKey('terminal-font-diagnostics-error'));
+  final loading = find.byKey(const ValueKey('terminal-font-diagnostics-loading'));
+  final errorText = error.evaluate().isEmpty ? null : tester.widget<Text>(error).data;
+  expect(error, findsNothing, reason: 'diagnostics panel opened but fixture parsing or terminal creation failed: $errorText');
+  expect(loading, findsNothing, reason: 'diagnostics panel opened but its asset future has not completed');
+  expect(find.byKey(const ValueKey('terminal-font-diagnostics-view')), findsOneWidget,
+      reason: 'diagnostics loaded without an error but the local terminal is absent');
 }
 
 void main() {

@@ -9,17 +9,17 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
     final anchors = <String,double>{};
     Future<void> show(String target,double width,double fontSize) async {
-      await tester.pumpWidget(MaterialApp(home:Center(child:SizedBox(width:width,height:360,
+      await tester.pumpWidget(MaterialApp(home:Scaffold(body:Center(child:SizedBox(width:width,height:360,
         child:RemoteHorizontalViewport(identity:target,anchors:anchors,
           style:TerminalStyle(fontFamily:'monospace',fontSize:fontSize),
-          child:const ColoredBox(color:Colors.black))))));
+          child:const ColoredBox(key:ValueKey('fixture-terminal'),color:Colors.black)))))));
       await tester.pump();
     }
     ScrollController controller() => tester.widget<SingleChildScrollView>(
       find.byKey(const ValueKey('remote-horizontal-scroll'))).controller!;
     await show('host/session/pane/terminal-a',200,14);
     expect(find.byKey(const ValueKey('remote-horizontal-slider')),findsOneWidget);
-    expect(tester.getSize(find.byType(ColoredBox)).height,312);
+    expect(tester.getSize(find.byKey(const ValueKey('fixture-terminal'))).height,312);
     expect(controller().position.maxScrollExtent,greaterThan(0));
     controller().jumpTo(controller().position.maxScrollExtent / 2); await tester.pump();
     final column = anchors['host/session/pane/terminal-a']!;
@@ -34,16 +34,16 @@ void main() {
     expect(controller().offset,0);
     expect(anchors['host/session/pane/terminal-a'],0);
     expect(find.byKey(const ValueKey('remote-horizontal-slider')),findsNothing);
-    expect(tester.getSize(find.byType(ColoredBox)).height,360);
+    expect(tester.getSize(find.byKey(const ValueKey('fixture-terminal'))).height,360);
   });
   testWidgets('missing identities are never shared and saved anchors are bounded', (tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(1000,800);
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
     final anchors = <String,double>{};
     Future<void> show(String? target) async {
-      await tester.pumpWidget(MaterialApp(home:Center(child:SizedBox(width:200,height:360,
+      await tester.pumpWidget(MaterialApp(home:Scaffold(body:Center(child:SizedBox(width:200,height:360,
         child:RemoteHorizontalViewport(identity:target,anchors:anchors,
-          style:const TerminalStyle(fontFamily:'monospace',fontSize:14),child:const ColoredBox(color:Colors.black))))));
+          style:const TerminalStyle(fontFamily:'monospace',fontSize:14),child:const ColoredBox(color:Colors.black)))))));
       await tester.pump();
     }
     ScrollController controller() => tester.widget<SingleChildScrollView>(find.byKey(const ValueKey('remote-horizontal-scroll'))).controller!;

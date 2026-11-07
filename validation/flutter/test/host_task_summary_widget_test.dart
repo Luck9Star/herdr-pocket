@@ -103,8 +103,11 @@ void main() {
     final catalog=HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
     final profile=tabProfile('Host','probe','127.0.0.1','direct','summary'); await catalog.add(profile);
     final tabs=HostTabs(),adapters=<String,SummaryWidgetAdapter>{};
+    // Mount first: HostCatalogPage reloads the catalog and deliberately
+    // invalidates tabs while its authority is unavailable.
+    await setup(tester,catalog,tabs,adapters);
     for (var i=0;i<maxOpenHostTabs-1;i++) { expect(tabs.open(profile),isTrue); }
-    tabs.select(null); await setup(tester,catalog,tabs,adapters);
+    tabs.select(null); await tester.pumpAndSettle();
     final adapter=await connectHost(tester,profile,adapters); adapter.emit(blocked:2); await pumpReports(tester);
     expect(tabs.tabs.length,maxOpenHostTabs);
     await tester.tap(find.byKey(const ValueKey('workspace-task-summaries'))); await tester.pumpAndSettle();

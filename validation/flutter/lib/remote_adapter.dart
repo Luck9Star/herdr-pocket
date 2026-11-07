@@ -107,6 +107,8 @@ class RemoteEvidence {
   int frameCount = 0, deltaFrames = 0, paneCount = 0, connectionCount = 0, bufferHighWaterBytes = 0;
   int? lastSeq;
   String? errorCode;
+  // Bounded progress only; never contains an endpoint, frame, or input.
+  String observationPhase = 'idle';
   Map<String,Object?> toReport(String testCase, bool passed) => {
     'status': passed ? 'passed' : 'failed', 'case':testCase,
     'hostKeyChecked':hostKeyChecked, 'hostKeyMatched':hostKeyMatched,
@@ -660,6 +662,7 @@ class RemoteReadOnlyAdapter {
     if (a == null || !_valid(a) || a.failure != null) return false;
     if (a.observationPaused) return true;
     a.observationPaused = true; a.observationEpoch++; a.watchEpoch++;
+    a.evidence.observationPhase = 'paused';
     final board = a.dashboard;
     if (board != null) a.dashboard = board.withFreshness(DashboardFreshness.stale);
     // Revoke every write proof before any destructor can throw.
@@ -682,7 +685,7 @@ class RemoteReadOnlyAdapter {
   bool resumeObservation() {
     final a = _attempt;
     if (a == null || !_valid(a) || a.failure != null || !a.observationPaused) return false;
-    a.observationPaused = false;
+    a.observationPaused = false; a.evidence.observationPhase = 'resuming';
     final signal = a.resumeObservation; a.resumeObservation = null;
     if (signal != null && !signal.isCompleted) signal.complete();
     a.restartWatch?.call();
@@ -1224,6 +1227,7 @@ class RemoteReadOnlyAdapter {
         StreamSubscription<Uint8List>? stderr;
         try {
           if (needsSnapshot) {
+            e.observationPhase = 'snapshot';
             final fresh = await snapshot(observation:true); checkObservation();
             checkObservation();
             requireOriginalObservationTarget(selected,fresh);
@@ -1234,6 +1238,7 @@ class RemoteReadOnlyAdapter {
             host:config.host,port:config.port,username:config.username,hostFingerprint:config.expectedFingerprint,
             session:config.session,socketPath:config.socketPath,paneId:selected.paneId,terminalId:selected.terminalId,route:route);
           e.fullFrameReceived = false;
+          e.observationPhase = 'opening';
           observe = await _openChannel<SSHSession>(a,() => client.execute(config.observeCommand(selected.terminalId)),
             (s) => s.channel.destroy(),observation:true);
           checkObservation(); a.observe = observe;
@@ -1247,6 +1252,7 @@ class RemoteReadOnlyAdapter {
           },onError:(Object _) {});
           a.stderr = stderr;
           phase('observing'); checkObservation();
+          e.observationPhase = 'awaiting_full';
           frames = StreamIterator<RemoteFrame>(validatedFrames(
             current.stdout.map((chunk) { budget.add(chunk.length); return chunk; }),continuous:onDashboard != null));
           var first = true;
@@ -1276,6 +1282,7 @@ class RemoteReadOnlyAdapter {
                 observationEpoch:epoch,inputJournalRead:inputJournalRead))),timed:false,observation:true);
             checkObservation();
             if (frame.full) initialBlockedObservationCompleted = true;
+            if (frame.full) e.observationPhase = 'streaming';
             if (onDashboard == null) break;
           }
           checkObservation();
@@ -1285,6 +1292,7 @@ class RemoteReadOnlyAdapter {
           if (error.code != 'observation_paused' && a.observationEpoch == epoch) rethrow;
           _check(a); needsSnapshot = true;
         } finally {
+          if (!a.observationPaused && a.observationEpoch == epoch) e.observationPhase = 'retiring';
           a.inputTarget = null;
           if (onDashboard != null) e.fullFrameReceived = false;
           observe?.channel.destroy();
@@ -1298,6 +1306,7 @@ class RemoteReadOnlyAdapter {
         }
 
     } catch (error) {
+      e.observationPhase = 'failed';
       final failure = a.failure ?? (error is RemoteFailure ? error : RemoteFailure(e.errorCode ??
         (error is SSHAuthFailError ? 'authentication_failed' : error is SSHAuthAbortError && e.hostKeyMatched ? 'authentication_aborted' : 'connection_failed')));
       e.errorCode ??= failure.code;

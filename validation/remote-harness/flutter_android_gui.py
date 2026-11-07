@@ -68,7 +68,7 @@ STAGES.update(label.replace('-', '_') for label in (*KEYBOARD_CHECKPOINTS, KEYBO
 GUARDED_FIELDS = ('guardedInput', 'directInputAccepted', 'draftInputAccepted', 'hiddenTabStopped',
                   'hiddenTabManualRecovery', 'unsentDraftRestored', 'postStopInputDisabled') + CLIPBOARD_FIELDS
 PUBLIC_LIMITS = {'request.json': 2048, 'result.json': 8192, 'signer.json': 1024, 'stage': 40,
-                 'failure.json': 512, 'checkpoint.json': 128}
+                 'failure.json': 1024, 'checkpoint.json': 128}
 SIGNER_CHALLENGE = b'herdr-pocket-android-signer-probe-v1'
 REQUEST_FIELDS = {'version', 'type', 'request_id', 'account', 'host_key',
                   'issued_at', 'expires_at', 'device', 'public_key'}
@@ -310,19 +310,38 @@ def wait_system_ime(read_dump, package, visible, timeout=12):
 
 def safe_tui_resume(value):
     """No terminal strings, host identity, path or arbitrary keys may leave the AVD."""
-    integer_bounds = {'schemaVersion': (1,1), 'actionsCompleted': (0,3),
+    integer_bounds = {'schemaVersion': (1,2), 'actionsCompleted': (0,3),
         'boardCount': (0,2), 'tabCount': (0,2), 'resumeCount': (0,2), 'viewCount': (0,2),
         'sequence': (-1,9_007_199_254_740_991), 'cols': (0,512), 'rows': (0,512),
         'bufferRows': (0,512), 'directCount': (0,2), 'rowsChecked': (0,24),
         'rowMatchMask': (0,0xffffff), 'firstMismatchRow': (-1,23), 'titleRowMask': (0,0xffffff)}
     booleans = {'terminalReplaced','sequencePresent','cursorKeysMode','directEnabled','tailRowsBlank'}
     invalid = 'flutter_android_failure_metadata_invalid'
-    if not isinstance(value,dict) or set(value) != set(integer_bounds) | booleans:
+    extra_bools = {'pageBusy','pagePaused','pageLive','evidenceFull'}
+    enums = {'boardFreshness': {'none','stale','refreshing','fresh','unavailable'},
+             'adapterPhase': {'unknown','idle','paused','resuming','snapshot','opening','awaiting_full','streaming','retiring','failed'},
+             'adapterError': {'none','other','timeout','channel_cleanup_timeout','channel_identity','channel_capacity',
+                 'watch_failed','watch_retry_exhausted','resume_target_changed','observe_ended',
+                 'invalid_first_frame','invalid_frame','invalid_response','sequence_gap','cancelled'}}
+    if not isinstance(value,dict) or type(value.get('schemaVersion')) is not int:
+        raise DeviceFailure(invalid)
+    if value['schemaVersion'] == 2:
+        integer_bounds['pageCount'] = (0,2)
+        booleans |= extra_bools
+    elif value['schemaVersion'] != 1:
+        raise DeviceFailure(invalid)
+    if set(value) != set(integer_bounds) | booleans | (set(enums) if value['schemaVersion'] == 2 else set()):
+        raise DeviceFailure(invalid)
+    if value['schemaVersion'] == 2 and any(type(value[k]) is not str or value[k] not in allowed for k,allowed in enums.items()):
         raise DeviceFailure(invalid)
     for key,(low,high) in integer_bounds.items():
         if type(value[key]) is not int or not low <= value[key] <= high:
             raise DeviceFailure(invalid)
     if any(type(value[key]) is not bool for key in booleans):
+        raise DeviceFailure(invalid)
+    if value['schemaVersion'] == 2 and value['pageCount'] != 1 and (
+            any(value[k] for k in extra_bools) or value['boardFreshness'] != 'none' or
+            value['adapterPhase'] != 'unknown' or value['adapterError'] != 'none'):
         raise DeviceFailure(invalid)
     if value['sequencePresent'] != (value['sequence'] >= 0) or value['rowsChecked'] not in (0,24):
         raise DeviceFailure(invalid)
@@ -342,7 +361,7 @@ def safe_tui_resume(value):
                 bool(value['titleRowMask'] & 1) != bool(value['rowMatchMask'] & 1) or
                 value['titleRowMask'] & value['rowMatchMask'] & 0xfffffe):
             raise DeviceFailure(invalid)
-    return {key:value[key] for key in (*integer_bounds,*sorted(booleans))}
+    return {key:value[key] for key in (*integer_bounds,*sorted(booleans),*(enums if value['schemaVersion'] == 2 else ()))}
 
 
 def safe_test_failure(value):

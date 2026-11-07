@@ -230,7 +230,10 @@ def run_waiting_pane(directory, path, pane, sample, timeout=900):
             recorder.record['signalAvailable'] = 1
         tty.setraw(fd)
         (directory/'received.bin').write_bytes(b'')
-        os.write(1,('POCKET-BLOCKED-' + sample + '\r\nSynthetic waiting process; no AI account.\r\n').encode())
+        # Keep the entire marker inside the rounded phone viewport's readable
+        # cells. The renderer still has to draw every letter of the chosen pane.
+        marker = '    POCKET-BLOCKED-' + sample
+        os.write(1,(marker + '\r\nSynthetic waiting process; no AI account.\r\n').encode())
         recorder.start()
         result = rpc(path,'pane.report_agent',{'pane_id':pane,'source':SOURCE,'agent':AGENT,'state':'blocked','seq':1})
         if result != {'type':'ok'}:
@@ -252,7 +255,7 @@ def run_waiting_pane(directory, path, pane, sample, timeout=900):
                 break
             if now>=next_frame:
                 frame+=1
-                os.write(1,('POCKET-BLOCKED-' + sample + ' frame ' + str(frame) + '\r\n').encode())
+                os.write(1,(marker + ' frame ' + str(frame) + '\r\n').encode())
                 next_frame=now+0.5
             if select.select([fd],[],[],0.05)[0]:
                 data=os.read(fd,4097)

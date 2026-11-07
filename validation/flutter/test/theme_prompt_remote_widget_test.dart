@@ -10,6 +10,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late ThemePromptSamples samples;
   setUpAll(() async {
+    // The opening helper checks the default character grid before switching
+    // to a theme. Load both bundled assets on the engine clock.
+    await rootBundle.loadString('assets/shared/terminal-font-diagnostics-v1.json');
     samples=ThemePromptSamples.parse(await rootBundle.loadString('assets/shared/theme-prompt-samples-v1.json'));
     final font=FontLoader('ProbeNerd')..addFont(rootBundle.load('assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'));
     await font.load();

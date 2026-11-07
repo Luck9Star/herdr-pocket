@@ -12,7 +12,7 @@ import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/pairing_public_key.dart';
 import 'package:herdr_flutter_probe/remote_page.dart';
-import 'package:herdr_flutter_probe/remote_adapter.dart' show RemotePane;
+import 'package:herdr_flutter_probe/remote_adapter.dart' show RemotePane,RemoteDashboard,RemoteEvidence;
 import 'package:herdr_flutter_probe/remote_screen_viewport.dart';
 import 'package:herdr_flutter_probe/theme_prompt_samples.dart';
 
@@ -392,8 +392,11 @@ Map<String,Object> tuiResumeSnapshot(WidgetTester tester,Terminal before,String 
   int count(Finder finder) => finder.evaluate().length.clamp(0,2).toInt();
   final view = find.byType(TerminalView),direct = find.byKey(const ValueKey('remote-mode-direct'));
   final sequence = displayedSequence(tester);
+  final pages = find.byType(RemotePage);
   final result = <String,Object>{
-    'schemaVersion':1,'actionsCompleted':actionsCompleted,
+    'schemaVersion':2,'actionsCompleted':actionsCompleted,
+    'pageCount':count(pages),'pageBusy':false,'pagePaused':false,'pageLive':false,
+    'boardFreshness':'none','adapterPhase':'unknown','adapterError':'none','evidenceFull':false,
     'boardCount':count(find.byKey(const ValueKey('hosts-board-tab'))),
     'tabCount':count(find.byKey(ValueKey(tabKey))),
     'resumeCount':count(find.byKey(const ValueKey('remote-resume'))),
@@ -403,6 +406,19 @@ Map<String,Object> tuiResumeSnapshot(WidgetTester tester,Terminal before,String 
     'directCount':count(direct),'directEnabled':false,
     'rowsChecked':0,'rowMatchMask':0,'firstMismatchRow':-1,'tailRowsBlank':false,'titleRowMask':0,
   };
+  if (result['pageCount'] == 1) {
+    final dynamic page = tester.state(pages);
+    final evidence = page.adapter.evidence as RemoteEvidence;
+    final board = page.dashboard as RemoteDashboard?;
+    const errors = {'timeout','channel_cleanup_timeout','channel_identity','channel_capacity',
+      'watch_failed','watch_retry_exhausted','resume_target_changed','observe_ended',
+      'invalid_first_frame','invalid_frame','invalid_response','sequence_gap','cancelled'};
+    final error = evidence.errorCode;
+    result.addAll({'pageBusy':page.busy == true,'pagePaused':page.viewPaused == true,
+      'pageLive':page.live == true,'boardFreshness':board?.freshness.name ?? 'none',
+      'adapterPhase':evidence.observationPhase,'adapterError':error == null ? 'none' : errors.contains(error) ? error : 'other',
+      'evidenceFull':evidence.fullFrameReceived == true});
+  }
   if (result['directCount'] == 1) result['directEnabled'] = tester.widget<ChoiceChip>(direct).onSelected != null;
   if (result['viewCount'] != 1) return result;
   final terminal = tester.widget<TerminalView>(view).terminal;

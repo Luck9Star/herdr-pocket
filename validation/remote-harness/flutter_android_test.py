@@ -1086,6 +1086,21 @@ class ClipboardCheckpointGuards(unittest.TestCase):
 
 
 class TuiResumeDiagnosticGuards(unittest.TestCase):
+    def test_resume_v2_reports_only_bounded_page_and_adapter_state(self):
+        diagnostic=tui_resume_report(schemaVersion=2,pageCount=1,pageBusy=True,pagePaused=False,
+            pageLive=False,evidenceFull=False,boardFreshness='refreshing',adapterPhase='snapshot',adapterError='none')
+        record={'stage':'tui_resume_full','errorClass':'TestFailure','line':131,'tuiResume':diagnostic}
+        raw=json.dumps(record,separators=(',',':')).encode()
+        self.assertLessEqual(len(raw),gui.PUBLIC_LIMITS['failure.json'])
+        self.assertEqual(gui.safe_test_failure(record),record)
+        self.assertEqual(gui.checked_public_payload(raw,'failure.json'),raw)
+        for field,value in [('adapterPhase','private'),('adapterError','private'),('boardFreshness','private'),
+                            ('pageCount',3),('pageLive',1),('private','secret')]:
+            with self.subTest(field=field),self.assertRaises(gui.DeviceFailure):
+                gui.safe_tui_resume({**diagnostic,field:value})
+        with self.assertRaises(gui.DeviceFailure):
+            gui.safe_tui_resume({**diagnostic,'pageCount':0})
+
     def test_all_resume_substages_roundtrip_bounded_false_predicates_without_text(self):
         for stage in gui.TUI_RESUME_STAGES:
             diagnostic=tui_resume_report(cursorKeysMode=False,rowMatchMask=0xffffef,firstMismatchRow=4)
@@ -1156,7 +1171,9 @@ class TuiResumeDiagnosticGuards(unittest.TestCase):
         self.assertNotIn('publish(',snapshot);self.assertNotIn('write(',snapshot)
         self.assertIn("actual == 'Pocket TUI'",snapshot)
         fields=set(re.findall(r"'([A-Za-z]+)':",snapshot))
-        self.assertEqual(fields,set(gui.safe_tui_resume(tui_resume_report())))
+        expected=tui_resume_report(schemaVersion=2,pageCount=1,pageBusy=True,pagePaused=False,
+            pageLive=False,evidenceFull=False,boardFreshness='refreshing',adapterPhase='snapshot',adapterError='none')
+        self.assertEqual(fields,set(gui.safe_tui_resume(expected)))
         self.assertIn("'tuiResume':tuiResume",source)
         self.assertIn("'failure.json',jsonEncode(boundedFailure",source)
 

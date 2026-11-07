@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -38,8 +37,11 @@ void main() {
       expect(tester.widget<Text>(find.byKey(const ValueKey('terminal-theme-cursor-actual'))).data,contains('第 4 列、第 1 行'));
       expect(tester.widget<Text>(find.byKey(const ValueKey('terminal-theme-cursor-comparison'))).data,contains('一致'));
       final scroll=find.byKey(const ValueKey('terminal-theme-horizontal'));
+      final horizontal=find.descendant(of:scroll,matching:find.byWidgetPredicate(
+        (widget) => widget is Scrollable && axisDirectionToAxis(widget.axisDirection)==Axis.horizontal));
+      expect(horizontal,findsOneWidget);
       await tester.drag(scroll,const Offset(-180,0)); await tester.pumpAndSettle();
-      expect(tester.state<ScrollableState>(find.descendant(of:scroll,matching:find.byType(Scrollable))).position.pixels,greaterThan(0));
+      expect(tester.state<ScrollableState>(horizontal).position.pixels,greaterThan(0));
       await tester.tap(find.byKey(const ValueKey('terminal-font-sample-oh-my-posh'))); await tester.pumpAndSettle();
       final other=tester.widget<TerminalView>(find.byKey(const ValueKey('terminal-theme-view-oh-my-posh')));
       expect(other.terminal.buffer.cursorX,6); expect(other.terminal.buffer.cursorY,1);

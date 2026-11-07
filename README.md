@@ -19,7 +19,7 @@ Flutter 真实 widget 经自建 OpenSSH/herdr 已走通 **配对审查 → 主�
 
 | 范围 | 已有结果 | 尚待验证或实现 |
 | --- | --- | --- |
-| 设计 | Penpot v2 保存 30 个画板，包含新版配色、配对、终端、网络与迁移流程 | 真机交互、无障碍及实测反馈；本批没有新画板 |
+| 设计 | Penpot v2 已保存 38 个画板，重载核对到 212 个交互对象。新增 S31–S38 覆盖手机草稿找回、观察恢复和设备操作待核实。[打开新版手机原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=2a5fd934-a163-8057-8008-e8230835dfbd) | 手机触控、输入法和无障碍仍需真机验收 |
 | 配对与密钥 | 两套 GUI 接入审查、设备密钥和恢复；Flutter 隔离链路通过 | 当前包的 Android KeyStore、相机、锁屏与重启恢复 |
 | 看板与观察 | 持续会话状态、full/delta、独立标签、隐藏暂停、同 SSH 显式恢复及停止已进入新包 | 长期运行和真实设备生命周期 |
 | 输入与迁移 | 受保护输入、按目标隔离的未知记录、加密配置迁移；未知结果不重放 | 真实中文 IME、快捷键、TUI、触控及键盘变化 |
@@ -31,4 +31,4 @@ Flutter 真实 widget 经自建 OpenSSH/herdr 已走通 **配对审查 → 主�
 
 历史 `040eb26` 云模拟器结果、`546c3eb` 独立标签包与各次失败保留原 SHA 和范围，不外推为本批设备运行通过。[历史手机结果](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/18-mobile-network-profiles.md) · [前一测试包](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/22-mobile-terminal-tabs.md) · [Penpot 设计与覆盖](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/design/README.md) · [配对与设备密钥](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/14-mobile-pairing-workbench.md) · [终端绘制与 EasyTier 移植修复](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/10-blocker-repair.md)
 
-下一批在现有设备 owner／多网络租约上完成定向 socket、Android JNI 与手机 GUI 接线，继续走通配对 → 看板 → 持续观察，积累一批功能后集中验证。桌面分屏紧随手机闭环。两路线使用相同字体与 fixture，先判断正确性，再比较性能和维护成本；断线或结果未知不自动重放输入，布局不隐式修改远端共享 PTY。[产品设计](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/05-product-design.md) · [云构建与分发](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/07-build-and-release.md)
+手机下一批围绕配对 → 看板 → 持续观察，开发每台主机的受阻任务摘要、快照时间和断线后保留的状态。当前可下载 APK 仍对应 `750798fe`，后续改动按同一提交集中验证。桌面分屏紧随手机闭环。两路线使用相同字体与 fixture，先判断正确性，再比较性能和维护成本；断线或结果未知不自动重放输入，布局不隐式修改远端共享 PTY。[产品设计](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/05-product-design.md) · [云构建与分发](https://github.com/Luck9Star/herdr-pocket/blob/codex/core-prototype-validation/docs/07-build-and-release.md)

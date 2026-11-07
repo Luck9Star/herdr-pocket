@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' as ime show TextEditingValue,TextRange;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
@@ -122,14 +122,14 @@ void main() {
   testWidgets('expanding and collapsing function keys preserves IME composition without modifying text', (tester) async {
     final adapter = input.InputFixtureAdapter(); await input.start(tester,adapter); await input.mode(tester,'direct');
     final original = tester.widget<TerminalView>(find.byType(TerminalView));
-    tester.testTextInput.updateEditingValue(const TextEditingValue(text:'中文',selection:TextSelection.collapsed(offset:2),
-      composing:TextRange(start:0,end:2))); await tester.pump();
+    tester.testTextInput.updateEditingValue(const ime.TextEditingValue(text:'中文',selection:TextSelection.collapsed(offset:2),
+      composing:ime.TextRange(start:0,end:2))); await tester.pump();
     await press(tester,'remote-function-keys-toggle'); await press(tester,'remote-function-keys-toggle');
     final current = tester.widget<TerminalView>(find.byType(TerminalView));
     expect(current.key,original.key); expect(identical(current.terminal,original.terminal),isTrue);
     expect(adapter.received,isEmpty);
-    tester.testTextInput.updateEditingValue(const TextEditingValue(text:'中文',selection:TextSelection.collapsed(offset:2),
-      composing:TextRange.empty)); await tester.pump();
+    tester.testTextInput.updateEditingValue(const ime.TextEditingValue(text:'中文',selection:TextSelection.collapsed(offset:2),
+      composing:ime.TextRange.empty)); await tester.pump();
     expect(adapter.received.single,utf8.encode('中文'));
     expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox());
   });
@@ -155,8 +155,8 @@ void main() {
     final oldBase = tester.widget<OutlinedButton>(find.byKey(const ValueKey('remote-base-c'))).onPressed!;
     final oldModifier = tester.widget<FilterChip>(find.byKey(const ValueKey('remote-modifier-alt'))).onSelected!;
     final oldEditing = original.onEditingValueChanged!;
-    tester.testTextInput.updateEditingValue(const TextEditingValue(text:'中',selection:TextSelection.collapsed(offset:1),
-      composing:TextRange(start:0,end:1)));
+    tester.testTextInput.updateEditingValue(const ime.TextEditingValue(text:'中',selection:TextSelection.collapsed(offset:1),
+      composing:ime.TextRange(start:0,end:1)));
     await tester.idle(); // Deliver the text channel without rebuilding old button closures.
     oldFunction(); oldEnter(); oldBase(); oldModifier(true);
     await tester.pump(); await tester.pump();
@@ -168,8 +168,8 @@ void main() {
     // Layout-only expansion/collapse preserves the actual editing connection.
     await press(tester,'remote-function-keys-toggle'); await press(tester,'remote-function-keys-toggle');
     expect(tester.widget<TerminalView>(find.byType(TerminalView)).key,original.key);
-    tester.testTextInput.updateEditingValue(const TextEditingValue(text:'中',selection:TextSelection.collapsed(offset:1),
-      composing:TextRange.empty)); await tester.pump(); await tester.pump();
+    tester.testTextInput.updateEditingValue(const ime.TextEditingValue(text:'中',selection:TextSelection.collapsed(offset:1),
+      composing:ime.TextRange.empty)); await tester.pump(); await tester.pump();
     expect(adapter.received.map((bytes) => utf8.decode(bytes)),['中']);
     oldFunction(); oldEnter(); oldModifier(true); await tester.pump();
     expect(adapter.received.length,1);
@@ -177,7 +177,7 @@ void main() {
     expect(adapter.received.map((bytes) => utf8.decode(bytes)),['中','\x1bOP']);
     await input.mode(tester,'observe'); await input.mode(tester,'direct');
     await press(tester,'remote-function-keys-toggle'); await press(tester,'remote-modifier-ctrl');
-    oldEditing(const TextEditingValue(text:'旧',selection:TextSelection.collapsed(offset:1),composing:TextRange(start:0,end:1)));
+    oldEditing(const ime.TextEditingValue(text:'旧',selection:TextSelection.collapsed(offset:1),composing:ime.TextRange(start:0,end:1)));
     await tester.pump();
     expect(tester.widget<FilterChip>(find.byKey(const ValueKey('remote-modifier-ctrl'))).selected,isTrue);
     await press(tester,'remote-function-key-f1'); expect(adapter.received.last,[27,91,49,59,53,80]);
@@ -186,14 +186,14 @@ void main() {
   testWidgets('range-only composition start and cancellation release modifiers without treating shown keyboard as composition', (tester) async {
     final adapter = input.InputFixtureAdapter(); await input.start(tester,adapter); await input.mode(tester,'direct');
     await press(tester,'remote-function-keys-toggle');
-    tester.testTextInput.updateEditingValue(const TextEditingValue(text:'a',selection:TextSelection.collapsed(offset:1),composing:TextRange.empty));
+    tester.testTextInput.updateEditingValue(const ime.TextEditingValue(text:'a',selection:TextSelection.collapsed(offset:1),composing:ime.TextRange.empty));
     await tester.pump(); await tester.pump(); expect(adapter.received.single,[97]);
     await press(tester,'remote-modifier-ctrl');
     final old = tester.widget<OutlinedButton>(find.byKey(const ValueKey('remote-function-key-f1'))).onPressed!;
-    tester.testTextInput.updateEditingValue(const TextEditingValue(text:'a',selection:TextSelection.collapsed(offset:1),
-      composing:TextRange(start:0,end:1))); await tester.idle(); old(); await tester.pump();
+    tester.testTextInput.updateEditingValue(const ime.TextEditingValue(text:'a',selection:TextSelection.collapsed(offset:1),
+      composing:ime.TextRange(start:0,end:1))); await tester.idle(); old(); await tester.pump();
     expect(adapter.received.length,1); expect(tester.widget<FilterChip>(find.byKey(const ValueKey('remote-modifier-ctrl'))).selected,isFalse);
-    tester.testTextInput.updateEditingValue(const TextEditingValue(text:'',selection:TextSelection.collapsed(offset:0),composing:TextRange.empty));
+    tester.testTextInput.updateEditingValue(const ime.TextEditingValue(text:'',selection:TextSelection.collapsed(offset:0),composing:ime.TextRange.empty));
     await tester.pump(); await tester.pump(); old(); await tester.pump(); expect(adapter.received.length,1);
     expect(tester.testTextInput.isVisible,isTrue);
     await press(tester,'remote-function-key-f1'); expect(adapter.received.last,[27,79,80]);

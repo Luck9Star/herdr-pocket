@@ -973,3 +973,26 @@ test('canvas choice belongs to one tab and is frozen for an explicit connection'
     const other=h.ui.create('another',null);assert.ok(other);await h.ui.select(other);select=h.all().find(n=>n.dataset.role==='tab-canvas');assert.equal(select.value,'80x24');
   } finally {h.restore();}
 });
+
+test('saved tab mode status stays truthful across frames, draft, unknown and stop',async()=>{
+ const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
+ try {
+  await readyKeyboard(h);
+  assert.ok(h.find('观察模式；输入已关闭。'));
+  h.find('逐键输入').onclick();await flush();await flush();
+  const live=h.find('逐键输入已启用；每次输入单独发送。');assert.ok(live);assert.equal(live.attrs.role,'status');
+  let text=live.textContent,writes=0;
+  Object.defineProperty(live,'textContent',{configurable:true,get:()=>text,set:value=>{writes++;text=value;}});
+  h.emit({kind:'frame',epoch:1,frame:{seq:2,full:false,cols:80,rows:24,bytes:[65]}});
+  h.emit({kind:'frame',epoch:1,frame:{seq:3,full:true,cols:80,rows:24,bytes:[65]}});
+  assert.equal(writes,0);assert.equal(h.find('逐键输入已启用；每次输入单独发送。'),live);
+  h.find('启用草稿输入').onclick();await flush();await flush();
+  assert.ok(h.find('草稿输入已启用；仅在核对并确认后发送。'));
+  h.emit({kind:'frame',epoch:1,frame:{seq:4,full:false,cols:80,rows:24,bytes:[65]}});
+  assert.ok(h.find('草稿输入已启用；仅在核对并确认后发送。'));
+  h.emit({kind:'input_ready',epoch:1,unknown:true,recovery_status:'pending'});
+  h.emit({kind:'frame',epoch:1,frame:{seq:5,full:true,cols:80,rows:24,bytes:[65]}});
+  assert.ok(h.find('输入结果待核实；输入已锁定。'));assert.equal(h.find('逐键输入').disabled,true);
+  await h.ui.hide();assert.ok(h.find('输入结果待核实；输入已锁定。'));
+ } finally {h.restore();}
+});

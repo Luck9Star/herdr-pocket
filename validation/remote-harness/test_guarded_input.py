@@ -6,7 +6,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from guarded_input import EvidenceError, expected_bytes, mobile_receipts, validate_mode
+from guarded_input import (EvidenceError, TUI_KEY_LENGTHS, TUI_SCREEN_CHECKS, expected_bytes,
+                           mobile_receipts, mobile_tui_evidence, validate_mode)
 
 spec = importlib.util.spec_from_file_location('guarded_runner', Path(__file__).with_name('run-ci.py'))
 runner = importlib.util.module_from_spec(spec)
@@ -14,6 +15,54 @@ spec.loader.exec_module(runner)
 
 
 class GuardedInputTests(unittest.TestCase):
+    def test_tui_requires_a_guarded_android_target(self):
+        for route in ('flutter-android', 'tauri-android'):
+            validate_mode(route, True, True, True)
+            with self.assertRaises(EvidenceError):
+                validate_mode(route, True, False, True)
+        with self.assertRaises(EvidenceError):
+            validate_mode('flutter', True, True, True)
+
+    def test_tui_requires_fresh_screen_steps_and_all_twelve_distinct_receipts(self):
+        def receipt(i, size):
+            return dict(requestId=f'{i:032x}', paneId='w1:p1', terminalId='term_ab', acceptedBytes=size)
+
+        prior = [receipt(0, 1), receipt(1, 9)]
+        keys = [receipt(i, size) for i, size in enumerate(TUI_KEY_LENGTHS, 2)]
+        evidence = dict(receipts=keys, observedInitialFull=True, screenChecks=list(TUI_SCREEN_CHECKS))
+        self.assertEqual(mobile_tui_evidence(evidence, prior, 'w1:p1', 'term_ab'), evidence)
+        with self.assertRaises(EvidenceError):
+            mobile_tui_evidence(evidence, prior, 'w1:p1', 'term_cd')
+        for change in (
+                dict(observedInitialFull=1), dict(screenChecks=list(reversed(TUI_SCREEN_CHECKS))),
+                dict(screenChecks=['initial'] * 10), dict(receipts=keys[:-1]), dict(receipts=keys[::-1]),
+                dict(receipts=[dict(keys[0], requestId=prior[0]['requestId']), *keys[1:]]),
+                dict(receipts=[dict(keys[0], paneId='w2:p1'), *keys[1:]]),
+                dict(receipts=keys[:-1] + [dict(keys[-1], terminalId='term_cd')]), dict(clipboard='raw')):
+            with self.subTest(fields=list(change)), self.assertRaises(EvidenceError):
+                mobile_tui_evidence({**evidence, **change}, prior)
+
+    def test_candidate_mode_report_is_bound_to_the_binary_and_observed_transitions(self):
+        digest = 'a' * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'observer-input-modes.json'
+            with self.assertRaises(runner.ProbeFailure):
+                runner.checked_observer_modes(path, digest)
+            step = dict(modeOnlyFrameObserved=True, freshVisualObserved=True)
+            record = dict(status='passed', expectation='candidate', binarySha256=digest,
+                          version='herdr 0.9.5', canvas=dict(cols=120, rows=40),
+                          capabilityVerified=True, initialFull=True, initialVisible=True,
+                          initialModeSynchronized=True, sequenceContiguous=True,
+                          sharedPtySizeUnchanged=True, ptySampleCount=25, steps=[step] * 4)
+            path.write_text(json.dumps(record))
+            self.assertEqual(runner.checked_observer_modes(path, digest)['modeTransitions'], 4)
+            for change in (dict(status='failed'), dict(expectation='stock'), dict(binarySha256='b' * 64),
+                           dict(initialModeSynchronized=1), dict(ptySampleCount=True),
+                           dict(steps=[step] * 3), dict(steps=[{**step, 'freshVisualObserved': False}] * 4)):
+                with self.subTest(fields=list(change)), self.assertRaises(runner.ProbeFailure):
+                    path.write_text(json.dumps({**record, **change}))
+                    runner.checked_observer_modes(path, digest)
+
     def test_stock_is_empty_and_android_requires_explicit_opt_in(self):
         for route in ('tauri-android', 'flutter-android'):
             validate_mode(route, False, False)

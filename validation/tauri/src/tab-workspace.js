@@ -23,6 +23,14 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   let switching=false, textSelection=null, fontDiagnostics=null, mountedTab=null;
   function boardEvent(tab,type) {if(tab.summaryIdentity && tab.token)onDashboard({type,hostId:tab.hostId,identity:tab.summaryIdentity,source:tab.token,board:tab.board});}
   function status(tab,message) {tab.message=message;if(tabs.activeId===tab.id)render();}
+  function inputModeMessage(tab) {
+    if(tab.unknown)return '输入结果待核实；输入已锁定。';
+    if(tab.state!=='active')return '观察未运行；输入已关闭。';
+    if(tab.inputEpoch!==null && tab.mode==='direct')return '逐键输入已启用；每次输入单独发送。';
+    if(tab.inputEpoch!==null && tab.mode==='draft')return '草稿输入已启用；仅在核对并确认后发送。';
+    return '观察模式；输入已关闭。';
+  }
+  function updateInputMode(tab) {const message=inputModeMessage(tab);if(tab.inputModeElement && tab.inputModeElement.textContent!==message)tab.inputModeElement.textContent=message;}
   function lease(tab) {return {token:tab.token,generation:tab.nativeGeneration,epoch:tab.epoch,revision:tab.inputRevision};}
   function sameLease(tab,old) {return current(tab,old.token) && tab.nativeGeneration===old.generation && tab.epoch===old.epoch && tab.inputRevision===old.revision;}
   function current(tab,token) {return tabs.get(tab.id)===tab && tabs.accepts(token);}
@@ -101,6 +109,10 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     canvasSelect.value=tab.canvasChoice;canvasSelect.disabled=tab.state!=='disconnected' || tab.closing || switching;canvasSelect.onchange=()=>{if(tab.state==='disconnected' && parseCanvas(canvasSelect.value))tab.canvasChoice=canvasSelect.value;};canvasLabel.append(canvasSelect);body.append(canvasLabel);
     const canvasHelp=document.createElement('p');canvasHelp.textContent=tab.state==='disconnected'?'仅影响此标签的下次连接；这是观察画布，不代表远端 PTY 原始尺寸。':`本次观察画布：${tab.activeCanvas.cols} × ${tab.activeCanvas.rows}；暂停恢复沿用本次选择。`;body.append(canvasHelp);
     const msg=document.createElement('p');msg.setAttribute('role','status');msg.textContent=tab.message;tab.messageElement=msg;body.append(msg);
+    tab.inputModeElement ??= document.createElement('p');
+    tab.inputModeElement.setAttribute('role','status');tab.inputModeElement.setAttribute('aria-live','polite');
+    updateInputMode(tab);
+    body.append(tab.inputModeElement);
     const controls=document.createElement('div');controls.className='remote-actions';
     const add=(label,enabled,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=!enabled || switching;b.onclick=action;controls.append(b);};
     add('连接',native && !!info && tab.reviewed && !tab.invalidated && tab.state==='disconnected' && !tab.closing,()=>void connect(tab));
@@ -340,12 +352,13 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     const wasBusy=tab.inputBusy;tab.queue.clear();tab.inputRevision++;tab.mode='observe';tab.inputEpoch=null;
     if(tab.pasteButton)tab.pasteButton.disabled=true;refreshKeyboard(tab);tab.toolbar?.reset();tab.toolbar=null;tab.toolbarHost?.replaceChildren();
     if(tab.terminal){tab.terminal.options.disableStdin=true;tab.terminal.textarea.setAttribute('inputmode','none');}
-    if(wasBusy){tab.unknown=true;tab.message='输入在途时焦点离开；请恢复观察后核实原目标。';await pause(tab);return;}
+    if(wasBusy){tab.unknown=true;updateInputMode(tab);tab.message='输入在途时焦点离开；请恢复观察后核实原目标。';await pause(tab);return;}
+    updateInputMode(tab);
     if(tab.nativeGeneration!==null && tab.epoch!==null) {tab.focusReset=invoke('remote_tab_input_mode',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration,epoch:tab.epoch,mode:'observe'}).catch(()=>{});await tab.focusReset;}
   }
   async function enableDirect(tab) {
     if(fontDiagnostics?.valid() || textSelection?.valid() || document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.unknown || tab.inputBusy || tab.directPending || !tab.terminal)return;
-    tab.queue.clear();tab.inputRevision++;tab.inputEpoch=null;tab.mode='observe';
+    tab.queue.clear();tab.inputRevision++;tab.inputEpoch=null;tab.mode='observe';updateInputMode(tab);
     const binding=lease(tab),terminal=tab.terminal,target=tab.target;
     const attempt={invalidated:false};tab.directPending=attempt;let invoked=false,granted=false;
     tab.message='正在核验逐键输入许可；请等待确认后输入。';if(tab.messageElement)tab.messageElement.textContent=tab.message;
@@ -361,7 +374,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       const inputEpoch=await invoke('remote_tab_input_mode',{tabId:tab.id,clientGeneration:binding.token.generation,generation:binding.generation,epoch:binding.epoch,mode:'direct'});
       if(!currentAttempt())return;
       if(!Number.isSafeInteger(inputEpoch) || inputEpoch<1)throw Error('input_lease_invalid');
-      tab.inputEpoch=inputEpoch;tab.mode='direct';granted=true;tab.message='逐键输入已启用。';if(tab.messageElement)tab.messageElement.textContent=tab.message;
+      tab.inputEpoch=inputEpoch;tab.mode='direct';updateInputMode(tab);granted=true;tab.message='逐键输入已启用。';if(tab.messageElement)tab.messageElement.textContent=tab.message;
       if(tab.pasteButton)tab.pasteButton.disabled=false;
       showToolbar(tab);refreshKeyboard(tab);
     } catch {
@@ -467,7 +480,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         }
         if(event.kind==='selection_ready') {if(event.epoch===tab.epoch && tabs.activeId===tab.id && !tab.wantsPause){tab.selectionReady=true;renderDashboard(tab);}return;}
         if(event.kind==='stage') {status(tab,`连接阶段：${event.stage}`);return;}
-        if(event.kind==='observation') {if(!Number.isSafeInteger(event.snapshot?.epoch) || (tab.epoch!==null && event.snapshot.epoch<tab.epoch))return;if(event.snapshot.epoch!==tab.epoch){tab.selectionTextReady=false;retireDirectPending(tab);tab.suppressBlur=true;tab.board.advance(event.snapshot.epoch);boardEvent(tab,'stale');tab.selectionReady=false;tab.frames=new RemoteFrameQueue();tab.inputRevision++;tab.inputBusy=false;tab.inputReady=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;}tab.epoch=event.snapshot.epoch;tab.state=event.snapshot.phase;if(['paused','pausing','closed'].includes(tab.state)){tab.board.invalidate(tab.state);boardEvent(tab,'stale');tab.selectionReady=false;}status(tab,tab.state==='paused'?'观察已暂停，SSH 保留；需主动恢复。':tab.state==='active'?'只读观察中。':'正在切换观察状态…');tab.suppressBlur=false;return;}
+        if(event.kind==='observation') {if(!Number.isSafeInteger(event.snapshot?.epoch) || (tab.epoch!==null && event.snapshot.epoch<tab.epoch))return;if(event.snapshot.epoch!==tab.epoch){tab.selectionTextReady=false;retireDirectPending(tab);tab.suppressBlur=true;tab.board.advance(event.snapshot.epoch);boardEvent(tab,'stale');tab.selectionReady=false;tab.frames=new RemoteFrameQueue();tab.inputRevision++;tab.inputBusy=false;tab.inputReady=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;}tab.epoch=event.snapshot.epoch;tab.state=event.snapshot.phase;if(['paused','pausing','closed'].includes(tab.state)){tab.board.invalidate(tab.state);boardEvent(tab,'stale');tab.selectionReady=false;}status(tab,tab.state==='paused'?'观察已暂停，SSH 保留；需主动恢复。':tab.state==='active'?'观察已连接；输入状态见下方。':'正在切换观察状态…');tab.suppressBlur=false;return;}
         if(event.kind==='input_ready') {if(event.epoch!==tab.epoch)return;tab.inputReady=true;tab.unknown=event.unknown;tab.recoveryStatus=event.recovery_status;tab.message=event.unknown?'存在未确认的发送结果，输入保持锁定；请核查原目标。':'已收到完整画面，可显式开启草稿输入。';render();return;}
         if(event.kind!=='frame' || event.epoch!==tab.epoch || tabs.activeId!==tab.id)return;
         if(!tab.frames.accept(event.frame)){void cancel(tab);return;}

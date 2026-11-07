@@ -14,18 +14,12 @@ import time
 from pathlib import Path
 
 from owned_pty import new_pty, restored_modes
+from paired_tui import EXPECTED, STEPS
 
 
 HERE = Path(__file__).resolve().parent
 VALIDATION = HERE.parent
-KEYS = ['down', 'tab', 'backspace', 'shift-tab', 'insert', 'delete', 'f1', 'f1', 'f5', 'f10']
-EXPECTED = {
-    'status': 'finished',
-    'actions': ['select-next', 'focus-detail', 'erase-character', 'focus-list', 'insert-row',
-                'delete-row', 'open-help', 'close-help', 'refresh', 'finish'],
-    'selected': 'Review', 'rowCount': 2, 'detailLength': 1, 'focus': 'list',
-    'helpOpen': False, 'refreshes': 1,
-}
+KEYS = [key for key, _, _ in STEPS]
 
 
 def collect(master, screen, seconds, until=None):

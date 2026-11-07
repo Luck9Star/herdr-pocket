@@ -17,7 +17,8 @@ sys.path.insert(0, str(REPO / 'helper'))
 sys.path.insert(0, str(REPO / 'validation/pairing'))
 from pairing import fingerprint
 from herdr_pocket_helper.store import Host
-from guarded_input import ANDROID_ROUTES, EvidenceError, expected_bytes, mobile_receipts
+from guarded_input import ANDROID_ROUTES, DIRECT, DRAFT, EvidenceError, expected_bytes, mobile_receipts, mobile_tui_evidence
+from paired_tui import validate_report
 
 
 class GuiFailure(Exception):
@@ -111,6 +112,9 @@ class FixtureApproval:
         self.fingerprint = None
         self.applied = False
         self.revocation_response = None
+        self.tui_terminal_id = None
+        self.tui_started = False
+        self.tui_verified = False
 
     def approve(self, raw):
         now = int(time.time())
@@ -157,6 +161,47 @@ class FixtureApproval:
             wait_for(lambda: (self.root/'received.bin').stat().st_size >= len(expected), 'fixture_input_missing', timeout=4)
         if not (self.root/'capture-running').is_file() or bounded_wire(self.root/'received.bin',4096) != expected:
             raise GuiFailure('unexpected_remote_input')
+
+    def start_tui(self, *, terminal_id):
+        if self.tui_started or self.tui_verified:
+            raise GuiFailure('paired_tui_already_started')
+        self.tui_started = True  # A failed/ambiguous start is never replayed.
+        if not isinstance(terminal_id, str) or fixture_terminal_id(self.config) != terminal_id:
+            raise GuiFailure('paired_tui_target_changed')
+        self.verify_ssh(DIRECT + DRAFT)
+        self.tui_terminal_id = terminal_id
+        marker = self.root / 'start-tui'
+        try:
+            with marker.open('xb') as output:
+                output.write(b'start\n'); output.flush(); os.fsync(output.fileno())
+        except OSError:
+            raise GuiFailure('paired_tui_start_unconfirmed') from None
+        def ready():
+            if not (self.root / 'capture-running').is_file():
+                raise GuiFailure('paired_tui_capture_stopped')
+            path = self.root / 'tui-ready'
+            return path.is_file() and not path.is_symlink() and bounded_wire(path, 16) == b'ready\n'
+        wait_for(ready, 'paired_tui_start_timeout', timeout=15)
+        if fixture_terminal_id(self.config) != terminal_id:
+            raise GuiFailure('paired_tui_target_changed')
+        return {'ready': True, 'sameTarget': True, 'initialInputMatched': True}
+
+    def verify_tui(self, *, terminal_id):
+        if not self.tui_started or self.tui_verified or terminal_id != self.tui_terminal_id:
+            raise GuiFailure('paired_tui_state_invalid')
+        self.tui_verified = True  # Verification failure is not a restart signal.
+        wait_for(lambda: (self.root / 'tui-complete').is_file(), 'paired_tui_completion_timeout', timeout=15)
+        if (self.root / 'tui-complete').is_symlink() or bounded_wire(self.root / 'tui-complete', 16) != b'complete\n':
+            raise GuiFailure('paired_tui_completion_invalid')
+        if fixture_terminal_id(self.config) != terminal_id:
+            raise GuiFailure('paired_tui_target_changed')
+        self.verify_ssh(DIRECT + DRAFT)
+        try:
+            state = validate_report(bounded_wire(self.root / 'tui-result.json', 2048))
+        except (OSError, ValueError):
+            raise GuiFailure('paired_tui_report_invalid') from None
+        return {'sameTarget': True, 'initialInputMatched': True, 'finalInputMatched': True,
+                'terminalModesRestored': True, 'postFinishKernelInputAbsent': True, **state}
 
     def revoke(self):
         if self.request_id and self.revocation_response is None:
@@ -381,12 +426,15 @@ def run_gui(args, root, env, config):
     case = 'reviewed-device-key-to-direct-and-draft' if guarded_mobile else 'reviewed-device-key-to-observe'
     result = {'adapter': args.paired_gui, 'testId': case, 'status':'failed'}
     try:
+        if getattr(args, 'android_tui', False) and not guarded_mobile:
+            raise GuiFailure('android_tui_requires_guarded_input')
         # Exercise the shipping helper against its own private scratch home.
         # The normal CLI obtains the operator's home from pwd instead.
         import tempfile
         with tempfile.TemporaryDirectory(dir=root, prefix='fixture-home-') as scratch:
             host = Host(Path(scratch), config['username'], config['expectedHostKey'])
             approval = FixtureApproval(root, config, host)
+            terminal = None
             try:
                 if args.paired_gui == 'tauri-android':
                     from android_gui import run_android as exercise
@@ -397,6 +445,8 @@ def run_gui(args, root, env, config):
                 terminal = fixture_terminal_id(config) if guarded_mobile else None
                 observed = exercise(args, root, env, config, approval)
                 receipts = observed.pop('inputReceipts', None)
+                tui = observed.pop('tui', None)  # Publish only after strict validation.
+                observed.pop('hostTui', None)  # Host attestation can never originate from a GUI.
                 result.update(observed)
                 expected = expected_bytes(args.paired_gui, bool(args.input_fixture))
                 if expected and result.get('inputQueueAccepted') is not True:
@@ -410,12 +460,32 @@ def run_gui(args, root, env, config):
                         raise GuiFailure(str(exc)) from None
                     if fixture_terminal_id(config) != terminal:
                         raise GuiFailure('fixture_input_target_changed')
+                    if getattr(args, 'android_tui', False):
+                        try:
+                            result['tui'] = mobile_tui_evidence(tui, result['inputReceipts'],
+                                                                pane=config['paneId'], terminal=terminal)
+                        except EvidenceError as exc:
+                            raise GuiFailure(str(exc)) from None
+                        result['hostTui'] = approval.verify_tui(terminal_id=terminal)
+                    elif tui is not None:
+                        raise GuiFailure('unexpected_mobile_tui')
                 elif receipts:
                     raise GuiFailure('unexpected_mobile_receipts')
+                elif tui is not None:
+                    raise GuiFailure('unexpected_mobile_tui')
                 approval.verify_ssh(expected)
             finally:
                 result['temporaryHostApprovedRequest'] = approval.applied
                 try:
+                    # An error in the later removal/cleanup UI must not erase an
+                    # independently completed host result, or turn the GUI green.
+                    if (getattr(args, 'android_tui', False) and terminal is not None
+                            and approval.tui_started and not approval.tui_verified
+                            and (root / 'tui-complete').is_file()):
+                        try:
+                            result['hostTui'] = approval.verify_tui(terminal_id=terminal)
+                        except (GuiFailure, OSError, ValueError):
+                            result['hostTuiVerificationFailed'] = True
                     result['matchedDeviceKeyInSshd'] = approval.fingerprint_authenticated()
                 finally:
                     approval.revoke()

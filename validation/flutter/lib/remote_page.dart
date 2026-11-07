@@ -137,6 +137,17 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       viewPaused ? 'paused' : live ? 'live' : 'stale',selectedPane ?? widget.requestedTarget?.paneId,
       selectedTarget?.terminalId ?? widget.requestedTarget?.terminalId);
   }
+  String get displayStatus => !live ? status : status.isEmpty ? liveInputStatus : '$liveInputStatus\n$status';
+  String get liveInputStatus {
+    if (inputGate.unknown != null || adapter.pendingInput != null) return '输入结果未知 · 输入已锁定；请核验后主动解除';
+    if (inputGate.sending) return '正在提交输入 · 等待受保护回执';
+    if (!inputGate.fresh) return '正在等待新 full · 输入关闭';
+    return switch (inputGate.mode) {
+      RemoteInputMode.observe => '正在只读观察 · 输入关闭',
+      RemoteInputMode.direct => '逐键输入已启用 · 仅显式按键发送',
+      RemoteInputMode.draft => '草稿模式 · 仅编辑本地，预览确认后发送',
+    };
+  }
   String targetKey(RemoteInputTarget target) => target.endpointKey;
   void draftChanged() {
     draftRevision++; // Keep the conservative guard for a late send rejection.
@@ -425,7 +436,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             dashboardSyncSource = '${config.username}@${config.host}:${config.port} / ${value.session}';
           }
           if (requested != null && selectedTarget == null && canSelect) selectedPane = requested.paneId;
-          status = !value.selectable ? '看板正在重新核验 · 目标选择暂不可用' : requested != null ? '已核对原 pane 与 terminal · 等待新 full' : value.panes.isEmpty
+          if (!live) status = !value.selectable ? '看板正在重新核验 · 目标选择暂不可用' : requested != null ? '已核对原 pane 与 terminal · 等待新 full' : value.panes.isEmpty
             ? '会话看板为空 · 未发现 pane，不代表主机没有任务' : '会话看板已核验 · 请选择一个明确 pane 开始观察'; });
         if (!viewPaused && widget.visibility?.value != false && value.observationEpoch == observationEpoch) summaryAttempt?.publish(value);
         if (requested != null && selectedTarget == null && selectedPane == requested.paneId && canSelect) {
@@ -472,14 +483,18 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           if (adapter.pendingInput != null) inputGate.restorePending(adapter.pendingInput!);
         }
         bindTerminalOutput();
-        setState(() { snapshot = RemoteSnapshot(generation,config.session,paneId,frame.ansi);
+        setState(() {
+          // Clear the obsolete connection phase once. Local notices survive
+          // subsequent frames; live mode comes from the gate, not delta text.
+          if (!live) status = '';
+          snapshot = RemoteSnapshot(generation,config.session,paneId,frame.ansi);
           capturedAt = DateTime.now(); sequence = frame.seq; live = true;
-          status = '正在只读观察 · 输入关闭'; });
+        });
         reportView();
       },onProgress:(generation,phase) {
         if (!mounted || ticket != request) return;
         if (phase == 'snapshot') widget.onAuthenticated?.call();
-        if (phase == 'snapshot_received' || phase == 'full_received') return;
+        if (live || phase == 'snapshot_received' || phase == 'full_received') return;
         setState(() { status = switch (phase) {
           'connecting' => '正在连接 · 尚未信任主机',
           'snapshot' => '主机身份与认证通过 · 读取会话看板',
@@ -1160,7 +1175,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           const Padding(padding:EdgeInsets.symmetric(vertical:8),
             child:Text('只改变观察者画布，不代表源 PTY 尺寸。连接与恢复沿用本次选择；更改前先停止并断开，再审查连接。字号、键盘与旋转不会调整远端尺寸。')),
           if (widget.networkBinding != null) Text('冻结网络：${widget.networkBinding!.label}',key:const ValueKey('remote-network-binding')),
-          Semantics(liveRegion:true,child:Text(status,key:const ValueKey('remote-status'),
+          Semantics(liveRegion:true,child:Text(displayStatus,key:const ValueKey('remote-status'),
             style:TextStyle(color:widget.tokens.color('textSecondary')))),
           Text(dashboardSyncedAt == null ? '会话看板：尚无已确认的同步时间' :
             '上次已核验会话看板：$dashboardSyncSource\n同步于 ${dashboardSyncedAt!.toLocal().toIso8601String()} · 此时间不代表终端画面已更新',

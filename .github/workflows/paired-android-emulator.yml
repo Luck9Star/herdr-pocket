@@ -5,6 +5,10 @@ on:
       guarded_input:
         type: boolean
         default: false
+      android_tui:
+        description: Exercise the same guarded pane with a live curses program
+        type: boolean
+        default: false
       flutter_only:
         type: boolean
         default: false
@@ -148,6 +152,7 @@ jobs:
       - name: Run independent stock and guarded API35 AVDs
         env:
           GUARDED_REQUESTED: ${{ inputs.guarded_input }}
+          ANDROID_TUI: ${{ inputs.android_tui }}
           GUARDED_INPUT: ${{ inputs.guarded_input && steps.download-fixture.outcome == 'success' }}
           X86_APK: ${{ steps.android-builds.outputs.x86_apk }}
         run: |
@@ -173,11 +178,13 @@ jobs:
             fi
           fi
           guarded_status=0
+          tui_args=()
+          if [ "$ANDROID_TUI" = true ]; then tui_args+=(--android-tui); fi
           if [ "$GUARDED_REQUESTED" = true ] && [ "$GUARDED_INPUT" = true ] && [ "$x86_status" -eq 0 ]; then
             if AVD_EVIDENCE_DIR="$RUNNER_TEMP/guarded-avd-evidence" bash validation/remote-harness/with-android-emulator.sh \
               "$RUNNER_TEMP/android-venv/bin/python" validation/remote-harness/run-ci.py \
                 --paired-gui tauri-android --tauri-app "$X86_APK" --output "$RUNNER_TEMP/android-guarded-input-evidence" \
-                --input-fixture "$RUNNER_TEMP/input-fixture" --android-guarded-input; then
+                --input-fixture "$RUNNER_TEMP/input-fixture" --android-guarded-input "${tui_args[@]}"; then
               :
             else
               guarded_status=$?
@@ -343,6 +350,7 @@ jobs:
       - name: Run independent stock and guarded API35 AVDs
         env:
           GUARDED_REQUESTED: ${{ inputs.guarded_input }}
+          ANDROID_TUI: ${{ inputs.android_tui }}
           GUARDED_INPUT: ${{ inputs.guarded_input && steps.download-fixture.outcome == 'success' }}
         run: |
           stock_avd_env=()
@@ -358,6 +366,8 @@ jobs:
             stock_status=$?
           fi
           guarded_status=0
+          tui_args=()
+          if [ "$ANDROID_TUI" = true ]; then tui_args+=(--android-tui); fi
           if [ "$GUARDED_REQUESTED" = true ] && [ "$GUARDED_INPUT" = true ]; then
             if AVD_EVIDENCE_DIR="$RUNNER_TEMP/guarded-avd-evidence" bash validation/remote-harness/with-android-emulator.sh \
               "$RUNNER_TEMP/flutter-android-venv/bin/python" validation/remote-harness/run-ci.py \
@@ -365,7 +375,7 @@ jobs:
                 --flutter-app "$RUNNER_TEMP/flutter-android-gui" \
                 --output "$RUNNER_TEMP/android-guarded-input-evidence" \
                 --input-fixture "$RUNNER_TEMP/input-fixture" \
-                --android-guarded-input; then
+                --android-guarded-input "${tui_args[@]}"; then
               :
             else
               guarded_status=$?

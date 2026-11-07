@@ -292,6 +292,15 @@ class RunnerGuards(PreparedFixture):
         with patch.object(gui, 'text', return_value='List of devices attached\nemulator-5554\tdevice\nphone\tdevice'):
             with self.assertRaises(gui.DeviceFailure): gui._run(args, self.fixture_root, self.env, self.config, Mock(), launch)
 
+    def test_tui_requires_guarded_before_any_device_or_launch_operation(self):
+        self.prepared();args=self.args();args.android_tui=True
+        with patch.object(gui,'text') as text,patch.object(gui,'adb') as adb:
+            launch=Mock();approval=Mock()
+            with self.assertRaisesRegex(gui.DeviceFailure,'android_tui_requires_guarded_input'):
+                gui._run(args,self.fixture_root,self.env,self.config,approval,launch)
+            text.assert_not_called();adb.assert_not_called();launch.assert_not_called();approval.start_tui.assert_not_called()
+            self.assertFalse((self.fixture_root/'flutter-android-public-defines.json').exists())
+
     def test_clipboard_fixture_is_not_enabled_before_disposable_api35_device_checks(self):
         self.prepared(); args = self.args(); args.android_guarded_input = True
         args.input_fixture = 'owned-mobile-fixture'
@@ -953,6 +962,102 @@ class ClipboardCheckpointGuards(unittest.TestCase):
                 with self.assertRaisesRegex(gui.DeviceFailure, '^bounded_failure$'):
                     gui.wait_public(proc, self.relative, 'result.json', 8192, timeout=1, checkpoints=state)
                 state.approval.verify_ssh.assert_not_called(); adb.assert_not_called()
+
+
+class TuiGuards(unittest.TestCase):
+    """Protocol/once-only tests; all host/adb collaborators here are fakes."""
+    relative = 'cache/herdr-flutter-android-123'
+    terminal = 'term_abcd'
+
+    def report(self):
+        from guarded_input import TUI_SCREEN_CHECKS, TUI_KEY_LENGTHS
+        receipts = [{'requestId': format(i, '032x'), 'paneId':'w1:p1',
+                     'terminalId':self.terminal, 'acceptedBytes':size} for i,size in enumerate((1,9),1)]
+        return device_report(case=gui.GUARDED_CASE, **{name:True for name in gui.GUARDED_FIELDS},
+            **gui.CLIPBOARD_COUNTS, restoredViewportLogicalPixels=[24,24], inputReceipts=receipts,
+            acceptedByteCounts=[1,9], tui={'observedInitialFull':True,'screenChecks':list(TUI_SCREEN_CHECKS),
+                'receipts':[{'requestId':format(i,'032x'),'paneId':'w1:p1','terminalId':self.terminal,
+                             'acceptedBytes':size} for i,size in enumerate(TUI_KEY_LENGTHS,3)]})
+
+    def state(self):
+        approval=Mock();approval.start_tui.return_value={'ready':True,'sameTarget':True,'initialInputMatched':True}
+        state=gui.ClipboardCheckpoints(self.relative,approval,keyboard=True,tui=True,config={'synthetic':True})
+        state.completed=list(state.expected[:-1])
+        return state,approval
+
+    def test_opt_in_tui_retains_old_receipts_and_strict_shared_whitelist(self):
+        raw=self.report();clean=gui.safe_device_result(raw,guarded=True,tui=True)
+        self.assertEqual(len(clean['inputReceipts']),2);self.assertEqual(len(clean['tui']['receipts']),10)
+        raw['private']='PRIVATE';raw['observerCanvas']['private']='PRIVATE'
+        self.assertNotIn('PRIVATE',json.dumps(gui.safe_device_result(raw,guarded=True,tui=True)))
+        with self.assertRaisesRegex(gui.DeviceFailure,'tui_unexpected'):gui.safe_device_result(raw,guarded=True)
+        with self.assertRaisesRegex(gui.DeviceFailure,'requires_guarded'):gui.safe_device_result(raw,tui=True)
+        for change in ('missing','full','stale','replay','target','size','extra'):
+            raw=self.report()
+            if change=='missing':raw.pop('tui')
+            if change=='full':raw['tui']['observedInitialFull']=False
+            if change=='stale':raw['tui']['screenChecks'][7]='close-help'
+            if change=='replay':raw['tui']['receipts'][0]['requestId']=raw['inputReceipts'][0]['requestId']
+            if change=='target':raw['tui']['receipts'][0]['terminalId']='term_1234'
+            if change=='size':raw['tui']['receipts'][0]['acceptedBytes']=1
+            if change=='extra':raw['tui']['private']='PRIVATE'
+            with self.subTest(change=change),self.assertRaises(gui.DeviceFailure):gui.safe_device_result(raw,guarded=True,tui=True)
+
+    def test_start_checkpoint_is_bounded_and_contains_no_command(self):
+        good={'checkpoint':gui.TUI_CHECKPOINT,'terminalId':self.terminal}
+        raw=json.dumps(good).encode();self.assertLess(len(raw),gui.PUBLIC_LIMITS['checkpoint.json'])
+        self.assertEqual(gui.checked_public_payload(raw,'checkpoint.json'),raw)
+        for change in ({'terminalId':'PRIVATE'},{'terminalId':None},{'command':'PRIVATE'}):
+            with self.subTest(change=change),self.assertRaises(gui.DeviceFailure):
+                gui.checked_public_payload(json.dumps({**good,**change}).encode(),'checkpoint.json')
+        with self.assertRaises(gui.DeviceFailure):gui.ClipboardCheckpoints(self.relative,Mock(),tui=True,guarded=False,config={})
+        state=gui.ClipboardCheckpoints(self.relative,Mock(),keyboard=True)
+        with patch.object(gui,'read_public',return_value=raw),patch.object(gui,'adb') as adb:
+            with self.assertRaisesRegex(gui.DeviceFailure,'checkpoint_order_invalid'):state.poll()
+            state.approval.start_tui.assert_not_called();adb.assert_not_called()
+
+    def test_start_once_verifies_independent_target_and_duplicate_poll_never_relaunches(self):
+        state,approval=self.state();lookup=Mock(return_value=self.terminal)
+        raw=json.dumps({'checkpoint':gui.TUI_CHECKPOINT,'terminalId':self.terminal}).encode()
+        with patch.dict('sys.modules',{'paired_gui':SimpleNamespace(fixture_terminal_id=lookup)}), \
+                patch.object(gui,'read_public',return_value=raw),patch.object(gui,'adb') as adb:
+            state.poll();state.poll();state.require_complete()
+            lookup.assert_called_once_with({'synthetic':True})
+            approval.start_tui.assert_called_once_with(terminal_id=self.terminal)
+            approval.verify_ssh.assert_not_called();self.assertEqual(adb.call_count,2)
+            self.assertEqual(json.loads(adb.call_args_list[0].kwargs['data']),{'checkpoint':gui.TUI_CHECKPOINT})
+
+    def test_failed_start_target_or_ack_is_never_replayed(self):
+        for failure in ('target','launch','unconfirmed','ack'):
+            state,approval=self.state();lookup=Mock(return_value='term_1234' if failure=='target' else self.terminal)
+            if failure=='launch':approval.start_tui.side_effect=gui.DeviceFailure('synthetic_start_failure')
+            if failure=='unconfirmed':approval.start_tui.return_value={'ready':False}
+            raw=json.dumps({'checkpoint':gui.TUI_CHECKPOINT,'terminalId':self.terminal}).encode()
+            with self.subTest(failure=failure),patch.dict('sys.modules',{'paired_gui':SimpleNamespace(fixture_terminal_id=lookup)}), \
+                    patch.object(gui,'read_public',return_value=raw), \
+                    patch.object(gui,'adb',side_effect=gui.DeviceFailure('flutter_android_adb_failed') if failure=='ack' else None) as adb:
+                before=state.completed.copy()
+                with self.assertRaises(gui.DeviceFailure):state.poll()
+                with self.assertRaisesRegex(gui.DeviceFailure,'already_attempted'):state.poll()
+                self.assertEqual(state.completed,before)
+                self.assertEqual(approval.start_tui.call_count,0 if failure=='target' else 1)
+                if failure!='ack':adb.assert_not_called()
+
+    def test_integration_source_uses_current_screen_fresh_full_real_taps_and_retains_legacy_phase(self):
+        source=(REPO/'validation/flutter/integration_test/android_pairing_observe_test.dart').read_text()
+        self.assertNotIn("contains('固定 80×24')",source)
+        self.assertIn("contains('观察画布 ')",source)
+        self.assertIn("'HERDR_ANDROID_GUARDED_TUI'",source)
+        self.assertIn('terminal.buffer.height != terminal.viewHeight',source)
+        self.assertIn('actual != (y < rows.length ? rows[y]',source)
+        self.assertIn('visibleRemoteScreenCells(terminal,render,',source)
+        self.assertIn('!identical(tester.widget<TerminalView>',source)
+        self.assertIn('(displayedSequence(tester) ?? -1) > sequence',source)
+        self.assertIn('await tap(tester,button); await accepted',source)
+        self.assertLess(source.index("inputReceipts.add(visibleReceipt(tester,target['paneId'] as String,9))"),source.index('tuiEvidence = await exerciseTui'))
+        self.assertIn("'acceptedByteCounts':[1,9]",source)
+        for key in ('remote-key-↓','remote-key-Tab',*('remote-function-key-'+name for name in ('backspace','shift-tab','insert','delete','f1','f5','f10'))):
+            self.assertIn(key,source)
 
 
 class SystemKeyboardGuards(unittest.TestCase):

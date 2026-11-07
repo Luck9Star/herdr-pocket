@@ -118,6 +118,7 @@ def run_fixture(root=None, timeout=900):
     saved, handlers = None, {}
     received = bytearray()
     ending_signal, reason, capture_errors = 0, 5, 0
+    tui_started = False
 
     def stop_signal(number, _frame):
         nonlocal ending_signal
@@ -155,6 +156,49 @@ def run_fixture(root=None, timeout=900):
                 reason = 6; break
             if (root / 'stop-capture').exists():
                 reason = 1; break
+            if (root / 'start-tui').exists() and not tui_started:
+                # An explicit, single-use transition on this very PTY. No
+                # terminal bytes are sent by the host and no input is replayed.
+                tui_started = True
+                if ((root / 'start-tui').is_symlink() or (root / 'start-tui').read_bytes() != b'start\n' or
+                        bytes(received) != b'kPocket\xe6\xb5\x8b' or (root / 'tui-result.json').exists()):
+                    raise ValueError('tui_transition_invalid')
+                import curses
+                import phone_tui_fixture
+                before_tui = termios.tcgetattr(fd)
+                previous_term = os.environ.get('TERM')
+                os.environ['TERM'] = 'xterm-256color'
+                def write_tui_marker(name, value):
+                    with (root / name).open('x', encoding='ascii') as marker:
+                        marker.write(value); marker.flush()
+                try:
+                    with (root / 'tui-result.json').open('x', encoding='utf-8') as output:
+                        remaining = min(180.0, max(0.0, deadline - time.monotonic()))
+                        if remaining <= 0:
+                            raise ValueError('tui_capture_deadline')
+                        result = curses.wrapper(phone_tui_fixture.run, remaining,
+                            lambda: bool(ending_signal) or (root / 'stop-capture').exists() or time.monotonic() >= deadline,
+                            heartbeat=recorder.poll,
+                            ready=lambda: write_tui_marker('tui-ready', 'ready\n'))
+                        json.dump(result, output, separators=(',', ':')); output.write('\n')
+                        output.flush(); os.fsync(output.fileno())
+                finally:
+                    if previous_term is None: os.environ.pop('TERM', None)
+                    else: os.environ['TERM'] = previous_term
+                if termios.tcgetattr(fd) != before_tui:
+                    raise ValueError('tui_terminal_mode_not_restored')
+                # Any trailing kernel input after Finish is recorded in the
+                # original byte log and therefore invalidates the exact-10 check.
+                tail_deadline = time.monotonic() + 0.3
+                while time.monotonic() < tail_deadline:
+                    recorder.poll()
+                    if select.select([fd], [], [], max(0, min(0.05, tail_deadline - time.monotonic())))[0]:
+                        tail = os.read(fd, 4096)
+                        if tail:
+                            received.extend(tail); (root / 'received.bin').write_bytes(received)
+                if bytes(received) != b'kPocket\xe6\xb5\x8b':
+                    raise ValueError('tui_trailing_input')
+                write_tui_marker('tui-complete', 'complete\n')
             if time.monotonic() >= deadline:
                 reason = 2; break
             if time.monotonic() >= next_tick:

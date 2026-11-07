@@ -69,6 +69,18 @@ guarded GUI 在完成相同配对、full/delta 后，显式选择逐键输入并
 
 本入口不注入未知响应／网络失败，未知结果后的人工恢复由 `remote_input_widget_test.dart` 的隔离替身回归检查；真实断线及进程重启恢复仍需单独验收。失败时只公开 `failure.json` 的静态阶段、白名单异常类型和测试源码行号；不写异常正文、原始 stack、公开响应或输入文本，原异常仍会重新抛出。
 
+## 可选的真实 curses 第二阶段
+
+`--android-tui` 仅可与现有 guarded 输入场景及隔离候选主机共同使用。Flutter runner 将其映射为 `HERDR_ANDROID_GUARDED_TUI=true`；不开启时保留原有只读或 guarded 场景。此次新增驱动未在本机执行 Flutter analyzer、Android 构建或 AVD，不代表设备通过；Python 隔离回归与 Dart 语法检查也不替代真实 SDK 运行。
+
+原有 `k`、系统键盘、粘贴审查、`Pocket测` 草稿、隐藏恢复和两笔回执验收保持在先。之后手机通过 app-private 的单次 `tui-start` 检查点提供已显示的 terminal ID；主机以独立 snapshot 核对目标，在确认原 10 bytes 后由 `Approval.start_tui` 将同一 pane／terminal／PTY 切到真实 curses。该控制文件不含命令或按键，不是 SSH 输入桥；启动失败或确认丢失时不重试。手机隐藏并主动恢复原标签，等待生产 `Terminal` 对象替换和当前 `Pocket TUI` 完整画面，证明启动后收到新 full，再显式选择逐键输入。
+
+手机依次点击可见辅助按钮 Down、Tab、Backspace、Shift+Tab、Insert、Delete、F1、F1、F5、F10。每笔只点一次，核对页面回执的新 request ID、原 pane／terminal 和精确字节数。前九步还要求本观察中的 seq 前进、当前完整合成屏逐行匹配，以及真实 renderer 中变化行的内侧文字完整可见；不在累积 ANSI 或 scrollback 中搜索，不导出远端正文。帮助页与主列表的完整标题分别核对，防止旧标题残留造成误判。F10 的应用完成由外层主机报告独立确认。
+
+新增 `result.tui` 严格包含 `receipts`（十笔）、`screenChecks`（`initial`、`select-next`、`focus-detail`、`erase-character`、`focus-list`、`insert-row`、`delete-row`、`open-help`、`close-help`、`refresh`）及 `observedInitialFull:true`，共享 `mobile_tui_evidence` 会拒绝缺步、重用原两笔 ID、目标变化、字节不符或额外字段。原 `inputReceipts` 仍只含 1 和 9 bytes 两笔。GUI 回执只证明队列受理；外层另用 `verify_tui` 核对实际 curses 十步、结束状态和接收端字节遥测，不能只凭 GUI 回执声称无重放。
+
+同一观察 channel 内的新 full 只更换终端解析器；相同 `inputTarget` 继续沿用已显式选择的输入模式。隐藏后恢复的新 channel 会产生新目标授权对象，仍需新 full 和显式重选模式。页面实时状态现在从实际 gate 显示只读、逐键、草稿、提交中或结果未知，delta 不再覆盖为“输入关闭”；本地错误提示保留，停止后显示停止状态。
+
 ## 共享 harness 与独立 job
 
 [`paired-android-emulator.yml`](../../../.github/workflows/paired-android-emulator.yml) 保留原 Tauri job，并新增独立 `flutter-device-key` Linux job。既有批次调用该 reusable workflow，因此无需更改批次触发器，也没有因接线而启动工作流。

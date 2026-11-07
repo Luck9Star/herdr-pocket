@@ -12,6 +12,7 @@ import subprocess
 import urllib.request
 
 from paired_gui import GuiFailure, wait_for
+from paired_tui import STEPS
 from flutter_android_gui import (
     DeviceFailure, public_host_fingerprint, public_ime_diagnostic, public_profile_json, wait_system_ime,
 )
@@ -48,14 +49,14 @@ class AndroidProgress:
     """Bounded per-stage evidence survives a later failure; no raw dumps/text."""
     PHASES = {'setup','pairing','canvas_selection','dashboard','observe_full','observe_delta','canvas_marker','font_diagnostics',
         'direct_mode','draft_mode','direct_input_receipt','paste_review','hidden_recovery',
-        'draft_input_receipt','stop_observation','complete',
+        'draft_input_receipt','tui','stop_observation','complete',
         'keyboard_observe_hidden','keyboard_direct_shown','keyboard_direct_hidden','keyboard_direct_reopened',
         'keyboard_draft_shown','keyboard_draft_back_request','keyboard_draft_back_hidden',
         'keyboard_draft_back_reopened','keyboard_draft_hidden','local_revocation_review'}
     COMPLETED = {'publicProfileReviewed','publicRequestCopyReported','revocationReviewed','authorizationReviewed','paneChosen','fullRendered','deltaRendered',
         'canvasSelectionVerified','canvasGeometryVerified','canvasMarkerVisible','canvasViewportRestored',
         'fontDiagnosticsCompleted','directKeyboardCompleted','directReceiptVerified',
-        'draftKeyboardCompleted','pasteReviewCompleted','draftRestored','draftReceiptVerified','stoppedStale'}
+        'draftKeyboardCompleted','pasteReviewCompleted','draftRestored','draftReceiptVerified','tuiCompleted','stoppedStale'}
     ERROR_CODES = {'android_system_ime_target_mismatch','android_system_ime_evidence_unavailable',
         'android_system_ime_show_unconfirmed','android_system_ime_hide_unconfirmed',
         'android_system_ime_expected_state_invalid','android_driver_failure',
@@ -653,7 +654,85 @@ def exercise_local_paste(browser, approval, receipt, raw_receipt):
             'pasteOperationsNoExtraSshBytes': True}
 
 
+# Only fixed fixture markers are inspected; terminal contents never leave CDP.
+TUI_MARKERS = {
+    'initial': ('Pocket TUI', 'F1 Help   F5 Refresh   F10 Finish', '> Build'),
+    'select-next': ('Pocket TUI', '> Review', 'Focus: list'),
+    'focus-detail': ('Pocket TUI', '> Review', 'Focus: detail', 'Detail: xy'),
+    'erase-character': ('Pocket TUI', '> Review', 'Focus: detail', 'Detail: x'),
+    'focus-list': ('Pocket TUI', '> Review', 'Focus: list', 'Detail: x'),
+    'insert-row': ('Pocket TUI', '> New', 'Focus: list', 'Detail: x'),
+    'delete-row': ('Pocket TUI', '> Review', 'Focus: list', 'Detail: x'),
+    'open-help': ('Pocket TUI Help', 'F1 Return to list'),
+    'close-help': ('Pocket TUI', '> Review', 'Refreshes: 0'),
+    'refresh': ('Pocket TUI', '> Review', 'Refreshes: 1'),
+}
+
+def tui_screen_matches(browser, marker):
+    expected = TUI_MARKERS[marker]
+    expression = r"""(()=>{const c=document.querySelector('#remote-captured');
+      const terminal=document.querySelector('#remote-terminal');
+      if(c?.dataset.state!=='active'||!terminal)return false;
+      terminal.scrollIntoView({block:'center',inline:'nearest'});
+      const rows=terminal.querySelectorAll('.xterm-rows > div');
+      if(!rows.length)return false;
+      const lines=[...rows].map(row=>row.textContent.replaceAll('\u00a0',' ').trimEnd());
+      return %s.every(marker=>lines.includes(marker));})()""" % json.dumps(expected)
+    return browser.evaluate(expression) is True
+
+
+def exercise_tui(browser, approval, pane, terminal, previous_receipt, previous_request_ids, progress=None):
+    """Drive only the reviewed target with real auxiliary-button clicks."""
+    expected_target = f'目标：{pane} · {terminal}'
+    if browser.read('#remote-input-target') != expected_target:
+        raise GuiFailure('android_tui_target_mismatch')
+    browser.click('#remote-input-direct')
+    wait_for(lambda: '逐键输入已启用' in (browser.read('#remote-input-status') or ''),
+             'android_tui_direct_mode_missing')
+    def frame_counts():
+        value = browser.evaluate("""(()=>{const c=document.querySelector('#remote-captured');
+          return c?.dataset.state==='active' ? [Number(c.dataset.fullFrames || 0),
+            Number(c.dataset.deltaFrames || 0)] : null})()""")
+        if (not isinstance(value, list) or len(value) != 2 or
+                any(type(item) is not int or item < 0 for item in value)):
+            raise GuiFailure('android_tui_frame_state_invalid')
+        return value
+
+    before_full, _ = frame_counts()
+    approval.start_tui(terminal_id=terminal)
+    wait_for(lambda: frame_counts()[0] > before_full and tui_screen_matches(browser, 'initial'),
+             'android_tui_initial_full_missing', timeout=60)
+    browser.click('#remote-input-keys [aria-controls="remote-more-keys"]')
+    if browser.evaluate("document.querySelector('#remote-more-keys')?.hidden === false") is not True:
+        raise GuiFailure('android_tui_more_keys_missing')
+    seen = set(previous_request_ids)
+    raw = previous_receipt
+    checks = ['initial']
+    receipts = []
+    for key, length, checkpoint in STEPS:
+        if (browser.read('#remote-input-target') != expected_target or
+                browser.evaluate("document.querySelector('#remote-captured')?.dataset.state === 'active'") is not True):
+            raise GuiFailure('android_tui_target_mismatch')
+        before = sum(frame_counts())
+        browser.click(f'#remote-input-keys [data-remote-key="{key}"]')
+        raw, receipt = browser.receipt(raw, pane, length)
+        if receipt['terminalId'] != terminal or receipt['requestId'] in seen:
+            raise GuiFailure('android_tui_receipt_mismatch')
+        seen.add(receipt['requestId'])
+        receipts.append(receipt)
+        if progress is not None:
+            progress.data['tuiReceiptsVerified'] = len(receipts)
+            progress.publish()
+        if checkpoint != 'finish':
+            wait_for(lambda: sum(frame_counts()) > before and tui_screen_matches(browser, checkpoint),
+                     'android_tui_screen_missing', timeout=30)
+            checks.append(checkpoint)
+    return {'receipts': receipts, 'screenChecks': checks, 'observedInitialFull': True}
+
+
 def run_android(args, root, env, config, approval):
+    if getattr(args, 'android_tui', False) and not getattr(args, 'input_fixture', None):
+        raise GuiFailure('android_tui_requires_guarded_fixture')
     if bool(getattr(args, 'android_guarded_input', False)) != bool(getattr(args, 'input_fixture', None)):
         raise GuiFailure('android_guarded_input_fixture_mismatch')
     if (os.environ.get('GITHUB_ACTIONS') != 'true' or
@@ -791,6 +870,7 @@ def run_android(args, root, env, config, approval):
         receipts = []
         paste_evidence = {}
         keyboard_evidence = []
+        tui_evidence = None
         if getattr(args, 'input_fixture', None):
             wait_for(lambda: browser.evaluate("!document.querySelector('#remote-input-controls').hidden"),
                      'android_input_controls_missing', timeout=60)
@@ -829,12 +909,18 @@ def run_android(args, root, env, config, approval):
             if browser.read('#remote-input-preview-text') != 'Pocket测':
                 raise GuiFailure('android_draft_preview_mismatch')
             browser.click('#remote-input-confirm')
-            _, second = browser.receipt(raw, config['paneId'], len('Pocket测'.encode('utf-8')))
+            raw, second = browser.receipt(raw, config['paneId'], len('Pocket测'.encode('utf-8')))
             if second['requestId'] == first['requestId'] or second['terminalId'] != first['terminalId']:
                 raise GuiFailure('android_input_receipt_target_mismatch')
             if browser.read('#remote-input-draft', 'value'):
                 raise GuiFailure('android_submitted_draft_retained')
             receipts.append(second); progress.mark('draftReceiptVerified'); progress.count('inputReceiptCount',2)
+            if getattr(args, 'android_tui', False):
+                approval.verify_ssh('kPocket测'.encode('utf-8'))
+                progress.phase('tui')
+                tui_evidence = exercise_tui(browser, approval, config['paneId'], first['terminalId'],
+                                            raw, [first['requestId'], second['requestId']], progress)
+                progress.mark('tuiCompleted')
         else:
             if not browser.evaluate("['remote-keyboard-show','remote-keyboard-hide'].every(id=>document.getElementById(id)?.disabled===true)"):
                 raise GuiFailure('android_readonly_keyboard_controls_enabled')
@@ -871,6 +957,7 @@ def run_android(args, root, env, config, approval):
                 'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                 'inputQueueAccepted':bool(receipts), 'inputReceipts':receipts,
                 'fontDiagnosticEvidence':font_diagnostic_evidence, 'observerCanvasEvidence':canvas_evidence,
+                **({'tui': tui_evidence} if tui_evidence is not None else {}),
                 **paste_evidence,
                 'systemKeyboardEvidence': {'checkpoints': keyboard_evidence, 'showWithHardwareKeyboard': True,
                     'scope': 'owned API35 IME service window; CDP commits are not IME touch/composition proof'},

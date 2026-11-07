@@ -186,7 +186,31 @@ def gui_report_fields(route, result, input_fixture=False):
     return fields
 
 
-def load_input_fixture(path, env):
+def checked_observer_modes(path, binary_hash):
+    if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size <= 4096:
+        raise ProbeFailure('input_fixture_mode_report_unavailable')
+    try:
+        evidence = json.loads(path.read_bytes())
+    except (UnicodeError, ValueError):
+        raise ProbeFailure('input_fixture_mode_report_invalid') from None
+    flags = ('capabilityVerified', 'initialFull', 'initialVisible', 'initialModeSynchronized',
+             'sequenceContiguous', 'sharedPtySizeUnchanged')
+    if (not isinstance(evidence, dict) or evidence.get('expectation') != 'candidate'
+            or evidence.get('version') != 'herdr 0.9.5' or evidence.get('status') != 'passed'
+            or evidence.get('binarySha256') != binary_hash
+            or evidence.get('canvas') != {'cols': 120, 'rows': 40}
+            or any(evidence.get(name) is not True for name in flags)):
+        raise ProbeFailure('input_fixture_mode_report_invalid')
+    samples = evidence.get('ptySampleCount')
+    steps = evidence.get('steps')
+    if (type(samples) is not int or samples < 2 or not isinstance(steps, list) or len(steps) != 4
+            or any(not isinstance(step, dict) or step.get('modeOnlyFrameObserved') is not True
+                   or step.get('freshVisualObserved') is not True for step in steps)):
+        raise ProbeFailure('input_fixture_mode_report_invalid')
+    return {'binarySha256': binary_hash, 'modeTransitions': len(steps), 'ptySampleCount': samples}
+
+
+def load_input_fixture(path, env, require_observer_modes=False):
     expected = Path(env['RUNNER_TEMP']).resolve() / 'input-fixture'
     if path.resolve() != expected or path.is_symlink():
         raise ProbeFailure('unexpected_fixture_path')
@@ -213,8 +237,11 @@ def load_input_fixture(path, env):
     digest = hashlib.sha256(binary).hexdigest()
     if digest != metadata.get('binarySHA256'):
         raise ProbeFailure('input_fixture_digest_mismatch')
-    return binary, dict(source, binarySHA256=digest, binaryDebugAssertions=False,
-                        readinessAndCapabilitySmokePassed=True)
+    verified = dict(source, binarySHA256=digest, binaryDebugAssertions=False,
+                    readinessAndCapabilitySmokePassed=True)
+    if require_observer_modes:
+        verified['observerModes'] = checked_observer_modes(expected / 'observer-input-modes.json', digest)
+    return binary, verified
 
 
 PTY_FIELDS = {'schemaVersion','state','endReason','initialRows','initialColumns','rows','columns',
@@ -266,11 +293,13 @@ def main():
     parser.add_argument('--tauri-app', type=Path)
     parser.add_argument('--input-fixture', type=Path)
     parser.add_argument('--android-guarded-input', action='store_true')
+    parser.add_argument('--android-tui', action='store_true',
+                        help='also exercise curses on the same paired and guarded Android target')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     require_runner(os.environ)
     try:
-        validate_mode(args.paired_gui, bool(args.input_fixture), args.android_guarded_input)
+        validate_mode(args.paired_gui, bool(args.input_fixture), args.android_guarded_input, args.android_tui)
     except EvidenceError as exc:
         raise ProbeFailure(str(exc)) from None
     if ((args.paired_gui in ('tauri','tauri-android') and not args.tauri_app) or
@@ -362,7 +391,7 @@ def main():
         version_text = (version.stdout + version.stderr).decode('ascii', errors='replace').strip()
         report['openSshVersion'] = version_text if re.fullmatch(r'OpenSSH_[ -~]{1,240}', version_text) else 'not_recorded'
         if args.input_fixture:
-            binary, report['herdr'] = load_input_fixture(args.input_fixture, env)
+            binary, report['herdr'] = load_input_fixture(args.input_fixture, env, args.android_tui)
         else:
             with urllib.request.urlopen(HERDR_URL, timeout=60) as response:
                 binary = response.read(100 * 1024 * 1024 + 1)
@@ -415,6 +444,8 @@ LogLevel VERBOSE
         if not isinstance(pane, str) or not re.fullmatch(r'[A-Za-z0-9:_-]{1,128}', pane):
             raise ProbeFailure('fixture_pane_invalid')
         shutil.copy2(REPO / 'validation/remote-harness/capture_input.py', root / 'capture_input.py')
+        if args.android_tui:
+            shutil.copy2(REPO / 'validation/remote-harness/phone_tui_fixture.py', root / 'phone_tui_fixture.py')
         shutil.copy2(REPO / 'validation/shared/fixture.json', root / 'terminal-fixture.json')
         command([herdr, '--session', 'pocket-probe', 'pane', 'run', pane,
                  shlex.join(['python3', str(root / 'capture_input.py')])])
@@ -442,6 +473,8 @@ LogLevel VERBOSE
             # Import the pairing dependencies only for the isolated GUI workflow.
             from paired_gui import run_gui
             milestone = 'M1d-mobile-guarded-input' if args.android_guarded_input else 'M1c-pairing-dashboard-observe'
+            if args.android_tui:
+                milestone = 'android-paired-interactive-tui'
             report.update(milestone=milestone,
                           **gui_report_fields(args.paired_gui, {'status': 'failed'}, bool(args.input_fixture)))
             report.pop('cancelScope', None)
@@ -501,6 +534,8 @@ LogLevel VERBOSE
                 publish()
         report['status'] = 'passed' if all(c['status'] == 'passed' for c in report['checks']) else 'failed'
         report['receivedInputBytes'] = len((root / 'received.bin').read_bytes())
+        if args.android_tui:
+            report['receivedInputBytesScope'] = 'capture outside curses; see tui.receipts and hostTui for the interactive phase'
         report['fixtureSharedBetweenAdapters'] = not bool(args.paired_gui)
         report['observeFixture'] = {'syntheticTickIntervalMs': 200, 'changedTerminalRow': 23,
                                     'selection': ('GUI chooses a pane button from the current snapshot' if args.paired_gui else

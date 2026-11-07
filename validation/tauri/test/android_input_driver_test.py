@@ -192,23 +192,100 @@ class AndroidPasteDriverTest(unittest.TestCase):
                 ('shell', 'pm', 'list', 'packages'): '',
                 ('shell', 'pidof', android.PACKAGE): '42',
                 ('shell', 'cat', '/proc/net/unix'): '@webview_devtools_remote_42',
+                ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'): '1',
                 ('forward', 'tcp:0', 'localabstract:webview_devtools_remote_42'): '12345'}
             return values.get(parts, '')
         with tempfile.NamedTemporaryFile() as apk, \
                 patch.dict(android.os.environ, {'GITHUB_ACTIONS': 'true', 'ANDROID_SERIAL': android.SERIAL}), \
-                patch.object(android, 'adb', side_effect=adb), patch.object(android, 'AndroidWebView', return_value=view):
+                patch.object(android, 'adb', side_effect=adb), patch.object(android, 'AndroidWebView', return_value=view), \
+                patch.object(android, 'system_keyboard', return_value={'visible': False, 'ownedTarget': True}):
             args = types.SimpleNamespace(android_guarded_input=False, input_fixture=None, tauri_app=apk.name)
             config = {'host': '127.0.0.1', 'port': 2222, 'username': 'fixture', 'session': 'pocket-probe',
                       'herdrPath': '/tmp/owned/herdr', 'socketPath': '/tmp/owned/socket', 'expectedHostKey': 'fixture', 'paneId': 'p'}
             result = android.run_android(args, None, None, config, approval)
         view.copy_synthetic_clipboard.assert_not_called()
-        view.receipt.assert_not_called(); approval.verify_ssh.assert_not_called()
+        view.receipt.assert_not_called(); approval.verify_ssh.assert_called_once_with(b'')
         self.assertEqual(result['initialHostBoardPhase'], 'fresh')
         self.assertEqual(result['hostBoardPhaseDuringTerminal'], 'fresh')
         self.assertFalse(result['inputQueueAccepted'])
         self.assertEqual(result['inputReceipts'], [])
         self.assertFalse(any('paste' in field.lower() or 'clipboard' in field.lower() for field in result))
         self.assertNotIn(('#remote-read-paste',), [call.args for call in view.click.call_args_list])
+
+
+class AndroidSystemKeyboardTest(unittest.TestCase):
+    class View:
+        def __init__(self, changed_draft=False, reselect=False):
+            self.events = []; self.changed_draft = changed_draft; self.draft = 'Pocket'; self.mode = 'direct'
+            self.focus = True; self.reselect = reselect
+        def click(self, selector):
+            self.events.append(selector)
+            if selector == '#remote-keyboard-hide' and self.changed_draft: self.draft = 'changed'
+            if selector == '#remote-keyboard-hide': self.mode = 'observe'
+            if selector == '#remote-input-direct': self.mode = 'direct'
+            if selector == '#remote-input-draft-mode': self.mode = 'draft'
+        def evaluate(self, expression):
+            return self.mode == 'observe' or self.reselect if 'disabled' in expression else self.focus
+        def read(self, selector, prop='textContent'):
+            if selector == '#remote-input-draft': return self.draft
+            if selector == '#remote-input-target': return '目标：p · term_1'
+            if selector == '#remote-input-status': return '草稿仅在核对' if self.mode == 'draft' else '逐键输入已启用'
+            raise AssertionError(selector)
+
+    def test_show_hide_reopen_use_real_probe_and_receiver_before_original_direct_byte(self):
+        view = self.View(); approval = Mock()
+        with patch.object(android, 'system_keyboard', side_effect=lambda visible: {'visible': visible, 'ownedTarget': True}) as system:
+            result = android.exercise_keyboard(view, approval, 'direct')
+        self.assertEqual([c.args for c in system.call_args_list], [(True,), (False,), (True,)])
+        self.assertEqual(view.events, ['#remote-keyboard-show', '#remote-keyboard-hide', '#remote-input-direct'])
+        self.assertEqual([c.args for c in approval.verify_ssh.call_args_list], [(b'',)] * 3)
+        self.assertEqual([x['checkpoint'] for x in result], ['keyboard-direct-shown', 'keyboard-direct-hidden', 'keyboard-direct-reopened'])
+
+    def test_draft_preserved_and_no_extra_remote_bytes_or_unconfirmed_visibility(self):
+        view = self.View(); approval = Mock()
+        with patch.object(android, 'system_keyboard', side_effect=lambda visible: {'visible': visible, 'ownedTarget': True}), patch.object(android, 'adb'):
+            android.exercise_keyboard(view, approval, 'draft')
+        self.assertEqual(view.draft, 'Pocket')
+        self.assertEqual([c.args for c in approval.verify_ssh.call_args_list], [(b'k',)] * 4)
+        with patch.object(android, 'system_keyboard', return_value={'visible': True, 'ownedTarget': True}), patch.object(android, 'adb'):
+            with self.assertRaisesRegex(android.GuiFailure, '^android_keyboard_changed_local_draft$'):
+                android.exercise_keyboard(self.View(changed_draft=True), Mock(), 'draft')
+        approval = Mock()
+        with patch.object(android, 'system_keyboard', side_effect=android.GuiFailure('android_system_ime_show_unconfirmed')):
+            with self.assertRaisesRegex(android.GuiFailure, '^android_system_ime_show_unconfirmed$'):
+                android.exercise_keyboard(self.View(), approval, 'direct')
+        approval.verify_ssh.assert_not_called()
+
+    def test_one_real_back_records_retained_or_lost_focus_then_explicitly_reopens_same_draft(self):
+        for focus_after, reselect in ((True, False), (False, True)):
+            view = self.View(reselect=reselect)
+            def adb(*parts):
+                self.assertEqual(parts, ('shell', 'input', 'keyevent', 'KEYCODE_BACK'))
+                view.focus = focus_after
+            with patch.object(android, 'system_keyboard', side_effect=lambda visible: {'visible': visible, 'ownedTarget': True}), \
+                    patch.object(android, 'adb', side_effect=adb) as back:
+                evidence = android.exercise_keyboard(view, Mock(), 'draft')
+            back.assert_called_once()
+            hidden = next(e for e in evidence if e['checkpoint'] == 'keyboard-draft-back-hidden')
+            self.assertTrue(hidden['editorFocusedBeforeBack'])
+            self.assertEqual(hidden['editorFocusedAfterBack'], focus_after)
+            reopened = next(e for e in evidence if e['checkpoint'] == 'keyboard-draft-back-reopened')
+            self.assertEqual(reopened['modeReselected'], reselect)
+            self.assertEqual(view.draft, 'Pocket')
+        with patch.object(android, 'system_keyboard', return_value={'visible': False, 'ownedTarget': True}), patch.object(android, 'adb') as back:
+            with self.assertRaisesRegex(android.GuiFailure, 'requires_visible_owned_ime'):
+                android.exercise_keyboard(self.View(), Mock(), 'draft')
+            back.assert_not_called()
+
+    def test_system_probe_reads_both_real_service_state_and_display_owner(self):
+        with patch.object(android, 'adb', return_value='owned-system-dump') as adb, \
+                patch.object(android, 'wait_system_ime', side_effect=lambda read, package, visible: (read(), package, visible)):
+            result = android.system_keyboard(True)
+        self.assertEqual(result, (('owned-system-dump', 'owned-system-dump'), android.PACKAGE, True))
+        self.assertEqual([c.args for c in adb.call_args_list], [('shell', 'dumpsys', 'input_method'), ('shell', 'dumpsys', 'window', 'displays')])
+        with patch.object(android, 'wait_system_ime', side_effect=android.DeviceFailure('android_system_ime_evidence_unavailable')):
+            with self.assertRaisesRegex(android.GuiFailure, '^android_system_ime_evidence_unavailable$'):
+                android.system_keyboard(True)
 
 class AndroidDraftReentryTest(unittest.TestCase):
     class View:

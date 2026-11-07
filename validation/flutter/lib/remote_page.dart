@@ -82,6 +82,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final terminalFocus = FocusNode();
   final terminalViewportKey = GlobalKey();
   final draft = TextEditingController();
+  final draftFocus = FocusNode();
   final screenText = TextEditingController();
   final screenTextFocus = FocusNode();
   Object? screenSelectionTicket;
@@ -91,6 +92,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   int draftRevision = 0;
   final rejectedDrafts = <({String target,String text})>[];
   bool rendering = false, previewOpen = false, readingPaste = false, acknowledgingInput = false;
+  bool directKeyboardHidden = false;
+  bool? lastKeyboardVisible;
+  String? inputSuspensionMessage;
+  Object keyboardActionTicket = Object();
   Object? pasteReviewTicket;
   NavigatorState? pasteReviewNavigator;
   Route<String>? pasteReviewRoute;
@@ -101,7 +106,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final draftOrigins = <String,RemoteInputTarget>{};
   final auxiliaryModifiers = AuxiliaryModifiers();
   late final RemoteInputGate inputGate = RemoteInputGate((target,bytes,current) =>
-    adapter.sendInput(target,bytes,stillCurrent:current),onChanged:() {
+    adapter.sendInput(target,bytes,stillCurrent:() => current() &&
+      !(inputGate.mode == RemoteInputMode.direct && directKeyboardHidden)),onChanged:() {
       if (selectingScreen && screenSelectionCurrent?.call() != true) clearScreenSelection();
       if (!inputGate.canInput || inputGate.mode != RemoteInputMode.direct || inputGate.sending) auxiliaryModifiers.reset();
       if (mounted) setState(() {});
@@ -173,12 +179,79 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
   }
   void summaryChanged() { if (mounted) setState(() {}); }
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    if (lastKeyboardVisible == true && !keyboardVisible &&
+        (inputGate.mode == RemoteInputMode.direct || inputGate.mode == RemoteInputMode.draft)) {
+      // System Back can hide the IME without changing FocusNode focus. Retire
+      // the active input epoch after this build, exactly like explicit hide.
+      pauseInputForKeyboard('系统收起了软键盘 · 输入已撤销，草稿已保留；请重新选择输入模式',deferRetirement:true);
+    }
+    lastKeyboardVisible = keyboardVisible;
+  }
+  bool get commonKeyboardControlState => live && !viewPaused && widget.visibility?.value != false &&
+    inputGate.fresh && inputGate.unknown == null && !selectingScreen && !previewOpen;
+  void resetKeyboardControls({bool invalidateKeyboardActions=true}) {
+    directKeyboardHidden = false;
+    inputSuspensionMessage = null;
+    if (invalidateKeyboardActions) keyboardActionTicket = Object();
+  }
+  bool get keyboardControlsEnabled => commonKeyboardControlState &&
+    inputGate.canInput && (inputGate.mode == RemoteInputMode.direct || inputGate.mode == RemoteInputMode.draft);
+  bool keyboardActionCurrent(RemoteInputTarget? target,RemoteInputMode mode,int gateEpoch,int pageEpoch,Object actionTicket) =>
+    commonKeyboardControlState && target != null && identical(inputGate.target,target) && observationEpoch == pageEpoch &&
+    identical(keyboardActionTicket,actionTicket) &&
+    inputGate.mode == mode && inputGate.epoch == gateEpoch && inputGate.canInput &&
+    (mode == RemoteInputMode.direct || mode == RemoteInputMode.draft);
+  void pauseInputForKeyboard(String message,{bool deferRetirement=false}) {
+    final target = inputGate.target;
+    final mode = inputGate.mode;
+    final gateEpoch = inputGate.epoch,pageEpoch = observationEpoch;
+    if ((mode != RemoteInputMode.direct && mode != RemoteInputMode.draft) || target == null) return;
+    directKeyboardHidden = mode == RemoteInputMode.direct;
+    inputSuspensionMessage = message;
+    void retireLease() {
+      if (!mounted || inputGate.epoch != gateEpoch || observationEpoch != pageEpoch ||
+          inputGate.mode != mode || !identical(inputGate.target,target)) return;
+      inputGate.setFocused(false); // Changes epoch, discards queued bytes and moves to observe.
+      if (mode == RemoteInputMode.draft) draftFocus.unfocus();
+      bindTerminalOutput();
+    }
+    if (deferRetirement) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => retireLease());
+    } else {
+      retireLease();
+    }
+  }
+  Future<void> showInputKeyboard(RemoteInputTarget? target,RemoteInputMode requestedMode,
+      int gateEpoch,int pageEpoch,Object actionTicket) async {
+    if (!keyboardActionCurrent(target,requestedMode,gateEpoch,pageEpoch,actionTicket)) return;
+    if (requestedMode == RemoteInputMode.direct) {
+      if (!terminalFocus.hasFocus) terminalFocus.requestFocus();
+    } else {
+      draftFocus.requestFocus();
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !commonKeyboardControlState || !identical(inputGate.target,target) || observationEpoch != pageEpoch ||
+        !identical(keyboardActionTicket,actionTicket) || inputGate.mode != requestedMode ||
+        inputGate.epoch != gateEpoch || !inputGate.canInput ||
+        (requestedMode == RemoteInputMode.draft && !draftFocus.hasFocus) ||
+        (requestedMode != RemoteInputMode.draft && !terminalFocus.hasFocus)) return;
+    await SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+  }
+  Future<void> hideInputKeyboard(RemoteInputTarget? target,RemoteInputMode mode,int gateEpoch,int pageEpoch,Object actionTicket) async {
+    if (!keyboardActionCurrent(target,mode,gateEpoch,pageEpoch,actionTicket)) return;
+    pauseInputForKeyboard('已请求收起键盘 · 输入权限已撤销，草稿已保留；请重新选择输入模式');
+    await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  }
   void terminalFocusChanged() {
     if (mounted) setState(() { if (!terminalFocus.hasFocus) auxiliaryModifiers.reset(); });
     // A preview owns a target-bound lease while its modal takes focus. All
     // other direct focus loss revokes the lease and any queued keystrokes.
     if (!terminalFocus.hasFocus && !previewOpen && inputGate.mode == RemoteInputMode.direct) {
-      inputGate.setFocused(false); bindTerminalOutput();
+      pauseInputForKeyboard('焦点离开了输入区 · 输入已撤销，草稿已保留；请重新选择输入模式');
     }
   }
   @override
@@ -186,6 +259,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.pairedTarget,widget.pairedTarget) || !identical(oldWidget.adapter,widget.adapter) ||
         oldWidget.keyHandle != widget.keyHandle || oldWidget.devicePublicKey != widget.devicePublicKey) {
+      resetKeyboardControls();
       dismissPasteReview(); clearScreenSelection();
     }
     if (!identical(oldWidget.networkBinding,widget.networkBinding) || !identical(oldWidget.requestedTarget,widget.requestedTarget)) {
@@ -208,6 +282,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   void visibilityChanged() {
     if (widget.visibility?.value == false) {
+      resetKeyboardControls();
       dismissPasteReview(); clearScreenSelection(); retirePendingPasteRead();
       widget.summaryLease?.invalidate(); summaryAttempt = null;
       inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
@@ -239,6 +314,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) stop('应用已暂停，连接已取消；请重新核验后主动连接');
   }
   void stop([String message = '已取消；不会重连或发送输入']) {
+    resetKeyboardControls();
     dismissPasteReview(); clearScreenSelection(); retirePendingPasteRead();
     widget.summaryLease?.invalidate(); summaryAttempt = null;
     inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
@@ -259,7 +335,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     adapter.captureInputJournalReview = null;
     inputGate.onChanged = null; inputGate.invalidate();
     clearScreenSelection(); screenText.dispose(); screenTextFocus.dispose();
-    terminalFocus.removeListener(terminalFocusChanged); terminalFocus.dispose(); draft.removeListener(draftChanged); draft.dispose();
+    terminalFocus.removeListener(terminalFocusChanged); terminalFocus.dispose(); draftFocus.dispose(); draft.removeListener(draftChanged); draft.dispose();
     unawaited(adapter.cancel()); terminal?.dispose();
     widget.onViewState?.call(inputGate.unknown != null || adapter.pendingInput != null ? 'unknown' : 'stale',
       selectedPane ?? widget.requestedTarget?.paneId,widget.requestedTarget?.terminalId);
@@ -270,7 +346,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Future<void> connect() async {
     if (networkBindingInvalidated || !identical(originalNetworkBinding,widget.networkBinding) ||
         !reviewed || busy || widget.visibility?.value == false) return;
-    dismissPasteReview(); clearScreenSelection();
+    resetKeyboardControls(); dismissPasteReview(); clearScreenSelection();
     final ticket = ++request;
     observationEpoch = 0;
     summaryAttempt = widget.summaryLease?.begin();
@@ -348,7 +424,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           final journalRead = frame.inputJournalRead;
           final reconciled = journalRead != null && adapter.isInputJournalReadCurrent(journalRead) &&
             inputGate.reconcileJournalRefresh(journalRead.review);
+          final previousInputTarget = inputGate.target;
           inputGate.bind(target,adapter.inputCapability);
+          if (!identical(previousInputTarget,target)) resetKeyboardControls();
           if (reconciled && identical(inputGate.target,journalRead.target)) inputGate.lastResult = journalRead.review.knownResult;
           if (adapter.pendingInput != null) inputGate.restorePending(adapter.pendingInput!);
         }
@@ -412,7 +490,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         board.generation != adapter.generation ||
         !board.selectable ||
         board.panes.where((p) => p.paneId == pane.paneId && p.terminalId == pane.terminalId).length != 1) return;
-    dismissPasteReview(); clearScreenSelection();
+    resetKeyboardControls(); dismissPasteReview(); clearScreenSelection();
     setState(() { selectedPane = pane.paneId; selectedTarget = pane; live = false; status = '目标已选择 · 等待新 full'; });
     reportView();
     try { adapter.selectTarget(board.generation,pane); }
@@ -424,7 +502,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final lease = inputGate.capture();
     if (source == null) return;
     source.onOutput = (text) {
-      if (!mounted || rendering || previewOpen || selectingScreen || !identical(source,terminal) || !terminalFocus.hasFocus ||
+      if (!mounted || rendering || previewOpen || selectingScreen || directKeyboardHidden || !identical(source,terminal) || !terminalFocus.hasFocus ||
           lease == null || lease.mode != RemoteInputMode.direct || !inputGate.current(lease)) return;
       // An IME/multiline insertion also goes through preview. Enter generated
       // by the terminal component is CR and remains an explicit key action.
@@ -442,7 +520,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     dismissPasteReview();
     retirePendingPasteRead();
     auxiliaryModifiers.reset();
-    terminalFocus.unfocus(); FocusScope.of(context).unfocus();
+    terminalFocus.unfocus(); draftFocus.unfocus(); FocusScope.of(context).unfocus();
+    resetKeyboardControls(invalidateKeyboardActions:false);
     inputGate.setFocused(true); inputGate.setMode(mode); bindTerminalOutput();
     final lease = inputGate.capture();
     if (mode == RemoteInputMode.direct && lease != null) {
@@ -695,7 +774,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   bool get auxiliaryReady => live && inputGate.canInput && inputGate.mode == RemoteInputMode.direct &&
-    terminalFocus.hasFocus && !previewOpen && !selectingScreen && !inputGate.sending;
+    terminalFocus.hasFocus && !directKeyboardHidden && !previewOpen && !selectingScreen && !inputGate.sending;
 
   void auxiliaryInput(String name) {
     final lease = inputGate.capture();
@@ -712,9 +791,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final enabled = available && inputGate.unknown == null && !selectingScreen;
     final panelObservationEpoch = observationEpoch,panelInputEpoch = inputGate.epoch;
     final panelTarget = inputGate.target;
+    final panelMode = inputGate.mode;
+    final panelKeyboardActionTicket = keyboardActionTicket;
     bool panelCurrent() => observationEpoch == panelObservationEpoch && inputGate.epoch == panelInputEpoch &&
       identical(inputGate.target,panelTarget) && widget.visibility?.value != false && !viewPaused;
     final result = inputGate.lastResult;
+    final suspensionMessage = inputSuspensionMessage;
     final reviewedUnknown = inputGate.unknown,reviewedRaw = inputGate.unknown?.pendingRaw;
     final receipt = reviewedUnknown != null ? reviewedUnknown.receipt : result?.receipt;
     final message = inputGate.unknown != null
@@ -723,6 +805,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         RemoteInputDisposition.rejected => '此次输入已确认未受理 · 本目标本机发送锁未清理，输入已锁定',
         _ => '发送结果待核实 · 仅本目标输入已锁定，不会重放',
       }
+      : inputGate.mode == RemoteInputMode.observe && suspensionMessage != null ? suspensionMessage
       : inputGate.sending ? '正在发送 · 同一动作不会重复提交'
       : result?.disposition == RemoteInputDisposition.accepted ? '服务端已接收 · 仅确认队列受理，请查看终端反馈'
       : result?.disposition == RemoteInputDisposition.rejected ? '未发送成功 · 已明确拒绝；请主动修正后再操作'
@@ -743,6 +826,18 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           selected:inputGate.mode == entry.key,
           onSelected:entry.key == RemoteInputMode.observe || enabled
             ? (_) { if (panelCurrent()) setInputMode(entry.key); } : null),
+      ]),
+      Wrap(spacing:8,runSpacing:8,children:[
+        OutlinedButton.icon(key:const ValueKey('remote-keyboard-show'),
+          onPressed:keyboardControlsEnabled ? () {
+            if (panelCurrent()) unawaited(showInputKeyboard(panelTarget,panelMode,panelInputEpoch,panelObservationEpoch,panelKeyboardActionTicket));
+          } : null,
+          icon:const Icon(Icons.keyboard),label:const Text('展开键盘')),
+        OutlinedButton.icon(key:const ValueKey('remote-keyboard-hide'),
+          onPressed:keyboardControlsEnabled ? () {
+            if (panelCurrent()) unawaited(hideInputKeyboard(panelTarget,panelMode,panelInputEpoch,panelObservationEpoch,panelKeyboardActionTicket));
+          } : null,
+          icon:const Icon(Icons.keyboard_hide),label:const Text('收起键盘')),
       ]),
       if (inputGate.unknown != null) ...[
         Text('待核实目标：${inputGate.unknown!.target.label}\n发送于 ${inputGate.unknown!.at.toLocal().toIso8601String()}'),
@@ -797,7 +892,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           PasteTextIntent:CallbackAction<PasteTextIntent>(onInvoke:(_) {
             if (panelCurrent()) unawaited(pasteInput()); return null;
           }),
-        },child:KeyedSubtree(key:ValueKey('remote-draft-input-epoch-${inputGate.epoch}'),child:TextField(key:const ValueKey('remote-input-draft'),controller:draft,minLines:2,maxLines:5,
+        },child:KeyedSubtree(key:ValueKey('remote-draft-input-epoch-${inputGate.epoch}'),child:TextField(key:const ValueKey('remote-input-draft'),controller:draft,focusNode:draftFocus,minLines:2,maxLines:5,
           maxLength:4096,
           enabled:enabled && !inputGate.sending && !previewOpen,autocorrect:false,enableSuggestions:false,
           contextMenuBuilder:(context,editable) => AdaptiveTextSelectionToolbar.buttonItems(

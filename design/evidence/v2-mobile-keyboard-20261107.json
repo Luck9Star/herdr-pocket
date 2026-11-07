@@ -1,0 +1,2431 @@
+{
+  "date": "2026-11-07",
+  "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+  "page": "7a22df08-251d-8016-8008-de03541c11da",
+  "palette": "Tech Indigo #4F46E5 / Slate",
+  "context": "Incremental design only; example interactions do not operate a system keyboard or connection.",
+  "links": {
+    "S43": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8acfe51be24",
+    "S44": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+    "S03": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=e6d238f0-ac08-8028-8008-de07eade594a"
+  },
+  "mcp": {
+    "server": "@penpot/mcp 2.15.4",
+    "appVersion": "2.19.0",
+    "versionMismatchWarning": true,
+    "baselineShapes": 1214,
+    "comparisonFields": [
+      "id",
+      "name",
+      "type",
+      "parent",
+      "x",
+      "y",
+      "width",
+      "height",
+      "text",
+      "interaction trigger/type/destination"
+    ],
+    "changedOriginalShapeIds": [
+      "e6d238f0-ac08-8028-8008-de07ebe3655d",
+      "e6d238f0-ac08-8028-8008-de07ebe487e1"
+    ],
+    "changeExplanation": "Only two previously inert S03 hide key and label gained click actions to S43. Existing visual properties and other recorded connections were not intentionally changed.",
+    "originalHide": [
+      {
+        "id": "e6d238f0-ac08-8028-8008-de07ebe3655d",
+        "name": "key-hide",
+        "type": "rectangle",
+        "parent": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "x": 1144,
+        "y": 718,
+        "w": 63.999998569488525,
+        "h": 41.999998688697815,
+        "text": null,
+        "links": [
+          {
+            "trigger": "click",
+            "type": "navigate-to",
+            "dest": "ff7bd149-6597-80a5-8008-e8acfe51be24"
+          }
+        ]
+      },
+      {
+        "id": "e6d238f0-ac08-8028-8008-de07ebe487e1",
+        "name": "hide-label",
+        "type": "text",
+        "parent": "e6d238f0-ac08-8028-8008-de07eade594a",
+        "x": 1144,
+        "y": 728,
+        "w": 64,
+        "h": 20.000000834465027,
+        "text": "收起键盘",
+        "links": [
+          {
+            "trigger": "click",
+            "type": "navigate-to",
+            "dest": "ff7bd149-6597-80a5-8008-e8acfe51be24"
+          }
+        ]
+      }
+    ],
+    "boards": [
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+        "name": "S43 · 键盘收起 · 输入已锁定",
+        "items": [
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfe574be4",
+            "name": "HERDR POCKET / 手机终端",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 24,
+            "y": 9918,
+            "w": 342,
+            "h": 20.000000715255737,
+            "text": "HERDR POCKET  /  手机终端",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfe613674",
+            "name": "键盘收起 · 输入已锁定",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 24,
+            "y": 9948,
+            "w": 342,
+            "h": 35.00000011920929,
+            "text": "键盘收起 · 输入已锁定",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfe67324d",
+            "name": "交互原型 · 不控制系统键盘或连接",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 24,
+            "y": 10688,
+            "w": 342,
+            "h": 38,
+            "text": "交互原型 · 不控制系统键盘或连接",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfe8276e1",
+            "name": "workstation / agent-a · 80 × 24",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 40,
+            "y": 10030,
+            "w": 310,
+            "h": 20.000000834465027,
+            "text": "workstation / agent-a · 80 × 24",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfe86ec24",
+            "name": "$ herdr status",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 40,
+            "y": 10062,
+            "w": 310,
+            "h": 100.00000011920929,
+            "text": "$ herdr status\n  agent-a  ·  ready\n  waiting for input…",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfe9a3a75",
+            "name": "● 观察模式 · 不发送远端按键",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 31,
+            "y": 9994,
+            "w": 328,
+            "h": 16.999999869531166,
+            "text": "● 观察模式 · 不发送远端按键",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfeaa3d56",
+            "name": "已收起输入焦点",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 40,
+            "y": 10221,
+            "w": 310,
+            "h": 22.000000715255737,
+            "text": "已收起输入焦点",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfeae70b8",
+            "name": "输入许可已撤销。要再次输入，",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 40,
+            "y": 10248,
+            "w": 310,
+            "h": 52.000000953674316,
+            "text": "输入许可已撤销。要再次输入，\n请重新选择逐键或草稿模式。",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfec041b0",
+            "name": "本地草稿 · 原目标",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 40,
+            "y": 10338,
+            "w": 310,
+            "h": 20.000000715255737,
+            "text": "本地草稿 · 原目标",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfec46403",
+            "name": "请先检查测试结果。",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 40,
+            "y": 10364,
+            "w": 310,
+            "h": 35.000000953674316,
+            "text": "请先检查测试结果。",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfed253ff",
+            "name": "action · 逐键输入 · 重新启用",
+            "type": "rectangle",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 24,
+            "y": 10428,
+            "w": 342.00000762939453,
+            "h": 47.999998927116394,
+            "text": null,
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfed5236c",
+            "name": "逐键输入 · 重新启用",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 32,
+            "y": 10441,
+            "w": 326,
+            "h": 21.99999988079071,
+            "text": "逐键输入 · 重新启用",
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfedb4050",
+            "name": "action · 草稿模式 · 重新启用",
+            "type": "rectangle",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 24,
+            "y": 10488,
+            "w": 342.00000762939453,
+            "h": 47.999998927116394,
+            "text": null,
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfede65d3",
+            "name": "草稿模式 · 重新启用",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 32,
+            "y": 10501,
+            "w": 326,
+            "h": 21.99999988079071,
+            "text": "草稿模式 · 重新启用",
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfee40102",
+            "name": "action · 返回只读观察",
+            "type": "rectangle",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 24,
+            "y": 10548,
+            "w": 342.00000762939453,
+            "h": 47.999998927116394,
+            "text": null,
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "7a22df08-251d-8016-8008-de04a20d928d"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfee6da57",
+            "name": "返回只读观察",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 32,
+            "y": 10561,
+            "w": 326,
+            "h": 22.000000715255737,
+            "text": "返回只读观察",
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "7a22df08-251d-8016-8008-de04a20d928d"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acff04563a",
+            "name": "切换目标或进入后台后，旧输入不发送；窗口变化只影响本地视口。",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe51be24",
+            "x": 24,
+            "y": 10618,
+            "w": 342,
+            "h": 53.999998807907104,
+            "text": "切换目标或进入后台后，旧输入不发送；窗口变化只影响本地视口。",
+            "links": []
+          }
+        ],
+        "outside": []
+      },
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+        "name": "S44 · 输入启用 · 键盘可再展开",
+        "items": [
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfe725e76",
+            "name": "HERDR POCKET / 手机终端",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 474,
+            "y": 9918,
+            "w": 342,
+            "h": 20.000000715255737,
+            "text": "HERDR POCKET  /  手机终端",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfe771a41",
+            "name": "输入启用 · 键盘可再展开",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 474,
+            "y": 9948,
+            "w": 342,
+            "h": 35.00000011920929,
+            "text": "输入启用 · 键盘可再展开",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfe7b9711",
+            "name": "交互原型 · 不控制系统键盘或连接",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 474,
+            "y": 10688,
+            "w": 342,
+            "h": 38,
+            "text": "交互原型 · 不控制系统键盘或连接",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfe8ebeaf",
+            "name": "workstation / agent-a · 80 × 24",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 490,
+            "y": 10030,
+            "w": 310,
+            "h": 20.000000834465027,
+            "text": "workstation / agent-a · 80 × 24",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfe9323ea",
+            "name": "$ herdr status",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 490,
+            "y": 10062,
+            "w": 310,
+            "h": 100.00000011920929,
+            "text": "$ herdr status\n  agent-a  ·  ready\n  waiting for input…",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfea2046d",
+            "name": "● 逐键输入已启用 · 当前目标不变",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 481,
+            "y": 9994,
+            "w": 328,
+            "h": 16.999999869531166,
+            "text": "● 逐键输入已启用 · 当前目标不变",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfeb51a69",
+            "name": "系统键盘暂未显示 · 示例",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 490,
+            "y": 10221,
+            "w": 310,
+            "h": 21.99999988079071,
+            "text": "系统键盘暂未显示 · 示例",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfeb94210",
+            "name": "若系统返回后编辑器仍有焦点，",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 490,
+            "y": 10248,
+            "w": 310,
+            "h": 52.000000953674316,
+            "text": "若系统返回后编辑器仍有焦点，\n可再次请求展开；显示由系统决定。",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfeca5cdd",
+            "name": "本地草稿 · 原目标",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 490,
+            "y": 10338,
+            "w": 310,
+            "h": 20.000000715255737,
+            "text": "本地草稿 · 原目标",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfece75e1",
+            "name": "请先检查测试结果。",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 490,
+            "y": 10364,
+            "w": 310,
+            "h": 35.000000953674316,
+            "text": "请先检查测试结果。",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfeebdfce",
+            "name": "action · 展开键盘 · 同一编辑器",
+            "type": "rectangle",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 474,
+            "y": 10428,
+            "w": 342.00000762939453,
+            "h": 47.999998927116394,
+            "text": null,
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "e6d238f0-ac08-8028-8008-de07eade594a"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfeeeb9c0",
+            "name": "展开键盘 · 同一编辑器",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 482,
+            "y": 10441,
+            "w": 326,
+            "h": 21.99999988079071,
+            "text": "展开键盘 · 同一编辑器",
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "e6d238f0-ac08-8028-8008-de07eade594a"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfef46c47",
+            "name": "action · 收起键盘 · 撤销输入",
+            "type": "rectangle",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 474,
+            "y": 10488,
+            "w": 342.00000762939453,
+            "h": 47.999998927116394,
+            "text": null,
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "ff7bd149-6597-80a5-8008-e8acfe51be24"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfef710ed",
+            "name": "收起键盘 · 撤销输入",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 482,
+            "y": 10501,
+            "w": 326,
+            "h": 21.99999988079071,
+            "text": "收起键盘 · 撤销输入",
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "ff7bd149-6597-80a5-8008-e8acfe51be24"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfefc82f1",
+            "name": "action · 查看草稿模式",
+            "type": "rectangle",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 474,
+            "y": 10548,
+            "w": 342.00000762939453,
+            "h": 47.999998927116394,
+            "text": null,
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acfeff29ed",
+            "name": "查看草稿模式",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 482,
+            "y": 10561,
+            "w": 326,
+            "h": 22.000000715255737,
+            "text": "查看草稿模式",
+            "links": [
+              {
+                "trigger": "click",
+                "type": "navigate-to",
+                "dest": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8acff093810",
+            "name": "本页展示可再请求展开，不代表设备键盘已显示；不会改变远端尺寸。",
+            "type": "text",
+            "parent": "ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+            "x": 474,
+            "y": 10618,
+            "w": 342,
+            "h": 53.999998807907104,
+            "text": "本页展示可再请求展开，不代表设备键盘已显示；不会改变远端尺寸。",
+            "links": []
+          }
+        ],
+        "outside": []
+      }
+    ]
+  },
+  "actualViewerClicks": [
+    "S44 收起键盘 → S43",
+    "S43 逐键输入重新启用 → S44",
+    "S44 展开键盘 → S03",
+    "reload viewer; S44 展开键盘 → S03",
+    "S03 收起键盘 → S43"
+  ],
+  "browserEvidence": "Actual Penpot viewer navigation; no Android IME or network action.",
+  "existingReadback": [
+    {
+      "id": "7a22df08-251d-8016-8008-de04a20d928d",
+      "name": "S02 · 终端观察模式 · 安全只读与画面监控",
+      "items": [
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2151fda",
+          "name": "16:40",
+          "type": "text",
+          "text": "16:40",
+          "x": 24,
+          "y": 13,
+          "w": 54,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a21e0d6c",
+          "name": "5G  100%",
+          "type": "text",
+          "text": "5G  100%",
+          "x": 314.00000953674316,
+          "y": 14,
+          "w": 52,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2229cc5",
+          "name": "‹ 看板",
+          "type": "text",
+          "text": "‹ 看板",
+          "x": 20,
+          "y": 52,
+          "w": 60,
+          "h": 23.999999046325684,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a225f707",
+          "name": "workstation / agent-a",
+          "type": "text",
+          "text": "workstation / agent-a",
+          "x": 80,
+          "y": 50,
+          "w": 210,
+          "h": 24.000000596046448,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a22b01b1",
+          "name": "● 已连接",
+          "type": "text",
+          "text": "● 已连接",
+          "x": 304,
+          "y": 55,
+          "w": 60,
+          "h": 13.999999821186066,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a233e795",
+          "name": "● agent-a",
+          "type": "text",
+          "text": "● agent-a",
+          "x": 30,
+          "y": 98,
+          "w": 104,
+          "h": 18.000000417232513,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a23918c5",
+          "name": "○ agent-b",
+          "type": "text",
+          "text": "○ agent-b",
+          "x": 154,
+          "y": 98,
+          "w": 90,
+          "h": 18.000000417232513,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a23e30ee",
+          "name": "+",
+          "type": "text",
+          "text": "+",
+          "x": 332,
+          "y": 96,
+          "w": 24,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2484ba6",
+          "name": "👁️ 观察模式",
+          "type": "text",
+          "text": "👁️ 观察模式",
+          "x": 22,
+          "y": 142,
+          "w": 114,
+          "h": 18.000000417232513,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a24d55ea",
+          "name": "⌨️ 逐键输入",
+          "type": "text",
+          "text": "⌨️ 逐键输入",
+          "x": 138,
+          "y": 142,
+          "w": 114,
+          "h": 18.000000417232513,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2528911",
+          "name": "✍️ 草稿模式",
+          "type": "text",
+          "text": "✍️ 草稿模式",
+          "x": 254,
+          "y": 142,
+          "w": 114,
+          "h": 18.000000417232513,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a259f308",
+          "name": "🛡️ 观察模式：按键不会发送到远端 PTY · 触控仅在本地滚动",
+          "type": "text",
+          "text": "🛡️ 观察模式：按键不会发送到远端 PTY · 触控仅在本地滚动",
+          "x": 28,
+          "y": 186,
+          "w": 334,
+          "h": 16.00000011920929,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2688e22",
+          "name": "agent-a @ workstation · 80x24",
+          "type": "text",
+          "text": "agent-a @ workstation · 80x24",
+          "x": 86,
+          "y": 227,
+          "w": 218,
+          "h": 16.000000059604645,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a26d7d9b",
+          "name": "⤢",
+          "type": "text",
+          "text": "⤢",
+          "x": 334,
+          "y": 226,
+          "w": 20,
+          "h": 16.000000059604645,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a27209bd",
+          "name": "❯ herdr session attach --target agent-a",
+          "type": "text",
+          "text": "❯ herdr session attach --target agent-a",
+          "x": 32,
+          "y": 262,
+          "w": 326,
+          "h": 18,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a276d754",
+          "name": "[2026-10-30 16:40:02] Connected via Tail",
+          "type": "text",
+          "text": "[2026-10-30 16:40:02] Connected via Tailscale (24ms)",
+          "x": 32,
+          "y": 284,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a27ae52b",
+          "name": "[HERDR] Session state: WAITING_FOR_INPUT",
+          "type": "text",
+          "text": "[HERDR] Session state: WAITING_FOR_INPUT",
+          "x": 32,
+          "y": 306,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a27f3c9e",
+          "name": "[AGENT] Task completed. Waiting for deve",
+          "type": "text",
+          "text": "[AGENT] Task completed. Waiting for developer review.",
+          "x": 32,
+          "y": 328,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a28344cc",
+          "name": "[DIFF] Changes in src / core / session.rs (+",
+          "type": "text",
+          "text": "[DIFF] Changes in src/core/session.rs (+142, -18):",
+          "x": 32,
+          "y": 350,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a28793ff",
+          "name": "+ pub struct SessionHandler { pty: Pty",
+          "type": "text",
+          "text": "  + pub struct SessionHandler { pty: PtyHandle }",
+          "x": 32,
+          "y": 372,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a28b931c",
+          "name": "+ impl Stream for SessionHandler { ...",
+          "type": "text",
+          "text": "  + impl Stream for SessionHandler { ... }",
+          "x": 32,
+          "y": 394,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a28fa071",
+          "name": "- legacy_unbuffered_write(data);",
+          "type": "text",
+          "text": "  - legacy_unbuffered_write(data);",
+          "x": 32,
+          "y": 416,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a29d0106",
+          "name": "› Run regression tests before merging.",
+          "type": "text",
+          "text": "› Run regression tests before merging.",
+          "x": 32,
+          "y": 438,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2a08e82",
+          "name": "› Press Enter or type command in Direct",
+          "type": "text",
+          "text": "› Press Enter or type command in Direct mode...",
+          "x": 32,
+          "y": 460,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2a3e25e",
+          "name": "› ▍",
+          "type": "text",
+          "text": "› ▍",
+          "x": 32,
+          "y": 482,
+          "w": 326,
+          "h": 18.000000417232513,
+          "interactions": []
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2a68242",
+          "name": "button / primary",
+          "type": "rectangle",
+          "text": null,
+          "x": 20,
+          "y": 712,
+          "w": 350,
+          "h": 41.999998688697815,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2a8737c",
+          "name": "⌨️ 切换至逐键输入模式 (Direct)",
+          "type": "text",
+          "text": "⌨️ 切换至逐键输入模式 (Direct)",
+          "x": 28,
+          "y": 724,
+          "w": 334,
+          "h": 20.000000715255737,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2ab99c1",
+          "name": "button / secondary",
+          "type": "rectangle",
+          "text": null,
+          "x": 20,
+          "y": 759.9999694824219,
+          "w": 170.00000476837158,
+          "h": 43.99999901652336,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "ff7bd149-6597-80a5-8008-e88156484822"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2ad0f1a",
+          "name": "选择终端文本",
+          "type": "text",
+          "text": "选择终端文本",
+          "x": 28,
+          "y": 772,
+          "w": 154,
+          "h": 20.000000715255737,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "ff7bd149-6597-80a5-8008-e88156484822"
+            }
+          ]
+        },
+        {
+          "id": "7a22df08-251d-8016-8008-de04a2b20c14",
+          "name": "⚙️ 终端字体与诊断",
+          "type": "text",
+          "text": "⚙️ 终端字体与诊断",
+          "x": 208,
+          "y": 767,
+          "w": 154,
+          "h": 20.000000715255737,
+          "interactions": []
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220d5ba4e7",
+          "name": "hitarea-7a22df08-251d-8016-8008-de04a2229cc5",
+          "type": "rectangle",
+          "text": null,
+          "x": 20,
+          "y": 41.99999952316284,
+          "w": 60.00000238418579,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220d6019ea",
+          "name": "hitarea-7a22df08-251d-8016-8008-de04a24d55ea",
+          "type": "rectangle",
+          "text": null,
+          "x": 138,
+          "y": 129.00000020861626,
+          "w": 113.99999856948853,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220d64c4cf",
+          "name": "hitarea-7a22df08-251d-8016-8008-de04a2528911",
+          "type": "rectangle",
+          "text": null,
+          "x": 254,
+          "y": 129.00000020861626,
+          "w": 113.99999856948853,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220d69fe49",
+          "name": "hitarea-7a22df08-251d-8016-8008-de04a2a8737c",
+          "type": "rectangle",
+          "text": null,
+          "x": 28,
+          "y": 712.0000003576279,
+          "w": 333.99999141693115,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "e6d238f0-ac08-8028-8008-de07eade594a",
+      "name": "S03 · 逐键输入模式 · 辅助键盘与实时发键",
+      "items": [
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eae4a794",
+          "name": "16:40",
+          "type": "text",
+          "text": "16:40",
+          "x": 24,
+          "y": 13,
+          "w": 54,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eaeb9103",
+          "name": "5G  100%",
+          "type": "text",
+          "text": "5G  100%",
+          "x": 314.00000953674316,
+          "y": 14,
+          "w": 52,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eaef0f40",
+          "name": "‹ 看板",
+          "type": "text",
+          "text": "‹ 看板",
+          "x": 20,
+          "y": 52,
+          "w": 60,
+          "h": 23.999999046325684,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+            }
+          ]
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eaf1b1c1",
+          "name": "workstation - agent-a",
+          "type": "text",
+          "text": "workstation / agent-a",
+          "x": 80,
+          "y": 50,
+          "w": 210,
+          "h": 24.000000596046448,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eaf61162",
+          "name": "badge-text",
+          "type": "text",
+          "text": "● 实时输入",
+          "x": 304,
+          "y": 55,
+          "w": 60,
+          "h": 14.000000238418579,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eafc35cc",
+          "name": "● agent-a",
+          "type": "text",
+          "text": "● agent-a",
+          "x": 30,
+          "y": 98,
+          "w": 104,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eafefd81",
+          "name": "○ agent-b",
+          "type": "text",
+          "text": "○ agent-b",
+          "x": 154,
+          "y": 98,
+          "w": 90,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb021100",
+          "name": "+",
+          "type": "text",
+          "text": "+",
+          "x": 332,
+          "y": 96,
+          "w": 24,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb07d5df",
+          "name": "👁️ 观察模式",
+          "type": "text",
+          "text": "👁️ 观察模式",
+          "x": 22,
+          "y": 142,
+          "w": 114,
+          "h": 18.000000417232513,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+            }
+          ]
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb0e5fb3",
+          "name": "⌨️ 逐键输入",
+          "type": "text",
+          "text": "⌨️ 逐键输入",
+          "x": 138,
+          "y": 142,
+          "w": 114,
+          "h": 18.000000417232513,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb11e37e",
+          "name": "✍️ 草稿模式",
+          "type": "text",
+          "text": "✍️ 草稿模式",
+          "x": 254,
+          "y": 142,
+          "w": 114,
+          "h": 18.000000417232513,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+            }
+          ]
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb168567",
+          "name": "⌨️ 实时发送至 agent-a · IME 组合字在本地合成后提交",
+          "type": "text",
+          "text": "⌨️ 实时发送至 agent-a · IME 组合字在本地合成后提交",
+          "x": 28,
+          "y": 186,
+          "w": 334,
+          "h": 16.00000011920929,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb20a553",
+          "name": "agent-a · PTY 80x12 · UTF-8 · FOCUS",
+          "type": "text",
+          "text": "agent-a · PTY 80x12 · UTF-8 · FOCUS",
+          "x": 86,
+          "y": 225,
+          "w": 218,
+          "h": 16.000000059604645,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb239c34",
+          "name": "❯ cargo check --workspace",
+          "type": "text",
+          "text": "❯ cargo check --workspace",
+          "x": 32,
+          "y": 256,
+          "w": 326,
+          "h": 18,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb266a11",
+          "name": "Compiling herdr-core v0.1.0 (-app)",
+          "type": "text",
+          "text": "   Compiling herdr-core v0.1.0 (/app)",
+          "x": 32,
+          "y": 278,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb289c13",
+          "name": "Finished dev in 1.42s",
+          "type": "text",
+          "text": "   Finished dev in 1.42s",
+          "x": 32,
+          "y": 300,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb2ace62",
+          "name": "❯ herdr-pocket agent-a input:",
+          "type": "text",
+          "text": "❯ herdr-pocket agent-a input:",
+          "x": 32,
+          "y": 322,
+          "w": 326,
+          "h": 18,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb2d6caf",
+          "name": "› git commit -m \"fix(session): pty buffe",
+          "type": "text",
+          "text": "› git commit -m \"fix(session): pty buffer\" █",
+          "x": 32,
+          "y": 344,
+          "w": 326,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb312b6b",
+          "name": "label-esc",
+          "type": "text",
+          "text": "Esc",
+          "x": 22,
+          "y": 477,
+          "w": 40,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb35664e",
+          "name": "label-tab",
+          "type": "text",
+          "text": "Tab",
+          "x": 71,
+          "y": 477,
+          "w": 40,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb390ff7",
+          "name": "label-ctrl",
+          "type": "text",
+          "text": "Ctrl ✓",
+          "x": 120,
+          "y": 477,
+          "w": 60,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb3d4232",
+          "name": "label-alt",
+          "type": "text",
+          "text": "Alt",
+          "x": 189,
+          "y": 477,
+          "w": 40,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb416761",
+          "name": "label-tilde",
+          "type": "text",
+          "text": "~",
+          "x": 238,
+          "y": 477,
+          "w": 30,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb45c407",
+          "name": "label-slash",
+          "type": "text",
+          "text": "/",
+          "x": 277,
+          "y": 477,
+          "w": 30,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb4a1f46",
+          "name": "label-pipe",
+          "type": "text",
+          "text": "|",
+          "x": 316,
+          "y": 477,
+          "w": 30,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb4ed70a",
+          "name": "label-colon",
+          "type": "text",
+          "text": ":",
+          "x": 355,
+          "y": 477,
+          "w": 30,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb5324c6",
+          "name": "label-up",
+          "type": "text",
+          "text": "↑",
+          "x": 22,
+          "y": 519,
+          "w": 40,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb577d4a",
+          "name": "label-down",
+          "type": "text",
+          "text": "↓",
+          "x": 72,
+          "y": 519,
+          "w": 40,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb5bc785",
+          "name": "label-left",
+          "type": "text",
+          "text": "←",
+          "x": 122,
+          "y": 519,
+          "w": 40,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb5ffb85",
+          "name": "label-right",
+          "type": "text",
+          "text": "→",
+          "x": 172,
+          "y": 519,
+          "w": 40,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb64430b",
+          "name": "label-enter",
+          "type": "text",
+          "text": "⏎ 换行",
+          "x": 222,
+          "y": 519,
+          "w": 72,
+          "h": 18.000000417232513,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb68ac83",
+          "name": "label-paste",
+          "type": "text",
+          "text": "📋 粘贴预览",
+          "x": 304,
+          "y": 519,
+          "w": 80,
+          "h": 18.000000417232513,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb6e3793",
+          "name": "letter-Q",
+          "type": "text",
+          "text": "Q",
+          "x": 10,
+          "y": 578,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb71fa6a",
+          "name": "letter-W",
+          "type": "text",
+          "text": "W",
+          "x": 47,
+          "y": 578,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb75ae7b",
+          "name": "letter-E",
+          "type": "text",
+          "text": "E",
+          "x": 84,
+          "y": 578,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb79c3f4",
+          "name": "letter-R",
+          "type": "text",
+          "text": "R",
+          "x": 121,
+          "y": 578,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb7d6a8f",
+          "name": "letter-T",
+          "type": "text",
+          "text": "T",
+          "x": 158,
+          "y": 578,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb818b45",
+          "name": "letter-Y",
+          "type": "text",
+          "text": "Y",
+          "x": 195,
+          "y": 578,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb856298",
+          "name": "letter-U",
+          "type": "text",
+          "text": "U",
+          "x": 232,
+          "y": 578,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb896f7e",
+          "name": "letter-I",
+          "type": "text",
+          "text": "I",
+          "x": 269,
+          "y": 578,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb8d6bbf",
+          "name": "letter-O",
+          "type": "text",
+          "text": "O",
+          "x": 306,
+          "y": 578,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb919ab8",
+          "name": "letter-P",
+          "type": "text",
+          "text": "P",
+          "x": 343,
+          "y": 578,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb95f19e",
+          "name": "letter-A",
+          "type": "text",
+          "text": "A",
+          "x": 28,
+          "y": 628,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb9999d4",
+          "name": "letter-S",
+          "type": "text",
+          "text": "S",
+          "x": 65,
+          "y": 628,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eb9dd1b1",
+          "name": "letter-D",
+          "type": "text",
+          "text": "D",
+          "x": 102,
+          "y": 628,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eba1b6c3",
+          "name": "letter-F",
+          "type": "text",
+          "text": "F",
+          "x": 139,
+          "y": 628,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eba5700d",
+          "name": "letter-G",
+          "type": "text",
+          "text": "G",
+          "x": 176,
+          "y": 628,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07eba99138",
+          "name": "letter-H",
+          "type": "text",
+          "text": "H",
+          "x": 213,
+          "y": 628,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebad8d4a",
+          "name": "letter-J",
+          "type": "text",
+          "text": "J",
+          "x": 250,
+          "y": 628,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebb190c6",
+          "name": "letter-K",
+          "type": "text",
+          "text": "K",
+          "x": 287,
+          "y": 628,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebb5427e",
+          "name": "letter-L",
+          "type": "text",
+          "text": "L",
+          "x": 324,
+          "y": 628,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebb96ba3",
+          "name": "shift",
+          "type": "text",
+          "text": "⇧",
+          "x": 10,
+          "y": 678,
+          "w": 44,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebbd0a15",
+          "name": "letter-Z",
+          "type": "text",
+          "text": "Z",
+          "x": 62,
+          "y": 678,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebc10225",
+          "name": "letter-X",
+          "type": "text",
+          "text": "X",
+          "x": 99,
+          "y": 678,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebc569a4",
+          "name": "letter-C",
+          "type": "text",
+          "text": "C",
+          "x": 136,
+          "y": 678,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebc93688",
+          "name": "letter-V",
+          "type": "text",
+          "text": "V",
+          "x": 173,
+          "y": 678,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebcd20bd",
+          "name": "letter-B",
+          "type": "text",
+          "text": "B",
+          "x": 210,
+          "y": 678,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebd0c230",
+          "name": "letter-N",
+          "type": "text",
+          "text": "N",
+          "x": 247,
+          "y": 678,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebd4e1d5",
+          "name": "letter-M",
+          "type": "text",
+          "text": "M",
+          "x": 284,
+          "y": 678,
+          "w": 33,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebd89fad",
+          "name": "backspace",
+          "type": "text",
+          "text": "⌫",
+          "x": 335,
+          "y": 678,
+          "w": 45,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebdcb085",
+          "name": "key-label-123",
+          "type": "text",
+          "text": "123",
+          "x": 10,
+          "y": 728,
+          "w": 58,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebe0f85a",
+          "name": "space-label",
+          "type": "text",
+          "text": "空格 (Space)",
+          "x": 76,
+          "y": 728,
+          "w": 160,
+          "h": 20.000000715255737,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebe487e1",
+          "name": "hide-label",
+          "type": "text",
+          "text": "收起键盘",
+          "x": 244,
+          "y": 728,
+          "w": 64,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebe771f9",
+          "name": "key-draft",
+          "type": "rectangle",
+          "text": null,
+          "x": 316,
+          "y": 718,
+          "w": 63.999998569488525,
+          "h": 41.999998688697815,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+            }
+          ]
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebe8faad",
+          "name": "draft-label",
+          "type": "text",
+          "text": "改用草稿",
+          "x": 316,
+          "y": 728,
+          "w": 64,
+          "h": 20.000000834465027,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de21c0633a81",
+          "name": "演示：发送时断线 → 核实结果",
+          "type": "text",
+          "text": "演示：发送时断线 → 核实结果",
+          "x": 24,
+          "y": 394,
+          "w": 342,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "feb2a821-b263-8097-8008-de215d48f293"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220d9dcfe4",
+          "name": "hitarea-e6d238f0-ac08-8028-8008-de07eaef0f40",
+          "type": "rectangle",
+          "text": null,
+          "x": 20,
+          "y": 41.99999952316284,
+          "w": 60.00000238418579,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220da69b8b",
+          "name": "hitarea-e6d238f0-ac08-8028-8008-de07eb07d5df",
+          "type": "rectangle",
+          "text": null,
+          "x": 22,
+          "y": 129.00000020861626,
+          "w": 113.99999856948853,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220db0f7f4",
+          "name": "hitarea-e6d238f0-ac08-8028-8008-de07eb11e37e",
+          "type": "rectangle",
+          "text": null,
+          "x": 254,
+          "y": 129.00000020861626,
+          "w": 113.99999856948853,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220db95dd6",
+          "name": "hitarea-e6d238f0-ac08-8028-8008-de07ebe8faad",
+          "type": "rectangle",
+          "text": null,
+          "x": 316,
+          "y": 716.0000004172325,
+          "w": 63.999998569488525,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07ebece9ba"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220dc166fe",
+          "name": "hitarea-feb2a821-b263-8097-8008-de21c0633a81",
+          "type": "rectangle",
+          "text": null,
+          "x": 24,
+          "y": 393.9999998807907,
+          "w": 342.00000762939453,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "feb2a821-b263-8097-8008-de215d48f293"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "e6d238f0-ac08-8028-8008-de07ebece9ba",
+      "name": "S04 · 草稿编辑模式 · 多行输入与安全发送",
+      "items": [
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebee5728",
+          "name": "16:40",
+          "type": "text",
+          "text": "16:40",
+          "x": 24,
+          "y": 13,
+          "w": 54,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebf2307c",
+          "name": "5G  100%",
+          "type": "text",
+          "text": "5G  100%",
+          "x": 314.00000953674316,
+          "y": 14,
+          "w": 52,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebf49010",
+          "name": "‹ 看板",
+          "type": "text",
+          "text": "‹ 看板",
+          "x": 20,
+          "y": 52,
+          "w": 60,
+          "h": 23.999999046325684,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+            }
+          ]
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebf6ba26",
+          "name": "workstation - agent-a",
+          "type": "text",
+          "text": "workstation / agent-a",
+          "x": 80,
+          "y": 50,
+          "w": 210,
+          "h": 24.000000596046448,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ebfaef21",
+          "name": "badge-text",
+          "type": "text",
+          "text": "● 已连接",
+          "x": 304,
+          "y": 55,
+          "w": 60,
+          "h": 13.999999821186066,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec007324",
+          "name": "● agent-a",
+          "type": "text",
+          "text": "● agent-a",
+          "x": 30,
+          "y": 98,
+          "w": 104,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec02c3f6",
+          "name": "○ agent-b",
+          "type": "text",
+          "text": "○ agent-b",
+          "x": 154,
+          "y": 98,
+          "w": 90,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec057b56",
+          "name": "+",
+          "type": "text",
+          "text": "+",
+          "x": 332,
+          "y": 96,
+          "w": 24,
+          "h": 20.000000834465027,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec095892",
+          "name": "👁️ 观察模式",
+          "type": "text",
+          "text": "👁️ 观察模式",
+          "x": 22,
+          "y": 142,
+          "w": 114,
+          "h": 18.000000417232513,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+            }
+          ]
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec0bfafe",
+          "name": "⌨️ 逐键输入",
+          "type": "text",
+          "text": "⌨️ 逐键输入",
+          "x": 138,
+          "y": 142,
+          "w": 114,
+          "h": 18.000000417232513,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec10af07",
+          "name": "✍️ 草稿模式",
+          "type": "text",
+          "text": "✍️ 草稿模式",
+          "x": 254,
+          "y": 142,
+          "w": 114,
+          "h": 18.000000417232513,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec14b60d",
+          "name": "远端上下文 (Terminal Output)",
+          "type": "text",
+          "text": "远端上下文 (Terminal Output)",
+          "x": 30,
+          "y": 184,
+          "w": 200,
+          "h": 16.00000011920929,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec1778c9",
+          "name": "› agent-a: task completed. waiting for r",
+          "type": "text",
+          "text": "› agent-a: task completed. waiting for review.",
+          "x": 30,
+          "y": 202,
+          "w": 330,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec197b07",
+          "name": "› diff: 4 files changed. Ready for next",
+          "type": "text",
+          "text": "› diff: 4 files changed. Ready for next command.",
+          "x": 30,
+          "y": 222,
+          "w": 330,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec1d3cea",
+          "name": "本地草稿编辑区",
+          "type": "text",
+          "text": "本地草稿编辑区",
+          "x": 36,
+          "y": 272,
+          "w": 200,
+          "h": 22.000000715255737,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec215ef2",
+          "name": "badge-text",
+          "type": "text",
+          "text": "UTF-8 · 5 行",
+          "x": 266,
+          "y": 274,
+          "w": 78,
+          "h": 13.999999821186066,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec23d76e",
+          "name": "安全模式：输入内容保留在本地，显式点击后单次发送",
+          "type": "text",
+          "text": "安全模式：输入内容保留在本地，显式点击后单次发送",
+          "x": 36,
+          "y": 296,
+          "w": 318,
+          "h": 16.000000059604645,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec27c197",
+          "name": "1",
+          "type": "text",
+          "text": "1",
+          "x": 40,
+          "y": 336,
+          "w": 20,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec2aeb74",
+          "name": "# 1. 运行回归测试并生成报告",
+          "type": "text",
+          "text": "# 1. 运行回归测试并生成报告",
+          "x": 68,
+          "y": 336,
+          "w": 280,
+          "h": 18.000000417232513,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec2d3859",
+          "name": "2",
+          "type": "text",
+          "text": "2",
+          "x": 40,
+          "y": 360,
+          "w": 20,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec2f6901",
+          "name": "python3 -m unittest discover -s validati",
+          "type": "text",
+          "text": "python3 -m unittest discover -s validation-helper -v",
+          "x": 68,
+          "y": 360,
+          "w": 280,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec31e0d7",
+          "name": "3",
+          "type": "text",
+          "text": "3",
+          "x": 40,
+          "y": 384,
+          "w": 20,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec344a2b",
+          "name": "# 2. 检查 git 工作区与最新修改",
+          "type": "text",
+          "text": "# 2. 检查 git 工作区与最新修改",
+          "x": 68,
+          "y": 384,
+          "w": 280,
+          "h": 18.000000417232513,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec36de44",
+          "name": "4",
+          "type": "text",
+          "text": "4",
+          "x": 40,
+          "y": 408,
+          "w": 20,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec390e43",
+          "name": "git status --short",
+          "type": "text",
+          "text": "git status --short",
+          "x": 68,
+          "y": 408,
+          "w": 280,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec3b8578",
+          "name": "5",
+          "type": "text",
+          "text": "5",
+          "x": 40,
+          "y": 432,
+          "w": 20,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec3e3966",
+          "name": "echo \"All pre-flight checks passed.\"",
+          "type": "text",
+          "text": "echo \"All pre-flight checks passed.\"",
+          "x": 68,
+          "y": 432,
+          "w": 280,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec41b25b",
+          "name": "✓",
+          "type": "text",
+          "text": "✓",
+          "x": 36,
+          "y": 517,
+          "w": 18,
+          "h": 16.000000059604645,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec445eda",
+          "name": "发送时不自动附加回车符 (防止误触发命令)",
+          "type": "text",
+          "text": "不添加末尾回车；原有换行仍可能执行",
+          "x": 62,
+          "y": 516,
+          "w": 290,
+          "h": 18.000000417232513,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec49686a",
+          "name": "✓",
+          "type": "text",
+          "text": "✓",
+          "x": 36,
+          "y": 545,
+          "w": 18,
+          "h": 16.000000059604645,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec4d399a",
+          "name": "发送后在本地保留此草稿记录",
+          "type": "text",
+          "text": "发送后转为记录，不自动回填待发草稿",
+          "x": 62,
+          "y": 544,
+          "w": 290,
+          "h": 18.000000953674316,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec5407aa",
+          "name": "🎯 发送目标锁定: workstation - design-session",
+          "type": "text",
+          "text": "🎯 发送目标锁定: workstation - design-session - agent-a",
+          "x": 44,
+          "y": 582,
+          "w": 302,
+          "h": 16.00000011920929,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec57610f",
+          "name": "button-primary",
+          "type": "rectangle",
+          "text": null,
+          "x": 20,
+          "y": 692,
+          "w": 350,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "feb2a821-b263-8097-8008-de215d8f5309"
+            }
+          ]
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec593600",
+          "name": "button-label",
+          "type": "text",
+          "text": "🚀 审查并安全发送到 PTY (Send)",
+          "x": 28,
+          "y": 705,
+          "w": 334,
+          "h": 20.000000715255737,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "feb2a821-b263-8097-8008-de215d8f5309"
+            }
+          ]
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec5daf15",
+          "name": "button-label",
+          "type": "text",
+          "text": "✕ 清空草稿",
+          "x": 28,
+          "y": 752,
+          "w": 154,
+          "h": 20,
+          "interactions": []
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec60d89f",
+          "name": "button-secondary",
+          "type": "rectangle",
+          "text": null,
+          "x": 200,
+          "y": 744,
+          "w": 170.00000476837158,
+          "h": 34.00000035762787,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+            }
+          ]
+        },
+        {
+          "id": "e6d238f0-ac08-8028-8008-de07ec6255d0",
+          "name": "button-label",
+          "type": "text",
+          "text": "👁️ 返回观察模式",
+          "x": 208,
+          "y": 752,
+          "w": 154,
+          "h": 20.000000715255737,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220df96d75",
+          "name": "hitarea-e6d238f0-ac08-8028-8008-de07ebf49010",
+          "type": "rectangle",
+          "text": null,
+          "x": 20,
+          "y": 41.99999952316284,
+          "w": 60.00000238418579,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220e014f16",
+          "name": "hitarea-e6d238f0-ac08-8028-8008-de07ec095892",
+          "type": "rectangle",
+          "text": null,
+          "x": 22,
+          "y": 129.00000020861626,
+          "w": 113.99999856948853,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220e0b8223",
+          "name": "hitarea-e6d238f0-ac08-8028-8008-de07ec0bfafe",
+          "type": "rectangle",
+          "text": null,
+          "x": 138,
+          "y": 129.00000020861626,
+          "w": 113.99999856948853,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "e6d238f0-ac08-8028-8008-de07eade594a"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220e11e38b",
+          "name": "hitarea-e6d238f0-ac08-8028-8008-de07ec593600",
+          "type": "rectangle",
+          "text": null,
+          "x": 28,
+          "y": 693.0000003576279,
+          "w": 333.99999141693115,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "feb2a821-b263-8097-8008-de215d8f5309"
+            }
+          ]
+        },
+        {
+          "id": "feb2a821-b263-8097-8008-de220e188f4e",
+          "name": "hitarea-e6d238f0-ac08-8028-8008-de07ec6255d0",
+          "type": "rectangle",
+          "text": null,
+          "x": 208,
+          "y": 740.0000003576279,
+          "w": 153.99999618530273,
+          "h": 43.99999976158142,
+          "interactions": [
+            {
+              "trigger": "click",
+              "type": "navigate-to",
+              "destination": "7a22df08-251d-8016-8008-de04a20d928d"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    "Product hide revokes input permission; re-enable requires an explicit mode action.",
+    "System Back focus and permission behavior depends on device and system; S44 is conditional example, not a universal guarantee.",
+    "Illustrated keyboard is not a proof of Android IME display, input delivery, terminal rendering or PTY behavior.",
+    "Prior objects were compared only on listed fields; styles and every property were not exhaustively compared.",
+    "S03 preexisting hide hit rectangle is 64 × 42 design units; touch accessibility remains device validation."
+  ],
+  "filesSha256": {
+    "design/penpot/mobile-keyboard-20261107.js": "9f5ee707e74d534284a1340d35b569a2dcb707561c727c03f6146d5dc9f54d70",
+    "design/penpot/mobile-keyboard-link-20261107.js": "04f74b52cf518a35f9c23e2f3841f0f9c37e0aaeba69c0c11b5c349453def176",
+    "design/evidence/v2-S43-keyboard-20261107.png": "0c61c16ec726c50c48e8e9d4e0a8e1b97b0bb7aa44dd9dcf5c6f6b38ab067599",
+    "design/evidence/v2-S44-keyboard-20261107.png": "bda74ad5963cb9a35608e0932589bba3a21941506235aa145e6fdb6b064b5995"
+  }
+}

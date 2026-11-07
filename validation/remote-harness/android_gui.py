@@ -11,6 +11,7 @@ import subprocess
 import urllib.request
 
 from paired_gui import GuiFailure, wait_for
+from flutter_android_gui import DeviceFailure, wait_system_ime
 
 PACKAGE = 'dev.herdrpocket.tauriprobe'
 SERIAL = 'emulator-5554'
@@ -28,6 +29,84 @@ def adb(*args, check=True, timeout=30):
     if len(result.stdout) > 1_048_576 or len(result.stderr) > 1_048_576:
         raise GuiFailure('android_adb_output_limit')
     return result.stdout.decode('utf-8', errors='replace').strip()
+
+
+def system_keyboard(visible):
+    try:
+        return wait_system_ime(lambda: (adb('shell', 'dumpsys', 'input_method'),
+            adb('shell', 'dumpsys', 'window', 'displays')), PACKAGE, visible)
+    except DeviceFailure as error:
+        raise GuiFailure(str(error)) from None
+
+
+def exercise_keyboard(browser, approval, mode):
+    """Real system window evidence; focus only selects the editor to exercise."""
+    if mode not in ('direct', 'draft'):
+        raise GuiFailure('android_keyboard_mode_invalid')
+    expected = b'' if mode == 'direct' else b'k'
+    draft = browser.read('#remote-input-draft', 'value') if mode == 'draft' else None
+    target = browser.read('#remote-input-target')
+    if not isinstance(target, str) or not target:
+        raise GuiFailure('android_keyboard_target_missing')
+    evidence = []
+    for visible, selector in ((True, '#remote-keyboard-show'), (False, '#remote-keyboard-hide')):
+        browser.click(selector)
+        sample = system_keyboard(visible)
+        approval.verify_ssh(expected)
+        if mode == 'draft' and browser.read('#remote-input-draft', 'value') != draft:
+            raise GuiFailure('android_keyboard_changed_local_draft')
+        if browser.read('#remote-input-target') != target:
+            raise GuiFailure('android_keyboard_target_changed')
+        if not visible and browser.evaluate("document.querySelector('#remote-keyboard-show')?.disabled===true") is not True:
+            raise GuiFailure('android_keyboard_hide_did_not_revoke_input')
+        evidence.append({**sample, 'checkpoint': 'keyboard-' + mode + ('-shown' if visible else '-hidden')})
+        if mode == 'draft' and visible:
+            if sample.get('visible') is not True or sample.get('ownedTarget') is not True:
+                raise GuiFailure('android_system_back_requires_visible_owned_ime')
+            focus_expression = "document.activeElement===document.querySelector('#remote-input-draft')"
+            before_focus = browser.evaluate(focus_expression)
+            if type(before_focus) is not bool:
+                raise GuiFailure('android_keyboard_focus_evidence_invalid')
+            # Exactly one real system Back, only after owned IME visibility.
+            # Never retry this action: a second Back could navigate the app.
+            adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+            hidden = system_keyboard(False)
+            after_focus = browser.evaluate(focus_expression)
+            if type(after_focus) is not bool:
+                raise GuiFailure('android_keyboard_focus_evidence_invalid')
+            approval.verify_ssh(expected)
+            if browser.read('#remote-input-draft', 'value') != draft or browser.read('#remote-input-target') != target:
+                raise GuiFailure('android_system_back_changed_draft_or_target')
+            evidence.append({**hidden, 'checkpoint': 'keyboard-draft-back-hidden',
+                'systemBackSent': True, 'editorFocusedBeforeBack': before_focus,
+                'editorFocusedAfterBack': after_focus})
+            reselected = browser.evaluate("document.querySelector('#remote-keyboard-show')?.disabled===true")
+            if type(reselected) is not bool:
+                raise GuiFailure('android_keyboard_focus_evidence_invalid')
+            if reselected:
+                browser.click('#remote-input-draft-mode')
+                wait_for(lambda: '草稿仅在核对' in (browser.read('#remote-input-status') or ''),
+                         'android_keyboard_mode_reentry_missing')
+            browser.click('#remote-keyboard-show')
+            reopened = system_keyboard(True)
+            approval.verify_ssh(expected)
+            if browser.read('#remote-input-draft', 'value') != draft or browser.read('#remote-input-target') != target:
+                raise GuiFailure('android_system_back_changed_draft_or_target')
+            reopened_focus = browser.evaluate(focus_expression)
+            if type(reopened_focus) is not bool:
+                raise GuiFailure('android_keyboard_focus_evidence_invalid')
+            evidence.append({**reopened, 'checkpoint': 'keyboard-draft-back-reopened',
+                'modeReselected': reselected, 'editorFocused': reopened_focus})
+    # Hide revokes input. Only an explicit mode action may reopen the editor;
+    # wait for the system window again before the original synthetic commit.
+    browser.click('#remote-input-' + ('direct' if mode == 'direct' else 'draft-mode'))
+    wait_for(lambda: ('逐键输入已启用' if mode == 'direct' else '草稿仅在核对') in
+             (browser.read('#remote-input-status') or ''), 'android_keyboard_mode_reentry_missing')
+    if mode == 'direct':
+        sample = system_keyboard(True)
+        approval.verify_ssh(expected)
+        evidence.append({**sample, 'checkpoint': 'keyboard-direct-reopened'})
+    return evidence
 
 
 class AndroidWebView:
@@ -247,6 +326,9 @@ def run_android(args, root, env, config, approval):
         raise GuiFailure('android_emulator_api_mismatch')
     if 'package:' + PACKAGE in adb('shell', 'pm', 'list', 'packages').splitlines():
         raise GuiFailure('android_package_already_present')
+    adb('shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
+    if adb('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard') != '1':
+        raise GuiFailure('android_system_ime_fixture_configuration_failed')
     forward = None
     installed = False
     browser = None
@@ -322,18 +404,22 @@ def run_android(args, root, env, config, approval):
         deltas = wait_for(lambda: rendered('delta'), 'android_delta_render_ack_missing', timeout=60)
         receipts = []
         paste_evidence = {}
+        keyboard_evidence = []
         if getattr(args, 'input_fixture', None):
             wait_for(lambda: browser.evaluate("!document.querySelector('#remote-input-controls').hidden"),
                      'android_input_controls_missing', timeout=60)
             browser.click('#remote-input-direct')
             wait_for(lambda: '逐键输入已启用' in (browser.read('#remote-input-status') or ''),
                      'android_direct_mode_missing')
+            keyboard_evidence.extend(exercise_keyboard(browser, approval, 'direct'))
             browser.direct_key('k')
             raw, first = browser.receipt(None, config['paneId'], 1)
             receipts.append(first)
             browser.click('#remote-input-draft-mode')
             wait_for(lambda: '草稿仅在核对' in (browser.read('#remote-input-status') or ''),
                      'android_draft_mode_missing')
+            browser.fill('#remote-input-draft', 'Pocket')
+            keyboard_evidence.extend(exercise_keyboard(browser, approval, 'draft'))
             paste_evidence = exercise_local_paste(browser, approval, first, raw)
             browser.click('#host-return-home')
             wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
@@ -357,6 +443,11 @@ def run_android(args, root, env, config, approval):
             if browser.read('#remote-input-draft', 'value'):
                 raise GuiFailure('android_submitted_draft_retained')
             receipts.append(second)
+        else:
+            if not browser.evaluate("['remote-keyboard-show','remote-keyboard-hide'].every(id=>document.getElementById(id)?.disabled===true)"):
+                raise GuiFailure('android_readonly_keyboard_controls_enabled')
+            keyboard_evidence.append({**system_keyboard(False), 'checkpoint': 'keyboard-observe-hidden'})
+            approval.verify_ssh(b'')
         terminal_board = wait_for(board_phase, 'android_host_board_phase_during_terminal_missing')
         browser.click('#remote-cancel')
         wait_for(lambda: '陈旧' in (browser.read('#remote-captured') or ''), 'android_stale_marker_missing')
@@ -364,6 +455,8 @@ def run_android(args, root, env, config, approval):
                 'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                 'inputQueueAccepted':bool(receipts), 'inputReceipts':receipts,
                 **paste_evidence,
+                'systemKeyboardEvidence': {'checkpoints': keyboard_evidence, 'showWithHardwareKeyboard': True,
+                    'scope': 'owned API35 IME service window; CDP commits are not IME touch/composition proof'},
                 'hiddenReentryFreshFull':bool(receipts),
                 'initialHostBoardPhase':initial_board, 'hostBoardPhaseDuringTerminal':terminal_board,
                 'keyStore':'Android API 35 emulator AndroidKeyStore-wrapped device key',

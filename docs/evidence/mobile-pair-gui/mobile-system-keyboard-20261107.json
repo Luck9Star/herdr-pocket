@@ -1,0 +1,287 @@
+{
+  "date": "2026-11-07",
+  "baseCommit": "3877f6cd2988b23888a48a8ccb118ff682baadca",
+  "existingAndroidBuild": {
+    "source": "1d604faac5c2f0a732ed79f0a502788a02747db9",
+    "workflowRun": 42362291867,
+    "record": "paired-dashboard-cloud-20261107.json",
+    "containsThisKeyboardChange": false
+  },
+  "localChecks": {
+    "tauri": {
+      "node": "22.22.2",
+      "passed": 226,
+      "viteModules": 53,
+      "macRustLibraryTestsPassed": 41,
+      "kotlinCompiler": "2.2.21",
+      "jvmStubProbes": [
+        "terminal IME gesture",
+        "clipboard"
+      ]
+    },
+    "flutter": {
+      "dart": "3.11.0",
+      "dartFilesParsed": 3,
+      "widgetTestsExecuted": false,
+      "gateScenarios": [
+        "blocked writer with accepted completion after hide and reopen",
+        "blocked writer with unknown completion after hide and reopen"
+      ],
+      "queuedInputReplayed": false
+    },
+    "python": {
+      "flutterAndroidDriver": 58,
+      "tauriAndroidDriver": 15,
+      "sharedHarness": 32,
+      "posixHelper": 15,
+      "skipped": 0
+    }
+  },
+  "browser": [
+    {
+      "engine": "Chrome/156.0.8078.81",
+      "environment": "Mac headless Chrome / CDP touch / synthetic transport",
+      "keyboardBoundary": "virtualKeyboard mock",
+      "rawReportSha256": "6aea21356e302b6796d93efd84db8208e0882c663df2a9dcaa4fddc10ed118d4",
+      "checkedPageSources": {
+        "validation/tauri/index.html": "12f773ca74a8d220ea7103cbb74c5a6a8e75b5ca32fe449339569e55a1dd54cb",
+        "validation/tauri/src/remote.js": "e399d21284dd9931e725d7acc407a69bd2f3cf48f5248ba99eb8df82c4e06eb4",
+        "validation/tauri/src/tab-workspace.js": "8f7bed1cbd648e84eb21ecf1a98713955930fa5e5fd43330fa9d8f8142c289f3",
+        "validation/tauri/src/mobile-soft-keyboard.js": "5d6e09eb6589eb9398c39bfa13b933dd9eb0ab00455b82a9b0129dc702280890",
+        "validation/tauri/src/shell-platform.js": "294ebf65ac3f2f07a1d48cb472ccf79313942b554d91087038015961f3690648",
+        "validation/tauri/src/style.css": "cadf2a18986ad534e2e1fe3747283b5ac2cdb2e771c9e66388d845b92827ce6b",
+        "validation/tauri/src/input-composition.js": "9e7b3db30fdbb1a9d36ebdd806a2c957454a4681ae0c087ed3240237c89125c2"
+      },
+      "results": [
+        {
+          "entry": "savedTab",
+          "viewport": [
+            390,
+            820
+          ],
+          "documentWidth": 375,
+          "systemRequests": [
+            "show",
+            "show",
+            "hide",
+            "show",
+            "hide"
+          ],
+          "observeButtonsDisabled": true,
+          "ownerPreservedOnRepeatedShow": true,
+          "localDraftRetainedAfterHide": true,
+          "lateCompositionBlocked": true,
+          "remoteSendCalls": 0,
+          "remoteResizeCalls": 0
+        },
+        {
+          "entry": "freshPairing",
+          "viewport": [
+            390,
+            820
+          ],
+          "documentWidth": 375,
+          "systemRequests": [
+            "show",
+            "show",
+            "hide",
+            "show",
+            "hide"
+          ],
+          "observeButtonsDisabled": true,
+          "ownerPreservedOnRepeatedShow": true,
+          "localDraftRetainedAfterHide": true,
+          "lateCompositionBlocked": true,
+          "remoteSendCalls": 0,
+          "remoteResizeCalls": 0
+        },
+        {
+          "entry": "savedTab",
+          "viewport": [
+            320,
+            820
+          ],
+          "documentWidth": 305,
+          "systemRequests": [
+            "show",
+            "show",
+            "hide",
+            "show",
+            "hide"
+          ],
+          "observeButtonsDisabled": true,
+          "ownerPreservedOnRepeatedShow": true,
+          "localDraftRetainedAfterHide": true,
+          "lateCompositionBlocked": true,
+          "remoteSendCalls": 0,
+          "remoteResizeCalls": 0
+        },
+        {
+          "entry": "freshPairing",
+          "viewport": [
+            320,
+            820
+          ],
+          "documentWidth": 305,
+          "systemRequests": [
+            "show",
+            "show",
+            "hide",
+            "show",
+            "hide"
+          ],
+          "observeButtonsDisabled": true,
+          "ownerPreservedOnRepeatedShow": true,
+          "localDraftRetainedAfterHide": true,
+          "lateCompositionBlocked": true,
+          "remoteSendCalls": 0,
+          "remoteResizeCalls": 0
+        }
+      ]
+    },
+    {
+      "engine": "Chrome/156.0.8078.81",
+      "environment": "Mac headless Chrome / CDP touch / synthetic transport",
+      "keyboardBoundary": "asynchronous Android ticket callback mock",
+      "rawReportSha256": "4ddb0e819524bab0f1508160c8e2f6559ed1b53874ed469c4dda2a45a5c20696",
+      "checkedPageSources": {
+        "validation/tauri/index.html": "12f773ca74a8d220ea7103cbb74c5a6a8e75b5ca32fe449339569e55a1dd54cb",
+        "validation/tauri/src/remote.js": "e399d21284dd9931e725d7acc407a69bd2f3cf48f5248ba99eb8df82c4e06eb4",
+        "validation/tauri/src/tab-workspace.js": "8f7bed1cbd648e84eb21ecf1a98713955930fa5e5fd43330fa9d8f8142c289f3",
+        "validation/tauri/src/mobile-soft-keyboard.js": "5d6e09eb6589eb9398c39bfa13b933dd9eb0ab00455b82a9b0129dc702280890",
+        "validation/tauri/src/shell-platform.js": "294ebf65ac3f2f07a1d48cb472ccf79313942b554d91087038015961f3690648",
+        "validation/tauri/src/style.css": "cadf2a18986ad534e2e1fe3747283b5ac2cdb2e771c9e66388d845b92827ce6b",
+        "validation/tauri/src/input-composition.js": "9e7b3db30fdbb1a9d36ebdd806a2c957454a4681ae0c087ed3240237c89125c2"
+      },
+      "results": [
+        {
+          "entry": "savedTab",
+          "viewport": [
+            390,
+            820
+          ],
+          "documentWidth": 375,
+          "systemRequests": [
+            "show",
+            "show",
+            "hide",
+            "show",
+            "hide"
+          ],
+          "observeButtonsDisabled": true,
+          "ownerPreservedOnRepeatedShow": true,
+          "localDraftRetainedAfterHide": true,
+          "lateCompositionBlocked": true,
+          "remoteSendCalls": 0,
+          "remoteResizeCalls": 0
+        },
+        {
+          "entry": "freshPairing",
+          "viewport": [
+            390,
+            820
+          ],
+          "documentWidth": 375,
+          "systemRequests": [
+            "show",
+            "show",
+            "hide",
+            "show",
+            "hide"
+          ],
+          "observeButtonsDisabled": true,
+          "ownerPreservedOnRepeatedShow": true,
+          "localDraftRetainedAfterHide": true,
+          "lateCompositionBlocked": true,
+          "remoteSendCalls": 0,
+          "remoteResizeCalls": 0
+        },
+        {
+          "entry": "savedTab",
+          "viewport": [
+            320,
+            820
+          ],
+          "documentWidth": 305,
+          "systemRequests": [
+            "show",
+            "show",
+            "hide",
+            "show",
+            "hide"
+          ],
+          "observeButtonsDisabled": true,
+          "ownerPreservedOnRepeatedShow": true,
+          "localDraftRetainedAfterHide": true,
+          "lateCompositionBlocked": true,
+          "remoteSendCalls": 0,
+          "remoteResizeCalls": 0
+        },
+        {
+          "entry": "freshPairing",
+          "viewport": [
+            320,
+            820
+          ],
+          "documentWidth": 305,
+          "systemRequests": [
+            "show",
+            "show",
+            "hide",
+            "show",
+            "hide"
+          ],
+          "observeButtonsDisabled": true,
+          "ownerPreservedOnRepeatedShow": true,
+          "localDraftRetainedAfterHide": true,
+          "lateCompositionBlocked": true,
+          "remoteSendCalls": 0,
+          "remoteResizeCalls": 0
+        }
+      ]
+    }
+  ],
+  "penpot": {
+    "record": "design/evidence/v2-mobile-keyboard-20261107.json",
+    "recordSha256": "a4d8971cbfd612423208c267606c8bd7e7e831688671867952fb8587cba38277",
+    "links": {
+      "S43": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8acfe51be24",
+      "S44": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8acfe6fa8fe",
+      "S03": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=e6d238f0-ac08-8028-8008-de07eade594a"
+    },
+    "savedBoards": [
+      "S43",
+      "S44"
+    ]
+  },
+  "sourceSha256": {
+    "validation/tauri/index.html": "12f773ca74a8d220ea7103cbb74c5a6a8e75b5ca32fe449339569e55a1dd54cb",
+    "validation/tauri/scripts/wire-android.py": "1d15b4cb2bcf473dfdecdc9e4087163e280bef87fd7a6b6893d2eff1c5b0c184",
+    "validation/tauri/src-tauri/src/lib.rs": "c907111878e46126c1bc6d176e63cc62ba25f13d5942d5edfa9cad0e8dc8316e",
+    "validation/tauri/src-tauri/src/terminal_keyboard.rs": "fb1f6cf39c1d67dbc1f99a3dbec080e7c9d105eb8beab337af94e1d34dbff5b7",
+    "validation/tauri/android/TerminalKeyboardPlugin.kt": "5898b1960b96e46c5a5dcdc2bc370d2172f4f23051a491fbd7563d45fbd82b14",
+    "validation/tauri/src/mobile-clipboard.js": "35c6b7a2505ec52a18f6dc1c05281b390a4d8eaae78e2b22e66602cb2ec28b25",
+    "validation/tauri/src/shell-platform.js": "294ebf65ac3f2f07a1d48cb472ccf79313942b554d91087038015961f3690648",
+    "validation/tauri/src/mobile-soft-keyboard.js": "5d6e09eb6589eb9398c39bfa13b933dd9eb0ab00455b82a9b0129dc702280890",
+    "validation/tauri/src/remote.js": "e399d21284dd9931e725d7acc407a69bd2f3cf48f5248ba99eb8df82c4e06eb4",
+    "validation/tauri/src/tab-workspace.js": "8f7bed1cbd648e84eb21ecf1a98713955930fa5e5fd43330fa9d8f8142c289f3",
+    "validation/tauri/test/android-clipboard-plugin-test.py": "71d9f02df466933fed8db54d7902ed7730fdcd7604ced9ff417d6e00ee39e0f4",
+    "validation/tauri/test/TerminalKeyboardPluginProbe.kt": "3298db7ea8654b8f8952b20ef6d6401a3edf8f5948fd21ea8ce4dbe35c7e036b",
+    "validation/tauri/test/mobile-soft-keyboard.test.mjs": "b90c5935f5bf2950a910a7a36fde70da3ba330b97bc4a438564fa400b01a258e",
+    "validation/tauri/test/direct-dashboard-gui.test.mjs": "192b53268019af1b070600a9eed754feb6a35feefb8d551c335b07710490fa58",
+    "validation/tauri/test/tab-workspace.test.mjs": "c12250c47191bc98ebd9e7e7272a78e1bd884dd5679dfc41f523e0ac56b2cc86",
+    "validation/flutter/lib/remote_page.dart": "99e604196266c2724c51048c57c622d9652f348a785cc1dbb8b721bad214b72b",
+    "validation/flutter/test/remote_keyboard_controls_test.dart": "ea6c0fc3a13c1c170debbd1d7d035afa49a2b047e8b0629cceafe52fce94a129",
+    "validation/flutter/integration_test/android_pairing_observe_test.dart": "07b8325301cc70923b9a0cd5b0372716c823e53186fb818b9c32b09a81014f45",
+    "validation/remote-harness/android_gui.py": "7f4a48d768d3fb9038c87c9b6a9b213268c773ebbdfe1aec0a04f3069afcb932",
+    "validation/remote-harness/flutter_android_gui.py": "9cada748199354db1991f08f9dbc8e4706a068ff01f18dbf4d9ebf52703e0c1b",
+    "validation/remote-harness/flutter_android_test.py": "030f840ac83155a26def2673c7b530c055a6ef7c2d50f34b4ade6083b19f8f3b",
+    "validation/tauri/test/android_input_driver_test.py": "c284a14e8d91ba58d628ac174278b840bd1ce9b19df9c1031127248560c00e47"
+  },
+  "unverified": [
+    "New Android APK, API 35 IME window and system Back sequence",
+    "Physical arm64 install, actual Chinese IME, camera pairing and touch selection",
+    "iOS device and foreground concurrency across all three overlay networks",
+    "Flutter widget suite and package analysis for this change"
+  ]
+}

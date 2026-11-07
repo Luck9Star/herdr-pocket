@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import {createShellPlatform, shellPlatform} from './shell-platform.js';
 
 const byteLimit = 4096;
 const messages = {
@@ -25,32 +26,16 @@ export function clipboardPasteMessage(error) {
 // user's tap handler, without an intervening asynchronous platform query.
 export function createPasteClipboard({
   callNative = invoke,
+  shell = createShellPlatform(callNative),
   webClipboard = () => globalThis.navigator?.clipboard,
   focused = () => !document.hidden && document.hasFocus(),
 } = {}) {
-  let platform = 'webview';
-  let probing = null;
-
-  function probeNative() {
-    if (!probing) {
-      probing = callNative('config_document_platform').then(result => {
-        platform = ['android', 'ios', 'macos', 'webview'].includes(result) ? result : null;
-      }).catch(() => { platform = null; }).finally(() => { probing = null; });
-    }
-    return probing;
-  }
-
-  function initialize(native) {
-    if (!native) return;
-    platform = null;
-    return probeNative();
-  }
-
   async function read() {
     try {
       if (!focused()) throw Error('clipboard_unfocused');
+      const platform = shell.current();
       if (!platform) {
-        void probeNative();
+        void shell.probe();
         throw Error('clipboard_unavailable');
       }
       let text;
@@ -73,9 +58,9 @@ export function createPasteClipboard({
     }
   }
 
-  return {initialize, read};
+  return {initialize: shell.initialize, read};
 }
 
-const clipboard = createPasteClipboard();
+const clipboard = createPasteClipboard({shell: shellPlatform});
 export const initializePasteClipboard = clipboard.initialize;
 export const readClipboardForPaste = clipboard.read;

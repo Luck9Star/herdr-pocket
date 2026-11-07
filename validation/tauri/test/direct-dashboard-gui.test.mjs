@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 class Element {
   constructor(id = '') {
     this.id = id;
+    this.isConnected = true;
     this.tagName = 'div';
     this.children = [];
     this.attrs = {};
@@ -69,7 +70,7 @@ async function importedRemote() {
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup({ inputMode = () => 1, clipboardRead } = {}) {
+async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
@@ -90,6 +91,7 @@ async function setup({ inputMode = () => 1, clipboardRead } = {}) {
   globalThis.document = {
     body: new Element('body'),
     hidden: false,
+    hasFocus: () => true,
     activeElement: null,
     getElementById: id => nodes[id] ?? null,
     createElement: tag => {
@@ -178,7 +180,7 @@ async function setup({ inputMode = () => 1, clipboardRead } = {}) {
   }
   globalThis.__directGuiDeps = { Terminal, invoke, Channel };
   const { initRemote } = await importedRemote();
-  initRemote({ native: true, theme: { terminal: {} }, onFixture() {}, onLeaveFixture() {}, clipboardRead });
+  initRemote({ native: true, theme: { terminal: {} }, onFixture() {}, onLeaveFixture() {}, clipboardRead, keyboardRequest });
   await flush();
   await flush();
 
@@ -248,6 +250,72 @@ async function openInput(h) {
   h.emit({ kind: 'frame', generation: 9, epoch:1, frame: { seq: 1, full: true, bytes: [65] } });
   h.emit({ kind: 'input_ready', generation: 9, epoch:1, unknown: false, recovery_status: 'ready' });
 }
+
+test('paired form keyboard controls use the current editor, revoke on hide and reject late IME', async () => {
+  const previous=Object.getOwnPropertyDescriptor(globalThis,'navigator');const keyboard=[];
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{virtualKeyboard:{show:()=>keyboard.push('show'),hide:()=>keyboard.push('hide')}}});
+  const h=await setup();const n=h.nodes;
+  try {
+    await openInput(h);
+    assert.equal(n['remote-keyboard-show'].disabled,true);
+    n['remote-keyboard-show'].click();assert.equal(h.calls.filter(c=>c.name==='remote_input_mode').length,0);
+    n['remote-input-direct'].click();await flush();await flush();
+    assert.equal(n['remote-keyboard-show'].disabled,false);
+    n['remote-keyboard-show'].click();assert.deepEqual(keyboard,['show']);
+    h.terminal.textarea.dispatch('compositionstart');
+    assert.equal(n['remote-keyboard-show'].disabled,true);
+    n['remote-keyboard-hide'].click();assert.deepEqual(keyboard,['show','hide']);
+    h.terminal.textarea.dispatch('compositionend');h.terminal.data('迟到');await flush();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
+    assert.equal(n['remote-keyboard-show'].disabled,true);
+    assert.ok(h.calls.some(c=>c.name==='remote_input_mode' && c.args.mode==='observe'));
+    n['remote-input-draft-mode'].click();await flush();await flush();
+    assert.equal(document.activeElement,n['remote-input-draft']);
+    n['remote-keyboard-show'].click();assert.deepEqual(keyboard,['show','hide','show']);
+    n['remote-input-draft'].value='草稿';n['remote-input-draft'].dispatch('compositionstart');
+    n['remote-input-preview'].click();assert.equal(n['remote-input-preview-area'].hidden,true);
+    n['remote-keyboard-hide'].click();n['remote-input-draft'].dispatch('compositionend');
+    n['remote-input-confirm'].click();await flush();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
+    assert.equal(h.calls.filter(c=>c.name.includes('resize')).length,0);
+  } finally {h.finish();await flush();h.restore();if(previous)Object.defineProperty(globalThis,'navigator',previous);else delete globalThis.navigator;}
+});
+
+test('paired keyboard late native requests lose authority after hide or target navigation',async()=>{
+  const requests=[],h=await setup({keyboardRequest:(action,editor,current)=>requests.push({action,editor,current})});
+  try {
+    await openInput(h);h.nodes['remote-input-direct'].click();await flush();await flush();
+    h.nodes['remote-keyboard-show'].click();assert.equal(requests[0].current(),true);
+    h.nodes['remote-keyboard-hide'].click();assert.equal(requests[0].current(),false);
+    assert.equal(requests[1].action,'hide');assert.equal(requests[1].current(),true);
+    h.nodes['remote-input-draft-mode'].click();await flush();await flush();
+    assert.equal(requests[1].current(),false);
+    h.nodes['remote-keyboard-show'].click();assert.equal(requests.at(-1).current(),true);
+    h.nodes['host-return-home'].click();await flush();assert.equal(requests.at(-1).current(),false);
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_send' || c.name.includes('resize')).length,0);
+  }finally{h.finish();await flush();h.restore();}
+});
+
+test('paired hide during pending direct permission invalidates its late grant',async()=>{
+  let grant;const h=await setup({inputMode:args=>args.mode==='direct'?new Promise(r=>grant=r):1,keyboardRequest:()=>{}});
+  try{
+    await openInput(h);h.nodes['remote-input-direct'].click();await flush();
+    assert.equal(h.nodes['remote-keyboard-hide'].disabled,false);
+    h.nodes['remote-keyboard-hide'].click();grant(7);await flush();await flush();
+    h.terminal.data('迟到');assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
+    assert.equal(h.terminal.options.disableStdin,true);assert.equal(h.nodes['remote-keyboard-show'].disabled,true);
+  }finally{h.finish();await flush();h.restore();}
+});
+
+test('paired draft cannot confirm an existing preview during IME composition',async()=>{
+  const h=await setup();try{
+    await openInput(h);h.nodes['remote-input-draft-mode'].click();await flush();await flush();
+    const draft=h.nodes['remote-input-draft'];draft.value='待核对';draft.dispatch('input');
+    h.nodes['remote-input-preview'].click();assert.equal(h.nodes['remote-input-preview-area'].hidden,false);
+    draft.dispatch('compositionstart');h.nodes['remote-input-confirm'].click();await flush();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
+  }finally{h.finish();await flush();h.restore();}
+});
 
 test('paired form requests an editable keyboard in the click and only sends compositions begun after permission', async () => {
   let allow;

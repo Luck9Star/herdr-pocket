@@ -951,5 +951,147 @@
       "deviceInstallation": "not run",
       "androidLoad": "not run"
     }
+  },
+  "flutterRecheck": {
+    "run": 42417473474,
+    "sourceSHA": "9b065bfaa7d888cc9d2704e2dbacab60b680275c",
+    "sourceJob": "skipped",
+    "analyzer": "passed",
+    "flutterTests": {
+      "passed": 439,
+      "skipped": 1
+    },
+    "rendererTestsPassed": 10,
+    "evidenceHashesVerified": true,
+    "cases": {
+      "stock": {
+        "artifactId": 13592008987,
+        "status": "passed",
+        "failure": null,
+        "receivedInputBytes": 0,
+        "sharedPty": {
+          "initialColumns": 119,
+          "initialRows": 40,
+          "columns": 119,
+          "rows": 40,
+          "changes": 0,
+          "readErrors": 0,
+          "captureErrors": 0,
+          "samples": 5161,
+          "endReason": 1
+        },
+        "hostCleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        },
+        "deviceCleanup": {
+          "ownedPackageInitiallyAbsent": true,
+          "ownedPackageAbsent": true,
+          "appProcessGone": true,
+          "reverseRemoved": true,
+          "ownedForwardsRemoved": true,
+          "flutterToolStopped": true,
+          "rawLogsUploaded": false,
+          "status": "passed"
+        },
+        "blockedTargetsFixture": {
+          "targetCount": 2,
+          "sameAgentLabel": true,
+          "realSnapshotBindings": true,
+          "receivedInputBytes": 0,
+          "noObservedResize": true,
+          "ownedWaitingProcessesStopped": true
+        },
+        "blockedTargetEvidence": {
+          "paneId": "w3:p1",
+          "terminalId": "term_65fb6ce008b4a3",
+          "listedRows": 2,
+          "reviewRequired": true,
+          "observing": true,
+          "markerMatched": true,
+          "otherMarkerAbsent": true
+        },
+        "temporaryHostApprovedRequest": true,
+        "matchedDeviceKeyInSshd": true,
+        "revokedFixtureKey": true,
+        "firstSequence": 1,
+        "deltaSequence": 2,
+        "fullRendered": true,
+        "deltaRendered": true,
+        "stoppedStale": true,
+        "localIdentityDeleted": true,
+        "emulatorRemoved": true
+      },
+      "guarded": {
+        "artifactId": 13592272553,
+        "status": "failed",
+        "failure": {
+          "stage": "tui_resume_full",
+          "errorClass": "TestFailure",
+          "line": 131,
+          "tuiResume": {
+            "schemaVersion": 2,
+            "actionsCompleted": 3,
+            "boardCount": 1,
+            "tabCount": 1,
+            "resumeCount": 0,
+            "viewCount": 1,
+            "sequence": 15,
+            "cols": 80,
+            "rows": 24,
+            "bufferRows": 24,
+            "directCount": 1,
+            "rowsChecked": 24,
+            "rowMatchMask": 16777215,
+            "firstMismatchRow": -1,
+            "titleRowMask": 1,
+            "pageCount": 1,
+            "cursorKeysMode": true,
+            "directEnabled": false,
+            "evidenceFull": false,
+            "pageBusy": false,
+            "pageLive": false,
+            "pagePaused": false,
+            "sequencePresent": true,
+            "tailRowsBlank": true,
+            "terminalReplaced": false,
+            "boardFreshness": "fresh",
+            "adapterPhase": "failed",
+            "adapterError": "channel_cleanup_timeout"
+          }
+        },
+        "receivedInputBytes": 10,
+        "sharedPty": {
+          "initialColumns": 119,
+          "initialRows": 40,
+          "columns": 119,
+          "rows": 40,
+          "changes": 0,
+          "readErrors": 0,
+          "captureErrors": 0,
+          "samples": 2808,
+          "endReason": 1
+        },
+        "hostCleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        },
+        "deviceCleanup": {
+          "ownedPackageInitiallyAbsent": true,
+          "ownedPackageAbsent": true,
+          "appProcessGone": true,
+          "reverseRemoved": true,
+          "ownedForwardsRemoved": true,
+          "flutterToolStopped": true,
+          "rawLogsUploaded": false,
+          "status": "passed"
+        },
+        "emulatorRemoved": true
+      }
+    }
   }
 }

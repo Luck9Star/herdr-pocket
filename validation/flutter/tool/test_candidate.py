@@ -51,6 +51,75 @@ class CandidateTests(unittest.TestCase):
         self.assertFalse((self.app / 'pubspec_overrides.yaml').exists())
         self.assertEqual((self.app / 'pubspec.lock').read_text(), self.baseline)
 
+    def test_reference_rejects_existing_target_and_bad_archive_without_overwrite(self):
+        shim = candidate.terminal_view_ime
+        target = self.app / 'candidate/reference_terminal_view'
+        target.mkdir(parents=True)
+        (target / 'keep').write_text('unchanged')
+        with patch.object(shim.urllib.request, 'urlopen') as fetch, self.assertRaises(ValueError):
+            shim.prepare_reference(self.app, candidate.SOURCE)
+        fetch.assert_not_called()
+        self.assertEqual((target / 'keep').read_text(), 'unchanged')
+        (target / 'keep').unlink(); target.rmdir()
+        with patch.object(shim.urllib.request, 'urlopen', return_value=io.BytesIO(b'wrong')), self.assertRaises(ValueError):
+            shim.prepare_reference(self.app, candidate.SOURCE)
+        self.assertFalse(target.exists())
+        self.assertFalse((self.app / 'reference-terminal-manifest.json').exists())
+
+    def test_reference_rejects_archive_links_and_duplicate_members(self):
+        shim = candidate.terminal_view_ime
+        for kind in ('link', 'duplicate'):
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode='w:gz') as archive:
+                item = tarfile.TarInfo('a'); item.size = 1
+                archive.addfile(item, io.BytesIO(b'x'))
+                second = tarfile.TarInfo('b' if kind == 'link' else 'a')
+                if kind == 'link':
+                    second.type = tarfile.SYMTYPE; second.linkname = '../outside'
+                    archive.addfile(second)
+                else:
+                    second.size = 1; archive.addfile(second, io.BytesIO(b'y'))
+            blob = buffer.getvalue()
+            info = {'archiveUrl': 'https://example.invalid/archive', 'archiveSha256': shim.digest(blob)}
+            with self.subTest(kind=kind), patch.object(shim, 'metadata', return_value=(info, {'files': {}})), \
+                    patch.object(shim.urllib.request, 'urlopen', return_value=io.BytesIO(blob)), self.assertRaises(ValueError):
+                shim.prepare_reference(self.app, candidate.SOURCE)
+            self.assertFalse((self.app / 'candidate/reference_terminal_view').exists())
+            self.assertFalse((self.app / 'reference-terminal-manifest.json').exists())
+
+    def test_ime_manifest_rejects_changed_patch_and_overlapping_renderer(self):
+        shim = candidate.terminal_view_ime
+        source = self.base / 'tampered'; (source / 'patches').mkdir(parents=True)
+        real = candidate.SOURCE / 'patches'
+        for name in ('manifest.json', 'ime-observation-manifest.json', 'terminal_view-0.5.0-ime-observation.patch'):
+            (source / 'patches' / name).write_bytes((real / name).read_bytes())
+        (source / 'patches/terminal_view-0.5.0-ime-observation.patch').write_text('tampered')
+        with self.assertRaises(ValueError): shim.metadata(source)
+        (source / 'patches/terminal_view-0.5.0-ime-observation.patch').write_bytes((real / 'terminal_view-0.5.0-ime-observation.patch').read_bytes())
+        m = json.loads((source / 'patches/manifest.json').read_text())
+        m['files']['lib/src/terminal_view.dart'] = {}
+        (source / 'patches/manifest.json').write_text(json.dumps(m))
+        with self.assertRaises(ValueError): shim.metadata(source)
+
+    @unittest.skipUnless(os.environ.get('HERDR_TEST_TERMINAL_ARCHIVE'), 'optional pinned public archive not supplied')
+    def test_real_pinned_archive_installs_reference_and_candidate_without_pub_cache(self):
+        shim = candidate.terminal_view_ime
+        blob = Path(os.environ['HERDR_TEST_TERMINAL_ARCHIVE']).read_bytes()
+        before = dict(os.environ)
+        with patch.object(shim.urllib.request, 'urlopen', side_effect=lambda *args, **kwargs: io.BytesIO(blob)):
+            reference = shim.prepare_reference(self.app, candidate.SOURCE)
+            candidate.apply(self.app)
+        ime, combining = shim.metadata(candidate.SOURCE)
+        self.assertEqual(reference['imeObservation'], ime)
+        for name, hashes in ime['files'].items():
+            for package in ('reference_terminal_view', 'terminal_view'):
+                self.assertEqual(shim.digest((self.app / 'candidate' / package / name).read_bytes()), hashes['afterSha256'])
+        for name, hashes in combining['files'].items():
+            self.assertEqual(shim.digest((self.app / 'candidate/reference_terminal_view' / name).read_bytes()), hashes['beforeSha256'])
+            self.assertEqual(shim.digest((self.app / 'candidate/terminal_view' / name).read_bytes()), hashes['afterSha256'])
+        self.assertEqual(json.loads((self.app / 'candidate-manifest.json').read_text())['imeObservation'], ime)
+        self.assertEqual(dict(os.environ), before)
+
     def test_lock_requires_exact_other_dependency_blocks(self):
         blocks = candidate.lock_packages(self.baseline)
         replacement = '\n'.join([
@@ -88,7 +157,8 @@ class CandidateTests(unittest.TestCase):
         }))
         git_env = {'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'core.autocrlf', 'GIT_CONFIG_VALUE_0': 'true'}
         with patch.object(candidate, 'SOURCE', source), patch.dict(os.environ, git_env), \
-                patch.object(candidate.urllib.request, 'urlopen', return_value=io.BytesIO(blob)):
+                patch.object(candidate.urllib.request, 'urlopen', return_value=io.BytesIO(blob)), \
+                patch.object(candidate.terminal_view_ime, 'apply_shim', return_value={'fixture': True}):
             candidate.apply(self.app)
         self.assertEqual((self.app / 'candidate/terminal_view/source.txt').read_bytes(), after)
 

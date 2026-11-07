@@ -1,7 +1,31 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/remote_auxiliary.dart';
 
 void main() {
+  test('shared function-key contract is independent of cursor mode and consumes modifiers once', () {
+    final file = [File('assets/shared/terminal-function-keys-v1.json'),
+      File('../../validation/shared/terminal-function-keys-v1.json'),
+      File('validation/shared/terminal-function-keys-v1.json')].firstWhere((file) => file.existsSync());
+    final fixture = jsonDecode(file.readAsStringSync()) as Map<String,dynamic>;
+    expect(fixture['schemaVersion'],1); expect(fixture['cases'],hasLength(64));
+    String? hex(String? value) => value == null ? null : utf8.encode(value).map((byte) => byte.toRadixString(16).padLeft(2,'0')).join();
+    for (final item in fixture['cases'] as List) {
+      for (final application in [false,true]) {
+        final key = item['key'] as String,ctrl = item['ctrl'] as bool,alt = item['alt'] as bool;
+        expect(hex(auxiliaryKey(key,applicationCursorMode:application,ctrl:ctrl,alt:alt)),item['expectedHex'],reason:'$item app=$application');
+        final modifiers = AuxiliaryModifiers();
+        if (ctrl) modifiers.toggle('ctrl',allowed:true);
+        if (alt) modifiers.toggle('alt',allowed:true);
+        expect(hex(modifiers.take(key,applicationCursorMode:application,allowed:true)),item['expectedHex']);
+        expect(modifiers.held,isFalse);
+        modifiers.toggle('ctrl',allowed:true); modifiers.toggle('alt',allowed:true);
+        expect(modifiers.take(key,applicationCursorMode:application,allowed:false),isNull);
+        expect(modifiers.held,isFalse);
+      }
+    }
+  });
   test('ASCII and cursor combinations match the shared terminal encoding', () {
     for (final key in 'abcdefghijklmnopqrstuvwxyz'.split('')) {
       final control = String.fromCharCode(key.codeUnitAt(0)-96);

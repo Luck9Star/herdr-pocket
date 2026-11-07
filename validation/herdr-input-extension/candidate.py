@@ -20,7 +20,7 @@ import uuid
 
 HERE = Path(__file__).resolve().parent
 BASE = '2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01'
-PATCH_HASH = 'c07a1637e3b72b13c660dc4cc3c2cca50ef383b66d0400a3208bd9079434ab00'
+PATCH_HASH = '7f89a79677a456f024bd73555130861cd1b0b47e9d4d69f98d4e18ffc7f1ed8a'
 PATCH = HERE / 'herdr-0.9.5-pocket-input.patch'
 ZIG_ARCHIVE_HASH = '70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00'
 NAME = 'herdr-pocket-input-candidate'
@@ -167,10 +167,13 @@ def build(source, output, cargo_cache, timeout=3600, pocket_source_sha=None):
         extract_source(root / 'source.tar', work)
         run([git, 'apply', '--check', PATCH], env=env, cwd=work)
         run([git, 'apply', PATCH], env=env, cwd=work)
-        guard_result = run([cargo, 'test', '--offline', '--locked', '--release', '--package', 'herdr',
-             'pocket_input_guards_identity_rejects_bad_bytes_and_never_resizes'], env=env, cwd=work, timeout=timeout)
-        if not re.search(r'test result: ok\. 1 passed; 0 failed;', guard_result):
-            raise Refused('release_guard_test_not_proven')
+        for case in ('pocket_input_guards_identity_rejects_bad_bytes_and_never_resizes',
+                     'observer_input_modes_are_per_client_and_survive_backpressure',
+                     'unreadable_observer_modes_close_only_that_observer_without_false_modes'):
+            result = run([cargo, 'test', '--offline', '--locked', '--release', '--package',
+                          'herdr', case], env=env, cwd=work, timeout=timeout)
+            if not re.search(r'test result: ok\. 1 passed; 0 failed;', result):
+                raise Refused('release_guard_test_not_proven')
         run([cargo, 'rustc', '--offline', '--locked', '--release', '--package', 'herdr', '--bin', 'herdr',
              '--', '-C', 'debug-assertions=no'], env=env, cwd=work, timeout=timeout)
         binary = work / 'target/release/herdr'

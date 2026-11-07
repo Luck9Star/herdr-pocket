@@ -36,7 +36,7 @@
 
 ## 云端构建
 
-工作流先在 Ubuntu 上生成临时平台工程、解析一次依赖锁并运行 analyze/tests，再让五端构建任务下载**同一个 lock**并使用 `--enforce-lockfile`。应用 `pubspec.lock` 已从 run 40982743142 取回并核对 terminal_view 归档 hash 后落库；构建脚本使用该锁并 `--enforce-lockfile`。原离线基线锁 SHA256 为 `5b3979bec9c6487bb79f9bba82e66908fe735248923aeced14568cb101c9fa99`；M1a 新增依赖锁已在 [run 41046472225](https://github.com/Luck9Star/herdr-pocket/actions/runs/41046472225) 的准备／解析步骤通过，并在 [run 41048094396](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396) 继续使用同一锁与候选逐依赖校验。首轮错误模板锁已排除，见来源记录。
+工作流先在 Ubuntu 上生成临时平台工程、解析一次依赖锁并运行 analyze/tests，再让五端构建任务下载**同一个 lock**并使用 `--enforce-lockfile`。应用 `pubspec.lock` 已从 run 40982743142 取回并核对 terminal_view 归档 hash 后落库；生成脚本在临时工程只将 `terminal_view` 锁项转为已校验 reference path，其余锁项保留，随后使用 `--enforce-lockfile`。原离线基线锁 SHA256 为 `5b3979bec9c6487bb79f9bba82e66908fe735248923aeced14568cb101c9fa99`；M1a 新增依赖锁已在 [run 41046472225](https://github.com/Luck9Star/herdr-pocket/actions/runs/41046472225) 的准备／解析步骤通过，并在 [run 41048094396](https://github.com/Luck9Star/herdr-pocket/actions/runs/41048094396) 继续使用同一锁与候选逐依赖校验。首轮错误模板锁已排除，见来源记录。
 
 平台脚手架只在 runner 临时目录生成，未将完整 SDK/平台模板安装到本机。`ci.py bootstrap` 在非 GitHub Actions 环境拒绝执行。
 
@@ -82,9 +82,13 @@ Mac GUI smoke 发现分解重音 `e\u0301 A\u030a n\u0303` 看起来只有基字
 
 诊断在独立 `render-characterization` CI job 中运行；可见重音与基字符像素相同时 job 必须失败，不能称字符正确性通过。五端包构建不依赖此诊断 job，便于继续设备比较。源码检查/目视现象不替代 CI 诊断结果；该诊断也不等价于原生剪贴板或系统 IME 验证。尚未对上游做补丁或改换终端引擎。
 
+## 共享的 IME 观察接线
+
+`ci.py prepare` 从 SHA-256 固定的 pub.dev 归档在新工程建立 `candidate/reference_terminal_view`，仅叠加 `patches/ime-observation-manifest.json` 指定的两个 widget 文件，原 painter/core 未修改。应用 pubspec 与锁仅替换这一项为相对 path；其余依赖沿用源锁，不写 pub cache。`candidate.py apply` 在独立 `candidate/terminal_view` 中叠加原组合字符补丁与相同 IME shim，保留既有 override 和逐依赖锁核验。两份来源 manifest、上游 LICENSE/NOTICE 随包保存，既有绘制实验 manifest 和原始归档对照不改写。应用、设备和真实输入法仍须分别验证；独立补丁检查不能证明编译或运行通过。
+
 ## 可追溯的组合重音修复候选
 
-默认仍使用未修改 `terminal_view: 0.5.0`，原始失败证据保留。`patches/` 与 `tool/candidate.py` 提供显式实验分支：官方归档与补丁 hash 校验后，仅在新建 CI 临时工程启用 path override，不修改 pub cache。候选锁必须通过逐依赖基线比较；候选包附来源 manifest、LICENSE 和 NOTICE。
+默认使用固定 `terminal_view: 0.5.0` 原版绘制器与 core，另在隔离依赖中叠加 IME 编辑状态观察 shim；因此整包并非未修改。原始失败证据保留。`patches/` 与 `tool/candidate.py` 提供显式实验分支：官方归档与补丁 hash 校验后，仅在新建 CI 临时工程启用 path override，不修改 pub cache。候选锁必须通过逐依赖基线比较；候选包附来源 manifest、LICENSE 和 NOTICE。
 
 修复涉及 ASCII 批处理分流、选区和 block cursor 的 combined 传递，不改输入、parser 或列宽。[修复说明与来源](../../docs/evidence/flutter/2026-10-30-combining-repair.md)；真实绘制回归位于 `regression/combining_patch_test.dart`。构建和测试结果需以独立候选工作流为准，不能把本地脚本检查当作已修复证明。
 
@@ -94,7 +98,7 @@ Mac GUI smoke 发现分解重音 `e\u0301 A\u030a n\u0303` 看起来只有基字
 
 两壳显式使用相同 16 色 ANSI 工程基线；JSON 将它与 Penpot 实际 tokens 分开记录。fixture 字节、固定 Nerd Font、14px 和 80×24 不变。布局收窄时只保留当前目标，隐藏的分屏标签恢复仍需要新 full；布局和键盘不发送远端 resize。极小或键盘占用后的视口允许工作区整体垂直滚动，保留终端与发送控件可达，不通过负尺寸 Flex 或远端 resize 硬塞布局。包 manifest 新增视觉 token 文件 SHA256。
 
-新增 `test/probe_ui_test.dart` 从实际控件驱动未知恢复、隐藏标签与窄屏切换，并检查 320×640／键盘 260px／1.3 倍 UI 字号下的布局和真实 terminal 几何。CI 保存的 `probe-results/ui-v2` 是 **headless widget 布局证据**，系统文字可能使用测试 fallback 字体，不能代替原生 App 视觉、真实输入法或触控验收。候选工作流继续生成带受控 terminal_view 修复的五端测试包；普通 baseline 工作流仍使用未补丁的官方 0.5.0，其已知组合绘制失败不可与候选包混用。
+新增 `test/probe_ui_test.dart` 从实际控件驱动未知恢复、隐藏标签与窄屏切换，并检查 320×640／键盘 260px／1.3 倍 UI 字号下的布局和真实 terminal 几何。CI 保存的 `probe-results/ui-v2` 是 **headless widget 布局证据**，系统文字可能使用测试 fallback 字体，不能代替原生 App 视觉、真实输入法或触控验收。候选工作流继续生成带受控 terminal_view 修复的五端测试包；普通 baseline 使用官方 0.5.0 原版绘制器和 core 及独立 IME 观察 shim，其已知组合绘制失败不可与候选包混用。
 
 手工步骤沿用上文：负载、故障注入和 UTF-8 记录现在位于“验证工具”；刷新图标是“获取新 full”，未知状态在 fresh full 后仍需显式“人工核实未知”。仅切换模式、标签、布局或刷新不得增加本地接收次数。
 

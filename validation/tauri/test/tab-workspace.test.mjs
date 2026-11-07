@@ -809,6 +809,35 @@ test('saved tab auxiliary keys use its current lease, preserve IME and release f
   } finally {h.restore();}
 });
 
+test('expanded saved-tab keys use the direct input lease and one-shot modifiers', async () => {
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{send:acceptedInput});
+  const writes=()=>h.calls.filter(call=>call.name==='remote_tab_input_send');
+  try {
+    await readyKeyboard(h);
+    assert.equal(h.find('更多键'),undefined);
+    h.find('逐键输入').onclick();await flush();
+    const expand=h.find('更多键'), group=h.all().find(node=>node.attrs['aria-label']==='更多终端键');
+    const f1=h.find('F1'), f12=h.find('F12');
+    assert.equal(expand.attrs['aria-expanded'],'false');assert.equal(group.hidden,true);
+    f1.onclick();await flush();assert.equal(writes().length,0);
+    expand.onclick();assert.equal(group.hidden,false);assert.equal(expand.attrs['aria-expanded'],'true');
+    f1.onclick();await flush();
+    h.find('Ctrl').onclick();f12.onclick();await flush();
+    h.find('Alt').onclick();h.find('Insert').onclick();await flush();
+    h.find('Delete').onclick();await flush();
+    h.find('Backspace').onclick();await flush();
+    h.find('Shift+Tab').onclick();await flush();
+    assert.deepEqual(writes().map(call=>call.args.bytes),[
+      [27,79,80], [27,91,50,52,59,53,126], [27,91,50,59,51,126],
+      [27,91,51,126], [127], [27,91,90],
+    ]);
+    assert.equal(h.find('Ctrl').attrs['aria-pressed'],'false');
+    assert.equal(h.find('Alt').attrs['aria-pressed'],'false');
+    expand.onclick();f1.onclick();await flush();assert.equal(writes().length,6);
+    expand.onclick();void h.ui.hide();f1.onclick();await flush();assert.equal(writes().length,6);
+  } finally {h.restore();}
+});
+
 test('a draft edited back to the same text during final confirmation needs a new review', async () => {
   const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{send:acceptedInput});
   try {

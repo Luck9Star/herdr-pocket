@@ -68,3 +68,20 @@ WebDriver 测试采用官方 [Tauri 测试说明](https://v2.tauri.app/develop/t
 `codex/batch/android-input-*` 集中运行两个手机候选。每条路线先在独立 API 35 AVD 中运行原版主机用例，必须收到零字节。受保护输入用例另开一次性 AVD，要求同时指定 `--android-guarded-input` 和 `--input-fixture`。runner 核对同一来源构建的二进制、固定上游 commit、补丁字节、能力自检和 SHA，再创建临时 host/helper。两种模式各自输出 manifest。
 
 用户在已选 pane 上发送单个 `k`，编辑尚未发送的草稿 `Pocket测`，回到看板，再主动打开原标签、连接、取得该 pane 的新 full。只有再次预览并确认后才发送草稿。验收要求两笔请求 ID 不同、分别受理 1 和 9 字节，pane 与稳定 terminal ID 均匹配主机独立查询的快照。真实临时 PTY 最终须恰好收到 UTF-8 的 `kPocket测`（共 10 字节，无回车）。清理后再次核对内容，拒绝额外输入。产物仅保留数字、公开测试标识与清理状态。此流程覆盖模拟器 GUI 和隔离 SSH 链路，物理设备、真实中文输入法与组网状态需要另验。
+
+## 在临时终端中操作真实 TUI
+
+在仓库根目录运行以下命令。需要 POSIX、Python 3 的 curses、xterm-256color terminfo，以及对应候选已有的 Node 或 Dart。也可以通过 `--runtime` 指定该可执行文件。
+
+```sh
+python3 validation/remote-harness/phone_tui_probe.py tauri
+python3 validation/remote-harness/phone_tui_probe.py flutter
+```
+
+每次运行新建 80×24 PTY 和临时结果文件。进入真实 curses 界面后，指定路线的生产编码器依次移动选中行、切换焦点、退格、插入和删除行、打开及关闭帮助、刷新，最后通过 F10 退出。JSON 中的 `passed` 同时要求十个动作按序发生、最终选中 Review、终端属性恢复及视口尺寸不变。
+
+可用显式选定的 herdr 可执行文件检查观察帧。探针单独启动临时本地会话，核对首次全帧、四次模式变化、后续有序画面和共享 PTY 尺寸样本。普通 0.9.5 使用 `--expect stock`，含本仓库固定候选补丁的二进制使用 `--expect candidate`。此探针只读，SSH 和手机系统输入单独验收。
+
+```sh
+python3 validation/remote-harness/observer_mode_probe.py --binary /path/to/herdr --expect stock
+```

@@ -19,8 +19,15 @@ String? auxiliaryKey(String name, {bool applicationCursorMode = false, bool ctrl
   final modifier = 1 + (ctrl ? 4 : 0) + (alt ? 2 : 0);
   final cursor = const {'up':'A','down':'B','right':'C','left':'D','home':'H','end':'F'}[name];
   if (cursor != null) return modifier > 1 ? '\x1b[1;$modifier$cursor' : '\x1b${applicationCursorMode ? 'O' : '['}$cursor';
-  final page = const {'pgup':5,'pgdn':6}[name];
-  if (page != null) return '\x1b[$page${modifier > 1 ? ';$modifier' : ''}~';
+  final function = const {'f1':'P','f2':'Q','f3':'R','f4':'S'}[name];
+  if (function != null) return modifier > 1 ? '\x1b[1;$modifier$function' : '\x1bO$function';
+  final tilde = const {'insert':2,'delete':3,'pgup':5,'pgdn':6,
+    'f5':15,'f6':17,'f7':18,'f8':19,'f9':20,'f10':21,'f11':23,'f12':24}[name];
+  if (tilde != null) return '\x1b[$tilde${modifier > 1 ? ';$modifier' : ''}~';
+  if (name == 'backspace' || name == 'shift-tab') {
+    if (ctrl || alt) return null; // No additional Backspace/backtab modifiers are defined by this toolbar.
+    return name == 'backspace' ? '\x7f' : '\x1b[Z';
+  }
   final shortcut = const {'ctrl-c':'\x03','ctrl-d':'\x04','ctrl-z':'\x1a','ctrl-a':'\x01',
     'ctrl-e':'\x05','ctrl-l':'\x0c','ctrl-r':'\x12','ctrl-u':'\x15','ctrl-w':'\x17'}[name];
   if (shortcut != null) return shortcut;

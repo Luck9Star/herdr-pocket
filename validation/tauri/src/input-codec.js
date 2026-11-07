@@ -2,6 +2,15 @@ const encoder = new TextEncoder();
 const arrows = {up:'A',down:'B',right:'C',left:'D'};
 export function auxiliaryKey(name, applicationCursorMode, {ctrl=false,alt=false}={}) {
   const modifier=1+(ctrl?4:0)+(alt?2:0);
+  const functionKey = /^f(?:[1-9]|1[0-2])$/.test(name) ? Number(name.slice(1)) : 0;
+  if(functionKey >= 1 && functionKey <= 4) {
+    const suffix='PQRS'[functionKey-1];
+    return modifier>1 ? `\x1b[1;${modifier}${suffix}` : `\x1bO${suffix}`;
+  }
+  const extendedKeys={f5:15,f6:17,f7:18,f8:19,f9:20,f10:21,f11:23,f12:24,insert:2,delete:3};
+  const extended=Object.hasOwn(extendedKeys,name) ? extendedKeys[name] : null;
+  if(extended) return `\x1b[${extended}${modifier>1?`;${modifier}`:''}~`;
+  if(name==='backspace' || name==='shift-tab') return modifier>1 ? null : name==='backspace' ? '\x7f' : '\x1b[Z';
   const cursor=arrows[name] ?? ({home:'H',end:'F'})[name];
   if(cursor) return modifier>1 ? `\x1b[1;${modifier}${cursor}` : `\x1b${applicationCursorMode?'O':'['}${cursor}`;
   const page=({pgup:5,pgdn:6})[name];

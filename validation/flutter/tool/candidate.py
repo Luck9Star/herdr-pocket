@@ -10,6 +10,9 @@ import re
 import subprocess
 import tarfile
 import urllib.request
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import terminal_view_ime
 
 SOURCE = Path(__file__).resolve().parents[1]
 
@@ -84,6 +87,7 @@ def apply(destination):
     for name, hashes in metadata['files'].items():
         if digest((target / name).read_bytes()) != hashes['afterSha256']:
             raise ValueError('Unexpected patched source: ' + name)
+    ime_metadata = terminal_view_ime.apply_shim(target, SOURCE)
     for name, expected in metadata.get('upstreamLicenseFiles', {}).items():
         if name not in ('LICENSE', 'NOTICE') or digest((target / name).read_bytes()) != expected:
             raise ValueError('Unexpected upstream license file')
@@ -103,8 +107,11 @@ def apply(destination):
         metadata['selectorRegressionWrapperSha256'] = digest(regression_wrapper.read_bytes())
     overrides.write_text('dependency_overrides:\n  terminal_view:\n    path: candidate/terminal_view\n', encoding='utf-8')
     options = destination / 'analysis_options.yaml'
-    options.write_text(options.read_text(encoding='utf-8').replace(
-        'analyzer:\n', 'analyzer:\n  exclude:\n    - candidate/**\n', 1), encoding='utf-8')
+    options_text = options.read_text(encoding='utf-8')
+    if '    - candidate/**\n' not in options_text:
+        options_text = options_text.replace('analyzer:\n', 'analyzer:\n  exclude:\n    - candidate/**\n', 1)
+    options.write_text(options_text, encoding='utf-8')
+    metadata['imeObservation'] = ime_metadata
     metadata.update({'sourceCommit': os.environ.get('GITHUB_SHA'),
                      'variant': 'experimental-patched',
                      'baselineLockSha256': digest((SOURCE / 'pubspec.lock').read_bytes())})

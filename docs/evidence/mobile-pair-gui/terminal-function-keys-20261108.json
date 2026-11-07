@@ -1,0 +1,677 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-08",
+  "sourceBase": "20ca93cbe435853875e20cbee608a13e24c23fd3",
+  "implementationState": "working-tree prototype; no new device artifact or release established by this record",
+  "evidenceArtifacts": [
+    {
+      "id": "browser-closed-loop-results",
+      "sha256": "f748b39d894125a0612335d247dedf616fc617795302f064492479afc66b326b",
+      "localPathOmitted": true
+    },
+    {
+      "id": "stock-observer-mode-summary",
+      "sha256": "d0ec5d833b27bb5099fc25a8686dfe670583fa50d08857aa1d874c381c7426f7",
+      "localPathOmitted": true
+    },
+    {
+      "id": "host-observer-mode-source-provenance",
+      "sha256": "1ce62dc5e39d219da71aad43d4fbc8cd88b045fa3a4ee3645e3cc078e0250022",
+      "localPathOmitted": true
+    },
+    {
+      "id": "flutter-production-codec-results",
+      "sha256": "6a14ebdd210f49771d135f4584a3df87b72fba60438765a3af88bf4afd967034",
+      "localPathOmitted": true
+    },
+    {
+      "id": "flutter-extracted-ime-method-results",
+      "sha256": "e1de8a0f631157168500b703e3e05fefdd3be116ced3e9d8966606548306c15e",
+      "localPathOmitted": true
+    },
+    {
+      "id": "flutter-two-variant-patch-application",
+      "sha256": "75e3b0ac0326847f483f4c269ff2b6c100efbf5b9390e9de39bfb1b23e30d3ce",
+      "localPathOmitted": true
+    },
+    {
+      "id": "clean-snapshot-tauri-curses",
+      "sha256": "67e68e4b29c936daf756ce3cc658f29e65e3b47f1320c383606ca2d471766bf9",
+      "localPathOmitted": true
+    },
+    {
+      "id": "clean-snapshot-flutter-curses",
+      "sha256": "caec7740b3baa0dd390c15d096ffebaa59ff87b764a88c98b19ce87ec6378905",
+      "localPathOmitted": true
+    },
+    {
+      "id": "clean-snapshot-observer-stock",
+      "sha256": "c05f4fdabcd0a6700d616ce12ebb6f9e50d99acdabd1b852b3d1c0e1a1b704ec",
+      "localPathOmitted": true
+    },
+    {
+      "id": "clean-snapshot-tauri-vite-build-log",
+      "sha256": "8c51a5d154ba4ad89a013f79bbda631e78d9373ba89ed6d7844cb2c81be9c3c8",
+      "localPathOmitted": true
+    },
+    {
+      "id": "clean-snapshot-host-tools-owned-socket-log",
+      "sha256": "ce2349e1f5b71c746817c95a24917e3369e291f167226a4791d96404e12d7be7",
+      "localPathOmitted": true
+    },
+    {
+      "id": "clean-snapshot-tauri-frontend-log",
+      "sha256": "921012a8afdfe5f642f228e68acca6ff22478d5e0b19ba036b6809e1a47891d6",
+      "localPathOmitted": true
+    },
+    {
+      "id": "clean-snapshot-remote-harness-log",
+      "sha256": "7a40d5805b091c66708cf65ab9c18cb1608ac412e35e1e1a91518465d4ac4b0c",
+      "localPathOmitted": true
+    }
+  ],
+  "contract": {
+    "fixture": "validation/shared/terminal-function-keys-v1.json",
+    "fixtureSha256": "a6c887c52dd1202d41b1c3b057ec59ddf4e04ffa800a4bd7637aaefc60091dfc",
+    "keys": [
+      "f1",
+      "f2",
+      "f3",
+      "f4",
+      "f5",
+      "f6",
+      "f7",
+      "f8",
+      "f9",
+      "f10",
+      "f11",
+      "f12",
+      "insert",
+      "delete",
+      "backspace",
+      "shift-tab"
+    ],
+    "modifierPolicy": {
+      "functionInsertDelete": "xterm parameter 1 + (Ctrl ? 4 : 0) + (Alt ? 2 : 0)",
+      "backspace": "DEL 7f only; Ctrl/Alt rejected and one-shot modifiers consumed",
+      "shift-tab": "CSI Z only; Ctrl/Alt rejected and one-shot modifiers consumed"
+    },
+    "scope": "explicit auxiliary controls only; does not transform IME text"
+  },
+  "browserCursesClosedLoop": {
+    "status": "passed",
+    "platform": "macOS desktop Chrome mobile emulation",
+    "browser": "Chrome/156.0.8078.81",
+    "client": "current-worktree Tauri frontend, isolated build",
+    "nativeAndTransport": "synthetic IPC bridge to a self-owned real xterm-256color PTY; no herdr observer, SSH, device store or overlay transport",
+    "ptyGrid": {
+      "cols": 80,
+      "rows": 24
+    },
+    "syntheticApplication": "validation/remote-harness/phone_tui_fixture.py",
+    "modeSource": "raw curses PTY output, including application-cursor enable, injected by the bridge",
+    "inputScope": "only the fixture key sequence; no personal input or credentials",
+    "cases": [
+      {
+        "viewportCss": {
+          "width": 320,
+          "height": 820
+        },
+        "entry": "direct",
+        "frontendTargetReviewed": true,
+        "applicationCursorFromRawCursesOutput": true,
+        "sentHex": [
+          "1b4f42",
+          "09",
+          "7f",
+          "1b5b5a",
+          "1b5b327e",
+          "1b5b337e",
+          "1b4f50",
+          "1b4f50",
+          "1b5b31357e",
+          "1b5b32317e"
+        ],
+        "visibleStates": {
+          "initialVisible": true,
+          "reviewVisible": true,
+          "helpVisible": true,
+          "helpClosed": true
+        },
+        "fixtureResult": {
+          "status": "finished",
+          "actions": [
+            "select-next",
+            "focus-detail",
+            "erase-character",
+            "focus-list",
+            "insert-row",
+            "delete-row",
+            "open-help",
+            "close-help",
+            "refresh",
+            "finish"
+          ],
+          "selected": "Review",
+          "rowCount": 2,
+          "detailLength": 1,
+          "focus": "list",
+          "helpOpen": false,
+          "refreshes": 1
+        }
+      },
+      {
+        "viewportCss": {
+          "width": 320,
+          "height": 820
+        },
+        "entry": "savedTab",
+        "frontendTargetReviewed": true,
+        "applicationCursorFromRawCursesOutput": true,
+        "sentHex": [
+          "1b4f42",
+          "09",
+          "7f",
+          "1b5b5a",
+          "1b5b327e",
+          "1b5b337e",
+          "1b4f50",
+          "1b4f50",
+          "1b5b31357e",
+          "1b5b32317e"
+        ],
+        "visibleStates": {
+          "initialVisible": true,
+          "reviewVisible": true,
+          "helpVisible": true,
+          "helpClosed": true
+        },
+        "fixtureResult": {
+          "status": "finished",
+          "actions": [
+            "select-next",
+            "focus-detail",
+            "erase-character",
+            "focus-list",
+            "insert-row",
+            "delete-row",
+            "open-help",
+            "close-help",
+            "refresh",
+            "finish"
+          ],
+          "selected": "Review",
+          "rowCount": 2,
+          "detailLength": 1,
+          "focus": "list",
+          "helpOpen": false,
+          "refreshes": 1
+        }
+      },
+      {
+        "viewportCss": {
+          "width": 390,
+          "height": 820
+        },
+        "entry": "direct",
+        "frontendTargetReviewed": true,
+        "applicationCursorFromRawCursesOutput": true,
+        "sentHex": [
+          "1b4f42",
+          "09",
+          "7f",
+          "1b5b5a",
+          "1b5b327e",
+          "1b5b337e",
+          "1b4f50",
+          "1b4f50",
+          "1b5b31357e",
+          "1b5b32317e"
+        ],
+        "visibleStates": {
+          "initialVisible": true,
+          "reviewVisible": true,
+          "helpVisible": true,
+          "helpClosed": true
+        },
+        "fixtureResult": {
+          "status": "finished",
+          "actions": [
+            "select-next",
+            "focus-detail",
+            "erase-character",
+            "focus-list",
+            "insert-row",
+            "delete-row",
+            "open-help",
+            "close-help",
+            "refresh",
+            "finish"
+          ],
+          "selected": "Review",
+          "rowCount": 2,
+          "detailLength": 1,
+          "focus": "list",
+          "helpOpen": false,
+          "refreshes": 1
+        }
+      },
+      {
+        "viewportCss": {
+          "width": 390,
+          "height": 820
+        },
+        "entry": "savedTab",
+        "frontendTargetReviewed": true,
+        "applicationCursorFromRawCursesOutput": true,
+        "sentHex": [
+          "1b4f42",
+          "09",
+          "7f",
+          "1b5b5a",
+          "1b5b327e",
+          "1b5b337e",
+          "1b4f50",
+          "1b4f50",
+          "1b5b31357e",
+          "1b5b32317e"
+        ],
+        "visibleStates": {
+          "initialVisible": true,
+          "reviewVisible": true,
+          "helpVisible": true,
+          "helpClosed": true
+        },
+        "fixtureResult": {
+          "status": "finished",
+          "actions": [
+            "select-next",
+            "focus-detail",
+            "erase-character",
+            "focus-list",
+            "insert-row",
+            "delete-row",
+            "open-help",
+            "close-help",
+            "refresh",
+            "finish"
+          ],
+          "selected": "Review",
+          "rowCount": 2,
+          "detailLength": 1,
+          "focus": "list",
+          "helpOpen": false,
+          "refreshes": 1
+        }
+      }
+    ],
+    "failures": [],
+    "limitation": "This proves browser controls, encoded bytes, and real curses effects through the synthetic bridge. It does not prove the stock or patched herdr input/observer path, mobile OS, system IME, native pairing or SSH."
+  },
+  "stockHerdrObservation": {
+    "status": "passed",
+    "version": "herdr 0.9.5",
+    "binarySha256": "fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2",
+    "binaryBuiltFromPinnedSourceVerified": false,
+    "fixtureSha256": "0fd2f9c3a491b249add9c5a3ad8e2b59d3f7d8ebc2c58b72d7b29146ebdf439c",
+    "scope": "dedicated disposable local Mac herdr session and IPC observers; synthetic curses application in a newly created captured PTY; no application input or SSH",
+    "applicationPty": {
+      "stdinIsTTY": true,
+      "stdoutIsTTY": true,
+      "initialGrid": {
+        "cols": 119,
+        "rows": 40
+      },
+      "sharedOuterPtySizes": [
+        [
+          119,
+          40
+        ]
+      ],
+      "modeCommandsObserved": {
+        "decckmOn": true,
+        "decckmOff": true,
+        "keypadApplicationOn": true,
+        "keypadApplicationOff": true,
+        "alternate1049On": true,
+        "alternate1049Off": true
+      },
+      "smkxExactHex": "1b5b3f31681b3d",
+      "smkxExactSeen": true,
+      "applicationResult": {
+        "status": "timeout",
+        "exitCode": 1,
+        "actions": [],
+        "interpretation": "bounded no-input observation reached its own deadline; not an interactive walkthrough"
+      }
+    },
+    "observerFrameExamples": [
+      {
+        "phase": "first-full-during-application",
+        "seq": 1,
+        "full": true,
+        "width": 120,
+        "height": 40,
+        "payloadBytes": 6220,
+        "syntheticTitleVisible": true,
+        "modeFlags": {
+          "decckmOn": false,
+          "decckmOff": false,
+          "keypadApplicationOn": false,
+          "keypadApplicationOff": false,
+          "alternate1049On": false,
+          "alternate1049Off": false
+        },
+        "lastApplicationDecckmCommandBeforeFrame": true
+      },
+      {
+        "phase": "delta-entering-application",
+        "seq": 3,
+        "full": false,
+        "width": 120,
+        "height": 40,
+        "payloadBytes": 5314,
+        "syntheticTitleVisible": true,
+        "modeFlags": {
+          "decckmOn": false,
+          "decckmOff": false,
+          "keypadApplicationOn": false,
+          "keypadApplicationOff": false,
+          "alternate1049On": false,
+          "alternate1049Off": false
+        },
+        "lastApplicationDecckmCommandBeforeFrame": true
+      }
+    ],
+    "outputFieldNames": [
+      "bytes",
+      "encoding",
+      "full",
+      "height",
+      "seq",
+      "type",
+      "width"
+    ],
+    "timing": {
+      "crossProcessComparableClockVerified": true,
+      "clock": "Unix epoch nanoseconds; process-monotonic clocks were not compared",
+      "absoluteTimestampsOmitted": true
+    },
+    "interpretation": "The application emitted enable commands while the title-bearing observer full and delta omitted application-cursor, application-keypad and alternate-screen commands. Observer renderer state is not evidence of the application input mode. No direct runtime mode_get read was performed.",
+    "cleanup": {
+      "launchedProcessExited": true,
+      "ownedApplicationTree": [
+        {
+          "kind": "wrapper",
+          "aliveBeforeCleanup": false,
+          "remaining": false
+        },
+        {
+          "kind": "application",
+          "aliveBeforeCleanup": false,
+          "remaining": false
+        },
+        {
+          "kind": "outerShell",
+          "aliveBeforeCleanup": false,
+          "remaining": false
+        }
+      ]
+    },
+    "finalModeOnlyRegression": {
+      "binarySha256": "fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2",
+      "canvas": {
+        "cols": 120,
+        "rows": 40
+      },
+      "capabilityVerified": false,
+      "expectation": "stock",
+      "initialFull": true,
+      "initialModeSynchronized": false,
+      "initialVisible": true,
+      "ptySampleCount": 116,
+      "scope": "isolated local CLI observer; no SSH or shared PTY resize",
+      "sequenceContiguous": true,
+      "sharedPtySizeUnchanged": true,
+      "status": "passed",
+      "steps": [
+        {
+          "freshVisualObserved": true,
+          "modeOnlyFrameObserved": false
+        },
+        {
+          "freshVisualObserved": true,
+          "modeOnlyFrameObserved": false
+        },
+        {
+          "freshVisualObserved": true,
+          "modeOnlyFrameObserved": false
+        },
+        {
+          "freshVisualObserved": true,
+          "modeOnlyFrameObserved": false
+        }
+      ],
+      "version": "herdr 0.9.5"
+    }
+  },
+  "hostObserverModeCandidate": {
+    "upstreamCommit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+    "patch": "validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch",
+    "baseInputPatchSha256": "c07a1637e3b72b13c660dc4cc3c2cca50ef383b66d0400a3208bd9079434ab00",
+    "observerIncrementSha256": "388620b9bb4c9994bae4d99ff18d3bbb8fdd52848793e62ae4889f2c7cee49d4",
+    "combinedPatchSha256": "7f89a79677a456f024bd73555130861cd1b0b47e9d4d69f98d4e18ffc7f1ed8a",
+    "sourceApplication": {
+      "sequenceAndCombinedApplied": true,
+      "resultingFilesIdentical": true
+    },
+    "formatAndWhitespace": {
+      "rustfmt_1_96_0": true,
+      "gitDiffCheck": true
+    },
+    "modesProposed": [
+      "application cursor keys (DECCKM)",
+      "bracketed paste"
+    ],
+    "rustTests": {
+      "status": "not-run",
+      "reason": "offline cargo cache lacks locked clap_complete 4.6.11; pinned Rust 1.96.1 and Zig 0.16 not available; no installs or network"
+    },
+    "coverageWrittenNotExecuted": [
+      "observer first full and all four mode pairs",
+      "mode-only change and two independent observers",
+      "full writer queue and recovery without new PTY output",
+      "unchanged frame skipped",
+      "target identity and disconnected replacement",
+      "TerminalAttach no injection",
+      "mode getter poisoned lock closes only observer",
+      "no observer PTY resize/attach ownership"
+    ],
+    "runtimeStatus": "not compiled or run; no live server, SSH or network validation",
+    "limitation": "Mode snapshot can lag child output not yet parsed; frame delivery and input are independent paths."
+  },
+  "flutter": {
+    "codec": {
+      "status": "passed",
+      "dartVersion": "3.11.0 macos_arm64",
+      "execution": "direct production remote_auxiliary.dart import with locked terminal_view 0.5.0 core",
+      "allSharedVectorsMatchedInBothCursorModes": true,
+      "oneShotConsumption": "passed",
+      "disabledZeroOutput": "passed",
+      "legacyEncodingChecks": "passed",
+      "pinnedTerminalCtrlF1Hex": "1b4f3550",
+      "toolbarCtrlF1Hex": "1b5b313b3550"
+    },
+    "imeMethodProbe": {
+      "status": "passed",
+      "checks": [
+        "native update callback before composing/commit",
+        "range-only same-text begin/cancel notifications",
+        "synchronous Ctrl/Alt consumption",
+        "retired auxiliary action tokens",
+        "original Enter/Ctrl-C/letter and F1 zero sends while composing",
+        "no edit rewrite",
+        "single nonempty Chinese commit",
+        "next explicit F1 unmodified",
+        "wrong-source/old-epoch callbacks ignored",
+        "unavailable editor fails closed",
+        "keyboard visibility not used"
+      ],
+      "scope": "actual patched CustomTextEdit updateEditingValue/setEditingState bodies and production RemoteTerminalIme read/blocks plus RemotePage composition callback/auxiliary getters/send bodies executed unchanged; Flutter value, editing-client, state and gate environment are stubs; no SDK/widget/system IME/device proof"
+    },
+    "preparation": {
+      "variants": [
+        "reference renderer with IME observation",
+        "combining candidate with the same IME observation"
+      ],
+      "officialArchiveSha256": "5f8cf2e999b9b98224430b7ef2a32d378062073fa4e566f1f52d89ac9d9ac9cf",
+      "imePatchSha256": "490e6ad48e71ea91726521fef1cc05e55d5542237722600629dfccb014de2d5b",
+      "bothSourcePatchApplicationsAndHashesMatched": true,
+      "scope": "isolated pinned-source preparation and SHA checks; two Flutter variants, not two GUI runtimes",
+      "cleanSnapshotToolSuiteRecheck": "passed in the clean scoped batch; Python tools only, not Flutter SDK/runtime"
+    },
+    "widgetRegressions": "written; not executed in this local evidence",
+    "sdkAnalyzerWidgetSystemImeDeviceSsh": "not run"
+  },
+  "terminfoDifference": {
+    "environment": "this Mac xterm-256color entry",
+    "kbs": "08",
+    "toolbarBackspace": "7f",
+    "choice": "explicit shared toolbar contract uses DEL; Ctrl/Alt Backspace and reverse Tab are rejected"
+  },
+  "notEstablished": [
+    "ordinary herdr writable input",
+    "compiled or running observer-mode host candidate",
+    "Flutter SDK/widget correctness",
+    "Android/iOS app runtime or real system IME",
+    "native device-key authorization or SSH round trip in this batch",
+    "physical-phone touch or font acceptance",
+    "five-platform support or three-overlay-network concurrency"
+  ],
+  "nextValidation": [
+    "build and test the fixed-source host candidate with pinned offline dependencies and toolchains",
+    "verify observer mode-only transitions, backpressure recovery and same-target full/input behavior on the compiled candidate",
+    "run prepared Flutter reference/candidate analyzer and widget regressions, including same-text composition transitions and stale auxiliary actions",
+    "run both native Android routes through actual device-key SSH, protected input and the curses walkthrough; preserve stock read-only and unknown-result non-replay boundaries",
+    "test physical-phone touch, Chinese IME, then remaining platforms and overlay concurrency separately"
+  ],
+  "snapshotValidation": {
+    "source": "clean HEAD archive plus this scoped batch; unrelated uncommitted ZeroTier work excluded",
+    "checks": [
+      {
+        "name": "Flutter Python preparation tools",
+        "passed": 15,
+        "failed": 0,
+        "scope": "actual pinned archive SHA and both reference/combining preparation modes"
+      },
+      {
+        "name": "Tauri frontend",
+        "passed": 394,
+        "failed": 0,
+        "skipped": 0,
+        "scope": "frontend regression, not native mobile runtime"
+      },
+      {
+        "name": "remote harness",
+        "passed": 67,
+        "failed": 0,
+        "scope": "driver and fixture regression, not phone or SSH runtime"
+      },
+      {
+        "name": "host candidate Python tools",
+        "passed": 19,
+        "failed": 0,
+        "scope": "self-owned Unix-socket peer and mocked build calls; run outside a socket-denying sandbox"
+      },
+      {
+        "name": "POSIX helper",
+        "passed": 15,
+        "failed": 0,
+        "scope": "self-created temporary fixtures, no real authorization files"
+      }
+    ],
+    "verification": "clean scoped snapshot; Node, remote harness, Vite and permitted-owned-socket host summaries checked; Flutter preparation/helper results independently verified by the coordinating task",
+    "aggregateTotalIntentionallyOmitted": true,
+    "tauriViteBuild": {
+      "status": "passed",
+      "scope": "production frontend bundling only; no native device runtime"
+    }
+  },
+  "productionCodecPtyWalkthrough": {
+    "status": "passed",
+    "scope": "each production codec independently drives the same self-owned real xterm-256color PTY; no Flutter engine, GUI widget, system IME, herdr observer or SSH in this path",
+    "application": "validation/remote-harness/phone_tui_fixture.py",
+    "probe": "validation/remote-harness/phone_tui_probe.py",
+    "ptyGrid": {
+      "cols": 80,
+      "rows": 24
+    },
+    "modeEvidence": "application cursor and alternate enter/leave sequences seen in the application output; termios restoration checked separately",
+    "routes": [
+      {
+        "route": "tauri",
+        "scope": "production codec to owned local PTY",
+        "passed": true,
+        "exitCode": 0,
+        "applicationCursor": true,
+        "enteredAlternateScreen": true,
+        "leftAlternateScreen": true,
+        "modesRestored": true,
+        "viewportUnchanged": true,
+        "application": {
+          "status": "finished",
+          "actions": [
+            "select-next",
+            "focus-detail",
+            "erase-character",
+            "focus-list",
+            "insert-row",
+            "delete-row",
+            "open-help",
+            "close-help",
+            "refresh",
+            "finish"
+          ],
+          "selected": "Review",
+          "rowCount": 2,
+          "detailLength": 1,
+          "focus": "list",
+          "helpOpen": false,
+          "refreshes": 1
+        }
+      },
+      {
+        "route": "flutter",
+        "scope": "production codec to owned local PTY",
+        "passed": true,
+        "exitCode": 0,
+        "applicationCursor": true,
+        "enteredAlternateScreen": true,
+        "leftAlternateScreen": true,
+        "modesRestored": true,
+        "viewportUnchanged": true,
+        "application": {
+          "status": "finished",
+          "actions": [
+            "select-next",
+            "focus-detail",
+            "erase-character",
+            "focus-list",
+            "insert-row",
+            "delete-row",
+            "open-help",
+            "close-help",
+            "refresh",
+            "finish"
+          ],
+          "selected": "Review",
+          "rowCount": 2,
+          "detailLength": 1,
+          "focus": "list",
+          "helpOpen": false,
+          "refreshes": 1
+        }
+      }
+    ]
+  }
+}

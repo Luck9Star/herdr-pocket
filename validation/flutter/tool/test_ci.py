@@ -88,7 +88,8 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
                 target.write_text(text)
             (app / 'ios/Runner/Info.plist').write_bytes(plistlib.dumps({}))
             (app / 'android/app/src/main/kotlin/dev/herdr/herdr_flutter_probe').mkdir(parents=True)
-        with patch.object(ci, 'run', side_effect=create) as command:
+        with patch.object(ci, 'run', side_effect=create) as command, \
+                patch.object(ci.terminal_view_ime, 'prepare_reference'):
             ci.prepare(app)
         command.assert_called_once()
         return app
@@ -115,6 +116,10 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(source).hexdigest(), checksums[self.diagnostic])
         app = self.flutter_scaffold()
         pubspec = (app / 'pubspec.yaml').read_text()
+        self.assertIn('  terminal_view:\n    path: candidate/reference_terminal_view\n', pubspec)
+        lock = (app / 'pubspec.lock').read_text()
+        self.assertIn('      path: "candidate/reference_terminal_view"', lock)
+        self.assertEqual(lock.count('      path: "candidate/reference_terminal_view"'), 1)
         self.assertEqual(pubspec.count('    - assets/shared/' + self.diagnostic + '\n'), 1)
         root = self.tauri_source()
         subprocess.run([shutil.which('node'), root / 'scripts/prepare-fixtures.mjs'], cwd=root,
@@ -164,6 +169,7 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
         with patch.object(candidate, 'SOURCE', source), \
                 patch.dict(os.environ, {'GITHUB_ACTIONS': 'true', 'RUNNER_TEMP': str(self.root), 'GITHUB_SHA': 'a' * 40}), \
                 patch.object(candidate.urllib.request, 'urlopen', return_value=io.BytesIO(blob)), \
+                patch.object(candidate.terminal_view_ime, 'apply_shim', return_value={'fixture': True}), \
                 redirect_stdout(io.StringIO()):
             candidate.apply(app)
         self.assertEqual((app / 'candidate/terminal_view/source.txt').read_bytes(), after)

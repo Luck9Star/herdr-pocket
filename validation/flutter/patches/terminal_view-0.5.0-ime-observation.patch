@@ -1,0 +1,76 @@
+--- a/lib/src/terminal_view.dart
++++ b/lib/src/terminal_view.dart
+@@ -48,6 +48,7 @@
+     this.deleteDetection = false,
+     this.shortcuts,
+     this.onKeyEvent,
++    this.onEditingValueChanged,
+     this.readOnly = false,
+     this.hardwareKeyboardOnly = false,
+     this.simulateScroll = true,
+@@ -136,6 +137,10 @@
+   /// Keyboard event handler of the terminal. This has higher priority than
+   /// [shortcuts] and input handler of the terminal.
+   final FocusOnKeyEventCallback? onKeyEvent;
++
++  /// Every real text-input update, before composition or committed text is handled.
++  /// Observers must not alter the editing state or send text from this callback.
++  final void Function(TextEditingValue)? onEditingValueChanged;
+ 
+   /// True if no input should send to the terminal.
+   final bool readOnly;
+@@ -313,6 +318,7 @@
+           widget.terminal.keyInput(TerminalKey.backspace);
+         },
+         onComposing: _onComposing,
++        onEditingValueChanged: widget.onEditingValueChanged,
+         onAction: (action) {
+           _scrollToBottom();
+           // Android sends TextInputAction.newline when the user presses the virtual keyboard's enter key.
+@@ -433,6 +439,10 @@
+     widget.onSecondaryTapUp?.call(details, offset);
+   }
+ 
++  /// Read-only view of the current platform text-input client, if mounted.
++  TextEditingValue? get currentTextEditingValue =>
++      _customTextEditKey.currentState?.currentTextEditingValue;
++
+   bool get hasInputConnection {
+     return _customTextEditKey.currentState?.hasInputConnection == true;
+   }
+--- a/lib/src/ui/custom_text_edit.dart
++++ b/lib/src/ui/custom_text_edit.dart
+@@ -9,6 +9,7 @@
+     required this.onInsert,
+     required this.onDelete,
+     required this.onComposing,
++    this.onEditingValueChanged,
+     required this.onAction,
+     required this.onKeyEvent,
+     required this.focusNode,
+@@ -29,6 +30,8 @@
+ 
+   final void Function(String?) onComposing;
+ 
++  final void Function(TextEditingValue)? onEditingValueChanged;
++
+   final void Function(TextInputAction) onAction;
+ 
+   final KeyEventResult Function(FocusNode, KeyEvent) onKeyEvent;
+@@ -113,6 +116,7 @@
+ 
+   void setEditingState(TextEditingValue value) {
+     _currentEditingState = value;
++    widget.onEditingValueChanged?.call(value);
+     _connection?.setEditingState(value);
+   }
+ 
+@@ -208,6 +212,8 @@
+   @override
+   void updateEditingValue(TextEditingValue value) {
+     _currentEditingState = value;
++    // Notify for range-only updates too, before onComposing/onInsert can emit text.
++    widget.onEditingValueChanged?.call(value);
+ 
+     // Get input after composing is done
+     if (!_currentEditingState.composing.isCollapsed) {

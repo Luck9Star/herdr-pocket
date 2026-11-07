@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 60
     env:
       BASE_SHA: 2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01
-      PATCH_SHA256: c07a1637e3b72b13c660dc4cc3c2cca50ef383b66d0400a3208bd9079434ab00
+      PATCH_SHA256: 7f89a79677a456f024bd73555130861cd1b0b47e9d4d69f98d4e18ffc7f1ed8a
       CARGO_BUILD_JOBS: 2
       CARGO_PROFILE_DEV_DEBUG: 0
     steps:
@@ -59,7 +59,11 @@ jobs:
       - name: Check atomic input guard and build the fixture server
         working-directory: fixture-source
         run: |
-          cargo test --locked --package herdr pocket_input_guards_identity_rejects_bad_bytes_and_never_resizes -- --nocapture
+          set -o pipefail
+          for case in pocket_input_guards_identity_rejects_bad_bytes_and_never_resizes observer_input_modes_are_per_client_and_survive_backpressure unreadable_observer_modes_close_only_that_observer_without_false_modes; do
+            cargo test --locked --package herdr "$case" -- --nocapture | tee "$RUNNER_TEMP/input-test.log"
+            grep -Fq 'test result: ok. 1 passed; 0 failed;' "$RUNNER_TEMP/input-test.log"
+          done
           # 0.9.5 selects herdr-dev whenever this binary has debug assertions;
           # the loopback harness intentionally exercises the release `herdr` path.
           # Keep dev optimisation/profile and the normal test build; set this on
@@ -67,6 +71,9 @@ jobs:
           cargo rustc --locked --package herdr --bin herdr -- -C debug-assertions=no
           mkdir "$RUNNER_TEMP/input-fixture"
           cp target/debug/herdr LICENSE "$RUNNER_TEMP/input-fixture/"
+          python3 "$GITHUB_WORKSPACE/validation/remote-harness/observer_mode_probe.py" \
+            --binary "$RUNNER_TEMP/input-fixture/herdr" --expect candidate \
+            --cols 120 --rows 40 | tee "$RUNNER_TEMP/input-fixture/observer-input-modes.json"
           cp "$GITHUB_WORKSPACE/validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch" "$RUNNER_TEMP/input-fixture/"
           python3 - <<'PY'
           import hashlib,json,os,pathlib,signal,socket,subprocess,tempfile,time
@@ -131,7 +138,7 @@ jobs:
     timeout-minutes: 90
     env:
       BASE_SHA: 2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01
-      PATCH_SHA256: c07a1637e3b72b13c660dc4cc3c2cca50ef383b66d0400a3208bd9079434ab00
+      PATCH_SHA256: 7f89a79677a456f024bd73555130861cd1b0b47e9d4d69f98d4e18ffc7f1ed8a
       ZIG_SHA256: 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
       CARGO_BUILD_JOBS: 2
       GIT_CONFIG_NOSYSTEM: '1'

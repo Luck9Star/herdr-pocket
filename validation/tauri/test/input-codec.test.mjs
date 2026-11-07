@@ -48,3 +48,18 @@ test('toolbar holds both modifiers, toggles/cancels without writes, and always r
   assert.equal(keys.toggle('alt',false),false);assert.equal(keys.held,false);
   keys.toggle('ctrl',true);assert.equal(keys.take('tab',false,true),null);assert.equal(keys.held,false);
 });
+
+test('shared function-key contract is exact in normal and application cursor modes', async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const fixture=JSON.parse(await readFile(new URL('../../shared/terminal-function-keys-v1.json',import.meta.url),'utf8'));
+  assert.equal(fixture.schemaVersion,1);assert.equal(fixture.cases.length,64);
+  for(const {key,ctrl,alt,expectedHex} of fixture.cases)for(const application of [false,true]) {
+    const value=auxiliaryKey(key,application,{ctrl,alt});
+    assert.equal(value===null?null:Buffer.from(value).toString('hex'),expectedHex,`${key} ctrl=${ctrl} alt=${alt} app=${application}`);
+  }
+  for(const key of ['backspace','shift-tab']) {
+    const modifiers=new AuxiliaryModifiers();modifiers.toggle('ctrl',true);modifiers.toggle('alt',true);
+    assert.equal(modifiers.take(key,false,true),null);assert.equal(modifiers.held,false);
+    assert.notEqual(modifiers.take(key,false,true),null);
+  }
+});

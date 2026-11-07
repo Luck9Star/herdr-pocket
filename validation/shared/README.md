@@ -30,3 +30,7 @@
 `tailscale-managed-v1.json` 定义 TS01–TS12：显式授权、完整二进制 StateStore、不可换绑的节点、迟到回调退休、Close 失败恢复、Android 私有目录、跨 provider 隔离及真实手机闭环。共享合同不改变字体或终端负载；隔离 native/JNI 检查不代表两套 GUI、设备或真实三网通过，15 格和 20 格矩阵仍需独立证据。
 
 `tailscale-settings-v1.json` 固定公开配置的默认值、精确字节 SHA-256 绑定（4 个正向向量）及 21 个拒绝向量。Rust 和 Dart 保存／导入／启动对齐；授权 URL 与公开 control URL 的上限分别为 4096／2048 bytes。它不含任何真实身份或授权链接，也不改变终端公平比较 fixture。
+
+## 手机终端功能键
+
+`terminal-function-keys-v1.json` 为 F1–F12、Insert、Delete、Backspace 和 Shift+Tab 各列出普通、Ctrl、Alt、Ctrl+Alt 四种结果。十六进制表示一次显式按键要发出的字节，空值表示该组合不可用。两种光标模式都检查这 64 组向量。方向键还须根据当前目标的应用光标模式另行验证。[两套编码器与 TUI 实测](../../docs/48-mobile-terminal-function-keys.md)

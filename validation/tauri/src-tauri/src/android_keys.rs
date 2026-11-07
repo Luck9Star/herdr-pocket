@@ -199,3 +199,31 @@ pub(crate) fn open_network_auth<R: Runtime>(
         .map_err(|_| "network_auth_open_unavailable")?;
     Ok(())
 }
+
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+struct ZeroTierArgs<'a>{action:&'a str,handle:Option<&'a str>,instance_id:Option<&'a str>,expected_phase:Option<&'a str>,operation_id:i64}
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+struct ZeroTierFenceArgs{operation_id:i64}
+pub(crate) fn zerotier_status<R:Runtime>(app:&tauri::AppHandle<R>)->std::result::Result<crate::zerotier_device::Status,String>{
+ let bridge=app.try_state::<ConfigRoot<R>>().ok_or("zerotier_device_unavailable")?;
+ let reply:serde_json::Value=bridge.0.run_mobile_plugin("zeroTierDeviceStatus",()).map_err(|_|"zerotier_device_unavailable")?;
+ let payload=reply.as_object().filter(|o|o.len()==1).and_then(|o|o.get("payload")).cloned().ok_or("zerotier_device_unavailable")?;
+ crate::zerotier_device::Status::checked(payload)
+}
+pub(crate) fn zerotier_write<R:Runtime>(app:&tauri::AppHandle<R>,action:&str,handle:Option<&str>,instance_id:Option<&str>,expected_phase:Option<&str>)->std::result::Result<Option<crate::zerotier_device::Device>,String>{
+ let bridge=app.try_state::<ConfigRoot<R>>().ok_or("zerotier_device_result_unknown")?;
+ let operation_id=crate::zerotier_device::next_operation_id()?;
+ let reply=crate::zerotier_device::settle_with_fence(||{
+  std::panic::catch_unwind(std::panic::AssertUnwindSafe(||bridge.0.run_mobile_plugin::<serde_json::Value>("zeroTierDeviceWrite",ZeroTierArgs{action,handle,instance_id,expected_phase,operation_id}))).map_err(|_|"zerotier_device_result_unknown".to_string())?.map_err(|_|"zerotier_device_result_unknown".to_string())
+ },||{
+  let value:serde_json::Value=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||bridge.0.run_mobile_plugin("zeroTierDeviceFence",ZeroTierFenceArgs{operation_id}))).map_err(|_|"zerotier_device_unavailable")?.map_err(|_|"zerotier_device_unavailable")?;
+  let obj=value.as_object().filter(|o|o.len()==1).ok_or("zerotier_device_unavailable")?;
+  obj.get("finished").and_then(|x|x.as_bool()).ok_or_else(||"zerotier_device_unavailable".to_string())
+ },||std::thread::sleep(std::time::Duration::from_millis(100)))?;
+ let o=reply.as_object().ok_or("zerotier_device_result_unknown")?;
+ let present=o.get("present").and_then(|v|v.as_bool()).ok_or("zerotier_device_result_unknown")?;
+ let value=if present && o.len()==2 {o.get("device").cloned().ok_or("zerotier_device_result_unknown")?} else if !present && o.len()==1 {serde_json::Value::Null} else {return Err("zerotier_device_result_unknown".into())};
+ crate::zerotier_device::checked_write(action,handle,value)
+}

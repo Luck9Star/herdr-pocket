@@ -14,6 +14,8 @@ import zipfile
 import android_tailscale
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / 'validation/network-profiles'))
+from android_sources import production_java_hashes
 sys.path.insert(0, str(ROOT / 'validation/tauri/scripts'))
 from js_notices import collect as collect_js_notices, verify_zip as verify_js_notices
 SYMBOLS = ['heeler_et_stream_connect', 'heeler_et_stream_read', 'heeler_et_stream_write',
@@ -200,6 +202,10 @@ def main():
                   'apkSha256': sha(a.output / 'app.apk'), 'nativeManifestSha256': sha(a.output / 'native-manifest.json'),
                   'build': 'passed', 'staticInspection': 'passed', 'androidLoad': 'not run',
                   'installation': 'not run', 'node': 'not run'}
+        java_root = ROOT / 'validation/network-profiles/native/android'
+        report['androidNetworkVaultSources'] = production_java_hashes(java_root)
+        report['androidNetworkVaultSourceListSHA256'] = sha(java_root / 'android-production-sources.txt')
+        report['androidNetworkVaultGradleSHA256'] = sha(java_root / 'network-secrets.gradle')
         if a.app == 'tauri':
             notices = collect_js_notices(ROOT / 'validation/tauri')
             report['tauriJavaScriptNotices'] = verify_js_notices(a.output / 'app.apk', notices, 'assets/')

@@ -4,6 +4,47 @@ Shared native sources for the Flutter and Tauri Android hosts. Requires Android 
 
 Apply `network-secrets.gradle` with `herdrNetworkSecretsDir` set to this directory, after the Android plugin. There are no third-party dependencies. Call blocking APIs off the UI thread.
 
+## Android production source boundary (2026-11-08)
+
+`android-production-sources.txt` is the complete shared Java production input
+list: 13 top-level files covering the existing EasyTier vault/config, Tailscale
+state/config, and ZeroTier device core/envelope/wrapper/metadata service. Gradle
+rejects a missing, empty, duplicate or non-basename Java entry, refuses symbolic
+links for the manifest and listed Java sources, and checks every
+listed file before configuration succeeds. Its `Sync` copies only those inputs
+into the generated source root. It executes on each build so a reused build
+directory loses obsolete nested sources and unlisted drafts before Kotlin or
+Java compilation. Packaging provenance must use this same manifest, not a glob.
+
+`AndroidZeroTierNative.java` remains a separate JNI candidate and is **not** in
+this production slice. Neither the device store nor the metadata service refers
+to that class. Their narrow `IdentityFactory` and `NativeOwner` capabilities
+still require a vetted native binding for activation; no fallback generates an
+identity or pretends a runtime retired. Without installation, the service returns
+exactly `available: false` and null device/pending records, and valid mutations
+fail with `device store unavailable`. No native library is loaded and no store
+directory is created. Publishing this metadata slice needs no ZeroTier upstream
+patch or stream draft; enabling a real identity/node later requires separate
+native candidate, library and application binding validation.
+
+Offline closure regression (use an already available local Gradle distribution):
+
+```sh
+python3 validation/network-profiles/native/android/tests/run-production-sources.py \
+  --gradle /absolute/local/gradle/bin/gradle --output /private/tmp/new-evidence-dir
+```
+
+The runner uses temporary HOME/Gradle directories and `--offline`, exercises the
+actual Gradle `Sync` and compile-task dependencies, rejects each missing input
+and malformed manifests, rejects manifest/source symlinks before Sync,
+excludes invalid top-level drafts and nested tests,
+and cleans a deliberately stale generated source tree on an unchanged-input
+rerun. It compiles exactly the synced production files with local Android stubs
+and verifies the absent JNI class plus unavailable service/five mutations in a
+real JVM. The Gradle fixture models only source-set/task interfaces; it is not an
+AGP/SDK build or Android device/KeyStore/native-network result. Its local file-lock
+socket may require running outside a restrictive sandbox.
+
 `org.herdr.network.AndroidNetworkSecretStore` provides `create(profileId, provider, mode, secret)`, `status(profileId, provider)`, and `delete(profileId, provider, handle)`. The only provider accepted today is `easytier`; profileId must be 32 lowercase hexadecimal characters. A profile has at most one identity. Create generates separate UUIDv4 handle and instanceId; the latter stays stable across status/restart. An explicit `PRIVATE` mode requires 1–1024 valid UTF-8 bytes without NUL; `PUBLIC_NO_SECRET` requires an empty array. Caller owns and clears its input array in a `finally` block. Never log secrets, exception details, or send secret values back over a bridge. Result contains only profileId, provider, handle, instanceId, mode.
 
 Status returns null only when no file exists. Lock, missing/inaccessible key, bad record, authentication failure, and unsupported provider are errors; no operation silently recreates a key. Bridge code should classify failures into safe public codes without exposing original exception messages. After an interrupted or unknown-result create, query status before any further action; never automatically retry a write. Delete verifies the three identifiers and protected record, deletes the key first, then unlinks the record. An unlink failure can leave an unreadable record; missing keys and corrupt records require explicit recovery policy, not silent replacement. Destructive recovery is outside this prototype.

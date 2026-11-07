@@ -28,6 +28,13 @@ class BundleTests(unittest.TestCase):
                                    '--commit', 'a' * 40, '--app', 'flutter', '--checks', 'failure']):
             bundle.main()
         report = json.loads((self.path / 'report.json').read_text())
+        java_root = bundle.ROOT / 'validation/network-profiles/native/android'
+        allowlist = java_root / 'android-production-sources.txt'
+        self.assertEqual(report['androidNetworkVaultSources'], {
+            name: bundle.sha(java_root / name) for name in allowlist.read_text().splitlines()})
+        self.assertIn('AndroidZeroTierDeviceService.java', report['androidNetworkVaultSources'])
+        self.assertNotIn('AndroidZeroTierNative.java', report['androidNetworkVaultSources'])
+        self.assertEqual(report['androidNetworkVaultSourceListSHA256'], bundle.sha(allowlist))
         self.assertEqual(report['sourceChecks'], 'failure')
         self.assertEqual(report['transportChecks'], 'not_run')
         self.assertEqual(report['terminalCandidateManifestSha256'], bundle.sha(candidate))

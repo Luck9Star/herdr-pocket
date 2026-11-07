@@ -5,6 +5,8 @@ root = Path(__file__).resolve().parents[1]
 repo = root.parents[1]
 sys.path.insert(0, str(repo / 'validation/shared'))
 from android_notices import verify as verify_packaged_notices
+sys.path.insert(0, str(repo / 'validation/network-profiles'))
+from android_sources import production_java_hashes
 sys.path.insert(0, str(root / 'scripts'))
 from js_notices import collect as collect_js_notices, verify_zip as verify_js_notices
 out = root / 'artifacts'
@@ -95,7 +97,8 @@ if manifest['platform']=='android' and manifest['buildOutcome']=='success':
     native=repo/'validation/pairing/native/android'
     manifest['androidSignerSources']={f.name:sha(f) for f in sorted(native.glob('*.java'))}
     network_vault=repo/'validation/network-profiles/native/android'
-    manifest['androidNetworkVaultSources']={f.name:sha(f) for f in sorted(network_vault.glob('*.java'))}
+    manifest['androidNetworkVaultSources']=production_java_hashes(network_vault)
+    manifest['androidNetworkVaultSourceListSHA256']=sha(network_vault/'android-production-sources.txt')
     manifest['androidNetworkVaultGradleSHA256']=sha(network_vault/'network-secrets.gradle')
     manifest['androidNetworkBridgeSHA256']=sha(root/'android/DeviceKeysPlugin.kt')
     network_source=repo/'validation/android-network-source'

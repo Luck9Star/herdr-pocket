@@ -7,13 +7,18 @@ import 'network_identity_dialog.dart';
 import 'network_runtime.dart';
 import 'network_login_dialog.dart';
 import 'remote_adapter.dart';
+import 'zerotier_device.dart';
+import 'zerotier_device_dialog.dart';
 
 class NetworkProfilesPage extends StatefulWidget {
-  const NetworkProfilesPage({super.key,required this.catalog,required this.closeTabs,this.identityStore,this.runtime});
+  const NetworkProfilesPage({super.key,required this.catalog,required this.closeTabs,this.identityStore,this.runtime,
+    this.zeroTierDeviceStore,this.beforeZeroTierForget});
   final HostCatalog catalog;
   final void Function(Set<String>) closeTabs;
   final NetworkIdentityStore? identityStore;
   final NativeNetworkRuntime? runtime;
+  final ZeroTierDeviceStore? zeroTierDeviceStore;
+  final BeforeZeroTierForget? beforeZeroTierForget;
   @override
   State<NetworkProfilesPage> createState() => _NetworkProfilesPageState();
 }
@@ -201,9 +206,15 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> with WidgetsB
   }
   Future<void> localIdentity(NetworkProfile profile) async {
     if (!canChange(profile)) return;
+    if (profile.provider == 'zerotier') { await sharedZeroTierDevice(); return; }
     await showDialog<void>(context:context,builder:(_) => NetworkIdentityDialog(profile:profile,catalog:catalog,
       closeTabs:widget.closeTabs,store:identities,runtime:runtime));
     if (mounted && currentProfile(profile) && runtime.supported) await nodeStatus(profile);
+  }
+  Future<void> sharedZeroTierDevice() async {
+    if (!available) return;
+    await showDialog<void>(context:context,builder:(_) => ZeroTierDeviceDialog(catalog:catalog,
+      store:widget.zeroTierDeviceStore ?? NativeZeroTierDeviceStore(),beforeForget:widget.beforeZeroTierForget));
   }
   bool loginReady(NetworkProfile profile) {
     final binding = nodes[profile.id]?.binding;
@@ -223,6 +234,8 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> with WidgetsB
     body:SafeArea(child:ListView(padding:const EdgeInsets.all(16),children:[
       const Text('Tailscale、EasyTier、ZeroTier 公开配置可由多台主机复用。本机入网资料单独保管，不随配置导出，也不复制 SSH 私钥或三网身份。'),
       const Text('Android Tailscale / EasyTier 原型可明确启动和停止节点。Tailscale 需本机设备身份与显式授权，等待管理员批准与已就绪分别显示；入网不等于 SSH 或 herdr 成功。缺少原生桥时返回 provider_unavailable。旧主机的 provider 标签仍只是资料。'),
+      OutlinedButton.icon(key:const ValueKey('networks-zerotier-device'),onPressed:available ? sharedZeroTierDevice : null,
+        icon:const Icon(Icons.devices),label:const Text('ZeroTier 共享设备身份 · 全部网络影响')),
       if (notice != null) Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(notice!,key:const ValueKey('networks-notice'))),
       FilledButton.icon(key:const ValueKey('networks-add'),onPressed:available && catalog.networkProfiles.length < maxNetworkProfiles ? () => edit() : null,
         icon:const Icon(Icons.add),label:const Text('新增网络配置')),

@@ -51,6 +51,9 @@ public class ConfigDocumentChannel { public ConfigDocumentChannel(FlutterActivit
         "dev/herdr/herdr_flutter_probe/NetworkIdentityChannel.java": """package dev.herdr.herdr_flutter_probe;
 import io.flutter.plugin.common.BinaryMessenger; import io.flutter.embedding.android.FlutterActivity;
 public class NetworkIdentityChannel { public NetworkIdentityChannel(FlutterActivity a,BinaryMessenger b) {} public void close() {} }""",
+        "dev/herdr/herdr_flutter_probe/ZeroTierDeviceChannel.java": """package dev.herdr.herdr_flutter_probe;
+import io.flutter.plugin.common.BinaryMessenger; import io.flutter.embedding.android.FlutterActivity;
+public class ZeroTierDeviceChannel { public ZeroTierDeviceChannel(FlutterActivity a,BinaryMessenger b) {} public void setForeground(boolean value) {} public void close() {} }""",
         "dev/herdr/pocket/NetworkRuntimeChannel.java": """package dev.herdr.pocket;
 import io.flutter.plugin.common.BinaryMessenger; import io.flutter.embedding.android.FlutterActivity;
 public class NetworkRuntimeChannel { public NetworkRuntimeChannel(FlutterActivity a,BinaryMessenger b) {} public void setForeground(boolean value) {} public void close() {} }""",

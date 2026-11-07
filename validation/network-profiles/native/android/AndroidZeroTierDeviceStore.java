@@ -33,6 +33,16 @@ public final class AndroidZeroTierDeviceStore {
         public final String handle,phase;
         private Pending(String handle,String phase) { this.handle=handle; this.phase=phase; }
     }
+    /** One data-lock snapshot; pending operations and an authenticated device are exclusive. */
+    public static final class Snapshot {
+        public final Device device;
+        public final Pending pendingCreation,pendingDeletion;
+        private Snapshot(ZeroTierDeviceStoreCore.Snapshot value) {
+            device=value.device==null ? null : new Device(value.device);
+            pendingCreation=value.creation==null ? null : new Pending(value.creation.handle,value.creation.phase);
+            pendingDeletion=value.deletion==null ? null : new Pending(value.deletion.handle,value.deletion.phase);
+        }
+    }
     /** Native-only capability; show only handle and state to the user. */
     public static final class UnreadableReview {
         private final AndroidZeroTierDeviceStore store;
@@ -84,10 +94,15 @@ public final class AndroidZeroTierDeviceStore {
         requireUnlocked(); ZeroTierDeviceStoreCore.PublicRecord result=core.status(factory);
         return result==null ? null : new Device(result);
     }
+    public Snapshot statusSnapshot() throws Exception { requireUnlocked(); return new Snapshot(core.snapshot(factory)); }
     public RuntimeLease acquire(String handle) throws Exception {
         requireUnlocked(); return new RuntimeLease(core.acquire(handle,factory,verifier));
     }
     public void forget(String handle) throws Exception { requireUnlocked(); core.forget(handle,factory); }
+    /** First removal from a reviewed GUI; pending deletion is not implicitly resumed. */
+    public void forgetExact(String handle,String instanceId) throws Exception {
+        requireUnlocked(); core.forgetExact(handle,instanceId,factory);
+    }
     public Pending pendingCreation() throws Exception {
         requireUnlocked(); ZeroTierDeviceStoreCore.PendingCreation value=core.pendingStatus();
         return value==null ? null : new Pending(value.handle,value.phase);
@@ -96,6 +111,15 @@ public final class AndroidZeroTierDeviceStore {
         requireUnlocked(); return new Device(core.recoverPendingCreate(handle,factory));
     }
     public void discardPendingCreation(String handle) throws Exception { requireUnlocked(); core.discardPendingCreate(handle); }
+    public Device recoverPendingCreationExact(String handle,String expectedPhase) throws Exception {
+        requireUnlocked(); return new Device(core.recoverPendingCreateExact(handle,expectedPhase,factory));
+    }
+    public void discardPendingCreationExact(String handle,String expectedPhase) throws Exception {
+        requireUnlocked(); core.discardPendingCreateExact(handle,expectedPhase);
+    }
+    public void recoverPendingDeletion(String handle,String expectedPhase) throws Exception {
+        requireUnlocked(); core.recoverPendingDeletion(handle,expectedPhase);
+    }
     public Pending pendingDeletion() throws Exception {
         requireUnlocked(); ZeroTierDeviceStoreCore.PendingDeletion value=core.pendingDeletionStatus();
         return value==null ? null : new Pending(value.handle,value.phase);

@@ -1,5 +1,6 @@
 import { nodePresentation } from './network-node-state.js';
 import { NetworkLoginPoll } from './network-login-poll.js';
+import { openZeroTierDeviceReview } from './zerotier-device-ui.js';
 // A write may have committed or cancelled a connection even when its result is unknown.
 // Always invalidate reviewed hosts and await their refresh before reloading the catalog.
 export async function settleNetworkOperation(work, affected, onAffected, load) {
@@ -10,8 +11,9 @@ export async function settleNetworkOperation(work, affected, onAffected, load) {
   return completed;
 }
 // Network configuration is public metadata; provider identities remain native.
-export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions}) {
+export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions, beforeForgetZeroTier}) {
   const panel=document.getElementById('network-panel'), open=document.getElementById('network-open');
+  let deviceReviewDialog=null;
   let catalog=null, editing=null, identityEditor=null, identityStates=new Map(), nodeStates=new Map(), busy=false, pendingStart=false, stopBusy=false, nodeEpoch=0, loadRevision=0;
   const poller=new NetworkLoginPoll(pollOptions);
   const managed=p=>['easytier','tailscale'].includes(p.provider);
@@ -36,6 +38,7 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
       nodes.set(profile.id,node);
     }catch {nodes.set(profile.id,null);}}}
     if(!current())return false;
+    if(catalog && JSON.stringify(catalog)!==JSON.stringify(fresh))deviceReviewDialog?.invalidate();
     catalog=fresh;identityStates=states;nodeStates=nodes;render(message);
     const pending=fresh.profiles.some(p=>p.provider==='tailscale' && ['starting','needs-login','needs-machine-auth'].includes(nodes.get(p.id)?.state));
     if(!polling && pending)poller.start(live=>load('',true,live));
@@ -84,6 +87,7 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
   function render(message='') {
     if(!catalog)return;clearSecrets();panel.replaceChildren();panel.append(el('h2','网络配置'),el('p','公开配置和本机网络身份分开保存；身份不随配置导出。节点状态不代表已入网。'));
     const status=el('p',message);status.setAttribute('role','status');panel.append(status);
+    panel.append(button('审查 ZeroTier 共享设备',()=>{deviceReviewDialog=openZeroTierDeviceReview({invoke,beforeForget:beforeForgetZeroTier,onSettled:async ids=>{await onAffected(ids);await load();}});}));
     for(const profile of catalog.profiles) {
       const affected=catalog.bindings.filter(b=>b.profileId===profile.id).map(b=>b.hostId);
       const card=el('article','','saved-host-card');card.append(el('h3',profile.label),el('p',`${profile.provider} · ${profile.enabled?'已启用':'已停用'} · 受影响主机：${names(affected)}`));
@@ -129,8 +133,8 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
       const row=el('div','','network-binding');row.append(el('strong',host.name));const select=document.createElement('select');const direct=el('option','系统连接（原有方式）');direct.value='';select.append(direct);for(const p of catalog.profiles){const o=el('option',`${p.label} · ${p.provider}${p.enabled?'':'（已停用）'}`);o.value=p.id;o.disabled=!p.enabled;select.append(o);}select.value=host.networkProfileId || '';row.append(select,button('应用',()=>{const profileId=select.value || null;if(profileId===(host.networkProfileId || null))return;const isDirect=!!host.networkProfileId && !profileId;if(!confirm(isDirect?`解除 ${host.name} 的网络绑定并改为系统直连？这会停止该主机连接。`:`更改 ${host.name} 的网络绑定并停止其连接？`))return;void operation(()=>invoke('network_bind',{hostId:host.id,profileId,expectedCatalog:catalog.revision,confirmedDirect:isDirect}),[host.id]);}));hostSection.append(row);
     }panel.append(hostSection);
   }
-  open.disabled=!native;open.onclick=()=>{retirePublication();clearSecrets();identityEditor=null;panel.hidden=!panel.hidden;if(!panel.hidden)void load();};
+  open.disabled=!native;open.onclick=()=>{deviceReviewDialog?.close();deviceReviewDialog=null;retirePublication();clearSecrets();identityEditor=null;panel.hidden=!panel.hidden;if(!panel.hidden)void load();};
   document.addEventListener('visibilitychange',()=>{retirePublication();clearSecrets();identityEditor=null;if(!document.hidden && !panel.hidden)void load('已返回应用；正在核对原配置与当前节点。');});
   window.addEventListener('pagehide',()=>{retirePublication();clearSecrets();});
-  return {refresh:()=>{if(!panel.hidden)void load();},close:()=>{retirePublication();clearSecrets();identityEditor=null;panel.hidden=true;}};
+  return {refresh:()=>{if(!panel.hidden)void load();},close:()=>{deviceReviewDialog?.close();deviceReviewDialog=null;retirePublication();clearSecrets();identityEditor=null;panel.hidden=true;}};
 }

@@ -1,0 +1,28 @@
+// Offline Gradle/Sync contract fixture; deliberately no Android plugin or SDK.
+plugins { id 'base' }
+class SourceRoot {
+    File source
+    void srcDir(Object value) { assert value instanceof File; source=value }
+}
+class MainSources { SourceRoot java=new SourceRoot() }
+class SourceSets {
+    MainSources mainSet=new MainSources()
+    void main(Closure body) { body.delegate=mainSet; body.resolveStrategy=Closure.DELEGATE_FIRST; body() }
+}
+class AndroidSources {
+    SourceSets sets=new SourceSets()
+    void sourceSets(Closure body) { body.delegate=sets; body.resolveStrategy=Closure.DELEGATE_FIRST; body() }
+}
+def fixtureAndroid=new AndroidSources()
+ext.android = { Closure body -> body.delegate=fixtureAndroid; body.resolveStrategy=Closure.DELEGATE_FIRST; body() }
+ext.herdrNetworkSecretsDir=file(providers.gradleProperty('sharedSourceDir').get())
+apply from: new File(herdrNetworkSecretsDir,'network-secrets.gradle')
+['preBuild','compileUniversalDebugKotlin','compileUniversalDebugJavaWithJavac'].each { name ->
+    tasks.register(name) {
+        doLast {
+            assert fixtureAndroid.sets.mainSet.java.source == layout.buildDirectory.dir('generated/herdr-network-sources').get().asFile
+            assert tasks.named('syncHerdrNetworkSources').get().state.executed
+            println "SOURCE_BOUNDARY_AFTER_SYNC=${name}"
+        }
+    }
+}

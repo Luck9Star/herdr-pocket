@@ -14,6 +14,7 @@ class MainActivity : FlutterActivity() {
     private var documents: ConfigDocumentChannel? = null
     private var networkRuntime: NetworkRuntimeChannel? = null
     private var networkIdentity: NetworkIdentityChannel? = null
+    private var zeroTierDevice: ZeroTierDeviceChannel? = null
     private val worker = Executors.newSingleThreadExecutor()
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
@@ -21,6 +22,7 @@ class MainActivity : FlutterActivity() {
         documents = ConfigDocumentChannel(this, engine.dartExecutor.binaryMessenger)
         networkRuntime = NetworkRuntimeChannel(this, engine.dartExecutor.binaryMessenger)
         networkIdentity = NetworkIdentityChannel(this, engine.dartExecutor.binaryMessenger)
+        zeroTierDevice = ZeroTierDeviceChannel(this, engine.dartExecutor.binaryMessenger)
         MethodChannel(engine.dartExecutor.binaryMessenger, "herdr.pocket/input_journal")
             .setMethodCallHandler { call, result ->
                 if (call.method !in listOf("read", "readAll", "prepare", "complete", "abandon", "resolve", "clear")) result.notImplemented()
@@ -85,11 +87,11 @@ class MainActivity : FlutterActivity() {
                 }
             }
     }
-    override fun onResume() { super.onResume(); networkRuntime?.setForeground(true) }
-    override fun onPause() { networkRuntime?.setForeground(false); super.onPause() }
+    override fun onResume() { super.onResume(); networkRuntime?.setForeground(true); zeroTierDevice?.setForeground(true) }
+    override fun onPause() { zeroTierDevice?.setForeground(false); networkRuntime?.setForeground(false); super.onPause() }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (scanner?.handle(requestCode, resultCode, data) != true &&
             documents?.handle(requestCode, resultCode, data) != true) super.onActivityResult(requestCode, resultCode, data)
     }
-    override fun onDestroy() { scanner?.close(); documents?.close(); networkIdentity?.close(); networkRuntime?.close(); worker.shutdown(); super.onDestroy() }
+    override fun onDestroy() { zeroTierDevice?.close(); scanner?.close(); documents?.close(); networkIdentity?.close(); networkRuntime?.close(); worker.shutdown(); super.onDestroy() }
 }

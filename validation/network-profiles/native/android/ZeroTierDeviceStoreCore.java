@@ -77,6 +77,14 @@ final class ZeroTierDeviceStoreCore {
         final String handle, phase;
         PendingDeletion(String handle,String phase) { this.handle=handle; this.phase=phase; }
     }
+    static final class Snapshot {
+        final PublicRecord device;
+        final PendingCreation creation;
+        final PendingDeletion deletion;
+        Snapshot(PublicRecord device,PendingCreation creation,PendingDeletion deletion) {
+            this.device=device; this.creation=creation; this.deletion=deletion;
+        }
+    }
     /** Opaque, one-shot native review. Only public handle and state may be displayed. */
     static final class UnreadableReview {
         private final ZeroTierDeviceStoreCore store; private final String nonce;
@@ -280,7 +288,9 @@ final class ZeroTierDeviceStoreCore {
     }
     /** Read-only recovery metadata. Never returns private bytes or ciphertext hashes. */
     PendingCreation pendingStatus() throws Exception {
-        return locked(() -> {
+        return locked(this::pendingCreationLocked);
+    }
+    private PendingCreation pendingCreationLocked() throws Exception {
             boolean marker=exists(creation);
             if (FINISHING.containsKey(root) || exists(intent)) throw new IOException("deletion requires recovery");
             CreatePending pending=pendingCreate(marker);
@@ -292,12 +302,29 @@ final class ZeroTierDeviceStoreCore {
                     throw new IOException("creation identity changed");
             }
             return new PendingCreation(pending.handle, marker ? (present ? "record-present" : "record-pending") : "finishing");
-        });
     }
     /** Explicitly discard only an exact pending creation with no installed record. */
     void discardPendingCreate(String expected) throws Exception {
+        discardPendingCreateInternal(expected,null);
+    }
+    /** GUI recovery must still match the phase explicitly reviewed by the user. */
+    void discardPendingCreateExact(String expected,String expectedPhase) throws Exception {
+        requirePhase(expectedPhase,"record-pending","finishing");
+        discardPendingCreateInternal(expected,expectedPhase);
+    }
+    private void requireCreationReview(String expected,String expectedPhase) throws Exception {
+        PendingCreation pending=pendingCreationLocked();
+        if (pending==null || !expected.equals(pending.handle) || !expectedPhase.equals(pending.phase))
+            throw new IOException("creation review changed");
+    }
+    private static void requirePhase(String phase,String... allowed) throws IOException {
+        for (String value:allowed) if (value.equals(phase)) return;
+        throw new IOException("invalid recovery phase");
+    }
+    private void discardPendingCreateInternal(String expected,String expectedPhase) throws Exception {
         handle(expected); Owner owner=claim();
         try { locked(() -> {
+            if (expectedPhase!=null) requireCreationReview(expected,expectedPhase);
             boolean marker=exists(creation);
             if (FINISHING.containsKey(root) || exists(intent)) throw new IOException("deletion requires recovery");
             CreatePending pending=pendingCreate(marker);
@@ -319,8 +346,16 @@ final class ZeroTierDeviceStoreCore {
     }
     /** Explicit recovery for an installed exact record after uncertain create. */
     PublicRecord recoverPendingCreate(String expected,IdentityFactory factory) throws Exception {
+        return recoverPendingCreateInternal(expected,null,factory);
+    }
+    PublicRecord recoverPendingCreateExact(String expected,String expectedPhase,IdentityFactory factory) throws Exception {
+        requirePhase(expectedPhase,"record-present","finishing");
+        return recoverPendingCreateInternal(expected,expectedPhase,factory);
+    }
+    private PublicRecord recoverPendingCreateInternal(String expected,String expectedPhase,IdentityFactory factory) throws Exception {
         handle(expected); Owner owner=claim();
         try { return locked(() -> {
+            if (expectedPhase!=null) requireCreationReview(expected,expectedPhase);
             settleCreate(expected,factory);
             directorySync.sync(root);
             PublicRecord result=inspect(expected,factory,(value,secret,record) -> value);
@@ -328,13 +363,25 @@ final class ZeroTierDeviceStoreCore {
         }); } finally { release(owner); }
     }
     PublicRecord status(IdentityFactory factory) throws Exception {
-        return locked(() -> {
+        return locked(() -> statusLocked(factory));
+    }
+    private PublicRecord statusLocked(IdentityFactory factory) throws Exception {
             if (!existsOrFail()) { verifiedHandle=null; return null; }
             // A prior process may have died after rename but before directory
             // sync; do not report a usable record until this sync succeeds.
             directorySync.sync(root);
             PublicRecord result=inspect(null,factory,(value,identity,record) -> value);
             verifiedHandle=result.handle; return result;
+    }
+    /** Read one coherent public state under the same data lock; no recovery. */
+    Snapshot snapshot(IdentityFactory factory) throws Exception {
+        return locked(() -> {
+            boolean creating=CREATING.containsKey(root) || exists(creation);
+            boolean deleting=FINISHING.containsKey(root) || exists(intent);
+            if (creating && deleting) throw new IOException("conflicting device operations");
+            if (creating) return new Snapshot(null,pendingCreationLocked(),null);
+            if (deleting) return new Snapshot(null,null,pendingDeletionLocked());
+            return new Snapshot(statusLocked(factory),null,null);
         });
     }
     PublicRecord create(IdentityFactory factory) throws Exception {
@@ -393,7 +440,7 @@ final class ZeroTierDeviceStoreCore {
                 verifiedHandle=result.identity.handle; return result;
             });
             return new RuntimeLease(this,owner,value.identity,value.recordHash,factory,verifier);
-        } catch (Exception error) { try { release(owner); } catch (Exception cleanup) { error.addSuppressed(cleanup); } throw error; }
+        } catch (Throwable error) { try { release(owner); } catch (Exception cleanup) { error.addSuppressed(cleanup); } throw error; }
     }
     static final class RuntimeLease {
         private final ZeroTierDeviceStoreCore store; private final Owner owner; final PublicRecord identity;
@@ -443,7 +490,9 @@ final class ZeroTierDeviceStoreCore {
     }
     /** Read-only deletion recovery metadata; exact handle is required to retry forget. */
     PendingDeletion pendingDeletionStatus() throws Exception {
-        return locked(() -> {
+        return locked(this::pendingDeletionLocked);
+    }
+    private PendingDeletion pendingDeletionLocked() throws Exception {
             if (CREATING.containsKey(root) || exists(creation)) throw new IOException("creation requires recovery");
             boolean marker=exists(intent); String finishing=FINISHING.get(root);
             if (!marker && finishing == null) return null;
@@ -461,7 +510,6 @@ final class ZeroTierDeviceStoreCore {
                 if (exists(state)) throw new IOException("deletion identity changed");
             }
             return new PendingDeletion(expected,marker ? (exists(state) ? "record-present" : "record-removed") : "finishing");
-        });
     }
     private void requireIntentRecord(String expected,byte[] hash) throws Exception {
         byte[] current=readRecord();
@@ -531,10 +579,30 @@ final class ZeroTierDeviceStoreCore {
         if (expected.equals(verifiedHandle)) verifiedHandle=null;
     }
     void forget(String expected,IdentityFactory factory) throws Exception {
+        forgetInternal(expected,null,null,factory);
+    }
+    /** GUI first-step removal: must match authenticated instance, never resume an old deletion. */
+    void forgetExact(String expected,String expectedInstance,IdentityFactory factory) throws Exception {
+        handle(expectedInstance);
+        forgetInternal(expected,expectedInstance,null,factory);
+    }
+    /** Resume only an existing exact intent; never starts deletion of a normal record. */
+    void recoverPendingDeletion(String expected,String expectedPhase) throws Exception {
+        requirePhase(expectedPhase,"record-present","record-removed","finishing");
+        forgetInternal(expected,null,expectedPhase,null);
+    }
+    private void forgetInternal(String expected,String expectedInstance,String expectedPhase,IdentityFactory factory) throws Exception {
         handle(expected); Owner owner=claim();
         try { locked(() -> {
             if (CREATING.containsKey(root) || exists(creation)) throw new IOException("creation requires recovery");
+            if (expectedPhase!=null) {
+                PendingDeletion pending=pendingDeletionLocked();
+                if (pending==null || !expected.equals(pending.handle) || !expectedPhase.equals(pending.phase))
+                    throw new IOException("deletion review changed");
+            }
             String finishing=FINISHING.get(root);
+            if (expectedInstance != null && (finishing != null || exists(intent)))
+                throw new IOException("deletion requires separate recovery");
             if (!exists(intent) && finishing != null) {
                 if (!expected.equals(finishing) || exists(state)) throw new IOException("device identity changed");
                 backend.delete(alias(expected)); directorySync.sync(root); FINISHING.remove(root); OBSERVED.remove(root);
@@ -544,9 +612,14 @@ final class ZeroTierDeviceStoreCore {
             byte[] hash;
             if (exists(intent)) hash=readIntent(expected);
             else {
+                if (expectedPhase!=null) throw new IOException("deletion intent unavailable");
                 if (!existsOrFail()) throw new IOException("device identity unavailable");
                 byte[] original=readRecord();
-                inspect(expected,factory,(result,identity,verified) -> { if (!Arrays.equals(original,verified)) throw new IOException("device state conflict"); return null; });
+                inspect(expected,factory,(result,identity,verified) -> {
+                    if (!Arrays.equals(original,verified) || (expectedInstance != null && !expectedInstance.equals(result.instanceId)))
+                        throw new IOException("device state conflict");
+                    return null;
+                });
                 if (!Arrays.equals(original,readRecord())) throw new IOException("device state conflict");
                 hash=digest(original);
                 byte[] wire=ByteBuffer.allocate(INTENT).put(DELETE_MAGIC).put(expected.getBytes(StandardCharsets.US_ASCII)).put(hash).array();

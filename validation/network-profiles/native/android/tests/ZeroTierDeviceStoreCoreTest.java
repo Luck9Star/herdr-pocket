@@ -29,9 +29,9 @@ public final class ZeroTierDeviceStoreCoreTest {
     }
     private static boolean wiped(byte[] bytes) { if(bytes == null) return false; for(byte b:bytes) if(b!=0) return false; return true; }
     private static final class Factory implements ZeroTierDeviceStoreCore.IdentityFactory {
-        int generated, validated, size=270; boolean valid=true, mutate=false, throwValidation=false; byte[] lastGenerated,lastValidated;
+        int generated, validated, size=270; boolean valid=true, mutate=false, throwValidation=false, throwError=false; byte[] lastGenerated,lastValidated;
         public byte[] generate() { generated++; lastGenerated=new byte[size]; Arrays.fill(lastGenerated,(byte)'X'); if(size>1) lastGenerated[1]=(byte)generated; return lastGenerated; }
-        public boolean validate(byte[] input) throws Exception { validated++; lastValidated=input; if(throwValidation) throw new IOException("synthetic validator failure"); if(mutate) input[2]++; return valid && input.length==270 && input[0]=='X'; }
+        public boolean validate(byte[] input) throws Exception { validated++; lastValidated=input; if(throwError) throw new AssertionError("synthetic validator error"); if(throwValidation) throw new IOException("synthetic validator failure"); if(mutate) input[2]++; return valid && input.length==270 && input[0]=='X'; }
     }
     private static final class Proof implements ZeroTierDeviceStoreCore.DrainVerifier {
         String handle, instance, lease; boolean allow, fail;
@@ -111,6 +111,12 @@ public final class ZeroTierDeviceStoreCoreTest {
         check(!created.handle.equals(created.instanceId),"separate opaque identity references");
         check(ZeroTierDeviceStoreCore.alias(created.handle).equals("org.herdr.pocket.zerotier-device.v1."+created.handle),"independent provider alias");
         check(second.status(factory).handle.equals(created.handle),"shared device metadata");
+        factory.throwError=true; boolean validatorError=false;
+        try { first.acquire(created.handle,factory,new Proof()); } catch(AssertionError expected) { validatorError=true; }
+        factory.throwError=false;
+        check(validatorError && wiped(factory.lastValidated),"validator Error wipes temporary input");
+        Proof errorProof=new Proof(); ZeroTierDeviceStoreCore.RuntimeLease errorRecovery=acquire(first,created.handle,factory,errorProof);
+        errorProof.allow=true; errorRecovery.confirmDrained(); check(true,"validator Error releases unadmitted owner");
         byte[] disk=Files.readAllBytes(base.resolve("herdr-zerotier-device-v1/device.state"));
         check(!new String(disk,StandardCharsets.ISO_8859_1).contains("X".repeat(32)),"device identity encrypted");
         Proof liveProof=new Proof();
@@ -217,15 +223,19 @@ public final class ZeroTierDeviceStoreCoreTest {
         rejects(() -> first.status(factory),"deletion intent blocks status");
         ZeroTierDeviceStoreCore.PendingDeletion pendingDelete=first.pendingDeletionStatus();
         check(pendingDelete!=null && pendingDelete.handle.equals(created.handle) && pendingDelete.phase.equals("record-present"),"deletion recovery returns exact opaque handle");
+        rejects(() -> first.recoverPendingDeletion(created.handle,"record-removed"),"stale deletion phase rejected");
+        rejects(() -> first.recoverPendingDeletion("11111111-1111-4111-8111-111111111111",pendingDelete.phase),"wrong recovery handle rejected");
         rejects(() -> first.create(factory),"deletion intent blocks create");
         failRemove[0]=false;
         ZeroTierDeviceStoreCore reopened=new ZeroTierDeviceStoreCore(base,backend,
             (r,d,b,c) -> { throw new AssertionError("not used"); },
             p -> Files.delete(p), r -> { try(java.nio.channels.FileChannel f=java.nio.channels.FileChannel.open(r,java.nio.file.StandardOpenOption.READ)) { f.force(true); } });
-        reopened.forget(created.handle,factory);
+        reopened.recoverPendingDeletion(created.handle,pendingDelete.phase);
         check(first.status(factory)==null && first.pendingDeletionStatus()==null,"completed deletion is absence");
         ZeroTierDeviceStoreCore.PublicRecord replacement=first.create(factory);
         check(!replacement.handle.equals(created.handle) && !replacement.instanceId.equals(created.instanceId),"replacement is new device identity");
+        rejects(() -> first.recoverPendingDeletion(created.handle,pendingDelete.phase),"old deletion recovery cannot delete replacement");
+        rejects(() -> first.recoverPendingDeletion(replacement.handle,pendingDelete.phase),"recovery cannot start first deletion of normal device");
         Files.write(base.resolve("herdr-zerotier-device-v1/device.delete"),oldIntent);
         int deletedBefore=backend.deletes;
         rejects(() -> first.pendingDeletionStatus(),"old intent cannot describe replacement");
@@ -268,8 +278,11 @@ public final class ZeroTierDeviceStoreCoreTest {
         ZeroTierDeviceStoreCore.PendingCreation uncertainPending=uncertainCreate.pendingStatus();
         check(uncertainPending!=null && uncertainPending.phase.equals("record-present"),"possibly committed device exposes pending status");
         rejects(() -> uncertainCreate.status(failureFactory),"uncertain create remains unavailable");
-        ZeroTierDeviceStoreCore.PublicRecord recovered=uncertainCreate.recoverPendingCreate(uncertainPending.handle,failureFactory);
+        rejects(() -> uncertainCreate.recoverPendingCreateExact(uncertainPending.handle,"finishing",failureFactory),"stale creation phase rejected");
+        rejects(() -> uncertainCreate.discardPendingCreateExact(uncertainPending.handle,"record-present"),"discard rejects installed phase");
+        ZeroTierDeviceStoreCore.PublicRecord recovered=uncertainCreate.recoverPendingCreateExact(uncertainPending.handle,uncertainPending.phase,failureFactory);
         check(recovered!=null,"possibly committed device recovered explicitly");
+        rejects(() -> uncertainCreate.recoverPendingCreateExact(uncertainPending.handle,uncertainPending.phase,failureFactory),"completed create recovery cannot repeat");
         rejects(() -> uncertainCreate.create(failureFactory),"uncertain create not replayed");
         uncertainCreate.forget(recovered.handle,failureFactory);
         // A real process dies after durable create intent, before installing the record.
@@ -288,7 +301,18 @@ public final class ZeroTierDeviceStoreCoreTest {
         rejects(() -> recovery.status(failureFactory),"pending without record not absence");
         rejects(() -> recovery.create(failureFactory),"pending cannot regenerate");
         rejects(() -> recovery.discardPendingCreate("11111111-1111-4111-8111-111111111111"),"wrong pending handle rejected");
-        recovery.discardPendingCreate(pending.handle);
+        rejects(() -> recovery.discardPendingCreateExact(pending.handle,"finishing"),"stale discard phase rejected");
+        rejects(() -> recovery.recoverPendingCreateExact(pending.handle,pending.phase,failureFactory),"uninstalled creation cannot be recovered");
+        final boolean[] discardSyncFail={true};
+        ZeroTierDeviceStoreCore discarding=new ZeroTierDeviceStoreCore(crashBase,new JceBackend(),
+            (r,d,b,c) -> { throw new AssertionError("discard must not generate"); },Files::delete,
+            r -> { if(discardSyncFail[0]) throw new IOException("synthetic discard sync failure"); });
+        rejects(() -> discarding.discardPendingCreateExact(pending.handle,pending.phase),"discard final sync uncertainty surfaced");
+        check(discarding.pendingStatus().phase.equals("finishing"),"discard without installed record keeps finishing latch");
+        rejects(() -> discarding.discardPendingCreateExact(pending.handle,pending.phase),"old discard phase cannot continue after transition");
+        rejects(() -> discarding.recoverPendingCreateExact(pending.handle,"finishing",failureFactory),"finishing without record cannot recover creation");
+        discardSyncFail[0]=false;
+        discarding.discardPendingCreateExact(pending.handle,"finishing");
         check(recovery.pendingStatus()==null && recovery.status(failureFactory)==null,"explicit exact discard restores absence");
         ZeroTierDeviceStoreCore.PublicRecord next=recovery.create(failureFactory);
         check(!next.handle.equals(pending.handle),"only explicit fresh create changes identity");
@@ -326,7 +350,8 @@ public final class ZeroTierDeviceStoreCoreTest {
         rejects(() -> finishing.status(finishingFactory),"finishing state cannot authorize use");
         rejects(() -> finishing.recoverPendingCreate(finishingPending.handle,finishingFactory),"failed retry remains pending");
         finishFail[0]=false;
-        ZeroTierDeviceStoreCore.PublicRecord finished=finishing.recoverPendingCreate(finishingPending.handle,finishingFactory);
+        rejects(() -> finishing.discardPendingCreateExact(finishingPending.handle,"finishing"),"finishing with installed record cannot discard");
+        ZeroTierDeviceStoreCore.PublicRecord finished=finishing.recoverPendingCreateExact(finishingPending.handle,"finishing",finishingFactory);
         check(finished.handle.equals(finishingPending.handle) && finishing.pendingStatus()==null,"explicit fsync retry preserves same identity");
         finishing.forget(finished.handle,finishingFactory);
         // A separate process dies after key delete but before state unlink.
@@ -339,9 +364,48 @@ public final class ZeroTierDeviceStoreCoreTest {
         check(crashPending!=null && crashPending.handle.equals(crashIdentity.handle),"crashed delete exposes exact opaque handle");
         crashDeleteBackend.failOpen=true; // emulate key absent in a real persistent keystore
         rejects(() -> crashDelete.status(crashDeleteFactory),"interrupted delete is not empty");
-        crashDelete.forget(crashPending.handle,crashDeleteFactory);
+        crashDelete.recoverPendingDeletion(crashPending.handle,crashPending.phase);
         check(crashDelete.pendingDeletionStatus()==null && crashDelete.status(crashDeleteFactory)==null,"interrupted delete converges without decrypting absent key");
+        exactDeletionRecoveryCases(base);
         unreadableCases(base);
+    }
+
+    private static void exactDeletionRecoveryCases(Path base) throws Exception {
+        for(String phase:new String[]{"record-present","record-removed","finishing"}) {
+            Path directory=Files.createDirectory(base.resolve("exact-delete-"+phase));
+            JceBackend backend=new JceBackend(); Factory factory=new Factory();
+            final boolean[] deleting={false},fail={true};
+            ZeroTierDeviceStoreCore core=new ZeroTierDeviceStoreCore(directory,backend,
+                (r,d,b,c) -> Files.write(d,b),
+                p -> { if(deleting[0] && fail[0] && phase.equals("record-present")) throw new IOException("synthetic unlink"); Files.delete(p); },
+                r -> {
+                    if(deleting[0] && fail[0] && !Files.exists(r.resolve("device.state")) &&
+                        (phase.equals("record-removed") && Files.exists(r.resolve("device.delete")) ||
+                         phase.equals("finishing") && !Files.exists(r.resolve("device.delete"))))
+                        throw new IOException("synthetic deletion sync");
+                });
+            ZeroTierDeviceStoreCore.PublicRecord device=core.create(factory);
+            for(String supplied:new String[]{null,"record-present","record-removed","finishing","unknown"})
+                rejects(() -> core.recoverPendingDeletion(device.handle,supplied),"recovery cannot initiate deletion");
+            check(core.status(factory).instanceId.equals(device.instanceId) && backend.deletes==0,"normal record unchanged after recovery rejection");
+            deleting[0]=true;
+            rejects(() -> core.forgetExact(device.handle,device.instanceId,factory),"exact first removal reports injected fault");
+            ZeroTierDeviceStoreCore.Snapshot snapshot=core.snapshot(factory);
+            check(snapshot.device==null && snapshot.creation==null && snapshot.deletion.phase.equals(phase),"coherent exact pending deletion phase");
+            int deletes=backend.deletes;
+            for(String supplied:new String[]{"record-present","record-removed","finishing"}) if(!phase.equals(supplied))
+                rejects(() -> core.recoverPendingDeletion(device.handle,supplied),"changed pending phase rejected before mutation");
+            rejects(() -> core.forgetExact(device.handle,device.instanceId,factory),"normal removal cannot silently resume pending intent");
+            check(backend.deletes==deletes && core.pendingDeletionStatus().phase.equals(phase),"stale review leaves pending state intact");
+            fail[0]=false;
+            core.recoverPendingDeletion(device.handle,phase);
+            check(core.status(factory)==null && core.pendingDeletionStatus()==null,"exact reviewed deletion finishes");
+            rejects(() -> core.recoverPendingDeletion(device.handle,phase),"completed deletion recovery cannot repeat");
+            ZeroTierDeviceStoreCore.PublicRecord next=core.create(factory);
+            rejects(() -> core.recoverPendingDeletion(device.handle,phase),"old completed intent cannot remove replacement");
+            check(core.status(factory).instanceId.equals(next.instanceId) && factory.generated==2,"recovery never generates replacement");
+            core.forgetExact(next.handle,next.instanceId,factory);
+        }
     }
 
     private static void unreadableCases(Path base) throws Exception {

@@ -20,6 +20,8 @@ VERSION = '3.47.9'
 COMMIT = 'c197ca5199e9ee5661e865596c9c07294dfab51c'
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import terminal_view_ime
+sys.path.insert(0, str(ROOT / 'validation/network-profiles'))
+from android_sources import production_java_hashes
 
 
 def run(args, cwd=None):
@@ -83,6 +85,7 @@ def prepare(destination):
     shutil.copy2(source / 'native/android/HostCatalogFile.kt', activity.with_name('HostCatalogFile.kt'))
     shutil.copy2(source / 'native/android/InputJournalFile.kt', activity.with_name('InputJournalFile.kt'))
     shutil.copy2(source / 'native/android/NetworkIdentityChannel.kt', activity.with_name('NetworkIdentityChannel.kt'))
+    shutil.copy2(source / 'native/android/ZeroTierDeviceChannel.kt', activity.with_name('ZeroTierDeviceChannel.kt'))
     shutil.copy2(source / 'native/android/NetworkRuntimeChannel.kt', activity.with_name('NetworkRuntimeChannel.kt'))
     gradle = destination / 'android/app/build.gradle.kts'
     script = gradle.read_text()
@@ -150,6 +153,22 @@ def source_record(relative):
             'repositoryCommit': os.environ.get('GITHUB_SHA', 'local')}
 
 
+def android_network_production_sources():
+    """Hash exactly the Java inputs selected by the shared Gradle allowlist."""
+    base = 'validation/network-profiles/native/android/'
+    manifest = base + 'android-production-sources.txt'
+    try:
+        hashes = production_java_hashes(ROOT / base)
+        if 'AndroidZeroTierNative.java' in hashes:
+            raise ValueError('Unreleased native binding in production source list')
+    except (OSError,ValueError) as error:
+        raise SystemExit('Invalid Android network production source list') from error
+    return [source_record(manifest), source_record(base + 'network-secrets.gradle'),
+            source_record('validation/network-profiles/android_sources.py'),
+            *[{'path':base + name,'sha256':digest,'repositoryCommit':os.environ.get('GITHUB_SHA','local')}
+              for name,digest in hashes.items()]]
+
+
 def verify_android_notice(apk):
     relative = 'validation/pairing/native/android/notices/BOUNCY-CASTLE-LICENSE.md'
     source = source_record(relative)
@@ -170,6 +189,7 @@ def pairing_provenance(platform, android_notice):
                             'lib/remote_page.dart', 'lib/remote_adapter.dart', 'tool/ci.py']],
         'androidSources': [source_record(android + name) for name in android_names],
         'androidChannel': source_record('validation/flutter/native/android/MainActivity.kt'),
+        'androidNetworkProductionSources': android_network_production_sources(),
         'androidCrypto': {'library': 'org.bouncycastle:bcprov-jdk18on:1.86',
                           'noticeSource': source_record(android + 'notices/BOUNCY-CASTLE-LICENSE.md'),
                           'packagedNotice': android_notice if platform == 'android' else 'not applicable'},
@@ -199,6 +219,17 @@ def pairing_provenance(platform, android_notice):
                          'AndroidTailscaleStateStore.java', 'AndroidTailscaleEnvelope.java', 'TailscaleStateStoreCore.java', 'network-secrets.gradle']] +
                        [source_record('validation/flutter/' + name) for name in
                         ['lib/network_identity.dart', 'lib/network_identity_dialog.dart', 'native/android/NetworkIdentityChannel.kt']],
+        },
+        'sharedZeroTierDevice': {
+            'api': ['status', 'create', 'forget', 'recoverPendingCreation', 'discardPendingCreation', 'recoverPendingDeletion'],
+            'scope': 'Public device metadata and exact pending-phase review; private identity never enters Dart',
+            'nativeBinding': 'NOT ENABLED; no ZeroTier runtime activation or native library bundled by these commands',
+            'deviceRuntime': 'NOT RUN by build/package workflow',
+            'sources': [source_record('validation/network-profiles/native/android/' + name) for name in
+                        ['AndroidZeroTierDeviceService.java', 'AndroidZeroTierDeviceStore.java', 'ZeroTierDeviceStoreCore.java',
+                         'AndroidZeroTierEnvelope.java', 'network-secrets.gradle']] +
+                       [source_record('validation/flutter/' + name) for name in
+                        ['lib/zerotier_device.dart', 'lib/zerotier_device_dialog.dart', 'native/android/ZeroTierDeviceChannel.kt']],
         },
         'testIdentity': 'memory signer exists only in explicit tests; not a production fallback or system-store evidence',
     }

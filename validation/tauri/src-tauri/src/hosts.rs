@@ -585,6 +585,13 @@ pub struct NetworkCatalog { pub revision: String, pub profiles: Vec<NetworkProfi
 #[serde(rename_all="camelCase")]
 pub struct NetworkBinding { pub host_id: String, pub profile_id: String }
 impl Hosts {
+    // Hold the catalog lock through the single native mutation; never call Hosts from f.
+    pub fn with_zerotier_review<T>(&self, revision:&str, profile_ids:&[String], host_ids:&[String], f:impl FnOnce()->Result<T,String>)->Result<T,String> { self.with(|r| {
+        let mut profiles:Vec<_>=r.profiles.iter().filter(|p|p.provider==Provider::Zerotier).map(|p|p.id.clone()).collect(); profiles.sort();
+        let mut hosts:Vec<_>=r.items.iter().filter(|h|h.provider==Provider::Zerotier || h.network_profile_id.as_ref().is_some_and(|id|profiles.binary_search(id).is_ok())).map(|h|h.id.clone()).collect(); hosts.sort();
+        let mut supplied_profiles=profile_ids.to_vec();supplied_profiles.sort();let mut supplied_hosts=host_ids.to_vec();supplied_hosts.sort();
+        if r.revision!=revision || profiles!=supplied_profiles || hosts!=supplied_hosts {return Err("network_changed".into());} f()
+    }) }
     pub fn networks(&self) -> Result<NetworkCatalog,String> { self.with(|r| Ok(NetworkCatalog { revision:r.revision.clone(), profiles:r.profiles.clone(), preferences:r.preferences.clone(), bindings:r.items.iter().filter_map(|h|h.network_profile_id.as_ref().map(|id|NetworkBinding{host_id:h.id.clone(),profile_id:id.clone()})).collect() })) }
     pub fn save_network(&self, mut profile: NetworkProfile, expected_catalog: &str, expected_revision: Option<u32>, affected: &[String]) -> Result<Vec<String>,String> { self.with(|r| {
         if r.revision != expected_catalog {return Err("network_changed".into());}
@@ -1130,6 +1137,25 @@ mod tests {
             fs::write(&path,serde_json::to_vec(&disk).unwrap()).unwrap();
             assert!(Hosts::default().init(temp.0.clone()).is_err());
         }
+    }
+    #[test]
+    fn zerotier_review_requires_complete_catalog_and_holds_lock() {
+        use crate::networks::Settings;
+        let temp=Temp::new();let hosts=Hosts::default();hosts.init(temp.0.clone()).unwrap();
+        let h=hosts.save(None,"bound",target(),None).unwrap();let mut t=target();t.host="other.invalid".into();let legacy=hosts.save(None,"legacy",t,None).unwrap();
+        let p=NetworkProfile{id:"0".repeat(32),label:"zt".into(),provider:Provider::Zerotier,enabled:true,revision:1,settings:Settings::Zerotier{network_id:"123456789abcdef0".into()}};
+        let cat=hosts.networks().unwrap();hosts.save_network(p,&cat.revision,None,&[]).unwrap();let cat=hosts.networks().unwrap();let id=cat.profiles[0].id.clone();hosts.bind_network(&h.id,Some(id.clone()),&cat.revision).unwrap();
+        hosts.with(|r|{let l=r.items.iter_mut().find(|x|x.id==legacy.id).unwrap();l.provider=Provider::Zerotier;l.enabled=false;l.retired=true;Ok(())}).unwrap();
+        let cat=hosts.networks().unwrap();let ids=vec![h.id.clone(),legacy.id.clone()];let mut called=false;
+        assert!(hosts.with_zerotier_review(&cat.revision,&[id.clone()],&ids,||{called=true;Ok(())}).is_ok());assert!(called);
+        called=false;assert!(hosts.with_zerotier_review(&cat.revision,&[id.clone()],&[h.id.clone()],||{called=true;Ok(())}).is_err());assert!(!called);
+        assert!(hosts.with_zerotier_review("stale",&[id.clone()],&ids,||Ok(())).is_err());assert!(hosts.with_zerotier_review(&cat.revision,&[id.clone(),id.clone()],&ids,||Ok(())).is_err());
+        for dispatched in [false,true] {
+            let ops=crate::network_identity::Operations::default();let lease=ops.enter().unwrap();let mut polls=0;
+            let result:Result<(),String>=hosts.with_zerotier_review(&cat.revision,&[id.clone()],&ids,||crate::zerotier_device::settle_with_fence(||Err(if dispatched {"after dispatch".into()}else{"before dispatch".into()}),||{assert!(hosts.0.try_lock().is_err());assert!(ops.enter().is_err());polls+=1;Ok(polls==2)},||{}));
+            assert!(result.is_err());assert_eq!(polls,2);drop(lease);assert!(ops.enter().is_ok());
+        }
+
     }
     #[test]
     fn network_catalog_persists_and_binding_never_exports_as_direct() {

@@ -94,6 +94,7 @@ use config_exchange::{config_apply, config_discard, config_export, config_previe
 use hosts::{Hosts, Target};
 mod networks;
 mod network_identity;
+mod zerotier_device;
 mod network_nodes;
 #[tauri::command]
 async fn host_init(app:tauri::AppHandle,hosts:State<'_,Hosts>)->Result<(),String> {
@@ -151,6 +152,24 @@ fn reviewed_identity_profile(hosts:&Hosts,id:&str,revision:u32,catalog_revision:
     let mut actual:Vec<_>=catalog.bindings.iter().filter(|b|b.profile_id==id).map(|b|b.host_id.clone()).collect();actual.sort();let mut supplied=affected.to_vec();supplied.sort();
     if catalog.revision!=catalog_revision || p.revision!=revision || actual!=supplied{return Err("network_changed".into());}
     network_nodes::provider_name(p.provider)?;Ok(p.clone())
+}
+#[tauri::command]
+async fn zerotier_device_status(request:tauri::ipc::Request<'_>,app:tauri::AppHandle)->Result<zerotier_device::Status,String>{
+ if !matches!(request.body(),tauri::ipc::InvokeBody::Json(v) if v.as_object().is_some_and(|o|o.is_empty())) {return Err("invalid_zerotier_device_request".into());}
+ #[cfg(target_os="android")]
+ {tauri::async_runtime::spawn_blocking(move||android_keys::zerotier_status(&app)).await.map_err(|_|"zerotier_device_unavailable".to_string())?}
+ #[cfg(not(target_os="android"))]
+ {let _=app;Ok(zerotier_device::Status::unavailable())}
+}
+#[tauri::command]
+async fn zerotier_device_write(request:tauri::ipc::Request<'_>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<Option<zerotier_device::Device>,String>{
+ let value=match request.body(){tauri::ipc::InvokeBody::Json(v)=>v.clone(),_=>return Err("invalid_zerotier_device_request".into())};
+ let zerotier_device::WriteRequest{action,catalog_revision,profile_ids,host_ids,handle,instance_id,expected_phase}=zerotier_device::parse_write(value)?;
+ let lease=ops.enter()?;
+ #[cfg(target_os="android")]
+ {tauri::async_runtime::spawn_blocking(move||{let _lease=lease;let hosts=app.state::<Hosts>();hosts.with_zerotier_review(&catalog_revision,&profile_ids,&host_ids,||android_keys::zerotier_write(&app,&action,handle.as_deref(),instance_id.as_deref(),expected_phase.as_deref()))}).await.map_err(|_|"zerotier_device_result_unknown".to_owned())?}
+ #[cfg(not(target_os="android"))]
+ {let _=(lease,app,catalog_revision,profile_ids,host_ids,expected_phase);Err("zerotier_device_unavailable".into())}
 }
 #[tauri::command]
 async fn network_identity_status(id:String,hosts:State<'_,Hosts>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<network_identity::Status,String>{
@@ -566,7 +585,7 @@ pub fn run() {
             let flow=RemoteFlow {recovery:Some(recovery),..Default::default()};
             app.manage(Arc::new(Mutex::new(flow))); Ok(())
         })
-        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_copy::pair_copy_request,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,host_cleanup_retry,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,network_node_status,network_node_start,network_node_stop,network_node_login,network_node_login_status,network_node_open_auth,
+        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_copy::pair_copy_request,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,host_cleanup_retry,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,zerotier_device_status,zerotier_device_write,network_node_status,network_node_start,network_node_stop,network_node_login,network_node_login_status,network_node_open_auth,
             mobile_clipboard_read_text,terminal_keyboard::mobile_terminal_keyboard,config_document_platform,config_document_open,config_document_save,config_export,config_preview,config_apply,config_discard])
         .run(tauri::generate_context!())
         .expect("Tauri probe startup failed");

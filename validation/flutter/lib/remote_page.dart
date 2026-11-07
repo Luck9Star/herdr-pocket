@@ -385,6 +385,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void setInputMode(RemoteInputMode mode) {
     if (!live || viewPaused || widget.visibility?.value == false || !inputGate.fresh ||
         (mode != RemoteInputMode.observe && (inputGate.target == null || inputGate.capability == null || inputGate.unknown != null))) return;
+    // Re-selecting the active chip is not a mode change. Preserve the current
+    // editor/client, focus and IME composition instead of replacing its epoch.
+    if (inputGate.mode == mode) return;
     auxiliaryModifiers.reset();
     terminalFocus.unfocus(); FocusScope.of(context).unfocus();
     inputGate.setFocused(true); inputGate.setMode(mode); bindTerminalOutput();

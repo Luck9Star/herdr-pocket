@@ -233,9 +233,31 @@ function watchWorkspace(fixedTarget=null,options={}) {
   const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
   globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
   globalThis.window={confirm:()=>true};const calls=[],channels=[],observed=[];let terminal;
-  const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe'){observed.push(args);return options.observe?options.observe(args):new Promise(()=>{});}if(name==='remote_tab_select' && options.select)return options.select(args);if(name==='remote_tab_input_mode')return options.mode?options.mode(args):Promise.resolve(5);return Promise.resolve();};
+  const invoke=(name,args)=>{
+    calls.push({name,args});
+    if(name==='remote_tab_reserve')return Promise.resolve(9);
+    if(name==='remote_tab_observe'){
+      observed.push(args);
+      return options.observe?options.observe(args):new Promise(()=>{});
+    }
+    if(name==='remote_tab_select' && options.select)return options.select(args);
+    if(name==='remote_tab_input_mode')return options.mode?options.mode(args):Promise.resolve(5);
+    if(name==='remote_tab_input_send' && options.send)return options.send(args);
+    return Promise.resolve();
+  };
   const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device'}),onDashboard:options.onDashboard,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>{
-    terminal={options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},dispose(){},focus(){document.activeElement=this.textarea;},onData(fn){this.data=fn;}};return terminal;
+    terminal={
+      options:{},focusReadOnly:[],parser:{registerOscHandler(){}},textarea:new Element('textarea'),
+      open(){},write(_b,done){done();},reset(){},dispose(){},
+      focus(){this.focusReadOnly.push(this.textarea.readOnly);document.activeElement=this.textarea;},
+      onData(fn){this.data=fn;},
+    };
+    Object.defineProperty(terminal.options,'disableStdin',{
+      set(value){terminal.textarea.readOnly=value;},
+      get(){return terminal.textarea.readOnly;},
+    });
+    terminal.options.disableStdin=true;
+    return terminal;
   }});
   const id=ui.create('fixture',fixedTarget);
   const all=()=>nodes['view-content'].all(),find=label=>all().find(n=>n.textContent===label);
@@ -445,4 +467,176 @@ test('workspace publishes only accepted authoritative watch snapshots and retire
  const {HostDashboardSummary}=await import('../src/host-dashboard-summary.js');const store=new HostDashboardSummary(),events=[];
  const h=watchWorkspace(null,{onDashboard:event=>{events.push(event.type);if(event.type==='starting')store.begin(event.identity,event.source);else if(event.type==='snapshot')store.publish(event.identity,event.source,event.board);else store.invalidateSource(event.hostId,event.source);}});
  try{await h.start();h.observation(1,'starting');h.watch(1,1,'fresh',[{paneId:'w1:p1',terminalId:'term_a001',agentStatus:'blocked'}]);const identity={id:'fixture',enabled:true,retired:false,target:{username:'u',host:'fixture',port:22,session:'work'},deviceFingerprint:'device'};assert.equal(store.get(identity).count,1);assert.equal(store.get(identity).current,true);const seen=events.filter(x=>x==='snapshot').length;h.watch(1,1,'fresh',[{paneId:'w1:p1',terminalId:'term_a001',agentStatus:'idle'}]);assert.equal(events.filter(x=>x==='snapshot').length,seen);h.ui.background();h.watch(1,2,'fresh',[]);await flush();assert.equal(store.get(identity).current,false);assert.equal(store.get(identity).count,1);assert.equal(events.filter(x=>x==='snapshot').length,seen);assert.equal(h.calls.filter(c=>c.name==='remote_tab_reserve').length,1);}finally{h.restore();}
+});
+
+async function readyKeyboard(h) {
+  await h.start();
+  h.observation(1, 'starting');
+  h.watch(1, 1);
+  h.emit({ kind: 'frame', epoch: 1, frame: { seq: 1, full: true, bytes: [65] } });
+  h.observation(1, 'active');
+  h.emit({ kind: 'input_ready', epoch: 1, unknown: false, recovery_status: 'ready' });
+}
+
+const acceptedInput = args => Promise.resolve({
+  status: 'accepted',
+  receipt: {
+    requestId: 'a'.repeat(32), paneId: 'w1:p1', terminalId: 'term_a001',
+    acceptedBytes: args.bytes.length,
+  },
+});
+
+test('mobile direct gesture focuses an editable terminal but sends nothing before native permission', async () => {
+  let grant;
+  const h = watchWorkspace({ paneId: 'w1:p1', terminalId: 'term_a001' }, {
+    mode: args => args.mode === 'direct' ? new Promise(resolve => grant = resolve) : Promise.resolve(5),
+    send: acceptedInput,
+  });
+  try {
+    await readyKeyboard(h);
+    const term = h.terminal();
+    h.find('逐键输入').onclick();
+    assert.deepEqual(term.focusReadOnly, [false]);
+    assert.equal(term.textarea.readOnly, false);
+    term.data('x');
+    assert.equal(h.calls.filter(call => call.name === 'remote_tab_input_send').length, 0);
+
+    await flush();
+    grant(7);
+    await flush();
+    term.data('y');
+    await flush();
+    const sent = h.calls.filter(call => call.name === 'remote_tab_input_send');
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0].args.bytes, [121]);
+  } finally { h.restore(); }
+});
+
+test('blur while native direct permission is pending locks input and revokes late permission', async () => {
+  let grant;
+  const h = watchWorkspace({ paneId: 'w1:p1', terminalId: 'term_a001' }, {
+    mode: args => args.mode === 'direct' ? new Promise(resolve => grant = resolve) : Promise.resolve(5),
+    send: acceptedInput,
+  });
+  try {
+    await readyKeyboard(h);
+    const term = h.terminal();
+    h.find('逐键输入').onclick();
+    await flush();
+    document.activeElement = new Element('button');
+    term.textarea.event_blur();
+    assert.equal(term.textarea.readOnly, true);
+    grant(7);
+    await flush(); await flush();
+    document.activeElement = term.textarea;
+    term.data('x');
+    await flush();
+    assert.equal(h.calls.filter(call => call.name === 'remote_tab_input_send').length, 0);
+    assert.ok(h.calls.some(call => call.name === 'remote_tab_input_mode' && call.args.mode === 'observe'));
+    assert.equal(term.textarea.readOnly, true);
+  } finally { h.restore(); }
+});
+
+test('IME composition begun before permission cannot submit after the late grant', async () => {
+  let grant;
+  const h = watchWorkspace({ paneId: 'w1:p1', terminalId: 'term_a001' }, {
+    mode: args => args.mode === 'direct' ? new Promise(resolve => grant = resolve) : Promise.resolve(5),
+    send: acceptedInput,
+  });
+  try {
+    await readyKeyboard(h);
+    const term = h.terminal();
+    h.find('逐键输入').onclick();
+    await flush();
+    term.textarea.event_compositionstart();
+    term.data('中');
+    grant(7);
+    await flush();
+    term.textarea.event_compositionend();
+    term.data('中文');
+    await flush();
+    assert.equal(h.calls.filter(call => call.name === 'remote_tab_input_send').length, 0);
+    term.data('字');
+    await flush();
+    const sent = h.calls.filter(call => call.name === 'remote_tab_input_send');
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0].args.bytes, [...new TextEncoder().encode('字')]);
+  } finally { h.restore(); }
+});
+
+test('switch during pending permission prevents old reply from sending to the new tab', async () => {
+  let grant;
+  const h = watchWorkspace({ paneId: 'w1:p1', terminalId: 'term_a001' }, {
+    mode: args => args.mode === 'direct' ? new Promise(resolve => grant = resolve) : Promise.resolve(5),
+    send: acceptedInput,
+  });
+  try {
+    await readyKeyboard(h);
+    const term = h.terminal();
+    h.find('逐键输入').onclick();
+    await flush();
+    const second = h.ui.create('other', { paneId: 'w2:p1', terminalId: 'term_a002' });
+    await h.ui.select(second);
+    grant(7);
+    await flush();
+    term.data('x');
+    await flush();
+    assert.equal(h.calls.filter(call => call.name === 'remote_tab_input_send').length, 0);
+    assert.equal(term.textarea.readOnly, true);
+  } finally { h.restore(); }
+});
+
+test('unknown direct-mode failure locks input and waits for observe reset before another attempt', async () => {
+  let rejectMode, finishReset;
+  const h = watchWorkspace({ paneId: 'w1:p1', terminalId: 'term_a001' }, {
+    mode: args => args.mode === 'direct'
+      ? new Promise((_, reject) => rejectMode = reject)
+      : new Promise(resolve => finishReset = resolve),
+    send: acceptedInput,
+  });
+  try {
+    await readyKeyboard(h);
+    const term = h.terminal();
+    h.find('逐键输入').onclick();
+    await flush();
+    rejectMode(Error('unknown'));
+    await flush();
+    assert.equal(term.textarea.readOnly, true);
+    term.data('x');
+    h.find('逐键输入').onclick();
+    assert.equal(h.calls.filter(call => call.name === 'remote_tab_input_mode' && call.args.mode === 'direct').length, 1);
+    assert.equal(h.calls.filter(call => call.name === 'remote_tab_input_send').length, 0);
+    finishReset(6);
+    await flush();
+  } finally { h.restore(); }
+});
+
+test('keyboard and paste events are blocked while direct permission is pending', async () => {
+  let grant;
+  const h = watchWorkspace({ paneId: 'w1:p1', terminalId: 'term_a001' }, {
+    mode: args => args.mode === 'direct' ? new Promise(resolve => grant = resolve) : Promise.resolve(5),
+    send: acceptedInput,
+  });
+  try {
+    await readyKeyboard(h);
+    const term = h.terminal();
+    h.find('逐键输入').onclick();
+    await flush();
+    for (const name of ['keydown', 'keypress', 'beforeinput', 'input', 'paste']) {
+      let prevented = false, stopped = false;
+      term.textarea[`event_${name}`]({
+        preventDefault() { prevented = true; },
+        stopImmediatePropagation() { stopped = true; },
+        clipboardData: { getData: () => 'not authorized' },
+      });
+      assert.equal(prevented, true, name);
+      assert.equal(stopped, true, name);
+    }
+    assert.equal(h.calls.filter(call => call.name === 'remote_tab_input_send').length, 0);
+    grant(7);
+    await flush();
+    term.data('z');
+    await flush();
+    assert.equal(h.calls.filter(call => call.name === 'remote_tab_input_send').length, 1);
+  } finally { h.restore(); }
 });

@@ -27,7 +27,17 @@ class Element {
   }
   click() { this.onclick?.({ target: this, preventDefault() {} }); }
   checkValidity() { return true; }
-  focus() { document.activeElement = this; }
+  focus() {
+    if (document.activeElement === this) return;
+    document.activeElement?.blur();
+    document.activeElement = this;
+    this.dispatch('focus');
+  }
+  blur() {
+    if (document.activeElement !== this) return;
+    document.activeElement = null;
+    this.dispatch('blur');
+  }
   contains(node) { return node === this || this.all().includes(node); }
   all() { return this.children.flatMap(child => [child, ...(child.all?.() || [])]); }
   querySelector() { return null; }
@@ -56,7 +66,7 @@ async function importedRemote() {
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup() {
+async function setup({ inputMode = () => 1 } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
@@ -101,7 +111,11 @@ async function setup() {
 
   const invoke = async (name, args = {}) => {
     calls.push({ name, args });
-    if (['host_init', 'host_new', 'remote_cancel', 'remote_select'].includes(name)) return;
+    if (['host_init', 'host_new', 'remote_cancel', 'remote_select', 'remote_ack'].includes(name)) return;
+    if (name === 'remote_input_mode') return inputMode(args);
+    if (name === 'remote_input_send') return {
+      status: 'accepted', receipt: { requestId: 'a'.repeat(32), paneId: 'w1:p1', terminalId: 'term_a001', acceptedBytes: args.bytes.length },
+    };
     if (name === 'host_list' || name === 'network_list') {
       const value = name === 'host_list'
         ? structuredClone(records)
@@ -133,7 +147,24 @@ async function setup() {
     throw Error(name);
   };
   class Channel { constructor() { channel = this; } }
-  class Terminal {}
+  let terminal;
+  class Terminal {
+    constructor(options) {
+      terminal = this;
+      this.options = options;
+      this.textarea = new Element();
+      this.focusedAs = [];
+      this.parser = { registerOscHandler() {} };
+    }
+    open() {}
+    dispose() {}
+    focus() {
+      this.focusedAs.push([this.options.disableStdin, this.textarea.attrs.inputmode]);
+      this.textarea.focus();
+    }
+    onData(handler) { this.data = handler; }
+    write(_bytes, ack) { ack(); }
+  }
   globalThis.__directGuiDeps = { Terminal, invoke, Channel };
   const { initRemote } = await importedRemote();
   initRemote({ native: true, theme: { terminal: {} }, onFixture() {}, onLeaveFixture() {} });
@@ -141,7 +172,7 @@ async function setup() {
   await flush();
 
   return {
-    nodes, calls, target,
+    nodes, calls, target, get terminal() { return terminal; },
     setRead: fn => { readOverride = fn; },
     emit: event => channel.onmessage(event),
     finish: () => resolveObserve?.(),
@@ -190,6 +221,65 @@ function publishDashboard(h, panes) {
 }
 function blockedPane() {
   return [{ paneId: 'w1:p1', terminalId: 'term_a001', agentStatus: 'blocked' }];
+}
+
+async function openInput(h) {
+  await pairAndConnect(h);
+  publishDashboard(h, blockedPane());
+  h.nodes['remote-panes'].children[0].click();
+  h.emit({ kind: 'frame', generation: 9, frame: { seq: 1, full: true, bytes: [65] } });
+  h.emit({ kind: 'input_ready', generation: 9, unknown: false, recovery_status: 'ready' });
+}
+
+test('paired form requests an editable keyboard in the click and only sends compositions begun after permission', async () => {
+  let allow;
+  const h = await setup({ inputMode: () => new Promise(resolve => { allow = resolve; }) });
+  try {
+    await openInput(h);
+    h.nodes['remote-input-direct'].click();
+    assert.deepEqual(h.terminal.focusedAs, [[false, 'text']]);
+    for (const event of ['keydown', 'keypress', 'beforeinput', 'input', 'paste']) {
+      let prevented = false, stopped = false;
+      h.terminal.textarea.dispatch(event, {
+        preventDefault() { prevented = true; },
+        stopImmediatePropagation() { stopped = true; },
+      });
+      assert.ok(prevented && stopped, event);
+    }
+    h.terminal.data('x');
+    h.terminal.textarea.dispatch('compositionstart');
+    await flush();
+    allow(2);
+    await flush();
+    h.terminal.textarea.dispatch('compositionend');
+    h.terminal.data('旧');
+    assert.equal(h.calls.filter(c => c.name === 'remote_input_send').length, 0);
+    h.terminal.textarea.dispatch('compositionstart');
+    h.terminal.textarea.dispatch('compositionend');
+    h.terminal.data('中');
+    assert.deepEqual(h.calls.filter(c => c.name === 'remote_input_send').map(c => c.args.bytes), [[228, 184, 173]]);
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+for (const outcome of ['blur', 'reject', 'cancel']) {
+  test(`paired form locks the keyboard when a direct request ends in ${outcome}`, async () => {
+    let allow, deny;
+    const h = await setup({ inputMode: args => args.mode === 'direct' ? new Promise((r, j) => { allow = r; deny = j; }) : 3 });
+    try {
+      await openInput(h);
+      h.nodes['remote-input-direct'].click();
+      await flush();
+      if (outcome === 'blur') h.terminal.textarea.blur();
+      if (outcome === 'cancel') h.nodes['remote-cancel'].click();
+      if (outcome === 'reject') deny(Error('fixture'));
+      else allow(2);
+      await flush();
+      assert.equal(h.terminal.options.disableStdin, true);
+      assert.equal(h.terminal.textarea.attrs.inputmode, 'none');
+      h.terminal.data('x');
+      assert.equal(h.calls.filter(c => c.name === 'remote_input_send').length, 0);
+    } finally { h.finish(); await flush(); h.restore(); }
+  });
 }
 function summary(nodes, live = true) {
   return live

@@ -10,6 +10,8 @@
 
 **测试包之后的原型进度**　两套手机看板都能按名称、地址、命名会话及网络类型检索主机，并区分当前待处理和上次受阻。Flutter 修复静默 SSH 观察通道后，在 Mac 隔离的真实 herdr 会话中连续恢复五次，每次均收到新首帧和后续增量，远端输入为 0。修复后的 Android 受保护 TUI 尚待复测。下方两份 APK 对应较早的 `dd02595`。[源码、Penpot 与实测记录](https://github.com/Luck9Star/herdr-pocket/blob/8703b0d37a2497357c5c6c07c6e4f28ce2a3fe1c/docs/54-mobile-host-search-and-observer-retirement.md)
 
+**手机网络配置**　Flutter 和 Tauri 都已接入「审查 ZeroTier 共享设备」。设备服务不可用时，仍可核对关联网络和主机；目录读取失败时显示范围未知。新版 Penpot 已保存两种状态。Mac 已验证临时 ZeroTier 身份经 JNI 加密保存、重新读取和删除。手机系统 KeyStore、实际入网与跨网络并发待测。下方已验证的 APK 来自此前的版本。[原型源码与本批实测](https://github.com/Luck9Star/herdr-pocket/blob/22d53e272a9acbeb2345bbcd0a1201fd7449af52/docs/55-mobile-shared-network-device.md) · [Penpot 设备审查](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=2a5fd934-a163-8057-8008-e823088d7aeb)
+
 ## Android 测试包
 
 两份 API 35 arm64-v8a debug APK 来自同一提交 [`dd02595`](https://github.com/Luck9Star/herdr-pocket/commit/dd025952321fb944465a48ec762ae76adc74f830)。登录 GitHub 下载归档，分别解压，用 `shasum -a 256 app.apk` 核对。归档摘要、包内 APK 和原生来源均已核验；两包中的 EasyTier、Tailscale 原生库逐字节一致。下载于北京时间 **11 月 22 日 05:32（Flutter）和 05:33（Tauri）** 到期。arm64 真机安装未验证。[构建记录](https://github.com/Luck9Star/herdr-pocket/actions/runs/42415286185)

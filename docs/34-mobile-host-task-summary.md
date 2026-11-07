@@ -34,7 +34,9 @@
 - Flutter 的 Ubuntu 隔离 SSH 测试还验证了返回列表时保留旧摘要、恢复原标签时使用同一连接、等新快照才恢复当前状态。共 7 帧，其中 5 个 delta；两次本地视口变化，234 次采样中共享 PTY 始终 119×40。此路使用测试 signer。[隔离 SSH 证据](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342/artifacts/13555994060)
 - Flutter analyzer、286 项常规测试、10 项绘制回归通过。常规套件跳过的 1 项 SSH 用例在独立步骤通过。Tauri JavaScript 149 项、共享 Rust transport 95＋1 项通过。模拟器执行 stock 只读场景；当前 arm64 真机安装、物理键盘／中文 IME、相机扫码及三网并发仍未验证。
 
-下一步优先在手机上验证输入与恢复，再根据正确性结果调整 Penpot 终端和键盘状态、比较两候选。UI 框架仍待选。
+下载 Actions 归档时请先登录 GitHub。公开仓库允许匿名查看本次构建记录；实际核查中，匿名读取 ZIP 返回 401。
+
+新一批手机源码已修正键盘首次焦点与重复点模式打断组字的问题，Mac 浏览器及本地验证见[手机终端键盘与组字](35-mobile-input-focus.md)。上表两份 APK 对应修复前的源码。下一批云任务将验证输入与恢复，再据此调整 Penpot 终端和键盘状态、比较两候选。
 
 ## 前两轮失败与修复
 

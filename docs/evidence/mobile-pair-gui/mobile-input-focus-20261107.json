@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "e6d2fc5903adc78f3cf5642a7e4bc3ed0f75ad22",
+  "testedSourcesSha256": {
+    "validation/tauri/src/remote.js": "319db85b93fef752290cacf624c01a08a68282499beeb2fabeb2c17ef7bc24ec",
+    "validation/tauri/src/tab-workspace.js": "dffeb2978b65332fa85f7ddbbb3b43fbd8a5504106166cc7bf5f45cd450eaa9d",
+    "validation/tauri/src/input-composition.js": "9e7b3db30fdbb1a9d36ebdd806a2c957454a4681ae0c087ed3240237c89125c2",
+    "validation/flutter/lib/remote_page.dart": "ee4752755ae1d476918032de652750a5c3b5c220c9bf3aefffeade35ec7acb63"
+  },
+  "environment": "macOS / Headless Chrome 156 / xterm.js 6.0.0 / synthetic native IPC, no SSH, OS keyboard, or device signer",
+  "baseline": {
+    "route": "saved host tab",
+    "firstTerminalFocus": {
+      "readOnly": true,
+      "inputMode": "text"
+    },
+    "viewport": [
+      390,
+      844
+    ],
+    "control": "DOM click"
+  },
+  "browser": {
+    "pairedForm": {
+      "viewport": [
+        390,
+        844
+      ],
+      "trustedDirectTap": true,
+      "agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "focus": [
+        {
+          "readOnly": false,
+          "inputMode": "text"
+        }
+      ],
+      "compositions": [
+        "compositionstart",
+        "compositionend",
+        "compositionstart",
+        "compositionend",
+        "compositionstart"
+      ],
+      "payloads": [
+        [
+          228,
+          184,
+          173
+        ]
+      ],
+      "activeTag": "TEXTAREA",
+      "resizeCalls": 0
+    },
+    "savedHostTab": {
+      "viewport": [
+        390,
+        844
+      ],
+      "trustedDirectTap": true,
+      "agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "focus": [
+        {
+          "readOnly": false,
+          "inputMode": "text"
+        }
+      ],
+      "compositions": [
+        "compositionstart",
+        "compositionend",
+        "compositionstart",
+        "compositionend",
+        "compositionstart"
+      ],
+      "payloads": [
+        [
+          228,
+          184,
+          173
+        ]
+      ],
+      "activeTag": "BODY",
+      "resizeCalls": 0
+    }
+  },
+  "actions": [
+    "Browser-generated trusted touch click on direct input",
+    "Begin composition while the native grant is pending, grant, then commit the old composition",
+    "Begin and commit a fresh Chinese composition",
+    "Begin another composition, then stop observation or select the other tab"
+  ],
+  "assertions": {
+    "pendingCompositionSent": 0,
+    "freshCommittedText": "中",
+    "freshReceiptsPerRoute": 1,
+    "additionalSendsAfterStopOrSwitch": 0
+  },
+  "automated": {
+    "cleanTauriNodePassed": 159,
+    "cleanTauriNodeSkipped": 0,
+    "viteBuild": "passed",
+    "dartFilesParsed": 2,
+    "flutterWidgetTestsAdded": 3,
+    "flutterWidgetTestsExecuted": false
+  },
+  "cleanup": {
+    "isolatedChromeSession": "closed",
+    "fixtureHttpPortListening": false,
+    "isolatedChromeDebugPortListening": false
+  },
+  "notVerified": [
+    "native system IME or soft keyboard visibility",
+    "physical touch, ARM Android installation or iOS runtime",
+    "new Flutter analyzer and widget tests",
+    "new APK build"
+  ]
+}

@@ -1,3 +1,15 @@
+// A writable textarea can request the keyboard before the backend grants input.
+// Keep composition events visible so a pre-grant composition retains its old lease.
+export function blockPendingKeys(textarea, pending) {
+  for (const kind of ['keydown', 'keypress', 'beforeinput', 'input']) {
+    textarea.addEventListener(kind, event => {
+      if (!pending()) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
+  }
+}
+
 /** Bind IME output to the lease that began composition, including after blur. */
 export class InputComposition {
   token = null;

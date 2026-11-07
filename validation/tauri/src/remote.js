@@ -5,7 +5,7 @@ import { invoke, Channel } from '@tauri-apps/api/core';
 import { RemoteViewGate, RemoteFrameQueue, validDashboard } from './remote-state.js';
 import { normalizePrivateKeyInput } from './remote-key.js';
 import { previewPairingResponse } from './pairing-view.js';
-import { InputComposition } from './input-composition.js';
+import { InputComposition, blockPendingKeys } from './input-composition.js';
 import { AuxiliaryModifiers, draftBytes, displayDraft } from './input-codec.js';
 import { OnlineInputQueue } from './online-input-queue.js';
 import { matchedReceipt } from './input-receipt.js';
@@ -115,30 +115,44 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   }
   async function changeInputMode(mode) {
     releaseAuxiliary();
-    if(inputGeneration===null || !terminal || (inputUnknown && mode!=='observe'))return;
+    if(document.hidden || inputGeneration===null || !terminal || (inputUnknown && mode!=='observe'))return;
     if(inputBusy) {loseInputFocus();return;}
     const discarded=onlineInput.clear(); recordUnsent(discarded.count);
     const generation=inputGeneration, revision=++inputRevision; inputEpoch=null; inputMode='observe'; draftPreview=null;
     renderAuxiliary();
     if(discarded.count)inputStatus(`${discarded.count} 笔未发送输入已丢弃。`);
     $('remote-input-preview-area').hidden=true; $('remote-input-draft-area').hidden=mode!=='draft';
-    const resetFinished=await Promise.race([focusReset.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),5000))]);
-    if(!resetFinished){inputStatus('焦点确认未完成；输入保持锁定。');return;}
-    if(revision!==inputRevision || generation!==inputGeneration)return;
-    switchingFocus=true;
-    if(mode==='draft') $('remote-input-draft').focus(); else terminal.focus();
-    switchingFocus=false;
+    // Request the editable control within the user gesture. Until the native
+    // reply, inputMode stays observe and compositions start without a lease.
     const expected=mode==='draft'?$('remote-input-draft'):terminal.textarea;
+    terminal.options.disableStdin=mode!=='direct';
+    terminal.textarea.setAttribute('inputmode',mode==='direct'?'text':'none');
+    if(mode==='direct')inputStatus('正在核验逐键输入许可；请等待确认后输入。');
+    switchingFocus=true;
     try {
-      const epoch=await invoke('remote_input_mode',{generation,mode,focused:document.activeElement===expected});
-      if(revision!==inputRevision || generation!==inputGeneration || document.activeElement!==expected)return;
-      inputEpoch=epoch; inputMode=mode; terminal.options.disableStdin=mode!=='direct';
-      terminal.textarea.setAttribute('inputmode',mode==='direct'?'text':'none');
+      if(mode==='draft')expected.focus();else terminal.focus();
+    } finally {switchingFocus=false;}
+    const current=()=>revision===inputRevision && generation===inputGeneration;
+    const focused=()=>!document.hidden && document.activeElement===expected;
+    let timer;
+    try {
+      await Promise.race([focusReset,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('focus_reset_timeout')),5000);})]);
+      if(!current())return;
+      if(!focused())throw Error('focus_lost');
+      const epoch=await invoke('remote_input_mode',{generation,mode,focused:true});
+      if(!current())return;
+      if(!focused() || !Number.isSafeInteger(epoch) || epoch<1)throw Error('input_lease_invalid');
+      inputEpoch=epoch; inputMode=mode;
       inputStatus(mode==='direct'?'逐键输入已启用；每次输入单独发送。':mode==='draft'?'草稿仅在核对并确认后发送。':'观察模式不发送输入。');
-    } catch {inputStatus('输入模式不可用；请重新选择。');}
+    } catch {
+      if(current()) {
+        loseInputFocus();
+        inputStatus('输入模式不可用；请重新选择。');
+      }
+    } finally {clearTimeout(timer);}
   }
   function inputToken() {return {generation:inputGeneration,epoch:inputEpoch,revision:inputRevision};}
-  function currentDirect(token) {return inputGeneration!==null && inputEpoch!==null && !inputUnknown && inputMode==='direct' && document.activeElement===terminal?.textarea && OnlineInputQueue.same(token,inputToken());}
+  function currentDirect(token) {return !document.hidden && inputGeneration!==null && inputEpoch!==null && !inputUnknown && inputMode==='direct' && document.activeElement===terminal?.textarea && OnlineInputQueue.same(token,inputToken());}
   function queueDirect(bytes) {
     const token=inputToken();
     if(!currentDirect(token)) {inputStatus('本次输入未发送：焦点或输入许可已失效。');return;}
@@ -502,11 +516,20 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
           terminal.parser.registerOscHandler(52,()=>true); terminal.parser.registerOscHandler(8,()=>true);
           terminal.open($('remote-terminal')); terminal.textarea.setAttribute('inputmode','none');
           const boundTerminal=terminal; inputComposition=new InputComposition();
+          const keyboardPending=()=>terminal===boundTerminal && inputMode!=='direct' && !boundTerminal.options.disableStdin;
+          blockPendingKeys(terminal.textarea,keyboardPending);
           terminal.onData(data=>{ if(terminal!==boundTerminal)return; const token={generation:inputGeneration,epoch:inputEpoch,revision:inputRevision}; if(!inputComposition.accepts(token)) {inputStatus('输入法提交已过期，本次未发送。');return;} renderAuxiliary();if(inputMode==='direct' && document.activeElement===terminal?.textarea) queueDirect(new TextEncoder().encode(data)); });
           terminal.textarea.addEventListener('compositionstart',()=>{if(terminal===boundTerminal)inputComposition.begin({generation:inputGeneration,epoch:inputEpoch,revision:inputRevision});},true);
           terminal.textarea.addEventListener('compositionend',()=>{if(terminal===boundTerminal)inputComposition.end();},true);
           terminal.textarea.addEventListener('blur',()=>{if(terminal===boundTerminal && !switchingFocus) loseInputFocus();});
-          terminal.textarea.addEventListener('paste',event=>{ if(terminal!==boundTerminal || inputMode!=='direct')return; event.preventDefault(); event.stopImmediatePropagation(); const text=event.clipboardData?.getData('text/plain') || ''; if(!text)return; $('remote-input-draft').value=text; void changeInputMode('draft').then(()=>showInputPreview()); },true);
+          terminal.textarea.addEventListener('paste',event=>{
+            if(terminal!==boundTerminal || (!keyboardPending() && inputMode!=='direct'))return;
+            event.preventDefault(); event.stopImmediatePropagation();
+            if(inputMode!=='direct')return;
+            const text=event.clipboardData?.getData('text/plain') || '';
+            if(!text)return;
+            $('remote-input-draft').value=text; void changeInputMode('draft').then(()=>showInputPreview());
+          },true);
         } else if(frame.full) terminal.reset();
         const rendered=terminal;
         terminal.write(Uint8Array.from(frame.bytes),()=>{

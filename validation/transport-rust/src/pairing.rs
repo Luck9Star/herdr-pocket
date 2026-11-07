@@ -9,6 +9,7 @@ pub trait KeyStore: Send + Sync {
     fn create(&self) -> Result<(String, String)>;
     fn public(&self, handle: &str) -> Result<String>;
     fn sign(&self, handle: &str, data: &[u8]) -> Result<Vec<u8>>;
+    /// Explicit deletion of the same immutable handle succeeds if already absent; never replace a key.
     fn delete(&self, handle: &str) -> Result<()>;
 }
 
@@ -460,11 +461,7 @@ impl KeyStore for VolatileKeyStore {
             .to_vec())
     }
     fn delete(&self, handle: &str) -> Result<()> {
-        self.0
-            .lock()
-            .map_err(|_| "key_unavailable")?
-            .remove(handle)
-            .ok_or("key_missing")?;
+        self.0.lock().map_err(|_| "key_unavailable")?.remove(handle);
         Ok(())
     }
 }

@@ -13,6 +13,10 @@ protocol SeedBackend {
     func delete(handle: String) throws
 }
 
+func checkedDeviceKeyDeletionStatus(_ status: OSStatus) throws {
+    guard status == errSecSuccess || status == errSecItemNotFound else { throw DeviceKeyError.osStatus(status) }
+}
+
 final class AppleKeychainSeedBackend: SeedBackend {
     private let service = "org.herdr-pocket.validation.device-key.v1"
     private func query(_ handle: String) -> [String: Any] {
@@ -44,7 +48,7 @@ final class AppleKeychainSeedBackend: SeedBackend {
     }
     func delete(handle: String) throws {
         let status = SecItemDelete(query(handle) as CFDictionary)
-        guard status == errSecSuccess else { throw DeviceKeyError.osStatus(status) }
+        try checkedDeviceKeyDeletionStatus(status)
     }
 }
 

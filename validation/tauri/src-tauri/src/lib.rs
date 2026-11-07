@@ -82,6 +82,7 @@ mod dashboard_watch;
 mod remote_tab_commands;
 mod config_document;
 mod clipboard;
+mod key_cleanup;
 mod pair_copy;
 mod terminal_keyboard;
 use clipboard::mobile_clipboard_read_text;
@@ -280,12 +281,14 @@ fn host_update(id:String,name:Option<String>,enabled:Option<bool>,hosts:State<'_
 struct RemoveHostReply {key_deleted:bool}
 #[tauri::command]
 async fn host_remove(id:String,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,ops:State<'_,network_identity::Operations>)->Result<RemoveHostReply,String>{
-    let _network_lease=ops.enter()?;let _lease=pairing.enter()?;let mut f=flow.lock().map_err(|_|"state_unavailable")?;if f.owner.is_some(){return Err("connection_active".into());}
-    f.tabs.cancel_hosts(std::slice::from_ref(&id));
-    let host=hosts.remove(&id)?;let mut current=pairing.current.lock().map_err(|_|"state_unavailable")?;
-    if current.as_ref().zip(host.pairing.as_ref()).is_some_and(|(p,r)|p.local_handle()==r.handle){*current=None;}
-    let key_deleted=host.pairing.as_ref().is_none_or(|r|pairing.store.delete(&r.handle).is_ok());
-    Ok(RemoveHostReply{key_deleted})
+    let _network_lease=ops.enter()?;
+    key_cleanup::remove_host(&pairing,&hosts,&flow,&id)
+
+}
+#[tauri::command]
+async fn host_cleanup_retry(id:String,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,ops:State<'_,network_identity::Operations>)->Result<key_cleanup::CleanupReply,String>{
+    let _network_lease=ops.enter()?;
+    key_cleanup::retry_cleanup(&pairing,&hosts,&flow,&id)
 }
 struct PairingState { store: Arc<dyn KeyStore>, current: Arc<Mutex<Option<Pairing>>>, busy: AtomicBool, restore_required: AtomicBool }
 struct PairingLease<'a>(&'a AtomicBool);
@@ -353,13 +356,8 @@ fn pair_cancel(state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>
 }
 #[tauri::command]
 async fn pair_reset(state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,hosts:State<'_,Hosts>) -> Result<(),String> {
-    let _lease=state.enter()?;
-    let mut f=flow.lock().map_err(|_|"state_unavailable")?;
-    if f.owner.is_some() { return Err("connection_active".into()); }
-    let mut current=state.current.lock().map_err(|_|"state_unavailable")?;
-    if let Some(p)=current.as_ref() { f.tabs.cancel_handle(p.local_handle()); if hosts.initialized()? {hosts.clear_handle(p.local_handle())?;} p.delete_local().map_err(str::to_string)?; }
-    current.take();
-    Ok(())
+    key_cleanup::reset_current(&state,&hosts,&flow)
+
 }
 #[derive(Default)]
 struct RemoteFlow {
@@ -566,7 +564,7 @@ pub fn run() {
             let flow=RemoteFlow {recovery:Some(recovery),..Default::default()};
             app.manage(Arc::new(Mutex::new(flow))); Ok(())
         })
-        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_copy::pair_copy_request,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,network_node_status,network_node_start,network_node_stop,network_node_login,network_node_login_status,network_node_open_auth,
+        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_copy::pair_copy_request,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,host_cleanup_retry,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,network_node_status,network_node_start,network_node_stop,network_node_login,network_node_login_status,network_node_open_auth,
             mobile_clipboard_read_text,terminal_keyboard::mobile_terminal_keyboard,config_document_platform,config_document_open,config_document_save,config_export,config_preview,config_apply,config_discard])
         .run(tauri::generate_context!())
         .expect("Tauri probe startup failed");

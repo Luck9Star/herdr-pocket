@@ -15,6 +15,9 @@ use std::{
 };
 
 const MAX_HOSTS: usize = 32;
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all="lowercase")]
+pub enum KeyCleanupMode { Identity, Host }
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Target {
@@ -73,6 +76,10 @@ pub struct Record {
     pub network_profile_id: Option<String>,
     #[serde(default, rename = "requiresNetworkBinding", skip_serializing_if = "is_false")]
     pub requires_network_binding: bool,
+    #[serde(default, rename="keyDeletionPending", skip_serializing_if="is_false")]
+    pub key_deletion_pending: bool,
+    #[serde(default, rename="keyCleanupMode", skip_serializing_if="Option::is_none")]
+    pub key_cleanup_mode: Option<KeyCleanupMode>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -98,6 +105,8 @@ pub struct View {
     pub retired: bool,
     pub network_profile_id: Option<String>,
     pub requires_network_binding: bool,
+    pub key_deletion_pending: bool,
+    pub key_cleanup_mode: Option<KeyCleanupMode>,
 }
 impl Record {
     pub fn review_network_binding(&self, profile:Option<&NetworkProfile>) -> Result<(),String> {
@@ -116,6 +125,8 @@ impl Record {
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
             || !valid_name(&self.name)
             || (self.retired && self.enabled)
+            || (self.key_deletion_pending != self.key_cleanup_mode.is_some())
+            || (self.key_deletion_pending && (self.enabled || self.pairing.is_none()))
             || (self.requires_network_binding && (!overlay_provider(self.provider) || self.network_profile_id.is_some()))
         {
             return Err("invalid_host_record".into());
@@ -152,6 +163,8 @@ impl Record {
             retired: self.retired,
             network_profile_id: self.network_profile_id.clone(),
             requires_network_binding: self.requires_network_binding,
+            key_deletion_pending: self.key_deletion_pending,
+            key_cleanup_mode: self.key_cleanup_mode,
         })
     }
 }
@@ -385,6 +398,7 @@ impl Hosts {
                 return Err("invalid_host_name".into());
             }
             target.validate()?;
+            if r.items.iter().any(|h|h.key_deletion_pending && h.target==target) {return Err("host_key_cleanup_pending".into());}
             let mut list = r.items.clone();
             let host_id = if let Some(id) = id {
                 let old = list.iter_mut().find(|x| x.id == id).ok_or("host_missing")?;
@@ -417,6 +431,8 @@ impl Hosts {
                     retired: false,
                     network_profile_id: None,
                     requires_network_binding: provider_hint.is_some_and(overlay_provider),
+                    key_deletion_pending: false,
+                    key_cleanup_mode: None,
                 });
                 id
             };
@@ -511,6 +527,7 @@ impl Hosts {
         self.with(|r| {
             let mut list = r.items.clone();
             let pos = list.iter().position(|h| h.id == id).ok_or("host_missing")?;
+            if list[pos].key_deletion_pending {return Err("host_key_cleanup_pending".into());}
             let removed = list.remove(pos);
             r.commit(list)?;
             Ok(removed)
@@ -522,6 +539,7 @@ impl Hosts {
             let mut changed = false;
             for h in &mut list {
                 if h.pairing.as_ref().is_some_and(|p| p.handle == handle) {
+                    if h.key_deletion_pending {return Err("host_key_cleanup_pending".into());}
                     h.pairing = None;
                     h.enabled = false;
                     changed = true;
@@ -533,6 +551,23 @@ impl Hosts {
             Ok(())
         })
     }
+    pub fn find_handle(&self, handle:&str) -> Result<Option<Record>,String> {self.with(|r|Ok(r.items.iter().find(|h|h.pairing.as_ref().is_some_and(|p|p.handle==handle)).cloned()))}
+    pub fn prepare_key_cleanup(&self, id:&str, expected_handle:&str, mode:KeyCleanupMode) -> Result<Record,String> {self.with(|r| {
+        let mut list=r.items.clone();let host=list.iter_mut().find(|h|h.id==id).ok_or("host_missing")?;
+        if !host.pairing.as_ref().is_some_and(|p|p.handle==expected_handle) {return Err("host_key_cleanup_changed".into());}
+        if host.key_deletion_pending {if host.key_cleanup_mode!=Some(mode) {return Err("host_key_cleanup_intent_changed".into());}return Ok(host.clone());}
+        host.enabled=false;host.key_deletion_pending=true;host.key_cleanup_mode=Some(mode);let ticket=host.clone();r.commit(list)?;Ok(ticket)
+    })}
+    pub fn finish_key_cleanup(&self, ticket:&Record) -> Result<(),String> {self.with(|r| {
+        let mut list=r.items.clone();let index=list.iter().position(|h|h.id==ticket.id).ok_or("host_key_cleanup_changed")?;
+        let current=&list[index];
+        if !ticket.key_deletion_pending || !current.key_deletion_pending || serde_json::to_vec(current).map_err(|_|"host_storage_unavailable")?!=serde_json::to_vec(ticket).map_err(|_|"host_storage_unavailable")? {return Err("host_key_cleanup_changed".into());}
+        match ticket.key_cleanup_mode.ok_or("host_key_cleanup_changed")? {
+            KeyCleanupMode::Host=>{list.remove(index);},
+            KeyCleanupMode::Identity=>{list[index].pairing=None;list[index].key_deletion_pending=false;list[index].key_cleanup_mode=None;list[index].enabled=false;}
+        }
+        r.commit(list)
+    })}
     pub fn contains_handle(&self, handle: &str) -> Result<bool, String> {
         self.with(|r| {
             Ok(r.items
@@ -583,6 +618,7 @@ impl Hosts {
     }) }
     pub fn route(&self, host:&Record) -> Result<Option<NetworkProfile>,String> { self.with(|r| {
         let current=r.items.iter().find(|h|h.id==host.id).ok_or("host_missing")?;
+        if current.key_deletion_pending {return Err("host_key_cleanup_pending".into());}
         if current.target!=host.target || current.network_profile_id!=host.network_profile_id
             || current.provider!=host.provider || current.requires_network_binding!=host.requires_network_binding {
             return Err("host_selection_changed".into());
@@ -602,6 +638,7 @@ impl Hosts {
 }
 impl Repository {
     fn route(&self, host:&Record) -> Result<Option<NetworkProfile>,String> {
+        if host.key_deletion_pending {return Err("host_key_cleanup_pending".into());}
         if host.requires_network_binding {return Err("network_binding_required".into());}
         let Some(id)=&host.network_profile_id else {return Ok(None)};
         let p=self.profiles.iter().find(|p|&p.id==id).ok_or("network_profile_missing")?;
@@ -717,6 +754,7 @@ impl Hosts {
                     .iter()
                     .find(|h| &h.id == id && !h.retired)
                     .ok_or("host_missing")?;
+                if h.key_deletion_pending {return Err("host_key_cleanup_pending".into());}
                 if h.network_profile_id.is_some() || h.requires_network_binding { return Err("transfer_network_unavailable".into()); }
                 hosts.push(PortableHost {
                     label: h.name.clone(),
@@ -816,6 +854,8 @@ impl Hosts {
                 if choice.action == ImportAction::Keep {
                     continue;
                 }
+                let incoming_target=Target::from(&host.target);
+                if r.items.iter().any(|h|h.key_deletion_pending && (h.target==incoming_target || selected.contains(&h.id))) {return Err("host_key_cleanup_pending".into());}
                 if choice.action == ImportAction::Replace {
                     if expected.is_empty() || selected != expected {
                         return Err("transfer_invalid_choice".into());
@@ -854,6 +894,8 @@ impl Hosts {
                     retired: false,
                     network_profile_id: None,
                     requires_network_binding: false,
+                    key_deletion_pending: false,
+                    key_cleanup_mode: None,
                 });
                 added_ids.push(id);
             }
@@ -893,6 +935,7 @@ impl Hosts {
  pub fn export_v2(&self,ids:&[String],network_ids:&[String],include_preferences:bool)->Result<ArchiveV2,String>{self.with(|r|{
     if ids.len()>16 || network_ids.len()>16 || ids.iter().collect::<HashSet<_>>().len()!=ids.len() || network_ids.iter().collect::<HashSet<_>>().len()!=network_ids.len(){return Err("transfer_invalid_selection".into());}
     let chosen:Vec<&Record>=ids.iter().map(|id|r.items.iter().find(|h|&h.id==id && !h.retired).ok_or("host_missing")).collect::<Result<_,_>>()?;
+    if chosen.iter().any(|h|h.key_deletion_pending) {return Err("host_key_cleanup_pending".into());}
     let mut included=network_ids.to_vec();for h in &chosen {if let Some(id)=&h.network_profile_id {if !included.contains(id){included.push(id.clone());}}}
     if included.len()>16 {return Err("transfer_invalid_selection".into());}
     let networks:Vec<PortableNetwork>=included.iter().enumerate().map(|(i,id)| {let p=r.profiles.iter().find(|p|&p.id==id).ok_or("network_profile_missing")?;Ok(PortableNetwork{key:format!("n{i}"),label:p.label.clone(),provider:p.provider,settings:p.settings.clone()})}).collect::<Result<_,String>>()?;
@@ -914,8 +957,9 @@ impl Hosts {
     for network in a.networks.iter().filter(|n|wanted.contains(&n.key)) {let id=random_public_id().map_err(str::to_string)?;let p=NetworkProfile{id:id.clone(),label:network.label.clone(),provider:network.provider,enabled:false,revision:1,settings:network.settings.clone()};p.validate()?;profiles.push(p);ids.insert(network.key.clone(),id);}
     let mut list=r.items.clone();let(mut added_ids,mut retired_ids,mut removed_ids,mut replaced)=(Vec::new(),Vec::new(),Vec::new(),Vec::new());
     for choice in choices {let h=&a.hosts[choice.index];let mut expected=conflict_ids_v2(&r.items,h);expected.sort();let mut selected=choice.replace_ids.clone();selected.sort();if choice.action!=ImportAction::Replace && !selected.is_empty(){return Err("transfer_invalid_choice".into());}if choice.action==ImportAction::Keep {continue;}
+        let incoming_target=Target::from(&h.target);if r.items.iter().any(|x|x.key_deletion_pending && (x.target==incoming_target || selected.contains(&x.id))) {return Err("host_key_cleanup_pending".into());}
         if choice.action==ImportAction::Replace {if expected.is_empty() || selected!=expected {return Err("transfer_invalid_choice".into());}for id in selected {let pos=list.iter().position(|h|h.id==id && !h.retired).ok_or("transfer_conflict_changed")?;replaced.push(list[pos].clone());if list[pos].pairing.is_some(){list[pos].retired=true;list[pos].enabled=false;retired_ids.push(id);}else{list.remove(pos);removed_ids.push(id);}}}
-        let target=Target::from(&h.target);if list.iter().any(|x|!x.retired && x.target==target){return Err("transfer_target_conflict".into());}let id=random_public_id().map_err(str::to_string)?;list.push(Record{id:id.clone(),name:h.label.clone(),enabled:true,target,pairing:None,provider:h.provider,retired:false,requires_network_binding:h.requires_network_binding,network_profile_id:h.network_key.as_ref().map(|key|ids.get(key).cloned().ok_or("transfer_invalid_schema")).transpose()?});added_ids.push(id);
+        let target=Target::from(&h.target);if list.iter().any(|x|!x.retired && x.target==target){return Err("transfer_target_conflict".into());}let id=random_public_id().map_err(str::to_string)?;list.push(Record{id:id.clone(),name:h.label.clone(),enabled:true,target,pairing:None,provider:h.provider,retired:false,key_deletion_pending:false,key_cleanup_mode:None,requires_network_binding:h.requires_network_binding,network_profile_id:h.network_key.as_ref().map(|key|ids.get(key).cloned().ok_or("transfer_invalid_schema")).transpose()?});added_ids.push(id);
     }
     let added=added_ids.iter().map(|id|list.iter().find(|h|&h.id==id).unwrap().view()).collect::<Result<Vec<_>,_>>()?;let retired=retired_ids.iter().map(|id|list.iter().find(|h|&h.id==id).unwrap().view()).collect::<Result<Vec<_>,_>>()?;
     let prefs=if apply_preferences {a.preferences.clone().ok_or("transfer_invalid_choice")?}else{r.preferences.clone()};Repository::validate_items(&list,&profiles,&prefs)?;before_commit(&replaced)?;r.commit_state(list,profiles,prefs)?;Ok(ImportResult{added,retired,removed_ids})

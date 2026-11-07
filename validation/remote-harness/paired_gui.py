@@ -317,18 +317,16 @@ def run_tauri(args, root, env, config, approval):
             button = wait_for(lambda:driver.read(pane_selector), 'pane_dashboard_missing')
             if not button.startswith(config['paneId']+' · '):
                 raise GuiFailure('unexpected_dashboard_pane')
-            # The disposable catalog contains just the device-authorized host.
-            # Capture its displayed count and timestamp before opening its pane.
             summary_selector = '#host-task-board [data-live-host-summary]'
-            current_label = '本次快照（持续更新不可用）'
+            phase_selector = '#remote-panes [data-dashboard-phase]'
             session_label = f" · 会话 {config['session']} · 受阻"
-            def current_summary():
-                label = driver.read(summary_selector)
-                return label if current_label + session_label in label and ' · 同步 ' in label else None
-            summary = wait_for(current_summary, 'direct_host_summary_missing')
-            retained = '上次快照（状态已陈旧）' + summary.split(current_label, 1)[1]
+            def current_board():
+                phase = driver.call('GET', driver.element(phase_selector)+'/attribute/data-dashboard-phase')
+                prefix = {'fresh': '当前快照', 'unavailable': '本次快照（持续更新不可用）'}.get(phase)
+                summary = driver.read(summary_selector)
+                return phase if prefix and prefix + session_label in summary and ' · 同步 ' in summary else None
+            initial_board = wait_for(current_board, 'direct_host_summary_missing')
             driver.click(pane_selector)
-            wait_for(lambda: driver.read(summary_selector).endswith(retained), 'direct_host_summary_not_retained')
             def rendered(attr):
                 path = driver.element('#remote-captured')+'/attribute/data-'+attr+'-frames'
                 value = driver.call('GET', path)
@@ -349,13 +347,20 @@ def run_tauri(args, root, env, config, approval):
                 driver.click('#remote-input-preview')
                 driver.click('#remote-input-confirm')
                 wait_for(lambda: '已接收入队' in driver.read('#remote-input-status'), 'input_ack_missing')
+            terminal_board = wait_for(current_board, 'direct_host_summary_expired_during_terminal')
             driver.click('#remote-cancel')
             wait_for(lambda:'陈旧' in driver.read('#remote-captured'), 'stale_marker_missing')
+            def stopped_summary():
+                label = driver.read(summary_selector)
+                position = label.find('上次快照（状态已陈旧）' + session_label)
+                return label[position:] if position >= 0 else None
+            retained = wait_for(stopped_summary, 'direct_host_summary_not_retained')
             driver.click('#host-return-home')
             wait_for(lambda: driver.read('#host-list [data-host-task-summary]') == retained,
                      'retained_home_summary_missing')
             return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
-                    'singleHostSnapshotShown':True, 'hostSummaryRetainedOnHome':True,
+                    'initialHostBoardPhase':initial_board, 'hostBoardPhaseDuringTerminal':terminal_board,
+                    'hostSummaryRetainedOnHome':True,
                     'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                     'localViewportChanges':2, 'inputQueueAccepted':bool(args.input_fixture), 'keyStore':'native process-memory Linux test identity'}
         finally:

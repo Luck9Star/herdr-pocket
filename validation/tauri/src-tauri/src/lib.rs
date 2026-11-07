@@ -356,9 +356,7 @@ struct RemoteFlow {
     host_id: Option<String>,
     node_binding: Option<herdr_readonly_transport::mobile_nodes::Binding>,
     cancelled_through: u64,
-    select: Option<(u64, tokio::sync::oneshot::Sender<String>)>,
-    ack: Option<(u64, u64, tokio::sync::oneshot::Sender<()>)>,
-    input: Option<(u64, Arc<herdr_readonly_transport::input::LiveInput>)>,
+    direct: Option<Arc<herdr_readonly_transport::direct_observation::DirectObservation>>,
     recovery: Option<herdr_readonly_transport::input::Recovery>,
 }
 impl RemoteFlow {
@@ -370,12 +368,12 @@ impl RemoteFlow {
     }
     fn cancel(&mut self, client_generation:u64, gate:&mut AttemptGate) {
         self.cancelled_through=self.cancelled_through.max(client_generation);
-        if self.owner==Some(client_generation) { if let Some((_,input))=self.input.take() {input.invalidate();} gate.cancel(); }
+        if self.owner==Some(client_generation) { if let Some(direct)=&self.direct {direct.cancel();} gate.cancel(); }
     }
     fn cancel_affected(&mut self, ids:&[String],gate:&mut AttemptGate) {self.tabs.cancel_hosts(ids);if let Some((owner,id))=self.owner.zip(self.host_id.clone()) {if ids.contains(&id) {self.cancel(owner,gate);}}}
     fn finish(&mut self, client_generation:u64, generation:u64, gate:&mut AttemptGate)->bool {
         if self.owner!=Some(client_generation) { return false; }
-        self.select=None; self.ack=None; self.owner=None; self.host_id=None; self.node_binding=None; if let Some((_,input))=self.input.take() {input.invalidate();}
+        if let Some(direct)=self.direct.take() {direct.cancel();} self.owner=None; self.host_id=None; self.node_binding=None;
         gate.finish(generation)
     }
 }
@@ -414,14 +412,7 @@ fn remote_tab_reserve(tab_id:String,client_generation:u64,host_id:String,expecte
 fn remote_tab_cancel(tab_id:String,client_generation:u64,generation:u64,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
     flow.lock().map_err(|_|"state_unavailable")?.tabs.cancel(&tab_id,client_generation,generation);Ok(())
 }
-#[derive(Serialize, Clone)]
-#[serde(tag="kind", rename_all="snake_case")]
-enum ObserveEvent {
-    Stage { generation:u64, stage:&'static str },
-    Dashboard { generation:u64, panes:Vec<herdr_readonly_transport::Pane> },
-    Frame { generation:u64, frame:herdr_readonly_transport::StreamFrame },
-    InputReady { generation:u64, unknown:bool, recovery_status:&'static str },
-}
+use herdr_readonly_transport::direct_observation::{DirectObservation, ObserveEvent};
 #[tauri::command]
 async fn remote_observe(config:RemoteConfig,device:bool,host_id:Option<String>,client_generation:u64,on_event:Channel<ObserveEvent>,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<(),String> {
     let network_lease=ops.enter()?;
@@ -460,38 +451,15 @@ async fn remote_observe(config:RemoteConfig,device:bool,host_id:Option<String>,c
     } else { None };
     drop(network_lease);
     let pair_progress=pairing.current.clone();
-    let progress_cancel=cancel.clone();
-    let progress_channel=on_event.clone();
-    let select_channel=on_event.clone();
-    let frame_channel=on_event.clone();
-    let select_flow=flow.inner().clone();
-    let frame_flow=flow.inner().clone();
-    let progress=move |stage| { if device && stage=="authenticated" { if let Ok(mut p)=pair_progress.lock() { if let Some(p)=p.as_mut() { p.finish(true); } } } if progress_channel.send(ObserveEvent::Stage{generation,stage}).is_err(){progress_cancel.cancel();} };
-    let select=
-        move |panes| { let flow=select_flow.clone(); let channel=select_channel.clone(); async move {
-            let (tx,rx)=tokio::sync::oneshot::channel();
-            flow.lock().map_err(|_|"state_unavailable")?.select=Some((generation,tx));
-            channel.send(ObserveEvent::Dashboard{generation,panes}).map_err(|_|"client_closed")?;
-            rx.await.map_err(|_|"cancelled")
-        }};
-    let frame=move |frame:herdr_readonly_transport::StreamFrame| { let flow=frame_flow.clone(); let channel=frame_channel.clone(); async move {
-            let seq=frame.seq; let (tx,rx)=tokio::sync::oneshot::channel();
-            flow.lock().map_err(|_|"state_unavailable")?.ack=Some((generation,seq,tx));
-            channel.send(ObserveEvent::Frame{generation,frame}).map_err(|_|"client_closed")?;
-            rx.await.map_err(|_|"cancelled")
-        }};
-    let input_flow=flow.inner().clone(); let input_channel=on_event.clone(); let input_cancel=cancel.clone();
-    let recovery=flow.lock().map_err(|_|"state_unavailable")?.recovery.clone().unwrap_or_else(herdr_readonly_transport::recovery::Recovery::disabled);
-    let hooks=herdr_readonly_transport::InputHooks { recovery, ready:Arc::new(move |input| {
-        if input_cancel.is_cancelled() {input.invalidate();return;}
-        let unknown=input.unknown(); let recovery_status=input.recovery_status();
-        if let Ok(mut f)=input_flow.lock() {
-            if f.owner!=Some(client_generation) || input_cancel.is_cancelled() {input.invalidate();return;}
-            f.input=Some((generation,input));
-            if input_channel.send(ObserveEvent::InputReady {generation,unknown,recovery_status}).is_err() {if let Some((_,input))=f.input.take(){input.invalidate();} input_cancel.cancel();}
-        } else { input.invalidate(); input_cancel.cancel(); }
-    }) };
-    let result=herdr_readonly_transport::observe_interactive_with_dialer(config,device_auth,cancel,Arc::new(Audit::default()),progress,select,frame,hooks,dialer.as_ref()).await;
+    let progress=Arc::new(move |stage| { if device && stage=="authenticated" { if let Ok(mut p)=pair_progress.lock() { if let Some(p)=p.as_mut() { p.finish(true); } } } });
+    let direct=DirectObservation::new(generation,cancel);
+    let recovery={
+        let mut f=flow.lock().map_err(|_|"state_unavailable")?;
+        f.direct=Some(direct.clone());
+        f.recovery.clone().unwrap_or_else(herdr_readonly_transport::recovery::Recovery::disabled)
+    };
+    let emit=Arc::new(move |event| on_event.send(event).map_err(|_|"client_closed"));
+    let result=direct.run(config,device_auth,Arc::new(Audit::default()),progress,emit,recovery,dialer.as_ref()).await;
     if device { if let Ok(mut p)=pairing.current.lock() { if let Some(p)=p.as_mut() { p.finish(false); } } }
     let accepted={ let mut f=flow.lock().map_err(|_|"state_unavailable")?; let mut g=state.lock().map_err(|_|"state_unavailable")?; f.finish(client_generation,generation,&mut g) };
     if !accepted {return Err("cancelled".into());}
@@ -499,7 +467,7 @@ async fn remote_observe(config:RemoteConfig,device:bool,host_id:Option<String>,c
 }
 fn current_input(flow:&Mutex<RemoteFlow>,generation:u64)->Result<Arc<herdr_readonly_transport::input::LiveInput>,String> {
     let f=flow.lock().map_err(|_|"state_unavailable")?;
-    f.input.as_ref().filter(|(g,_)|*g==generation).map(|(_,i)|i.clone()).ok_or("input_stale".into())
+    f.direct.as_ref().ok_or("input_stale")?.input(generation).map_err(str::to_string)
 }
 #[tauri::command]
 fn remote_input_mode(generation:u64,mode:String,focused:bool,flow:State<'_,Arc<Mutex<RemoteFlow>>>) -> Result<u64,String> {
@@ -525,16 +493,14 @@ async fn remote_input_send(generation:u64,epoch:u64,bytes:Vec<u8>,draft:bool,flo
     })
 }
 #[tauri::command]
-fn remote_select(generation:u64,pane_id:String,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
-    let mut f=flow.lock().map_err(|_|"state_unavailable")?;
-    if !f.select.as_ref().is_some_and(|(g,_)|*g==generation) { return Err("stale_selection".into()); }
-    f.select.take().unwrap().1.send(pane_id).map_err(|_|"cancelled".into())
+fn remote_select(generation:u64,epoch:u64,revision:u64,pane_id:String,terminal_id:String,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
+    let f=flow.lock().map_err(|_|"state_unavailable")?;
+    f.direct.as_ref().ok_or("stale_selection")?.select(generation,epoch,revision,pane_id,terminal_id).map_err(str::to_string)
 }
 #[tauri::command]
-fn remote_ack(generation:u64,seq:u64,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
-    let mut f=flow.lock().map_err(|_|"state_unavailable")?;
-    if !f.ack.as_ref().is_some_and(|(g,s,_)|*g==generation && *s==seq) {return Err("stale_ack".into());}
-    f.ack.take().unwrap().2.send(()).map_err(|_|"cancelled".into())
+fn remote_ack(generation:u64,epoch:u64,seq:u64,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
+    let f=flow.lock().map_err(|_|"state_unavailable")?;
+    f.direct.as_ref().ok_or("stale_ack")?.ack(generation,epoch,seq).map_err(str::to_string)
 }
 #[tauri::command]
 fn remote_cancel(client_generation:u64,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>)->Result<(),String> {

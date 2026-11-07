@@ -4,7 +4,8 @@ import { initNetworkUI } from './network-ui.js';
 import { initTabWorkspace } from './tab-workspace.js';
 import { Terminal } from '@xterm/xterm';
 import { invoke, Channel } from '@tauri-apps/api/core';
-import { RemoteViewGate, RemoteFrameQueue, validDashboard } from './remote-state.js';
+import { RemoteViewGate, RemoteFrameQueue } from './remote-state.js';
+import { SessionDashboard } from './dashboard-watch.js';
 import { normalizePrivateKeyInput } from './remote-key.js';
 import { previewPairingResponse } from './pairing-view.js';
 import { InputComposition, blockPendingKeys } from './input-composition.js';
@@ -250,7 +251,11 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     const text=event.clipboardData?.types && !Array.from(event.clipboardData.types).includes('text/plain') ? '' : event.clipboardData?.getData('text/plain') || '';
     void reviewLocalPaste(terminal,text,$('remote-input-draft'));
   },true);
-  window.addEventListener('blur',()=>{pasteFocusEpoch++;clearPasteReview();});
+  window.addEventListener('blur',()=>{
+    pasteFocusEpoch++;clearPasteReview();
+    if(inputEpoch!==null || inputBusy)loseInputFocus();
+  });
+  window.addEventListener('offline',()=>{if(gate.pending)cancel('网络已断开，观察已停止；重新连接需主动核验。');});
   for(const id of ['remote-input-preview','remote-input-confirm', 'remote-input-recover','remote-read-paste']) $(id).addEventListener('pointerdown',e=>e.preventDefault());
   $('remote-read-paste').onclick=async()=>{
     const origin=inputMode==='direct'?terminal?.textarea:$('remote-input-draft');
@@ -636,42 +641,85 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       directSummary.begin({host:reviewedHost ? summaryHost(reviewedHost) : null,config,device:$('pair-mode').checked,pairFingerprint,generation});
       const onEvent=new Channel();
       const frames=new RemoteFrameQueue();
+      const board=new SessionDashboard();
+      let boardEpoch=null, boardSelectionReady=false, selectionIntent=null, boundConfirmed=false;
+      function renderDirectBoard() {
+        $('remote-dashboard').hidden=false; $('remote-panes').replaceChildren();
+        const freshness=document.createElement('p');freshness.setAttribute('role','status');
+        freshness.setAttribute('data-dashboard-phase',board.phase);freshness.textContent=board.label;
+        $('remote-panes').append(freshness);
+        const presentation=dashboardPresentation(board.panes);
+        const caption=document.createElement('p');caption.textContent=presentation.summary;$('remote-panes').append(caption);
+        const epoch=board.epoch,revision=board.revision;
+        const canChoose=pane=>gate.accepts(generation) && showingRemote && !document.hidden && !selectedTarget && !selectionIntent && boardSelectionReady && boardEpoch===epoch && board.reviewed(pane,epoch,revision);
+        for(const pane of presentation.panes) {
+          const intent=Object.freeze({paneId:pane.paneId,terminalId:pane.terminalId});
+          const button=document.createElement('button');button.type='button';button.textContent=`${pane.paneId} · ${pane.terminalId}`;
+          const subtitle=[pane.label,paneStatusText(pane),[pane.workspace,pane.tab].filter(Boolean).join(' / ')].filter(Boolean).join(' · ');
+          if(subtitle){const meta=document.createElement('small');meta.className='pane-summary';meta.textContent=subtitle;button.append(meta);}
+          button.disabled=!canChoose(intent);
+          button.onclick=async()=>{
+            if(!canChoose(intent))return;
+            selectionIntent=intent;renderDirectBoard();
+            try {
+              await invoke('remote_select',{generation:boardNativeGeneration,epoch,revision,paneId:intent.paneId,terminalId:intent.terminalId});
+              if(!gate.accepts(generation,boardNativeGeneration) || !showingRemote || document.hidden)return;
+              boardSelectionReady=false;
+            } catch {if(gate.accepts(generation,boardNativeGeneration))cancel('选择未确认，连接已停止；请重新核对。');}
+            finally {if(gate.accepts(generation,boardNativeGeneration) && showingRemote)renderDirectBoard();}
+          };
+          $('remote-panes').append(button);
+          const newTab=document.createElement('button');newTab.type='button';newTab.textContent=`在新标签打开 ${pane.paneId}`;
+          newTab.disabled=!activeHostId || !$('pair-mode').checked || !board.reviewed(intent,epoch,revision);
+          newTab.onclick=async()=>{if(!gate.accepts(generation,boardNativeGeneration) || !showingRemote || document.hidden || !board.reviewed(intent,epoch,revision))return;const host=activeHostId;try {await waitForOldConnection(++hostNavigation);const id=workspace.create(host,intent);await workspace.select(id);status('目标已固定；请在标签中主动连接。');}catch {status('无法新建标签；请确认设备身份、连接状态和八标签上限。','warning');}};
+          $('remote-panes').append(newTab);
+        }
+      }
+      let boardNativeGeneration=null;
       let renderedFull = 0, renderedDeltas = 0;
       const captured = $('remote-captured');
       captured.dataset.fullFrames = captured.dataset.deltaFrames = '0';
       delete $('remote-input-status').dataset.receipt;
       onEvent.onmessage=event=>{
         if(!gate.accepts(generation,event.generation) || !showingRemote)return;
-        if(event.kind==='input_ready') { inputGeneration=event.generation; inputUnknown=event.unknown; inputMode='observe'; inputEpoch=null; $('remote-input-controls').hidden=false; $('remote-input-recover').hidden=event.recovery_status!=='pending'; $('remote-input-status').textContent=event.recovery_status==='unavailable'?'安全记录不可用或已损坏；输入保持锁定。':inputUnknown?'存在未确认的发送记录。重新观察原目标后，核实结果并确认。':'观察模式；显式选择输入模式才可发送。'; return; }
+        if(event.kind==='input_ready') { if(event.epoch!==boardEpoch || !selectedTarget || !boundConfirmed)return; inputGeneration=event.generation; inputUnknown=event.unknown; inputMode='observe'; inputEpoch=null; $('remote-input-controls').hidden=false; $('remote-input-recover').hidden=event.recovery_status!=='pending'; $('remote-input-status').textContent=event.recovery_status==='unavailable'?'安全记录不可用或已损坏；输入保持锁定。':inputUnknown?'存在未确认的发送记录。重新观察原目标后，核实结果并确认。':'观察模式；显式选择输入模式才可发送。'; return; }
         if(event.kind==='stage') { if(event.stage==='authenticated' && $('pair-mode').checked){connectionDraftAuthenticated=true;directSummary.authenticated(generation);pairState='paired';pairStatus('已完成固定主机公钥核验与设备 SSH 认证。');} if(stages[event.stage])status(stages[event.stage]); return; }
-        if(event.kind==='dashboard') {
-          if(!validDashboard(event.panes)){cancel('会话看板无效，连接已停止。');return;}
-          directSummary.snapshot(generation,event.panes);
-          $('remote-dashboard').hidden=false; $('remote-panes').replaceChildren();
-          const presentation=dashboardPresentation(event.panes);
-          for(const pane of presentation.panes) {
-            const button=document.createElement('button'); button.type='button';
-            button.textContent=`${pane.paneId} · ${pane.terminalId}`;
-            const details=[pane.label,paneStatusText(pane)];
-            details.push([pane.workspace,pane.tab].filter(Boolean).join(' / '));
-            const subtitle=details.filter(Boolean).join(' · ');
-            if (subtitle) {
-              const meta=document.createElement('small'); meta.className='pane-summary';
-              meta.textContent=subtitle; button.append(meta);
-            }
-            button.onclick=()=>{ directSummary.finish(generation); bindDraft(pane); selectedTarget=pane; $('remote-input-target').textContent=`目标：${pane.paneId} · ${pane.terminalId}`; for(const item of $('remote-panes').children)item.disabled=true;
-              void invoke('remote_select',{generation:event.generation,paneId:pane.paneId}).catch(()=>{if(gate.accepts(generation,event.generation))cancel('选择失败，连接已停止。');});
-              $('remote-dashboard').hidden=true; status(`正在观察 ${pane.paneId} · ${pane.terminalId}`);
-            };
-            $('remote-panes').append(button);
-            const newTab=document.createElement('button');newTab.type='button';newTab.textContent=`在新标签打开 ${pane.paneId}`;
-            newTab.disabled=!activeHostId || !$('pair-mode').checked;
-            newTab.onclick=async()=>{const host=activeHostId;try {await waitForOldConnection(++hostNavigation);const id=workspace.create(host,pane);await workspace.select(id);status('目标已固定；请在标签中主动连接。');}catch {status('无法新建标签；请确认设备身份、连接状态和八标签上限。','warning');}};
-            $('remote-panes').append(newTab);
+        if(event.kind==='observation') {
+          const epoch=event.snapshot?.epoch,phase=event.snapshot?.phase;
+          if(!Number.isSafeInteger(epoch) || epoch<1 || !['starting','active','pausing','paused','resuming','closed'].includes(phase)){cancel('观察状态无效，连接已停止。');return;}
+          if(boardEpoch!==null && epoch<boardEpoch)return;
+          if(boardEpoch!==null && epoch>boardEpoch && (selectedTarget || selectionIntent)){cancel('观察代次变化，连接已停止。');return;}
+          if(boardEpoch===null || epoch>boardEpoch){boardEpoch=epoch;board.advance(epoch);boardSelectionReady=false;directSummary.update(generation,board);}
+          boardNativeGeneration=event.generation;
+          if(['pausing','paused','closed'].includes(phase)){board.invalidate(phase);boardSelectionReady=false;directSummary.update(generation,board);}
+          renderDirectBoard();return;
+        }
+        if(event.kind==='target_bound') {
+          if(event.epoch!==boardEpoch)return;
+          const expected = selectionIntent || selectedTarget;
+          if(!expected || event.pane_id!==expected.paneId || event.terminal_id!==expected.terminalId){cancel('终端目标已变化，连接已停止。');return;}
+          if(selectionIntent) {
+            bindDraft(expected);selectedTarget=expected;selectionIntent=null;
+            $('remote-input-target').textContent=`目标：${expected.paneId} · ${expected.terminalId}`;
+            status(`正在观察 ${expected.paneId} · ${expected.terminalId}`);
           }
-          status(presentation.summary); return;
+          boundConfirmed=true;return;
+        }
+        if(event.kind==='dashboard_watch') {
+          if(!event.update || !Number.isSafeInteger(event.update.epoch) || event.update.epoch<1){cancel('会话看板无效，连接已停止。');return;}
+          if(boardEpoch===null || event.update.epoch!==boardEpoch)return;
+          boardNativeGeneration=event.generation;
+          const accepted=board.accept(event.update,boardEpoch);
+          if(accepted==='invalid'){cancel('会话看板无效，连接已停止。');return;}
+          if(accepted==='accepted'){directSummary.update(generation,board);renderDirectBoard();}
+          return;
+        }
+        if(event.kind==='selection_ready') {
+          if(!Number.isSafeInteger(event.epoch) || event.epoch!==boardEpoch)return;
+          boardNativeGeneration=event.generation;boardSelectionReady=true;renderDirectBoard();return;
         }
         if(event.kind!=='frame') { cancel('收到无效事件，连接已停止。'); return; }
+        if(event.epoch!==boardEpoch || !boundConfirmed)return;
         const frame=event.frame;
         if(!frames.accept(frame)) {cancel('画面顺序或内容异常，连接已停止，画面陈旧。');return;}
         if(!terminal) {
@@ -708,7 +756,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
         } else if(frame.full) {selectionReady=false;if(selectTextButton)selectTextButton.disabled=true;terminal.reset();}
         const rendered=terminal;
         terminal.write(Uint8Array.from(frame.bytes),()=>{
-          if(terminal!==rendered || !gate.accepts(generation,event.generation) || !showingRemote)return;
+          if(terminal!==rendered || !gate.accepts(generation,event.generation) || !showingRemote || event.epoch!==boardEpoch)return;
           $('remote-captured').textContent=`${new Date().toLocaleTimeString()} 更新 · 80 × 24 · 只读观察中`;
           status('只读观察中；停止或离开后画面标记为陈旧。','success');
           if(!frames.acknowledge(frame.seq)){cancel('渲染确认异常，连接已停止。');return;}
@@ -716,7 +764,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
           if (frame.full) renderedFull++; else renderedDeltas++;
           captured.dataset.fullFrames = String(renderedFull);
           captured.dataset.deltaFrames = String(renderedDeltas);
-          void invoke('remote_ack',{generation:event.generation,seq:frame.seq}).catch(()=>{if(gate.accepts(generation,event.generation))cancel('渲染确认失败，连接已停止。');});
+          void invoke('remote_ack',{generation:event.generation,epoch:event.epoch,seq:frame.seq}).catch(()=>{if(gate.accepts(generation,event.generation))cancel('渲染确认失败，连接已停止。');});
         });
       };
       if ($('pair-mode').checked) { pairState='connecting'; pairStatus('正在核验主机并认证设备；不会自动重试。'); }

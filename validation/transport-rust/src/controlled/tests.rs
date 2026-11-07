@@ -18,7 +18,9 @@ impl Drop for Temp {
 struct Stats {
     connections: AtomicUsize,
     auths: AtomicUsize,
+    device_key: Mutex<Option<PublicKey>>,
     execs: AtomicUsize,
+    terminal_delta: AtomicBool,
     snapshots: AtomicUsize,
     snapshot_active: AtomicUsize,
     snapshot_high: AtomicUsize,
@@ -68,7 +70,8 @@ impl server::Handler for Peer {
     ) -> std::result::Result<server::Auth, Self::Error> {
         self.stats.auths.fetch_add(1, Ordering::SeqCst);
         Ok(
-            if user == "fixture" && key.public_key.key_data() == self.key.key_data() {
+            if user == "fixture" && (key.public_key.key_data() == self.key.key_data()
+                || locked(&self.stats.device_key).as_ref().is_some_and(|allowed| key.public_key.key_data() == allowed.key_data())) {
                 server::Auth::Accept
             } else {
                 server::Auth::reject()
@@ -93,6 +96,9 @@ impl server::Handler for Peer {
         self.stats.execs.fetch_add(1, Ordering::SeqCst);
         session.channel_success(channel)?;
         session.data(channel,b"{\"type\":\"terminal.frame\",\"seq\":1,\"full\":true,\"encoding\":\"ansi\",\"width\":80,\"height\":24,\"bytes\":\"eA==\"}\n".to_vec())?;
+        if self.stats.terminal_delta.load(Ordering::SeqCst) {
+            session.data(channel,b"{\"type\":\"terminal.frame\",\"seq\":2,\"full\":false,\"encoding\":\"ansi\",\"width\":80,\"height\":24,\"bytes\":\"eQ==\"}\n".to_vec())?;
+        }
         if self.stats.block_after_exec.load(Ordering::SeqCst) {
             self.stats.block_reads.store(true, Ordering::SeqCst);
         }
@@ -1083,6 +1089,184 @@ fn changed(h: &Harness) {
 }
 fn set_panes(h: &Harness, panes: Value) {
     *locked(&h.stats.panes) = Some(panes.as_array().unwrap().clone());
+}
+
+// Exercise the exact bridge called by Tauri's just-paired remote_observe.
+// This fixture never contacts a real host or installs a key authorization.
+use crate::direct_observation::{DirectObservation, ObserveEvent};
+struct DirectView {
+    bridge: Arc<DirectObservation>,
+    events: mpsc::UnboundedReceiver<ObserveEvent>,
+    task: tokio::task::JoinHandle<Result<()>>,
+    dials: Arc<Counting>,
+    seen_frames: Vec<(u64, bool)>,
+}
+impl DirectView {
+    fn launch(h: &Harness, device: Option<(String, Arc<dyn DeviceSigner>)>) -> Self {
+        let bridge = DirectObservation::new(73, Cancellation::default());
+        let runner = bridge.clone();
+        let (tx, events) = mpsc::unbounded_channel();
+        let emit = Arc::new(move |event| tx.send(event).map_err(|_| "client_closed"));
+        let mut config = h.config.clone();
+        if device.is_some() { config.private_key_pem.clear(); }
+        let recovery = h.recovery("direct-input");
+        let dials = Arc::new(Counting { dials: AtomicUsize::new(0) });
+        let dialer = dials.clone();
+        let task = tokio::spawn(async move {
+            runner.run(config, device, Arc::new(Audit::default()), Arc::new(|_| {}), emit, recovery, dialer.as_ref()).await
+        });
+        Self { bridge, events, task, dials, seen_frames: Vec::new() }
+    }
+    async fn next(&mut self, predicate: impl Fn(&ObserveEvent) -> bool) -> ObserveEvent {
+        timeout(Duration::from_secs(7), async {
+            loop {
+                let event = self.events.recv().await.expect("observation ended before expected event");
+                if let ObserveEvent::Frame { frame, .. } = &event { self.seen_frames.push((frame.seq, frame.full)); }
+                if predicate(&event) { return event; }
+            }
+        }).await.unwrap()
+    }
+    async fn fresh(&mut self) -> session_watch::SessionWatchUpdate {
+        match self.next(|e| matches!(e, ObserveEvent::DashboardWatch { update, .. } if update.phase == session_watch::SessionWatchPhase::Fresh)).await {
+            ObserveEvent::DashboardWatch { update, .. } => update,
+            _ => unreachable!(),
+        }
+    }
+    async fn ready(&mut self) -> u64 {
+        match self.next(|e| matches!(e, ObserveEvent::SelectionReady { .. })).await {
+            ObserveEvent::SelectionReady { epoch, .. } => epoch,
+            _ => unreachable!(),
+        }
+    }
+    fn choose(&self, update: &session_watch::SessionWatchUpdate, terminal: &str) -> Result<()> {
+        self.bridge.select(73, update.epoch, update.revision, "w1:p1".into(), terminal.into())
+    }
+    async fn stop(self, h: &Harness) {
+        self.bridge.cancel();
+        assert_eq!(timeout(Duration::from_secs(7), self.task).await.unwrap().unwrap(), Err("cancelled"));
+        until(|| h.stats.watch_active.load(Ordering::SeqCst) == 0).await;
+        // The peer's SSH driver must finish before Harness::drop can abort it.
+        // This distinguishes real connection retirement from a closed UI slot.
+        until(|| locked(&h.children).iter().all(|task| task.is_finished())).await;
+        assert_eq!(self.dials.dials.load(Ordering::SeqCst), 1);
+        assert_eq!(h.stats.connections.load(Ordering::SeqCst), 1);
+        assert_eq!(h.stats.auths.load(Ordering::SeqCst), 1);
+        assert!(locked(&h.stats.writes).is_empty());
+        assert!(!locked(&h.stats.methods).iter().any(|m| m.contains("resize") || m == "pocket.input.send"));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn direct_paired_bridge_watch_and_terminal_share_signer_and_full_delta_ack() {
+    use crate::pairing::{KeyStore, VolatileKeyStore};
+    struct Signer { store: Arc<VolatileKeyStore>, handle: String, calls: Arc<AtomicUsize> }
+    impl DeviceSigner for Signer {
+        fn sign(&self, data: &[u8]) -> std::result::Result<Vec<u8>, ()> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.store.sign(&self.handle, data).map_err(|_| ())
+        }
+    }
+    let h = Harness::new().await;
+    h.stats.terminal_delta.store(true, Ordering::SeqCst);
+    let store = Arc::new(VolatileKeyStore::default());
+    let (handle, public) = store.create().unwrap();
+    *locked(&h.stats.device_key) = Some(PublicKey::from_openssh(&public).unwrap());
+    let calls = Arc::new(AtomicUsize::new(0));
+    let signer = Arc::new(Signer { store, handle, calls: calls.clone() });
+    let signer_lifetime = Arc::downgrade(&signer);
+    let mut view = DirectView::launch(&h, Some((public, signer)));
+    // Attach announces epoch before any dashboard event. Both early fresh and
+    // late selection-ready are deliverable without dropping the initial rows.
+    assert!(matches!(view.events.recv().await, Some(ObserveEvent::Observation { generation: 73, snapshot: ObservationSnapshot { epoch: 1, phase: ObservationPhase::Starting } })));
+    let first = view.fresh().await;
+    assert_eq!(view.ready().await, first.epoch);
+    view.choose(&first, "term_abc").unwrap();
+    let bound = view.next(|e| matches!(e, ObserveEvent::TargetBound { .. })).await;
+    assert!(matches!(bound, ObserveEvent::TargetBound { generation: 73, epoch: 1, ref pane_id, ref terminal_id } if pane_id == "w1:p1" && terminal_id == "term_abc"));
+    let full = view.next(|e| matches!(e, ObserveEvent::Frame { .. })).await;
+    assert!(matches!(full, ObserveEvent::Frame { epoch: 1, frame: StreamFrame { seq: 1, full: true, .. }, .. }));
+    assert_eq!(view.bridge.ack(72, 1, 1), Err("stale_ack"));
+    assert_eq!(view.bridge.ack(73, 2, 1), Err("stale_ack"));
+    assert_eq!(view.bridge.ack(73, 1, 2), Err("stale_ack"));
+    // A dashboard status refresh completes while the full terminal frame is
+    // still awaiting GUI ACK, proving the two channels run concurrently.
+    set_panes(&h, serde_json::json!([{"pane_id":"w1:p1","terminal_id":"term_abc","agent_status":"blocked"},{"pane_id":"w1:p3","terminal_id":"term_123","agent_status":"working"}]));
+    changed(&h);
+    let refreshed = view.fresh().await;
+    assert!(refreshed.revision > first.revision);
+    assert!(refreshed.panes.as_ref().unwrap().iter().any(|p| p.pane_id == "w1:p3"));
+    assert_eq!(view.seen_frames, vec![(1, true)]);
+    while let Ok(event) = view.events.try_recv() { assert!(!matches!(event, ObserveEvent::Frame { .. })); }
+    view.bridge.ack(73, 1, 1).unwrap();
+    let delta = view.next(|e| matches!(e, ObserveEvent::Frame { .. })).await;
+    assert!(matches!(delta, ObserveEvent::Frame { epoch: 1, frame: StreamFrame { seq: 2, full: false, .. }, .. }));
+    assert_eq!(view.bridge.ack(73, 1, 1), Err("stale_ack"));
+    view.bridge.ack(73, 1, 2).unwrap();
+    assert_eq!(view.bridge.ack(73, 1, 2), Err("stale_ack"));
+    assert!(calls.load(Ordering::SeqCst) > 0);
+    assert!(signer_lifetime.upgrade().is_some());
+    assert_eq!(h.stats.execs.load(Ordering::SeqCst), 1);
+    view.stop(&h).await;
+    assert!(signer_lifetime.upgrade().is_none());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn direct_paired_bridge_rejects_old_epoch_revision_replaced_row_and_duplicate_selection() {
+    let h = Harness::new().await;
+    let mut view = DirectView::launch(&h, None);
+    let first = view.fresh().await;
+    view.ready().await;
+    h.stats.hold_snapshot.store(true, Ordering::SeqCst);
+    set_panes(&h, serde_json::json!([{"pane_id":"w1:p1","terminal_id":"term_cde","agent_status":"working"}]));
+    changed(&h);
+    let stale = view.next(|e| matches!(e, ObserveEvent::DashboardWatch { update, .. } if update.phase == session_watch::SessionWatchPhase::Stale)).await;
+    let ObserveEvent::DashboardWatch { update: stale, .. } = stale else { unreachable!() };
+    assert_eq!(view.choose(&stale, "term_abc"), Err("dashboard_stale"));
+    h.stats.hold_snapshot.store(false, Ordering::SeqCst);
+    h.stats.snapshot_gate.notify_waiters();
+    let current = view.fresh().await;
+    assert_eq!(view.choose(&first, "term_abc"), Err("dashboard_stale"));
+    assert_eq!(view.choose(&current, "term_abc"), Err("target_changed"));
+    assert_eq!(view.bridge.select(72, current.epoch, current.revision, "w1:p1".into(), "term_cde".into()), Err("stale_selection"));
+    assert_eq!(view.bridge.select(73, current.epoch + 1, current.revision, "w1:p1".into(), "term_cde".into()), Err("stale_selection"));
+    view.choose(&current, "term_cde").unwrap();
+    assert_eq!(view.choose(&current, "term_cde"), Err("stale_selection"));
+    assert!(matches!(view.next(|e| matches!(e, ObserveEvent::TargetBound { .. })).await, ObserveEvent::TargetBound { ref terminal_id, .. } if terminal_id == "term_cde"));
+    view.stop(&h).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn direct_paired_bridge_cancel_covers_selection_and_first_frame_ack() {
+    for select in [false, true] {
+        let h = Harness::new().await;
+        let mut view = DirectView::launch(&h, None);
+        let first = view.fresh().await;
+        view.ready().await;
+        if select {
+            view.choose(&first, "term_abc").unwrap();
+            view.next(|e| matches!(e, ObserveEvent::Frame { .. })).await;
+        }
+        let bridge = view.bridge.clone();
+        view.stop(&h).await;
+        assert_eq!(bridge.select(73, first.epoch, first.revision, "w1:p1".into(), "term_abc".into()), Err("stale_selection"));
+        assert_eq!(bridge.ack(73, first.epoch, 1), Err("stale_ack"));
+        assert!(bridge.input(73).is_err());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn direct_paired_bridge_reports_unsupported_watch_without_claiming_freshness() {
+    let h = Harness::new().await;
+    h.stats.watch_unsupported.store(true, Ordering::SeqCst);
+    let mut view = DirectView::launch(&h, None);
+    let event = view.next(|e| matches!(e, ObserveEvent::DashboardWatch { update, .. } if update.phase == session_watch::SessionWatchPhase::Unavailable && update.panes.is_some())).await;
+    let ObserveEvent::DashboardWatch { update, .. } = event else { unreachable!() };
+    assert_eq!(update.reason, "watch_unsupported");
+    view.ready().await;
+    view.choose(&update, "term_abc").unwrap();
+    view.next(|e| matches!(e, ObserveEvent::Frame { .. })).await;
+    assert_eq!(h.stats.watch_subscribers.load(Ordering::SeqCst), 1);
+    view.stop(&h).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

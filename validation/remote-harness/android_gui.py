@@ -311,6 +311,10 @@ def run_android(args, root, env, config, approval):
         button = wait_for(lambda: browser.read(selector), 'android_pane_dashboard_missing', timeout=60)
         if not button.startswith(config['paneId']+' · '):
             raise GuiFailure('android_unexpected_dashboard_pane')
+        def board_phase():
+            value = browser.evaluate("document.querySelector('#remote-panes [data-dashboard-phase]')?.dataset.dashboardPhase")
+            return value if value in ('fresh', 'unavailable') else None
+        initial_board = wait_for(board_phase, 'android_initial_host_board_phase_missing')
         browser.click(selector)
         def rendered(attr):
             return browser.evaluate(f"Number(document.querySelector('#remote-captured').dataset.{attr}Frames || 0)")
@@ -353,6 +357,7 @@ def run_android(args, root, env, config, approval):
             if browser.read('#remote-input-draft', 'value'):
                 raise GuiFailure('android_submitted_draft_retained')
             receipts.append(second)
+        terminal_board = wait_for(board_phase, 'android_host_board_phase_during_terminal_missing')
         browser.click('#remote-cancel')
         wait_for(lambda: '陈旧' in (browser.read('#remote-captured') or ''), 'android_stale_marker_missing')
         return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
@@ -360,6 +365,7 @@ def run_android(args, root, env, config, approval):
                 'inputQueueAccepted':bool(receipts), 'inputReceipts':receipts,
                 **paste_evidence,
                 'hiddenReentryFreshFull':bool(receipts),
+                'initialHostBoardPhase':initial_board, 'hostBoardPhaseDuringTerminal':terminal_board,
                 'keyStore':'Android API 35 emulator AndroidKeyStore-wrapped device key',
                 'device':'ephemeral Android emulator', 'uiDriver':'debug WebView CDP input'}
     finally:

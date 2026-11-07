@@ -178,7 +178,7 @@ class AndroidPasteDriverTest(unittest.TestCase):
     def test_stock_production_runner_does_not_seed_or_read_clipboard(self):
         import tempfile
         view = Mock()
-        view.evaluate.side_effect = lambda expression: 1 if 'Frames' in expression else True
+        view.evaluate.side_effect = lambda expression: 'fresh' if 'dataset.dashboardPhase' in expression else (1 if 'Frames' in expression else True)
         view.read.side_effect = lambda selector, *args: {
             '#pair-request': 'public fixture request', '#pair-status': '授权响应已审查',
             '#remote-panes button': 'p · term_1', '#remote-captured': '陈旧',
@@ -203,6 +203,8 @@ class AndroidPasteDriverTest(unittest.TestCase):
             result = android.run_android(args, None, None, config, approval)
         view.copy_synthetic_clipboard.assert_not_called()
         view.receipt.assert_not_called(); approval.verify_ssh.assert_not_called()
+        self.assertEqual(result['initialHostBoardPhase'], 'fresh')
+        self.assertEqual(result['hostBoardPhaseDuringTerminal'], 'fresh')
         self.assertFalse(result['inputQueueAccepted'])
         self.assertEqual(result['inputReceipts'], [])
         self.assertFalse(any('paste' in field.lower() or 'clipboard' in field.lower() for field in result))

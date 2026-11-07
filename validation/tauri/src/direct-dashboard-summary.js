@@ -1,8 +1,8 @@
 import {hostSummaryIdentity} from './host-dashboard-summary.js';
 const fields=['host','port','username','expectedHostKey','socketPath','herdrPath','session'];
-// The legacy direct observer emits exactly one authoritative dashboard, not a watch.
+// A direct observer owns at most one authenticated host summary.
 export class DirectDashboardSummary {
-  constructor(emit,now=()=>Date.now()){this.emit=emit;this.now=now;this.attempt=null;}
+  constructor(emit){this.emit=emit;this.attempt=null;}
   begin({host,config,device,pairFingerprint,generation}) {
     this.finish();
     if(!device || !hostSummaryIdentity(host) || pairFingerprint!==host.deviceFingerprint || !Number.isSafeInteger(generation) || fields.some(k=>host.target[k]!==config[k]))return;
@@ -11,9 +11,12 @@ export class DirectDashboardSummary {
     this.emit({type:'starting',hostId:host.id,identity,source});
   }
   authenticated(generation) {if(this.attempt?.generation===generation)this.attempt.authenticated=true;}
-  snapshot(generation,panes) {
+  update(generation,board) {
     const a=this.attempt;if(!a || a.generation!==generation || !a.authenticated)return;
-    this.emit({type:'snapshot',hostId:a.identity.id,identity:a.identity,source:a.source,board:{panes,capturedAt:this.now(),phase:'unavailable'}});
+    if(!board?.selectable || !Array.isArray(board.panes) || !Number.isFinite(board.capturedAt)) {
+      this.emit({type:'stale',hostId:a.identity.id,identity:a.identity,source:a.source});return;
+    }
+    this.emit({type:'snapshot',hostId:a.identity.id,identity:a.identity,source:a.source,board});
   }
   finish(generation) {
     const a=this.attempt;if(!a || (generation!==undefined && a.generation!==generation))return;

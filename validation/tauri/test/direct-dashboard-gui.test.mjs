@@ -1566,3 +1566,50 @@ test('paired form sends the explicitly selected observer canvas on connect',asyn
     await flush();
   } finally {h.restore();}
 });
+
+test('paired function keys send once only with active focus and consume rejected modifiers',async()=>{
+  const h=await setup(), n=h.nodes;try {
+    await openInput(h);
+    const all=()=>n['remote-input-keys'].all();
+    const expand=all().find(e=>e.textContent==='更多键');
+    const key=name=>all().find(e=>e.dataset.remoteKey===name);
+    assert.equal(expand.disabled,true);key('f1').click();assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
+    n['remote-input-direct'].click();await flush();await flush();assert.equal(document.activeElement,h.terminal.textarea);
+    expand.click();assert.equal(expand.attrs['aria-expanded'],'true');
+    key('f1').click();await flush();await flush();
+    n['remote-modifier-ctrl'].click();n['remote-modifier-alt'].click();key('f4').click();await flush();await flush();
+    n['remote-modifier-alt'].click();key('insert').click();await flush();await flush();
+    n['remote-modifier-ctrl'].click();key('backspace').click();await flush();await flush();
+    key('backspace').click();await flush();await flush();
+    key('shift-tab').click();await flush();await flush();
+    const writes=h.calls.filter(c=>c.name==='remote_input_send').map(c=>Buffer.from(c.args.bytes).toString('hex'));
+    assert.deepEqual(writes,['1b4f50','1b5b313b3753','1b5b323b337e','7f','1b5b5a']);
+    n['remote-modifier-ctrl'].click();expand.click();key('f2').click();await flush();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,5);
+    expand.click();key('f2').click();await flush();await flush();
+    assert.equal(Buffer.from(h.calls.filter(c=>c.name==='remote_input_send').at(-1).args.bytes).toString('hex'),'1b4f51');
+    h.background();key('f3').click();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,6);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('paired function keys cannot send while composing or in draft',async()=>{
+  const h=await setup(),n=h.nodes;try {
+    await openInput(h);n['remote-input-direct'].click();await flush();await flush();
+    const all=()=>n['remote-input-keys'].all(),expand=all().find(e=>e.textContent==='更多键'),key=all().find(e=>e.dataset.remoteKey==='f1');
+    expand.click();h.terminal.textarea.dispatch('compositionstart');assert.equal(expand.disabled,true);key.click();
+    h.terminal.textarea.dispatch('compositionend');await flush();assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
+    n['remote-input-draft-mode'].click();await flush();await flush();key.click();assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('keyboard navigation inside auxiliary toolbar retains lease only until focus leaves it',async()=>{
+  const h=await setup(),n=h.nodes;try {
+    await openInput(h);n['remote-input-direct'].click();await flush();await flush();
+    const all=()=>n['remote-input-keys'].all(),expand=all().find(e=>e.textContent==='更多键');
+    h.terminal.textarea.dispatch('blur',{relatedTarget:expand});document.activeElement=expand;
+    expand.click();const key=all().find(e=>e.dataset.remoteKey==='f1');document.activeElement=key;key.click();await flush();await flush();
+    assert.equal(Buffer.from(h.calls.filter(c=>c.name==='remote_input_send')[0].args.bytes).toString('hex'),'1b4f50');
+    document.activeElement=document.body;n['remote-input-keys'].dispatch('focusout',{relatedTarget:document.body});key.click();await flush();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,1);
+  } finally {h.finish();await flush();h.restore();}
+});

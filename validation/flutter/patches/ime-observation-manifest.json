@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "name": "terminal_view-0.5.0-ime-observation",
+  "version": "0.5.0",
+  "archiveUrl": "https://pub.dev/api/archives/terminal_view-0.5.0.tar.gz",
+  "archiveSha256": "5f8cf2e999b9b98224430b7ef2a32d378062073fa4e566f1f52d89ac9d9ac9cf",
+  "patch": "terminal_view-0.5.0-ime-observation.patch",
+  "patchSha256": "490e6ad48e71ea91726521fef1cc05e55d5542237722600629dfccb014de2d5b",
+  "files": {
+    "lib/src/terminal_view.dart": {
+      "beforeSha256": "8a13ac69b2b97c8b21081c7af8c33ce73b896dfd2b6a3fff223907f18dc81928",
+      "afterSha256": "95b63af660c0757a630850b0f3c41ac088be74e1a267e3ae00216204dd0672ef"
+    },
+    "lib/src/ui/custom_text_edit.dart": {
+      "beforeSha256": "4287bec39bd725d34a077c9c324a4726cbdf90e52a0b43439bf17ee9e5db5421",
+      "afterSha256": "86e4af70be9ed855aee86c7c3e59cdb9296e30aaf8b0112230c4cdf32da50012"
+    }
+  },
+  "scope": "Observe every actual TextInputClient editing-state update before composition/commit handling and expose read-only currentTextEditingValue. Does not transform text, replace connections, change focus, or alter terminal input encoding. Required in both baseline and combining candidate; renderer/core combining patch applies to disjoint files.",
+  "license": "MIT; retain upstream LICENSE and NOTICE in prepared dependency."
+}

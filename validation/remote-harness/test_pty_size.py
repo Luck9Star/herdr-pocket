@@ -21,30 +21,14 @@ import unittest
 from unittest.mock import patch
 
 try:
-    import fcntl
-    import pty
-    import struct
     import termios
+    from owned_pty import new_pty, resize, restored_modes
 except ImportError:
     fixture = None
 else:
     spec = importlib.util.spec_from_file_location('owned_pty_capture', Path(__file__).with_name('capture_input.py'))
     fixture = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fixture)
-
-
-@contextmanager
-def new_pty(rows=24, columns=80):
-    master, slave = pty.openpty()
-    try:
-        resize(slave, rows, columns)
-        yield master, slave
-    finally:
-        os.close(master); os.close(slave)
-
-
-def resize(fd, rows, columns):
-    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', rows, columns, 0, 0))
 
 
 def wait_until(check, timeout=3):
@@ -60,16 +44,6 @@ def wait_until(check, timeout=3):
 def record(root):
     path = Path(root) / 'pty-size.json'
     return json.loads(path.read_text()) if path.exists() else None
-
-
-def restored_modes(attributes):
-    # Darwin may set PENDIN while switching from raw to canonical mode. This
-    # kernel input-queue marker is not a requested echo/canonical/signal mode.
-    # Compare every other attribute, rather than dropping the whole lflag word.
-    result = list(attributes)
-    if sys.platform == 'darwin':
-        result[3] &= ~getattr(termios, 'PENDIN', 0)
-    return result
 
 
 @contextmanager

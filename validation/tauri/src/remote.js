@@ -36,6 +36,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   let inputGeneration=null, inputEpoch=null, inputMode='observe', inputBusy=null, inputUnknown=false, inputRevision=0, selectedTarget=null, draftPreview=null, switchingFocus=false;
   let inputComposition=new InputComposition(), focusReset=Promise.resolve(), pasteReview=null, draftRevision=0, draftComposing=false, pasteFocusEpoch=0, pasteReadSequence=0; const onlineInput=new OnlineInputQueue();
   const auxiliaryModifiers=new AuxiliaryModifiers();
+  let moreKeysButton=null, moreKeys=null;
   const localViewport=new LocalTerminalViewport();
   let networkRevisions=new Map();
   const hostSummaries=new HostDashboardSummary();
@@ -160,10 +161,11 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     $('remote-keyboard-hide').disabled=!editor && !pendingEditor;
   }
   function inputStatus(text) { $('remote-input-status').textContent=text; renderAuxiliary();renderKeyboardActions(); }
-  function auxiliaryAllowed() {return currentDirect(inputToken()) && !inputBusy;}
+  function auxiliaryAllowed() {return currentDirect(inputToken()) && !inputBusy && !(inputComposition.token && !inputComposition.ended);}
   function renderAuxiliary() {
     const allowed=auxiliaryAllowed();
-    if(!allowed)auxiliaryModifiers.reset();
+    if(!allowed){auxiliaryModifiers.reset();if(moreKeys && (!currentDirect(inputToken()) || (inputComposition.token && !inputComposition.ended)))moreKeys.hidden=true;}
+    if(moreKeysButton){moreKeysButton.disabled=!allowed;moreKeysButton.setAttribute('aria-expanded',String(!moreKeys.hidden));moreKeysButton.setAttribute('aria-label',moreKeys.hidden?'展开更多终端键':'收起更多终端键');}
     for(const name of ['ctrl','alt']) {
       const button=$('remote-modifier-'+name); button.disabled=!allowed;
       button.setAttribute('aria-pressed',String(auxiliaryModifiers[name]));
@@ -237,7 +239,8 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     } finally {clearTimeout(timer);}
   }
   function inputToken() {return {generation:inputGeneration,epoch:inputEpoch,revision:inputRevision};}
-  function currentDirect(token) {return !fontDiagnostics?.valid() && !textSelection?.valid() && !document.hidden && inputGeneration!==null && inputEpoch!==null && !inputUnknown && inputMode==='direct' && document.activeElement===terminal?.textarea && OnlineInputQueue.same(token,inputToken());}
+  function ownsDirectFocus(element) {return !!element && (element===terminal?.textarea || $('remote-input-keys').contains(element));}
+  function currentDirect(token) {return !fontDiagnostics?.valid() && !textSelection?.valid() && !document.hidden && inputGeneration!==null && inputEpoch!==null && !inputUnknown && inputMode==='direct' && ownsDirectFocus(document.activeElement) && OnlineInputQueue.same(token,inputToken());}
   function queueDirect(bytes) {
     const token=inputToken();
     if(!currentDirect(token)) {inputStatus('本次输入未发送：焦点或输入许可已失效。');return;}
@@ -425,11 +428,19 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     button.textContent=name.toUpperCase();$('remote-combination-bases').append(button);
   }
   const space=document.createElement('button');space.type='button';space.dataset.remoteKey='space';space.textContent='Space';$('remote-combination-bases').append(space);
+  moreKeysButton=document.createElement('button');moreKeysButton.type='button';moreKeysButton.textContent='更多键';moreKeysButton.setAttribute('aria-controls','remote-more-keys');
+  moreKeys=document.createElement('div');moreKeys.id='remote-more-keys';moreKeys.className='remote-actions terminal-more-keys';moreKeys.setAttribute('aria-label','更多终端键');moreKeys.hidden=true;
+  for(const [name,label] of [...Array.from({length:12},(_,i)=>[`f${i+1}`,`F${i+1}`]),['insert','Insert'],['delete','Delete'],['backspace','Backspace'],['shift-tab','Shift+Tab']]) {
+    const button=document.createElement('button');button.type='button';button.dataset.remoteKey=name;button.textContent=label;button.setAttribute('aria-label',label);moreKeys.append(button);
+  }
+  $('remote-input-keys').append(moreKeysButton,moreKeys);
+  $('remote-input-keys').addEventListener('focusout',event=>{if(inputMode==='direct' && !switchingFocus && !ownsDirectFocus(event.relatedTarget))loseInputFocus();});
+  moreKeysButton.onclick=()=>{if(!auxiliaryAllowed()){moreKeys.hidden=true;renderAuxiliary();return;}moreKeys.hidden=!moreKeys.hidden;renderAuxiliary();};
   for(const button of $('remote-input-keys').querySelectorAll('button'))button.addEventListener('pointerdown',e=>e.preventDefault());
   for(const name of ['ctrl','alt'])$('remote-modifier-'+name).onclick=()=>{auxiliaryModifiers.toggle(name,auxiliaryAllowed());renderAuxiliary();};
   $('remote-modifier-cancel').onclick=releaseAuxiliary;
   for(const button of $('remote-input-keys').querySelectorAll('button[data-remote-key]'))button.onclick=()=>{
-    const allowed=auxiliaryAllowed();
+    const allowed=auxiliaryAllowed() && !(moreKeys.hidden && moreKeys.contains(button));
     const key=auxiliaryModifiers.take(button.dataset.remoteKey,terminal?.modes.applicationCursorKeysMode===true,allowed);
     renderAuxiliary();if(key!==null)queueDirect(new TextEncoder().encode(key));
     else if(allowed)inputStatus('此辅助组合未定义，未发送；组合键已释放。');
@@ -891,9 +902,9 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
           const keyboardPending=()=>terminal===boundTerminal && inputMode!=='direct' && !boundTerminal.options.disableStdin;
           blockPendingKeys(terminal.textarea,keyboardPending);
           terminal.onData(data=>{ if(terminal!==boundTerminal)return; const token={generation:inputGeneration,epoch:inputEpoch,revision:inputRevision}; if(!inputComposition.accepts(token)) {inputStatus('输入法提交已过期，本次未发送。');return;} renderAuxiliary();if(inputMode==='direct' && document.activeElement===terminal?.textarea) queueDirect(new TextEncoder().encode(data)); });
-          terminal.textarea.addEventListener('compositionstart',()=>{if(terminal===boundTerminal){pasteReadSequence++;inputComposition.begin({generation:inputGeneration,epoch:inputEpoch,revision:inputRevision});renderKeyboardActions();}},true);
-          terminal.textarea.addEventListener('compositionend',()=>{if(terminal===boundTerminal){inputComposition.end();renderKeyboardActions();}},true);
-          terminal.textarea.addEventListener('blur',()=>{if(terminal===boundTerminal && !switchingFocus) loseInputFocus();});
+          terminal.textarea.addEventListener('compositionstart',()=>{if(terminal===boundTerminal){pasteReadSequence++;inputComposition.begin({generation:inputGeneration,epoch:inputEpoch,revision:inputRevision});renderAuxiliary();renderKeyboardActions();}},true);
+          terminal.textarea.addEventListener('compositionend',()=>{if(terminal===boundTerminal){inputComposition.end();renderAuxiliary();renderKeyboardActions();}},true);
+          terminal.textarea.addEventListener('blur',event=>{if(terminal===boundTerminal && !switchingFocus && !ownsDirectFocus(event.relatedTarget)) loseInputFocus();});
           terminal.textarea.addEventListener('paste',event=>{
             if(terminal!==boundTerminal || (!keyboardPending() && inputMode!=='direct'))return;
             event.preventDefault(); event.stopImmediatePropagation();

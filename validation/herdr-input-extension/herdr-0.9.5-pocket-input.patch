@@ -1,5 +1,5 @@
 diff --git a/src/api/schema.rs b/src/api/schema.rs
-index 439ed331..cb7b620c 100644
+index 439ed33..cb7b620 100644
 --- a/src/api/schema.rs
 +++ b/src/api/schema.rs
 @@ -75,6 +75,10 @@ pub enum Method {
@@ -14,7 +14,7 @@ index 439ed331..cb7b620c 100644
      WorkspaceCreate(WorkspaceCreateParams),
      #[serde(rename = "workspace.list")]
 diff --git a/src/api/schema/panes.rs b/src/api/schema/panes.rs
-index 9dbe0221..9d182b27 100644
+index 9dbe022..9d182b2 100644
 --- a/src/api/schema/panes.rs
 +++ b/src/api/schema/panes.rs
 @@ -694,3 +694,12 @@ pub struct PaneLinkRegion {
@@ -31,7 +31,7 @@ index 9dbe0221..9d182b27 100644
 +    pub bytes_base64: String,
 +}
 diff --git a/src/api/schema/response.rs b/src/api/schema/response.rs
-index e92e4952..6e71d23f 100644
+index e92e495..6e71d23 100644
 --- a/src/api/schema/response.rs
 +++ b/src/api/schema/response.rs
 @@ -42,6 +42,8 @@ pub struct ErrorBody {
@@ -44,7 +44,7 @@ index e92e4952..6e71d23f 100644
          version: String,
          protocol: u32,
 diff --git a/src/api/server.rs b/src/api/server.rs
-index 0a4cfa66..a338a6b4 100644
+index 0a4cfa6..a338a6b 100644
 --- a/src/api/server.rs
 +++ b/src/api/server.rs
 @@ -618,6 +618,8 @@ pub(crate) fn api_method_name(method: &Method) -> &'static str {
@@ -57,7 +57,7 @@ index 0a4cfa66..a338a6b4 100644
          Method::WorkspaceList(_) => "workspace.list",
          Method::WorkspaceGet(_) => "workspace.get",
 diff --git a/src/app/api.rs b/src/app/api.rs
-index dd87c508..a7564310 100644
+index dd87c50..a756431 100644
 --- a/src/app/api.rs
 +++ b/src/app/api.rs
 @@ -1059,6 +1059,8 @@ impl App {
@@ -70,13 +70,13 @@ index dd87c508..a7564310 100644
              Method::WorkspaceGet(target) => return self.handle_workspace_get(request.id, target),
              Method::WorkspaceCreate(params) => {
 diff --git a/src/app/api/panes.rs b/src/app/api/panes.rs
-index b5f3baf6..2594856e 100644
+index b5f3baf..2594856 100644
 --- a/src/app/api/panes.rs
 +++ b/src/app/api/panes.rs
 @@ -1909,6 +1909,34 @@ impl App {
          encode_success(id, ResponseResult::Ok {})
      }
-
+ 
 +    // Candidate extension: validate identity and enqueue in one app event. An OK
 +    // response acknowledges queue acceptance only, not PTY/application execution.
 +    pub(super) fn handle_pocket_input_capabilities(&self, id: String) -> String {
@@ -111,7 +111,7 @@ index b5f3baf6..2594856e 100644
 @@ -2816,6 +2844,34 @@ mod tests {
          assert!(read.truncated);
      }
-
+ 
 +    #[tokio::test]
 +    async fn pocket_input_guards_identity_rejects_bad_bytes_and_never_resizes() {
 +        use crate::api::schema::{Method, PocketInputSendParams, Request};
@@ -143,3 +143,543 @@ index b5f3baf6..2594856e 100644
      #[tokio::test]
      async fn api_pane_send_keys_preserves_legacy_control_c_aliases() {
          let (mut app, pane_id, mut rx) = app_with_send_key_runtime(3);
+diff --git a/src/pane.rs b/src/pane.rs
+index f80baeb..1433562 100644
+--- a/src/pane.rs
++++ b/src/pane.rs
+@@ -3470,6 +3470,15 @@ impl PaneRuntime {
+         self.terminal.input_state()
+     }
+ 
++    pub(crate) fn observer_input_modes(&self) -> Option<(bool, bool)> {
++        self.terminal.observer_input_modes()
++    }
++
++    #[cfg(test)]
++    pub(crate) fn test_poison_observer_mode_lock(&self) {
++        self.terminal.test_poison_observer_mode_lock();
++    }
++
+     pub fn bracketed_paste_enabled(&self) -> bool {
+         self.terminal.bracketed_paste_enabled()
+     }
+diff --git a/src/pane/terminal.rs b/src/pane/terminal.rs
+index d4b7ef5..45c5633 100644
+--- a/src/pane/terminal.rs
++++ b/src/pane/terminal.rs
+@@ -437,6 +437,15 @@ impl PaneTerminal {
+         self.ghostty.input_state()
+     }
+ 
++    pub(crate) fn observer_input_modes(&self) -> Option<(bool, bool)> {
++        self.ghostty.observer_input_modes()
++    }
++
++    #[cfg(test)]
++    pub(crate) fn test_poison_observer_mode_lock(&self) {
++        self.ghostty.test_poison_observer_mode_lock();
++    }
++
+     pub fn bracketed_paste_enabled(&self) -> bool {
+         self.ghostty.bracketed_paste_enabled()
+     }
+@@ -1845,6 +1854,27 @@ impl GhosttyPaneTerminal {
+         core.kitty_keyboard.replay_ansi()
+     }
+ 
++    #[cfg(test)]
++    fn test_poison_observer_mode_lock(&self) {
++        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++            let _guard = self.core.lock().unwrap();
++            panic!("synthetic terminal lock failure");
++        }));
++    }
++
++    // A single lock produces a coherent snapshot; failure is not equivalent to off.
++    pub(crate) fn observer_input_modes(&self) -> Option<(bool, bool)> {
++        let core = self.core.lock().ok()?;
++        Some((
++            core.terminal
++                .mode_get(crate::ghostty::MODE_APPLICATION_CURSOR_KEYS)
++                .ok()?,
++            core.terminal
++                .mode_get(crate::ghostty::MODE_BRACKETED_PASTE)
++                .ok()?,
++        ))
++    }
++
+     pub fn bracketed_paste_enabled(&self) -> bool {
+         self.mode_enabled(crate::ghostty::MODE_BRACKETED_PASTE)
+     }
+diff --git a/src/server/clients.rs b/src/server/clients.rs
+index 65e875b..3d0821c 100644
+--- a/src/server/clients.rs
++++ b/src/server/clients.rs
+@@ -141,6 +141,8 @@ pub(crate) struct ClientConnection {
+     pub(crate) last_activity: u64,
+     /// Render baseline for the negotiated client encoding.
+     pub(crate) render_state: ClientRenderState,
++    /// Last modes successfully queued to this observer, bound to its terminal.
++    pub(crate) observer_input_modes: Option<(String, bool, bool)>,
+     /// Image assets already included in the selected ClientShell scene.
+     pub(crate) shell_graphics_delivery: crate::kitty_graphics::surface::DeliveryCache,
+     /// Passive eligibility for audited local Kitty regular-file graphics.
+@@ -229,6 +231,7 @@ impl ClientConnection {
+             cell_size,
+             last_activity,
+             render_state: ClientRenderState::new(render_encoding),
++            observer_input_modes: None,
+             shell_graphics_delivery: crate::kitty_graphics::surface::DeliveryCache::default(),
+             direct_graphics: false,
+             pixel_mouse: false,
+diff --git a/src/server/headless.rs b/src/server/headless.rs
+index cb2c619..85ea18e 100644
+--- a/src/server/headless.rs
++++ b/src/server/headless.rs
+@@ -1315,6 +1315,7 @@ impl HeadlessServer {
+         client.mode = ClientConnectionMode::TerminalObserve {
+             terminal_id: terminal_id.clone(),
+         };
++        client.observer_input_modes = None;
+         client.render_state.reset_baseline();
+         client.last_activity = stamp;
+         let was_foreground = self.foreground_client_id == Some(client_id);
+diff --git a/src/server/headless/render.rs b/src/server/headless/render.rs
+index aa075a9..f7f44b0 100644
+--- a/src/server/headless/render.rs
++++ b/src/server/headless/render.rs
+@@ -734,6 +734,14 @@ impl HeadlessServer {
+                     continue;
+                 }
+             }
++            let observer_ansi = matches!(&mode, ClientConnectionMode::TerminalObserve { .. })
++                && self.clients.get(&client_id).is_some_and(|client| {
++                    matches!(
++                        &client.render_state,
++                        crate::server::render_stream::ClientRenderState::TerminalAnsi { .. }
++                    )
++                });
++            let mut observer_modes = None;
+             let mut surface_parts = None;
+             let frame = match mode {
+                 ClientConnectionMode::ClientShell => {
+@@ -771,6 +779,21 @@ impl HeadlessServer {
+                         broken_clients.push(client_id);
+                         continue;
+                     };
++                    // Check before synchronized-output state: that getter treats a
++                    // poisoned terminal lock as "synchronized", which otherwise
++                    // leaves an observer indefinitely holding stale input modes.
++                    if observer_ansi && runtime.observer_input_modes().is_none() {
++                        self.send_to_client(
++                            client_id,
++                            ServerMessage::ServerShutdown {
++                                reason: Some(
++                                    "terminal observe ended: input mode unavailable".into(),
++                                ),
++                            },
++                        );
++                        broken_clients.push(client_id);
++                        continue;
++                    }
+                     let (synchronized, epoch) = runtime.synchronized_output_state();
+                     if synchronized {
+                         if let Some(client) = self.clients.get_mut(&client_id) {
+@@ -791,6 +814,21 @@ impl HeadlessServer {
+                         "full_render.visible_hyperlinks",
+                         hyperlinks_started,
+                     );
++                    if observer_ansi {
++                        let Some((cursor, paste)) = runtime.observer_input_modes() else {
++                            self.send_to_client(
++                                client_id,
++                                ServerMessage::ServerShutdown {
++                                    reason: Some(
++                                        "terminal observe ended: input mode unavailable".into(),
++                                    ),
++                                },
++                            );
++                            broken_clients.push(client_id);
++                            continue;
++                        };
++                        observer_modes = Some((terminal_id.clone(), cursor, paste));
++                    }
+                     let (synchronized, after_epoch) = runtime.synchronized_output_state();
+                     if synchronized || after_epoch != epoch {
+                         if let Some(client) = self.clients.get_mut(&client_id) {
+@@ -840,6 +878,11 @@ impl HeadlessServer {
+                         || !graphics.placements.is_empty()
+                         || !graphics.retained_assets.is_empty()
+                 });
++            if let Some(ref modes) = observer_modes {
++                if client.observer_input_modes.as_ref() != Some(modes) {
++                    client.render_state.request_repaint();
++                }
++            }
+             let mut next_shell_graphics_delivery = None;
+             let prepared =
+                 if let Some((panes, splits, popup, graphics, delivery, _)) = surface_parts {
+@@ -865,6 +908,9 @@ impl HeadlessServer {
+                 crate::render_prof::event("full_render.skip_identical");
+                 continue;
+             };
++            if let Some((_, cursor, paste)) = &observer_modes {
++                prepared.append_observer_input_modes(*cursor, *paste);
++            }
+             let max = if has_graphics {
+                 graphics_frame_limit
+             } else {
+@@ -978,6 +1024,9 @@ impl HeadlessServer {
+                         client.shell_graphics_delivery = delivery;
+                     }
+                     client.render_state.commit_sent_frame(prepared);
++                    if observer_modes.is_some() {
++                        client.observer_input_modes = observer_modes;
++                    }
+                     if shell_graphics_pending || shell_assets_deferred {
+                         client.defer_full_render();
+                     } else {
+diff --git a/src/server/headless/tests/mod.rs b/src/server/headless/tests/mod.rs
+index 3ab7ec0..b45d514 100644
+--- a/src/server/headless/tests/mod.rs
++++ b/src/server/headless/tests/mod.rs
+@@ -4397,6 +4397,288 @@ fn backpressured_observer_skips_runtime_access_and_recovers_without_new_output()
+     });
+ }
+ 
++#[cfg(unix)]
++#[test]
++fn observer_input_modes_are_per_client_and_survive_backpressure() {
++    with_terminal_session_test_server(|server, terminal_id, target, _| {
++        let initial_size = server
++            .app
++            .terminal_runtimes
++            .get(&terminal_id)
++            .unwrap()
++            .current_size();
++        let mut receivers = Vec::new();
++        for client_id in [70, 71] {
++            let (writer, control, frames) = test_client_writer();
++            server.handle_server_event(ServerEvent::ClientConnected {
++                client_id,
++                cols: 80,
++                rows: 24,
++                cell_width_px: 0,
++                cell_height_px: 0,
++                pixel_mouse: false,
++                writer,
++            });
++            assert!(
++                server.handle_server_event(ServerEvent::ClientObserveTerminal {
++                    client_id,
++                    target: target.clone(),
++                })
++            );
++            receivers.push((control, frames));
++        }
++        server.render_and_stream();
++        let ServerMessage::Terminal(first) = read_server_message(
++            receivers[0]
++                .1
++                .recv_timeout(Duration::from_secs(2))
++                .expect("frame timeout"),
++        ) else {
++            panic!("first frame")
++        };
++        assert!(first.full);
++        assert!(first.bytes.ends_with(b"\x1b[?1l\x1b[?2004l"));
++        // Keep the second observer's initial frame queued to force backpressure.
++        server
++            .app
++            .terminal_runtimes
++            .get(&terminal_id)
++            .unwrap()
++            .test_process_pty_bytes(b"\x1b[?1h\x1b[?2004h");
++        server.render_and_stream();
++        let ServerMessage::Terminal(changed) = read_server_message(
++            receivers[0]
++                .1
++                .recv_timeout(Duration::from_secs(2))
++                .expect("frame timeout"),
++        ) else {
++            panic!("mode-only frame")
++        };
++        assert!(changed.full);
++        assert_eq!(changed.seq, first.seq + 1);
++        assert!(changed.bytes.ends_with(b"\x1b[?1h\x1b[?2004h"));
++        assert_eq!(server.clients[&71].deferred_render(), DeferredRender::Full);
++        assert_eq!(
++            server.clients[&71]
++                .observer_input_modes
++                .as_ref()
++                .map(|m| (m.1, m.2)),
++            Some((false, false))
++        );
++        let ServerMessage::Terminal(queued) = read_server_message(
++            receivers[1]
++                .1
++                .recv_timeout(Duration::from_secs(2))
++                .expect("frame timeout"),
++        ) else {
++            panic!("queued first frame")
++        };
++        assert!(queued.bytes.ends_with(b"\x1b[?1l\x1b[?2004l"));
++        assert!(server.handle_server_event(ServerEvent::ClientWriterDrained { client_id: 71 }));
++        server.render_and_stream();
++        let ServerMessage::Terminal(recovered) = read_server_message(
++            receivers[1]
++                .1
++                .recv_timeout(Duration::from_secs(2))
++                .expect("frame timeout"),
++        ) else {
++            panic!("recovery frame")
++        };
++        assert!(recovered.full);
++        assert!(recovered.bytes.ends_with(b"\x1b[?1h\x1b[?2004h"));
++        assert_eq!(
++            server.clients[&71]
++                .observer_input_modes
++                .as_ref()
++                .map(|m| (m.1, m.2)),
++            Some((true, true))
++        );
++        server.render_and_stream();
++        assert!(receivers[0].1.try_recv().is_err());
++        assert!(receivers[1].1.try_recv().is_err());
++        for (input, suffix) in [
++            (&b"\x1b[?1h\x1b[?2004l"[..], &b"\x1b[?1h\x1b[?2004l"[..]),
++            (&b"\x1b[?1l\x1b[?2004h"[..], &b"\x1b[?1l\x1b[?2004h"[..]),
++            (&b"\x1b[?1h\x1b[?2004h"[..], &b"\x1b[?1h\x1b[?2004h"[..]),
++        ] {
++            server
++                .app
++                .terminal_runtimes
++                .get(&terminal_id)
++                .unwrap()
++                .test_process_pty_bytes(input);
++            server.render_and_stream();
++            for (_, frames) in &receivers {
++                let ServerMessage::Terminal(frame) = read_server_message(
++                    frames
++                        .recv_timeout(Duration::from_secs(2))
++                        .expect("frame timeout"),
++                ) else {
++                    panic!("mode update")
++                };
++                assert!(frame.full);
++                assert!(frame.bytes.ends_with(suffix));
++            }
++        }
++        assert_eq!(
++            server
++                .app
++                .terminal_runtimes
++                .get(&terminal_id)
++                .unwrap()
++                .current_size(),
++            initial_size
++        );
++        assert!(server.terminal_attach_owners.is_empty());
++        assert!(!server
++            .app
++            .state
++            .direct_attach_resize_locks
++            .contains(&terminal_id));
++        assert!(receivers[0].0.try_recv().is_err());
++        // A stale target identity must trigger a fresh baseline even when both bits match.
++        server.clients.get_mut(&70).unwrap().observer_input_modes =
++            Some(("old-target".into(), true, true));
++        server.render_and_stream();
++        let ServerMessage::Terminal(rebound) = read_server_message(
++            receivers[0]
++                .1
++                .recv_timeout(Duration::from_secs(2))
++                .expect("frame timeout"),
++        ) else {
++            panic!("target-bound frame")
++        };
++        assert!(rebound.full);
++        assert!(rebound.bytes.ends_with(b"\x1b[?1h\x1b[?2004h"));
++        assert!(receivers[1].1.try_recv().is_err());
++        assert_eq!(
++            server.clients[&70]
++                .observer_input_modes
++                .as_ref()
++                .unwrap()
++                .0
++                .as_str(),
++            target.as_str()
++        );
++        // A new observer must not inherit a former connection's mode baseline.
++        assert!(server.handle_server_event(ServerEvent::ClientDisconnected { client_id: 70 }));
++        let (writer, _control, fresh_frames) = test_client_writer();
++        server.handle_server_event(ServerEvent::ClientConnected {
++            client_id: 72,
++            cols: 80,
++            rows: 24,
++            cell_width_px: 0,
++            cell_height_px: 0,
++            pixel_mouse: false,
++            writer,
++        });
++        assert!(
++            server.handle_server_event(ServerEvent::ClientObserveTerminal {
++                client_id: 72,
++                target: target.clone(),
++            })
++        );
++        server.render_and_stream();
++        let ServerMessage::Terminal(fresh) = read_server_message(
++            fresh_frames
++                .recv_timeout(Duration::from_secs(2))
++                .expect("frame timeout"),
++        ) else {
++            panic!("fresh observer")
++        };
++        assert!(fresh.full);
++        assert!(fresh.bytes.ends_with(b"\x1b[?1h\x1b[?2004h"));
++        // Attach remains a separate rendering path and must not receive injected modes.
++        let (writer, _control, attach_frames) = test_client_writer();
++        server.clients.insert(
++            73,
++            ClientConnection::new_with_mode(
++                ClientConnectionMode::TerminalAttach {
++                    terminal_id: target,
++                },
++                (80, 24),
++                crate::kitty_graphics::HostCellSize::default(),
++                0,
++                RenderEncoding::TerminalAnsi,
++                Some(writer),
++            ),
++        );
++        server.render_and_stream();
++        let ServerMessage::Terminal(attached) = read_server_message(
++            attach_frames
++                .recv_timeout(Duration::from_secs(2))
++                .expect("frame timeout"),
++        ) else {
++            panic!("attach frame")
++        };
++        assert!(!attached.bytes.windows(5).any(|bytes| bytes == b"\x1b[?1h"));
++        assert!(!attached
++            .bytes
++            .windows(8)
++            .any(|bytes| bytes == b"\x1b[?2004h"));
++        assert!(server.clients[&73].observer_input_modes.is_none());
++    });
++}
++
++#[cfg(unix)]
++#[test]
++fn unreadable_observer_modes_close_only_that_observer_without_false_modes() {
++    with_terminal_session_test_server(|server, terminal_id, target, _| {
++        let (writer, control, frames) = test_client_writer();
++        server.handle_server_event(ServerEvent::ClientConnected {
++            client_id: 70,
++            cols: 80,
++            rows: 24,
++            cell_width_px: 0,
++            cell_height_px: 0,
++            pixel_mouse: false,
++            writer,
++        });
++        assert!(
++            server.handle_server_event(ServerEvent::ClientObserveTerminal {
++                client_id: 70,
++                target: target.clone(),
++            })
++        );
++        server.render_and_stream();
++        let _ = frames
++            .recv_timeout(Duration::from_secs(2))
++            .expect("frame timeout");
++        let (attach_writer, _attach_control, _attach_frames) = test_client_writer();
++        server.clients.insert(
++            73,
++            ClientConnection::new_with_mode(
++                ClientConnectionMode::TerminalAttach {
++                    terminal_id: target,
++                },
++                (80, 24),
++                crate::kitty_graphics::HostCellSize::default(),
++                0,
++                RenderEncoding::TerminalAnsi,
++                Some(attach_writer),
++            ),
++        );
++        server
++            .app
++            .terminal_runtimes
++            .get(&terminal_id)
++            .unwrap()
++            .test_poison_observer_mode_lock();
++        server.render_and_stream();
++        assert!(!server.clients.contains_key(&70));
++        assert!(server.clients.contains_key(&73));
++        assert!(frames.try_recv().is_err());
++        assert_eq!(
++            read_server_shutdown_reason(
++                control
++                    .recv_timeout(Duration::from_secs(2))
++                    .expect("frame timeout")
++            ),
++            Some("terminal observe ended: input mode unavailable".to_owned())
++        );
++    });
++}
++
+ #[test]
+ fn terminal_observe_allows_multiple_clients_without_attach_ownership() {
+     with_terminal_session_test_server(|server, terminal_id, terminal_id_string, _| {
+diff --git a/src/server/render_stream.rs b/src/server/render_stream.rs
+index aa1bbab..dfd2ffe 100644
+--- a/src/server/render_stream.rs
++++ b/src/server/render_stream.rs
+@@ -400,6 +400,26 @@ impl PreparedRender {
+         }
+     }
+ 
++    /// Only a complete observer ANSI frame establishes input modes after reset.
++    pub(crate) fn append_observer_input_modes(&mut self, cursor: bool, paste: bool) {
++        if let Self::TerminalAnsi {
++            message: ServerMessage::Terminal(frame),
++            ..
++        } = self
++        {
++            if frame.full {
++                frame
++                    .bytes
++                    .extend_from_slice(if cursor { b"\x1b[?1h" } else { b"\x1b[?1l" });
++                frame.bytes.extend_from_slice(if paste {
++                    b"\x1b[?2004h"
++                } else {
++                    b"\x1b[?2004l"
++                });
++            }
++        }
++    }
++
+     /// Graphics metadata represented by this semantic update plus only the
+     /// asset keys whose pixel payloads were queued. This is independent of the
+     /// selected wire codec and avoids cloning asset byte vectors.
+diff --git a/src/terminal/runtime.rs b/src/terminal/runtime.rs
+index 23b61da..2f5a586 100644
+--- a/src/terminal/runtime.rs
++++ b/src/terminal/runtime.rs
+@@ -462,6 +462,15 @@ impl TerminalRuntime {
+         self.0.kitty_image_fingerprints(image_ids)
+     }
+ 
++    pub(crate) fn observer_input_modes(&self) -> Option<(bool, bool)> {
++        self.0.observer_input_modes()
++    }
++
++    #[cfg(test)]
++    pub(crate) fn test_poison_observer_mode_lock(&self) {
++        self.0.test_poison_observer_mode_lock();
++    }
++
+     pub fn keyboard_protocol(&self) -> crate::input::KeyboardProtocol {
+         self.0.keyboard_protocol()
+     }

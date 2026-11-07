@@ -14,6 +14,10 @@ export function createTabInputToolbar({ canSend, send, applicationCursorMode }) 
   modifierRow.className = 'remote-actions';
   const keyRow = document.createElement('div');
   keyRow.className = 'remote-actions';
+  const extraKeys = document.createElement('div');
+  extraKeys.className = 'remote-actions terminal-more-keys';
+  extraKeys.setAttribute('aria-label', '更多终端键');
+  extraKeys.hidden = true;
   const letters = document.createElement('div');
   letters.className = 'remote-actions remote-combination-bases';
   letters.setAttribute('aria-label', '选择组合基础键');
@@ -41,10 +45,15 @@ export function createTabInputToolbar({ canSend, send, applicationCursorMode }) 
     modifiers.toggle(name, allowed());
     refresh();
   }
-  function key(name, text, label, container) {
+  const expand = button('更多键', '展开更多终端键', () => {
+    if (!allowed()) { extraKeys.hidden = true; refresh(); return; }
+    extraKeys.hidden = !extraKeys.hidden;
+    refresh();
+  });
+  function key(name, text, label, container, visible = () => true) {
     const node = button(text, label, () => {
       // Recheck on click: a rendered enabled button is not a live permission.
-      const permitted = allowed();
+      const permitted = visible() && allowed();
       let sequence = null;
       try {
         if (permitted) {
@@ -65,17 +74,24 @@ export function createTabInputToolbar({ canSend, send, applicationCursorMode }) 
     ['up', '↑', '向上'], ['down', '↓', '向下'], ['left', '←', '向左'], ['right', '→', '向右'],
     ['home', 'Home', 'Home'], ['end', 'End', 'End'], ['pgup', 'PgUp', 'Page Up'], ['pgdn', 'PgDn', 'Page Down'],
   ]) key(name, text, label, keyRow);
+  for (const [name, text] of [
+    ...Array.from({length:12}, (_, i) => [`f${i+1}`, `F${i+1}`]),
+    ['insert', 'Insert'], ['delete', 'Delete'], ['backspace', 'Backspace'], ['shift-tab', 'Shift+Tab'],
+  ]) key(name, text, text, extraKeys, () => !extraKeys.hidden);
   for (const letter of 'abcdefghijklmnopqrstuvwxyz') key(letter, letter.toUpperCase(), `组合键 ${letter.toUpperCase()}`, letters);
   key('space', 'Space', '组合键空格', letters);
 
   function refresh() {
     const permitted = allowed();
-    if (!permitted) modifiers.reset();
+    if (!permitted) { modifiers.reset(); extraKeys.hidden = true; }
     ctrl.disabled = !permitted;
     alt.disabled = !permitted;
     ctrl.setAttribute('aria-pressed', String(modifiers.ctrl));
     alt.setAttribute('aria-pressed', String(modifiers.alt));
     cancel.disabled = !permitted || !modifiers.held;
+    expand.disabled = !permitted;
+    expand.setAttribute('aria-expanded', String(!extraKeys.hidden));
+    expand.setAttribute('aria-label', extraKeys.hidden ? '展开更多终端键' : '收起更多终端键');
     for (const node of keys) node.disabled = !permitted;
     letters.hidden = !modifiers.held;
     status.textContent = !permitted ? '输入未启用；辅助键不可用。'
@@ -84,7 +100,7 @@ export function createTabInputToolbar({ canSend, send, applicationCursorMode }) 
     return permitted;
   }
   function reset() { modifiers.reset(); refresh(); }
-  element.append(status, modifierRow, letters, keyRow);
+  element.append(status, modifierRow, letters, keyRow, expand, extraKeys);
   refresh();
   return { element, refresh, reset };
 }

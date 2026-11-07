@@ -1,3 +1,4 @@
 # Preserve verified upstream bytes and unified-diff blank context lines.
 validation/vendor/russh-0.65.0/README.md -whitespace
 validation/vendor/russh-0.65.0-local-close.patch -whitespace
+validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch whitespace=-blank-at-eol

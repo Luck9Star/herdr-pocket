@@ -32,7 +32,9 @@ jobs:
         if: always()
         with:
           name: flutter-resolved-lock-${{ github.sha }}
-          path: ${{ runner.temp }}/flutter-probe/pubspec.lock
+          path: |
+            ${{ runner.temp }}/flutter-probe/pubspec.lock
+            ${{ runner.temp }}/flutter-probe/reference-terminal-manifest.json
           if-no-files-found: error
           retention-days: 14
   render-characterization:

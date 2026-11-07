@@ -253,6 +253,10 @@ jobs:
           cp build/app/outputs/flutter-apk/app-debug.apk "$RUNNER_TEMP/app.apk"
       - name: Verify APK ABI, native hash and dynamic dependency
         run: python3 validation/native/tool/android_bundle.py apk "$RUNNER_TEMP/app.apk" "$RUNNER_TEMP/android-native" --commit "$GITHUB_SHA" --readelf "$READELF" --app '${{ matrix.app }}'
+      - name: Exercise the candidate key encoder in a Linux curses PTY
+        id: host_tui
+        continue-on-error: true
+        run: python3 validation/remote-harness/phone_tui_probe.py '${{ matrix.app }}' | tee "$RUNNER_TEMP/phone-tui-host.json"
       - name: Record APK provenance and validation boundary
         env:
           APP: ${{ matrix.app }}
@@ -261,6 +265,10 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/app-output"
           cp "$RUNNER_TEMP/app.apk" "$RUNNER_TEMP/app-output/app.apk"
+          cp validation/shared/terminal-function-keys-v1.json "$RUNNER_TEMP/app-output/"
+          if test -s "$RUNNER_TEMP/phone-tui-host.json"; then
+            cp "$RUNNER_TEMP/phone-tui-host.json" "$RUNNER_TEMP/app-output/"
+          fi
           cp "$RUNNER_TEMP/android-native/manifest.json" "$RUNNER_TEMP/app-output/native-manifest.json"
           if test "$APP" = flutter; then
             cp "$RUNNER_TEMP/flutter-probe/candidate-manifest.json" "$RUNNER_TEMP/app-output/candidate-manifest.json"
@@ -280,3 +288,6 @@ jobs:
           path: ${{ runner.temp }}/app-output
           if-no-files-found: error
           retention-days: 14
+      - name: Report host TUI failure after keeping the built APK
+        if: steps.host_tui.outcome == 'failure'
+        run: exit 1

@@ -18,6 +18,8 @@ sys.path.insert(0, str(ROOT / 'validation/shared'))
 from android_notices import verify as verify_packaged_notices
 VERSION = '3.47.9'
 COMMIT = 'c197ca5199e9ee5661e865596c9c07294dfab51c'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import terminal_view_ime
 
 
 def run(args, cwd=None):
@@ -41,6 +43,25 @@ def prepare(destination):
         # flutter create can seed its own template lock even with --no-pub.
         # It is not this probe's dependency lock and must not be enforced.
         (destination / 'pubspec.lock').unlink(missing_ok=True)
+    terminal_view_ime.prepare_reference(destination, source)
+    pubspec = destination / 'pubspec.yaml'
+    before = '  terminal_view: 0.5.0\n'
+    if pubspec.read_text(encoding='utf-8').count(before) != 1:
+        raise ValueError('Unexpected terminal_view pubspec dependency')
+    pubspec.write_text(pubspec.read_text(encoding='utf-8').replace(before,
+        '  terminal_view:\n    path: candidate/reference_terminal_view\n', 1), encoding='utf-8')
+    lock = destination / 'pubspec.lock'
+    if lock.exists():
+        text = lock.read_text(encoding='utf-8')
+        old = ('  terminal_view:\n    dependency: "direct main"\n    description:\n'
+               '      name: terminal_view\n      sha256: "5f8cf2e999b9b98224430b7ef2a32d378062073fa4e566f1f52d89ac9d9ac9cf"\n'
+               '      url: "https://pub.dev"\n    source: hosted\n    version: "0.5.0"')
+        new = ('  terminal_view:\n    dependency: "direct main"\n    description:\n'
+               '      path: "candidate/reference_terminal_view"\n      relative: true\n'
+               '    source: path\n    version: "0.5.0"')
+        if text.count(old) != 1:
+            raise ValueError('Unexpected terminal_view lock entry')
+        lock.write_text(text.replace(old, new, 1), encoding='utf-8')
     shutil.copytree(source / 'lib', destination / 'lib', dirs_exist_ok=True)
     shutil.copytree(source / 'test', destination / 'test', dirs_exist_ok=True)
     (destination / 'tool').mkdir(exist_ok=True)
@@ -111,7 +132,7 @@ def prepare(destination):
 
     shutil.copytree(source / 'diagnostic', destination / 'diagnostic', dirs_exist_ok=True)
     shutil.copytree(source / 'regression', destination / 'regression', dirs_exist_ok=True)
-    (destination / 'analysis_options.yaml').write_text('analyzer:\n  errors:\n    todo: ignore\n')
+    (destination / 'analysis_options.yaml').write_text('analyzer:\n  exclude:\n    - candidate/**\n  errors:\n    todo: ignore\n')
     shared = ROOT / 'validation/shared'
     fixture = json.loads((shared / 'fixture.json').read_text(encoding='utf-8'))
     font = shared / fixture['font']['file']
@@ -263,6 +284,12 @@ def package(destination, platform, output):
     if platform == 'android':
         manifest['androidApkSha256'] = hashlib.sha256(paths[0].read_bytes()).hexdigest()
         shutil.copy2(paths[0], output / 'flutter-android-debug.apk')
+    reference_manifest = destination / 'reference-terminal-manifest.json'
+    if reference_manifest.exists():
+        manifest['terminalReference'] = json.loads(reference_manifest.read_text(encoding='utf-8'))
+        shutil.copy2(reference_manifest, output / 'reference-terminal-manifest.json')
+        for name in ('LICENSE', 'NOTICE'):
+            shutil.copy2(destination / 'candidate/reference_terminal_view' / name, output / ('terminal-reference-' + name))
     candidate_manifest = destination / 'candidate-manifest.json'
     if candidate_manifest.exists():
         provenance = json.loads(candidate_manifest.read_text(encoding='utf-8'))

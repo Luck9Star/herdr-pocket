@@ -9,6 +9,7 @@ import 'remote_adapter.dart';
 import 'remote_input.dart';
 import 'remote_input_review.dart';
 import 'remote_auxiliary.dart';
+import 'remote_terminal_ime.dart';
 import 'remote_input_platform.dart';
 import 'remote_screen_text.dart';
 import 'remote_screen_viewport.dart';
@@ -116,11 +117,17 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final draftVersions = <String,Object>{};
   final draftOrigins = <String,RemoteInputTarget>{};
   final auxiliaryModifiers = AuxiliaryModifiers();
+  final terminalIme = RemoteTerminalIme();
+  bool imeLookupPending = false,observedImeComposing = false;
+  Object auxiliaryActionTicket = Object();
+  bool functionKeysExpanded = false;
+  Object functionKeysTicket = Object();
   late final RemoteInputGate inputGate = RemoteInputGate((target,bytes,current) =>
     adapter.sendInput(target,bytes,stillCurrent:() => current() &&
       !(inputGate.mode == RemoteInputMode.direct && directKeyboardHidden)),onChanged:() {
       if (selectingScreen && screenSelectionCurrent?.call() != true) clearScreenSelection();
-      if (!inputGate.canInput || inputGate.mode != RemoteInputMode.direct || inputGate.sending) auxiliaryModifiers.reset();
+      if (!inputGate.canInput || inputGate.mode != RemoteInputMode.direct) retireFunctionKeys();
+      else if (inputGate.sending) auxiliaryModifiers.reset();
       if (mounted) setState(() {});
       reportView();
     });
@@ -204,7 +211,15 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   bool get commonKeyboardControlState => live && !viewPaused && widget.visibility?.value != false &&
     inputGate.fresh && inputGate.unknown == null && !selectingScreen && !previewOpen && !showingFontDiagnostics;
+  void retireFunctionKeys() {
+    functionKeysExpanded = false;
+    functionKeysTicket = Object();
+    auxiliaryModifiers.reset();
+    auxiliaryActionTicket = Object();
+  }
   void resetKeyboardControls({bool invalidateKeyboardActions=true}) {
+    retireFunctionKeys();
+    terminalIme.clear(); observedImeComposing = false;
     directKeyboardHidden = false;
     inputSuspensionMessage = null;
     if (invalidateKeyboardActions) keyboardActionTicket = Object();
@@ -217,6 +232,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     inputGate.mode == mode && inputGate.epoch == gateEpoch && inputGate.canInput &&
     (mode == RemoteInputMode.direct || mode == RemoteInputMode.draft);
   void pauseInputForKeyboard(String message,{bool deferRetirement=false}) {
+    retireFunctionKeys();
     final target = inputGate.target;
     final mode = inputGate.mode;
     final gateEpoch = inputGate.epoch,pageEpoch = observationEpoch;
@@ -258,7 +274,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
   }
   void terminalFocusChanged() {
-    if (mounted) setState(() { if (!terminalFocus.hasFocus) auxiliaryModifiers.reset(); });
+    if (mounted) setState(() { if (!terminalFocus.hasFocus) retireFunctionKeys(); });
     // A preview owns a target-bound lease while its modal takes focus. All
     // other direct focus loss revokes the lease and any queued keystrokes.
     if (!terminalFocus.hasFocus && !previewOpen && inputGate.mode == RemoteInputMode.direct) {
@@ -725,7 +741,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     var routePushed = false;
     // A pending platform read does not own modal focus: ordinary direct-mode
     // focus loss still revokes its lease before any review can be opened.
-    setState(() { auxiliaryModifiers.reset(); pasteReviewTicket = ticket; readingPaste = true; });
+    setState(() { retireFunctionKeys(); pasteReviewTicket = ticket; readingPaste = true; });
     try {
       final value = await Clipboard.getData(Clipboard.kTextPlain);
       final clipboard = value?.text;
@@ -798,8 +814,32 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
   }
 
-  bool get auxiliaryReady => live && inputGate.canInput && inputGate.mode == RemoteInputMode.direct &&
+  bool get auxiliaryTargetReady => live && inputGate.canInput && inputGate.mode == RemoteInputMode.direct &&
     terminalFocus.hasFocus && !directKeyboardHidden && !previewOpen && !selectingScreen && !inputGate.sending;
+  bool get auxiliaryReady => auxiliaryTargetReady && !terminalIme.blocksAuxiliary(terminal);
+
+  void scheduleTerminalImeLookup() {
+    if (imeLookupPending) return;
+    imeLookupPending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      imeLookupPending = false;
+      if (!mounted) return;
+      if (terminalIme.bind(terminalViewportKey.currentContext,terminal)) setState(() {});
+    });
+  }
+
+  void terminalEditingValueChanged(Terminal source,int pageRequest,int pageEpoch,int inputEpoch,TextEditingValue value) {
+    if (!mounted || !identical(terminal,source) || request != pageRequest || observationEpoch != pageEpoch ||
+        inputGate.epoch != inputEpoch || inputGate.mode != RemoteInputMode.direct || viewPaused || widget.visibility?.value == false) return;
+    final composing = !value.composing.isCollapsed;
+    // This callback runs synchronously on every platform update, including
+    // range-only changes, before the dependency may commit text to onOutput.
+    if (composing || observedImeComposing) {
+      auxiliaryModifiers.reset(); auxiliaryActionTicket = Object(); functionKeysTicket = Object();
+    }
+    observedImeComposing = composing;
+    setState(() {});
+  }
 
   void auxiliaryInput(String name) {
     final lease = inputGate.capture();
@@ -844,8 +884,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final panelTarget = inputGate.target;
     final panelMode = inputGate.mode;
     final panelKeyboardActionTicket = keyboardActionTicket;
+    final panelFunctionKeysTicket = functionKeysTicket;
+    final panelAuxiliaryActionTicket = auxiliaryActionTicket;
     bool panelCurrent() => observationEpoch == panelObservationEpoch && inputGate.epoch == panelInputEpoch &&
       identical(inputGate.target,panelTarget) && widget.visibility?.value != false && !viewPaused;
+    bool auxiliaryCurrent() => panelCurrent() && auxiliaryReady && identical(auxiliaryActionTicket,panelAuxiliaryActionTicket);
+    bool functionKeysCurrent() => auxiliaryCurrent() && functionKeysExpanded &&
+      identical(functionKeysTicket,panelFunctionKeysTicket);
     final result = inputGate.lastResult;
     final suspensionMessage = inputSuspensionMessage;
     final reviewedUnknown = inputGate.unknown,reviewedRaw = inputGate.unknown?.pendingRaw;
@@ -913,16 +958,18 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       Semantics(liveRegion:true,child:Text(auxiliaryModifiers.held
           ? '${auxiliaryModifiers.ctrl ? 'Ctrl ' : ''}${auxiliaryModifiers.alt ? 'Alt ' : ''}保持 · 选择一个辅助基础键后释放；终端输入法文字不受影响'
           : '组合键已释放 · 仅影响下一次辅助基础键',key:const ValueKey('remote-modifier-status'))),
+      if (auxiliaryTargetReady && terminalIme.blocksAuxiliary(terminal))
+        const Text('输入法组字或编辑状态未就绪 · 辅助键暂不可用',key:ValueKey('remote-auxiliary-ime-blocked')),
         Wrap(spacing:8,runSpacing:8,children:[
           for (final name in const ['ctrl','alt']) FilterChip(key:ValueKey('remote-modifier-$name'),
             label:Text(name == 'ctrl' ? 'Ctrl' : 'Alt'),selected:name == 'ctrl' ? auxiliaryModifiers.ctrl : auxiliaryModifiers.alt,
-            onSelected:auxiliaryReady ? (_) { if (panelCurrent()) setState(() { auxiliaryModifiers.toggle(name,allowed:auxiliaryReady); }); } : null),
+            onSelected:auxiliaryReady ? (_) { if (auxiliaryCurrent()) setState(() { auxiliaryModifiers.toggle(name,allowed:auxiliaryReady); }); } : null),
           TextButton(key:const ValueKey('remote-modifier-cancel'),onPressed:auxiliaryReady && auxiliaryModifiers.held
-            ? () { if (panelCurrent()) setState(auxiliaryModifiers.reset); } : null,child:const Text('取消组合键')),
+            ? () { if (auxiliaryCurrent()) setState(auxiliaryModifiers.reset); } : null,child:const Text('取消组合键')),
         ]),
         if (auxiliaryModifiers.held) Wrap(spacing:8,runSpacing:8,children:[
           for (final name in [...'abcdefghijklmnopqrstuvwxyz'.split(''),'space'])
-            OutlinedButton(key:ValueKey('remote-base-$name'),onPressed:auxiliaryReady ? () { if (panelCurrent()) auxiliaryInput(name); } : null,
+            OutlinedButton(key:ValueKey('remote-base-$name'),onPressed:auxiliaryReady ? () { if (auxiliaryCurrent()) auxiliaryInput(name); } : null,
               child:Text(name == 'space' ? 'Space' : name.toUpperCase())),
         ]),
       if (inputGate.mode == RemoteInputMode.direct) ...[
@@ -931,9 +978,32 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             'Ctrl+Z':'ctrl-z','Ctrl+A':'ctrl-a','Ctrl+E':'ctrl-e','Ctrl+L':'ctrl-l','Ctrl+R':'ctrl-r',
             'Ctrl+U':'ctrl-u','Ctrl+W':'ctrl-w','↑':'up','↓':'down','←':'left','→':'right',
             'Home':'home','End':'end','PgUp':'pgup','PgDn':'pgdn','Enter':'enter'}.entries)
-            OutlinedButton(key:ValueKey('remote-key-${key.key}'),onPressed:auxiliaryReady ? () { if (panelCurrent()) auxiliaryInput(key.value); } : null,
+            OutlinedButton(key:ValueKey('remote-key-${key.key}'),onPressed:auxiliaryReady ? () { if (auxiliaryCurrent()) auxiliaryInput(key.value); } : null,
               child:Text(key.key)),
         ]),
+        OutlinedButton.icon(key:const ValueKey('remote-function-keys-toggle'),
+          style:OutlinedButton.styleFrom(minimumSize:const Size(0,48)),
+          onPressed:auxiliaryTargetReady ? () {
+            if (!panelCurrent() || !auxiliaryTargetReady || !identical(functionKeysTicket,panelFunctionKeysTicket)) return;
+            setState(() {
+              if (functionKeysExpanded) { retireFunctionKeys(); }
+              else { functionKeysExpanded = true; functionKeysTicket = Object(); }
+            });
+          } : null,
+          icon:Icon(functionKeysExpanded ? Icons.expand_less : Icons.expand_more),
+          label:Text(functionKeysExpanded ? '收起功能键' : '展开功能键')),
+        if (functionKeysExpanded) ...[
+          const Text('Ctrl/Alt 可修饰 F1–F12、Insert 和 Delete。Backspace 与 Shift+Tab 的附加修饰不发送。'),
+          Wrap(spacing:8,runSpacing:8,children:[
+            for (final key in const {'F1':'f1','F2':'f2','F3':'f3','F4':'f4','F5':'f5','F6':'f6',
+              'F7':'f7','F8':'f8','F9':'f9','F10':'f10','F11':'f11','F12':'f12',
+              'Insert':'insert','Delete':'delete','Backspace (DEL)':'backspace','Shift+Tab':'shift-tab'}.entries)
+              OutlinedButton(key:ValueKey('remote-function-key-${key.value}'),
+                style:OutlinedButton.styleFrom(minimumSize:const Size(64,48)),
+                onPressed:auxiliaryReady ? () { if (functionKeysCurrent()) auxiliaryInput(key.value); } : null,
+                child:Text(key.key)),
+          ]),
+        ],
         OutlinedButton.icon(key:const ValueKey('remote-input-paste'),onPressed:enabled && !previewOpen && !readingPaste && !inputGate.sending
           ? () { if (panelCurrent()) unawaited(pasteInput()); } : null,
           icon:const Icon(Icons.content_paste),label:const Text('粘贴并预览')),
@@ -1063,6 +1133,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final terminalObservationEpoch = observationEpoch,terminalInputEpoch = inputGate.epoch;
+    final terminalSource = terminal,terminalPageRequest = request;
+    if (terminalSource != null && !showingFontDiagnostics && !selectingScreen) scheduleTerminalImeLookup();
     final selectionSource = terminal,selectionSnapshot = snapshot,selectionRequest = request;
     final diagnosticSource = terminal,diagnosticTarget = inputGate.target;
     final diagnosticRequest = request,diagnosticObservationEpoch = observationEpoch,diagnosticInputEpoch = inputGate.epoch;
@@ -1189,6 +1261,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 autoResize:false,readOnly:!live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput,
                 simulateScroll:false,hardwareKeyboardOnly:inputGate.mode != RemoteInputMode.direct,
                 keyboardType:TextInputType.text,
+                onEditingValueChanged:(value) {
+                  if (terminalSource != null) terminalEditingValueChanged(terminalSource,terminalPageRequest,
+                    terminalObservationEpoch,terminalInputEpoch,value);
+                },
                 textStyle:TerminalStyle(fontFamily:'ProbeNerd',fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble()),shortcuts:const {},
                 onKeyEvent:(node,event) {
                   if (observationEpoch != terminalObservationEpoch || inputGate.epoch != terminalInputEpoch || viewPaused ||

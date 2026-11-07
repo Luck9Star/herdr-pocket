@@ -1,0 +1,955 @@
+{
+  "source": "dd025952321fb944465a48ec762ae76adc74f830",
+  "date": "2026-11-08",
+  "macTests": {
+    "tauriNode22": 472,
+    "viteModules": 64,
+    "remoteHarness": 103,
+    "flutterAndroidDriver": 89,
+    "posixHelper": 15
+  },
+  "macBrowser": {
+    "scope": "Isolated Mac Chrome; actual archive+8-file compiled Tauri front end and touch events; synthetic native commands and snapshots; no SSH or device proof",
+    "base": "d5a6dc06a876d05ef98815759595c042b05b1cfd",
+    "cases": [
+      {
+        "width": 320,
+        "entry": "saved host → new terminal tab → review → connect",
+        "initial": {
+          "open": true,
+          "visible": true,
+          "rows": [
+            {
+              "stage": "network",
+              "state": "pending"
+            },
+            {
+              "stage": "hostKey",
+              "state": "unknown"
+            },
+            {
+              "stage": "authentication",
+              "state": "unknown"
+            },
+            {
+              "stage": "dashboard",
+              "state": "unknown"
+            },
+            {
+              "stage": "terminal",
+              "state": "unknown"
+            }
+          ],
+          "allRowsVisible": true,
+          "overflow": 0,
+          "panelWidth": 262,
+          "attempt": "active"
+        },
+        "beforeFull": {
+          "open": true,
+          "visible": true,
+          "rows": [
+            {
+              "stage": "network",
+              "state": "verified"
+            },
+            {
+              "stage": "hostKey",
+              "state": "verified"
+            },
+            {
+              "stage": "authentication",
+              "state": "verified"
+            },
+            {
+              "stage": "dashboard",
+              "state": "verified"
+            },
+            {
+              "stage": "terminal",
+              "state": "pending"
+            }
+          ],
+          "allRowsVisible": true,
+          "overflow": 0,
+          "panelWidth": 262,
+          "attempt": "active"
+        },
+        "afterFull": {
+          "open": true,
+          "visible": true,
+          "rows": [
+            {
+              "stage": "network",
+              "state": "verified"
+            },
+            {
+              "stage": "hostKey",
+              "state": "verified"
+            },
+            {
+              "stage": "authentication",
+              "state": "verified"
+            },
+            {
+              "stage": "dashboard",
+              "state": "verified"
+            },
+            {
+              "stage": "terminal",
+              "state": "verified"
+            }
+          ],
+          "allRowsVisible": true,
+          "overflow": 0,
+          "panelWidth": 262,
+          "attempt": "active"
+        },
+        "fullAcknowledgements": 1,
+        "expansionSideEffects": {
+          "connections": 0,
+          "input": 0,
+          "resize": 0
+        },
+        "totalEffects": {
+          "connections": 2,
+          "input": 0,
+          "resize": 0
+        },
+        "terminalReadOnly": true
+      },
+      {
+        "width": 390,
+        "entry": "saved host → new terminal tab → review → connect",
+        "initial": {
+          "open": true,
+          "visible": true,
+          "rows": [
+            {
+              "stage": "network",
+              "state": "pending"
+            },
+            {
+              "stage": "hostKey",
+              "state": "unknown"
+            },
+            {
+              "stage": "authentication",
+              "state": "unknown"
+            },
+            {
+              "stage": "dashboard",
+              "state": "unknown"
+            },
+            {
+              "stage": "terminal",
+              "state": "unknown"
+            }
+          ],
+          "allRowsVisible": true,
+          "overflow": 0,
+          "panelWidth": 332,
+          "attempt": "active"
+        },
+        "beforeFull": {
+          "open": true,
+          "visible": true,
+          "rows": [
+            {
+              "stage": "network",
+              "state": "verified"
+            },
+            {
+              "stage": "hostKey",
+              "state": "verified"
+            },
+            {
+              "stage": "authentication",
+              "state": "verified"
+            },
+            {
+              "stage": "dashboard",
+              "state": "verified"
+            },
+            {
+              "stage": "terminal",
+              "state": "pending"
+            }
+          ],
+          "allRowsVisible": true,
+          "overflow": 0,
+          "panelWidth": 332,
+          "attempt": "active"
+        },
+        "afterFull": {
+          "open": true,
+          "visible": true,
+          "rows": [
+            {
+              "stage": "network",
+              "state": "verified"
+            },
+            {
+              "stage": "hostKey",
+              "state": "verified"
+            },
+            {
+              "stage": "authentication",
+              "state": "verified"
+            },
+            {
+              "stage": "dashboard",
+              "state": "verified"
+            },
+            {
+              "stage": "terminal",
+              "state": "verified"
+            }
+          ],
+          "allRowsVisible": true,
+          "overflow": 0,
+          "panelWidth": 332,
+          "attempt": "active"
+        },
+        "fullAcknowledgements": 1,
+        "expansionSideEffects": {
+          "connections": 0,
+          "input": 0,
+          "resize": 0
+        },
+        "totalEffects": {
+          "connections": 2,
+          "input": 0,
+          "resize": 0
+        },
+        "terminalReadOnly": true
+      }
+    ],
+    "failures": [],
+    "chrome": "Chrome/156.0.8078.81",
+    "cleanup": {
+      "browserExited": true,
+      "exitCode": 0,
+      "signal": null
+    }
+  },
+  "disposableLocalHerdr": {
+    "backgroundUpdateChecksDisabled": true,
+    "binarySha256": "fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2",
+    "blockedTargets": [
+      {
+        "label": "pocket-blocked",
+        "paneId": "w2:p1",
+        "state": "blocked",
+        "terminalId": "term_65fb63a08a36b2"
+      },
+      {
+        "label": "pocket-blocked",
+        "paneId": "w3:p1",
+        "state": "blocked",
+        "terminalId": "term_65fb63a08eac23"
+      }
+    ],
+    "distinguishableRealPaneOutput": true,
+    "hostInputRequests": 0,
+    "hostObserveLeaseRequests": 0,
+    "hostResizeRequests": 0,
+    "ownedServerStopped": true,
+    "ownedTemporaryDirectoryRemoved": true,
+    "primaryPty": {
+      "changes": 0,
+      "columns": 119,
+      "initialColumns": 119,
+      "initialRows": 40,
+      "rows": 40
+    },
+    "primaryUntouched": true,
+    "schemaVersion": 1,
+    "sourceCommitVerifiedForBinary": false,
+    "sourceContractCommit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+    "userAuthorizationFilesTouched": false,
+    "waitingProcesses": {
+      "noObservedResize": true,
+      "ownedWaitingProcessesStopped": true,
+      "realSnapshotBindings": true,
+      "receivedInputBytes": 0,
+      "sameAgentLabel": true,
+      "targetCount": 2
+    }
+  },
+  "androidFirstRun": {
+    "run": 42415286185,
+    "sourceSHA": "dd025952321fb944465a48ec762ae76adc74f830",
+    "conclusion": "failure",
+    "sourceChecks": {
+      "flutterPassed": 435,
+      "flutterSkipped": 1,
+      "flutterFailed": 4,
+      "flutterAnalyzeInfo": 1,
+      "flutterCombiningRenderPassed": 10
+    },
+    "tauri": {
+      "runId": 42415286185,
+      "sourceSHA": "dd025952321fb944465a48ec762ae76adc74f830",
+      "tauriAvdJobId": 128532916848,
+      "jobConclusion": "success",
+      "archiveHashes": {
+        "stock": "a34d8144cd4af5db17ba303777d6199f4a57d7d4a4ca0938415a531624d4321b",
+        "guarded": "45d96638796050016ee90f4d4c0c434ed3ddbe4c2fc5a9d789ae9deb6c50933c"
+      },
+      "checksums": [
+        {
+          "files": [
+            "manifest.json",
+            "remote-contract.json",
+            "tauri-android-progress.json",
+            "transport-Cargo.lock"
+          ],
+          "allMatched": true
+        },
+        {
+          "files": [
+            "manifest.json",
+            "remote-contract.json",
+            "tauri-android-progress.json",
+            "transport-Cargo.lock"
+          ],
+          "allMatched": true
+        }
+      ],
+      "stock": {
+        "status": "passed",
+        "receivedInputBytes": 0,
+        "blockedTargetEvidence": {
+          "paneId": "w3:p1",
+          "terminalId": "term_65fb66e805c7c3",
+          "observing": true,
+          "markerMatched": true,
+          "otherMarkerAbsent": true,
+          "listedRows": 2,
+          "reviewRequired": true
+        },
+        "blockedTargetsFixture": {
+          "targetCount": 2,
+          "sameAgentLabel": true,
+          "realSnapshotBindings": true,
+          "receivedInputBytes": 0,
+          "noObservedResize": true,
+          "ownedWaitingProcessesStopped": true
+        },
+        "sharedPty": {
+          "noObservedResize": true,
+          "numericRecord": {
+            "captureErrors": 0,
+            "changes": 0,
+            "columns": 119,
+            "elapsedMs": 66471,
+            "endReason": 1,
+            "initialColumns": 119,
+            "initialRows": 40,
+            "maxSampleGapMs": 128,
+            "readErrors": 0,
+            "rows": 40,
+            "sampleIntervalMs": 50,
+            "samples": 1310,
+            "schemaVersion": 1,
+            "signalAvailable": 1,
+            "signalSamples": 0,
+            "signalsMayCoalesce": 1,
+            "state": 2,
+            "terminationSignal": 0,
+            "winchHandlers": 0
+          }
+        },
+        "revokedFixtureKey": true,
+        "matchedDeviceKeyInSshd": true,
+        "hostCleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        },
+        "appCleanup": {
+          "application": "confirmed",
+          "browser": "confirmed",
+          "forward": "confirmed",
+          "reverse": "confirmed"
+        },
+        "emulatorRemoved": true
+      },
+      "guarded": {
+        "status": "passed",
+        "receivedInputBytesOutsideCurses": 10,
+        "initialReceiptByteCounts": [
+          1,
+          9
+        ],
+        "tuiActionCount": 10,
+        "tuiReceiptByteCounts": [
+          3,
+          1,
+          1,
+          3,
+          4,
+          4,
+          3,
+          3,
+          5,
+          5
+        ],
+        "twelveDistinctRequestsSamePair": true,
+        "hostTui": {
+          "sameTarget": true,
+          "initialInputMatched": true,
+          "finalInputMatched": true,
+          "terminalModesRestored": true,
+          "postFinishKernelInputAbsent": true,
+          "applicationStateMatched": true,
+          "actionCount": 10
+        },
+        "sharedPty": {
+          "noObservedResize": true,
+          "numericRecord": {
+            "captureErrors": 0,
+            "changes": 0,
+            "columns": 119,
+            "elapsedMs": 86939,
+            "endReason": 1,
+            "initialColumns": 119,
+            "initialRows": 40,
+            "maxSampleGapMs": 152,
+            "readErrors": 0,
+            "rows": 40,
+            "sampleIntervalMs": 50,
+            "samples": 1598,
+            "schemaVersion": 1,
+            "signalAvailable": 1,
+            "signalSamples": 0,
+            "signalsMayCoalesce": 1,
+            "state": 2,
+            "terminationSignal": 0,
+            "winchHandlers": 0
+          }
+        },
+        "revokedFixtureKey": true,
+        "matchedDeviceKeyInSshd": true,
+        "hostCleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        },
+        "appCleanup": {
+          "application": "confirmed",
+          "browser": "confirmed",
+          "forward": "confirmed",
+          "reverse": "confirmed"
+        },
+        "emulatorRemoved": true
+      }
+    },
+    "flutter": {
+      "stock": {
+        "artifactId": 13591712803,
+        "status": "failed",
+        "failure": {
+          "stage": "blocked_marker",
+          "errorClass": "TestFailure",
+          "line": 131
+        },
+        "receivedInputBytes": 0,
+        "sharedPty": {
+          "initialColumns": 119,
+          "initialRows": 40,
+          "columns": 119,
+          "rows": 40,
+          "changes": 0,
+          "readErrors": 0,
+          "captureErrors": 0,
+          "samples": 5651,
+          "endReason": 1
+        },
+        "hostCleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        },
+        "deviceCleanup": {
+          "ownedPackageInitiallyAbsent": true,
+          "ownedPackageAbsent": true,
+          "appProcessGone": true,
+          "reverseRemoved": true,
+          "ownedForwardsRemoved": true,
+          "flutterToolStopped": true,
+          "rawLogsUploaded": false,
+          "status": "passed"
+        },
+        "blockedTargetsFixture": {
+          "targetCount": 2,
+          "sameAgentLabel": true,
+          "realSnapshotBindings": true,
+          "receivedInputBytes": 0,
+          "noObservedResize": true,
+          "ownedWaitingProcessesStopped": true
+        }
+      },
+      "guarded": {
+        "artifactId": 13592175433,
+        "status": "failed",
+        "failure": {
+          "stage": "tui_resume_full",
+          "errorClass": "TestFailure",
+          "line": 131,
+          "tuiResume": {
+            "schemaVersion": 1,
+            "actionsCompleted": 3,
+            "boardCount": 1,
+            "tabCount": 1,
+            "resumeCount": 0,
+            "viewCount": 1,
+            "sequence": 13,
+            "cols": 80,
+            "rows": 24,
+            "bufferRows": 24,
+            "directCount": 1,
+            "rowsChecked": 24,
+            "rowMatchMask": 16777215,
+            "firstMismatchRow": -1,
+            "titleRowMask": 1,
+            "cursorKeysMode": true,
+            "directEnabled": false,
+            "sequencePresent": true,
+            "tailRowsBlank": true,
+            "terminalReplaced": false
+          }
+        },
+        "receivedInputBytes": 10,
+        "sharedPty": {
+          "initialColumns": 119,
+          "initialRows": 40,
+          "columns": 119,
+          "rows": 40,
+          "changes": 0,
+          "readErrors": 0,
+          "captureErrors": 0,
+          "samples": 2831,
+          "endReason": 1
+        },
+        "hostCleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        },
+        "deviceCleanup": {
+          "ownedPackageInitiallyAbsent": true,
+          "ownedPackageAbsent": true,
+          "appProcessGone": true,
+          "reverseRemoved": true,
+          "ownedForwardsRemoved": true,
+          "flutterToolStopped": true,
+          "rawLogsUploaded": false,
+          "status": "passed"
+        }
+      }
+    }
+  },
+  "markerCorrection": {
+    "source": "9b065bfaa7d888cc9d2704e2dbacab60b680275c",
+    "core": {
+      "scope": "real locked terminal_view 0.5.0 core and exact production screenHasMarker; deterministic clip geometry model, not Flutter render/device proof",
+      "geometry": {
+        "viewportWidth": 288,
+        "viewportHeight": 312,
+        "roundClipRadius": 12,
+        "cellWidth": 8.4,
+        "lineHeight": 18,
+        "screenHeight": 800
+      },
+      "cases": [
+        {
+          "case": "original-col0-clipped-despite-source-B",
+          "cells": [
+            1,
+            16,
+            2,
+            32
+          ],
+          "visibleB": false,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "original-col0-still-clipped-after-vertical-scroll",
+          "cells": [
+            8,
+            23,
+            2,
+            32
+          ],
+          "visibleB": false,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "mounted-but-phone-offscreen",
+          "cells": null,
+          "visibleB": false,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "fixed-padding-but-retained-horizontal-anchor",
+          "cells": [
+            1,
+            16,
+            11,
+            42
+          ],
+          "visibleB": false,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "padded-and-revealed-at-reading-origin",
+          "cells": [
+            1,
+            16,
+            2,
+            32
+          ],
+          "visibleB": true,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "padded-source-relative-row-after-scroll",
+          "cells": [
+            8,
+            23,
+            2,
+            32
+          ],
+          "visibleB": true,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "first-column-cuts-marker",
+          "cells": [
+            1,
+            16,
+            5,
+            32
+          ],
+          "visibleB": false,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "last-column-cuts-marker",
+          "cells": [
+            1,
+            16,
+            4,
+            18
+          ],
+          "visibleB": false,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "A-only-is-never-B",
+          "cells": [
+            1,
+            16,
+            2,
+            32
+          ],
+          "visibleB": false,
+          "wholeSourceContainsB": false,
+          "visibleA": true
+        },
+        {
+          "case": "fixed-default-font-cell-width-6.0",
+          "cells": [
+            1,
+            16,
+            2,
+            46
+          ],
+          "visibleB": true,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "fixed-default-font-cell-width-8.4",
+          "cells": [
+            1,
+            16,
+            2,
+            32
+          ],
+          "visibleB": true,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "fixed-default-font-cell-width-10.0",
+          "cells": [
+            1,
+            16,
+            2,
+            27
+          ],
+          "visibleB": true,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "fixed-default-font-cell-width-12.0",
+          "cells": [
+            1,
+            16,
+            1,
+            23
+          ],
+          "visibleB": true,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        },
+        {
+          "case": "marker-too-wide-remains-rejected",
+          "cells": [
+            1,
+            16,
+            1,
+            17
+          ],
+          "visibleB": false,
+          "wholeSourceContainsB": true,
+          "visibleA": false
+        }
+      ],
+      "sourceBufferRows": 24,
+      "sourceBufferColumns": 80,
+      "sourceScreenRelativeCoordinates": true,
+      "remoteInputRequests": 0,
+      "remoteResizeRequests": 0
+    },
+    "macHost": {
+      "backgroundUpdateChecksDisabled": true,
+      "binarySha256": "fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2",
+      "blockedTargets": [
+        {
+          "label": "pocket-blocked",
+          "paneId": "w2:p1",
+          "state": "blocked",
+          "terminalId": "term_65fb6a446bf322"
+        },
+        {
+          "label": "pocket-blocked",
+          "paneId": "w3:p1",
+          "state": "blocked",
+          "terminalId": "term_65fb6a447126d3"
+        }
+      ],
+      "distinguishableRealPaneOutput": true,
+      "hostInputRequests": 0,
+      "hostObserveLeaseRequests": 0,
+      "hostResizeRequests": 0,
+      "ownedServerStopped": true,
+      "ownedTemporaryDirectoryRemoved": true,
+      "primaryPty": {
+        "changes": 0,
+        "columns": 119,
+        "initialColumns": 119,
+        "initialRows": 40,
+        "rows": 40
+      },
+      "primaryUntouched": true,
+      "realVisibleMarkerMargins": [
+        {
+          "markerColumn": 4,
+          "realVisibleLineCount": 2,
+          "sample": "A"
+        },
+        {
+          "markerColumn": 4,
+          "realVisibleLineCount": 2,
+          "sample": "B"
+        }
+      ],
+      "schemaVersion": 1,
+      "sourceCommitVerifiedForBinary": false,
+      "sourceContractCommit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+      "tauriTrimmedExactMarkerCompatible": true,
+      "userAuthorizationFilesTouched": false,
+      "waitingProcesses": {
+        "noObservedResize": true,
+        "ownedWaitingProcessesStopped": true,
+        "realSnapshotBindings": true,
+        "receivedInputBytes": 0,
+        "sameAgentLabel": true,
+        "targetCount": 2
+      }
+    }
+  },
+  "artifacts": {
+    "runId": 42415286185,
+    "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42415286185",
+    "runStatus": "completed",
+    "runConclusion": "failure",
+    "sourceCommit": "dd025952321fb944465a48ec762ae76adc74f830",
+    "jobOutcomes": {
+      "apps (flutter)": "success",
+      "apps (tauri)": "success",
+      "android-pairing / android-device-key": "success",
+      "android-pairing / flutter-device-key": "failure",
+      "flutter-source": "failure"
+    },
+    "apps": {
+      "flutter": {
+        "artifact": {
+          "id": 13591233797,
+          "name": "android-flutter-network-dd025952321fb944465a48ec762ae76adc74f830",
+          "size": 151704704,
+          "digest": "e50d31d8a35b144b96faf6f94db086ae229d89ae8a366dfef2dffbaccf7e56eb",
+          "expires": "2026-11-21T21:32:59Z",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42415286185/artifacts/13591233797",
+          "actualBytes": 151704704,
+          "actualSha256": "e50d31d8a35b144b96faf6f94db086ae229d89ae8a366dfef2dffbaccf7e56eb",
+          "digestMatches": true
+        },
+        "package": {
+          "apkName": "app.apk",
+          "apkBytes": 483878232,
+          "apkSha256": "027a7881183275e966f602a8a48f0ffc51f4d718476cc9aa1fab151f45499a32",
+          "abi": [
+            "arm64-v8a"
+          ],
+          "api": 35,
+          "build": "passed",
+          "staticInspection": "passed",
+          "androidLoad": "not run",
+          "installation": "not run",
+          "sourceChecks": "failure",
+          "transportChecks": "success",
+          "nativeManifestSha256": "09bda552c24c1aa9b36df1a3d0fe1eef5a35dceb77309adfa574470d366ce27c",
+          "candidateManifestSha256": "d14756ceedc899055fa1174ef885be103c1f4970c5d99c08b7027166fd8d56f8",
+          "nativeManifestFiles": 74,
+          "apkLibraries": {
+            "libVkLayer_khronos_validation.so": "ae445f7e74d402e3a367adb230b1edd9841899fcb3310166e5cc96a09ad37a3f",
+            "libflutter.so": "5b368215d1ee0dff3ef83f830477185f32d05705663fd028e50e840487617a2f",
+            "libheeler_easytier.so": "2e2a4f50eb2bed6095f6e3498474607f39e6c6a7305d6f9a6b98cf8f1f217190",
+            "libherdr_flutter_network_runtime.so": "b333e78c30befc59eb9540a923cf3058b5b3b52e798d1f48975aabfc942557eb",
+            "libhp_tailscale.so": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+          }
+        },
+        "outerEntries": [
+          "RUSSH-NOTICE.md",
+          "SHA256SUMS",
+          "app.apk",
+          "candidate-manifest.json",
+          "mobile-tabs-v1.json",
+          "native-manifest.json",
+          "phone-tui-host.json",
+          "report.json",
+          "russh-0.65.0-local-close.patch",
+          "russh-0.65.0-source.json",
+          "russh-LICENSE",
+          "session-watch-v1.json",
+          "tailscale-settings-v1.json",
+          "target-input-journal-v1.json",
+          "terminal-function-keys-v1.json",
+          "terminal_view-LICENSE",
+          "terminal_view-NOTICE"
+        ]
+      },
+      "tauri": {
+        "artifact": {
+          "id": 13591323156,
+          "name": "android-tauri-network-dd025952321fb944465a48ec762ae76adc74f830",
+          "size": 163177373,
+          "digest": "21bb38b4cf8c8980bcf761fc5045ffab95d1617b8989339279f63fa1724db631",
+          "expires": "2026-11-21T21:33:51Z",
+          "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42415286185/artifacts/13591323156",
+          "actualBytes": 163177373,
+          "actualSha256": "21bb38b4cf8c8980bcf761fc5045ffab95d1617b8989339279f63fa1724db631",
+          "digestMatches": true
+        },
+        "package": {
+          "apkName": "app.apk",
+          "apkBytes": 593385427,
+          "apkSha256": "569313409cfb7e2b88fe3fa0d267817ca727276866613364824002561a567604",
+          "abi": [
+            "arm64-v8a"
+          ],
+          "api": 35,
+          "build": "passed",
+          "staticInspection": "passed",
+          "androidLoad": "not run",
+          "installation": "not run",
+          "sourceChecks": "success",
+          "transportChecks": "success",
+          "nativeManifestSha256": "09bda552c24c1aa9b36df1a3d0fe1eef5a35dceb77309adfa574470d366ce27c",
+          "candidateManifestSha256": null,
+          "nativeManifestFiles": 74,
+          "apkLibraries": {
+            "libheeler_easytier.so": "2e2a4f50eb2bed6095f6e3498474607f39e6c6a7305d6f9a6b98cf8f1f217190",
+            "libherdr_pocket_tauri_probe_lib.so": "fe875eddb805fee3f0d9de20e080a0a1e2cb19b84382828b75c6f3325476c2f4",
+            "libhp_tailscale.so": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+          }
+        },
+        "outerEntries": [
+          "RUSSH-NOTICE.md",
+          "app.apk",
+          "SHA256SUMS",
+          "js-notices.json",
+          "mobile-tabs-v1.json",
+          "native-manifest.json",
+          "phone-tui-host.json",
+          "report.json",
+          "russh-0.65.0-local-close.patch",
+          "russh-0.65.0-source.json",
+          "russh-LICENSE",
+          "session-watch-v1.json",
+          "tailscale-settings-v1.json",
+          "target-input-journal-v1.json",
+          "terminal-function-keys-v1.json",
+          "xterm-LICENSE",
+          "xterm-addon-unicode-graphemes-LICENSE"
+        ]
+      }
+    },
+    "sharedNativeByteIdentity": {
+      "libheeler_easytier.so": {
+        "flutterSha256": "2e2a4f50eb2bed6095f6e3498474607f39e6c6a7305d6f9a6b98cf8f1f217190",
+        "tauriSha256": "2e2a4f50eb2bed6095f6e3498474607f39e6c6a7305d6f9a6b98cf8f1f217190",
+        "sameBytes": true
+      },
+      "libhp_tailscale.so": {
+        "flutterSha256": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d",
+        "tauriSha256": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d",
+        "sameBytes": true
+      }
+    },
+    "nativeProvenance": {
+      "rustNativeSourceBundleSha256": "09bda552c24c1aa9b36df1a3d0fe1eef5a35dceb77309adfa574470d366ce27c",
+      "sharedNativeSourceSetSha256": "684d2fced643a9234e308dcbc988fd44670517080caf05cc46ae9eea9610e94b",
+      "tailscaleSourceManifestSha256": "ab5754e36edec68a18ad650af713086fac8f49c45df5e8fa9e0a2d842a9fa7f0"
+    },
+    "validations": {
+      "bothArtifactsVerifiedAgainstGitHubDigestAndSize": true,
+      "bothProducerChecksumManifestsMatch": true,
+      "bothReportsAndManifestsMatchSource": true,
+      "bothApksArm64Only": true,
+      "debugVariantConfirmedByActionsBuildLogs": true,
+      "commonEasyTierAndTailscaleLibrariesByteIdentical": true,
+      "debugSignerSeparatelyInspected": false,
+      "deviceInstallation": "not run",
+      "androidLoad": "not run"
+    }
+  }
+}

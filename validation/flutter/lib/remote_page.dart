@@ -83,6 +83,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   bool rendering = false, previewOpen = false, acknowledgingInput = false;
   String? draftTarget;
   final drafts = <String,String>{};
+  final draftVersions = <String,Object>{};
   final draftOrigins = <String,RemoteInputTarget>{};
   final auxiliaryModifiers = AuxiliaryModifiers();
   late final RemoteInputGate inputGate = RemoteInputGate((target,bytes,current) =>
@@ -98,7 +99,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       selectedTarget?.terminalId ?? widget.requestedTarget?.terminalId);
   }
   String targetKey(RemoteInputTarget target) => target.endpointKey;
-  void draftChanged() { draftRevision++; }
+  void draftChanged() {
+    draftRevision++; // Keep the conservative guard for a late send rejection.
+    final key = draftTarget;
+    if (key == null || drafts[key] == draft.text) return;
+    drafts[key] = draft.text;
+    draftVersions[key] = Object();
+    if (mounted) setState(() {});
+  }
 
   // Presentation only: retain the original pane objects and source order in
   // each group. Stopped snapshots cannot advertise current pending work.
@@ -566,9 +574,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   String? unsentText(String key) => draftTarget == key ? draft.text : drafts[key];
-  bool sameUnsent(String key,String text,int revision) => mounted && draftRevision == revision && unsentText(key) == text;
-  Future<void> clearUnsent(String key,String text,int revision,RemoteInputTarget origin) async {
-    if (!sameUnsent(key,text,revision)) return;
+  bool sameUnsent(String key,String text,Object revision) =>
+    mounted && identical(draftVersions[key],revision) && unsentText(key) == text;
+  Future<void> clearUnsent(String key,String text,RemoteInputTarget origin) async {
+    // Freeze this entry when explicitly clicked, after checking the visible
+    // text. Other targets cannot invalidate it; editing this target, even ABA,
+    // replaces its token and invalidates the open confirmation.
+    final revision = draftVersions[key];
+    if (revision == null || !sameUnsent(key,text,revision)) return;
     final confirmed = await showDialog<bool>(context:context,builder:(context) => AlertDialog(
       title:const Text('清除此原目标的未发送草稿？'),
       content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -580,6 +593,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     setState(() {
       drafts.remove(key);
       if (draftTarget == key) draft.clear();
+      draftVersions[key] = Object();
       draftRevision++; // Consumes this clear review even for an archived target.
     });
   }
@@ -592,7 +606,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       const SizedBox(height:16),Text('找回未发送草稿 · 只读',style:Theme.of(context).textTheme.titleMedium),
       const Text('来源：本页按原目标保留的未发送编辑内容。仅在本页内存保留；复制不授予发送权限，不能自动转交给新目标。'),
       for (var index = 0; index < entries.length; index++) Builder(builder:(context) {
-        final entry = entries[index],origin = draftOrigins[entries[index].key]!,revision = draftRevision;
+        final entry = entries[index],origin = draftOrigins[entries[index].key]!;
         return Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
           Text('原目标：${origin.label}',key:ValueKey('remote-unsent-origin-$index')),
           Text('原网络：${origin.route == 'system' ? '系统路由' : origin.route}',softWrap:true),
@@ -600,14 +614,15 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           SelectableText(entry.value,key:ValueKey('remote-unsent-text-$index')),
           Wrap(spacing:8,children:[
             TextButton(key:ValueKey('remote-unsent-copy-$index'),onPressed:() async {
-              if (!sameUnsent(entry.key,entry.value,revision)) return;
+              final revision = draftVersions[entry.key];
+              if (revision == null || !sameUnsent(entry.key,entry.value,revision)) return;
               try { await Clipboard.setData(ClipboardData(text:entry.value)); }
               catch (_) {
                 if (sameUnsent(entry.key,entry.value,revision)) ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content:Text('系统复制未确认 · 原草稿仍保留，可长按文本复制。')));
               }
             },child:const Text('复制原草稿')),
-            TextButton(key:ValueKey('remote-unsent-clear-$index'),onPressed:() => clearUnsent(entry.key,entry.value,revision,origin),child:const Text('清除此草稿…')),
+            TextButton(key:ValueKey('remote-unsent-clear-$index'),onPressed:() => clearUnsent(entry.key,entry.value,origin),child:const Text('清除此草稿…')),
           ]),
         ])));
       }),

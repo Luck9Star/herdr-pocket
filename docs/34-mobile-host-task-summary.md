@@ -26,3 +26,5 @@
 云端 Flutter analyzer 和 10 项绘制回归通过。常规测试为 281 项通过、1 项跳过、2 项失败，后续的隔离 SSH 测试被跳过。两个失败用例在模拟手工重连时没有重新填写已经清除的临时凭据，适配器只收到了首次连接。API 35 上，Tauri 在生成的 Kotlin 代码编译阶段失败，模拟器未启动。Flutter 测试驱动报 `flutter_android_public_signer_read_failed`，未取得签名探针，主机未授权。[首轮记录](https://github.com/Luck9Star/herdr-pocket/actions/runs/42325603861)
 
 首轮原生库、共享 transport 和 Flutter arm64 构建通过，Tauri arm64 构建失败。修复批让每次手工重连重新填写合成凭据并完成审查，按收到的全帧核对输入日志读取次数。Android 构建将顶层 Java 同步到独立源码目录，Kotlin 的构建输入由此排除了 JVM 测试用的平台桩。Flutter 模拟器驱动先确认测试应用已安装，再读取有界的公开结果文件；首轮没有记录底层 ADB 诊断。
+
+第二轮 `1ba655e` 已通过重连后的看板时间检查。另一个用例成功进入替换后的终端，发现编辑新目标草稿会让旧草稿的清除按钮失效。清除审查现按原目标、可见文字和该草稿的版本核对，其他目标的编辑可独立进行。Android Gradle 插件拒绝直接注册目录 Provider，改为注册具体目录并保留对同步任务的显式依赖。此轮 Flutter 模拟器的测试进程在应用安装前退出。[第二轮记录](https://github.com/Luck9Star/herdr-pocket/actions/runs/42327077924)

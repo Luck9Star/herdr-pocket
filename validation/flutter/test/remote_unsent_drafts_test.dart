@@ -65,6 +65,13 @@ void main() {
     });
   }
   testWidgets('same pane with a new terminal never inherits the original draft; clearing original preserves new editor',(tester) async {
+    final copied = <String>[];
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform,(call) async {
+      if (call.method == 'Clipboard.setData') copied.add((call.arguments as Map)['text'] as String);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(SystemChannels.platform,null));
     final adapter = _ReconnectInputAdapter(); await input.start(tester,adapter); await writeDraft(tester,'ORIGINAL ONLY');
     await tester.ensureVisible(base.field('cancel')); await tester.tap(base.field('cancel')); await tester.pump();
     await reviewManualReconnect(tester,adapter);
@@ -78,9 +85,16 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('remote-input-draft')));
     await tester.enterText(find.byKey(const ValueKey('remote-input-draft')),'NEW TERMINAL DRAFT'); await tester.pump();
     expect(tester.widget<Text>(find.byKey(const ValueKey('remote-unsent-origin-0'))).data,contains('term_abcd'));
+    await tapShelf(tester,'remote-unsent-copy-0'); expect(copied,['ORIGINAL ONLY']);
     await tapShelf(tester,'remote-unsent-clear-0');
+    expect(find.text('清除此原目标的未发送草稿？'),findsOneWidget);
+    // Editing B after reviewing A must neither invalidate A's confirmation nor
+    // let A's confirmation clear the controller now owned by B.
+    editor.text = 'NEW TERMINAL EDITED DURING REVIEW'; await tester.pump();
     await tester.tap(find.byKey(const ValueKey('remote-unsent-clear-confirm'))); await tester.pumpAndSettle();
-    expect(editor.text,'NEW TERMINAL DRAFT'); expect(adapter.received,isEmpty); await tester.pumpWidget(const SizedBox());
+    expect(editor.text,'NEW TERMINAL EDITED DURING REVIEW');
+    expect(find.byKey(const ValueKey('remote-unsent-shelf')),findsNothing);
+    expect(adapter.received,isEmpty); expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox());
   });
   testWidgets('stale clear confirmation cannot remove a newly edited draft for the same endpoint',(tester) async {
     final adapter = input.InputFixtureAdapter(); await input.start(tester,adapter);
@@ -92,6 +106,43 @@ void main() {
     expect(tester.widget<SelectableText>(find.byKey(const ValueKey('remote-unsent-text-0'))).data,'new text after review');
     expect(adapter.received,isEmpty); await tester.pumpWidget(const SizedBox());
   });
+  testWidgets('same-target ABA editing invalidates an open clear confirmation even when visible text returns',(tester) async {
+    final adapter = input.InputFixtureAdapter(); await input.start(tester,adapter);
+    final controller = await writeDraft(tester,'reviewed text'); await input.mode(tester,'observe');
+    await tapShelf(tester,'remote-unsent-clear-0');
+    controller.text = 'different text'; controller.text = 'reviewed text'; await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('remote-unsent-clear-confirm'))); await tester.pumpAndSettle();
+    expect(controller.text,'reviewed text');
+    expect(tester.widget<SelectableText>(find.byKey(const ValueKey('remote-unsent-text-0'))).data,'reviewed text');
+    // A new explicit click reviews the current version and can clear it.
+    await tapShelf(tester,'remote-unsent-clear-0');
+    await tester.tap(find.byKey(const ValueKey('remote-unsent-clear-confirm'))); await tester.pumpAndSettle();
+    expect(controller.text,isEmpty); expect(find.byKey(const ValueKey('remote-unsent-shelf')),findsNothing);
+    expect(adapter.received,isEmpty); expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox());
+  });
+  for (final action in ['copy','clear']) {
+    testWidgets('a $action click cannot act on text that changed since the visible shelf was built',(tester) async {
+      final copied = <String>[];
+      final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform,(call) async {
+        if (call.method == 'Clipboard.setData') copied.add((call.arguments as Map)['text'] as String);
+        return null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(SystemChannels.platform,null));
+      final adapter = input.InputFixtureAdapter(); await input.start(tester,adapter);
+      final controller = await writeDraft(tester,'visible old text'); await input.mode(tester,'observe');
+      final control = find.byKey(ValueKey('remote-unsent-$action-0'));
+      await tester.ensureVisible(control); await tester.pumpAndSettle();
+      // No frame between the edit and the real click: the old displayed value
+      // cannot be combined with the new entry's token to authorize an action.
+      controller.text = 'new text awaiting a frame';
+      await tester.tap(control); await tester.pumpAndSettle();
+      expect(copied,isEmpty); expect(find.byKey(const ValueKey('remote-unsent-clear-confirm')),findsNothing);
+      expect(controller.text,'new text awaiting a frame');
+      expect(tester.widget<SelectableText>(find.byKey(const ValueKey('remote-unsent-text-0'))).data,'new text awaiting a frame');
+      expect(adapter.received,isEmpty); expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox());
+    });
+  }
   testWidgets('unknown submitted bytes remain in recovery record and never become an unsent draft',(tester) async {
     final adapter = input.InputFixtureAdapter()..nextResult = const RemoteInputResult.unknown();
     await input.start(tester,adapter); final controller = await writeDraft(tester,'SUBMITTED UNKNOWN');

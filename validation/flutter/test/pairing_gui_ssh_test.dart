@@ -188,7 +188,10 @@ void main() {
       expect(adapter.inputTarget,isNotNull);
       expect(tester.widget<ChoiceChip>(draftMode).onSelected,isNotNull);
       expect(tester.widget<ChoiceChip>(directMode).onSelected,isNotNull);
-      expect(inputJournal.reads,1);
+      // One capability check plus a fresh journal read for every accepted full,
+      // including the first full after explicitly resuming the original target.
+      final acceptedFulls = adapter.evidence.frameCount - adapter.evidence.deltaFrames;
+      expect(inputJournal.reads,1 + acceptedFulls);
       await tapControl('remote-mode-draft');
       final draft = find.byKey(const ValueKey('remote-input-draft'));
       await tester.ensureVisible(draft);

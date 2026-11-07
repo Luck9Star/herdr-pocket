@@ -6,6 +6,17 @@ import 'package:herdr_flutter_probe/remote_input.dart';
 import 'remote_page_test.dart' as base;
 import 'remote_input_widget_test.dart' as input;
 import 'remote_input_test.dart' as fixtures show target;
+import 'remote_dashboard_time_test.dart' show IndependentObserveAttempts,reviewManualReconnect;
+
+class _ReconnectInputAdapter extends input.InputFixtureAdapter with IndependentObserveAttempts {
+  @override Future<RemoteSnapshot> observe(RemoteConfig config,{required DashboardConsumer onDashboard,
+      required FrameConsumer onFrame,RemoteProgress? onProgress}) {
+    connection=Object(); return super.observe(config,onDashboard:onDashboard,onFrame:onFrame,onProgress:onProgress);
+  }
+  @override Future<void> cancel() {
+    selectedTarget=null; pausedTarget=null; paused=false; return super.cancel();
+  }
+}
 
 Future<TextEditingController> writeDraft(WidgetTester tester,String value) async {
   await input.mode(tester,'draft');
@@ -54,10 +65,9 @@ void main() {
     });
   }
   testWidgets('same pane with a new terminal never inherits the original draft; clearing original preserves new editor',(tester) async {
-    final adapter = input.InputFixtureAdapter(); await input.start(tester,adapter); await writeDraft(tester,'ORIGINAL ONLY');
+    final adapter = _ReconnectInputAdapter(); await input.start(tester,adapter); await writeDraft(tester,'ORIGINAL ONLY');
     await tester.ensureVisible(base.field('cancel')); await tester.tap(base.field('cancel')); await tester.pump();
-    await tester.ensureVisible(base.field('review')); await tester.tap(base.field('review')); await tester.pump();
-    await tester.ensureVisible(base.field('connect')); await tester.tap(base.field('connect')); await tester.pump();
+    await reviewManualReconnect(tester,adapter);
     adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',const [RemotePane('w1:p1','term_9876')],freshness:DashboardFreshness.fresh)); await tester.pump();
     final pane = find.byKey(const ValueKey('remote-pane-w1:p1')); await tester.ensureVisible(pane); await tester.tap(pane); await tester.pump();
     adapter.selectedTarget = fixtures.target(connection:adapter.connection,generation:adapter.generation,pane:'w1:p1',term:'term_9876');

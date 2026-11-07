@@ -3,6 +3,7 @@ from contextlib import contextmanager
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -150,6 +151,23 @@ class ScaffoldGuards(PreparedFixture):
 
 
 class RunnerGuards(PreparedFixture):
+    def test_first_target_review_failures_are_bounded_and_distinguish_consent_from_disabled_creation(self):
+        for stage in ('target_finish_edit', 'target_review_ready', 'target_review_unchecked', 'target_create_unavailable'):
+            record = {'stage': stage, 'errorClass': 'TestFailure', 'line': 240}
+            encoded = json.dumps(record).encode()
+            self.assertEqual(gui.safe_test_failure(record), record)
+            self.assertEqual(gui.checked_public_payload(encoded, 'failure.json'), encoded)
+            with self.assertRaises(gui.DeviceFailure):
+                gui.safe_test_failure(dict(record, target='private target is not evidence'))
+
+    def test_fixed_integration_stages_fit_the_public_driver_allowlist(self):
+        source = (REPO / 'validation/flutter/integration_test/android_pairing_observe_test.dart').read_text()
+        stages = set(re.findall(r"stage\('([a-z_]+)'\)", source))
+        self.assertTrue(stages)
+        self.assertLessEqual(stages, gui.STAGES)
+        for stage in stages:
+            self.assertLessEqual(len(stage.encode()), gui.PUBLIC_LIMITS['stage'])
+
     def test_failure_metadata_has_no_message_stack_or_payload_channel(self):
         record = {'stage': 'guarded_direct_commit', 'errorClass': 'TestFailure', 'line': 240}
         self.assertEqual(gui.safe_test_failure(record), record)

@@ -59,8 +59,8 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
 Future<void> tapKey(WidgetTester tester, String key) => tap(tester,find.byKey(ValueKey(key)));
 /// Observe the real view after the editor's done action. Do not override view
 /// metrics, assign review state, or retry the consent tap if it is not checked.
-Future<Finder> sourceReviewCheckbox(WidgetTester tester) async {
-  final tile = find.byKey(const ValueKey('pair-source-review'));
+Future<Finder> stableReviewCheckbox(WidgetTester tester,String key) async {
+  final tile = find.byKey(ValueKey(key));
   final checkbox = find.descendant(of:tile,matching:find.byType(Checkbox));
   List<double> previousViewport = const [];
   var stableSamples = 0;
@@ -94,6 +94,8 @@ Future<Finder> sourceReviewCheckbox(WidgetTester tester) async {
 }
 Finder hostOpen() => find.byWidgetPredicate((widget) => widget is FilledButton &&
   widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('host-open-'));
+Finder hostTab() => find.byWidgetPredicate((widget) => widget is TextButton &&
+  widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('host-tab-'));
 int? displayedSequence(WidgetTester tester) {
   final labels = tester.widgetList<Text>(find.byType(Text)).where((text) =>
     text.data?.contains('固定 80×24') == true && text.data?.contains(' · seq ') == true).toList();
@@ -192,9 +194,25 @@ void main() {
       await tester.ensureVisible(field);
       await tester.enterText(field,target[name].toString()); await tester.pump();
     }
-    await tapKey(tester,'pair-target-review');
+    final reviewedFields = <String,String>{
+      for (final name in ['host','port','username','session','socketPath','herdrPath','expectedHostKey'])
+        name:tester.widget<TextField>(find.byKey(ValueKey('pair-$name'))).controller!.text,
+    };
+    for (final entry in reviewedFields.entries) { expect(entry.value,target[entry.key].toString()); }
+    stage('target_finish_edit');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump(const Duration(milliseconds:300));
+    stage('target_review_ready');
+    final targetCheckbox = await stableReviewCheckbox(tester,'pair-target-review');
+    await tester.tap(targetCheckbox); await tester.pump(const Duration(milliseconds:150));
+    stage('target_review_unchecked');
+    expect(targetCheckbox.hitTestable(),findsOneWidget);
+    expect(tester.widget<Checkbox>(targetCheckbox).value,isTrue);
+    for (final entry in reviewedFields.entries) {
+      expect(tester.widget<TextField>(find.byKey(ValueKey('pair-${entry.key}'))).controller!.text,entry.value);
+    }
     final createButton = tester.widget<FilledButton>(find.byKey(const ValueKey('pair-create')));
-    if (createButton.onPressed == null) { stage('create_not_available'); fail('create_not_available'); }
+    if (createButton.onPressed == null) { stage('target_create_unavailable'); fail('target_create_unavailable'); }
     await tapKey(tester,'pair-create'); // The only create action uses native AndroidKeyStore.
     final requestControl = find.byKey(const ValueKey('pair-request'));
     const errors = {'核验连接资料':'target_invalid','保存创建意图':'catalog_intent_failed',
@@ -243,7 +261,7 @@ void main() {
     stage('response_preview');
     expect(find.byKey(const ValueKey('pair-response-preview')),findsOneWidget);
     stage('response_source_confirm');
-    final sourceCheckbox = await sourceReviewCheckbox(tester);
+    final sourceCheckbox = await stableReviewCheckbox(tester,'pair-source-review');
     await tester.tap(sourceCheckbox); // One real pointer action on the checkbox.
     await tester.pump(const Duration(milliseconds:350));
     expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('pair-source-review'))).value,isTrue);
@@ -322,22 +340,36 @@ void main() {
       inputReceipts.add(visibleReceipt(tester,target['paneId'] as String,1));
 
       stage('guarded_hidden_draft');
+      // A host profile ID and a view/tab ID are different identities. Capture
+      // this actual visible tab before hiding it; never guess its key from id.
+      expect(hostTab(),findsOneWidget);
+      final originalTabKey = (tester.widget<TextButton>(hostTab()).key! as ValueKey<String>).value;
+      final terminalBeforeHide = tester.widget<TerminalView>(terminalView).terminal;
       await tapKey(tester,'remote-mode-draft');
       final draftControl = find.byKey(const ValueKey('remote-input-draft'));
       await tester.ensureVisible(draftControl); await tester.enterText(draftControl,'Pocket测');
       await tester.pump();
+      await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
       await tapKey(tester,'hosts-board-tab');
-      await tapKey(tester,'host-tab-$id');
-      expect(find.textContaining('请主动审查连接并取得新 full'),findsOneWidget);
+      await tapKey(tester,originalTabKey);
+      await until(tester,() => find.byKey(const ValueKey('remote-resume')).evaluate().length == 1);
       expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
       expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+      expect(draftControl,findsNothing);
+      expect(tester.widget<SelectableText>(find.byKey(const ValueKey('remote-unsent-text-0'))).data,'Pocket测');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('remote-unsent-origin-0'))).data,
+        contains(inputReceipts.first['terminalId'] as String));
       stage('guarded_reconnect');
-      await tapKey(tester,'remote-review'); await tapKey(tester,'remote-connect');
-      await until(tester,() => pane.evaluate().length == 1 &&
-        tester.widget<FilledButton>(pane).onPressed != null);
-      await tap(tester,pane);
-      await until(tester,() => find.textContaining('只读观察中').evaluate().isNotEmpty &&
+      // Production hidden tabs retain SSH. Only explicit resume plus a new
+      // full reopens input; reconnecting here would test a different path.
+      await tapKey(tester,'remote-resume');
+      await until(tester,() => find.byType(TerminalView).evaluate().length == 1 &&
+        !identical(tester.widget<TerminalView>(terminalView).terminal,terminalBeforeHide) &&
+        find.textContaining('只读观察中').evaluate().isNotEmpty &&
         tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected != null);
+      final restoredTargetLabel = tester.widget<Text>(find.textContaining('当前输入目标：')).data;
+      expect(restoredTargetLabel,contains(inputReceipts.first['paneId'] as String));
+      expect(restoredTargetLabel,contains(inputReceipts.first['terminalId'] as String));
       await tapKey(tester,'remote-mode-draft');
       expect(tester.widget<TextField>(draftControl).controller!.text,'Pocket测');
       stage('guarded_draft_review');

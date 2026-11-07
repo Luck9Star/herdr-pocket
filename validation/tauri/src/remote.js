@@ -31,6 +31,10 @@ import { LocalTerminalViewport, terminalViewportIdentity } from './local-termina
 import { observationError } from './observation-error.js';
 import { initConnectionProfileUI } from './connection-profile-ui.js';
 
+const hostProviderNames = new Map([
+  ['direct', 'direct'], ['tailscale', 'Tailscale'], ['easytier', 'EasyTier'], ['zerotier', 'ZeroTier'],
+]);
+
 export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboardRead=readClipboardForPaste, keyboardRequest=requestMobileKeyboard, clipboardWrite=writePublicRequest }) {
   const $ = id => document.getElementById(id), gate = new RemoteViewGate();
   let textSelection=null, fontDiagnostics=null, selectTextButton=null, selectionReady=false;
@@ -41,6 +45,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   let moreKeysButton=null, moreKeys=null;
   const localViewport=new LocalTerminalViewport();
   let networkRevisions=new Map();
+  let networkProviders=new Map();
   const hostSummaries=new HostDashboardSummary();
   let pairFingerprint=null;
   let connectionProfiles=null,profileProviderHint=null,pairCamera=null,revocationReview=false,pairReviewIdentity=null,handoffRevision=0,handoffBusy=false;
@@ -553,24 +558,81 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       const nextNetworkRevisions=new Map(catalog.profiles.map(p=>[p.id,p.revision]));
       const nextFont=catalog.preferences.terminalFontSize;
       hostRecords=nextHosts;networkRevisions=nextNetworkRevisions;terminalFontSize=nextFont;
+      networkProviders=new Map(catalog.profiles.map(profile=>[profile.id,profile.provider]));
       hostSummaries.reconcile(hostRecords.map(summaryHost));workspace?.setFont(terminalFontSize);
       $('terminal-font-size').value=terminalFontSize;if(terminal)terminal.options.fontSize=terminalFontSize;
       renderHosts();render();if(refreshNetwork)networks?.refresh();hostMessage(hostRecords.length?'选择主机、管理资料，或新增主机。':'还没有已存主机。');
     } catch {
       if(revision!==hostRefreshRevision)return;
-      hostSummaries.suspendAll();hostRecords=[];networkRevisions=new Map();renderHosts();
+      hostSummaries.suspendAll();hostRecords=[];networkRevisions=new Map();networkProviders.clear();renderHosts();
       hostMessage('本机资料不可用；仍可打开手动连接表单。');
     }
   }
+  function hostProvider(host) {
+    const provider = host.networkProfileId ? networkProviders.get(host.networkProfileId) : host.provider;
+    return hostProviderNames.get(provider) ?? '';
+  }
+  function filterHostCards() {
+    const search = $('host-query');
+    const query = search.value.trim().toLowerCase();
+    const state = $('host-attention').value || 'all';
+    const filtered = Boolean(query || state !== 'all');
+    const visibleIds = new Set();
+    let attentionCount = 0;
+    let historyCount = 0;
+    for (const host of hostRecords) {
+      const summary = hostSummaries.get(summaryHost(host));
+      let reportState = null;
+      if (summary?.blocked.length) {
+        reportState = summary.current && summary.phase === 'fresh' ? 'current' : 'history';
+        if (reportState === 'current') attentionCount++;
+        else historyCount++;
+      }
+      if (state !== 'all' && state !== reportState) continue;
+      const fields = [host.name, host.target.session, host.target.host, hostProvider(host)];
+      if (!query || fields.some(value => typeof value === 'string' && value.toLowerCase().includes(query))) {
+        visibleIds.add(host.id);
+      }
+    }
+    for (const card of $('host-list').children) {
+      card.hidden = !visibleIds.has(card.dataset.hostId);
+    }
+    $('host-filters').hidden = hostRecords.length === 0 && !filtered;
+    $('host-attention-current').textContent = `当前待处理（${attentionCount}）`;
+    $('host-attention-history').textContent = `上次受阻，待核查（${historyCount}）`;
+    $('host-query-clear').hidden = !search.value;
+    const status = $('host-filter-status');
+    status.hidden = !filtered;
+    const count = `显示 ${visibleIds.size} / ${hostRecords.length} 台主机`;
+    status.textContent = !filtered ? '' : visibleIds.size ? count : `没有匹配的主机 · ${count}`;
+    $('host-filter-reset').hidden = !filtered || visibleIds.size > 0;
+  }
+  $('host-query').addEventListener('input', filterHostCards);
+  $('host-attention').addEventListener('change', filterHostCards);
+  function clearHostQuery() {
+    $('host-query').value = '';
+    $('host-query').focus();
+    filterHostCards();
+  }
+  $('host-query-clear').onclick = clearHostQuery;
+  $('host-filter-reset').onclick = () => {
+    $('host-attention').value = 'all';
+    clearHostQuery();
+  };
   function renderHosts() {
     renderLiveSummary();
     $('host-open-remote').textContent=unsavedHostOpen && !activeHostId?'继续未保存的主机':'新增主机 / 手动连接';
     $('host-open-remote').disabled=pairBusy;
     $('host-list').replaceChildren(); $('host-tabs').replaceChildren();
     for(const host of hostSummaries.order(hostRecords.map(summaryHost))) {
-      const card=document.createElement('article'); card.className='saved-host-card';
+      const card=document.createElement('article'); card.className='saved-host-card';card.dataset.hostId=host.id;
       const title=document.createElement('h3');title.textContent=host.name;card.append(title);
-      const detail=document.createElement('p');detail.textContent=`${host.target.username}@${host.target.host}:${host.target.port} · ${host.keyDeletionPending?(host.keyCleanupMode==='identity'?'仅清设备身份待确认，原主机公开资料将保留':'移除主机资料待确认，原引用保留'):host.retired?'已替换并停用，身份保留供删除或撤销':host.enabled?'已启用':'已停用'} · ${host.networkProfileId?'已绑定网络（连接需核验）':'系统连接'} · ${runtimeRevokedHosts.has(host.id) && host.pairingStatus!=='revoked'?'本次运行已停用，撤销回执保存未确认':host.pairingStatus==='revoked'?'已登记主机撤销，原设备记录保留待显式清理':host.pairingStatus==='awaiting-host'?'待主机响应':host.pairingStatus==='cancelled'?'配对已取消，需核查授权':host.deviceFingerprint?'设备资料已存':'未保存设备身份'} · ${hostStatuses.get(host.id) || '尚未在本次运行中连接'}`;card.append(detail);
+      const provider = hostProvider(host);
+      let route = '系统连接';
+      if (host.networkProfileId) route = provider ? `已绑定 ${provider}（连接需核验）` : '绑定网络资料不可用';
+      else if (host.requiresNetworkBinding) route = `${provider || '网络'} 待绑定`;
+      else if (provider && provider !== 'direct') route = `系统连接 · 资料标注 ${provider}（未绑定）`;
+      const detail=document.createElement('p');detail.textContent=`${host.target.username}@${host.target.host}:${host.target.port} · ${host.keyDeletionPending?(host.keyCleanupMode==='identity'?'仅清设备身份待确认，原主机公开资料将保留':'移除主机资料待确认，原引用保留'):host.retired?'已替换并停用，身份保留供删除或撤销':host.enabled?'已启用':'已停用'} · 会话 ${host.target.session} · ${route} · ${runtimeRevokedHosts.has(host.id) && host.pairingStatus!=='revoked'?'本次运行已停用，撤销回执保存未确认':host.pairingStatus==='revoked'?'已登记主机撤销，原设备记录保留待显式清理':host.pairingStatus==='awaiting-host'?'待主机响应':host.pairingStatus==='cancelled'?'配对已取消，需核查授权':host.deviceFingerprint?'设备资料已存':'未保存设备身份'} · ${hostStatuses.get(host.id) || '尚未在本次运行中连接'}`;card.append(detail);
       const taskSummary=document.createElement('p');taskSummary.textContent=hostSummaryText(hostSummaries.get(host));taskSummary.setAttribute('data-host-task-summary',host.id);card.append(taskSummary);
       card.append(blockedTargetList({store:hostSummaries,host,disabled:pairBusy,onOpen:target=>void openBlockedTarget(host.id,target)}));
       const name=document.createElement('input');name.value=host.name;name.maxLength=96;name.setAttribute('aria-label',`重命名 ${host.name}`);card.append(name);
@@ -586,6 +648,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       card.append(actions);$('host-list').append(card);
       if(host.enabled) {const tab=document.createElement('button');tab.type='button';tab.textContent=host.name;tab.disabled=pairBusy;tab.setAttribute('aria-pressed',String(host.id===activeHostId));tab.onclick=()=>void openSavedHost(host.id);$('host-tabs').append(tab);}
     }
+    filterHostCards();
   }
   async function openSavedHost(id) {
     if(pairBusy)return;

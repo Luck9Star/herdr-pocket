@@ -49,3 +49,5 @@
 - **原版 herdr 的 Flutter 手机闭环通过。** API 35 模拟器使用本机设备密钥配对，隔离 sshd 确认认证公钥与获批公钥一致。看板选中原窗格后，屏幕收到序号 1 的首帧和序号 2 的增量，主动停止后显示陈旧状态。随后从两个同名历史窗格中选择 B，重新审查，核对实际 pane／terminal，并看到完整 B 标记，画面无 A。原窗格和两个受阻窗格均收到 0 字节。共享 PTY 的 5,161 个采样均为 119×40。应用、模拟器、临时密钥和主机进程均已清理。[Flutter 只读场景](https://github.com/Luck9Star/herdr-pocket/actions/runs/42417473474/artifacts/13592008987)
 - **受保护 TUI 恢复仍失败。** 前两笔共 10 字节已送达。隐藏后返回原标签并点击恢复，适配器报告 `channel_cleanup_timeout`，没有取得新首帧，界面保持输入关闭。旧画面的 24 行与 TUI 初始画面一致。现有证据无法区分哪个 SSH channel 的关闭没有得到确认；十个 TUI 操作未通过。共享 PTY 的 2,808 个采样均为 119×40，应用和模拟器已退出。下一步在隔离 SSH 宿主区分观察、订阅与快照通道的关闭确认，保留原目标和新首帧门槛。[Flutter 受保护输入场景](https://github.com/Luck9Star/herdr-pocket/actions/runs/42417473474/artifacts/13592272553)
 - 本次 Flutter 设备作业的 analyzer 无问题，widget 等测试 439 项通过、1 项跳过，组合重音绘制回归 10 项通过。两个公开场景归档的内部校验和均通过。定向运行未重建分发 APK，总结果因受保护 TUI 场景失败。[设备作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/42417473474/job/128539507175)
+
+随后在 Mac 隔离 OpenSSH 环境复现了静默观察进程的通道超时。修改后，实际 herdr 上五次恢复都收到了原目标的新完整帧及同观察代增量。Android 上的受保护输入仍以上述设备结果为准。[手机看板搜索、SSH 修复与后续验收](54-mobile-host-search-and-observer-retirement.md)

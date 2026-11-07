@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-08",
+  "status": "design-prototype-saved-and-clicked",
+  "fileId": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+  "pageId": "7a22df08-251d-8016-8008-de03541c11da",
+  "homepage": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=7a22df08-251d-8016-8008-de045ec11db9",
+  "entry": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e94cd219075f",
+  "historicalB": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e94cd2231d90",
+  "script": "design/penpot/mobile-host-filter-20261108.js",
+  "scriptSha256": "65aa45e01a04c95e4ac981708832344d348b0ecfc64755bd829cc98d056532cc",
+  "newBoards": [
+    {
+      "id": "ff7bd149-6597-80a5-8008-e94cd219075f",
+      "name": "主机检索 · 搜索与任务状态",
+      "x": 0,
+      "y": 16368
+    },
+    {
+      "id": "ff7bd149-6597-80a5-8008-e94cd21e35f5",
+      "name": "主机检索 · 当前待处理",
+      "x": 450,
+      "y": 16368
+    },
+    {
+      "id": "ff7bd149-6597-80a5-8008-e94cd2231d90",
+      "name": "主机检索 · 历史 B 待核查",
+      "x": 900,
+      "y": 16368
+    },
+    {
+      "id": "ff7bd149-6597-80a5-8008-e94cd22b9a0d",
+      "name": "主机检索 · 原 B 身份与连接审查",
+      "x": 1350,
+      "y": 16368
+    },
+    {
+      "id": "ff7bd149-6597-80a5-8008-e94cd22717f6",
+      "name": "主机检索 · 原 B 只读首帧",
+      "x": 1800,
+      "y": 16368
+    }
+  ],
+  "homepageChange": {
+    "newEntry": "ff7bd149-6597-80a5-8008-e94cd5144b22",
+    "entryHeight": 44,
+    "preservedOldNoninteractiveChipsAsHidden": [
+      {
+        "id": "7a22df08-251d-8016-8008-de045ef5da63",
+        "hidden": false,
+        "name": "badge / brand"
+      },
+      {
+        "id": "7a22df08-251d-8016-8008-de045ef8ee05",
+        "hidden": false,
+        "name": "全部主机 3"
+      },
+      {
+        "id": "7a22df08-251d-8016-8008-de045efe8a3e",
+        "hidden": false,
+        "name": "badge / warning"
+      },
+      {
+        "id": "7a22df08-251d-8016-8008-de045f017734",
+        "hidden": false,
+        "name": "待处理 1"
+      },
+      {
+        "id": "7a22df08-251d-8016-8008-de045f068ba0",
+        "hidden": false,
+        "name": "badge / success"
+      },
+      {
+        "id": "7a22df08-251d-8016-8008-de045f093f48",
+        "hidden": false,
+        "name": "运行中 2"
+      },
+      {
+        "id": "7a22df08-251d-8016-8008-de045f0e7897",
+        "hidden": false,
+        "name": "badge / neutral"
+      },
+      {
+        "id": "7a22df08-251d-8016-8008-de045f114d68",
+        "hidden": false,
+        "name": "网络状态"
+      }
+    ],
+    "otherHomepageCardsAndLinksPreserved": true
+  },
+  "identityReview": {
+    "reusedCloneOf": "feb2a821-b263-8097-8008-de215d7cb45c",
+    "originalReviewUnchanged": true,
+    "target": {
+      "paneId": "w3:p1",
+      "terminalId": "term_bbbb"
+    },
+    "taskLabelsIdentical": true
+  },
+  "realViewerClicks": [
+    {
+      "action": "首页搜索入口",
+      "observedBoard": "搜索与任务状态",
+      "boardId": "ff7bd149-6597-80a5-8008-e94cd219075f"
+    },
+    {
+      "action": "重载后首页搜索入口",
+      "observedBoard": "搜索与任务状态",
+      "boardId": "ff7bd149-6597-80a5-8008-e94cd219075f"
+    },
+    {
+      "action": "上次受阻，待核查（1）",
+      "observedBoard": "历史 B 待核查",
+      "boardId": "ff7bd149-6597-80a5-8008-e94cd2231d90"
+    },
+    {
+      "action": "重新核查 B 原目标",
+      "observedBoard": "原 B 身份与连接审查",
+      "boardId": "ff7bd149-6597-80a5-8008-e94cd22b9a0d"
+    },
+    {
+      "action": "演示：审查通过 → 原 B 只读",
+      "observedBoard": "原 B 只读首帧",
+      "boardId": "ff7bd149-6597-80a5-8008-e94cd22717f6"
+    },
+    {
+      "action": "返回历史看板",
+      "observedBoard": "历史 B 待核查",
+      "boardId": "ff7bd149-6597-80a5-8008-e94cd2231d90"
+    },
+    {
+      "action": "清除全部筛选",
+      "observedBoard": "S01",
+      "boardId": "7a22df08-251d-8016-8008-de045ec11db9"
+    },
+    {
+      "action": "再次打开首页搜索入口",
+      "observedBoard": "搜索与任务状态",
+      "boardId": "ff7bd149-6597-80a5-8008-e94cd219075f"
+    },
+    {
+      "action": "当前待处理（1）",
+      "observedBoard": "当前待处理",
+      "boardId": "ff7bd149-6597-80a5-8008-e94cd21e35f5"
+    }
+  ],
+  "readback": {
+    "independentViewerLoadedSavedFile": true,
+    "viewerReloaded": true,
+    "savedHomepageEntryFollowedAgainAfterReload": true,
+    "boardsReadBack": 5,
+    "boundsViolations": 0,
+    "sameLabelExactIdsReadBack": [
+      "同名任务 · 上次受阻\nw2:p1 · term_aaaa",
+      "同名任务 · 上次受阻\nw3:p1 · term_bbbb"
+    ],
+    "currentAndHistoryBranchesClicked": true
+  },
+  "image": {
+    "path": "design/evidence/mobile-host-filter-history-20261108.png",
+    "sha256": "b03f23060e3f633e46248114d808c9950202adcfb265e883bdcb8de75f3ac5ba",
+    "visualReview": "passed"
+  },
+  "recovery": {
+    "firstAttempt": "Penpot rejected navigation to the same owning board",
+    "verifiedOwnPartialBoardsRemoved": true,
+    "originalHomepageNotYetChangedOnFirstFailure": true,
+    "correctedGeneratorSkipsSelfNavigation": true
+  },
+  "compatibility": {
+    "pluginAdvertisedPenpot": "2.15.4",
+    "actualPenpot": "2.19.0",
+    "requiredReadWriteExportApisWorked": true
+  },
+  "cleanup": {
+    "pluginDisconnected": true,
+    "pluginPanelClosed": true,
+    "ownedViewerTabClosed": true,
+    "userEditorLeftOpen": true,
+    "mcpProcessExitCode": 0,
+    "staticProcessExitCode": 130,
+    "ports4400To4403NoListeners": true,
+    "otherUserTabsLeftOpen": true
+  },
+  "scope": [
+    "Clickable Penpot design only; no actual SSH, network-provider, device, IME or input proof",
+    "Static query/count examples show the contract; application search is verified separately",
+    "Clear text keeps task state; clear all resets both, recorded as design guidance",
+    "No source, network configuration, credentials, CI, Git or existing dirty documentation modified"
+  ]
+}

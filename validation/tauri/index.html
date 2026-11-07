@@ -9,7 +9,24 @@
 <section id="network-panel" class="config-transfer" aria-label="网络配置" hidden></section>
 <section class="host-save"><label>终端字号（10–28）<input id="terminal-font-size" type="number" min="10" max="28" step="1" value="14" inputmode="numeric"></label><button id="terminal-font-save" type="button">保存字号</button><p id="terminal-font-status" role="status" aria-live="polite"></p></section>
 <section id="config-transfer" class="config-transfer" aria-labelledby="config-transfer-title" hidden></section>
-<p id="host-home-status" class="remote-status" role="status" aria-live="polite">正在读取本机资料…</p><div id="host-list" class="host-list" aria-label="已存主机"></div>
+<p id="host-home-status" class="remote-status" role="status" aria-live="polite">正在读取本机资料…</p>
+<section id="host-filters" class="host-filters" aria-label="筛选已存主机" hidden>
+  <label for="host-query">查找主机或会话</label>
+  <div class="host-query-row">
+    <input id="host-query" type="search" placeholder="名称、会话、地址或网络类型" autocomplete="off" spellcheck="false" aria-controls="host-list">
+    <button id="host-query-clear" type="button" aria-label="清除搜索" hidden>清除</button>
+  </div>
+  <label class="host-attention">任务状态
+    <select id="host-attention" aria-controls="host-list">
+      <option value="all">全部任务状态</option>
+      <option id="host-attention-current" value="current">当前待处理</option>
+      <option id="host-attention-history" value="history">上次受阻，待核查</option>
+    </select>
+  </label>
+  <p id="host-filter-status" role="status" aria-live="polite" hidden></p>
+  <button id="host-filter-reset" type="button" hidden>清除全部筛选</button>
+</section>
+<div id="host-list" class="host-list" aria-label="已存主机"></div>
 <p class="remote-help">Android 配对资料存于本应用 no-backup 目录。Linux/macOS 测试身份只保留在进程内，重启后不可恢复；移除本机资料不会撤销主机上的授权。</p>
 <details class="terminal-notices">
   <summary>终端组件许可</summary>

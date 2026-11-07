@@ -1,0 +1,253 @@
+{
+  "date": "2026-11-08",
+  "previousAndroid": {
+    "packageSource": "dd025952321fb944465a48ec762ae76adc74f830",
+    "packageRun": "42415286185",
+    "packageArtifacts": {
+      "flutter": "13591233797",
+      "tauri": "13591323156"
+    },
+    "flutterRun": "42417473474",
+    "flutterGuardedResult": "channel_cleanup_timeout before new full frame; ten guarded actions not completed"
+  },
+  "mac": {
+    "flutter": {
+      "dart": "3.11.0",
+      "dartssh2": "4.1.0",
+      "searchContracts": 10,
+      "searchCoreAnalyzer": "passed",
+      "newWidgetCases": 5,
+      "newWidgetsExecuted": false,
+      "adapterSha256": "28797f257e3453fcfb9dc0bdcc3922aa52c276e2d78367c29527f4cd8f76509a",
+      "testedAdapterSha256": "3900f27edffdb28e1254dad3daecc19bf30f5497f8f9e70b0f76fea388a34b13",
+      "adapterDiff": "two documentation comment lines relocated; same non-comment code",
+      "transport": "loopback OpenSSH with temporary keys and direct-route interface in the isolated Dart package",
+      "beforeAndAfter": {
+        "baselineQuiet": {
+          "fulls": 1,
+          "error": "channel_cleanup_timeout"
+        },
+        "fixedQuiet": {
+          "fulls": 6,
+          "resumeCount": 5,
+          "status": "passed"
+        },
+        "fixedIgnoredTerm": {
+          "fulls": 1,
+          "error": "channel_cleanup_timeout"
+        },
+        "terminationUnitCases": 2
+      },
+      "channelCases": {
+        "destroy-quiet": {
+          "count": 1,
+          "exactPeerCloseFlags": [
+            false
+          ],
+          "localDoneFlags": [
+            true
+          ],
+          "peerCloseDelayMs": [],
+          "pinMatched": true,
+          "authenticated": true,
+          "reusedAfterMissingPeerClose": false
+        },
+        "signal-quiet": {
+          "count": 6,
+          "exactPeerCloseFlags": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "localDoneFlags": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "peerCloseDelayMs": [
+            9,
+            19,
+            12,
+            7,
+            12,
+            5
+          ],
+          "pinMatched": true,
+          "authenticated": true,
+          "reusedAfterMissingPeerClose": false
+        },
+        "destroy-stdout": {
+          "count": 4,
+          "exactPeerCloseFlags": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "localDoneFlags": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "peerCloseDelayMs": [
+            11,
+            15,
+            13,
+            6
+          ],
+          "pinMatched": true,
+          "authenticated": true,
+          "reusedAfterMissingPeerClose": false
+        },
+        "forward-quiet": {
+          "count": 6,
+          "exactPeerCloseFlags": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "localDoneFlags": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "peerCloseDelayMs": [
+            2,
+            2,
+            3,
+            3,
+            2,
+            2
+          ],
+          "pinMatched": true,
+          "authenticated": true,
+          "reusedAfterMissingPeerClose": false
+        },
+        "signal-ignored": {
+          "count": 1,
+          "exactPeerCloseFlags": [
+            false
+          ],
+          "localDoneFlags": [
+            true
+          ],
+          "peerCloseDelayMs": [],
+          "pinMatched": true,
+          "authenticated": true,
+          "reusedAfterMissingPeerClose": false
+        }
+      },
+      "closeControls": {
+        "status": "passed",
+        "quietDestroyTimedOut": true,
+        "quietTermSixPeerCloses": true,
+        "continuousOutputFourPeerCloses": true,
+        "ignoredTermStillTimedOut": true,
+        "quietForwardSixPeerCloses": true
+      },
+      "fixtureCleanup": {
+        "keyFilesAbsent": true,
+        "unixSocketAbsent": true,
+        "noOwnedChildPidFiles": true,
+        "serverExited": true,
+        "ownPortClosed": true
+      },
+      "earlierFixtureCleanupFailure": "An intentionally unresponsive control child survived the first cleanup check. The fixture owner verified its command, terminated the child, and repeated all five cases in a fresh fixture.",
+      "herdr": {
+        "version": "0.9.5",
+        "binarySha256": "fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2",
+        "sourceBuildCorrespondenceVerified": false,
+        "result": {
+          "result": {
+            "status": "passed",
+            "fulls": 6,
+            "deltas": 5,
+            "sameEpochDeltaAfterEachResume": true,
+            "phase": "streaming"
+          },
+          "serverAlive": true,
+          "paneAlive": true,
+          "inputBytes": 0,
+          "pty": {
+            "initialRows": 40,
+            "initialColumns": 119,
+            "rows": 40,
+            "columns": 119,
+            "changes": 0,
+            "readErrors": 0,
+            "captureErrors": 0,
+            "state": 2
+          },
+          "inputBytesAfter": 0,
+          "serverStopped": true,
+          "rootRemoved": true
+        }
+      }
+    },
+    "tauri": {
+      "node": "22.22.2",
+      "vite": "8.3.5",
+      "tests": 474,
+      "skipped": 0,
+      "modulesBuilt": 64,
+      "browser": {
+        "cases": [
+          {
+            "width": 320,
+            "overflow": 0,
+            "inputHeight": 46,
+            "selectorHeight": 44,
+            "historyCount": "上次受阻，待核查（1）",
+            "filterStatus": "显示 1 / 2 台主机",
+            "originalTarget": true,
+            "searchMatchedOtherSession": true,
+            "resetRestoredBothHosts": true,
+            "extraNativeCalls": 0
+          },
+          {
+            "width": 390,
+            "overflow": 0,
+            "inputHeight": 46,
+            "selectorHeight": 44,
+            "historyCount": "上次受阻，待核查（1）",
+            "filterStatus": "显示 1 / 2 台主机",
+            "originalTarget": true,
+            "searchMatchedOtherSession": true,
+            "resetRestoredBothHosts": true,
+            "extraNativeCalls": 0
+          }
+        ],
+        "cleanup": {
+          "code": 0,
+          "signal": null
+        },
+        "scope": "Isolated Mac Chrome at phone widths, production Tauri build, synthetic host catalog and native observation events."
+      }
+    },
+    "sharedRegression": {
+      "remoteHarness": 103,
+      "flutterAndroidDriver": 90,
+      "helperWithTemporaryFiles": 15
+    }
+  },
+  "notVerified": [
+    "Android guarded ten actions on the repaired adapter",
+    "new Flutter host catalog widgets in the Flutter engine",
+    "arm64 physical device, camera, system IME and touch",
+    "iOS and live cross-provider concurrency"
+  ],
+  "designEvidence": "../../../design/evidence/mobile-host-filter-20261108.json"
+}

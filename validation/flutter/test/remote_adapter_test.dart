@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:io' show File;
 import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
+// The pinned library exposes SSHSession.channel with this internal type.
+// ignore: implementation_imports
+import 'package:dartssh2/src/ssh_channel.dart' show SSHChannel;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/network_runtime.dart' show RoutedSSHSocket;
 import 'package:herdr_flutter_probe/remote_adapter.dart';
@@ -38,8 +41,29 @@ class DelayedCloseSocket extends FakeSocket {
   bool closeCalled = false;
   @override Future<void> close() { closeCalled = true; return closing.future; }
 }
+class FakeObserverChannel implements SSHChannel {
+  FakeObserverChannel(this.calls);
+  final List<String> calls;
+  @override void destroy() { calls.add('destroy'); }
+  @override dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+class FakeObserverSession implements SSHSession {
+  FakeObserverSession(this.calls,{this.rejectSignal=false}) : channel = FakeObserverChannel(calls);
+  final List<String> calls;
+  final bool rejectSignal;
+  @override final SSHChannel channel;
+  @override void kill(SSHSignal signal) { calls.add(signal.name); if (rejectSignal) throw StateError('signal unavailable'); }
+  @override dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 void main() {
+  test('observer termination requests TERM before destroy only once, even if unsupported', () {
+    for (final reject in [false,true]) {
+      final calls=<String>[],session=FakeObserverSession(calls,rejectSignal:reject),stopper=ObserverSessionTerminator();
+      stopper.stop(session); stopper.stop(session);
+      expect(calls,['TERM','destroy']);
+    }
+  });
   test('MT10 fixed-version channel trace waits for exact peer close and rejects forged, stale and wrong IDs', () async {
     var overflow = 0;
     final tracker = ChannelRetirementTracker('fixture',onOverflow:() { overflow++; });
@@ -244,7 +268,7 @@ void main() {
     final envelope = {'type':'session_snapshot','snapshot':snapshot};
     expect(validateSnapshotTarget(config,envelope),'term_abcd');
     expect(config.observeCommand('term_abcd'),
-      "/usr/bin/env 'XDG_CONFIG_HOME=/tmp/fixture-config' '/tmp/fixture/herdr' --session 'probe' terminal session observe 'term_abcd' --cols 80 --rows 24");
+      "exec /usr/bin/env 'XDG_CONFIG_HOME=/tmp/fixture-config' '/tmp/fixture/herdr' --session 'probe' terminal session observe 'term_abcd' --cols 80 --rows 24");
     expect(() => validateSnapshotTarget(RemoteConfig.fromJson({...fixtureConfig(),'session':'other'}),envelope),throwsA(failure('session_mismatch')));
     expect(() => validateSnapshotTarget(config,{'type':'session_snapshot','snapshot':{...snapshot,'panes':[]}}),throwsA(failure('pane_missing')));
     expect(() => validateSnapshotTarget(config,{'type':'session_snapshot','snapshot':{...snapshot,'protocol':23}}),throwsA(failure('unsupported_protocol')));

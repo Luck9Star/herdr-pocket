@@ -10,6 +10,7 @@ import 'remote_adapter.dart';
 import 'config_transfer_page.dart';
 import 'network_profiles_page.dart';
 import 'host_task_summary.dart';
+import 'host_catalog_search.dart';
 
 String blockedSummaryGroupKey(String hostId,{bool compact=false}) => '${compact ? 'workspace' : 'host'}-blocked-$hostId';
 String blockedSummaryTargetKey(String hostId,RemotePane pane,{bool compact=false}) =>
@@ -32,6 +33,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   late final summaries = HostTaskSummaries(catalog);
   String? notice;
   bool busy = false;
+  final hostSearch = TextEditingController();
+  HostTaskFilter taskFilter = HostTaskFilter.all;
   @override
   void initState() {
     super.initState(); catalog.addListener(changed); tabs.addListener(tabChanged); summaries.addListener(tabChanged);
@@ -43,7 +46,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   void changed() { tabs.reconcile(catalog.ready ? catalog.profiles : const [],catalog.networkProfiles); if (mounted) setState(() {}); }
   void tabChanged() { if (mounted) setState(() {}); }
   @override
-  void dispose() { WidgetsBinding.instance.removeObserver(this); summaries.removeListener(tabChanged); summaries.dispose(); catalog.removeListener(changed); tabs.removeListener(tabChanged); if (widget.tabs == null) tabs.dispose(); if (widget.catalog == null) catalog.dispose(); super.dispose(); }
+  void dispose() { hostSearch.dispose(); WidgetsBinding.instance.removeObserver(this); summaries.removeListener(tabChanged); summaries.dispose(); catalog.removeListener(changed); tabs.removeListener(tabChanged); if (widget.tabs == null) tabs.dispose(); if (widget.catalog == null) catalog.dispose(); super.dispose(); }
   Future<void> action(Future<void> Function() work) async {
     if (busy) return;
     setState(() { busy = true; notice = null; });
@@ -173,6 +176,33 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     });
   }
   List<HostProfile> get orderedHosts => summaries.orderedHosts;
+  HostSearchFields searchFields(HostProfile profile) {
+    final bound=catalog.networkProfiles.where((network) => network.id==profile.networkProfileId).toList();
+    return HostSearchFields(label:profile.label,session:profile.target['session'] as String,
+      host:profile.target['host'] as String,provider:hostSearchProvider(profile.provider,
+        hasBinding:profile.networkProfileId != null,boundProvider:bound.length==1 ? bound.single.provider : null));
+  }
+  HostTaskFilter? searchTargetCategory(HostProfile profile) {
+    final report=summaries.forHost(profile.id);
+    if (report==null) return null;
+    final current=report.freshness==DashboardFreshness.fresh && report.current;
+    final select=current ? currentSearchTargets : historicalSearchTargets;
+    final targets=select(report.blockedPanes.map((pane) => HostSearchTarget(
+      pane.paneId,pane.terminalId,pane.agentStatus)),fresh:report.freshness==DashboardFreshness.fresh,current:report.current);
+    if (targets.isEmpty) return null;
+    // Authority and binding are report-wide. The search projection has already
+    // rejected duplicate pane/terminal IDs, so one candidate is sufficient.
+    final target=targets.first;
+    final pane=report.blockedPanes.firstWhere((pane) => pane.paneId==target.paneId && pane.terminalId==target.terminalId);
+    if (summaries.blockedTarget(profile.id,report,pane)==null) return null;
+    return current ? HostTaskFilter.current : HostTaskFilter.history;
+  }
+  String networkDescription(HostProfile profile) {
+    final matches=catalog.networkProfiles.where((network) => network.id==profile.networkProfileId).toList();
+    final bound=matches.length==1 ? matches.single : null;
+    return hostNetworkDescription(declared:profile.provider,requiresBinding:profile.requiresNetworkBinding,
+      hasBinding:profile.networkProfileId != null,boundLabel:bound?.label,boundEnabled:bound?.enabled);
+  }
   Widget hostSummary(HostProfile profile,{bool compact=false}) {
     final value = summaries.forHost(profile.id);
     final distinct = <String,RemotePane>{};
@@ -209,7 +239,16 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           crossAxisAlignment:CrossAxisAlignment.stretch,children:[Text(host.label,style:Theme.of(context).textTheme.titleSmall),hostSummary(host,compact:true)])),
       ]))]);
   }
-  Widget board() => ListView(key:const ValueKey('host-catalog-list'),padding:const EdgeInsets.all(16),children:[
+  Widget board() {
+    final ordered=orderedHosts;
+    // Derived only from existing reports; filtering never opens or retires a lease.
+    final categories={for (final host in ordered) host.id:searchTargetCategory(host)};
+    final pendingIds={for (final entry in categories.entries) if (entry.value==HostTaskFilter.current) entry.key};
+    final historicalIds={for (final entry in categories.entries) if (entry.value==HostTaskFilter.history) entry.key};
+    final shown=searchHostCatalog(ordered,query:hostSearch.text,filter:taskFilter,
+      fields:searchFields,
+      current:(host) => pendingIds.contains(host.id),history:(host) => historicalIds.contains(host.id));
+    return ListView(key:const ValueKey('host-catalog-list'),padding:const EdgeInsets.all(16),children:[
     Text(catalog.status,key:const ValueKey('hosts-status')),
     if (notice != null) Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(notice!)),
     const SizedBox(height:12),
@@ -229,11 +268,36 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           await (widget.keys ?? NativeDeviceKeys()).delete(handle); await catalog.clearDeletedCreation(handle);
         }),child:const Text('明确删除未完成的本机身份（不撤销主机）')),
     ],
-    for (final profile in orderedHosts) Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+    if (catalog.ready && ordered.isNotEmpty) ...[
+      const SizedBox(height:12),
+      TextField(key:const ValueKey('hosts-search'),controller:hostSearch,
+        // Read the raw text only. Do not rewrite case, selection or IME composing.
+        onChanged:(_) => setState(() {}),
+        decoration:InputDecoration(labelText:'查找主机或会话',prefixIcon:const Icon(Icons.search),
+          suffixIcon:hostSearch.text.isEmpty ? null : IconButton(key:const ValueKey('hosts-search-clear'),
+            tooltip:'清除搜索',onPressed:() => setState(hostSearch.clear),icon:const Icon(Icons.clear)))),
+      const SizedBox(height:8),
+      InputDecorator(decoration:const InputDecoration(labelText:'任务状态'),child:DropdownButtonHideUnderline(
+        child:DropdownButton<HostTaskFilter>(key:const ValueKey('hosts-task-filter'),value:taskFilter,isExpanded:true,
+          items:[const DropdownMenuItem(value:HostTaskFilter.all,child:Text('全部任务状态')),
+            DropdownMenuItem(value:HostTaskFilter.current,child:Text('当前待处理（${pendingIds.length}）')),
+            DropdownMenuItem(value:HostTaskFilter.history,child:Text('上次受阻，待核查（${historicalIds.length}）'))],
+          onChanged:(value) { if (value != null) setState(() => taskFilter=value); }))),
+      Text('显示 ${shown.length} / ${ordered.length} 台主机',key:const ValueKey('hosts-filter-count')),
+      if (taskFilter==HostTaskFilter.current) const Text('仅列出当前报告中可定位的受阻目标；历史报告与状态未知不计入。'),
+      if (taskFilter==HostTaskFilter.history) const Text('上次明确受阻的目标，当前状态待核查；打开后仍需重新审查连接与原目标。'),
+      if (shown.isEmpty) ...[
+        const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('没有匹配的主机',key:ValueKey('hosts-search-empty'))),
+        TextButton(key:const ValueKey('hosts-filters-reset'),onPressed:() => setState(() {
+          hostSearch.clear(); taskFilter=HostTaskFilter.all;
+        }),child:const Text('清除全部筛选')),
+      ],
+    ],
+    for (final profile in shown) Card(key:ValueKey('host-card-${profile.id}'),child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Text(profile.label,style:Theme.of(context).textTheme.titleMedium),
       hostSummary(profile),
-      Text(profile.requiresNetworkBinding ? '待绑定 ${profile.provider} · 请先在网络管理中配置并选择该网络' : profile.networkProfileId == null ? '系统直连（沿用系统路由）' : '网络绑定：${catalog.networkFor(profile)?.label} · ${catalog.networkFor(profile)?.enabled == true ? '本机启用' : '本机停用'}'),
-      Text('${hostProviderLabel(profile.provider)} · 入网状态未知\n${profile.target['username']}@${profile.target['host']}:${profile.target['port']}\n会话 ${profile.target['session']} · ${profile.retired ? '已替换停用，保留原身份待撤销' : profile.enabled ? '本机启用' : '本机停用'}\n${profile.hasIdentity ? profile.restore(catalog.clock()).state : '导入未配对 · 无本机身份'} · 在线与主机授权需重新核验'),
+      Text(networkDescription(profile)),
+      Text('资料 provider：${hostProviderLabel(profile.provider)} · 入网状态未知\n${profile.target['username']}@${profile.target['host']}:${profile.target['port']}\n会话 ${profile.target['session']} · ${profile.retired ? '已替换停用，保留原身份待撤销' : profile.enabled ? '本机启用' : '本机停用'}\n${profile.hasIdentity ? profile.restore(catalog.clock()).state : '导入未配对 · 无本机身份'} · 在线与主机授权需重新核验'),
       if (profile.retired && profile.hasIdentity) ExpansionTile(title:const Text('原配对公开请求（供主机核验撤销）'),
         children:[SelectableText(profile.restore(catalog.clock()).wire)]),
       const SizedBox(height:8),
@@ -251,6 +315,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     const SizedBox(height:12),TextButton(key:const ValueKey('hosts-offline'),onPressed:() { tabs.select(null); Navigator.push<void>(context,MaterialPageRoute(builder:widget.offlineBuilder)); },child:const Text('进入离线终端实验室')),
     const Text('资料只含公开目标、设备公钥与本机句柄。不会自动连接、替换主机公钥、重建密钥或重放未知操作。'),
   ]);
+  }
   Widget tabNavigator(HostTab tab) => ValueListenableBuilder<bool>(valueListenable:tab.visible,
     builder:(context,visible,child) => IgnorePointer(ignoring:!visible,child:ExcludeSemantics(excluding:!visible,
       child:FocusScope(canRequestFocus:visible,child:child!))),

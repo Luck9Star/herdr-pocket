@@ -92,3 +92,11 @@
 .connection-diagnostics summary { min-height: 44px; display: list-item; cursor: pointer; line-height: 44px; }
 .connection-diagnostics p,.connection-diagnostics li { overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
 .connection-diagnostics ol { padding-inline-start: 20px; }
+.host-filters{margin:16px 0}
+.host-filters>label:first-child{display:block;margin-bottom:6px;font-weight:600}
+.host-query-row{display:flex;align-items:center;gap:8px}
+.host-query-row input{flex:1;min-width:0;min-height:44px;padding:8px 12px;border:1px solid var(--hp-borderStrong);border-radius:10px;background:var(--hp-canvas);color:var(--hp-textPrimary);font:inherit}
+.host-filters button{min-height:44px}
+.host-attention{display:flex;align-items:center;gap:8px;min-height:44px;width:fit-content}
+.host-attention select{min-width:0;min-height:44px;max-width:100%;padding:4px 8px;color:var(--hp-textPrimary);font:inherit}
+.host-filters p{margin:4px 0;color:var(--hp-textSecondary)}

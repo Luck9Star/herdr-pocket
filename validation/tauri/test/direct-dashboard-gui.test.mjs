@@ -1691,3 +1691,63 @@ test('paired diagnostics require accepted dashboard and original target full ren
   h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});assert.equal(row('terminal').dataset.stageState,'verified');n['remote-cancel'].click();assert.equal(row('terminal').dataset.stageState,'verified');assert.match(n['remote-connection-diagnostics'].all().find(e=>e.dataset.attemptState).children[2].textContent,/已结束/);
  }finally{h.finish();await flush();h.restore();}
 });
+
+test('saved host search intersects public fields, keeps card identity and never touches native state', async () => {
+  const h = await setup(), n = h.nodes;
+  try {
+    const host = (id, session, provider, extra={}) => ({
+      id, name:'同名主机', enabled:true, provider,
+      target:{...h.target, session, host:id+'.example', username:'not-searchable-user'},
+      ...extra,
+    });
+    const records = [
+      host('first','Board-中文','direct'),
+      host('second','Night','direct',{networkProfileId:'net1'}),
+      host('third','Day','tailscale',{networkProfileId:'removed'}),
+    ];
+    h.setRead((name,value) => name === 'host_list' ? records :
+      {...value,profiles:[{id:'net1',revision:1,provider:'easytier'}]});
+    n['host-return-home'].click(); await flush(); await flush();
+    const cards=[...n['host-list'].children];
+    const visible=()=>cards.filter(card=>!card.hidden).map(card=>card.dataset.hostId);
+    const search=value=>{n['host-query'].value=value;n['host-query'].dispatch('input');};
+    const callCount=h.calls.length;
+    assert.deepEqual(visible(),['first','second','third']);
+    assert.match(cards[1].children[1].textContent,/会话 Night · 已绑定 EasyTier/);
+    assert.match(cards[2].children[1].textContent,/会话 Day · 绑定网络资料不可用/);
+    for (const [query,expected] of [
+      ['同名',['first','second','third']], ['中文',['first']], [' nIgHt ',['second']],
+      ['second.example',['second']], ['easyTier',['second']], ['direct',['first']],
+      ['tailscale',[]], ['not-searchable-user',[]], ['fixture private',[]],
+    ]) {
+      search(query);assert.deepEqual(visible(),expected);
+    }
+    assert.match(n['host-filter-status'].textContent,/没有匹配.*0 \/ 3/);
+    n['host-query-clear'].click();
+    assert.deepEqual(visible(),['first','second','third']);
+    assert.equal(n['host-query'].value,'');
+    assert.equal(document.activeElement,n['host-query']);
+    assert.deepEqual(n['host-list'].children,cards);
+    assert.equal(n['host-tabs'].children.length,3);
+    assert.equal(h.calls.length,callCount);
+  } finally { h.restore(); }
+});
+
+test('home can filter historical blocked tasks without turning a stopped connection into a current one', async () => {
+  const h=await setup(),n=h.nodes;
+  try {
+    await pairAndConnect(h);publishDashboard(h,blockedPane());
+    n['host-return-home'].click();await flush();await flush();
+    const baseline=h.calls.length,card=n['host-list'].children[0];
+    const state=value=>{n['host-attention'].value=value;n['host-attention'].dispatch('change');};
+    state('current');assert.equal(card.hidden,true);assert.match(n['host-attention-current'].textContent,/（0）/);
+    state('history');assert.equal(card.hidden,false);assert.match(n['host-attention-history'].textContent,/（1）/);
+    const button=card.all().find(e=>e.dataset.blockedTarget==='w1:p1/term_a001');
+    assert.match(button.textContent,/重新核查/);
+    n['host-query'].value='absent';n['host-query'].dispatch('input');assert.equal(card.hidden,true);
+    n['host-query-clear'].click();assert.equal(n['host-attention'].value,'history');assert.equal(card.hidden,false);
+    state('current');n['host-filter-reset'].click();
+    assert.equal(n['host-attention'].value,'all');assert.equal(card.hidden,false);
+    assert.equal(h.calls.length,baseline);
+  } finally {h.finish();await flush();h.restore();}
+});

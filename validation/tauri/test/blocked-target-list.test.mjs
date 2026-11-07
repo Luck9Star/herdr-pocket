@@ -14,5 +14,8 @@ test('list distinguishes unknown, stale empty, verified empty, and rejects detac
   const stale=render().children[1];assert.match(stale.textContent,/重新核查此目标/);stale.onclick();assert.equal(opened.length,1);
   store.publish(host,source,{panes:[],capturedAt:2000,phase:'fresh'});stale.onclick();assert.equal(opened.length,1);assert.match(render().children[0].textContent,/已核验受阻清单为空/);
   store.invalidateHost(host.id);assert.match(render().children[0].textContent,/陈旧.*未知/);
+  store.publish(host,source,{panes:[{paneId:'w1:p1',terminalId:'term_a001',agentStatus:'blocked'}],capturedAt:3000,phase:'unavailable'});
+  const snapshot=render();assert.match(snapshot.children[0].textContent,/持续更新不可用/);
+  assert.match(snapshot.children[1].textContent,/重新核查此目标/);snapshot.children[1].onclick();assert.equal(opened.length,2);
  } finally {globalThis.document=old;}
 });

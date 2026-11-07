@@ -94,7 +94,7 @@ class RemoteConfig {
 
   String observeCommand(String terminalId) {
     if (!RegExp(r'^term_[0-9a-f]{1,123}$').hasMatch(terminalId)) throw const RemoteFailure('invalid_terminal_id');
-    return '/usr/bin/env ${shellQuote('XDG_CONFIG_HOME=$configRoot')} ${shellQuote(herdrPath)} '
+    return 'exec /usr/bin/env ${shellQuote('XDG_CONFIG_HOME=$configRoot')} ${shellQuote(herdrPath)} '
       '--session ${shellQuote(session)} terminal session observe ${shellQuote(terminalId)} --cols $observationCols --rows $observationRows';
   }
 
@@ -453,6 +453,17 @@ class _Attempt {
   bool lateChannelDestroyFailed = false;
 }
 
+/// Stops only the no-PTY observer exec owned by this adapter, at most once.
+class ObserverSessionTerminator {
+  final Expando<bool> _stopped = Expando<bool>();
+  void stop(SSHSession session) {
+    if (_stopped[session] == true) return;
+    _stopped[session] = true;
+    try { session.kill(SSHSignal.TERM); } catch (_) { /* still destroy and await peer CLOSE */ }
+    session.channel.destroy();
+  }
+}
+
 /// Defaults to read-only. Writes require the separate guarded test extension;
 /// stock herdr 0.9.5 never gains input through a pane-ID-only fallback.
 class RemoteReadOnlyAdapter {
@@ -463,6 +474,14 @@ class RemoteReadOnlyAdapter {
   final DateTime Function() _clock;
   final RemoteConnectionBudget _budget;
   final RemoteInputJournal? inputJournal;
+  final ObserverSessionTerminator _observerTerminator = ObserverSessionTerminator();
+  // This SSH exec runs only our `herdr ... terminal session observe` reader,
+  // without a PTY. A quiet reader may not notice CLOSE until it writes again;
+  // ask that reader to exit before closing its channel. Peer CLOSE is still
+  // required by _retireChannel and a missing acknowledgement fails closed.
+  void _stopObserver(SSHSession session) {
+    _observerTerminator.stop(session);
+  }
   RemoteInputJournalReview? Function(RemoteInputTarget target)? captureInputJournalReview;
   int generation = 0, _connectionCount = 0;
   _Attempt? _attempt;
@@ -631,7 +650,7 @@ class RemoteReadOnlyAdapter {
     // Destroy owned channels synchronously; SSHSession.close discards a Future
     // in dartssh2 4.1.0. Let the client finish before destroying its socket.
     for (final destroy in <void Function()>[
-      if (a.observe != null) () => a.observe!.channel.destroy(),
+      if (a.observe != null) () => _stopObserver(a.observe!),
       if (a.forward != null) () => a.forward!.destroy(),
       if (a.inputForward != null) () => a.inputForward!.destroy(),
       if (a.watch != null) () => a.watch!.destroy(),
@@ -673,7 +692,7 @@ class RemoteReadOnlyAdapter {
     for (final destroy in <void Function()>[
       if (a.watch != null) () => a.watch!.destroy(),
       if (a.inputForward != null) () => a.inputForward!.destroy(),
-      if (a.observe != null) () => a.observe!.channel.destroy(),
+      if (a.observe != null) () => _stopObserver(a.observe!),
     ]) {
       try { destroy(); } catch (_) { _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout')); }
     }
@@ -1041,7 +1060,7 @@ class RemoteReadOnlyAdapter {
             if (!initialBlockedObservationCompleted) requireInitialBlockedObservation(a.selectedTarget!,authority);
           }
           on RemoteFailure catch (failure) {
-            _fail(a,failure); a.observe?.channel.destroy(); return;
+            _fail(a,failure); if (a.observe != null) _stopObserver(a.observe!); return;
           }
         }
         final source = authority ?? a.dashboard;
@@ -1240,14 +1259,14 @@ class RemoteReadOnlyAdapter {
           e.fullFrameReceived = false;
           e.observationPhase = 'opening';
           observe = await _openChannel<SSHSession>(a,() => client.execute(config.observeCommand(selected.terminalId)),
-            (s) => s.channel.destroy(),observation:true);
+            _stopObserver,observation:true);
           checkObservation(); a.observe = observe;
           final current = observe;
           final budget = ObserveByteBudget(continuous:onDashboard != null);
           stderr = current.stderr.listen((chunk) {
             if (!_valid(a) || a.observationPaused || a.observationEpoch != epoch) return;
             try { budget.add(chunk.length,stderr:true); } on RemoteFailure catch (error) {
-              e.errorCode = error.code; _fail(a,error); current.channel.destroy();
+              e.errorCode = error.code; _fail(a,error); _stopObserver(current);
             }
           },onError:(Object _) {});
           a.stderr = stderr;
@@ -1295,7 +1314,7 @@ class RemoteReadOnlyAdapter {
           if (!a.observationPaused && a.observationEpoch == epoch) e.observationPhase = 'retiring';
           a.inputTarget = null;
           if (onDashboard != null) e.fullFrameReceived = false;
-          observe?.channel.destroy();
+          if (observe != null) _stopObserver(observe);
           if (identical(a.observe,observe)) a.observe = null;
           if (observe != null && _valid(a)) await _retireChannel(a,observe);
           try { await stderr?.cancel(); } catch (_) { /* retired observer */ }

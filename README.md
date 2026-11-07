@@ -2,7 +2,7 @@
 
 手机优先的远端 [herdr](https://github.com/herdrdev/herdr) 客户端原型。首次配对时，手机审查主机指纹并创建专属设备密钥，主机确认后，手机主动连接，从看板选择会话内的终端并持续观察。目标平台为 iOS、Android、Windows、macOS 和 Linux。
 
-**从这里开始**　[原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [最新下载、验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)
+**从这里开始**　[阶段交接：已完成、未完成与恢复顺序](https://github.com/Luck9Star/herdr-pocket/blob/85c150b24dca14412cf01075b832c1014547a3aa/docs/56-project-status-and-handoff.md) · [原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [最新下载、验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)
 
 **手机端进度 · 2026-11-08**　Flutter 和 Tauri 已把身份审查、手机专属密钥、主机授权回执和设备密钥 SSH 接入手机 GUI。从主机看板点选具体终端后，能看到首帧和持续输出，再主动停止。本批 Tauri 在 API 35 模拟器还走通了「两条同名受阻记录 → 重审 → 精确观察 B」，远端收到 0 字节；受保护输入完成十个远端 TUI 操作。Flutter 定向复测也走通配对、看板、持续观察、停止，再从同名记录准确选中 B，远端输入为 0 字节。Flutter 的受保护 TUI 在前两笔共 10 字节后仍因 SSH 通道关闭确认超时，未恢复新首帧，输入保持关闭。[本批设备记录](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) · [Flutter 定向运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42417473474)
 

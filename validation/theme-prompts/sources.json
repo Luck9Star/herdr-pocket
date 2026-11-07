@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "captureDate": "2026-11-08",
+  "profile": "macOS-arm64-existing-Homebrew-binary",
+  "powerlevel10k": {
+    "version": "1.20.0",
+    "commit": "35833ea15f14b71dbcebc7e54c104d8d56ca5268",
+    "tagObject": "ff0311157d6b24fea21aa70699783f362b0f554f",
+    "url": "https://codeload.github.com/romkatv/powerlevel10k/tar.gz/refs/tags/v1.20.0",
+    "archiveSha256": "d8187d44b697b3a37a8c4896678b4380e717cbf2850179529358348780a2d3d7"
+  },
+  "ohMyPosh": {
+    "version": "31.9.1",
+    "commit": "e6c9eb7796d1c903c7944c4e87a4ea2c3f6b4182",
+    "url": "https://codeload.github.com/JanDeDobbeleer/oh-my-posh/tar.gz/refs/tags/v31.9.1",
+    "archiveSha256": "6764e5db3623173def3a7f1ba37a7a4c70cfed53484f7ea2528082888183bbac",
+    "binarySha256": "db899fc291c9e3de75e0bf30ec9d2abad7731af880c707e9e1fc52fcdcab1005",
+    "binaryOrigin": "Existing /opt/homebrew/Cellar/oh-my-posh/31.9.1/bin/oh-my-posh; local Homebrew formula names this version and archive SHA256; no system installation or upgrade performed"
+  },
+  "zsh": {
+    "version": "zsh 5.9 (arm64-apple-darwin26.0)",
+    "binarySha256": "82bab4884831effc95a1d22db7d0b71c0fb38363abf5e8228fdae5f7844ac175"
+  }
+}

@@ -6,7 +6,7 @@ import sys
 import time
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 # android_gui's operational runner imports reach the cryptography helper stack;
@@ -47,10 +47,13 @@ class FakeBrowser:
         self.measured = measured or geometry()
         self.closed = False
         self.clicks = []
+        self.samples = []
 
     def evaluate(self, expression):
         if expression == android_gui.FONT_DIAGNOSTIC_GEOMETRY:
             return self.measured
+        if 'function readThemeMeasurement(id)' in expression:
+            return android_gui.theme_prompt_expectations()[self.samples[-1]]
         if "startsWith('示例已绘制')" in expression:
             return 'ready'
         if "const close=d?.querySelector('button')" in expression:
@@ -74,6 +77,9 @@ class FakeBrowser:
         self.clicks.append(selector)
         if selector == '.terminal-font-diagnostics button':
             self.closed = True
+
+    def select_font_sample(self, ident):
+        self.samples.append(ident)
 
 
 class Approval:
@@ -129,6 +135,70 @@ class AndroidFontProbeTests(unittest.TestCase):
         self.assertEqual(evidence['deltaFramesAfter'], 6)
         self.assertEqual(approval.expected, [b'', b''])
         self.assertEqual(browser.clicks, ['#remote-font-diagnostics', '.terminal-font-diagnostics button'])
+        self.assertEqual(browser.samples,['powerlevel10k','oh-my-posh'])
+        self.assertEqual(evidence['localThemePromptCursors'],android_gui.theme_prompt_expectations())
+
+    def test_theme_measurement_rejects_wrong_cursor_boolean_coercion_and_extra_fields(self):
+        expected=android_gui.theme_prompt_expectations()['powerlevel10k']
+        for measured in ([14,0], {**expected,'terminalText':'PRIVATE'},
+                         *({**expected,field:value} for field in expected
+                           for value in (True,False,'0',0.0,-1,999)),
+                         android_gui.theme_prompt_expectations()['oh-my-posh']):
+            with self.subTest(measured=measured),self.assertRaises(android_gui.GuiFailure):
+                android_gui.theme_prompt_measurement(GeometryBrowser(measured),'powerlevel10k')
+
+    def test_pending_or_old_sample_measurements_wait_for_current_ready_callback(self):
+        expected=android_gui.theme_prompt_expectations()['oh-my-posh']
+        browser=SequenceBrowser([None,None,expected])
+        with patch.object(android_gui,'wait_for',bounded_wait):
+            self.assertEqual(android_gui.theme_prompt_measurement(browser,'oh-my-posh'),expected)
+        self.assertEqual(browser.reads,3)
+        self.assertTrue(browser.expression.endswith(')("oh-my-posh")'))
+
+    def test_missing_or_permanently_stale_theme_measurements_fail_closed(self):
+        for pending in (None,False,{}):
+            browser=SequenceBrowser([pending,pending,pending])
+            with self.subTest(pending=pending),patch.object(android_gui,'wait_for',bounded_wait):
+                with self.assertRaises(android_gui.GuiFailure):
+                    android_gui.theme_prompt_measurement(browser,'powerlevel10k')
+
+    def test_normal_theme_select_uses_native_keys_once_and_rejects_out_of_order_samples(self):
+        browser=object.__new__(android_gui.AndroidWebView)
+        selected=['glyphs']
+        browser.click=Mock()
+        browser.read=Mock(side_effect=lambda _selector,_attribute:selected[0])
+        def dispatch(_method,params):
+            if params['type']=='keyUp' and params['key']=='Enter':
+                selected[0]={'glyphs':'powerlevel10k','powerlevel10k':'oh-my-posh'}[selected[0]]
+        browser.call=Mock(side_effect=dispatch)
+        browser.select_font_sample('powerlevel10k')
+        browser.select_font_sample('oh-my-posh')
+        self.assertEqual(browser.click.call_count,2)
+        self.assertEqual(browser.call.call_count,8)
+        self.assertEqual([call.args[1]['key'] for call in browser.call.call_args_list],
+                         ['ArrowDown','ArrowDown','Enter','Enter'] * 2)
+        for ident in ('powerlevel10k','unknown',None):
+            with self.subTest(ident=ident),self.assertRaises(android_gui.GuiFailure):
+                browser.select_font_sample(ident)
+        self.assertEqual(browser.click.call_count,2)
+
+
+def bounded_wait(check, code, timeout=10):
+    for _ in range(3):
+        result=check()
+        if result:return result
+    raise android_gui.GuiFailure(code)
+
+
+class SequenceBrowser:
+    def __init__(self, values):
+        self.values=iter(values)
+        self.reads=0
+
+    def evaluate(self, expression):
+        self.expression=expression
+        self.reads+=1
+        return next(self.values)
 
 
 class GeometryBrowser:

@@ -21,6 +21,7 @@ flutter:
     - assets/shared/design-tokens-v2.json
     - assets/shared/fixture.json
     - assets/shared/terminal-font-diagnostics-v1.json
+    - assets/shared/theme-prompt-samples-v1.json
     - assets/shared/remote-frame-geometry-v1.json
     - assets/shared/terminal-function-keys-v1.json
     - assets/shared/network-profiles-v1.json

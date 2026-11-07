@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "theme-prompt-samples-v1",
+  "columns": 40,
+  "rows": 3,
+  "samples": [
+    {
+      "id": "powerlevel10k",
+      "label": "Powerlevel10k 1.20.0 · 中文目录",
+      "ansi": "\u001b[0m\u001b[49m\u001b[39m\u001b[0m\u001b[44m\u001b[37m  中文\u001b[0m\u001b[37m\u001b[44m\u001b[44m\u001b[37m \u001b[0m\u001b[37m\u001b[44m\u001b[40m\u001b[34m\u001b[0m\u001b[34m\u001b[40m\u001b[40m\u001b[38;5;76m ❯\u001b[0m\u001b[38;5;76m\u001b[40m\u001b[40m\u001b[38;5;76m \u001b[0m\u001b[38;5;76m\u001b[40m\u001b[49m\u001b[30m\u001b[0m\u001b[30m\u001b[49m\u001b[39m \u001b[0m\u001b[49m\u001b[39m",
+      "cursorColumn": 14,
+      "cursorRow": 0
+    },
+    {
+      "id": "oh-my-posh",
+      "label": "Oh My Posh 31.9.1 · 中文目录",
+      "ansi": "\u001b[0m\u001b[38;2;0;95;175;49m\u001b[7m\u001b[0m\u001b[48;2;0;95;175m\u001b[38;2;255;255;255m  中文 \u001b[0m\u001b[48;2;38;38;38m\u001b[38;2;0;95;175m\u001b[0m\u001b[48;2;38;38;38m\u001b[38;2;0;215;135m ❯ \u001b[0m\u001b[38;2;38;38;38m\u001b[0m ",
+      "cursorColumn": 15,
+      "cursorRow": 0
+    }
+  ]
+}

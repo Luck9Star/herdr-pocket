@@ -251,7 +251,7 @@ function watchWorkspace(fixedTarget=null,options={}) {
   };
   const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device'}),onDashboard:options.onDashboard,clipboardRead:options.clipboardRead,keyboardRequest:options.keyboardRequest,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:(options)=>{
     terminal={
-      createdOptions:options,options:{},focusReadOnly:[],parser:{registerOscHandler(){}},textarea:new Element('textarea'),
+      createdOptions:options,cols:options.cols,rows:options.rows,options:{},focusReadOnly:[],parser:{registerOscHandler(){}},textarea:new Element('textarea'),
       open(){},write(bytes,done){(this.writes??=[]).push(bytes);done();},reset(){},resize(cols,rows){this.cols=cols;this.rows=rows;},dispose(){},
       focus(){this.focusReadOnly.push(this.textarea.readOnly);document.activeElement=this.textarea;},
       onData(fn){this.data=fn;},
@@ -1081,4 +1081,15 @@ for(const scenario of ['done before full','replacement before full','stale befor
   }else {assert.equal(writes,0);assert.equal(calls.filter(c=>c.name==='remote_tab_ack').length,0);}
   await flush();assert.equal(calls.some(c=>c.name==='remote_tab_input_send'||/resize/.test(c.name)),false);
  } finally {globalThis.document=old;}
+});
+
+test('normal saved-tab font page switches real theme samples locally and closes safely on tab change',async()=>{
+ const prior=globalThis.fetch,glyphs=JSON.parse(readFileSync(new URL('../../shared/terminal-font-diagnostics-v1.json',import.meta.url))),text=readFileSync(new URL('../../shared/theme-prompt-samples-v1.json',import.meta.url),'utf8'),themes=JSON.parse(text);
+ globalThis.fetch=async url=>url==='/shared/theme-prompt-samples-v1.json'?{ok:true,text:async()=>text}:{ok:true,json:async()=>glyphs};const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
+ try {
+  await readyKeyboard(h);const observed=h.terminal();h.find('字体与字符诊断').onclick();await flush();await flush();const before=h.calls.length;
+  const panel=document.body.children.find(e=>e.attrs['aria-label']==='字体与字符诊断'),choice=panel.all().find(e=>e.attrs['aria-label']==='诊断样例');
+  for(const sample of themes.samples){choice.focus();choice.value=sample.id;choice.onchange();await flush();await flush();assert.equal(document.activeElement,choice);assert.deepEqual(h.terminal().writes,[sample.ansi]);assert.equal(h.terminal().createdOptions.cols,40);assert.equal(h.terminal().createdOptions.rows,3);assert.equal(h.terminal().textarea.disabled,true);const status=panel.all().find(e=>e.attrs.role==='status');assert.equal(status.dataset.expectedCursorColumn,String(sample.cursorColumn));assert.equal(status.dataset.sampleId,sample.id);assert.equal(status.dataset.columns,'40');assert.equal(status.dataset.rows,'3');}
+  assert.equal(h.calls.length,before);assert.equal(observed.options.disableStdin,true);const id=h.ui.create('other',{paneId:'w2:p1',terminalId:'term_a002'});await h.ui.select(id);assert.equal(panel.removed,true);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send'||/resize/.test(c.name)).length,0);
+ }finally{h.restore();globalThis.fetch=prior;}
 });

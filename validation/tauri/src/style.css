@@ -85,3 +85,6 @@
 .blocked-target-list { display: grid; gap: 8px; margin: 12px 0; min-width: 0; }
 .blocked-target-list p { margin: 0; }
 .blocked-target-list button { min-height: 44px; width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.font-diagnostics-choice { display: block; width: 100%; min-height: 44px; margin-top: 6px; padding: 8px 10px; color: var(--hp-textPrimary); background: var(--hp-card); border: 1px solid var(--hp-borderStrong); border-radius: 8px; font: inherit; }
+.font-diagnostics-legend li { overflow-wrap: anywhere; }
+.font-diagnostics-theme-legend { grid-template-columns: minmax(0, 1fr); }

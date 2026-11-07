@@ -1,0 +1,11 @@
+{
+  "version": 4,
+  "final_space": true,
+  "blocks": [{
+    "type": "prompt", "alignment": "left",
+    "segments": [
+      {"type": "path", "style": "powerline", "powerline_symbol": "\ue0b0", "foreground": "#ffffff", "background": "#005faf", "template": " \uf07b {{ .Path }} ", "options": {"style": "folder"}},
+      {"type": "text", "style": "powerline", "powerline_symbol": "\ue0b0", "foreground": "#00d787", "background": "#262626", "template": " ❯ "}
+    ]
+  }]
+}

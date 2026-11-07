@@ -13,6 +13,7 @@ import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/pairing_public_key.dart';
 import 'package:herdr_flutter_probe/remote_page.dart';
 import 'package:herdr_flutter_probe/remote_screen_viewport.dart';
+import 'package:herdr_flutter_probe/theme_prompt_samples.dart';
 
 const packageName = 'dev.herdr.herdr_flutter_probe';
 const fixtureEnabled = String.fromEnvironment('HERDR_ANDROID_NATIVE_PAIRING');
@@ -127,7 +128,7 @@ Future<void> tapPopupOption(WidgetTester tester,Finder item) =>
 /// Read only the bundled sample screen. A zero denotes a missing row or
 /// marker; keep the actual reading even when a candidate disagrees with the
 /// expected column. The remote terminal can contain private output.
-Future<List<int>> readFontDiagnostic(WidgetTester tester) async {
+Future<({List<int> markers,Map<String,Map<String,int>> themes})> readFontDiagnostic(WidgetTester tester) async {
   await tapKey(tester,'remote-font-diagnostics-open');
   final preview = find.byKey(const ValueKey('terminal-font-diagnostics-view'));
   await until(tester,() => preview.evaluate().length == 1);
@@ -151,10 +152,39 @@ Future<List<int>> readFontDiagnostic(WidgetTester tester) async {
       if (line.getCodePoint(x) == 0x7c) markers[row] = x + 1;
     }
   }
+  final themes = ThemePromptSamples.parse(await rootBundle.loadString('assets/shared/theme-prompt-samples-v1.json'));
+  final cursors = <String,Map<String,int>>{};
+  for (final id in const ['powerlevel10k','oh-my-posh']) {
+    final expected = themes.samples.singleWhere((sample) => sample.id == id);
+    final choice = find.byKey(ValueKey('terminal-font-sample-$id'));
+    await until(tester,() => choice.evaluate().length == 1 &&
+      tester.widget<ChoiceChip>(choice).onSelected != null);
+    await tapKey(tester,'terminal-font-sample-$id');
+    final themePreview = find.byKey(ValueKey('terminal-theme-view-$id'));
+    await until(tester,() => themePreview.evaluate().length == 1 &&
+      tester.widget<ChoiceChip>(choice).selected);
+    await tester.ensureVisible(themePreview);
+    await tester.pump();
+    final themeView = tester.widget<TerminalView>(themePreview);
+    expect(themeView.readOnly,isTrue);
+    expect(themeView.autoResize,isFalse);
+    expect(themeView.textStyle.fontFamily,'ProbeNerd');
+    final terminal = themeView.terminal;
+    expect(terminal.viewWidth,40);
+    expect(terminal.viewHeight,3);
+    // Read real engine buffer coordinates once per selected bundled sample.
+    final x = terminal.buffer.cursorX, y = terminal.buffer.cursorY;
+    expect(x,inInclusiveRange(0,terminal.viewWidth - 1));
+    expect(y,inInclusiveRange(0,terminal.viewHeight - 1));
+    expect(x,expected.cursorColumn);
+    expect(y,expected.cursorRow);
+    cursors[id] = {'columns':terminal.viewWidth,'rows':terminal.viewHeight,
+      'cursorColumn':x,'cursorRow':y};
+  }
   await tapKey(tester,'terminal-font-diagnostics-close');
-  expect(preview,findsNothing);
+  expect(find.byKey(const ValueKey('terminal-font-diagnostics')),findsNothing);
   expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
-  return markers;
+  return (markers:markers,themes:cursors);
 }
 /// Observe the real view after the editor's done action. Do not override view
 /// metrics, assign review state, or retry the consent tap if it is not checked.
@@ -756,7 +786,7 @@ void main() {
     }
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
     stage('local_font_diagnostic');
-    final fontMarkerColumns = await readFontDiagnostic(tester);
+    final fontDiagnostics = await readFontDiagnostic(tester);
     await until(tester,() => (displayedSequence(tester) ?? -1) > deltaSequence);
     final inputReceipts = <Map<String,Object>>[];
     List<int>? restoredViewport;
@@ -966,7 +996,8 @@ void main() {
       'fullRendered':true,'deltaRendered':true,'stoppedStale':true,'observeMode':true,
       'directModeDisabled':true,'draftModeDisabled':true,'localIdentityDeleted':true,
       'identityCreationActions':identityCreationActions,'firstSequence':firstSequence,'deltaSequence':deltaSequence,
-      'localFontMarkerColumns':fontMarkerColumns,
+      'localFontMarkerColumns':fontDiagnostics.markers,
+      'localThemePromptCursors':fontDiagnostics.themes,
       if (!guardedInput) 'observerCanvas':observerCanvas,
       'frameCountLowerBound':2,'deltaCountLowerBound':1,
       if (guardedInput) ...{

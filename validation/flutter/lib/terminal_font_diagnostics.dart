@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:terminal_view/terminal_view.dart';
 
 import 'design_tokens.dart';
+import 'theme_prompt_samples.dart';
 
 const _fixtureAsset = 'assets/shared/terminal-font-diagnostics-v1.json';
+const _themeAsset = 'assets/shared/theme-prompt-samples-v1.json';
 
 class TerminalFontDiagnostics extends StatefulWidget {
   const TerminalFontDiagnostics({
@@ -15,12 +17,14 @@ class TerminalFontDiagnostics extends StatefulWidget {
     required this.registeredFontFamily,
     required this.fontSize,
     required this.onClose,
+    this.assetBundle,
   });
 
   final DesignTokens tokens;
   final String registeredFontFamily;
   final double fontSize;
   final VoidCallback onClose;
+  final AssetBundle? assetBundle;
 
   @override
   State<TerminalFontDiagnostics> createState() =>
@@ -35,17 +39,22 @@ class _TerminalFontDiagnosticsState extends State<TerminalFontDiagnostics> {
   Terminal? _terminal;
   Map<String, dynamic>? _fixture;
   String? _error;
+  String? _themeError;
+  String _selected = 'columns';
+  ThemePromptSamples? _themes;
+  final _themeTerminals = <String,Terminal>{};
 
   @override
   void initState() {
     super.initState();
     _loadFixture();
+    _loadThemeFixture();
   }
 
   Future<void> _loadFixture() async {
     Terminal? localTerminal;
     try {
-      final decoded = jsonDecode(await rootBundle.loadString(_fixtureAsset));
+      final decoded = jsonDecode(await (widget.assetBundle ?? rootBundle).loadString(_fixtureAsset));
       if (decoded is! Map<String, dynamic> ||
           decoded['schemaVersion'] != 1 ||
           decoded['id'] != 'terminal-font-diagnostics-v1' ||
@@ -97,9 +106,27 @@ class _TerminalFontDiagnosticsState extends State<TerminalFontDiagnostics> {
     }
   }
 
+  Future<void> _loadThemeFixture() async {
+    final created = <String,Terminal>{};
+    try {
+      final fixture = ThemePromptSamples.parse(await (widget.assetBundle ?? rootBundle).loadString(_themeAsset));
+      for (final sample in fixture.samples) {
+        final terminal = Terminal(maxLines:24,reflowEnabled:false);
+        created[sample.id] = terminal;
+        terminal..resize(40,3)..write(sample.ansi);
+      }
+      if (!mounted) { for (final terminal in created.values) { terminal.dispose(); } return; }
+      setState(() { _themes = fixture; _themeTerminals.addAll(created); });
+    } catch (_) {
+      for (final terminal in created.values) { terminal.dispose(); }
+      if (mounted) setState(() => _themeError = '主题样例暂不可用 · 字符列宽检查仍可使用');
+    }
+  }
+
   @override
   void dispose() {
     _terminal?.dispose();
+    for (final terminal in _themeTerminals.values) { terminal.dispose(); }
     _focusNode.dispose();
     super.dispose();
   }
@@ -151,7 +178,16 @@ class _TerminalFontDiagnosticsState extends State<TerminalFontDiagnostics> {
             softWrap: true,
           ),
           const SizedBox(height: 8),
-          if (_error != null)
+          Wrap(spacing:8,runSpacing:4,children:[
+            for (final choice in const [('columns','字符列宽'),('powerlevel10k','Powerlevel10k'),('oh-my-posh','Oh My Posh')])
+              ChoiceChip(key:ValueKey('terminal-font-sample-${choice.$1}'),label:Text(choice.$2),selected:_selected == choice.$1,
+                onSelected:choice.$1 == 'columns' || _themeTerminals.containsKey(choice.$1)
+                  ? (_) => setState(() => _selected = choice.$1) : null),
+          ]),
+          if (_themeError != null) Text(_themeError!,key:const ValueKey('terminal-theme-samples-error')),
+          const SizedBox(height:8),
+          if (_selected != 'columns') _themePreview()
+          else if (_error != null)
             Text(
               _error!,
               key: const ValueKey('terminal-font-diagnostics-error'),
@@ -210,6 +246,35 @@ class _TerminalFontDiagnosticsState extends State<TerminalFontDiagnostics> {
         ],
       ),
     );
+  }
+
+  Widget _themePreview() {
+    final sample = _themes!.samples.singleWhere((sample) => sample.id == _selected);
+    final terminal = _themeTerminals[_selected]!;
+    final actualColumn = terminal.buffer.cursorX, actualRow = terminal.buffer.cursorY;
+    final matches = actualColumn == sample.cursorColumn && actualRow == sample.cursorRow;
+    final measure = TextPainter(text:TextSpan(text:'M',style:TextStyle(fontFamily:widget.registeredFontFamily,fontSize:widget.fontSize)),
+      textDirection:TextDirection.ltr)..layout();
+    final width = (measure.width * 40 + 32).clamp(320.0,1600.0).toDouble();
+    measure.dispose();
+    return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Text('${sample.label} · 本地只读示例 · 40 列 × 3 行',key:const ValueKey('terminal-theme-title')),
+      Text('预期光标：第 ${sample.cursorColumn + 1} 列、第 ${sample.cursorRow + 1} 行（从 1 开始）；窄屏可左右滑动查看。',
+        key:const ValueKey('terminal-theme-cursor')),
+      Text('本地实际光标：第 ${actualColumn + 1} 列、第 ${actualRow + 1} 行（从 1 开始）',
+        key:const ValueKey('terminal-theme-cursor-actual')),
+      Text(matches ? '列与行位置一致 · 字形仍需人工核对' : '位置不一致 · 请检查字符宽度与字体回退',
+        key:const ValueKey('terminal-theme-cursor-comparison')),
+      const SizedBox(height:8),
+      SizedBox(height:(widget.fontSize * 5).clamp(96.0,160.0).toDouble(),child:SingleChildScrollView(
+        key:const ValueKey('terminal-theme-horizontal'),scrollDirection:Axis.horizontal,
+        child:SizedBox(width:width,child:ClipRRect(borderRadius:BorderRadius.circular(8),child:TerminalView(
+          terminal,key:ValueKey('terminal-theme-view-$_selected'),theme:widget.tokens.terminalTheme,
+          focusNode:_focusNode,autoResize:false,readOnly:true,hardwareKeyboardOnly:true,keyboardType:TextInputType.none,
+          simulateScroll:false,shortcuts:const {},textStyle:TerminalStyle(fontFamily:widget.registeredFontFamily,fontSize:widget.fontSize)))))),
+      const SizedBox(height:8),
+      const Text('本地只读绘制，不改变远端会话、PTY、草稿或输入；字形、颜色与光标位置需人工核对。'),
+    ]);
   }
 
   Widget _sampleRow(Map<String, dynamic> sample, int index) => Padding(

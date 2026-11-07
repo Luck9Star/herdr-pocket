@@ -15,6 +15,7 @@ from paired_gui import GuiFailure, wait_for
 from paired_tui import STEPS
 from flutter_android_gui import (
     DeviceFailure, public_host_fingerprint, public_ime_diagnostic, public_profile_json, wait_system_ime,
+    safe_theme_prompt_cursors, theme_prompt_expectations,
 )
 
 PACKAGE = 'dev.herdrpocket.tauriprobe'
@@ -63,6 +64,8 @@ class AndroidProgress:
         'android_canvas_default_invalid','android_canvas_selection_failed','android_canvas_viewport_missing',
         'android_canvas_marker_missing','android_canvas_geometry_invalid','android_canvas_scroll_failed',
         'android_canvas_marker_not_visible','android_canvas_viewport_restore_failed',
+        'android_theme_selection_invalid','android_theme_selection_missing',
+        'android_theme_measurement_missing','android_theme_measurement_invalid',
         'android_revoke_clock_invalid','android_revoke_device_time_unready','android_revoke_controls_unconfirmed'}
     def __init__(self, args):
         self.stream = None; self.success = False
@@ -363,6 +366,18 @@ class AndroidWebView:
                 params.update({'text': key, 'unmodifiedText': key})
             self.call('Input.dispatchKeyEvent', params)
 
+    def select_font_sample(self, ident):
+        """Select consecutive bundled samples with actual native select keyboard input."""
+        previous = {'powerlevel10k':'glyphs','oh-my-posh':'powerlevel10k'}.get(ident)
+        selector = '.terminal-font-diagnostics select[aria-label="诊断样例"]'
+        if previous is None or self.read(selector, 'value') != previous:
+            raise GuiFailure('android_theme_selection_invalid')
+        self.click(selector)
+        for key, number in (('ArrowDown',40),('Enter',13)):
+            for kind in ('keyDown','keyUp'):
+                self.call('Input.dispatchKeyEvent', {'type':kind,'key':key,'code':key,'windowsVirtualKeyCode':number})
+        wait_for(lambda: self.read(selector,'value') == ident, 'android_theme_selection_missing')
+
     def hidden_key_probe(self):
         # Exercise the old view after navigation; receiver must remain unchanged.
         for kind in ('keyDown', 'keyUp'):
@@ -550,6 +565,19 @@ def exercise_observer_canvas(browser):
     return {'geometryVerified':True,'markerVisible':visible is True,'viewportRestored':True}
 
 
+def theme_prompt_measurement(browser, ident):
+    if ident not in ('powerlevel10k','oh-my-posh'):
+        raise GuiFailure('android_theme_selection_invalid')
+    probe = Path(__file__).with_name('theme-prompt-measurement.js').read_text(encoding='utf-8')
+    expression = f'({probe})({json.dumps(ident)})'
+    value = wait_for(lambda: browser.evaluate(expression), 'android_theme_measurement_missing')
+    expected = theme_prompt_expectations()[ident]
+    if (not isinstance(value, dict) or set(value) != set(expected) or
+            any(type(value[key]) is not int or value[key] != number for key, number in expected.items())):
+        raise GuiFailure('android_theme_measurement_invalid')
+    return value.copy()
+
+
 def exercise_font_diagnostics(browser, approval, rendered):
     """Open the production local sample, measure rendered xterm cells, then resume observation."""
     if not browser.evaluate("document.querySelector('#remote-font-diagnostics')?.disabled===false"):
@@ -592,6 +620,14 @@ def exercise_font_diagnostics(browser, approval, rendered):
         # exact types so 0 and 1 cannot stand in for boolean focus evidence.
         if type(actual) is not type(expected) or actual != expected:
             raise GuiFailure('android_font_guard_' + key.lower())
+    theme_cursors = {}
+    for ident in ('powerlevel10k','oh-my-posh'):
+        browser.select_font_sample(ident)
+        theme_cursors[ident] = theme_prompt_measurement(browser, ident)
+    try:
+        theme_cursors = safe_theme_prompt_cursors(theme_cursors)
+    except DeviceFailure:
+        raise GuiFailure('android_theme_measurement_invalid') from None
     approval.verify_ssh(b'')
     during = rendered('delta')
     browser.click('.terminal-font-diagnostics button')
@@ -605,7 +641,7 @@ def exercise_font_diagnostics(browser, approval, rendered):
         return count if count > during else False
     after = wait_for(resumed_delta, 'android_font_diagnostic_observation_not_resumed', timeout=30)
     approval.verify_ssh(b'')
-    return {'geometry': geometry, 'inputLocked': True, 'safeFocus': True,
+    return {'geometry': geometry, 'localThemePromptCursors': theme_cursors, 'inputLocked': True, 'safeFocus': True,
             'inputControlsPresent': state['inputControlsPresent'],
             'inputControlsHidden': state['inputControlsHidden'],
             'focusRestored': True, 'observationContinued': True,

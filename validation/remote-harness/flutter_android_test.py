@@ -43,6 +43,7 @@ def device_report(**changes):
     value = {'case': 'android-native-pairing-observe', 'buildMode': 'debug',
         **{name: True for name in gui.BOOL_FIELDS}, 'profileCreationActionsBeforeReview': 0, 'identityCreationActions': 1,
         'localFontMarkerColumns': [15] * 8, 'observerCanvas': {'cols':120,'rows':40,'wideMarkerMatched':True,'wideMarkerVisible':True,'readingPositionRestored':True},
+        'localThemePromptCursors': gui.theme_prompt_expectations(),
         'firstSequence': 5, 'deltaSequence': 7, 'frameCountLowerBound': 2, 'deltaCountLowerBound': 1}
     value.update(changes)
     return value
@@ -414,6 +415,49 @@ class WireGuards(unittest.TestCase):
         for columns in (None, measured[:7], [True] * 8, [2] * 8, [17] * 8, ['15'] * 8):
             with self.subTest(columns=columns), self.assertRaises(gui.DeviceFailure):
                 gui.safe_device_result(device_report(localFontMarkerColumns=columns))
+
+    def test_theme_cursors_require_both_locked_samples_exact_integer_fields(self):
+        expected = gui.theme_prompt_expectations()
+        self.assertEqual(gui.safe_device_result(device_report())['localThemePromptCursors'],expected)
+        malformed = [None, [], {}, {**expected,'unknown':expected['powerlevel10k']},
+                     {'powerlevel10k':expected['powerlevel10k']}]
+        for field in expected['powerlevel10k']:
+            for value in (None, True, False, '0', 0.0, -1, 40, 999):
+                if type(value) is int and value == expected['powerlevel10k'][field]:
+                    continue
+                malformed.append({**expected,'powerlevel10k':{**expected['powerlevel10k'],field:value}})
+        malformed.append({**expected,'powerlevel10k':{**expected['powerlevel10k'],'terminalText':'PRIVATE'}})
+        malformed.append({**expected,'oh-my-posh':expected['powerlevel10k']})
+        for measured in malformed:
+            with self.subTest(measured=measured),self.assertRaises(gui.DeviceFailure):
+                gui.safe_device_result(device_report(localThemePromptCursors=measured))
+
+    def test_old_device_result_without_theme_probe_cannot_pass_current_contract(self):
+        old = device_report()
+        del old['localThemePromptCursors']
+        with self.assertRaises(gui.DeviceFailure):
+            gui.safe_device_result(old)
+
+    def test_theme_expectations_reject_a_fixture_not_matching_its_lock(self):
+        with patch.object(gui.hashlib,'sha256') as hashed:
+            hashed.return_value.hexdigest.return_value = '0' * 64
+            with self.assertRaises(gui.DeviceFailure):
+                gui.theme_prompt_expectations()
+
+    def test_android_theme_instrumentation_reads_real_views_after_each_normal_choice(self):
+        source=(REPO/'validation/flutter/integration_test/android_pairing_observe_test.dart').read_text()
+        flow=source[source.index('Future<({List<int> markers,'):source.index('/// Observe the real view after')]
+        for expected in ("rootBundle.loadString('assets/shared/theme-prompt-samples-v1.json')",
+                         "await tapKey(tester,'terminal-font-sample-$id')",
+                         "ValueKey('terminal-theme-view-$id')",'terminal.buffer.cursorX',
+                         'terminal.buffer.cursorY','expect(themeView.readOnly,isTrue)',
+                         'expect(themeView.autoResize,isFalse)','expect(x,expected.cursorColumn)',
+                         'expect(y,expected.cursorRow)'):
+            self.assertIn(expected,flow)
+        self.assertNotIn('cursorColumn:14',flow)
+        self.assertNotIn('cursorColumn:15',flow)
+        self.assertLess(flow.index('markers[row] ='),flow.index('for (final id in const'))
+        self.assertIn("'localThemePromptCursors':fontDiagnostics.themes",source)
 
     def test_stock_observer_canvas_requires_measured_geometry_and_marker(self):
         expected = {'cols': 120, 'rows': 40, 'wideMarkerMatched': True,

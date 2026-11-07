@@ -60,6 +60,7 @@ class AndroidNoticeTests(unittest.TestCase):
 
 class SharedDiagnosticAssetsTests(unittest.TestCase):
     diagnostic = 'terminal-font-diagnostics-v1.json'
+    theme_prompts = 'theme-prompt-samples-v1.json'
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='herdr-shared-diagnostic-assets-')
@@ -111,24 +112,23 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('node'), 'real Tauri resource copier requires an existing Node executable')
     def test_real_copy_paths_include_identical_diagnostic_and_locked_font_bytes(self):
-        source = (self.shared / self.diagnostic).read_bytes()
         checksums = dict(line.split('  ', 1)[::-1] for line in (self.shared / 'SHA256SUMS').read_text().splitlines())
-        self.assertEqual(hashlib.sha256(source).hexdigest(), checksums[self.diagnostic])
         app = self.flutter_scaffold()
         pubspec = (app / 'pubspec.yaml').read_text()
         self.assertIn('  terminal_view:\n    path: candidate/reference_terminal_view\n', pubspec)
         lock = (app / 'pubspec.lock').read_text()
         self.assertIn('      path: "candidate/reference_terminal_view"', lock)
         self.assertEqual(lock.count('      path: "candidate/reference_terminal_view"'), 1)
-        self.assertEqual(pubspec.count('    - assets/shared/' + self.diagnostic + '\n'), 1)
         root = self.tauri_source()
         subprocess.run([shutil.which('node'), root / 'scripts/prepare-fixtures.mjs'], cwd=root,
                        check=True, capture_output=True, text=True)
-        flutter_asset = app / 'assets/shared' / self.diagnostic
-        tauri_asset = root / 'public/shared' / self.diagnostic
-        self.assertEqual(flutter_asset.read_bytes(), source)
-        self.assertEqual(tauri_asset.read_bytes(), source)
-        self.assertEqual(tauri_asset.read_bytes(), flutter_asset.read_bytes())
+        for name in (self.diagnostic, self.theme_prompts):
+            with self.subTest(asset=name):
+                source = (self.shared / name).read_bytes()
+                self.assertEqual(hashlib.sha256(source).hexdigest(), checksums[name])
+                self.assertEqual(pubspec.count('    - assets/shared/' + name + '\n'), 1)
+                self.assertEqual((app / 'assets/shared' / name).read_bytes(), source)
+                self.assertEqual((root / 'public/shared' / name).read_bytes(), source)
         font = json.loads((self.shared / 'fixture.json').read_text())['font']
         expected = (self.shared / font['file']).read_bytes()
         self.assertEqual(hashlib.sha256(expected).hexdigest(), font['sha256'])

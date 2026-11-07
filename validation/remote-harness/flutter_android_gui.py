@@ -97,6 +97,7 @@ _PRIMARY_FAILURE_CODES = frozenset({
     'flutter_android_existing_or_non_emulator_device',
     'flutter_android_failure_metadata_invalid',
     'flutter_android_font_measurement_invalid',
+    'flutter_android_theme_measurement_invalid',
     'flutter_android_observer_canvas_unconfirmed',
     'flutter_android_forward_list_invalid',
     'flutter_android_gradle_changed',
@@ -440,6 +441,53 @@ def require_cloud(env, root, application, config):
     return app
 
 
+def theme_prompt_expectations():
+    """Numeric expectations from the same checksum-locked shared input as both apps."""
+    shared = Path(__file__).resolve().parents[1] / 'shared'
+    try:
+        raw = (shared / 'theme-prompt-samples-v1.json').read_bytes()
+        locks = [line.split()[0] for line in (shared / 'SHA256SUMS').read_text().splitlines()
+                 if line.split()[1:] == ['theme-prompt-samples-v1.json']]
+        if len(raw) > 16384 or locks != [hashlib.sha256(raw).hexdigest()]:
+            raise ValueError()
+        fixture = json.loads(raw)
+        if (set(fixture) != {'schemaVersion','id','columns','rows','samples'} or
+                type(fixture['schemaVersion']) is not int or fixture['schemaVersion'] != 1 or
+                fixture['id'] != 'theme-prompt-samples-v1' or
+                type(fixture['columns']) is not int or fixture['columns'] != 40 or
+                type(fixture['rows']) is not int or fixture['rows'] != 3 or
+                not isinstance(fixture['samples'], list) or len(fixture['samples']) != 2):
+            raise ValueError()
+        expected = {}
+        for sample in fixture['samples']:
+            if (not isinstance(sample, dict) or
+                    set(sample) != {'id','label','ansi','cursorColumn','cursorRow'} or
+                    sample['id'] not in ('powerlevel10k','oh-my-posh') or sample['id'] in expected or
+                    type(sample['cursorColumn']) is not int or not 0 <= sample['cursorColumn'] < fixture['columns'] or
+                    type(sample['cursorRow']) is not int or not 0 <= sample['cursorRow'] < fixture['rows']):
+                raise ValueError()
+            expected[sample['id']] = {key: fixture[key] for key in ('columns','rows')}
+            expected[sample['id']].update({key:sample[key] for key in ('cursorColumn','cursorRow')})
+        return expected
+    except (OSError, ValueError, TypeError, KeyError, IndexError):
+        raise DeviceFailure('flutter_android_theme_measurement_invalid') from None
+
+
+def safe_theme_prompt_cursors(value):
+    expected = theme_prompt_expectations()
+    if not isinstance(value, dict) or set(value) != set(expected):
+        raise DeviceFailure('flutter_android_theme_measurement_invalid')
+    clean = {}
+    for ident, wanted in expected.items():
+        measured = value[ident]
+        if (not isinstance(measured, dict) or set(measured) != set(wanted) or
+                any(type(measured[key]) is not int or measured[key] != number
+                    for key, number in wanted.items())):
+            raise DeviceFailure('flutter_android_theme_measurement_invalid')
+        clean[ident] = measured.copy()
+    return clean
+
+
 def safe_device_result(raw, guarded=False, tui=False):
     if tui and not guarded:
         raise DeviceFailure('android_tui_requires_guarded_input')
@@ -463,6 +511,7 @@ def safe_device_result(raw, guarded=False, tui=False):
             any(type(col) is not int or not (col == 0 or 3 <= col <= 16) for col in columns)):
         raise DeviceFailure('flutter_android_font_measurement_invalid')
     clean['localFontMarkerColumns'] = columns.copy()
+    clean['localThemePromptCursors'] = safe_theme_prompt_cursors(raw.get('localThemePromptCursors'))
     if not guarded:
         canvas = raw.get('observerCanvas')
         if (not isinstance(canvas, dict) or type(canvas.get('cols')) is not int or canvas['cols'] != 120 or

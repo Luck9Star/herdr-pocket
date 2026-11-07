@@ -1658,3 +1658,16 @@ test('live task snapshots retain focused task buttons, revoke old tickets and re
   assert.equal(h.calls.filter(c=>c.name==='remote_input_send'||c.name==='remote_tab_input_send'||/resize/.test(c.name)).length,0);
  } finally {h.finish();await flush();h.restore();}
 });
+
+test('normal paired font page switches both real theme samples without input or remote calls',async()=>{
+ const prior=globalThis.fetch,glyphs=JSON.parse(await readFile(new URL('../../shared/terminal-font-diagnostics-v1.json',import.meta.url),'utf8')),text=await readFile(new URL('../../shared/theme-prompt-samples-v1.json',import.meta.url),'utf8'),themes=JSON.parse(text),reads=[];
+ globalThis.fetch=async url=>{reads.push(url);return url==='/shared/theme-prompt-samples-v1.json'?{ok:true,text:async()=>text}:{ok:true,json:async()=>glyphs};};
+ let clipboardReads=0;const h=await setup({clipboardRead:async()=>{clipboardReads++;return 'never';}});
+ try {
+  await openInput(h);const observed=h.terminal;h.nodes['remote-font-diagnostics'].click();await flush();await flush();
+  const panel=document.body.children.find(e=>e.attrs['aria-label']==='字体与字符诊断'),choice=panel.all().find(e=>e.attrs['aria-label']==='诊断样例');const before=h.calls.length;
+  for(const sample of themes.samples){choice.focus();choice.value=sample.id;choice.onchange();await flush();await flush();assert.equal(document.activeElement,choice);assert.deepEqual(h.terminal.writes,[sample.ansi]);assert.equal(h.terminal.options.cols,40);assert.equal(h.terminal.options.rows,3);assert.equal(h.terminal.textarea.disabled,true);const status=panel.all().find(e=>e.attrs.role==='status');assert.equal(status.dataset.expectedCursorColumn,String(sample.cursorColumn));assert.equal(status.dataset.expectedCursorRow,String(sample.cursorRow));assert.equal(status.dataset.sampleId,sample.id);assert.equal(status.dataset.columns,'40');assert.equal(status.dataset.rows,'3');}
+  assert.equal(h.calls.length,before);assert.equal(clipboardReads,0);observed.data('disabled');assert.equal(h.calls.filter(c=>c.name==='remote_input_send'||/resize/.test(c.name)).length,0);
+  panel.children.find(e=>e.textContent==='关闭诊断').click();assert.equal(document.activeElement,h.nodes['remote-font-diagnostics']);assert.ok(reads.includes('/shared/theme-prompt-samples-v1.json'));
+ } finally {h.finish();await flush();h.restore();globalThis.fetch=prior;}
+});

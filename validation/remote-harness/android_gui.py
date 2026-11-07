@@ -148,6 +148,34 @@ class AndroidWebView:
             pass
 
 
+def restore_reviewed_draft(browser, pane_id, terminal_id, rendered):
+    # A saved host is not a terminal target: restore the identity and explicitly
+    # choose the same pane and terminal before asserting draft recovery.
+    if browser.read('#remote-input-draft', 'value'):
+        raise GuiFailure('android_unbound_draft_exposed')
+    browser.click('#host-restore-review')
+    browser.click('#host-restore')
+    wait_for(lambda: browser.evaluate("document.querySelector('#host-restore-panel').hidden"),
+             'android_identity_restore_missing', timeout=60)
+    browser.click('#remote-review')
+    browser.click('#remote-connect')
+    selector = '#remote-panes button'
+    button = wait_for(lambda: browser.evaluate(
+        "document.querySelector('#remote-panes button')?.firstChild?.textContent || null"),
+        'android_reentry_dashboard_missing', timeout=60)
+    if button != f'{pane_id} · {terminal_id}':
+        raise GuiFailure('android_reentry_target_mismatch')
+    browser.click(selector)
+    wait_for(lambda: rendered('full'), 'android_reentry_full_missing', timeout=60)
+    wait_for(lambda: browser.evaluate("!document.querySelector('#remote-input-controls').hidden"),
+             'android_reentry_input_controls_missing', timeout=60)
+    browser.click('#remote-input-draft-mode')
+    wait_for(lambda: '草稿仅在核对' in (browser.read('#remote-input-status') or ''),
+             'android_reentry_draft_mode_missing')
+    if browser.read('#remote-input-draft', 'value') != 'Pocket测':
+        raise GuiFailure('android_reentry_draft_changed')
+
+
 def run_android(args, root, env, config, approval):
     if bool(getattr(args, 'android_guarded_input', False)) != bool(getattr(args, 'input_fixture', None)):
         raise GuiFailure('android_guarded_input_fixture_mismatch')
@@ -252,26 +280,10 @@ def run_android(args, root, env, config, approval):
             browser.click('#host-list .saved-host-actions button')
             wait_for(lambda: browser.evaluate("!document.querySelector('#host-restore-panel').hidden"),
                      'android_restore_panel_missing')
-            if browser.read('#remote-input-draft', 'value') != 'Pocket测':
-                raise GuiFailure('android_draft_not_retained')
-            browser.click('#host-restore-review')
-            browser.click('#host-restore')
-            wait_for(lambda: browser.evaluate("document.querySelector('#host-restore-panel').hidden"),
-                     'android_identity_restore_missing', timeout=60)
-            browser.click('#remote-review')
-            browser.click('#remote-connect')
-            button = wait_for(lambda: browser.read(selector), 'android_reentry_dashboard_missing', timeout=60)
-            if not button.startswith(config['paneId']+' · '):
-                raise GuiFailure('android_reentry_target_mismatch')
-            browser.click(selector)
-            wait_for(lambda: rendered('full'), 'android_reentry_full_missing', timeout=60)
-            wait_for(lambda: browser.evaluate("!document.querySelector('#remote-input-controls').hidden"),
-                     'android_reentry_input_controls_missing', timeout=60)
-            browser.click('#remote-input-draft-mode')
-            wait_for(lambda: '草稿仅在核对' in (browser.read('#remote-input-status') or ''),
-                     'android_reentry_draft_mode_missing')
-            if browser.read('#remote-input-draft', 'value') != 'Pocket测':
-                raise GuiFailure('android_reentry_draft_changed')
+            approval.verify_ssh(b'k')
+            restore_reviewed_draft(browser, config['paneId'], first['terminalId'], rendered)
+            # Reconnection, selection and local recovery must not replay input.
+            approval.verify_ssh(b'k')
             browser.click('#remote-input-preview')
             if browser.read('#remote-input-preview-text') != 'Pocket测':
                 raise GuiFailure('android_draft_preview_mismatch')

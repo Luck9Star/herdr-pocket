@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/device_keys.dart';
@@ -81,6 +82,36 @@ Future<void> acceptResponse(WidgetTester tester,Map<String,dynamic> response) as
 void main() {
   setUp(PairingPage.resetMemorySession);
   tearDown(PairingPage.resetMemorySession);
+  for (final width in [320.0,390.0]) {
+    testWidgets('first pairing at ${width}px ends editing and checks the actual target checkbox once before create',(tester) async {
+      tester.view.devicePixelRatio = 1; tester.view.physicalSize = Size(width,844);
+      addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
+      final config = fixtureConfig(),keys = TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
+      final tokens = (await tester.runAsync(DesignTokens.load))!;
+      await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:PairingPage(tokens:tokens,keys:keys,clock:() => 1000)));
+      final names = ['host','port','username','session','socketPath','herdrPath','expectedHostKey'];
+      for (final name in names) {
+        final field = find.byKey(ValueKey('pair-$name')); await tester.ensureVisible(field);
+        await tester.enterText(field,config[name].toString()); await tester.pump();
+      }
+      final original = {for (final name in names) name:tester.widget<TextField>(find.byKey(ValueKey('pair-$name'))).controller!.text};
+      expect(keys.creates,0);
+      await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pumpAndSettle();
+      final tile = find.byKey(const ValueKey('pair-target-review'));
+      final checkbox = find.descendant(of:tile,matching:find.byType(Checkbox));
+      await tester.ensureVisible(checkbox); await tester.pumpAndSettle();
+      expect(checkbox.hitTestable(),findsOneWidget); expect(tester.widget<Checkbox>(checkbox).value,isFalse);
+      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('pair-create'))).onPressed,isNull);
+      await tester.tap(checkbox.hitTestable()); await tester.pumpAndSettle();
+      expect(tester.widget<Checkbox>(checkbox).value,isTrue);
+      for (final entry in original.entries) {
+        expect(tester.widget<TextField>(find.byKey(ValueKey('pair-${entry.key}'))).controller!.text,entry.value);
+      }
+      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('pair-create'))).onPressed,isNotNull);
+      await tapVisible(tester,'pair-create'); expect(keys.creates,1);
+      expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox());
+    });
+  }
   testWidgets('memory double UI: public review -> board -> explicit observe -> stale; not SSH evidence',(tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);

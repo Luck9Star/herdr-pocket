@@ -56,6 +56,52 @@ class AndroidInputDriverTest(unittest.TestCase):
         with self.assertRaises(android.GuiFailure):
             view.receipt(None, 'p', 1)
 
+class AndroidDraftReentryTest(unittest.TestCase):
+    class View:
+        def __init__(self, target='p · term_1', unbound='', restored='Pocket测'):
+            self.target = target
+            self.unbound = unbound
+            self.restored = restored
+            self.calls = []
+            self.selected = False
+
+        def read(self, selector, prop='textContent'):
+            self.calls.append(('read', selector))
+            if selector == '#remote-input-draft':
+                return self.restored if self.selected else self.unbound
+            if selector == '#remote-input-status':
+                return '草稿仅在核对并确认后发送。'
+            raise AssertionError(selector)
+
+        def click(self, selector):
+            self.calls.append(('click', selector))
+            if selector == '#remote-panes button':
+                self.selected = True
+
+        def evaluate(self, expression):
+            self.calls.append(('evaluate', expression))
+            if 'firstChild' in expression:
+                return self.target
+            return True
+
+    def test_review_then_exact_target_then_draft_check(self):
+        view = self.View()
+        android.restore_reviewed_draft(view, 'p', 'term_1', lambda _: 1)
+        clicks = [value for action, value in view.calls if action == 'click']
+        self.assertEqual(clicks, ['#host-restore-review', '#host-restore', '#remote-review',
+                                  '#remote-connect', '#remote-panes button', '#remote-input-draft-mode'])
+        reads = [i for i, item in enumerate(view.calls) if item == ('read', '#remote-input-draft')]
+        selection = view.calls.index(('click', '#remote-panes button'))
+        self.assertLess(reads[0], selection)
+        self.assertGreater(reads[1], selection)
+
+    def test_draft_before_binding_and_changed_terminal_fail_closed(self):
+        for view, error in ((self.View(unbound='old'), 'android_unbound_draft_exposed'),
+                            (self.View(target='p · term_10'), 'android_reentry_target_mismatch'),
+                            (self.View(restored='different'), 'android_reentry_draft_changed')):
+            with self.subTest(error=error), self.assertRaisesRegex(android.GuiFailure, error):
+                android.restore_reviewed_draft(view, 'p', 'term_1', lambda _: 1)
+
 
 if __name__ == '__main__':
     unittest.main()

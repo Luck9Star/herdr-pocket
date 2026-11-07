@@ -10,6 +10,8 @@ class Element {
   replaceChildren(...xs){this.replaceCount=(this.replaceCount || 0)+1;this.children=[];this.append(...xs);}
   setAttribute(k,v){this.attrs[k]=v;}
   addEventListener(name,fn){this['event_'+name]=fn;}
+  focus(){globalThis.document.activeElement=this;}
+  contains(node){return node===this || this.all().includes(node);}
   all(){return this.children.flatMap(x=>[x,...x.all()]);}
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -232,7 +234,7 @@ function watchWorkspace(fixedTarget=null,options={}) {
   globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
   globalThis.window={confirm:()=>true};const calls=[],channels=[],observed=[];let terminal;
   const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe'){observed.push(args);return options.observe?options.observe(args):new Promise(()=>{});}if(name==='remote_tab_select' && options.select)return options.select(args);if(name==='remote_tab_input_mode')return options.mode?options.mode(args):Promise.resolve(5);return Promise.resolve();};
-  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>{
+  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device'}),onDashboard:options.onDashboard,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>{
     terminal={options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},dispose(){},focus(){document.activeElement=this.textarea;},onData(fn){this.data=fn;}};return terminal;
   }});
   const id=ui.create('fixture',fixedTarget);
@@ -270,7 +272,7 @@ test('SW02 SW07: terminal full and stale or reordered metadata cannot rewrite da
     assert.ok(h.all().some(n=>n.attrs['data-dashboard-phase']==='stale'));
     assert.equal(h.find('逐键输入').disabled,true);
     h.watch(1,4,'fresh',[{paneId:'w1:p1',terminalId:'term_a001',agentStatus:'blocked'},{paneId:'w1:p2',terminalId:'term_def',agentStatus:'idle'}]);
-    assert.ok(h.all().some(n=>n.textContent.includes('w1:p2') && n.textContent.includes('idle')));
+    assert.ok(h.all().some(n=>n.textContent.includes('w1:p2') && n.textContent.includes('空闲')));
     assert.equal(h.find('逐键输入').disabled,true,'a fresh board must not resolve unknown input');
     h.watch(1,5,'fresh',[{paneId:'w1:p2',terminalId:'term_def',agentStatus:'idle'}]);
     assert.ok(h.all().some(n=>n.textContent==='fixture · w1:p1 · term_a001'),'target remains frozen when row exits');
@@ -286,7 +288,7 @@ test('SW07: dashboard updates preserve focused direct input DOM while showing fr
     h.watch(1,2,'stale',null);assert.ok(h.all().some(n=>n.attrs['data-dashboard-phase']==='stale'));
     h.watch(1,3,'fresh',[{paneId:'w1:p1',terminalId:'term_a001',agentStatus:'blocked'}]);
     assert.equal(h.nodes['view-content'].replaceCount,before);assert.equal(document.activeElement,terminal.textarea);
-    assert.ok(h.all().some(n=>n.textContent.includes('blocked')));
+    assert.ok(h.all().some(n=>n.textContent.includes('受阻')));
     assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
   } finally {h.restore();}
 });
@@ -403,4 +405,44 @@ test('IJ03 IJ12: a delayed review-mode result cannot resolve the next observatio
     reviewResult(8);await flush();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_recover').length,0);
     assert.equal(h.find('逐键输入').disabled,true);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
   } finally {h.restore();}
+});
+
+async function readyPaste(h) {
+ await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
+ const draft=h.all().find(n=>n.tagName==='textarea');draft.value='原草稿';draft.oninput();h.find('逐键输入').onclick();await flush();await flush();
+}
+function paste(terminal,value){let prevented=false,stopped=false;terminal.textarea.event_paste({preventDefault(){prevented=true;},stopImmediatePropagation(){stopped=true;},clipboardData:{getData:()=>value}});assert.equal(prevented,true);assert.equal(stopped,true);}
+for(const [label,expected] of [['追加到草稿','原草稿新\n文本'],['替换草稿','新\n文本'],['取消粘贴','原草稿']]) test(`粘贴预览 ${label} preserves draft until explicit action`,async()=>{
+ const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try{await readyPaste(h);paste(h.terminal(),'新\n文本');await flush();await flush();assert.ok(h.all().some(n=>n.tagName==='pre' && n.textContent==='新\n文本'));assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿');h.find(label).onclick();assert.equal(h.all().find(n=>n.tagName==='textarea').value,expected);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);}finally{h.restore();}
+});
+test('paste review is revoked on focus escape and cannot apply a retained button',async()=>{
+ const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try{await readyPaste(h);paste(h.terminal(),'新');await flush();const apply=h.find('替换草稿');const group=h.all().find(n=>n.attrs['aria-label']==='粘贴内容审查');group.onfocusout({relatedTarget:new Element('button')});apply.onclick();assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿');assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);}finally{h.restore();}
+});
+test('clipboard loses authority when focus leaves and returns while observe mode is pending',async()=>{
+ let release;const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{mode:a=>a.mode==='observe'?new Promise(r=>release=r):Promise.resolve(5)});try{await readyPaste(h);const term=h.terminal();paste(term,'新');await flush();term.textarea.event_blur();document.activeElement=term.textarea;release(6);await flush();assert.equal(h.find('追加到草稿'),undefined);assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿');}finally{h.restore();}
+});
+test('composition in progress is not converted into a clipboard review',async()=>{
+ const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try{await readyPaste(h);const term=h.terminal();term.textarea.event_compositionstart();paste(term,'新');await flush();assert.equal(h.find('追加到草稿'),undefined);assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿');term.textarea.event_compositionend();}finally{h.restore();}
+});
+test('blocked rows lead the snapshot and selection retains exact identities',async()=>{
+ const h=watchWorkspace();try{await h.start();h.observation(1,'starting');h.watch(1,1,'fresh',[{paneId:'w1:p1',terminalId:'term_ab01',agentStatus:'working'},{paneId:'w1:p2',terminalId:'term_ab02',agentStatus:'blocked'},{paneId:'w1:p3',terminalId:'term_ab03',agentStatus:'future'}]);h.emit({kind:'selection_ready',epoch:1});const rows=h.all().filter(n=>n.tagName==='button'&&n.textContent.startsWith('选择 '));assert.match(rows[0].textContent,/w1:p2.*term_ab02.*受阻/);assert.match(rows[1].textContent,/工作中/);assert.match(rows[2].textContent,/状态未知/);assert.ok(h.all().some(n=>n.textContent.includes('1 个受阻窗格')));rows[0].onclick();await flush();const sent=h.calls.find(c=>c.name==='remote_tab_select').args;assert.equal(sent.paneId,'w1:p2');assert.equal(sent.terminalId,'term_ab02');}finally{h.restore();}
+});
+test('new connection keeps old snapshot stale until authority replaces it',async()=>{
+ let finish;let attempt=0;const h=watchWorkspace(null,{observe:()=>{attempt++;return attempt===1?new Promise(r=>finish=r):new Promise(()=>{});}});try{await h.start();h.observation(3,'starting');h.watch(3,1,'fresh',[{paneId:'w1:p1',terminalId:'term_cd01',agentStatus:'blocked'}]);h.emit({kind:'selection_ready',epoch:3});h.ui.background();finish();await flush();await flush();await h.start();assert.ok(h.all().some(n=>n.textContent.includes('term_cd01')));assert.ok(h.all().some(n=>n.textContent.includes('上次快照')));assert.ok(h.all().filter(n=>n.tagName==='button' && n.textContent.startsWith('选择 ')).every(n=>n.disabled));h.observation(1,'starting');assert.ok(h.all().some(n=>n.textContent.includes('term_cd01')));h.watch(1,1,'fresh',[{paneId:'w1:p2',terminalId:'term_cd02',agentStatus:'idle'}]);h.emit({kind:'selection_ready',epoch:1});assert.ok(h.all().some(n=>n.textContent.includes('term_cd02')));assert.ok(!h.all().some(n=>n.textContent.includes('term_cd01')));assert.equal(h.calls.filter(c=>c.name==='remote_tab_reserve').length,2);}finally{h.restore();}
+});
+
+test('clipboard review from old epoch cannot modify the retained draft',async()=>{
+ const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try{await readyPaste(h);paste(h.terminal(),'新');await flush();const stale=h.find('替换草稿');h.observation(2,'resuming');stale.onclick();h.emit({kind:'frame',epoch:2,frame:{seq:1,full:true,bytes:[65]}});h.observation(2,'active');h.emit({kind:'input_ready',epoch:2,unknown:false,recovery_status:'ready'});assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿');assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);}finally{h.restore();}
+});
+test('old row cannot regain authority after a new connection reuses epoch and revision',async()=>{
+ let end,attempt=0;const h=watchWorkspace(null,{observe:()=>{attempt++;return attempt===1?new Promise(r=>end=r):new Promise(()=>{});}});try{await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'selection_ready',epoch:1});const old=h.all().find(n=>n.tagName==='button'&&n.textContent.startsWith('选择 '));h.ui.background();end();await flush();await flush();await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'selection_ready',epoch:1});old.onclick();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_tab_select').length,0);const fresh=h.all().find(n=>n.tagName==='button'&&n.textContent.startsWith('选择 '));fresh.onclick();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_tab_select').length,1);}finally{h.restore();}
+});
+test('failed reconnect keeps last snapshot stale without automatic retry',async()=>{
+ let finish,attempt=0;const h=watchWorkspace(null,{observe:()=>{attempt++;return attempt===1?new Promise(r=>finish=r):Promise.reject(Error('offline'));}});try{await h.start();h.observation(1,'starting');h.watch(1,1);h.ui.background();finish();await flush();await flush();await h.start();await flush();assert.ok(h.all().some(n=>n.textContent.includes('term_a001')));assert.ok(h.all().some(n=>n.attrs['data-dashboard-phase']==='stale'));assert.ok(h.all().filter(n=>n.tagName==='button'&&n.textContent.startsWith('选择 ')).every(n=>n.disabled));assert.equal(h.calls.filter(c=>c.name==='remote_tab_reserve').length,2);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);}finally{h.restore();}
+});
+
+test('workspace publishes only accepted authoritative watch snapshots and retires them on background',async()=>{
+ const {HostDashboardSummary}=await import('../src/host-dashboard-summary.js');const store=new HostDashboardSummary(),events=[];
+ const h=watchWorkspace(null,{onDashboard:event=>{events.push(event.type);if(event.type==='starting')store.begin(event.identity,event.source);else if(event.type==='snapshot')store.publish(event.identity,event.source,event.board);else store.invalidateSource(event.hostId,event.source);}});
+ try{await h.start();h.observation(1,'starting');h.watch(1,1,'fresh',[{paneId:'w1:p1',terminalId:'term_a001',agentStatus:'blocked'}]);const identity={id:'fixture',enabled:true,retired:false,target:{username:'u',host:'fixture',port:22,session:'work'},deviceFingerprint:'device'};assert.equal(store.get(identity).count,1);assert.equal(store.get(identity).current,true);const seen=events.filter(x=>x==='snapshot').length;h.watch(1,1,'fresh',[{paneId:'w1:p1',terminalId:'term_a001',agentStatus:'idle'}]);assert.equal(events.filter(x=>x==='snapshot').length,seen);h.ui.background();h.watch(1,2,'fresh',[]);await flush();assert.equal(store.get(identity).current,false);assert.equal(store.get(identity).count,1);assert.equal(events.filter(x=>x==='snapshot').length,seen);assert.equal(h.calls.filter(c=>c.name==='remote_tab_reserve').length,1);}finally{h.restore();}
 });

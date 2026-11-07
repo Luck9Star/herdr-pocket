@@ -274,6 +274,15 @@ void main() {
     final pane = find.byKey(ValueKey('remote-pane-${target['paneId']}'));
     await until(tester,() => pane.evaluate().length == 1);
     expect(find.textContaining('状态 paired',skipOffstage:false),findsOneWidget);
+    stage('host_task_summary_authoritative');
+    final hostSummaryControl = find.byKey(const ValueKey('remote-host-task-summary'));
+    await until(tester,() {
+      if (hostSummaryControl.evaluate().length != 1) return false;
+      final summary = tester.widget<Text>(hostSummaryControl).data ?? '';
+      return summary.startsWith('当前主机摘要 · 主机报告 · ') && summary.contains('原会话 ${target['session']}');
+    });
+    expect(tester.widget<Text>(find.byKey(const ValueKey('remote-dashboard-sync'))).data,
+      contains('${target['username']}@${target['host']}:${target['port']} / ${target['session']}'));
     stage('observe_frames');
     await tap(tester,pane);
     await until(tester,() => find.byType(TerminalView).evaluate().length == 1 &&
@@ -348,6 +357,10 @@ void main() {
     stage('stop');
     await tapKey(tester,'remote-cancel');
     await until(tester,() => find.textContaining('旧画面 · 已停止').evaluate().isNotEmpty);
+    stage('host_task_summary_stale');
+    await until(tester,() => hostSummaryControl.evaluate().length == 1 &&
+      (tester.widget<Text>(hostSummaryControl).data ?? '').contains('上次主机报告'));
+    expect(tester.widget<Text>(hostSummaryControl).data,contains('原会话 ${target['session']}'));
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-draft'))).onSelected,isNull);
     if (guardedInput) await tester.sendKeyEvent(LogicalKeyboardKey.keyX,character:'x');

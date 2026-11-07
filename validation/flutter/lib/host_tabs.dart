@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'host_catalog.dart';
 import 'network_profiles.dart';
 import 'remote_adapter.dart';
+import 'host_task_summary.dart';
 
 const maxOpenHostTabs = 8;
 
@@ -23,6 +24,7 @@ class HostTab {
   final navigator = GlobalKey<NavigatorState>();
   final visible = ValueNotifier<bool>(false);
   final ValueNotifier<HostTabView> view;
+  HostDashboardLease? summaryLease;
   bool _disposed = false;
   int _viewRevision = 0;
   static String networkFor(HostProfile p,List<NetworkProfile> networks) {
@@ -39,7 +41,7 @@ class HostTab {
   static String bindingFor(HostProfile p,[List<NetworkProfile> networks=const []]) => jsonEncode({'id':p.id,'target':p.target,
     'networkProfileId':p.networkProfileId,'network':p.networkProfileId == null ? null : networks.where((n) => n.id == p.networkProfileId).map((n) => n.toJson()).toList(),
     'pairing':{'handle':p.pairingRecord['handle'],'request':p.pairingRecord['request']}});
-  void dispose() { _disposed = true; visible.value = false; visible.dispose(); view.dispose(); }
+  void dispose() { _disposed = true; summaryLease?.close(); visible.value = false; visible.dispose(); view.dispose(); }
 }
 
 class HostTabView {
@@ -73,12 +75,12 @@ class HostTabs extends ChangeNotifier {
   void select(String? id) {
     if (id != null && find(id) == null) return;
     if (activeId == id) return;
-    active?.visible.value = false;
+    active?.summaryLease?.invalidate(); active?.visible.value = false;
     activeId = id; active?.visible.value = true; notice = null; notifyListeners();
   }
   void close(String id) {
     final tab = find(id); if (tab == null) return;
-    tab.visible.value = false;
+    tab.summaryLease?.close(); tab.visible.value = false;
     if (activeId == id) activeId = null; // do not implicitly activate another host
     _tabs.remove(tab); tab.dispose(); notifyListeners();
   }

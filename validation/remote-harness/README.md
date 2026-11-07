@@ -85,3 +85,11 @@ python3 validation/remote-harness/phone_tui_probe.py flutter
 ```sh
 python3 validation/remote-harness/observer_mode_probe.py --binary /path/to/herdr --expect stock
 ```
+
+## 配对手机操作同一远端 TUI
+
+一次云批次可以在两个现有受保护输入模拟器任务中继续操作 curses。选择 `codex/network-batch/with-emulators-input-tui-*` 测试分支时，工作流向这两项传入 `--android-tui`、`--android-guarded-input` 和同一批构建的 `--input-fixture`。普通 0.9.5 场景继续验收零输入；每条路线沿用自己的已配对测试主机。候选二进制须附带与其 SHA-256 相符的模式探针结果，包含四次纯模式变化和有序的新画面。
+
+原有逐键与草稿的两笔回执、10 字节接收记录通过后，测试主机在原 pane 的同一 PTY 中一次性启动 curses。手机核对当前目标的新全帧，经可见按键执行十个动作。十笔新回执必须来自原 pane 和稳定 terminal，且与先前两笔请求 ID 全部不同。看见选中行、焦点、详情、帮助与刷新次数依次变化后，以 F10 完成。主机独立校验程序动作、最终状态、终端属性和接收日志。网络超时或发送结果未知时不会重发。
+
+报告中的 `tui` 是手机观察与回执，`hostTui` 是独立主机结果。`receivedInputBytes` 只计 curses 之前和之后的原始接收器字节，curses 阶段的按键另有十笔回执。后续撤销或清理失败时，整体仍失败，已经完成的主机状态可单独核查。局部 PTY 和浏览器检查、云模拟器、物理设备分别记录。

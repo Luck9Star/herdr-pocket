@@ -22,12 +22,11 @@ jobs:
       release_candidate: true
   android-pairing:
     needs: input-fixture
-    if: >-
-      !cancelled() && startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-') &&
-      (needs.input-fixture.result == 'success' || needs.input-fixture.result == 'skipped')
+    if: "!cancelled() && startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-')"
     uses: ./.github/workflows/paired-android-emulator.yml
     with:
-      guarded_input: ${{ needs.input-fixture.result == 'success' }}
+      guarded_input: ${{ startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-') }}
+      android_tui: ${{ startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-tui-') }}
   transport-source:
     if: "!startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-recheck-')"
     runs-on: ubuntu-24.04
@@ -51,9 +50,7 @@ jobs:
           retention-days: 14
   flutter-source:
     needs: input-fixture
-    if: >-
-      !cancelled() && !startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-recheck-') &&
-      (needs.input-fixture.result == 'success' || needs.input-fixture.result == 'skipped')
+    if: "!cancelled() && !startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-recheck-')"
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     outputs:

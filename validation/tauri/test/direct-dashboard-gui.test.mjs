@@ -1613,3 +1613,27 @@ test('keyboard navigation inside auxiliary toolbar retains lease only until focu
     assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,1);
   } finally {h.finish();await flush();h.restore();}
 });
+
+test('paired frame updates preserve accurate input status without repeating live announcements',async()=>{
+  const h=await setup(),n=h.nodes;
+  try {
+    await openInput(h);
+    assert.match(n['remote-status'].textContent,/观察已连接/);
+    assert.match(n['remote-input-status'].textContent,/观察模式/);
+    n['remote-input-direct'].click();await flush();await flush();
+    assert.match(n['remote-input-status'].textContent,/逐键输入已启用/);
+    let status=n['remote-status'].textContent,writes=0;
+    Object.defineProperty(n['remote-status'],'textContent',{configurable:true,get:()=>status,set:value=>{writes++;status=value;}});
+    for(const [seq,full] of [[2,false],[3,true]])h.emit({kind:'frame',generation:9,epoch:1,frame:{seq,full,cols:80,rows:24,bytes:[65]}});
+    assert.equal(writes,0);assert.match(n['remote-input-status'].textContent,/逐键输入已启用/);
+    assert.doesNotMatch(n['remote-captured'].textContent,/只读/);
+    n['remote-input-draft-mode'].click();await flush();await flush();
+    assert.match(n['remote-input-status'].textContent,/草稿仅在核对/);
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:4,full:false,cols:80,rows:24,bytes:[65]}});
+    assert.match(n['remote-input-status'].textContent,/草稿仅在核对/);assert.equal(writes,0);
+    h.emit({kind:'input_ready',generation:9,epoch:1,unknown:true,recovery_status:'pending'});
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:5,full:true,cols:80,rows:24,bytes:[65]}});
+    assert.match(n['remote-input-status'].textContent,/未确认/);assert.equal(writes,0);
+    n['remote-cancel'].click();assert.match(n['remote-captured'].textContent,/陈旧/);
+  } finally {h.restore();}
+});

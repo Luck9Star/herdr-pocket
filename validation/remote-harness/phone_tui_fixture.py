@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 
-def run(screen, seconds, cancelled):
+def run(screen, seconds, cancelled, *, heartbeat=lambda: None, ready=lambda: None):
     items = ['Build', 'Review']
     selected = 0
     detail = 'xy'
@@ -23,7 +23,9 @@ def run(screen, seconds, cancelled):
     deadline = time.monotonic() + seconds
     screen.keypad(True)
     screen.timeout(100)
+    first = True
     while time.monotonic() < deadline and not cancelled():
+        heartbeat()
         screen.erase()
         lines = ['Pocket TUI', 'F1 Help   F5 Refresh   F10 Finish'] if not help_open else [
             'Pocket TUI Help', 'F1 Return to list']
@@ -36,6 +38,9 @@ def run(screen, seconds, cancelled):
             if width > 1:
                 screen.addnstr(y, 0, line, width - 1)
         screen.refresh()
+        if first:
+            ready()
+            first = False
         key = screen.getch()
         if key in (-1, curses.KEY_RESIZE):
             continue

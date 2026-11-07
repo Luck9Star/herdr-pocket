@@ -78,7 +78,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
 
   const stages = { connecting:'连接 SSH，等待服务器身份核验…', 'host-key-verified':'预期主机公钥已匹配，开始临时公钥认证…', authenticated:'认证完成，读取指定 socket 的会话快照…', 'snapshot-received':'快照已读取，请选择目标 pane…', 'full-frame-received':'完整画面已校验，正在关闭连接…' };
 
-  function status(message, tone='info') { $('remote-status').textContent=message; $('remote-status').dataset.tone=tone; }
+  function status(message, tone='info') { if($('remote-status').textContent!==message)$('remote-status').textContent=message; $('remote-status').dataset.tone=tone; }
   // Network intent survives target corrections; trust and preview leases do not.
   const currentProfileProvider=()=>profileProviderHint;
   const declaredProvider=()=>hostRecords.find(h=>h.id===activeHostId)?.provider || currentProfileProvider();
@@ -160,7 +160,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     const pendingEditor=terminal && !document.hidden && showingRemote && inputGeneration!==null && selectedTarget && (document.activeElement===terminal.textarea && terminal.options.disableStdin===false || document.activeElement===$('remote-input-draft') && !$('remote-input-draft-area').hidden);
     $('remote-keyboard-hide').disabled=!editor && !pendingEditor;
   }
-  function inputStatus(text) { $('remote-input-status').textContent=text; renderAuxiliary();renderKeyboardActions(); }
+  function inputStatus(text) { if($('remote-input-status').textContent!==text)$('remote-input-status').textContent=text; renderAuxiliary();renderKeyboardActions(); }
   function auxiliaryAllowed() {return currentDirect(inputToken()) && !inputBusy && !(inputComposition.token && !inputComposition.ended);}
   function renderAuxiliary() {
     const allowed=auxiliaryAllowed();
@@ -917,9 +917,10 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
         const rendered=terminal;
         terminal.write(Uint8Array.from(frame.bytes),()=>{
           if(terminal!==rendered || !gate.accepts(generation,event.generation) || !showingRemote || event.epoch!==boardEpoch)return;
-          $('remote-captured').textContent=`${new Date().toLocaleTimeString()} 更新 · ${frame.cols} × ${frame.rows} · 只读观察中`;
+          const becameActive=captured.dataset.state!=='active';
+          $('remote-captured').textContent=`${new Date().toLocaleTimeString()} 更新 · ${frame.cols} × ${frame.rows} · 观察中`;
           captured.dataset.cols=String(frame.cols);captured.dataset.rows=String(frame.rows);captured.dataset.state='active';
-          status('只读观察中；停止或离开后画面标记为陈旧。','success');
+          if(becameActive)status('观察已连接；输入状态见下方。停止或离开后画面标记为陈旧。','success');
           if(!frames.acknowledge(frame.seq)){cancel('渲染确认异常，连接已停止。');return;}
           if(frame.full)localViewport.fullRendered();
           selectionReady=true;if(selectTextButton)selectTextButton.disabled=false;$('remote-font-diagnostics').disabled=false;

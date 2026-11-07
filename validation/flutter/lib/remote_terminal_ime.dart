@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show BuildContext,Element,StatefulElement;
+import 'package:flutter/services.dart' show TextEditingValue;
 import 'package:terminal_view/terminal_view.dart';
 
 /// Reads the pinned production text-input client. Bind after layout, then read

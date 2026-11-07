@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import time
-from guarded_input import EvidenceError, mobile_receipts, validate_mode
+from guarded_input import EvidenceError, mobile_receipts, mobile_tui_evidence, validate_mode
 
 PACKAGE = 'dev.herdr.herdr_flutter_probe'
 SERIAL = 'emulator-5554'
@@ -54,6 +54,10 @@ KEYBOARD_CHECKPOINTS = ('keyboard-direct-shown', 'keyboard-direct-hidden',
     'keyboard-direct-reopened', 'keyboard-draft-shown', 'keyboard-draft-back-request',
     'keyboard-draft-back-hidden', 'keyboard-draft-back-reopened', 'keyboard-draft-hidden')
 KEYBOARD_OBSERVE_CHECKPOINT = 'keyboard-observe-hidden'
+TUI_CHECKPOINT = 'tui-start'
+STAGES.update({'tui_start','tui_resume_full','tui_initial','tui_select_next','tui_focus_detail',
+    'tui_erase_character','tui_focus_list','tui_insert_row','tui_delete_row','tui_open_help',
+    'tui_close_help','tui_refresh','tui_finish'})
 STAGES.update(label.replace('-', '_') for label in (*KEYBOARD_CHECKPOINTS, KEYBOARD_OBSERVE_CHECKPOINT))
 GUARDED_FIELDS = ('guardedInput', 'directInputAccepted', 'draftInputAccepted', 'hiddenTabStopped',
                   'hiddenTabManualRecovery', 'unsentDraftRestored', 'postStopInputDisabled') + CLIPBOARD_FIELDS
@@ -123,6 +127,10 @@ _PRIMARY_FAILURE_CODES = frozenset({
     'flutter_android_toolchain_unavailable',
     'flutter_android_unknown_forward',
     'flutter_android_viewport_recovery_invalid',
+    'flutter_android_tui_unexpected',
+    'flutter_android_tui_target_mismatch',
+    'flutter_android_tui_start_unconfirmed',
+    'flutter_android_tui_start_already_attempted',
 })
 
 def _safe_primary_failure(exc):
@@ -387,7 +395,9 @@ def require_cloud(env, root, application, config):
     return app
 
 
-def safe_device_result(raw, guarded=False):
+def safe_device_result(raw, guarded=False, tui=False):
+    if tui and not guarded:
+        raise DeviceFailure('android_tui_requires_guarded_input')
     case = GUARDED_CASE if guarded else STOCK_CASE
     if not isinstance(raw, dict) or raw.get('case') != case or raw.get('buildMode') != 'debug':
         raise DeviceFailure('flutter_android_result_case_invalid')
@@ -443,6 +453,13 @@ def safe_device_result(raw, guarded=False):
     elif raw.get('inputReceipts') or raw.get('guardedInput') or any(
             field in raw for field in (*CLIPBOARD_FIELDS, *CLIPBOARD_COUNTS, 'restoredViewportLogicalPixels')):
         raise DeviceFailure('flutter_android_stock_input_unexpected')
+    if tui:
+        try:
+            clean['tui'] = mobile_tui_evidence(raw.get('tui'), clean['inputReceipts'])
+        except EvidenceError as exc:
+            raise DeviceFailure(str(exc)) from None
+    elif 'tui' in raw:
+        raise DeviceFailure('flutter_android_tui_unexpected')
     return clean
 
 
@@ -559,7 +576,8 @@ def checked_public_payload(raw, name):
     elif name == 'result.json':
         # Validate the wire shape here; _run separately binds it to the
         # explicitly selected stock/guarded case before accepting the result.
-        safe_device_result(value, guarded=isinstance(value, dict) and value.get('case') == GUARDED_CASE)
+        safe_device_result(value, guarded=isinstance(value, dict) and value.get('case') == GUARDED_CASE,
+                           tui=isinstance(value, dict) and 'tui' in value)
     elif name == 'signer.json':
         if (not isinstance(value, dict) or set(value) != {'publicKey', 'signature', 'deleteReturned', 'readRejected'} or
                 not isinstance(value['publicKey'], str) or not isinstance(value['signature'], str) or
@@ -568,8 +586,13 @@ def checked_public_payload(raw, name):
     elif name == 'failure.json':
         safe_test_failure(value)
     elif name == 'checkpoint.json':
-        if not isinstance(value, dict) or value.get('checkpoint') not in (*CLIPBOARD_CHECKPOINTS, *KEYBOARD_CHECKPOINTS, KEYBOARD_OBSERVE_CHECKPOINT):
+        if not isinstance(value, dict) or value.get('checkpoint') not in (*CLIPBOARD_CHECKPOINTS, *KEYBOARD_CHECKPOINTS, KEYBOARD_OBSERVE_CHECKPOINT, TUI_CHECKPOINT):
             raise DeviceFailure(invalid)
+        if value['checkpoint'] == TUI_CHECKPOINT:
+            if (set(value) != {'checkpoint','terminalId'} or not isinstance(value['terminalId'],str) or
+                    not re.fullmatch(r'term_[0-9a-f]{1,123}',value['terminalId'])):
+                raise DeviceFailure(invalid)
+            return raw
         keyboard = value['checkpoint'] not in CLIPBOARD_CHECKPOINTS
         if set(value) != ({'checkpoint', 'viewInsetBottom', 'editorFocused', 'modeReselected'} if keyboard else {'checkpoint'}):
             raise DeviceFailure(invalid)
@@ -621,12 +644,18 @@ class ClipboardCheckpoints:
     The default preserves the historical two-clipboard-checkpoint reader.
     New cloud runs explicitly require the additional system-keyboard evidence.
     """
-    def __init__(self, relative_directory, approval, *, keyboard=False, guarded=True, ime_failure_output=None):
+    def __init__(self, relative_directory, approval, *, keyboard=False, guarded=True, ime_failure_output=None, tui=False, config=None):
         self.relative = relative_directory
         self.approval = approval
         self.completed = []
         self.expected = ((KEYBOARD_CHECKPOINTS + CLIPBOARD_CHECKPOINTS if guarded else
                           (KEYBOARD_OBSERVE_CHECKPOINT,)) if keyboard else CLIPBOARD_CHECKPOINTS)
+        if tui and (not guarded or config is None):
+            raise DeviceFailure('android_tui_requires_guarded_input')
+        if tui:
+            self.expected += (TUI_CHECKPOINT,)
+        self.config = config
+        self.tui_attempted = False
         self.keyboard_evidence = []
         self.ime_failure_output = ime_failure_output
 
@@ -666,7 +695,20 @@ class ClipboardCheckpoints:
         if len(self.completed) >= len(self.expected) or label != self.expected[len(self.completed)]:
             raise DeviceFailure('flutter_android_clipboard_checkpoint_order_invalid')
         system = None
-        if label not in CLIPBOARD_CHECKPOINTS:
+        if label == TUI_CHECKPOINT:
+            if self.tui_attempted:
+                raise DeviceFailure('flutter_android_tui_start_already_attempted')
+            # Mark before any host operation: a timeout or lost ACK never
+            # authorizes a second launch, even if a caller polls again.
+            self.tui_attempted = True
+            from paired_gui import fixture_terminal_id
+            terminal_id = fixture_terminal_id(self.config)
+            if value.get('terminalId') != terminal_id:
+                raise DeviceFailure('flutter_android_tui_target_mismatch')
+            evidence = self.approval.start_tui(terminal_id=terminal_id)
+            if evidence != {'ready':True,'sameTarget':True,'initialInputMatched':True}:
+                raise DeviceFailure('flutter_android_tui_start_unconfirmed')
+        elif label not in CLIPBOARD_CHECKPOINTS:
             visible = label.endswith(('-shown', '-reopened', '-request'))
             inset = value.get('viewInsetBottom')
             if type(inset) is not int or not 0 <= inset <= 16384 or (inset > 0) != visible:
@@ -683,7 +725,8 @@ class ClipboardCheckpoints:
                 after = self.system_ime(label, False, after_system_back=True)
                 system = {**system, 'systemBackSent': True, 'afterSystemBack': after}
         expected = b'' if label.startswith('keyboard-direct-') or label == KEYBOARD_OBSERVE_CHECKPOINT else b'k'
-        self.approval.verify_ssh(expected)
+        if label != TUI_CHECKPOINT:
+            self.approval.verify_ssh(expected)
         # Do not acknowledge verification failure, and never replay the check or
         # an unknown-result acknowledgement write. Cleanup owns the fresh app.
         response = json.dumps({'checkpoint': label}, separators=(',', ':')).encode('ascii')
@@ -757,8 +800,9 @@ def run_flutter_android(args, root, env, config, approval):
 def _run(args, root, env, config, approval, owned_process):
     app = require_cloud(env, root, args.flutter_app, config)
     guarded = getattr(args, 'android_guarded_input', False)
+    tui = getattr(args, 'android_tui', False)
     try:
-        validate_mode('flutter-android', bool(args.input_fixture), guarded)
+        validate_mode('flutter-android', bool(args.input_fixture), guarded, tui)
     except EvidenceError as exc:
         raise DeviceFailure(str(exc)) from None
     output = Path(args.output).resolve()
@@ -788,6 +832,7 @@ def _run(args, root, env, config, approval, owned_process):
     defines = root / 'flutter-android-public-defines.json'
     defines.write_text(json.dumps({'HERDR_ANDROID_NATIVE_PAIRING': '1', 'HERDR_ANDROID_RUN_ID': env['GITHUB_RUN_ID'],
         'POCKET_GUARDED_INPUT': 'true' if guarded else 'false',
+        'HERDR_ANDROID_GUARDED_TUI': 'true' if tui else 'false',
         'HERDR_ANDROID_API35_CLIPBOARD_FIXTURE': 'true' if guarded else 'false',
         'HERDR_ANDROID_API35_KEYBOARD_FIXTURE': 'true',
         'HERDR_ANDROID_TARGET_JSON': json.dumps(config, separators=(',', ':')),
@@ -816,11 +861,11 @@ def _run(args, root, env, config, approval, owned_process):
             response = approval.approve(request)
             write_response(relative, response)
             checkpoints = ClipboardCheckpoints(relative, approval, keyboard=True, guarded=guarded,
-                ime_failure_output=output / 'flutter-android-system-ime-failure.json')
-            raw = wait_public(process, relative, 'result.json', 8192, timeout=400, checkpoints=checkpoints)
+                ime_failure_output=output / 'flutter-android-system-ime-failure.json',tui=tui,config=config)
+            raw = wait_public(process, relative, 'result.json', 8192, timeout=580 if tui else 400, checkpoints=checkpoints)
             if checkpoints is not None:
                 checkpoints.require_complete()
-            result = safe_device_result(json.loads(raw.decode('utf-8')), guarded=guarded)
+            result = safe_device_result(json.loads(raw.decode('utf-8')), guarded=guarded,tui=tui)
             result['systemKeyboardEvidence'] = {'checkpoints': checkpoints.keyboard_evidence,
                 'scope': 'owned API35 docked IME window and real view insets; automated commits are not IME touch/composition proof',
                 'showWithHardwareKeyboard': True}

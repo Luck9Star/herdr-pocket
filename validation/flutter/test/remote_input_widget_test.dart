@@ -107,6 +107,59 @@ Future<void> mode(WidgetTester tester,String value) async {
 }
 
 void main() {
+  testWidgets('live status follows the input gate through delta, parser replacement, new target, unknown and stop', (tester) async {
+    final adapter = InputFixtureAdapter(); await start(tester,adapter);
+    String status() => tester.widget<Text>(find.byKey(const ValueKey('remote-status'))).data!;
+    expect(status(),'正在只读观察 · 输入关闭');
+    await mode(tester,'draft'); expect(status(),'草稿模式 · 仅编辑本地，预览确认后发送');
+    adapter.dashboard!(RemoteDashboard(adapter.generation,'probe',
+      const [RemotePane('w1:p1','term_abcd')],freshness:DashboardFreshness.fresh,revision:2));
+    await tester.pump(); expect(status(),'草稿模式 · 仅编辑本地，预览确认后发送');
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(1,false,'DELTA'));
+    await tester.pump(); expect(status(),'草稿模式 · 仅编辑本地，预览确认后发送');
+    await mode(tester,'direct'); expect(status(),'逐键输入已启用 · 仅显式按键发送');
+    final parser = tester.widget<TerminalView>(find.byType(TerminalView)).terminal;
+    final target = adapter.inputTarget;
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(2,true,'SAME CHANNEL FULL'));
+    await tester.pump(); await tester.pump();
+    expect(identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal,parser),isFalse);
+    expect(identical(adapter.inputTarget,target),isTrue);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).selected,isTrue);
+    expect(status(),'逐键输入已启用 · 仅显式按键发送');
+    // A resumed/new observe channel has a new lease even for the same pane.
+    adapter.selectedTarget = fixtures.target(connection:adapter.connection,generation:adapter.generation);
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(3,true,'NEW OBSERVATION FULL'));
+    await tester.pump(); await tester.pump();
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+    expect(status(),'正在只读观察 · 输入关闭'); expect(adapter.received,isEmpty);
+    await mode(tester,'direct');
+    adapter.delayedResult = Completer<RemoteInputResult>();
+    tester.widget<TerminalView>(find.byType(TerminalView)).terminal.onOutput!('k');
+    await tester.pump(); expect(status(),'正在提交输入 · 等待受保护回执');
+    adapter.delayedResult!.complete(const RemoteInputResult.unknown());
+    await tester.pump(); await tester.pump();
+    expect(status(),'输入结果未知 · 输入已锁定；请核验后主动解除');
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(4,false,'AFTER UNKNOWN'));
+    await tester.pump(); expect(status(),'输入结果未知 · 输入已锁定；请核验后主动解除');
+    await tester.ensureVisible(base.field('cancel')); await tester.tap(base.field('cancel')); await tester.pump();
+    expect(status(),contains('已取消')); expect(adapter.received.length,1);
+    expect(tester.takeException(),isNull);
+  });
+  testWidgets('delta preserves local rejection notice alongside truthful live mode', (tester) async {
+    final adapter = InputFixtureAdapter(); await start(tester,adapter); await mode(tester,'direct');
+    Future<void> press(String name) async {
+      final button = find.byKey(ValueKey(name)); await tester.ensureVisible(button);
+      await tester.tap(button); await tester.pump(); await tester.pump();
+    }
+    await press('remote-function-keys-toggle'); await press('remote-modifier-ctrl');
+    await press('remote-function-key-backspace');
+    expect(find.textContaining('此辅助组合未定义'),findsOneWidget);
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(1,false,'NO INPUT'));
+    await tester.pump();
+    final status = tester.widget<Text>(find.byKey(const ValueKey('remote-status'))).data!;
+    expect(status,startsWith('逐键输入已启用')); expect(status,contains('此辅助组合未定义'));
+    expect(adapter.received,isEmpty); expect(tester.takeException(),isNull);
+  });
   testWidgets('wide alternate screen last cell is locally reachable without input or resize, including after viewport changes', (tester) async {
     final adapter = InputFixtureAdapter(); await start(tester,adapter);
     adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(1,true,'\x1b[?1049h\x1b[40;120HZ',cols:120,rows:40));

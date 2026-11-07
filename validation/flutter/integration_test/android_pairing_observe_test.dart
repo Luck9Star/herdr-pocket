@@ -22,6 +22,7 @@ const publicProfile = String.fromEnvironment('HERDR_ANDROID_PROFILE_JSON');
 const hostFingerprint = String.fromEnvironment('HERDR_ANDROID_HOST_FINGERPRINT');
 const publicDirectory = String.fromEnvironment('HERDR_ANDROID_PUBLIC_DIR');
 const guardedInput = bool.fromEnvironment('POCKET_GUARDED_INPUT');
+const guardedTui = bool.fromEnvironment('HERDR_ANDROID_GUARDED_TUI');
 // Set only by the isolated runner after its single API35 AVD/fresh-package
 // checks. This test never reads or saves a pre-existing clipboard value.
 const syntheticClipboardEnabled = bool.fromEnvironment('HERDR_ANDROID_API35_CLIPBOARD_FIXTURE');
@@ -32,7 +33,7 @@ const systemKeyboardEnabled = bool.fromEnvironment('HERDR_ANDROID_API35_KEYBOARD
 Map<String,dynamic> checkedTarget() {
   if (!Platform.isAndroid || !kDebugMode || fixtureEnabled != '1' ||
       !RegExp(r'^[0-9]+$').hasMatch(runId) || utf8.encode(publicTarget).length > 8192 ||
-      syntheticClipboardEnabled != guardedInput ||
+      syntheticClipboardEnabled != guardedInput || guardedTui && !guardedInput ||
       publicDirectory != '/data/user/0/$packageName/cache/herdr-flutter-android-$runId') {
     throw StateError('isolated_android_fixture_required');
   }
@@ -150,7 +151,7 @@ Finder hostTab() => find.byWidgetPredicate((widget) => widget is TextButton &&
   widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('host-tab-'));
 int? displayedSequence(WidgetTester tester) {
   final labels = tester.widgetList<Text>(find.byType(Text)).where((text) =>
-    text.data?.contains('固定 80×24') == true && text.data?.contains(' · seq ') == true).toList();
+    text.data?.contains('观察画布 ') == true && text.data?.contains(' · seq ') == true).toList();
   if (labels.length != 1) return null;
   final match = RegExp(r' · seq ([0-9]+)\n').firstMatch(labels.single.data!);
   return match == null ? null : int.tryParse(match.group(1)!);
@@ -216,6 +217,122 @@ Future<void> accepted(WidgetTester tester, {String? previousRequest}) => until(t
     !(tester.widget<Text>(control).data ?? '').contains(previousRequest ?? 'never-a-request') &&
     find.textContaining('服务端已接收 · 仅确认队列受理').evaluate().isNotEmpty;
 });
+
+// Only the self-created curses fixture's exact current screen is read. Never
+// search accumulated ANSI or scrollback, and never export terminal contents.
+List<String> tuiRows(String marker) {
+  if (marker == 'open-help') return ['Pocket TUI Help','F1 Return to list'];
+  final inserted = marker == 'insert-row';
+  final selected = marker != 'initial';
+  final shortened = !['initial','select-next','focus-detail'].contains(marker);
+  return ['Pocket TUI','F1 Help   F5 Refresh   F10 Finish',
+    '${selected ? '  ' : '> '}Build','${selected && !inserted ? '> ' : '  '}Review',
+    if (inserted) '> New',
+    'Detail: ${shortened ? 'x' : 'xy'}',
+    'Focus: ${['focus-detail','erase-character'].contains(marker) ? 'detail' : 'list'}',
+    'Refreshes: ${marker == 'refresh' ? 1 : 0}'];
+}
+bool currentTuiScreen(WidgetTester tester,String marker) {
+  final view = find.byType(TerminalView);
+  if (view.evaluate().length != 1 || displayedSequence(tester) == null) return false;
+  final terminal = tester.widget<TerminalView>(view).terminal;
+  if (terminal.viewWidth != 80 || terminal.viewHeight != 24 ||
+      terminal.buffer.height != terminal.viewHeight || !terminal.cursorKeysMode) return false;
+  final rows = tuiRows(marker);
+  for (var y = 0; y < terminal.viewHeight; y++) {
+    final actual = String.fromCharCodes(List.generate(terminal.viewWidth,(x) {
+      final code = terminal.buffer.lines[y].getCodePoint(x);
+      return code == 0 ? 32 : code;
+    })).trimRight();
+    if (actual != (y < rows.length ? rows[y] : '')) return false;
+  }
+  return true;
+}
+Future<void> visibleTuiScreen(WidgetTester tester,String marker) async {
+  await until(tester,() => currentTuiScreen(tester,marker),seconds:20);
+  final view = find.byType(TerminalView);
+  // These are the production local reading controls; no terminal bytes or
+  // resize requests are generated. Restore the fixture's first screen region.
+  for (final key in ['remote-horizontal-slider','remote-vertical-slider']) {
+    final slider = find.byKey(ValueKey(key));
+    if (slider.evaluate().length == 1) tester.widget<Slider>(slider).onChanged?.call(0);
+  }
+  await tester.ensureVisible(view); await tester.pump(const Duration(milliseconds:150));
+  expect(currentTuiScreen(tester,marker),isTrue);
+  final terminal = tester.widget<TerminalView>(view).terminal;
+  final render = tester.state<TerminalViewState>(view).renderTerminal;
+  final cells = visibleRemoteScreenCells(terminal,render,
+    Offset.zero & tester.view.physicalSize / tester.view.devicePixelRatio);
+  // The rounded viewport conservatively excludes its corner cells. Require
+  // the changing synthetic row's inner text to be fully visible as well as
+  // checking the exact complete current screen above (including its title).
+  final row = switch (marker) {
+    'open-help' => 1,
+    'initial' => 2,
+    'select-next' || 'delete-row' || 'close-help' => 3,
+    'insert-row' || 'erase-character' => 4,
+    'focus-detail' || 'focus-list' => 5,
+    'refresh' => 6,
+    _ => throw StateError('invalid_tui_marker'),
+  };
+  expect(cells,isNotNull);
+  expect(cells!.firstRow,lessThanOrEqualTo(row)); expect(cells.endRow,greaterThan(row));
+  expect(cells.firstColumn,lessThanOrEqualTo(2)); expect(cells.endColumn,greaterThanOrEqualTo(tuiRows(marker)[row].length));
+  expect(tester.widget<TerminalView>(view).autoResize,isFalse);
+}
+Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
+    Map<String,dynamic> target,String tabKey,List<Map<String,Object>> prior,void Function(String) stage) async {
+  expect(guardedInput && guardedTui,isTrue);
+  final terminalId = prior.first['terminalId'] as String;
+  expect(prior.last['terminalId'],terminalId);
+  stage('tui_start');
+  publish(exchange,'checkpoint.json',jsonEncode({'checkpoint':'tui-start','terminalId':terminalId}));
+  final ack = File('${exchange.path}/checkpoint-ack.json');
+  await until(tester,() => ack.existsSync() && ack.readAsStringSync() == jsonEncode({'checkpoint':'tui-start'}));
+  // Explicit resume provides an unambiguous post-start full on the same PTY.
+  // This retires old authorization; a later full within this new channel does
+  // not authorize a different target, nor require changing the user's mode.
+  stage('tui_resume_full');
+  final before = tester.widget<TerminalView>(find.byType(TerminalView)).terminal;
+  await tapKey(tester,'hosts-board-tab'); await tapKey(tester,tabKey);
+  await tapKey(tester,'remote-resume');
+  await until(tester,() => find.byType(TerminalView).evaluate().length == 1 &&
+    !identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal,before) &&
+    currentTuiScreen(tester,'initial') &&
+    tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected != null);
+  expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+  stage('tui_initial'); await visibleTuiScreen(tester,'initial');
+  await tapKey(tester,'remote-mode-direct');
+  await tapKey(tester,'remote-function-keys-toggle');
+  final checks = <String>['initial'], receipts = <Map<String,Object>>[];
+  final seen = prior.map((receipt) => receipt['requestId']).toSet();
+  final actions = <(String,String?,int)>[
+    ('remote-key-↓','select-next',3),('remote-key-Tab','focus-detail',1),
+    ('remote-function-key-backspace','erase-character',1),('remote-function-key-shift-tab','focus-list',3),
+    ('remote-function-key-insert','insert-row',4),('remote-function-key-delete','delete-row',4),
+    ('remote-function-key-f1','open-help',3),('remote-function-key-f1','close-help',3),
+    ('remote-function-key-f5','refresh',5),('remote-function-key-f10',null,5)];
+  var previousRequest = prior.last['requestId'] as String;
+  for (final (key,marker,size) in actions) {
+    stage('tui_${marker?.replaceAll('-','_') ?? 'finish'}');
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).selected,isTrue);
+    final label = tester.widget<Text>(find.textContaining('当前输入目标：')).data!;
+    expect(label,contains(target['paneId'] as String)); expect(label,contains(terminalId));
+    final sequence = displayedSequence(tester)!;
+    final button = find.byKey(ValueKey(key));
+    await until(tester,() => button.evaluate().length == 1 && tester.widget<OutlinedButton>(button).onPressed != null);
+    // Exactly one visible tap, with no retry after an unknown result.
+    await tap(tester,button); await accepted(tester,previousRequest:previousRequest);
+    final receipt = visibleReceipt(tester,target['paneId'] as String,size);
+    expect(receipt['terminalId'],terminalId); expect(seen.add(receipt['requestId']),isTrue);
+    receipts.add(receipt); previousRequest = receipt['requestId'] as String;
+    if (marker != null) {
+      await until(tester,() => (displayedSequence(tester) ?? -1) > sequence && currentTuiScreen(tester,marker),seconds:20);
+      await visibleTuiScreen(tester,marker); checks.add(marker);
+    }
+  }
+  return {'receipts':receipts,'screenChecks':checks,'observedInitialFull':true};
+}
 
 // Independent ephemeral identity. It never enters the host catalog or pairing.
 Future<void> nativeSignerProbe(Directory exchange, void Function(String) stage) async {
@@ -509,6 +626,7 @@ void main() {
     await until(tester,() => (displayedSequence(tester) ?? -1) > deltaSequence);
     final inputReceipts = <Map<String,Object>>[];
     List<int>? restoredViewport;
+    Map<String,Object>? tuiEvidence;
     if (guardedInput) {
       stage('guarded_direct_available');
       expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNotNull);
@@ -670,6 +788,7 @@ void main() {
       inputReceipts.add(visibleReceipt(tester,target['paneId'] as String,9));
       expect(inputReceipts.last['terminalId'],inputReceipts.first['terminalId']);
       expect(tester.widget<TextField>(draftControl).controller!.text,isEmpty);
+      if (guardedTui) tuiEvidence = await exerciseTui(tester,exchange,target,originalTabKey,inputReceipts,stage);
     } else {
       expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
       expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-draft'))).onSelected,isNull);
@@ -720,6 +839,7 @@ void main() {
         'hiddenTabStopped':true,'hiddenTabManualRecovery':true,'unsentDraftRestored':true,
         'postStopInputDisabled':true,'inputReceipts':inputReceipts,
         'acceptedByteCounts':[1,9],
+        if (tuiEvidence != null) 'tui':tuiEvidence,
         'restoredViewportLogicalPixels':restoredViewport,
         'syntheticClipboardSet':true,'pasteReviewCancelled':true,'pasteCancelPreservedDraft':true,
         'pasteReviewReopened':true,'pasteAppendedLocally':true,'pasteTargetVerified':true,
@@ -737,5 +857,5 @@ void main() {
       }
       rethrow;
     }
-  },timeout:const Timeout(Duration(minutes:6)));
+  },timeout:const Timeout(Duration(minutes:guardedTui ? 9 : 6)));
 }

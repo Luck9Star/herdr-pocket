@@ -68,6 +68,73 @@ class DeviceFailure(ValueError):
     """Only static phase codes may leave this module."""
 
 
+# Static, non-sensitive codes only; unknown errors are deliberately collapsed.
+_PRIMARY_FAILURE_CODES = frozenset({
+    'android_system_back_requires_visible_owned_ime',
+    'android_system_ime_evidence_unavailable',
+    'android_system_ime_expected_state_invalid',
+    'android_system_ime_fixture_configuration_failed',
+    'android_system_ime_hide_unconfirmed',
+    'android_system_ime_show_unconfirmed',
+    'android_system_ime_target_mismatch',
+    'flutter_android_adb_failed',
+    'flutter_android_adb_output_limit',
+    'flutter_android_adb_unavailable',
+    'flutter_android_avd_api_or_user_mismatch',
+    'flutter_android_ci_emulator_only',
+    'flutter_android_cleanup_failed',
+    'flutter_android_clipboard_checkpoint_order_invalid',
+    'flutter_android_clipboard_checkpoints_missing',
+    'flutter_android_clipboard_counter_invalid',
+    'flutter_android_delta_not_observed',
+    'flutter_android_existing_or_non_emulator_device',
+    'flutter_android_failure_metadata_invalid',
+    'flutter_android_font_measurement_invalid',
+    'flutter_android_forward_list_invalid',
+    'flutter_android_gradle_changed',
+    'flutter_android_guarded_byte_counts_invalid',
+    'flutter_android_invalid_public_target',
+    'flutter_android_keyboard_insets_mismatch',
+    'flutter_android_not_isolated_fixture',
+    'flutter_android_output_not_isolated',
+    'flutter_android_package_already_present',
+    'flutter_android_package_install_timeout',
+    'flutter_android_preparation_missing',
+    'flutter_android_preparation_not_verified',
+    'flutter_android_production_source_proof_missing',
+    'flutter_android_production_sources_changed',
+    'flutter_android_public_exchange_oversize',
+    'flutter_android_public_limit_invalid',
+    'flutter_android_public_path_invalid',
+    'flutter_android_response_invalid',
+    'flutter_android_result_boolean_invalid',
+    'flutter_android_result_case_invalid',
+    'flutter_android_result_counter_invalid',
+    'flutter_android_result_missing',
+    'flutter_android_result_sequence_invalid',
+    'flutter_android_reverse_already_present',
+    'flutter_android_signer_verification_failed',
+    'flutter_android_stock_input_unexpected',
+    'flutter_android_test_exited',
+    'flutter_android_test_exited_before_install',
+    'flutter_android_tool_exit_timeout',
+    'flutter_android_toolchain_mismatch',
+    'flutter_android_toolchain_unavailable',
+    'flutter_android_unknown_forward',
+    'flutter_android_viewport_recovery_invalid',
+})
+
+def _safe_primary_failure(exc):
+    if not isinstance(exc, DeviceFailure):
+        return 'flutter_android_primary_failure'
+    code = str(exc)
+    if code in _PRIMARY_FAILURE_CODES:
+        return code
+    for prefix in ('flutter_android_test_exited_', 'flutter_android_phase_timeout_', 'flutter_android_test_failed_'):
+        if code.startswith(prefix) and code[len(prefix):] in STAGES:
+            return code
+    return 'flutter_android_primary_failure'
+
 class SystemImeFailure(DeviceFailure):
     """Classified counters/enums only; never retain a dumpsys string or package."""
     def __init__(self, code, diagnostic, retryable=False):
@@ -729,6 +796,7 @@ def _run(args, root, env, config, approval, owned_process):
     cleanup = {'sourceSHA': env['GITHUB_SHA'], 'ownedPackageInitiallyAbsent': True,
                'ownedPackageAbsent': False, 'appProcessGone': False, 'reverseRemoved': False,
                'ownedForwardsRemoved': False, 'flutterToolStopped': False, 'rawLogsUploaded': False}
+    primary_failure = None
     try:
         adb('reverse', reverse, reverse); reverse_added = True
         with owned_process(command, cwd=app, env=env, log=root / 'flutter-android-private.log') as process:
@@ -755,6 +823,9 @@ def _run(args, root, env, config, approval, owned_process):
                 raise DeviceFailure('flutter_android_tool_exit_timeout') from None
             if code:
                 raise DeviceFailure(failure_stage(relative, 'flutter_android_test_failed'))
+    except Exception as error:
+        primary_failure = _safe_primary_failure(error)
+        raise
     finally:
         # Only fixed stage/class names and a bounded source line may leave the
         # device. Never copy exception text or the raw Flutter/SSH logs.
@@ -807,8 +878,12 @@ def _run(args, root, env, config, approval, owned_process):
         successful_cleanup = all(cleanup[field] is True for field in
             ('ownedPackageAbsent', 'appProcessGone', 'reverseRemoved', 'ownedForwardsRemoved', 'flutterToolStopped'))
         cleanup['status'] = 'passed' if successful_cleanup else 'failed'
+        if not successful_cleanup and primary_failure is not None:
+            cleanup['primaryFailure'] = primary_failure
         (output / 'flutter-android-device-cleanup.json').write_text(json.dumps(cleanup, indent=2) + '\n', encoding='utf-8')
         if not successful_cleanup:
+            if primary_failure is not None:
+                raise DeviceFailure(primary_failure) from None
             raise DeviceFailure('flutter_android_cleanup_failed')
     if result is None:
         raise DeviceFailure('flutter_android_result_missing')

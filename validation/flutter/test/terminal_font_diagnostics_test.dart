@@ -28,10 +28,9 @@ Future<void> press(WidgetTester tester, String key) async {
   }
   expect(panel, findsOneWidget,
       reason: 'the pointer reached the button but diagnostics did not open; check its target/epoch guard');
-  // Await the real packaged asset on the engine IO clock after the panel is
-  // mounted; do not advance a fake timer while an indeterminate loader spins.
-  await tester.runAsync(() => rootBundle.loadString(
-    'assets/shared/terminal-font-diagnostics-v1.json'));
+  // The suite loaded the asset on the engine clock. Give its queued callbacks
+  // one real event turn, then paint the result on the widget test clock.
+  await tester.runAsync(() => Future<void>.delayed(Duration.zero));
   await tester.pump();
   final error = find.byKey(const ValueKey('terminal-font-diagnostics-error'));
   final loading = find.byKey(const ValueKey('terminal-font-diagnostics-loading'));
@@ -43,6 +42,14 @@ Future<void> press(WidgetTester tester, String key) async {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    await rootBundle.loadString('assets/shared/terminal-font-diagnostics-v1.json');
+    final font = FontLoader('ProbeNerd')
+      ..addFont(rootBundle.load('assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'));
+    await font.load();
+  });
+
   testWidgets(
     'opening diagnostics from direct mode retires input and closing remains observe-only',
     (tester) async {
@@ -134,14 +141,6 @@ void main() {
   testWidgets(
     'local font diagnostics is read-only, aligned to shared samples, and preserves the draft at 320 px',
     (tester) async {
-      final font = FontLoader('ProbeNerd')
-        ..addFont(
-          rootBundle.load(
-            'assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf',
-          ),
-        );
-      await font.load();
-
       for (final width in [320.0, 390.0]) {
         final adapter = input.InputFixtureAdapter();
         await input.start(tester, adapter, width: width);

@@ -634,7 +634,8 @@ class CleanupGuards(PreparedFixture):
                 patch.object(gui, 'verify_signer', side_effect=gui.DeviceFailure('flutter_android_signer_verification_failed') if fail_signer else None,
                     return_value={'stage':'complete','signatureVerified':True,'deleteReturned':True,'readRejected':True}):
             if fail_reverse_cleanup:
-                with self.assertRaisesRegex(gui.DeviceFailure, 'flutter_android_cleanup_failed'):
+                expected = 'flutter_android_signer_verification_failed' if fail_signer else 'flutter_android_cleanup_failed'
+                with self.assertRaisesRegex(gui.DeviceFailure, '^' + expected + '$'):
                     gui._run(args, self.fixture_root, self.env, self.config, approval, process)
                 result = None
             elif fail_signer:
@@ -687,6 +688,26 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(cleanup['status'], 'failed')
         self.assertFalse(cleanup['reverseRemoved'])
         self.assertTrue(cleanup['ownedPackageAbsent'])
+
+    def test_primary_failure_survives_failed_cleanup(self):
+        result, cleanup = self.exercise(fail_reverse_cleanup=True, fail_signer=True)
+        self.assertIsNone(result)
+        self.assertEqual(cleanup['status'], 'failed')
+        self.assertEqual(cleanup['primaryFailure'], 'flutter_android_signer_verification_failed')
+        self.assertTrue(cleanup['ownedPackageAbsent'])
+        self.assertFalse(cleanup['reverseRemoved'])
+
+    def test_caller_handling_an_unrelated_error_does_not_become_driver_primary_failure(self):
+        try:
+            raise RuntimeError('PRIVATE OUTER ERROR')
+        except RuntimeError:
+            _, cleanup = self.exercise(fail_reverse_cleanup=True)
+        self.assertNotIn('primaryFailure', cleanup)
+        self.assertEqual(cleanup['status'], 'failed')
+
+    def test_unknown_primary_error_is_redacted(self):
+        self.assertEqual(gui._safe_primary_failure(gui.DeviceFailure('PRIVATE')), 'flutter_android_primary_failure')
+        self.assertEqual(gui._safe_primary_failure(ValueError('PRIVATE')), 'flutter_android_primary_failure')
 
     def test_failed_signer_verification_stops_before_host_approval(self):
         result, cleanup = self.exercise(fail_signer=True)

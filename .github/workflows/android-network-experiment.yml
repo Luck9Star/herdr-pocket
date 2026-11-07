@@ -83,7 +83,8 @@ jobs:
         id: safety
         if: "!cancelled() && steps.resolve.outputs.verified_lock == 'true'"
         working-directory: ${{ runner.temp }}/flutter-probe
-        run: flutter test --reporter expanded 2>&1 | tee candidate-safety-tests.log
+        # Keep the lock, renderer results and APK build available if a widget stalls.
+        run: timeout --kill-after=30s 12m flutter test --reporter expanded 2>&1 | tee candidate-safety-tests.log
       - name: Test the combining-character repair
         id: renderer
         if: "!cancelled() && steps.resolve.outputs.verified_lock == 'true'"

@@ -4,6 +4,8 @@
 
 **从这里开始**　[原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [本次验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/43-mobile-viewport-recovery.md) · [Penpot 手机可点击原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8c46842cb06)
 
+**原型分支最新进度 · `23dd7fd`**　主机 helper 可生成公开连接资料二维码。Flutter 与 Tauri 都已接入资料预览、指纹核对及设备授权审查。声明覆盖网络的主机首次连接前须绑定本机同类型网络。Mac 已验证二维码解码与窄屏扫码审查；这批改动的 Android 构建和真机相机仍待验收。下方测试包保留各自的实际源码与验证结果。[本批源码和分层实测](https://github.com/Luck9Star/herdr-pocket/blob/23dd7fd3ac579c4faef3dcd18c8d3d1cf74fa280/docs/44-mobile-connection-profile.md) · [Penpot 手机配对预览](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8dca4d84f9b)
+
 ## Android 测试包 · 2026-11-07
 
 两份 arm64-v8a debug APK 来自同一[源码提交](https://github.com/Luck9Star/herdr-pocket/commit/cb0fd1c7ad3137a09dd92dbd72e2df168379ce88)。登录 GitHub 下载归档，解压后用 `shasum -a 256 app.apk` 核对下表。已逐包核验 ZIP、APK、EasyTier 和 Tailscale 原生库，以及两端共用的字体和诊断样例。[构建与模拟器运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42374975205)

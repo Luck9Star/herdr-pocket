@@ -1,0 +1,24 @@
+{
+  "status": "blocked_not_saved",
+  "fileId": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+  "pageId": "7a22df08-251d-8016-8008-de03541c11da",
+  "observed": "Existing v2 page and S56–S60 visible in existing editor; no S61–S64 were saved by this attempt.",
+  "blocker": "Installed Penpot MCP Plugin did not open a connected plugin panel. Official MCP execute_code returned No Penpot plugin instances are currently connected.",
+  "attempt": "Existing plugin Open was clicked. A temporary loopback-only official MCP server listened on 4401 HTTP, 4402 WebSocket, 4403 REPL; plugin assets were served on 4400 with CORS. No connected instance or Connect button appeared. Browser and services were on the same Mac. No persistent configuration or cookies were changed.",
+  "recovery": "Restore the existing Penpot MCP plugin connection in the editor and confirm its Connect control reports connected to the same loopback server before attempting the reviewed script; inspect existing S61–S64 and destinations first.",
+  "script": "design/penpot/mobile-tui-controls-20261108.js",
+  "scriptStatus": "Draft only; node syntax checked. Not executed, visually checked, saved, or viewer-click tested.",
+  "deviceValidation": false,
+  "cleanup": "Temporary MCP and asset servers stopped; pre-existing editor preserved.",
+  "retry": "A separate new Chrome tab loaded the existing file; opening installed Penpot MCP Plugin displayed: The plugin URL could not be reached. No Connect panel appeared. The new tab and temporary services were closed.",
+  "draftChanges": "16 extra keys, 48px key surfaces, one-shot Ctrl/Alt labels and composition-disabled state; curses fixture sample. Syntax checked; interaction and layout remain unverified.",
+  "sourceSha256": "c65e94c79841e2b8961a139e3686fc3fc79ecd79cd0cafcca566c98e9cec21d5",
+  "localShapeSimulation": {
+    "scope": "temporary Map/shape/font/interaction API simulation; no Penpot application or design validation",
+    "createdBoards": 4,
+    "functionKeysPerGrid": 16,
+    "clickNavigationInteractions": 32,
+    "rerunRefusedWithoutMutation": true,
+    "refusalCases": 10
+  }
+}

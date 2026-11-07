@@ -195,6 +195,88 @@
           "serverStopped": true,
           "rootRemoved": true
         }
+      },
+      "repeatableRecoveryProbe": {
+        "mode": "observe-recovery",
+        "scope": "macOS pure Dart adapter copy; only RoutedSSHSocket interface substituted; real isolated OpenSSH and herdr 0.9.5; no Android/Flutter SDK/Linux CLI positive claim",
+        "sourceHashes": {
+          "validation/flutter/tool/remote_probe.dart": "642f2d2ef5328bb973917e26d88ca61579ea0117813a774d3fdefb182b39e6f7",
+          "validation/flutter/test/observer_recovery_probe_test.dart": "a03286c9a1a57e539aa3d12e8dcfaaea7038441682a92795a45758dcdb57e8ca",
+          "validation/flutter/tool/observer-recovery.md": "06fe8f201b14b91b70c9ab14a92dc5da49801148423b3867540e64daa02dd3b0"
+        },
+        "scriptedCasesPassed": 12,
+        "staleFrameTestsKeepStreamOpen": true,
+        "mutationControls": {
+          "identity-removed": {
+            "rejected": true,
+            "firstFailure": "Bad state: gate failed: wrong-generation-1 expected recovery_target_changed got  {resumeCount: 5, freshFullCount: 5, sameEpochDeltaCount: 5}"
+          },
+          "full-epoch-removed": {
+            "rejected": true,
+            "firstFailure": "Bad state: gate failed: old-full expected recovery_timeout got recovery_timeout {resumeCount: 1, freshFullCount: 1}"
+          },
+          "delta-epoch-removed": {
+            "rejected": true,
+            "firstFailure": "Bad state: gate failed: old-delta expected recovery_timeout got  {resumeCount: 5, freshFullCount: 5, sameEpochDeltaCount: 5}"
+          },
+          "independent-wrong-generation-1": {
+            "identityRemovedRejected": true
+          },
+          "independent-wrong-pane-3": {
+            "identityRemovedRejected": true
+          },
+          "independent-wrong-generation-5": {
+            "identityRemovedRejected": true
+          },
+          "independent-wrong-pane-5": {
+            "identityRemovedRejected": true
+          }
+        },
+        "actualHerdr": {
+          "result": {
+            "status": "passed",
+            "observerRecovery": {
+              "resumeCount": 5,
+              "freshFullCount": 5,
+              "sameEpochDeltaCount": 5
+            },
+            "connections": 1,
+            "fulls": 6,
+            "deltas": 5,
+            "errorCode": "cancelled"
+          },
+          "serverAlive": true,
+          "paneAlive": true,
+          "inputBytes": 0,
+          "pty": {
+            "initialRows": 40,
+            "initialColumns": 119,
+            "rows": 40,
+            "columns": 119,
+            "changes": 0,
+            "readErrors": 0,
+            "captureErrors": 0,
+            "state": 2
+          },
+          "inputBytesAfter": 0,
+          "serverStopped": true,
+          "rootRemoved": true
+        },
+        "sshdCleanup": {
+          "ownSshdExited": true,
+          "keysAbsent": true,
+          "portClosed": true
+        },
+        "outsideCi": {
+          "status": "passed",
+          "outsideCiRejected": true,
+          "configAbsent": true,
+          "noOutputWritten": true
+        },
+        "notExecuted": [
+          "flutter test test/observer_recovery_probe_test.dart",
+          "Linux runner CLI positive"
+        ]
       }
     },
     "tauri": {

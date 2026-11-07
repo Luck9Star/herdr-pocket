@@ -2,7 +2,21 @@
 
 herdr-pocket 是手机优先的远端 herdr 图形客户端原型，目标覆盖 iOS、Android、Windows、macOS 和 Linux。手机从配对和主机看板进入完整终端，桌面共享信息模型并提供分屏。项目独立于 herdr 官方；具体许可证待依赖与分发审查后确定。
 
-**最新 Android 测试包 · 源码 `a9914fe` · 2026-11-07**　两套路线的 API 35 arm64-v8a debug APK 已构建并实际下载，归档与 APK 哈希、来源和包内 EasyTier／Tailscale 库已离线核对。登录 GitHub 后下载并解压，保留 `report.json` 和校验文件；两包尚未在 arm64 手机上验收。GitHub 显示两份归档于 2026-11-21 12:51（北京时间）到期。[本次集中运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239) · [原型分支](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [输入与测试步骤](https://github.com/Luck9Star/herdr-pocket/blob/33d416bb949e09069a0de5b61c1534fa2cd79919/docs/36-mobile-paste-and-auxiliary-input.md)
+**Android 测试包 · 2026-11-07 · 源码 `1d604fa`**　Flutter 与 Tauri 两份 API 35 arm64-v8a debug APK 均已实际下载。归档及包内 APK 的 SHA-256、提交来源和包内原生库已核对。登录 GitHub 后下载并解压，保留 `report.json` 及 `SHA256SUMS`。[原型分支](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [本批 Actions](https://github.com/Luck9Star/herdr-pocket/actions/runs/42362291867) · [验证记录与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/3877f6cd2988b23888a48a8ccb118ff682baadca/docs/40-android-paired-dashboard-validation.md)
+
+| 路线 | 下载测试归档 | 解压后的 `app.apk` SHA-256 |
+| --- | --- | --- |
+| Flutter | [下载 arm64 debug](https://github.com/Luck9Star/herdr-pocket/actions/runs/42362291867/artifacts/13570467817) | `97c8fcf23dd4476753e44e72287eab31ca95c475b63c63b604bdea21038c692b` |
+| Tauri | [下载 arm64 debug](https://github.com/Luck9Star/herdr-pocket/actions/runs/42362291867/artifacts/13570522730) | `0ca78544ac0064529260177ca0761cb174e8ad37a7ad00a284b07bfb89bdae4d` |
+
+**手机端进度**　八项云任务全部通过。Flutter 与 Tauri 的四个 API 35 x86_64 场景均经设备密钥走通配对、看板、选定终端、持续输出与停止。只读场景收到 0 字节，受保护输入场景在同一目标收到 1 和 9 字节，四个场景的共享 PTY 均保持 119 × 40。 [逐场证据](https://github.com/Luck9Star/herdr-pocket/blob/3877f6cd2988b23888a48a8ccb118ff682baadca/docs/40-android-paired-dashboard-validation.md)
+
+手机端先审查主机与设备公钥，经主机确认后主动连接，从主机／会话看板选择目标并持续观察。终端提供逐键、草稿和粘贴审查，网络切换和发送结果未知时不自动重放。真机安装、相机扫码、真实中文输入法和三网并发仍待验收，两条 GUI 路线继续保留。[手机原型 · 选择与复制](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e88156484822) · [刚配对后的持续看板](https://github.com/Luck9Star/herdr-pocket/blob/3877f6cd2988b23888a48a8ccb118ff682baadca/docs/39-mobile-paired-dashboard.md) · [系统粘贴与草稿审查](https://github.com/Luck9Star/herdr-pocket/blob/3877f6cd2988b23888a48a8ccb118ff682baadca/docs/38-mobile-system-paste.md)
+
+<details>
+<summary>上一批测试包、定向复验与手机原型演进记录</summary>
+
+**历史 Android 测试包 · 源码 `a9914fe` · 2026-11-07**　两套路线的 API 35 arm64-v8a debug APK 已构建并实际下载，归档与 APK 哈希、来源和包内 EasyTier／Tailscale 库已离线核对。登录 GitHub 后下载并解压，保留 `report.json` 和校验文件；两包尚未在 arm64 手机上验收。GitHub 显示两份归档于 2026-11-21 12:51（北京时间）到期。[本次集中运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239) · [原型分支](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [输入与测试步骤](https://github.com/Luck9Star/herdr-pocket/blob/33d416bb949e09069a0de5b61c1534fa2cd79919/docs/36-mobile-paste-and-auxiliary-input.md)
 
 | 路线 | 下载测试归档 | 解压后的 `app.apk` SHA-256 |
 | --- | --- | --- |
@@ -17,9 +31,11 @@ herdr-pocket 是手机优先的远端 herdr 图形客户端原型，目标覆盖
 
 [手机原型 · 选择终端文本](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e88156484822) · [手机原型 · 粘贴超限](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e881ed74ebc9)
 
-**原型分支新进度 · 手机选区与复制**　两个 GUI 都已接入只读选区。两套真实终端缓冲区在相同的 10 组字符上复制一致，后续标记的列位置也一致。Tauri 在 Mac 浏览器的两个入口、两种手机视口通过复制与裁剪检查。Flutter 新选区仍待 widget 和手机运行验收。上面的两份 APK 均早于此项改动。[选区实测与复核步骤](https://github.com/Luck9Star/herdr-pocket/blob/6ffab0606ce88f404cada602b8330f0ce69f2411/docs/37-mobile-terminal-selection.md) · [Penpot 四个新增状态](https://github.com/Luck9Star/herdr-pocket/blob/6ffab0606ce88f404cada602b8330f0ce69f2411/design/evidence/v2-mobile-text-and-paste-20261107.json)
+**当时的原型分支进度 · 手机选区与复制**　两个 GUI 都已接入只读选区。两套真实终端缓冲区在相同的 10 组字符上复制一致，后续标记的列位置也一致。Tauri 在 Mac 浏览器的两个入口、两种手机视口通过复制与裁剪检查。Flutter 新选区仍待 widget 和手机运行验收。上面的两份 APK 均早于此项改动。[选区实测与复核步骤](https://github.com/Luck9Star/herdr-pocket/blob/6ffab0606ce88f404cada602b8330f0ce69f2411/docs/37-mobile-terminal-selection.md) · [Penpot 四个新增状态](https://github.com/Luck9Star/herdr-pocket/blob/6ffab0606ce88f404cada602b8330f0ce69f2411/design/evidence/v2-mobile-text-and-paste-20261107.json)
 
-**手机原型最新源码 · 配对后的持续看板**　Tauri 在刚配对的主机上复用同一条已认证 SSH，打开终端后看板仍继续更新。Mac 上的隔离 SSH 测试验证了订阅、帧确认与取消，两种手机视口验证了目标切换；Flutter 和 Tauri 同时补齐了系统粘贴审查。上表两份 APK 对应较早的 `a9914fe`。[持续看板与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/d56ca78a9b31f288acbaf0d2c477312cd50e9808/docs/39-mobile-paired-dashboard.md) · [系统粘贴与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/d56ca78a9b31f288acbaf0d2c477312cd50e9808/docs/38-mobile-system-paste.md)
+**当时的手机原型源码 · 配对后的持续看板**　Tauri 在刚配对的主机上复用同一条已认证 SSH，打开终端后看板仍继续更新。Mac 上的隔离 SSH 测试验证了订阅、帧确认与取消，两种手机视口验证了目标切换；Flutter 和 Tauri 同时补齐了系统粘贴审查。上表两份 APK 对应较早的 `a9914fe`。[持续看板与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/d56ca78a9b31f288acbaf0d2c477312cd50e9808/docs/39-mobile-paired-dashboard.md) · [系统粘贴与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/d56ca78a9b31f288acbaf0d2c477312cd50e9808/docs/38-mobile-system-paste.md)
+
+</details>
 
 ## 历史绿批及既有记录
 

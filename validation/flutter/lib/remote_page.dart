@@ -6,6 +6,7 @@ import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
 import 'remote_adapter.dart';
 import 'remote_input.dart';
+import 'remote_input_review.dart';
 import 'remote_auxiliary.dart';
 import 'remote_input_platform.dart';
 import 'device_keys.dart';
@@ -80,7 +81,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final draft = TextEditingController();
   int draftRevision = 0;
   final rejectedDrafts = <({String target,String text})>[];
-  bool rendering = false, previewOpen = false, acknowledgingInput = false;
+  bool rendering = false, previewOpen = false, readingPaste = false, acknowledgingInput = false;
+  Object? pasteReviewTicket;
   String? draftTarget;
   final drafts = <String,String>{};
   final draftVersions = <String,Object>{};
@@ -105,7 +107,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (key == null || drafts[key] == draft.text) return;
     drafts[key] = draft.text;
     draftVersions[key] = Object();
+    retirePendingPasteRead();
     if (mounted) setState(() {});
+  }
+  void retirePendingPasteRead() {
+    if (readingPaste && !previewOpen) { pasteReviewTicket = null; readingPaste = false; }
   }
 
   // Presentation only: retain the original pane objects and source order in
@@ -167,6 +173,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   void visibilityChanged() {
     if (widget.visibility?.value == false) {
+      retirePendingPasteRead();
       widget.summaryLease?.invalidate(); summaryAttempt = null;
       inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
       if (!adapter.pauseObservation()) {
@@ -197,6 +204,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) stop('应用已暂停，连接已取消；请重新核验后主动连接');
   }
   void stop([String message = '已取消；不会重连或发送输入']) {
+    retirePendingPasteRead();
     widget.summaryLease?.invalidate(); summaryAttempt = null;
     inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
     request++; frozenNode = null; identityLease?.cancel(); unawaited(adapter.cancel());
@@ -388,6 +396,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     // Re-selecting the active chip is not a mode change. Preserve the current
     // editor/client, focus and IME composition instead of replacing its epoch.
     if (inputGate.mode == mode) return;
+    retirePendingPasteRead();
     auxiliaryModifiers.reset();
     terminalFocus.unfocus(); FocusScope.of(context).unfocus();
     inputGate.setFocused(true); inputGate.setMode(mode); bindTerminalOutput();
@@ -401,20 +410,32 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Future<void> previewInput(String text, RemoteInputLease lease, {bool fromDraft = false}) async {
     if (previewOpen || inputGate.sending || !inputGate.current(lease) || text.isEmpty) return;
-    if (utf8ByteLength(text) > 4096) {
+    if (utf8ByteLength(text) > remoteInputReviewByteLimit) {
       setState(() { status = '文本超过 4096 bytes · 未发送'; }); return;
     }
     if (fromDraft && rejectedDrafts.length >= 8) {
       setState(() { status = '待找回的未发送草稿已达上限 · 请先处理后再发送'; }); return;
     }
+    final key = targetKey(lease.target),draftVersion = draftVersions[targetKey(lease.target)];
+    bool sameDraft() => draftTarget == key && draft.text == text && identical(draftVersions[key],draftVersion);
+    if (fromDraft && !sameDraft()) return;
     final previewEpoch = observationEpoch;
-    setState(() { auxiliaryModifiers.reset(); previewOpen = true; });
+    setState(() {
+      // Normal committed IME text keeps its existing preview path. If a
+      // clipboard read is pending, retire that read rather than lose the text
+      // or let its late completion take ownership of this modal's focus.
+      pasteReviewTicket = null; readingPaste = false;
+      auxiliaryModifiers.reset(); previewOpen = true;
+    });
     final approved = await showDialog<bool>(context:context,builder:(context) => AlertDialog(
       title:const Text('预览发送文本'),
       content:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
         mainAxisSize:MainAxisSize.min,children:[
-          Text(lease.target.label),const SizedBox(height:12),SelectableText(text),
+          Text(lease.target.label),const SizedBox(height:12),
+          Text('原始文本 ${utf8ByteLength(text)} / $remoteInputReviewByteLimit UTF-8 bytes'),
+          SelectableText(visibleRemoteInput(text),key:const ValueKey('remote-input-review-text')),
           const SizedBox(height:12),
+          const Text('方括号标出控制与不可见字符；只用于审查，发送保留原始字符。'),
           const Text('保留全部换行，不额外附加回车。换行可能被终端解释为执行输入。服务端接收不表示命令已执行。'),
         ])),actions:[
         TextButton(onPressed:() => Navigator.pop(context,false),child:const Text('取消')),
@@ -425,7 +446,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     setState(() { previewOpen = false; });
     if (lease.mode == RemoteInputMode.direct && inputGate.current(lease)) terminalFocus.requestFocus();
     if (approved != true || observationEpoch != previewEpoch || widget.visibility?.value == false || viewPaused || !inputGate.current(lease)) return;
-    final key = targetKey(lease.target);
+    if (fromDraft && !sameDraft()) {
+      setState(() { status = '原草稿已变化 · 本次未发送，请重新预览'; }); return;
+    }
     final taken = fromDraft && draftTarget == key && draft.text == text;
     if (taken) draft.clear(); // Quarantine submitted bytes before any asynchronous result.
     final revisionAfterClear = draftRevision;
@@ -446,12 +469,53 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Future<void> pasteInput() async {
     final lease = inputGate.capture();
-    if (lease == null || previewOpen || inputGate.sending) return;
-    final value = await Clipboard.getData(Clipboard.kTextPlain);
-    if (!mounted || !inputGate.current(lease) || value?.text == null) return;
-    if (lease.mode == RemoteInputMode.draft) {
-      if (utf8ByteLength(draft.text + value!.text!) <= 4096) draft.text += value.text!;
-    } else { await previewInput(value!.text!,lease); }
+    if (lease == null || previewOpen || readingPaste || inputGate.sending) return;
+    final ticket = Object();
+    final key = targetKey(lease.target),original = draft.text,version = draftVersions[targetKey(lease.target)];
+    final pasteEpoch = observationEpoch;
+    bool sameContext() => mounted && identical(pasteReviewTicket,ticket) && observationEpoch == pasteEpoch && widget.visibility?.value != false &&
+      !viewPaused && !inputGate.sending && inputGate.current(lease) && draftTarget == key && draft.text == original &&
+      identical(draftVersions[key],version);
+    // A pending platform read does not own modal focus: ordinary direct-mode
+    // focus loss still revokes its lease before any review can be opened.
+    setState(() { auxiliaryModifiers.reset(); pasteReviewTicket = ticket; readingPaste = true; });
+    try {
+      final value = await Clipboard.getData(Clipboard.kTextPlain);
+      final clipboard = value?.text;
+      if (!sameContext() || clipboard == null || clipboard.isEmpty) return;
+      final review = RemotePasteReview(original,clipboard);
+      setState(() { previewOpen = true; });
+      final choice = await showDialog<String>(context:context,builder:(context) => AlertDialog(
+        title:const Text('审查粘贴 · 仅编辑本地草稿'),
+        content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text(lease.target.label),const SizedBox(height:12),
+          Text('剪贴板原始文本 ${review.clipboardBytes} / $remoteInputReviewByteLimit UTF-8 bytes'),
+          SelectableText(visibleRemoteInput(review.clipboard),key:const ValueKey('remote-paste-review-text')),
+          const SizedBox(height:12),Text('原草稿 ${utf8ByteLength(original)} bytes；追加后 ${review.appendedBytes} bytes'),
+          if (original.isNotEmpty) ExpansionTile(title:const Text('查看原目标的本地草稿'),children:[SelectableText(visibleRemoteInput(original))]),
+          if (!review.canReplace) const Text('剪贴板文本超过 4096 UTF-8 bytes · 不能使用，请缩短后重新粘贴。'),
+          if (review.canReplace && !review.canAppend) const Text('追加后超过 4096 UTF-8 bytes · 可明确替换原草稿，或取消后手动整理。'),
+          const SizedBox(height:12),const Text('方括号标出控制与不可见字符，原始内容保持不变。追加或替换只编辑此原目标的本地草稿；发送到远端仍需另行预览确认。'),
+        ])),actions:[
+          TextButton(key:const ValueKey('remote-paste-cancel'),onPressed:() => Navigator.pop(context),child:const Text('取消')),
+          TextButton(key:const ValueKey('remote-paste-replace'),onPressed:review.canReplace ? () => Navigator.pop(context,'replace') : null,child:const Text('替换原草稿')),
+          FilledButton(key:const ValueKey('remote-paste-append'),onPressed:review.canAppend ? () => Navigator.pop(context,'append') : null,child:const Text('追加到原草稿')),
+        ]));
+      if (!sameContext()) return;
+      if (choice != 'append' && choice != 'replace') return;
+      if (choice == 'append' ? !review.canAppend : !review.canReplace) return;
+      if (lease.mode != RemoteInputMode.draft) setInputMode(RemoteInputMode.draft);
+      if (draftTarget != key || inputGate.mode != RemoteInputMode.draft) return;
+      final text = choice == 'append' ? review.original + review.clipboard : review.clipboard;
+      draft.value = TextEditingValue(text:text,selection:TextSelection.collapsed(offset:text.length));
+    } catch (_) {
+      if (sameContext()) setState(() { status = '系统粘贴未确认 · 原草稿保留，请主动重新审查'; });
+    } finally {
+      if (mounted && identical(pasteReviewTicket,ticket)) {
+        setState(() { previewOpen = false; readingPaste = false; pasteReviewTicket = null; });
+        if (lease.mode == RemoteInputMode.direct && inputGate.current(lease)) terminalFocus.requestFocus();
+      }
+    }
   }
 
   bool get auxiliaryReady => live && inputGate.canInput && inputGate.mode == RemoteInputMode.direct &&
@@ -548,20 +612,32 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             OutlinedButton(key:ValueKey('remote-key-${key.key}'),onPressed:auxiliaryReady ? () { if (panelCurrent()) auxiliaryInput(key.value); } : null,
               child:Text(key.key)),
         ]),
-        OutlinedButton.icon(key:const ValueKey('remote-input-paste'),onPressed:enabled && !previewOpen && !inputGate.sending
+        OutlinedButton.icon(key:const ValueKey('remote-input-paste'),onPressed:enabled && !previewOpen && !readingPaste && !inputGate.sending
           ? () { if (panelCurrent()) unawaited(pasteInput()); } : null,
           icon:const Icon(Icons.content_paste),label:const Text('粘贴并预览')),
       ],
       if (inputGate.mode == RemoteInputMode.draft) ...[
-        KeyedSubtree(key:ValueKey('remote-draft-input-epoch-${inputGate.epoch}'),child:TextField(key:const ValueKey('remote-input-draft'),controller:draft,minLines:2,maxLines:5,
+        Actions(actions:<Type,Action<Intent>>{
+          PasteTextIntent:CallbackAction<PasteTextIntent>(onInvoke:(_) {
+            if (panelCurrent()) unawaited(pasteInput()); return null;
+          }),
+        },child:KeyedSubtree(key:ValueKey('remote-draft-input-epoch-${inputGate.epoch}'),child:TextField(key:const ValueKey('remote-input-draft'),controller:draft,minLines:2,maxLines:5,
           maxLength:4096,
           enabled:enabled && !inputGate.sending && !previewOpen,autocorrect:false,enableSuggestions:false,
+          contextMenuBuilder:(context,editable) => AdaptiveTextSelectionToolbar.buttonItems(
+            anchors:editable.contextMenuAnchors,buttonItems:[
+              for (final item in editable.contextMenuButtonItems)
+                if (item.type != ContextMenuButtonType.paste) item,
+              ContextMenuButtonItem(type:ContextMenuButtonType.paste,label:'审查粘贴',onPressed:() {
+                ContextMenuController.removeAny(); if (panelCurrent()) unawaited(pasteInput());
+              }),
+            ]),
           enableIMEPersonalizedLearning:false,decoration:const InputDecoration(labelText:'此目标的本地草稿',
-            helperText:'发送最多 4096 UTF-8 bytes；中文等字符可能占多个 byte'))),
+            helperText:'发送最多 4096 UTF-8 bytes；中文等字符可能占多个 byte')))),
         Wrap(spacing:8,children:[
-          OutlinedButton(onPressed:enabled && !inputGate.sending && !previewOpen ? () { if (panelCurrent()) unawaited(pasteInput()); } : null,child:const Text('粘贴到草稿')),
+          OutlinedButton(key:const ValueKey('remote-input-draft-paste'),onPressed:enabled && !inputGate.sending && !previewOpen && !readingPaste ? () { if (panelCurrent()) unawaited(pasteInput()); } : null,child:const Text('粘贴并审查')),
           FilledButton(key:const ValueKey('remote-input-draft-send'),
-            onPressed:enabled && !inputGate.sending && !previewOpen ? () {
+            onPressed:enabled && !inputGate.sending && !previewOpen && !readingPaste ? () {
               if (!panelCurrent()) return;
               final lease = inputGate.capture(); if (lease != null) unawaited(previewInput(draft.text,lease,fromDraft:true));
             } : null,child:const Text('预览并发送文本')),
@@ -760,8 +836,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 onKeyEvent:(node,event) {
                   if (observationEpoch != terminalObservationEpoch || inputGate.epoch != terminalInputEpoch || viewPaused ||
                       widget.visibility?.value == false || !live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput || previewOpen) return KeyEventResult.handled;
-                  if (event is KeyDownEvent && (HardwareKeyboard.instance.isControlPressed || HardwareKeyboard.instance.isMetaPressed) &&
-                      event.logicalKey == LogicalKeyboardKey.keyV) {
+                  if (event is KeyDownEvent && (((HardwareKeyboard.instance.isControlPressed || HardwareKeyboard.instance.isMetaPressed) &&
+                      event.logicalKey == LogicalKeyboardKey.keyV) ||
+                      (HardwareKeyboard.instance.isShiftPressed && event.logicalKey == LogicalKeyboardKey.insert))) {
                     unawaited(pasteInput()); return KeyEventResult.handled;
                   }
                   return KeyEventResult.ignored;

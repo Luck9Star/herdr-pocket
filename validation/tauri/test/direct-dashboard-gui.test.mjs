@@ -77,6 +77,7 @@ async function setup({ inputMode = () => 1 } = {}) {
   const nodes = Object.fromEntries(
     [...html.matchAll(/id="([^"]+)"/g)].map(match => [match[1], new Element(match[1])]),
   );
+  nodes['remote-rejected-drafts'].hidden = true;
   nodes['remote-page'].hidden = true;
   nodes['fixture-workbench'].hidden = true;
   nodes['remote-port'].value = '22';
@@ -107,12 +108,14 @@ async function setup({ inputMode = () => 1 } = {}) {
   let resolveObserve;
   let rejectObserve;
   let readOverride = null;
+  let sendResult = null;
   const calls = [];
 
   const invoke = async (name, args = {}) => {
     calls.push({ name, args });
     if (['host_init', 'host_new', 'remote_cancel', 'remote_select', 'remote_ack'].includes(name)) return;
     if (name === 'remote_input_mode') return inputMode(args);
+    if (name === 'remote_input_send' && sendResult) return sendResult;
     if (name === 'remote_input_send') return {
       status: 'accepted', receipt: { requestId: 'a'.repeat(32), paneId: 'w1:p1', terminalId: 'term_a001', acceptedBytes: args.bytes.length },
     };
@@ -154,6 +157,7 @@ async function setup({ inputMode = () => 1 } = {}) {
       this.options = options;
       this.textarea = new Element();
       this.focusedAs = [];
+      this.modes = { bracketedPasteMode: false };
       this.parser = { registerOscHandler() {} };
     }
     open() {}
@@ -174,6 +178,8 @@ async function setup({ inputMode = () => 1 } = {}) {
   return {
     nodes, calls, target, get terminal() { return terminal; },
     setRead: fn => { readOverride = fn; },
+    setSendResult: result => { sendResult = result; },
+    updateHost: update => { Object.assign(records[0], update); },
     emit: event => channel.onmessage(event),
     finish: () => resolveObserve?.(),
     fail: () => rejectObserve?.(Error('fixture failure')),
@@ -421,4 +427,446 @@ test('catalog failure restores historical summary only as stale and ignores late
     h.emit({ kind: 'dashboard', generation: 9, panes: [] });
     assert.match(summary(n, false).textContent, /上次快照.*受阻 1/);
   } finally { h.finish(); await flush(); h.restore(); }
+});
+
+function dispatchPaste(element, text) {
+  let prevented = false, stopped = false;
+  element.dispatch('paste', {
+    preventDefault() { prevented = true; },
+    stopImmediatePropagation() { stopped = true; },
+    clipboardData: { getData: () => text },
+  });
+  assert.equal(prevented, true);
+  assert.equal(stopped, true);
+}
+
+async function readyDirectPaste(h) {
+  await openInput(h);
+  const draft = h.nodes['remote-input-draft'];
+  draft.value = '原草稿';
+  draft.dispatch('input');
+  h.nodes['remote-input-direct'].click();
+  await flush(); await flush();
+}
+
+for (const [choice, expected] of [
+  ['append', '原草稿新\n行'],
+  ['replace', '新\n行'],
+  ['cancel', '原草稿'],
+]) {
+  test(`paired direct paste ${choice} reviews before changing local draft`, async () => {
+    const h = await setup(), n = h.nodes;
+    try {
+      await readyDirectPaste(h);
+      dispatchPaste(h.terminal.textarea, '新\n行');
+      await flush(); await flush();
+      assert.equal(n['remote-paste-review'].hidden, false);
+      assert.equal(n['remote-input-draft'].value, '原草稿');
+      assert.match(n['remote-paste-preview'].textContent, /⏎/);
+      n[`remote-paste-${choice}`].click();
+      assert.equal(n['remote-input-draft'].value, expected);
+      assert.equal(n['remote-paste-review'].hidden, true);
+      assert.equal(h.calls.filter(call => call.name === 'remote_input_send').length, 0);
+    } finally { h.finish(); await flush(); h.restore(); }
+  });
+}
+
+test('draft textarea paste is intercepted and previewed without overwriting current draft', async () => {
+  const h = await setup(), n = h.nodes;
+  try {
+    await openInput(h);
+    const draft = n['remote-input-draft'];
+    draft.value = '原草稿'; draft.dispatch('input');
+    n['remote-input-draft-mode'].click();
+    await flush(); await flush();
+    dispatchPaste(draft, '新');
+    await flush(); await flush();
+    assert.equal(n['remote-paste-review'].hidden, false);
+    assert.equal(draft.value, '原草稿');
+    n['remote-paste-append'].click();
+    assert.equal(draft.value, '原草稿新');
+    assert.equal(h.calls.filter(call => call.name === 'remote_input_send').length, 0);
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+test('paste preview makes control and bidi characters visible and enforces merged UTF-8 limit', async () => {
+  const h = await setup(), n = h.nodes;
+  try {
+    await readyDirectPaste(h);
+    dispatchPaste(h.terminal.textarea, '\u001b\u202e中');
+    await flush(); await flush();
+    assert.match(n['remote-paste-preview'].textContent, /\\u\{1b\}/);
+    assert.match(n['remote-paste-preview'].textContent, /\\u\{202e\}/);
+    n['remote-paste-cancel'].click();
+    n['remote-input-draft'].value = 'A'.repeat(4095);
+    n['remote-input-draft'].dispatch('input');
+    n['remote-input-draft-mode'].click();
+    await flush(); await flush();
+    dispatchPaste(n['remote-input-draft'], '中');
+    await flush(); await flush();
+    assert.equal(n['remote-paste-append'].disabled, true);
+    assert.equal(document.activeElement, n['remote-paste-replace']);
+    assert.match(n['remote-paste-target'].textContent, /w1:p1.*term_a001/);
+    assert.equal(n['remote-input-draft'].value, 'A'.repeat(4095));
+    assert.match(n['remote-paste-status'].textContent, /4096/);
+    n['remote-paste-replace'].click();
+    assert.equal(n['remote-input-draft'].value, '中');
+    assert.equal(h.calls.filter(call => call.name === 'remote_input_send').length, 0);
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+test('composition in progress blocks direct and draft paste reviews', async () => {
+  const h = await setup(), n = h.nodes;
+  try {
+    await readyDirectPaste(h);
+    h.terminal.textarea.dispatch('compositionstart');
+    dispatchPaste(h.terminal.textarea, '新');
+    await flush();
+    assert.equal(n['remote-paste-review'].hidden, true);
+    assert.equal(n['remote-input-draft'].value, '原草稿');
+    h.terminal.textarea.dispatch('compositionend');
+    n['remote-input-draft-mode'].click();
+    await flush(); await flush();
+    n['remote-input-draft'].dispatch('compositionstart');
+    dispatchPaste(n['remote-input-draft'], '新');
+    await flush();
+    assert.equal(n['remote-paste-review'].hidden, true);
+    assert.equal(n['remote-input-draft'].value, '原草稿');
+    n['remote-input-draft'].dispatch('compositionend');
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+test('stopping while observe reset is pending prevents a late paste review', async () => {
+  let release;
+  const h = await setup({ inputMode: args => args.mode === 'observe'
+    ? new Promise(resolve => { release = resolve; }) : 2 });
+  const n = h.nodes;
+  try {
+    await readyDirectPaste(h);
+    dispatchPaste(h.terminal.textarea, '新');
+    await flush();
+    n['remote-cancel'].click();
+    release(3);
+    await flush(); await flush();
+    assert.equal(n['remote-paste-review'].hidden, true);
+    assert.equal(n['remote-input-draft'].value, '原草稿');
+    n['remote-paste-replace'].click();
+    assert.equal(n['remote-input-draft'].value, '原草稿');
+    assert.equal(h.calls.filter(call => call.name === 'remote_input_send').length, 0);
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+test('focus leaving paste review revokes its buttons without touching the draft', async () => {
+  const h = await setup(), n = h.nodes;
+  try {
+    await readyDirectPaste(h);
+    dispatchPaste(h.terminal.textarea, '新');
+    await flush(); await flush();
+    n['remote-paste-review'].dispatch('focusout', { relatedTarget: new Element('outside') });
+    assert.equal(n['remote-paste-review'].hidden, true);
+    n['remote-paste-replace'].click();
+    assert.equal(n['remote-input-draft'].value, '原草稿');
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+test('draft edits and restoration during a pending review invalidate its original version', async () => {
+  let release;
+  const h = await setup({ inputMode: args => args.mode === 'observe'
+    ? new Promise(resolve => { release = resolve; }) : 2 });
+  const n = h.nodes;
+  try {
+    await readyDirectPaste(h);
+    dispatchPaste(h.terminal.textarea, '新');
+    await flush();
+    n['remote-input-draft'].value = '改动';
+    n['remote-input-draft'].dispatch('input');
+    n['remote-input-draft'].value = '原草稿';
+    n['remote-input-draft'].dispatch('input');
+    release(3);
+    await flush(); await flush();
+    assert.equal(n['remote-paste-review'].hidden, true);
+    n['remote-paste-replace'].click();
+    assert.equal(n['remote-input-draft'].value, '原草稿');
+    assert.equal(h.calls.filter(call => call.name === 'remote_input_send').length, 0);
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+test('applying a paste changes only the local draft until separate draft permission and send confirmation', async () => {
+  const h = await setup(), n = h.nodes;
+  try {
+    await readyDirectPaste(h);
+    dispatchPaste(h.terminal.textarea, '新');
+    await flush(); await flush();
+    n['remote-paste-append'].click();
+    assert.equal(n['remote-input-draft'].value, '原草稿新');
+    assert.equal(h.calls.filter(call => call.name === 'remote_input_send').length, 0);
+    n['remote-input-preview'].click();
+    assert.equal(n['remote-input-preview-area'].hidden, true);
+    n['remote-input-draft-mode'].click();
+    await flush(); await flush();
+    n['remote-input-preview'].click();
+    assert.equal(n['remote-input-preview-area'].hidden, false);
+    n['remote-input-confirm'].click();
+    await flush();
+    assert.equal(h.calls.filter(call => call.name === 'remote_input_send').length, 1);
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+test('returning home revokes an open paste review without changing the saved draft', async () => {
+  const h = await setup(), n = h.nodes;
+  try {
+    await readyDirectPaste(h);
+    dispatchPaste(h.terminal.textarea, '新');
+    await flush(); await flush();
+    assert.equal(n['remote-paste-review'].hidden, false);
+    n['host-return-home'].click();
+    await flush();
+    assert.equal(n['remote-paste-review'].hidden, true);
+    n['remote-paste-replace'].click();
+    assert.equal(n['remote-input-draft'].value, '原草稿');
+    assert.equal(h.calls.filter(call => call.name === 'remote_input_send').length, 0);
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+async function reconnectTo(h, pane) {
+  h.finish();
+  await flush();
+  h.nodes['remote-review'].checked = true;
+  h.nodes['remote-form'].dispatch('input', { target: h.nodes['remote-review'] });
+  h.nodes['remote-form'].dispatch('submit');
+  await flush();
+  publishDashboard(h, [pane]);
+  h.nodes['remote-panes'].children[0].click();
+  h.emit({ kind: 'frame', generation: 9, frame: { seq: 1, full: true, bytes: [65] } });
+  h.emit({ kind: 'input_ready', generation: 9, unknown: false, recovery_status: 'ready' });
+}
+
+test('direct drafts follow the reviewed device and exact pane and terminal across reconnects', async () => {
+  const h = await setup(), n = h.nodes;
+  try {
+    await openInput(h);
+    n['remote-input-draft'].value = '第一终端草稿';
+    n['remote-input-draft'].dispatch('input');
+    const first = blockedPane()[0];
+    const otherPane = { paneId: 'w1:p2', terminalId: 'term_a002', agentStatus: 'idle' };
+    const otherTerminal = { ...first, terminalId: 'term_a003' };
+    await reconnectTo(h, otherPane);
+    assert.equal(n['remote-input-draft'].value, '');
+    n['remote-input-draft'].value = '第二终端草稿';
+    await reconnectTo(h, otherTerminal);
+    assert.equal(n['remote-input-draft'].value, '');
+    await reconnectTo(h, first);
+    assert.equal(n['remote-input-draft'].value, '第一终端草稿');
+    h.updateHost({ deviceFingerprint: 'different-device' });
+    n['host-save'].click();
+    await flush(); await flush();
+    await reconnectTo(h, first);
+    assert.equal(n['remote-input-draft'].value, '');
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+test('an unknown draft send never returns to the sendable editor', async () => {
+  const h = await setup(), n = h.nodes;
+  try {
+    await openInput(h);
+    n['remote-input-draft'].value = '不重放';
+    n['remote-input-draft'].dispatch('input');
+    n['remote-input-draft-mode'].click();
+    await flush(); await flush();
+    h.setSendResult({ status: 'unknown' });
+    n['remote-input-preview'].click();
+    n['remote-input-confirm'].click();
+    await flush();
+    assert.equal(n['remote-input-draft'].value, '');
+    await reconnectTo(h, blockedPane()[0]);
+    assert.equal(n['remote-input-draft'].value, '');
+    assert.equal(h.calls.filter(call => call.name === 'remote_input_send').length, 1);
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+async function submitDraft(h, value) {
+  const n=h.nodes;
+  n['remote-input-draft'].value=value;
+  n['remote-input-draft'].dispatch('input');
+  n['remote-input-draft-mode'].click();
+  await flush(); await flush();
+  n['remote-input-preview'].click();
+  n['remote-input-confirm'].click();
+}
+
+test('definite rejection restores untouched original draft', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    await openInput(h);
+    h.setSendResult({status:'rejected'});
+    await submitDraft(h,'被拒原文');
+    await flush();
+    assert.equal(n['remote-input-draft'].value,'被拒原文');
+    assert.equal(n['remote-rejected-drafts'].hidden,true);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('recovery-required rejection keeps a read-only copy and never overwrites edits', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    await openInput(h);
+    let resolve;
+    h.setSendResult(new Promise(r=>{resolve=r;}));
+    await submitDraft(h,'待找回原文');
+    n['remote-input-draft'].value='新编辑';
+    n['remote-input-draft'].dispatch('input');
+    resolve({status:'rejected',recoveryRequired:true});
+    await flush();
+    assert.equal(n['remote-input-draft'].value,'新编辑');
+    const label=n['remote-rejected-drafts'].children[0];
+    assert.match(label.textContent,/w1:p1.*term_a001/);
+    assert.equal(label.children[0].value,'待找回原文');
+    assert.equal(label.children[0].readOnly,true);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('late definite rejection belongs to the original target, never the new draft', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    await openInput(h);
+    let resolve;
+    h.setSendResult(new Promise(r=>{resolve=r;}));
+    await submitDraft(h,'旧目标原文');
+    await reconnectTo(h,{paneId:'w1:p2',terminalId:'term_a002',agentStatus:'idle'});
+    n['remote-input-draft'].value='新目标草稿';
+    n['remote-input-draft'].dispatch('input');
+    resolve({status:'rejected'});
+    await flush();
+    assert.equal(n['remote-input-draft'].value,'新目标草稿');
+    const label=n['remote-rejected-drafts'].children[0];
+    assert.match(label.textContent,/w1:p1.*term_a001/);
+    assert.equal(label.children[0].value,'旧目标原文');
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('accepted text does not reappear as sendable or read-only rejected text', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    await openInput(h);
+    await submitDraft(h,'已接收文本');
+    await flush();
+    assert.equal(n['remote-input-draft'].value,'');
+    assert.equal(n['remote-rejected-drafts'].hidden,true);
+    await reconnectTo(h,blockedPane()[0]);
+    assert.equal(n['remote-input-draft'].value,'');
+  } finally {h.finish();await flush();h.restore();}
+});
+
+
+test('proven input_stale error restores untouched draft', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    await openInput(h);
+    let reject;
+    h.setSendResult(new Promise((_resolve,r)=>{reject=r;}));
+    await submitDraft(h,'未发送原文');
+    reject('input_stale');
+    await flush();
+    assert.equal(n['remote-input-draft'].value,'未发送原文');
+    assert.equal(n['remote-rejected-drafts'].hidden,true);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+
+test('full recovery area refuses sending until an explicit removal, retaining every exact text', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    await openInput(h);
+    for(let i=0;i<32;i++) {
+      let resolve;
+      h.setSendResult(new Promise(r=>{resolve=r;}));
+      await submitDraft(h,`未发送 ${i}`);
+      n['remote-input-draft'].value=`新草稿 ${i}`;
+      n['remote-input-draft'].dispatch('input');
+      resolve({status:'rejected'});
+      await flush();
+    }
+    assert.equal(n['remote-rejected-drafts'].children.length,64);
+    const oldRemove=n['remote-rejected-drafts'].children[1];
+    assert.equal(n['remote-rejected-drafts'].children[0].children[0].value,'未发送 0');
+    const before=h.calls.filter(call=>call.name==='remote_input_send').length;
+    await submitDraft(h,'等待容量');
+    assert.equal(h.calls.filter(call=>call.name==='remote_input_send').length,before);
+    assert.equal(n['remote-input-draft'].value,'等待容量');
+    assert.match(n['remote-input-status'].textContent,/已满/);
+    oldRemove.click();
+    assert.equal(n['remote-rejected-drafts'].children.length,62);
+    oldRemove.click();
+    assert.equal(n['remote-rejected-drafts'].children.length,62);
+    let resolve;
+    h.setSendResult(new Promise(r=>{resolve=r;}));
+    await submitDraft(h,'容量已释放');
+    assert.equal(h.calls.filter(call=>call.name==='remote_input_send').length,before+1);
+    n['remote-input-draft'].value='继续编辑';
+    n['remote-input-draft'].dispatch('input');
+    resolve({status:'rejected'});
+    await flush();
+    assert.equal(n['remote-rejected-drafts'].children.length,64);
+    assert.equal(n['remote-rejected-drafts'].children[62].children[0].value,'容量已释放');
+  } finally {h.finish();await flush();h.restore();}
+});
+
+
+test('read-only records distinguish same pane across reviewed hosts', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    await openInput(h);
+    for(const host of ['fixture.invalid','other.invalid']) {
+      if(host==='other.invalid') {
+        n['remote-host'].value=host;
+        await reconnectTo(h,blockedPane()[0]);
+      }
+      let resolve;
+      h.setSendResult(new Promise(r=>{resolve=r;}));
+      await submitDraft(h,`内容 ${host}`);
+      n['remote-input-draft'].value='新文字';
+      n['remote-input-draft'].dispatch('input');
+      resolve({status:'rejected'});
+      await flush();
+    }
+    const labels=n['remote-rejected-drafts'].children.filter(node=>node.tagName==='label');
+    assert.equal(labels.length,2);
+    assert.match(labels[0].textContent,/fixture\.invalid.*会话 work.*w1:p1.*term_a001/);
+    assert.match(labels[1].textContent,/手动连接第 .*other\.invalid.*会话 work.*w1:p1.*term_a001/);
+    assert.equal(labels[0].children[0].value,'内容 fixture.invalid');
+    assert.equal(labels[1].children[0].value,'内容 other.invalid');
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('late old send cannot block or unlock the new connection send owner', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    await openInput(h);
+    let resolveA, resolveB;
+    h.setSendResult(new Promise(resolve=>{resolveA=resolve;}));
+    await submitDraft(h,'旧目标文本');
+    assert.equal(h.calls.filter(call=>call.name==='remote_input_send').length,1);
+
+    await reconnectTo(h,{paneId:'w1:p2',terminalId:'term_a002',agentStatus:'idle'});
+    h.setSendResult(new Promise(resolve=>{resolveB=resolve;}));
+    await submitDraft(h,'新目标文本');
+    assert.equal(h.calls.filter(call=>call.name==='remote_input_send').length,2);
+
+    resolveA({status:'rejected'});
+    await flush();
+    const oldRecord=n['remote-rejected-drafts'].children[0];
+    assert.match(oldRecord.textContent,/w1:p1.*term_a001/);
+    assert.equal(oldRecord.children[0].value,'旧目标文本');
+
+    n['remote-input-draft'].value='不可并发提交';
+    n['remote-input-draft'].dispatch('input');
+    n['remote-input-preview'].click();
+    n['remote-input-confirm'].click();
+    assert.equal(h.calls.filter(call=>call.name==='remote_input_send').length,2);
+    assert.equal(n['remote-input-draft'].value,'不可并发提交');
+    resolveB({status:'accepted',receipt:{requestId:'b'.repeat(32),paneId:'w1:p2',terminalId:'term_a002',acceptedBytes:new TextEncoder().encode('新目标文本').length}});
+    await flush();
+    assert.equal(n['remote-input-draft'].value,'不可并发提交');
+    assert.equal(n['remote-rejected-drafts'].children.length,2);
+  } finally {h.finish();await flush();h.restore();}
 });

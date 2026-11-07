@@ -4,6 +4,9 @@ import {SessionDashboard} from './dashboard-watch.js';
 import {matchedReceipt} from './input-receipt.js';
 import {OnlineInputQueue} from './online-input-queue.js';
 import {InputComposition,blockPendingKeys} from './input-composition.js';
+import {draftBytes} from './input-codec.js';
+import {applyPaste,previewPaste} from './paste-review.js';
+import {createTabInputToolbar} from './tab-input-toolbar.js';
 import {dashboardPresentation,paneStatusText} from './dashboard-presentation.js';
 
 /** A foreground tab owns its native attempt and renderer. No reconnect is automatic. */
@@ -53,7 +56,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   }
   function render() {
     const focused=tabs.get(tabs.activeId);
-    if(focused?.mode==='direct' && document.activeElement===focused.terminal?.textarea && !focused.suppressBlur){renderDashboard(focused);return;}
+    if(focused?.mode==='direct' && ownsInputFocus(focused,document.activeElement) && !focused.suppressBlur){renderDashboard(focused);return;}
     // Any unrelated full redraw removes focus from the review; revoke it first.
     if(focused?.pasteReview && !focused.focusPasteReview)focused.pasteReview=null;
     root.hidden=tabs.list().length===0;nav.replaceChildren();body.replaceChildren();
@@ -79,25 +82,54 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(tab.pasteReview && !pasteReviewValid(tab,tab.pasteReview))tab.pasteReview=null;
     if(tab.pasteReview) {
       const review=tab.pasteReview,group=document.createElement('section');group.setAttribute('aria-label','粘贴内容审查');
-      const heading=document.createElement('p');heading.textContent='粘贴预览：内容尚未发送，请选择如何处理现有草稿。';group.append(heading);
-      const preview=document.createElement('pre');preview.textContent=review.text;group.append(preview);
+      const heading=document.createElement('p');
+      heading.textContent=`粘贴到本地草稿 · ${hostName(tab.hostId)} · ${review.paneId} · ${review.terminalId}`;
+      group.append(heading);
+      const preview=document.createElement('pre');preview.className='paste-review-text';preview.textContent=previewPaste(review.text);group.append(preview);
       const actions=document.createElement('div');actions.className='remote-actions';
-      const choice=(title,apply)=>{const b=document.createElement('button');b.type='button';b.textContent=title;b.onclick=()=>{if(tab.pasteReview!==review || !pasteReviewValid(tab,review)){tab.pasteReview=null;render();return;}tab.pasteReview=null;if(apply){tab.draft=apply(tab.draft,review.text);tab.draftRevision++;}render();};actions.append(b);return b;};
-      const first=choice('追加到草稿',(draft,text)=>draft+text);choice('替换草稿',(_draft,text)=>text);choice('取消粘贴',null);group.append(actions);
+      const choice=(title,action)=>{
+        const button=document.createElement('button');button.type='button';button.textContent=title;
+        button.disabled=action!==null && applyPaste(tab.draft,review.text,action)===null;
+        button.onclick=()=>{
+          if(tab.pasteReview!==review || button.disabled)return;
+          if(pasteReviewValid(tab,review) && action!==null) {
+            const next=applyPaste(tab.draft,review.text,action);
+            if(next===null)return;
+            tab.draft=next;tab.draftRevision++;
+          }
+          tab.pasteReview=null;render();
+        };
+        actions.append(button);return button;
+      };
+      const append=choice('追加到草稿','append');
+      const replace=choice('替换草稿','replace');
+      choice('取消粘贴',null);group.append(actions);
+      if(append.disabled) {
+        const limit=document.createElement('p');
+        limit.textContent='追加后超过 4096 个 UTF-8 字节，可替换或取消。';group.append(limit);
+      }
       group.onfocusout=e=>{if(tab.pasteReview===review && !group.contains(e.relatedTarget)){tab.pasteReview=null;render();}};
-      body.append(group);if(tab.focusPasteReview){tab.focusPasteReview=false;first.focus?.();}
+      body.append(group);if(tab.focusPasteReview){tab.focusPasteReview=false;(append.disabled?replace:append).focus?.();}
     }
     if(tab.inputReady) {
       const text=document.createElement('textarea');text.value=tab.draft;text.placeholder='输入草稿';text.setAttribute('aria-label','当前标签草稿');
-      text.oninput=()=>{tab.draft=text.value;tab.draftRevision++;};body.append(text);
+      tab.draftField=text;
+      let composing=false;
+      text.addEventListener('compositionstart',()=>{composing=true;});
+      text.addEventListener('compositionend',()=>{composing=false;});
+      text.addEventListener('blur',()=>{if(!tab.suppressPasteBlur)tab.pasteFocusRevision++;});
+      text.addEventListener('paste',event=>void reviewPaste(tab,event,text,composing),true);
+      text.oninput=()=>{if(tab.draftField===text && tabs.activeId===tab.id){tab.draft=text.value;tab.draftRevision++;}};body.append(text);
       const actions=document.createElement('div');actions.className='remote-actions';
       const direct=document.createElement('button');direct.type='button';direct.textContent='逐键输入';direct.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy;direct.onclick=()=>void enableDirect(tab);actions.append(direct);
       const enable=document.createElement('button');enable.type='button';enable.textContent='启用草稿输入';enable.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy;
       enable.onclick=()=>void enableInput(tab);actions.append(enable);
-      const send=document.createElement('button');send.type='button';send.textContent='发送草稿';send.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || tab.inputEpoch==null;
+      const send=document.createElement('button');send.type='button';send.textContent='发送草稿';send.disabled=!tab.target || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null;
       send.onclick=()=>void sendDraft(tab);actions.append(send);
       if(tab.recoveryStatus==='pending'){const recover=document.createElement('button');recover.type='button';recover.textContent='已核实原目标结果，恢复输入';recover.disabled=!tab.target || tab.state!=='active' || tab.inputBusy;recover.onclick=()=>void recoverInput(tab);actions.append(recover);}
       body.append(actions);
+      tab.toolbarHost=document.createElement('div');body.append(tab.toolbarHost);
+      if(tab.mode==='direct' && tab.toolbar)tab.toolbarHost.append(tab.toolbar.element);
     }
     if(tab.rejectedDrafts.length){const heading=document.createElement('p');heading.textContent='服务器明确拒绝的原文（只读，不会自动发送）：';body.append(heading);
       tab.rejectedDrafts.forEach((value,index)=>{const saved=document.createElement('textarea');saved.value=value;saved.readOnly=true;saved.setAttribute('aria-label','被拒绝的原文');body.append(saved);const dismiss=document.createElement('button');dismiss.type='button';dismiss.textContent='移除此找回原文';dismiss.onclick=()=>{tab.rejectedDrafts.splice(index,1);render();};body.append(dismiss);});
@@ -148,25 +180,62 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     finally {if(sameLease(tab,binding)){tab.inputBusy=false;render();}}
   }
   function directToken(tab) {return {generation:tab.nativeGeneration,epoch:tab.inputEpoch,revision:tab.inputRevision};}
-  function directCurrent(tab,token) {return !document.hidden && tabs.activeId===tab.id && tab.state==='active' && tab.mode==='direct' && !tab.unknown && document.activeElement===tab.terminal?.textarea && OnlineInputQueue.same(token,directToken(tab));}
+  function ownsInputFocus(tab,element) {
+    return !!element && (element===tab.terminal?.textarea || tab.toolbar?.element.contains(element));
+  }
+  function directCurrent(tab,token) {
+    return !document.hidden && !switching && !tab.wantsPause && !tab.closing && !tab.invalidated &&
+      tabs.activeId===tab.id && current(tab,tab.token) && tab.state==='active' && tab.mode==='direct' &&
+      !tab.unknown && tab.inputEpoch!==null && ownsInputFocus(tab,document.activeElement) && OnlineInputQueue.same(token,directToken(tab));
+  }
+  function enqueueDirect(tab,bytes) {
+    const token=directToken(tab);
+    if(!directCurrent(tab,token))return;
+    if(!tab.queue.push(token,bytes)){tab.queue.clear();void loseDirect(tab);return;}
+    void pumpDirect(tab);
+  }
+  function showToolbar(tab) {
+    const authorized=directToken(tab);
+    const toolbar=createTabInputToolbar({
+      canSend:()=>directCurrent(tab,authorized) && !(tab.composition.token && !tab.composition.ended),
+      send:bytes=>{if(directCurrent(tab,authorized))enqueueDirect(tab,bytes);},
+      applicationCursorMode:()=>tab.terminal?.modes?.applicationCursorKeysMode===true,
+    });
+    toolbar.element.className='tab-input-toolbar';
+    tab.toolbar=toolbar;
+    toolbar.element.addEventListener('focusout',event=>{
+      if(tab.toolbar===toolbar && tab.mode==='direct' && !tab.suppressBlur && !ownsInputFocus(tab,event.relatedTarget))void loseDirect(tab);
+    });
+    tab.toolbarHost.replaceChildren(toolbar.element);
+    toolbar.refresh();
+  }
   function pasteReviewValid(tab,review) {
     return !document.hidden && tabs.activeId===tab.id && !switching && tab.state==='active' && !tab.wantsPause && !tab.closing && tab.mode==='observe' && !tab.unknown && tab.draftRevision===review.draftRevision && tab.pasteFocusRevision===review.focusRevision && tab.target?.paneId===review.paneId && tab.target?.terminalId===review.terminalId && sameLease(tab,review.binding);
   }
-  async function reviewPaste(tab,event) {
-    if(tab.directPending && tab.mode!=='direct'){event.preventDefault();event.stopImmediatePropagation();return;}
-    if(tab.mode!=='direct')return;
+  async function reviewPaste(tab,event,editor,composing) {
     event.preventDefault();event.stopImmediatePropagation();
-    if(tab.composition.token && !tab.composition.ended){status(tab,'输入法组合尚未结束，请完成后再粘贴。');return;}
+    if(tab.directPending || tab.inputBusy || tab.unknown || !tab.inputReady || !tab.target ||
+        document.hidden || tabs.activeId!==tab.id || tab.state!=='active' || document.activeElement!==editor)return;
+    if(editor===tab.terminal?.textarea ? tab.mode!=='direct' : editor!==tab.draftField)return;
+    const report=message=>{tab.message=message;if(tab.messageElement)tab.messageElement.textContent=message;};
+    if(composing){report('输入法组合尚未结束，请完成后再粘贴。');return;}
     const text=event.clipboardData?.getData('text/plain') || '';
-    if(!text || new TextEncoder().encode(text).length>4096){status(tab,'粘贴内容须为 1 至 4096 字节。');return;}
-    const original=lease(tab), draftRevision=tab.draftRevision, focusRevision=tab.pasteFocusRevision, paneId=tab.target?.paneId, terminalId=tab.target?.terminalId,focused=tab.terminal?.textarea;
-    if(document.hidden || document.activeElement!==focused || tabs.activeId!==tab.id || tab.state!=='active')return;
-    await loseDirect(tab);
-    if(document.hidden || document.activeElement!==focused || !current(tab,original.token) || tab.nativeGeneration!==original.generation || tab.epoch!==original.epoch || tabs.activeId!==tab.id || tab.state!=='active' || tab.draftRevision!==draftRevision || tab.pasteFocusRevision!==focusRevision || tab.target?.paneId!==paneId || tab.target?.terminalId!==terminalId || tab.unknown)return;
-    tab.pasteReview={text,draftRevision,focusRevision,paneId,terminalId,binding:lease(tab)};tab.focusPasteReview=true;tab.suppressPasteBlur=true;try {render();} finally {tab.suppressPasteBlur=false;}
+    if(applyPaste('',text,'replace')===null){report('粘贴内容须为 1 至 4096 个 UTF-8 字节。');return;}
+    const {paneId,terminalId}=tab.target;
+    const draftRevision=tab.draftRevision,focusRevision=tab.pasteFocusRevision;
+    const reset=tab.mode==='observe'?tab.focusReset:loseDirect(tab);
+    const review={text,draftRevision,focusRevision,paneId,terminalId,binding:lease(tab)};
+    tab.pendingPaste=review;
+    await reset;
+    if(tab.pendingPaste!==review)return;
+    tab.pendingPaste=null;
+    if(document.activeElement!==editor || !pasteReviewValid(tab,review))return;
+    tab.pasteReview=review;tab.focusPasteReview=true;tab.suppressPasteBlur=true;
+    try {render();} finally {tab.suppressPasteBlur=false;}
   }
   async function loseDirect(tab) {
     const wasBusy=tab.inputBusy;tab.queue.clear();tab.inputRevision++;tab.mode='observe';tab.inputEpoch=null;
+    tab.toolbar?.reset();tab.toolbar=null;tab.toolbarHost?.replaceChildren();
     if(tab.terminal){tab.terminal.options.disableStdin=true;tab.terminal.textarea.setAttribute('inputmode','none');}
     if(wasBusy){tab.unknown=true;tab.message='输入在途时焦点离开；请恢复观察后核实原目标。';await pause(tab);return;}
     if(tab.nativeGeneration!==null && tab.epoch!==null) {tab.focusReset=invoke('remote_tab_input_mode',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration,epoch:tab.epoch,mode:'observe'}).catch(()=>{});await tab.focusReset;}
@@ -190,6 +259,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       if(!currentAttempt())return;
       if(!Number.isSafeInteger(inputEpoch) || inputEpoch<1)throw Error('input_lease_invalid');
       tab.inputEpoch=inputEpoch;tab.mode='direct';granted=true;tab.message='逐键输入已启用。';if(tab.messageElement)tab.messageElement.textContent=tab.message;
+      showToolbar(tab);
     } catch {
       if(tab.directPending===attempt && current(tab,binding.token)){tab.message='逐键输入未启用。';if(tab.messageElement)tab.messageElement.textContent=tab.message;}
     } finally {
@@ -228,19 +298,27 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     finally {if(sameLease(tab,binding)){tab.inputBusy=false;render();}}
   }
   async function sendDraft(tab) {
-    if(document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.unknown || tab.inputBusy || tab.inputEpoch==null)return;
+    if(document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null)return;
     if(tab.draftPending+tab.rejectedDrafts.length>=8){status(tab,'找回区已满，请先处理已拒绝原文。');return;}
-    const text=tab.draft,bytes=[...new TextEncoder().encode(text)];if(!bytes.length || bytes.length>4096){status(tab,'草稿须为 1 至 4096 字节。');return;}
-    if(!window.confirm(`发送到 ${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'} · ${tab.target?.terminalId || '待选择'}？`))return;
-    const binding=lease(tab),epoch=binding.epoch,inputEpoch=tab.inputEpoch,token=binding.token;tab.draft='';const draftRevision=++tab.draftRevision;tab.draftPending++;tab.inputBusy=true;render();
-    try {const result=await invoke('remote_tab_input_send',{tabId:tab.id,clientGeneration:token.generation,generation:tab.nativeGeneration,epoch,inputEpoch,bytes,draft:true});
+    const text=tab.draft,bracketed=tab.terminal?.modes?.bracketedPasteMode===true;
+    const bytes=draftBytes(text,bracketed);
+    if(!bytes){status(tab,'草稿为空、超过 4096 字节或含不支持的粘贴结束序列。');return;}
+    const binding=lease(tab),inputEpoch=tab.inputEpoch,version=tab.draftRevision;
+    const framing=bracketed?'已包含括号粘贴标记':'普通文本';
+    if(!window.confirm(`发送到 ${hostName(tab.hostId)} · ${tab.target.paneId} · ${tab.target.terminalId}？\n${bytes.length} 字节 · ${framing}\n\n${previewPaste(text)}`))return;
+    if(!sameLease(tab,binding) || document.hidden || tabs.activeId!==tab.id || tab.mode!=='draft' ||
+        tab.inputEpoch!==inputEpoch || tab.draftRevision!==version || tab.draft!==text ||
+        tab.state!=='active' || tab.unknown || tab.inputBusy || (tab.terminal?.modes?.bracketedPasteMode===true)!==bracketed)return;
+    const epoch=binding.epoch,token=binding.token;tab.draft='';const draftRevision=++tab.draftRevision;tab.draftPending++;tab.inputBusy=true;render();
+    try {const result=await invoke('remote_tab_input_send',{tabId:tab.id,clientGeneration:token.generation,generation:tab.nativeGeneration,epoch,inputEpoch,bytes:[...bytes],draft:true});
+      let restored=false;
       if(result?.status==='rejected' && tabs.get(tab.id)===tab){
-        if(sameLease(tab,binding) && tab.draftRevision===draftRevision){tab.draft=text;tab.draftRevision++;}
+        if(!result.recoveryRequired && sameLease(tab,binding) && tab.draftRevision===draftRevision){tab.draft=text;tab.draftRevision++;restored=true;}
         else {tab.rejectedDrafts.push(text);}
       }
       if(!sameLease(tab,binding))return;
       const receipt=result?.status==='accepted'?matchedReceipt(result.receipt,tab.target,bytes.length):null;
-      if(result?.status==='rejected'){tab.message=tab.draftRevision===draftRevision?'服务器明确拒绝；原文已放入只读找回区。':'服务器明确拒绝；原文已保留。';if(result.recoveryRequired){tab.unknown=true;tab.inputEpoch=null;}}
+      if(result?.status==='rejected'){tab.message=restored?'服务器明确拒绝；原草稿已恢复。':'服务器明确拒绝；原文已放入只读找回区。';if(result.recoveryRequired){tab.unknown=true;tab.inputEpoch=null;}}
       else if(receipt){tab.message=result.recoveryRequired?'服务器已接收入队，但安全记录待核查；输入已锁定。':`服务器已接收入队 ${receipt.acceptedBytes} 字节；执行结果请查看终端。`;if(result.recoveryRequired){tab.unknown=true;tab.inputEpoch=null;}}
       else {tab.unknown=true;tab.inputEpoch=null;tab.message='发送结果未知；请核查原目标，不会自动重发。';void cancel(tab);}
     } catch {if(sameLease(tab,binding)){tab.unknown=true;tab.inputEpoch=null;tab.message='发送结果未确认；请核查原目标，不会自动重发。';}}
@@ -293,12 +371,12 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
           tab.terminal=terminalFactory({cols:80,rows:24,fontSize:getFontSize(),fontFamily:'ProbeNerd, monospace',scrollback:0,disableStdin:true,theme:theme.terminal});
           tab.terminal.parser.registerOscHandler(52,()=>true);tab.terminal.parser.registerOscHandler(8,()=>true);
           render();tab.terminal.open(tab.element);tab.terminal.textarea.setAttribute('inputmode','none');
-          tab.terminal.onData(data=>{const t=directToken(tab);if(tab.mode!=='direct' || document.activeElement!==tab.terminal?.textarea || !tab.composition.accepts(t))return;const bytes=new TextEncoder().encode(data);if(!tab.queue.push(t,bytes)){tab.queue.clear();void loseDirect(tab);return;}void pumpDirect(tab);});
+          tab.terminal.onData(data=>{if(document.activeElement===tab.terminal?.textarea && tab.mode==='direct' && tab.composition.accepts(directToken(tab)))enqueueDirect(tab,new TextEncoder().encode(data));});
           blockPendingKeys(tab.terminal.textarea,()=>tab.directPending && tab.mode!=='direct');
-          tab.terminal.textarea.addEventListener('compositionstart',()=>tab.composition.begin(directToken(tab)),true);
-          tab.terminal.textarea.addEventListener('compositionend',()=>tab.composition.end(),true);
-          tab.terminal.textarea.addEventListener('blur',()=>{if(!tab.suppressPasteBlur)tab.pasteFocusRevision++;if(!tab.suppressBlur && tab.directPending){tab.directPending.invalidated=true;tab.inputRevision++;tab.terminal.options.disableStdin=true;tab.terminal.textarea.setAttribute('inputmode','none');}if(!tab.suppressBlur && tab.mode==='direct')void loseDirect(tab);});
-          tab.terminal.textarea.addEventListener('paste',event=>void reviewPaste(tab,event),true);
+          tab.terminal.textarea.addEventListener('compositionstart',()=>{tab.composition.begin(directToken(tab));tab.toolbar?.refresh();},true);
+          tab.terminal.textarea.addEventListener('compositionend',()=>{tab.composition.end();tab.toolbar?.refresh();},true);
+          tab.terminal.textarea.addEventListener('blur',event=>{if(!tab.suppressPasteBlur)tab.pasteFocusRevision++;if(!tab.suppressBlur && tab.directPending){tab.directPending.invalidated=true;tab.inputRevision++;tab.terminal.options.disableStdin=true;tab.terminal.textarea.setAttribute('inputmode','none');}if(!tab.suppressBlur && tab.mode==='direct' && !ownsInputFocus(tab,event?.relatedTarget))void loseDirect(tab);});
+          tab.terminal.textarea.addEventListener('paste',event=>void reviewPaste(tab,event,tab.terminal.textarea,tab.composition.token && !tab.composition.ended),true);
         } else if(event.frame.full) tab.terminal.reset();
         const frame=event.frame;tab.terminal.write(Uint8Array.from(frame.bytes),()=>{
           if(!current(tab,token) || tabs.activeId!==tab.id || event.epoch!==tab.epoch)return;

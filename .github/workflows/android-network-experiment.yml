@@ -12,9 +12,17 @@ concurrency:
   group: network-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  input-fixture:
+    if: startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-')
+    uses: ./.github/workflows/input-extension-validation.yml
   android-pairing:
-    if: startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-')
+    needs: input-fixture
+    if: >-
+      !cancelled() && startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-') &&
+      (needs.input-fixture.result == 'success' || needs.input-fixture.result == 'skipped')
     uses: ./.github/workflows/paired-android-emulator.yml
+    with:
+      guarded_input: ${{ needs.input-fixture.result == 'success' }}
   transport-source:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -36,6 +44,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   flutter-source:
+    needs: input-fixture
+    if: ${{ !cancelled() && (needs.input-fixture.result == 'success' || needs.input-fixture.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     outputs:
@@ -71,8 +81,16 @@ jobs:
         if: "!cancelled() && steps.resolve.outputs.verified_lock == 'true'"
         working-directory: ${{ runner.temp }}/flutter-probe
         run: flutter test diagnostic/combining_render_test.dart regression/combining_patch_test.dart --reporter expanded 2>&1 | tee candidate-render-tests.log
+      - name: Download the guarded input fixture from this build
+        if: needs.input-fixture.result == 'success'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: input-fixture-${{ github.sha }}
+          path: ${{ runner.temp }}/input-fixture
       - name: Test pairing and retained SSH observation with an isolated host
         if: "!cancelled() && steps.safety.outcome == 'success' && steps.renderer.outcome == 'success'"
+        env:
+          GUARDED_INPUT: ${{ needs.input-fixture.result == 'success' }}
         run: |
           export PATH="$RUNNER_TEMP/flutter-sdk/bin:$PATH"
           python3 -m venv "$RUNNER_TEMP/pairing-venv"
@@ -80,7 +98,9 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 "$RUNNER_TEMP/pairing-venv/bin/python" -m unittest discover -s validation/remote-harness -q
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install -y openssh-server
-          "$RUNNER_TEMP/pairing-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui flutter --flutter-app "$RUNNER_TEMP/flutter-probe" --output "$RUNNER_TEMP/paired-evidence"
+          args=()
+          if [ "$GUARDED_INPUT" = true ]; then args+=(--input-fixture "$RUNNER_TEMP/input-fixture"); fi
+          "$RUNNER_TEMP/pairing-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui flutter --flutter-app "$RUNNER_TEMP/flutter-probe" --output "$RUNNER_TEMP/paired-evidence" "${args[@]}"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

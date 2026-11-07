@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
@@ -195,8 +196,23 @@ void main() {
       await tapControl('remote-mode-draft');
       final draft = find.byKey(const ValueKey('remote-input-draft'));
       await tester.ensureVisible(draft);
-      await tester.enterText(draft,'Pocket测'); await tester.pump();
-      expect(inputJournal.prepares,0); // Editing is local; no write without confirmation.
+      await tester.enterText(draft,'Pocket'); await tester.pump();
+      // Use a known clipboard value in this headless lane. The guarded SSH
+      // endpoint still receives the real application's independently approved draft.
+      final messenger=TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform,(call) async =>
+        call.method=='Clipboard.getData' ? <String,dynamic>{'text':'测'} : null);
+      try {
+        await tapControl('remote-input-draft-paste');
+        expect(tester.widget<SelectableText>(find.byKey(const ValueKey('remote-paste-review-text'))).data,'测');
+        expect(tester.widget<TextField>(draft).controller!.text,'Pocket');
+        expect(inputJournal.prepares,0);
+        await tapControl('remote-paste-append');
+      } finally {
+        messenger.setMockMethodCallHandler(SystemChannels.platform,null);
+      }
+      expect(tester.widget<TextField>(draft).controller!.text,'Pocket测');
+      expect(inputJournal.prepares,0);
       await tapControl('remote-input-draft-send');
       expect(find.text('预览发送文本'),findsOneWidget);
       final preview = find.descendant(of:find.byType(AlertDialog),matching:find.byType(SelectableText));

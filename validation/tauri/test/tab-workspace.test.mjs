@@ -5,7 +5,7 @@ const fixture=JSON.parse(readFileSync(new URL('../../shared/mobile-tabs-v1.json'
 const target=id=>fixture.targets.find(t=>t.id===id);
 import {initTabWorkspace} from '../src/tab-workspace.js';
 class Element {
-  constructor(tag){this.tagName=tag;this.children=[];this.attrs={};this.value='';this.disabled=false;this.hidden=false;this.textContent='';}
+  constructor(tag){this.tagName=tag;this.children=[];this.attrs={};this.dataset={};this.value='';this.disabled=false;this.hidden=false;this.textContent='';}
   append(...xs){for(const x of xs)this.children.push(x);}
   replaceChildren(...xs){this.replaceCount=(this.replaceCount || 0)+1;this.children=[];this.append(...xs);}
   setAttribute(k,v){this.attrs[k]=v;}
@@ -435,7 +435,7 @@ async function readyPaste(h) {
 }
 function paste(terminal,value){let prevented=false,stopped=false;terminal.textarea.event_paste({preventDefault(){prevented=true;},stopImmediatePropagation(){stopped=true;},clipboardData:{getData:()=>value}});assert.equal(prevented,true);assert.equal(stopped,true);}
 for(const [label,expected] of [['追加到草稿','原草稿新\n文本'],['替换草稿','新\n文本'],['取消粘贴','原草稿']]) test(`粘贴预览 ${label} preserves draft until explicit action`,async()=>{
- const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try{await readyPaste(h);paste(h.terminal(),'新\n文本');await flush();await flush();assert.ok(h.all().some(n=>n.tagName==='pre' && n.textContent==='新\n文本'));assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿');h.find(label).onclick();assert.equal(h.all().find(n=>n.tagName==='textarea').value,expected);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);}finally{h.restore();}
+ const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try{await readyPaste(h);paste(h.terminal(),'新\n文本');await flush();await flush();assert.ok(h.all().some(n=>n.tagName==='pre' && n.textContent==='新⏎\n文本'));assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿');h.find(label).onclick();assert.equal(h.all().find(n=>n.tagName==='textarea').value,expected);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);}finally{h.restore();}
 });
 test('paste review is revoked on focus escape and cannot apply a retained button',async()=>{
  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try{await readyPaste(h);paste(h.terminal(),'新');await flush();const apply=h.find('替换草稿');const group=h.all().find(n=>n.attrs['aria-label']==='粘贴内容审查');group.onfocusout({relatedTarget:new Element('button')});apply.onclick();assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿');assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);}finally{h.restore();}
@@ -639,4 +639,107 @@ test('keyboard and paste events are blocked while direct permission is pending',
     await flush();
     assert.equal(h.calls.filter(call => call.name === 'remote_tab_input_send').length, 1);
   } finally { h.restore(); }
+});
+
+test('draft field paste reveals hidden controls, bounds the combined draft and sends only after separate approval', async () => {
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{send:acceptedInput});
+  const draft=()=>h.all().find(node=>node.attrs['aria-label']==='当前标签草稿');
+  try {
+    await readyKeyboard(h);
+    h.find('启用草稿输入').onclick();await flush();
+    const field=draft();
+    field.focus();field.value='a'.repeat(4093);field.oninput();
+    const content='中\x1b\u202e\n';
+    paste({textarea:field},content);await flush();
+    assert.ok(h.all().some(node=>node.tagName==='pre' && node.textContent==='中\\u{1b}\\u{202e}⏎\n'));
+    assert.equal(h.find('追加到草稿').disabled,true);
+    h.find('追加到草稿').onclick();
+    assert.equal(draft().value,'a'.repeat(4093));
+    h.find('替换草稿').onclick();
+    assert.equal(draft().value,content);
+    assert.equal(h.find('发送草稿').disabled,true);
+    assert.ok(!h.calls.some(call=>call.name==='remote_tab_input_send'));
+
+    h.find('启用草稿输入').onclick();await flush();
+    let approved=false, description='';
+    window.confirm=value=>{description=value;return approved;};
+    h.terminal().modes={bracketedPasteMode:true};
+    h.find('发送草稿').onclick();await flush();
+    assert.match(description,/w1:p1 · term_a001/);
+    assert.ok(description.includes('中\\u{1b}\\u{202e}⏎'));
+    assert.equal(draft().value,content);
+    assert.ok(!h.calls.some(call=>call.name==='remote_tab_input_send'));
+    approved=true;
+    h.find('发送草稿').onclick();await flush();
+    const writes=h.calls.filter(call=>call.name==='remote_tab_input_send');
+    assert.equal(writes.length,1);
+    assert.deepEqual(writes[0].args.bytes,[...new TextEncoder().encode('\x1b[200~'+content+'\x1b[201~')]);
+  } finally {h.restore();}
+});
+
+test('composing in the draft field and an older review cannot replace the current paste decision', async () => {
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
+  const draft=()=>h.all().find(node=>node.attrs['aria-label']==='当前标签草稿');
+  try {
+    await readyKeyboard(h);
+    let field=draft();
+    field.focus();field.value='原稿';field.oninput();
+    field.event_compositionstart();paste({textarea:field},'旧');await flush();
+    assert.equal(h.find('替换草稿'),undefined);
+    field.event_compositionend();paste({textarea:field},'一');await flush();
+    const stale=h.find('替换草稿');
+    h.find('取消粘贴').onclick();
+    field=draft();field.focus();paste({textarea:field},'二');await flush();
+    stale.onclick();
+    assert.equal(draft().value,'原稿');
+    h.find('追加到草稿').onclick();assert.equal(draft().value,'原稿二');
+    assert.ok(!h.calls.some(call=>call.name==='remote_tab_input_send'));
+  } finally {h.restore();}
+});
+
+test('saved tab auxiliary keys use its current lease, preserve IME and release focus outside the toolbar', async () => {
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{send:acceptedInput});
+  const writes=()=>h.calls.filter(call=>call.name==='remote_tab_input_send');
+  try {
+    await readyKeyboard(h);
+    assert.equal(h.find('Ctrl'),undefined);
+    h.find('逐键输入').onclick();await flush();
+    const ctrl=h.find('Ctrl'), key=h.find('C'), term=h.terminal();
+    ctrl.onclick();assert.equal(ctrl.attrs['aria-pressed'],'true');
+    term.textarea.event_compositionstart();
+    assert.equal(ctrl.disabled,true);
+    key.onclick();assert.equal(writes().length,0);
+    term.textarea.event_compositionend();
+    term.data('中');await flush();
+    ctrl.onclick();key.onclick();await flush();
+    assert.deepEqual(writes().map(call=>call.args.bytes),[[228,184,173],[3]]);
+    assert.equal(ctrl.attrs['aria-pressed'],'false');
+
+    const up=h.find('↑'),group=h.all().find(node=>node.attrs['aria-label']==='终端辅助键');
+    term.modes={applicationCursorKeysMode:true};
+    term.textarea.event_blur({relatedTarget:up});
+    up.focus();
+    term.data('x');assert.equal(writes().length,2);
+    up.onclick();await flush();
+    assert.deepEqual(writes().at(-1).args.bytes,[27,79,65]);
+    group.event_focusout({relatedTarget:new Element('button')});
+    await flush();up.onclick();
+    assert.equal(writes().length,3);
+    assert.equal(term.textarea.readOnly,true);
+    assert.ok(!h.calls.some(call=>call.name.includes('resize')));
+  } finally {h.restore();}
+});
+
+test('a draft edited back to the same text during final confirmation needs a new review', async () => {
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{send:acceptedInput});
+  try {
+    await readyKeyboard(h);
+    h.find('启用草稿输入').onclick();await flush();
+    const field=h.all().find(node=>node.attrs['aria-label']==='当前标签草稿');
+    field.value='A';field.oninput();
+    window.confirm=()=>{field.value='B';field.oninput();field.value='A';field.oninput();return true;};
+    h.find('发送草稿').onclick();await flush();
+    assert.equal(field.value,'A');
+    assert.ok(!h.calls.some(call=>call.name==='remote_tab_input_send'));
+  } finally {h.restore();}
 });

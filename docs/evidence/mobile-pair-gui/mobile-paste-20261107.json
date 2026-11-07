@@ -1,0 +1,1251 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+  "run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239",
+  "local": {
+    "cleanTauriNodeTests": 190,
+    "cleanTauriNodeFailed": 0,
+    "viteProductionBuild": "passed",
+    "offlineHarnessChecks": 31,
+    "changedDartFilesSyntaxChecked": 6,
+    "localFlutterAnalyzeOrWidgets": false,
+    "browser": "macOS headless Chrome 156, real app DOM and xterm.js 6.0.0, isolated synthetic Tauri IPC; injected ClipboardEvent; browser-generated touch clicks; no system clipboard, SSH or native device access",
+    "browserRoutes": {
+      "tab-390": {
+        "viewport": [
+          390,
+          820
+        ],
+        "preview": "中⏎\n\\u{202e}X\\u{1b}",
+        "append": "original+clipboard",
+        "overflowCancelPreservedBytes": 4094,
+        "replace": "代",
+        "localPasteRemoteSends": 0,
+        "explicitAuxiliaryKeys": [
+          [
+            3
+          ],
+          [
+            27,
+            91,
+            65
+          ]
+        ],
+        "resizeRequests": 0
+      },
+      "form-390": {
+        "viewport": [
+          390,
+          820
+        ],
+        "preview": "中⏎\n\\u{202e}X\\u{1b}",
+        "append": "original+clipboard",
+        "overflowCancelPreservedBytes": 4094,
+        "replace": "代",
+        "localPasteRemoteSends": 0,
+        "explicitAuxiliaryKeys": [],
+        "resizeRequests": 0
+      },
+      "tab-320": {
+        "viewport": [
+          320,
+          820
+        ],
+        "preview": "中⏎\n\\u{202e}X\\u{1b}",
+        "append": "original+clipboard",
+        "overflowCancelPreservedBytes": 4094,
+        "replace": "代",
+        "localPasteRemoteSends": 0,
+        "explicitAuxiliaryKeys": [
+          [
+            3
+          ],
+          [
+            27,
+            91,
+            65
+          ]
+        ],
+        "resizeRequests": 0
+      },
+      "form-320": {
+        "viewport": [
+          320,
+          820
+        ],
+        "preview": "中⏎\n\\u{202e}X\\u{1b}",
+        "append": "original+clipboard",
+        "overflowCancelPreservedBytes": 4094,
+        "replace": "代",
+        "localPasteRemoteSends": 0,
+        "explicitAuxiliaryKeys": [],
+        "resizeRequests": 0
+      }
+    },
+    "dedicatedBrowserClosed": true,
+    "fixtureServerStopped": true
+  },
+  "knownDeviceGaps": [
+    "physical touch and platform IME",
+    "OS clipboard menu on mobile",
+    "arm64 device runtime",
+    "iOS lifecycle",
+    "real overlay concurrency"
+  ],
+  "asOf": "2026-11-07",
+  "cloud": {
+    "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+    "run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239",
+    "status": "completed",
+    "conclusion": "failure",
+    "jobs": [
+      {
+        "name": "transport-source",
+        "conclusion": "success",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/job/128302962796"
+      },
+      {
+        "name": "native",
+        "conclusion": "success",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/job/128302962926"
+      },
+      {
+        "name": "input-fixture / build",
+        "conclusion": "success",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/job/128302962946"
+      },
+      {
+        "name": "flutter-source",
+        "conclusion": "success",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/job/128304303268"
+      },
+      {
+        "name": "android-pairing / flutter-device-key",
+        "conclusion": "failure",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/job/128304303346"
+      },
+      {
+        "name": "android-pairing / android-device-key",
+        "conclusion": "failure",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/job/128304303412"
+      },
+      {
+        "name": "apps (tauri)",
+        "conclusion": "success",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/job/128304972164"
+      },
+      {
+        "name": "apps (flutter)",
+        "conclusion": "success",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/job/128304972174"
+      }
+    ],
+    "packages": {
+      "verified": true,
+      "sourceCommit": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+      "zipArtifacts": {
+        "flutter": {
+          "zipSha256": "0791314fc9f235103ae117aff415a93a8fbaf95ceb0f14b3a9cb27ccdbd288ec",
+          "zipBytes": 151583956
+        },
+        "tauri": {
+          "zipSha256": "d2343d42ea535a4c517b0439b793bbf2ad20c9dd17f6f4b27dc90b472ca14bee",
+          "zipBytes": 162603773
+        },
+        "native": {
+          "zipSha256": "ce3cd9a21491378c53ea7dd98343335957c8336711293d5d70088c7898f27721",
+          "zipBytes": 126167934
+        }
+      },
+      "nativeManifestSha256": "ef183f873aa73d68291e27feb8cb09ee3603d43ef9f3e024e634badadfcd576c",
+      "nativeAbi": "arm64-v8a",
+      "nativeLibraries": {
+        "libheeler_easytier.so": {
+          "sha256": "752081f189632b403acd1b7600199c19148cd2d6f137b324c2cac1a5bc2c41c7",
+          "bytes": 365042104
+        },
+        "libhp_tailscale.so": {
+          "sha256": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d",
+          "bytes": 30406096
+        }
+      },
+      "apps": {
+        "flutter": {
+          "apkSha256": "dbbf5a01a27ea800fdb0199f3a406a65a0027e4ad7b55754ac9d33639a85e820",
+          "apkBytes": 483760608,
+          "abi": "arm64-v8a",
+          "nativeManifestSha256": "ef183f873aa73d68291e27feb8cb09ee3603d43ef9f3e024e634badadfcd576c",
+          "report": {
+            "sourceCommit": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+            "app": "flutter",
+            "abi": "arm64-v8a",
+            "api": 35,
+            "sourceChecks": "success",
+            "transportChecks": "success",
+            "transportChecksScope": "shared Rust isolated SSH and unit checks; not Android runtime or real overlay",
+            "sourceChecksScope": "Flutter analyzer, unit/widget, renderer and isolated SSH GUI checks",
+            "apkSha256": "dbbf5a01a27ea800fdb0199f3a406a65a0027e4ad7b55754ac9d33639a85e820",
+            "nativeManifestSha256": "ef183f873aa73d68291e27feb8cb09ee3603d43ef9f3e024e634badadfcd576c",
+            "build": "passed",
+            "staticInspection": "passed",
+            "androidLoad": "not run",
+            "installation": "not run",
+            "node": "not run",
+            "terminalCandidateManifestSha256": "2c7afda02071d7397d1ae77cfb8e27b29557188a580e02529ae5752cc56f23f7"
+          },
+          "checksummedArtifactFiles": 14
+        },
+        "tauri": {
+          "apkSha256": "0dd3ae7d013ecceb66873b9f032f152a5ea416b206bfa8c6362571fedf493668",
+          "apkBytes": 591450439,
+          "abi": "arm64-v8a",
+          "nativeManifestSha256": "ef183f873aa73d68291e27feb8cb09ee3603d43ef9f3e024e634badadfcd576c",
+          "report": {
+            "sourceCommit": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+            "app": "tauri",
+            "abi": "arm64-v8a",
+            "api": 35,
+            "sourceChecks": "success",
+            "transportChecks": "success",
+            "transportChecksScope": "shared Rust isolated SSH and unit checks; not Android runtime or real overlay",
+            "sourceChecksScope": "JavaScript unit tests; Rust target compilation is part of build",
+            "apkSha256": "0dd3ae7d013ecceb66873b9f032f152a5ea416b206bfa8c6362571fedf493668",
+            "nativeManifestSha256": "ef183f873aa73d68291e27feb8cb09ee3603d43ef9f3e024e634badadfcd576c",
+            "build": "passed",
+            "staticInspection": "passed",
+            "androidLoad": "not run",
+            "installation": "not run",
+            "node": "not run"
+          },
+          "checksummedArtifactFiles": 11
+        }
+      },
+      "scope": "offline byte and metadata checks only; no execution, install, Android load or network validation; native SHA256SUMS checked for the two named libraries only"
+    },
+    "packageArtifactURLs": {
+      "flutter": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/artifacts/13561835087",
+      "tauri": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/artifacts/13561422120",
+      "native": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/artifacts/13560079447"
+    },
+    "downloadVerification": {
+      "zipDigestsRecomputed": true,
+      "apkDigestsAndSizesRecomputed": true,
+      "scope": "Local offline verification of downloaded bytes and recorded metadata; no APK execution or installation."
+    },
+    "initialAvd": {
+      "passed": 1,
+      "failed": 3,
+      "scope": "Four independent Android API35 x86_64 AVD runs with self-created SSH fixtures. The listed failure stages are assertions, not established root causes. These do not execute the downloaded arm64 network APKs.",
+      "cases": [
+        {
+          "app": "flutter",
+          "case": "stock",
+          "artifactId": 13560902949,
+          "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/artifacts/13560902949",
+          "zipSha256": "b3ce6e96a2e51665b59d5d6437eb2789d1ecb2381809567ec3edd9a7a20c518f",
+          "zipBytes": 38523,
+          "internalChecksumsVerified": 7,
+          "manifest": {
+            "schemaVersion": 1,
+            "milestone": "M1c-pairing-dashboard-observe",
+            "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+            "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239",
+            "platform": "Android API35 x86_64 AVD on Ubuntu 24.04 loopback OpenSSH; Flutter debug",
+            "runnerImage": {
+              "imageOS": "ubuntu24",
+              "imageVersion": "20261101.360.1"
+            },
+            "herdr": {
+              "version": "0.9.5",
+              "sourceCommit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+              "asset": "https://github.com/herdrdev/herdr/releases/download/v0.9.5/herdr-linux-x86_64",
+              "sha256": "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d"
+            },
+            "status": "failed",
+            "checks": [
+              {
+                "adapter": "flutter-android",
+                "testId": "reviewed-device-key-to-observe",
+                "status": "failed",
+                "temporaryHostApprovedRequest": false,
+                "matchedDeviceKeyInSshd": false,
+                "revokedFixtureKey": false,
+                "errorCode": "flutter_android_test_exited_create_not_available"
+              }
+            ],
+            "scope": "API35 Flutter debug app with production HostCatalogPage and native AndroidKeyStore-wrapped identity",
+            "unverified": [
+              "physical phone",
+              "camera",
+              "real IME",
+              "overlay networks",
+              "pixel rendering",
+              "hardware key protection",
+              "production deployment",
+              "remote input from this GUI",
+              "Flutter release/profile application runtime",
+              "protected system-store runtime"
+            ],
+            "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+            "readinessSnapshot": {
+              "pocket-probe": {
+                "resultType": "session_snapshot",
+                "flatKnownFields": {
+                  "version": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  },
+                  "protocol": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  }
+                },
+                "snapshotPresent": true,
+                "snapshotType": "dict",
+                "nestedKnownFields": {
+                  "version": {
+                    "present": true,
+                    "type": "str",
+                    "value": "0.9.5"
+                  },
+                  "protocol": {
+                    "present": true,
+                    "type": "int",
+                    "value": 22
+                  }
+                }
+              },
+              "pocket-other": {
+                "resultType": "session_snapshot",
+                "flatKnownFields": {
+                  "version": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  },
+                  "protocol": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  }
+                },
+                "snapshotPresent": true,
+                "snapshotType": "dict",
+                "nestedKnownFields": {
+                  "version": {
+                    "present": true,
+                    "type": "str",
+                    "value": "0.9.5"
+                  },
+                  "protocol": {
+                    "present": true,
+                    "type": "int",
+                    "value": 22
+                  }
+                }
+              }
+            },
+            "crossSessionFixture": {
+              "bothSessionsExist": true,
+              "samePaneId": true,
+              "expected": "reject mismatched socket/session before publishing full"
+            },
+            "frameEvidence": "displayed sequence advance on the same production Terminal object after initial full",
+            "receivedInputBytes": 0,
+            "fixtureSharedBetweenAdapters": false,
+            "observeFixture": {
+              "syntheticTickIntervalMs": 200,
+              "changedTerminalRow": 23,
+              "selection": "GUI chooses a pane button from the current snapshot",
+              "backpressureScope": "decoded single-frame byte high-water only, not JSON line, SSH buffers or whole-process memory"
+            },
+            "sharedPty": {
+              "noObservedResize": true,
+              "numericRecord": {
+                "captureErrors": 0,
+                "changes": 0,
+                "columns": 119,
+                "elapsedMs": 248495,
+                "endReason": 1,
+                "initialColumns": 119,
+                "initialRows": 40,
+                "maxSampleGapMs": 156,
+                "readErrors": 0,
+                "rows": 40,
+                "sampleIntervalMs": 50,
+                "samples": 4903,
+                "schemaVersion": 1,
+                "signalAvailable": 1,
+                "signalSamples": 0,
+                "signalsMayCoalesce": 1,
+                "state": 2,
+                "terminationSignal": 0,
+                "winchHandlers": 0
+              }
+            },
+            "cleanup": {
+              "ownedProcessesStopped": true,
+              "ephemeralKeysRemoved": true,
+              "userAuthorizationFilesTouched": false,
+              "rawLogsUploaded": false
+            }
+          },
+          "avdLifecycle": "preflight: checking for existing devices\npreflight: no existing device\nstartup: launched owned emulator on emulator-5554\nstartup: boot ready=true\ncleanup: beginning; original status 1\ncleanup: owned serial absent on attempt 1\n",
+          "driverStatus": "stock=1 guarded=1",
+          "appCleanup": {
+            "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+            "ownedPackageInitiallyAbsent": true,
+            "ownedPackageAbsent": true,
+            "appProcessGone": true,
+            "reverseRemoved": true,
+            "ownedForwardsRemoved": true,
+            "flutterToolStopped": true,
+            "rawLogsUploaded": false,
+            "status": "passed"
+          },
+          "failure": {
+            "stage": "create_not_available",
+            "errorClass": "TestFailure",
+            "line": 197
+          }
+        },
+        {
+          "app": "flutter",
+          "case": "guarded-input",
+          "artifactId": 13560992720,
+          "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/artifacts/13560992720",
+          "zipSha256": "9e1ec011bb07739ec89c36a2bb3dbb2ac8d599935f8d8cd3c5d6052cfa51fd15",
+          "zipBytes": 38682,
+          "internalChecksumsVerified": 7,
+          "manifest": {
+            "schemaVersion": 1,
+            "milestone": "M1d-mobile-guarded-input",
+            "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+            "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239",
+            "platform": "Android API35 x86_64 AVD on Ubuntu 24.04 loopback OpenSSH; Flutter debug",
+            "runnerImage": {
+              "imageOS": "ubuntu24",
+              "imageVersion": "20261101.360.1"
+            },
+            "herdr": {
+              "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+              "upstreamSHA": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+              "patchSHA256": "c07a1637e3b72b13c660dc4cc3c2cca50ef383b66d0400a3208bd9079434ab00",
+              "buildProfile": "dev",
+              "configDirectory": "herdr",
+              "scope": "isolated validation fixture",
+              "binarySHA256": "4bc21805f02ad092ca07ede35792876781c9e4783239da98fef90a328cace4b5",
+              "binaryDebugAssertions": false,
+              "readinessAndCapabilitySmokePassed": true
+            },
+            "status": "failed",
+            "checks": [
+              {
+                "adapter": "flutter-android",
+                "testId": "reviewed-device-key-to-direct-and-draft",
+                "status": "failed",
+                "temporaryHostApprovedRequest": true,
+                "matchedDeviceKeyInSshd": true,
+                "revokedFixtureKey": true,
+                "errorCode": "flutter_android_test_exited_guarded_hidden_draft"
+              }
+            ],
+            "scope": "API35 Flutter debug app with production HostCatalogPage and native AndroidKeyStore-wrapped identity",
+            "unverified": [
+              "physical phone",
+              "camera",
+              "real IME",
+              "overlay networks",
+              "pixel rendering",
+              "hardware key protection",
+              "production deployment",
+              "remote input from this GUI",
+              "Flutter release/profile application runtime",
+              "protected system-store runtime"
+            ],
+            "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+            "readinessSnapshot": {
+              "pocket-probe": {
+                "resultType": "session_snapshot",
+                "flatKnownFields": {
+                  "version": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  },
+                  "protocol": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  }
+                },
+                "snapshotPresent": true,
+                "snapshotType": "dict",
+                "nestedKnownFields": {
+                  "version": {
+                    "present": true,
+                    "type": "str",
+                    "value": "0.9.5"
+                  },
+                  "protocol": {
+                    "present": true,
+                    "type": "int",
+                    "value": 22
+                  }
+                }
+              },
+              "pocket-other": {
+                "resultType": "session_snapshot",
+                "flatKnownFields": {
+                  "version": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  },
+                  "protocol": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  }
+                },
+                "snapshotPresent": true,
+                "snapshotType": "dict",
+                "nestedKnownFields": {
+                  "version": {
+                    "present": true,
+                    "type": "str",
+                    "value": "0.9.5"
+                  },
+                  "protocol": {
+                    "present": true,
+                    "type": "int",
+                    "value": 22
+                  }
+                }
+              }
+            },
+            "crossSessionFixture": {
+              "bothSessionsExist": true,
+              "samePaneId": true,
+              "expected": "reject mismatched socket/session before publishing full"
+            },
+            "frameEvidence": "displayed sequence advance on the same production Terminal object after initial full",
+            "receivedInputBytes": 1,
+            "fixtureSharedBetweenAdapters": false,
+            "observeFixture": {
+              "syntheticTickIntervalMs": 200,
+              "changedTerminalRow": 23,
+              "selection": "GUI chooses a pane button from the current snapshot",
+              "backpressureScope": "decoded single-frame byte high-water only, not JSON line, SSH buffers or whole-process memory"
+            },
+            "sharedPty": {
+              "noObservedResize": true,
+              "numericRecord": {
+                "captureErrors": 0,
+                "changes": 0,
+                "columns": 119,
+                "elapsedMs": 147396,
+                "endReason": 1,
+                "initialColumns": 119,
+                "initialRows": 40,
+                "maxSampleGapMs": 253,
+                "readErrors": 0,
+                "rows": 40,
+                "sampleIntervalMs": 50,
+                "samples": 2903,
+                "schemaVersion": 1,
+                "signalAvailable": 1,
+                "signalSamples": 0,
+                "signalsMayCoalesce": 1,
+                "state": 2,
+                "terminationSignal": 0,
+                "winchHandlers": 0
+              }
+            },
+            "cleanup": {
+              "ownedProcessesStopped": true,
+              "ephemeralKeysRemoved": true,
+              "userAuthorizationFilesTouched": false,
+              "rawLogsUploaded": false
+            }
+          },
+          "avdLifecycle": "preflight: checking for existing devices\npreflight: no existing device\nstartup: launched owned emulator on emulator-5554\nstartup: boot ready=true\ncleanup: beginning; original status 1\ncleanup: owned serial absent on attempt 1\n",
+          "driverStatus": "stock=1 guarded=1",
+          "appCleanup": {
+            "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+            "ownedPackageInitiallyAbsent": true,
+            "ownedPackageAbsent": true,
+            "appProcessGone": true,
+            "reverseRemoved": true,
+            "ownedForwardsRemoved": true,
+            "flutterToolStopped": true,
+            "rawLogsUploaded": false,
+            "status": "passed"
+          },
+          "failure": {
+            "stage": "guarded_hidden_draft",
+            "errorClass": "TestFailure",
+            "line": 48
+          }
+        },
+        {
+          "app": "tauri",
+          "case": "stock",
+          "artifactId": 13561447093,
+          "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/artifacts/13561447093",
+          "zipSha256": "69e24c9cfb1ce08366f67d068b23ee7410a240b8d9b32309a93491735a8a4fbe",
+          "zipBytes": 37583,
+          "internalChecksumsVerified": 3,
+          "manifest": {
+            "schemaVersion": 1,
+            "milestone": "M1c-pairing-dashboard-observe",
+            "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+            "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239",
+            "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+            "runnerImage": {
+              "imageOS": "ubuntu24",
+              "imageVersion": "20261101.360.1"
+            },
+            "herdr": {
+              "version": "0.9.5",
+              "sourceCommit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+              "asset": "https://github.com/herdrdev/herdr/releases/download/v0.9.5/herdr-linux-x86_64",
+              "sha256": "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d"
+            },
+            "status": "passed",
+            "checks": [
+              {
+                "adapter": "tauri-android",
+                "testId": "reviewed-device-key-to-observe",
+                "status": "passed",
+                "paired": true,
+                "paneChosen": true,
+                "fullRendered": true,
+                "deltaRendered": true,
+                "stoppedStale": true,
+                "fullRenderAcknowledgements": 1,
+                "deltaRenderAcknowledgements": 1,
+                "inputQueueAccepted": false,
+                "hiddenReentryFreshFull": false,
+                "keyStore": "Android API 35 emulator AndroidKeyStore-wrapped device key",
+                "device": "ephemeral Android emulator",
+                "uiDriver": "debug WebView CDP input",
+                "temporaryHostApprovedRequest": true,
+                "matchedDeviceKeyInSshd": true,
+                "revokedFixtureKey": true,
+                "receivedInputBytes": 0
+              }
+            ],
+            "scope": "API35 emulator WebView and AndroidKeyStore-wrapped identity",
+            "unverified": [
+              "physical phone",
+              "camera",
+              "real IME",
+              "overlay networks",
+              "pixel rendering",
+              "hardware key protection",
+              "production deployment",
+              "remote input from this GUI"
+            ],
+            "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+            "readinessSnapshot": {
+              "pocket-probe": {
+                "resultType": "session_snapshot",
+                "flatKnownFields": {
+                  "version": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  },
+                  "protocol": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  }
+                },
+                "snapshotPresent": true,
+                "snapshotType": "dict",
+                "nestedKnownFields": {
+                  "version": {
+                    "present": true,
+                    "type": "str",
+                    "value": "0.9.5"
+                  },
+                  "protocol": {
+                    "present": true,
+                    "type": "int",
+                    "value": 22
+                  }
+                }
+              },
+              "pocket-other": {
+                "resultType": "session_snapshot",
+                "flatKnownFields": {
+                  "version": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  },
+                  "protocol": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  }
+                },
+                "snapshotPresent": true,
+                "snapshotType": "dict",
+                "nestedKnownFields": {
+                  "version": {
+                    "present": true,
+                    "type": "str",
+                    "value": "0.9.5"
+                  },
+                  "protocol": {
+                    "present": true,
+                    "type": "int",
+                    "value": 22
+                  }
+                }
+              }
+            },
+            "crossSessionFixture": {
+              "bothSessionsExist": true,
+              "samePaneId": true,
+              "expected": "reject mismatched socket/session before publishing full"
+            },
+            "frameEvidence": "xterm parser callback after consuming a frame",
+            "receivedInputBytes": 0,
+            "fixtureSharedBetweenAdapters": false,
+            "observeFixture": {
+              "syntheticTickIntervalMs": 200,
+              "changedTerminalRow": 23,
+              "selection": "GUI chooses a pane button from the current snapshot",
+              "backpressureScope": "decoded single-frame byte high-water only, not JSON line, SSH buffers or whole-process memory"
+            },
+            "sharedPty": {
+              "noObservedResize": true,
+              "numericRecord": {
+                "captureErrors": 0,
+                "changes": 0,
+                "columns": 119,
+                "elapsedMs": 33648,
+                "endReason": 1,
+                "initialColumns": 119,
+                "initialRows": 40,
+                "maxSampleGapMs": 123,
+                "readErrors": 0,
+                "rows": 40,
+                "sampleIntervalMs": 50,
+                "samples": 666,
+                "schemaVersion": 1,
+                "signalAvailable": 1,
+                "signalSamples": 0,
+                "signalsMayCoalesce": 1,
+                "state": 2,
+                "terminationSignal": 0,
+                "winchHandlers": 0
+              }
+            },
+            "cleanup": {
+              "ownedProcessesStopped": true,
+              "ephemeralKeysRemoved": true,
+              "userAuthorizationFilesTouched": false,
+              "rawLogsUploaded": false
+            }
+          },
+          "avdLifecycle": "preflight: checking for existing devices\npreflight: no existing device\nstartup: launched owned emulator on emulator-5554\nstartup: boot ready=true\ncleanup: beginning; original status 0\ncleanup: owned serial absent on attempt 1\n",
+          "driverStatus": "stock=0 guarded=1"
+        },
+        {
+          "app": "tauri",
+          "case": "guarded-input",
+          "artifactId": 13561457135,
+          "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/artifacts/13561457135",
+          "zipSha256": "bd6e29671812b233b902a3d48aee9ff1489911ea09a5d28123cb286f067e4df4",
+          "zipBytes": 37691,
+          "internalChecksumsVerified": 3,
+          "manifest": {
+            "schemaVersion": 1,
+            "milestone": "M1d-mobile-guarded-input",
+            "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+            "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239",
+            "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+            "runnerImage": {
+              "imageOS": "ubuntu24",
+              "imageVersion": "20261101.360.1"
+            },
+            "herdr": {
+              "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+              "upstreamSHA": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+              "patchSHA256": "c07a1637e3b72b13c660dc4cc3c2cca50ef383b66d0400a3208bd9079434ab00",
+              "buildProfile": "dev",
+              "configDirectory": "herdr",
+              "scope": "isolated validation fixture",
+              "binarySHA256": "4bc21805f02ad092ca07ede35792876781c9e4783239da98fef90a328cace4b5",
+              "binaryDebugAssertions": false,
+              "readinessAndCapabilitySmokePassed": true
+            },
+            "status": "failed",
+            "checks": [
+              {
+                "adapter": "tauri-android",
+                "testId": "reviewed-device-key-to-direct-and-draft",
+                "status": "failed",
+                "temporaryHostApprovedRequest": true,
+                "matchedDeviceKeyInSshd": true,
+                "revokedFixtureKey": true,
+                "errorCode": "android_draft_not_retained"
+              }
+            ],
+            "scope": "API35 emulator WebView and AndroidKeyStore-wrapped identity",
+            "unverified": [
+              "physical phone",
+              "camera",
+              "real IME",
+              "overlay networks",
+              "pixel rendering",
+              "hardware key protection",
+              "production deployment",
+              "remote input from this GUI",
+              "protected system-store runtime"
+            ],
+            "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+            "readinessSnapshot": {
+              "pocket-probe": {
+                "resultType": "session_snapshot",
+                "flatKnownFields": {
+                  "version": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  },
+                  "protocol": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  }
+                },
+                "snapshotPresent": true,
+                "snapshotType": "dict",
+                "nestedKnownFields": {
+                  "version": {
+                    "present": true,
+                    "type": "str",
+                    "value": "0.9.5"
+                  },
+                  "protocol": {
+                    "present": true,
+                    "type": "int",
+                    "value": 22
+                  }
+                }
+              },
+              "pocket-other": {
+                "resultType": "session_snapshot",
+                "flatKnownFields": {
+                  "version": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  },
+                  "protocol": {
+                    "present": false,
+                    "type": "NoneType",
+                    "value": null
+                  }
+                },
+                "snapshotPresent": true,
+                "snapshotType": "dict",
+                "nestedKnownFields": {
+                  "version": {
+                    "present": true,
+                    "type": "str",
+                    "value": "0.9.5"
+                  },
+                  "protocol": {
+                    "present": true,
+                    "type": "int",
+                    "value": 22
+                  }
+                }
+              }
+            },
+            "crossSessionFixture": {
+              "bothSessionsExist": true,
+              "samePaneId": true,
+              "expected": "reject mismatched socket/session before publishing full"
+            },
+            "frameEvidence": "xterm parser callback after consuming a frame",
+            "receivedInputBytes": 1,
+            "fixtureSharedBetweenAdapters": false,
+            "observeFixture": {
+              "syntheticTickIntervalMs": 200,
+              "changedTerminalRow": 23,
+              "selection": "GUI chooses a pane button from the current snapshot",
+              "backpressureScope": "decoded single-frame byte high-water only, not JSON line, SSH buffers or whole-process memory"
+            },
+            "sharedPty": {
+              "noObservedResize": true,
+              "numericRecord": {
+                "captureErrors": 0,
+                "changes": 0,
+                "columns": 119,
+                "elapsedMs": 45867,
+                "endReason": 1,
+                "initialColumns": 119,
+                "initialRows": 40,
+                "maxSampleGapMs": 89,
+                "readErrors": 0,
+                "rows": 40,
+                "sampleIntervalMs": 50,
+                "samples": 906,
+                "schemaVersion": 1,
+                "signalAvailable": 1,
+                "signalSamples": 0,
+                "signalsMayCoalesce": 1,
+                "state": 2,
+                "terminationSignal": 0,
+                "winchHandlers": 0
+              }
+            },
+            "cleanup": {
+              "ownedProcessesStopped": true,
+              "ephemeralKeysRemoved": true,
+              "userAuthorizationFilesTouched": false,
+              "rawLogsUploaded": false
+            }
+          },
+          "avdLifecycle": "preflight: checking for existing devices\npreflight: no existing device\nstartup: launched owned emulator on emulator-5554\nstartup: boot ready=true\ncleanup: beginning; original status 1\ncleanup: owned serial absent on attempt 1\n",
+          "driverStatus": "stock=0 guarded=1"
+        }
+      ],
+      "retry": "A separate test-only AVD retry must retain its own source, run and outcome; no retry result is included here."
+    },
+    "flutterLinuxGui": {
+      "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/artifacts/13561540966",
+      "zipSha256": "ae7f4c6ae13c945addab3ec3bc2f7309871be3a4dc26d4bc613aab659a865d0c",
+      "internalChecksumsVerified": 4,
+      "manifest": {
+        "schemaVersion": 1,
+        "milestone": "M1c-pairing-dashboard-observe",
+        "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+        "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239",
+        "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+        "runnerImage": {
+          "imageOS": "ubuntu24",
+          "imageVersion": "20261101.360.1"
+        },
+        "herdr": {
+          "sourceSHA": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+          "upstreamSHA": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+          "patchSHA256": "c07a1637e3b72b13c660dc4cc3c2cca50ef383b66d0400a3208bd9079434ab00",
+          "buildProfile": "dev",
+          "configDirectory": "herdr",
+          "scope": "isolated validation fixture",
+          "binarySHA256": "4bc21805f02ad092ca07ede35792876781c9e4783239da98fef90a328cace4b5",
+          "binaryDebugAssertions": false,
+          "readinessAndCapabilitySmokePassed": true
+        },
+        "status": "passed",
+        "checks": [
+          {
+            "adapter": "flutter",
+            "testId": "reviewed-device-key-to-observe",
+            "status": "passed",
+            "paired": true,
+            "paneChosen": true,
+            "fullRendered": true,
+            "deltaRendered": true,
+            "stoppedStale": true,
+            "reopenedPendingRequest": true,
+            "pauseResumeSameConnection": true,
+            "hostSummaryActive": true,
+            "hostSummaryRetained": true,
+            "hostSummaryResumed": true,
+            "hostSummaryStopped": true,
+            "inputQueueAccepted": true,
+            "signCalls": 1,
+            "frameCount": 10,
+            "deltaFrames": 8,
+            "localViewportChanges": 2,
+            "keyStore": "test-only Dart signer with runner-generated identity",
+            "temporaryHostApprovedRequest": true,
+            "matchedDeviceKeyInSshd": true,
+            "revokedFixtureKey": true,
+            "receivedInputBytes": 9
+          }
+        ],
+        "scope": "Flutter widget with explicit test signer, catalog and input journal",
+        "unverified": [
+          "physical phone",
+          "camera",
+          "real IME",
+          "overlay networks",
+          "pixel rendering",
+          "hardware key protection",
+          "production deployment",
+          "protected system-store runtime"
+        ],
+        "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+        "readinessSnapshot": {
+          "pocket-probe": {
+            "resultType": "session_snapshot",
+            "flatKnownFields": {
+              "version": {
+                "present": false,
+                "type": "NoneType",
+                "value": null
+              },
+              "protocol": {
+                "present": false,
+                "type": "NoneType",
+                "value": null
+              }
+            },
+            "snapshotPresent": true,
+            "snapshotType": "dict",
+            "nestedKnownFields": {
+              "version": {
+                "present": true,
+                "type": "str",
+                "value": "0.9.5"
+              },
+              "protocol": {
+                "present": true,
+                "type": "int",
+                "value": 22
+              }
+            }
+          },
+          "pocket-other": {
+            "resultType": "session_snapshot",
+            "flatKnownFields": {
+              "version": {
+                "present": false,
+                "type": "NoneType",
+                "value": null
+              },
+              "protocol": {
+                "present": false,
+                "type": "NoneType",
+                "value": null
+              }
+            },
+            "snapshotPresent": true,
+            "snapshotType": "dict",
+            "nestedKnownFields": {
+              "version": {
+                "present": true,
+                "type": "str",
+                "value": "0.9.5"
+              },
+              "protocol": {
+                "present": true,
+                "type": "int",
+                "value": 22
+              }
+            }
+          }
+        },
+        "crossSessionFixture": {
+          "bothSessionsExist": true,
+          "samePaneId": true,
+          "expected": "reject mismatched socket/session before publishing full"
+        },
+        "frameEvidence": "widget state after Terminal.write",
+        "receivedInputBytes": 9,
+        "fixtureSharedBetweenAdapters": false,
+        "observeFixture": {
+          "syntheticTickIntervalMs": 200,
+          "changedTerminalRow": 23,
+          "selection": "GUI chooses a pane button from the current snapshot",
+          "backpressureScope": "decoded single-frame byte high-water only, not JSON line, SSH buffers or whole-process memory"
+        },
+        "sharedPty": {
+          "noObservedResize": true,
+          "numericRecord": {
+            "captureErrors": 0,
+            "changes": 0,
+            "columns": 119,
+            "elapsedMs": 15321,
+            "endReason": 1,
+            "initialColumns": 119,
+            "initialRows": 40,
+            "maxSampleGapMs": 84,
+            "readErrors": 0,
+            "rows": 40,
+            "sampleIntervalMs": 50,
+            "samples": 306,
+            "schemaVersion": 1,
+            "signalAvailable": 1,
+            "signalSamples": 0,
+            "signalsMayCoalesce": 1,
+            "state": 2,
+            "terminationSignal": 0,
+            "winchHandlers": 0
+          }
+        },
+        "cleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        }
+      },
+      "boundary": "Linux Flutter widget + explicit test signer/catalog/input journal + isolated loopback SSH and guarded herdr fixture; not Android runtime, platform IME or overlay evidence."
+    },
+    "flutterSource": {
+      "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239/artifacts/13560863596",
+      "zipSha256": "b534eb033f216f0f2a91c638f32c54008f030d2c74d108b7efe276671259bb3a",
+      "analyze": "No issues found",
+      "safetyTestsPassed": 312,
+      "safetyTestsSkipped": 1,
+      "rendererTestsPassed": 10,
+      "candidateManifestSha256": "2c7afda02071d7397d1ae77cfb8e27b29557188a580e02529ae5752cc56f23f7",
+      "scope": "Cloud Linux analyzer, unit/widget and isolated renderer tests; no physical mobile acceptance."
+    }
+  },
+  "inputs": {
+    "run-final.json": {
+      "sha256": "9e53c11c863b38624893364b91aa659e0d2f3c8b6c3b5e3dcca31d65d5f327e1",
+      "scope": "Supplied local evidence snapshot"
+    },
+    "packages-verified.json": {
+      "sha256": "559bb6438f696802f3bc30ac49cfd7686860f9813047c1729fc78263cab611d2",
+      "scope": "Supplied local evidence snapshot"
+    },
+    "browser-final.json": {
+      "sha256": "2030479cc23305be8c3c8614ba013d8c24b3c42db4c0c178a9223647c42d7334",
+      "scope": "Supplied local evidence snapshot"
+    }
+  },
+  "androidRecheck": {
+    "run": {
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42351694649",
+      "headSha": "0036451e99867fbdad3d2ed8173ff65e1a1fd442",
+      "status": "completed",
+      "conclusion": "failure",
+      "createdAt": "2026-11-07T07:32:17Z",
+      "updatedAt": "2026-11-07T07:51:30Z"
+    },
+    "applicationSource": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+    "workflowScope": "same application sources; rebuilt disposable fixture and x86_64 AVD apps only; original distribution APKs reused",
+    "scenarios": {
+      "flutter-pair": {
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42351694649/artifacts/13566218165",
+        "sha256": "b5069dcd1f437a1651a103cdeb12c8e3a4dde4eaebde819b6c4229c70ba097e3",
+        "internalFilesVerified": 7,
+        "passed": true,
+        "receivedBytes": 0,
+        "receiptByteCounts": [],
+        "sameTargetDistinctRequestIds": null,
+        "pty": {
+          "initialColumns": 119,
+          "initialRows": 40,
+          "columns": 119,
+          "rows": 40,
+          "samples": 5964,
+          "changes": 0,
+          "signalSamples": 0
+        },
+        "cleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        }
+      },
+      "flutter-guarded": {
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42351694649/artifacts/13565969469",
+        "sha256": "bf782a118aab058eaf400b1465bec0410d356ce36e9694a570de9523237b0b1e",
+        "internalFilesVerified": 7,
+        "passed": true,
+        "receivedBytes": 10,
+        "receiptByteCounts": [
+          1,
+          9
+        ],
+        "sameTargetDistinctRequestIds": true,
+        "pty": {
+          "initialColumns": 119,
+          "initialRows": 40,
+          "columns": 119,
+          "rows": 40,
+          "samples": 2225,
+          "changes": 0,
+          "signalSamples": 0
+        },
+        "cleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        }
+      },
+      "tauri-pair": {
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42351694649/artifacts/13566715340",
+        "sha256": "aefc5b77155eb4f99ea5c377b4e75e43d3fe3ddc4ab9daa4b338eacfa3841432",
+        "internalFilesVerified": 3,
+        "passed": true,
+        "receivedBytes": 0,
+        "receiptByteCounts": [],
+        "sameTargetDistinctRequestIds": null,
+        "pty": {
+          "initialColumns": 119,
+          "initialRows": 40,
+          "columns": 119,
+          "rows": 40,
+          "samples": 865,
+          "changes": 0,
+          "signalSamples": 0
+        },
+        "cleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        }
+      },
+      "tauri-guarded": {
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42351694649/artifacts/13566113149",
+        "sha256": "b744dc14ba514b4447669dcc301da34c9adcfe777cd504af6202dc6bf591e9b9",
+        "internalFilesVerified": 3,
+        "passed": true,
+        "receivedBytes": 10,
+        "receiptByteCounts": [
+          1,
+          9
+        ],
+        "sameTargetDistinctRequestIds": true,
+        "pty": {
+          "initialColumns": 119,
+          "initialRows": 40,
+          "columns": 119,
+          "rows": 40,
+          "samples": 1028,
+          "changes": 0,
+          "signalSamples": 0
+        },
+        "cleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        }
+      }
+    },
+    "flutterRegression": {
+      "passed": 314,
+      "skipped": 1,
+      "rasterPassed": 10,
+      "analyzerFindings": [
+        "unnecessary_import: test/pairing_gui_test.dart:3:8"
+      ],
+      "combinedExitCode": 1,
+      "androidAvdExitCode": 0,
+      "followup": "Removed duplicate dart:typed_data import in the source follow-up. Its full Flutter analyzer run is pending."
+    }
+  }
+}

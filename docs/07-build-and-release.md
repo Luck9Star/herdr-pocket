@@ -145,3 +145,9 @@ Android 组网候选另设[显式批次同源实验工作流](../.github/workflo
 手机独立标签批次继续使用同一个组网工作流：Flutter 先固定组合重音修复候选与依赖锁，分别分析、运行 widget／绘制和隔离 SSH GUI；共享 Rust 单独运行受控观察测试。两包报告保留 `sourceChecks`、`transportChecks`、打包和 Android 运行状态，不以成功打包抹去测试失败。新增 russh 固定源码候选的完整 Apache 许可证、变更声明、补丁与来源摘要随构建 assets 和下载证据交付；来源还原检查不替代实际编译或运行。[标签、依赖修复与集中结果](22-mobile-terminal-tabs.md)
 
 Tailscale 手机源码批次将同一组网工作流扩为 EasyTier＋Tailscale 双库：固定 Go module zip 的 h1、补丁后 tar 全文件、两库 APK 字节、JNI 与 DT_NEEDED 同时校验。该扩展在 `750798fe` / run 42247482105 实际完成，两份 APK 同源、五个 job 成功，保留首轮失败与修复后的独立证据；不继承旧包的设备运行结果，仍按功能批次集中执行。[接线与来源门禁](26-mobile-tailscale-login.md) · [本批下载、校验与边界](27-mobile-tailscale-cloud.md)
+
+手机输入和双网络 APK 一起验收时，用同一已审阅提交创建 `codex/network-batch/with-emulators-input-<批次名>`。工作流按该 SHA 构建受保护输入夹具，供两条 Android 模拟器路线和 Flutter 的隔离 SSH 用例使用。原生库及两个 arm64 测试包仍分别构建并关联来源。只需要普通观察的批次继续使用 `with-emulators-<批次名>`。[手机终端验收](36-mobile-paste-and-auxiliary-input.md)
+
+该输入批次已在 `a9914fe` / [run 42339225239](https://github.com/Luck9Star/herdr-pocket/actions/runs/42339225239) 实际运行，最终状态为失败。原生库、共享 Rust、输入夹具、Flutter 源码检查和两个 arm64 包成功；两套 AVD job 失败，四个独立模拟器场景为 1 通过、3 失败。Linux Flutter 隔离 SSH GUI 通过且收到 9 字节。下载包的离线哈希复核、模拟器应用运行、Linux widget 及真实手机分别记证；arm64 包未在设备安装或运行。后续测试专用 AVD 重试必须保留自己的源码 SHA、run、失败／通过和清理记录，不能把本轮改为通过，也不能把调试模拟器结果继承给 arm64 组网 APK。[下载、首轮失败阶段和范围](36-mobile-paste-and-auxiliary-input.md#同源云验证与可下载测试包)
+
+仅复验输入驱动时，使用 `codex/network-batch/with-emulators-input-recheck-*` 分支，沿用已核对的 arm64 分发包，运行同 SHA 的输入夹具和两条 API 35 x86_64 模拟器路线。源码／原生库／分发矩阵跳过。每个场景按 artifact 的 SHA、manifest 和接收端字节数记证，同时保留 analyzer 与整个工作流的真实状态。[首次定向复验](36-mobile-paste-and-auxiliary-input.md#android-定向复验)

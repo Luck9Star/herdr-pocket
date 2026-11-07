@@ -1,0 +1,230 @@
+{
+  "asOf": "2026-11-08",
+  "base": "27b4d4903c1eb8202e41943fea7eeeb19edc25c1",
+  "mobileSource": "542c0db6c6d2c5323d466051d5ffd628f843a9cf",
+  "snapshot": {
+    "productAndTestFilesCompared": 47,
+    "nativeStreamDraftIncluded": false,
+    "androidRuntimeStoreBoundByDefault": false
+  },
+  "frontend": {
+    "tauriMacChrome": {
+      "cases": [
+        {
+          "width": 320,
+          "height": 740,
+          "pageOverflow": 0,
+          "dialogOverflow": 0,
+          "dialogWithinScreen": true,
+          "buttons": [
+            44,
+            44
+          ],
+          "scopeWhenDeviceUnavailable": true,
+          "scopeWhenStatusRejected": true,
+          "missingCatalogShownUnknown": true,
+          "unknownWriteReplayed": false,
+          "mutations": 1,
+          "exactRecoveryReferences": true,
+          "removeWithoutStopProofDisabled": true,
+          "remoteCalls": 0,
+          "focusRestored": true
+        },
+        {
+          "width": 390,
+          "height": 740,
+          "pageOverflow": 0,
+          "dialogOverflow": 0,
+          "dialogWithinScreen": true,
+          "buttons": [
+            44,
+            44
+          ],
+          "scopeWhenDeviceUnavailable": true,
+          "scopeWhenStatusRejected": true,
+          "missingCatalogShownUnknown": true,
+          "unknownWriteReplayed": false,
+          "mutations": 1,
+          "exactRecoveryReferences": true,
+          "removeWithoutStopProofDisabled": true,
+          "remoteCalls": 0,
+          "focusRestored": true
+        }
+      ],
+      "cleanup": {
+        "code": 0,
+        "signal": null
+      },
+      "scope": "Isolated Mac Chrome, production frontend, synthetic Android bridge and catalog"
+    },
+    "tauriNodeTests": 510,
+    "tauriViteModules": 65,
+    "flutterWidgetCasesInSharedDeviceSuite": 15,
+    "flutterWidgetExecution": "not run"
+  },
+  "mac": {
+    "flutterJvm": {
+      "normal": 24,
+      "interruptedCreation": 18,
+      "interruptedDeletion": 19
+    },
+    "tauriJvm": {
+      "uninstalled": 10,
+      "installed": 91
+    },
+    "tauriRustDefaultFeatures": 67,
+    "sharedService": {
+      "uninstalled": 8,
+      "installed": 58,
+      "interruptedCreation": 40,
+      "interruptedDeletion": 22
+    },
+    "javaStoreCore": 215,
+    "javaAndroidWrapperWithStubs": 36,
+    "temporaryKeys": "Test JCE provider with disposable fixture identities",
+    "parentSnapshotLogSHA256": {
+      "flutter-jvm": "87ee514a643350c8b55fb8e43de35d616440455acf08c39366c10b5c5450b562",
+      "tauri-jvm": "16caa72dc4c28bae2f7b851397d05dd23d23e86240624955ac36660751457ea4",
+      "java-service": "b4cb3682010cd5442ede83a7ec071775fd45a36e4947cdac5379c93cbe26227d",
+      "java-core": "020943e02dd30f5da36de0d4cbd2e913a3d7476368e78198011bf4df24218325",
+      "java-android": "29fdc373686e262fb573ab6b93b6308663223e448cef3f31e93987f091afe523"
+    },
+    "offlineNativeIdentity": {
+      "sourceVerified": true,
+      "verifiedSourceFiles": 4052,
+      "compiledNativeFiles": 7,
+      "identityOnlyExports": true,
+      "identityService": {
+        "passed": true,
+        "checks": 28,
+        "nativeCreates": 1,
+        "nativeValidations": 7,
+        "encryptedAtRest": true,
+        "freshReaderMatched": true,
+        "tamperRejected": true,
+        "wrongInstanceRejected": true,
+        "explicitlyRemoved": true,
+        "buffersCleared": true,
+        "keyStoreEmpty": true,
+        "temporaryRootRemoved": true
+      },
+      "negativeControls": {
+        "working-native-refused": true,
+        "changed-cached-source-refused": true,
+        "inputTreeOutputRejected": true,
+        "existingReceiptUntouched": true
+      },
+      "sourceHashes": {
+        "verified-candidate/ext/ZeroTierOne/node/Identity.cpp": "84dda1ab7abb90e9df791a714172955980a6b92a9f3f48ca8f8612a89b11a714",
+        "verified-candidate/ext/ZeroTierOne/node/ECC.cpp": "b74ddffca6e9e80d8dd67dca2a4764b1f09afee579d61b4f6b5a2c48377833b4",
+        "verified-candidate/ext/ZeroTierOne/node/Salsa20.cpp": "12717ec56f15c0761889e514f4cd72a35a21433ba3d1ba84fa8e2457a7943931",
+        "verified-candidate/ext/ZeroTierOne/node/SHA512.cpp": "6c44ed28f662ce0f02d7759a0811c99e95c8f2aeeec875fd2b4ec75b46255204",
+        "verified-candidate/ext/ZeroTierOne/node/Utils.cpp": "9101ba2fdf0a132d0f8ad4ed7ac9f0a35fdf56933b6f41edba776a113b1bfaa8",
+        "verified-candidate/src/hp_zt_identity.cpp": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992",
+        "validation/native/candidates/zerotier/tests/identity-service/identity_bridge.cpp": "12fb5399d94c6388f705a6a7e796b7192601c6eb5ca520cb6873a54cc739eb2f",
+        "verified-candidate/src/hp_zt.h": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad",
+        "validation/network-profiles/native/android/ZeroTierDeviceStoreCore.java": "b4e56d5134e9268c6f6d5a990e64a3d2bd8ab8356b2bc00858f2038fdd5430b9",
+        "validation/network-profiles/native/android/AndroidZeroTierEnvelope.java": "99257bb7a4980d1c0485c2083b6b17c292c1fb0bdd90c3c188e0886f137b3a4a",
+        "validation/network-profiles/native/android/AndroidZeroTierDeviceStore.java": "19e2aef1479536906046ef5a144a19f50f05429de6dad573b0fe4648d1546471",
+        "validation/network-profiles/native/android/AndroidZeroTierDeviceService.java": "ba9b470aa04591d49b1460f4c32a6c81de137d20c3171754c15aec0d2a403315",
+        "validation/network-profiles/native/android/tests/ZeroTierAndroidStoreTest.java": "0cca37d110f87c80995780a68df6545746930248799dcd154a1dae2d5c41b59b",
+        "validation/network-profiles/native/android/tests/zerotier-stubs/android/app/KeyguardManager.java": "6cbd93aa6f46026731cf04589c1460841e5244033df9ca43e08ca44d20b99f57",
+        "validation/network-profiles/native/android/tests/zerotier-stubs/android/content/Context.java": "c0d30f39611c24b51b8d4d04c261e75a4d0bbc53046f512c385450b109989061",
+        "validation/network-profiles/native/android/tests/zerotier-stubs/android/os/Build.java": "b8dca7401c022d8b95d106d5ae59bbcf479ff9c479f1e5123d9815fcb11b5bce",
+        "validation/network-profiles/native/android/tests/zerotier-stubs/android/security/keystore/KeyGenParameterSpec.java": "d62616d7367761ebae56dabfeda9bf2f6a133299478811ace7d76aa15cb9ccf2",
+        "validation/network-profiles/native/android/tests/zerotier-stubs/android/security/keystore/KeyProperties.java": "26d2188f740fb32a881b65ce40f93b8e3b286f08d694d8e25d3422369e8cffdb",
+        "validation/native/candidates/zerotier/tests/identity-service/IdentityBridge.java": "cf0cbf58aee7e7bb14f837db147b2a5d96aa93f44c4b6badd83a356c5f1ab6e4",
+        "validation/native/candidates/zerotier/tests/identity-service/DeviceIdentityServiceProbe.java": "3720c64da58d1c0113668195e9f7b51dbb075846b5fcce13b335de732c7dcce1",
+        "accepted-native/zerotier-candidate.json": "40630720f1ba92cea5ca8d7134162fde62e7e3c9f529fac38deba6bad68306e1",
+        "accepted-native/zerotier-runtime-source.json": "f7be03f90ee923723240f752ff096d64f58f0aaf028a526cd3981cc90159f3e3",
+        "accepted-native/tool/zerotier_candidate.py": "372757cebc2d81d5c15473c4307cf2e4ba01b467e3d740a34f747dd0a194eedc",
+        "validation/native/candidates/zerotier/tests/identity-service/run.py": "3ccd72bdcefb51ad6ccf0acfab0254ea1f6d8ffbbf8e55292644dce84a999a19",
+        "JDK/include/jni.h": "1e03bd83d1662ac00647f7a06c11d32333767ee537803ec1d153e89888414520",
+        "JDK/include/darwin/jni_md.h": "8232a5a68d36060aaa426fbfdb4537983ecfdfc5fe07a43230005ddd1a4b986a",
+        "validation/native/candidates/zerotier/tests/identity-service/README.md": "d5c7586b8051a2b8d9fd24f25adc05791c0023b04fa2cc8d596db300414b3781"
+      },
+      "jvmExitCode": 0,
+      "temporaryTreeRemoved": true,
+      "androidAbi": false,
+      "fakeAndroidKeyStore": true,
+      "nodeStarted": false,
+      "streamsCompiled": false,
+      "independentRepeatMatched": true
+    }
+  },
+  "package": {
+    "gradleTest": {
+      "schemaVersion": 1,
+      "scope": "offline Gradle Sync + desktop JVM/Android stubs",
+      "productionSources": [
+        "AndroidEasyTierConfig.java",
+        "AndroidNetworkEnvelope.java",
+        "AndroidNetworkSecretStore.java",
+        "AndroidTailscaleConfig.java",
+        "AndroidTailscaleEnvelope.java",
+        "AndroidTailscaleStateStore.java",
+        "AndroidZeroTierDeviceStore.java",
+        "AndroidZeroTierDeviceService.java",
+        "AndroidZeroTierEnvelope.java",
+        "EasyTierConfigBuilder.java",
+        "NetworkSecretStoreCore.java",
+        "TailscaleStateStoreCore.java",
+        "ZeroTierDeviceStoreCore.java"
+      ],
+      "jniCandidateIncluded": false,
+      "sourceSHA256": {
+        "AndroidEasyTierConfig.java": "1733e1fb41121b93b9715592e47eafb1b6a3b7cd127d00a7b6ba16c2fcb4de69",
+        "AndroidNetworkEnvelope.java": "e57f31f3213752dcf02c8b610a6472b359636ff9ae7300baee36c2f5808a2e64",
+        "AndroidNetworkSecretStore.java": "94b746bc637e5329bdda38d6b85a3b0e5439759d7299e981dfc3fd795a7cd55d",
+        "AndroidTailscaleConfig.java": "36fbcca0bcc209cdf3bd4796702c95d7c6f12c8d0cc8cd69db4660328e6d71d0",
+        "AndroidTailscaleEnvelope.java": "f782286a4cdd556ef7bae9345232cf83e92c8c91fc8bcf607dc0b790d8ab1bd3",
+        "AndroidTailscaleStateStore.java": "07dd0a743113635ba7dc746797249c4c8132582b234dbfc4ae47e0fb9070777d",
+        "AndroidZeroTierDeviceStore.java": "19e2aef1479536906046ef5a144a19f50f05429de6dad573b0fe4648d1546471",
+        "AndroidZeroTierDeviceService.java": "ba9b470aa04591d49b1460f4c32a6c81de137d20c3171754c15aec0d2a403315",
+        "AndroidZeroTierEnvelope.java": "99257bb7a4980d1c0485c2083b6b17c292c1fb0bdd90c3c188e0886f137b3a4a",
+        "EasyTierConfigBuilder.java": "031497d530ca8df5b99b40bf4343ea7d53222bdea903852b787f4f642eb699e9",
+        "NetworkSecretStoreCore.java": "ae6b79d8867efed9909dd789420da0a2c769bdc95964983363fbf4f34a8886ec",
+        "TailscaleStateStoreCore.java": "0cd311c161dfdf8b38dff0aa40eaa23ccf4d789a6c7168f276ebbba38e98241d",
+        "ZeroTierDeviceStoreCore.java": "b4e56d5134e9268c6f6d5a990e64a3d2bd8ab8356b2bc00858f2038fdd5430b9",
+        "android-production-sources.txt": "cd93ac94c7a432200f8872c19202df18366a8bfc3d7e8f1443b11d0e8cdb0bf7",
+        "network-secrets.gradle": "9c34606e80a10ecf5f4107cc5d89bd27cb294bfb66b7c0a26d0023188876b9d3"
+      },
+      "checks": [
+        "all 13 checked files copied exactly; two invalid top-level drafts and nested tests excluded",
+        "unchanged-input rerun executes Sync and removes stale nested/JNI sources",
+        "each of 13 missing inputs rejected during Gradle configuration",
+        "manifest missing/empty/blank/path/non-Java/duplicate/whitespace input rejected",
+        "valid manifest/source symlinks outside shared directory rejected before Sync; generated bytes unchanged",
+        "exact synced closure compiles without JNI candidate; unbound service status and all five writes fail closed"
+      ],
+      "commandCount": 27,
+      "passed": true
+    },
+    "gradleJvmCommands": 27,
+    "gradleSourceSetTest": "Offline Gradle Sync + javac using Android stubs; no Android Gradle Plugin or APK build",
+    "androidBundleReportTests": 13,
+    "flutterCiTests": 6,
+    "flutterSourceManifestTests": 1,
+    "inputManifest": "validation/network-profiles/native/android/android-production-sources.txt"
+  },
+  "previousAndroid": {
+    "source": "dd025952321fb944465a48ec762ae76adc74f830",
+    "run": "42415286185",
+    "includesThisChange": false
+  },
+  "pending": [
+    "actual AndroidKeyStore, lock screen and restart",
+    "Android Rust cfg, APK compilation and device UI at this source",
+    "native identity-engine binding and private-overlay SSH",
+    "three-provider concurrency per platform",
+    "Flutter Android guarded TUI recovery and ten remote actions"
+  ],
+  "penpot": {
+    "entry": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=2a5fd934-a163-8057-8008-e823088d7aeb",
+    "coverageRecord": "design/evidence/mobile-network-device-impact-20261108.json",
+    "coverageRecordSHA256": "17c67f77e1435ac6f7e22aed2a40db1a24f1f394a91057861cd1494bf3309289",
+    "newBoards": 2,
+    "viewerClicks": 10,
+    "boundsViolations": 0
+  }
+}

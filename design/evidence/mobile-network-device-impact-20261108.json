@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-08",
+  "status": "design-prototype-saved-and-clicked",
+  "fileId": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+  "pageId": "7a22df08-251d-8016-8008-de03541c11da",
+  "entry": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=2a5fd934-a163-8057-8008-e823088d7aeb",
+  "knownRange": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e958a0a76ce2",
+  "unknownRange": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e958a0ac3710",
+  "script": "design/penpot/mobile-network-device-impact-20261108.js",
+  "scriptSha256": "92a3a8227ce01ac635645935e5f372bea7c6f5067687a347a593b8c5fa6a6702",
+  "newBoards": [
+    {
+      "id": "ff7bd149-6597-80a5-8008-e958a0a76ce2",
+      "name": "设备影响 · 能力不可用 · 范围已核对",
+      "x": 0,
+      "y": 17292
+    },
+    {
+      "id": "ff7bd149-6597-80a5-8008-e958a0ac3710",
+      "name": "设备影响 · 目录受阻 · 范围未知",
+      "x": 450,
+      "y": 17292
+    }
+  ],
+  "entryChange": {
+    "reusedOriginalImpactCard": true,
+    "height": 142.99999475479126,
+    "minTargetHeight": 44,
+    "title": "完整影响范围 · 查看状态 ›",
+    "onlyOriginalShapesChanged": [
+      "2a5fd934-a163-8057-8008-e824e8f8ea16",
+      "2a5fd934-a163-8057-8008-e824e8fc2740",
+      "2a5fd934-a163-8057-8008-e824e9011349"
+    ],
+    "existingPositionSizeBodyAndButtonsPreserved": true,
+    "originalS35SnapshotUnchanged": true
+  },
+  "coverage": [
+    "ZeroTier 身份能力不可用，设备状态未知而非没有身份",
+    "已核对的2个网络及3台主机示例，包括启用、停用/归档和旧类型 ZeroTier 主机",
+    "创建/恢复/放弃/移除均无交互，灰色区域真实点击未跳转",
+    "目录/主机读取失败或正在写入时显示范围未知，未知不计0",
+    "读取成功返回完整范围，同时保留能力不可用",
+    "两状态返回原S34，原S34到S35及取消返回仍可点击"
+  ],
+  "realViewerClicks": [
+    {
+      "action": "S34 完整影响范围入口",
+      "observedBoardId": "ff7bd149-6597-80a5-8008-e958a0a76ce2"
+    },
+    {
+      "action": "灰色设备写操作区（无跳转）",
+      "observedBoardId": "ff7bd149-6597-80a5-8008-e958a0a76ce2"
+    },
+    {
+      "action": "刷新状态与影响范围",
+      "observedBoardId": "ff7bd149-6597-80a5-8008-e958a0ac3710"
+    },
+    {
+      "action": "重载后再次点击 S34 入口",
+      "observedBoardId": "ff7bd149-6597-80a5-8008-e958a0a76ce2"
+    },
+    {
+      "action": "再次刷新范围",
+      "observedBoardId": "ff7bd149-6597-80a5-8008-e958a0ac3710"
+    },
+    {
+      "action": "重新读取",
+      "observedBoardId": "ff7bd149-6597-80a5-8008-e958a0a76ce2"
+    },
+    {
+      "action": "返回原设备审查",
+      "observedBoardId": "2a5fd934-a163-8057-8008-e823088d7aeb"
+    },
+    {
+      "action": "原第1步审查按钮",
+      "observedBoardId": "2a5fd934-a163-8057-8008-e823089e01ed"
+    },
+    {
+      "action": "原取消返回按钮",
+      "observedBoardId": "2a5fd934-a163-8057-8008-e823088d7aeb"
+    },
+    {
+      "action": "独立未知范围链接重载后返回",
+      "observedBoardId": "2a5fd934-a163-8057-8008-e823088d7aeb"
+    }
+  ],
+  "readback": {
+    "independentViewer": true,
+    "savedS34ReloadedAndEntryFollowedAgain": true,
+    "unknownRangeDirectLinkReloaded": true,
+    "boardsReadBack": 2,
+    "boundsViolations": 0,
+    "disabledWriteShapesHaveNoInteractions": true,
+    "originalS35SnapshotUnchanged": true,
+    "visualReview": "passed"
+  },
+  "image": {
+    "path": "design/evidence/mobile-network-device-impact-20261108.png",
+    "sha256": "87d9d00d50bdc2de43ca5e4b18f36ad00b4819e600f0240a21684ab01faee848"
+  },
+  "compatibility": {
+    "pluginAdvertisedPenpot": "2.15.4",
+    "actualPenpot": "2.19.0",
+    "requiredReadWriteExportApisWorked": true
+  },
+  "cleanup": {
+    "pluginDisconnected": true,
+    "pluginPanelClosed": true,
+    "ownedViewerTabClosed": true,
+    "userEditorLeftOpen": true,
+    "mcpProcessExitCode": 0,
+    "staticProcessExitCode": 130,
+    "ports4400To4403NoListeners": true,
+    "otherUserTabsLeftOpen": true
+  },
+  "scope": [
+    "Clickable Penpot design only; synthetic examples are not Android/KeyStore/native/network evidence",
+    "No business source, CI, Git, network settings or credentials changed",
+    "Original design source files and existing dirty WIP were not edited",
+    "S34 reused card entry avoids adding a button over existing content; no extra original-board shapes"
+  ]
+}

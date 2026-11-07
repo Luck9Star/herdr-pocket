@@ -29,4 +29,6 @@ Penpot 在原文件上保存了五个画板，覆盖状态选择、当前待处�
 
 ## 下一批手机验收
 
+手机的网络配置页现已接入共享设备影响审查，从历史主机回到网络管理时可核对相关网络与主机。两条 Android 宿主的桌面 JVM 联跑与待验项目见[共享网络设备](55-mobile-shared-network-device.md)。
+
 先在 Android API 35 重跑 Flutter 的配对、设备密钥 SSH、看板、隐藏标签恢复与受保护 TUI 十个按键，逐次核对原目标、新首帧、后续输出、输入回执及 PTY。将两条 GUI 的检索场景并入同批验收，再更新下载包。上一轮 Android 的 Flutter 受保护 TUI 仍止于通道超时，两条 GUI 的普通只读闭环已有设备作业记录。实体手机触控、系统中文输入法、相机扫码、iOS 和实际跨组网并发均待验证，技术选型继续保留两条路线。[上轮 Android 定向复测](https://github.com/Luck9Star/herdr-pocket/actions/runs/42417473474)

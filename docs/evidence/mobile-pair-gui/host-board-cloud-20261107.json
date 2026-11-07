@@ -1,0 +1,465 @@
+{
+  "schemaVersion": 1,
+  "source": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15",
+  "date": "2026-11-07",
+  "run": 42328109342,
+  "runURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342",
+  "priorRuns": [
+    {
+      "id": 42325603861,
+      "source": "c1c040a47712f1e000e2c73aa8356bf69b7dec99",
+      "jobs": [
+        {
+          "name": "native",
+          "conclusion": "success",
+          "failed": []
+        },
+        {
+          "name": "flutter-source",
+          "conclusion": "failure",
+          "failed": [
+            "Test mobile state and input contracts"
+          ]
+        },
+        {
+          "name": "android-pairing / android-device-key",
+          "conclusion": "failure",
+          "failed": [
+            "Fail after preserving Tauri and Android evidence"
+          ]
+        },
+        {
+          "name": "transport-source",
+          "conclusion": "success",
+          "failed": []
+        },
+        {
+          "name": "android-pairing / flutter-device-key",
+          "conclusion": "failure",
+          "failed": [
+            "Fail after preserving Flutter and Android evidence"
+          ]
+        },
+        {
+          "name": "apps (flutter)",
+          "conclusion": "success",
+          "failed": []
+        },
+        {
+          "name": "apps (tauri)",
+          "conclusion": "failure",
+          "failed": [
+            "Build Tauri arm64 APK"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 42327077924,
+      "source": "1ba655ee66ff0460d398ff167858751447dfe579",
+      "jobs": [
+        {
+          "name": "native",
+          "conclusion": "success",
+          "failed": []
+        },
+        {
+          "name": "transport-source",
+          "conclusion": "success",
+          "failed": []
+        },
+        {
+          "name": "android-pairing / flutter-device-key",
+          "conclusion": "failure",
+          "failed": [
+            "Fail after preserving Flutter and Android evidence"
+          ]
+        },
+        {
+          "name": "flutter-source",
+          "conclusion": "failure",
+          "failed": [
+            "Test mobile state and input contracts"
+          ]
+        },
+        {
+          "name": "android-pairing / android-device-key",
+          "conclusion": "failure",
+          "failed": [
+            "Fail after preserving Tauri and Android evidence"
+          ]
+        },
+        {
+          "name": "apps (flutter)",
+          "conclusion": "failure",
+          "failed": [
+            "Build Flutter arm64 APK from the verified experimental candidate"
+          ]
+        },
+        {
+          "name": "apps (tauri)",
+          "conclusion": "failure",
+          "failed": [
+            "Build Tauri arm64 APK"
+          ]
+        }
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "name": "native",
+      "id": 128268055403,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "transport-source",
+      "id": 128268055666,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "flutter-source",
+      "id": 128268055720,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "android-pairing / flutter-device-key",
+      "id": 128268055731,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "android-pairing / android-device-key",
+      "id": 128268055763,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "apps (flutter)",
+      "id": 128270322269,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "apps (tauri)",
+      "id": 128270322289,
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "local": {
+    "isolatedSnapshot": "c1c040a47712f1e000e2c73aa8356bf69b7dec99",
+    "tauriNodeTests": 149,
+    "viteBuild": "passed",
+    "dartSyntaxFiles": 63,
+    "remoteHarnessUnitTests": 31,
+    "flutterAndroidDriverUnitTests": {
+      "count": 40,
+      "scope": "After install wait repair, macOS with cryptography dependency"
+    },
+    "gradleSourceBoundary": {
+      "gradle": "9.4.0",
+      "scope": "Synthetic source-set with concrete File, normal incremental Sync and Kotlin task dependency",
+      "javaSources": 12
+    }
+  },
+  "cloud": {
+    "flutterAnalysis": "passed",
+    "flutterTests": 286,
+    "skippedInGeneralSuite": 1,
+    "flutterRenderTests": 10,
+    "transportTests": [
+      95,
+      1
+    ],
+    "tauriJavaScriptTests": 149
+  },
+  "unverified": [
+    "arm64 physical installation and hardware-backed guarantees",
+    "real camera and QR transfer",
+    "real system IME and physical touch",
+    "guarded remote input on the two current Android emulators",
+    "real overlay networks and 5-platform concurrency",
+    "iOS signing and installation"
+  ],
+  "isolatedRuns": {
+    "tauri-android": {
+      "archiveManifestSHA256": "4999fbfa649c3f74f75d01c94d347a94538d379945f89b4da55c47a7836268d9",
+      "result": {
+        "status": "passed",
+        "paired": true,
+        "fullRendered": true,
+        "deltaRendered": true,
+        "stoppedStale": true,
+        "fullRenderAcknowledgements": 1,
+        "deltaRenderAcknowledgements": 1,
+        "temporaryHostApprovedRequest": true,
+        "matchedDeviceKeyInSshd": true,
+        "revokedFixtureKey": true,
+        "receivedInputBytes": 0,
+        "keyStore": "Android API 35 emulator AndroidKeyStore-wrapped device key"
+      },
+      "pty": {
+        "columns": 119,
+        "rows": 40,
+        "samples": 754,
+        "changes": 0
+      },
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      }
+    },
+    "flutter": {
+      "archiveManifestSHA256": "f1211064e76c5b7f887b6cac3833717ae0e6422b89855dee61d96f44f7e2abbe",
+      "result": {
+        "status": "passed",
+        "paired": true,
+        "fullRendered": true,
+        "deltaRendered": true,
+        "stoppedStale": true,
+        "pauseResumeSameConnection": true,
+        "hostSummaryActive": true,
+        "hostSummaryRetained": true,
+        "hostSummaryResumed": true,
+        "hostSummaryStopped": true,
+        "frameCount": 7,
+        "deltaFrames": 5,
+        "temporaryHostApprovedRequest": true,
+        "matchedDeviceKeyInSshd": true,
+        "revokedFixtureKey": true,
+        "receivedInputBytes": 0,
+        "keyStore": "test-only Dart signer with runner-generated identity"
+      },
+      "pty": {
+        "columns": 119,
+        "rows": 40,
+        "samples": 234,
+        "changes": 0
+      },
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      }
+    },
+    "flutter-android": {
+      "archiveManifestSHA256": "460c8ab2717a374fa00a86ed54fba741a556d6f7998a20683bcfed7056ae9caa",
+      "result": {
+        "status": "passed",
+        "deviceApi": 35,
+        "paired": true,
+        "fullRendered": true,
+        "deltaRendered": true,
+        "stoppedStale": true,
+        "frameCountLowerBound": 2,
+        "deltaCountLowerBound": 1,
+        "temporaryHostApprovedRequest": true,
+        "matchedDeviceKeyInSshd": true,
+        "revokedFixtureKey": true,
+        "receivedInputBytes": 0,
+        "keyStore": "API35 emulator production AndroidKeyStore AES-wrapped seed; native software Ed25519 signing",
+        "storageMocked": false,
+        "signerInjected": false,
+        "framesInjected": false
+      },
+      "pty": {
+        "columns": 119,
+        "rows": 40,
+        "samples": 4877,
+        "changes": 0
+      },
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      },
+      "signerProbe": {
+        "stage": "complete",
+        "signatureVerified": true,
+        "deleteReturned": true,
+        "readRejected": true
+      },
+      "deviceCleanup": {
+        "sourceSHA": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15",
+        "ownedPackageInitiallyAbsent": true,
+        "ownedPackageAbsent": true,
+        "appProcessGone": true,
+        "reverseRemoved": true,
+        "ownedForwardsRemoved": true,
+        "flutterToolStopped": true,
+        "rawLogsUploaded": false,
+        "status": "passed"
+      }
+    }
+  },
+  "downloadVerification": {
+    "verified": true,
+    "sourceCommit": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15",
+    "zipArtifacts": {
+      "flutter": {
+        "zipSha256": "4f0536ab244e78acad89d87571d000dc9a24a12816250160286f1e4c645094e0",
+        "zipBytes": 151571659
+      },
+      "tauri": {
+        "zipSha256": "3803244f88656aeab90159d45ba43f13e03f29e623d44c5632a3f1ce934a4f9e",
+        "zipBytes": 162596177
+      },
+      "native": {
+        "zipSha256": "c95a7bc5dcabf9e42a9dc752aa42e4e3896cd740c847a316bd2f5a55812562bc",
+        "zipBytes": 126169767
+      }
+    },
+    "nativeManifestSha256": "b34965156e472d90e6607365c8874859c4834ee1c15314ea6e9bab7fb83024f4",
+    "nativeAbi": "arm64-v8a",
+    "nativeLibraries": {
+      "libheeler_easytier.so": {
+        "sha256": "49c877fb717bd914b064f16622865033874aa076f0e0c1d031ba3490308e2883",
+        "bytes": 365042104
+      },
+      "libhp_tailscale.so": {
+        "sha256": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d",
+        "bytes": 30406096
+      }
+    },
+    "apps": {
+      "flutter": {
+        "apkSha256": "aad0a4e04b28650dec872a29d4b554a6993350f614b5ae3c8982e5c8581ce994",
+        "apkBytes": 483749592,
+        "abi": "arm64-v8a",
+        "nativeManifestSha256": "b34965156e472d90e6607365c8874859c4834ee1c15314ea6e9bab7fb83024f4",
+        "report": {
+          "sourceCommit": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15",
+          "app": "flutter",
+          "abi": "arm64-v8a",
+          "api": 35,
+          "sourceChecks": "success",
+          "transportChecks": "success",
+          "transportChecksScope": "shared Rust isolated SSH and unit checks; not Android runtime or real overlay",
+          "sourceChecksScope": "Flutter analyzer, unit/widget, renderer and isolated SSH GUI checks",
+          "apkSha256": "aad0a4e04b28650dec872a29d4b554a6993350f614b5ae3c8982e5c8581ce994",
+          "nativeManifestSha256": "b34965156e472d90e6607365c8874859c4834ee1c15314ea6e9bab7fb83024f4",
+          "build": "passed",
+          "staticInspection": "passed",
+          "androidLoad": "not run",
+          "installation": "not run",
+          "node": "not run",
+          "terminalCandidateManifestSha256": "3f84769fe0563dea9a4cb5f8c43a91c55019ecc49c7e18666dd8508079e1258d"
+        },
+        "checksummedArtifactFiles": 14
+      },
+      "tauri": {
+        "apkSha256": "2217b6d7033e68bb3f9632861efd4597c20a6ec8ae02c56084aab822b2c0a3a6",
+        "apkBytes": 591450439,
+        "abi": "arm64-v8a",
+        "nativeManifestSha256": "b34965156e472d90e6607365c8874859c4834ee1c15314ea6e9bab7fb83024f4",
+        "report": {
+          "sourceCommit": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15",
+          "app": "tauri",
+          "abi": "arm64-v8a",
+          "api": 35,
+          "sourceChecks": "success",
+          "transportChecks": "success",
+          "transportChecksScope": "shared Rust isolated SSH and unit checks; not Android runtime or real overlay",
+          "sourceChecksScope": "JavaScript unit tests; Rust target compilation is part of build",
+          "apkSha256": "2217b6d7033e68bb3f9632861efd4597c20a6ec8ae02c56084aab822b2c0a3a6",
+          "nativeManifestSha256": "b34965156e472d90e6607365c8874859c4834ee1c15314ea6e9bab7fb83024f4",
+          "build": "passed",
+          "staticInspection": "passed",
+          "androidLoad": "not run",
+          "installation": "not run",
+          "node": "not run"
+        },
+        "checksummedArtifactFiles": 11
+      }
+    },
+    "scope": "offline byte and metadata checks only; no execution, install, Android load or network validation; native SHA256SUMS checked for the two named libraries only"
+  },
+  "artifacts": [
+    {
+      "name": "android-flutter-network",
+      "id": 13556637167,
+      "bytes": 151571659,
+      "digest": "sha256:4f0536ab244e78acad89d87571d000dc9a24a12816250160286f1e4c645094e0",
+      "expires": "2026-11-21T02:26:52Z",
+      "expired": false,
+      "source": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15"
+    },
+    {
+      "name": "flutter-android-emulator-pairing",
+      "id": 13556572172,
+      "bytes": 31727,
+      "digest": "sha256:5439414870fb8748c7bd3fb0e820cd9461a2e5a35663e5ebb8757a392716b545",
+      "expires": "2026-11-21T02:20:22Z",
+      "expired": false,
+      "source": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15"
+    },
+    {
+      "name": "android-tauri-network",
+      "id": 13556314095,
+      "bytes": 162596177,
+      "digest": "sha256:3803244f88656aeab90159d45ba43f13e03f29e623d44c5632a3f1ce934a4f9e",
+      "expires": "2026-11-21T02:27:09Z",
+      "expired": false,
+      "source": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15"
+    },
+    {
+      "name": "android-emulator-pairing",
+      "id": 13556263219,
+      "bytes": 28620,
+      "digest": "sha256:e3324e7d4f9a347415917edfff917af5e883b1fde530b94cff86b808dee74ccc",
+      "expires": "2026-11-21T02:21:00Z",
+      "expired": false,
+      "source": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15"
+    },
+    {
+      "name": "android-network-flutter-ssh",
+      "id": 13555994060,
+      "bytes": 19931,
+      "digest": "sha256:bd8098317f02781f32aba4da4d72ccef89de7e9a82e2a73d015ff35881fb0521",
+      "expires": "2026-11-21T02:15:01Z",
+      "expired": false,
+      "source": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15"
+    },
+    {
+      "name": "android-network-transport-source",
+      "id": 13555868905,
+      "bytes": 5900,
+      "digest": "sha256:9ffa946bfb0fa8692fb0f76edceb8560289aa095778d89b76b720e2116f5f6e7",
+      "expires": "2026-11-21T02:14:28Z",
+      "expired": false,
+      "source": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15"
+    },
+    {
+      "name": "android-native",
+      "id": 13555803540,
+      "bytes": 126169767,
+      "digest": "sha256:c95a7bc5dcabf9e42a9dc752aa42e4e3896cd740c847a316bd2f5a55812562bc",
+      "expires": "2026-11-21T02:20:59Z",
+      "expired": false,
+      "source": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15"
+    },
+    {
+      "name": "android-network-flutter-source",
+      "id": 13555734512,
+      "bytes": 157795,
+      "digest": "sha256:3e4847e466babe25a03da9ff86545df3e251d26df1676261a15a5aa66f5be829",
+      "expires": "2026-11-21T02:15:02Z",
+      "expired": false,
+      "source": "e54f23cd2d18fc31b4ad75757e4cb95b70342b15"
+    }
+  ],
+  "testAppCleanup": {
+    "localTestGuiStarted": false,
+    "flutterAvdStopped": true,
+    "tauriAvdStopped": true,
+    "guardedInputEnabled": false
+  }
+}

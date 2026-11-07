@@ -1,0 +1,186 @@
+{
+  "source": "7470d5cc2a9c4b4c5fce0802b6bc7789a8b1e67f",
+  "cloud_run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360",
+  "scope": "Exact source tested locally using isolated or synthetic fixtures. Separate Android artifacts and emulator evidence are recorded by run and ABI.",
+  "source_files_sha256": {
+    "helper/README.md": "d3b35496cf0676f440d6982f201840a9721eeea2f8c4d6e0d286f6ea071dc02b",
+    "helper/herdr_pocket_helper/__main__.py": "bbad286094a4762d9f6ccf00460c9f956c8751e45c335510608e8806f3cb0fe3",
+    "helper/herdr_pocket_helper/store.py": "c1b3462da1101b1f081f0a5ac93b96ff5737ef362630f050f1a930583660e714",
+    "helper/tests/test_receipt_inspection.py": "da6bf62c3a47fb808bf9ced3e045ff15e14a7485fb72e3ef4d272f1d8dd86d5d",
+    "validation/flutter/integration_test/android_pairing_observe_test.dart": "31bffdcf221f908f5f63d97d531e13007cbba339856cade6f79eb47ce7849d86",
+    "validation/flutter/lib/pairing.dart": "3daa534cbaad3cf1b93a95f74002693200e8b2eb307fe750b7056157f4c8c823",
+    "validation/flutter/lib/pairing_page.dart": "0550294a45abb65058d029adea747d2037bb46d8a883bc10fd0f70faed550587",
+    "validation/flutter/test/pair_scan_test.dart": "aea955f6c2ed937bead72cd8eec279916fff3b3ee9c5c3dd4e27bbee81a73c60",
+    "validation/flutter/test/pairing_handoff_test.dart": "4824c300158674dc3e0fd8910083afb25d0a4b10a02ea1e3356cbd68d343e4c9",
+    "validation/remote-harness/android_gui.py": "bea92edeabf5b2f6987045eb2cfa19a981561ef0b41cee098a305edcb3d271a3",
+    "validation/remote-harness/flutter_android_gui.py": "7b5f413bb92895484ab4b8240d63653238fcc0171eadaeaa8d312b003e0b9f83",
+    "validation/remote-harness/flutter_android_test.py": "f0164e5f3d059fce94568db2d89aedf86f6608c4241267a0884e5ebb46dc5ae7",
+    "validation/remote-harness/paired_gui.py": "b6d45310c537fa9066c3151403faf4c2ec610e24a20cd16071d67ac9c39b3526",
+    "validation/remote-harness/test_android_ime_diagnostics.py": "98eeb749dfcb43f40442d0e5c432b6c180895ee83564fb22b77bdb776e152338",
+    "validation/remote-harness/test_paired_fixture.py": "e752a46e865fbab4ae1bae9d19aa956bd115163c10a63d45a86375169a09ba43",
+    "validation/tauri/android/ClipboardPlugin.kt": "f87f7b88baaec62f59783e30391b280af8202b7fb0c5bf2a2f7b6ec9d6917661",
+    "validation/tauri/index.html": "fd991baf6732d369ec9c743b0c9be9ddc8ac8cf4cef1181e42b2d202d3dc1326",
+    "validation/tauri/src-tauri/src/clipboard.rs": "f3ca0a5f6aa1b15a4efdd0b8f4f720591bdab9bbeea39421e9af93a528221e4a",
+    "validation/tauri/src-tauri/src/hosts.rs": "3d4d1f90012da195ae671a1b1f6d67d826d8fdab3436bb044070392d4b71f708",
+    "validation/tauri/src-tauri/src/lib.rs": "8bb18d88246bf99a553d86d38ec926c5b906bd38895203e66216dd9e236c0920",
+    "validation/tauri/src-tauri/src/pair_copy.rs": "b16fca15c1eaadafcba444374daa54a5fa8fe5d5474061b14409e831c9e849ce",
+    "validation/tauri/src/pairing-camera.js": "ebc4bd19544e40e36b64133fbecb92995bae403f6deae4337caf980428f71f42",
+    "validation/tauri/src/public-request-clipboard.js": "7988275c4eb83107c0185ca5edccdb33ff5876d7a2da415d765ce666023d1da1",
+    "validation/tauri/src/remote.js": "ef9ae5a905edf4107a3102b3ec0ee0d2fbf7773d07b0b7a15d7154961ac60743",
+    "validation/tauri/test/ClipboardPluginProbe.kt": "92fa6315d1a50bc77d9ad8fbe3bc849430144010c8270630c10c016f266dccbf",
+    "validation/tauri/test/android-clipboard-plugin-test.py": "66c7f15fbb331ce2cdc02268ded5ca44f4fa17e1e72ceaa9b49801849af74225",
+    "validation/tauri/test/direct-dashboard-gui.test.mjs": "a03a5298500aab02efecd9bac7a2dcfebb1151f4aff26f106db6140125e8aec7",
+    "validation/tauri/test/pair-copy-packaging-test.py": "6ca3b36d59775ee08ccfc1faa8b01f658618e6eb833f8712cbcb221264027150",
+    "validation/tauri/test/pairing-camera.test.mjs": "fdc63df8e736e6a345dbf73bbbf10a45cb63ffe1dda79a2d52a2aaf506ac3d17",
+    "validation/tauri/test/public-request-clipboard.test.mjs": "864d1f6b26f59c90398ae11deeaf610e6a5c406971add8c427d368ab9c5db0aa",
+    "validation/transport-rust/src/pairing.rs": "65eaa92ab0998e3cbef0d1ffe7f4d4fc92788c10f3e068f7a28ef94ba8fd158e"
+  },
+  "local_suites": [
+    {
+      "check": "POSIX helper",
+      "passed": 22
+    },
+    {
+      "check": "shared device harness",
+      "passed": 47
+    },
+    {
+      "check": "Flutter Android driver",
+      "passed": 65
+    },
+    {
+      "check": "Node",
+      "passed": 377
+    },
+    {
+      "check": "Tauri Rust library, isolated target",
+      "passed": 51
+    },
+    {
+      "check": "Rust transport library",
+      "passed": 88
+    }
+  ],
+  "vite": {
+    "modules": 60,
+    "shared_font_and_fixture_hashes_verified": true
+  },
+  "mac_browser": {
+    "platform": "isolated Mac headless Chrome via CDP, touch events",
+    "native": "synthetic native and clipboard; no real SSH, keys or clipboard",
+    "viewports": {
+      "320": {
+        "width": 320,
+        "scrollWidth": 320,
+        "copyDisabled": true,
+        "connectDisabled": true,
+        "requestRetained": true,
+        "status": "已审查匹配撤销回执，目录已确认撤销；原设备记录保留，不能连接。私钥仅可由你另行显式清理。",
+        "counts": {
+          "pair_create": 1,
+          "pair_copy_request": 2,
+          "pair_accept": 1,
+          "pair_reset": 0,
+          "remote_observe": 0,
+          "remote_tab_observe": 0
+        },
+        "copyResult": "confirmed by synthetic native reply",
+        "copyFailureManualSelection": true,
+        "expiredAuthorizationBlocked": true,
+        "revocationExplicitlyReviewed": true,
+        "actualClipboardTouched": false
+      },
+      "390": {
+        "width": 390,
+        "scrollWidth": 390,
+        "copyDisabled": true,
+        "connectDisabled": true,
+        "requestRetained": true,
+        "status": "已审查匹配撤销回执，目录已确认撤销；原设备记录保留，不能连接。私钥仅可由你另行显式清理。",
+        "counts": {
+          "pair_create": 1,
+          "pair_copy_request": 2,
+          "pair_accept": 1,
+          "pair_reset": 0,
+          "remote_observe": 0,
+          "remote_tab_observe": 0
+        },
+        "copyResult": "confirmed by synthetic native reply",
+        "copyFailureManualSelection": true,
+        "expiredAuthorizationBlocked": true,
+        "revocationExplicitlyReviewed": true,
+        "actualClipboardTouched": false
+      }
+    },
+    "failures": [],
+    "chrome": "Chrome/156.0.8078.81"
+  },
+  "helper": {
+    "tty_before": "UnsupportedOperation: File or stream is not seekable using text r+ on /dev/tty",
+    "tty_after": "Passed real controlling TTY REVOKE full phrase; original request expired; new revocation 600s; exact account/host/id/device fingerprint match",
+    "dart_receipt_checks": [
+      "cancelled accepts fresh matching revocation",
+      "expired accepts fresh matching revocation",
+      "authorized accepts fresh matching revocation",
+      "four binding mismatches rejected",
+      "unreviewed rejected",
+      "stale revocation rejected",
+      "refreshed revocation accepted",
+      "new authorization cannot extend original request"
+    ]
+  },
+  "android_copy": {
+    "native_command": "pair_copy_request",
+    "js_arguments": [
+      "hostId",
+      "requestId"
+    ],
+    "kotlin_clipboard_keyboard_probes": "passed with stubs",
+    "generated_project_wiring": "passed",
+    "actual_clipboard_touched_in_local_GUI_review": false
+  },
+  "penpot": {
+    "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "page": "7a22df08-251d-8016-8008-de03541c11da",
+    "total_boards": 55,
+    "reviewed_boards": [
+      {
+        "name": "S52 · 公开请求交接",
+        "id": "ff7bd149-6597-80a5-8008-e8e75ef79937"
+      },
+      {
+        "name": "S53 · 原请求结束 · 审查撤销回执",
+        "id": "ff7bd149-6597-80a5-8008-e8e75f25e6d3"
+      },
+      {
+        "name": "S54 · 已审查撤销 · 本机身份保留",
+        "id": "ff7bd149-6597-80a5-8008-e8e75f4fedb9"
+      },
+      {
+        "name": "S55 · 已核验撤销回执 · 待接受",
+        "id": "ff7bd149-6597-80a5-8008-e8e83e923b94"
+      }
+    ],
+    "clicks": [
+      "S51 → S52",
+      "S52 → S53",
+      "S53 → S55",
+      "S55 → S54",
+      "S54 → S01",
+      "S54 → S13"
+    ],
+    "export_sha256": {
+      "v2-S52-request-handoff-20261107.png": "215dc27ca20234d8fec8cbc109d9a9b4e195ed67febd139bbaa4c1c2d6271faa",
+      "v2-S53-revocation-receipt-20261107.png": "cbf843b77b943bbb2b379f639fba3efd934feaeac3785bfa7bbe2328c88d330a",
+      "v2-S54-revocation-receipt-20261107.png": "570606137d752523987c975a85f9fde636bd08f9118e815657b069699a04bbb1",
+      "v2-S55-revocation-receipt-20261107.png": "47fb2b515782d51a7fcaed7d98072b5d70fc34e1b1315c8e17a2c807e24a5007"
+    },
+    "dangling_links": []
+  },
+  "unverified": [
+    "physical arm64 Android, camera, OEM keyboard and physical touch",
+    "iOS signing/install and real-device rendering",
+    "three live networks and cross-network concurrency",
+    "commitment to a single production framework"
+  ]
+}

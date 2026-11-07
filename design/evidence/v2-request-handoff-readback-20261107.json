@@ -1,0 +1,897 @@
+{
+  "result": {
+    "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "page": "7a22df08-251d-8016-8008-de03541c11da",
+    "boardCount": 55,
+    "boards": [
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8e75ef79937",
+        "name": "S52 · 公开请求交接",
+        "width": 390.00000953674316,
+        "height": 843.9999580383301,
+        "visible": true,
+        "children": [
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75effde92",
+            "name": "产品标识",
+            "type": "text",
+            "x": 24,
+            "y": 18,
+            "width": 342,
+            "height": 20.000000715255737,
+            "text": "HERDR POCKET  /  设备配对",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f0bb350",
+            "name": "标题",
+            "type": "text",
+            "x": 24,
+            "y": 52,
+            "width": 342,
+            "height": 37.99999976158142,
+            "text": "交给主机独立审查",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f16362e",
+            "name": "副标题",
+            "type": "text",
+            "x": 24,
+            "y": 96,
+            "width": 342,
+            "height": 40.000001430511475,
+            "text": "本机身份已创建 · 等待主机确认",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f1d8c84",
+            "name": "原型边界",
+            "type": "text",
+            "x": 24,
+            "y": 805,
+            "width": 342,
+            "height": 23.999999046325684,
+            "text": "交互原型 · 虚构示例，不执行复制或授权",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f795ec7",
+            "name": "请求摘要",
+            "type": "rectangle",
+            "x": 24,
+            "y": 145,
+            "width": 342.00000762939453,
+            "height": 245.00000476837158,
+            "text": null,
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f8150da",
+            "name": "摘要标题",
+            "type": "text",
+            "x": 40,
+            "y": 158,
+            "width": 310,
+            "height": 23.999999046325684,
+            "text": "原请求 · 有效 10 分钟",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f8da5e7",
+            "name": "原请求详情",
+            "type": "text",
+            "x": 40,
+            "y": 190,
+            "width": 310,
+            "height": 179.00000548362732,
+            "text": "编号 0123456789abcdef\n       0123456789abcdef\n账号 demo  ·  到期 16:50:00\n主机 SHA256:bbXpuKG6zhzdmnxq256Tlqz\n       FBzRl2f6OOg722cYNbU8\n设备 SHA256:aaaaaaaaaaaaaaaaaaaaaaa\n       aaaaaaaaaaaaaaaaaaaa",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f9c595f",
+            "name": "交接说明",
+            "type": "rectangle",
+            "x": 24,
+            "y": 403,
+            "width": 342.00000762939453,
+            "height": 113.99999856948853,
+            "text": null,
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75fa16316",
+            "name": "交接标题",
+            "type": "text",
+            "x": 40,
+            "y": 416,
+            "width": 310,
+            "height": 22.000000715255737,
+            "text": "只交付当前有效的公开请求",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75faa7649",
+            "name": "交接正文",
+            "type": "text",
+            "x": 40,
+            "y": 447,
+            "width": 310,
+            "height": 57.999998569488525,
+            "text": "主机须通过可信渠道独立核对编号、账号与两端指纹，再明确确认授权。",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75fb2d915",
+            "name": "action · 模拟复制",
+            "type": "rectangle",
+            "x": 24,
+            "y": 534,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75fb8782a",
+            "name": "模拟复制",
+            "type": "text",
+            "x": 32,
+            "y": 546,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "演示：复制公开请求并查看主机确认",
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75fc5a203",
+            "name": "action · 审查授权响应",
+            "type": "rectangle",
+            "x": 24,
+            "y": 591,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75fcaf247",
+            "name": "审查授权响应",
+            "type": "text",
+            "x": 32,
+            "y": 603,
+            "width": 326,
+            "height": 23.999999046325684,
+            "text": "演示：主机已确认 · 审查响应",
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "e6d238f0-ac08-8028-8008-de087525a40f"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75fd753d3",
+            "name": "action · 结束请求",
+            "type": "rectangle",
+            "x": 24,
+            "y": 648,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8e75f25e6d3"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75fdcb6ed",
+            "name": "结束请求",
+            "type": "text",
+            "x": 32,
+            "y": 660,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "演示：请求过期或取消后",
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8e75f25e6d3"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75fe99a0f",
+            "name": "交接安全",
+            "type": "text",
+            "x": 24,
+            "y": 718,
+            "width": 342,
+            "height": 57.999998569488525,
+            "text": "复制失败可手动选择公开请求；过期后不可再交付授权请求。",
+            "links": []
+          }
+        ]
+      },
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8e75f25e6d3",
+        "name": "S53 · 原请求结束 · 审查撤销回执",
+        "width": 390.00000953674316,
+        "height": 843.9999580383301,
+        "visible": true,
+        "children": [
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f2b9d19",
+            "name": "产品标识",
+            "type": "text",
+            "x": 24,
+            "y": 18,
+            "width": 342,
+            "height": 20.000000715255737,
+            "text": "HERDR POCKET  /  设备配对",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f35c17e",
+            "name": "标题",
+            "type": "text",
+            "x": 24,
+            "y": 52,
+            "width": 342,
+            "height": 37.99999976158142,
+            "text": "原请求已取消或过期",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f3eaec0",
+            "name": "副标题",
+            "type": "text",
+            "x": 24,
+            "y": 96,
+            "width": 342,
+            "height": 40.000001430511475,
+            "text": "授权结果未知 · 仅可审查新鲜撤销回执",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f4665f2",
+            "name": "原型边界",
+            "type": "text",
+            "x": 24,
+            "y": 805,
+            "width": 342,
+            "height": 23.999999046325684,
+            "text": "交互原型 · 虚构示例，不执行复制或授权",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75ff216b3",
+            "name": "失效状态",
+            "type": "rectangle",
+            "x": 24,
+            "y": 146,
+            "width": 342.00000762939453,
+            "height": 103.99999618530273,
+            "text": null,
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75ff7b514",
+            "name": "失效标题",
+            "type": "text",
+            "x": 40,
+            "y": 159,
+            "width": 310,
+            "height": 23.000000596046448,
+            "text": "等待已结束 · 原身份仍在",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e760014610",
+            "name": "失效说明",
+            "type": "text",
+            "x": 40,
+            "y": 190,
+            "width": 310,
+            "height": 48.99999809265137,
+            "text": "取消不代表主机未授权；迟到授权不能启用连接。",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e7600c1e2d",
+            "name": "撤销摘要",
+            "type": "rectangle",
+            "x": 24,
+            "y": 263,
+            "width": 342.00000762939453,
+            "height": 182.00000524520874,
+            "text": null,
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e76013f960",
+            "name": "撤销标题",
+            "type": "text",
+            "x": 40,
+            "y": 276,
+            "width": 310,
+            "height": 23.999999046325684,
+            "text": "待审查 · 撤销回执",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e760241370",
+            "name": "撤销详情",
+            "type": "text",
+            "x": 40,
+            "y": 308,
+            "width": 310,
+            "height": 118.00000369548798,
+            "text": "编号 0123456789abcdef\n       0123456789abcdef\n账号 demo · revoked · 16:40–16:50\n主机 SHA256:bbXpuKG6zhzdmnxq256Tlqz\n       FBzRl2f6OOg722cYNbU8\n设备 SHA256:aaaaaaaaaaaaaaaaaaaaaaa\n       aaaaaaaaaaaaaaaaaaaa",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e7602ea7f7",
+            "name": "审查确认",
+            "type": "rectangle",
+            "x": 24,
+            "y": 458,
+            "width": 342.00000762939453,
+            "height": 62.00000047683716,
+            "text": null,
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8e83e923b94"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e7603588db",
+            "name": "审查确认说明",
+            "type": "text",
+            "x": 40,
+            "y": 473,
+            "width": 310,
+            "height": 34.000000953674316,
+            "text": "☐ 已核对来源、原编号与两端指纹",
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8e83e923b94"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e7603fbf33",
+            "name": "action · 确认撤销",
+            "type": "rectangle",
+            "x": 24,
+            "y": 540,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8e83e923b94"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e760468b65",
+            "name": "确认撤销",
+            "type": "text",
+            "x": 32,
+            "y": 552,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "演示：确认已独立核验",
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8e83e923b94"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e76053184e",
+            "name": "action · 回到主机步骤",
+            "type": "rectangle",
+            "x": 24,
+            "y": 597,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e76058f280",
+            "name": "回到主机步骤",
+            "type": "text",
+            "x": 32,
+            "y": 609,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "查看主机确认与撤销步骤",
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e76064fb75",
+            "name": "action · 返回看板",
+            "type": "rectangle",
+            "x": 24,
+            "y": 654,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e7606a754e",
+            "name": "返回看板",
+            "type": "text",
+            "x": 32,
+            "y": 666,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "返回主机看板",
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e76075e37e",
+            "name": "撤销安全",
+            "type": "text",
+            "x": 24,
+            "y": 722,
+            "width": 342,
+            "height": 60.00000047683716,
+            "text": "错配或过期的回执不能接受；身份和原公钥保留，不自动重试。",
+            "links": []
+          }
+        ]
+      },
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8e75f4fedb9",
+        "name": "S54 · 已审查撤销 · 本机身份保留",
+        "width": 390.00000953674316,
+        "height": 843.9999580383301,
+        "visible": true,
+        "children": [
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f544643",
+            "name": "产品标识",
+            "type": "text",
+            "x": 24,
+            "y": 18,
+            "width": 342,
+            "height": 20.000000715255737,
+            "text": "HERDR POCKET  /  设备配对",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f5cfe7d",
+            "name": "标题",
+            "type": "text",
+            "x": 24,
+            "y": 52,
+            "width": 342,
+            "height": 37.99999976158142,
+            "text": "撤销回执已审查",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f66e115",
+            "name": "副标题",
+            "type": "text",
+            "x": 24,
+            "y": 96,
+            "width": 342,
+            "height": 40.000001668930054,
+            "text": "此原请求不能再授权或连接",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e75f6eb51c",
+            "name": "原型边界",
+            "type": "text",
+            "x": 24,
+            "y": 805,
+            "width": 342,
+            "height": 23.999999046325684,
+            "text": "交互原型 · 虚构示例，不执行复制或授权",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e7607f64cc",
+            "name": "撤销结果",
+            "type": "rectangle",
+            "x": 24,
+            "y": 150,
+            "width": 342.00000762939453,
+            "height": 135.0000023841858,
+            "text": null,
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e76084add5",
+            "name": "撤销结果标题",
+            "type": "text",
+            "x": 40,
+            "y": 164,
+            "width": 310,
+            "height": 24.000000596046448,
+            "text": "已审查匹配的撤销回执",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e7608e4981",
+            "name": "撤销结果说明",
+            "type": "text",
+            "x": 40,
+            "y": 196,
+            "width": 310,
+            "height": 72.99999666213989,
+            "text": "原请求已撤销；本机身份、关联公钥及句柄仍保留，供独立核验。",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e760987a3b",
+            "name": "连接边界",
+            "type": "rectangle",
+            "x": 24,
+            "y": 299,
+            "width": 342.00000762939453,
+            "height": 132.00000524520874,
+            "text": null,
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e760a168a1",
+            "name": "连接边界标题",
+            "type": "text",
+            "x": 40,
+            "y": 313,
+            "width": 310,
+            "height": 24.000000596046448,
+            "text": "不会自动连接或删除身份",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e760aae3e4",
+            "name": "连接边界正文",
+            "type": "text",
+            "x": 40,
+            "y": 345,
+            "width": 310,
+            "height": 74.00000095367432,
+            "text": "撤销限制后续认证，不保证断开已建立的 SSH；主机状态仍应独立核验。",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e760b46cec",
+            "name": "action · 返回主机看板",
+            "type": "rectangle",
+            "x": 24,
+            "y": 454,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e760ba1242",
+            "name": "返回主机看板",
+            "type": "text",
+            "x": 32,
+            "y": 466,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "返回主机看板",
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "7a22df08-251d-8016-8008-de045ec11db9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e760c573c5",
+            "name": "action · 查看撤销步骤",
+            "type": "rectangle",
+            "x": 24,
+            "y": 511,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e760ccdc2a",
+            "name": "查看撤销步骤",
+            "type": "text",
+            "x": 32,
+            "y": 523,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "查看主机撤销步骤",
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "feb2a821-b263-8097-8008-de215d8656a9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e760dad21d",
+            "name": "结果边界",
+            "type": "text",
+            "x": 24,
+            "y": 588,
+            "width": 342,
+            "height": 86.00000095367432,
+            "text": "需要新的配对时应另行明确创建。此示例不提供从撤销结果直接连接的出口。",
+            "links": []
+          }
+        ]
+      },
+      {
+        "id": "ff7bd149-6597-80a5-8008-e8e83e923b94",
+        "name": "S55 · 已核验撤销回执 · 待接受",
+        "width": 390.00000953674316,
+        "height": 843.9999580383301,
+        "visible": true,
+        "children": [
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83e9ad37a",
+            "name": "产品标识",
+            "type": "text",
+            "x": 24,
+            "y": 18,
+            "width": 342,
+            "height": 20.000000715255737,
+            "text": "HERDR POCKET  /  设备配对",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83ea3dbdd",
+            "name": "标题",
+            "type": "text",
+            "x": 24,
+            "y": 52,
+            "width": 342,
+            "height": 37.99999976158142,
+            "text": "已核验撤销回执",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83eab22bb",
+            "name": "副标题",
+            "type": "text",
+            "x": 24,
+            "y": 96,
+            "width": 342,
+            "height": 40.000001430511475,
+            "text": "尚未接受 · 原身份继续保留",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83eb1ac2d",
+            "name": "核验摘要",
+            "type": "rectangle",
+            "x": 24,
+            "y": 146,
+            "width": 342.00000762939453,
+            "height": 189.9999976158142,
+            "text": null,
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83eb5d243",
+            "name": "摘要标题",
+            "type": "text",
+            "x": 40,
+            "y": 160,
+            "width": 310,
+            "height": 23.999999046325684,
+            "text": "撤销回执 · 与原请求匹配",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83ebcede9",
+            "name": "摘要正文",
+            "type": "text",
+            "x": 40,
+            "y": 194,
+            "width": 310,
+            "height": 123.00000286102295,
+            "text": "编号 0123456789abcdef\n       0123456789abcdef\n账号 demo · revoked · 16:40–16:50\n主机与设备完整指纹均已独立比对",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83ec462a6",
+            "name": "已核验",
+            "type": "rectangle",
+            "x": 24,
+            "y": 349,
+            "width": 342.00000762939453,
+            "height": 112.00000047683716,
+            "text": null,
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83ec87a28",
+            "name": "已核验标题",
+            "type": "text",
+            "x": 40,
+            "y": 363,
+            "width": 310,
+            "height": 23.999999046325684,
+            "text": "☑ 已核对来源、原编号与两端指纹",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83eceabac",
+            "name": "已核验说明",
+            "type": "text",
+            "x": 40,
+            "y": 394,
+            "width": 310,
+            "height": 52.000000953674316,
+            "text": "来源或内容变化、回执到期后需要重新核验。",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83ed43c51",
+            "name": "action · 接受撤销",
+            "type": "rectangle",
+            "x": 24,
+            "y": 483,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8e75f4fedb9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83ed83f5e",
+            "name": "接受撤销",
+            "type": "text",
+            "x": 32,
+            "y": 495,
+            "width": 326,
+            "height": 23.999999046325684,
+            "text": "明确接受撤销回执 · 演示",
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8e75f4fedb9"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83ee16b03",
+            "name": "action · 返回待核验",
+            "type": "rectangle",
+            "x": 24,
+            "y": 540,
+            "width": 342.00000762939453,
+            "height": 46.00000083446503,
+            "text": null,
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8e75f25e6d3"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83ee54b9d",
+            "name": "返回待核验",
+            "type": "text",
+            "x": 32,
+            "y": 552,
+            "width": 326,
+            "height": 24.000000596046448,
+            "text": "返回待核验回执",
+            "links": [
+              {
+                "type": "navigate-to",
+                "destination": "ff7bd149-6597-80a5-8008-e8e75f25e6d3"
+              }
+            ]
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83eee3fbd",
+            "name": "安全边界",
+            "type": "text",
+            "x": 24,
+            "y": 618,
+            "width": 342,
+            "height": 90,
+            "text": "只记录本次撤销结果；不会自动连接、删除本机密钥或保证断开已有 SSH。",
+            "links": []
+          },
+          {
+            "id": "ff7bd149-6597-80a5-8008-e8e83ef5e210",
+            "name": "原型边界",
+            "type": "text",
+            "x": 24,
+            "y": 805,
+            "width": 342,
+            "height": 23.999999046325684,
+            "text": "交互原型 · 虚构示例，不执行授权操作",
+            "links": []
+          }
+        ]
+      }
+    ],
+    "dangling": [],
+    "s51Entry": [
+      {
+        "name": "action · 创建设备身份",
+        "links": [
+          "ff7bd149-6597-80a5-8008-e8e75ef79937"
+        ]
+      },
+      {
+        "name": "创建设备身份",
+        "links": [
+          "ff7bd149-6597-80a5-8008-e8e75ef79937"
+        ]
+      }
+    ]
+  },
+  "log": ""
+}

@@ -1,0 +1,1003 @@
+{
+  "date": "2026-11-07",
+  "candidateSource": "54bf6498ddda5cd86892e533e44ef8198e42a2be",
+  "baseline": "3fc2d8c39096ac8261faacea4e81b7060a9adac2",
+  "isolatedSource": "git archive baseline plus the 16 reviewed paths. Existing unrelated worktree changes were excluded.",
+  "sourceSHA256": {
+    "validation/flutter/integration_test/android_pairing_observe_test.dart": "db959b9d83e1f80cb0d3b7342c91c372f8a3763913f9c9205c0dabf033a01695",
+    "validation/flutter/lib/remote_page.dart": "5119df52d286beacb3649df55d8663c394e5a906ee4a3afa4d6e3e4387f04ebe",
+    "validation/flutter/lib/remote_horizontal_viewport.dart": "40e5597c94731a4183b736952f2244dd53ac12703183382e567eaad186b5eb71",
+    "validation/flutter/test/remote_horizontal_viewport_test.dart": "dbe276e013c614d6573feff2cc394f77e0898fb655e3613a60f246c8ff133619",
+    "validation/flutter/test/remote_input_widget_test.dart": "9e982ab529c55b89f45ca3bd9de3743ee735a5eac6938fa4473add367fac0a63",
+    "validation/tauri/src/local-terminal-viewport.js": "402ee761e7537b11ff97d8e84c048773adae26c50bce8faaee985156c082cb3e",
+    "validation/tauri/src/observation-error.js": "9fa59e2480f0bcb8f27c66079f0bc24f30b848b81be89c04c9a8fc37d300b7e5",
+    "validation/tauri/src/remote.js": "c6239bca92a0c9439cf64794c70655e246e669e3b3e2e95a6e9b586f10a47565",
+    "validation/tauri/src/tab-workspace.js": "78deab42b9204913c19941d25b7dfb36bbfc3f007d2bbb7e5d0b35ff77935182",
+    "validation/tauri/test/direct-dashboard-gui.test.mjs": "496838cd10a9584857a3f664b921295b47907758df2f719ced2376c58f63819c",
+    "validation/tauri/test/local-terminal-viewport.test.mjs": "08aaee495a43777032f978e19a75effec8e471647f22b2b625b65e21115da691",
+    "validation/tauri/test/tab-workspace.test.mjs": "e9b57f667fee05dcf9fef18698d4e6b9ecb02e3c28deecd55d0cf745702cedbf",
+    "validation/remote-harness/android_gui.py": "4d4fcc2dc4f1bbb37e1d2be411517bed5f41c61c0451b4e8a2e3a2c86fbdc0e7",
+    "validation/remote-harness/test_android_font_probe.py": "3cac96fc0a9f10b35a7d69688d253b21239417fd292ade32890718314da9645c",
+    "validation/remote-harness/flutter_android_gui.py": "702071aacf410f9fa27e017197b9ae4fa3103007d08dfcc64b046504be841920",
+    "validation/remote-harness/flutter_android_test.py": "787bc95f78c4f098db4cee9e52f927660616abc9f276f6cebbe11139a7dd76fc"
+  },
+  "macChrome": {
+    "scope": "Chrome 156 via a private DevTools pipe; real xterm DOM and browser touch input; synthetic SSH/native IPC and pairing responses; fixed bundled font. No physical Android or iOS device. Browser closed.",
+    "scenarios": {
+      "tab-390": {
+        "viewport": [
+          390,
+          820
+        ],
+        "gesture": "CDP touch drag 100 CSS px",
+        "max": 364,
+        "before": 85,
+        "after": 85,
+        "sends": 0,
+        "resizes": 0
+      },
+      "form-390": {
+        "viewport": [
+          390,
+          820
+        ],
+        "gesture": "CDP touch drag 100 CSS px",
+        "max": 332,
+        "before": 85,
+        "after": 85,
+        "sends": 0,
+        "resizes": 0
+      },
+      "tab-320": {
+        "viewport": [
+          320,
+          820
+        ],
+        "gesture": "CDP touch drag 100 CSS px",
+        "max": 434,
+        "before": 85,
+        "after": 85,
+        "sends": 0,
+        "resizes": 0
+      },
+      "form-320": {
+        "viewport": [
+          320,
+          820
+        ],
+        "gesture": "CDP touch drag 100 CSS px",
+        "max": 402,
+        "before": 85,
+        "after": 85,
+        "sends": 0,
+        "resizes": 0
+      }
+    },
+    "savedPath": "Reviewed saved host, chose pane, panned in observe and switched to draft, which replaces the scroll element. Checked the replacement element retained scrollLeft.",
+    "pairedPath": "Paired through the form, chose pane, panned, returned home, reopened saved host and revalidated the original identity, manually connected, received full and checked scrollLeft.",
+    "diagnosticDOM": {
+      "320": {
+        "measured": {
+          "rowCount": 8,
+          "columns": 16,
+          "columnRatio": 16,
+          "markerColumns": [
+            15,
+            15,
+            15,
+            15,
+            15,
+            15,
+            15,
+            15
+          ],
+          "markerOffsets": [
+            14.988805970149254,
+            14.988805970149254,
+            14.988805970149254,
+            14.993470149253731,
+            14.988805970149254,
+            14.993470149253731,
+            14.993470149253731,
+            14.99160447761194
+          ],
+          "cellWidthPx": 8.375,
+          "screenWidthPx": 134
+        },
+        "state": {
+          "dialogOpen": true,
+          "nativeModal": true,
+          "ariaModal": true,
+          "closeFocused": true,
+          "triggerEnabled": true,
+          "inputControlsPresent": true,
+          "inputControlsHidden": false,
+          "keyboardShowDisabled": true,
+          "keyboardHideDisabled": true,
+          "remoteTextareaReadOnly": true,
+          "remoteTextareaInputMode": "none",
+          "remoteTextareaFocused": false,
+          "remoteDraftFocused": false
+        }
+      },
+      "390": {
+        "measured": {
+          "rowCount": 8,
+          "columns": 16,
+          "columnRatio": 16,
+          "markerColumns": [
+            15,
+            15,
+            15,
+            15,
+            15,
+            15,
+            15,
+            15
+          ],
+          "markerOffsets": [
+            14.988805970149254,
+            14.988805970149254,
+            14.988805970149254,
+            14.993470149253731,
+            14.988805970149254,
+            14.993470149253731,
+            14.993470149253731,
+            14.99160447761194
+          ],
+          "cellWidthPx": 8.375,
+          "screenWidthPx": 134
+        },
+        "state": {
+          "dialogOpen": true,
+          "nativeModal": true,
+          "ariaModal": true,
+          "closeFocused": true,
+          "triggerEnabled": true,
+          "inputControlsPresent": true,
+          "inputControlsHidden": false,
+          "keyboardShowDisabled": true,
+          "keyboardHideDisabled": true,
+          "remoteTextareaReadOnly": true,
+          "remoteTextareaInputMode": "none",
+          "remoteTextareaFocused": false,
+          "remoteDraftFocused": false
+        }
+      }
+    }
+  },
+  "localChecks": {
+    "tauriNode22": 247,
+    "viteModules": 56,
+    "flutterDeviceDriver": 59,
+    "combinedRemoteHarness": 36,
+    "isolatedPosixHelper": 15,
+    "flutterPackagingTools": 11,
+    "existingTrackedWipHashesUnchanged": 42
+  },
+  "flutterDiagnosticReproduction": {
+    "frozen": "Pinned patched terminal_view 0.5.0 with maxLines=8 and first resize(16,8) throws in Buffer.resize / IndexAwareCircularBuffer.pop.",
+    "workingFix": "Allocate 24 rows for the initial terminal size, then resize(16,8); verifies source patch hashes before running the real standalone core.",
+    "standaloneDartVersion": "3.11.0",
+    "markerColumnOneBased": [
+      15,
+      15,
+      15,
+      15,
+      15,
+      15,
+      15,
+      15
+    ],
+    "fontFixtureSha256": "2eea98fc43db6a8d531739da72363241d11683a60e43b27ed12c3f4d887d1749",
+    "scope": "Core buffer markers only; no Flutter painting or device checks in this result."
+  },
+  "penpot": {
+    "review": "../../../design/evidence/v2-mobile-horizontal-review-20261107.json",
+    "viewerPaths": [
+      "S46 > S47 > S46 > S02 > S46",
+      "S18 > S46"
+    ]
+  },
+  "ci": {
+    "initialBatch": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42372870417",
+    "source": "54bf6498ddda5cd86892e533e44ef8198e42a2be",
+    "initialVerification": {
+      "schemaVersion": 1,
+      "runId": 42372870417,
+      "sourceCommit": "54bf6498ddda5cd86892e533e44ef8198e42a2be",
+      "branch": "codex/network-batch/with-emulators-input-mobile-recovery-20261107",
+      "conclusion": "failure",
+      "artifacts": {
+        "flutter-app": {
+          "id": "13575100706",
+          "path": "flutter-app/artifact.zip",
+          "githubDigest": "sha256:5ac837176a67c807ce0a7c69f63eaf6f21fc90390e3908d693c19f7b3c97331c",
+          "localDigest": "sha256:5ac837176a67c807ce0a7c69f63eaf6f21fc90390e3908d693c19f7b3c97331c",
+          "verified": true
+        },
+        "tauri-app": {
+          "id": "13574498135",
+          "path": "tauri-app/artifact.zip",
+          "githubDigest": "sha256:c580fa00a9760c84265cd7e1c369e9abd10d4d069ba71d12f62385d279e1d1b2",
+          "localDigest": "sha256:c580fa00a9760c84265cd7e1c369e9abd10d4d069ba71d12f62385d279e1d1b2",
+          "verified": true
+        },
+        "flutter-source": {
+          "id": "13574623537",
+          "path": "flutter-source/artifact.zip",
+          "githubDigest": "sha256:8c0a535a1048748526c63a261b21b53b3aa04750f69a3c0a3ef7714b749ac514",
+          "localDigest": "sha256:8c0a535a1048748526c63a261b21b53b3aa04750f69a3c0a3ef7714b749ac514",
+          "verified": true
+        },
+        "tauri-stock": {
+          "id": "13574624375",
+          "path": "tauri-stock/artifact.zip",
+          "githubDigest": "sha256:7ff30434217a79d910b95a42b142ee995bd1a5c582d5a1652cb1c5e5305fbae1",
+          "localDigest": "sha256:7ff30434217a79d910b95a42b142ee995bd1a5c582d5a1652cb1c5e5305fbae1",
+          "verified": true
+        },
+        "tauri-guarded": {
+          "id": "13574454809",
+          "path": "tauri-guarded/artifact.zip",
+          "githubDigest": "sha256:801203d43ad37d1547ffd5f2b48a2ab0b18f092388ab7a4511db3440dd6162ee",
+          "localDigest": "sha256:801203d43ad37d1547ffd5f2b48a2ab0b18f092388ab7a4511db3440dd6162ee",
+          "verified": true
+        },
+        "flutter-stock": {
+          "id": "13574808494",
+          "path": "flutter-stock/artifact.zip",
+          "githubDigest": "sha256:4214c94e464c295a287c973edf6d4dbf38dd2e709d416ad389ea5fb3c74be5a1",
+          "localDigest": "sha256:4214c94e464c295a287c973edf6d4dbf38dd2e709d416ad389ea5fb3c74be5a1",
+          "verified": true
+        },
+        "flutter-guarded": {
+          "id": "13574863000",
+          "path": "flutter-guarded/artifact.zip",
+          "githubDigest": "sha256:06f139ea157852f09a52de7ba30c2d80b2355c19a779db7995dabbe4678938c5",
+          "localDigest": "sha256:06f139ea157852f09a52de7ba30c2d80b2355c19a779db7995dabbe4678938c5",
+          "verified": true
+        }
+      },
+      "apps": {
+        "flutter": {
+          "artifact": {
+            "id": "13575100706",
+            "path": "flutter-app/artifact.zip",
+            "githubDigest": "sha256:5ac837176a67c807ce0a7c69f63eaf6f21fc90390e3908d693c19f7b3c97331c",
+            "localDigest": "sha256:5ac837176a67c807ce0a7c69f63eaf6f21fc90390e3908d693c19f7b3c97331c",
+            "verified": true
+          },
+          "apkPath": "flutter-app/app.apk",
+          "apkSha256": "1f205866fded49eef29472635cfc984537bd92acf5546a32858d0b102a993854",
+          "sourceCommit": "54bf6498ddda5cd86892e533e44ef8198e42a2be",
+          "abi": "arm64-v8a",
+          "observedNativeAbis": [
+            "arm64-v8a"
+          ],
+          "api": 35,
+          "sourceChecks": "failure",
+          "transportChecks": "success",
+          "build": "passed",
+          "staticInspection": "passed",
+          "androidLoad": "not run",
+          "installation": "not run",
+          "node": "not run"
+        },
+        "tauri": {
+          "artifact": {
+            "id": "13574498135",
+            "path": "tauri-app/artifact.zip",
+            "githubDigest": "sha256:c580fa00a9760c84265cd7e1c369e9abd10d4d069ba71d12f62385d279e1d1b2",
+            "localDigest": "sha256:c580fa00a9760c84265cd7e1c369e9abd10d4d069ba71d12f62385d279e1d1b2",
+            "verified": true
+          },
+          "apkPath": "tauri-app/app.apk",
+          "apkSha256": "0ebfe25a67db2bbb9aa35d0dd3bdf819dc43f2e40104f7914411a708145a34b0",
+          "sourceCommit": "54bf6498ddda5cd86892e533e44ef8198e42a2be",
+          "abi": "arm64-v8a",
+          "observedNativeAbis": [
+            "arm64-v8a"
+          ],
+          "api": 35,
+          "sourceChecks": "success",
+          "transportChecks": "success",
+          "build": "passed",
+          "staticInspection": "passed",
+          "androidLoad": "not run",
+          "installation": "not run",
+          "node": "not run"
+        }
+      },
+      "flutterSource": {
+        "artifact": {
+          "id": "13574623537",
+          "path": "flutter-source/artifact.zip",
+          "githubDigest": "sha256:8c0a535a1048748526c63a261b21b53b3aa04750f69a3c0a3ef7714b749ac514",
+          "localDigest": "sha256:8c0a535a1048748526c63a261b21b53b3aa04750f69a3c0a3ef7714b749ac514",
+          "verified": true
+        },
+        "sourceCommit": "54bf6498ddda5cd86892e533e44ef8198e42a2be",
+        "testConclusion": "failure",
+        "failureCount": 5,
+        "failureTests": [
+          "remote_input_widget_test.dart: horizontal scrollbar remains draggable in direct input mode",
+          "remote_keyboard_controls_test.dart: keyboard controls stay within explicit direct mode and suppress commits while hidden",
+          "terminal_font_diagnostics_test.dart: local font diagnostics is read-only, aligned to shared samples, and preserves the draft at 320 px",
+          "terminal_font_diagnostics_test.dart: opening diagnostics from direct mode retires input and closing remains observe-only",
+          "terminal_font_diagnostics_test.dart: stock observe connection without input capability can open diagnostics but cannot send"
+        ]
+      },
+      "scenes": {
+        "tauri-stock": {
+          "artifact": {
+            "id": "13574624375",
+            "path": "tauri-stock/artifact.zip",
+            "githubDigest": "sha256:7ff30434217a79d910b95a42b142ee995bd1a5c582d5a1652cb1c5e5305fbae1",
+            "localDigest": "sha256:7ff30434217a79d910b95a42b142ee995bd1a5c582d5a1652cb1c5e5305fbae1",
+            "verified": true
+          },
+          "status": "failed",
+          "testId": "reviewed-device-key-to-observe",
+          "errorCode": "android_font_diagnostic_input_or_focus_guard_failed",
+          "receivedInputBytes": 0,
+          "keyboard": null,
+          "font": null,
+          "viewport": {},
+          "probeReadingsAvailable": false,
+          "pty": {
+            "noObservedResize": true,
+            "numericRecord": {
+              "captureErrors": 0,
+              "changes": 0,
+              "columns": 119,
+              "elapsedMs": 47027,
+              "endReason": 1,
+              "initialColumns": 119,
+              "initialRows": 40,
+              "maxSampleGapMs": 104,
+              "readErrors": 0,
+              "rows": 40,
+              "sampleIntervalMs": 50,
+              "samples": 931,
+              "schemaVersion": 1,
+              "signalAvailable": 1,
+              "signalSamples": 0,
+              "signalsMayCoalesce": 1,
+              "state": 2,
+              "terminationSignal": 0,
+              "winchHandlers": 0
+            }
+          },
+          "cleanup": {
+            "ownedProcessesStopped": true,
+            "ephemeralKeysRemoved": true,
+            "userAuthorizationFilesTouched": false,
+            "rawLogsUploaded": false
+          },
+          "deviceCleanup": null,
+          "emulatorLifecycle": [
+            "preflight: checking for existing devices",
+            "preflight: no existing device",
+            "startup: launched owned emulator on emulator-5554",
+            "startup: boot ready=true",
+            "cleanup: beginning; original status 1",
+            "cleanup: owned serial absent on attempt 1"
+          ]
+        },
+        "tauri-guarded": {
+          "artifact": {
+            "id": "13574454809",
+            "path": "tauri-guarded/artifact.zip",
+            "githubDigest": "sha256:801203d43ad37d1547ffd5f2b48a2ab0b18f092388ab7a4511db3440dd6162ee",
+            "localDigest": "sha256:801203d43ad37d1547ffd5f2b48a2ab0b18f092388ab7a4511db3440dd6162ee",
+            "verified": true
+          },
+          "status": "failed",
+          "testId": "reviewed-device-key-to-direct-and-draft",
+          "errorCode": "android_font_diagnostic_input_or_focus_guard_failed",
+          "receivedInputBytes": 0,
+          "keyboard": null,
+          "font": null,
+          "viewport": {},
+          "probeReadingsAvailable": false,
+          "pty": {
+            "noObservedResize": true,
+            "numericRecord": {
+              "captureErrors": 0,
+              "changes": 0,
+              "columns": 119,
+              "elapsedMs": 38449,
+              "endReason": 1,
+              "initialColumns": 119,
+              "initialRows": 40,
+              "maxSampleGapMs": 113,
+              "readErrors": 0,
+              "rows": 40,
+              "sampleIntervalMs": 50,
+              "samples": 760,
+              "schemaVersion": 1,
+              "signalAvailable": 1,
+              "signalSamples": 0,
+              "signalsMayCoalesce": 1,
+              "state": 2,
+              "terminationSignal": 0,
+              "winchHandlers": 0
+            }
+          },
+          "cleanup": {
+            "ownedProcessesStopped": true,
+            "ephemeralKeysRemoved": true,
+            "userAuthorizationFilesTouched": false,
+            "rawLogsUploaded": false
+          },
+          "deviceCleanup": null,
+          "emulatorLifecycle": [
+            "preflight: checking for existing devices",
+            "preflight: no existing device",
+            "startup: launched owned emulator on emulator-5554",
+            "startup: boot ready=true",
+            "cleanup: beginning; original status 1",
+            "cleanup: owned serial absent on attempt 1"
+          ]
+        },
+        "flutter-stock": {
+          "artifact": {
+            "id": "13574808494",
+            "path": "flutter-stock/artifact.zip",
+            "githubDigest": "sha256:4214c94e464c295a287c973edf6d4dbf38dd2e709d416ad389ea5fb3c74be5a1",
+            "localDigest": "sha256:4214c94e464c295a287c973edf6d4dbf38dd2e709d416ad389ea5fb3c74be5a1",
+            "verified": true
+          },
+          "status": "failed",
+          "testId": "reviewed-device-key-to-observe",
+          "errorCode": "flutter_android_test_exited_local_font_diagnostic",
+          "receivedInputBytes": 0,
+          "keyboard": null,
+          "font": null,
+          "viewport": {},
+          "probeReadingsAvailable": false,
+          "pty": {
+            "noObservedResize": true,
+            "numericRecord": {
+              "captureErrors": 0,
+              "changes": 0,
+              "columns": 119,
+              "elapsedMs": 309208,
+              "endReason": 1,
+              "initialColumns": 119,
+              "initialRows": 40,
+              "maxSampleGapMs": 217,
+              "readErrors": 0,
+              "rows": 40,
+              "sampleIntervalMs": 50,
+              "samples": 6090,
+              "schemaVersion": 1,
+              "signalAvailable": 1,
+              "signalSamples": 0,
+              "signalsMayCoalesce": 1,
+              "state": 2,
+              "terminationSignal": 0,
+              "winchHandlers": 0
+            }
+          },
+          "cleanup": {
+            "ownedProcessesStopped": true,
+            "ephemeralKeysRemoved": true,
+            "userAuthorizationFilesTouched": false,
+            "rawLogsUploaded": false
+          },
+          "deviceCleanup": {
+            "sourceSHA": "54bf6498ddda5cd86892e533e44ef8198e42a2be",
+            "ownedPackageInitiallyAbsent": true,
+            "ownedPackageAbsent": true,
+            "appProcessGone": true,
+            "reverseRemoved": true,
+            "ownedForwardsRemoved": true,
+            "flutterToolStopped": true,
+            "rawLogsUploaded": false,
+            "status": "passed"
+          },
+          "emulatorLifecycle": [
+            "preflight: checking for existing devices",
+            "preflight: no existing device",
+            "startup: launched owned emulator on emulator-5554",
+            "startup: boot ready=true",
+            "cleanup: beginning; original status 1",
+            "cleanup: owned serial absent on attempt 1"
+          ]
+        },
+        "flutter-guarded": {
+          "artifact": {
+            "id": "13574863000",
+            "path": "flutter-guarded/artifact.zip",
+            "githubDigest": "sha256:06f139ea157852f09a52de7ba30c2d80b2355c19a779db7995dabbe4678938c5",
+            "localDigest": "sha256:06f139ea157852f09a52de7ba30c2d80b2355c19a779db7995dabbe4678938c5",
+            "verified": true
+          },
+          "status": "failed",
+          "testId": "reviewed-device-key-to-direct-and-draft",
+          "errorCode": "flutter_android_test_exited_target_review_unchecked",
+          "receivedInputBytes": 0,
+          "keyboard": null,
+          "font": null,
+          "viewport": {},
+          "probeReadingsAvailable": false,
+          "pty": {
+            "noObservedResize": true,
+            "numericRecord": {
+              "captureErrors": 0,
+              "changes": 0,
+              "columns": 119,
+              "elapsedMs": 114849,
+              "endReason": 1,
+              "initialColumns": 119,
+              "initialRows": 40,
+              "maxSampleGapMs": 105,
+              "readErrors": 0,
+              "rows": 40,
+              "sampleIntervalMs": 50,
+              "samples": 2265,
+              "schemaVersion": 1,
+              "signalAvailable": 1,
+              "signalSamples": 0,
+              "signalsMayCoalesce": 1,
+              "state": 2,
+              "terminationSignal": 0,
+              "winchHandlers": 0
+            }
+          },
+          "cleanup": {
+            "ownedProcessesStopped": true,
+            "ephemeralKeysRemoved": true,
+            "userAuthorizationFilesTouched": false,
+            "rawLogsUploaded": false
+          },
+          "deviceCleanup": {
+            "sourceSHA": "54bf6498ddda5cd86892e533e44ef8198e42a2be",
+            "ownedPackageInitiallyAbsent": true,
+            "ownedPackageAbsent": true,
+            "appProcessGone": true,
+            "reverseRemoved": true,
+            "ownedForwardsRemoved": true,
+            "flutterToolStopped": true,
+            "rawLogsUploaded": false,
+            "status": "passed"
+          },
+          "emulatorLifecycle": [
+            "preflight: checking for existing devices",
+            "preflight: no existing device",
+            "startup: launched owned emulator on emulator-5554",
+            "startup: boot ready=true",
+            "cleanup: beginning; original status 1",
+            "cleanup: owned serial absent on attempt 1"
+          ]
+        }
+      },
+      "verificationBoundary": {
+        "arm64ApksInstalled": false,
+        "physicalDeviceTested": false,
+        "emulatorScenesWereExecuted": true,
+        "remoteTerminalContentIncluded": false
+      }
+    },
+    "tauriDiagnosticDriverFailure": "JSON inputmode \"none\" compared by Python object identity. The exact decoded Mac CDP values reproduced the same guard failure. Replacing identity with strict type-and-value comparison passed those same readings at both widths. Android rerun required.",
+    "initialVerifiedPackageContents": {
+      "flutter": {
+        "source": "54bf6498ddda5cd86892e533e44ef8198e42a2be",
+        "apkSha256": "1f205866fded49eef29472635cfc984537bd92acf5546a32858d0b102a993854",
+        "ndk": "28.2.13676358",
+        "nativeManifestSha256": "27ef038f003dd03ea9082890ac1f63e84fab5ad3c2cae5fdef4cc899d22b50c0",
+        "nativeLibraries": {
+          "libheeler_easytier.so": "05d8d6cedf43c5b2139b1ae9962aebbe61a37be758c2343bdc7f6e6ef76477d7",
+          "libhp_tailscale.so": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+        },
+        "verifiedAssets": {
+          "fonts/JetBrainsMonoNerdFontMono-Regular.ttf": {
+            "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+            "entry": "assets/flutter_assets/assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf"
+          },
+          "terminal-font-diagnostics-v1.json": {
+            "sha256": "2eea98fc43db6a8d531739da72363241d11683a60e43b27ed12c3f4d887d1749",
+            "entry": "assets/flutter_assets/assets/shared/terminal-font-diagnostics-v1.json"
+          }
+        }
+      },
+      "tauri": {
+        "source": "54bf6498ddda5cd86892e533e44ef8198e42a2be",
+        "apkSha256": "0ebfe25a67db2bbb9aa35d0dd3bdf819dc43f2e40104f7914411a708145a34b0",
+        "ndk": "28.2.13676358",
+        "nativeManifestSha256": "27ef038f003dd03ea9082890ac1f63e84fab5ad3c2cae5fdef4cc899d22b50c0",
+        "nativeLibraries": {
+          "libheeler_easytier.so": "05d8d6cedf43c5b2139b1ae9962aebbe61a37be758c2343bdc7f6e6ef76477d7",
+          "libhp_tailscale.so": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+        },
+        "verifiedAssets": {
+          "fonts/JetBrainsMonoNerdFontMono-Regular.ttf": {
+            "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+            "embeddedIn": "lib/arm64-v8a/libherdr_pocket_tauri_probe_lib.so",
+            "encoding": "brotli-q2",
+            "offset": 1063235,
+            "encodedSha256": "71e0ae795f84c23e8ed6cdbdc2af2b6711cd914e2838125e113f5eabf5f3909e"
+          },
+          "terminal-font-diagnostics-v1.json": {
+            "sha256": "2eea98fc43db6a8d531739da72363241d11683a60e43b27ed12c3f4d887d1749",
+            "embeddedIn": "lib/arm64-v8a/libherdr_pocket_tauri_probe_lib.so",
+            "encoding": "brotli-q2",
+            "offset": 2692234,
+            "encodedSha256": "d6e9f284aff62ddde393d2aea85c1ce0d2e59b9adc8c73c442e09addc1482302"
+          }
+        }
+      }
+    },
+    "repairSource": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+    "repairBatch": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42374975205",
+    "repairVerification": {
+      "schemaVersion": 1,
+      "run": {
+        "id": 42374975205,
+        "sourceCommit": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+        "status": "failure",
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42374975205"
+      },
+      "artifacts": {
+        "flutter-source": {
+          "artifactId": "13575047541",
+          "githubDigest": "sha256:9277041e599fd97486fb2bda23e435f09f5bee957f11784db492406dc48d28c8",
+          "downloadedZipSha256": "9277041e599fd97486fb2bda23e435f09f5bee957f11784db492406dc48d28c8",
+          "expiresAt": null,
+          "digestVerified": true
+        },
+        "flutter-app": {
+          "artifactId": "13575935931",
+          "githubDigest": "sha256:f5a50b51c920b128abac0e06748bc21a2b0f64f78bd7b3406e9d89c7e3d30b17",
+          "downloadedZipSha256": "f5a50b51c920b128abac0e06748bc21a2b0f64f78bd7b3406e9d89c7e3d30b17",
+          "expiresAt": "2026-11-21T13:15:42Z",
+          "digestVerified": true,
+          "apkSha256": "ab0c06233be2c74e5ad591c6cafb5e90aa384e2f0785526641371bc542e70a96",
+          "sourceCommit": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+          "abi": "arm64-v8a",
+          "api": 35,
+          "sourceChecks": "failure",
+          "build": "passed",
+          "staticInspection": "passed",
+          "androidLoad": "not run",
+          "installation": "not run",
+          "actualApkNativeAbi": [
+            "arm64-v8a"
+          ],
+          "physicalDeviceEvidence": false
+        },
+        "tauri-app": {
+          "artifactId": "13575986671",
+          "githubDigest": "sha256:16b54a81edcfe49e3d96313aeb0988ec0db77c1bd03c1c580bb648e2031f71f5",
+          "downloadedZipSha256": "16b54a81edcfe49e3d96313aeb0988ec0db77c1bd03c1c580bb648e2031f71f5",
+          "expiresAt": "2026-11-21T13:16:46Z",
+          "digestVerified": true,
+          "apkSha256": "088b8bc6e562b02432bc9d87889f48eebdd95413bacaddf01b317d436f4950b4",
+          "sourceCommit": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+          "abi": "arm64-v8a",
+          "api": 35,
+          "sourceChecks": "success",
+          "build": "passed",
+          "staticInspection": "passed",
+          "androidLoad": "not run",
+          "installation": "not run",
+          "actualApkNativeAbi": [
+            "arm64-v8a"
+          ],
+          "physicalDeviceEvidence": false
+        },
+        "tauri-stock": {
+          "artifactId": "13575498815",
+          "githubDigest": "sha256:e8eb56668d89b4a10235b8a2defa416d2e01794c911fe36be2d833029413ee28",
+          "downloadedZipSha256": "e8eb56668d89b4a10235b8a2defa416d2e01794c911fe36be2d833029413ee28",
+          "expiresAt": "2026-11-21T13:15:41Z",
+          "digestVerified": true
+        },
+        "tauri-guarded": {
+          "artifactId": "13575896046",
+          "githubDigest": "sha256:d1a8100a5ad34005b510865859cd031394be253b54b1ca22c620ee2b2f413fa8",
+          "downloadedZipSha256": "d1a8100a5ad34005b510865859cd031394be253b54b1ca22c620ee2b2f413fa8",
+          "expiresAt": "2026-11-21T13:15:43Z",
+          "digestVerified": true
+        },
+        "flutter-stock": {
+          "artifactId": "13575638537",
+          "githubDigest": "sha256:de9c6142c89d1b379b9b8facca2a7b8fad741b0a2360ce52ce9bc985265e09a8",
+          "downloadedZipSha256": "de9c6142c89d1b379b9b8facca2a7b8fad741b0a2360ce52ce9bc985265e09a8",
+          "expiresAt": "2026-11-21T13:16:56Z",
+          "digestVerified": true
+        },
+        "flutter-guarded": {
+          "artifactId": "13575423976",
+          "githubDigest": "sha256:e3c0b9c73d0acda7e22ca3cb0288955b937b27ca13fee70a3fdf8105ccccb544",
+          "downloadedZipSha256": "e3c0b9c73d0acda7e22ca3cb0288955b937b27ca13fee70a3fdf8105ccccb544",
+          "expiresAt": "2026-11-21T13:16:57Z",
+          "digestVerified": true
+        }
+      },
+      "apkBoundary": "Both APKs are arm64-v8a only. Reports say androidLoad and installation not run; they are build artifacts, not physical-device validation.",
+      "fourAvdScenes": {
+        "flutter-stock": {
+          "adapter": "flutter",
+          "condition": "stock",
+          "sourceCommit": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+          "status": "passed",
+          "testId": "reviewed-device-key-to-observe",
+          "errorCode": null,
+          "avd": {
+            "api": 35,
+            "systemImageAbi": "x86_64",
+            "tag": "google_apis",
+            "host": "Ubuntu 24.04 x86_64 loopback OpenSSH"
+          },
+          "keyboard": {
+            "checkpoints": [
+              {
+                "source": "Android15-IME-window-and-WindowInsets",
+                "ownedTarget": true,
+                "visible": false,
+                "hidden": true,
+                "windowVisible": false,
+                "decorVisible": false,
+                "inputViewShown": true,
+                "windowInsetsImeVisible": false,
+                "stableSamples": 2,
+                "checkpoint": "keyboard-observe-hidden",
+                "viewInsetBottom": 0,
+                "editorFocused": false,
+                "modeReselected": false
+              }
+            ],
+            "scope": "owned API35 docked IME window and real view insets; automated commits are not IME touch/composition proof",
+            "showWithHardwareKeyboard": true
+          },
+          "fontMarkerColumns": [
+            15,
+            15,
+            15,
+            15,
+            15,
+            15,
+            15,
+            15
+          ],
+          "viewport": {
+            "measurement": "not present in uploaded scene report"
+          },
+          "input": {
+            "receivedBytes": 0,
+            "inputQueueAccepted": false,
+            "directModeDisabled": true,
+            "draftModeDisabled": true
+          },
+          "pty": {
+            "columns": 119,
+            "rows": 40,
+            "noObservedResize": true,
+            "samples": 4271,
+            "elapsedMs": 216494
+          },
+          "cleanup": {
+            "ownedProcessesStopped": true,
+            "ephemeralKeysRemoved": true,
+            "userAuthorizationFilesTouched": false,
+            "rawLogsUploaded": false
+          },
+          "pairing": {
+            "temporaryHostApprovedRequest": true,
+            "matchedDeviceKeyInSshd": true,
+            "revokedFixtureKey": true
+          },
+          "ptySampleCount": 4271
+        },
+        "flutter-guarded": {
+          "adapter": "flutter",
+          "condition": "guarded",
+          "sourceCommit": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+          "status": "failed",
+          "testId": "reviewed-device-key-to-direct-and-draft",
+          "errorCode": "android_system_ime_target_mismatch",
+          "avd": {
+            "api": 35,
+            "systemImageAbi": "x86_64",
+            "tag": "google_apis",
+            "host": "Ubuntu 24.04 x86_64 loopback OpenSSH"
+          },
+          "keyboard": null,
+          "fontMarkerColumns": null,
+          "viewport": {
+            "measurement": "not present in uploaded scene report"
+          },
+          "input": {
+            "receivedBytes": 0,
+            "inputQueueAccepted": null,
+            "directModeDisabled": null,
+            "draftModeDisabled": null
+          },
+          "pty": {
+            "columns": 119,
+            "rows": 40,
+            "noObservedResize": true,
+            "samples": 1427,
+            "elapsedMs": 72211
+          },
+          "cleanup": {
+            "ownedProcessesStopped": true,
+            "ephemeralKeysRemoved": true,
+            "userAuthorizationFilesTouched": false,
+            "rawLogsUploaded": false
+          },
+          "pairing": {
+            "temporaryHostApprovedRequest": true,
+            "matchedDeviceKeyInSshd": true,
+            "revokedFixtureKey": true
+          },
+          "ptySampleCount": 1427
+        },
+        "tauri-stock": {
+          "adapter": "tauri",
+          "condition": "stock",
+          "sourceCommit": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+          "status": "failed",
+          "testId": "reviewed-device-key-to-observe",
+          "errorCode": "android_system_ime_target_mismatch",
+          "avd": {
+            "api": 35,
+            "systemImageAbi": "x86_64",
+            "tag": "google_apis",
+            "host": "Ubuntu 24.04 x86_64 loopback OpenSSH"
+          },
+          "keyboard": {
+            "probeResult": "no keyboard payload; driver error before serialized observation",
+            "errorCode": "android_system_ime_target_mismatch"
+          },
+          "fontMarkerColumns": null,
+          "viewport": {
+            "measurement": "not present in uploaded scene report"
+          },
+          "input": {
+            "receivedBytes": 0,
+            "inputQueueAccepted": null,
+            "directModeDisabled": null,
+            "draftModeDisabled": null
+          },
+          "pty": {
+            "columns": 119,
+            "rows": 40,
+            "noObservedResize": true,
+            "samples": 770,
+            "elapsedMs": 38888
+          },
+          "cleanup": {
+            "ownedProcessesStopped": true,
+            "ephemeralKeysRemoved": true,
+            "userAuthorizationFilesTouched": false,
+            "rawLogsUploaded": false
+          },
+          "pairing": {
+            "temporaryHostApprovedRequest": true,
+            "matchedDeviceKeyInSshd": true,
+            "revokedFixtureKey": true
+          },
+          "ptySampleCount": 770
+        },
+        "tauri-guarded": {
+          "adapter": "tauri",
+          "condition": "guarded",
+          "sourceCommit": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+          "status": "failed",
+          "testId": "reviewed-device-key-to-direct-and-draft",
+          "errorCode": "android_system_ime_target_mismatch",
+          "avd": {
+            "api": 35,
+            "systemImageAbi": "x86_64",
+            "tag": "google_apis",
+            "host": "Ubuntu 24.04 x86_64 loopback OpenSSH"
+          },
+          "keyboard": {
+            "probeResult": "no keyboard payload; driver error before serialized observation",
+            "errorCode": "android_system_ime_target_mismatch"
+          },
+          "fontMarkerColumns": null,
+          "viewport": {
+            "measurement": "not present in uploaded scene report"
+          },
+          "input": {
+            "receivedBytes": 0,
+            "inputQueueAccepted": null,
+            "directModeDisabled": null,
+            "draftModeDisabled": null
+          },
+          "pty": {
+            "columns": 119,
+            "rows": 40,
+            "noObservedResize": true,
+            "samples": 798,
+            "elapsedMs": 40329
+          },
+          "cleanup": {
+            "ownedProcessesStopped": true,
+            "ephemeralKeysRemoved": true,
+            "userAuthorizationFilesTouched": false,
+            "rawLogsUploaded": false
+          },
+          "pairing": {
+            "temporaryHostApprovedRequest": true,
+            "matchedDeviceKeyInSshd": true,
+            "revokedFixtureKey": true
+          },
+          "ptySampleCount": 798
+        }
+      },
+      "sourceFailures": {
+        "flutter_source": {
+          "artifactId": "13575047541",
+          "sourceCommit": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+          "failures": [
+            "remote_horizontal_viewport_test.dart: column anchor survives rebuild and geometry changes, isolated by target",
+            "remote_horizontal_viewport_test.dart: missing identities are never shared and saved anchors are bounded",
+            "terminal_font_diagnostics_test.dart: opening diagnostics from direct mode retires input and closing remains observe-only",
+            "terminal_font_diagnostics_test.dart: stock observe connection without input capability can open diagnostics but cannot send",
+            "terminal_font_diagnostics_test.dart: local font diagnostics is read-only, aligned to shared samples, and preserves the draft at 320 px"
+          ],
+          "typedErrors": [
+            "Font test cases: TestFailure Expected exactly one matching candidate; Found 0 widgets with key terminal-font-diagnostics-view (helper press; tests lines 40, 100, 144).",
+            "Viewport case: component Slider remote-horizontal-slider has No Material widget found at lib/remote_horizontal_viewport.dart:115:21; first also Bad state: Too many elements in WidgetController.getSize (test line 22)."
+          ]
+        }
+      },
+      "interpretation": "Flutter stock AVD observe scenario passed; Flutter guarded and both Tauri scenarios failed with android_system_ime_target_mismatch. Tauri scenarios emitted no font/keyboard measurements. Viewport measurements were absent from all scene manifests. PTY dimensions below are shared PTY observations, not screen viewport."
+    },
+    "repairVerifiedPackageContents": {
+      "flutter": {
+        "source": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+        "apkSha256": "ab0c06233be2c74e5ad591c6cafb5e90aa384e2f0785526641371bc542e70a96",
+        "ndk": "28.2.13676358",
+        "nativeManifestSha256": "c9752de38a77c58ba3ce75afedc3dbfbad1e3bf3539e94785b0eb15e2df66cd8",
+        "nativeLibraries": {
+          "libheeler_easytier.so": "05a53800b145f2139e5547501381d0b3d4ca95c25c8a031768738568c8716cfd",
+          "libhp_tailscale.so": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+        },
+        "verifiedAssets": {
+          "fonts/JetBrainsMonoNerdFontMono-Regular.ttf": {
+            "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+            "entry": "assets/flutter_assets/assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf"
+          },
+          "terminal-font-diagnostics-v1.json": {
+            "sha256": "2eea98fc43db6a8d531739da72363241d11683a60e43b27ed12c3f4d887d1749",
+            "entry": "assets/flutter_assets/assets/shared/terminal-font-diagnostics-v1.json"
+          }
+        }
+      },
+      "tauri": {
+        "source": "cb0fd1c7ad3137a09dd92dbd72e2df168379ce88",
+        "apkSha256": "088b8bc6e562b02432bc9d87889f48eebdd95413bacaddf01b317d436f4950b4",
+        "ndk": "28.2.13676358",
+        "nativeManifestSha256": "c9752de38a77c58ba3ce75afedc3dbfbad1e3bf3539e94785b0eb15e2df66cd8",
+        "nativeLibraries": {
+          "libheeler_easytier.so": "05a53800b145f2139e5547501381d0b3d4ca95c25c8a031768738568c8716cfd",
+          "libhp_tailscale.so": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+        },
+        "verifiedAssets": {
+          "fonts/JetBrainsMonoNerdFontMono-Regular.ttf": {
+            "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+            "embeddedIn": "lib/arm64-v8a/libherdr_pocket_tauri_probe_lib.so",
+            "encoding": "brotli-q2",
+            "offset": 1063235,
+            "encodedSha256": "71e0ae795f84c23e8ed6cdbdc2af2b6711cd914e2838125e113f5eabf5f3909e"
+          },
+          "terminal-font-diagnostics-v1.json": {
+            "sha256": "2eea98fc43db6a8d531739da72363241d11683a60e43b27ed12c3f4d887d1749",
+            "embeddedIn": "lib/arm64-v8a/libherdr_pocket_tauri_probe_lib.so",
+            "encoding": "brotli-q2",
+            "offset": 2692234,
+            "encodedSha256": "d6e9f284aff62ddde393d2aea85c1ce0d2e59b9adc8c73c442e09addc1482302"
+          }
+        }
+      }
+    },
+    "postBatchWidgetTestRepair": "5aa797231aaacbe4ff20cd07ae917a479a2287f8"
+  }
+}

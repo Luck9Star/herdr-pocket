@@ -61,6 +61,7 @@ async function importedRemote() {
   const url = new URL('../src/remote.js', import.meta.url);
   let code = await readFile(url, 'utf8');
   code = code
+    .replace("import {createUnicodeTerminal} from './terminal-unicode.js';", 'const createUnicodeTerminal=(Terminal,options)=>new Terminal(options);')
     .replace("import { Terminal } from '@xterm/xterm';", 'const {Terminal}=globalThis.__directGuiDeps;')
     .replace("import { invoke, Channel } from '@tauri-apps/api/core';", 'const {invoke,Channel}=globalThis.__directGuiDeps;')
     .replace(/from '(\.\/[^']+)'/g, (_match, path) => `from '${new URL(path, url).href}'`);
@@ -85,6 +86,7 @@ async function setup({ inputMode = () => 1, clipboardRead } = {}) {
   nodes['remote-port'].value = '22';
   nodes['pair-device'].value = 'Fixture';
 
+  const documentEvents={},windowEvents={};
   globalThis.document = {
     body: new Element('body'),
     hidden: false,
@@ -95,9 +97,9 @@ async function setup({ inputMode = () => 1, clipboardRead } = {}) {
       node.tagName = tag;
       return node;
     },
-    addEventListener() {},
+    addEventListener(name,fn) { (documentEvents[name] ??= []).push(fn); },
   };
-  globalThis.window = { addEventListener() {}, confirm: () => true };
+  globalThis.window = { addEventListener(name,fn) { (windowEvents[name] ??= []).push(fn); }, confirm: () => true };
   globalThis.confirm = () => true;
 
   const target = {
@@ -186,6 +188,8 @@ async function setup({ inputMode = () => 1, clipboardRead } = {}) {
     setSendResult: result => { sendResult = result; },
     updateHost: update => { Object.assign(records[0], update); },
     emit: event => channel.onmessage(event),
+    windowEvent: name => (windowEvents[name] || []).forEach(fn=>fn()),
+    background: () => { document.hidden=true;(documentEvents.visibilitychange || []).forEach(fn=>fn()); },
     finish: () => resolveObserve?.(),
     fail: () => rejectObserve?.(Error('fixture failure')),
     restore() {
@@ -228,7 +232,9 @@ async function pairAndConnect(h) {
 
 function publishDashboard(h, panes) {
   h.emit({ kind: 'stage', generation: 9, stage: 'authenticated' });
-  h.emit({ kind: 'dashboard', generation: 9, panes });
+  h.emit({ kind: 'observation', generation: 9, snapshot:{epoch:1,phase:'starting'} });
+  h.emit({ kind: 'dashboard_watch', generation: 9, update:{epoch:1,revision:1,phase:'fresh',reason:'fixture',panes} });
+  h.emit({ kind: 'selection_ready', generation: 9, epoch:1 });
 }
 function blockedPane() {
   return [{ paneId: 'w1:p1', terminalId: 'term_a001', agentStatus: 'blocked' }];
@@ -237,9 +243,10 @@ function blockedPane() {
 async function openInput(h) {
   await pairAndConnect(h);
   publishDashboard(h, blockedPane());
-  h.nodes['remote-panes'].children[0].click();
-  h.emit({ kind: 'frame', generation: 9, frame: { seq: 1, full: true, bytes: [65] } });
-  h.emit({ kind: 'input_ready', generation: 9, unknown: false, recovery_status: 'ready' });
+  h.nodes['remote-panes'].children.find(e=>e.tagName==='button' && e.textContent.startsWith('w1:p1')).click();
+  h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});
+  h.emit({ kind: 'frame', generation: 9, epoch:1, frame: { seq: 1, full: true, bytes: [65] } });
+  h.emit({ kind: 'input_ready', generation: 9, epoch:1, unknown: false, recovery_status: 'ready' });
 }
 
 test('paired form requests an editable keyboard in the click and only sends compositions begun after permission', async () => {
@@ -298,23 +305,93 @@ function summary(nodes, live = true) {
     : nodes['host-list'].children[0].children.find(node => node.attrs['data-host-task-summary']);
 }
 
-test('normal new pairing form publishes one-shot host summary and marks it stale on pane selection and home return', async () => {
+test('normal new pairing form keeps summary live after pane selection and marks it stale on home return', async () => {
   const h = await setup(), n = h.nodes;
   try {
     await pairAndConnect(h);
     assert.equal(h.calls.filter(call => call.name === 'remote_observe').length, 1);
     publishDashboard(h, blockedPane());
-    assert.match(summary(n).textContent, /本次快照（持续更新不可用）.*会话 work.*受阻 1.*同步/);
+    assert.match(summary(n).textContent, /当前快照.*会话 work.*受阻 1.*同步/);
     const pane = n['remote-panes'].children.find(node => node.textContent.startsWith('w1:p1'));
     assert.ok(pane);
     pane.click();
     await flush();
-    assert.match(summary(n).textContent, /上次快照/);
+    assert.match(summary(n).textContent, /当前快照/);
     n['host-return-home'].click();
     await flush(); await flush();
     assert.match(summary(n, false).textContent, /上次快照.*受阻 1/);
     assert.equal(h.calls.filter(call => call.name === 'remote_observe').length, 1);
   } finally { h.finish(); await flush(); h.restore(); }
+});
+
+test('live paired board updates summary and rejects old reviewed buttons and revisions', async () => {
+  const h=await setup(),n=h.nodes;
+  try {
+    await pairAndConnect(h);publishDashboard(h,blockedPane());
+    const old=n['remote-panes'].children.find(e=>e.textContent.startsWith('w1:p1'));
+    const changed={paneId:'w1:p1',terminalId:'term_a002',agentStatus:'working'};
+    h.emit({kind:'dashboard_watch',generation:9,update:{epoch:1,revision:2,phase:'fresh',reason:'changed',panes:[changed]}});
+    assert.match(summary(n).textContent,/当前快照.*受阻 0/);
+    old.click();assert.equal(h.calls.filter(c=>c.name==='remote_select').length,0);
+    h.emit({kind:'dashboard_watch',generation:9,update:{epoch:1,revision:1,phase:'fresh',reason:'late',panes:blockedPane()}});
+    const current=n['remote-panes'].children.find(e=>e.textContent.startsWith('w1:p1'));
+    assert.match(current.textContent,/term_a002/);current.click();await flush();
+    assert.deepEqual(h.calls.filter(c=>c.name==='remote_select').at(-1).args,{generation:9,epoch:1,revision:2,paneId:'w1:p1',terminalId:'term_a002'});
+    h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a002'});
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,bytes:[65]}});
+    h.emit({kind:'dashboard_watch',generation:9,update:{epoch:1,revision:3,phase:'fresh',reason:'changed',panes:blockedPane()}});
+    assert.match(summary(n).textContent,/当前快照.*受阻 1/);
+    assert.equal(h.calls.filter(c=>c.name==='remote_observe').length,1);
+    assert.equal(h.calls.filter(c=>c.name.includes('resize') || c.name==='remote_input_send').length,0);
+    assert.deepEqual(h.calls.find(c=>c.name==='remote_ack').args,{generation:9,epoch:1,seq:1});
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('refreshing stales summary and disables selection; unsupported snapshot is explicitly labelled', async()=>{
+  const h=await setup(),n=h.nodes;
+  try {
+    await pairAndConnect(h);publishDashboard(h,blockedPane());
+    const old=n['remote-panes'].children.find(e=>e.textContent.startsWith('w1:p1'));
+    h.emit({kind:'dashboard_watch',generation:9,update:{epoch:1,revision:2,phase:'refreshing',reason:'watch_lost',panes:null}});
+    assert.match(summary(n).textContent,/上次快照/);old.click();assert.equal(h.calls.filter(c=>c.name==='remote_select').length,0);
+    h.emit({kind:'dashboard_watch',generation:9,update:{epoch:1,revision:3,phase:'unavailable',reason:'unsupported',panes:blockedPane()}});
+    assert.match(summary(n).textContent,/本次快照（持续更新不可用）/);
+    assert.match(n['remote-panes'].children[0].textContent,/持续更新不可用/);
+    assert.equal(n['remote-panes'].children.find(e=>e.textContent.startsWith('w1:p1')).disabled,false);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('window blur keeps a visible host board subscribed', async () => {
+  const h=await setup();
+  try {
+    await pairAndConnect(h);publishDashboard(h,blockedPane());h.windowEvent('blur');
+    h.emit({kind:'dashboard_watch',generation:9,update:{epoch:1,revision:2,phase:'fresh',reason:'snapshot',panes:[]}});
+    assert.match(summary(h.nodes).textContent,/当前快照.*受阻 0/);
+    assert.equal(h.calls.filter(c=>c.name==='remote_cancel').length,0);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+for(const reason of ['offline','background'])test(`${reason} invalidates the live board and rejects late updates`,async()=>{
+  const h=await setup(),n=h.nodes;
+  try {
+    await pairAndConnect(h);publishDashboard(h,blockedPane());
+    if(reason==='background')h.background();else h.windowEvent(reason);
+    assert.match(summary(n).textContent,/上次快照/);
+    h.emit({kind:'dashboard_watch',generation:9,update:{epoch:1,revision:2,phase:'fresh',reason:'late',panes:[]}});
+    assert.match(summary(n).textContent,/上次快照.*受阻 1/);
+    assert.equal(h.calls.filter(c=>c.name==='remote_cancel').length,1);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('unexpected bound terminal stops without enabling input or sending',async()=>{
+  const h=await setup();try{
+    await pairAndConnect(h);publishDashboard(h,blockedPane());
+    h.nodes['remote-panes'].children.find(e=>e.textContent.startsWith('w1:p1')).click();
+    h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_replaced'});
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,bytes:[65]}});
+    assert.equal(h.calls.filter(c=>c.name==='remote_cancel').length,1);
+    assert.equal(h.calls.filter(c=>c.name==='remote_ack' || c.name==='remote_input_send').length,0);
+  }finally{h.finish();await flush();h.restore();}
 });
 
 test('cancel and late dashboard cannot restore current summary', async () => {
@@ -324,7 +401,7 @@ test('cancel and late dashboard cannot restore current summary', async () => {
     publishDashboard(h, blockedPane());
     n['remote-cancel'].click();
     assert.match(summary(n).textContent, /上次快照/);
-    h.emit({ kind: 'dashboard', generation: 9, panes: [] });
+    h.emit({ kind: 'dashboard_watch', generation: 9, update:{epoch:1,revision:2,phase:'fresh',reason:'fixture',panes:[]} });
     assert.match(summary(n).textContent, /上次快照.*受阻 1/);
   } finally { h.finish(); await flush(); h.restore(); }
 });
@@ -356,7 +433,7 @@ test('temporary manual form cannot claim a saved paired host summary', async () 
     n['remote-form'].dispatch('submit');
     await flush();
     h.emit({ kind: 'stage', generation: 10, stage: 'authenticated' });
-    h.emit({ kind: 'dashboard', generation: 10, panes: blockedPane() });
+    h.emit({ kind: 'dashboard_watch', generation: 10, update:{epoch:1,revision:1,phase:'fresh',reason:'fixture',panes:blockedPane()} });
     assert.match(summary(n).textContent, /上次快照.*受阻 0/);
   } finally { h.finish(); await flush(); h.restore(); }
 });
@@ -365,7 +442,7 @@ test('dashboard before native authentication never claims a saved host summary',
   const h = await setup(), n = h.nodes;
   try {
     await pairAndConnect(h);
-    h.emit({ kind: 'dashboard', generation: 9, panes: blockedPane() });
+    h.emit({ kind: 'dashboard_watch', generation: 9, update:{epoch:1,revision:1,phase:'fresh',reason:'fixture',panes:blockedPane()} });
     assert.match(summary(n).textContent, /任务状态未知/);
   } finally { h.finish(); await flush(); h.restore(); }
 });
@@ -429,7 +506,7 @@ test('catalog failure restores historical summary only as stale and ignores late
     n['host-return-home'].click();
     await flush(); await flush();
     assert.match(summary(n, false).textContent, /上次快照.*受阻 1/);
-    h.emit({ kind: 'dashboard', generation: 9, panes: [] });
+    h.emit({ kind: 'dashboard_watch', generation: 9, update:{epoch:1,revision:2,phase:'fresh',reason:'fixture',panes:[]} });
     assert.match(summary(n, false).textContent, /上次快照.*受阻 1/);
   } finally { h.finish(); await flush(); h.restore(); }
 });
@@ -641,9 +718,11 @@ async function reconnectTo(h, pane) {
   h.nodes['remote-form'].dispatch('submit');
   await flush();
   publishDashboard(h, [pane]);
-  h.nodes['remote-panes'].children[0].click();
-  h.emit({ kind: 'frame', generation: 9, frame: { seq: 1, full: true, bytes: [65] } });
-  h.emit({ kind: 'input_ready', generation: 9, unknown: false, recovery_status: 'ready' });
+  h.nodes['remote-panes'].children.find(e=>e.tagName==='button' && e.textContent.startsWith(pane.paneId)).click();
+  assert.equal(h.nodes['remote-input-draft'].value, '', 'unbound row must not expose its saved draft');
+  h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:pane.paneId,terminal_id:pane.terminalId});
+  h.emit({ kind: 'frame', generation: 9, epoch:1, frame: { seq: 1, full: true, bytes: [65] } });
+  h.emit({ kind: 'input_ready', generation: 9, epoch:1, unknown: false, recovery_status: 'ready' });
 }
 
 test('direct drafts follow the reviewed device and exact pane and terminal across reconnects', async () => {

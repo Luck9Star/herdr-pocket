@@ -1,0 +1,188 @@
+{
+  "date": "2026-11-07",
+  "baseCommit": "6ffab0606ce88f404cada602b8330f0ce69f2411",
+  "scope": "Local isolated candidate B, Tauri newly paired form; no claim of Android or production readiness",
+  "sourceSnapshot": "Isolated local candidate B; paths under repository root",
+  "sourceSha256": {
+    "validation/tauri/src/remote.js": "2c2bbf5dc9294f0513476843e8351a713df8f6efdc6bb05423357e7563ca36f0",
+    "validation/tauri/src/direct-dashboard-summary.js": "fd1b4ad5e7153592b64ab9ee206f565ce302608443c391c3d2dae402bcb79863",
+    "validation/tauri/src/dashboard-watch.js": "739daa9562d806513db9a1886e6fdb51285bc8a02d055218ee69dfc9b6de55f9",
+    "validation/tauri/src-tauri/src/lib.rs": "5d8b4cd66278346f126c67f8518c3184be29ef41c803426363a20928f49356d7",
+    "validation/tauri/src-tauri/src/dashboard_watch.rs": "34ef000a63d6ed3736e43de0c81b8e0ad364042f6123830d488f8eab710de54f",
+    "validation/transport-rust/src/controlled.rs": "2ac23745369addadb996f6c98707c4a5cba6841494165fae9fcdb13a2f98d42e",
+    "validation/transport-rust/src/session_watch.rs": "ffe624aeaaffa4b6a63bbd9dcfc9e95f1e19387c4b548d90cb05a0017a2f5b1c",
+    "validation/tauri/test/direct-dashboard-gui.test.mjs": "d941afdf5ab9ed4949a51e6441e128972ae6935976a4190bd98230a6e01bd35b",
+    "validation/tauri/test/direct-dashboard-summary.test.mjs": "6ffdd8442032c25b2deca7d588d8a9f3bc2a7d825810e0f7fe093534816b4594",
+    "validation/transport-rust/src/direct_observation.rs": "9da2c18f77bd6fb97cf05793ac57566a0ea20eb002eaefdfa00642ee2bc83e87",
+    "validation/transport-rust/src/dashboard_review.rs": "f718e695e9ad00e07379f0444ce071b96dd943c3d9dd578ed85e700cc9044300",
+    "validation/transport-rust/src/controlled/tests.rs": "925c3856dbcd41f0e3c11eb9fb1ed4639756ea036ad8042f5b960a59f9f98183"
+  },
+  "browser": {
+    "environment": "Mac headless Chrome; CDP touch emulation and synthetic paired/transport fixtures",
+    "site": "Local fixture copy; remote.js and direct-dashboard-summary.js matched sourceSha256",
+    "reportSha256": "5dcf291a82a37353d1daf5690181307132cb185d8ef6fc56eb001218a60ae91f",
+    "results": [
+      {
+        "width": 320,
+        "oldButtonRejected": true,
+        "olderRevisionDropped": true,
+        "staleAfterCancel": true,
+        "ops": [
+          [
+            "remote_select",
+            {
+              "generation": 9,
+              "epoch": 1,
+              "revision": 3,
+              "paneId": "w1:p1",
+              "terminalId": "term_a002"
+            }
+          ],
+          [
+            "remote_ack",
+            {
+              "generation": 9,
+              "epoch": 1,
+              "seq": 1
+            }
+          ],
+          [
+            "remote_ack",
+            {
+              "generation": 9,
+              "epoch": 1,
+              "seq": 2
+            }
+          ]
+        ],
+        "counters": {
+          "observe": 1,
+          "sends": 0,
+          "resize": 0,
+          "cancel": 1
+        }
+      },
+      {
+        "width": 390,
+        "oldButtonRejected": true,
+        "olderRevisionDropped": true,
+        "staleAfterCancel": true,
+        "ops": [
+          [
+            "remote_select",
+            {
+              "generation": 9,
+              "epoch": 1,
+              "revision": 3,
+              "paneId": "w1:p1",
+              "terminalId": "term_a002"
+            }
+          ],
+          [
+            "remote_ack",
+            {
+              "generation": 9,
+              "epoch": 1,
+              "seq": 1
+            }
+          ],
+          [
+            "remote_ack",
+            {
+              "generation": 9,
+              "epoch": 1,
+              "seq": 2
+            }
+          ]
+        ],
+        "counters": {
+          "observe": 1,
+          "sends": 0,
+          "resize": 0,
+          "cancel": 1
+        }
+      }
+    ],
+    "limitations": [
+      "Not a mobile device or real network",
+      "Pairing and transport are fixtures",
+      "Browser results do not prove Rust IPC or device behavior"
+    ]
+  },
+  "javascript": {
+    "passed": 215,
+    "failed": 0,
+    "skipped": 0,
+    "workingDirectory": "validation/tauri",
+    "log": "live-js-final.log",
+    "logSha256": "26ae2897e4dee3c8ccb84a04a9f5af7d54de793cc78729de54f8fe8e7aeddb99",
+    "scope": "JS tests, including mocked native/browser boundary"
+  },
+  "vite": {
+    "passed": true,
+    "workingDirectory": "validation/tauri",
+    "log": "live-vite-final.log",
+    "logSha256": "cdf25e087fc58fbeacf7d04659454977c9f400048a6cdb0062eb3d9999ff004e",
+    "limitations": [
+      "Bundle build does not prove native runtime or installation"
+    ]
+  },
+  "android": {
+    "currentBatchCi": "pending",
+    "newApkVerified": false,
+    "deviceOrAvdVerified": false
+  },
+  "notes": [
+    "Local temporary logs and source copies may be removed; hashes identify observed local artifacts.",
+    "Ordinary visible-window blur retained dashboard observation in the JS fixture while revoking input focus.",
+    "Rust, browser fixtures, Android and real-network results are separate evidence layers."
+  ],
+  "native": {
+    "scope": "Mac local Rust unit and loopback fixture, test signer; not device or Android",
+    "transportLib": {
+      "passed": 86,
+      "failed": 0,
+      "log": "transport-lib.log",
+      "sha256": "fc690f6ac99dffd641bd683f9d8abd5f14f3da3ed70fbeccec8a721d2eef02e0"
+    },
+    "tauriLib": {
+      "passed": 41,
+      "failed": 0,
+      "log": "tauri-lib.log",
+      "sha256": "b2cdd5f46bb50e68627b6b6ae48f9b8983f736d08300ce759a1c500ce625bc0c"
+    },
+    "directPairedBridge": {
+      "passed": 4,
+      "failed": 0,
+      "filteredOut": 82,
+      "subsetOfTransportLib": true,
+      "log": "direct-paired-bridge.log",
+      "sha256": "f0708cc91e28640c8c18e29b2a50a69672083f9da5ad615e80d509f2d5e2287b",
+      "cases": [
+        "same signer and SSH with live watch while full frame awaits ACK, then delta ACK",
+        "stale epoch/revision, replaced row and duplicate selection",
+        "cancel during selection and first frame ACK",
+        "unsupported watch is not presented as fresh"
+      ]
+    },
+    "newTabFixture": {
+      "result": "newtab-navigation-result.json",
+      "sha256": "24afff959c7339f0a15a1c3e4c3d149b26808ad5ffa9f9d09dda9583141af476",
+      "scope": "actual JS modules with mocked native and DOM; not GUI or real host",
+      "results": [
+        {
+          "case": "settle-without-navigation",
+          "tabsCreated": 1,
+          "hostLabel": "Fixture · w1:p1",
+          "targetTerminal": "term_a001"
+        },
+        {
+          "case": "navigation-while-waiting",
+          "tabsCreated": 0,
+          "remotePageHidden": true
+        }
+      ]
+    }
+  },
+  "pastePrerequisiteCommit": "1e0616708b9355f21bf9494f34836345c16da717"
+}

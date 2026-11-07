@@ -6,24 +6,16 @@ import sys
 import time
 import types
 import unittest
+from unittest.mock import patch
 
 
 # android_gui's operational runner imports reach the cryptography helper stack;
 # these isolated tests need only its static exception and polling contracts.
-_module_names = ('paired_gui', 'flutter_android_gui')
-_previous_modules = {name: sys.modules.get(name) for name in _module_names}
 paired_stub = types.ModuleType('paired_gui')
 class GuiFailure(Exception):
     pass
 paired_stub.GuiFailure = GuiFailure
 paired_stub.wait_for = lambda check, _code, timeout=10: _wait_for(check, timeout)
-sys.modules['paired_gui'] = paired_stub
-flutter_stub = types.ModuleType('flutter_android_gui')
-class DeviceFailure(Exception):
-    pass
-flutter_stub.DeviceFailure = DeviceFailure
-flutter_stub.wait_system_ime = lambda *_args, **_kwargs: {}
-sys.modules['flutter_android_gui'] = flutter_stub
 
 
 def _wait_for(check, timeout):
@@ -38,12 +30,8 @@ def _wait_for(check, timeout):
 
 spec = importlib.util.spec_from_file_location('android_gui', Path(__file__).with_name('android_gui.py'))
 android_gui = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(android_gui)
-for _name, _module in _previous_modules.items():
-    if _module is None:
-        sys.modules.pop(_name, None)
-    else:
-        sys.modules[_name] = _module
+with patch.dict(sys.modules, {'paired_gui': paired_stub}):
+    spec.loader.exec_module(android_gui)
 
 
 def geometry(**changes):

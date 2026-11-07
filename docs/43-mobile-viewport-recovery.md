@@ -63,3 +63,9 @@ Flutter analyzer 与 10 项组合重音绘制回归通过。常规套件 347 项
 登录 GitHub 后下载、解压，用 `shasum -a 256 app.apk` 对照上表。使用专用 Android 测试设备安装后，可按本文的手机复测步骤操作，最后退出测试应用并撤销临时配对。GitHub 显示归档于北京时间 2026-11-21 21:15（Flutter）和 21:16（Tauri）到期。已核对下载 ZIP 和 APK 哈希、唯一原生 ABI、构建提交、两份 .so 与同批 native manifest 的哈希，以及 APK 内字体和诊断样例字节。云模拟器实际运行使用 x86_64 构建，表中 arm64 APK 的真机安装和运行仍未验证。
 
 下一批手机验证优先复核 IME 的应用／窗口归属，保留此前已完成步骤的脱敏读数，再复跑配对、看板和持续观察。物理手机可用后，用相同设备验证触控、中文组字和字体 fallback，再据结果收敛 Penpot、终端引擎和组件规格。三网连接与跨网并发继续逐平台验收。
+
+### 输入法归属检查的后续修订
+
+三场失败共用的驱动原先在整个系统输入法服务输出中搜索 `packageName`，可能把历史编辑器误算为当前目标。原报告只有错误码，无法据此反推这三场的具体原因。按 Android 15 源码，修订驱动只解析当前 `mInputEditorInfo` 的归属，要求默认显示屏上的前台应用及用户匹配。出现短暂无焦点时只读取状态，连续两次确认后才通过。若窗口属于其他应用、显示屏不唯一或归属不明，检查仍会失败。[InputMethodService](https://github.com/aosp-mirror/platform_frameworks_base/blob/android-15.0.0_r1/core/java/android/inputmethodservice/InputMethodService.java#L4479) · [EditorInfo](https://github.com/aosp-mirror/platform_frameworks_base/blob/android-15.0.0_r1/core/java/android/view/inputmethod/EditorInfo.java#L1243)
+
+Tauri 驱动会保留已完成的看板、全帧、增量和字形检查；Flutter 会在键盘检查失败时立即保存当时的步骤及归属分类。两者共用脱敏白名单。隔离源码在 Mac 通过 47 项共享远端检查、62 项 Flutter Android 驱动检查和 15 项 Tauri 输入驱动检查，无跳过。修订只涉及测试驱动与夹具，应用包仍是上表的同源构建，新驱动在 API 35 上的结果留待下一批集中验收。

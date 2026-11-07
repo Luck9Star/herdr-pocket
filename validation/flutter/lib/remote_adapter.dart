@@ -7,6 +7,7 @@ import 'package:pointycastle/digests/sha256.dart';
 import 'remote_failure.dart';
 export 'remote_failure.dart';
 import 'remote_input.dart';
+import 'remote_frame_geometry.dart';
 import 'network_runtime.dart' show RoutedSSHSocket;
 
 String shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
@@ -14,10 +15,12 @@ String shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 class RemoteConfig {
   RemoteConfig._(this.host, this.port, this.username, this.expectedHostKey,
     this.privateKeyPem, this.socketPath, this.herdrPath, this.session, this.paneId,
-    this.expectedFingerprint, [this.deviceIdentity]);
+    this.expectedFingerprint, [this.deviceIdentity,this.observationCols=80,this.observationRows=24]);
   final String host, username, expectedHostKey, privateKeyPem, socketPath, herdrPath, session, paneId, expectedFingerprint;
   final int port;
   final SSHIdentity? deviceIdentity;
+  // Per-observation rendering preference; never serialized into host identity.
+  final int observationCols,observationRows;
   static const fields = {'schemaVersion','host','port','username','expectedHostKey',
     'privateKeyPem','socketPath','herdrPath','session','paneId','reviewConfirmed'};
 
@@ -75,6 +78,12 @@ class RemoteConfig {
       c.herdrPath,c.session,c.paneId,c.expectedFingerprint,identity);
   }
 
+  RemoteConfig withObservationCanvas(int cols,int rows) {
+    if (!validRemoteFrameGeometry(cols,rows)) throw const RemoteFailure('invalid_config');
+    return RemoteConfig._(host,port,username,expectedHostKey,privateKeyPem,socketPath,
+      herdrPath,session,paneId,expectedFingerprint,deviceIdentity,cols,rows);
+  }
+
   String get configRoot {
     final suffix = '/herdr/sessions/$session/herdr.sock';
     if (!socketPath.endsWith(suffix) || socketPath.length <= suffix.length) {
@@ -86,7 +95,7 @@ class RemoteConfig {
   String observeCommand(String terminalId) {
     if (!RegExp(r'^term_[0-9a-f]{1,123}$').hasMatch(terminalId)) throw const RemoteFailure('invalid_terminal_id');
     return '/usr/bin/env ${shellQuote('XDG_CONFIG_HOME=$configRoot')} ${shellQuote(herdrPath)} '
-      '--session ${shellQuote(session)} terminal session observe ${shellQuote(terminalId)} --cols 80 --rows 24';
+      '--session ${shellQuote(session)} terminal session observe ${shellQuote(terminalId)} --cols $observationCols --rows $observationRows';
   }
 
 }
@@ -263,8 +272,9 @@ class DashboardInvalidations {
   void resetSubscription() { dirty = false; lost = false; }
 }
 class RemoteFrame {
-  const RemoteFrame(this.seq, this.full, this.ansi,{this.observationEpoch=0,this.inputJournalRead});
+  const RemoteFrame(this.seq, this.full, this.ansi,{this.cols=80,this.rows=24,this.observationEpoch=0,this.inputJournalRead});
   final int seq;
+  final int cols,rows;
   final int observationEpoch;
   final bool full;
   final String ansi;
@@ -661,7 +671,9 @@ class RemoteReadOnlyAdapter {
   }
 
   Future<RemoteSnapshot> read(RemoteConfig config, {RemoteProgress? onProgress}) =>
-    _run(config,onProgress:onProgress);
+    // Legacy snapshots expose only ANSI, so their request stays 80x24 even if
+    // a programmatic caller supplies a wider streaming canvas preference.
+    _run(config.withObservationCanvas(80,24),onProgress:onProgress);
 
   /// Keeps the same authenticated connection open. Explicit selectPane is
   /// required after the dashboard; cancellation/EOF ends this attempt forever.
@@ -1236,7 +1248,8 @@ class RemoteReadOnlyAdapter {
             first = false;
             completed = RemoteSnapshot(a.generation,config.session,selected.paneId,frame.ansi);
             if (onFrame != null) await _wait(a,Future<void>.sync(() => onFrame(a.generation,selected.paneId,
-              RemoteFrame(frame.seq,frame.full,frame.ansi,observationEpoch:epoch,inputJournalRead:inputJournalRead))),timed:false,observation:true);
+              RemoteFrame(frame.seq,frame.full,frame.ansi,cols:frame.cols,rows:frame.rows,
+                observationEpoch:epoch,inputJournalRead:inputJournalRead))),timed:false,observation:true);
             checkObservation();
             if (onDashboard == null) break;
           }
@@ -1367,17 +1380,21 @@ Stream<String> boundedLines(Stream<Uint8List> source, {int? maxTotal = 2097152})
 /// One bounded record at a time; no dropping deltas, recovery or retries.
 Stream<RemoteFrame> validatedFrames(Stream<Uint8List> source, {bool continuous = true}) async* {
   int? previous;
+  int? fullCols,fullRows;
   await for (final line in boundedLines(source,maxTotal:continuous ? null : 2097152)) {
     final frame = _decodeObject(line);
     final first = previous == null;
     final code = first ? 'invalid_first_frame' : 'invalid_frame';
     final seq = frame['seq'];
-    if (frame['type'] != 'terminal.frame' || frame['encoding'] != 'ansi' || frame['width'] != 80 ||
-        frame['height'] != 24 || seq is! int || seq < 0 || seq > 9007199254740991 ||
+    final cols = frame['width'],rows = frame['height'];
+    if (frame['type'] != 'terminal.frame' || frame['encoding'] != 'ansi' || !validRemoteFrameGeometry(cols,rows) ||
+        (!continuous && (cols != 80 || rows != 24)) ||
+        seq is! int || seq < 0 || seq > 9007199254740991 ||
         frame['full'] is! bool || (first && frame['full'] != true) || frame['bytes'] is! String) {
       throw RemoteFailure(code);
     }
     if (previous != null && seq != previous + 1) throw const RemoteFailure('sequence_gap');
+    if (frame['full'] != true && (cols != fullCols || rows != fullRows)) throw RemoteFailure(code);
     String ansi;
     try {
       final bytes = base64Decode(frame['bytes'] as String);
@@ -1385,7 +1402,8 @@ Stream<RemoteFrame> validatedFrames(Stream<Uint8List> source, {bool continuous =
       ansi = utf8.decode(bytes);
     } on FormatException { throw RemoteFailure(code); }
     previous = seq;
-    yield RemoteFrame(seq,frame['full'] as bool,ansi);
+    if (frame['full'] == true) { fullCols = cols as int; fullRows = rows as int; }
+    yield RemoteFrame(seq,frame['full'] as bool,ansi,cols:cols as int,rows:rows as int);
   }
 }
 

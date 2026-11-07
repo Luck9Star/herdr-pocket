@@ -488,6 +488,7 @@ mod tests {
             session: "test".into(),
             pane_id: String::new(),
             review_confirmed: true,
+            observe_canvas: Default::default(),
         }
     }
     #[test]

@@ -1,3 +1,4 @@
+import {parseCanvas} from './observe-canvas.js';
 import {createUnicodeTerminal} from './terminal-unicode.js';
 import {createTerminalSelection} from './terminal-selection.js';
 import {createFontDiagnostics} from './terminal-font-diagnostics.js';
@@ -115,7 +116,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       : '网络声明仅供核对，不会自动选择本机节点或绑定网络。Tailscale、EasyTier、ZeroTier 需在网络配置中单独审查、授权与绑定。';
     connectionProfiles?.render();
   }
-  function clearSnapshot() { localViewport.detach(); invalidateInput(); selectTextButton?.remove?.(); selectTextButton=null; terminal?.dispose(); terminal=null; $('remote-terminal').replaceChildren(); $('remote-result').hidden=true; $('remote-dashboard').hidden=true; $('remote-panes').replaceChildren(); }
+  function clearSnapshot() { delete $('remote-captured').dataset.cols;delete $('remote-captured').dataset.rows;$('remote-captured').dataset.state='empty';localViewport.detach(); invalidateInput(); selectTextButton?.remove?.(); selectTextButton=null; terminal?.dispose(); terminal=null; $('remote-terminal').replaceChildren(); $('remote-result').hidden=true; $('remote-dashboard').hidden=true; $('remote-panes').replaceChildren(); }
   function discardKey() { $('remote-private-key').value=''; }
   function cancel(reason='本次读取已取消。迟到结果不会显示。',nativeCameraBackground=false) {
     // Each camera purpose owns a bounded return lease for public bytes only.
@@ -125,11 +126,12 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     localViewport.capture();
     const clientGeneration=gate.pendingGeneration;
     directSummary.finish(clientGeneration);
-    previewResponse=invalidatePairReview($('pair-source-review'),$('pair-response-preview')); if(pairState==='none') $('pair-target-review').checked=false; const discarded=invalidateInput(); recordUnsent(discarded.count); gate.invalidate(); discardKey(); if ($('pair-mode').checked && gate.pending && pairState!=='paired') { pairState='cancelled'; pairStatus('已取消；主机授权状态可能未知，请核查清理。'); } $('remote-dashboard').hidden=true; if(terminal) $('remote-captured').textContent='观察已停止 · 画面陈旧'; status(reason+(discarded.count?` ${discarded.count} 笔待发送输入已丢弃。`:'')); render();
+    previewResponse=invalidatePairReview($('pair-source-review'),$('pair-response-preview')); if(pairState==='none') $('pair-target-review').checked=false; const discarded=invalidateInput(); recordUnsent(discarded.count); gate.invalidate(); discardKey(); if ($('pair-mode').checked && gate.pending && pairState!=='paired') { pairState='cancelled'; pairStatus('已取消；主机授权状态可能未知，请核查清理。'); } $('remote-dashboard').hidden=true; if(terminal) {$('remote-captured').textContent='观察已停止 · 画面陈旧';$('remote-captured').dataset.state='stale';} status(reason+(discarded.count?` ${discarded.count} 笔待发送输入已丢弃。`:'')); render();
     // Invalidating precedes asynchronous cleanup. Keep busy until the old invoke settles.
     if (gate.pending && native) void invoke('remote_cancel',{clientGeneration}).catch(()=>{if(gate.pendingGeneration===clientGeneration)status('正在结束旧连接；结束前不可开始新读取。','warning');});
   }
   $('remote-form').addEventListener('input', event => {
+    if(event.target.id==='remote-canvas')return;
     clearHandoff();
     if(event.target.id==='pair-revocation-mode')revocationReview=event.target.checked;
     if(!['pair-target-review','pair-source-review','remote-review','host-restore-review'].includes(event.target.id)){pairReviewIdentity=null;previewResponse=invalidatePairReview($('pair-source-review'),$('pair-response-preview'));}
@@ -760,6 +762,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   };
   $('remote-form').addEventListener('submit',async event=>{
     event.preventDefault();if(revocationMode() || pairState==='revoked'){status('当前仅审查撤销或保留已撤销记录；不能发起连接。','warning');return;} if(requiresNetworkBinding()) {status('此主机声明组网连接：请先保存并在网络配置中独立审查、绑定，再返回主动连接。未绑定时不会使用系统直连。','warning');return;} if (!native) { status('浏览器预览没有原生 SSH 适配器。请使用测试安装包。','warning'); return; }
+    const canvas=parseCanvas($('remote-canvas').value);if(!canvas){status('请选择有效的观察画布。','warning');return;}
     const generation=gate.begin(); if(generation===null)return;
     let config=null;
     try {
@@ -859,7 +862,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
         if(!frames.accept(frame)) {cancel('画面顺序或内容异常，连接已停止，画面陈旧。');return;}
         if(!terminal) {
           $('remote-result').hidden=false;
-          terminal=createUnicodeTerminal(Terminal,{cols:80,rows:24,fontFamily:'ProbeNerd, monospace',fontSize:terminalFontSize,scrollback:0,disableStdin:true,cursorBlink:false,convertEol:false,theme:theme.terminal,linkHandler:{activate:()=>{}}});
+          terminal=createUnicodeTerminal(Terminal,{cols:frame.cols,rows:frame.rows,fontFamily:'ProbeNerd, monospace',fontSize:terminalFontSize,scrollback:0,disableStdin:true,cursorBlink:false,convertEol:false,theme:theme.terminal,linkHandler:{activate:()=>{}}});
           terminal.parser.registerOscHandler(52,()=>true); terminal.parser.registerOscHandler(8,()=>true);
           terminal.open($('remote-terminal')); terminal.textarea.setAttribute('inputmode','none');
           localViewport.mount($('remote-terminal').parentElement,terminal,terminalViewportIdentity(viewportConnection,selectedTarget));
@@ -899,11 +902,12 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
             const text=event.clipboardData?.types && !Array.from(event.clipboardData.types).includes('text/plain') ? '' : event.clipboardData?.getData('text/plain') || '';
             void reviewLocalPaste(boundTerminal,text,boundTerminal.textarea);
           },true);
-        } else if(frame.full) {selectionReady=false;if(selectTextButton)selectTextButton.disabled=true;$('remote-font-diagnostics').disabled=true;terminal.reset();}
+        } else if(frame.full) {selectionReady=false;if(selectTextButton)selectTextButton.disabled=true;$('remote-font-diagnostics').disabled=true;localViewport.capture();terminal.reset();if(terminal.cols!==frame.cols || terminal.rows!==frame.rows)terminal.resize(frame.cols,frame.rows);}
         const rendered=terminal;
         terminal.write(Uint8Array.from(frame.bytes),()=>{
           if(terminal!==rendered || !gate.accepts(generation,event.generation) || !showingRemote || event.epoch!==boardEpoch)return;
-          $('remote-captured').textContent=`${new Date().toLocaleTimeString()} 更新 · 80 × 24 · 只读观察中`;
+          $('remote-captured').textContent=`${new Date().toLocaleTimeString()} 更新 · ${frame.cols} × ${frame.rows} · 只读观察中`;
+          captured.dataset.cols=String(frame.cols);captured.dataset.rows=String(frame.rows);captured.dataset.state='active';
           status('只读观察中；停止或离开后画面标记为陈旧。','success');
           if(!frames.acknowledge(frame.seq)){cancel('渲染确认异常，连接已停止。');return;}
           if(frame.full)localViewport.fullRendered();
@@ -915,11 +919,11 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
         });
       };
       if ($('pair-mode').checked) { pairState='connecting'; pairStatus('正在核验主机并认证设备；不会自动重试。'); }
-      await invoke('remote_observe',{config,device:$('pair-mode').checked,hostId:activeHostId,clientGeneration:generation,onEvent});
+      await invoke('remote_observe',{config,device:$('pair-mode').checked,hostId:activeHostId,clientGeneration:generation,canvas,onEvent});
 
     } catch(error) {
       if($('pair-mode').checked && pairState==='connecting') { pairState='waiting-connectivity'; pairStatus('连接或认证未完成；需手动重试，不会自动重放。'); }
-      if(gate.accepts(generation)){ if(terminal) $('remote-captured').textContent='连接已结束 · 画面陈旧'; $('remote-dashboard').hidden=true; status(observationError(error),'warning'); }
+      if(gate.accepts(generation)){ if(terminal) {$('remote-captured').textContent='连接已结束 · 画面陈旧';$('remote-captured').dataset.state='stale';} $('remote-dashboard').hidden=true; status(observationError(error),'warning'); }
     } finally { directSummary.finish(generation);discardKey(); if(config)config.privateKeyPem=''; if(gate.finish(generation)){const lost=invalidateInput();recordUnsent(lost.count);} gate.reviewed=false; render(); }
   });
   document.addEventListener('visibilitychange',()=>{

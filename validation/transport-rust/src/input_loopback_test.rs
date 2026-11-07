@@ -244,6 +244,7 @@ async fn run_case(corrupt: bool) {
         session: "fixture".into(),
         pane_id: "w1:p1".into(),
         review_confirmed: true,
+        observe_canvas: Default::default(),
     };
     let dir = temp.0.join("journal");
     let recovery = recovery::Recovery::open(dir.clone());

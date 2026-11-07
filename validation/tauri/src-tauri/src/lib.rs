@@ -424,7 +424,8 @@ fn remote_tab_cancel(tab_id:String,client_generation:u64,generation:u64,flow:Sta
 }
 use herdr_readonly_transport::direct_observation::{DirectObservation, ObserveEvent};
 #[tauri::command]
-async fn remote_observe(config:RemoteConfig,device:bool,host_id:Option<String>,client_generation:u64,on_event:Channel<ObserveEvent>,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<(),String> {
+async fn remote_observe(mut config:RemoteConfig,canvas:Option<herdr_readonly_transport::ObserveCanvas>,device:bool,host_id:Option<String>,client_generation:u64,on_event:Channel<ObserveEvent>,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<(),String> {
+    let canvas=canvas.unwrap_or_default().validate().map_err(str::to_string)?;
     let network_lease=ops.enter()?;
     if device {
         let current=pairing.current.lock().map_err(|_|"state_unavailable")?;
@@ -470,6 +471,7 @@ async fn remote_observe(config:RemoteConfig,device:bool,host_id:Option<String>,c
         match result { Ok(v)=>Some(v), Err(e)=> { let mut f=flow.lock().map_err(|_|"state_unavailable")?; let mut g=state.lock().map_err(|_|"state_unavailable")?; f.finish(client_generation,generation,&mut g); return Err(e.into()); } }
     } else { None };
     drop(network_lease);
+    config.observe_canvas=canvas;
     let pair_progress=pairing.current.clone();
     let progress=Arc::new(move |stage| { if device && stage=="authenticated" { if let Ok(mut p)=pair_progress.lock() { if let Some(p)=p.as_mut() { p.finish(true); } } } });
     let direct=DirectObservation::new(generation,cancel);

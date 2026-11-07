@@ -4,6 +4,7 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/device_keys.dart';
 import 'package:herdr_flutter_probe/pairing.dart';
@@ -36,10 +37,13 @@ class GuiMemoryAdapter extends RemoteReadOnlyAdapter {
   DashboardConsumer? board; FrameConsumer? frame;
   String? chosen;
   int calls = 0;
+  int frameCols = 80,frameRows = 24;
+  RemoteConfig? observedConfig;
   @override
   Future<RemoteSnapshot> observe(RemoteConfig config,{required DashboardConsumer onDashboard,
     required FrameConsumer onFrame,RemoteProgress? onProgress}) {
     expect(config.privateKeyPem,isEmpty); expect(config.deviceIdentity,isNotNull);
+    observedConfig = config;
     calls++; generation++; board = onDashboard; frame = onFrame;
     onProgress?.call(generation,'snapshot');
     onDashboard(RemoteDashboard(generation,'probe',const [RemotePane('w1:p1','term_abcd')],freshness:DashboardFreshness.fresh));
@@ -50,8 +54,8 @@ class GuiMemoryAdapter extends RemoteReadOnlyAdapter {
   @override
   void selectPane(int expectedGeneration,String paneId) {
     chosen = paneId;
-    frame!(generation,paneId,const RemoteFrame(1,true,'MEMORY UI FULL'));
-    frame!(generation,paneId,const RemoteFrame(2,false,'MEMORY UI DELTA'));
+    frame!(generation,paneId,RemoteFrame(1,true,'MEMORY UI FULL',cols:frameCols,rows:frameRows));
+    frame!(generation,paneId,RemoteFrame(2,false,'MEMORY UI DELTA',cols:frameCols,rows:frameRows));
   }
   @override
   Future<void> cancel() async { generation++; }
@@ -115,7 +119,7 @@ void main() {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
     final config = fixtureConfig(); final keys = TestDeviceKeys(config['privateKeyPem'] as String);
-    final adapter = GuiMemoryAdapter(); Map<String,dynamic>? request;
+    final adapter = GuiMemoryAdapter()..frameCols = 119..frameRows = 40; Map<String,dynamic>? request;
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:PairingPage(tokens:tokens,keys:keys,adapter:adapter,
       onRequest:(r) { request = r; },clock:() => 1000)));
@@ -129,10 +133,18 @@ void main() {
     expect(find.textContaining('authorized-unverified'),findsOneWidget);
     await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('remote-privateKeyPem')),findsNothing);
+    await tapVisible(tester,'remote-canvas-size'); await tester.pumpAndSettle();
+    await tester.tap(find.text('120×40').last); await tester.pumpAndSettle();
     await tapVisible(tester,'remote-review'); await tapVisible(tester,'remote-connect'); await tester.pump();
+    expect(adapter.observedConfig!.observationCols,120); expect(adapter.observedConfig!.observationRows,40);
+    expect(adapter.observedConfig!.observeCommand('term_abcd'),endsWith('--cols 120 --rows 40'));
     expect(adapter.chosen,isNull);
     await tapVisible(tester,'remote-pane-w1:p1');
     expect(find.textContaining('只读观察中'),findsOneWidget);
+    final actual = tester.widget<TerminalView>(find.byType(TerminalView)).terminal;
+    expect(actual.viewWidth,119); expect(actual.viewHeight,40);
+    expect(find.textContaining('观察画布 119×40'),findsOneWidget);
+    expect(tester.widget<DropdownButtonFormField<int>>(find.byKey(const ValueKey('remote-canvas-size'))).onChanged,isNull);
     await tapVisible(tester,'remote-cancel');
     expect(find.textContaining('旧画面 · 已停止'),findsOneWidget); expect(adapter.calls,1);
     expect(keys.signCalls,0); // Fake transport did not authenticate; never call this SSH evidence.

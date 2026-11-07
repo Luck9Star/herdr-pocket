@@ -107,6 +107,43 @@ Future<void> mode(WidgetTester tester,String value) async {
 }
 
 void main() {
+  testWidgets('wide alternate screen last cell is locally reachable without input or resize, including after viewport changes', (tester) async {
+    final adapter = InputFixtureAdapter(); await start(tester,adapter);
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(1,true,'\x1b[?1049h\x1b[40;120HZ',cols:120,rows:40));
+    await tester.pump(); await tester.pump();
+    final view = find.byType(TerminalView);
+    final terminal = tester.widget<TerminalView>(view).terminal;
+    final resizes = <String>[];
+    terminal.onResize = (cols,rows,pixelWidth,pixelHeight) => resizes.add('$cols×$rows');
+    final horizontal = tester.widget<SingleChildScrollView>(find.byKey(const ValueKey('remote-horizontal-scroll'))).controller!;
+    final vertical = tester.widget<TerminalView>(view).scrollController!;
+    expect(vertical.position.maxScrollExtent,greaterThan(0));
+    expect(terminal.isUsingAltBuffer,isTrue);
+    // The explicit reading slider reaches both ends even though terminal_view
+    // gives alternate-screen drag gestures to the TUI.
+    await tester.ensureVisible(find.byKey(const ValueKey('remote-vertical-slider'))); await tester.pump(); await tester.pump();
+    tester.widget<Slider>(find.byKey(const ValueKey('remote-vertical-slider'))).onChanged!(0);
+    await tester.pump(); expect(vertical.offset,0);
+    tester.widget<Slider>(find.byKey(const ValueKey('remote-vertical-slider'))).onChanged!(1);
+    horizontal.jumpTo(horizontal.position.maxScrollExtent); await tester.pump();
+    await tester.ensureVisible(find.byKey(const ValueKey('remote-horizontal-scroll'))); await tester.pump();
+    final render = tester.state<TerminalViewState>(view).renderTerminal;
+    final last = render.getOffset(const CellOffset(119,39)),right = render.getOffset(const CellOffset(120,39));
+    final horizontalBounds = tester.getRect(find.byKey(const ValueKey('remote-horizontal-scroll')));
+    expect(render.localToGlobal(last).dx,greaterThanOrEqualTo(horizontalBounds.left));
+    expect(render.localToGlobal(right).dx,closeTo(horizontalBounds.right,0.01));
+    expect(last.dx,greaterThanOrEqualTo(0)); expect(right.dx,lessThanOrEqualTo(render.size.width));
+    expect(last.dy,greaterThanOrEqualTo(0)); expect(last.dy + render.lineHeight,closeTo(render.size.height,0.01));
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(2,false,'\x1b[40;120HQ',cols:120,rows:40));
+    await tester.pump();
+    expect(identical(tester.widget<TerminalView>(view).terminal,terminal),isTrue);
+    expect(terminal.buffer.lines[39].getCodePoint(119),'Q'.codeUnitAt(0));
+    tester.view.physicalSize = const Size(600,844); await tester.pump(); await tester.pump();
+    tester.view.viewInsets = const FakeViewPadding(bottom:220); await tester.pump(); await tester.pump();
+    expect(terminal.viewWidth,120); expect(terminal.viewHeight,40);
+    expect(resizes,isEmpty); expect(adapter.received,isEmpty); expect(adapter.calls,1);
+    expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('horizontal scrollbar remains draggable in direct input mode', (tester) async {
     final adapter = InputFixtureAdapter(); await start(tester,adapter);
     await mode(tester,'direct');
@@ -127,25 +164,48 @@ void main() {
     expect(controller.offset,greaterThan(0));
     expect(adapter.received,isEmpty);
   });
-  testWidgets('terminal horizontal position survives pause and a fresh full frame', (tester) async {
+  testWidgets('both reading axes survive pause and a fresh full frame, then same-target reauthentication', (tester) async {
     final visibility = ValueNotifier(true); addTearDown(visibility.dispose);
     final adapter = InputFixtureAdapter();
     await start(tester,adapter,visibility:visibility);
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(1,true,'WIDE',cols:120,rows:40));
+    await tester.pump(); await tester.pump();
     final viewport = find.byKey(const ValueKey('remote-horizontal-scroll'));
     await tester.ensureVisible(viewport); await tester.pump();
     ScrollController controller() => tester.widget<SingleChildScrollView>(viewport).controller!;
     expect(controller().position.maxScrollExtent,greaterThan(0));
     controller().jumpTo(controller().position.maxScrollExtent / 2); await tester.pump();
     final offset = controller().offset;
+    final verticalSlider = find.byKey(const ValueKey('remote-vertical-slider'));
+    tester.widget<Slider>(verticalSlider).onChanged!(.25); await tester.pump(); await tester.pump();
+    ScrollController vertical() => tester.widget<TerminalView>(find.byType(TerminalView)).scrollController!;
+    final verticalOffset = vertical().offset;
+    expect(verticalOffset,greaterThan(0));
     visibility.value = false; await tester.pump();
     visibility.value = true; await tester.pump();
     final resume = find.byKey(const ValueKey('remote-resume'));
     await tester.ensureVisible(resume); await tester.tap(resume); await tester.pump();
-    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'FRESH',observationEpoch:1));
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'FRESH',cols:120,rows:40,observationEpoch:1));
     await tester.pump(); await tester.pump();
     expect(controller().offset,closeTo(offset,0.1));
+    expect(vertical().offset,closeTo(verticalOffset,0.1));
     expect(adapter.received,isEmpty);
     expect(adapter.calls,1);
+    final stop = find.byKey(const ValueKey('remote-cancel'));
+    await tester.ensureVisible(stop); await tester.tap(stop); await tester.pump();
+    await tester.ensureVisible(base.field('privateKeyPem'));
+    await tester.enterText(base.field('privateKeyPem'),fixtureConfig()['privateKeyPem'] as String); await tester.pump();
+    await tester.ensureVisible(base.field('review')); await tester.tap(base.field('review')); await tester.pump();
+    await tester.ensureVisible(base.field('connect')); await tester.tap(base.field('connect')); await tester.pump();
+    adapter.publish(); await tester.pump();
+    final pane = find.byKey(const ValueKey('remote-pane-w1:p1'));
+    await tester.ensureVisible(pane); await tester.tap(pane); await tester.pump();
+    adapter.frame!(adapter.generation,'w1:p1',const RemoteFrame(0,true,'REAUTHENTICATED',cols:120,rows:40));
+    await tester.pump(); await tester.pump();
+    expect(controller().offset,closeTo(offset,0.1));
+    expect(vertical().offset,closeTo(verticalOffset,0.1));
+    expect(adapter.received,isEmpty); expect(adapter.calls,2);
+    expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox());
   });
   testWidgets('hidden observation failure remains visible when returning', (tester) async {
     final visibility = ValueNotifier(true); addTearDown(visibility.dispose);

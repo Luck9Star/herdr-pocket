@@ -263,20 +263,46 @@ void main() {
       expect(() => requireOriginalObservationTarget(original,RemoteDashboard(2,'probe',panes)),throwsA(failure('resume_target_changed')));
     }
   });
+  test('nondefault streaming canvas leaves the legacy 80x24 request and target identity independent', () {
+    final stream = RemoteConfig.fromJson(fixtureConfig()).withObservationCanvas(160,50);
+    final legacy = stream.withObservationCanvas(80,24);
+    expect(stream.observeCommand('term_abcd'),endsWith('--cols 160 --rows 50'));
+    expect(legacy.observeCommand('term_abcd'),endsWith('--cols 80 --rows 24'));
+    expect(stream.observationCols,160); expect(stream.observationRows,50);
+    expect(legacy.host,stream.host); expect(legacy.port,stream.port);
+    expect(legacy.username,stream.username); expect(legacy.expectedFingerprint,stream.expectedFingerprint);
+    expect(legacy.socketPath,stream.socketPath); expect(legacy.session,stream.session);
+    expect(legacy.paneId,stream.paneId); expect(legacy.herdrPath,stream.herdrPath);
+    expect(legacy.observeCommand('term_abcd'),isNot(contains('resize')));
+    expect(stream.observeCommand('term_abcd'),isNot(contains('resize')));
+  });
   test('private key single-line input reconstructs only OpenSSH PEM in memory', () {
     final pem = fixtureConfig()['privateKeyPem'] as String;
     final compact = pem.replaceAll('\n','');
     expect(SSHKeyPair.fromPem(pemFromSingleLineInput(compact)).single.type,'ssh-ed25519');
     expect(() => pemFromSingleLineInput('private-file-path'),throwsA(failure('invalid_private_key')));
   });
-  test('first real frame must be full ANSI 80x24, strict UTF8 and bounded', () async {
+  test('legacy first full stays ANSI 80x24 while streaming accepts bounded actual geometry', () async {
     Stream<Uint8List> frame(Map<String,Object?> data) => Stream.value(Uint8List.fromList(utf8.encode('${jsonEncode(data)}\n')));
     final valid = <String,Object?>{'type':'terminal.frame','seq':0,'full':true,'encoding':'ansi','width':80,'height':24,'bytes':base64Encode(utf8.encode('中文 é'))};
     expect(await firstFullFrame(frame(valid)),'中文 é');
     await expectLater(firstFullFrame(frame({...valid,'type':'terminal.closed'})),throwsA(failure('invalid_first_frame')));
     await expectLater(firstFullFrame(frame({...valid,'full':false})),throwsA(failure('invalid_first_frame')));
     await expectLater(firstFullFrame(frame({...valid,'seq':-1})),throwsA(failure('invalid_first_frame')));
-    await expectLater(firstFullFrame(frame({...valid,'width':81})),throwsA(failure('invalid_first_frame')));
+    final wide = {...valid,'width':119,'height':40};
+    await expectLater(firstFullFrame(frame(wide)),throwsA(failure('invalid_first_frame')));
+    await expectLater(validatedFrames(frame(wide),continuous:false).toList(),throwsA(failure('invalid_first_frame')));
+    final streamed = await validatedFrames(frame(wide)).single;
+    expect(streamed.cols,119); expect(streamed.rows,40); expect(streamed.ansi,'中文 é');
+    for (final dimensions in [
+      {'width':0,'height':24}, {'width':80,'height':0}, {'width':513,'height':24},
+      {'width':80,'height':513}, {'width':512,'height':129}, {'width':80.0,'height':24},
+      {'width':null,'height':24}, {'width':80,'height':'24'},
+    ]) {
+      await expectLater(firstFullFrame(frame({...valid,...dimensions})),throwsA(failure('invalid_first_frame')));
+    }
+    final missing = {...valid}..remove('width');
+    await expectLater(firstFullFrame(frame(missing)),throwsA(failure('invalid_first_frame')));
     await expectLater(boundedLines(Stream.value(Uint8List(1048577))).toList(),throwsA(failure('output_limit')));
   });
   test('stderr and stdout consume one total budget, with a smaller stderr cap', () {
@@ -290,9 +316,11 @@ void main() {
     final adapter = RemoteReadOnlyAdapter(connector:(host,port) {
       calls++; return calls == 1 ? pending.future : Future.error(const RemoteFailure('synthetic_connection'));
     });
-    final first = expectLater(adapter.read(RemoteConfig.fromJson(fixtureConfig())),throwsA(failure('cancelled')));
+    final requested = RemoteConfig.fromJson(fixtureConfig()).withObservationCanvas(160,50);
+    final first = expectLater(adapter.read(requested),throwsA(failure('cancelled')));
     await Future<void>.delayed(Duration.zero);
     await adapter.cancel(); await first;
+    expect(requested.observationCols,160); expect(requested.observationRows,50);
     await expectLater(adapter.read(RemoteConfig.fromJson(fixtureConfig())),throwsA(failure('connection_busy')));
     expect(calls,1);
     final late = FakeSocket(); pending.complete(late);
@@ -407,6 +435,33 @@ void main() {
       throwsA(failure('output_limit')));
     final budget = ObserveByteBudget(continuous:true); budget.add(2097153);
     expect(() => budget.add(65537,stderr:true),throwsA(failure('output_limit')));
+  });
+
+  test('shared remote geometry cases preserve wire fields and change grid only on sequenced full', () async {
+    final file = [File('assets/shared/remote-frame-geometry-v1.json'),
+      File('../../validation/shared/remote-frame-geometry-v1.json'),
+      File('validation/shared/remote-frame-geometry-v1.json')].firstWhere((file) => file.existsSync());
+    final fixture = jsonDecode(file.readAsStringSync()) as Map<String,dynamic>;
+    for (final item in fixture['cases'] as List) {
+      final published = <RemoteFrame>[];
+      final input = (item['frames'] as List).map((geometry) => Uint8List.fromList(utf8.encode('${jsonEncode({
+        ...geometry as Map<String,dynamic>,'type':'terminal.frame','encoding':'ansi','bytes':base64Encode(utf8.encode('geometry fixture')),
+      })}\n')));
+      final accepted = item['accepted'] as List;
+      final expectedCount = accepted.takeWhile((value) => value == true).length;
+      try {
+        await for (final frame in validatedFrames(Stream.fromIterable(input))) { published.add(frame); }
+        expect(expectedCount,accepted.length,reason:item['id'] as String);
+      } on RemoteFailure {
+        expect(expectedCount,lessThan(accepted.length),reason:item['id'] as String);
+      }
+      expect(published.length,expectedCount,reason:item['id'] as String);
+      for (var i = 0; i < published.length; i++) {
+        final geometry = item['frames'][i];
+        expect(published[i].cols,geometry['width'],reason:item['id'] as String);
+        expect(published[i].rows,geometry['height'],reason:item['id'] as String);
+      }
+    }
   });
 
 }

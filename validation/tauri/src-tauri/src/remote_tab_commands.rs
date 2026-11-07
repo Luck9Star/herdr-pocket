@@ -18,16 +18,17 @@ struct TabCleanup {flow:Arc<Mutex<RemoteFlow>>,tab:String,owner:u64,generation:u
 impl Drop for TabCleanup {fn drop(&mut self) {if let Ok(mut f)=self.flow.lock(){f.tabs.finish(&self.tab,self.owner,self.generation);}}}
 
 #[tauri::command]
-pub async fn remote_tab_observe(tab_id:String,client_generation:u64,generation:u64,pane_id:String,terminal_id:String,on_event:Channel<TabEvent>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<(),String> {
+pub async fn remote_tab_observe(tab_id:String,client_generation:u64,generation:u64,pane_id:String,terminal_id:String,canvas:Option<herdr_readonly_transport::ObserveCanvas>,on_event:Channel<TabEvent>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<(),String> {
+    let canvas=canvas.unwrap_or_default().validate().map_err(str::to_string)?;
     let cancel={let mut f=flow.lock().map_err(|_|"state_unavailable")?;if f.tabs.visible.as_ref()!=Some(&(tab_id.clone(),client_generation,generation)){f.tabs.cancel(&tab_id,client_generation,generation);return Err("tab_stale".into());}f.tabs.claim(&tab_id,client_generation,generation).map_err(str::to_string)?};
     let _cleanup=TabCleanup {flow:flow.inner().clone(),tab:tab_id.clone(),owner:client_generation,generation};
-    let result=tab_observe_inner(&tab_id,client_generation,generation,&pane_id,&terminal_id,on_event,cancel,&flow,&pairing,&hosts,&nodes,&ops,&app).await;
+    let result=tab_observe_inner(&tab_id,client_generation,generation,&pane_id,&terminal_id,canvas,on_event,cancel,&flow,&pairing,&hosts,&nodes,&ops,&app).await;
     let accepted=flow.lock().map_err(|_|"state_unavailable")?.tabs.finish(&tab_id,client_generation,generation);
     if !accepted {return Err("cancelled".into());} result
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn tab_observe_inner(tab:&str,owner:u64,generation:u64,pane:&str,terminal:&str,on_event:Channel<TabEvent>,cancel:Cancellation,flow:&Arc<Mutex<RemoteFlow>>,pairing:&PairingState,hosts:&Hosts,nodes:&network_nodes::Nodes,ops:&network_identity::Operations,app:&tauri::AppHandle)->Result<(),String> {
+async fn tab_observe_inner(tab:&str,owner:u64,generation:u64,pane:&str,terminal:&str,canvas:herdr_readonly_transport::ObserveCanvas,on_event:Channel<TabEvent>,cancel:Cancellation,flow:&Arc<Mutex<RemoteFlow>>,pairing:&PairingState,hosts:&Hosts,nodes:&network_nodes::Nodes,ops:&network_identity::Operations,app:&tauri::AppHandle)->Result<(),String> {
     let _lease=ops.enter()?;
     let record={let f=flow.lock().map_err(|_|"state_unavailable")?;f.tabs.get(tab).filter(|s|s.owner==owner && s.generation==generation).and_then(|s|s.record.clone()).ok_or("tab_stale")?};
     let current=hosts.get(&record.id)?;
@@ -38,7 +39,7 @@ async fn tab_observe_inner(tab:&str,owner:u64,generation:u64,pane:&str,terminal:
         network_nodes::RouteKind::Overlay=>{let (dialer,b)=nodes.route(app,profile.as_ref().ok_or("network_profile_missing")?).await?;(dialer,Some(b))}
     };
     if cancel.is_cancelled(){return Err("cancelled".into());}
-    let config=record.target.config();
+    let mut config=record.target.config();
     let device={
         let mut f=flow.lock().map_err(|_|"state_unavailable")?;
         let s=f.tabs.get_mut(tab).filter(|s|s.owner==owner && s.generation==generation && !cancel.is_cancelled()).ok_or("tab_stale")?;
@@ -51,6 +52,7 @@ async fn tab_observe_inner(tab:&str,owner:u64,generation:u64,pane:&str,terminal:
         s.node_binding=binding;device
     };
     drop(_lease);
+    config.observe_canvas=canvas.validate().map_err(str::to_string)?;
     let control={let f=flow.lock().map_err(|_|"state_unavailable")?;f.tabs.get(tab).filter(|s|s.owner==owner && s.generation==generation).and_then(|s|s.control.clone()).ok_or("tab_stale")?};
     let watch_flow=flow.clone();let watch_tab=tab.to_owned();let watch_event=on_event.clone();let watch_cancel=cancel.clone();
     control.set_dashboard_listener(Arc::new(move |update| {

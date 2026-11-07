@@ -4,6 +4,7 @@ The only exported evidence is the fixed allowlist below. Raw CDP, adb, target
 configuration and public pairing material stay inside the runner process.
 """
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -45,18 +46,22 @@ def system_keyboard(visible):
 
 class AndroidProgress:
     """Bounded per-stage evidence survives a later failure; no raw dumps/text."""
-    PHASES = {'setup','pairing','dashboard','observe_full','observe_delta','font_diagnostics',
+    PHASES = {'setup','pairing','canvas_selection','dashboard','observe_full','observe_delta','canvas_marker','font_diagnostics',
         'direct_mode','draft_mode','direct_input_receipt','paste_review','hidden_recovery',
         'draft_input_receipt','stop_observation','complete',
         'keyboard_observe_hidden','keyboard_direct_shown','keyboard_direct_hidden','keyboard_direct_reopened',
         'keyboard_draft_shown','keyboard_draft_back_request','keyboard_draft_back_hidden',
         'keyboard_draft_back_reopened','keyboard_draft_hidden','local_revocation_review'}
     COMPLETED = {'publicProfileReviewed','publicRequestCopyReported','revocationReviewed','authorizationReviewed','paneChosen','fullRendered','deltaRendered',
+        'canvasSelectionVerified','canvasGeometryVerified','canvasMarkerVisible','canvasViewportRestored',
         'fontDiagnosticsCompleted','directKeyboardCompleted','directReceiptVerified',
         'draftKeyboardCompleted','pasteReviewCompleted','draftRestored','draftReceiptVerified','stoppedStale'}
     ERROR_CODES = {'android_system_ime_target_mismatch','android_system_ime_evidence_unavailable',
         'android_system_ime_show_unconfirmed','android_system_ime_hide_unconfirmed',
         'android_system_ime_expected_state_invalid','android_driver_failure',
+        'android_canvas_default_invalid','android_canvas_selection_failed','android_canvas_viewport_missing',
+        'android_canvas_marker_missing','android_canvas_geometry_invalid','android_canvas_scroll_failed',
+        'android_canvas_marker_not_visible','android_canvas_viewport_restore_failed',
         'android_revoke_clock_invalid','android_revoke_device_time_unready','android_revoke_controls_unconfirmed'}
     def __init__(self, args):
         self.stream = None; self.success = False
@@ -334,6 +339,19 @@ class AndroidWebView:
         if self.read(selector, 'value') != str(value):
             raise GuiFailure('android_text_input_mismatch')
 
+    def select_observer_canvas(self, guarded):
+        """Choose on the actual select using CDP input, never assign its value."""
+        if self.read('#remote-canvas', 'value') != '80x24':
+            raise GuiFailure('android_canvas_default_invalid')
+        if guarded:
+            return
+        self.click('#remote-canvas')
+        for key, code, number in (('ArrowDown','ArrowDown',40),('Enter','Enter',13)):
+            for kind in ('keyDown','keyUp'):
+                self.call('Input.dispatchKeyEvent', {'type':kind,'key':key,'code':code,'windowsVirtualKeyCode':number})
+        wait_for(lambda: self.read('#remote-canvas','value') == '120x40',
+                 'android_canvas_selection_failed')
+
     def direct_key(self, key):
         # Dispatch a real key through the focused xterm textarea, without Enter.
         if key != 'k' or not self.evaluate("document.activeElement === document.querySelector('#remote-terminal .xterm-helper-textarea')"):
@@ -481,6 +499,54 @@ def font_diagnostic_geometry(browser):
             'cellWidthPx': round(cell_width, 3) if cell_width is not None else None,
             'screenWidthPx': round(width, 3) if width is not None else None,
             'columnRatio': round(ratio, 4) if ratio is not None else None}
+
+
+# Inspect only the known synthetic marker; neither marker text nor terminal contents
+# enter evidence. Geometry is computed in the page and only booleans leave it.
+CANVAS_MARKER_CHECK = r'''(()=>{
+  const c=document.querySelector('#remote-captured'),v=document.querySelector('#remote-terminal')?.parentElement;
+  const screen=document.querySelector('#remote-terminal .xterm-screen');
+  const rows=screen?.querySelector('.xterm-rows')?.children;
+  if(c?.dataset.state!=='active'||c.dataset.cols!=='120'||c.dataset.rows!=='40'||!v||!screen||!rows||rows.length!==40)return null;
+  const row=rows[31],walker=document.createTreeWalker(row,NodeFilter.SHOW_TEXT);
+  let node,found=null,index=-1;
+  while((node=walker.nextNode())) {const i=node.data.indexOf('HPWIDE');if(i>=0){found=node;index=i;break;}}
+  if(!found)return null;
+  const range=document.createRange();range.setStart(found,index);range.setEnd(found,index+6);
+  const marker=range.getBoundingClientRect(), grid=screen.getBoundingClientRect(), viewport=v.getBoundingClientRect();
+  const cell=grid.width/120;
+  const correctColumn=cell>0 && Math.abs((marker.left-grid.left)/cell-91)<0.2;
+  const visible=marker.width>0 && marker.height>0 && marker.left>=Math.max(viewport.left,0) &&
+    marker.right<=Math.min(viewport.right,innerWidth) && marker.top>=Math.max(viewport.top,0) &&
+    marker.bottom<=Math.min(viewport.bottom,innerHeight);
+  return {geometry:true,correctColumn,visible};
+})()'''
+
+
+def exercise_observer_canvas(browser):
+    before = browser.evaluate("""(()=>{const v=document.querySelector('#remote-terminal')?.parentElement;
+      if(!v)return null;v.scrollIntoView({block:'center'});return {left:v.scrollLeft,top:v.scrollTop};})()""")
+    if (not isinstance(before, dict) or any(type(before.get(k)) not in (int,float) or not math.isfinite(before[k]) or before[k]<0 for k in ('left','top'))):
+        raise GuiFailure('android_canvas_viewport_missing')
+    geometry = wait_for(lambda: browser.evaluate(CANVAS_MARKER_CHECK), 'android_canvas_marker_missing', timeout=60)
+    if geometry.get('geometry') is not True or geometry.get('correctColumn') is not True:
+        raise GuiFailure('android_canvas_geometry_invalid')
+    try:
+        # This changes only the local scroll container; no terminal or network command.
+        scrolled=browser.evaluate("""(()=>{const v=document.querySelector('#remote-terminal')?.parentElement;
+          if(!v)return false;v.scrollLeft=v.scrollWidth;v.scrollTop=v.scrollHeight;return true;})()""")
+        if scrolled is not True:raise GuiFailure('android_canvas_scroll_failed')
+        def marker_visible():
+            state=browser.evaluate(CANVAS_MARKER_CHECK)
+            return isinstance(state,dict) and all(state.get(key) is True for key in ('geometry','correctColumn','visible'))
+        visible=wait_for(marker_visible, 'android_canvas_marker_not_visible')
+    finally:
+        restored=browser.evaluate("""(()=>{const v=document.querySelector('#remote-terminal')?.parentElement;
+          if(!v)return false;v.scrollLeft=%s;v.scrollTop=%s;
+          return Math.abs(v.scrollLeft-%s)<1 && Math.abs(v.scrollTop-%s)<1;})()""" %
+          (before['left'],before['top'],before['left'],before['top']))
+    if restored is not True:raise GuiFailure('android_canvas_viewport_restore_failed')
+    return {'geometryVerified':True,'markerVisible':visible is True,'viewportRestored':True}
 
 
 def exercise_font_diagnostics(browser, approval, rendered):
@@ -693,7 +759,9 @@ def run_android(args, root, env, config, approval):
         browser.click('#pair-source-review')
         browser.click('#pair-accept')
         wait_for(lambda: '授权响应已审查' in (browser.read('#pair-status') or ''), 'android_authorization_not_reviewed', timeout=60)
-        progress.mark('authorizationReviewed'); progress.phase('dashboard')
+        progress.mark('authorizationReviewed'); progress.phase('canvas_selection')
+        guarded=bool(getattr(args,'input_fixture',None))
+        browser.select_observer_canvas(guarded);progress.mark('canvasSelectionVerified');progress.phase('dashboard')
         browser.click('#remote-review')
         browser.click('#remote-connect')
         selector = '#remote-panes button'
@@ -712,6 +780,11 @@ def run_android(args, root, env, config, approval):
         progress.mark('fullRendered'); progress.count('fullRenderAcknowledgements',full); progress.phase('observe_delta')
         deltas = wait_for(lambda: rendered('delta'), 'android_delta_render_ack_missing', timeout=60)
         progress.mark('deltaRendered'); progress.mark('paneChosen'); progress.count('deltaRenderAcknowledgements',deltas)
+        canvas_evidence={}
+        if not guarded:
+            progress.phase('canvas_marker')
+            canvas_evidence=exercise_observer_canvas(browser)
+            progress.mark('canvasGeometryVerified');progress.mark('canvasMarkerVisible');progress.mark('canvasViewportRestored')
         progress.phase('font_diagnostics')
         font_diagnostic_evidence = exercise_font_diagnostics(browser, approval, rendered)
         progress.mark('fontDiagnosticsCompleted')
@@ -797,7 +870,7 @@ def run_android(args, root, env, config, approval):
                 'revocationReviewed':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                 'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                 'inputQueueAccepted':bool(receipts), 'inputReceipts':receipts,
-                'fontDiagnosticEvidence':font_diagnostic_evidence,
+                'fontDiagnosticEvidence':font_diagnostic_evidence, 'observerCanvasEvidence':canvas_evidence,
                 **paste_evidence,
                 'systemKeyboardEvidence': {'checkpoints': keyboard_evidence, 'showWithHardwareKeyboard': True,
                     'scope': 'owned API35 IME service window; CDP commits are not IME touch/composition proof'},

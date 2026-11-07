@@ -153,6 +153,7 @@ class ProgressTests(unittest.TestCase):
                     patch.object(android,'adb',side_effect=adb) as command, \
                     patch.object(android,'AndroidWebView',return_value=view), \
                     patch.object(android,'exercise_font_diagnostics',side_effect=font), \
+                    patch.object(android,'exercise_observer_canvas',return_value={'geometryVerified':True,'markerVisible':True,'viewportRestored':True}), \
                     patch.object(android,'system_keyboard',side_effect=failure):
                 with self.assertRaisesRegex(android.GuiFailure,'^android_system_ime_target_mismatch$'):
                     android.run_android(args,None,None,config,approval)
@@ -160,7 +161,7 @@ class ProgressTests(unittest.TestCase):
             self.assertEqual(report['stage'],'keyboard_observe_hidden')
             self.assertEqual(report['status'],'failed')
             self.assertEqual(report['errorCode'],'android_system_ime_target_mismatch')
-            for key in ('publicProfileReviewed','publicRequestCopyReported','authorizationReviewed','paneChosen','fullRendered','deltaRendered','fontDiagnosticsCompleted'):
+            for key in ('publicProfileReviewed','publicRequestCopyReported','authorizationReviewed','paneChosen','fullRendered','deltaRendered','fontDiagnosticsCompleted','canvasSelectionVerified','canvasGeometryVerified','canvasMarkerVisible','canvasViewportRestored'):
                 self.assertTrue(report['completed'][key])
             self.assertFalse(report['completed']['stoppedStale'])
             self.assertEqual(report['fullRenderAcknowledgements'],3)
@@ -217,5 +218,48 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(progress.data['systemImeChecks'],[])
         adb.assert_not_called();browser.direct_key.assert_not_called()
 
+
+
+class CanvasDriverTests(unittest.TestCase):
+    def test_stock_select_uses_click_and_cdp_keys_guarded_does_not_change_default(self):
+        view=object.__new__(android.AndroidWebView)
+        view.read=Mock(side_effect=['80x24','120x40']);view.click=Mock();view.call=Mock()
+        view.select_observer_canvas(False)
+        view.click.assert_called_once_with('#remote-canvas')
+        self.assertEqual([call.args[1]['key'] for call in view.call.call_args_list],['ArrowDown','ArrowDown','Enter','Enter'])
+        view.read=Mock(return_value='80x24');view.click.reset_mock();view.call.reset_mock()
+        view.select_observer_canvas(True);view.click.assert_not_called();view.call.assert_not_called()
+
+    def test_canvas_selection_rejects_unverified_defaults_and_failed_interaction(self):
+        view=object.__new__(android.AndroidWebView);view.click=Mock();view.call=Mock()
+        view.read=Mock(return_value='160x50')
+        with self.assertRaisesRegex(android.GuiFailure,'android_canvas_default_invalid'):view.select_observer_canvas(False)
+        view.click.assert_not_called()
+        view.read=Mock(side_effect=['80x24','80x24'])
+        with self.assertRaisesRegex(android.GuiFailure,'android_canvas_selection_failed'):view.select_observer_canvas(False)
+
+    def test_marker_is_checked_after_scroll_and_restored_without_exporting_content(self):
+        view=Mock();view.evaluate.side_effect=[{'left':10,'top':20},
+            {'geometry':True,'correctColumn':True,'visible':False},True,
+            {'geometry':True,'correctColumn':True,'visible':True},True]
+        result=android.exercise_observer_canvas(view)
+        self.assertEqual(result,{'geometryVerified':True,'markerVisible':True,'viewportRestored':True})
+        self.assertTrue(all(type(value) is bool for value in result.values()))
+        self.assertIn('scrollLeft=10',view.evaluate.call_args_list[-1].args[0])
+        self.assertIn('scrollTop=20',view.evaluate.call_args_list[-1].args[0])
+
+    def test_marker_failure_still_restores_original_viewport(self):
+        view=Mock();view.evaluate.side_effect=[{'left':10,'top':20},
+            {'geometry':True,'correctColumn':True,'visible':False},True,
+            {'geometry':True,'correctColumn':True,'visible':False},True]
+        with self.assertRaisesRegex(android.GuiFailure,'android_canvas_marker_not_visible'):
+            android.exercise_observer_canvas(view)
+        self.assertIn('scrollLeft=10',view.evaluate.call_args_list[-1].args[0])
+
+    def test_wrong_marker_column_does_not_count_as_geometry_proof(self):
+        view=Mock();view.evaluate.side_effect=[{'left':0,'top':0},
+            {'geometry':True,'correctColumn':False,'visible':True}]
+        with self.assertRaisesRegex(android.GuiFailure,'android_canvas_geometry_invalid'):
+            android.exercise_observer_canvas(view)
 
 if __name__ == '__main__':unittest.main()

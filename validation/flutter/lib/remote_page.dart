@@ -13,6 +13,9 @@ import 'remote_input_platform.dart';
 import 'remote_screen_text.dart';
 import 'remote_screen_viewport.dart';
 import 'remote_horizontal_viewport.dart';
+import 'remote_terminal_screen.dart';
+import 'remote_frame_geometry.dart';
+import 'remote_vertical_viewport.dart';
 import 'terminal_font_diagnostics.dart';
 import 'device_keys.dart';
 import 'network_profiles.dart';
@@ -67,6 +70,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       name:TextEditingController(text:name == 'port' ? '22' : ''),
   };
   bool reviewed = false, busy = false,viewPaused = false,dashboardFresh = false;
+  int observationCanvas = 0;
   DeviceIdentityLease? identityLease;
   int request = 0;
   int observationEpoch = 0;
@@ -83,6 +87,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   String? dashboardSyncSource;
   Terminal? terminal;
   final horizontalAnchors = <String,double>{};
+  final verticalAnchors = <String,double>{};
   String? horizontalTarget;
   final terminalFocus = FocusNode();
   final terminalViewportKey = GlobalKey();
@@ -383,6 +388,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       } else {
         config = RemoteConfig.fromJson({...values,'privateKeyPem':pemFromSingleLineInput(fields['privateKeyPem']!.text)});
       }
+      final canvas = remoteObservationCanvases[observationCanvas];
+      config = config.withObservationCanvas(canvas.cols,canvas.rows);
       fields['privateKeyPem']!.clear();
       FocusScope.of(context).unfocus();
       inputGate.invalidate();
@@ -414,7 +421,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         if (frame.full) {
           clearScreenSelection();
           terminal?.dispose();
-          terminal = Terminal(maxLines:24,reflowEnabled:false)..resize(80,24);
+          terminal = createRemoteTerminalScreen(frame.cols,frame.rows);
           final target = selectedTarget;
           final bound = adapter.inputTarget;
           final route = dashboard?.source?.route ?? (bound != null && target != null &&
@@ -1070,6 +1077,16 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           const SizedBox(height:8),
           const Text('仅用于隔离测试主机。审查接入后查看当前命名会话，选择明确 pane 观察。支持保护扩展与持久锁时可显式输入；布局不调整共享 PTY。'),
           const SizedBox(height:12),
+          DropdownButtonFormField<int>(key:const ValueKey('remote-canvas-size'),initialValue:observationCanvas,
+            decoration:const InputDecoration(labelText:'本次只读观察画布'),
+            items:[for (var i = 0; i < remoteObservationCanvases.length; i++)
+              DropdownMenuItem(value:i,key:ValueKey('remote-canvas-${remoteObservationCanvases[i].cols}x${remoteObservationCanvases[i].rows}'),
+                child:Text('${remoteObservationCanvases[i].cols}×${remoteObservationCanvases[i].rows}'))],
+            onChanged:busy || networkBindingInvalidated ? null : (value) {
+              if (value != null) setState(() { observationCanvas = value; reviewed = false; });
+            }),
+          const Padding(padding:EdgeInsets.symmetric(vertical:8),
+            child:Text('只改变观察者画布，不代表源 PTY 尺寸。连接与恢复沿用本次选择；更改前先停止并断开，再审查连接。字号、键盘与旋转不会调整远端尺寸。')),
           if (widget.networkBinding != null) Text('冻结网络：${widget.networkBinding!.label}',key:const ValueKey('remote-network-binding')),
           Semantics(liveRegion:true,child:Text(status,key:const ValueKey('remote-status'),
             style:TextStyle(color:widget.tokens.color('textSecondary')))),
@@ -1142,7 +1159,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           ],
           if (snapshot != null && terminal != null) ...[
             const SizedBox(height:12),
-            Text('${snapshot!.session} / ${snapshot!.paneId}\n${live ? inputGate.mode == RemoteInputMode.observe ? '只读观察中' : '实时终端 · 显式输入模式' : '旧画面 · 已停止'} · seq $sequence\n更新于 ${capturedAt!.toLocal().toIso8601String()} · 固定 80×24'),
+            Text('${snapshot!.session} / ${snapshot!.paneId}\n${live ? inputGate.mode == RemoteInputMode.observe ? '只读观察中' : '实时终端 · 显式输入模式' : '旧画面 · 已停止'} · seq $sequence\n更新于 ${capturedAt!.toLocal().toIso8601String()} · 观察画布 ${terminal!.viewWidth}×${terminal!.viewHeight}'),
             OutlinedButton.icon(key:const ValueKey('remote-screen-select'),
               onPressed:live && !viewPaused && widget.visibility?.value != false && !selectingScreen &&
                 !showingFontDiagnostics && !previewOpen && !readingPaste && !inputGate.sending ? () {
@@ -1160,10 +1177,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             if (showingFontDiagnostics)
               TerminalFontDiagnostics(tokens:widget.tokens,registeredFontFamily:'ProbeNerd',
                 fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble(),onClose:closeFontDiagnostics)
-            else if (selectingScreen) screenSelectionPanel() else SizedBox(height:360,child:ClipRRect(key:terminalViewportKey,borderRadius:BorderRadius.circular(12),
+            else if (selectingScreen) screenSelectionPanel() else RemoteVerticalViewport(
+              identity:horizontalTarget,anchors:verticalAnchors,frame:terminal!,fresh:live,
+              builder:(verticalScroll) => SizedBox(height:360,child:ClipRRect(key:terminalViewportKey,borderRadius:BorderRadius.circular(12),
               child:RemoteHorizontalViewport(identity:horizontalTarget,anchors:horizontalAnchors,
+                columns:terminal!.viewWidth,
                 style:TerminalStyle(fontFamily:'ProbeNerd',fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble()),
                 child:TerminalView(terminal!,key:ValueKey('remote-terminal-${inputGate.epoch}'),
+                scrollController:verticalScroll,
                 focusNode:terminalFocus,theme:widget.tokens.terminalTheme,
                 autoResize:false,readOnly:!live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput,
                 simulateScroll:false,hardwareKeyboardOnly:inputGate.mode != RemoteInputMode.direct,
@@ -1178,7 +1199,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                     unawaited(pasteInput()); return KeyEventResult.handled;
                   }
                   return KeyEventResult.ignored;
-                })))),
+                }))))),
           ],
           if (snapshot != null || inputGate.unknown != null) inputPanel(),
           unsentDraftPanel(),

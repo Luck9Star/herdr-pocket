@@ -32,12 +32,19 @@ export class RemoteViewGate {
 export class RemoteFrameQueue {
   lastSeq = null;
   inFlight = false;
+  geometry = null;
   accept(frame) {
     if (this.inFlight || !frame || !Number.isSafeInteger(frame.seq) || frame.seq < 0 || typeof frame.full !== 'boolean' ||
         (this.lastSeq === null ? !frame.full : frame.seq !== this.lastSeq + 1) ||
+        !Number.isInteger(frame.cols) || frame.cols < 2 || frame.cols > 512 ||
+        !Number.isInteger(frame.rows) || frame.rows < 1 || frame.rows > 512 ||
+        frame.cols * frame.rows > 65536 ||
+        (!frame.full && (!this.geometry || frame.cols !== this.geometry.cols || frame.rows !== this.geometry.rows)) ||
         !Array.isArray(frame.bytes) || frame.bytes.length > 65536 ||
         !frame.bytes.every(b => Number.isInteger(b) && b >= 0 && b <= 255)) return false;
-    this.lastSeq = frame.seq; this.inFlight = true; return true;
+    this.lastSeq = frame.seq; this.inFlight = true;
+    if (frame.full) this.geometry = {cols:frame.cols, rows:frame.rows};
+    return true;
   }
   acknowledge(seq) {
     if (!this.inFlight || seq !== this.lastSeq) return false;

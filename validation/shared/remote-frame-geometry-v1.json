@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "limits": {"minCols": 2, "minRows": 1, "maxCols": 512, "maxRows": 512, "maxCells": 65536},
+  "cases": [
+    {"id": "default-compatible", "frames": [{"seq": 1, "full": true, "width": 80, "height": 24}, {"seq": 2, "full": false, "width": 80, "height": 24}], "accepted": [true, true]},
+    {"id": "wide-observer", "frames": [{"seq": 8, "full": true, "width": 120, "height": 40}, {"seq": 9, "full": false, "width": 120, "height": 40}], "accepted": [true, true]},
+    {"id": "later-full-changes-geometry", "frames": [{"seq": 1, "full": true, "width": 80, "height": 24}, {"seq": 2, "full": true, "width": 160, "height": 50}, {"seq": 3, "full": false, "width": 160, "height": 50}, {"seq": 4, "full": true, "width": 2, "height": 1}], "accepted": [true, true, true, true]},
+    {"id": "short-grid", "frames": [{"seq": 1, "full": true, "width": 2, "height": 1}, {"seq": 2, "full": false, "width": 2, "height": 1}], "accepted": [true, true]},
+    {"id": "cell-limit-wide", "frames": [{"seq": 10, "full": true, "width": 512, "height": 128}], "accepted": [true]},
+    {"id": "cell-limit-tall", "frames": [{"seq": 1, "full": true, "width": 128, "height": 512}], "accepted": [true]},
+    {"id": "one-column", "frames": [{"seq": 1, "full": true, "width": 1, "height": 24}], "accepted": [false]},
+    {"id": "zero-height", "frames": [{"seq": 1, "full": true, "width": 80, "height": 0}], "accepted": [false]},
+    {"id": "negative-width", "frames": [{"seq": 1, "full": true, "width": -2, "height": 24}], "accepted": [false]},
+    {"id": "fraction", "frames": [{"seq": 1, "full": true, "width": 79.5, "height": 24}], "accepted": [false]},
+    {"id": "numeric-string", "frames": [{"seq": 1, "full": true, "width": "80", "height": 24}], "accepted": [false]},
+    {"id": "boolean", "frames": [{"seq": 1, "full": true, "width": 80, "height": true}], "accepted": [false]},
+    {"id": "above-col-limit", "frames": [{"seq": 1, "full": true, "width": 513, "height": 1}], "accepted": [false]},
+    {"id": "above-row-limit", "frames": [{"seq": 1, "full": true, "width": 2, "height": 513}], "accepted": [false]},
+    {"id": "above-area-limit", "frames": [{"seq": 1, "full": true, "width": 512, "height": 129}], "accepted": [false]},
+    {"id": "missing-width", "frames": [{"seq": 1, "full": true, "height": 24}], "accepted": [false]},
+    {"id": "missing-height", "frames": [{"seq": 1, "full": true, "width": 80}], "accepted": [false]},
+    {"id": "changed-delta-width", "frames": [{"seq": 1, "full": true, "width": 80, "height": 24}, {"seq": 2, "full": false, "width": 120, "height": 24}], "accepted": [true, false]},
+    {"id": "changed-delta-height", "frames": [{"seq": 1, "full": true, "width": 80, "height": 24}, {"seq": 2, "full": false, "width": 80, "height": 25}], "accepted": [true, false]},
+    {"id": "missing-initial-full", "frames": [{"seq": 1, "full": false, "width": 120, "height": 40}], "accepted": [false]},
+    {"id": "sequence-gap-full", "frames": [{"seq": 1, "full": true, "width": 80, "height": 24}, {"seq": 3, "full": true, "width": 120, "height": 40}], "accepted": [true, false]},
+    {"id": "replayed-full", "frames": [{"seq": 1, "full": true, "width": 80, "height": 24}, {"seq": 1, "full": true, "width": 120, "height": 40}], "accepted": [true, false]}
+  ]
+}

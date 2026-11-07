@@ -44,7 +44,7 @@ void main() {
     expect(alternate,isNot(contains('HISTORY')));
   });
 
-  test('oversize combined suffix and unexpected dimensions reject without partial capture or output', () {
+  test('oversize combined suffix and out-of-grid ranges reject without partial capture or output', () {
     final terminal = Terminal(maxLines:24,reflowEnabled:false)..resize(80,24);
     addTearDown(terminal.dispose);
     final output = <String>[]; terminal.onOutput = output.add;
@@ -54,7 +54,10 @@ void main() {
     expect(output,isEmpty);
     expect(terminal.viewWidth,80); expect(terminal.viewHeight,24);
     terminal.resize(81,24);
-    expect(captureRemoteScreenText(terminal,const RemoteScreenCells(0,24,0,81)),isNull);
+    expect(captureRemoteScreenText(terminal,const RemoteScreenCells(0,24,0,81)),isNull); // Still oversize combined suffix.
+    terminal.buffer.lines[0].setCombined(0,'');
+    expect(captureRemoteScreenText(terminal,const RemoteScreenCells(0,24,80,81)),isNotNull);
+    expect(captureRemoteScreenText(terminal,const RemoteScreenCells(0,24,0,82)),isNull);
     expect(output,isEmpty);
   });
 

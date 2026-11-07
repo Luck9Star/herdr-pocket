@@ -12,6 +12,7 @@ import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/pairing_public_key.dart';
 import 'package:herdr_flutter_probe/remote_page.dart';
+import 'package:herdr_flutter_probe/remote_screen_viewport.dart';
 
 const packageName = 'dev.herdr.herdr_flutter_probe';
 const fixtureEnabled = String.fromEnvironment('HERDR_ANDROID_NATIVE_PAIRING');
@@ -409,6 +410,12 @@ void main() {
     final remotePage = tester.widget<RemotePage>(find.byType(RemotePage));
     expect(remotePage.adapter,isNull); expect(remotePage.deviceKeys,isA<NativeDeviceKeys>());
     expect(remotePage.pairedTarget,isNotNull);
+    if (!guardedInput) {
+      stage('observe_canvas_select');
+      await tapKey(tester,'remote-canvas-size');
+      final option = find.byKey(const ValueKey('remote-canvas-120x40')).hitTestable();
+      await tap(tester,option);
+    }
     stage('ssh_and_dashboard');
     await tapKey(tester,'remote-review'); await tapKey(tester,'remote-connect');
     final pane = find.byKey(ValueKey('remote-pane-${target['paneId']}'));
@@ -436,6 +443,66 @@ void main() {
       (displayedSequence(tester) ?? -1) > firstSequence &&
       identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal,fullTerminal));
     final deltaSequence = displayedSequence(tester)!;
+    final observerCanvas = <String,dynamic>{};
+    if (!guardedInput) {
+      stage('observe_canvas_render');
+      expect([fullTerminal.viewWidth,fullTerminal.viewHeight], [120,40]);
+      final mark = 'HPWIDE'.codeUnits;
+      await until(tester,() {
+        final line = fullTerminal.buffer.lines[31];
+        for (var index = 0; index < mark.length; index++) {
+          if (line.getCodePoint(91 + index) != mark[index]) return false;
+        }
+        return true;
+      });
+      // Drive the app's two local reading sliders. Their callbacks change only
+      // local scroll controllers, including for alternate-screen applications.
+      final view = find.byType(TerminalView);
+      final viewport = find.byKey(const ValueKey('remote-horizontal-scroll'));
+      final horizontalSlider = find.byKey(const ValueKey('remote-horizontal-slider'));
+      final verticalSlider = find.byKey(const ValueKey('remote-vertical-slider'));
+      final horizontal = tester.widget<SingleChildScrollView>(viewport).controller!;
+      final vertical = tester.widget<TerminalView>(view).scrollController!;
+      expect(tester.widget<TerminalView>(view).autoResize,isFalse);
+      final oldHorizontal = horizontal.offset, oldVertical = vertical.offset;
+      final horizontalMax = horizontal.position.maxScrollExtent, verticalMax = vertical.position.maxScrollExtent;
+      Future<void> setReading(Finder slider,double value) async {
+        final changed = tester.widget<Slider>(slider).onChanged;
+        if (changed != null) changed(value);
+        await tester.pump(const Duration(milliseconds:100));
+        await tester.ensureVisible(viewport);
+        await tester.pump(const Duration(milliseconds:100));
+      }
+      bool containsMarker({required bool row,required bool columns}) {
+        if (view.evaluate().length != 1 || !identical(tester.widget<TerminalView>(view).terminal,fullTerminal)) return false;
+        final render = tester.state<TerminalViewState>(view).renderTerminal;
+        final bounds = Offset.zero & tester.view.physicalSize / tester.view.devicePixelRatio;
+        final cells = visibleRemoteScreenCells(fullTerminal,render,bounds);
+        return cells != null && (!row || cells.firstRow <= 31 && cells.endRow > 31) &&
+          (!columns || cells.firstColumn <= 91 && cells.endColumn >= 97);
+      }
+      await tester.ensureVisible(viewport);
+      await tester.pump(const Duration(milliseconds:100));
+      for (var step = 0; step <= 20 && !containsMarker(row:true,columns:false); step++) {
+        await setReading(verticalSlider,step / 20);
+      }
+      expect(containsMarker(row:true,columns:false),isTrue);
+      for (var step = 0; step <= 20 && !containsMarker(row:true,columns:true); step++) {
+        await setReading(horizontalSlider,step / 20);
+      }
+      expect(containsMarker(row:true,columns:true),isTrue);
+      // Check the actual buffer again while all six cells are fully visible.
+      for (var index = 0; index < mark.length; index++) {
+        expect(fullTerminal.buffer.lines[31].getCodePoint(91 + index),mark[index]);
+      }
+      await setReading(horizontalSlider,horizontalMax > 0 ? oldHorizontal / horizontalMax : 0);
+      await setReading(verticalSlider,verticalMax > 0 ? oldVertical / verticalMax : 0);
+      expect(horizontal.offset,closeTo(oldHorizontal,1));
+      expect(vertical.offset,closeTo(oldVertical,1));
+      expect(tester.widget<TerminalView>(view).autoResize,isFalse);
+      observerCanvas.addAll({'cols':fullTerminal.viewWidth,'rows':fullTerminal.viewHeight,
+        'wideMarkerMatched':true,'wideMarkerVisible':true,'readingPositionRestored':true});
+    }
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
     stage('local_font_diagnostic');
     final fontMarkerColumns = await readFontDiagnostic(tester);
@@ -646,6 +713,7 @@ void main() {
       'directModeDisabled':true,'draftModeDisabled':true,'localIdentityDeleted':true,
       'identityCreationActions':1,'firstSequence':firstSequence,'deltaSequence':deltaSequence,
       'localFontMarkerColumns':fontMarkerColumns,
+      if (!guardedInput) 'observerCanvas':observerCanvas,
       'frameCountLowerBound':2,'deltaCountLowerBound':1,
       if (guardedInput) ...{
         'guardedInput':true,'directInputAccepted':true,'draftInputAccepted':true,

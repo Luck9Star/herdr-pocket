@@ -8,6 +8,8 @@
 
 两条路线均可展开查看本次连接的网络路径、主机指纹、公钥认证、看板和终端首帧。字体诊断使用固定 Powerlevel10k 与 Oh My Posh 样例；手机实体键盘、真实中文输入法和真机性能仍待实测。[受阻窗格交互](https://github.com/Luck9Star/herdr-pocket/blob/d5a6dc06a876d05ef98815759595c042b05b1cfd/docs/51-mobile-blocked-targets.md) · [主题及已保存的 Penpot 原型](https://github.com/Luck9Star/herdr-pocket/blob/d5a6dc06a876d05ef98815759595c042b05b1cfd/docs/52-mobile-theme-prompts.md)
 
+**测试包之后的原型进度**　两套手机看板都能按名称、地址、命名会话及网络类型检索主机，并区分当前待处理和上次受阻。Flutter 修复静默 SSH 观察通道后，在 Mac 隔离的真实 herdr 会话中连续恢复五次，每次均收到新首帧和后续增量，远端输入为 0。修复后的 Android 受保护 TUI 尚待复测。下方两份 APK 对应较早的 `dd02595`。[源码、Penpot 与实测记录](https://github.com/Luck9Star/herdr-pocket/blob/8703b0d37a2497357c5c6c07c6e4f28ce2a3fe1c/docs/54-mobile-host-search-and-observer-retirement.md)
+
 ## Android 测试包
 
 两份 API 35 arm64-v8a debug APK 来自同一提交 [`dd02595`](https://github.com/Luck9Star/herdr-pocket/commit/dd025952321fb944465a48ec762ae76adc74f830)。登录 GitHub 下载归档，分别解压，用 `shasum -a 256 app.apk` 核对。归档摘要、包内 APK 和原生来源均已核验；两包中的 EasyTier、Tailscale 原生库逐字节一致。下载于北京时间 **11 月 22 日 05:32（Flutter）和 05:33（Tauri）** 到期。arm64 真机安装未验证。[构建记录](https://github.com/Luck9Star/herdr-pocket/actions/runs/42415286185)

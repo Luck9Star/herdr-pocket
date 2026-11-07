@@ -372,15 +372,63 @@ class PublicExchangeGuards(unittest.TestCase):
         replies = [subprocess.CompletedProcess([], 1, b'',
             ('head: ' + self.relative + '/request.json: No such file or directory\n').encode()),
             subprocess.CompletedProcess([], 0, b'public_request', b'')]
-        with patch.object(gui, 'adb', side_effect=replies):
+        with patch.object(gui, 'package_present', return_value=True), patch.object(gui, 'adb', side_effect=replies):
             with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_test_exited_public_request$'):
                 gui.wait_public(proc, self.relative, 'request.json', 2048, timeout=1)
 
+    def test_wait_does_not_read_public_files_until_owned_package_appears(self):
+        proc = Mock(); proc.poll.return_value = None
+        package_states = iter((False, False, True))
+        events = []
+        def package_present():
+            state = next(package_states)
+            events.append(('package', state))
+            return state
+        def read_public(relative, limit):
+            events.append(('read', relative.rsplit('/', 1)[1]))
+            return b'{"public":"synthetic"}'
+        with patch.object(gui, 'package_present', side_effect=package_present), \
+             patch.object(gui, 'read_public', side_effect=read_public), \
+             patch.object(gui.time, 'sleep') as sleep:
+            result = gui.wait_public(proc, self.relative, 'signer.json', 1024, timeout=1)
+        self.assertEqual(result, b'{"public":"synthetic"}')
+        self.assertEqual(events, [('package', False), ('package', False),
+                                  ('package', True), ('read', 'signer.json')])
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_process_exit_before_install_does_not_read_stage_or_public_files(self):
+        proc = Mock(); proc.poll.return_value = 1
+        with patch.object(gui, 'package_present', return_value=False), \
+             patch.object(gui, 'read_public') as read_public, \
+             patch.object(gui, 'failure_stage') as failure_stage:
+            with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_test_exited_before_install$'):
+                gui.wait_public(proc, self.relative, 'signer.json', 1024, timeout=1)
+        read_public.assert_not_called()
+        failure_stage.assert_not_called()
+
+    def test_package_install_wait_remains_bounded_without_reading_public_files(self):
+        proc = Mock(); proc.poll.return_value = None
+        with patch.object(gui.time, 'monotonic', side_effect=(0, 2)), \
+             patch.object(gui, 'package_present', return_value=False), \
+             patch.object(gui, 'read_public') as read_public, \
+             patch.object(gui, 'failure_stage') as failure_stage:
+            with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_package_install_timeout$'):
+                gui.wait_public(proc, self.relative, 'signer.json', 1024, timeout=1)
+        read_public.assert_not_called()
+        failure_stage.assert_not_called()
+
+    def test_read_failure_after_owned_package_appears_remains_fatal(self):
+        proc = Mock(); proc.poll.return_value = None
+        failure = gui.DeviceFailure('flutter_android_public_signer_read_failed')
+        with patch.object(gui, 'package_present', return_value=True), \
+             patch.object(gui, 'read_public', side_effect=failure) as read_public:
+            with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_public_signer_read_failed$'):
+                gui.wait_public(proc, self.relative, 'signer.json', 1024, timeout=1)
+        read_public.assert_called_once_with(self.relative + '/signer.json', 1024)
+
     def test_wait_only_delivers_final_json_to_approval_spy_after_diagnostics_and_partial_data(self):
         request = self.request()
-        replies = [subprocess.CompletedProcess([], 0,
-            ('run-as: unknown package: ' + gui.PACKAGE + '\n').encode(), b''),
-            subprocess.CompletedProcess([], 1, b'',
+        replies = [subprocess.CompletedProcess([], 1, b'',
                 ('head: ' + self.relative + '/request.json: No such file or directory\n').encode()),
             subprocess.CompletedProcess([], 0, b' \n', b''),
             subprocess.CompletedProcess([], 0, b'{"version":', b''),
@@ -389,9 +437,11 @@ class PublicExchangeGuards(unittest.TestCase):
         approval = Mock(spec=['approve'])
         def sleep(_):
             approval.approve.assert_not_called()
-        with patch.object(gui, 'adb', side_effect=replies) as adb, patch.object(gui.time, 'sleep', side_effect=sleep):
+        with patch.object(gui, 'package_present', return_value=True), \
+             patch.object(gui, 'adb', side_effect=replies) as adb, \
+             patch.object(gui.time, 'sleep', side_effect=sleep):
             approval.approve(gui.wait_public(proc, self.relative, 'request.json', 2048, timeout=1))
-        self.assertEqual(adb.call_count, 5)
+        self.assertEqual(adb.call_count, 4)
         approval.approve.assert_called_once_with(request)
 
 

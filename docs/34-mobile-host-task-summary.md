@@ -18,3 +18,11 @@
 4. 重复开同一主机的标签、缩窄窗口或打开系统键盘，检查主机统计没有翻倍，远端共享 PTY 尺寸保持原值。
 
 本批连同手机草稿找回、看板时间及两条 GUI 的入口回归一起验证。云构建使用同一 Git 提交产生两份 arm64 debug APK；API 35 x86_64 模拟器另行走真实设备密钥与隔离 SSH。前台真实三网、物理设备、系统中文输入法及 iOS 签名仍待逐项验收。既有 Android 测试包和上一轮验证可见[固定来源与校验和](27-mobile-tailscale-cloud.md)。
+
+## 首轮云验收
+
+首轮源码为 `c1c040a`。同一提交的隔离副本在 Mac 上通过 149 项 Tauri JavaScript 检查、前端构建和 31 项远端测试驱动单测。Flutter 的 63 个 Dart 文件通过本地语法解析。[提交](https://github.com/Luck9Star/herdr-pocket/commit/c1c040a47712f1e000e2c73aa8356bf69b7dec99)
+
+云端 Flutter analyzer 和 10 项绘制回归通过。常规测试为 281 项通过、1 项跳过、2 项失败，后续的隔离 SSH 测试被跳过。两个失败用例在模拟手工重连时没有重新填写已经清除的临时凭据，适配器只收到了首次连接。API 35 上，Tauri 在生成的 Kotlin 代码编译阶段失败，模拟器未启动。Flutter 测试驱动报 `flutter_android_public_signer_read_failed`，未取得签名探针，主机未授权。[首轮记录](https://github.com/Luck9Star/herdr-pocket/actions/runs/42325603861)
+
+首轮原生库、共享 transport 和 Flutter arm64 构建通过，Tauri arm64 构建失败。修复批让每次手工重连重新填写合成凭据并完成审查，按收到的全帧核对输入日志读取次数。Android 构建将顶层 Java 同步到独立源码目录，Kotlin 的构建输入由此排除了 JVM 测试用的平台桩。Flutter 模拟器驱动先确认测试应用已安装，再读取有界的公开结果文件；首轮没有记录底层 ADB 诊断。

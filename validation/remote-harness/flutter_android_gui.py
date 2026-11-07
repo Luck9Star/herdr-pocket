@@ -306,13 +306,24 @@ def failure_stage(relative_directory, fallback):
 def wait_public(proc, relative_directory, name, limit, timeout):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        # Flutter may still be building/installing its disposable app. Never
+        # run-as a package that has not appeared on this emulator yet.
+        if not package_present():
+            if proc.poll() is not None:
+                raise DeviceFailure('flutter_android_test_exited_before_install')
+            time.sleep(0.15)
+            continue
         result = read_public(relative_directory + '/' + name, limit)
         if result is not None:
             return result
         if proc.poll() is not None:
-            raise DeviceFailure(failure_stage(relative_directory, 'flutter_android_test_exited'))
+            if package_present():
+                raise DeviceFailure(failure_stage(relative_directory, 'flutter_android_test_exited'))
+            raise DeviceFailure('flutter_android_test_exited')
         time.sleep(0.15)
-    raise DeviceFailure(failure_stage(relative_directory, 'flutter_android_phase_timeout'))
+    if package_present():
+        raise DeviceFailure(failure_stage(relative_directory, 'flutter_android_phase_timeout'))
+    raise DeviceFailure('flutter_android_package_install_timeout')
 
 
 def verify_signer(raw):

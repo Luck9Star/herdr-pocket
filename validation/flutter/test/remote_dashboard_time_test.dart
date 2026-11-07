@@ -1,8 +1,45 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'remote_page_test.dart' as base;
 import 'remote_test_data.dart';
+
+/// Each explicit observation owns a separate result, matching production
+/// cancellation instead of sharing PendingAdapter's one-shot completer.
+mixin IndependentObserveAttempts on base.PendingAdapter {
+  Completer<RemoteSnapshot>? _observing;
+  @override Future<RemoteSnapshot> observe(RemoteConfig config,{required DashboardConsumer onDashboard,
+      required FrameConsumer onFrame,RemoteProgress? onProgress}) {
+    if (_observing != null) throw StateError('previous fixture attempt was not cancelled');
+    calls++; generation++; dashboard=onDashboard; frame=onFrame;
+    final attempt=Completer<RemoteSnapshot>(); _observing=attempt; return attempt.future;
+  }
+  void failCurrent(RemoteFailure failure) {
+    final attempt=_observing; if (attempt == null) throw StateError('no admitted fixture attempt');
+    _observing=null; attempt.completeError(failure);
+  }
+  @override Future<void> cancel() async {
+    generation++; cancels++;
+    final attempt=_observing; _observing=null;
+    if (attempt != null && !attempt.isCompleted) attempt.completeError(const RemoteFailure('cancelled'));
+  }
+}
+class _ReconnectDashboardAdapter extends base.PendingAdapter with IndependentObserveAttempts {}
+
+Future<void> reviewManualReconnect(WidgetTester tester,base.PendingAdapter adapter) async {
+  final privateKey=base.field('privateKeyPem'),previousCalls=adapter.calls;
+  await tester.ensureVisible(privateKey);
+  expect(tester.widget<TextField>(privateKey).controller!.text,isEmpty);
+  // The manual path intentionally clears its temporary key after every use.
+  // Re-enter only synthetic parser material, then perform the real review.
+  await tester.enterText(privateKey,(fixtureConfig()['privateKeyPem'] as String).replaceAll('\n',r'\n')); await tester.pump();
+  await tester.ensureVisible(base.field('review')); await tester.tap(base.field('review')); await tester.pump();
+  expect(tester.widget<CheckboxListTile>(base.field('review')).value,isTrue);
+  await tester.ensureVisible(base.field('connect')); await tester.tap(base.field('connect')); await tester.pump();
+  expect(adapter.calls,previousCalls+1);
+  expect(tester.widget<TextField>(privateKey).controller!.text,isEmpty);
+}
 
 void main() {
   test('unknown legacy snapshot time stays unknown and stale transitions preserve authority time',() {
@@ -23,7 +60,7 @@ void main() {
     expect(clockReads,0); expect(adapter.currentDashboard,isNull);
   });
   testWidgets('board time is independent of frames and survives stale, failed reconnect and late callbacks',(tester) async {
-    final adapter = base.PendingAdapter(); await base.prepare(tester,adapter,const Size(390,844));
+    final adapter = _ReconnectDashboardAdapter(); await base.prepare(tester,adapter,const Size(390,844));
     await tester.ensureVisible(base.field('review')); await tester.tap(base.field('review')); await tester.pump();
     await tester.ensureVisible(base.field('connect')); await tester.tap(base.field('connect')); await tester.pump();
     final sync = find.byKey(const ValueKey('remote-dashboard-sync'));
@@ -46,10 +83,9 @@ void main() {
     expect(tester.widget<Text>(sync).data,first);
     // Beginning a new attempt clears the current board, but retains the last
     // successful time with its original source rather than relabelling it now.
-    await tester.ensureVisible(base.field('review')); await tester.tap(base.field('review')); await tester.pump();
-    await tester.ensureVisible(base.field('connect')); await tester.tap(base.field('connect')); await tester.pump();
+    await reviewManualReconnect(tester,adapter);
     expect(tester.widget<Text>(sync).data,first);
-    adapter.pending.completeError(const RemoteFailure('synthetic_connection')); await tester.pump();
+    adapter.failCurrent(const RemoteFailure('synthetic_connection')); await tester.pump();
     expect(tester.widget<Text>(sync).data,first);
     expect(adapter.calls,2); await tester.pumpWidget(const SizedBox());
   });

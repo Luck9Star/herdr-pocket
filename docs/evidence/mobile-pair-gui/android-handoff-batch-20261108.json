@@ -1,0 +1,534 @@
+{
+  "asOfBeijing": "2026-11-08",
+  "source": "7470d5cc2a9c4b4c5fce0802b6bc7789a8b1e67f",
+  "run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360",
+  "runConclusion": "failure",
+  "jobs": [
+    {
+      "name": "native",
+      "id": 128443720576,
+      "conclusion": "success",
+      "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/job/128443720576"
+    },
+    {
+      "name": "input-fixture / build",
+      "id": 128443720794,
+      "conclusion": "success",
+      "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/job/128443720794"
+    },
+    {
+      "name": "transport-source",
+      "id": 128443720837,
+      "conclusion": "success",
+      "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/job/128443720837"
+    },
+    {
+      "name": "input-host-candidate",
+      "id": 128443721952,
+      "conclusion": "skipped",
+      "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/job/128443721952"
+    },
+    {
+      "name": "input-fixture / release-profile",
+      "id": 128443721959,
+      "conclusion": "skipped",
+      "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/job/128443721959"
+    },
+    {
+      "name": "flutter-source",
+      "id": 128444929656,
+      "conclusion": "failure",
+      "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/job/128444929656"
+    },
+    {
+      "name": "android-pairing / android-device-key",
+      "id": 128444929726,
+      "conclusion": "failure",
+      "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/job/128444929726"
+    },
+    {
+      "name": "android-pairing / flutter-device-key",
+      "id": 128444929769,
+      "conclusion": "failure",
+      "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/job/128444929769"
+    },
+    {
+      "name": "apps (flutter)",
+      "id": 128450252181,
+      "conclusion": "success",
+      "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/job/128450252181"
+    },
+    {
+      "name": "apps (tauri)",
+      "id": 128450252274,
+      "conclusion": "success",
+      "html_url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/job/128450252274"
+    }
+  ],
+  "packages": {
+    "flutter": {
+      "artifact": {
+        "id": 13580043770,
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/artifacts/13580043770",
+        "zipBytes": 151651518,
+        "zipDigest": "sha256:48a5a3d3969ebfcfca1c27b8bb7181dd27cf72522b88047e95023ade2d798889",
+        "expiresUtc": "2026-11-21T15:55:17Z"
+      },
+      "apkSha256": "420ff2077356116b3556e0bb47d104e1ddfec966660d06bd5df8f221b5ef9745",
+      "report": {
+        "sourceCommit": "7470d5cc2a9c4b4c5fce0802b6bc7789a8b1e67f",
+        "app": "flutter",
+        "abi": "arm64-v8a",
+        "api": 35,
+        "sourceChecks": "failure",
+        "transportChecks": "success",
+        "transportChecksScope": "shared Rust isolated SSH and unit checks; not Android runtime or real overlay",
+        "sourceChecksScope": "Flutter analyzer, unit/widget, renderer and isolated SSH GUI checks",
+        "apkSha256": "420ff2077356116b3556e0bb47d104e1ddfec966660d06bd5df8f221b5ef9745",
+        "nativeManifestSha256": "a65ad0bd8dc1bc4e42f28860dc17c8e0d9d8758bae0a1afc2a63d62594399025",
+        "build": "passed",
+        "staticInspection": "passed",
+        "androidLoad": "not run",
+        "installation": "not run",
+        "node": "not run",
+        "terminalCandidateManifestSha256": "c85aeef2d2f9c1ed2f82c98eb664372bcda258422c1a89b8daf32f10117ab940"
+      },
+      "allNativeAbis": [
+        "arm64-v8a"
+      ],
+      "nativeLibraries": {
+        "lib/arm64-v8a/libVkLayer_khronos_validation.so": "ae445f7e74d402e3a367adb230b1edd9841899fcb3310166e5cc96a09ad37a3f",
+        "lib/arm64-v8a/libflutter.so": "5b368215d1ee0dff3ef83f830477185f32d05705663fd028e50e840487617a2f",
+        "lib/arm64-v8a/libheeler_easytier.so": "47a1ecfcbad0f1539710ab9d7aaefb485471cecee7ce7cd2e7fb9b708e7f31b5",
+        "lib/arm64-v8a/libherdr_flutter_network_runtime.so": "5590b7eccfaedcb1795206896bd7762c1da7402f0bd7be1905ecca85359d0a50",
+        "lib/arm64-v8a/libhp_tailscale.so": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+      },
+      "verifiedAgainstSameRunNative": true
+    },
+    "tauri": {
+      "artifact": {
+        "id": 13580602396,
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/artifacts/13580602396",
+        "zipBytes": 163041619,
+        "zipDigest": "sha256:22591ac70726c1344f04593716ef5669e9fae0e8ef21789924d3bc48841c7e9b",
+        "expiresUtc": "2026-11-21T15:57:35Z"
+      },
+      "apkSha256": "1242e94e0c6cb85995016bb4d11eb58faa88172b9196156512a24ad657e3f20d",
+      "report": {
+        "sourceCommit": "7470d5cc2a9c4b4c5fce0802b6bc7789a8b1e67f",
+        "app": "tauri",
+        "abi": "arm64-v8a",
+        "api": 35,
+        "sourceChecks": "success",
+        "transportChecks": "success",
+        "transportChecksScope": "shared Rust isolated SSH and unit checks; not Android runtime or real overlay",
+        "sourceChecksScope": "JavaScript unit tests; Rust target compilation is part of build",
+        "apkSha256": "1242e94e0c6cb85995016bb4d11eb58faa88172b9196156512a24ad657e3f20d",
+        "nativeManifestSha256": "a65ad0bd8dc1bc4e42f28860dc17c8e0d9d8758bae0a1afc2a63d62594399025",
+        "build": "passed",
+        "staticInspection": "passed",
+        "androidLoad": "not run",
+        "installation": "not run",
+        "node": "not run",
+        "tauriJavaScriptNotices": {
+          "assets/xterm-LICENSE": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd",
+          "assets/xterm-addon-unicode-graphemes-LICENSE": "a26afeeba9ab0a19502a73df658d8fb09186d0906c81af6c04d334064971e81f"
+        },
+        "tauriJavaScriptNoticeSources": {
+          "xterm-LICENSE": {
+            "package": "@xterm/xterm",
+            "version": "6.0.0",
+            "license": "MIT",
+            "resolved": "https://mirrors.tencent.com/npm/@xterm/xterm/-/xterm-6.0.0.tgz",
+            "integrity": "sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==",
+            "packageLockSha256": "7c2babe5db5a4b60687f2cdef95d6fa1a196a0c229f4e6a2bd46e469e4bd6d05",
+            "sourceLicenseSha256": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd",
+            "bytes": 1261
+          },
+          "xterm-addon-unicode-graphemes-LICENSE": {
+            "package": "@xterm/addon-unicode-graphemes",
+            "version": "0.4.0",
+            "license": "MIT",
+            "resolved": "https://registry.npmjs.org/@xterm/addon-unicode-graphemes/-/addon-unicode-graphemes-0.4.0.tgz",
+            "integrity": "sha512-9+/CqwbKcnlkJU4d3wIgO+wjsL8f6vyz+UwUWLu6nADQz8Gr8ONqGCJfdDjIdI+yYZLABQqQy47FzEM6AWELjw==",
+            "packageLockSha256": "7c2babe5db5a4b60687f2cdef95d6fa1a196a0c229f4e6a2bd46e469e4bd6d05",
+            "sourceLicenseSha256": "a26afeeba9ab0a19502a73df658d8fb09186d0906c81af6c04d334064971e81f",
+            "bytes": 1103
+          }
+        }
+      },
+      "allNativeAbis": [
+        "arm64-v8a"
+      ],
+      "nativeLibraries": {
+        "lib/arm64-v8a/libheeler_easytier.so": "47a1ecfcbad0f1539710ab9d7aaefb485471cecee7ce7cd2e7fb9b708e7f31b5",
+        "lib/arm64-v8a/libherdr_pocket_tauri_probe_lib.so": "1a6b5bf41aea42c815485cc002f4a80cf18afb66a73800ad4fce00e16d92b826",
+        "lib/arm64-v8a/libhp_tailscale.so": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+      },
+      "verifiedAgainstSameRunNative": true
+    }
+  },
+  "sharedAssetsVerifiedInBothApks": {
+    "fonts/JetBrainsMonoNerdFontMono-Regular.ttf": {
+      "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+      "flutterEntry": "assets/flutter_assets/assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf",
+      "tauriLibrary": "lib/arm64-v8a/libherdr_pocket_tauri_probe_lib.so",
+      "encoding": "rust-brotli-9.1.1-q2",
+      "offset": 1325777,
+      "encodedSha256": "71e0ae795f84c23e8ed6cdbdc2af2b6711cd914e2838125e113f5eabf5f3909e"
+    },
+    "terminal-font-diagnostics-v1.json": {
+      "sha256": "2eea98fc43db6a8d531739da72363241d11683a60e43b27ed12c3f4d887d1749",
+      "flutterEntry": "assets/flutter_assets/assets/shared/terminal-font-diagnostics-v1.json",
+      "tauriLibrary": "lib/arm64-v8a/libherdr_pocket_tauri_probe_lib.so",
+      "encoding": "rust-brotli-9.1.1-q2",
+      "offset": 1087543,
+      "encodedSha256": "d6e9f284aff62ddde393d2aea85c1ce0d2e59b9adc8c73c442e09addc1482302"
+    }
+  },
+  "native": {
+    "artifact": {
+      "id": 13579887420,
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/artifacts/13579887420",
+      "zipBytes": 126167787,
+      "zipDigest": "sha256:ac9fbceb7b0d1a52e6685465eb30a67b7ce147bf558b1f65987c8cf3d871a82a",
+      "expiresUtc": "2026-11-21T15:30:09Z"
+    },
+    "libraries": {
+      "libheeler_easytier.so": "47a1ecfcbad0f1539710ab9d7aaefb485471cecee7ce7cd2e7fb9b708e7f31b5",
+      "libhp_tailscale.so": "6afb7e3bb6ffdcdccbdb9e18b79d1803906789c3547c2975dc70871cbec46b8d"
+    }
+  },
+  "api35X86_64": {
+    "flutter-stock": {
+      "adapter": "flutter",
+      "scenario": "stock",
+      "artifact": {
+        "id": 13581085117,
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/artifacts/13581085117",
+        "zipBytes": 42048,
+        "zipDigest": "sha256:0c8c6e33cbab461adaf861e0cbec045b069147de83cc7560b8b07147bfc15c08",
+        "expiresUtc": "2026-11-21T15:58:16Z"
+      },
+      "result": "passed",
+      "hostApproved": true,
+      "sshdMatchedDeviceKey": true,
+      "helperRevokedFixtureKey": true,
+      "receivedInputBytes": 0,
+      "error": null,
+      "pty": {
+        "columns": 119,
+        "rows": 40,
+        "changes": 0,
+        "samples": 4303,
+        "readErrors": 0,
+        "captureErrors": 0
+      },
+      "hostCleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      },
+      "emulatorStopped": true,
+      "deviceCleanup": {
+        "sourceSHA": "7470d5cc2a9c4b4c5fce0802b6bc7789a8b1e67f",
+        "ownedPackageInitiallyAbsent": true,
+        "ownedPackageAbsent": true,
+        "appProcessGone": true,
+        "reverseRemoved": true,
+        "ownedForwardsRemoved": true,
+        "flutterToolStopped": true,
+        "rawLogsUploaded": false,
+        "status": "passed"
+      },
+      "fixedTestFailure": null,
+      "checks": {
+        "profilePreviewShown": true,
+        "profileFieldsMatched": true,
+        "profileFingerprintMatched": true,
+        "profileTargetUnreviewed": true,
+        "profileCreationActionsBeforeReview": 0,
+        "identityCreationActions": 1,
+        "publicRequestShown": true,
+        "pendingRequestReopened": true,
+        "originalDeviceKeyRevalidated": true,
+        "authorizationReviewed": true,
+        "paneChosen": true,
+        "fullRendered": true,
+        "deltaRendered": true,
+        "stoppedStale": true,
+        "firstSequence": 1,
+        "deltaSequence": 3,
+        "localFontMarkerColumns": [
+          15,
+          15,
+          15,
+          15,
+          15,
+          15,
+          15,
+          15
+        ],
+        "systemKeyboardEvidence": {
+          "checkpoints": [
+            {
+              "source": "Android15-IME-window-and-WindowInsets",
+              "ownedTarget": true,
+              "visible": false,
+              "hidden": true,
+              "windowVisible": false,
+              "decorVisible": false,
+              "inputViewShown": true,
+              "windowInsetsImeVisible": false,
+              "diagnostic": {
+                "formatVersion": 1,
+                "reason": "owned_hidden",
+                "serviceCount": 1,
+                "displayCount": 1,
+                "focusCount": 1,
+                "focusOwner": "owned",
+                "editorBlockCount": 1,
+                "editorPackageCount": 1,
+                "editorOwner": "owned",
+                "imeInsetsCount": 1,
+                "imeInsetsState": "hidden",
+                "visibility": "hidden",
+                "attempts": 2,
+                "expectedVisible": false
+              },
+              "stableSamples": 2,
+              "checkpoint": "keyboard-observe-hidden",
+              "viewInsetBottom": 0,
+              "editorFocused": false,
+              "modeReselected": false
+            }
+          ],
+          "scope": "owned API35 docked IME window and real view insets; automated commits are not IME touch/composition proof",
+          "showWithHardwareKeyboard": true
+        },
+        "localIdentityDeleted": true
+      }
+    },
+    "flutter-guarded": {
+      "adapter": "flutter",
+      "scenario": "guarded",
+      "artifact": {
+        "id": 13581040476,
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/artifacts/13581040476",
+        "zipBytes": 41267,
+        "zipDigest": "sha256:ff5efb8a6a4a3aff995746861d25fa931e360761c97240978b9493c8c05234ba",
+        "expiresUtc": "2026-11-21T15:58:18Z"
+      },
+      "result": "failed",
+      "hostApproved": true,
+      "sshdMatchedDeviceKey": true,
+      "helperRevokedFixtureKey": true,
+      "receivedInputBytes": 1,
+      "error": "flutter_android_cleanup_failed",
+      "pty": {
+        "columns": 119,
+        "rows": 40,
+        "changes": 0,
+        "samples": 1777,
+        "readErrors": 0,
+        "captureErrors": 0
+      },
+      "hostCleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      },
+      "emulatorStopped": true,
+      "deviceCleanup": {
+        "sourceSHA": "7470d5cc2a9c4b4c5fce0802b6bc7789a8b1e67f",
+        "ownedPackageInitiallyAbsent": true,
+        "ownedPackageAbsent": false,
+        "appProcessGone": false,
+        "reverseRemoved": false,
+        "ownedForwardsRemoved": true,
+        "flutterToolStopped": true,
+        "rawLogsUploaded": false,
+        "status": "failed"
+      },
+      "fixedTestFailure": null,
+      "checks": {}
+    },
+    "tauri-stock": {
+      "adapter": "tauri",
+      "scenario": "stock",
+      "artifact": {
+        "id": 13579454256,
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/artifacts/13579454256",
+        "zipBytes": 45447,
+        "zipDigest": "sha256:09305e042b90d97db8d143505de45aebaf70daddcbbb8422e44d1878cba39354",
+        "expiresUtc": "2026-11-21T15:37:05Z"
+      },
+      "result": "passed",
+      "hostApproved": true,
+      "sshdMatchedDeviceKey": true,
+      "helperRevokedFixtureKey": true,
+      "receivedInputBytes": 0,
+      "error": null,
+      "pty": {
+        "columns": 119,
+        "rows": 40,
+        "changes": 0,
+        "samples": 816,
+        "readErrors": 0,
+        "captureErrors": 0
+      },
+      "hostCleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      },
+      "emulatorStopped": true,
+      "completed": {
+        "authorizationReviewed": true,
+        "deltaRendered": true,
+        "directKeyboardCompleted": false,
+        "directReceiptVerified": false,
+        "draftKeyboardCompleted": false,
+        "draftReceiptVerified": false,
+        "draftRestored": false,
+        "fontDiagnosticsCompleted": true,
+        "fullRendered": true,
+        "paneChosen": true,
+        "pasteReviewCompleted": false,
+        "publicProfileReviewed": true,
+        "publicRequestCopyReported": true,
+        "revocationReviewed": true,
+        "stoppedStale": true
+      },
+      "fullAcks": 1,
+      "deltaAcks": 2,
+      "inputReceiptCount": 0,
+      "imeCheckpoints": [
+        "keyboard_observe_hidden"
+      ],
+      "deviceCleanup": {
+        "application": "confirmed",
+        "browser": "confirmed",
+        "forward": "confirmed",
+        "reverse": "confirmed"
+      }
+    },
+    "tauri-guarded": {
+      "adapter": "tauri",
+      "scenario": "guarded",
+      "artifact": {
+        "id": 13579614084,
+        "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/artifacts/13579614084",
+        "zipBytes": 45120,
+        "zipDigest": "sha256:4d40089bec3df781d287fa258b1745c049e06560a120186b97f18e28007a192e",
+        "expiresUtc": "2026-11-21T15:37:07Z"
+      },
+      "result": "failed",
+      "hostApproved": true,
+      "sshdMatchedDeviceKey": true,
+      "helperRevokedFixtureKey": true,
+      "receivedInputBytes": 10,
+      "error": "android_control_missing_pair-accept",
+      "pty": {
+        "columns": 119,
+        "rows": 40,
+        "changes": 0,
+        "samples": 1894,
+        "readErrors": 0,
+        "captureErrors": 0
+      },
+      "hostCleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      },
+      "emulatorStopped": true,
+      "completed": {
+        "authorizationReviewed": true,
+        "deltaRendered": true,
+        "directKeyboardCompleted": true,
+        "directReceiptVerified": true,
+        "draftKeyboardCompleted": true,
+        "draftReceiptVerified": true,
+        "draftRestored": true,
+        "fontDiagnosticsCompleted": true,
+        "fullRendered": true,
+        "paneChosen": true,
+        "pasteReviewCompleted": true,
+        "publicProfileReviewed": true,
+        "publicRequestCopyReported": true,
+        "revocationReviewed": false,
+        "stoppedStale": true
+      },
+      "fullAcks": 1,
+      "deltaAcks": 1,
+      "inputReceiptCount": 2,
+      "imeCheckpoints": [
+        "keyboard_direct_shown",
+        "keyboard_direct_hidden",
+        "keyboard_direct_reopened",
+        "keyboard_draft_shown",
+        "keyboard_draft_back_hidden",
+        "keyboard_draft_back_reopened",
+        "keyboard_draft_hidden"
+      ],
+      "deviceCleanup": {
+        "application": "confirmed",
+        "browser": "confirmed",
+        "forward": "confirmed",
+        "reverse": "confirmed"
+      }
+    }
+  },
+  "flutterSource": {
+    "artifact": {
+      "id": 13580840572,
+      "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/42386109360/artifacts/13580840572",
+      "zipBytes": 160746,
+      "zipDigest": "sha256:535b45f15bb9ee162a33c31ad2fbb7c467cd2bbe24aade86fd84baed6b6ec1c5",
+      "expiresUtc": "2026-11-21T15:50:02Z"
+    },
+    "analyzer": "3 unnecessary imports in test files",
+    "tests": {
+      "passed": 375,
+      "skipped": 1,
+      "failed": 2,
+      "failures": "stock observation font diagnostics and narrow draft preservation font diagnostics each timed out at 10 minutes; reentrant runAsync was recorded"
+    },
+    "combiningRendererPassed": 10
+  },
+  "postBuild": {
+    "keyCleanupSource": "82b499b562f8203b24640e392f926b58a285e560",
+    "evidenceSource": "2789f9d89b86268f3c9c8094a2e2bb2ef9ebd1ae",
+    "tauriLibraryTestsPassed": 59,
+    "tauriNodeTestsPassed": 382,
+    "rustTestsSpecificToPendingKeyCleanup": 8,
+    "appleSystemKeychainCallsInMemoryProbe": 0,
+    "sharedHarnessTestsPassed": 52,
+    "flutterAndroidDriverTestsPassed": 68,
+    "tauriOneSecondReceiptClockCounterexample": true,
+    "tauriGuardedDeviceCauseConfirmed": false,
+    "fontTiming": {
+      "dart": "3.11.0",
+      "fake_async": "1.3.3",
+      "flutterEngineExecuted": false,
+      "originalDeadlockAndReentrantCascadeReproduced": true,
+      "retiredTestCompletedCachedFutureDeadlockReproduced": true,
+      "setUpAllWarmPlusPumpOnlyCounterexample": true,
+      "prewarmedPlusFreshRealBarrierPassed": 200,
+      "prewarmedAssetLoadCount": 1,
+      "coldBarrierAloneRejected": true
+    },
+    "cloudOrDeviceRevalidationAfterFix": false
+  },
+  "unverified": [
+    "arm64 phone installation and rendering, physical camera QR and Chinese IME",
+    "iOS signing and installation",
+    "real overlay nodes and concurrent routes across three providers",
+    "guarded Flutter primary failure and final Tauri mobile revocation in the guarded scenario"
+  ]
+}

@@ -21,6 +21,7 @@ const guardedInput = bool.fromEnvironment('POCKET_GUARDED_INPUT');
 // Set only by the isolated runner after its single API35 AVD/fresh-package
 // checks. This test never reads or saves a pre-existing clipboard value.
 const syntheticClipboardEnabled = bool.fromEnvironment('HERDR_ANDROID_API35_CLIPBOARD_FIXTURE');
+const systemKeyboardEnabled = bool.fromEnvironment('HERDR_ANDROID_API35_KEYBOARD_FIXTURE');
 
 /// Only public fixture target/request/response and typed evidence cross these
 /// files. No injected DeviceKeys, catalog, adapter, frame or MethodChannel mock.
@@ -121,6 +122,28 @@ Future<void> clipboardCheckpoint(WidgetTester tester,Directory exchange,String l
   await until(tester,() => ack.existsSync() && ack.readAsStringSync() == jsonEncode({'checkpoint':label}));
 }
 
+Future<void> keyboardCheckpoint(WidgetTester tester,Directory exchange,String label,{bool modeReselected=false,FocusNode? editorFocus}) async {
+  expect(systemKeyboardEnabled,isTrue);
+  // The pinned IntegrationTestWidgetsFlutterBinding does not register a fake
+  // text-input handler. Refuse one installed later as well; isVisible on that
+  // stub would only describe TextInput.show requests, not a system IME window.
+  expect(tester.testTextInput.isRegistered,isFalse);
+  final shown = label.endsWith('-shown') || label.endsWith('-reopened') || label.endsWith('-request');
+  // These are the real embedding's view insets; no test metric override is
+  // installed. The host separately checks the actual InputMethodService
+  // window on the owned AVD and the remote receiver before acknowledging.
+  await until(tester,() => shown ? tester.view.viewInsets.bottom > 0 : tester.view.viewInsets.bottom == 0,seconds:12);
+  final draft = find.byKey(const ValueKey('remote-input-draft'));
+  final focused = editorFocus?.hasFocus ?? (label.startsWith('keyboard-draft-')
+    ? tester.widget<TextField>(draft).focusNode?.hasFocus == true
+    : tester.widget<TerminalView>(find.byType(TerminalView)).focusNode?.hasFocus == true);
+  publish(exchange,'checkpoint.json',jsonEncode({'checkpoint':label,
+    'viewInsetBottom':tester.view.viewInsets.bottom.round(),
+    'editorFocused':focused,'modeReselected':modeReselected}));
+  final ack = File('${exchange.path}/checkpoint-ack.json');
+  await until(tester,() => ack.existsSync() && ack.readAsStringSync() == jsonEncode({'checkpoint':label}));
+}
+
 Map<String,Object> boundedFailure(Object error,StackTrace stack,String stage) {
   const classes = {'TestFailure','StateError','RemoteFailure','FormatException','TimeoutException'};
   final name = error.runtimeType.toString();
@@ -180,6 +203,7 @@ void main() {
     Directory? failureDirectory;
     var currentStage = 'fixture_validation';
     try {
+    expect(tester.testTextInput.isRegistered,isFalse);
     final target = checkedTarget();
     final exchange = Directory(publicDirectory);
     if (exchange.existsSync()) throw StateError('android_public_exchange_already_exists');
@@ -339,6 +363,20 @@ void main() {
       await tap(tester,terminalView);
       await until(tester,() => tester.widget<TerminalView>(terminalView).focusNode!.hasFocus &&
         tester.state<TerminalViewState>(terminalView).hasInputConnection);
+      if (systemKeyboardEnabled) {
+        await tapKey(tester,'remote-keyboard-show');
+        stage('keyboard_direct_shown');
+        await keyboardCheckpoint(tester,exchange,'keyboard-direct-shown');
+        await tapKey(tester,'remote-keyboard-hide');
+        stage('keyboard_direct_hidden');
+        await keyboardCheckpoint(tester,exchange,'keyboard-direct-hidden');
+        expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+        await tapKey(tester,'remote-mode-direct');
+        await tapKey(tester,'remote-keyboard-show');
+        stage('keyboard_direct_reopened');
+        await keyboardCheckpoint(tester,exchange,'keyboard-direct-reopened');
+        expect(tester.widget<TerminalView>(terminalView).autoResize,isFalse);
+      }
       // Submit a committed character through TerminalView's normal TextInput
       // path. A hardware key event alone need not generate printable text on
       // Android. The fixed integration binding does not register a fake IME;
@@ -362,6 +400,38 @@ void main() {
       final draftControl = find.byKey(const ValueKey('remote-input-draft'));
       await tester.ensureVisible(draftControl); await tester.enterText(draftControl,'Pocket');
       await tester.pump();
+      if (systemKeyboardEnabled) {
+        final preservedDraft = tester.widget<TextField>(draftControl).controller!;
+        final draftEditorFocus = tester.widget<TextField>(draftControl).focusNode!;
+        await tapKey(tester,'remote-keyboard-show');
+        stage('keyboard_draft_shown');
+        await keyboardCheckpoint(tester,exchange,'keyboard-draft-shown',editorFocus:draftEditorFocus);
+        stage('keyboard_draft_back_request');
+        // The host verifies the real owned IME window again, issues exactly
+        // one Android KEYCODE_BACK, verifies hiding, and only then ACKs.
+        await keyboardCheckpoint(tester,exchange,'keyboard-draft-back-request',editorFocus:draftEditorFocus);
+        stage('keyboard_draft_back_hidden');
+        await keyboardCheckpoint(tester,exchange,'keyboard-draft-back-hidden',editorFocus:draftEditorFocus);
+        expect(preservedDraft.text,'Pocket');
+        expect(visibleReceipt(tester,target['paneId'] as String,1),inputReceipts.first);
+        final show = find.byKey(const ValueKey('remote-keyboard-show'));
+        final reselected = tester.widget<ButtonStyleButton>(show).onPressed == null ||
+          !tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-draft'))).selected;
+        if (reselected) await tapKey(tester,'remote-mode-draft');
+        await tapKey(tester,'remote-keyboard-show');
+        stage('keyboard_draft_back_reopened');
+        await keyboardCheckpoint(tester,exchange,'keyboard-draft-back-reopened',modeReselected:reselected,editorFocus:draftEditorFocus);
+        expect(tester.widget<TextField>(draftControl).controller!.text,'Pocket');
+        await tapKey(tester,'remote-keyboard-hide');
+        stage('keyboard_draft_hidden');
+        await keyboardCheckpoint(tester,exchange,'keyboard-draft-hidden',editorFocus:draftEditorFocus);
+        expect(preservedDraft.text,'Pocket');
+        expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
+        expect(visibleReceipt(tester,target['paneId'] as String,1),inputReceipts.first);
+        expect(tester.widget<TerminalView>(terminalView).autoResize,isFalse);
+        await tapKey(tester,'remote-mode-draft');
+        expect(tester.widget<TextField>(draftControl).controller!.text,'Pocket');
+      }
       await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
       stage('guarded_clipboard_fixture');
       // Fixed synthetic data on the runner-owned disposable AVD only. Never
@@ -434,6 +504,13 @@ void main() {
     } else {
       expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
       expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-draft'))).onSelected,isNull);
+      if (systemKeyboardEnabled) {
+        for (final key in ['remote-keyboard-show','remote-keyboard-hide']) {
+          expect(tester.widget<ButtonStyleButton>(find.byKey(ValueKey(key))).onPressed,isNull);
+        }
+        stage('keyboard_observe_hidden');
+        await keyboardCheckpoint(tester,exchange,'keyboard-observe-hidden');
+      }
     }
     expect(tester.takeException(),isNull);
     stage('stop');

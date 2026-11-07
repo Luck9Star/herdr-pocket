@@ -47,6 +47,11 @@ def device_report(**changes):
     return value
 
 
+def checkpoint_payload(label):
+    return {'checkpoint': label, **({'viewInsetBottom': 300 if label.endswith(('-shown', '-reopened', '-request')) else 0,
+        'editorFocused': True, 'modeReselected': False} if label not in gui.CLIPBOARD_CHECKPOINTS else {})}
+
+
 class PreparedFixture(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -520,6 +525,7 @@ class CleanupGuards(PreparedFixture):
             self.assertEqual(command[command.index('-d') + 1], gui.SERIAL)
             defines = json.loads((self.fixture_root / 'flutter-android-public-defines.json').read_text())
             self.assertEqual(defines['HERDR_ANDROID_API35_CLIPBOARD_FIXTURE'], 'true' if guarded else 'false')
+            self.assertEqual(defines['HERDR_ANDROID_API35_KEYBOARD_FIXTURE'], 'true')
             state['installed'] = True; forwards.add(owned)
             yield Process()
         def adb(*parts, **kwargs):
@@ -539,6 +545,7 @@ class CleanupGuards(PreparedFixture):
             if parts[-1:] == ('ro.kernel.qemu',): return '1'
             if parts[-1:] == ('ro.build.version.sdk',): return '35'
             if parts[-1:] == ('get-current-user',): return '0'
+            if parts == ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'): return '1'
             if parts == ('reverse', '--list'):
                 return gui.SERIAL + ' tcp:2222 tcp:2222' if state['reverse'] else ''
             return ''
@@ -554,9 +561,11 @@ class CleanupGuards(PreparedFixture):
         public = iter((b'{"public":"signer"}', b'{"public":"request"}', json.dumps(report).encode()))
         def wait_public(*args, checkpoints=None, **kwargs):
             if checkpoints is not None:
+                payloads = [checkpoint_payload(label) for label in checkpoints.expected]
                 with patch.object(gui, 'read_public', side_effect=[
-                        json.dumps({'checkpoint': label}).encode() for label in gui.CLIPBOARD_CHECKPOINTS]):
-                    checkpoints.poll(); checkpoints.poll()
+                        json.dumps(value).encode() for value in payloads]), \
+                        patch.object(gui, 'wait_system_ime', side_effect=lambda _read, _package, visible: {'visible': visible, 'ownedTarget': True}):
+                    for _ in payloads: checkpoints.poll()
             return next(public)
         with patch.object(gui, 'adb', side_effect=adb), patch.object(gui, 'text', side_effect=text), \
                 patch.object(gui, 'package_present', side_effect=lambda: state['installed']), \
@@ -810,7 +819,7 @@ class ClipboardCheckpointGuards(unittest.TestCase):
                 self.assertEqual(state.completed, [])
                 if bad == 'receiver': adb.assert_not_called()
 
-    def test_stock_wait_never_reads_checkpoints_and_guarded_result_cannot_bypass_them(self):
+    def test_legacy_wait_can_omit_checkpoints_but_explicit_new_checks_cannot_be_bypassed(self):
         proc = Mock(); proc.poll.return_value = None
         with patch.object(gui, 'package_present', return_value=True), \
                 patch.object(gui, 'read_public', return_value=b'{}') as read:
@@ -834,6 +843,106 @@ class ClipboardCheckpointGuards(unittest.TestCase):
                 with self.assertRaisesRegex(gui.DeviceFailure, '^bounded_failure$'):
                     gui.wait_public(proc, self.relative, 'result.json', 8192, timeout=1, checkpoints=state)
                 state.approval.verify_ssh.assert_not_called(); adb.assert_not_called()
+
+
+class SystemKeyboardGuards(unittest.TestCase):
+    @staticmethod
+    def dumps(*, window=True, decor=True, input_view=True, package=gui.PACKAGE, editor=None):
+        editor = package if editor is None else editor
+        method = ('Current Input Method Manager state:\n  mInputShown=true\n'
+            '  mStartInputHistory: PRIVATE_HISTORY\n'
+            'Input method service state for synthetic-ime:\n'
+            f'  mWindowVisible={str(window).lower()} mDecorViewVisible={str(decor).lower()}\n'
+            f'  mIsInputViewShown={str(input_view).lower()}\n'
+            f'  mInputEditorInfo:\n    packageName={editor}\n')
+        windows = (f'WINDOW MANAGER DISPLAY CONTENTS\n  mCurrentFocus=Window{{abc u0 {package}/.MainActivity}}\n'
+            f'  InsetsSource id=3 type=ime frame=[0,900][500,1000] visible={str(window and decor and input_view).lower()} flags= sideHint=BOTTOM\n')
+        return method, windows
+
+    def test_actual_window_flags_are_required_focus_or_show_request_never_proves_visible(self):
+        shown = gui.parse_system_ime(*self.dumps(), gui.PACKAGE)
+        self.assertTrue(shown['visible']); self.assertFalse(shown['hidden'])
+        hidden = gui.parse_system_ime(*self.dumps(window=False, decor=False), gui.PACKAGE)
+        self.assertFalse(hidden['visible']); self.assertTrue(hidden['hidden'])
+        # InputViewShown may be retained after hiding; actual window flags win.
+        self.assertTrue(hidden['inputViewShown'])
+        transient = gui.parse_system_ime(*self.dumps(window=True, decor=False), gui.PACKAGE)
+        self.assertFalse(transient['visible']); self.assertFalse(transient['hidden'])
+        self.assertNotIn('PRIVATE', json.dumps(shown))
+
+    def test_missing_duplicate_historical_or_foreign_state_is_not_accepted(self):
+        method, windows = self.dumps()
+        invalid = [(method.replace('mWindowVisible=true', 'requestShow=true'), windows),
+            (method + ' mWindowVisible=false', windows), (method + method, windows),
+            (method, windows + windows), (method, windows.replace(gui.PACKAGE, 'other.application')),
+            (method, windows.replace('type=ime', 'type=navigationBars')),
+            (method.replace('packageName=' + gui.PACKAGE, 'packageName=other.application'), windows),
+            ('mInputShown=true mShowRequested=true', windows)]
+        for raw, focus in invalid:
+            with self.subTest(raw=raw[:35]), self.assertRaises(gui.DeviceFailure):
+                gui.parse_system_ime(raw, focus, gui.PACKAGE)
+
+    def test_wait_requires_two_actual_stable_samples_and_propagates_read_failure(self):
+        read = Mock(side_effect=[self.dumps(window=False, decor=False), self.dumps(), self.dumps()])
+        with patch.object(gui.time, 'sleep'):
+            result = gui.wait_system_ime(read, gui.PACKAGE, True)
+        self.assertEqual(result['stableSamples'], 2); self.assertEqual(read.call_count, 3)
+        with patch.object(gui.time, 'monotonic', side_effect=[0, 0, 1, 13]), patch.object(gui.time, 'sleep'):
+            with self.assertRaisesRegex(gui.DeviceFailure, '^android_system_ime_show_unconfirmed$'):
+                gui.wait_system_ime(lambda: self.dumps(window=False, decor=False), gui.PACKAGE, True)
+        with self.assertRaisesRegex(gui.DeviceFailure, '^bounded_adb_failure$'):
+            gui.wait_system_ime(Mock(side_effect=gui.DeviceFailure('bounded_adb_failure')), gui.PACKAGE, True)
+
+    def test_keyboard_checkpoint_shape_insets_system_and_receiver_are_all_required(self):
+        relative = 'cache/herdr-flutter-android-123'
+        for label in (*gui.KEYBOARD_CHECKPOINTS, gui.KEYBOARD_OBSERVE_CHECKPOINT):
+            value = checkpoint_payload(label)
+            raw = json.dumps(value).encode()
+            self.assertLessEqual(len(raw), gui.PUBLIC_LIMITS['checkpoint.json'])
+            self.assertEqual(gui.checked_public_payload(raw, 'checkpoint.json'), raw)
+            for change in ({'viewInsetBottom': True}, {'viewInsetBottom': -1}, {'privateText': 'PRIVATE'}):
+                with self.assertRaises(gui.DeviceFailure):
+                    gui.checked_public_payload(json.dumps(dict(value, **change)).encode(), 'checkpoint.json')
+        state = gui.ClipboardCheckpoints(relative, Mock(), keyboard=True, guarded=True)
+        payloads = [checkpoint_payload(label) for label in state.expected]
+        with patch.object(gui, 'read_public', side_effect=[json.dumps(x).encode() for x in payloads]), \
+                patch.object(gui, 'wait_system_ime', side_effect=lambda _read, _package, visible: {'visible': visible, 'ownedTarget': True}) as system, \
+                patch.object(gui, 'adb'):
+            for _ in payloads: state.poll()
+            state.require_complete()
+        self.assertEqual(system.call_count, len(gui.KEYBOARD_CHECKPOINTS) + 1)
+        self.assertEqual([c.args for c in state.approval.verify_ssh.call_args_list], [(b'',)] * 3 + [(b'k',)] * (len(state.expected) - 3))
+        self.assertEqual(len(state.keyboard_evidence), len(gui.KEYBOARD_CHECKPOINTS))
+        state = gui.ClipboardCheckpoints(relative, Mock(), keyboard=True, guarded=False)
+        payload = dict(checkpoint_payload(gui.KEYBOARD_OBSERVE_CHECKPOINT), viewInsetBottom=1)
+        with patch.object(gui, 'read_public', return_value=json.dumps(payload).encode()), \
+                patch.object(gui, 'wait_system_ime') as system, patch.object(gui, 'adb') as adb:
+            with self.assertRaisesRegex(gui.DeviceFailure, 'keyboard_insets_mismatch'): state.poll()
+            system.assert_not_called(); adb.assert_not_called(); state.approval.verify_ssh.assert_not_called()
+
+    def test_system_back_is_once_only_after_owned_visible_window_and_not_replayed_after_failure(self):
+        relative = 'cache/herdr-flutter-android-123'
+        label = 'keyboard-draft-back-request'
+        payload = json.dumps(checkpoint_payload(label)).encode()
+        before = list(gui.KEYBOARD_CHECKPOINTS[:gui.KEYBOARD_CHECKPOINTS.index(label)])
+        for failure in (None, 'not-owned', 'hide-unconfirmed'):
+            state = gui.ClipboardCheckpoints(relative, Mock(), keyboard=True)
+            state.completed = before.copy()
+            samples = [{'visible': True, 'ownedTarget': failure != 'not-owned'},
+                gui.DeviceFailure('android_system_ime_hide_unconfirmed') if failure == 'hide-unconfirmed' else {'visible': False, 'ownedTarget': True}]
+            with patch.object(gui, 'read_public', return_value=payload), \
+                    patch.object(gui, 'wait_system_ime', side_effect=samples), patch.object(gui, 'adb') as adb:
+                if failure:
+                    with self.assertRaises(gui.DeviceFailure): state.poll()
+                    self.assertEqual(state.completed, before)
+                else:
+                    state.poll(); state.poll()  # Atomic request can remain; never send Back twice.
+                    self.assertTrue(state.keyboard_evidence[-1]['systemBackSent'])
+                    state.approval.verify_ssh.assert_called_once_with(b'k')
+                back = [c for c in adb.call_args_list if c.args == ('shell', 'input', 'keyevent', 'KEYCODE_BACK')]
+                self.assertEqual(len(back), 0 if failure == 'not-owned' else 1)
+                if failure:
+                    self.assertEqual(len(adb.call_args_list), len(back))  # No ACK on unconfirmed hide.
 
 
 if __name__ == '__main__':

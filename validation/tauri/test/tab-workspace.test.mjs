@@ -5,12 +5,13 @@ const fixture=JSON.parse(readFileSync(new URL('../../shared/mobile-tabs-v1.json'
 const target=id=>fixture.targets.find(t=>t.id===id);
 import {initTabWorkspace} from '../src/tab-workspace.js';
 class Element {
-  constructor(tag){this.tagName=tag;this.children=[];this.attrs={};this.dataset={};this.value='';this.disabled=false;this.hidden=false;this.textContent='';}
+  constructor(tag){this.isConnected=true;this.tagName=tag;this.children=[];this.attrs={};this.dataset={};this.value='';this.disabled=false;this.hidden=false;this.textContent='';}
   append(...xs){for(const x of xs)this.children.push(x);}
   replaceChildren(...xs){this.replaceCount=(this.replaceCount || 0)+1;this.children=[];this.append(...xs);}
   setAttribute(k,v){this.attrs[k]=v;}
   addEventListener(name,fn){this['event_'+name]=fn;}
   focus(){globalThis.document.activeElement=this;}
+  blur(){if(globalThis.document.activeElement===this){globalThis.document.activeElement=null;this.event_blur?.({relatedTarget:null});}}
   contains(node){return node===this || this.all().includes(node);}
   all(){return this.children.flatMap(x=>[x,...x.all()]);}
 }
@@ -231,7 +232,7 @@ for (const edited of ['new draft', '']) test(`MT08: same-epoch edit ${edited ? '
 function watchWorkspace(fixedTarget=null,options={}) {
   const oldDocument=globalThis.document,oldWindow=globalThis.window;
   const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
-  globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+  globalThis.document={hidden:false,hasFocus:()=>true,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
   globalThis.window={confirm:()=>true};const calls=[],channels=[],observed=[];let terminal;
   const invoke=(name,args)=>{
     calls.push({name,args});
@@ -245,7 +246,7 @@ function watchWorkspace(fixedTarget=null,options={}) {
     if(name==='remote_tab_input_send' && options.send)return options.send(args);
     return Promise.resolve();
   };
-  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device'}),onDashboard:options.onDashboard,clipboardRead:options.clipboardRead,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>{
+  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device'}),onDashboard:options.onDashboard,clipboardRead:options.clipboardRead,keyboardRequest:options.keyboardRequest,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>{
     terminal={
       options:{},focusReadOnly:[],parser:{registerOscHandler(){}},textarea:new Element('textarea'),
       open(){},write(_b,done){done();},reset(){},dispose(){},
@@ -484,6 +485,54 @@ const acceptedInput = args => Promise.resolve({
     requestId: 'a'.repeat(32), paneId: 'w1:p1', terminalId: 'term_a001',
     acceptedBytes: args.bytes.length,
   },
+});
+
+test('saved tab keyboard controls revoke direct and draft leases, stale controls cannot send',async()=>{
+  const previous=Object.getOwnPropertyDescriptor(globalThis,'navigator'),keys=[];
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{virtualKeyboard:{show:()=>keys.push('show'),hide:()=>keys.push('hide')}}});
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{send:acceptedInput});
+  try {
+    await readyKeyboard(h);const term=h.terminal();
+    const readonly=h.find('展开键盘');assert.equal(readonly.disabled,true);readonly.onclick();
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_mode').length,0);
+    h.find('逐键输入').onclick();await flush();await flush();
+    const show=h.find('展开键盘'),hide=h.find('收起键盘');assert.equal(show.disabled,false);show.onclick();assert.deepEqual(keys,['show']);
+    term.textarea.event_compositionstart();assert.equal(show.disabled,true);hide.onclick();
+    term.textarea.event_compositionend();term.data('迟到');await flush();
+    assert.deepEqual(keys,['show','hide']);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
+    assert.ok(h.calls.some(c=>c.name==='remote_tab_input_mode' && c.args.mode==='observe'));
+    h.find('启用草稿输入').onclick();await flush();await flush();
+    const draft=h.all().find(n=>n.attrs['aria-label']==='当前标签草稿');
+    h.find('展开键盘').onclick();assert.equal(document.activeElement,draft);
+    draft.value='草稿';draft.oninput();draft.event_compositionstart();h.find('发送草稿').onclick();
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
+    h.find('收起键盘').onclick();draft.event_compositionend();await flush();
+    const other=h.ui.create('other',{paneId:'w2:p1',terminalId:'term_a002'});await h.ui.select(other);show.onclick();hide.onclick();
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
+    assert.equal(h.calls.filter(c=>c.name.includes('resize')).length,0);
+  } finally {h.restore();if(previous)Object.defineProperty(globalThis,'navigator',previous);else delete globalThis.navigator;}
+});
+
+test('saved tab queued keyboard requests reject old lease and switched target',async()=>{
+  const requests=[],h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{keyboardRequest:(action,editor,current)=>requests.push({action,editor,current})});
+  try{
+    await readyKeyboard(h);h.find('逐键输入').onclick();await flush();await flush();
+    h.find('展开键盘').onclick();assert.equal(requests[0].current(),true);
+    h.find('收起键盘').onclick();assert.equal(requests[0].current(),false);assert.equal(requests[1].current(),true);
+    h.find('启用草稿输入').onclick();await flush();await flush();h.find('展开键盘').onclick();assert.equal(requests[1].current(),false);
+    assert.equal(requests.at(-1).current(),true);const other=h.ui.create('other',{paneId:'w2:p1',terminalId:'term_a002'});await h.ui.select(other);
+    assert.equal(requests.at(-1).current(),false);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send'||c.name.includes('resize')).length,0);
+  }finally{h.restore();}
+});
+
+test('saved tab hide during pending direct permission invalidates its late grant',async()=>{
+  let grant;const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{mode:args=>args.mode==='direct'?new Promise(r=>grant=r):Promise.resolve(5),keyboardRequest:()=>{}});
+  try{
+    await readyKeyboard(h);h.find('逐键输入').onclick();await flush();
+    assert.equal(h.find('收起键盘').disabled,false);h.find('收起键盘').onclick();grant(7);await flush();await flush();
+    h.terminal().data('迟到');assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
+    assert.equal(h.terminal().textarea.readOnly,true);assert.equal(h.find('展开键盘').disabled,true);
+  }finally{h.restore();}
 });
 
 test('mobile direct gesture focuses an editable terminal but sends nothing before native permission', async () => {

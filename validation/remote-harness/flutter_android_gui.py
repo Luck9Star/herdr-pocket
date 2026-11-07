@@ -45,6 +45,11 @@ CLIPBOARD_FIELDS = ('syntheticClipboardSet', 'pasteReviewCancelled', 'pasteCance
                     'pasteReceiptUnchanged', 'pasteKeptFixedSize')
 CLIPBOARD_COUNTS = {'clipboardFixtureBytes': 3, 'pasteOriginalDraftBytes': 6, 'pasteMergedDraftBytes': 9}
 CLIPBOARD_CHECKPOINTS = ('paste-cancel-preserved', 'paste-local-append')
+KEYBOARD_CHECKPOINTS = ('keyboard-direct-shown', 'keyboard-direct-hidden',
+    'keyboard-direct-reopened', 'keyboard-draft-shown', 'keyboard-draft-back-request',
+    'keyboard-draft-back-hidden', 'keyboard-draft-back-reopened', 'keyboard-draft-hidden')
+KEYBOARD_OBSERVE_CHECKPOINT = 'keyboard-observe-hidden'
+STAGES.update(label.replace('-', '_') for label in (*KEYBOARD_CHECKPOINTS, KEYBOARD_OBSERVE_CHECKPOINT))
 GUARDED_FIELDS = ('guardedInput', 'directInputAccepted', 'draftInputAccepted', 'hiddenTabStopped',
                   'hiddenTabManualRecovery', 'unsentDraftRestored', 'postStopInputDisabled') + CLIPBOARD_FIELDS
 PUBLIC_LIMITS = {'request.json': 2048, 'result.json': 8192, 'signer.json': 1024, 'stage': 40,
@@ -56,6 +61,64 @@ REQUEST_FIELDS = {'version', 'type', 'request_id', 'account', 'host_key',
 
 class DeviceFailure(ValueError):
     """Only static phase codes may leave this module."""
+
+
+def parse_system_ime(raw, window_dump, package):
+    """Android 15 InputMethodService's current window, never focus/show requests.
+
+    Pinned AOSP android-15.0.0_r1: DisplayContent.dump and
+    InputMethodService.dump. The IME manager's focused token is only a Binder;
+    WindowManager supplies the actual app identity. Ambiguous formats cannot prove
+    visibility. Raw dumps can contain editor text and never leave this process.
+    """
+    if (package not in (PACKAGE, 'dev.herdrpocket.tauriprobe') or
+            not isinstance(raw, str) or not isinstance(window_dump, str) or
+            max(len(raw.encode('utf-8')), len(window_dump.encode('utf-8'))) > 1_048_576 or
+            raw.count('Input method service state for ') != 1):
+        raise DeviceFailure('android_system_ime_evidence_unavailable')
+    _, service = raw.split('Input method service state for ', 1)
+    windows = re.findall(r'^\s*mCurrentFocus=(.+)$', window_dump, re.M)
+    if (len(windows) != 1 or
+            not re.search(r'\bu0 ' + re.escape(package) + r'/[^\s}]+', windows[0])):
+        raise DeviceFailure('android_system_ime_target_mismatch')
+    inset_flags = re.findall(r'^\s*InsetsSource id=[0-9a-fA-F]+ type=ime\b[^\n]*\bvisible=(true|false)\b', window_dump, re.M)
+    if not inset_flags or len(set(inset_flags)) != 1:
+        raise DeviceFailure('android_system_ime_evidence_unavailable')
+    inset_visible = inset_flags[0] == 'true'
+    values = {}
+    for key in ('mWindowVisible', 'mDecorViewVisible', 'mIsInputViewShown'):
+        found = re.findall(r'\b' + key + r'=(true|false)\b', service)
+        if len(found) != 1:
+            raise DeviceFailure('android_system_ime_evidence_unavailable')
+        values[key] = found[0] == 'true'
+    editors = re.findall(r'\bpackageName=([A-Za-z0-9_.]+)\b', service)
+    if len(editors) > 1 or (editors and editors[0] != package):
+        raise DeviceFailure('android_system_ime_target_mismatch')
+    visible = all(values.values()) and inset_visible
+    hidden = not values['mWindowVisible'] and not values['mDecorViewVisible'] and not inset_visible
+    if visible and editors != [package]:
+        raise DeviceFailure('android_system_ime_target_mismatch')
+    return {'source': 'Android15-IME-window-and-WindowInsets', 'ownedTarget': True,
+        'visible': visible, 'hidden': hidden, 'windowVisible': values['mWindowVisible'],
+        'decorVisible': values['mDecorViewVisible'], 'inputViewShown': values['mIsInputViewShown'],
+        'windowInsetsImeVisible': inset_visible}
+
+
+def wait_system_ime(read_dump, package, visible, timeout=12):
+    if type(visible) is not bool:
+        raise DeviceFailure('android_system_ime_expected_state_invalid')
+    deadline = time.monotonic() + timeout
+    stable = 0
+    while time.monotonic() < deadline:
+        dumps = read_dump()
+        if not isinstance(dumps, tuple) or len(dumps) != 2:
+            raise DeviceFailure('android_system_ime_evidence_unavailable')
+        sample = parse_system_ime(*dumps, package)
+        stable = stable + 1 if sample['visible' if visible else 'hidden'] else 0
+        if stable >= 2:
+            return {**sample, 'stableSamples': stable}
+        time.sleep(0.15)
+    raise DeviceFailure('android_system_ime_' + ('show' if visible else 'hide') + '_unconfirmed')
 
 
 def safe_test_failure(value):
@@ -279,8 +342,14 @@ def checked_public_payload(raw, name):
     elif name == 'failure.json':
         safe_test_failure(value)
     elif name == 'checkpoint.json':
-        if (not isinstance(value, dict) or set(value) != {'checkpoint'} or
-                value['checkpoint'] not in CLIPBOARD_CHECKPOINTS):
+        if not isinstance(value, dict) or value.get('checkpoint') not in (*CLIPBOARD_CHECKPOINTS, *KEYBOARD_CHECKPOINTS, KEYBOARD_OBSERVE_CHECKPOINT):
+            raise DeviceFailure(invalid)
+        keyboard = value['checkpoint'] not in CLIPBOARD_CHECKPOINTS
+        if set(value) != ({'checkpoint', 'viewInsetBottom', 'editorFocused', 'modeReselected'} if keyboard else {'checkpoint'}):
+            raise DeviceFailure(invalid)
+        if keyboard and (type(value['viewInsetBottom']) is not int or not 0 <= value['viewInsetBottom'] <= 16384):
+            raise DeviceFailure(invalid)
+        if keyboard and any(type(value[name]) is not bool for name in ('editorFocused', 'modeReselected')):
             raise DeviceFailure(invalid)
     return raw
 
@@ -321,22 +390,50 @@ def failure_stage(relative_directory, fallback):
 
 
 class ClipboardCheckpoints:
-    """Host receiver verification before acknowledging each local-only action."""
-    def __init__(self, relative_directory, approval):
+    """Host IME/receiver verification before acknowledging local-only actions.
+
+    The default preserves the historical two-clipboard-checkpoint reader.
+    New cloud runs explicitly require the additional system-keyboard evidence.
+    """
+    def __init__(self, relative_directory, approval, *, keyboard=False, guarded=True):
         self.relative = relative_directory
         self.approval = approval
         self.completed = []
+        self.expected = ((KEYBOARD_CHECKPOINTS + CLIPBOARD_CHECKPOINTS if guarded else
+                          (KEYBOARD_OBSERVE_CHECKPOINT,)) if keyboard else CLIPBOARD_CHECKPOINTS)
+        self.keyboard_evidence = []
 
     def poll(self):
         raw = read_public(self.relative + '/checkpoint.json', PUBLIC_LIMITS['checkpoint.json'])
         if raw is None:
             return
-        label = json.loads(raw)['checkpoint']
+        value = json.loads(raw)
+        label = value['checkpoint']
         if self.completed and label == self.completed[-1]:
             return  # The same atomic request may remain visible while Dart resumes.
-        if len(self.completed) >= len(CLIPBOARD_CHECKPOINTS) or label != CLIPBOARD_CHECKPOINTS[len(self.completed)]:
+        if len(self.completed) >= len(self.expected) or label != self.expected[len(self.completed)]:
             raise DeviceFailure('flutter_android_clipboard_checkpoint_order_invalid')
-        self.approval.verify_ssh(b'k')
+        system = None
+        if label not in CLIPBOARD_CHECKPOINTS:
+            visible = label.endswith(('-shown', '-reopened', '-request'))
+            inset = value.get('viewInsetBottom')
+            if type(inset) is not int or not 0 <= inset <= 16384 or (inset > 0) != visible:
+                raise DeviceFailure('flutter_android_keyboard_insets_mismatch')
+            system = wait_system_ime(lambda: (text('shell', 'dumpsys', 'input_method'),
+                text('shell', 'dumpsys', 'window', 'displays')), PACKAGE, visible)
+            system = {**system, 'checkpoint': label, 'viewInsetBottom': inset,
+                'editorFocused': value['editorFocused'], 'modeReselected': value['modeReselected']}
+            if label == 'keyboard-draft-back-request':
+                if system.get('visible') is not True or system.get('ownedTarget') is not True:
+                    raise DeviceFailure('android_system_back_requires_visible_owned_ime')
+                # No repeated Back even if hiding/acknowledgement fails. The
+                # first failure propagates into owned process/app cleanup.
+                adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+                after = wait_system_ime(lambda: (text('shell', 'dumpsys', 'input_method'),
+                    text('shell', 'dumpsys', 'window', 'displays')), PACKAGE, False)
+                system = {**system, 'systemBackSent': True, 'afterSystemBack': after}
+        expected = b'' if label.startswith('keyboard-direct-') or label == KEYBOARD_OBSERVE_CHECKPOINT else b'k'
+        self.approval.verify_ssh(expected)
         # Do not acknowledge verification failure, and never replay the check or
         # an unknown-result acknowledgement write. Cleanup owns the fresh app.
         response = json.dumps({'checkpoint': label}, separators=(',', ':')).encode('ascii')
@@ -344,9 +441,11 @@ class ClipboardCheckpoints:
         adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=response)
         adb('shell', 'run-as', PACKAGE, 'mv', pending, self.relative + '/checkpoint-ack.json')
         self.completed.append(label)
+        if system is not None:
+            self.keyboard_evidence.append(system)
 
     def require_complete(self):
-        if tuple(self.completed) != CLIPBOARD_CHECKPOINTS:
+        if tuple(self.completed) != self.expected:
             raise DeviceFailure('flutter_android_clipboard_checkpoints_missing')
 
 
@@ -425,6 +524,11 @@ def _run(args, root, env, config, approval, owned_process):
         raise DeviceFailure('flutter_android_avd_api_or_user_mismatch')
     if package_present():
         raise DeviceFailure('flutter_android_package_already_present')
+    # Only this already-verified, fresh, disposable AVD is changed. Hardware
+    # keyboard emulation otherwise suppresses the real software IME window.
+    adb('shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
+    if text('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard') != '1':
+        raise DeviceFailure('android_system_ime_fixture_configuration_failed')
     reverse = 'tcp:' + str(config['port'])
     if any(reverse in line.split()[1:2] for line in text('reverse', '--list').splitlines()):
         raise DeviceFailure('flutter_android_reverse_already_present')
@@ -435,6 +539,7 @@ def _run(args, root, env, config, approval, owned_process):
     defines.write_text(json.dumps({'HERDR_ANDROID_NATIVE_PAIRING': '1', 'HERDR_ANDROID_RUN_ID': env['GITHUB_RUN_ID'],
         'POCKET_GUARDED_INPUT': 'true' if guarded else 'false',
         'HERDR_ANDROID_API35_CLIPBOARD_FIXTURE': 'true' if guarded else 'false',
+        'HERDR_ANDROID_API35_KEYBOARD_FIXTURE': 'true',
         'HERDR_ANDROID_TARGET_JSON': json.dumps(config, separators=(',', ':')),
         'HERDR_ANDROID_PUBLIC_DIR': '/data/user/0/' + PACKAGE + '/' + relative}), encoding='utf-8')
     defines.chmod(0o600)
@@ -457,11 +562,14 @@ def _run(args, root, env, config, approval, owned_process):
             request = wait_public(process, relative, 'request.json', 2048, timeout=900)
             response = approval.approve(request)
             write_response(relative, response)
-            checkpoints = ClipboardCheckpoints(relative, approval) if guarded else None
+            checkpoints = ClipboardCheckpoints(relative, approval, keyboard=True, guarded=guarded)
             raw = wait_public(process, relative, 'result.json', 8192, timeout=400, checkpoints=checkpoints)
             if checkpoints is not None:
                 checkpoints.require_complete()
             result = safe_device_result(json.loads(raw.decode('utf-8')), guarded=guarded)
+            result['systemKeyboardEvidence'] = {'checkpoints': checkpoints.keyboard_evidence,
+                'scope': 'owned API35 docked IME window and real view insets; automated commits are not IME touch/composition proof',
+                'showWithHardwareKeyboard': True}
             if guarded:
                 result['pasteOperationsNoExtraSshBytes'] = True
             try:

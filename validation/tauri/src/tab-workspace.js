@@ -9,10 +9,11 @@ import {draftBytes} from './input-codec.js';
 import {applyPaste,previewPaste} from './paste-review.js';
 import {readClipboardForPaste,clipboardPasteMessage} from './mobile-clipboard.js';
 import {createTabInputToolbar} from './tab-input-toolbar.js';
+import {requestMobileKeyboard} from './mobile-soft-keyboard.js';
 import {dashboardPresentation,paneStatusText} from './dashboard-presentation.js';
 
 /** A foreground tab owns its native attempt and renderer. No reconnect is automatic. */
-export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null,getFontSize=()=>14,channelFactory,terminalFactory,onDashboard=()=>{},clipboardRead=readClipboardForPaste}) {
+export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null,getFontSize=()=>14,channelFactory,terminalFactory,onDashboard=()=>{},clipboardRead=readClipboardForPaste,keyboardRequest=requestMobileKeyboard}) {
   const tabs=new RemoteTabs(), root=document.getElementById('tab-workspace');
   const nav=document.getElementById('view-tabs'), body=document.getElementById('view-content');
   let switching=false, textSelection=null;
@@ -55,6 +56,19 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     } catch {
       if(current(tab,token) && tab.epoch===epoch){tab.message='选择未确认，请核对当前看板后重新选择；不会自动切换目标。';if(tab.messageElement)tab.messageElement.textContent=tab.message;}
     } finally {if(current(tab,token)){tab.selecting=false;renderDashboard(tab);}}
+  }
+  function keyboardEditor(tab) {
+    if(document.hidden || switching || tabs.activeId!==tab.id || !current(tab,tab.token) || tab.state!=='active' || tab.wantsPause || tab.closing || tab.invalidated || tab.unknown || !tab.target || tab.inputEpoch===null)return null;
+    if(tab.mode==='direct' && directCurrent(tab,directToken(tab)))return tab.terminal?.textarea || null;
+    if(tab.mode==='draft')return tab.draftField || null;
+    return null;
+  }
+  function refreshKeyboard(tab) {
+    const editor=keyboardEditor(tab);
+    const composing=tab.mode==='direct' ? !!tab.composition.token && !tab.composition.ended : tab.draftComposing;
+    if(tab.keyboardShow)tab.keyboardShow.disabled=!editor || tab.inputBusy || !!textSelection?.valid() || composing;
+    const pending=tab.directPending && !tab.directPending.invalidated && document.activeElement===tab.terminal?.textarea;
+    if(tab.keyboardHide)tab.keyboardHide.disabled=!(editor && document.activeElement===editor) && !pending;
   }
   function render() {
     if(textSelection && !textSelection.valid()){textSelection.close();textSelection=null;}
@@ -118,8 +132,8 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       const text=document.createElement('textarea');text.value=tab.draft;text.placeholder='输入草稿';text.setAttribute('aria-label','当前标签草稿');
       tab.draftField=text;
       tab.draftComposing=false;
-      text.addEventListener('compositionstart',()=>{tab.pasteReadSequence++;tab.draftComposing=true;});
-      text.addEventListener('compositionend',()=>{tab.draftComposing=false;});
+      text.addEventListener('compositionstart',()=>{tab.pasteReadSequence++;tab.draftComposing=true;refreshKeyboard(tab);});
+      text.addEventListener('compositionend',()=>{tab.draftComposing=false;refreshKeyboard(tab);});
       text.addEventListener('blur',()=>{if(!tab.suppressPasteBlur)tab.pasteFocusRevision++;});
       text.addEventListener('paste',event=>void reviewPaste(tab,event,text,tab.draftComposing),true);
       text.oninput=()=>{if(tab.draftField===text && tabs.activeId===tab.id){tab.draft=text.value;tab.draftRevision++;}};body.append(text);
@@ -127,6 +141,31 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       const direct=document.createElement('button');direct.type='button';direct.textContent='逐键输入';direct.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy;direct.onclick=()=>void enableDirect(tab);actions.append(direct);
       const enable=document.createElement('button');enable.type='button';enable.textContent='启用草稿输入';enable.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy;
       enable.onclick=()=>void enableInput(tab);actions.append(enable);
+      const show=document.createElement('button');show.type='button';show.id='tab-keyboard-show';show.textContent='展开键盘';show.setAttribute('aria-label','展开键盘');
+      const hide=document.createElement('button');hide.type='button';hide.id='tab-keyboard-hide';hide.textContent='收起键盘';hide.setAttribute('aria-label','收起键盘');
+      show.onpointerdown=hide.onpointerdown=event=>event.preventDefault();
+      const binding=lease(tab),target=tab.target;
+      const currentButton=()=>tab.keyboardShow===show && tab.keyboardHide===hide && current(tab,binding.token) && tab.nativeGeneration===binding.generation && tab.epoch===binding.epoch && tab.target===target && !document.hidden && !switching && tabs.activeId===tab.id && tab.state==='active' && !tab.closing && !tab.wantsPause && !tab.invalidated;
+      show.onclick=()=>{
+        if(!currentButton())return;refreshKeyboard(tab);if(show.disabled)return;
+        const editor=keyboardEditor(tab);if(!editor)return;
+        const token=directToken(tab),mode=tab.mode,terminal=tab.terminal;
+        if(editor===tab.terminal?.textarea)tab.terminal.focus();else editor.focus();
+        keyboardRequest('show',editor,()=>currentButton() && keyboardEditor(tab)===editor && tab.terminal===terminal && tab.mode===mode && OnlineInputQueue.same(token,directToken(tab)) && document.activeElement===editor);
+        tab.message='已请求展开键盘；是否显示由系统决定。';if(tab.messageElement)tab.messageElement.textContent=tab.message;refreshKeyboard(tab);
+      };
+      hide.onclick=()=>{
+        if(!currentButton())return;refreshKeyboard(tab);if(hide.disabled)return;
+        const editor=keyboardEditor(tab) || (tab.directPending ? tab.terminal?.textarea : null);
+        if(!editor || document.activeElement!==editor)return;
+        const revision=tab.inputRevision,terminal=tab.terminal;
+        keyboardRequest('hide',editor,()=>currentButton() && tab.terminal===terminal && (tab.inputRevision===revision || tab.inputRevision===revision+1 && tab.mode==='observe') && (document.activeElement===editor || document.activeElement===document.body || document.activeElement==null));
+        if(tab.directPending)tab.directPending.invalidated=true;
+        editor.blur?.();if(tab.inputRevision===revision)void loseDirect(tab);
+        tab.message='已收起输入焦点；重新输入请先选择输入模式。';if(tab.messageElement)tab.messageElement.textContent=tab.message;refreshKeyboard(tab);
+      };
+      tab.keyboardShow=show;tab.keyboardHide=hide;actions.append(show,hide);refreshKeyboard(tab);
+
       const paste=document.createElement('button');paste.type='button';paste.textContent='粘贴并审查';paste.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || !['draft','direct'].includes(tab.mode) || tab.inputEpoch==null;
       paste.onpointerdown=event=>event.preventDefault();paste.onclick=()=>void readPaste(tab);tab.pasteButton=paste;actions.append(paste);
       const send=document.createElement('button');send.type='button';send.textContent='发送草稿';send.disabled=!tab.target || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null;
@@ -276,7 +315,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   }
   async function loseDirect(tab) {
     const wasBusy=tab.inputBusy;tab.queue.clear();tab.inputRevision++;tab.mode='observe';tab.inputEpoch=null;
-    if(tab.pasteButton)tab.pasteButton.disabled=true;tab.toolbar?.reset();tab.toolbar=null;tab.toolbarHost?.replaceChildren();
+    if(tab.pasteButton)tab.pasteButton.disabled=true;refreshKeyboard(tab);tab.toolbar?.reset();tab.toolbar=null;tab.toolbarHost?.replaceChildren();
     if(tab.terminal){tab.terminal.options.disableStdin=true;tab.terminal.textarea.setAttribute('inputmode','none');}
     if(wasBusy){tab.unknown=true;tab.message='输入在途时焦点离开；请恢复观察后核实原目标。';await pause(tab);return;}
     if(tab.nativeGeneration!==null && tab.epoch!==null) {tab.focusReset=invoke('remote_tab_input_mode',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration,epoch:tab.epoch,mode:'observe'}).catch(()=>{});await tab.focusReset;}
@@ -291,7 +330,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     // xterm mirrors disableStdin into textarea.readOnly. Open the keyboard during
     // the user's gesture; observe mode and null inputEpoch still reject all input.
     try {
-      terminal.options.disableStdin=false;terminal.textarea.setAttribute('inputmode','text');terminal.focus();
+      terminal.options.disableStdin=false;terminal.textarea.setAttribute('inputmode','text');terminal.focus();refreshKeyboard(tab);
       if(!currentAttempt())return;
       await tab.focusReset;
       if(!currentAttempt())return;
@@ -301,7 +340,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       if(!Number.isSafeInteger(inputEpoch) || inputEpoch<1)throw Error('input_lease_invalid');
       tab.inputEpoch=inputEpoch;tab.mode='direct';granted=true;tab.message='逐键输入已启用。';if(tab.messageElement)tab.messageElement.textContent=tab.message;
       if(tab.pasteButton)tab.pasteButton.disabled=false;
-      showToolbar(tab);
+      showToolbar(tab);refreshKeyboard(tab);
     } catch {
       if(tab.directPending===attempt && current(tab,binding.token)){tab.message='逐键输入未启用。';if(tab.messageElement)tab.messageElement.textContent=tab.message;}
     } finally {
@@ -340,7 +379,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     finally {if(sameLease(tab,binding)){tab.inputBusy=false;render();}}
   }
   async function sendDraft(tab) {
-    if(textSelection?.valid() || document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null)return;
+    if(textSelection?.valid() || document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null || tab.draftComposing)return;
     if(tab.draftPending+tab.rejectedDrafts.length>=8){status(tab,'找回区已满，请先处理已拒绝原文。');return;}
     const text=tab.draft,bracketed=tab.terminal?.modes?.bracketedPasteMode===true;
     const bytes=draftBytes(text,bracketed);
@@ -350,7 +389,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(!window.confirm(`发送到 ${hostName(tab.hostId)} · ${tab.target.paneId} · ${tab.target.terminalId}？\n${bytes.length} 字节 · ${framing}\n\n${previewPaste(text)}`))return;
     if(!sameLease(tab,binding) || document.hidden || tabs.activeId!==tab.id || tab.mode!=='draft' ||
         tab.inputEpoch!==inputEpoch || tab.draftRevision!==version || tab.draft!==text ||
-        tab.state!=='active' || tab.unknown || tab.inputBusy || (tab.terminal?.modes?.bracketedPasteMode===true)!==bracketed)return;
+        tab.state!=='active' || tab.unknown || tab.inputBusy || tab.draftComposing || (tab.terminal?.modes?.bracketedPasteMode===true)!==bracketed)return;
     const epoch=binding.epoch,token=binding.token;tab.draft='';const draftRevision=++tab.draftRevision;tab.draftPending++;tab.inputBusy=true;render();
     try {const result=await invoke('remote_tab_input_send',{tabId:tab.id,clientGeneration:token.generation,generation:tab.nativeGeneration,epoch,inputEpoch,bytes:[...bytes],draft:true});
       let restored=false;
@@ -415,8 +454,8 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
           render();tab.terminal.open(tab.element);tab.terminal.textarea.setAttribute('inputmode','none');
           tab.terminal.onData(data=>{if(document.activeElement===tab.terminal?.textarea && tab.mode==='direct' && tab.composition.accepts(directToken(tab)))enqueueDirect(tab,new TextEncoder().encode(data));});
           blockPendingKeys(tab.terminal.textarea,()=>tab.directPending && tab.mode!=='direct');
-          tab.terminal.textarea.addEventListener('compositionstart',()=>{tab.pasteReadSequence++;tab.composition.begin(directToken(tab));tab.toolbar?.refresh();},true);
-          tab.terminal.textarea.addEventListener('compositionend',()=>{tab.composition.end();tab.toolbar?.refresh();},true);
+          tab.terminal.textarea.addEventListener('compositionstart',()=>{tab.pasteReadSequence++;tab.composition.begin(directToken(tab));tab.toolbar?.refresh();refreshKeyboard(tab);},true);
+          tab.terminal.textarea.addEventListener('compositionend',()=>{tab.composition.end();tab.toolbar?.refresh();refreshKeyboard(tab);},true);
           tab.terminal.textarea.addEventListener('blur',event=>{if(!tab.suppressPasteBlur)tab.pasteFocusRevision++;if(!tab.suppressBlur && tab.directPending){tab.directPending.invalidated=true;tab.inputRevision++;tab.terminal.options.disableStdin=true;tab.terminal.textarea.setAttribute('inputmode','none');}if(!tab.suppressBlur && tab.mode==='direct' && !ownsInputFocus(tab,event?.relatedTarget))void loseDirect(tab);});
           tab.terminal.textarea.addEventListener('paste',event=>void reviewPaste(tab,event,tab.terminal.textarea,tab.composition.token && !tab.composition.ended),true);
         } else if(event.frame.full) {tab.selectionTextReady=false;tab.terminal.reset();}

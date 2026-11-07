@@ -29,4 +29,5 @@ shutil.copyfile(root/'android/NetworkAuthReview.kt',target.with_name('NetworkAut
 shutil.copyfile(root/'android/PairScanPlugin.kt',target.with_name('PairScanPlugin.kt'))
 shutil.copyfile(root/'android/ConfigDocumentPlugin.kt',target.with_name('ConfigDocumentPlugin.kt'))
 shutil.copyfile(root/'android/ClipboardPlugin.kt',target.with_name('ClipboardPlugin.kt'))
+shutil.copyfile(root/'android/TerminalKeyboardPlugin.kt',target.with_name('TerminalKeyboardPlugin.kt'))
 copy_android_assets(root, app/'src/main/assets')

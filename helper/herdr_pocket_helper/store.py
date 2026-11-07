@@ -123,6 +123,61 @@ class Host:
             raise Refuse('request account or expected host fingerprint differs')
         return req
 
+    def receipt(self, raw, rid):
+        """Validate an old public request at its original issuance, not as new consent."""
+        def unique(items):
+            result = {}
+            for key, value in items:
+                if key in result:
+                    raise Refuse('duplicate receipt field')
+                result[key] = value
+            return result
+        try:
+            item = json.loads(raw.decode('utf-8'), object_pairs_hook=unique)
+            if (not isinstance(item, dict)
+                    or set(item) != {'request', 'phase', 'added', 'separator', 'beforeHash'}
+                    or item['phase'] not in ('adding', 'authorized', 'revoking', 'revoked')
+                    or type(item['added']) is not bool or type(item['separator']) is not bool
+                    or not isinstance(item['beforeHash'], str)
+                    or re.fullmatch(r'[a-f0-9]{64}', item['beforeHash']) is None
+                    or not isinstance(item['request'], dict)):
+                raise Refuse('invalid receipt')
+            req = item['request']
+            req = self.review(encode(req), req['issued_at'])
+            if req['request_id'] != request_id(rid) or (not item['added'] and item['phase'] in ('revoking', 'revoked')):
+                raise Refuse('receipt differs from original request')
+            return item
+        except (KeyError, TypeError, UnicodeError, RecursionError) as exc:
+            raise Refuse('invalid receipt') from exc
+
+    def inspect_receipt(self, rid, *, now=None):
+        """Read one exact receipt and authorization snapshot, without creating even a lock."""
+        rid = request_id(rid)
+        now = int(time.time()) if now is None else now
+        if type(now) is not int or now < 0:
+            raise Refuse('invalid inspection time')
+        name = rid + '.json'
+        with directory(self.home) as home, directory('.ssh', parent=home) as ssh, directory(RECEIPTS, parent=ssh) as receipts:
+            raw = read_at(receipts, name)
+            if raw is None:
+                raise Refuse('no local receipt')
+            receipt = self.receipt(raw, rid)
+            req = receipt['request']
+            before = read_at(ssh, AUTH)
+            kind = classify(before or b'', req['public_key'], self.owned_line(req))
+            if read_at(receipts, name) != raw or read_at(ssh, AUTH) != before:
+                raise Refuse('receipt or authorization changed during inspection')
+        phase = receipt['phase']
+        can_revoke = receipt['added'] and (
+            (phase in ('adding', 'revoking') and kind in ('owned', 'absent'))
+            or (phase == 'authorized' and kind == 'owned')
+            or (phase == 'revoked' and kind == 'absent'))
+        return {'type': 'herdr-authorization-inspection', 'request': req,
+                'device_fingerprint': fingerprint(req['public_key']), 'receipt_phase': phase,
+                'authorization_added': receipt['added'], 'observed_entry': kind,
+                'request_expired': now >= req['expires_at'], 'inspected_at': now,
+                'can_revoke': can_revoke, 'authorization_written': False}
+
     @contextmanager
     def transaction(self, *, create):
         with ExitStack() as stack:
@@ -180,7 +235,7 @@ class Host:
             return self.response(req, 'authorized', receipt['added'], now)
 
     def revoke(self, rid, confirmed_id, *, now=None):
-        now = int(time.time()) if now is None else now
+        clock = (lambda: int(time.time())) if now is None else (lambda: now)
         if request_id(rid) != confirmed_id:
             raise Refuse('confirmation does not match request')
         name = rid + '.json'
@@ -188,7 +243,7 @@ class Host:
             raw = read_at(receipts, name)
             if raw is None:
                 raise Refuse('no local receipt')
-            receipt = json.loads(raw)
+            receipt = self.receipt(raw, rid)
             req = receipt['request']
             if (req['request_id'] != rid or req['account'] != self.account or req['host_key'] != self.pin
                     or receipt['phase'] not in ('adding','authorized','revoking','revoked') or receipt['added'] is not True):
@@ -199,7 +254,7 @@ class Host:
             if receipt['phase'] == 'revoked':
                 if kind != 'absent':
                     raise Refuse('authorization changed after revocation')
-                return self.response(req, 'revoked', True, now)
+                return self.response(req, 'revoked', True, clock())
             if kind == 'existing' or kind == 'absent' and receipt['phase'] == 'authorized':
                 raise Refuse('owned entry was modified; inspect manually')
             if receipt['phase'] != 'revoking':
@@ -214,7 +269,7 @@ class Host:
                 replace(ssh, AUTH, remaining, before)
             receipt['phase'] = 'revoked'
             replace(receipts, name, encode(receipt), raw)
-            return self.response(req, 'revoked', True, now)
+            return self.response(req, 'revoked', True, clock())
 
     def response(self, req, state, added, now):
         end = min(now + MAX_TTL, req['expires_at']) if state == 'authorized' else now + MAX_TTL
@@ -224,13 +279,7 @@ class Host:
         return encode(obj)
 
     def review_revocation(self, rid):
-        name = request_id(rid) + '.json'
-        with directory(self.home) as home, directory('.ssh', parent=home) as ssh, directory(RECEIPTS, parent=ssh) as receipts:
-            raw = read_at(receipts, name)
-            if raw is None:
-                raise Refuse('no local receipt')
-            r = json.loads(raw)
-            req = r['request']
-            if req['request_id'] != rid or req['account'] != self.account or req['host_key'] != self.pin or r['added'] is not True:
-                raise Refuse('no owned authorization for this host and account')
-            return req
+        inspected = self.inspect_receipt(rid)
+        if not inspected['can_revoke']:
+            raise Refuse('no unchanged, owned authorization for this host and account')
+        return inspected['request']

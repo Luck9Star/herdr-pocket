@@ -1,6 +1,7 @@
 """No sshd, network or credentials: assert the CI authorization/evidence gate."""
 from pathlib import Path
 from types import SimpleNamespace
+import json
 import os
 import tempfile
 import time
@@ -96,5 +97,9 @@ class GuiFixtureTests(unittest.TestCase):
                 approval.verify_ssh()
             (root/'received.bin').write_bytes(b'')
             approval.verify_ssh()
-            approval.revoke()
+            receipt = approval.revoke()
+            item = json.loads(receipt)
+            self.assertEqual((item['status'], item['request_id'], item['host_key'], item['fingerprint']),
+                             ('revoked', pending.request['request_id'], host.pin, approval.fingerprint))
+            self.assertEqual(approval.revoke(), receipt)
             self.assertEqual((root/'authorized_keys').read_bytes(), b'')

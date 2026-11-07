@@ -110,6 +110,7 @@ class FixtureApproval:
         self.request_id = None
         self.fingerprint = None
         self.applied = False
+        self.revocation_response = None
 
     def approve(self, raw):
         now = int(time.time())
@@ -158,11 +159,13 @@ class FixtureApproval:
             raise GuiFailure('unexpected_remote_input')
 
     def revoke(self):
-        if self.request_id:
-            self.host.revoke(self.request_id, self.request_id, now=int(time.time()))
+        if self.request_id and self.revocation_response is None:
+            receipt = self.host.revoke(self.request_id, self.request_id, now=int(time.time()))
             if bounded_wire(self.host.home / '.ssh' / 'authorized_keys', 4096):
                 raise GuiFailure('fixture_revoke_incomplete')
             self.replace_authorization(b'')
+            self.revocation_response = receipt
+        return self.revocation_response
 
 
 def run_flutter(args, root, env, config, approval):

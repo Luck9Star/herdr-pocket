@@ -83,7 +83,7 @@ void main() {
     expect(find.byKey(const ValueKey('pair-response-preview')),findsNothing); expect(find.byKey(const ValueKey('pair-connect')),findsNothing);
     await tester.pumpWidget(const SizedBox());
   },variant:android);
-  testWidgets('denied camera keeps manual path; expired request cannot launch another scan',(tester) async {
+  testWidgets('denied camera keeps manual path; expired request can scan a fresh revocation',(tester) async {
     final visibility = ValueNotifier(true); var time = 1000, calls = 0;
     await prepare(tester,visibility,() => time);
     messenger.setMockMethodCallHandler(const MethodChannel('herdr.pocket/pair_scan'),(_) async { calls++; throw PlatformException(code:'denied'); });
@@ -92,7 +92,7 @@ void main() {
     expect(find.textContaining('可继续手动输入'),findsOneWidget);
     expect(tester.widget<TextField>(find.byKey(const ValueKey('pair-response'))).enabled,isTrue);
     time = 1600; await tester.pump(const Duration(seconds:1));
-    expect(tester.widget<TextButton>(find.byKey(const ValueKey('pair-scan'))).onPressed,isNull); expect(calls,1);
+    expect(tester.widget<TextButton>(find.byKey(const ValueKey('pair-scan'))).onPressed,isNotNull); expect(calls,1);
     await tester.pumpWidget(const SizedBox());
   },variant:android);
 }

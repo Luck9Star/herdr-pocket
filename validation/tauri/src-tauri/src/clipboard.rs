@@ -108,3 +108,52 @@ mod tests {
         );
     }
 }
+
+#[cfg(any(target_os = "android", test))]
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CopyReply {
+    copied: Option<bool>,
+    error: Option<String>,
+}
+
+#[cfg(any(target_os = "android", test))]
+fn checked_copy_reply(reply: CopyReply) -> Result<(), String> {
+    if let Some(error) = reply.error {
+        return Err(match error.as_str() {
+            "clipboard_unfocused" => "clipboard_unfocused",
+            "clipboard_too_large" => "clipboard_too_large",
+            "clipboard_unsupported" => "clipboard_unsupported",
+            "pairing_copy_expired" => "pairing_copy_expired",
+            _ => "clipboard_unavailable",
+        }.into());
+    }
+    if reply.copied != Some(true) { return Err("clipboard_unavailable".into()); }
+    Ok(())
+}
+
+/// Native-only public pairing output. There is no frontend text argument.
+#[cfg(target_os = "android")]
+pub async fn write_pairing_request<R: Runtime>(app: AppHandle<R>, text: String, issued_at: u64, expires_at: u64) -> Result<(), String> {
+    if text.is_empty() || text.len() > 2048 { return Err("clipboard_too_large".into()); }
+    let plugin = app.try_state::<Clipboard<R>>().ok_or("clipboard_unavailable")?;
+    let reply: CopyReply = plugin.0.run_mobile_plugin_async(
+        "copyPairingRequest", serde_json::json!({"text":text,"issuedAt":issued_at,"expiresAt":expires_at}),
+    ).await.map_err(|_| "clipboard_unavailable")?;
+    checked_copy_reply(reply)
+}
+
+#[cfg(test)]
+mod copy_tests {
+    use super::*;
+    #[test]
+    fn copy_reply_is_positive_exact_and_errors_are_classified_without_request_text() {
+        assert!(checked_copy_reply(CopyReply{copied:Some(true),error:None}).is_ok());
+        for copied in [None,Some(false)] { assert!(checked_copy_reply(CopyReply{copied,error:None}).is_err()); }
+        for error in ["clipboard_unfocused","clipboard_too_large","clipboard_unsupported","pairing_copy_expired"] {
+            assert_eq!(checked_copy_reply(CopyReply{copied:None,error:Some(error.into())}).unwrap_err(),error);
+        }
+        assert_eq!(checked_copy_reply(CopyReply{copied:Some(true),error:Some("private contents".into())}).unwrap_err(),"clipboard_unavailable");
+        assert!(serde_json::from_str::<CopyReply>(r#"{"copied":true,"text":"unexpected"}"#).is_err());
+    }
+}

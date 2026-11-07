@@ -82,6 +82,7 @@ mod dashboard_watch;
 mod remote_tab_commands;
 mod config_document;
 mod clipboard;
+mod pair_copy;
 mod terminal_keyboard;
 use clipboard::mobile_clipboard_read_text;
 #[cfg(target_os = "macos")]
@@ -330,7 +331,15 @@ fn pair_accept(response:String,reviewed:bool,state:State<'_,PairingState>,flow:S
     let mut current=state.current.lock().map_err(|_|"state_unavailable")?;
     let p=current.as_mut().ok_or("pairing_missing")?;
     let mut proposed=p.clone(); proposed.accept(&response,now()?,reviewed).map_err(str::to_string)?;
-    if proposed.authorization=="revoked" {f.tabs.cancel_handle(p.local_handle());hosts.clear_handle(p.local_handle())?;} else if proposed.authorization=="authorized" {hosts.set_status(p.local_handle(),ReferenceStatus::Authorized)?;}
+    if proposed.authorization=="revoked" {
+        f.tabs.cancel_handle(p.local_handle());
+        let saved = hosts.set_status(p.local_handle(), ReferenceStatus::Revoked);
+        *p = proposed;
+        let mut view = pairing_view(p)?;
+        view.stored = saved.is_ok();
+        return Ok(view);
+    }
+    if proposed.authorization=="authorized" {hosts.set_status(p.local_handle(),ReferenceStatus::Authorized)?;}
     *p=proposed; pairing_view(p)
 }
 #[tauri::command]
@@ -557,7 +566,7 @@ pub fn run() {
             let flow=RemoteFlow {recovery:Some(recovery),..Default::default()};
             app.manage(Arc::new(Mutex::new(flow))); Ok(())
         })
-        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,network_node_status,network_node_start,network_node_stop,network_node_login,network_node_login_status,network_node_open_auth,
+        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_copy::pair_copy_request,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,network_node_status,network_node_start,network_node_stop,network_node_login,network_node_login_status,network_node_open_auth,
             mobile_clipboard_read_text,terminal_keyboard::mobile_terminal_keyboard,config_document_platform,config_document_open,config_document_save,config_export,config_preview,config_apply,config_discard])
         .run(tauri::generate_context!())
         .expect("Tauri probe startup failed");

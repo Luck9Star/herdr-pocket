@@ -396,6 +396,9 @@ impl Hosts {
                 }
                 old.name = name.into();
                 if pairing.is_some() {
+                    if old.pairing.as_ref().is_some_and(|p| p.status == ReferenceStatus::Revoked) {
+                        return Err("pairing_revoked".into());
+                    }
                     old.pairing = pairing;
                 }
                 id.to_string()
@@ -487,12 +490,20 @@ impl Hosts {
     }
     pub fn set_status(&self, handle: &str, status: ReferenceStatus) -> Result<(), String> {
         self.with(|r| {
-            let mut list = r.items.clone();
-            let h = list
-                .iter_mut()
-                .find(|h| h.pairing.as_ref().is_some_and(|p| p.handle == handle))
+            let index = r.items.iter()
+                .position(|h| h.pairing.as_ref().is_some_and(|p| p.handle == handle))
                 .ok_or("host_pairing_missing")?;
-            h.pairing.as_mut().ok_or("host_pairing_missing")?.status = status;
+            let mut list = r.items.clone();
+            let reference = list[index].pairing.as_mut().ok_or("host_pairing_missing")?;
+            if reference.status == ReferenceStatus::Revoked && status != ReferenceStatus::Revoked {
+                return Err("pairing_revoked".into());
+            }
+            reference.status = status;
+            // A failed durable write must still stop local observers from
+            // restoring the old authorized handle in this running process.
+            if status == ReferenceStatus::Revoked {
+                r.items[index].pairing = list[index].pairing.clone();
+            }
             r.commit(list)
         })
     }
@@ -1199,6 +1210,46 @@ mod tests {
         second.host = "example.com".into();
         assert!(store.save(None, "Two", second, Some(reference)).is_err());
         assert_eq!(store.list().unwrap().len(), 1);
+    }
+    #[test]
+    fn revoked_identity_retains_only_cleanup_authority_across_reopen_and_write_failure() {
+        let temp = Temp::new();
+        let hosts = Hosts::default();
+        hosts.init(temp.0.clone()).unwrap();
+        let target = target();
+        let keys = std::sync::Arc::new(VolatileKeyStore::default());
+        let pairing = Pairing::create(keys, "fixture", &target.expected_host_key, "Pocket", 100).unwrap();
+        let old = PairingReference {
+            handle: pairing.local_handle().into(), request_json: pairing.request_json().unwrap(),
+            status: ReferenceStatus::Authorized,
+        };
+        let view = hosts.save(None, "Fixture", target.clone(), Some(old.clone())).unwrap();
+
+        // Block the final rename inside our temporary fixture only.
+        let catalog = temp.0.join("hosts.json");
+        let backup = temp.0.join("original.json");
+        fs::rename(&catalog, &backup).unwrap();
+        fs::create_dir(&catalog).unwrap();
+        assert!(hosts.set_status(&old.handle, ReferenceStatus::Revoked).is_err());
+        assert_eq!(hosts.get(&view.id).unwrap().pairing.unwrap().status, ReferenceStatus::Revoked);
+        assert!(hosts.set_status(&old.handle, ReferenceStatus::Cancelled).is_err());
+        assert!(hosts.save(Some(&view.id), "Fixture", target, Some(old.clone())).is_err());
+        fs::remove_dir(&catalog).unwrap();
+        fs::rename(backup, catalog).unwrap();
+        hosts.set_status(&old.handle, ReferenceStatus::Revoked).unwrap();
+        drop(hosts);
+
+        let reloaded = Hosts::default();
+        reloaded.init(temp.0.clone()).unwrap();
+        let record = reloaded.get(&view.id).unwrap();
+        let public = record.view().unwrap();
+        assert_eq!(public.pairing_status, Some(ReferenceStatus::Revoked));
+        assert_eq!(public.device_fingerprint, view.device_fingerprint);
+        assert!(!serde_json::to_string(&public).unwrap().contains(&old.handle));
+        let cleanup = record.pairing.unwrap();
+        assert_eq!(cleanup.handle, old.handle);
+        assert_eq!(cleanup.request_json, old.request_json);
+        assert!(reloaded.set_status(&old.handle, ReferenceStatus::Authorized).is_err());
     }
     #[test]
     fn malformed_or_oversized_store_is_not_silently_reset() {

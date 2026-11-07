@@ -3,6 +3,8 @@ package org.herdr.pocket
 import android.content.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
+import android.os.SystemClock
+import android.webkit.WebView
 import app.tauri.plugin.Invoke
 
 fun main() {
@@ -81,5 +83,49 @@ fun main() {
     }, "text/plain")
     check(read() == "safe")
     activity.service = null; read("clipboard_unavailable")
-    println("ClipboardPlugin: foreground, MIME, first-item, typed errors, UTF-16 preflight and UTF-8 limits passed (synthetic stubs only).")
+    activity.service = manager
+    val view = WebView()
+    plugin.load(view)
+    manager.reads = 0
+    fun copy(text: String = "synthetic public request", expiry: Long = System.currentTimeMillis() / 1000 + 60, issued: Long = System.currentTimeMillis() / 1000 - 1): Invoke {
+        val request = Invoke()
+        request.args = PairingRequestCopyArgs().also { it.text = text; it.issuedAt = issued; it.expiresAt = expiry }
+        plugin.copyPairingRequest(request)
+        return request
+    }
+    fun failure(code: String, request: Invoke = copy()) {
+        check(request.result!!["error"] == code) { "copy: expected $code got ${request.result}" }
+        check(!request.result!!.containsKey("copied"))
+    }
+    check(copy().result!!["copied"] == true)
+    check(manager.writes == 1 && manager.writeCalls == 1 && manager.reads == 0)
+    check(manager.clip!!.getItemAt(0).text == "synthetic public request")
+    failure("clipboard_too_large",copy("a".repeat(2049)))
+    failure("clipboard_too_large",copy("界".repeat(683)))
+    failure("clipboard_unsupported",copy("\uD800"))
+    failure("pairing_copy_expired",copy(expiry=System.currentTimeMillis() / 1000))
+    failure("pairing_copy_expired",copy(issued=System.currentTimeMillis() / 1000 + 10))
+    failure("pairing_copy_expired",copy(expiry=System.currentTimeMillis() / 1000 + 601))
+    check(manager.writeCalls == 1 && manager.reads == 0)
+    for (mode in 0..6) {
+        when(mode) {0->activity.focus=false;1->activity.finishing=true;2->activity.destroyed=true;
+            3->activity.lifecycle.currentState=Lifecycle.State.STARTED;4->view.focus=false;5->view.windowFocus=false;6->view.attached=false}
+        failure("clipboard_unfocused")
+        activity.focus=true;activity.finishing=false;activity.destroyed=false;activity.lifecycle.currentState=Lifecycle.State.RESUMED
+        view.focus=true;view.windowFocus=true;view.attached=true
+    }
+    activity.queued = true
+    val paused = copy(); plugin.onPause(activity); activity.flush(); failure("clipboard_unfocused",paused)
+    val late = copy(); SystemClock.now += 2000; activity.flush(); failure("clipboard_unfocused",late)
+    val replaced = copy(); plugin.load(WebView()); activity.flush(); failure("clipboard_unfocused",replaced)
+    activity.queued = false; plugin.load(view)
+    activity.onService = Runnable { activity.focus=false }
+    failure("clipboard_unfocused"); activity.onService=null; activity.focus=true
+    check(manager.writeCalls == 1 && manager.reads == 0)
+    activity.service=null; failure("clipboard_unavailable"); activity.service=manager
+    manager.failWrites=true; failure("clipboard_unavailable");manager.failWrites=false
+    check(manager.writeCalls == 2 && manager.writes == 1 && manager.reads == 0)
+    check(copy("a".repeat(2048)).result!!["copied"] == true)
+    check(manager.writeCalls == 3 && manager.writes == 2 && manager.reads == 0)
+    println("ClipboardPlugin: read regressions and native pairing copy bounds, focus, presence, expiry, pause, replacement and exactly-one-write/no-read passed (synthetic stubs only).")
 }

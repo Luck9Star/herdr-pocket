@@ -56,7 +56,12 @@
 <label><input id="pair-target-review" type="checkbox"> 我已独立核对 SSH 用户名和预期主机公钥。</label>
 <button id="pair-create" type="button">创建设备公开请求</button>
 <label>公开配对请求<textarea id="pair-request" readonly rows="6" spellcheck="false"></textarea></label>
-<p>通过可信方式将请求交给主机操作者；响应不会自动连接，也不证明主机可信。</p>
+<p id="pair-request-summary" class="remote-help" hidden></p>
+<div class="remote-actions"><button id="pair-request-copy" type="button" disabled>复制原始公开请求</button><button id="pair-request-select" type="button" disabled>手选公开请求</button></div>
+<p id="pair-handoff-status" role="status" aria-live="polite"></p>
+<p>请通过双方已确认的可信渠道交接原始请求。主机操作者先核对上方请求 ID、SSH 账号、主机和设备指纹，再由该 SSH 用户明确确认授权；手机仍须独立审查返回响应，不会自动连接。需要停止授权时，由同一主机用户核对原记录并确认撤销，再把新鲜的匹配撤销回执交回手机。Android 使用本机原始请求复制；其他平台依赖系统剪贴板写入能力。不可用时保留上方只读原文供系统手选复制。</p>
+<label><input id="pair-revocation-mode" type="checkbox"> 仅审查撤销回执（禁用创建、请求交接和连接操作）</label>
+<p id="pair-review-mode-note" class="remote-help"></p>
 <label>导入主机响应<textarea id="pair-response" rows="6" maxlength="2048" spellcheck="false"></textarea></label>
 <button id="pair-scan" type="button">扫描主机响应</button>
 <button id="pair-preview" type="button">查看响应内容</button>

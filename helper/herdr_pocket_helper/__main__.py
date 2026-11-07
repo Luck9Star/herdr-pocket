@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shlex
 import sys
 import time
 
@@ -29,12 +30,13 @@ def read_host_public(path):
 
 def confirm(action, req):
     phrase = action + ' ' + req['request_id']
-    with open('/dev/tty', 'r+', encoding='utf-8') as tty:
-        tty.write(f"账号 {req['account']}\n主机指纹 {req['host_key']}\n"
+    # Text r+ uses a seekable buffered random stream; a terminal is not seekable.
+    with open('/dev/tty', 'r', encoding='utf-8') as tty_in, open('/dev/tty', 'w', encoding='utf-8') as tty_out:
+        tty_out.write(f"账号 {req['account']}\n主机指纹 {req['host_key']}\n"
                   f"设备 {req['device']} · {fingerprint(req['public_key'])}\n"
                   f"请求 {req['request_id']}\n输入 {phrase} 以确认，其他输入取消：\n")
-        tty.flush()
-        if tty.readline(100).rstrip('\r\n') != phrase:
+        tty_out.flush()
+        if tty_in.readline(100).rstrip('\r\n') != phrase:
             raise ValueError('cancelled by host operator')
     return req['request_id']
 
@@ -52,14 +54,14 @@ def emit_response(raw, output_format, *, newline=True):
 def main(argv=None):
     parser = argparse.ArgumentParser(description='herdr-pocket 一次性主机配对工具（POSIX OpenSSH 默认授权文件）。')
     sub = parser.add_subparsers(dest='action', required=True)
-    for action in ('preview', 'authorize', 'revoke'):
+    for action in ('preview', 'authorize', 'revoke', 'inspect'):
         cmd = sub.add_parser(action)
         cmd.add_argument('--host-public-key', required=True, metavar='FILE.pub')
-        if action == 'revoke':
+        if action in ('revoke', 'inspect'):
             cmd.add_argument('--request-id', required=True)
         else:
             cmd.add_argument('--request', required=True, metavar='FILE|-')
-        if action != 'preview':
+        if action in ('authorize', 'revoke'):
             cmd.add_argument('--format', choices=('json','svg'), default='json')
     profile = sub.add_parser('profile', help='输出公开连接资料；不会添加设备授权')
     profile.add_argument('--host-public-key', required=True, metavar='FILE.pub')
@@ -87,6 +89,14 @@ def main(argv=None):
             return 0
         from .store import Host
         host = Host(Path(account.pw_dir), account.pw_name, read_host_public(args.host_public_key))
+        if args.action == 'inspect':
+            inspected = host.inspect_receipt(args.request_id)
+            inspected['revoke_command'] = shlex.join([
+                sys.executable, '-m', 'herdr_pocket_helper', 'revoke',
+                '--host-public-key', args.host_public_key, '--request-id', args.request_id,
+            ]) if inspected['can_revoke'] else None
+            print(json.dumps(inspected, ensure_ascii=False))
+            return 0
         if getattr(args, 'format', 'json') == 'svg':
             # Resolve optional format support before any authorization change.
             from qrcode.image.svg import SvgPathFillImage  # noqa: F401
@@ -105,6 +115,9 @@ def main(argv=None):
         emit_response(raw, args.format)
         return 0
     except (OSError, ValueError, KeyError, TypeError, ImportError):
+        if args.action == 'inspect':
+            print('未读取原请求收据。请使用原 POSIX 账号、原主机 .pub 公钥及明确的请求 ID，核对收据和授权文件权限；不会扫描目录或创建授权。', file=sys.stderr)
+            return 1
         if args.action == 'profile':
             print('未生成连接资料。请核对显式目标、端口、命名会话、绝对路径和主机 .pub 公钥；资料仅用于连接审查，不能授权设备。', file=sys.stderr)
             return 1

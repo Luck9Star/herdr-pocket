@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,7 @@ import 'remote_auxiliary.dart';
 import 'remote_input_platform.dart';
 import 'remote_screen_text.dart';
 import 'remote_screen_viewport.dart';
+import 'remote_horizontal_viewport.dart';
 import 'terminal_font_diagnostics.dart';
 import 'device_keys.dart';
 import 'network_profiles.dart';
@@ -80,6 +82,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   DateTime? dashboardSyncedAt;
   String? dashboardSyncSource;
   Terminal? terminal;
+  final horizontalAnchors = <String,double>{};
+  String? horizontalTarget;
   final terminalFocus = FocusNode();
   final terminalViewportKey = GlobalKey();
   final draft = TextEditingController();
@@ -297,9 +301,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         setState(() { viewPaused = true; live = false; dashboardFresh = false; status = '标签已隐藏 · 观察与输入暂停，SSH 可保留；返回后需主动恢复'; });
         reportView();
       }
-    } else if (mounted) {
-      setState(() { status = viewPaused ? '标签已显示 · 旧画面仅供参考，请主动恢复原目标并等待新 full' :
-        '标签已显示 · 旧画面仅供参考，请主动审查连接并取得新 full'; });
+    } else if (mounted && viewPaused) {
+      setState(() { status = '标签已显示 · 旧画面仅供参考，请主动恢复原目标并等待新 full'; });
     }
   }
   void resumeObservation() {
@@ -412,6 +415,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           clearScreenSelection();
           terminal?.dispose();
           terminal = Terminal(maxLines:24,reflowEnabled:false)..resize(80,24);
+          final target = selectedTarget;
+          final bound = adapter.inputTarget;
+          final route = dashboard?.source?.route ?? (bound != null && target != null &&
+            bound.paneId == target.paneId && bound.terminalId == target.terminalId ? bound.route : null);
+          horizontalTarget = target == null || target.paneId.isEmpty || target.terminalId.isEmpty || route == null || route.isEmpty
+            ? null : jsonEncode([route,config.host,config.port,config.username,config.expectedFingerprint,
+              config.session,config.socketPath,config.herdrPath,target.paneId,target.terminalId]);
         }
         // Parser-generated responses to remote device queries must never become
         // user input, including while an interactive mode is selected.
@@ -1151,7 +1161,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
               TerminalFontDiagnostics(tokens:widget.tokens,registeredFontFamily:'ProbeNerd',
                 fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble(),onClose:closeFontDiagnostics)
             else if (selectingScreen) screenSelectionPanel() else SizedBox(height:360,child:ClipRRect(key:terminalViewportKey,borderRadius:BorderRadius.circular(12),
-              child:TerminalView(terminal!,key:ValueKey('remote-terminal-${inputGate.epoch}'),
+              child:RemoteHorizontalViewport(identity:horizontalTarget,anchors:horizontalAnchors,
+                style:TerminalStyle(fontFamily:'ProbeNerd',fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble()),
+                child:TerminalView(terminal!,key:ValueKey('remote-terminal-${inputGate.epoch}'),
                 focusNode:terminalFocus,theme:widget.tokens.terminalTheme,
                 autoResize:false,readOnly:!live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput,
                 simulateScroll:false,hardwareKeyboardOnly:inputGate.mode != RemoteInputMode.direct,
@@ -1166,7 +1178,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                     unawaited(pasteInput()); return KeyEventResult.handled;
                   }
                   return KeyEventResult.ignored;
-                }))),
+                })))),
           ],
           if (snapshot != null || inputGate.unknown != null) inputPanel(),
           unsentDraftPanel(),

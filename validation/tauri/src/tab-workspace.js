@@ -12,12 +12,14 @@ import {readClipboardForPaste,clipboardPasteMessage} from './mobile-clipboard.js
 import {createTabInputToolbar} from './tab-input-toolbar.js';
 import {requestMobileKeyboard} from './mobile-soft-keyboard.js';
 import {dashboardPresentation,paneStatusText} from './dashboard-presentation.js';
+import {LocalTerminalViewport,terminalViewportIdentity} from './local-terminal-viewport.js';
+import {observationError} from './observation-error.js';
 
 /** A foreground tab owns its native attempt and renderer. No reconnect is automatic. */
 export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null,getFontSize=()=>14,channelFactory,terminalFactory,onDashboard=()=>{},clipboardRead=readClipboardForPaste,keyboardRequest=requestMobileKeyboard}) {
   const tabs=new RemoteTabs(), root=document.getElementById('tab-workspace');
   const nav=document.getElementById('view-tabs'), body=document.getElementById('view-content');
-  let switching=false, textSelection=null, fontDiagnostics=null;
+  let switching=false, textSelection=null, fontDiagnostics=null, mountedTab=null;
   function boardEvent(tab,type) {if(tab.summaryIdentity && tab.token)onDashboard({type,hostId:tab.hostId,identity:tab.summaryIdentity,source:tab.token,board:tab.board});}
   function status(tab,message) {tab.message=message;if(tabs.activeId===tab.id)render();}
   function lease(tab) {return {token:tab.token,generation:tab.nativeGeneration,epoch:tab.epoch,revision:tab.inputRevision};}
@@ -78,6 +80,8 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(focused?.mode==='direct' && ownsInputFocus(focused,document.activeElement) && !focused.suppressBlur){renderDashboard(focused);return;}
     // Any unrelated full redraw removes focus from the review; revoke it first.
     if(focused?.pasteReview && !focused.focusPasteReview)focused.pasteReview=null;
+    // Only the currently mounted viewport has visible geometry worth retaining.
+    mountedTab?.localViewport.detach();mountedTab=null;
     root.hidden=tabs.list().length===0;nav.replaceChildren();body.replaceChildren();
     for(const tab of tabs.list()) {
       const button=document.createElement('button');button.type='button';
@@ -204,10 +208,12 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     }
     const viewport=document.createElement('div');viewport.className='term-scroll';
     if(tab.element)viewport.append(tab.element);body.append(viewport);
+    tab.localViewport.mount(viewport,tab.terminal,terminalViewportIdentity(tab.summaryIdentity || hostInfo(tab.hostId),tab.target),!!tab.selectionTextReady);
+    mountedTab=tab;
   }
   function create(hostId,target) {
     if(!native || !hostId || (target && (!target.paneId || !target.terminalId))) throw Error('tab_target_invalid');
-    const tab=tabs.create(hostId);tab.target=target ? Object.freeze({paneId:target.paneId,terminalId:target.terminalId}) : null;
+    const tab=tabs.create(hostId);tab.localViewport=new LocalTerminalViewport();tab.target=target ? Object.freeze({paneId:target.paneId,terminalId:target.terminalId}) : null;
     tab.selectionTextReady=false;tab.queue=new OnlineInputQueue();tab.composition=new InputComposition();tab.directPending=null;tab.pasteReview=null;tab.focusPasteReview=false;tab.pasteFocusRevision=0;tab.pasteReadSequence=0;tab.draftComposing=false;tab.draftRevision=0;tab.draftPending=0;tab.rejectedDrafts=[];tab.inputRevision=0;tab.controlRevision=0;tab.mode='observe';tab.board=new SessionDashboard();tab.selectionIntent=tab.target;tab.selectionReady=false;tab.selecting=false;tab.focusReset=Promise.resolve();tab.message=target?'目标已固定；请主动连接。':'请主动连接并从实际快照选择终端。';tab.state='disconnected';tab.closing=false;tab.nativeGeneration=null;tab.epoch=null;
     render();return tab.id;
   }
@@ -425,13 +431,13 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     tab.state='disconnected';if(wasDisconnected)tab.closing=false;render();
   }
   async function close(tab) {
-    await cancel(tab);tab.terminal?.dispose();tabs.close(tab.id);render();
+    await cancel(tab);tab.localViewport.detach();tab.terminal?.dispose();tabs.close(tab.id);render();
   }
   async function connect(tab) {
     if(tabs.activeId!==tab.id || tab.state!=='disconnected' || tab.closing || tab.invalidated || !tab.reviewed || !hostInfo(tab.hostId))return;
     const reviewed=JSON.parse(tab.reviewedHost || 'null'),actual=hostInfo(tab.hostId);
     if(!reviewed || JSON.stringify(reviewed)!==JSON.stringify({target:actual.target,deviceFingerprint:actual.deviceFingerprint,networkProfileId:actual.networkProfileId ?? null,networkRevision:actual.networkRevision ?? null})){tab.reviewed=false;status(tab,'主机资料已变化，请重新核对。');return;}
-    const token=tabs.begin(tab.id);tab.token=token;tab.summaryIdentity=actual;onDashboard({type:'starting',hostId:tab.hostId,identity:actual,source:token});tab.epoch=null;tab.inputReady=false;tab.inputEpoch=null;tab.inputBusy=false;tab.selecting=false;tab.mode='observe';tab.inputRevision++;tab.queue.clear();const previousBoard=tab.board;tab.board=new SessionDashboard();tab.board.panes=previousBoard.panes;tab.board.capturedAt=previousBoard.capturedAt;tab.pasteReview=null;tab.selectionIntent=tab.target;tab.selectionReady=false;tab.wantsPause=false;tab.state='connecting';tab.message='正在连接并核验目标…';tab.frames=new RemoteFrameQueue();render();
+    const token=tabs.begin(tab.id);tab.token=token;tab.summaryIdentity=actual;onDashboard({type:'starting',hostId:tab.hostId,identity:actual,source:token});tab.epoch=null;tab.selectionTextReady=false;tab.inputReady=false;tab.inputEpoch=null;tab.inputBusy=false;tab.selecting=false;tab.mode='observe';tab.inputRevision++;tab.queue.clear();const previousBoard=tab.board;tab.board=new SessionDashboard();tab.board.panes=previousBoard.panes;tab.board.capturedAt=previousBoard.capturedAt;tab.pasteReview=null;tab.selectionIntent=tab.target;tab.selectionReady=false;tab.wantsPause=false;tab.state='connecting';tab.message='正在连接并核验目标…';tab.frames=new RemoteFrameQueue();render();
     try {
       const generation=await invoke('remote_tab_reserve',{tabId:tab.id,clientGeneration:token.generation,hostId:tab.hostId,expectedTarget:reviewed.target,expectedDeviceFingerprint:reviewed.deviceFingerprint,expectedNetworkProfileId:reviewed.networkProfileId,expectedNetworkRevision:reviewed.networkRevision});
       if(!current(tab,token) || tab.closing) {await invoke('remote_tab_cancel',{tabId:tab.id,clientGeneration:token.generation,generation});return;}
@@ -474,16 +480,17 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         const frame=event.frame;tab.terminal.write(Uint8Array.from(frame.bytes),()=>{
           if(!current(tab,token) || tabs.activeId!==tab.id || event.epoch!==tab.epoch)return;
           if(!tab.frames.acknowledge(frame.seq)){void cancel(tab);return;}
+          if(frame.full)tab.localViewport.fullRendered();
           tab.selectionTextReady=true;if(tab.selectionTextButton)tab.selectionTextButton.disabled=false;if(tab.fontDiagnosticsButton)tab.fontDiagnosticsButton.disabled=false;
           void invoke('remote_tab_ack',{tabId:tab.id,clientGeneration:token.generation,generation,epoch:event.epoch,seq:frame.seq}).catch(()=>void cancel(tab));
         });
       };
       const pending=invoke('remote_tab_observe',{tabId:tab.id,clientGeneration:token.generation,generation,paneId:tab.target?.paneId || '',terminalId:tab.target?.terminalId || '',onEvent:channel});
       await pending;
-    } catch {if(current(tab,token))status(tab,'连接或观察未完成；请核对目标后手动处理。');}
+    } catch(error) {if(current(tab,token))status(tab,observationError(error));}
     finally {if(tabs.get(tab.id)===tab && tab.token===token){tab.board.invalidate('disconnected');boardEvent(tab,'stale');tab.selectionReady=false;tabs.invalidate(tab.id);tab.state='disconnected';tab.reviewed=false;tab.closing=false;tab.nativeGeneration=null;tab.inputEpoch=null;render();}}
   }
-  function setFont(size) {for(const tab of tabs.list())if(tab.terminal)tab.terminal.options.fontSize=size;}
+  function setFont(size) {for(const tab of tabs.list())if(tab.terminal){tab.localViewport.capture();tab.terminal.options.fontSize=size;}}
   function prepareAffected(ids) {const affected=tabs.affected(ids);for(const tab of affected){retireDirectPending(tab);tab.board.invalidate('configuration_changed');boardEvent(tab,'stale');tab.selectionReady=false;tab.suppressBlur=true;tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';tab.inputRevision++;tab.inputBusy=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;tabs.invalidate(tab.id);tab.closing=true;tab.state='disconnected';}render();for(const tab of affected)tab.suppressBlur=false;}
   function affected(ids) {for(const tab of tabs.affected(ids)){tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';void cancel(tab);}}
   function background() {for(const tab of tabs.list())tab.pasteReadSequence++;textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;for(const tab of tabs.list()){tab.pasteReview=null;void cancel(tab);}}

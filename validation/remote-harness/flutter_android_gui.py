@@ -27,9 +27,9 @@ STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'ha
           'public_key_failed', 'profile_save_failed', 'create_not_available', 'host_board', 'public_request', 'restore_pending', 'host_authorization',
           'target_finish_edit', 'target_review_ready', 'target_review_unchecked', 'target_create_unavailable',
           'response_review', 'ssh_and_dashboard', 'observe_frames', 'stop',
-          'host_task_summary_authoritative', 'host_task_summary_stale',
+          'host_task_summary_authoritative', 'host_task_summary_stale', 'local_font_diagnostic',
           'delete_local_identity', 'complete', 'guarded_direct', 'guarded_hidden_draft',
-          'guarded_reconnect', 'guarded_draft_review', 'fixture_validation',
+          'guarded_reconnect', 'guarded_draft_review', 'fixture_validation', 'viewport_pan', 'viewport_restored',
           'response_enter', 'response_preview', 'response_source_confirm', 'response_accept',
           'response_authorized', 'response_open_remote', 'response_remote_identity',
           'response_finish_edit', 'response_rejected', 'response_save_unconfirmed',
@@ -196,11 +196,22 @@ def safe_device_result(raw, guarded=False):
         clean[field] = value
     if clean['deltaSequence'] <= clean['firstSequence']:
         raise DeviceFailure('flutter_android_delta_not_observed')
+    columns = raw.get('localFontMarkerColumns')
+    if (not isinstance(columns, list) or len(columns) != 8 or
+            any(type(col) is not int or not (col == 0 or 3 <= col <= 16) for col in columns)):
+        raise DeviceFailure('flutter_android_font_measurement_invalid')
+    clean['localFontMarkerColumns'] = columns.copy()
     for field, expected in (('identityCreationActions', 1), ('frameCountLowerBound', 2), ('deltaCountLowerBound', 1)):
         if type(raw.get(field)) is not int or raw[field] != expected:
             raise DeviceFailure('flutter_android_result_counter_invalid')
         clean[field] = expected
     if guarded:
+        offsets = raw.get('restoredViewportLogicalPixels')
+        if (not isinstance(offsets, list) or len(offsets) != 2 or
+                any(type(value) is not int or not 11 <= value <= 4096 for value in offsets) or
+                abs(offsets[1] - offsets[0]) > 1):
+            raise DeviceFailure('flutter_android_viewport_recovery_invalid')
+        clean['restoredViewportLogicalPixels'] = offsets.copy()
         for field, expected in CLIPBOARD_COUNTS.items():
             if type(raw.get(field)) is not int or raw[field] != expected:
                 raise DeviceFailure('flutter_android_clipboard_counter_invalid')
@@ -215,7 +226,7 @@ def safe_device_result(raw, guarded=False):
             raise DeviceFailure('flutter_android_guarded_byte_counts_invalid')
         clean['acceptedByteCounts'] = sizes
     elif raw.get('inputReceipts') or raw.get('guardedInput') or any(
-            field in raw for field in (*CLIPBOARD_FIELDS, *CLIPBOARD_COUNTS)):
+            field in raw for field in (*CLIPBOARD_FIELDS, *CLIPBOARD_COUNTS, 'restoredViewportLogicalPixels')):
         raise DeviceFailure('flutter_android_stock_input_unexpected')
     return clean
 

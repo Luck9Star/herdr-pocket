@@ -42,6 +42,7 @@ def block(name, source='sdk', version='0.0.0'):
 def device_report(**changes):
     value = {'case': 'android-native-pairing-observe', 'buildMode': 'debug',
         **{name: True for name in gui.BOOL_FIELDS}, 'identityCreationActions': 1,
+        'localFontMarkerColumns': [15] * 8,
         'firstSequence': 5, 'deltaSequence': 7, 'frameCountLowerBound': 2, 'deltaCountLowerBound': 1}
     value.update(changes)
     return value
@@ -208,7 +209,7 @@ class RunnerGuards(PreparedFixture):
     def test_stock_and_guarded_device_reports_cannot_substitute_for_each_other(self):
         first = {'requestId': 'a' * 32, 'terminalId': 'term_ab', 'paneId': 'w1:p1', 'acceptedBytes': 1}
         second = dict(first, requestId='b' * 32, acceptedBytes=9)
-        report = device_report(case=gui.GUARDED_CASE, acceptedByteCounts=[1, 9],
+        report = device_report(case=gui.GUARDED_CASE, acceptedByteCounts=[1, 9], restoredViewportLogicalPixels=[96,96],
                                inputReceipts=[first, second], **dict.fromkeys(gui.GUARDED_FIELDS, True),
                                **gui.CLIPBOARD_COUNTS)
         self.assertEqual(gui.safe_device_result(report, guarded=True)['inputReceipts'], [first, second])
@@ -217,6 +218,7 @@ class RunnerGuards(PreparedFixture):
         with self.assertRaises(gui.DeviceFailure):
             gui.safe_device_result(device_report(), guarded=True)
         for changes in ({'acceptedByteCounts': [True, 9]}, {'unsentDraftRestored': False},
+                        {'restoredViewportLogicalPixels': [96, 0]}, {'restoredViewportLogicalPixels': [12, True]},
                         {'inputReceipts': [first, dict(second, requestId=first['requestId'])]}):
             with self.assertRaises(gui.DeviceFailure):
                 gui.safe_device_result(dict(report, **changes), guarded=True)
@@ -224,7 +226,7 @@ class RunnerGuards(PreparedFixture):
     def test_guarded_clipboard_evidence_is_required_bounded_and_never_copies_clipboard_contents(self):
         first = {'requestId': 'a' * 32, 'terminalId': 'term_ab', 'paneId': 'w1:p1', 'acceptedBytes': 1}
         second = dict(first, requestId='b' * 32, acceptedBytes=9)
-        report = device_report(case=gui.GUARDED_CASE, acceptedByteCounts=[1, 9],
+        report = device_report(case=gui.GUARDED_CASE, acceptedByteCounts=[1, 9], restoredViewportLogicalPixels=[96,96],
             inputReceipts=[first, second], **dict.fromkeys(gui.GUARDED_FIELDS, True), **gui.CLIPBOARD_COUNTS)
         for field in (*gui.CLIPBOARD_FIELDS, *gui.CLIPBOARD_COUNTS):
             missing = dict(report); missing.pop(field)
@@ -306,6 +308,14 @@ class WireGuards(unittest.TestCase):
                         {'firstSequence': True}, {'deltaSequence': 5}, {'identityCreationActions': 2},
                         {'frameCountLowerBound': 1}, {'buildMode': 'release'}, {'case': 'mock'}):
             with self.assertRaises(gui.DeviceFailure): gui.safe_device_result(device_report(**changes))
+
+    def test_preserve_measured_marker_positions_and_reject_malformed_sample_values(self):
+        measured = [15, 15, 16, 15, 15, 15, 0, 15]
+        clean = gui.safe_device_result(device_report(localFontMarkerColumns=measured))
+        self.assertEqual(clean['localFontMarkerColumns'], measured)
+        for columns in (None, measured[:7], [True] * 8, [2] * 8, [17] * 8, ['15'] * 8):
+            with self.subTest(columns=columns), self.assertRaises(gui.DeviceFailure):
+                gui.safe_device_result(device_report(localFontMarkerColumns=columns))
 
     def test_public_exchange_only_uses_fixed_cache_paths_and_bounds(self):
         with patch.object(gui, 'adb', return_value=subprocess.CompletedProcess([], 0, b'x' * 2049, b'')) as adb:
@@ -555,7 +565,7 @@ class CleanupGuards(PreparedFixture):
         report = device_report()
         if guarded:
             first = {'requestId': 'a' * 32, 'terminalId': 'term_ab', 'paneId': 'w1:p1', 'acceptedBytes': 1}
-            report.update(case=gui.GUARDED_CASE, acceptedByteCounts=[1, 9],
+            report.update(case=gui.GUARDED_CASE, acceptedByteCounts=[1, 9], restoredViewportLogicalPixels=[96, 96],
                 inputReceipts=[first, dict(first, requestId='b' * 32, acceptedBytes=9)],
                 **dict.fromkeys(gui.GUARDED_FIELDS, True), **gui.CLIPBOARD_COUNTS)
         public = iter((b'{"public":"signer"}', b'{"public":"request"}', json.dumps(report).encode()))

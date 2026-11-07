@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "terminal-font-diagnostics-v1",
+  "fontFamily": "JetBrainsMono Nerd Font Mono",
+  "fontRelease": "Nerd Fonts v3.4.0",
+  "columns": 16,
+  "rows": 8,
+  "markerColumn": 15,
+  "samples": [
+    {
+      "id": "ascii",
+      "label": "ASCII",
+      "text": "Hello",
+      "cells": 5
+    },
+    {
+      "id": "powerline",
+      "label": "Powerline 分隔符",
+      "text": "",
+      "cells": 2
+    },
+    {
+      "id": "nerd",
+      "label": "Nerd Font 图标",
+      "text": "󰟀",
+      "cells": 3
+    },
+    {
+      "id": "cjk",
+      "label": "中文宽字符",
+      "text": "中文",
+      "cells": 4
+    },
+    {
+      "id": "combining",
+      "label": "组合重音",
+      "text": "é Å",
+      "cells": 3
+    },
+    {
+      "id": "emoji",
+      "label": "Emoji",
+      "text": "😀🚀",
+      "cells": 4
+    },
+    {
+      "id": "grapheme",
+      "label": "Emoji 组合",
+      "text": "👩‍💻❤️",
+      "cells": 4
+    },
+    {
+      "id": "ansi",
+      "label": "ANSI 粗体与红色",
+      "text": "ANSI",
+      "cells": 4
+    }
+  ],
+  "write": "1|Hello       |\r\n2|          |\r\n3|󰟀         |\r\n4|中文        |\r\n5|é Å         |\r\n6|😀🚀        |\r\n7|👩‍💻❤️        |\r\n8|\u001b[1;31mANSI\u001b[0m        |"
+}

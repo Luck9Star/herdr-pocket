@@ -1,5 +1,6 @@
 import {createUnicodeTerminal} from './terminal-unicode.js';
 import {createTerminalSelection} from './terminal-selection.js';
+import {createFontDiagnostics} from './terminal-font-diagnostics.js';
 import { initNetworkUI } from './network-ui.js';
 import { initTabWorkspace } from './tab-workspace.js';
 import { Terminal } from '@xterm/xterm';
@@ -24,7 +25,7 @@ import { requestMobileKeyboard } from './mobile-soft-keyboard.js';
 
 export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboardRead=readClipboardForPaste, keyboardRequest=requestMobileKeyboard }) {
   const $ = id => document.getElementById(id), gate = new RemoteViewGate();
-  let textSelection=null, selectTextButton=null, selectionReady=false;
+  let textSelection=null, fontDiagnostics=null, selectTextButton=null, selectionReady=false;
   let terminalFontSize=14, terminal = null, showingRemote = true, pairState = 'none', previewResponse = '', pairBusy = false, scanBusy = false, scanRevision = 0;
   let inputGeneration=null, inputEpoch=null, inputMode='observe', inputBusy=null, inputUnknown=false, inputRevision=0, selectedTarget=null, draftPreview=null, switchingFocus=false;
   let inputComposition=new InputComposition(), focusReset=Promise.resolve(), pasteReview=null, draftRevision=0, draftComposing=false, pasteFocusEpoch=0, pasteReadSequence=0; const onlineInput=new OnlineInputQueue();
@@ -91,7 +92,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   });
   function recordUnsent(count) {if(!count)return; const box=$('remote-unsent-notices'), line=document.createElement('p'); const name=hostRecords.find(h=>h.id===activeHostId)?.name || '当前目标'; line.textContent=`${name}：${count} 笔输入未发送，未自动重放。`; box.append(line); while(box.children.length>10)box.firstElementChild.remove(); box.hidden=false;}
   function keyboardEditor() {
-    if(document.hidden || !showingRemote || inputGeneration===null || !terminal || !selectedTarget || inputUnknown)return null;
+    if(fontDiagnostics?.valid() || document.hidden || !showingRemote || inputGeneration===null || !terminal || !selectedTarget || inputUnknown)return null;
     if(inputMode==='direct' && inputEpoch!==null)return terminal.textarea;
     if(inputMode==='draft' && inputEpoch!==null)return $('remote-input-draft');
     return null;
@@ -122,7 +123,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   function releaseAuxiliary() {auxiliaryModifiers.reset();renderAuxiliary();}
   function clearPasteReview() {pasteReview=null;$('remote-paste-review').hidden=true;$('remote-paste-preview').textContent='';$('remote-paste-status').textContent='';}
   function invalidateInput() {
-    textSelection?.close();textSelection=null;selectionReady=false;
+    textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;selectionReady=false;$('remote-font-diagnostics').disabled=true;
     clearPasteReview();draftComposing=false;
     const discarded=onlineInput.clear(); inputRevision++; inputGeneration=null; inputEpoch=null; inputMode='observe'; draftPreview=null; inputBusy=null;
     releaseAuxiliary();
@@ -143,7 +144,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   async function changeInputMode(mode) {
     clearPasteReview();
     releaseAuxiliary();
-    if(textSelection?.valid() || document.hidden || inputGeneration===null || !terminal || (inputUnknown && mode!=='observe'))return;
+    if(fontDiagnostics?.valid() || textSelection?.valid() || document.hidden || inputGeneration===null || !terminal || (inputUnknown && mode!=='observe'))return;
     if(inputBusy) {loseInputFocus();return;}
     const discarded=onlineInput.clear(); recordUnsent(discarded.count);
     const generation=inputGeneration, revision=++inputRevision; inputEpoch=null; inputMode='observe'; draftPreview=null;
@@ -181,7 +182,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     } finally {clearTimeout(timer);}
   }
   function inputToken() {return {generation:inputGeneration,epoch:inputEpoch,revision:inputRevision};}
-  function currentDirect(token) {return !textSelection?.valid() && !document.hidden && inputGeneration!==null && inputEpoch!==null && !inputUnknown && inputMode==='direct' && document.activeElement===terminal?.textarea && OnlineInputQueue.same(token,inputToken());}
+  function currentDirect(token) {return !fontDiagnostics?.valid() && !textSelection?.valid() && !document.hidden && inputGeneration!==null && inputEpoch!==null && !inputUnknown && inputMode==='direct' && document.activeElement===terminal?.textarea && OnlineInputQueue.same(token,inputToken());}
   function queueDirect(bytes) {
     const token=inputToken();
     if(!currentDirect(token)) {inputStatus('本次输入未发送：焦点或输入许可已失效。');return;}
@@ -247,6 +248,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     } finally {if(submitted)pendingDrafts.delete(submitted);if(inputBusy===owner)inputBusy=null; if(proceed && inputGeneration===generation && OnlineInputQueue.same(token,inputToken())) {if(currentDirect(token))void pumpDirect();else {const lost=onlineInput.clear();if(inputGeneration!==null)loseInputFocus();if(lost.count){recordUnsent(lost.count);inputStatus(`${lost.count} 笔未发送输入已丢弃。`);}}}}
   }
   function showInputPreview() {
+    if(fontDiagnostics?.valid())return;
     const text=$('remote-input-draft').value;
     if(draftComposing){inputStatus('输入法组合尚未结束，请完成后再预览。');return;}
     const bracketed=terminal?.modes.bracketedPasteMode===true;
@@ -362,7 +364,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('remote-paste-cancel').onclick=()=>choosePaste('cancel');
   $('remote-paste-review').addEventListener('focusout',event=>{if(pasteReview && !$('remote-paste-review').contains(event.relatedTarget))clearPasteReview();});
   $('remote-input-preview').onclick=showInputPreview;
-  $('remote-input-confirm').onclick=()=>{if(draftComposing){inputStatus('输入法组合尚未结束，请完成后再确认。');return;} if(draftPreview===null || draftPreview.text!==$('remote-input-draft').value || draftPreview.bracketed!==(terminal?.modes.bracketedPasteMode===true)) {draftPreview=null; $('remote-input-preview-area').hidden=true; inputStatus('终端粘贴模式或文本已变化，请重新预览。'); return;} const bytes=draftBytes(draftPreview.text,draftPreview.bracketed); draftPreview=null; $('remote-input-preview-area').hidden=true; if(bytes)void sendInput(bytes,true);};
+  $('remote-input-confirm').onclick=()=>{if(fontDiagnostics?.valid())return;if(draftComposing){inputStatus('输入法组合尚未结束，请完成后再确认。');return;} if(draftPreview===null || draftPreview.text!==$('remote-input-draft').value || draftPreview.bracketed!==(terminal?.modes.bracketedPasteMode===true)) {draftPreview=null; $('remote-input-preview-area').hidden=true; inputStatus('终端粘贴模式或文本已变化，请重新预览。'); return;} const bytes=draftBytes(draftPreview.text,draftPreview.bracketed); draftPreview=null; $('remote-input-preview-area').hidden=true; if(bytes)void sendInput(bytes,true);};
   for(const name of 'abcdefghijklmnopqrstuvwxyz') {
     const button=document.createElement('button');button.type='button';button.dataset.remoteKey=name;
     button.textContent=name.toUpperCase();$('remote-combination-bases').append(button);
@@ -765,16 +767,26 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
           terminal.open($('remote-terminal')); terminal.textarea.setAttribute('inputmode','none');
           const selectText=document.createElement('button');selectText.type='button';selectText.className='terminal-select-button';selectText.disabled=true;selectText.textContent='选择终端文本';selectText.onpointerdown=event=>event.preventDefault();
           $('remote-result').prepend(selectText);selectTextButton=selectText;
+          $('remote-font-diagnostics').disabled=true;
           selectText.onclick=()=>{
             const bound=terminal,target=selectedTarget,host=activeHostId;
             const current=()=>!document.hidden && showingRemote && terminal===bound && selectedTarget===target && activeHostId===host && gate.accepts(generation,event.generation);
             if(!bound || !target || !selectionReady || !current())return;
             if(inputBusy){inputStatus('输入仍在处理，暂不能选择终端文本。');return;}
-            textSelection?.close();textSelection=null;loseInputFocus();
+            fontDiagnostics?.close(false);fontDiagnostics=null;textSelection?.close();textSelection=null;loseInputFocus();
             try {textSelection=createTerminalSelection({terminal:bound,current,label:`${target.paneId} · ${target.terminalId}`});}
             catch(error) {status(String(error).includes('snapshot_too_large')?'可见终端文本超过 64 KiB，无法选择；未复制内容。':'没有可安全测量的可见终端文本，请滚动终端到屏幕内后重试。','warning');}
           };
           const boundTerminal=terminal; inputComposition=new InputComposition();
+          $('remote-font-diagnostics').onpointerdown=event=>event.preventDefault();
+          $('remote-font-diagnostics').onclick=()=>{
+            const target=selectedTarget,host=activeHostId,nativeGeneration=event.generation;
+            const current=()=>!document.hidden && showingRemote && terminal===boundTerminal && selectedTarget===target && activeHostId===host && gate.accepts(generation,nativeGeneration);
+            if(fontDiagnostics?.valid() || !selectionReady || !target || !current())return;
+            if(inputBusy || (inputEpoch===null && !boundTerminal.options.disableStdin)){inputStatus('输入仍在处理，暂不能打开字体诊断。');return;}
+            textSelection?.close();textSelection=null;fontDiagnostics?.close();fontDiagnostics=null;loseInputFocus();
+            let view;switchingFocus=true;try {view=createFontDiagnostics({current,terminalFactory:options=>createUnicodeTerminal(Terminal,options),fontSize:terminalFontSize,theme:theme.terminal,returnFocus:$('remote-font-diagnostics'),onClose:()=>{if(fontDiagnostics===view)fontDiagnostics=null;}});fontDiagnostics=view;} catch {inputStatus('字体诊断无法安全打开；输入已锁定。');} finally {switchingFocus=false;}
+          };
           const keyboardPending=()=>terminal===boundTerminal && inputMode!=='direct' && !boundTerminal.options.disableStdin;
           blockPendingKeys(terminal.textarea,keyboardPending);
           terminal.onData(data=>{ if(terminal!==boundTerminal)return; const token={generation:inputGeneration,epoch:inputEpoch,revision:inputRevision}; if(!inputComposition.accepts(token)) {inputStatus('输入法提交已过期，本次未发送。');return;} renderAuxiliary();if(inputMode==='direct' && document.activeElement===terminal?.textarea) queueDirect(new TextEncoder().encode(data)); });
@@ -789,14 +801,14 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
             const text=event.clipboardData?.types && !Array.from(event.clipboardData.types).includes('text/plain') ? '' : event.clipboardData?.getData('text/plain') || '';
             void reviewLocalPaste(boundTerminal,text,boundTerminal.textarea);
           },true);
-        } else if(frame.full) {selectionReady=false;if(selectTextButton)selectTextButton.disabled=true;terminal.reset();}
+        } else if(frame.full) {selectionReady=false;if(selectTextButton)selectTextButton.disabled=true;$('remote-font-diagnostics').disabled=true;terminal.reset();}
         const rendered=terminal;
         terminal.write(Uint8Array.from(frame.bytes),()=>{
           if(terminal!==rendered || !gate.accepts(generation,event.generation) || !showingRemote || event.epoch!==boardEpoch)return;
           $('remote-captured').textContent=`${new Date().toLocaleTimeString()} 更新 · 80 × 24 · 只读观察中`;
           status('只读观察中；停止或离开后画面标记为陈旧。','success');
           if(!frames.acknowledge(frame.seq)){cancel('渲染确认异常，连接已停止。');return;}
-          selectionReady=true;if(selectTextButton)selectTextButton.disabled=false;
+          selectionReady=true;if(selectTextButton)selectTextButton.disabled=false;$('remote-font-diagnostics').disabled=false;
           if (frame.full) renderedFull++; else renderedDeltas++;
           captured.dataset.fullFrames = String(renderedFull);
           captured.dataset.deltaFrames = String(renderedDeltas);

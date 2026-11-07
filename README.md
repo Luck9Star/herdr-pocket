@@ -22,7 +22,7 @@
 | 范围 | 已有证据 | 下一项验收 |
 | --- | --- | --- |
 | 配对 → 看板 → 持续观察 | Flutter、Tauri 在 API 35 模拟器均验证首次资料审查、设备签名 SSH、看板、所选终端首帧与增量、停止；Tauri 只读场景还走通手机接受撤销回执。[四场设备结果](https://github.com/Luck9Star/herdr-pocket/blob/343b5b6b0d926044d6884b33ea73bec3a5b6b174/docs/46-android-pairing-handoff-validation.md) | arm64 安装、物理相机扫码、锁屏和重启恢复 |
-| 终端与阅读位置 | 切回原终端须先校验身份并取得新的完整画面。Mac Chrome 在 320 和 390 像素宽的两个入口共四场恢复到原位置，远端发送及 resize 均为零。[本次测量](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/43-mobile-viewport-recovery.md) | 手机中文 IME、触控选区、长时间观察与跨标签焦点 |
+| 终端与阅读位置 | 原型分支的两套手机界面已增加 80×24、120×40、160×50 三档观察画布。Mac 上分别收到对应的全帧和增量，共享 PTY 的 16 个样本均为 119×40。Tauri 在两种窄屏视口能读到右下角，Flutter 已验核心缓冲区。本页 APK 早于画布改动。[画布与阅读实测](https://github.com/Luck9Star/herdr-pocket/blob/20ca93cbe435853875e20cbee608a13e24c23fd3/docs/47-mobile-observer-canvas.md) · [阅读位置恢复](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/43-mobile-viewport-recovery.md) | 两壳在 API 35 复测宽画布与位置恢复，再验真机触控、中文 IME 和长时间观察 |
 | 终端输入 | 原版 herdr 在手机验证链路中提供只读观察。隔离的守卫扩展支持目标绑定的逐键和草稿输入；不确定是否送达时保留记录，不自动重发。[输入能力与恢复](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/24-target-input-recovery.md) | 主机扩展交付、真实交互式 TUI 和设备输入 |
 | 组网与平台 | 两份 APK 包含 EasyTier、Tailscale。ZeroTier 的来源、设备管理及离线原生验证另有记录。[原生验证](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/29-zerotier-managed-device.md) | 三网真实节点、并发及五平台矩阵 |
 

@@ -1,0 +1,23 @@
+{
+  "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+  "page": "7a22df08-251d-8016-8008-de03541c11da",
+  "date": "2026-11-07",
+  "initial_review": "S13 describes host confirmation and revocation but lacks request handoff and review after cancellation/expiry; S05 assumes response reviewed; S51 was missing the intervening request.",
+  "viewer_clicks": [
+    "S51 → S52",
+    "S52 → S53",
+    "S53 → S55",
+    "S55 → S54",
+    "S54 → S01",
+    "S54 → S13"
+  ],
+  "scope": "Prototype clicks only, no real authorization, clipboard, key deletion, device or SSH verification.",
+  "version_warning": "Penpot MCP 2.15.4 reports mismatch with Penpot 2.19.0",
+  "images": {
+    "v2-S52-request-handoff-20261107.png": "215dc27ca20234d8fec8cbc109d9a9b4e195ed67febd139bbaa4c1c2d6271faa",
+    "v2-S53-revocation-receipt-20261107.png": "cbf843b77b943bbb2b379f639fba3efd934feaeac3785bfa7bbe2328c88d330a",
+    "v2-S54-revocation-receipt-20261107.png": "570606137d752523987c975a85f9fde636bd08f9118e815657b069699a04bbb1",
+    "v2-S55-revocation-receipt-20261107.png": "47fb2b515782d51a7fcaed7d98072b5d70fc34e1b1315c8e17a2c807e24a5007"
+  },
+  "viewer_note": "S54 to S01 and S13 were clicked before the review-confirmation state was added; unchanged S54 was then reached from S55 in a newly opened viewer."
+}

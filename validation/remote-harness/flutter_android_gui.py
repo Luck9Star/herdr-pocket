@@ -31,7 +31,7 @@ STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'ha
           'public_key_failed', 'profile_save_failed', 'create_not_available', 'host_board', 'public_request', 'restore_pending', 'host_authorization',
           'target_finish_edit', 'target_review_ready', 'target_review_unchecked', 'target_create_unavailable',
           'target_create_ready', 'target_create_one_tap', 'target_request_wait',
-          'response_review', 'ssh_and_dashboard', 'observe_frames', 'stop',
+          'response_review', 'ssh_and_dashboard', 'observe_frames', 'observe_canvas_select', 'observe_canvas_render', 'stop',
           'host_task_summary_authoritative', 'host_task_summary_stale', 'local_font_diagnostic',
           'delete_local_identity', 'complete', 'guarded_direct', 'guarded_hidden_draft',
           'guarded_reconnect', 'guarded_draft_review', 'fixture_validation', 'viewport_pan', 'viewport_restored',
@@ -90,6 +90,7 @@ _PRIMARY_FAILURE_CODES = frozenset({
     'flutter_android_existing_or_non_emulator_device',
     'flutter_android_failure_metadata_invalid',
     'flutter_android_font_measurement_invalid',
+    'flutter_android_observer_canvas_unconfirmed',
     'flutter_android_forward_list_invalid',
     'flutter_android_gradle_changed',
     'flutter_android_guarded_byte_counts_invalid',
@@ -407,6 +408,14 @@ def safe_device_result(raw, guarded=False):
             any(type(col) is not int or not (col == 0 or 3 <= col <= 16) for col in columns)):
         raise DeviceFailure('flutter_android_font_measurement_invalid')
     clean['localFontMarkerColumns'] = columns.copy()
+    if not guarded:
+        canvas = raw.get('observerCanvas')
+        if (not isinstance(canvas, dict) or type(canvas.get('cols')) is not int or canvas['cols'] != 120 or
+                type(canvas.get('rows')) is not int or canvas['rows'] != 40 or canvas.get('wideMarkerMatched') is not True or
+                canvas.get('wideMarkerVisible') is not True or canvas.get('readingPositionRestored') is not True):
+            raise DeviceFailure('flutter_android_observer_canvas_unconfirmed')
+        clean['observerCanvas'] = {'cols':120, 'rows':40, 'wideMarkerMatched':True,
+                                   'wideMarkerVisible':True, 'readingPositionRestored':True}
     for field, expected in (('profileCreationActionsBeforeReview', 0), ('identityCreationActions', 1), ('frameCountLowerBound', 2), ('deltaCountLowerBound', 1)):
         if type(raw.get(field)) is not int or raw[field] != expected:
             raise DeviceFailure('flutter_android_result_counter_invalid')

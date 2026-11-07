@@ -5,7 +5,7 @@ import 'remote_screen_text.dart';
 /// Read the pinned renderer's *actual* scroll position and cell dimensions,
 /// intersecting its ancestors' paint clips and the app viewport. Only fully
 /// visible cells are exported: an offscreen or half-clipped row/column is not
-/// a license to read a whole 80x24 buffer page. No layout or terminal mutation.
+/// a license to read a whole remote buffer page. No layout or terminal mutation.
 RemoteScreenCells? visibleRemoteScreenCells(Terminal terminal,RenderTerminal render,Rect screenBounds) {
   if (!render.attached || !render.hasSize || render.size.isEmpty) return null;
   var visible = MatrixUtils.transformRect(render.getTransformTo(null),render.paintBounds).intersect(screenBounds);
@@ -35,6 +35,6 @@ RemoteScreenCells? visibleRemoteScreenCells(Terminal terminal,RenderTerminal ren
   final endRow = ((end.dy - origin.dy) / height + 0.000001).floor().clamp(0,terminal.buffer.height).toInt();
   final firstColumn = ((start.dx - origin.dx) / width - 0.000001).ceil().clamp(0,terminal.viewWidth).toInt();
   final endColumn = ((end.dx - origin.dx) / width + 0.000001).floor().clamp(0,terminal.viewWidth).toInt();
-  if (endRow <= firstRow || endColumn <= firstColumn || endRow - firstRow > 24 || endColumn - firstColumn > 80) return null;
+  if (endRow <= firstRow || endColumn <= firstColumn || endRow - firstRow > terminal.viewHeight) return null;
   return RemoteScreenCells(firstRow,endRow,firstColumn,endColumn);
 }

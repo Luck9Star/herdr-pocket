@@ -92,6 +92,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
   nodes['remote-page'].hidden = true;
   nodes['fixture-workbench'].hidden = true;
   nodes['remote-port'].value = '22';
+  nodes['remote-canvas'].value = '80x24';
   nodes['pair-device'].value = 'Fixture';
   const viewport=new Element('remote-viewport');
   Object.assign(viewport,{clientWidth:320,scrollWidth:800,clientHeight:200,scrollHeight:400,scrollLeft:0,scrollTop:0});
@@ -179,7 +180,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
     constructor(options) {
       terminal = this;
       this.options = options;
-      this.cols=options.cols;
+      this.cols=options.cols;this.rows=options.rows;
       this.element={querySelector:()=>({getBoundingClientRect:()=>({width:800*this.options.fontSize/14})})};
       this.unicode = {};
       this.textarea = new Element();
@@ -187,6 +188,8 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
       this.modes = { bracketedPasteMode: false };
       this.parser = { registerOscHandler() {} };
     }
+    resize(cols,rows) {this.cols=cols;this.rows=rows;}
+    reset() {}
     loadAddon() {}
     open() {}
     dispose() {}
@@ -223,7 +226,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
   };
 }
 
-async function pairAndConnect(h) {
+async function pairAndConnect(h, canvas='80x24') {
   const n = h.nodes;
   n['host-open-remote'].click();
   await flush();
@@ -249,6 +252,7 @@ async function pairAndConnect(h) {
   await flush(); await flush(); await flush();
   n['remote-review'].checked = true;
   n['remote-form'].dispatch('input', { target: n['remote-review'] });
+  n['remote-canvas'].value=canvas;n['remote-form'].dispatch('input', {target:n['remote-canvas']});
   n['remote-form'].dispatch('submit');
   await flush();
 }
@@ -268,7 +272,7 @@ async function openInput(h) {
   publishDashboard(h, blockedPane());
   h.nodes['remote-panes'].children.find(e=>e.tagName==='button' && e.textContent.startsWith('w1:p1')).click();
   h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});
-  h.emit({ kind: 'frame', generation: 9, epoch:1, frame: { seq: 1, full: true, bytes: [65] } });
+  h.emit({ kind: 'frame', generation: 9, epoch:1, frame: { seq: 1, full: true,cols:80,rows:24, bytes: [65] } });
   h.emit({ kind: 'input_ready', generation: 9, epoch:1, unknown: false, recovery_status: 'ready' });
 }
 
@@ -361,7 +365,7 @@ test('stock paired observation opens local diagnostics without input_ready',asyn
   globalThis.fetch=async()=>({ok:true,json:async()=>fixture});const h=await setup();
   try{
     await pairAndConnect(h);publishDashboard(h,blockedPane());h.nodes['remote-panes'].children.find(e=>e.tagName==='button' && e.textContent.startsWith('w1:p1')).click();
-    h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,bytes:[65]}});await flush();
+    h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();
     const observed=h.terminal;assert.equal(h.nodes['remote-font-diagnostics'].disabled,false);h.nodes['remote-font-diagnostics'].click();await flush();await flush();
     assert.deepEqual(h.terminal.writes,[fixture.write]);assert.equal(h.terminal.options.disableStdin,true);
     assert.equal(observed.options.disableStdin,true);assert.equal(h.calls.filter(c=>c.name==='remote_input_mode').length,0);
@@ -504,7 +508,7 @@ test('live paired board updates summary and rejects old reviewed buttons and rev
     assert.match(current.textContent,/term_a002/);current.click();await flush();
     assert.deepEqual(h.calls.filter(c=>c.name==='remote_select').at(-1).args,{generation:9,epoch:1,revision:2,paneId:'w1:p1',terminalId:'term_a002'});
     h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a002'});
-    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,bytes:[65]}});
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
     h.emit({kind:'dashboard_watch',generation:9,update:{epoch:1,revision:3,phase:'fresh',reason:'changed',panes:blockedPane()}});
     assert.match(summary(n).textContent,/当前快照.*受阻 1/);
     assert.equal(h.calls.filter(c=>c.name==='remote_observe').length,1);
@@ -554,7 +558,7 @@ test('unexpected bound terminal stops without enabling input or sending',async()
     await pairAndConnect(h);publishDashboard(h,blockedPane());
     h.nodes['remote-panes'].children.find(e=>e.textContent.startsWith('w1:p1')).click();
     h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_replaced'});
-    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,bytes:[65]}});
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
     assert.equal(h.calls.filter(c=>c.name==='remote_cancel').length,1);
     assert.equal(h.calls.filter(c=>c.name==='remote_ack' || c.name==='remote_input_send').length,0);
   }finally{h.finish();await flush();h.restore();}
@@ -887,7 +891,7 @@ async function reconnectTo(h, pane) {
   h.nodes['remote-panes'].children.find(e=>e.tagName==='button' && e.textContent.startsWith(pane.paneId)).click();
   assert.equal(h.nodes['remote-input-draft'].value, '', 'unbound row must not expose its saved draft');
   h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:pane.paneId,terminal_id:pane.terminalId});
-  h.emit({ kind: 'frame', generation: 9, epoch:1, frame: { seq: 1, full: true, bytes: [65] } });
+  h.emit({ kind: 'frame', generation: 9, epoch:1, frame: { seq: 1, full: true,cols:80,rows:24, bytes: [65] } });
   h.emit({ kind: 'input_ready', generation: 9, epoch:1, unknown: false, recovery_status: 'ready' });
 }
 
@@ -1188,7 +1192,7 @@ test('fresh pairing viewport returns through saved identity only after new full,
     n['remote-panes'].children.find(e=>e.tagName==='button' && e.textContent.startsWith('w1:p1')).click();
     h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});
     assert.equal(v.scrollLeft,0,'target proof alone must not restore before a new full');
-    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,bytes:[66]}});
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[66]}});
     assert.equal(v.scrollLeft,240);assert.equal(v.scrollTop,60);
     const count=h.calls.length;v.scrollLeft=180;v.dispatch('scroll');
     assert.equal(h.calls.length,count,'local scrolling must not invoke transport');
@@ -1533,4 +1537,32 @@ test('delete failure with unavailable directory readback still reports an unconf
   const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');const remove=actions.children.find(x=>x.textContent==='移除');remove.click();remove.click();await flush();await flush();
   assert.match(n['host-home-status'].textContent,/本机删除未确认/);assert.doesNotMatch(n['host-home-status'].textContent,/连接已停用|原引用保留/);
  }finally{h.restore();}
+});
+
+test('paired observation sizes its local canvas before write and acknowledges only after render',async()=>{
+  const h=await setup();try {
+    await pairAndConnect(h);publishDashboard(h,blockedPane());
+    h.nodes['remote-panes'].children.find(e=>e.tagName==='button' && e.textContent.startsWith('w1:p1')).click();
+    h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,cols:119,rows:40,bytes:[65]}});
+    const terminal=h.terminal;assert.equal(terminal.cols,119);assert.equal(terminal.rows,40);
+    let done;const events=[];terminal.resize=(cols,rows)=>{events.push(['resize',cols,rows]);terminal.cols=cols;terminal.rows=rows;};
+    terminal.write=(_bytes,ack)=>{events.push(['write',terminal.cols,terminal.rows]);done=ack;};
+    const ackCount=()=>h.calls.filter(c=>c.name==='remote_ack').length;
+    assert.equal(ackCount(),1);
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:2,full:true,cols:100,rows:30,bytes:[66]}});
+    assert.deepEqual(events,[['resize',100,30],['write',100,30]]);assert.equal(ackCount(),1);
+    done();assert.equal(ackCount(),2);assert.match(h.nodes['remote-captured'].textContent,/100 × 30/);
+    assert.equal(h.calls.some(c=>/resize/i.test(c.name)),false);await flush();
+  } finally {h.restore();}
+});
+
+
+test('paired form sends the explicitly selected observer canvas on connect',async()=>{
+  const h=await setup();try {
+    await pairAndConnect(h,'160x50');
+    const call=h.calls.find(c=>c.name==='remote_observe');assert.deepEqual(call.args.canvas,{cols:160,rows:50});
+    assert.equal(h.nodes['remote-fields'].disabled,true);assert.equal(h.calls.some(c=>/resize/i.test(c.name)),false);
+    await flush();
+  } finally {h.restore();}
 });

@@ -42,3 +42,13 @@ test('observation failures use exact public allowlist and never stringify raw ex
   assert.match(observationError('observe_ended'),/观察通道已结束.*画面已陈旧/);
   for(const error of ['secret-host-key',Error('secret-host-key'),{toString(){throw Error('must not stringify');}},'constructor','toString'])assert.doesNotMatch(observationError(error),/secret-host-key|function|Object/);
 });
+
+test('vertical row anchor tracks font size and clamps to the locally visible canvas',()=>{
+  let width=800,height=400;const screen={getBoundingClientRect:()=>({width,height})};
+  const terminal={cols:80,rows:40,element:{querySelector:()=>screen}};
+  const viewport={scrollLeft:0,scrollTop:0,clientWidth:320,scrollWidth:800,clientHeight:100,scrollHeight:400};
+  const state=new LocalTerminalViewport();state.mount(viewport,terminal,'one',true);viewport.scrollTop=150;state.capture();
+  height=600;viewport.scrollHeight=600;state.restore();assert.equal(viewport.scrollTop,225);
+  viewport.clientHeight=550;state.restore();assert.equal(viewport.scrollTop,50);
+  state.capture();viewport.clientHeight=100;state.restore();assert.equal(viewport.scrollTop,225);
+});

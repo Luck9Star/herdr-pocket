@@ -42,7 +42,7 @@ def block(name, source='sdk', version='0.0.0'):
 def device_report(**changes):
     value = {'case': 'android-native-pairing-observe', 'buildMode': 'debug',
         **{name: True for name in gui.BOOL_FIELDS}, 'profileCreationActionsBeforeReview': 0, 'identityCreationActions': 1,
-        'localFontMarkerColumns': [15] * 8,
+        'localFontMarkerColumns': [15] * 8, 'observerCanvas': {'cols':120,'rows':40,'wideMarkerMatched':True,'wideMarkerVisible':True,'readingPositionRestored':True},
         'firstSequence': 5, 'deltaSequence': 7, 'frameCountLowerBound': 2, 'deltaCountLowerBound': 1}
     value.update(changes)
     return value
@@ -352,6 +352,25 @@ class WireGuards(unittest.TestCase):
         for columns in (None, measured[:7], [True] * 8, [2] * 8, [17] * 8, ['15'] * 8):
             with self.subTest(columns=columns), self.assertRaises(gui.DeviceFailure):
                 gui.safe_device_result(device_report(localFontMarkerColumns=columns))
+
+    def test_stock_observer_canvas_requires_measured_geometry_and_marker(self):
+        expected = {'cols': 120, 'rows': 40, 'wideMarkerMatched': True,
+                    'wideMarkerVisible': True, 'readingPositionRestored': True}
+        raw = device_report(observerCanvas=dict(expected, terminalText='synthetic'))
+        self.assertEqual(gui.safe_device_result(raw)['observerCanvas'], expected)
+        missing = device_report()
+        del missing['observerCanvas']
+        invalid = (None, {}, dict(expected, cols=80), dict(expected, rows=24),
+                   dict(expected, cols=True), dict(expected, rows=40.0),
+                   dict(expected, wideMarkerMatched=1), dict(expected, wideMarkerMatched=False),
+                   dict(expected, wideMarkerVisible=1), dict(expected, wideMarkerVisible=False),
+                   dict(expected, readingPositionRestored=1), dict(expected, readingPositionRestored=False),
+                   {k:v for k,v in expected.items() if k != 'wideMarkerVisible'},
+                   {k:v for k,v in expected.items() if k != 'readingPositionRestored'})
+        for item in [missing, *(device_report(observerCanvas=canvas) for canvas in invalid)]:
+            with self.subTest(item=item.get('observerCanvas')), self.assertRaisesRegex(
+                    gui.DeviceFailure, '^flutter_android_observer_canvas_unconfirmed$'):
+                gui.safe_device_result(item)
 
     def test_public_exchange_only_uses_fixed_cache_paths_and_bounds(self):
         with patch.object(gui, 'adb', return_value=subprocess.CompletedProcess([], 0, b'x' * 2049, b'')) as adb:

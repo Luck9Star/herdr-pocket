@@ -75,3 +75,5 @@
   padding-inline-start: 0;
   list-style-position: inside;
 }
+
+#remote-canvas, #view-content select[data-role="tab-canvas"] { display: block; min-height: 44px; max-width: 100%; margin: 8px 0; padding: 8px 12px; font: inherit; color: var(--hp-textPrimary); background: var(--hp-card); border: 1px solid var(--hp-borderStrong); border-radius: 10px; }

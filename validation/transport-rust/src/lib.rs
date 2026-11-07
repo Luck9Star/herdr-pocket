@@ -50,6 +50,26 @@ const LINE_LIMIT: usize = 1_048_576;
 const TOTAL_LIMIT: usize = 2_097_152;
 pub type Result<T> = std::result::Result<T, &'static str>;
 
+/// An explicitly selected read-only observer canvas, not the source PTY size.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ObserveCanvas {
+    pub cols: u16,
+    pub rows: u16,
+}
+impl Default for ObserveCanvas {
+    fn default() -> Self { Self { cols: 80, rows: 24 } }
+}
+impl ObserveCanvas {
+    pub fn validate(self) -> Result<Self> {
+        if self.cols < 2 || self.rows == 0 || self.cols > 512 || self.rows > 512
+            || u32::from(self.cols) * u32::from(self.rows) > 65536 {
+            return Err("invalid_observe_canvas");
+        }
+        Ok(self)
+    }
+}
+
 // Deliberately no Debug/Serialize: a config contains experimental credentials.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -65,6 +85,10 @@ pub struct RemoteConfig {
     pub session: String,
     pub pane_id: String,
     pub review_confirmed: bool,
+    // Set only by the observation API after target review, never imported,
+    // persisted, exported, or included in device/input identity.
+    #[serde(skip)]
+    pub observe_canvas: ObserveCanvas,
 }
 impl Drop for RemoteConfig {
     fn drop(&mut self) {
@@ -86,6 +110,7 @@ impl RemoteConfig {
         self.validate_for_auth(dashboard, false)
     }
     fn validate_for_auth(&self, dashboard: bool, external: bool) -> Result<PublicKey> {
+        self.observe_canvas.validate()?;
         fn bounded(s: &str, max: usize) -> bool {
             !s.is_empty() && s.len() <= max && !s.chars().any(char::is_control)
         }
@@ -164,6 +189,14 @@ pub fn config_root(socket: &str, session: &str) -> Result<String> {
     Ok(root.to_string())
 }
 fn observe_command(config: &RemoteConfig, terminal_id: &str) -> Result<String> {
+    observe_command_with_canvas(config, terminal_id, config.observe_canvas)
+}
+// The legacy one-shot result has no geometry metadata and its parser is 80x24.
+// A programmatic stream preference must not change that request contract.
+fn read_once_observe_command(config: &RemoteConfig, terminal_id: &str) -> Result<String> {
+    observe_command_with_canvas(config, terminal_id, ObserveCanvas::default())
+}
+fn observe_command_with_canvas(config: &RemoteConfig, terminal_id: &str, canvas: ObserveCanvas) -> Result<String> {
     if !terminal_id.starts_with("term_")
         || terminal_id.len() <= 5
         || terminal_id.len() > 128
@@ -174,12 +207,13 @@ fn observe_command(config: &RemoteConfig, terminal_id: &str) -> Result<String> {
         return Err("invalid_terminal_id");
     }
     let root = config_root(&config.socket_path, &config.session)?;
+    let canvas = canvas.validate()?;
     Ok(format!(
-        "/usr/bin/env {} {} --session {} terminal session observe {} --cols 80 --rows 24",
+        "/usr/bin/env {} {} --session {} terminal session observe {} --cols {} --rows {}",
         quote(&format!("XDG_CONFIG_HOME={root}")),
         quote(&config.herdr_path),
         quote(&config.session),
-        quote(terminal_id)
+        quote(terminal_id), canvas.cols, canvas.rows
     ))
 }
 
@@ -607,7 +641,7 @@ pub async fn read_once_with_dialer(
     let value: Value = serde_json::from_slice(&bytes).map_err(|_| "invalid_snapshot")?;
     audit.snapshot_received.store(true, Ordering::SeqCst);
     let terminal_id = snapshot_terminal(&value, &config.pane_id)?;
-    let command = observe_command(&config, &terminal_id)?;
+    let command = read_once_observe_command(&config, &terminal_id)?;
     progress("snapshot-received");
     if cancel.is_cancelled() {
         return Err("cancelled");
@@ -690,6 +724,9 @@ pub struct Pane {
 #[derive(Clone, Serialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamFrame {
+    /// Server-rendered frame grid; it does not report the source PTY geometry.
+    pub cols: u16,
+    pub rows: u16,
     pub seq: u64,
     pub full: bool,
     pub bytes: Vec<u8>,
@@ -764,14 +801,16 @@ fn snapshot_panes(value: &Value) -> Result<Vec<Pane>> {
     }
     Ok(panes)
 }
-fn parse_stream_frame(value: Value, previous: Option<u64>) -> Result<StreamFrame> {
+type FrameState = (u64, u16, u16);
+fn parse_stream_frame(value: Value, previous: Option<FrameState>) -> Result<StreamFrame> {
     if value["type"] != "terminal.frame"
         || value["encoding"] != "ansi"
-        || value["width"] != 80
-        || value["height"] != 24
     {
         return Err("invalid_frame");
     }
+    let cols = value["width"].as_u64().and_then(|v| u16::try_from(v).ok()).ok_or("invalid_frame")?;
+    let rows = value["height"].as_u64().and_then(|v| u16::try_from(v).ok()).ok_or("invalid_frame")?;
+    ObserveCanvas { cols, rows }.validate().map_err(|_| "invalid_frame")?;
     let seq = value["seq"]
         .as_u64()
         .filter(|seq| *seq <= 9_007_199_254_740_991)
@@ -780,7 +819,8 @@ fn parse_stream_frame(value: Value, previous: Option<u64>) -> Result<StreamFrame
     if previous.is_none() && !full {
         return Err("invalid_full_frame");
     }
-    if let Some(prev) = previous {
+    if let Some((prev, prev_cols, prev_rows)) = previous {
+        if !full && (cols != prev_cols || rows != prev_rows) { return Err("invalid_frame"); }
         if prev.checked_add(1) != Some(seq) {
             return Err("sequence_gap");
         }
@@ -792,6 +832,7 @@ fn parse_stream_frame(value: Value, previous: Option<u64>) -> Result<StreamFrame
         return Err("observe_limit");
     }
     Ok(StreamFrame {
+        cols, rows,
         seq,
         full,
         bytes,
@@ -985,7 +1026,7 @@ where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<
                         if sequence.is_none() && Instant::now() >= first_deadline {
                             return Err("timeout");
                         }
-                        sequence = Some(parsed.seq);
+                        sequence = Some((parsed.seq, parsed.cols, parsed.rows));
                         if parsed.full {
                             audit.full_frame_received.store(true, Ordering::SeqCst);
                         }
@@ -1136,17 +1177,17 @@ mod tests {
         let mut delta = first.clone();
         delta["full"] = false.into();
         delta["seq"] = 2.into();
-        assert!(!parse_stream_frame(delta.clone(), Some(1)).unwrap().full);
+        assert!(!parse_stream_frame(delta.clone(), Some((1, 80, 24))).unwrap().full);
         assert_eq!(
             parse_stream_frame(delta.clone(), None),
             Err("invalid_full_frame")
         );
         assert_eq!(
-            parse_stream_frame(delta.clone(), Some(0)),
+            parse_stream_frame(delta.clone(), Some((0, 80, 24))),
             Err("sequence_gap")
         );
         assert_eq!(
-            parse_stream_frame(delta.clone(), Some(2)),
+            parse_stream_frame(delta.clone(), Some((2, 80, 24))),
             Err("sequence_gap")
         );
         for (field, bad) in [
@@ -1157,10 +1198,85 @@ mod tests {
         ] {
             let mut invalid = delta.clone();
             invalid[field] = bad;
-            assert!(parse_stream_frame(invalid, Some(1)).is_err());
+            assert!(parse_stream_frame(invalid, Some((1, 80, 24))).is_err());
         }
         delta["bytes"] = Base64::encode_string(&vec![0; 65537]).into();
-        assert_eq!(parse_stream_frame(delta, Some(1)), Err("observe_limit"));
+        assert_eq!(parse_stream_frame(delta, Some((1, 80, 24))), Err("observe_limit"));
+    }
+    #[test]
+    fn shared_remote_frame_geometry_contract() {
+        let fixture: Value=serde_json::from_str(include_str!("../../shared/remote-frame-geometry-v1.json")).unwrap();
+        assert_eq!(fixture["schemaVersion"],1);
+        for case in fixture["cases"].as_array().unwrap() {
+            let mut previous=None;
+            for (index,raw) in case["frames"].as_array().unwrap().iter().enumerate() {
+                let mut wire=raw.clone();wire["type"]=json!("terminal.frame");wire["encoding"]=json!("ansi");wire["bytes"]=json!("YWJj");
+                let result=parse_stream_frame(wire,previous);
+                assert_eq!(result.is_ok(),case["accepted"][index].as_bool().unwrap(),"{} frame {}",case["id"],index);
+                if let Ok(frame)=result {previous=Some((frame.seq,frame.cols,frame.rows));}
+            }
+        }
+    }
+    #[test]
+    fn observer_canvas_is_bounded_explicit_and_outside_imported_identity() {
+        let mut config = example_config();
+        assert_eq!(config.observe_canvas, ObserveCanvas::default());
+        config.observe_canvas = ObserveCanvas { cols: 160, rows: 50 };
+        let command = observe_command(&config, "term_abc123").unwrap();
+        assert!(command.ends_with("--cols 160 --rows 50"));
+        assert!(!command.contains("resize"));
+        assert!(!command.contains("control"));
+        for canvas in [ObserveCanvas {cols:1,rows:24}, ObserveCanvas {cols:80,rows:0},
+            ObserveCanvas {cols:513,rows:24}, ObserveCanvas {cols:512,rows:129}] {
+            config.observe_canvas = canvas;
+            assert_eq!(observe_command(&config, "term_abc123"), Err("invalid_observe_canvas"));
+        }
+        // A caller cannot smuggle this per-observation preference into imported
+        // configuration, pairing reference, or target persistence.
+        let raw = serde_json::json!({"schemaVersion":1,"host":"fixture.invalid","port":22,
+            "username":"fixture","expectedHostKey":"unused","privateKeyPem":"unused",
+            "socketPath":"/tmp/herdr/sessions/work/herdr.sock","herdrPath":"/tmp/herdr",
+            "session":"work","paneId":"w:p1","reviewConfirmed":true});
+        for key in ["observeCanvas", "canvas", "observeCols", "cols"] {
+            let mut invalid=raw.clone(); invalid[key]=json!({"cols":160,"rows":50});
+            assert!(RemoteConfig::from_json(&serde_json::to_vec(&invalid).unwrap()).is_err());
+        }
+    }
+    #[test]
+    fn nondefault_stream_canvas_cannot_change_legacy_one_shot_request() {
+        let mut config = example_config();
+        config.observe_canvas = ObserveCanvas { cols: 160, rows: 50 };
+        let one_shot = read_once_observe_command(&config, "term_abc123").unwrap();
+        let stream = observe_command(&config, "term_abc123").unwrap();
+        assert!(one_shot.ends_with("--cols 80 --rows 24"));
+        assert!(stream.ends_with("--cols 160 --rows 50"));
+        assert_eq!(config.observe_canvas, ObserveCanvas { cols: 160, rows: 50 });
+        assert!(!one_shot.contains("resize"));
+        assert!(!stream.contains("resize"));
+    }
+    #[test]
+    fn parsed_geometry_is_transmitted_and_delta_cannot_change_grid() {
+        let full=json!({"type":"terminal.frame","encoding":"ansi","seq":1,"full":true,"width":160,"height":50,"bytes":"YWJj"});
+        let parsed=parse_stream_frame(full.clone(),None).unwrap();
+        let serialized=serde_json::to_value(&parsed).unwrap();
+        assert_eq!(serialized["cols"],160); assert_eq!(serialized["rows"],50);
+        assert!(serialized.get("width").is_none());
+        let mut next=full.clone(); next["seq"]=json!(2); next["full"]=json!(false);
+        assert!(parse_stream_frame(next.clone(),Some((1,160,50))).is_ok());
+        next["width"]=json!(120);
+        assert_eq!(parse_stream_frame(next.clone(),Some((1,160,50))),Err("invalid_frame"));
+        next["full"]=json!(true);
+        assert_eq!(parse_stream_frame(next.clone(),Some((1,160,50))).unwrap().cols,120);
+        next["seq"]=json!(3);
+        assert_eq!(parse_stream_frame(next,Some((1,160,50))),Err("sequence_gap"));
+        for (key,value) in [("width",json!(null)),("width",json!("160")),("width",json!(1)),
+            ("width",json!(0)),("height",json!(-1)),("width",json!(160.0)),
+            ("width",json!(513)),("height",json!(512))] {
+            let mut invalid=full.clone();invalid[key]=value;
+            assert!(parse_stream_frame(invalid,None).is_err());
+        }
+        let mut smallest=full;smallest["width"]=json!(2);smallest["height"]=json!(1);
+        assert!(parse_stream_frame(smallest,None).is_ok());
     }
     #[tokio::test]
     async fn first_frame_deadline_does_not_restart_for_partial_messages() {

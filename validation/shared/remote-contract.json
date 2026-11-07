@@ -75,7 +75,7 @@
   "commands": {
     "snapshot": "one direct-streamlocal channel, one session.snapshot RPC, validate response id, ok/error and result.type=session_snapshot, read result.snapshot, then close",
     "observe": "fixed /usr/bin/env with only shell-quoted XDG_CONFIG_HOME derived from canonical socketPath; shell-quoted herdrPath --session session terminal session observe resolvedTerminalId --cols 80 --rows 24; no SSH PTY/control/takeover/resize; close after validated full frame",
-    "continuousObserve": "fixed /usr/bin/env with only shell-quoted XDG_CONFIG_HOME derived from canonical socketPath; shell-quoted herdrPath --session session terminal session observe resolvedTerminalId --cols 80 --rows 24; no SSH PTY/control/takeover/resize; await consumer acknowledgement for each full/delta frame until explicit cancel, EOF or protocol/size error"
+    "continuousObserve": "same fixed target and quoting as one-shot. Use validated observer dimensions for --cols and --rows, default 80x24. Both mobile clients also offer 120x40 and 160x50. Acknowledge each full/delta after consumption. Stop on explicit cancel, EOF or protocol/size error. No SSH PTY, control, takeover or shared PTY resize."
   },
   "lifecycle": [
     "Every attempt owns an internal generation; cancellation or target change invalidates it before transport cleanup.",
@@ -159,6 +159,7 @@
     "firstFullTimeoutSeconds": 10,
     "idleTimeout": null,
     "seqMaximum": 9007199254740991,
-    "history": "No cumulative raw frame history; both remote views retain only the fixed 80x24 screen (no scrollback). bufferHighWaterBytes measures one decoded frame, not JSON line, SSH buffers or whole-process memory."
+    "canvas": "Each frame carries integer width (2..512) and height (1..512), with at most 65536 cells. The first frame is full. A geometry change requires a full frame at the next sequence. The wire dimensions describe the observer rendering area. The shared PTY size is independent.",
+    "history": "Keep only the current observer screen without scrollback. bufferHighWaterBytes measures one decoded frame. Local pan, keyboard and viewport changes do not resize the shared PTY."
   }
 }

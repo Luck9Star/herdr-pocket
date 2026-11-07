@@ -59,6 +59,7 @@ impl PortableTarget {
             session: self.session.clone(),
             pane_id: String::new(),
             review_confirmed: true,
+            observe_canvas: Default::default(),
         }
         .validate_pair_target()
         .map_err(|_| "transfer_invalid_schema")

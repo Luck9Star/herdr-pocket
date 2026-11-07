@@ -441,6 +441,7 @@ impl Harness {
                 session: "fixture".into(),
                 pane_id: "w1:p1".into(),
                 review_confirmed: true,
+                observe_canvas: Default::default(),
             },
         }
     }

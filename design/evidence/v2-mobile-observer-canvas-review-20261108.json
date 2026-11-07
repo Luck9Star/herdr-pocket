@@ -1,0 +1,98 @@
+{
+  "file": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+  "page": "7a22df08-251d-8016-8008-de03541c11da",
+  "boardCount": 60,
+  "newBoards": [
+    {
+      "id": "25c76497-7d68-803e-8008-e8fdaa687c09",
+      "name": "S56 · 观察画布 · 80 × 24"
+    },
+    {
+      "id": "25c76497-7d68-803e-8008-e8fdaa75785a",
+      "name": "S57 · 观察画布 · 120 × 40"
+    },
+    {
+      "id": "25c76497-7d68-803e-8008-e8fdaa782a8a",
+      "name": "S58 · 观察画布 · 160 × 50"
+    },
+    {
+      "id": "25c76497-7d68-803e-8008-e8fdaa7a68eb",
+      "name": "S59 · 观察画布 · 左上阅读"
+    },
+    {
+      "id": "25c76497-7d68-803e-8008-e8fdaa7d9353",
+      "name": "S60 · 观察画布 · 右下阅读"
+    }
+  ],
+  "newInteractionCount": 36,
+  "danglingNewLinks": 0,
+  "existingBoardCount": 55,
+  "existingDirectShapes": 1426,
+  "oldShapeCanonicalSha256Before": "75399e148180f7d15c81a320c4d2a1315d481a3a7932c93c8e015f77683daff2",
+  "oldShapeCanonicalSha256After": "75399e148180f7d15c81a320c4d2a1315d481a3a7932c93c8e015f77683daff2",
+  "oldShapeFields": "id,name,type,rounded geometry,trigger and destination",
+  "touchEntry": {
+    "board": "S17",
+    "x": 24,
+    "y": 4580,
+    "width": 342.0,
+    "height": 48.0,
+    "originalShapeIntersectionCount": 0,
+    "oldButtons": [
+      {
+        "name": "action · 返回观察终端",
+        "bounds": [
+          24,
+          4448,
+          342.0,
+          48.0
+        ],
+        "intersectionArea": 0.0
+      },
+      {
+        "name": "action · 查看隐藏恢复示意",
+        "bounds": [
+          24,
+          4510,
+          342.0,
+          48.0
+        ],
+        "intersectionArea": 0.0
+      }
+    ],
+    "positionWithinBoard": {
+      "x": 24,
+      "y": 680,
+      "width": 342,
+      "height": 48
+    }
+  },
+  "verifiedClicks": [
+    "S17 → S56 → S46 (after entry move)",
+    "S56 → S57 → S59 → S60 → S59 → S57 → S58 → S46 (before entry move)"
+  ],
+  "limitations": [
+    "Penpot prototype only",
+    "120×40 is a labelled fixed reading example",
+    "MCP plugin 2.15.4 and site 2.19.0 version warning"
+  ],
+  "viewerEntry": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=61ebadac-98b5-8013-8008-e6e7917e7a2b",
+  "comparisonMeaning": "55 original boards: 1426 direct shapes preserved by id/name/type/rounded geometry/trigger/destination; attributes outside this set not compared.",
+  "reusableScript": "design/penpot/mobile-observer-canvas-20261108.js",
+  "localModelVerification": {
+    "newBoardsCompared": 5,
+    "newBoardChildrenCompared": 87,
+    "fields": "name,type,relative geometry,text and destination names",
+    "selectedOptionsHaveSelfLinks": false,
+    "entrySize": [
+      342,
+      48
+    ],
+    "pageGuard": true,
+    "duplicateGuard": true,
+    "occupiedEntryGuard": true,
+    "persistedEntryGeometryAndTargetsCompared": true,
+    "scope": "isolated in-memory model; no Penpot write during this verification"
+  },
+  "historicalScripts": "/private/tmp/herdr-observer-canvas-20261108"
+}

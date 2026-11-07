@@ -43,6 +43,7 @@ impl Target {
             session: self.session.clone(),
             pane_id: String::new(),
             review_confirmed: true,
+            observe_canvas: Default::default(),
         }
     }
     pub fn from_config(c: &RemoteConfig) -> Self {

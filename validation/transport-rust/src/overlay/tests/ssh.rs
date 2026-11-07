@@ -161,6 +161,7 @@ async fn readonly_and_guarded_routes_reject_wrong_hostkey_before_auth() {
             session: "fixture".into(),
             pane_id: "w1:p1".into(),
             review_confirmed: true,
+            observe_canvas: Default::default(),
         };
         let audit = Arc::new(Audit::default());
         let error = if guarded {

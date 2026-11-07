@@ -25,7 +25,7 @@ test('MT02 MT03 MT10: switching pauses old connection, explicit resume, stale fr
   globalThis.document={hidden:false,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
   const calls=[],channels=[],pending=[];
   const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(calls.length);if(name==='remote_tab_observe'){pending.push(args);return new Promise(()=>{});}return Promise.resolve();};
-  const fakeTerminal=()=>({parser:{registerOscHandler(){}},textarea:{setAttribute(){}},open(){},write(_b,done){done();},reset(){},dispose(){}});
+  const fakeTerminal=()=>({parser:{registerOscHandler(){}},textarea:{setAttribute(){}},open(){},write(_b,done){done();},reset(){},resize(cols,rows){this.cols=cols;this.rows=rows;},dispose(){}});
   try {
     const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:fakeTerminal});
     const direct=target('direct-pane-a'),mesh=target('mesh-pane-b');
@@ -39,7 +39,7 @@ test('MT02 MT03 MT10: switching pauses old connection, explicit resume, stale fr
     assert.ok(calls.some(c=>c.name==='remote_tab_control' && c.args.tabId===a && c.args.action==='pause'));
     assert.ok(!calls.some(c=>c.name==='remote_tab_control' && c.args.tabId===b && c.args.action==='resume'));
     const before=calls.filter(c=>c.name==='remote_tab_ack').length;
-    channels[0].onmessage({kind:'frame',generation:first.generation,epoch:1,frame:{seq:1,full:true,bytes:[65]}});
+    channels[0].onmessage({kind:'frame',generation:first.generation,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
     await flush();assert.equal(calls.filter(c=>c.name==='remote_tab_ack').length,before);
     assert.equal(calls.filter(c=>c.name==='remote_tab_cancel').length,0);
   } finally {globalThis.document=oldDocument;}
@@ -85,14 +85,14 @@ test('MT09 MT10: direct input sends only current visible epoch and stops after s
   globalThis.window={confirm:()=>true};
   const calls=[],channels=[],observers=[];let term;
   const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe'){observers.push(args);return new Promise(()=>{});}if(name==='remote_tab_input_mode')return Promise.resolve(5);if(name==='remote_tab_input_send')return Promise.resolve({status:'accepted',receipt:{requestId:'a'.repeat(32),paneId:'w1:p1',terminalId:'term_a001',acceptedBytes:args.bytes.length}});return Promise.resolve();};
-  const fakeTerminal=()=>{term={options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},dispose(){},focus(){document.activeElement=this.textarea;},onData(fn){this.data=fn;}};return term;};
+  const fakeTerminal=()=>{term={options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},resize(cols,rows){this.cols=cols;this.rows=rows;},dispose(){},focus(){document.activeElement=this.textarea;},onData(fn){this.data=fn;}};return term;};
   try {
     const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:fakeTerminal});
     const direct=target('direct-pane-a'),mesh=target('mesh-pane-b');ui.create(direct.hostId,direct);
     const find=label=>nodes['view-content'].all().find(n=>n.textContent===label);
     const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
     const g=observers[0].generation;channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'starting'}});
-    channels[0].onmessage({kind:'frame',generation:g,epoch:1,frame:{seq:1,full:true,bytes:[65]}});await flush();
+    channels[0].onmessage({kind:'frame',generation:g,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();
     channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'active'}});
     channels[0].onmessage({kind:'input_ready',generation:g,epoch:1,unknown:false,recovery_status:'ready'});
     find('逐键输入').onclick();await flush();await flush();term.data('a');await flush();
@@ -149,14 +149,14 @@ test('MT08 MT10: late draft-mode and rejected-send replies cannot overwrite a ne
   globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};globalThis.window={confirm:()=>true};
   const calls=[],channels=[],observed=[];let resolveMode,resolveSend,delayMode=true;
   const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(3);if(name==='remote_tab_observe'){observed.push(args);return new Promise(()=>{});}if(name==='remote_tab_input_mode' && args.mode==='draft'){if(delayMode)return new Promise(resolve=>{resolveMode=resolve;});return Promise.resolve(10);}if(name==='remote_tab_input_send')return new Promise(resolve=>{resolveSend=resolve;});return Promise.resolve();};
-  const fakeTerminal=()=>({options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},dispose(){},onData(){}});
+  const fakeTerminal=()=>({options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},resize(cols,rows){this.cols=cols;this.rows=rows;},dispose(){},onData(){}});
   try {
     const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:fakeTerminal});
     const direct=target('direct-pane-a');ui.create(direct.hostId,direct);
     const find=label=>nodes['view-content'].all().find(n=>n.textContent===label);
     const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
     const g=observed[0].generation;
-    const frame=(epoch)=>{channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch,phase:'resuming'}});channels[0].onmessage({kind:'frame',generation:g,epoch,frame:{seq:1,full:true,bytes:[65]}});channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch,phase:'active'}});channels[0].onmessage({kind:'input_ready',generation:g,epoch,unknown:false,recovery_status:'ready'});};
+    const frame=(epoch)=>{channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch,phase:'resuming'}});channels[0].onmessage({kind:'frame',generation:g,epoch,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch,phase:'active'}});channels[0].onmessage({kind:'input_ready',generation:g,epoch,unknown:false,recovery_status:'ready'});};
     frame(1);find('启用草稿输入').onclick();await flush();frame(2);resolveMode(9);await flush();
     assert.equal(find('发送草稿').disabled,true);
     delayMode=false;find('启用草稿输入').onclick();await flush();let textarea=nodes['view-content'].all().find(n=>n.tagName==='textarea');textarea.value='old';textarea.oninput();find('发送草稿').onclick();await flush();
@@ -201,12 +201,12 @@ test('MT02 MT08: blur during direct input pauses rather than disconnects and doe
   globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
   const calls=[],channels=[],observed=[];let term;
   const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe'){observed.push(args);return new Promise(()=>{});}if(name==='remote_tab_input_mode')return Promise.resolve(5);if(name==='remote_tab_input_send')return new Promise(()=>{});return Promise.resolve();};
-  const fakeTerminal=()=>{term={options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},dispose(){},focus(){document.activeElement=this.textarea;},onData(fn){this.data=fn;}};return term;};
+  const fakeTerminal=()=>{term={options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},resize(cols,rows){this.cols=cols;this.rows=rows;},dispose(){},focus(){document.activeElement=this.textarea;},onData(fn){this.data=fn;}};return term;};
   try {
     const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:fakeTerminal});
     const direct=target('direct-pane-a');ui.create(direct.hostId,direct);
     const find=label=>nodes['view-content'].all().find(n=>n.textContent===label);const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
-    const g=observed[0].generation;channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'starting'}});channels[0].onmessage({kind:'frame',generation:g,epoch:1,frame:{seq:1,full:true,bytes:[65]}});await flush();channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'active'}});channels[0].onmessage({kind:'input_ready',generation:g,epoch:1,unknown:false,recovery_status:'ready'});
+    const g=observed[0].generation;channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'starting'}});channels[0].onmessage({kind:'frame',generation:g,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'active'}});channels[0].onmessage({kind:'input_ready',generation:g,epoch:1,unknown:false,recovery_status:'ready'});
     find('逐键输入').onclick();await flush();term.data('a');await flush();document.activeElement=null;term.textarea.event_blur();await flush();
     assert.equal(calls.filter(c=>c.name==='remote_tab_input_send').length,1);
     assert.equal(calls.filter(c=>c.name==='remote_tab_control' && c.args.action==='pause').length,1);
@@ -220,12 +220,12 @@ for (const edited of ['new draft', '']) test(`MT08: same-epoch edit ${edited ? '
   globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};globalThis.window={confirm:()=>true};
   const channels=[],observed=[];let resolveSend,sends=0;
   const invoke=(name,args)=>{if(name==='remote_tab_reserve')return Promise.resolve(3);if(name==='remote_tab_observe'){observed.push(args);return new Promise(()=>{});}if(name==='remote_tab_input_mode')return Promise.resolve(10);if(name==='remote_tab_input_send'){sends++;return new Promise(resolve=>{resolveSend=resolve;});}return Promise.resolve();};
-  const fakeTerminal=()=>({options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},dispose(){},onData(){}});
+  const fakeTerminal=()=>({options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},resize(cols,rows){this.cols=cols;this.rows=rows;},dispose(){},onData(){}});
   try {
     const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:fakeTerminal});
     const direct=target('direct-pane-a');ui.create(direct.hostId,direct);
     const find=label=>nodes['view-content'].all().find(n=>n.textContent===label);const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
-    const g=observed[0].generation;channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'starting'}});channels[0].onmessage({kind:'frame',generation:g,epoch:1,frame:{seq:1,full:true,bytes:[65]}});channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'active'}});channels[0].onmessage({kind:'input_ready',generation:g,epoch:1,unknown:false,recovery_status:'ready'});
+    const g=observed[0].generation;channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'starting'}});channels[0].onmessage({kind:'frame',generation:g,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'active'}});channels[0].onmessage({kind:'input_ready',generation:g,epoch:1,unknown:false,recovery_status:'ready'});
     find('启用草稿输入').onclick();await flush();let text=nodes['view-content'].all().find(n=>n.tagName==='textarea');text.value='original';text.oninput();find('发送草稿').onclick();await flush();
     text=nodes['view-content'].all().find(n=>n.tagName==='textarea');text.value='temporary';text.oninput();text.value=edited;text.oninput();resolveSend({status:'rejected'});await flush();
     const textareas=nodes['view-content'].all().filter(n=>n.tagName==='textarea');assert.equal(textareas[0].value,edited);assert.equal(textareas[1].value,'original');assert.equal(textareas[1].readOnly,true);assert.equal(sends,1);
@@ -252,7 +252,7 @@ function watchWorkspace(fixedTarget=null,options={}) {
   const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device'}),onDashboard:options.onDashboard,clipboardRead:options.clipboardRead,keyboardRequest:options.keyboardRequest,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:(options)=>{
     terminal={
       createdOptions:options,options:{},focusReadOnly:[],parser:{registerOscHandler(){}},textarea:new Element('textarea'),
-      open(){},write(bytes,done){(this.writes??=[]).push(bytes);done();},reset(){},dispose(){},
+      open(){},write(bytes,done){(this.writes??=[]).push(bytes);done();},reset(){},resize(cols,rows){this.cols=cols;this.rows=rows;},dispose(){},
       focus(){this.focusReadOnly.push(this.textarea.readOnly);document.activeElement=this.textarea;},
       onData(fn){this.data=fn;},
     };
@@ -292,9 +292,9 @@ test('SW01 SW09: watch selection awaits native receiver and freezes pane plus te
 
 test('SW02 SW07: terminal full and stale or reordered metadata cannot rewrite dashboard freshness or unknown lock',async()=>{
   const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try {
-    await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});
+    await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
     h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:true,recovery_status:'pending'});
-    h.watch(1,3,'stale',null);h.watch(1,2);h.emit({kind:'frame',epoch:1,frame:{seq:2,full:true,bytes:[66]}});await flush();
+    h.watch(1,3,'stale',null);h.watch(1,2);h.emit({kind:'frame',epoch:1,frame:{seq:2,full:true,cols:80,rows:24,bytes:[66]}});await flush();
     assert.ok(h.all().some(n=>n.attrs['data-dashboard-phase']==='stale'));
     assert.equal(h.find('逐键输入').disabled,true);
     h.watch(1,4,'fresh',[{paneId:'w1:p1',terminalId:'term_a001',agentStatus:'blocked'},{paneId:'w1:p2',terminalId:'term_def',agentStatus:'idle'}]);
@@ -308,7 +308,7 @@ test('SW02 SW07: terminal full and stale or reordered metadata cannot rewrite da
 
 test('SW07: dashboard updates preserve focused direct input DOM while showing fresh and stale metadata',async()=>{
   const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try {
-    await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});
+    await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
     h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
     h.find('逐键输入').onclick();await flush();await flush();const terminal=h.terminal(),before=h.nodes['view-content'].replaceCount;
     h.watch(1,2,'stale',null);assert.ok(h.all().some(n=>n.attrs['data-dashboard-phase']==='stale'));
@@ -340,14 +340,14 @@ test('SW09: first frame target proof and a late selection ACK cannot cross a res
   let resolveSelection;const h=watchWorkspace(null,{select:()=>new Promise(resolve=>{resolveSelection=resolve;})});try {
     await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'selection_ready',epoch:1});
     h.all().find(n=>n.tagName==='button' && n.textContent.startsWith('选择 w1:p1')).onclick();await flush();
-    h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
+    h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
     assert.equal(h.find('逐键输入').disabled,true,'an input-ready message cannot invent the selected target');
     h.emit({kind:'target_bound',epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});
     assert.ok(h.all().some(n=>n.textContent==='fixture · w1:p1 · term_a001'));
     await h.ui.hide();h.observation(2,'paused');h.find('恢复观察').onclick();await flush();await flush();h.observation(3,'resuming');h.watch(3,1);
     h.emit({kind:'target_bound',epoch:1,pane_id:'w1:p1',terminal_id:'term_def'});
     h.emit({kind:'target_bound',epoch:3,pane_id:'w1:p1',terminal_id:'term_a001'});
-    h.emit({kind:'frame',epoch:3,frame:{seq:1,full:true,bytes:[66]}});h.observation(3,'active');h.emit({kind:'input_ready',epoch:3,unknown:true,recovery_status:'pending'});
+    h.emit({kind:'frame',epoch:3,frame:{seq:1,full:true,cols:80,rows:24,bytes:[66]}});h.observation(3,'active');h.emit({kind:'input_ready',epoch:3,unknown:true,recovery_status:'pending'});
     const resumedDraft=h.all().find(n=>n.tagName==='textarea');resumedDraft.value='恢复后的草稿';resumedDraft.oninput();document.activeElement=resumedDraft;
     resolveSelection();await flush();
     assert.equal(h.all().find(n=>n.tagName==='textarea'),resumedDraft);assert.equal(document.activeElement,resumedDraft);assert.equal(resumedDraft.value,'恢复后的草稿');
@@ -370,7 +370,7 @@ test('SW08 SW09: native target proof cannot replace the pane terminal the user a
 
 test('SW07: live board refresh preserves draft textarea, focus, composition and exact text',async()=>{
   const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try {
-    await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});
+    await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
     h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
     const draft=h.all().find(n=>n.tagName==='textarea');document.activeElement=draft;
     let composing=false;draft.addEventListener('compositionstart',()=>{composing=true;});draft.addEventListener('compositionend',()=>{composing=false;});
@@ -381,7 +381,7 @@ test('SW07: live board refresh preserves draft textarea, focus, composition and 
     assert.ok(h.all().filter(n=>n.tagName==='button' && n.textContent.startsWith('新标签：')).every(n=>n.disabled));
     h.watch(1,3,'fresh',[{paneId:'w1:p1',terminalId:'term_a001',agentStatus:'blocked'},{paneId:'w1:p2',terminalId:'term_def',agentStatus:'idle'}]);
     h.emit({kind:'target_bound',epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});
-    h.emit({kind:'frame',epoch:1,frame:{seq:2,full:true,bytes:[66]}});
+    h.emit({kind:'frame',epoch:1,frame:{seq:2,full:true,cols:80,rows:24,bytes:[66]}});
     assert.equal(h.nodes['view-content'].replaceCount,before);assert.equal(h.all().find(n=>n.tagName==='textarea'),draft);assert.equal(document.activeElement,draft);assert.equal(composing,true);
     assert.ok(h.all().some(n=>n.textContent.includes('w1:p2') && !n.disabled));
     // A retained old row still cannot use its obsolete review revision.
@@ -398,7 +398,7 @@ test('SW07: an explicit new SSH attempt accepts epoch one after the prior attemp
     assert.equal(h.calls.filter(c=>c.name==='remote_tab_reserve').length,1);
     await h.start();h.observation(1,'starting');h.watch(1,1);
     assert.ok(h.all().some(n=>n.attrs['data-dashboard-phase']==='fresh'));
-    h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});await flush();
+    h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();
     assert.ok(h.calls.some(c=>c.name==='remote_tab_ack' && c.args.epoch===1));
     assert.equal(h.calls.filter(c=>c.name==='remote_tab_reserve').length,2);
     assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
@@ -407,7 +407,7 @@ test('SW07: an explicit new SSH attempt accepts epoch one after the prior attemp
 
 test('IJ04 IJ12: recovery confirmation alone requests observe review focus with the captured input epoch',async()=>{
   const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try {
-    await h.start();h.observation(1,'starting');h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});h.observation(1,'active');
+    await h.start();h.observation(1,'starting');h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});h.observation(1,'active');
     h.emit({kind:'input_ready',epoch:1,unknown:true,recovery_status:'pending'});
     window.confirm=()=>false;h.find('已核实原目标结果，恢复输入').onclick();await flush();
     assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_mode').length,0);
@@ -425,16 +425,16 @@ test('IJ04 IJ12: recovery confirmation alone requests observe review focus with 
 
 test('IJ03 IJ12: a delayed review-mode result cannot resolve the next observation epoch',async()=>{
   let reviewResult;const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{mode:args=>args.review?new Promise(resolve=>{reviewResult=resolve;}):Promise.resolve(5)});try {
-    await h.start();h.observation(1,'starting');h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:true,recovery_status:'pending'});
+    await h.start();h.observation(1,'starting');h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:true,recovery_status:'pending'});
     h.find('已核实原目标结果，恢复输入').onclick();await flush();assert.ok(reviewResult);
-    h.observation(3,'resuming');h.emit({kind:'frame',epoch:3,frame:{seq:1,full:true,bytes:[66]}});h.observation(3,'active');h.emit({kind:'input_ready',epoch:3,unknown:true,recovery_status:'pending'});
+    h.observation(3,'resuming');h.emit({kind:'frame',epoch:3,frame:{seq:1,full:true,cols:80,rows:24,bytes:[66]}});h.observation(3,'active');h.emit({kind:'input_ready',epoch:3,unknown:true,recovery_status:'pending'});
     reviewResult(8);await flush();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_recover').length,0);
     assert.equal(h.find('逐键输入').disabled,true);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
   } finally {h.restore();}
 });
 
 async function readyPaste(h) {
- await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
+ await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
  const draft=h.all().find(n=>n.tagName==='textarea');draft.value='原草稿';draft.oninput();h.find('逐键输入').onclick();await flush();await flush();
 }
 function paste(terminal,value){let prevented=false,stopped=false;terminal.textarea.event_paste({preventDefault(){prevented=true;},stopImmediatePropagation(){stopped=true;},clipboardData:{getData:()=>value}});assert.equal(prevented,true);assert.equal(stopped,true);}
@@ -458,7 +458,7 @@ test('new connection keeps old snapshot stale until authority replaces it',async
 });
 
 test('clipboard review from old epoch cannot modify the retained draft',async()=>{
- const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try{await readyPaste(h);paste(h.terminal(),'新');await flush();const stale=h.find('替换草稿');h.observation(2,'resuming');stale.onclick();h.emit({kind:'frame',epoch:2,frame:{seq:1,full:true,bytes:[65]}});h.observation(2,'active');h.emit({kind:'input_ready',epoch:2,unknown:false,recovery_status:'ready'});assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿');assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);}finally{h.restore();}
+ const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});try{await readyPaste(h);paste(h.terminal(),'新');await flush();const stale=h.find('替换草稿');h.observation(2,'resuming');stale.onclick();h.emit({kind:'frame',epoch:2,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});h.observation(2,'active');h.emit({kind:'input_ready',epoch:2,unknown:false,recovery_status:'ready'});assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿');assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);}finally{h.restore();}
 });
 test('old row cannot regain authority after a new connection reuses epoch and revision',async()=>{
  let end,attempt=0;const h=watchWorkspace(null,{observe:()=>{attempt++;return attempt===1?new Promise(r=>end=r):new Promise(()=>{});}});try{await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'selection_ready',epoch:1});const old=h.all().find(n=>n.tagName==='button'&&n.textContent.startsWith('选择 '));h.ui.background();end();await flush();await flush();await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'selection_ready',epoch:1});old.onclick();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_tab_select').length,0);const fresh=h.all().find(n=>n.tagName==='button'&&n.textContent.startsWith('选择 '));fresh.onclick();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_tab_select').length,1);}finally{h.restore();}
@@ -477,7 +477,7 @@ async function readyKeyboard(h) {
   await h.start();
   h.observation(1, 'starting');
   h.watch(1, 1);
-  h.emit({ kind: 'frame', epoch: 1, frame: { seq: 1, full: true, bytes: [65] } });
+  h.emit({ kind: 'frame', epoch: 1, frame: { seq: 1, full: true,cols:80,rows:24, bytes: [65] } });
   h.observation(1, 'active');
   h.emit({ kind: 'input_ready', epoch: 1, unknown: false, recovery_status: 'ready' });
 }
@@ -557,7 +557,7 @@ test('stock saved tab opens local diagnostics without input_ready',async()=>{
   const prior=globalThis.fetch,fixture=JSON.parse(readFileSync(new URL('../../shared/terminal-font-diagnostics-v1.json',import.meta.url),'utf8'));
   globalThis.fetch=async()=>({ok:true,json:async()=>fixture});const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
   try{
-    await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,bytes:[65]}});h.observation(1,'active');await flush();
+    await h.start();h.observation(1,'starting');h.watch(1,1);h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});h.observation(1,'active');await flush();
     const observed=h.terminal();assert.equal(h.find('字体与字符诊断').disabled,false);h.find('字体与字符诊断').onclick();await flush();await flush();
     assert.deepEqual(h.terminal().writes,[fixture.write]);assert.equal(h.terminal().createdOptions.disableStdin,true);
     assert.equal(observed.options.disableStdin,true);assert.ok(h.calls.filter(c=>c.name==='remote_tab_input_mode').every(c=>c.args.mode==='observe'));
@@ -830,10 +830,10 @@ test('saved tab selection revokes direct input and closes on tab switch',async()
   const calls=[],channels=[],observers=[];let terminal;
   const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe'){observers.push(args);return new Promise(()=>{});}if(name==='remote_tab_input_mode')return Promise.resolve(5);return Promise.resolve();};
   try {
-    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>terminal={element:{contains:()=>true,querySelector:()=>({parentElement:null,getBoundingClientRect:()=>({left:0,top:0,width:10,height:10})})},cols:1,rows:1,buffer:{active:{viewportY:0,getLine:()=>({length:1,isWrapped:false,getCell:()=>({getChars:()=> 'A',getWidth:()=>1}),translateToString:()=> 'A'})}},options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},dispose(){},focus(){document.activeElement=this.textarea;},onData(fn){this.data=fn;}}});
+    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>terminal={element:{contains:()=>true,querySelector:()=>({parentElement:null,getBoundingClientRect:()=>({left:0,top:0,width:10,height:10})})},cols:1,rows:1,buffer:{active:{viewportY:0,getLine:()=>({length:1,isWrapped:false,getCell:()=>({getChars:()=> 'A',getWidth:()=>1}),translateToString:()=> 'A'})}},options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},resize(cols,rows){this.cols=cols;this.rows=rows;},dispose(){},focus(){document.activeElement=this.textarea;},onData(fn){this.data=fn;}}});
     ui.create('host',{paneId:'w1:p1',terminalId:'term_a001'});const find=label=>nodes['view-content'].all().find(n=>n.textContent===label);
     const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
-    const g=observers[0].generation;channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'active'}});channels[0].onmessage({kind:'frame',generation:g,epoch:1,frame:{seq:1,full:true,bytes:[65]}});channels[0].onmessage({kind:'input_ready',generation:g,epoch:1,unknown:false,recovery_status:'ready'});
+    const g=observers[0].generation;channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'active'}});channels[0].onmessage({kind:'frame',generation:g,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});channels[0].onmessage({kind:'input_ready',generation:g,epoch:1,unknown:false,recovery_status:'ready'});
     find('逐键输入').onclick();await flush();await flush();const select=find('选择终端文本');assert.ok(select);let prevented=false;select.onpointerdown({preventDefault(){prevented=true;}});assert.equal(prevented,true);select.onclick();await flush();
     const panel=body.children.at(-1);assert.equal(panel.attrs['aria-label'],'选择终端文本');assert.equal(terminal.options.disableStdin,true);
     find('逐键输入').onclick();terminal.focus();terminal.data('x');await flush();assert.equal(calls.filter(c=>c.name==='remote_tab_input_send').length,0);assert.equal(calls.filter(c=>c.name==='remote_tab_input_mode' && c.args.mode==='direct').length,1);
@@ -872,7 +872,7 @@ test('saved tab preserves local column viewport across redraw, hide/resume full 
     if(name==='remote_tab_observe')return new Promise(resolve=>observations.push({args,resolve}));
     return Promise.resolve();
   };
-  const terminalFactory=options=>({options,cols:80,element:{querySelector:()=>({getBoundingClientRect:()=>({width:800*options.fontSize/14})})},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},dispose(){},onData(){}});
+  const terminalFactory=options=>({options,cols:80,element:{querySelector:()=>({getBoundingClientRect:()=>({width:800*options.fontSize/14})})},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},resize(cols,rows){this.cols=cols;this.rows=rows;},dispose(){},onData(){}});
   try {
     const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{host:id,port:22,username:'u',expectedHostKey:'pin',session:'s'},hostFingerprint:'pin',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory});
     const a=ui.create('first',{paneId:'w1:p1',terminalId:'term_a001'});
@@ -881,7 +881,7 @@ test('saved tab preserves local column viewport across redraw, hide/resume full 
     const connect=async()=>{const check=nodes['view-content'].all().find(n=>n.tagName==='input');check.checked=true;check.onchange();find('连接').onclick();await flush();await flush();};
     await connect();let g=observations[0].args.generation;
     const emit=(channel,epoch,phase)=>channels[channel].onmessage({kind:'observation',generation:g,snapshot:{epoch,phase}});
-    const full=(channel,epoch,seq=1)=>channels[channel].onmessage({kind:'frame',generation:g,epoch,frame:{seq,full:true,bytes:[65]}});
+    const full=(channel,epoch,seq=1)=>channels[channel].onmessage({kind:'frame',generation:g,epoch,frame:{seq,full:true,cols:80,rows:24,bytes:[65]}});
     emit(0,1,'active');full(0,1);viewport().scrollLeft=240;viewport().scrollTop=50;viewport().event_scroll();
     const b=ui.create('second',{paneId:'w2:p2',terminalId:'term_b002'});
     assert.equal(viewport().scrollLeft,240,'unrelated render must retain local scroll');
@@ -918,3 +918,29 @@ for(const [error,pattern] of [['host_key_mismatch',/主机公钥不匹配.*认�
     } finally {globalThis.document=oldDocument;}
   });
 }
+
+test('saved tab applies authoritative frame geometry before writing and never invokes remote resize',async()=>{
+  const h=watchWorkspace();try {
+    await h.start();h.observation(1,'starting');h.watch(1,1);
+    h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:119,rows:40,bytes:[65]}});
+    const term=h.terminal();assert.equal(term.createdOptions.cols,119);assert.equal(term.createdOptions.rows,40);
+    term.cols=119;term.rows=40;const events=[];
+    term.resize=(cols,rows)=>{events.push(['resize',cols,rows]);term.cols=cols;term.rows=rows;};
+    term.write=(_bytes,done)=>{events.push(['write',term.cols,term.rows]);done();};
+    h.emit({kind:'frame',epoch:1,frame:{seq:2,full:true,cols:100,rows:30,bytes:[66]}});
+    assert.deepEqual(events,[['resize',100,30],['write',100,30]]);
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_ack').length,2);
+    assert.equal(h.calls.some(c=>/resize/i.test(c.name)),false);
+  } finally {h.restore();}
+});
+
+test('canvas choice belongs to one tab and is frozen for an explicit connection',async()=>{
+  const h=watchWorkspace();try {
+    let select=h.all().find(n=>n.dataset.role==='tab-canvas');assert.equal(select.value,'80x24');
+    select.value='120x40';select.onchange();assert.equal(h.calls.some(c=>c.name==='remote_tab_observe'),false);
+    await h.start();const observe=h.calls.find(c=>c.name==='remote_tab_observe');assert.deepEqual(observe.args.canvas,{cols:120,rows:40});
+    select=h.all().find(n=>n.dataset.role==='tab-canvas');assert.equal(select.disabled,true);
+    select.value='160x50';select.onchange();assert.deepEqual(observe.args.canvas,{cols:120,rows:40});
+    const other=h.ui.create('another',null);assert.ok(other);await h.ui.select(other);select=h.all().find(n=>n.dataset.role==='tab-canvas');assert.equal(select.value,'80x24');
+  } finally {h.restore();}
+});

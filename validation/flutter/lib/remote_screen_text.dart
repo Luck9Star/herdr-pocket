@@ -19,8 +19,8 @@ class RemoteScreenCells {
 String? captureRemoteScreenText(Terminal terminal,RemoteScreenCells cells) {
   final buffer = terminal.buffer;
   final firstRow = cells.firstRow,endRow = cells.endRow,firstColumn = cells.firstColumn,endColumn = cells.endColumn;
-  if (firstRow < 0 || endRow > buffer.height || endRow <= firstRow || endRow - firstRow > 24 ||
-      firstColumn < 0 || endColumn > terminal.viewWidth || endColumn <= firstColumn || endColumn - firstColumn > 80) return null;
+  if (firstRow < 0 || endRow > buffer.height || endRow <= firstRow || endRow - firstRow > terminal.viewHeight ||
+      firstColumn < 0 || endColumn > terminal.viewWidth || endColumn <= firstColumn) return null;
   final text = StringBuffer();
   var bytes = 0;
   bool append(String value) {

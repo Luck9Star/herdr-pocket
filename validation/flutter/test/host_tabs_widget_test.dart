@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
@@ -66,10 +67,10 @@ HostProfile tabProfile(String label,String session,String host,String provider,S
   return HostProfile.create(label,{...config,'host':host,'session':session,
     'socketPath':'/tmp/fixture-config/herdr/sessions/$session/herdr.sock'},pairing,1000,provider:provider);
 }
-Future<void> connectTab(WidgetTester tester,TabFixtureAdapter adapter,{String pane='w1:p1'}) async {
+Future<void> connectTab(WidgetTester tester,TabFixtureAdapter adapter,{String pane='w1:p1',int cols=80,int rows=24}) async {
   await tapVisible(tester,'remote-review'); await tapVisible(tester,'remote-connect');
   adapter.publish(); await tester.pump(); await tapVisible(tester,'remote-pane-$pane');
-  adapter.frame!(adapter.generation,pane,const RemoteFrame(0,true,'SYNTHETIC TAB FULL'));
+  adapter.frame!(adapter.generation,pane,RemoteFrame(0,true,'SYNTHETIC TAB FULL',cols:cols,rows:rows));
   await tester.pump();
 }
 void main() {
@@ -87,7 +88,13 @@ void main() {
     await tester.pumpAndSettle(); await tapVisible(tester,'host-open-${a.id}'); await tester.pumpAndSettle();
     final aTab = tabs.active!.id,aAdapter = adapters[a.id]!.single;
     await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle();
-    await connectTab(tester,aAdapter); await mode(tester,'draft');
+    await tapVisible(tester,'remote-canvas-size'); await tester.pumpAndSettle();
+    await tester.tap(find.text('120×40').last); await tester.pumpAndSettle();
+    await connectTab(tester,aAdapter,cols:120,rows:40);
+    expect(aAdapter.config.observationCols,120); expect(aAdapter.config.observationRows,40);
+    expect(tester.widget<TerminalView>(find.byType(TerminalView)).terminal.viewWidth,120);
+    expect(tester.widget<TerminalView>(find.byType(TerminalView)).terminal.viewHeight,40);
+    await mode(tester,'draft');
     final draft = find.byKey(const ValueKey('remote-input-draft'));
     await tester.ensureVisible(draft); await tester.enterText(draft,'Host A unsent'); await tester.pump();
     final oldGeneration = aAdapter.generation;
@@ -97,6 +104,7 @@ void main() {
     await tapVisible(tester,'host-open-${b.id}'); await tester.pumpAndSettle();
     final bTab = tabs.active!.id,bAdapter = adapters[b.id]!.single;
     await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle(); await connectTab(tester,bAdapter);
+    expect(bAdapter.config.observationCols,80); expect(bAdapter.config.observationRows,24);
     expect(bAdapter.config.session,'probeB'); expect(aAdapter.config.session,'probeA');
     expect(identical(aAdapter,bAdapter),isFalse);
     await mode(tester,'draft'); await tester.ensureVisible(draft); await tester.enterText(draft,'Host B unsent');

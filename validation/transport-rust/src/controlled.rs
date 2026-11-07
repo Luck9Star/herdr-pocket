@@ -850,7 +850,7 @@ where
                         if sequence.is_none() && Instant::now() >= deadline {
                             return Err("timeout");
                         }
-                        sequence = Some(parsed.seq);
+                        sequence = Some((parsed.seq, parsed.cols, parsed.rows));
                         let full = parsed.full;
                         tokio::select! {biased;_=cancel.wait()=>return Err("cancelled"),_=control.changed(epoch)=>return Ok(()),result=frame(epoch,parsed)=>{result?;}}
                         if !current(control, epoch) {

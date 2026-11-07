@@ -1,0 +1,408 @@
+{
+  "date": "2026-11-08",
+  "sourceBase": "343b5b6b0d926044d6884b33ea73bec3a5b6b174",
+  "sharedFixtureSha256": "cc2b796630ca87ad150915b8767bdcd69711f2ccb96ac4aeedcc59c5a2c79ef4",
+  "upstreamCommit": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+  "macLocalIpc": {
+    "scope": "Self-owned local stock CLI IPC only; no SSH, real host, device, overlay, or PTY resize. Not a verified source-build binary.",
+    "binarySha256": "fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2",
+    "version": "herdr 0.9.5",
+    "observations": [
+      {
+        "requested": {
+          "cols": 80,
+          "rows": 24
+        },
+        "frames": [
+          {
+            "seq": 1,
+            "full": true,
+            "width": 80,
+            "height": 24,
+            "encoding": "ansi"
+          },
+          {
+            "seq": 2,
+            "full": false,
+            "width": 80,
+            "height": 24,
+            "encoding": "ansi"
+          },
+          {
+            "seq": 3,
+            "full": false,
+            "width": 80,
+            "height": 24,
+            "encoding": "ansi"
+          }
+        ],
+        "status": "passed"
+      },
+      {
+        "requested": {
+          "cols": 120,
+          "rows": 40
+        },
+        "frames": [
+          {
+            "seq": 1,
+            "full": true,
+            "width": 120,
+            "height": 40,
+            "encoding": "ansi"
+          },
+          {
+            "seq": 2,
+            "full": false,
+            "width": 120,
+            "height": 40,
+            "encoding": "ansi"
+          },
+          {
+            "seq": 3,
+            "full": false,
+            "width": 120,
+            "height": 40,
+            "encoding": "ansi"
+          }
+        ],
+        "status": "passed"
+      },
+      {
+        "requested": {
+          "cols": 160,
+          "rows": 50
+        },
+        "frames": [
+          {
+            "seq": 1,
+            "full": true,
+            "width": 160,
+            "height": 50,
+            "encoding": "ansi"
+          },
+          {
+            "seq": 2,
+            "full": false,
+            "width": 160,
+            "height": 50,
+            "encoding": "ansi"
+          },
+          {
+            "seq": 3,
+            "full": false,
+            "width": 160,
+            "height": 50,
+            "encoding": "ansi"
+          }
+        ],
+        "status": "passed"
+      }
+    ],
+    "sampledSharedPty": {
+      "cols": 119,
+      "rows": 40,
+      "samples": 16,
+      "before": 3,
+      "duringByCanvas": [
+        3,
+        3,
+        3
+      ],
+      "after": 4
+    },
+    "status": "passed"
+  },
+  "macTauriWebViewSurrogate": {
+    "browser": "Chrome/156.0.8078.81",
+    "native": "synthetic commands; no external network, clipboard, SSH or keys",
+    "cases": [
+      {
+        "viewportCssPx": 320,
+        "directCanvas": {
+          "cols": 120,
+          "rows": 40
+        },
+        "savedTabCanvas": {
+          "cols": 160,
+          "rows": 50
+        },
+        "touchScrollPx": {
+          "left": 189,
+          "top": 284
+        },
+        "directBottomAndDeltaVisible": true,
+        "tabBottomAndDeltaVisible": true,
+        "invalidDeltaStopped": true,
+        "lateFullIgnored": true,
+        "calls": {
+          "remote_observe": 1,
+          "remote_ack": 2,
+          "remote_select": 1,
+          "remote_input_send": 0,
+          "remote_resize": 0,
+          "remote_tab_observe": 1,
+          "remote_tab_ack": 2,
+          "remote_tab_input_send": 0,
+          "remote_tab_resize": 0
+        }
+      },
+      {
+        "viewportCssPx": 390,
+        "directCanvas": {
+          "cols": 120,
+          "rows": 40
+        },
+        "savedTabCanvas": {
+          "cols": 160,
+          "rows": 50
+        },
+        "touchScrollPx": {
+          "left": 187,
+          "top": 284
+        },
+        "directBottomAndDeltaVisible": true,
+        "tabBottomAndDeltaVisible": true,
+        "invalidDeltaStopped": true,
+        "lateFullIgnored": true,
+        "calls": {
+          "remote_observe": 1,
+          "remote_ack": 2,
+          "remote_select": 1,
+          "remote_input_send": 0,
+          "remote_resize": 0,
+          "remote_tab_observe": 1,
+          "remote_tab_ack": 2,
+          "remote_tab_input_send": 0,
+          "remote_tab_resize": 0
+        }
+      }
+    ]
+  },
+  "flutterCore": {
+    "status": "passed",
+    "dartVersion": "3.11.0 (stable) (Mon Feb 9 00:38:07 2026 -0800) on \"macos_arm64\"",
+    "sizes": [
+      {
+        "cols": 2,
+        "rows": 1,
+        "status": "passed",
+        "capacityEach": 1
+      },
+      {
+        "cols": 16,
+        "rows": 8,
+        "status": "passed",
+        "capacityEach": 8
+      },
+      {
+        "cols": 80,
+        "rows": 24,
+        "status": "passed",
+        "capacityEach": 24
+      },
+      {
+        "cols": 119,
+        "rows": 40,
+        "status": "passed",
+        "capacityEach": 40
+      },
+      {
+        "cols": 160,
+        "rows": 50,
+        "status": "passed",
+        "capacityEach": 50
+      },
+      {
+        "cols": 512,
+        "rows": 128,
+        "status": "passed",
+        "capacityEach": 128
+      },
+      {
+        "cols": 128,
+        "rows": 512,
+        "status": "passed",
+        "capacityEach": 512
+      }
+    ],
+    "scope": "actual terminal_view 0.5.0 core and production remote screen factory, geometry validator and text capture; no Flutter SDK renderer widget SSH device or network verification"
+  },
+  "flutterParser": {
+    "status": "passed",
+    "cases": [
+      {
+        "id": "default-compatible",
+        "published": 2,
+        "error": null,
+        "status": "passed"
+      },
+      {
+        "id": "wide-observer",
+        "published": 2,
+        "error": null,
+        "status": "passed"
+      },
+      {
+        "id": "later-full-changes-geometry",
+        "published": 4,
+        "error": null,
+        "status": "passed"
+      },
+      {
+        "id": "short-grid",
+        "published": 2,
+        "error": null,
+        "status": "passed"
+      },
+      {
+        "id": "cell-limit-wide",
+        "published": 1,
+        "error": null,
+        "status": "passed"
+      },
+      {
+        "id": "cell-limit-tall",
+        "published": 1,
+        "error": null,
+        "status": "passed"
+      },
+      {
+        "id": "one-column",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "zero-height",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "negative-width",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "fraction",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "numeric-string",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "boolean",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "above-col-limit",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "above-row-limit",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "above-area-limit",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "missing-width",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "missing-height",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "changed-delta-width",
+        "published": 1,
+        "error": "invalid_frame",
+        "status": "passed"
+      },
+      {
+        "id": "changed-delta-height",
+        "published": 1,
+        "error": "invalid_frame",
+        "status": "passed"
+      },
+      {
+        "id": "missing-initial-full",
+        "published": 0,
+        "error": "invalid_first_frame",
+        "status": "passed"
+      },
+      {
+        "id": "sequence-gap-full",
+        "published": 1,
+        "error": "sequence_gap",
+        "status": "passed"
+      },
+      {
+        "id": "replayed-full",
+        "published": 1,
+        "error": "sequence_gap",
+        "status": "passed"
+      }
+    ],
+    "scope": "unchanged RemoteFrame, boundedLines, _decodeObject, validatedFrames and firstFullFrame function/class bodies extracted from production remote_adapter.dart; production geometry validator imported directly; no Flutter SDK widget full adapter SSH or device test"
+  },
+  "unverified": [
+    "Flutter engine/widget drawing",
+    "wide canvas over SSH from Android AVD or a physical phone",
+    "iOS",
+    "overlay networks"
+  ],
+  "exactSourceChecks": {
+    "rustTransportLibraryTestsPassed": 92,
+    "tauriWebTestsPassed": 389,
+    "tauriWebTestsSkipped": 0,
+    "tauriWebBuildPassed": true,
+    "nodeVersion": "22.22.2",
+    "tauriRustMacCheckPassed": true,
+    "tauriNativeHostCatalogTestsPassed": 19,
+    "isolatedHelperTestsPassed": 15,
+    "flutterAndroidDriverTestsPassed": 69,
+    "tauriAndroidDriverTestsPassed": 25,
+    "ptyFixtureTestsPassed": 10
+  },
+  "flutterVerticalReading": {
+    "status": "passed",
+    "dartVersion": "3.11.0 (stable) (Mon Feb 9 00:38:07 2026 -0800) on \"macos_arm64\"",
+    "checks": [
+      "fractional row anchor",
+      "actual measured line-height conversion",
+      "clamp to visible range",
+      "target isolation",
+      "invalid values ignored",
+      "initial renderer policy preserved without jump",
+      "stale cannot restore",
+      "fresh full restores",
+      "font change preserves rows",
+      "clamp leaves original preference intact",
+      "later larger viewport restores original preferred row",
+      "new full preserves saved rows",
+      "16 target cap"
+    ],
+    "scope": "unchanged production anchor helpers and remember/sync method bodies; scroll metrics, scheduler, and renderer line-height read are stubs. No Flutter SDK widget/render/device verification."
+  }
+}

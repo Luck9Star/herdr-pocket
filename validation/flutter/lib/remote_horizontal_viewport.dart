@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:terminal_view/terminal_view.dart';
 
-/// Local-only 80-column viewport. Anchors are fractional grid columns so a
+/// Local-only remote-grid viewport. Anchors are fractional grid columns so a
 /// font or window change does not turn the old pixel offset into a new target.
 class RemoteHorizontalViewport extends StatefulWidget {
   const RemoteHorizontalViewport({super.key,required this.identity,required this.anchors,
-    required this.style,required this.child});
+    required this.style,required this.columns,required this.child});
   final String? identity;
   final Map<String,double> anchors;
   final TerminalStyle style;
+  final int columns;
   final Widget child;
   @override
   State<RemoteHorizontalViewport> createState() => _RemoteHorizontalViewportState();
@@ -56,7 +57,9 @@ class _RemoteHorizontalViewportState extends State<RemoteHorizontalViewport> {
   @override
   void didUpdateWidget(RemoteHorizontalViewport oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.identity != widget.identity) { cellWidth = 0; viewportWidth = 0; }
+    if (oldWidget.identity != widget.identity || oldWidget.columns != widget.columns) {
+      cellWidth = 0; viewportWidth = 0;
+    }
   }
   void restore(double width,double viewport) {
     if (!width.isFinite || width <= 0 || !viewport.isFinite || viewport <= 0) {
@@ -98,12 +101,12 @@ class _RemoteHorizontalViewportState extends State<RemoteHorizontalViewport> {
     return LayoutBuilder(builder:(context,constraints) {
       restore(width,constraints.maxWidth);
       if (!width.isFinite || width <= 0 || !constraints.maxWidth.isFinite || constraints.maxWidth <= 0) return const SizedBox.shrink();
-      final overflow = width * 80 > constraints.maxWidth;
+      final overflow = width * widget.columns > constraints.maxWidth;
       final terminalHeight = overflow ? 312.0 : 360.0;
       return Column(children:[
         SizedBox(height:terminalHeight,child:SingleChildScrollView(key:const ValueKey('remote-horizontal-scroll'),
           controller:scroll,scrollDirection:Axis.horizontal,
-          child:SizedBox(width:width * 80,height:terminalHeight,child:widget.child))),
+          child:SizedBox(width:width * widget.columns,height:terminalHeight,child:widget.child))),
         if (overflow)
         SizedBox(key:const ValueKey('remote-horizontal-scrollbar'),height:48,
           child:ValueListenableBuilder<({double value,double extent})>(valueListenable:sliderPosition,builder:(context,position,_) {

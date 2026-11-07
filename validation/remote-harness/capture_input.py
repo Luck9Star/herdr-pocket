@@ -140,6 +140,10 @@ def run_fixture(root=None, timeout=900):
         # Baseline publication precedes ready; every layout experiment must
         # take place after this boundary and before explicit stop-capture.
         recorder.start()
+        # The read-only wide-canvas test checks six cells outside 80 x 24.
+        # Leave a smaller fixture PTY alone and preserve the application's cursor.
+        if recorder.record['columns'] >= 97 and recorder.record['rows'] >= 32:
+            os.write(1, b'\x1b7\x1b[32;92HHPWIDE\x1b8')
         (root / 'capture-running').write_text(str(os.getpid()))
         (root / 'capture-ready').write_text('ready')
         deadline = time.monotonic() + timeout

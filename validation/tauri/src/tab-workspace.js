@@ -7,11 +7,12 @@ import {OnlineInputQueue} from './online-input-queue.js';
 import {InputComposition,blockPendingKeys} from './input-composition.js';
 import {draftBytes} from './input-codec.js';
 import {applyPaste,previewPaste} from './paste-review.js';
+import {readClipboardForPaste,clipboardPasteMessage} from './mobile-clipboard.js';
 import {createTabInputToolbar} from './tab-input-toolbar.js';
 import {dashboardPresentation,paneStatusText} from './dashboard-presentation.js';
 
 /** A foreground tab owns its native attempt and renderer. No reconnect is automatic. */
-export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null,getFontSize=()=>14,channelFactory,terminalFactory,onDashboard=()=>{}}) {
+export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null,getFontSize=()=>14,channelFactory,terminalFactory,onDashboard=()=>{},clipboardRead=readClipboardForPaste}) {
   const tabs=new RemoteTabs(), root=document.getElementById('tab-workspace');
   const nav=document.getElementById('view-tabs'), body=document.getElementById('view-content');
   let switching=false, textSelection=null;
@@ -116,16 +117,18 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(tab.inputReady) {
       const text=document.createElement('textarea');text.value=tab.draft;text.placeholder='输入草稿';text.setAttribute('aria-label','当前标签草稿');
       tab.draftField=text;
-      let composing=false;
-      text.addEventListener('compositionstart',()=>{composing=true;});
-      text.addEventListener('compositionend',()=>{composing=false;});
+      tab.draftComposing=false;
+      text.addEventListener('compositionstart',()=>{tab.pasteReadSequence++;tab.draftComposing=true;});
+      text.addEventListener('compositionend',()=>{tab.draftComposing=false;});
       text.addEventListener('blur',()=>{if(!tab.suppressPasteBlur)tab.pasteFocusRevision++;});
-      text.addEventListener('paste',event=>void reviewPaste(tab,event,text,composing),true);
+      text.addEventListener('paste',event=>void reviewPaste(tab,event,text,tab.draftComposing),true);
       text.oninput=()=>{if(tab.draftField===text && tabs.activeId===tab.id){tab.draft=text.value;tab.draftRevision++;}};body.append(text);
       const actions=document.createElement('div');actions.className='remote-actions';
       const direct=document.createElement('button');direct.type='button';direct.textContent='逐键输入';direct.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy;direct.onclick=()=>void enableDirect(tab);actions.append(direct);
       const enable=document.createElement('button');enable.type='button';enable.textContent='启用草稿输入';enable.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy;
       enable.onclick=()=>void enableInput(tab);actions.append(enable);
+      const paste=document.createElement('button');paste.type='button';paste.textContent='粘贴并审查';paste.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || !['draft','direct'].includes(tab.mode) || tab.inputEpoch==null;
+      paste.onpointerdown=event=>event.preventDefault();paste.onclick=()=>void readPaste(tab);tab.pasteButton=paste;actions.append(paste);
       const send=document.createElement('button');send.type='button';send.textContent='发送草稿';send.disabled=!tab.target || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null;
       send.onclick=()=>void sendDraft(tab);actions.append(send);
       if(tab.recoveryStatus==='pending'){const recover=document.createElement('button');recover.type='button';recover.textContent='已核实原目标结果，恢复输入';recover.disabled=!tab.target || tab.state!=='active' || tab.inputBusy;recover.onclick=()=>void recoverInput(tab);actions.append(recover);}
@@ -154,7 +157,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   function create(hostId,target) {
     if(!native || !hostId || (target && (!target.paneId || !target.terminalId))) throw Error('tab_target_invalid');
     const tab=tabs.create(hostId);tab.target=target ? Object.freeze({paneId:target.paneId,terminalId:target.terminalId}) : null;
-    tab.selectionTextReady=false;tab.queue=new OnlineInputQueue();tab.composition=new InputComposition();tab.directPending=null;tab.pasteReview=null;tab.focusPasteReview=false;tab.pasteFocusRevision=0;tab.draftRevision=0;tab.draftPending=0;tab.rejectedDrafts=[];tab.inputRevision=0;tab.controlRevision=0;tab.mode='observe';tab.board=new SessionDashboard();tab.selectionIntent=tab.target;tab.selectionReady=false;tab.selecting=false;tab.focusReset=Promise.resolve();tab.message=target?'目标已固定；请主动连接。':'请主动连接并从实际快照选择终端。';tab.state='disconnected';tab.closing=false;tab.nativeGeneration=null;tab.epoch=null;
+    tab.selectionTextReady=false;tab.queue=new OnlineInputQueue();tab.composition=new InputComposition();tab.directPending=null;tab.pasteReview=null;tab.focusPasteReview=false;tab.pasteFocusRevision=0;tab.pasteReadSequence=0;tab.draftComposing=false;tab.draftRevision=0;tab.draftPending=0;tab.rejectedDrafts=[];tab.inputRevision=0;tab.controlRevision=0;tab.mode='observe';tab.board=new SessionDashboard();tab.selectionIntent=tab.target;tab.selectionReady=false;tab.selecting=false;tab.focusReset=Promise.resolve();tab.message=target?'目标已固定；请主动连接。':'请主动连接并从实际快照选择终端。';tab.state='disconnected';tab.closing=false;tab.nativeGeneration=null;tab.epoch=null;
     render();return tab.id;
   }
   async function select(id) {
@@ -228,12 +231,16 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   }
   async function reviewPaste(tab,event,editor,composing) {
     event.preventDefault();event.stopImmediatePropagation();
+    tab.pasteReadSequence++;
+    const text=event.clipboardData?.types && !Array.from(event.clipboardData.types).includes('text/plain') ? '' : event.clipboardData?.getData('text/plain') || '';
+    return reviewPasteText(tab,text,editor,composing);
+  }
+  async function reviewPasteText(tab,text,editor,composing) {
     if(tab.directPending || tab.inputBusy || tab.unknown || !tab.inputReady || !tab.target ||
         document.hidden || tabs.activeId!==tab.id || tab.state!=='active' || document.activeElement!==editor)return;
     if(editor===tab.terminal?.textarea ? tab.mode!=='direct' : editor!==tab.draftField)return;
     const report=message=>{tab.message=message;if(tab.messageElement)tab.messageElement.textContent=message;};
     if(composing){report('输入法组合尚未结束，请完成后再粘贴。');return;}
-    const text=event.clipboardData?.getData('text/plain') || '';
     if(applyPaste('',text,'replace')===null){report('粘贴内容须为 1 至 4096 个 UTF-8 字节。');return;}
     const {paneId,terminalId}=tab.target;
     const draftRevision=tab.draftRevision,focusRevision=tab.pasteFocusRevision;
@@ -247,9 +254,29 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     tab.pasteReview=review;tab.focusPasteReview=true;tab.suppressPasteBlur=true;
     try {render();} finally {tab.suppressPasteBlur=false;}
   }
+  async function readPaste(tab) {
+    const mode=tab.mode, editor=mode==='direct'?tab.terminal?.textarea:tab.draftField;
+    const binding=lease(tab), inputEpoch=tab.inputEpoch, target=tab.target, terminal=tab.terminal;
+    const draftRevision=tab.draftRevision, original=tab.draft, focusRevision=tab.pasteFocusRevision;
+    const sequence=++tab.pasteReadSequence;
+    const valid=()=>sequence===tab.pasteReadSequence && sameLease(tab,binding) && tab.inputEpoch===inputEpoch && inputEpoch!==null &&
+      tab.mode===mode && ['draft','direct'].includes(mode) && tab.target===target && !!target && tab.terminal===terminal &&
+      tabs.activeId===tab.id && !switching && !document.hidden && tab.state==='active' && !tab.wantsPause && !tab.closing &&
+      !tab.invalidated && !tab.unknown && !tab.inputBusy && !tab.directPending && tab.inputReady &&
+      document.activeElement===editor && (mode==='direct' || tab.draftField===editor) && tab.draftRevision===draftRevision && tab.draft===original &&
+      tab.pasteFocusRevision===focusRevision && !(mode==='direct' ? tab.composition.token && !tab.composition.ended : tab.draftComposing);
+    const report=message=>{tab.message=message;if(tab.messageElement)tab.messageElement.textContent=message;};
+    if(!valid()){report('请先启用输入模式并完成输入法组合，再粘贴。');return;}
+    try {
+      const text=await clipboardRead();
+      if(!valid())return;
+      if(typeof text!=='string' || !text){report('剪贴板没有可用的纯文本。');return;}
+      await reviewPasteText(tab,text,editor,false);
+    } catch (error) {if(valid())report(clipboardPasteMessage(error));}
+  }
   async function loseDirect(tab) {
     const wasBusy=tab.inputBusy;tab.queue.clear();tab.inputRevision++;tab.mode='observe';tab.inputEpoch=null;
-    tab.toolbar?.reset();tab.toolbar=null;tab.toolbarHost?.replaceChildren();
+    if(tab.pasteButton)tab.pasteButton.disabled=true;tab.toolbar?.reset();tab.toolbar=null;tab.toolbarHost?.replaceChildren();
     if(tab.terminal){tab.terminal.options.disableStdin=true;tab.terminal.textarea.setAttribute('inputmode','none');}
     if(wasBusy){tab.unknown=true;tab.message='输入在途时焦点离开；请恢复观察后核实原目标。';await pause(tab);return;}
     if(tab.nativeGeneration!==null && tab.epoch!==null) {tab.focusReset=invoke('remote_tab_input_mode',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration,epoch:tab.epoch,mode:'observe'}).catch(()=>{});await tab.focusReset;}
@@ -273,6 +300,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       if(!currentAttempt())return;
       if(!Number.isSafeInteger(inputEpoch) || inputEpoch<1)throw Error('input_lease_invalid');
       tab.inputEpoch=inputEpoch;tab.mode='direct';granted=true;tab.message='逐键输入已启用。';if(tab.messageElement)tab.messageElement.textContent=tab.message;
+      if(tab.pasteButton)tab.pasteButton.disabled=false;
       showToolbar(tab);
     } catch {
       if(tab.directPending===attempt && current(tab,binding.token)){tab.message='逐键输入未启用。';if(tab.messageElement)tab.messageElement.textContent=tab.message;}
@@ -387,7 +415,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
           render();tab.terminal.open(tab.element);tab.terminal.textarea.setAttribute('inputmode','none');
           tab.terminal.onData(data=>{if(document.activeElement===tab.terminal?.textarea && tab.mode==='direct' && tab.composition.accepts(directToken(tab)))enqueueDirect(tab,new TextEncoder().encode(data));});
           blockPendingKeys(tab.terminal.textarea,()=>tab.directPending && tab.mode!=='direct');
-          tab.terminal.textarea.addEventListener('compositionstart',()=>{tab.composition.begin(directToken(tab));tab.toolbar?.refresh();},true);
+          tab.terminal.textarea.addEventListener('compositionstart',()=>{tab.pasteReadSequence++;tab.composition.begin(directToken(tab));tab.toolbar?.refresh();},true);
           tab.terminal.textarea.addEventListener('compositionend',()=>{tab.composition.end();tab.toolbar?.refresh();},true);
           tab.terminal.textarea.addEventListener('blur',event=>{if(!tab.suppressPasteBlur)tab.pasteFocusRevision++;if(!tab.suppressBlur && tab.directPending){tab.directPending.invalidated=true;tab.inputRevision++;tab.terminal.options.disableStdin=true;tab.terminal.textarea.setAttribute('inputmode','none');}if(!tab.suppressBlur && tab.mode==='direct' && !ownsInputFocus(tab,event?.relatedTarget))void loseDirect(tab);});
           tab.terminal.textarea.addEventListener('paste',event=>void reviewPaste(tab,event,tab.terminal.textarea,tab.composition.token && !tab.composition.ended),true);
@@ -407,8 +435,8 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   function setFont(size) {for(const tab of tabs.list())if(tab.terminal)tab.terminal.options.fontSize=size;}
   function prepareAffected(ids) {const affected=tabs.affected(ids);for(const tab of affected){retireDirectPending(tab);tab.board.invalidate('configuration_changed');boardEvent(tab,'stale');tab.selectionReady=false;tab.suppressBlur=true;tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';tab.inputRevision++;tab.inputBusy=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;tabs.invalidate(tab.id);tab.closing=true;tab.state='disconnected';}render();for(const tab of affected)tab.suppressBlur=false;}
   function affected(ids) {for(const tab of tabs.affected(ids)){tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';void cancel(tab);}}
-  function background() {textSelection?.close();textSelection=null;for(const tab of tabs.list()){tab.pasteReview=null;void cancel(tab);}}
-  function prepareHide(){textSelection?.close();textSelection=null;const tab=tabs.get(tabs.activeId);if(tab)tab.suppressBlur=true;}
+  function background() {for(const tab of tabs.list())tab.pasteReadSequence++;textSelection?.close();textSelection=null;for(const tab of tabs.list()){tab.pasteReview=null;void cancel(tab);}}
+  function prepareHide(){const active=tabs.get(tabs.activeId);if(active)active.pasteReadSequence++;textSelection?.close();textSelection=null;const tab=tabs.get(tabs.activeId);if(tab)tab.suppressBlur=true;}
   function cancelPrepareHide(){const tab=tabs.get(tabs.activeId);if(tab){tab.suppressBlur=false;if(tab.mode==='direct' && document.activeElement!==tab.terminal?.textarea)void loseDirect(tab);}}
   async function hide() {textSelection?.close();textSelection=null;const tab=tabs.get(tabs.activeId);if(tab && ['connecting','starting','active','resuming'].includes(tab.state))await pause(tab);else if(tab)tab.suppressBlur=false;}
   globalThis.window?.addEventListener?.('blur',()=>{let changed=false;for(const tab of tabs.list()){tab.pasteFocusRevision++;if(tab.pasteReview){tab.pasteReview=null;changed=true;}}if(changed)render();});

@@ -18,12 +18,16 @@ const runId = String.fromEnvironment('HERDR_ANDROID_RUN_ID');
 const publicTarget = String.fromEnvironment('HERDR_ANDROID_TARGET_JSON');
 const publicDirectory = String.fromEnvironment('HERDR_ANDROID_PUBLIC_DIR');
 const guardedInput = bool.fromEnvironment('POCKET_GUARDED_INPUT');
+// Set only by the isolated runner after its single API35 AVD/fresh-package
+// checks. This test never reads or saves a pre-existing clipboard value.
+const syntheticClipboardEnabled = bool.fromEnvironment('HERDR_ANDROID_API35_CLIPBOARD_FIXTURE');
 
 /// Only public fixture target/request/response and typed evidence cross these
 /// files. No injected DeviceKeys, catalog, adapter, frame or MethodChannel mock.
 Map<String,dynamic> checkedTarget() {
   if (!Platform.isAndroid || !kDebugMode || fixtureEnabled != '1' ||
       !RegExp(r'^[0-9]+$').hasMatch(runId) || utf8.encode(publicTarget).length > 8192 ||
+      syntheticClipboardEnabled != guardedInput ||
       publicDirectory != '/data/user/0/$packageName/cache/herdr-flutter-android-$runId') {
     throw StateError('isolated_android_fixture_required');
   }
@@ -106,6 +110,15 @@ int? displayedSequence(WidgetTester tester) {
 void publish(Directory dir, String name, String text) {
   final pending = File('${dir.path}/$name.new');
   pending.writeAsStringSync(text,flush:true); pending.renameSync('${dir.path}/$name');
+}
+
+Future<void> clipboardCheckpoint(WidgetTester tester,Directory exchange,String label) async {
+  expect(guardedInput && syntheticClipboardEnabled,isTrue);
+  publish(exchange,'checkpoint.json',jsonEncode({'checkpoint':label}));
+  final ack = File('${exchange.path}/checkpoint-ack.json');
+  // Host writes an atomic acknowledgement only after its real SSH receiver is
+  // exactly k. No terminal text or clipboard text crosses this exchange.
+  await until(tester,() => ack.existsSync() && ack.readAsStringSync() == jsonEncode({'checkpoint':label}));
 }
 
 Map<String,Object> boundedFailure(Object error,StackTrace stack,String stage) {
@@ -347,9 +360,46 @@ void main() {
       final terminalBeforeHide = tester.widget<TerminalView>(terminalView).terminal;
       await tapKey(tester,'remote-mode-draft');
       final draftControl = find.byKey(const ValueKey('remote-input-draft'));
-      await tester.ensureVisible(draftControl); await tester.enterText(draftControl,'Pocket测');
+      await tester.ensureVisible(draftControl); await tester.enterText(draftControl,'Pocket');
       await tester.pump();
       await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
+      stage('guarded_clipboard_fixture');
+      // Fixed synthetic data on the runner-owned disposable AVD only. Never
+      // getData here: both reads must come from the normal production button.
+      expect(syntheticClipboardEnabled,isTrue);
+      await Clipboard.setData(const ClipboardData(text:'测'));
+      stage('guarded_paste_cancel_review');
+      await tapKey(tester,'remote-input-draft-paste');
+      void checkPasteReview() {
+        final dialog = find.byType(AlertDialog);
+        expect(find.text('审查粘贴 · 仅编辑本地草稿'),findsOneWidget);
+        expect(tester.widget<SelectableText>(find.byKey(const ValueKey('remote-paste-review-text'))).data,'测');
+        for (final field in ['paneId','terminalId']) {
+          expect(find.descendant(of:dialog,matching:find.textContaining(inputReceipts.first[field] as String)),findsOneWidget);
+        }
+        expect(tester.widget<TextField>(draftControl).controller!.text,'Pocket');
+        expect(visibleReceipt(tester,target['paneId'] as String,1),inputReceipts.first);
+        expect(find.text('预览发送文本'),findsNothing);
+      }
+      checkPasteReview();
+      await tapKey(tester,'remote-paste-cancel');
+      stage('guarded_paste_cancel_preserved');
+      expect(find.byType(AlertDialog),findsNothing);
+      expect(tester.widget<TextField>(draftControl).controller!.text,'Pocket');
+      expect(visibleReceipt(tester,target['paneId'] as String,1),inputReceipts.first);
+      await clipboardCheckpoint(tester,exchange,'paste-cancel-preserved');
+      stage('guarded_paste_reopen_review');
+      await tapKey(tester,'remote-input-draft-paste');
+      checkPasteReview();
+      await tapKey(tester,'remote-paste-append');
+      stage('guarded_paste_local_append');
+      expect(find.byType(AlertDialog),findsNothing);
+      expect(tester.widget<TextField>(draftControl).controller!.text,'Pocket测');
+      expect(utf8.encode(tester.widget<TextField>(draftControl).controller!.text).length,9);
+      expect(visibleReceipt(tester,target['paneId'] as String,1),inputReceipts.first);
+      expect(tester.widget<TerminalView>(terminalView).autoResize,isFalse);
+      expect(find.text('预览发送文本'),findsNothing);
+      await clipboardCheckpoint(tester,exchange,'paste-local-append');
       await tapKey(tester,'hosts-board-tab');
       await tapKey(tester,originalTabKey);
       await until(tester,() => find.byKey(const ValueKey('remote-resume')).evaluate().length == 1);
@@ -420,6 +470,10 @@ void main() {
         'hiddenTabStopped':true,'hiddenTabManualRecovery':true,'unsentDraftRestored':true,
         'postStopInputDisabled':true,'inputReceipts':inputReceipts,
         'acceptedByteCounts':[1,9],
+        'syntheticClipboardSet':true,'pasteReviewCancelled':true,'pasteCancelPreservedDraft':true,
+        'pasteReviewReopened':true,'pasteAppendedLocally':true,'pasteTargetVerified':true,
+        'pasteReceiptUnchanged':true,'pasteKeptFixedSize':true,
+        'clipboardFixtureBytes':3,'pasteOriginalDraftBytes':6,'pasteMergedDraftBytes':9,
       },
     };
     publish(exchange,'result.json',jsonEncode(report));

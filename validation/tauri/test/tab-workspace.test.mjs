@@ -245,7 +245,7 @@ function watchWorkspace(fixedTarget=null,options={}) {
     if(name==='remote_tab_input_send' && options.send)return options.send(args);
     return Promise.resolve();
   };
-  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device'}),onDashboard:options.onDashboard,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>{
+  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device'}),onDashboard:options.onDashboard,clipboardRead:options.clipboardRead,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>{
     terminal={
       options:{},focusReadOnly:[],parser:{registerOscHandler(){}},textarea:new Element('textarea'),
       open(){},write(_b,done){done();},reset(){},dispose(){},
@@ -760,4 +760,23 @@ test('saved tab selection revokes direct input and closes on tab switch',async()
     find('逐键输入').onclick();terminal.focus();terminal.data('x');await flush();assert.equal(calls.filter(c=>c.name==='remote_tab_input_send').length,0);assert.equal(calls.filter(c=>c.name==='remote_tab_input_mode' && c.args.mode==='direct').length,1);
     const other=ui.create('other',{paneId:'w1:p1',terminalId:'term_a001'});await ui.select(other);assert.equal(panel.removed,true);assert.equal(panel.children[2].value,'');
   } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;globalThis.getComputedStyle=oldStyle;}
+});
+
+test('touch clipboard reviews saved tab direct and draft without sending',async()=>{
+ for(const mode of ['direct','draft']){
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{clipboardRead:async()=> '触摸'});
+  try{
+   await readyPaste(h);
+   if(mode==='draft'){h.find('启用草稿输入').onclick();await flush();await flush();h.all().find(n=>n.tagName==='textarea').focus();}
+   const button=h.find('粘贴并审查');assert.equal(button.disabled,false);button.onclick();await flush();await flush();
+   assert.ok(h.find('追加到草稿'));assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿');
+   h.find('追加到草稿').onclick();assert.equal(h.all().find(n=>n.tagName==='textarea').value,'原草稿触摸');
+   assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
+  }finally{h.restore();}
+ }
+});
+
+test('touch clipboard ignores pending read when tab hides',async()=>{
+ let release;const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{clipboardRead:()=>new Promise(r=>release=r)});
+ try{await readyPaste(h);h.find('粘贴并审查').onclick();h.ui.prepareHide();release('迟到');await flush();assert.equal(h.find('追加到草稿'),undefined);assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);}finally{h.restore();}
 });

@@ -68,7 +68,7 @@ async function importedRemote() {
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup({ inputMode = () => 1 } = {}) {
+async function setup({ inputMode = () => 1, clipboardRead } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
@@ -176,7 +176,7 @@ async function setup({ inputMode = () => 1 } = {}) {
   }
   globalThis.__directGuiDeps = { Terminal, invoke, Channel };
   const { initRemote } = await importedRemote();
-  initRemote({ native: true, theme: { terminal: {} }, onFixture() {}, onLeaveFixture() {} });
+  initRemote({ native: true, theme: { terminal: {} }, onFixture() {}, onLeaveFixture() {}, clipboardRead });
   await flush();
   await flush();
 
@@ -892,4 +892,40 @@ test('paired entry revokes direct input during selection and does not restore it
     panel.children[2].focus();panel.children.at(-1).children.at(-1).click();assert.equal(panel.removed,true);assert.notEqual(document.activeElement,h.terminal.textarea);
     h.terminal.data('x');await flush();assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
   } finally {globalThis.getComputedStyle=oldStyle;h.restore();}
+});
+
+test('touch clipboard reviews paired direct and draft without sending', async () => {
+  for (const mode of ['direct', 'draft']) {
+    const h=await setup({clipboardRead:async()=> '触摸文本'}), n=h.nodes;
+    try {
+      await openInput(h);
+      const draft=n['remote-input-draft'];draft.value='原';draft.dispatch('input');
+      n[mode==='direct'?'remote-input-direct':'remote-input-draft-mode'].click();await flush();await flush();
+      n['remote-read-paste'].click();await flush();await flush();
+      assert.equal(n['remote-paste-review'].hidden,false);
+      assert.equal(draft.value,'原');n['remote-paste-append'].click();assert.equal(draft.value,'原触摸文本');
+      assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,0);
+    } finally {h.finish();await flush();h.restore();}
+  }
+});
+
+test('touch clipboard rejects stale double reads and changed draft', async () => {
+  let resolves=[];const h=await setup({clipboardRead:()=>new Promise(resolve=>resolves.push(resolve))}),n=h.nodes;
+  try {
+    await readyDirectPaste(h);n['remote-read-paste'].click();n['remote-read-paste'].click();
+    resolves[0]('旧');await flush();assert.equal(n['remote-paste-review'].hidden,true);
+    n['remote-input-draft'].value='改变';n['remote-input-draft'].dispatch('input');resolves[1]('新');await flush();
+    assert.equal(n['remote-paste-review'].hidden,true);assert.equal(n['remote-input-draft'].value,'改变');
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('touch clipboard reports denial and oversized text without exposing it',async()=>{
+  for(const [read,expected] of [[async()=>{throw Error('clipboard_denied');},/未允许/],[async()=> 'x'.repeat(4097),/4096/]]){
+    const h=await setup({clipboardRead:read}),n=h.nodes;
+    try{await readyDirectPaste(h);n['remote-read-paste'].click();await flush();assert.equal(n['remote-paste-review'].hidden,true);assert.match(n['remote-input-status'].textContent,expected);assert.equal(n['remote-paste-preview'].textContent,'');}finally{h.finish();await flush();h.restore();}
+  }
+});
+
+test('browser non-text clipboard is rejected with visible feedback',async()=>{
+ const h=await setup(),n=h.nodes;try{await readyDirectPaste(h);h.terminal.textarea.dispatch('paste',{preventDefault(){},stopImmediatePropagation(){},clipboardData:{types:['image/png'],getData:()=> 'not text'}});await flush();assert.equal(n['remote-paste-review'].hidden,true);assert.match(n['remote-input-status'].textContent,/纯文本/);}finally{h.finish();await flush();h.restore();}
 });

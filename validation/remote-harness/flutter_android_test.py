@@ -204,7 +204,8 @@ class RunnerGuards(PreparedFixture):
         first = {'requestId': 'a' * 32, 'terminalId': 'term_ab', 'paneId': 'w1:p1', 'acceptedBytes': 1}
         second = dict(first, requestId='b' * 32, acceptedBytes=9)
         report = device_report(case=gui.GUARDED_CASE, acceptedByteCounts=[1, 9],
-                               inputReceipts=[first, second], **dict.fromkeys(gui.GUARDED_FIELDS, True))
+                               inputReceipts=[first, second], **dict.fromkeys(gui.GUARDED_FIELDS, True),
+                               **gui.CLIPBOARD_COUNTS)
         self.assertEqual(gui.safe_device_result(report, guarded=True)['inputReceipts'], [first, second])
         with self.assertRaises(gui.DeviceFailure):
             gui.safe_device_result(report)
@@ -214,6 +215,25 @@ class RunnerGuards(PreparedFixture):
                         {'inputReceipts': [first, dict(second, requestId=first['requestId'])]}):
             with self.assertRaises(gui.DeviceFailure):
                 gui.safe_device_result(dict(report, **changes), guarded=True)
+
+    def test_guarded_clipboard_evidence_is_required_bounded_and_never_copies_clipboard_contents(self):
+        first = {'requestId': 'a' * 32, 'terminalId': 'term_ab', 'paneId': 'w1:p1', 'acceptedBytes': 1}
+        second = dict(first, requestId='b' * 32, acceptedBytes=9)
+        report = device_report(case=gui.GUARDED_CASE, acceptedByteCounts=[1, 9],
+            inputReceipts=[first, second], **dict.fromkeys(gui.GUARDED_FIELDS, True), **gui.CLIPBOARD_COUNTS)
+        for field in (*gui.CLIPBOARD_FIELDS, *gui.CLIPBOARD_COUNTS):
+            missing = dict(report); missing.pop(field)
+            with self.subTest(field=field, missing=True), self.assertRaises(gui.DeviceFailure):
+                gui.safe_device_result(missing, guarded=True)
+            for bad in (False, 1, 'private clipboard') if field in gui.CLIPBOARD_FIELDS else (False, 0, 999999):
+                with self.subTest(field=field, value=bad), self.assertRaises(gui.DeviceFailure):
+                    gui.safe_device_result(dict(report, **{field: bad}), guarded=True)
+        clean = gui.safe_device_result(dict(report, clipboardText='PRIVATE', originalClipboard='PRIVATE'), guarded=True)
+        self.assertNotIn('PRIVATE', json.dumps(clean))
+        self.assertEqual(clean['inputReceipts'], [first, second])
+        for field in (*gui.CLIPBOARD_FIELDS, *gui.CLIPBOARD_COUNTS):
+            with self.subTest(stockField=field), self.assertRaises(gui.DeviceFailure):
+                gui.safe_device_result(device_report(**{field: report[field]}))
 
     def test_existing_package_and_additional_device_are_never_removed_or_used(self):
         self.prepared(); args = self.args(); launch = Mock()
@@ -228,6 +248,22 @@ class RunnerGuards(PreparedFixture):
             launch.assert_not_called(); adb.assert_not_called()
         with patch.object(gui, 'text', return_value='List of devices attached\nemulator-5554\tdevice\nphone\tdevice'):
             with self.assertRaises(gui.DeviceFailure): gui._run(args, self.fixture_root, self.env, self.config, Mock(), launch)
+
+    def test_clipboard_fixture_is_not_enabled_before_disposable_api35_device_checks(self):
+        self.prepared(); args = self.args(); args.android_guarded_input = True
+        args.input_fixture = 'owned-mobile-fixture'
+        for prop, bad in (('ro.kernel.qemu', '0'), ('ro.build.version.sdk', '34'), ('get-current-user', '10')):
+            def output(*parts, **kwargs):
+                if parts == ('devices',): return 'List of devices attached\nemulator-5554\tdevice'
+                values = {'ro.kernel.qemu': '1', 'ro.build.version.sdk': '35', 'get-current-user': '0'}
+                return bad if parts[-1] == prop else values.get(parts[-1], '')
+            with self.subTest(property=prop), patch.object(gui, 'text', side_effect=output), \
+                    patch.object(gui, 'adb') as adb, patch.object(gui, 'package_present', return_value=False):
+                launch = Mock()
+                with self.assertRaisesRegex(gui.DeviceFailure, 'flutter_android_avd_api_or_user_mismatch'):
+                    gui._run(args, self.fixture_root, self.env, self.config, Mock(), launch)
+                launch.assert_not_called(); adb.assert_not_called()
+                self.assertFalse((self.fixture_root / 'flutter-android-public-defines.json').exists())
 
 
 class WireGuards(unittest.TestCase):
@@ -464,8 +500,10 @@ class PublicExchangeGuards(unittest.TestCase):
 
 
 class CleanupGuards(PreparedFixture):
-    def exercise(self, fail_reverse_cleanup=False, fail_signer=False):
+    def exercise(self, fail_reverse_cleanup=False, fail_signer=False, guarded=False, fail_checkpoint=None):
         self.prepared(); args = self.args()
+        args.android_guarded_input = guarded
+        if guarded: args.input_fixture = 'owned-mobile-fixture'
         state = {'installed': False, 'reverse': False}
         original = (gui.SERIAL, 'tcp:55000', 'tcp:55001')
         owned = (gui.SERIAL, 'tcp:56000', 'tcp:56001')
@@ -480,10 +518,14 @@ class CleanupGuards(PreparedFixture):
             self.assertNotIn('--release', command); self.assertNotIn('--profile', command)
             self.assertEqual(command[-1], 'integration_test/android_pairing_observe_test.dart')
             self.assertEqual(command[command.index('-d') + 1], gui.SERIAL)
+            defines = json.loads((self.fixture_root / 'flutter-android-public-defines.json').read_text())
+            self.assertEqual(defines['HERDR_ANDROID_API35_CLIPBOARD_FIXTURE'], 'true' if guarded else 'false')
             state['installed'] = True; forwards.add(owned)
             yield Process()
         def adb(*parts, **kwargs):
             calls.append(parts)
+            if fail_checkpoint == 'ack' and parts[-1:] == ('cache/herdr-flutter-android-123/checkpoint-ack.new',):
+                raise gui.DeviceFailure('synthetic_checkpoint_ack_failure')
             if parts[:2] == ('reverse', '--remove'):
                 if fail_reverse_cleanup: raise gui.DeviceFailure('synthetic_cleanup_failure')
                 state['reverse'] = False
@@ -501,12 +543,27 @@ class CleanupGuards(PreparedFixture):
                 return gui.SERIAL + ' tcp:2222 tcp:2222' if state['reverse'] else ''
             return ''
         approval = Mock(); approval.approve.return_value = b'{"public":"response"}'
+        if fail_checkpoint == 'receiver':
+            approval.verify_ssh.side_effect = gui.DeviceFailure('synthetic_checkpoint_receiver_failure')
+        report = device_report()
+        if guarded:
+            first = {'requestId': 'a' * 32, 'terminalId': 'term_ab', 'paneId': 'w1:p1', 'acceptedBytes': 1}
+            report.update(case=gui.GUARDED_CASE, acceptedByteCounts=[1, 9],
+                inputReceipts=[first, dict(first, requestId='b' * 32, acceptedBytes=9)],
+                **dict.fromkeys(gui.GUARDED_FIELDS, True), **gui.CLIPBOARD_COUNTS)
+        public = iter((b'{"public":"signer"}', b'{"public":"request"}', json.dumps(report).encode()))
+        def wait_public(*args, checkpoints=None, **kwargs):
+            if checkpoints is not None:
+                with patch.object(gui, 'read_public', side_effect=[
+                        json.dumps({'checkpoint': label}).encode() for label in gui.CLIPBOARD_CHECKPOINTS]):
+                    checkpoints.poll(); checkpoints.poll()
+            return next(public)
         with patch.object(gui, 'adb', side_effect=adb), patch.object(gui, 'text', side_effect=text), \
                 patch.object(gui, 'package_present', side_effect=lambda: state['installed']), \
                 patch.object(gui, 'forward_set', side_effect=lambda: set(forwards)), \
                 patch.object(gui, 'write_response'), \
                 patch.object(gui, 'checked_flutter_version', return_value={'frameworkVersion': tool.FLUTTER_VERSION, 'frameworkRevision': tool.FLUTTER_COMMIT}), \
-                patch.object(gui, 'wait_public', side_effect=[b'{"public":"signer"}', b'{"public":"request"}', json.dumps(device_report()).encode()]), \
+                patch.object(gui, 'wait_public', side_effect=wait_public), \
                 patch.object(gui, 'verify_signer', side_effect=gui.DeviceFailure('flutter_android_signer_verification_failed') if fail_signer else None,
                     return_value={'stage':'complete','signatureVerified':True,'deleteReturned':True,'readRejected':True}):
             if fail_reverse_cleanup:
@@ -518,11 +575,18 @@ class CleanupGuards(PreparedFixture):
                     gui._run(args, self.fixture_root, self.env, self.config, approval, process)
                 approval.approve.assert_not_called()
                 result = None
+            elif fail_checkpoint:
+                with self.assertRaisesRegex(gui.DeviceFailure, 'synthetic_checkpoint_' + fail_checkpoint + '_failure'):
+                    gui._run(args, self.fixture_root, self.env, self.config, approval, process)
+                self.assertEqual(approval.verify_ssh.call_count, 1)
+                self.assertLessEqual(sum(parts[-1:] == ('cache/herdr-flutter-android-123/checkpoint-ack.new',) for parts in calls), 1)
+                result = None
             else:
                 result = gui._run(args, self.fixture_root, self.env, self.config, approval, process)
         self.assertEqual(forwards, {original})
         self.assertFalse(state['installed'])
         self.assertIn(('uninstall', gui.PACKAGE), calls)
+        self.assertEqual(calls.count(('uninstall', gui.PACKAGE)), 1)
         self.assertNotIn(('forward', '--remove', original[1]), calls)
         self.assertFalse((self.fixture_root / 'flutter-android-public-defines.json').exists())
         cleanup = json.loads((args.output / 'flutter-android-device-cleanup.json').read_text())
@@ -538,6 +602,17 @@ class CleanupGuards(PreparedFixture):
         self.assertFalse(result['storageMocked'])  # This label is from the real runner; this test is not device evidence.
         self.assertFalse(cleanup['rawLogsUploaded'])
 
+    def test_guarded_run_requires_clipboard_contract_but_keeps_the_original_two_receipts(self):
+        result, cleanup = self.exercise(guarded=True)
+        self.assertEqual(cleanup['status'], 'passed')
+        self.assertEqual(result['acceptedByteCounts'], [1, 9])
+        self.assertEqual(len(result['inputReceipts']), 2)
+        self.assertIs(result['pasteOperationsNoExtraSshBytes'], True)
+        for field in gui.CLIPBOARD_FIELDS:
+            self.assertIs(result[field], True)
+        for field, expected in gui.CLIPBOARD_COUNTS.items():
+            self.assertEqual(result[field], expected)
+
     def test_failed_cleanup_is_recorded_and_cannot_return_passed(self):
         result, cleanup = self.exercise(fail_reverse_cleanup=True)
         self.assertIsNone(result)
@@ -547,6 +622,16 @@ class CleanupGuards(PreparedFixture):
 
     def test_failed_signer_verification_stops_before_host_approval(self):
         result, cleanup = self.exercise(fail_signer=True)
+        self.assertIsNone(result)
+        self.assertEqual(cleanup['status'], 'passed')
+
+    def test_failed_clipboard_receiver_cleans_owned_resources_without_returning_success(self):
+        result, cleanup = self.exercise(guarded=True, fail_checkpoint='receiver')
+        self.assertIsNone(result)
+        self.assertEqual(cleanup['status'], 'passed')
+
+    def test_failed_clipboard_ack_cleans_owned_resources_without_replaying_unknown_write(self):
+        result, cleanup = self.exercise(guarded=True, fail_checkpoint='ack')
         self.assertIsNone(result)
         self.assertEqual(cleanup['status'], 'passed')
 
@@ -669,6 +754,86 @@ class SharedRouteGuards(unittest.TestCase):
         self.assertEqual(result['errorCode'], 'synthetic_verification_failure')
         self.assertTrue(result['revokedFixtureKey'])
         self.assertFalse(result['matchedDeviceKeyInSshd'])
+
+
+class ClipboardCheckpointGuards(unittest.TestCase):
+    relative = 'cache/herdr-flutter-android-123'
+
+    def test_only_exact_bounded_checkpoint_requests_are_accepted(self):
+        for label in gui.CLIPBOARD_CHECKPOINTS:
+            raw = json.dumps({'checkpoint': label}).encode()
+            self.assertEqual(gui.checked_public_payload(raw, 'checkpoint.json'), raw)
+        for value in ({'checkpoint': 'PRIVATE'}, {'checkpoint': 1}, {'checkpoint': []},
+                      {'checkpoint': gui.CLIPBOARD_CHECKPOINTS[0], 'clipboard': 'PRIVATE'}):
+            with self.subTest(value=value), self.assertRaises(gui.DeviceFailure):
+                gui.checked_public_payload(json.dumps(value).encode(), 'checkpoint.json')
+
+    def test_two_checkpoints_verify_real_receiver_before_atomic_ack_and_ignore_duplicate_poll(self):
+        approval = Mock()
+        state = gui.ClipboardCheckpoints(self.relative, approval)
+        events = []
+        approval.verify_ssh.side_effect = lambda expected: events.append(('verify', expected))
+        def adb(*args, **kwargs):
+            events.append(('ack', args, kwargs))
+        labels = (gui.CLIPBOARD_CHECKPOINTS[0], gui.CLIPBOARD_CHECKPOINTS[0], gui.CLIPBOARD_CHECKPOINTS[1])
+        with patch.object(gui, 'read_public', side_effect=[json.dumps({'checkpoint': item}).encode() for item in labels]), \
+                patch.object(gui, 'adb', side_effect=adb):
+            state.poll(); state.poll(); state.poll(); state.require_complete()
+        self.assertEqual(approval.verify_ssh.call_args_list, [((b'k',), {}), ((b'k',), {})])
+        self.assertEqual([event[0] for event in events], ['verify', 'ack', 'ack', 'verify', 'ack', 'ack'])
+        for index, label in ((1, labels[0]), (4, labels[2])):
+            self.assertEqual(events[index][1], ('shell', '-T', 'run-as', gui.PACKAGE, 'tee', self.relative + '/checkpoint-ack.new'))
+            self.assertEqual(json.loads(events[index][2]['data']), {'checkpoint': label})
+        self.assertEqual(state.completed, list(gui.CLIPBOARD_CHECKPOINTS))
+
+    def test_out_of_order_old_or_missing_checkpoint_is_fatal(self):
+        for completed, label in (([], gui.CLIPBOARD_CHECKPOINTS[1]),
+                                 (list(gui.CLIPBOARD_CHECKPOINTS), gui.CLIPBOARD_CHECKPOINTS[0])):
+            state = gui.ClipboardCheckpoints(self.relative, Mock()); state.completed = completed
+            with patch.object(gui, 'read_public', return_value=json.dumps({'checkpoint': label}).encode()), \
+                    patch.object(gui, 'adb') as adb:
+                with self.assertRaisesRegex(gui.DeviceFailure, 'checkpoint_order_invalid'):
+                    state.poll()
+                adb.assert_not_called(); state.approval.verify_ssh.assert_not_called()
+        for completed in ([], [gui.CLIPBOARD_CHECKPOINTS[0]]):
+            state = gui.ClipboardCheckpoints(self.relative, Mock()); state.completed = completed
+            with self.assertRaisesRegex(gui.DeviceFailure, 'checkpoints_missing'):
+                state.require_complete()
+
+    def test_receiver_or_ack_failure_does_not_mark_checkpoint_complete(self):
+        for bad in ('receiver', 'ack'):
+            approval = Mock(); state = gui.ClipboardCheckpoints(self.relative, approval)
+            if bad == 'receiver': approval.verify_ssh.side_effect = gui.DeviceFailure('unexpected_remote_input')
+            with patch.object(gui, 'read_public', return_value=json.dumps({'checkpoint': gui.CLIPBOARD_CHECKPOINTS[0]}).encode()), \
+                    patch.object(gui, 'adb', side_effect=gui.DeviceFailure('flutter_android_adb_failed') if bad == 'ack' else None) as adb:
+                with self.assertRaises(gui.DeviceFailure): state.poll()
+                self.assertEqual(state.completed, [])
+                if bad == 'receiver': adb.assert_not_called()
+
+    def test_stock_wait_never_reads_checkpoints_and_guarded_result_cannot_bypass_them(self):
+        proc = Mock(); proc.poll.return_value = None
+        with patch.object(gui, 'package_present', return_value=True), \
+                patch.object(gui, 'read_public', return_value=b'{}') as read:
+            self.assertEqual(gui.wait_public(proc, self.relative, 'result.json', 8192, timeout=1), b'{}')
+            read.assert_called_once_with(self.relative + '/result.json', 8192)
+        state = gui.ClipboardCheckpoints(self.relative, Mock())
+        with patch.object(gui, 'package_present', return_value=True), \
+                patch.object(gui, 'read_public', side_effect=[None, b'{}']):
+            with self.assertRaisesRegex(gui.DeviceFailure, 'checkpoints_missing'):
+                gui.wait_public(proc, self.relative, 'result.json', 8192, timeout=1, checkpoints=state)
+
+    def test_guarded_checkpoint_wait_has_bounded_timeout_and_checks_process_exit(self):
+        for exited in (False, True):
+            proc = Mock(); proc.poll.return_value = 1 if exited else None
+            state = gui.ClipboardCheckpoints(self.relative, Mock())
+            ticks = (0, 0, 2) if not exited else (0, 0)
+            with patch.object(gui.time, 'monotonic', side_effect=ticks), patch.object(gui.time, 'sleep'), \
+                    patch.object(gui, 'package_present', return_value=True), \
+                    patch.object(gui, 'read_public', return_value=None), \
+                    patch.object(gui, 'failure_stage', return_value='bounded_failure'), patch.object(gui, 'adb') as adb:
+                with self.assertRaisesRegex(gui.DeviceFailure, '^bounded_failure$'):
+                    gui.wait_public(proc, self.relative, 'result.json', 8192, timeout=1, checkpoints=state)
+                state.approval.verify_ssh.assert_not_called(); adb.assert_not_called()
 
 
 if __name__ == '__main__':

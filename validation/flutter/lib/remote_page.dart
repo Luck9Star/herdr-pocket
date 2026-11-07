@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderObject;
 import 'package:flutter/services.dart';
@@ -93,6 +93,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final rejectedDrafts = <({String target,String text})>[];
   bool rendering = false, previewOpen = false, readingPaste = false, acknowledgingInput = false;
   Object? pasteReviewTicket;
+  NavigatorState? pasteReviewNavigator;
+  Route<String>? pasteReviewRoute;
+  ValueNotifier<String>? pasteReviewClipboard;
   String? draftTarget;
   final drafts = <String,String>{};
   final draftVersions = <String,Object>{};
@@ -123,6 +126,24 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   void retirePendingPasteRead() {
     if (readingPaste && !previewOpen) { pasteReviewTicket = null; readingPaste = false; }
+  }
+  void dismissPasteReview() {
+    final hadPasteReview = pasteReviewTicket != null || readingPaste || pasteReviewRoute != null || pasteReviewClipboard != null;
+    if (!hadPasteReview) return;
+    pasteReviewTicket = null;
+    readingPaste = false;
+    if (pasteReviewRoute != null) previewOpen = false;
+    final clipboard = pasteReviewClipboard;
+    pasteReviewClipboard = null;
+    final navigator = pasteReviewNavigator,route = pasteReviewRoute;
+    pasteReviewNavigator = null; pasteReviewRoute = null;
+    if (clipboard == null && (navigator == null || route == null || !route.isActive)) return;
+    // Clear the clipboard preview and remove this exact route after the frame;
+    // lifecycle callbacks may run while Navigator is building or transitioning.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (clipboard != null && clipboard.value.isNotEmpty) clipboard.value = '';
+      if (navigator != null && route != null && navigator.mounted && route.isActive) navigator.removeRoute(route);
+    });
   }
 
   // Presentation only: retain the original pane objects and source order in
@@ -165,7 +186,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void didUpdateWidget(RemotePage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.pairedTarget,widget.pairedTarget) || !identical(oldWidget.adapter,widget.adapter) ||
-        oldWidget.keyHandle != widget.keyHandle || oldWidget.devicePublicKey != widget.devicePublicKey) clearScreenSelection();
+        oldWidget.keyHandle != widget.keyHandle || oldWidget.devicePublicKey != widget.devicePublicKey) {
+      dismissPasteReview(); clearScreenSelection();
+    }
     if (!identical(oldWidget.networkBinding,widget.networkBinding) || !identical(oldWidget.requestedTarget,widget.requestedTarget)) {
       networkBindingInvalidated = true;
       oldWidget.networkBinding?.changes?.removeListener(networkChanged);
@@ -186,7 +209,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   void visibilityChanged() {
     if (widget.visibility?.value == false) {
-      clearScreenSelection(); retirePendingPasteRead();
+      dismissPasteReview(); clearScreenSelection(); retirePendingPasteRead();
       widget.summaryLease?.invalidate(); summaryAttempt = null;
       inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
       if (!adapter.pauseObservation()) {
@@ -228,6 +251,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   @override
   void dispose() {
+    dismissPasteReview();
     widget.summaryLease?.registry.removeListener(summaryChanged);
     widget.summaryLease?.close(); summaryAttempt = null;
     widget.visibility?.removeListener(visibilityChanged);
@@ -247,7 +271,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Future<void> connect() async {
     if (networkBindingInvalidated || !identical(originalNetworkBinding,widget.networkBinding) ||
         !reviewed || busy || widget.visibility?.value == false) return;
-    clearScreenSelection();
+    dismissPasteReview(); clearScreenSelection();
     final ticket = ++request;
     observationEpoch = 0;
     summaryAttempt = widget.summaryLease?.begin();
@@ -317,6 +341,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           final target = adapter.inputTarget!;
           final key = targetKey(target);
           if (draftTarget != key) {
+            dismissPasteReview();
             if (draftTarget != null) drafts[draftTarget!] = draft.text;
             draftTarget = key; draftOrigins.putIfAbsent(key,() => target);
             draft.text = drafts[key] ?? '';
@@ -388,7 +413,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         board.generation != adapter.generation ||
         !board.selectable ||
         board.panes.where((p) => p.paneId == pane.paneId && p.terminalId == pane.terminalId).length != 1) return;
-    clearScreenSelection();
+    dismissPasteReview(); clearScreenSelection();
     setState(() { selectedPane = pane.paneId; selectedTarget = pane; live = false; status = '目标已选择 · 等待新 full'; });
     reportView();
     try { adapter.selectTarget(board.generation,pane); }
@@ -415,6 +440,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     // Re-selecting the active chip is not a mode change. Preserve the current
     // editor/client, focus and IME composition instead of replacing its epoch.
     if (inputGate.mode == mode) return;
+    dismissPasteReview();
     retirePendingPasteRead();
     auxiliaryModifiers.reset();
     terminalFocus.unfocus(); FocusScope.of(context).unfocus();
@@ -590,31 +616,59 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     bool sameContext() => mounted && identical(pasteReviewTicket,ticket) && observationEpoch == pasteEpoch && widget.visibility?.value != false &&
       !viewPaused && !inputGate.sending && inputGate.current(lease) && draftTarget == key && draft.text == original &&
       identical(draftVersions[key],version);
+    ValueNotifier<String>? clipboardPreview;
+    NavigatorState? navigator;
+    DialogRoute<String>? route;
+    var routePushed = false;
     // A pending platform read does not own modal focus: ordinary direct-mode
     // focus loss still revokes its lease before any review can be opened.
     setState(() { auxiliaryModifiers.reset(); pasteReviewTicket = ticket; readingPaste = true; });
     try {
       final value = await Clipboard.getData(Clipboard.kTextPlain);
       final clipboard = value?.text;
-      if (!sameContext() || clipboard == null || clipboard.isEmpty) return;
+      if (!sameContext()) return;
+      if (clipboard == null || clipboard.isEmpty) {
+        setState(() { status = '剪贴板没有可用文本 · 原草稿保留；若系统拒绝读取，请允许后主动重试'; });
+        return;
+      }
       final review = RemotePasteReview(original,clipboard);
+      navigator = Navigator.of(context,rootNavigator:true);
+      clipboardPreview = ValueNotifier(review.clipboard);
+      pasteReviewClipboard = clipboardPreview;
+      void closeReview(String? result) {
+        final currentRoute = route;
+        if (!identical(pasteReviewTicket,ticket) || currentRoute == null || !currentRoute.isActive) return;
+        clipboardPreview!.value = '';
+        navigator!.removeRoute(currentRoute,result);
+      }
+      route = DialogRoute<String>(
+        context:context,
+        themes:InheritedTheme.capture(from:context,to:navigator.context),
+        barrierLabel:MaterialLocalizations.of(context).modalBarrierDismissLabel,
+        settings:const RouteSettings(name:'remote-paste-review'),
+        builder:(dialogContext) => AlertDialog(
+          title:const Text('审查粘贴 · 仅编辑本地草稿'),
+          content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(lease.target.label),const SizedBox(height:12),
+            Text('剪贴板原始文本 ${remoteInputByteLabel(review.clipboardBytes)} / $remoteInputReviewByteLimit UTF-8 bytes'),
+            if (review.canReplace) ValueListenableBuilder<String>(valueListenable:clipboardPreview,builder:(context,text,_) =>
+              text.isEmpty ? const SizedBox.shrink() : SelectableText(visibleRemoteInput(text),key:const ValueKey('remote-paste-review-text'))),
+            const SizedBox(height:12),Text('原草稿 ${remoteInputByteLabel(review.originalBytes)} bytes；追加后 ${remoteInputByteLabel(review.appendedBytes)} bytes'),
+            if (original.isNotEmpty) ExpansionTile(title:const Text('查看原目标的本地草稿'),children:[SelectableText(visibleRemoteInput(original))]),
+            if (!review.canReplace) const Text('剪贴板文本超过 4096 UTF-8 bytes · 不能使用，请缩短后重新粘贴。'),
+            if (review.canReplace && !review.canAppend) const Text('追加后超过 4096 UTF-8 bytes · 可明确替换原草稿，或取消后手动整理。'),
+            const SizedBox(height:12),const Text('方括号标出控制与不可见字符，原始内容保持不变。追加或替换只编辑此原目标的本地草稿；发送到远端仍需另行预览确认。'),
+          ])),actions:[
+            TextButton(key:const ValueKey('remote-paste-cancel'),onPressed:() => closeReview(null),child:const Text('取消')),
+            TextButton(key:const ValueKey('remote-paste-replace'),onPressed:review.canReplace ? () => closeReview('replace') : null,child:const Text('替换原草稿')),
+            FilledButton(key:const ValueKey('remote-paste-append'),onPressed:review.canAppend ? () => closeReview('append') : null,child:const Text('追加到原草稿')),
+          ]));
+      pasteReviewNavigator = navigator;
+      pasteReviewRoute = route;
       setState(() { previewOpen = true; });
-      final choice = await showDialog<String>(context:context,builder:(context) => AlertDialog(
-        title:const Text('审查粘贴 · 仅编辑本地草稿'),
-        content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Text(lease.target.label),const SizedBox(height:12),
-          Text('剪贴板原始文本 ${review.clipboardBytes} / $remoteInputReviewByteLimit UTF-8 bytes'),
-          SelectableText(visibleRemoteInput(review.clipboard),key:const ValueKey('remote-paste-review-text')),
-          const SizedBox(height:12),Text('原草稿 ${utf8ByteLength(original)} bytes；追加后 ${review.appendedBytes} bytes'),
-          if (original.isNotEmpty) ExpansionTile(title:const Text('查看原目标的本地草稿'),children:[SelectableText(visibleRemoteInput(original))]),
-          if (!review.canReplace) const Text('剪贴板文本超过 4096 UTF-8 bytes · 不能使用，请缩短后重新粘贴。'),
-          if (review.canReplace && !review.canAppend) const Text('追加后超过 4096 UTF-8 bytes · 可明确替换原草稿，或取消后手动整理。'),
-          const SizedBox(height:12),const Text('方括号标出控制与不可见字符，原始内容保持不变。追加或替换只编辑此原目标的本地草稿；发送到远端仍需另行预览确认。'),
-        ])),actions:[
-          TextButton(key:const ValueKey('remote-paste-cancel'),onPressed:() => Navigator.pop(context),child:const Text('取消')),
-          TextButton(key:const ValueKey('remote-paste-replace'),onPressed:review.canReplace ? () => Navigator.pop(context,'replace') : null,child:const Text('替换原草稿')),
-          FilledButton(key:const ValueKey('remote-paste-append'),onPressed:review.canAppend ? () => Navigator.pop(context,'append') : null,child:const Text('追加到原草稿')),
-        ]));
+      final choiceFuture = navigator.push<String>(route);
+      routePushed = true;
+      final choice = await choiceFuture;
       if (!sameContext()) return;
       if (choice != 'append' && choice != 'replace') return;
       if (choice == 'append' ? !review.canAppend : !review.canReplace) return;
@@ -629,6 +683,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         setState(() { previewOpen = false; readingPaste = false; pasteReviewTicket = null; });
         if (lease.mode == RemoteInputMode.direct && inputGate.current(lease)) terminalFocus.requestFocus();
       }
+      if (identical(pasteReviewRoute,route)) {
+        pasteReviewRoute = null;
+        if (identical(pasteReviewNavigator,navigator)) pasteReviewNavigator = null;
+      }
+      if (identical(pasteReviewClipboard,clipboardPreview)) pasteReviewClipboard = null;
+      if (clipboardPreview != null && clipboardPreview.value.isNotEmpty) clipboardPreview.value = '';
+      if (routePushed && route != null) await route.completed;
+      clipboardPreview?.dispose();
     }
   }
 

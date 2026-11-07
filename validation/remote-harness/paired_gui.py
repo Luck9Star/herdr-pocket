@@ -394,6 +394,8 @@ def run_gui(args, root, env, config):
                 if expected and result.get('inputQueueAccepted') is not True:
                     raise GuiFailure('missing_guarded_input_receipt')
                 if guarded_mobile:
+                    if result.get('pasteOperationsNoExtraSshBytes') is not True:
+                        raise GuiFailure('mobile_clipboard_receiver_check_missing')
                     try:
                         result['inputReceipts'] = mobile_receipts(receipts, config['paneId'], terminal)
                     except EvidenceError as exc:

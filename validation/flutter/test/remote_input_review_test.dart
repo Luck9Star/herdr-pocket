@@ -16,11 +16,12 @@ void main() {
     expect(exact.clipboardBytes,4096); expect(exact.canReplace,isTrue); expect(exact.canAppend,isTrue);
     expect(visibleRemoteInput(exact.clipboard).length,greaterThan(4096));
     final unicode = RemotePasteReview('',List.filled(1366,'中').join());
-    expect(unicode.clipboardBytes,4098); expect(unicode.canReplace,isFalse); expect(unicode.canAppend,isFalse);
+    expect(unicode.clipboardBytes,4097); expect(unicode.clipboard,isEmpty);
+    expect(unicode.canReplace,isFalse); expect(unicode.canAppend,isFalse);
   });
   test('append counts existing bytes, while replacing an oversized draft remains an explicit option',() {
     final review = RemotePasteReview(List.filled(4097,'x').join(),'new');
-    expect(review.appendedBytes,4100); expect(review.canAppend,isFalse); expect(review.canReplace,isTrue);
+    expect(review.appendedBytes,4097); expect(review.canAppend,isFalse); expect(review.canReplace,isTrue);
     expect(RemotePasteReview(List.filled(4093,'x').join(),'中').canAppend,isTrue);
     expect(RemotePasteReview(List.filled(4094,'x').join(),'中').canAppend,isFalse);
   });
@@ -30,10 +31,18 @@ void main() {
       expect(review.canAppend,isFalse); expect(review.canReplace,isFalse);
     }
   });
-  test('unusable oversized text has a bounded explicitly truncated display and unchanged raw byte count',() {
+  test('unusable oversized clipboard is discarded after the bounded byte check',() {
     final raw = List.filled(10000,'x').join(),review = RemotePasteReview('',List.filled(10000,'x').join());
     expect(visibleRemoteInput(raw),endsWith('…（预览已截短）'));
     expect(visibleRemoteInput(raw).length,lessThan(4200));
-    expect(review.clipboardBytes,10000); expect(review.clipboard,raw); expect(review.canReplace,isFalse);
+    expect(review.clipboardBytes,4097); expect(review.clipboard,isEmpty); expect(review.canReplace,isFalse);
+    expect(remoteInputByteLabel(review.clipboardBytes),'超过 4096');
+  });
+  test('bounded count handles surrogate pairs and malformed UTF16 like UTF8 encoding',() {
+    expect(boundedRemoteInputBytes('🙂'),4);
+    expect(boundedRemoteInputBytes('\ud800'),3); expect(boundedRemoteInputBytes('\udfff'),3);
+    expect(boundedRemoteInputBytes('\ud800X\udfff'),7);
+    expect(boundedRemoteInputBytes(List.filled(1024,'🙂').join()),4096);
+    expect(boundedRemoteInputBytes(List.filled(1025,'🙂').join()),4097);
   });
 }

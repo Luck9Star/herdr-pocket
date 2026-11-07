@@ -35,13 +35,20 @@ STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'ha
           'response_finish_edit', 'response_rejected', 'response_save_unconfirmed',
           'response_review_invalidated',
           'guarded_direct_available', 'guarded_direct_select', 'guarded_direct_focus',
-          'guarded_direct_commit', 'guarded_direct_ack', 'guarded_direct_receipt'}
+          'guarded_direct_commit', 'guarded_direct_ack', 'guarded_direct_receipt',
+          'guarded_clipboard_fixture', 'guarded_paste_cancel_review', 'guarded_paste_cancel_preserved',
+          'guarded_paste_reopen_review', 'guarded_paste_local_append'}
 STOCK_CASE = 'android-native-pairing-observe'
 GUARDED_CASE = 'android-native-pairing-guarded-input'
+CLIPBOARD_FIELDS = ('syntheticClipboardSet', 'pasteReviewCancelled', 'pasteCancelPreservedDraft',
+                    'pasteReviewReopened', 'pasteAppendedLocally', 'pasteTargetVerified',
+                    'pasteReceiptUnchanged', 'pasteKeptFixedSize')
+CLIPBOARD_COUNTS = {'clipboardFixtureBytes': 3, 'pasteOriginalDraftBytes': 6, 'pasteMergedDraftBytes': 9}
+CLIPBOARD_CHECKPOINTS = ('paste-cancel-preserved', 'paste-local-append')
 GUARDED_FIELDS = ('guardedInput', 'directInputAccepted', 'draftInputAccepted', 'hiddenTabStopped',
-                  'hiddenTabManualRecovery', 'unsentDraftRestored', 'postStopInputDisabled')
+                  'hiddenTabManualRecovery', 'unsentDraftRestored', 'postStopInputDisabled') + CLIPBOARD_FIELDS
 PUBLIC_LIMITS = {'request.json': 2048, 'result.json': 8192, 'signer.json': 1024, 'stage': 40,
-                 'failure.json': 512}
+                 'failure.json': 512, 'checkpoint.json': 128}
 SIGNER_CHALLENGE = b'herdr-pocket-android-signer-probe-v1'
 REQUEST_FIELDS = {'version', 'type', 'request_id', 'account', 'host_key',
                   'issued_at', 'expires_at', 'device', 'public_key'}
@@ -131,6 +138,10 @@ def safe_device_result(raw, guarded=False):
             raise DeviceFailure('flutter_android_result_counter_invalid')
         clean[field] = expected
     if guarded:
+        for field, expected in CLIPBOARD_COUNTS.items():
+            if type(raw.get(field)) is not int or raw[field] != expected:
+                raise DeviceFailure('flutter_android_clipboard_counter_invalid')
+            clean[field] = expected
         try:
             clean['inputReceipts'] = mobile_receipts(raw.get('inputReceipts'))
         except EvidenceError as exc:
@@ -140,7 +151,8 @@ def safe_device_result(raw, guarded=False):
         if counts != sizes or not all(type(count) is int for count in counts):
             raise DeviceFailure('flutter_android_guarded_byte_counts_invalid')
         clean['acceptedByteCounts'] = sizes
-    elif raw.get('inputReceipts') or raw.get('guardedInput'):
+    elif raw.get('inputReceipts') or raw.get('guardedInput') or any(
+            field in raw for field in (*CLIPBOARD_FIELDS, *CLIPBOARD_COUNTS)):
         raise DeviceFailure('flutter_android_stock_input_unexpected')
     return clean
 
@@ -266,11 +278,15 @@ def checked_public_payload(raw, name):
             raise DeviceFailure(invalid)
     elif name == 'failure.json':
         safe_test_failure(value)
+    elif name == 'checkpoint.json':
+        if (not isinstance(value, dict) or set(value) != {'checkpoint'} or
+                value['checkpoint'] not in CLIPBOARD_CHECKPOINTS):
+            raise DeviceFailure(invalid)
     return raw
 
 
 def read_public(relative, limit):
-    if not re.fullmatch(r'cache/herdr-flutter-android-[0-9]+/(?:request\.json|result\.json|signer\.json|failure\.json|stage)', relative):
+    if not re.fullmatch(r'cache/herdr-flutter-android-[0-9]+/(?:request\.json|result\.json|signer\.json|failure\.json|checkpoint\.json|stage)', relative):
         raise DeviceFailure('flutter_android_public_path_invalid')
     name = relative.rsplit('/', 1)[1]
     if type(limit) is not int or limit != PUBLIC_LIMITS[name]:
@@ -304,7 +320,37 @@ def failure_stage(relative_directory, fallback):
     return fallback + '_' + label if label in STAGES else fallback
 
 
-def wait_public(proc, relative_directory, name, limit, timeout):
+class ClipboardCheckpoints:
+    """Host receiver verification before acknowledging each local-only action."""
+    def __init__(self, relative_directory, approval):
+        self.relative = relative_directory
+        self.approval = approval
+        self.completed = []
+
+    def poll(self):
+        raw = read_public(self.relative + '/checkpoint.json', PUBLIC_LIMITS['checkpoint.json'])
+        if raw is None:
+            return
+        label = json.loads(raw)['checkpoint']
+        if self.completed and label == self.completed[-1]:
+            return  # The same atomic request may remain visible while Dart resumes.
+        if len(self.completed) >= len(CLIPBOARD_CHECKPOINTS) or label != CLIPBOARD_CHECKPOINTS[len(self.completed)]:
+            raise DeviceFailure('flutter_android_clipboard_checkpoint_order_invalid')
+        self.approval.verify_ssh(b'k')
+        # Do not acknowledge verification failure, and never replay the check or
+        # an unknown-result acknowledgement write. Cleanup owns the fresh app.
+        response = json.dumps({'checkpoint': label}, separators=(',', ':')).encode('ascii')
+        pending = self.relative + '/checkpoint-ack.new'
+        adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=response)
+        adb('shell', 'run-as', PACKAGE, 'mv', pending, self.relative + '/checkpoint-ack.json')
+        self.completed.append(label)
+
+    def require_complete(self):
+        if tuple(self.completed) != CLIPBOARD_CHECKPOINTS:
+            raise DeviceFailure('flutter_android_clipboard_checkpoints_missing')
+
+
+def wait_public(proc, relative_directory, name, limit, timeout, checkpoints=None):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         # Flutter may still be building/installing its disposable app. Never
@@ -314,8 +360,12 @@ def wait_public(proc, relative_directory, name, limit, timeout):
                 raise DeviceFailure('flutter_android_test_exited_before_install')
             time.sleep(0.15)
             continue
+        if checkpoints is not None:
+            checkpoints.poll()
         result = read_public(relative_directory + '/' + name, limit)
         if result is not None:
+            if checkpoints is not None:
+                checkpoints.require_complete()
             return result
         if proc.poll() is not None:
             if package_present():
@@ -384,6 +434,7 @@ def _run(args, root, env, config, approval, owned_process):
     defines = root / 'flutter-android-public-defines.json'
     defines.write_text(json.dumps({'HERDR_ANDROID_NATIVE_PAIRING': '1', 'HERDR_ANDROID_RUN_ID': env['GITHUB_RUN_ID'],
         'POCKET_GUARDED_INPUT': 'true' if guarded else 'false',
+        'HERDR_ANDROID_API35_CLIPBOARD_FIXTURE': 'true' if guarded else 'false',
         'HERDR_ANDROID_TARGET_JSON': json.dumps(config, separators=(',', ':')),
         'HERDR_ANDROID_PUBLIC_DIR': '/data/user/0/' + PACKAGE + '/' + relative}), encoding='utf-8')
     defines.chmod(0o600)
@@ -406,8 +457,13 @@ def _run(args, root, env, config, approval, owned_process):
             request = wait_public(process, relative, 'request.json', 2048, timeout=900)
             response = approval.approve(request)
             write_response(relative, response)
-            raw = wait_public(process, relative, 'result.json', 8192, timeout=400)
+            checkpoints = ClipboardCheckpoints(relative, approval) if guarded else None
+            raw = wait_public(process, relative, 'result.json', 8192, timeout=400, checkpoints=checkpoints)
+            if checkpoints is not None:
+                checkpoints.require_complete()
             result = safe_device_result(json.loads(raw.decode('utf-8')), guarded=guarded)
+            if guarded:
+                result['pasteOperationsNoExtraSshBytes'] = True
             try:
                 code = process.wait(timeout=60)
             except subprocess.TimeoutExpired:

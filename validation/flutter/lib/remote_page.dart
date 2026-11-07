@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderObject;
 import 'package:flutter/services.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
@@ -240,7 +239,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) stop('应用已暂停，连接已取消；请重新核验后主动连接');
   }
   void stop([String message = '已取消；不会重连或发送输入']) {
-    clearScreenSelection(); retirePendingPasteRead();
+    dismissPasteReview(); clearScreenSelection(); retirePendingPasteRead();
     widget.summaryLease?.invalidate(); summaryAttempt = null;
     inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
     request++; frozenNode = null; identityLease?.cancel(); unawaited(adapter.cancel());
@@ -633,12 +632,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       }
       final review = RemotePasteReview(original,clipboard);
       navigator = Navigator.of(context,rootNavigator:true);
-      clipboardPreview = ValueNotifier(review.clipboard);
-      pasteReviewClipboard = clipboardPreview;
+      final preview = ValueNotifier(review.clipboard);
+      clipboardPreview = preview;
+      pasteReviewClipboard = preview;
       void closeReview(String? result) {
         final currentRoute = route;
-        if (!identical(pasteReviewTicket,ticket) || currentRoute == null || !currentRoute.isActive) return;
-        clipboardPreview!.value = '';
+        if (!identical(pasteReviewTicket,ticket) || currentRoute == null || !currentRoute.isActive || !currentRoute.isCurrent) return;
+        preview.value = '';
         navigator!.removeRoute(currentRoute,result);
       }
       route = DialogRoute<String>(
@@ -651,7 +651,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(lease.target.label),const SizedBox(height:12),
             Text('剪贴板原始文本 ${remoteInputByteLabel(review.clipboardBytes)} / $remoteInputReviewByteLimit UTF-8 bytes'),
-            if (review.canReplace) ValueListenableBuilder<String>(valueListenable:clipboardPreview,builder:(context,text,_) =>
+            if (review.canReplace) ValueListenableBuilder<String>(valueListenable:preview,builder:(context,text,_) =>
               text.isEmpty ? const SizedBox.shrink() : SelectableText(visibleRemoteInput(text),key:const ValueKey('remote-paste-review-text'))),
             const SizedBox(height:12),Text('原草稿 ${remoteInputByteLabel(review.originalBytes)} bytes；追加后 ${remoteInputByteLabel(review.appendedBytes)} bytes'),
             if (original.isNotEmpty) ExpansionTile(title:const Text('查看原目标的本地草稿'),children:[SelectableText(visibleRemoteInput(original))]),

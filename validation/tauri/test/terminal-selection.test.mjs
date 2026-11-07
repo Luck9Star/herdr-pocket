@@ -9,6 +9,23 @@ class Element {
 const line=(chars,wrapped=false)=>({isWrapped:wrapped,length:chars.length,getCell:i=>({getChars:()=>chars[i],getWidth:()=>1}),translateToString:(_trim,_start,end)=>chars.slice(0,end).map(x=>x || ' ').join('')});
 const bounds=(rows,cols)=>({startRow:0,endRow:rows,startCol:0,endCol:cols,visible:()=>true});
 const term=lines=>({cols:6,rows:lines.length,buffer:{active:{viewportY:0,getLine:i=>lines[i]}}});
+// The addon may see Node's pooled Buffer with a non-zero byte offset.
+// WebViews instead use atob and a zero-offset Uint8Array. Import the real
+// provider using that browser path, then restore Node's global immediately.
+async function importBrowserUnicodeTerminal() {
+  const descriptor=Object.getOwnPropertyDescriptor(globalThis,'Buffer');
+  let module;
+  try {
+    Object.defineProperty(globalThis,'Buffer',{configurable:true,writable:true,value:undefined});
+    module=await import('../src/terminal-unicode.js');
+  } finally {
+    if(descriptor)Object.defineProperty(globalThis,'Buffer',descriptor);
+    else delete globalThis.Buffer;
+  }
+  assert.deepEqual(Object.getOwnPropertyDescriptor(globalThis,'Buffer'),descriptor);
+  return module;
+}
+
 test('viewport snapshot keeps CJK, combining characters, emoji, meaningful spaces and soft wraps',()=>{
   assert.equal(visibleTerminalText(term([line(['中','e\u0301',' ','','','']),line(['😀',' ','','', '', ''],true),line(['x',' ','','', '', ''])]),bounds(3,6)), '中e\u0301 😀 \nx ');
 });
@@ -41,7 +58,7 @@ test('64 KiB counts interior gaps and explicit spaces but omits unwritten row pa
 test('shared selection cases clip cells and preserve hard and soft wraps',async()=>{
   const {readFile}=await import('node:fs/promises');const fixture=JSON.parse(await readFile(new URL('../../shared/terminal-selection-v1.json',import.meta.url),'utf8'));
   const {default:pkg}=await import('@xterm/xterm');
-  const {createUnicodeTerminal}=await import('../src/terminal-unicode.js');
+  const {createUnicodeTerminal}=await importBrowserUnicodeTerminal();
   const t=createUnicodeTerminal(pkg.Terminal,{cols:fixture.columns,rows:fixture.rows});
   assert.equal(t.unicode.activeVersion,'15-graphemes');
   await new Promise(resolve=>t.write(fixture.write,resolve));
@@ -64,7 +81,7 @@ test('layout clips to scroll ancestors and excludes occluded and half cells',()=
 
 test('real terminal groups emoji sequences without shifting common terminal cells',async()=>{
   const {default:pkg}=await import('@xterm/xterm');
-  const {createUnicodeTerminal}=await import('../src/terminal-unicode.js');
+  const {createUnicodeTerminal}=await importBrowserUnicodeTerminal();
   for(const [text,width] of [['👩‍💻',2],['👨‍👩‍👧‍👦',2],['🇨🇳',2],['❤️',2],['\ue0b0',1],['·',1],['e\u0301',1],['中',2]]) {
     const t=createUnicodeTerminal(pkg.Terminal,{cols:80,rows:24});
     await new Promise(resolve=>t.write(text+'!',resolve));

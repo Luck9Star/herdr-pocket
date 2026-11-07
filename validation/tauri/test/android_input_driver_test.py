@@ -184,6 +184,13 @@ class AndroidPasteDriverTest(unittest.TestCase):
             '#remote-panes button': 'p · term_1', '#remote-captured': '陈旧',
         }[selector]
         approval = Mock(); approval.approve.return_value = b'public fixture response'
+        font_evidence = {'rowCount': 8, 'columns': 16, 'markerColumn': 15,
+                         'markerPositionStatus': 'verified', 'deltaFramesAfter': 1}
+        def font_probe(browser, receiver, rendered):
+            self.assertIs(browser, view); self.assertIs(receiver, approval)
+            self.assertEqual(rendered('full'), 1)
+            self.assertEqual(rendered('delta'), 1)
+            return font_evidence
         def adb(*parts, **kwargs):
             values = {('devices',): 'List of devices attached\nemulator-5554\tdevice',
                 ('shell', 'getprop', 'ro.kernel.qemu'): '1',
@@ -198,11 +205,14 @@ class AndroidPasteDriverTest(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as apk, \
                 patch.dict(android.os.environ, {'GITHUB_ACTIONS': 'true', 'ANDROID_SERIAL': android.SERIAL}), \
                 patch.object(android, 'adb', side_effect=adb), patch.object(android, 'AndroidWebView', return_value=view), \
+                patch.object(android, 'exercise_font_diagnostics', side_effect=font_probe) as font, \
                 patch.object(android, 'system_keyboard', return_value={'visible': False, 'ownedTarget': True}):
             args = types.SimpleNamespace(android_guarded_input=False, input_fixture=None, tauri_app=apk.name)
             config = {'host': '127.0.0.1', 'port': 2222, 'username': 'fixture', 'session': 'pocket-probe',
                       'herdrPath': '/tmp/owned/herdr', 'socketPath': '/tmp/owned/socket', 'expectedHostKey': 'fixture', 'paneId': 'p'}
             result = android.run_android(args, None, None, config, approval)
+        font.assert_called_once()
+        self.assertIs(result['fontDiagnosticEvidence'], font_evidence)
         view.copy_synthetic_clipboard.assert_not_called()
         view.receipt.assert_not_called(); approval.verify_ssh.assert_called_once_with(b'')
         self.assertEqual(result['initialHostBoardPhase'], 'fresh')

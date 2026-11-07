@@ -7,6 +7,7 @@ import hashlib
 import base64
 import binascii
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -64,62 +65,161 @@ class DeviceFailure(ValueError):
     """Only static phase codes may leave this module."""
 
 
-def parse_system_ime(raw, window_dump, package):
-    """Android 15 InputMethodService's current window, never focus/show requests.
+class SystemImeFailure(DeviceFailure):
+    """Classified counters/enums only; never retain a dumpsys string or package."""
+    def __init__(self, code, diagnostic, retryable=False):
+        super().__init__(code)
+        self.diagnostic = dict(diagnostic)
+        self.retryable = retryable
 
-    Pinned AOSP android-15.0.0_r1: DisplayContent.dump and
-    InputMethodService.dump. The IME manager's focused token is only a Binder;
-    WindowManager supplies the actual app identity. Ambiguous formats cannot prove
-    visibility. Raw dumps can contain editor text and never leave this process.
+    def public_diagnostic(self):
+        return public_ime_diagnostic(self.diagnostic)
+
+
+def public_ime_diagnostic(value):
+    """Emit only bounded counts and known classifications from either Android driver."""
+    if not isinstance(value, dict):
+        return {}
+    safe = {}
+    counters = ('formatVersion', 'serviceCount', 'displayCount', 'focusCount',
+                'editorBlockCount', 'editorPackageCount', 'imeInsetsCount', 'attempts')
+    for key in counters:
+        count = value.get(key)
+        if type(count) is int and 0 <= count <= 100:
+            safe[key] = count
+    for key in ('expectedVisible', 'timedOut'):
+        if type(value.get(key)) is bool:
+            safe[key] = value[key]
+    owners = ('unavailable', 'ambiguous', 'none', 'owned', 'foreign')
+    classifications = {
+        'reason': ('invalid_dump_type_or_package', 'dump_limit', 'service_count',
+                   'display_ambiguous_or_nondefault', 'focus_count', 'focus_null',
+                   'focus_format_unproven', 'focus_foreign', 'ime_insets_ambiguous',
+                   'service_window_flags_ambiguous', 'editor_block_count', 'editor_foreign',
+                   'editor_owner_ambiguous', 'visible_editor_missing', 'owned_visible',
+                   'owned_hidden', 'visibility_transition', 'no_sample', 'dump_pair_invalid'),
+        'focusOwner': owners,
+        'editorOwner': owners,
+        'imeInsetsState': ('unavailable', 'conflicting', 'visible', 'hidden'),
+        'visibility': ('unavailable', 'visible', 'hidden', 'transition'),
+    }
+    for key, allowed in classifications.items():
+        if isinstance(value.get(key), str) and value[key] in allowed:
+            safe[key] = value[key]
+    return safe
+
+
+def parse_system_ime(raw, window_dump, package):
+    """Pinned Android 15 current service/editor block plus one focused app window.
+
+    android-15.0.0_r1 InputMethodService.dump (4464-4505) nests EditorInfo.dump
+    under mInputEditorInfo; EditorInfo.dump (1243) prints packageName on its own
+    indented line. Other dump/history/hint fields are not current editor owners.
+    DisplayContent.dump (3636,3669) emits one display and current focus per display.
+    Raw dumps may contain editor text and never leave this function.
     """
-    if (package not in (PACKAGE, 'dev.herdrpocket.tauriprobe') or
-            not isinstance(raw, str) or not isinstance(window_dump, str) or
-            max(len(raw.encode('utf-8')), len(window_dump.encode('utf-8'))) > 1_048_576 or
-            raw.count('Input method service state for ') != 1):
-        raise DeviceFailure('android_system_ime_evidence_unavailable')
+    diagnostic = {'formatVersion': 1, 'reason': 'unavailable', 'serviceCount': 0,
+        'displayCount': 0, 'focusCount': 0, 'focusOwner': 'unavailable',
+        'editorBlockCount': 0, 'editorPackageCount': 0, 'editorOwner': 'unavailable',
+        'imeInsetsCount': 0, 'imeInsetsState': 'unavailable', 'visibility': 'unavailable'}
+    def fail(reason, *, target=False, retryable=False):
+        diagnostic['reason'] = reason
+        raise SystemImeFailure('android_system_ime_' + ('target_mismatch' if target else 'evidence_unavailable'), diagnostic, retryable)
+    if package not in (PACKAGE, 'dev.herdrpocket.tauriprobe') or not isinstance(raw, str) or not isinstance(window_dump, str):
+        fail('invalid_dump_type_or_package')
+    if max(len(raw.encode('utf-8')), len(window_dump.encode('utf-8'))) > 1_048_576:
+        fail('dump_limit')
+    count = raw.count('Input method service state for ')
+    diagnostic['serviceCount'] = min(count, 9)
+    if count != 1:fail('service_count')
     _, service = raw.split('Input method service state for ', 1)
-    windows = re.findall(r'^\s*mCurrentFocus=(.+)$', window_dump, re.M)
-    if (len(windows) != 1 or
-            not re.search(r'\bu0 ' + re.escape(package) + r'/[^\s}]+', windows[0])):
-        raise DeviceFailure('android_system_ime_target_mismatch')
+    displays = re.findall(r'^\s*Display: mDisplayId=(\d+)\b', window_dump, re.M)
+    diagnostic['displayCount'] = min(len(displays), 9)
+    if displays != ['0']:
+        fail('display_ambiguous_or_nondefault', target=True)
+    windows = re.findall(r'^\s*mCurrentFocus=([^\n]*)$', window_dump, re.M)
+    diagnostic['focusCount'] = min(len(windows), 9)
+    if len(windows) != 1:
+        diagnostic['focusOwner'] = 'ambiguous' if windows else 'unavailable'
+        fail('focus_count', target=True)
+    focus = windows[0].strip()
+    if focus == 'null':
+        diagnostic['focusOwner'] = 'none'
+        fail('focus_null', target=True, retryable=True)
+    owner = re.fullmatch(r'Window\{[0-9a-fA-F]+ u(\d+) ([A-Za-z0-9_.]+)/[A-Za-z0-9_.$]+\}', focus)
+    if not owner:
+        fail('focus_format_unproven', target=True)
+    diagnostic['focusOwner'] = 'owned' if owner.group(1) == '0' and owner.group(2) == package else 'foreign'
+    if diagnostic['focusOwner'] != 'owned':fail('focus_foreign', target=True)
     inset_flags = re.findall(r'^\s*InsetsSource id=[0-9a-fA-F]+ type=ime\b[^\n]*\bvisible=(true|false)\b', window_dump, re.M)
+    diagnostic['imeInsetsCount'] = min(len(inset_flags), 99)
     if not inset_flags or len(set(inset_flags)) != 1:
-        raise DeviceFailure('android_system_ime_evidence_unavailable')
+        diagnostic['imeInsetsState'] = 'conflicting' if inset_flags else 'unavailable'
+        fail('ime_insets_ambiguous')
     inset_visible = inset_flags[0] == 'true'
+    diagnostic['imeInsetsState'] = 'visible' if inset_visible else 'hidden'
     values = {}
     for key in ('mWindowVisible', 'mDecorViewVisible', 'mIsInputViewShown'):
         found = re.findall(r'\b' + key + r'=(true|false)\b', service)
-        if len(found) != 1:
-            raise DeviceFailure('android_system_ime_evidence_unavailable')
+        if len(found) != 1:fail('service_window_flags_ambiguous')
         values[key] = found[0] == 'true'
-    editors = re.findall(r'\bpackageName=([A-Za-z0-9_.]+)\b', service)
-    if len(editors) > 1 or (editors and editors[0] != package):
-        raise DeviceFailure('android_system_ime_target_mismatch')
+    # Bound current EditorInfo by its indentation. No scan of arbitrary packageName
+    # text in hints, history, or an IME subclass's later diagnostic sections.
+    headers = list(re.finditer(r'^(?P<indent>[ \t]*)mInputEditorInfo:[ \t]*(?P<null>null)?[ \t]*$', service, re.M))
+    diagnostic['editorBlockCount'] = min(len(headers), 9)
+    if len(headers) != 1:fail('editor_block_count')
+    header = headers[0]
+    if header.group('null'):
+        editors = []
+        diagnostic['editorOwner'] = 'none'
+    else:
+        depth = len(header.group('indent'))
+        block = []
+        for line in service[header.end():].splitlines():
+            if not line.strip():continue
+            if len(line) - len(line.lstrip(' \t')) <= depth:break
+            block.append(line)
+        editors = re.findall(r'^\s*packageName=([^\s]+)(?:\s|$)', '\n'.join(block), re.M)
+        diagnostic['editorPackageCount'] = min(len(editors), 9)
+        diagnostic['editorOwner'] = ('owned' if editors == [package] else 'foreign' if len(editors) == 1 else 'ambiguous' if editors else 'unavailable')
+        if editors != [package]:fail('editor_foreign' if len(editors) == 1 else 'editor_owner_ambiguous', target=True)
     visible = all(values.values()) and inset_visible
     hidden = not values['mWindowVisible'] and not values['mDecorViewVisible'] and not inset_visible
-    if visible and editors != [package]:
-        raise DeviceFailure('android_system_ime_target_mismatch')
+    diagnostic['visibility'] = 'visible' if visible else 'hidden' if hidden else 'transition'
+    if visible and editors != [package]:fail('visible_editor_missing', target=True, retryable=True)
+    diagnostic['reason'] = 'owned_visible' if visible else 'owned_hidden' if hidden else 'visibility_transition'
     return {'source': 'Android15-IME-window-and-WindowInsets', 'ownedTarget': True,
         'visible': visible, 'hidden': hidden, 'windowVisible': values['mWindowVisible'],
         'decorVisible': values['mDecorViewVisible'], 'inputViewShown': values['mIsInputViewShown'],
-        'windowInsetsImeVisible': inset_visible}
+        'windowInsetsImeVisible': inset_visible, 'diagnostic': diagnostic}
 
 
 def wait_system_ime(read_dump, package, visible, timeout=12):
     if type(visible) is not bool:
         raise DeviceFailure('android_system_ime_expected_state_invalid')
     deadline = time.monotonic() + timeout
-    stable = 0
-    while time.monotonic() < deadline:
+    stable = 0; attempts = 0; last = {'formatVersion': 1, 'reason': 'no_sample'}
+    while time.monotonic() < deadline and attempts < 100:
+        attempts += 1
         dumps = read_dump()
         if not isinstance(dumps, tuple) or len(dumps) != 2:
-            raise DeviceFailure('android_system_ime_evidence_unavailable')
-        sample = parse_system_ime(*dumps, package)
-        stable = stable + 1 if sample['visible' if visible else 'hidden'] else 0
-        if stable >= 2:
-            return {**sample, 'stableSamples': stable}
+            raise SystemImeFailure('android_system_ime_evidence_unavailable', {'formatVersion': 1, 'reason': 'dump_pair_invalid', 'attempts': attempts})
+        try:
+            sample = parse_system_ime(*dumps, package)
+        except SystemImeFailure as error:
+            error.diagnostic.update(attempts=attempts, expectedVisible=visible)
+            if not error.retryable:raise
+            # A null focus/absent editor is never accepted. Only passive reads may
+            # wait for an actual owned target; foreign/ambiguous owners abort now.
+            stable = 0; last = error.diagnostic
+        else:
+            last = sample['diagnostic']
+            stable = stable + 1 if sample['visible' if visible else 'hidden'] else 0
+            if stable >= 2:
+                return {**sample, 'stableSamples': stable, 'diagnostic': {**last, 'attempts': attempts, 'expectedVisible': visible}}
         time.sleep(0.15)
-    raise DeviceFailure('android_system_ime_' + ('show' if visible else 'hide') + '_unconfirmed')
+    raise SystemImeFailure('android_system_ime_' + ('show' if visible else 'hide') + '_unconfirmed',
+                           {**last, 'attempts': attempts, 'expectedVisible': visible, 'timedOut': True})
 
 
 def safe_test_failure(value):
@@ -407,13 +507,39 @@ class ClipboardCheckpoints:
     The default preserves the historical two-clipboard-checkpoint reader.
     New cloud runs explicitly require the additional system-keyboard evidence.
     """
-    def __init__(self, relative_directory, approval, *, keyboard=False, guarded=True):
+    def __init__(self, relative_directory, approval, *, keyboard=False, guarded=True, ime_failure_output=None):
         self.relative = relative_directory
         self.approval = approval
         self.completed = []
         self.expected = ((KEYBOARD_CHECKPOINTS + CLIPBOARD_CHECKPOINTS if guarded else
                           (KEYBOARD_OBSERVE_CHECKPOINT,)) if keyboard else CLIPBOARD_CHECKPOINTS)
         self.keyboard_evidence = []
+        self.ime_failure_output = ime_failure_output
+
+    def system_ime(self, label, visible, *, after_system_back=False):
+        try:
+            return wait_system_ime(lambda: (text('shell', 'dumpsys', 'input_method'),
+                text('shell', 'dumpsys', 'window', 'displays')), PACKAGE, visible)
+        except SystemImeFailure as error:
+            # Persist before unwinding the owned Flutter tool/app. The original
+            # failure still propagates, including if evidence cannot be written.
+            allowed_codes = {'android_system_ime_target_mismatch','android_system_ime_evidence_unavailable',
+                             'android_system_ime_show_unconfirmed','android_system_ime_hide_unconfirmed'}
+            report = {'schemaVersion':1,'adapter':'flutter-android','status':'failed',
+                'checkpoint':label,'systemRead':'after_system_back' if after_system_back else 'requested_state',
+                'systemBackSent':after_system_back,'expectedVisible':visible,
+                'completedCheckpoints':self.completed.copy(),
+                'errorCode':str(error) if str(error) in allowed_codes else 'android_system_ime_evidence_unavailable',
+                'diagnostic':error.public_diagnostic()}
+            payload = json.dumps(report,sort_keys=True,separators=(',',':'))+'\n'
+            if self.ime_failure_output is not None and len(payload) <= 4096:
+                try:
+                    fd = os.open(self.ime_failure_output,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+                    with os.fdopen(fd,'w',encoding='ascii') as stream:
+                        stream.write(payload);stream.flush();os.fsync(stream.fileno())
+                except OSError:
+                    pass  # Never mask an IME failure or acknowledge its checkpoint.
+            raise
 
     def poll(self):
         raw = read_public(self.relative + '/checkpoint.json', PUBLIC_LIMITS['checkpoint.json'])
@@ -431,8 +557,7 @@ class ClipboardCheckpoints:
             inset = value.get('viewInsetBottom')
             if type(inset) is not int or not 0 <= inset <= 16384 or (inset > 0) != visible:
                 raise DeviceFailure('flutter_android_keyboard_insets_mismatch')
-            system = wait_system_ime(lambda: (text('shell', 'dumpsys', 'input_method'),
-                text('shell', 'dumpsys', 'window', 'displays')), PACKAGE, visible)
+            system = self.system_ime(label, visible)
             system = {**system, 'checkpoint': label, 'viewInsetBottom': inset,
                 'editorFocused': value['editorFocused'], 'modeReselected': value['modeReselected']}
             if label == 'keyboard-draft-back-request':
@@ -441,8 +566,7 @@ class ClipboardCheckpoints:
                 # No repeated Back even if hiding/acknowledgement fails. The
                 # first failure propagates into owned process/app cleanup.
                 adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-                after = wait_system_ime(lambda: (text('shell', 'dumpsys', 'input_method'),
-                    text('shell', 'dumpsys', 'window', 'displays')), PACKAGE, False)
+                after = self.system_ime(label, False, after_system_back=True)
                 system = {**system, 'systemBackSent': True, 'afterSystemBack': after}
         expected = b'' if label.startswith('keyboard-direct-') or label == KEYBOARD_OBSERVE_CHECKPOINT else b'k'
         self.approval.verify_ssh(expected)
@@ -574,7 +698,8 @@ def _run(args, root, env, config, approval, owned_process):
             request = wait_public(process, relative, 'request.json', 2048, timeout=900)
             response = approval.approve(request)
             write_response(relative, response)
-            checkpoints = ClipboardCheckpoints(relative, approval, keyboard=True, guarded=guarded)
+            checkpoints = ClipboardCheckpoints(relative, approval, keyboard=True, guarded=guarded,
+                ime_failure_output=output / 'flutter-android-system-ime-failure.json')
             raw = wait_public(process, relative, 'result.json', 8192, timeout=400, checkpoints=checkpoints)
             if checkpoints is not None:
                 checkpoints.require_complete()

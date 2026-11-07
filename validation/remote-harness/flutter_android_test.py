@@ -537,7 +537,11 @@ class CleanupGuards(PreparedFixture):
             self.assertEqual(defines['HERDR_ANDROID_API35_CLIPBOARD_FIXTURE'], 'true' if guarded else 'false')
             self.assertEqual(defines['HERDR_ANDROID_API35_KEYBOARD_FIXTURE'], 'true')
             state['installed'] = True; forwards.add(owned)
-            yield Process()
+            try:
+                yield Process()
+            finally:
+                if fail_checkpoint == 'ime':
+                    self.assertTrue((args.output/'flutter-android-system-ime-failure.json').is_file())
         def adb(*parts, **kwargs):
             calls.append(parts)
             if fail_checkpoint == 'ack' and parts[-1:] == ('cache/herdr-flutter-android-123/checkpoint-ack.new',):
@@ -572,9 +576,14 @@ class CleanupGuards(PreparedFixture):
         def wait_public(*args, checkpoints=None, **kwargs):
             if checkpoints is not None:
                 payloads = [checkpoint_payload(label) for label in checkpoints.expected]
+                def system(_read, _package, visible):
+                    if fail_checkpoint == 'ime':
+                        raise gui.SystemImeFailure('android_system_ime_target_mismatch',
+                            {'reason':'focus_foreign','focusOwner':'foreign','attempts':1,'raw':'PRIVATE'})
+                    return {'visible':visible,'ownedTarget':True}
                 with patch.object(gui, 'read_public', side_effect=[
                         json.dumps(value).encode() for value in payloads]), \
-                        patch.object(gui, 'wait_system_ime', side_effect=lambda _read, _package, visible: {'visible': visible, 'ownedTarget': True}):
+                        patch.object(gui, 'wait_system_ime', side_effect=system):
                     for _ in payloads: checkpoints.poll()
             return next(public)
         with patch.object(gui, 'adb', side_effect=adb), patch.object(gui, 'text', side_effect=text), \
@@ -595,9 +604,10 @@ class CleanupGuards(PreparedFixture):
                 approval.approve.assert_not_called()
                 result = None
             elif fail_checkpoint:
-                with self.assertRaisesRegex(gui.DeviceFailure, 'synthetic_checkpoint_' + fail_checkpoint + '_failure'):
+                expected_error = 'android_system_ime_target_mismatch' if fail_checkpoint == 'ime' else 'synthetic_checkpoint_' + fail_checkpoint + '_failure'
+                with self.assertRaisesRegex(gui.DeviceFailure, '^'+expected_error+'$'):
                     gui._run(args, self.fixture_root, self.env, self.config, approval, process)
-                self.assertEqual(approval.verify_ssh.call_count, 1)
+                self.assertEqual(approval.verify_ssh.call_count, 0 if fail_checkpoint == 'ime' else 1)
                 self.assertLessEqual(sum(parts[-1:] == ('cache/herdr-flutter-android-123/checkpoint-ack.new',) for parts in calls), 1)
                 result = None
             else:
@@ -653,6 +663,17 @@ class CleanupGuards(PreparedFixture):
         result, cleanup = self.exercise(guarded=True, fail_checkpoint='ack')
         self.assertIsNone(result)
         self.assertEqual(cleanup['status'], 'passed')
+
+    def test_ime_failure_is_written_before_cleanup_and_keeps_original_failure(self):
+        result, cleanup = self.exercise(guarded=True, fail_checkpoint='ime')
+        self.assertIsNone(result);self.assertEqual(cleanup['status'],'passed')
+        raw=(self.runner/'output/flutter-android-system-ime-failure.json').read_text()
+        evidence=json.loads(raw)
+        self.assertEqual(evidence['checkpoint'],'keyboard-direct-shown')
+        self.assertEqual(evidence['systemRead'],'requested_state')
+        self.assertEqual(evidence['diagnostic'],{'reason':'focus_foreign','focusOwner':'foreign','attempts':1})
+        self.assertEqual(evidence['completedCheckpoints'],[])
+        self.assertNotIn('PRIVATE',raw)
 
 
 class SharedReportGuards(unittest.TestCase):
@@ -856,6 +877,44 @@ class ClipboardCheckpointGuards(unittest.TestCase):
 
 
 class SystemKeyboardGuards(unittest.TestCase):
+    def test_ime_diagnostic_export_is_bounded_and_checkpoints_are_not_acknowledged(self):
+        for label in (gui.KEYBOARD_OBSERVE_CHECKPOINT,'keyboard-direct-shown','keyboard-draft-back-request'):
+            with self.subTest(label=label),tempfile.TemporaryDirectory() as temporary:
+                output=Path(temporary)/'flutter-android-system-ime-failure.json'
+                state=gui.ClipboardCheckpoints('cache/herdr-flutter-android-123',Mock(),keyboard=True,
+                    guarded=label!=gui.KEYBOARD_OBSERVE_CHECKPOINT,ime_failure_output=output)
+                state.completed=list(state.expected[:state.expected.index(label)])
+                before=state.completed.copy()
+                failure=gui.SystemImeFailure('android_system_ime_hide_unconfirmed' if label.endswith('request') else 'android_system_ime_target_mismatch',
+                    {'reason':'focus_null','focusOwner':'none','attempts':100,'expectedVisible':False,'timedOut':True,
+                     'rawDump':'PRIVATE','editorPackageCount':1000,'visibility':'PRIVATE'})
+                samples=[{'visible':True,'ownedTarget':True},failure] if label.endswith('request') else [failure]
+                with patch.object(gui,'read_public',return_value=json.dumps(checkpoint_payload(label)).encode()), \
+                        patch.object(gui,'wait_system_ime',side_effect=samples),patch.object(gui,'adb') as adb:
+                    with self.assertRaises(gui.SystemImeFailure) as caught:state.poll()
+                self.assertIs(caught.exception,failure)
+                self.assertEqual(state.completed,before);state.approval.verify_ssh.assert_not_called()
+                raw=output.read_text();report=json.loads(raw)
+                self.assertLess(len(raw),4096);self.assertNotIn('PRIVATE',raw)
+                self.assertEqual(report['checkpoint'],label)
+                self.assertEqual(report['completedCheckpoints'],before)
+                self.assertEqual(report['systemRead'],'after_system_back' if label.endswith('request') else 'requested_state')
+                self.assertEqual(report['systemBackSent'],label.endswith('request'))
+                self.assertEqual(output.stat().st_mode & 0o777,0o600)
+                self.assertEqual(len(adb.call_args_list),1 if label.endswith('request') else 0)
+                if label.endswith('request'):adb.assert_called_once_with('shell','input','keyevent','KEYCODE_BACK')
+                # Existing evidence is never overwritten; a write failure must
+                # preserve the original IME exception and never ACK the request.
+                with patch.object(gui,'wait_system_ime',side_effect=failure):
+                    with self.assertRaises(gui.SystemImeFailure) as caught:state.system_ime(label,True)
+                self.assertIs(caught.exception,failure);self.assertEqual(output.read_text(),raw)
+
+    def test_public_ime_diagnostic_drops_unknown_values_and_wrong_types(self):
+        for reason in ('PRIVATE',[],{},None):
+            error=gui.SystemImeFailure('android_system_ime_target_mismatch',
+                {'reason':reason,'attempts':True,'focusCount':-1,'raw':'PRIVATE'})
+            self.assertEqual(error.public_diagnostic(),{})
+
     @staticmethod
     def dumps(*, window=True, decor=True, input_view=True, package=gui.PACKAGE, editor=None):
         editor = package if editor is None else editor
@@ -865,7 +924,7 @@ class SystemKeyboardGuards(unittest.TestCase):
             f'  mWindowVisible={str(window).lower()} mDecorViewVisible={str(decor).lower()}\n'
             f'  mIsInputViewShown={str(input_view).lower()}\n'
             f'  mInputEditorInfo:\n    packageName={editor}\n')
-        windows = (f'WINDOW MANAGER DISPLAY CONTENTS\n  mCurrentFocus=Window{{abc u0 {package}/.MainActivity}}\n'
+        windows = (f'WINDOW MANAGER DISPLAY CONTENTS\n  Display: mDisplayId=0\n  mCurrentFocus=Window{{abc u0 {package}/.MainActivity}}\n'
             f'  InsetsSource id=3 type=ime frame=[0,900][500,1000] visible={str(window and decor and input_view).lower()} flags= sideHint=BOTTOM\n')
         return method, windows
 

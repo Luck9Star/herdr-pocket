@@ -11,7 +11,7 @@ import subprocess
 import urllib.request
 
 from paired_gui import GuiFailure, wait_for
-from flutter_android_gui import DeviceFailure, wait_system_ime
+from flutter_android_gui import DeviceFailure, public_ime_diagnostic, wait_system_ime
 
 PACKAGE = 'dev.herdrpocket.tauriprobe'
 SERIAL = 'emulator-5554'
@@ -36,10 +36,86 @@ def system_keyboard(visible):
         return wait_system_ime(lambda: (adb('shell', 'dumpsys', 'input_method'),
             adb('shell', 'dumpsys', 'window', 'displays')), PACKAGE, visible)
     except DeviceFailure as error:
-        raise GuiFailure(str(error)) from None
+        failure = GuiFailure(str(error))
+        failure.system_ime_diagnostic = getattr(error, 'diagnostic', None)
+        raise failure from None
 
 
-def exercise_keyboard(browser, approval, mode):
+class AndroidProgress:
+    """Bounded per-stage evidence survives a later failure; no raw dumps/text."""
+    PHASES = {'setup','pairing','dashboard','observe_full','observe_delta','font_diagnostics',
+        'direct_mode','draft_mode','direct_input_receipt','paste_review','hidden_recovery',
+        'draft_input_receipt','stop_observation','complete',
+        'keyboard_observe_hidden','keyboard_direct_shown','keyboard_direct_hidden','keyboard_direct_reopened',
+        'keyboard_draft_shown','keyboard_draft_back_request','keyboard_draft_back_hidden',
+        'keyboard_draft_back_reopened','keyboard_draft_hidden'}
+    COMPLETED = {'authorizationReviewed','paneChosen','fullRendered','deltaRendered',
+        'fontDiagnosticsCompleted','directKeyboardCompleted','directReceiptVerified',
+        'draftKeyboardCompleted','pasteReviewCompleted','draftRestored','draftReceiptVerified','stoppedStale'}
+    ERROR_CODES = {'android_system_ime_target_mismatch','android_system_ime_evidence_unavailable',
+        'android_system_ime_show_unconfirmed','android_system_ime_hide_unconfirmed',
+        'android_system_ime_expected_state_invalid','android_driver_failure'}
+    def __init__(self, args):
+        self.stream = None; self.success = False
+        sha = os.environ.get('GITHUB_SHA','')
+        self.data = {'schemaVersion':1,'adapter':'tauri-android','status':'running','stage':'setup',
+            'sourceSHA':sha if re.fullmatch(r'[0-9a-f]{40}',sha) else None,
+            'completed':{key:False for key in sorted(self.COMPLETED)},
+            'fullRenderAcknowledgements':0,'deltaRenderAcknowledgements':0,'inputReceiptCount':0,
+            'systemImeChecks':[], 'cleanup':{key:'not_needed' for key in ('browser','application','forward','reverse')}}
+        output = getattr(args,'output',None)
+        if output is not None:
+            parent = Path(output).absolute(); temporary = Path(os.environ.get('RUNNER_TEMP','/nonexistent')).resolve()
+            if (not parent.is_dir() or parent.resolve()!=parent or parent==temporary or not parent.is_relative_to(temporary)):
+                raise GuiFailure('android_progress_output_invalid')
+            try:
+                fd = os.open(parent/'tauri-android-progress.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+                self.stream = os.fdopen(fd,'w',encoding='ascii')
+            except OSError:
+                raise GuiFailure('android_progress_output_unavailable') from None
+        self.publish()
+    def publish(self):
+        payload=json.dumps(self.data,sort_keys=True,separators=(',',':'))+'\n'
+        if len(payload)>16384:raise GuiFailure('android_progress_report_limit')
+        if self.stream:
+            try:
+                self.stream.seek(0); self.stream.write(payload); self.stream.truncate(); self.stream.flush()
+            except OSError:
+                raise GuiFailure('android_progress_output_unavailable') from None
+    def phase(self,value):
+        if value not in self.PHASES:raise GuiFailure('android_progress_stage_invalid')
+        self.data['stage']=value; self.publish()
+    def mark(self,value):
+        if value not in self.COMPLETED:raise GuiFailure('android_progress_stage_invalid')
+        self.data['completed'][value]=True; self.publish()
+    def count(self,key,value):
+        if key not in ('fullRenderAcknowledgements','deltaRenderAcknowledgements','inputReceiptCount') or type(value) is not int or not 0<=value<=1_000_000:
+            raise GuiFailure('android_progress_counter_invalid')
+        self.data[key]=value; self.publish()
+    def ime(self,sample):
+        if len(self.data['systemImeChecks'])>=12:raise GuiFailure('android_progress_report_limit')
+        item={'stage':self.data['stage'],'status':'passed','diagnostic':public_ime_diagnostic(sample.get('diagnostic'))}
+        for key in ('ownedTarget','visible','hidden','windowVisible','decorVisible','inputViewShown','windowInsetsImeVisible'):
+            if type(sample.get(key)) is bool:item[key]=sample[key]
+        if type(sample.get('stableSamples')) is int and 2<=sample['stableSamples']<=100:item['stableSamples']=sample['stableSamples']
+        self.data['systemImeChecks'].append(item); self.publish()
+    def fail(self,error):
+        code=str(error)
+        self.data.update(status='failed',errorCode=code if code in self.ERROR_CODES else 'android_driver_failure')
+        diagnostic=public_ime_diagnostic(getattr(error,'system_ime_diagnostic',None))
+        if diagnostic:self.data['systemImeFailure']=diagnostic
+        self.publish()
+    def finish(self,cleanup_failed):
+        self.data['status']='passed' if self.success and not cleanup_failed else 'failed'
+        if cleanup_failed:self.data['cleanupErrorCode']='android_cleanup_failed'
+        if self.data['status']=='passed':self.data['stage']='complete'
+        self.publish()
+        if self.stream:os.fsync(self.stream.fileno())
+    def close(self):
+        if self.stream:self.stream.close();self.stream=None
+
+
+def exercise_keyboard(browser, approval, mode, progress=None):
     """Real system window evidence; focus only selects the editor to exercise."""
     if mode not in ('direct', 'draft'):
         raise GuiFailure('android_keyboard_mode_invalid')
@@ -50,6 +126,7 @@ def exercise_keyboard(browser, approval, mode):
         raise GuiFailure('android_keyboard_target_missing')
     evidence = []
     for visible, selector in ((True, '#remote-keyboard-show'), (False, '#remote-keyboard-hide')):
+        if progress:progress.phase('keyboard_'+mode+('_shown' if visible else '_hidden'))
         browser.click(selector)
         sample = system_keyboard(visible)
         approval.verify_ssh(expected)
@@ -59,6 +136,7 @@ def exercise_keyboard(browser, approval, mode):
             raise GuiFailure('android_keyboard_target_changed')
         if not visible and browser.evaluate("document.querySelector('#remote-keyboard-show')?.disabled===true") is not True:
             raise GuiFailure('android_keyboard_hide_did_not_revoke_input')
+        if progress:progress.ime(sample)
         evidence.append({**sample, 'checkpoint': 'keyboard-' + mode + ('-shown' if visible else '-hidden')})
         if mode == 'draft' and visible:
             if sample.get('visible') is not True or sample.get('ownedTarget') is not True:
@@ -67,9 +145,11 @@ def exercise_keyboard(browser, approval, mode):
             before_focus = browser.evaluate(focus_expression)
             if type(before_focus) is not bool:
                 raise GuiFailure('android_keyboard_focus_evidence_invalid')
+            if progress:progress.phase('keyboard_draft_back_request')
             # Exactly one real system Back, only after owned IME visibility.
             # Never retry this action: a second Back could navigate the app.
             adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+            if progress:progress.phase('keyboard_draft_back_hidden')
             hidden = system_keyboard(False)
             after_focus = browser.evaluate(focus_expression)
             if type(after_focus) is not bool:
@@ -77,6 +157,7 @@ def exercise_keyboard(browser, approval, mode):
             approval.verify_ssh(expected)
             if browser.read('#remote-input-draft', 'value') != draft or browser.read('#remote-input-target') != target:
                 raise GuiFailure('android_system_back_changed_draft_or_target')
+            if progress:progress.ime(hidden)
             evidence.append({**hidden, 'checkpoint': 'keyboard-draft-back-hidden',
                 'systemBackSent': True, 'editorFocusedBeforeBack': before_focus,
                 'editorFocusedAfterBack': after_focus})
@@ -87,6 +168,7 @@ def exercise_keyboard(browser, approval, mode):
                 browser.click('#remote-input-draft-mode')
                 wait_for(lambda: '草稿仅在核对' in (browser.read('#remote-input-status') or ''),
                          'android_keyboard_mode_reentry_missing')
+            if progress:progress.phase('keyboard_draft_back_reopened')
             browser.click('#remote-keyboard-show')
             reopened = system_keyboard(True)
             approval.verify_ssh(expected)
@@ -95,6 +177,7 @@ def exercise_keyboard(browser, approval, mode):
             reopened_focus = browser.evaluate(focus_expression)
             if type(reopened_focus) is not bool:
                 raise GuiFailure('android_keyboard_focus_evidence_invalid')
+            if progress:progress.ime(reopened)
             evidence.append({**reopened, 'checkpoint': 'keyboard-draft-back-reopened',
                 'modeReselected': reselected, 'editorFocused': reopened_focus})
     # Hide revokes input. Only an explicit mode action may reopen the editor;
@@ -103,8 +186,10 @@ def exercise_keyboard(browser, approval, mode):
     wait_for(lambda: ('逐键输入已启用' if mode == 'direct' else '草稿仅在核对') in
              (browser.read('#remote-input-status') or ''), 'android_keyboard_mode_reentry_missing')
     if mode == 'direct':
+        if progress:progress.phase('keyboard_direct_reopened')
         sample = system_keyboard(True)
         approval.verify_ssh(expected)
+        if progress:progress.ime(sample)
         evidence.append({**sample, 'checkpoint': 'keyboard-direct-reopened'})
     return evidence
 
@@ -476,6 +561,7 @@ def run_android(args, root, env, config, approval):
     browser = None
     reverse = f"tcp:{config['port']}"
     cleanup_failed = False
+    progress = AndroidProgress(args)
     try:
         adb('reverse', reverse, reverse)
         adb('install', str(args.tauri_app), timeout=90)
@@ -501,6 +587,7 @@ def run_android(args, root, env, config, approval):
                 return False
             return False
         browser = wait_for(connect, 'android_webview_not_ready', timeout=60)
+        progress.phase('pairing')
         browser.click('#host-open-remote')
         for field, key in [('host','host'), ('port','port'), ('user','username'), ('session','session'),
                            ('herdr','herdrPath'), ('socket','socketPath'), ('pin','expectedHostKey')]:
@@ -529,6 +616,7 @@ def run_android(args, root, env, config, approval):
         browser.click('#pair-source-review')
         browser.click('#pair-accept')
         wait_for(lambda: '授权响应已审查' in (browser.read('#pair-status') or ''), 'android_authorization_not_reviewed', timeout=60)
+        progress.mark('authorizationReviewed'); progress.phase('dashboard')
         browser.click('#remote-review')
         browser.click('#remote-connect')
         selector = '#remote-panes button'
@@ -542,28 +630,38 @@ def run_android(args, root, env, config, approval):
         browser.click(selector)
         def rendered(attr):
             return browser.evaluate(f"Number(document.querySelector('#remote-captured').dataset.{attr}Frames || 0)")
+        progress.phase('observe_full')
         full = wait_for(lambda: rendered('full'), 'android_full_render_ack_missing', timeout=60)
+        progress.mark('fullRendered'); progress.count('fullRenderAcknowledgements',full); progress.phase('observe_delta')
         deltas = wait_for(lambda: rendered('delta'), 'android_delta_render_ack_missing', timeout=60)
+        progress.mark('deltaRendered'); progress.mark('paneChosen'); progress.count('deltaRenderAcknowledgements',deltas)
+        progress.phase('font_diagnostics')
         font_diagnostic_evidence = exercise_font_diagnostics(browser, approval, rendered)
+        progress.mark('fontDiagnosticsCompleted')
         receipts = []
         paste_evidence = {}
         keyboard_evidence = []
         if getattr(args, 'input_fixture', None):
             wait_for(lambda: browser.evaluate("!document.querySelector('#remote-input-controls').hidden"),
                      'android_input_controls_missing', timeout=60)
+            progress.phase('direct_mode')
             browser.click('#remote-input-direct')
             wait_for(lambda: '逐键输入已启用' in (browser.read('#remote-input-status') or ''),
                      'android_direct_mode_missing')
-            keyboard_evidence.extend(exercise_keyboard(browser, approval, 'direct'))
+            keyboard_evidence.extend(exercise_keyboard(browser, approval, 'direct',progress=progress))
+            progress.mark('directKeyboardCompleted'); progress.phase('direct_input_receipt')
             browser.direct_key('k')
             raw, first = browser.receipt(None, config['paneId'], 1)
-            receipts.append(first)
+            receipts.append(first); progress.mark('directReceiptVerified'); progress.count('inputReceiptCount',1)
+            progress.phase('draft_mode')
             browser.click('#remote-input-draft-mode')
             wait_for(lambda: '草稿仅在核对' in (browser.read('#remote-input-status') or ''),
                      'android_draft_mode_missing')
             browser.fill('#remote-input-draft', 'Pocket')
-            keyboard_evidence.extend(exercise_keyboard(browser, approval, 'draft'))
+            keyboard_evidence.extend(exercise_keyboard(browser, approval, 'draft',progress=progress))
+            progress.mark('draftKeyboardCompleted'); progress.phase('paste_review')
             paste_evidence = exercise_local_paste(browser, approval, first, raw)
+            progress.mark('pasteReviewCompleted'); progress.phase('hidden_recovery')
             browser.click('#host-return-home')
             wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
             if browser.evaluate("document.activeElement.matches('#remote-input-draft, #remote-terminal .xterm-helper-textarea')"):
@@ -576,6 +674,7 @@ def run_android(args, root, env, config, approval):
             restore_reviewed_draft(browser, config['paneId'], first['terminalId'], rendered)
             # Reconnection, selection and local recovery must not replay input.
             approval.verify_ssh(b'k')
+            progress.mark('draftRestored'); progress.phase('draft_input_receipt')
             browser.click('#remote-input-preview')
             if browser.read('#remote-input-preview-text') != 'Pocket测':
                 raise GuiFailure('android_draft_preview_mismatch')
@@ -585,15 +684,20 @@ def run_android(args, root, env, config, approval):
                 raise GuiFailure('android_input_receipt_target_mismatch')
             if browser.read('#remote-input-draft', 'value'):
                 raise GuiFailure('android_submitted_draft_retained')
-            receipts.append(second)
+            receipts.append(second); progress.mark('draftReceiptVerified'); progress.count('inputReceiptCount',2)
         else:
             if not browser.evaluate("['remote-keyboard-show','remote-keyboard-hide'].every(id=>document.getElementById(id)?.disabled===true)"):
                 raise GuiFailure('android_readonly_keyboard_controls_enabled')
-            keyboard_evidence.append({**system_keyboard(False), 'checkpoint': 'keyboard-observe-hidden'})
+            progress.phase('keyboard_observe_hidden')
+            sample=system_keyboard(False)
             approval.verify_ssh(b'')
+            progress.ime(sample)
+            keyboard_evidence.append({**sample, 'checkpoint': 'keyboard-observe-hidden'})
         terminal_board = wait_for(board_phase, 'android_host_board_phase_during_terminal_missing')
+        progress.phase('stop_observation')
         browser.click('#remote-cancel')
         wait_for(lambda: '陈旧' in (browser.read('#remote-captured') or ''), 'android_stale_marker_missing')
+        progress.mark('stoppedStale'); progress.success=True
         return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                 'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                 'inputQueueAccepted':bool(receipts), 'inputReceipts':receipts,
@@ -605,23 +709,36 @@ def run_android(args, root, env, config, approval):
                 'initialHostBoardPhase':initial_board, 'hostBoardPhaseDuringTerminal':terminal_board,
                 'keyStore':'Android API 35 emulator AndroidKeyStore-wrapped device key',
                 'device':'ephemeral Android emulator', 'uiDriver':'debug WebView CDP input'}
+    except GuiFailure as error:
+        progress.fail(error)
+        raise
+    except Exception:
+        progress.fail(GuiFailure('android_driver_failure'))
+        raise
     finally:
         if browser:
-            browser.close()
+            try:
+                browser.close(); progress.data['cleanup']['browser']='confirmed'
+            except Exception:
+                cleanup_failed = True; progress.data['cleanup']['browser']='failed'
         if installed:
             try:
                 adb('shell', 'am', 'force-stop', PACKAGE)
-                adb('uninstall', PACKAGE, timeout=60)
+                adb('uninstall', PACKAGE, timeout=60); progress.data['cleanup']['application']='confirmed'
             except GuiFailure:
-                cleanup_failed = True
+                cleanup_failed = True; progress.data['cleanup']['application']='failed'
         if forward:
             try:
-                adb('forward', '--remove', forward)
+                adb('forward', '--remove', forward); progress.data['cleanup']['forward']='confirmed'
             except GuiFailure:
-                cleanup_failed = True
+                cleanup_failed = True; progress.data['cleanup']['forward']='failed'
         try:
-            adb('reverse', '--remove', reverse)
+            adb('reverse', '--remove', reverse); progress.data['cleanup']['reverse']='confirmed'
         except GuiFailure:
-            cleanup_failed = True
+            cleanup_failed = True; progress.data['cleanup']['reverse']='failed'
+        try:
+            progress.finish(cleanup_failed)
+        finally:
+            progress.close()
         if cleanup_failed:
             raise GuiFailure('android_cleanup_failed')

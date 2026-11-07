@@ -999,5 +999,23 @@
       }
     },
     "postBatchWidgetTestRepair": "5aa797231aaacbe4ff20cd07ae917a479a2287f8"
+  },
+  "postBatchImeDriver": {
+    "base": "1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4",
+    "sourceHashes": {
+      "validation/remote-harness/android_gui.py": "e5722fa86d40c113663f8c9efd04ba20889ec3e7b7c93118e462fd891869bd8c",
+      "validation/remote-harness/flutter_android_gui.py": "74b3940c54b272b067e5324c83508a9b276a1723bf5f927a3bf03ab993b17b22",
+      "validation/remote-harness/flutter_android_test.py": "cad36c8f98f20d5ccfc35891d98879d6f5e12e351f57d00959d5183c7dd21ee1",
+      "validation/remote-harness/test_android_ime_diagnostics.py": "5491ea9bb25325dc070154e34897d48cc864f5164747644ef62f82e0bf4e3204",
+      "validation/tauri/test/android_input_driver_test.py": "aec793f9bd9139f0ccd9a9cec310859617e535f725df8c2be98534fa51b3a7d7",
+      "validation/remote-harness/test_android_font_probe.py": "4547600e67b9255878bab1df59e96f6b0641129a1d025843efdddde47a804bf5"
+    },
+    "isolatedMacChecks": {
+      "remoteHarness": 47,
+      "flutterAndroidDriver": 62,
+      "tauriAndroidInputDriver": 15,
+      "skipped": 0
+    },
+    "androidRerun": false
   }
 }

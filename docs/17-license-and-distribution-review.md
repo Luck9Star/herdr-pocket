@@ -128,3 +128,9 @@ MIT／BSD／ISC／Apache 主干使这两种方向有继续评估的基础；Apac
 上述审查固定在 `8daf1bc`。随后提交 `007e20d` 增加共享 `FONT-NOTICES.md`、`font-sources.json`、17 份上游许可全文和 13 份来源说明，共 32 份材料。原有 TTF 和两份字体许可的字节摘要沿用原版本。[字体声明](../validation/shared/fonts/FONT-NOTICES.md) · [来源及待核项](../validation/shared/fonts/font-sources.json)
 
 Flutter `007e20d` APK 已逐字核对 35 份字体文件与仓库，含上述 32 份材料。Tauri 可下载包来自 `8daf1bc`，后续集中构建再验新增材料的随包状态。字体来源表仍有 6 项待核内容，平台解析依赖和完整发行材料继续按本页清单推进。[两包验证记录](16-mobile-input-and-config.md)
+
+## 2026-11-07 手机终端 Unicode 候选增量
+
+Tauri 选区候选继续固定 `@xterm/xterm` 6.0.0，新增 `@xterm/addon-unicode-graphemes` 0.4.0。该插件和主包各有一份 MIT 原文与独立版权信息。已从 npm 官方注册表取得插件 tarball 并核对 SHA-512 与 npm lock 一致。软件包声明的来源提交为 `f447274f430fd22513f6adbf9862d19524471c04`；上游将 grapheme 插件标记为实验性。[固定包元数据](https://registry.npmjs.org/@xterm%2faddon-unicode-graphemes/0.4.0) · [上游固定源码和已知边界](https://github.com/xtermjs/xterm.js/tree/f447274f430fd22513f6adbf9862d19524471c04/addons/addon-unicode-graphemes)
+
+手机主机页的「终端组件许可」可以分别读取两份随包原文。前端构建也将它们单独写入 `dist/js-notices/`，可对照固定版本 npm 包逐字节复核。Android 构建脚本会将两份原文放入 Tauri APK，打包时与安装的 npm 包逐字节核对，并记录锁文件来源和摘要。现有 `a9914fe` Android 产物产生于这项变更之前，新脚本的包内验证尚待下次云构建。其余依赖及应用最终许可证仍按本页对应条目单独审查。

@@ -1,3 +1,5 @@
+import {createUnicodeTerminal} from './terminal-unicode.js';
+import {createTerminalSelection} from './terminal-selection.js';
 import { initNetworkUI } from './network-ui.js';
 import { initTabWorkspace } from './tab-workspace.js';
 import { Terminal } from '@xterm/xterm';
@@ -19,6 +21,7 @@ import { previewPaste, applyPaste } from './paste-review.js';
 
 export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   const $ = id => document.getElementById(id), gate = new RemoteViewGate();
+  let textSelection=null, selectTextButton=null, selectionReady=false;
   let terminalFontSize=14, terminal = null, showingRemote = true, pairState = 'none', previewResponse = '', pairBusy = false, scanBusy = false, scanRevision = 0;
   let inputGeneration=null, inputEpoch=null, inputMode='observe', inputBusy=null, inputUnknown=false, inputRevision=0, selectedTarget=null, draftPreview=null, switchingFocus=false;
   let inputComposition=new InputComposition(), focusReset=Promise.resolve(), pasteReview=null, draftRevision=0, draftComposing=false, pasteFocusEpoch=0; const onlineInput=new OnlineInputQueue();
@@ -65,7 +68,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
     $('remote-cancel').disabled=!gate.pending;
     $('remote-review').checked=gate.reviewed;
   }
-  function clearSnapshot() { invalidateInput(); terminal?.dispose(); terminal=null; $('remote-terminal').replaceChildren(); $('remote-result').hidden=true; $('remote-dashboard').hidden=true; $('remote-panes').replaceChildren(); }
+  function clearSnapshot() { invalidateInput(); selectTextButton?.remove?.(); selectTextButton=null; terminal?.dispose(); terminal=null; $('remote-terminal').replaceChildren(); $('remote-result').hidden=true; $('remote-dashboard').hidden=true; $('remote-panes').replaceChildren(); }
   function discardKey() { $('remote-private-key').value=''; }
   function cancel(reason='本次读取已取消。迟到结果不会显示。') {
     const clientGeneration=gate.pendingGeneration;
@@ -103,6 +106,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   function releaseAuxiliary() {auxiliaryModifiers.reset();renderAuxiliary();}
   function clearPasteReview() {pasteReview=null;$('remote-paste-review').hidden=true;$('remote-paste-preview').textContent='';$('remote-paste-status').textContent='';}
   function invalidateInput() {
+    textSelection?.close();textSelection=null;selectionReady=false;
     clearPasteReview();draftComposing=false;
     const discarded=onlineInput.clear(); inputRevision++; inputGeneration=null; inputEpoch=null; inputMode='observe'; draftPreview=null; inputBusy=null;
     releaseAuxiliary();
@@ -123,7 +127,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
   async function changeInputMode(mode) {
     clearPasteReview();
     releaseAuxiliary();
-    if(document.hidden || inputGeneration===null || !terminal || (inputUnknown && mode!=='observe'))return;
+    if(textSelection?.valid() || document.hidden || inputGeneration===null || !terminal || (inputUnknown && mode!=='observe'))return;
     if(inputBusy) {loseInputFocus();return;}
     const discarded=onlineInput.clear(); recordUnsent(discarded.count);
     const generation=inputGeneration, revision=++inputRevision; inputEpoch=null; inputMode='observe'; draftPreview=null;
@@ -160,7 +164,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
     } finally {clearTimeout(timer);}
   }
   function inputToken() {return {generation:inputGeneration,epoch:inputEpoch,revision:inputRevision};}
-  function currentDirect(token) {return !document.hidden && inputGeneration!==null && inputEpoch!==null && !inputUnknown && inputMode==='direct' && document.activeElement===terminal?.textarea && OnlineInputQueue.same(token,inputToken());}
+  function currentDirect(token) {return !textSelection?.valid() && !document.hidden && inputGeneration!==null && inputEpoch!==null && !inputUnknown && inputMode==='direct' && document.activeElement===terminal?.textarea && OnlineInputQueue.same(token,inputToken());}
   function queueDirect(bytes) {
     const token=inputToken();
     if(!currentDirect(token)) {inputStatus('本次输入未发送：焦点或输入许可已失效。');return;}
@@ -180,7 +184,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
     await sending;renderAuxiliary();
   }
   async function sendInput(bytes,draft,token=inputToken()) {
-    if(inputGeneration===null || inputEpoch===null || inputUnknown || inputBusy || !bytes.length || bytes.length>4096 || !OnlineInputQueue.same(token,inputToken()) ||
+    if(textSelection?.valid() || inputGeneration===null || inputEpoch===null || inputUnknown || inputBusy || !bytes.length || bytes.length>4096 || !OnlineInputQueue.same(token,inputToken()) ||
        (draft ? inputMode!=='draft' || document.activeElement!==$('remote-input-draft') : !currentDirect(token))) {
       const lost=onlineInput.clear();recordUnsent(lost.count+1);inputStatus(`本次输入未发送：输入许可或字节上限不满足。${lost.count?` 另有 ${lost.count} 笔未发送。`:''}`);return;
     }
@@ -499,7 +503,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
     else if(event.type==='stale')changed=hostSummaries.invalidateSource(host.id,event.source);
     if(changed)renderSummaryChanges();
   }
-  const workspace=initTabWorkspace({native,invoke,theme,channelFactory:()=>new Channel(),terminalFactory:options=>new Terminal(options),onDashboard:onWorkspaceDashboard,getFontSize:()=>terminalFontSize,hostInfo:id=>{const host=hostRecords.find(h=>h.id===id);if(!host)return null;const networkRevision=host.networkProfileId ? networkRevisions.get(host.networkProfileId) : null;return networkRevision===undefined ? null : {...host,networkRevision};},hostName:id=>hostRecords.find(h=>h.id===id)?.name || '主机'});
+  const workspace=initTabWorkspace({native,invoke,theme,channelFactory:()=>new Channel(),terminalFactory:options=>createUnicodeTerminal(Terminal,options),onDashboard:onWorkspaceDashboard,getFontSize:()=>terminalFontSize,hostInfo:id=>{const host=hostRecords.find(h=>h.id===id);if(!host)return null;const networkRevision=host.networkProfileId ? networkRevisions.get(host.networkProfileId) : null;return networkRevision===undefined ? null : {...host,networkRevision};},hostName:id=>hostRecords.find(h=>h.id===id)?.name || '主机'});
   const networks=initNetworkUI({native,invoke,getHosts:()=>hostRecords,onAffected:async ids=>{workspace.affected(ids);if(ids.includes(activeHostId))cancel('网络操作涉及此主机；观察已停止，请重新核对当前配置。');await refreshHosts(false);}});
   $('terminal-font-save').disabled=!native;
   $('terminal-font-save').onclick=async()=>{const font=Number($('terminal-font-size').value);if(!Number.isInteger(font)||font<10||font>28){$('terminal-font-status').textContent='请输入 10 至 28 的整数。';return;}try{const catalog=await invoke('network_list');await invoke('preferences_save',{font,expectedCatalog:catalog.revision});terminalFontSize=font;workspace.setFont(font);if(terminal)terminal.options.fontSize=font;$('terminal-font-status').textContent='字号已保存；不改变远端终端尺寸。';}catch{$('terminal-font-status').textContent='字号保存未确认；请核查后重试。';await refreshHosts();}};
@@ -649,9 +653,20 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
         if(!frames.accept(frame)) {cancel('画面顺序或内容异常，连接已停止，画面陈旧。');return;}
         if(!terminal) {
           $('remote-result').hidden=false;
-          terminal=new Terminal({cols:80,rows:24,fontFamily:'ProbeNerd, monospace',fontSize:terminalFontSize,scrollback:0,disableStdin:true,cursorBlink:false,convertEol:false,theme:theme.terminal,linkHandler:{activate:()=>{}}});
+          terminal=createUnicodeTerminal(Terminal,{cols:80,rows:24,fontFamily:'ProbeNerd, monospace',fontSize:terminalFontSize,scrollback:0,disableStdin:true,cursorBlink:false,convertEol:false,theme:theme.terminal,linkHandler:{activate:()=>{}}});
           terminal.parser.registerOscHandler(52,()=>true); terminal.parser.registerOscHandler(8,()=>true);
           terminal.open($('remote-terminal')); terminal.textarea.setAttribute('inputmode','none');
+          const selectText=document.createElement('button');selectText.type='button';selectText.className='terminal-select-button';selectText.disabled=true;selectText.textContent='选择终端文本';selectText.onpointerdown=event=>event.preventDefault();
+          $('remote-result').prepend(selectText);selectTextButton=selectText;
+          selectText.onclick=()=>{
+            const bound=terminal,target=selectedTarget,host=activeHostId;
+            const current=()=>!document.hidden && showingRemote && terminal===bound && selectedTarget===target && activeHostId===host && gate.accepts(generation,event.generation);
+            if(!bound || !target || !selectionReady || !current())return;
+            if(inputBusy){inputStatus('输入仍在处理，暂不能选择终端文本。');return;}
+            textSelection?.close();textSelection=null;loseInputFocus();
+            try {textSelection=createTerminalSelection({terminal:bound,current,label:`${target.paneId} · ${target.terminalId}`});}
+            catch(error) {status(String(error).includes('snapshot_too_large')?'可见终端文本超过 64 KiB，无法选择；未复制内容。':'没有可安全测量的可见终端文本，请滚动终端到屏幕内后重试。','warning');}
+          };
           const boundTerminal=terminal; inputComposition=new InputComposition();
           const keyboardPending=()=>terminal===boundTerminal && inputMode!=='direct' && !boundTerminal.options.disableStdin;
           blockPendingKeys(terminal.textarea,keyboardPending);
@@ -666,13 +681,14 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture }) {
             const text=event.clipboardData?.getData('text/plain') || '';
             void reviewLocalPaste(boundTerminal,text,boundTerminal.textarea);
           },true);
-        } else if(frame.full) terminal.reset();
+        } else if(frame.full) {selectionReady=false;if(selectTextButton)selectTextButton.disabled=true;terminal.reset();}
         const rendered=terminal;
         terminal.write(Uint8Array.from(frame.bytes),()=>{
           if(terminal!==rendered || !gate.accepts(generation,event.generation) || !showingRemote)return;
           $('remote-captured').textContent=`${new Date().toLocaleTimeString()} 更新 · 80 × 24 · 只读观察中`;
           status('只读观察中；停止或离开后画面标记为陈旧。','success');
           if(!frames.acknowledge(frame.seq)){cancel('渲染确认异常，连接已停止。');return;}
+          selectionReady=true;if(selectTextButton)selectTextButton.disabled=false;
           if (frame.full) renderedFull++; else renderedDeltas++;
           captured.dataset.fullFrames = String(renderedFull);
           captured.dataset.deltaFrames = String(renderedDeltas);

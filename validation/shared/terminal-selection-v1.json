@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "columns": 6,
+  "rows": 3,
+  "write": "A中é Z?\r\n😀!",
+  "cases": [
+    {
+      "name": "full-soft-wrap",
+      "top": 0,
+      "bottom": 3,
+      "left": 0,
+      "right": 6,
+      "text": "A中é Z?\n😀!"
+    },
+    {
+      "name": "left-half",
+      "top": 0,
+      "bottom": 3,
+      "left": 0,
+      "right": 3,
+      "text": "A中\n?\n😀!"
+    },
+    {
+      "name": "wide-continuation-at-left",
+      "top": 0,
+      "bottom": 3,
+      "left": 2,
+      "right": 5,
+      "text": "é \n\n!"
+    },
+    {
+      "name": "scrolled-rows",
+      "top": 1,
+      "bottom": 3,
+      "left": 0,
+      "right": 6,
+      "text": "?\n😀!"
+    }
+  ]
+}

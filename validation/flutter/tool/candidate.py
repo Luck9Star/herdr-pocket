@@ -45,6 +45,23 @@ def apply(destination):
     patch = SOURCE / 'patches' / metadata['patch']
     if digest(patch.read_bytes()) != metadata['patchSha256']:
         raise ValueError('Patch checksum mismatch')
+    regression = metadata.get('selectorRegression')
+    regression_source = None
+    regression_wrapper = destination / 'test/candidate_selector_preservation_test.dart'
+    if regression is not None:
+        # Candidate-only: the fixed baseline must retain its original results.
+        if regression.get('source') != 'regression/selector_preservation.dart':
+            raise ValueError('Unexpected selector regression source')
+        regression_source = SOURCE / regression['source']
+        if digest(regression_source.read_bytes()) != regression['sha256']:
+            raise ValueError('Selector regression checksum mismatch')
+        existing = destination / regression['source']
+        if (regression_wrapper.exists() or regression_wrapper.is_symlink()
+                or (destination / 'test').is_symlink()
+                or (destination / 'regression').is_symlink()
+                or existing.is_symlink()
+                or (existing.exists() and digest(existing.read_bytes()) != regression['sha256'])):
+            raise ValueError('Refusing existing or changed candidate regression')
     with urllib.request.urlopen(metadata['archiveUrl'], timeout=60) as response:
         archive = response.read(64 * 1024 * 1024 + 1)
     if len(archive) > 64 * 1024 * 1024 or digest(archive) != metadata['archiveSha256']:
@@ -67,6 +84,23 @@ def apply(destination):
     for name, hashes in metadata['files'].items():
         if digest((target / name).read_bytes()) != hashes['afterSha256']:
             raise ValueError('Unexpected patched source: ' + name)
+    for name, expected in metadata.get('upstreamLicenseFiles', {}).items():
+        if name not in ('LICENSE', 'NOTICE') or digest((target / name).read_bytes()) != expected:
+            raise ValueError('Unexpected upstream license file')
+    if regression_source is not None:
+        staged = destination / regression['source']
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        staged.write_bytes(regression_source.read_bytes())
+        regression_wrapper.parent.mkdir(parents=True, exist_ok=True)
+        regression_wrapper.write_text(
+            "import 'package:flutter_test/flutter_test.dart';\n"
+            "import '../regression/selector_preservation.dart' as selector;\n\n"
+            "void main() {\n"
+            "  test('candidate preserves ordered selectors, combining suffixes and copy fixtures', () {\n"
+            "    selector.runSelectorPreservationChecks();\n"
+            "  });\n"
+            "}\n", encoding='utf-8')
+        metadata['selectorRegressionWrapperSha256'] = digest(regression_wrapper.read_bytes())
     overrides.write_text('dependency_overrides:\n  terminal_view:\n    path: candidate/terminal_view\n', encoding='utf-8')
     options = destination / 'analysis_options.yaml'
     options.write_text(options.read_text(encoding='utf-8').replace(

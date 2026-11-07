@@ -1,6 +1,7 @@
 """Wire shared Android sources into the disposable Tauri-generated Gradle project."""
 from pathlib import Path
 import shutil
+from js_notices import copy_android_assets
 
 root=Path(__file__).resolve().parents[1]
 project=root/'src-tauri/gen/android'
@@ -27,3 +28,4 @@ shutil.copyfile(root/'android/DeviceKeysPlugin.kt',target)
 shutil.copyfile(root/'android/NetworkAuthReview.kt',target.with_name('NetworkAuthReview.kt'))
 shutil.copyfile(root/'android/PairScanPlugin.kt',target.with_name('PairScanPlugin.kt'))
 shutil.copyfile(root/'android/ConfigDocumentPlugin.kt',target.with_name('ConfigDocumentPlugin.kt'))
+copy_android_assets(root, app/'src/main/assets')

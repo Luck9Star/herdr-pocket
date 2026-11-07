@@ -743,3 +743,21 @@ test('a draft edited back to the same text during final confirmation needs a new
     assert.ok(!h.calls.some(call=>call.name==='remote_tab_input_send'));
   } finally {h.restore();}
 });
+
+test('saved tab selection revokes direct input and closes on tab switch',async()=>{
+  const oldDocument=globalThis.document,oldWindow=globalThis.window,oldStyle=globalThis.getComputedStyle;
+  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+  const body=new Element('body');globalThis.getComputedStyle=()=>({});globalThis.document={body,querySelectorAll:()=>[],documentElement:{clientWidth:100,clientHeight:100},elementsFromPoint:()=>[terminal.element],hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>{const e=new Element(tag);e.remove=function(){this.removed=true;};return e;}};globalThis.window={confirm:()=>true};
+  const calls=[],channels=[],observers=[];let terminal;
+  const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe'){observers.push(args);return new Promise(()=>{});}if(name==='remote_tab_input_mode')return Promise.resolve(5);return Promise.resolve();};
+  try {
+    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:()=>terminal={element:{contains:()=>true,querySelector:()=>({parentElement:null,getBoundingClientRect:()=>({left:0,top:0,width:10,height:10})})},cols:1,rows:1,buffer:{active:{viewportY:0,getLine:()=>({length:1,isWrapped:false,getCell:()=>({getChars:()=> 'A',getWidth:()=>1}),translateToString:()=> 'A'})}},options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(_b,done){done();},reset(){},dispose(){},focus(){document.activeElement=this.textarea;},onData(fn){this.data=fn;}}});
+    ui.create('host',{paneId:'w1:p1',terminalId:'term_a001'});const find=label=>nodes['view-content'].all().find(n=>n.textContent===label);
+    const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
+    const g=observers[0].generation;channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'active'}});channels[0].onmessage({kind:'frame',generation:g,epoch:1,frame:{seq:1,full:true,bytes:[65]}});channels[0].onmessage({kind:'input_ready',generation:g,epoch:1,unknown:false,recovery_status:'ready'});
+    find('逐键输入').onclick();await flush();await flush();const select=find('选择终端文本');assert.ok(select);let prevented=false;select.onpointerdown({preventDefault(){prevented=true;}});assert.equal(prevented,true);select.onclick();await flush();
+    const panel=body.children.at(-1);assert.equal(panel.attrs['aria-label'],'选择终端文本');assert.equal(terminal.options.disableStdin,true);
+    find('逐键输入').onclick();terminal.focus();terminal.data('x');await flush();assert.equal(calls.filter(c=>c.name==='remote_tab_input_send').length,0);assert.equal(calls.filter(c=>c.name==='remote_tab_input_mode' && c.args.mode==='direct').length,1);
+    const other=ui.create('other',{paneId:'w1:p1',terminalId:'term_a001'});await ui.select(other);assert.equal(panel.removed,true);assert.equal(panel.children[2].value,'');
+  } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;globalThis.getComputedStyle=oldStyle;}
+});

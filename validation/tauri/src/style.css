@@ -33,3 +33,11 @@
 #view-content .term-scroll{margin-top:12px}
 
 .paste-review-text,#remote-paste-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-block-size:14rem;overflow:auto}
+
+/* Frozen viewport selection stays local and works with native touch selection. */
+.terminal-selection { position: fixed; z-index: 1000; inset: 1rem; max-width: 52rem; max-height: calc(100dvh - 2rem); margin: auto; padding: 1rem; overflow: auto; background: var(--surface, #fff); color: var(--text, #111); border: 2px solid currentColor; border-radius: .5rem; box-shadow: 0 0 0 100vmax #0009; }
+.terminal-selection textarea { display: block; width: 100%; min-height: 12rem; max-height: 48vh; resize: vertical; white-space: pre; overflow: auto; user-select: text; -webkit-user-select: text; font-family: monospace; }
+.terminal-selection button { min-height: 44px; }
+
+.terminal-notices summary { cursor: pointer; padding: 12px 0; }
+.terminal-notices pre { white-space: pre-wrap; overflow-wrap: anywhere; }

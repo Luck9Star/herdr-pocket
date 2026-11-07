@@ -17,4 +17,12 @@ for (const name of ['RUSSH-NOTICE.md', 'russh-0.65.0-source.json', 'russh-0.65.0
   await cp(new URL(`../../vendor/${name}`, import.meta.url), new URL(name, notices));
 }
 await cp(new URL('../../vendor/russh-0.65.0-LICENSE-APACHE', import.meta.url), new URL('russh-LICENSE', notices));
+const jsNotices = new URL('../public/js-notices/', import.meta.url);
+await mkdir(jsNotices, { recursive: true });
+for (const [dependency, filename] of [
+  ['@xterm/xterm', 'xterm-LICENSE'],
+  ['@xterm/addon-unicode-graphemes', 'xterm-addon-unicode-graphemes-LICENSE'],
+]) {
+  await cp(new URL(`../node_modules/${dependency}/LICENSE`, import.meta.url), new URL(filename, jsNotices));
+}
 console.log('Shared fixture and font hashes verified.');

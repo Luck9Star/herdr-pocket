@@ -14,6 +14,8 @@ import zipfile
 import android_tailscale
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / 'validation/tauri/scripts'))
+from js_notices import collect as collect_js_notices, verify_zip as verify_js_notices
 SYMBOLS = ['heeler_et_stream_connect', 'heeler_et_stream_read', 'heeler_et_stream_write',
            'heeler_et_stream_shutdown_write', 'heeler_et_stream_close', 'heeler_et_node_start',
            'heeler_et_node_status', 'heeler_et_node_stop', 'heeler_et_node_stream_connect']
@@ -160,6 +162,8 @@ def apk(path, bundle, commit, readelf, app):
         for name in providers:
             if hashlib.sha256(archive.read('lib/arm64-v8a/' + name)).hexdigest() != sha(bundle / name):
                 raise ValueError('APK native library differs from verified bundle: ' + name)
+        if app == 'tauri':
+            verify_js_notices(path, collect_js_notices(ROOT / 'validation/tauri'), 'assets/')
         import tempfile
         with tempfile.TemporaryDirectory() as directory:
             names = [Path(x).name for x in libs]
@@ -196,6 +200,15 @@ def main():
                   'apkSha256': sha(a.output / 'app.apk'), 'nativeManifestSha256': sha(a.output / 'native-manifest.json'),
                   'build': 'passed', 'staticInspection': 'passed', 'androidLoad': 'not run',
                   'installation': 'not run', 'node': 'not run'}
+        if a.app == 'tauri':
+            notices = collect_js_notices(ROOT / 'validation/tauri')
+            report['tauriJavaScriptNotices'] = verify_js_notices(a.output / 'app.apk', notices, 'assets/')
+            sources = {}
+            for filename, record in notices.items():
+                (a.output / filename).write_bytes(record['data'])
+                sources[filename] = {key: value for key, value in record.items() if key != 'data'}
+            (a.output / 'js-notices.json').write_text(json.dumps(sources, indent=2) + '\n')
+            report['tauriJavaScriptNoticeSources'] = sources
         candidate = a.output / 'candidate-manifest.json'
         if candidate.exists():
             report['terminalCandidateManifestSha256'] = sha(candidate)

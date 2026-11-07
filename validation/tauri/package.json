@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "prepare:fixtures": "node scripts/prepare-fixtures.mjs",
     "dev": "npm run prepare:fixtures && vite --host 127.0.0.1 --port 1420 --strictPort",
@@ -13,6 +15,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",
+    "@xterm/addon-unicode-graphemes": "0.4.0",
     "@xterm/xterm": "6.0.0"
   },
   "devDependencies": {

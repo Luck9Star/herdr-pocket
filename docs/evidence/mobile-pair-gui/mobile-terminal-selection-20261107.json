@@ -1,0 +1,723 @@
+{
+  "testedOn": "2026-11-07",
+  "baselineApkSource": "a9914fefeb9791aec5d3e041bf0d5d8a17f70e82",
+  "delivery": "Prototype branch source only. No Android APK was built or released for this selection batch.",
+  "fixtureSha256": "b4cacb01f66f4cb946f8a237f6e23f16e82f26bab3517bb5867b564d532deea8",
+  "cases": [
+    {
+      "name": "full-soft-wrap",
+      "top": 0,
+      "bottom": 3,
+      "left": 0,
+      "right": 6,
+      "text": "A中é Z?\n😀!"
+    },
+    {
+      "name": "left-half",
+      "top": 0,
+      "bottom": 3,
+      "left": 0,
+      "right": 3,
+      "text": "A中\n?\n😀!"
+    },
+    {
+      "name": "wide-continuation-at-left",
+      "top": 0,
+      "bottom": 3,
+      "left": 2,
+      "right": 5,
+      "text": "é \n\n!"
+    },
+    {
+      "name": "scrolled-rows",
+      "top": 1,
+      "bottom": 3,
+      "left": 0,
+      "right": 6,
+      "text": "?\n😀!"
+    }
+  ],
+  "widthMarkersZeroBased": {
+    "default": {
+      "developer": 2,
+      "family": 4,
+      "flag": 2,
+      "vs16": 1,
+      "nerd": 1,
+      "ambiguous": 1,
+      "combining": 1,
+      "chinese": 2
+    },
+    "unicode11": {
+      "developer": 4,
+      "family": 8,
+      "flag": 2,
+      "vs16": 1,
+      "nerd": 1,
+      "ambiguous": 1,
+      "combining": 1,
+      "chinese": 2
+    },
+    "graphemes": {
+      "developer": 2,
+      "family": 2,
+      "flag": 2,
+      "vs16": 2,
+      "nerd": 1,
+      "ambiguous": 1,
+      "combining": 1,
+      "chinese": 2
+    }
+  },
+  "sameInputComparedAcrossEngines": [
+    {
+      "name": "woman-technologist",
+      "markerColumn": 2,
+      "copy": "👩‍💻!",
+      "flutterMarker": 2,
+      "flutterCopy": "👩‍💻!"
+    },
+    {
+      "name": "family-man-woman-girl-boy",
+      "markerColumn": 2,
+      "copy": "👨‍👩‍👧‍👦!",
+      "flutterMarker": 2,
+      "flutterCopy": "👨‍👩‍👧‍👦!"
+    },
+    {
+      "name": "flag-china",
+      "markerColumn": 2,
+      "copy": "🇨🇳!",
+      "flutterMarker": 2,
+      "flutterCopy": "🇨🇳!"
+    },
+    {
+      "name": "heart-emoji-presentation",
+      "markerColumn": 2,
+      "copy": "❤️!",
+      "flutterMarker": 2,
+      "flutterCopy": "❤️!"
+    },
+    {
+      "name": "sun-text-presentation",
+      "markerColumn": 1,
+      "copy": "☀︎!",
+      "flutterMarker": 1,
+      "flutterCopy": "☀︎!"
+    },
+    {
+      "name": "cjk-middle",
+      "markerColumn": 2,
+      "copy": "中!",
+      "flutterMarker": 2,
+      "flutterCopy": "中!"
+    },
+    {
+      "name": "grinning-face",
+      "markerColumn": 2,
+      "copy": "😀!",
+      "flutterMarker": 2,
+      "flutterCopy": "😀!"
+    },
+    {
+      "name": "e-combining-acute",
+      "markerColumn": 1,
+      "copy": "é!",
+      "flutterMarker": 1,
+      "flutterCopy": "é!"
+    },
+    {
+      "name": "powerline-right-hard-divider",
+      "markerColumn": 1,
+      "copy": "!",
+      "flutterMarker": 1,
+      "flutterCopy": "!"
+    },
+    {
+      "name": "middle-dot",
+      "markerColumn": 1,
+      "copy": "·!",
+      "flutterMarker": 1,
+      "flutterCopy": "·!"
+    }
+  ],
+  "tauri": {
+    "dependencies": {
+      "xterm": "6.0.0",
+      "addon": "@xterm/addon-unicode-graphemes@0.4.0",
+      "provider": "15-graphemes",
+      "registryTarball": "https://registry.npmjs.org/@xterm/addon-unicode-graphemes/-/addon-unicode-graphemes-0.4.0.tgz",
+      "verifiedTarballIntegrity": "sha512-9+/CqwbKcnlkJU4d3wIgO+wjsL8f6vyz+UwUWLu6nADQz8Gr8ONqGCJfdDjIdI+yYZLABQqQy47FzEM6AWELjw=="
+    },
+    "cleanJavaScriptChecks": 199,
+    "cleanViteBuild": "passed",
+    "boardNotices": "both component notices in the built board DOM matched original installed LICENSE text",
+    "macBrowser": {
+      "browser": "Chrome/156.0.8078.81",
+      "scope": "Mac headless Chrome, real app and xterm, fixture transport, clipboard stub; not Android; ProbeNerd loaded; CJK/emoji glyph fallback not independently verified",
+      "font": {
+        "status": 200,
+        "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+        "faces": [
+          "loaded"
+        ]
+      },
+      "routes": {
+        "tab-390": {
+          "viewport": [
+            390,
+            820
+          ],
+          "selected": "👩‍💻❤️! 中é😀  \n",
+          "provider": "15-graphemes",
+          "cells": [
+            {
+              "chars": "👩‍💻",
+              "width": 2
+            },
+            {
+              "chars": "",
+              "width": 0
+            },
+            {
+              "chars": "❤️",
+              "width": 2
+            },
+            {
+              "chars": "",
+              "width": 0
+            },
+            {
+              "chars": "!",
+              "width": 1
+            },
+            {
+              "chars": " ",
+              "width": 1
+            }
+          ],
+          "font": {
+            "status": 200,
+            "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+            "faces": [
+              "loaded"
+            ]
+          },
+          "copyCount": 1,
+          "horizontalCropSentinels": true,
+          "staleRejected": true,
+          "remoteInputs": 0,
+          "resizeRequests": 0
+        },
+        "form-390": {
+          "viewport": [
+            390,
+            820
+          ],
+          "selected": "👩‍💻❤️! 中é😀  \n",
+          "provider": "15-graphemes",
+          "cells": [
+            {
+              "chars": "👩‍💻",
+              "width": 2
+            },
+            {
+              "chars": "",
+              "width": 0
+            },
+            {
+              "chars": "❤️",
+              "width": 2
+            },
+            {
+              "chars": "",
+              "width": 0
+            },
+            {
+              "chars": "!",
+              "width": 1
+            },
+            {
+              "chars": " ",
+              "width": 1
+            }
+          ],
+          "font": {
+            "status": 200,
+            "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+            "faces": [
+              "loaded"
+            ]
+          },
+          "copyCount": 1,
+          "horizontalCropSentinels": true,
+          "staleRejected": true,
+          "remoteInputs": 0,
+          "resizeRequests": 0
+        },
+        "tab-320": {
+          "viewport": [
+            320,
+            820
+          ],
+          "selected": "👩‍💻❤️! 中é😀  \n",
+          "provider": "15-graphemes",
+          "cells": [
+            {
+              "chars": "👩‍💻",
+              "width": 2
+            },
+            {
+              "chars": "",
+              "width": 0
+            },
+            {
+              "chars": "❤️",
+              "width": 2
+            },
+            {
+              "chars": "",
+              "width": 0
+            },
+            {
+              "chars": "!",
+              "width": 1
+            },
+            {
+              "chars": " ",
+              "width": 1
+            }
+          ],
+          "font": {
+            "status": 200,
+            "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+            "faces": [
+              "loaded"
+            ]
+          },
+          "copyCount": 1,
+          "horizontalCropSentinels": true,
+          "staleRejected": true,
+          "remoteInputs": 0,
+          "resizeRequests": 0
+        },
+        "form-320": {
+          "viewport": [
+            320,
+            820
+          ],
+          "selected": "👩‍💻❤️! 中é😀  \n",
+          "provider": "15-graphemes",
+          "cells": [
+            {
+              "chars": "👩‍💻",
+              "width": 2
+            },
+            {
+              "chars": "",
+              "width": 0
+            },
+            {
+              "chars": "❤️",
+              "width": 2
+            },
+            {
+              "chars": "",
+              "width": 0
+            },
+            {
+              "chars": "!",
+              "width": 1
+            },
+            {
+              "chars": " ",
+              "width": 1
+            }
+          ],
+          "font": {
+            "status": 200,
+            "sha256": "f01031f40e48dc29e1112e6b0b0450a2c6cd097f3f35cfff05c55cb311f8034c",
+            "faces": [
+              "loaded"
+            ]
+          },
+          "copyCount": 1,
+          "horizontalCropSentinels": true,
+          "staleRejected": true,
+          "remoteInputs": 0,
+          "resizeRequests": 0
+        }
+      },
+      "sourceHashesWhenTested": {
+        "package.json": "04984fb08f64a5296e7e5825dd3ff0a334dde7a2ef666b1a330c2bd17834089c",
+        "package-lock.json": "7c2babe5db5a4b60687f2cdef95d6fa1a196a0c229f4e6a2bd46e469e4bd6d05",
+        "src/terminal-unicode.js": "03e01f24b889cc47dd722b65cf4021d9da141708bf56e25d4450f1dc4e644dcf",
+        "src/terminal-selection.js": "e40a40efd6fc2c2370bea658dc7dc94c98c4850cd94b1fd1c8d801ab3e360b76",
+        "src/remote.js": "7409b7f93886f1aa14045ff0144aeb0f3acf2c436809fda9ae78b3888062ddfe",
+        "src/tab-workspace.js": "bc744ce6bf3740e74c04e8bd2a09bc1cff163461fa35a52286354b7cb1d6a297",
+        "src/style.css": "cadf2a18986ad534e2e1fe3747283b5ac2cdb2e771c9e66388d845b92827ce6b"
+      },
+      "note": "Four browser cases reran after final UTF-8 limit change. The exact-limit/padding cases ran separately in the JavaScript suite. Board notices were checked independently in a built application."
+    },
+    "utf8ByteLimit": "65536 bytes accepted with trailing unwritten cells. Interior gaps and explicit trailing spaces count; overflow rejected.",
+    "noticeVerification": {
+      "nativeToolPythonTests": 13,
+      "result": "Actual built web assets and browser preview ZIP checked against the two installed package notices. Android report path tested with synthetic positive and altered APKs. No new native package was produced for this source batch.",
+      "sha256": {
+        "xterm-LICENSE": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd",
+        "xterm-addon-unicode-graphemes-LICENSE": "a26afeeba9ab0a19502a73df658d8fb09186d0906c81af6c04d334064971e81f"
+      }
+    }
+  },
+  "flutter": {
+    "archive": "5f8cf2e999b9b98224430b7ef2a32d378062073fa4e566f1f52d89ac9d9ac9cf",
+    "candidateRevision": 2,
+    "patchSha256": "17f7be40e51ffb43df48d67d111376e958a67edf71051fbb660a39b3c5ab6f29",
+    "checkedBy": "Real standalone Dart 3.11.0 arm64 engine tests. Compared patched cells, text, styles, cursor and marker against fixed baseline.",
+    "summary": {
+      "sampleCount": 23,
+      "allCopiesPreservedAfter": true,
+      "allCellCodepointWidthStyleMatricesUnchanged": true,
+      "allObservedMarkerAndCursorPositionsUnchanged": true,
+      "priorUiPatchBytesPreservedAsPrefix": true,
+      "allThreePatchedSourceHashesVerified": true,
+      "officialArchiveShaUnchanged": true,
+      "licenseAndNoticeMatchOfficialArchive": true,
+      "candidateRegressionWrapperHashVerified": true,
+      "baselineRegressionFailsOnMissingHeartSelector": true,
+      "symlinkedTestDirectoryRejectedBeforeArchiveAccess": true,
+      "candidateToolUnitTestsPassed": 5,
+      "flutterRendererWidgetTestsExecuted": false,
+      "newApkBuilt": false,
+      "cloudCiTriggered": false
+    },
+    "cases": [
+      {
+        "name": "woman-technologist",
+        "beforeCopy": "👩‍💻!",
+        "afterCopy": "👩‍💻!",
+        "copyPreservedAfter": true,
+        "observedMarkersBefore": [
+          [
+            0,
+            2
+          ]
+        ],
+        "observedMarkersAfter": [
+          [
+            0,
+            2
+          ]
+        ],
+        "layoutAndCursorIdentical": true,
+        "beforeCombined": [
+          {
+            "row": 0,
+            "column": 0,
+            "scalars": [
+              8205,
+              128187
+            ]
+          }
+        ],
+        "afterCombined": [
+          {
+            "row": 0,
+            "column": 0,
+            "scalars": [
+              8205,
+              128187
+            ]
+          }
+        ]
+      },
+      {
+        "name": "family-man-woman-girl-boy",
+        "beforeCopy": "👨‍👩‍👧‍👦!",
+        "afterCopy": "👨‍👩‍👧‍👦!",
+        "copyPreservedAfter": true,
+        "observedMarkersBefore": [
+          [
+            0,
+            2
+          ]
+        ],
+        "observedMarkersAfter": [
+          [
+            0,
+            2
+          ]
+        ],
+        "layoutAndCursorIdentical": true,
+        "beforeCombined": [
+          {
+            "row": 0,
+            "column": 0,
+            "scalars": [
+              8205,
+              128105,
+              8205,
+              128103,
+              8205,
+              128102
+            ]
+          }
+        ],
+        "afterCombined": [
+          {
+            "row": 0,
+            "column": 0,
+            "scalars": [
+              8205,
+              128105,
+              8205,
+              128103,
+              8205,
+              128102
+            ]
+          }
+        ]
+      },
+      {
+        "name": "flag-china",
+        "beforeCopy": "🇨🇳!",
+        "afterCopy": "🇨🇳!",
+        "copyPreservedAfter": true,
+        "observedMarkersBefore": [
+          [
+            0,
+            2
+          ]
+        ],
+        "observedMarkersAfter": [
+          [
+            0,
+            2
+          ]
+        ],
+        "layoutAndCursorIdentical": true,
+        "beforeCombined": [],
+        "afterCombined": []
+      },
+      {
+        "name": "heart-emoji-presentation",
+        "beforeCopy": "❤!",
+        "afterCopy": "❤️!",
+        "copyPreservedAfter": true,
+        "observedMarkersBefore": [
+          [
+            0,
+            2
+          ]
+        ],
+        "observedMarkersAfter": [
+          [
+            0,
+            2
+          ]
+        ],
+        "layoutAndCursorIdentical": true,
+        "beforeCombined": [],
+        "afterCombined": [
+          {
+            "row": 0,
+            "column": 0,
+            "scalars": [
+              65039
+            ]
+          }
+        ]
+      },
+      {
+        "name": "sun-text-presentation",
+        "beforeCopy": "☀!",
+        "afterCopy": "☀︎!",
+        "copyPreservedAfter": true,
+        "observedMarkersBefore": [
+          [
+            0,
+            1
+          ]
+        ],
+        "observedMarkersAfter": [
+          [
+            0,
+            1
+          ]
+        ],
+        "layoutAndCursorIdentical": true,
+        "beforeCombined": [],
+        "afterCombined": [
+          {
+            "row": 0,
+            "column": 0,
+            "scalars": [
+              65038
+            ]
+          }
+        ]
+      },
+      {
+        "name": "cjk-middle",
+        "beforeCopy": "中!",
+        "afterCopy": "中!",
+        "copyPreservedAfter": true,
+        "observedMarkersBefore": [
+          [
+            0,
+            2
+          ]
+        ],
+        "observedMarkersAfter": [
+          [
+            0,
+            2
+          ]
+        ],
+        "layoutAndCursorIdentical": true,
+        "beforeCombined": [],
+        "afterCombined": []
+      },
+      {
+        "name": "grinning-face",
+        "beforeCopy": "😀!",
+        "afterCopy": "😀!",
+        "copyPreservedAfter": true,
+        "observedMarkersBefore": [
+          [
+            0,
+            2
+          ]
+        ],
+        "observedMarkersAfter": [
+          [
+            0,
+            2
+          ]
+        ],
+        "layoutAndCursorIdentical": true,
+        "beforeCombined": [],
+        "afterCombined": []
+      },
+      {
+        "name": "e-combining-acute",
+        "beforeCopy": "é!",
+        "afterCopy": "é!",
+        "copyPreservedAfter": true,
+        "observedMarkersBefore": [
+          [
+            0,
+            1
+          ]
+        ],
+        "observedMarkersAfter": [
+          [
+            0,
+            1
+          ]
+        ],
+        "layoutAndCursorIdentical": true,
+        "beforeCombined": [
+          {
+            "row": 0,
+            "column": 0,
+            "scalars": [
+              769
+            ]
+          }
+        ],
+        "afterCombined": [
+          {
+            "row": 0,
+            "column": 0,
+            "scalars": [
+              769
+            ]
+          }
+        ]
+      },
+      {
+        "name": "powerline-right-hard-divider",
+        "beforeCopy": "!",
+        "afterCopy": "!",
+        "copyPreservedAfter": true,
+        "observedMarkersBefore": [
+          [
+            0,
+            1
+          ]
+        ],
+        "observedMarkersAfter": [
+          [
+            0,
+            1
+          ]
+        ],
+        "layoutAndCursorIdentical": true,
+        "beforeCombined": [],
+        "afterCombined": []
+      },
+      {
+        "name": "middle-dot",
+        "beforeCopy": "·!",
+        "afterCopy": "·!",
+        "copyPreservedAfter": true,
+        "observedMarkersBefore": [
+          [
+            0,
+            1
+          ]
+        ],
+        "observedMarkersAfter": [
+          [
+            0,
+            1
+          ]
+        ],
+        "layoutAndCursorIdentical": true,
+        "beforeCombined": [],
+        "afterCombined": []
+      }
+    ],
+    "sharedCases": [
+      {
+        "name": "full-soft-wrap",
+        "text": "A中é Z?\n😀!",
+        "status": "passed"
+      },
+      {
+        "name": "left-half",
+        "text": "A中\n?\n😀!",
+        "status": "passed"
+      },
+      {
+        "name": "wide-continuation-at-left",
+        "text": "é \n\n!",
+        "status": "passed"
+      },
+      {
+        "name": "scrolled-rows",
+        "text": "?\n😀!",
+        "status": "passed"
+      }
+    ],
+    "sourceHashes": {
+      "validation/flutter/lib/remote_page.dart": "ca3e3354920b7ee3d90897d5587cbaa0b7dcec48c6db43697c0d772bddccaa58",
+      "validation/flutter/lib/remote_screen_text.dart": "bb93257e15e0c8e610b2107c326c6e8c35881c1e89b1e0601d8deffe08f05f17",
+      "validation/flutter/lib/remote_screen_viewport.dart": "dd12706a888d9a3e350f19fb135e9dae9781210e7a4e1c76aca565ae203ee2cf",
+      "validation/flutter/test/remote_screen_text_test.dart": "ae5a7b3767c856952355414110801180169baf48d543af79cda6d9f480ba2473",
+      "validation/flutter/test/remote_screen_selection_test.dart": "13f719fcc8d7542ef4a729f3e026819e4402b5f8e77182d18eb2019517ecf49e",
+      "validation/flutter/tool/candidate.py": "06942238508d8a0ef7d9c2610692f6f2fb1fc999c8d47eb728148559d586c1c4",
+      "validation/flutter/patches/terminal_view-0.5.0-combining.patch": "17f7be40e51ffb43df48d67d111376e958a67edf71051fbb660a39b3c5ab6f29",
+      "validation/flutter/patches/manifest.json": "3ee0f42d20f1e27f744d8f8d85dce1ebb5cd982cd3abd32b48b0c9c98259cad3",
+      "validation/flutter/regression/selector_preservation.dart": "c49f1ab56d30680fc76b9702a7d7715dc589b5d05e92fed61f6a1c15c11b08db"
+    },
+    "followup": "New widget and renderer tests not executed on Flutter or Android in this source batch."
+  },
+  "unverified": [
+    "arm64 installation of the two older APKs",
+    "new source installed or running in Android/iOS WebView or Flutter",
+    "physical selection handles, OS clipboard, CJK/emoji fallback glyphs, real IME",
+    "real remote shells, true overlay concurrency and five-platform runtime"
+  ]
+}

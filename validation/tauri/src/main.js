@@ -1,8 +1,13 @@
 import { isTauri } from '@tauri-apps/api/core';
 import '@xterm/xterm/css/xterm.css';
+import xtermLicense from '../node_modules/@xterm/xterm/LICENSE?raw';
+import graphemesLicense from '../node_modules/@xterm/addon-unicode-graphemes/LICENSE?raw';
 import './style.css';
 import { readTheme } from './theme.js';
 import { initRemote } from './remote.js';
+
+document.getElementById('xterm-license').textContent = xtermLicense;
+document.getElementById('xterm-graphemes-license').textContent = graphemesLicense;
 
 const tokens = await fetch('/shared/design-tokens-v2.json');
 if (!tokens.ok) throw Error('Design tokens unavailable');

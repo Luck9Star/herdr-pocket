@@ -148,3 +148,9 @@ python3 test/android-network-plugin-test.py /private/tmp/herdr-kotlin-2.2.21-che
 本批最终轻量验收计数以日志为准：42 项 Rust host 单测、115 项 Node 单测、Vite 生产构建与 Kotlin 隔离 probe 已执行通过；它们使用当前共享运行时源码，不能外推设备或真实网络结果。
 
 外部页面打开 API 已用 Context7 `library Android` → `/websites/developer_android` → `docs` 对照 [Android 官方 URL intent 说明](https://developer.android.com/training/package-visibility/use-cases)：`ACTION_VIEW` 可能交给浏览器、支持该 URL 的应用或选择器；没有 handler 的异常被处理为打开结果未确认，不自动改用其他入口。
+
+### Unicode 列宽来源
+
+三个 xterm 实例在首帧前加载官方 `@xterm/addon-unicode-graphemes` 0.4.0（MIT，包声明源码提交 [`f447274f430fd22513f6adbf9862d19524471c04`](https://github.com/xtermjs/xterm.js/tree/f447274f430fd22513f6adbf9862d19524471c04/addons/addon-unicode-graphemes)），该插件激活 Unicode 15 grapheme provider；xterm 6.0.0 的 Unicode API 需要 `allowProposedApi`。插件上游标记为实验性，可能产生非标准行为。构建时将其 LICENSE 复制到 `public/js-notices/`，依赖和完整性由 npm lock 固定。[官方用法](https://github.com/xtermjs/xterm.js/blob/f447274f430fd22513f6adbf9862d19524471c04/addons/addon-unicode-graphemes/README.md)。这只改变本地单元宽度，不修改远端 PTY 尺寸。
+
+隔离 Node 真实 xterm 比较：`👩‍💻`、`👨‍👩‍👧‍👦`、`🇨🇳`、`❤️` 后的标记均在零基第 2 列；测试的 `\ue0b0` Nerd Font 私用区字符、歧义宽字符 `·`、组合字符 `é` 后在第 1 列，`中` 后在第 2 列。相同样本中默认 provider 的职业／家庭／VS16 后标记分别为 2／4／1，Unicode11 provider 为 4／8／1。该比较不能证明所有 grapheme 或任意远端终端的宽度一致；移动平台和真实设备仍需验收。

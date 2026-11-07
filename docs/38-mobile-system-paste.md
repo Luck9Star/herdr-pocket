@@ -1,5 +1,7 @@
 # 手机系统粘贴与草稿审查
 
+2026-11-07 后续云验收已完成，两款 APK 和四个 Android 场景均已复核。[下载、逐场结果与测试步骤](40-android-paired-dashboard-validation.md)
+
 手机在刚配对的终端表单或已存标签内启用草稿或逐键输入后，可以点「粘贴并审查」。Tauri 从当前平台读取纯文本，再显示原目标上的本地审查。Flutter 在读取为空、被系统拒绝或超过上限时保留原草稿。发送仍需单独预览并确认。
 
 ## 可复测的操作
@@ -27,4 +29,4 @@ Mac Chrome 156 的 320×820、390×820 两种视口均从刚配对的表单和�
 
 隔离源码副本通过 Tauri JavaScript 测试与前端构建、Mac Rust 宿主测试，以及用合成平台对象编译运行的 Kotlin 插件测试。Dart 3.11.0 在 Mac 上运行了 510 个 UTF-8 对照样例以及追加、替换、丢弃超限文本的合同测试。[本批证据](evidence/mobile-pair-gui/mobile-system-paste-20261107.json)
 
-下一次集中 Android 云验收将在自建 API 35 模拟器中写入固定测试文本，通过实际 GUI 取消和追加，并在确认发送前由独立接收端核对字节。新驱动、当前 Flutter widget、Android 系统剪贴板和物理手机的 IME／触控仍待设备运行。已有的两份 arm64 APK 来自较早提交。[可下载测试包](36-mobile-paste-and-auxiliary-input.md#同源云验证与可下载测试包) · [Penpot 与上一批选区证据](37-mobile-terminal-selection.md)
+本地验收结束时，为后续 Android 云验收准备的场景是在自建 API 35 模拟器中写入固定测试文本，通过实际 GUI 取消和追加，并在确认发送前由独立接收端核对字节。当时的驱动和 widget 尚待云端运行；下列包来自当时较早的源码。物理手机上的 IME／触控仍待实测。[可下载测试包](36-mobile-paste-and-auxiliary-input.md#同源云验证与可下载测试包) · [Penpot 与上一批选区证据](37-mobile-terminal-selection.md)

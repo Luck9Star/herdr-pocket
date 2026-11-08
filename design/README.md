@@ -96,3 +96,22 @@ macOS首轮发现 terminal_view 0.5.0 的 ASCII组合重音绘制缺陷，已增
 ![迁移审查画板](evidence/v2-network-import-20261106.png)
 
 Mac 测试只证明合成配置和系统文件交互，未取得可用的应用截图；手机真机视觉／触控、辅助技术、设备身份和真实三网仍待分别验证。Penpot 插件 2.15.4 对服务 2.19.0 仍提示版本不匹配；本次增量脚本只记录本次执行，不应重复运行。临时查看器、插件和本轮启动的本地服务已关闭，原编辑器保留。
+
+## 手机草稿与共享设备恢复（2026-11-07）
+
+基于[手机恢复实现与合成交互检查](../docs/33-mobile-recovery-design.md)，在同一 v2 页面增量保存 S31–S38，沿用既有靛蓝／Slate 配色。
+
+- [从陈旧看板与草稿找回开始](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=2a5fd934-a163-8057-8008-e8230835dfbd)
+- [从共享设备待定恢复开始](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=2a5fd934-a163-8057-8008-e823088d7aeb)
+- [重载原始读回](evidence/v2-mobile-recovery-reloaded-20261107.json) · [原对象对照与实际点击范围](evidence/v2-mobile-recovery-comparison-20261107.json) · [完整覆盖](v2-coverage.md)
+
+重载后 38 个画板、1,155 个形状、212 个交互对象；无悬空目的地或画板外孤立形状，新增文本没有超出画板。原 1,008 对象的名称、类型、父级、几何、文字、填充和导航边逐项一致；这不是对每一种 Penpot 属性的全量比较。原 22 个组件和 25／53 项 token sets 保留，没有据此宣布完整组件库或真机无障碍通过。
+
+查看器实际点击 S31 → S32 → S38 → S33，以及 S34 → S35 → S36 → S34、S36 → S37。其他连接为读回检查。原型以虚构记录演示原目标找回、未知结果只读核对和二步审查，不执行系统剪贴板、设备身份、SSH 授权或网络操作。
+
+首次[增量脚本](penpot/mobile-recovery-20261107.js)因示例文本首行为空生成空名称而部分失败；[定点补全脚本](penpot/mobile-recovery-finish-20261107.js)复用已创建对象完成，随后[只读核验](penpot/verify-mobile-recovery-20261107.js)及重载通过。两份写入脚本记录一次实际执行，不是可反复运行的同步器。官方 MCP 2.15.4／应用 2.19.0 的版本不匹配警告仍保留。
+
+![旧看板与草稿恢复](evidence/v2-S31-recovery-20261107.png)
+![共享设备待定恢复](evidence/v2-S34-device-recovery-20261107.png)
+
+临时浏览器夹具、查看器、插件与本轮 Vite／Penpot MCP 服务均已关闭，视口覆盖已恢复，原编辑页保留。已有 Android APK 未变化；手机触控、IME、KeyStore、真实组网与最终框架选型仍待独立证据。

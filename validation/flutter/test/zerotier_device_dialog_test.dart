@@ -131,6 +131,9 @@ void main() {
     final revision = catalog.revision;
     catalog.profiles = [affectedHost(catalog.networkProfiles.last)]; catalog.signal(); await tester.pumpAndSettle();
     expect(catalog.revision,revision); expect(find.byKey(const ValueKey('zt-device-forget')),findsNothing);
+    // The invalidated notice renders near the top of the recycled list; jump back so its row is built.
+    final scrollable=find.descendant(of:find.byKey(const ValueKey('zt-device-list')),matching:find.byType(Scrollable)).first;
+    tester.state<ScrollableState>(scrollable).position.jumpTo(0); await tester.pump();
     expect(find.textContaining('审查已失效'),findsOneWidget); expect(store.forgets,0);
     await tapReview(tester,'zt-device-refresh'); await tapReview(tester,'zt-device-review');
     expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('zt-device-acknowledge'))).value,isFalse);
@@ -141,6 +144,9 @@ void main() {
     await showReview(tester,catalog,store,beforeForget:(_) async {});
     await tapReview(tester,'zt-device-review'); await tapReview(tester,'zt-device-acknowledge');
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused); await tester.pump();
+    // Real Android returns from paused through hidden and inactive; the listener rejects paused -> resumed.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden); await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive); await tester.pump();
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pumpAndSettle();
     // A paused app draws no frames, so the revoked review only leaves the tree
     // on the first frame drawn after the app comes back.
@@ -202,6 +208,9 @@ void main() {
     final catalog = ReviewCatalog(),store = MemoryZeroTierDeviceStore()..current = pendingState('recoverPendingDeletion','record-present');
     await showReview(tester,catalog,store); await tapReview(tester,'zt-pending-review-recoverPendingDeletion'); await tapReview(tester,'zt-pending-acknowledge');
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused); await tester.pump();
+    // Real Android returns from paused through hidden and inactive; the listener rejects paused -> resumed.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden); await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive); await tester.pump();
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pumpAndSettle();
     // A paused app draws no frames, so the revoked review only leaves the tree
     // on the first frame drawn after the app comes back.

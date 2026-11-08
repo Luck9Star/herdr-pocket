@@ -250,7 +250,9 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden); await tester.pumpAndSettle();
     expect(controller.text,'original'); expect(adapter.received,isEmpty);
     // A hidden app draws no frames, so the revoked review route only leaves the
-    // tree on the first frame drawn after the app comes back.
+    // tree on the first frame drawn after the app comes back. Real Android
+    // returns through inactive; the listener rejects hidden -> resumed.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive); await tester.pump();
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pumpAndSettle();
     expect(find.textContaining('PRIVATE CLIP'),findsNothing);
     expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox());

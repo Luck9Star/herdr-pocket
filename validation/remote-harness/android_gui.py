@@ -72,7 +72,9 @@ class AndroidProgress:
         'android_revoke_clock_invalid','android_revoke_device_time_unready','android_revoke_controls_unconfirmed',
         'android_board_search_state_invalid','android_board_search_count_mismatch','android_board_search_history_missing',
         'android_board_search_native_call','android_board_search_reset_missing','android_board_search_clear_missing',
-        'android_board_search_counter_unavailable','android_select_option_missing','android_select_option_failed',
+        'android_board_search_counter_install_failed','android_board_search_counter_read_invalid',
+        'android_board_search_counter_no_ipc','android_board_search_counter_unsettle_timeout',
+        'android_select_option_missing','android_select_option_failed',
         'android_device_impact_entry_missing','android_device_impact_status_invalid','android_device_impact_action_enabled',
         'android_device_impact_reread_invalid','android_device_impact_entry_lost','android_device_impact_write_invoked'}
     def __init__(self, args):
@@ -124,6 +126,8 @@ class AndroidProgress:
         self.data.update(status='failed',errorCode=code if code in self.ERROR_CODES else 'android_driver_failure')
         diagnostic=public_ime_diagnostic(getattr(error,'system_ime_diagnostic',None))
         if diagnostic:self.data['systemImeFailure']=diagnostic
+        counter=_public_counter_context(getattr(error,'counter_context',None))
+        if counter:self.data['counterContext']=counter
         self.publish()
     def finish(self,cleanup_failed):
         self.data['status']='passed' if self.success and not cleanup_failed else 'failed'
@@ -261,6 +265,23 @@ def exercise_keyboard(browser, approval, mode, progress=None):
         if progress:progress.ime(sample)
         evidence.append({**sample, 'checkpoint': 'keyboard-direct-reopened'})
     return evidence
+
+
+def _public_counter_context(value):
+    """Bounded read-only page context only; drop unknown keys and unbounded URLs."""
+    if not isinstance(value, dict):
+        return None
+    safe = {'readyState':'unknown','internals':False,'invokeType':'unknown','url':'unknown'}
+    if value.get('readyState') in ('loading','interactive','complete'):
+        safe['readyState'] = value['readyState']
+    if type(value.get('internals')) is bool:
+        safe['internals'] = value['internals']
+    if value.get('invokeType') in ('function','undefined','object','string','number','boolean','symbol','bigint','missing'):
+        safe['invokeType'] = value['invokeType']
+    url = value.get('url')
+    if isinstance(url, str) and url[:7] in ('tauri:/','http://','https:/','file://'):
+        safe['url'] = url[:120]
+    return safe
 
 
 class AndroidWebView:
@@ -421,17 +442,40 @@ class AndroidWebView:
                 self.call('Input.dispatchKeyEvent', {'type':kind,'key':'Enter','code':'Enter','windowsVirtualKeyCode':13})
         wait_for(lambda: self.read(selector, 'value') == value, 'android_select_option_failed')
 
+    def _counter_page_context(self):
+        """Read-only page state so a reset WebView can be told from a busy one."""
+        try:
+            value = self.evaluate('(()=>{const i=window.__TAURI_INTERNALS__;'
+                'return {readyState:document.readyState,internals:!!i,'
+                'invokeType:i?typeof i.invoke:"missing",url:location.href}})()')
+        except GuiFailure:
+            value = {}  # A failed probe still reports every field as unknown.
+        return _public_counter_context(value)
+
+    def _counter_failure(self, code):
+        """Counter failures carry page context; a failed probe degrades to unknown."""
+        failure = GuiFailure(code)
+        failure.counter_context = self._counter_page_context()
+        return failure
+
     def install_invoke_counter(self):
         """Count real app IPC so a local-only interaction can be proven on the device."""
-        installed = self.evaluate(
-            '(()=>{const i=window.__TAURI_INTERNALS__;if(!i||typeof i.invoke!=="function")return false;'
+        script = ('(()=>{const i=window.__TAURI_INTERNALS__;if(!i||typeof i.invoke!=="function")return false;'
             'if(i.__herdrInvokeCounter)return true;const original=i.invoke;'
             'const c={count:0,tally:{}};i.__herdrInvokeCounter=c;i.__herdrInvokeOriginal=original;'
             'i.invoke=function(cmd,args,options){c.count+=1;'
             'if(typeof cmd==="string"&&Object.keys(c.tally).length<64)c.tally[cmd]=(c.tally[cmd]||0)+1;'
             'return original.call(i,cmd,args,options);};return true;})()')
-        if installed is not True:
-            raise GuiFailure('android_board_search_counter_unavailable')
+        def installed():
+            # A briefly reset JS context returns false or throws; both self-heal here.
+            try:
+                return self.evaluate(script) is True
+            except GuiFailure:
+                return False
+        try:
+            wait_for(installed, 'android_board_search_counter_install_failed', timeout=15)
+        except GuiFailure:
+            raise self._counter_failure('android_board_search_counter_install_failed') from None
 
     def invoke_counter(self):
         value = self.evaluate(
@@ -441,7 +485,7 @@ class AndroidWebView:
                 not isinstance(value.get('tally'), dict) or len(value['tally']) > 64 or
                 any(not isinstance(name, str) or type(number) is not int or number < 0
                     for name, number in value['tally'].items())):
-            raise GuiFailure('android_board_search_counter_unavailable')
+            raise self._counter_failure('android_board_search_counter_read_invalid')
         return value
 
     def remove_invoke_counter(self):
@@ -629,11 +673,19 @@ def _board_counts(snapshot):
     return int(status.group(1)), int(status.group(2)), int(current.group(1)), int(history.group(1))
 
 
+def _counter_count_reached(browser, minimum):
+    """Probe helper: True once the counter reads the minimum despite a brief JS reset."""
+    try:
+        return browser.invoke_counter()['count'] >= minimum
+    except GuiFailure:
+        return False
+
+
 def _settled_invoke_count(browser):
     """Wait until the app stops issuing IPC so a local-only interaction can be measured."""
     previous = -1
     stable = 0
-    for _ in range(60):
+    for _ in range(120):
         current = browser.invoke_counter()['count']
         if current == previous:
             stable += 1
@@ -643,7 +695,7 @@ def _settled_invoke_count(browser):
             stable = 0
             previous = current
         time.sleep(0.25)
-    raise GuiFailure('android_board_search_counter_unavailable')
+    raise browser._counter_failure('android_board_search_counter_unsettle_timeout')
 
 
 def exercise_board_search(browser, approval, config):
@@ -658,8 +710,11 @@ def exercise_board_search(browser, approval, config):
         browser.click('#host-return-home')
         wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
         # The board refresh on return proves that the counter observes real app IPC.
-        if browser.invoke_counter()['count'] < 1:
-            raise GuiFailure('android_board_search_counter_unavailable')
+        try:
+            wait_for(lambda: _counter_count_reached(browser, 1), 'android_board_search_counter_no_ipc',
+                     timeout=15)
+        except GuiFailure:
+            raise browser._counter_failure('android_board_search_counter_no_ipc') from None
         baseline = _settled_invoke_count(browser)
         expected = {row['paneId']+'/'+row['terminalId'] for row in targets}
 
@@ -806,7 +861,7 @@ def exercise_device_impact_review(browser):
         # A second read must issue fresh catalog and device reads.
         before = browser.invoke_counter()['count']
         browser.click_named(DEVICE_REVIEW_SELECTOR,'刷新状态','android_device_impact_reread_invalid')
-        wait_for(lambda: browser.invoke_counter()['count'] - before >= 3, 'android_device_impact_reread_invalid', timeout=30)
+        wait_for(lambda: _counter_count_reached(browser, before + 3), 'android_device_impact_reread_invalid', timeout=30)
         reread_calls = browser.invoke_counter()['count'] - before
         reread = wait_for(lambda: _settled_device_review(browser), 'android_device_impact_reread_invalid', timeout=60)
         if _device_class(reread) != state:

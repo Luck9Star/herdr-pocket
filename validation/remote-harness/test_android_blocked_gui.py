@@ -159,8 +159,9 @@ class AndroidBoardAndDeviceGuards(unittest.TestCase):
         for code in ('android_board_search_state_invalid','android_board_search_count_mismatch',
                      'android_board_search_history_missing','android_board_search_native_call',
                      'android_board_search_reset_missing','android_board_search_clear_missing',
-                     'android_board_search_counter_unavailable','android_select_option_missing',
-                     'android_select_option_failed','android_device_impact_entry_missing',
+                     'android_board_search_counter_install_failed','android_board_search_counter_read_invalid',
+                     'android_board_search_counter_no_ipc','android_board_search_counter_unsettle_timeout',
+                     'android_select_option_missing','android_select_option_failed','android_device_impact_entry_missing',
                      'android_device_impact_status_invalid','android_device_impact_action_enabled',
                      'android_device_impact_reread_invalid','android_device_impact_entry_lost',
                      'android_device_impact_write_invoked'):

@@ -1,0 +1,85 @@
+{
+  "status": "incomplete-not-active",
+  "date": "2026-11-07",
+  "baseCommit": "98473a699a055006e60b8c5c92ecdd54a28c13d3",
+  "base": "pinned candidate after patches 0005/0006/0007",
+  "patchSha256": "691bf868941c0d072946d076f02a6cc39391832676ae0f752f5aa2f49748e108",
+  "files": [
+    {
+      "path": "ext/lwip/src/api/sockets.c",
+      "before": "8fd212ec7b89545f0111c063b3c40e33a63475131a0513f130d465c83c2609bb",
+      "after": "1b5845f4c22fa8963974bbef34fe97ac9895f8a34f57150f9024a53f5951c750"
+    },
+    {
+      "path": "ext/lwip/src/core/netif.c",
+      "before": "84c12e22fee886e757fb0fa6d7793987a901f73522f8dbbc47242eb772f6d00a",
+      "after": "1c8d308fcb3cc9b51bbc08206c9ea0668df915c6fbf24655735b6b0c9f920258"
+    },
+    {
+      "path": "ext/lwip/src/core/tcp.c",
+      "before": "172edcdb736bfe98d7ad8b9f582d9d048634d513adeb003919666c5294be71cb",
+      "after": "481b4010f40325a0dadf0ec57bc81af69b22faf12432e019a038f89a3f465c73"
+    },
+    {
+      "path": "ext/lwip/src/core/tcp_in.c",
+      "before": "98c3130c75c122ed0502b77b7ff20698d3df37fa587dbb5b427ab3ebf0e269d4",
+      "after": "7840c04efdab82ee05ab970be5706934c59b88ed564fbcd2e82e07413efe59b5"
+    },
+    {
+      "path": "ext/lwip/src/core/tcp_out.c",
+      "before": "894814e50ec242c1243f6b6049f16747ce150f9427f15dac937c23b3bd3a796e",
+      "after": "7932ce9888ee2c885e942bebe1c6289b870fd0dc380c480f221f4541dce544b1"
+    },
+    {
+      "path": "ext/lwip/src/include/lwip/ip.h",
+      "before": "9589862a8cd3d22ad06ac291231d4b0335cb15e2d0e5bcbd1f870808d9f85828",
+      "after": "d04a6df68e0a3197915bc444c08b8980d16d894e7b6c818c91893e49c89cdc0f"
+    },
+    {
+      "path": "ext/lwip/src/include/lwip/netif.h",
+      "before": "bed85f2bdd2b57cd90106cfcc4baca8a27cdf4051a595f35b6d9ba4ca7f9a5fa",
+      "after": "071bbb47d763267aa2e783c91d317e47ec0eb77a99d8e80c12cdc567a93e0868"
+    },
+    {
+      "path": "ext/lwip/src/include/lwip/priv/sockets_priv.h",
+      "before": "bd45590358b1a07481b7ddae7845e0d1c59bcf482ea48d9093638e0d11aafcc3",
+      "after": "6cf7e9e19a204ee5b2a58e2a1919ce8629f29e7d20e5b84c0468a67b741259d9"
+    },
+    {
+      "path": "ext/lwip/src/include/lwip/priv/tcp_priv.h",
+      "before": "547929dbf334d846444094ecb363680bf90320b198ac1e49027fda4049c07233",
+      "after": "56d41a05a7421e5d61521eed78a7ec17d632533882e8407dbfde7f801480bfe6"
+    },
+    {
+      "path": "include/hp_zt_bound.h",
+      "before": null,
+      "after": "5eb3d9803ff27dc247ba8b1aff64415e7f59bcf4d800fe724de96a963e2307be"
+    },
+    {
+      "path": "src/HpBoundRoutes.cpp",
+      "before": null,
+      "after": "077c0845bce54ad938b50dfdc218e874b0e90ec763ceeac624d9460bab442ad1"
+    },
+    {
+      "path": "src/HpBoundSockets.cpp",
+      "before": null,
+      "after": "c174f5e295fb25ba3f0007e478ea47c622eb84203a2aebc1a8b20a5d8c787522"
+    },
+    {
+      "path": "src/NodeService.cpp",
+      "before": "fab73354eac8e905e279abb2b518e400569891b9c8696fd734d4541ef7102adb",
+      "after": "fc8526a2fde7846316f75c43e5df68f833f2163bb7de38ee2dc8913a5fffc352"
+    },
+    {
+      "path": "src/VirtualTap.cpp",
+      "before": "cbf0e79a8fa7086f7be502bd403005e9b5356a48e3bcd16f878a6ab4e038893e",
+      "after": "172e66f62607e3baffcee71f5de922f89edb0820ac42baf2dfe19a2fc529115e"
+    },
+    {
+      "path": "src/VirtualTap.hpp",
+      "before": "3887342ebe4deaa04ca1baa5c8f74d79d5694842237d6df5d0dfa72d4f384843",
+      "after": "40ca26cb4a4e5d4ed6a7b6c8f0a60aa35920d1c0b198e3eced0c22f2e2f53515"
+    }
+  ],
+  "validation": "Historical v6 wire results predate later source changes; final draft not validated. Not listed in zerotier-candidate.json. Do not claim runnable node or mobile support."
+}

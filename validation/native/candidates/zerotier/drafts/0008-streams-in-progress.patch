@@ -1,0 +1,670 @@
+diff --git a/ext/lwip/src/api/sockets.c b/ext/lwip/src/api/sockets.c
+--- a/ext/lwip/src/api/sockets.c
++++ b/ext/lwip/src/api/sockets.c
+@@ -4160,3 +4160,62 @@
+ #endif /* LWIP_IPV6_MLD */
+ 
+ #endif /* LWIP_SOCKET */
++
++
++/* herdr-pocket private network/generation bind. Atomically choose the real
++ * route/source and bind the TCP PCB while the core lock excludes reconfigure. */
++#include "hp_zt_bound.h"
++int hp_zt_lwip_bind(int fd, uint64_t network, const uint8_t* bytes, uint32_t length, uint64_t* epoch)
++{
++  struct lwip_sock* sock = get_socket(fd);
++  ip_addr_t dest, source;
++  struct netif* n;
++  int result = HP_ZT_BOUND_ROUTE;
++  if (!sock) { return HP_ZT_BOUND_ERROR; }
++  if (length == 4) { IP_SET_TYPE_VAL(dest, IPADDR_TYPE_V4); memcpy(&ip_2_ip4(&dest)->addr, bytes, 4); }
++  else if (length == 16) { ip_addr_set_zero_ip6(&dest); memcpy(ip_2_ip6(&dest)->addr, bytes, 16); }
++  else { done_socket(sock); return HP_ZT_BOUND_ERROR; }
++  LOCK_TCPIP_CORE();
++  n = hp_zt_route_locked(network, &dest, &source);
++  if (n && NETCONNTYPE_GROUP(netconn_type(sock->conn)) == NETCONN_TCP && sock->conn->pcb.tcp) {
++    tcp_bind_netif(sock->conn->pcb.tcp, n);
++    if (tcp_bind(sock->conn->pcb.tcp, &source, 0) == ERR_OK) {
++      *epoch=n->hp_generation;
++      sock->hp_network=network; sock->hp_epoch=*epoch; sock->hp_index=netif_get_index(n); sock->hp_connected=0;
++      ip_addr_copy(sock->hp_dest,dest); ip_addr_copy(sock->hp_source,source);
++      result=HP_ZT_BOUND_OK;
++    } else { result=HP_ZT_BOUND_ERROR; }
++  }
++  UNLOCK_TCPIP_CORE();
++  done_socket(sock);
++  return result;
++}
++int hp_zt_lwip_state(int fd, uint64_t network, uint64_t epoch)
++{
++  struct lwip_sock* sock = get_socket(fd);
++  struct tcp_pcb* pcb;
++  struct netif* n;
++  ip_addr_t source;
++  int result=HP_ZT_BOUND_ERROR;
++  if (!sock) { return result; }
++  LOCK_TCPIP_CORE();
++  pcb=NETCONNTYPE_GROUP(netconn_type(sock->conn)) == NETCONN_TCP ? sock->conn->pcb.tcp : NULL;
++  n=hp_zt_route_locked(network,&sock->hp_dest,&source);
++  if (!n || !epoch || sock->hp_network!=network || sock->hp_epoch!=epoch ||
++      n->hp_generation!=epoch || netif_get_index(n)!=sock->hp_index ||
++      !ip_addr_cmp(&source,&sock->hp_source)) { result=HP_ZT_BOUND_ROUTE; }
++  else if (pcb && (pcb->hp_generation!=epoch || pcb->netif_idx!=sock->hp_index)) { result=HP_ZT_BOUND_ROUTE; }
++  else if (pcb && pcb->state == SYN_SENT) { result=HP_ZT_BOUND_AGAIN; }
++  else if (pcb && pcb->state >= ESTABLISHED) { sock->hp_connected=1; result=HP_ZT_BOUND_OK; }
++  else if (!pcb && sock->hp_connected) { result=HP_ZT_BOUND_OK; } /* recv reports EOF/reset. */
++  UNLOCK_TCPIP_CORE();
++  done_socket(sock);
++  return result;
++}
++
++/* Classify where lwIP's errno constants are defined. Host C++ headers can use
++ * different numeric values (e.g. Darwin EINPROGRESS=36 versus lwIP=115). */
++int hp_zt_lwip_again(void)
++{
++  return errno == EWOULDBLOCK || errno == EAGAIN || errno == EINPROGRESS;
++}
+diff --git a/ext/lwip/src/core/netif.c b/ext/lwip/src/core/netif.c
+--- a/ext/lwip/src/core/netif.c
++++ b/ext/lwip/src/core/netif.c
+@@ -439,10 +439,10 @@
+ }
+ 
+ static void
+-netif_do_ip_addr_changed(const ip_addr_t *old_addr, const ip_addr_t *new_addr)
++netif_do_ip_addr_changed(const ip_addr_t *old_addr, const ip_addr_t *new_addr, const struct netif *changed)
+ {
+ #if LWIP_TCP
+-  tcp_netif_ip_addr_changed(old_addr, new_addr);
++  tcp_netif_ip_addr_changed_scoped(old_addr, new_addr, changed);
+ #endif /* LWIP_TCP */
+ #if LWIP_UDP
+   udp_netif_ip_addr_changed(old_addr, new_addr);
+@@ -468,7 +468,7 @@
+     ip_addr_copy(*old_addr, *netif_ip_addr4(netif));
+ 
+     LWIP_DEBUGF(NETIF_DEBUG | LWIP_DBG_STATE, ("netif_set_ipaddr: netif address being changed\n"));
+-    netif_do_ip_addr_changed(old_addr, &new_addr);
++    netif_do_ip_addr_changed(old_addr, &new_addr, netif);
+ 
+     mib2_remove_ip4(netif);
+     mib2_remove_route_ip4(0, netif);
+@@ -750,7 +750,7 @@
+ 
+ #if LWIP_IPV4
+   if (!ip4_addr_isany_val(*netif_ip4_addr(netif))) {
+-    netif_do_ip_addr_changed(netif_ip_addr4(netif), NULL);
++    netif_do_ip_addr_changed(netif_ip_addr4(netif), NULL, netif);
+   }
+ 
+ #if LWIP_IGMP
+@@ -764,7 +764,7 @@
+ #if LWIP_IPV6
+   for (i = 0; i < LWIP_IPV6_NUM_ADDRESSES; i++) {
+     if (ip6_addr_isvalid(netif_ip6_addr_state(netif, i))) {
+-      netif_do_ip_addr_changed(netif_ip_addr6(netif, i), NULL);
++      netif_do_ip_addr_changed(netif_ip_addr6(netif, i), NULL, netif);
+     }
+   }
+ #if LWIP_IPV6_MLD
+@@ -1353,7 +1353,7 @@
+     ip6_addr_assign_zone(ip_2_ip6(&new_ipaddr), IP6_UNICAST, netif);
+ 
+     if (ip6_addr_isvalid(netif_ip6_addr_state(netif, addr_idx))) {
+-      netif_do_ip_addr_changed(netif_ip_addr6(netif, addr_idx), &new_ipaddr);
++      netif_do_ip_addr_changed(netif_ip_addr6(netif, addr_idx), &new_ipaddr, netif);
+     }
+     /* @todo: remove/readd mib2 ip6 entries? */
+ 
+@@ -1413,7 +1413,7 @@
+ 
+     if (old_valid && !new_valid) {
+       /* address about to be removed by setting invalid */
+-      netif_do_ip_addr_changed(netif_ip_addr6(netif, addr_idx), NULL);
++      netif_do_ip_addr_changed(netif_ip_addr6(netif, addr_idx), NULL, netif);
+       /* @todo: remove mib2 ip6 entries? */
+     }
+     netif->ip6_addr_state[addr_idx] = state;
+diff --git a/ext/lwip/src/core/tcp.c b/ext/lwip/src/core/tcp.c
+--- a/ext/lwip/src/core/tcp.c
++++ b/ext/lwip/src/core/tcp.c
+@@ -766,8 +766,10 @@
+   LWIP_ASSERT_CORE_LOCKED();
+   if (netif != NULL) {
+     pcb->netif_idx = netif_get_index(netif);
++    pcb->hp_generation = netif->hp_generation;
+   } else {
+     pcb->netif_idx = NETIF_NO_INDEX;
++    pcb->hp_generation = 0;
+   }
+ }
+ 
+@@ -890,7 +892,8 @@
+   lpcb->state = LISTEN;
+   lpcb->prio = pcb->prio;
+   lpcb->so_options = pcb->so_options;
+-  lpcb->netif_idx = NETIF_NO_INDEX;
++  lpcb->netif_idx = pcb->netif_idx;
++  lpcb->hp_generation = pcb->hp_generation;
+   lpcb->ttl = pcb->ttl;
+   lpcb->tos = pcb->tos;
+ #if LWIP_IPV4 && LWIP_IPV6
+@@ -1086,6 +1089,8 @@
+ 
+   if (pcb->netif_idx != NETIF_NO_INDEX) {
+     netif = netif_get_by_index(pcb->netif_idx);
++    if (pcb->hp_generation && (!netif || !netif->hp_ready ||
++        netif->hp_generation != pcb->hp_generation)) { netif = NULL; }
+   } else {
+     /* check if we have a route to the remote host */
+     netif = ip_route(&pcb->local_ip, &pcb->remote_ip);
+@@ -2300,7 +2305,7 @@
+ 
+ /** Helper function for tcp_netif_ip_addr_changed() that iterates a pcb list */
+ static void
+-tcp_netif_ip_addr_changed_pcblist(const ip_addr_t *old_addr, struct tcp_pcb *pcb_list)
++tcp_netif_ip_addr_changed_pcblist(const ip_addr_t *old_addr, struct tcp_pcb *pcb_list, const struct netif *changed)
+ {
+   struct tcp_pcb *pcb;
+   pcb = pcb_list;
+@@ -2310,6 +2315,7 @@
+   while (pcb != NULL) {
+     /* PCB bound to current local interface address? */
+     if (ip_addr_cmp(&pcb->local_ip, old_addr)
++        && (!changed || pcb->netif_idx == NETIF_NO_INDEX || pcb->netif_idx == netif_get_index(changed))
+ #if LWIP_AUTOIP
+         /* connections to link-local addresses must persist (RFC3927 ch. 1.9) */
+         && (!IP_IS_V4_VAL(pcb->local_ip) || !ip4_addr_islinklocal(ip_2_ip4(&pcb->local_ip)))
+@@ -2332,19 +2338,20 @@
+  * @param new_addr IP address of the netif after change or NULL if netif has been removed
+  */
+ void
+-tcp_netif_ip_addr_changed(const ip_addr_t *old_addr, const ip_addr_t *new_addr)
++tcp_netif_ip_addr_changed_scoped(const ip_addr_t *old_addr, const ip_addr_t *new_addr, const struct netif *changed)
+ {
+   struct tcp_pcb_listen *lpcb;
+ 
+   if (!ip_addr_isany(old_addr)) {
+-    tcp_netif_ip_addr_changed_pcblist(old_addr, tcp_active_pcbs);
+-    tcp_netif_ip_addr_changed_pcblist(old_addr, tcp_bound_pcbs);
++    tcp_netif_ip_addr_changed_pcblist(old_addr, tcp_active_pcbs, changed);
++    tcp_netif_ip_addr_changed_pcblist(old_addr, tcp_bound_pcbs, changed);
+ 
+     if (!ip_addr_isany(new_addr)) {
+       /* PCB bound to current local interface address? */
+       for (lpcb = tcp_listen_pcbs.listen_pcbs; lpcb != NULL; lpcb = lpcb->next) {
+         /* PCB bound to current local interface address? */
+-        if (ip_addr_cmp(&lpcb->local_ip, old_addr)) {
++        if (ip_addr_cmp(&lpcb->local_ip, old_addr) &&
++            (!changed || lpcb->netif_idx == NETIF_NO_INDEX || lpcb->netif_idx == netif_get_index(changed))) {
+           /* The PCB is listening to the old ipaddr and
+             * is set to listen to the new one instead */
+           ip_addr_copy(lpcb->local_ip, *new_addr);
+@@ -2352,6 +2359,13 @@
+       }
+     }
+   }
++}
++
++/* Compatibility for other raw lwIP users without an interface identity. */
++void
++tcp_netif_ip_addr_changed(const ip_addr_t *old_addr, const ip_addr_t *new_addr)
++{
++  tcp_netif_ip_addr_changed_scoped(old_addr,new_addr,NULL);
+ }
+ 
+ const char *
+diff --git a/ext/lwip/src/core/tcp_in.c b/ext/lwip/src/core/tcp_in.c
+--- a/ext/lwip/src/core/tcp_in.c
++++ b/ext/lwip/src/core/tcp_in.c
+@@ -254,7 +254,9 @@
+ 
+     /* check if PCB is bound to specific netif */
+     if ((pcb->netif_idx != NETIF_NO_INDEX) &&
+-        (pcb->netif_idx != netif_get_index(ip_data.current_input_netif))) {
++        (pcb->netif_idx != netif_get_index(ip_data.current_input_netif) ||
++          (pcb->hp_generation && (!ip_data.current_input_netif->hp_ready ||
++           pcb->hp_generation != ip_data.current_input_netif->hp_generation)))) {
+       prev = pcb;
+       continue;
+     }
+@@ -288,7 +290,9 @@
+ 
+       /* check if PCB is bound to specific netif */
+       if ((pcb->netif_idx != NETIF_NO_INDEX) &&
+-          (pcb->netif_idx != netif_get_index(ip_data.current_input_netif))) {
++          (pcb->netif_idx != netif_get_index(ip_data.current_input_netif) ||
++          (pcb->hp_generation && (!ip_data.current_input_netif->hp_ready ||
++           pcb->hp_generation != ip_data.current_input_netif->hp_generation)))) {
+         continue;
+       }
+ 
+@@ -318,7 +322,9 @@
+     for (lpcb = tcp_listen_pcbs.listen_pcbs; lpcb != NULL; lpcb = lpcb->next) {
+       /* check if PCB is bound to specific netif */
+       if ((lpcb->netif_idx != NETIF_NO_INDEX) &&
+-          (lpcb->netif_idx != netif_get_index(ip_data.current_input_netif))) {
++          (lpcb->netif_idx != netif_get_index(ip_data.current_input_netif) ||
++          (lpcb->hp_generation && (!ip_data.current_input_netif->hp_ready ||
++           lpcb->hp_generation != ip_data.current_input_netif->hp_generation)))) {
+         prev = (struct tcp_pcb *)lpcb;
+         continue;
+       }
+@@ -576,8 +582,11 @@
+     if (!(TCPH_FLAGS(tcphdr) & TCP_RST)) {
+       TCP_STATS_INC(tcp.proterr);
+       TCP_STATS_INC(tcp.drop);
++      /* No unbound RST may escape through another overlapping network. */
++      if (!ip_data.current_input_netif->hp_network) {
+       tcp_rst(NULL, ackno, seqno + tcplen, ip_current_dest_addr(),
+               ip_current_src_addr(), tcphdr->dest, tcphdr->src);
++      }
+     }
+     pbuf_free(p);
+   }
+@@ -693,6 +702,7 @@
+     /* inherit socket options */
+     npcb->so_options = pcb->so_options & SOF_INHERITED;
+     npcb->netif_idx = pcb->netif_idx;
++    npcb->hp_generation = pcb->hp_generation;
+     /* Register the new PCB so that we can begin receiving segments
+        for it. */
+     TCP_REG_ACTIVE(npcb);
+diff --git a/ext/lwip/src/core/tcp_out.c b/ext/lwip/src/core/tcp_out.c
+--- a/ext/lwip/src/core/tcp_out.c
++++ b/ext/lwip/src/core/tcp_out.c
+@@ -134,7 +134,11 @@
+   LWIP_UNUSED_ARG(src); /* in case IPv4-only and source-based routing is disabled */
+ 
+   if ((pcb != NULL) && (pcb->netif_idx != NETIF_NO_INDEX)) {
+-    return netif_get_by_index(pcb->netif_idx);
++    struct netif *bound = netif_get_by_index(pcb->netif_idx);
++    /* Includes retransmissions, ACKs, keepalives and FIN, not just user writes. */
++    if (pcb->hp_generation && (!bound || !bound->hp_ready ||
++        bound->hp_generation != pcb->hp_generation)) { return NULL; }
++    return bound;
+   } else {
+     return ip_route(src, dst);
+   }
+diff --git a/ext/lwip/src/include/lwip/ip.h b/ext/lwip/src/include/lwip/ip.h
+--- a/ext/lwip/src/include/lwip/ip.h
++++ b/ext/lwip/src/include/lwip/ip.h
+@@ -79,6 +79,7 @@
+   ip_addr_t remote_ip;                     \
+   /* Bound netif index */                  \
+   u8_t netif_idx;                          \
++  u64_t hp_generation;                     \
+   /* Socket options */                     \
+   u8_t so_options;                         \
+   /* Type Of Service */                    \
+diff --git a/ext/lwip/src/include/lwip/netif.h b/ext/lwip/src/include/lwip/netif.h
+--- a/ext/lwip/src/include/lwip/netif.h
++++ b/ext/lwip/src/include/lwip/netif.h
+@@ -257,7 +257,17 @@
+ /** Generic data structure used for all lwIP network interfaces.
+  *  The following fields should be filled in by the initialization
+  *  function for the device driver: hwaddr_len, hwaddr[], mtu, flags */
++struct hp_zt_gateway4 { u32_t network, mask, via; u8_t bits; };
+ struct netif {
++  /* herdr-pocket: exact tap/config epoch, never an address/8-bit-index identity. */
++  u64_t hp_generation;
++  u64_t hp_network;
++  u8_t hp_ready;
++  /* Fixed libzt supports one controller-assigned source per family. */
++  u8_t hp_prefix6;
++  u8_t hp_source6[16];
++  u8_t hp_route_count;
++  struct hp_zt_gateway4 hp_routes[128];
+ #if !LWIP_SINGLE_NETIF
+   /** pointer to next in linked list */
+   struct netif *next;
+diff --git a/ext/lwip/src/include/lwip/priv/sockets_priv.h b/ext/lwip/src/include/lwip/priv/sockets_priv.h
+--- a/ext/lwip/src/include/lwip/priv/sockets_priv.h
++++ b/ext/lwip/src/include/lwip/priv/sockets_priv.h
+@@ -65,6 +65,10 @@
+ 
+ /** Contains all internal pointers and states used for a socket */
+ struct lwip_sock {
++  /* Immutable original bind, retained through peer EOF after pcb retirement. */
++  u64_t hp_network, hp_epoch;
++  ip_addr_t hp_dest, hp_source;
++  u8_t hp_index, hp_connected;
+   /** sockets currently are built on netconns, each socket has one netconn */
+   struct netconn *conn;
+   /** data that was left from the previous read */
+diff --git a/ext/lwip/src/include/lwip/priv/tcp_priv.h b/ext/lwip/src/include/lwip/priv/tcp_priv.h
+--- a/ext/lwip/src/include/lwip/priv/tcp_priv.h
++++ b/ext/lwip/src/include/lwip/priv/tcp_priv.h
+@@ -505,6 +505,7 @@
+ void tcp_timer_needed(void);
+ 
+ void tcp_netif_ip_addr_changed(const ip_addr_t* old_addr, const ip_addr_t* new_addr);
++void tcp_netif_ip_addr_changed_scoped(const ip_addr_t* old_addr, const ip_addr_t* new_addr, const struct netif* changed);
+ 
+ #if TCP_QUEUE_OOSEQ
+ void tcp_free_ooseq(struct tcp_pcb *pcb);
+diff --git a/include/hp_zt_bound.h b/include/hp_zt_bound.h
+new file mode 100644
+--- /dev/null
++++ b/include/hp_zt_bound.h
+@@ -0,0 +1,27 @@
++/* herdr-pocket private pinned-libzt boundary; numeric, network-bound TCP only. */
++#ifndef HP_ZT_BOUND_H
++#define HP_ZT_BOUND_H
++#include <stddef.h>
++#include <stdint.h>
++#ifdef __cplusplus
++extern "C" {
++#endif
++enum { HP_ZT_BOUND_OK=0, HP_ZT_BOUND_AGAIN=1, HP_ZT_BOUND_ERROR=2, HP_ZT_BOUND_ROUTE=3 };
++int hp_zt_bound_open(uint64_t network, const uint8_t* ip, uint32_t length,
++    uint16_t port, int* fd, uint64_t* epoch);
++int hp_zt_bound_state(int fd, uint64_t network, uint64_t epoch);
++int hp_zt_bound_read(int fd, uint8_t* data, uint32_t cap, uint32_t* count);
++int hp_zt_bound_write(int fd, const uint8_t* data, uint32_t length, uint32_t* count);
++int hp_zt_bound_shutdown_write(int fd);
++int hp_zt_bound_close(int fd);
++/* Internal only, called with lwIP socket references and the core lock. */
++struct netif;
++struct ip_addr;
++struct netif* hp_zt_route_locked(uint64_t network, const struct ip_addr* dest, struct ip_addr* source);
++int hp_zt_lwip_bind(int fd, uint64_t network, const uint8_t* ip, uint32_t length, uint64_t* epoch);
++int hp_zt_lwip_state(int fd, uint64_t network, uint64_t epoch);
++int hp_zt_lwip_again(void);
++#ifdef __cplusplus
++}
++#endif
++#endif
+diff --git a/src/HpBoundRoutes.cpp b/src/HpBoundRoutes.cpp
+new file mode 100644
+--- /dev/null
++++ b/src/HpBoundRoutes.cpp
+@@ -0,0 +1,65 @@
++// herdr-pocket: caller holds the lwIP core lock. No service/tap pointer escapes.
++#include "hp_zt_bound.h"
++#include "lwip/netif.h"
++#include "lwip/ip.h"
++#include <algorithm>
++#include <cstring>
++static bool hp_reaches4(struct netif* n,const ip4_addr_t* dest)
++{
++    if (ip4_addr_isany_val(*netif_ip4_addr(n))) { return false; }
++    if (ip4_addr_netcmp(dest,netif_ip4_addr(n),netif_ip4_netmask(n))) { return true; }
++    const struct hp_zt_gateway4* best=NULL;
++    for (unsigned i=0;i<n->hp_route_count && i<128;++i) {
++        const struct hp_zt_gateway4* route=&n->hp_routes[i];
++        if (route->bits>32 || (ip4_addr_get_u32(dest)&route->mask)!=route->network) { continue; }
++        // Match the production gateway hook: first of equally specific routes.
++        if (!best || route->bits>best->bits) { best=route; }
++    }
++    if (!best) { return false; }
++    ip4_addr_t via; ip4_addr_set_u32(&via,best->via);
++    return !ip4_addr_isany_val(via) && ip4_addr_netcmp(&via,netif_ip4_addr(n),netif_ip4_netmask(n));
++}
++extern "C" struct netif* hp_zt_route_locked(uint64_t network, const ip_addr_t* dest, ip_addr_t* source)
++{
++    struct netif* found = NULL;
++    struct netif* n;
++    NETIF_FOREACH(n) {
++        if (!n->state || !n->hp_ready || !n->hp_generation || n->hp_network != network ||
++            !netif_is_up(n) || !netif_is_link_up(n)) { continue; }
++        bool reaches = false;
++        ip_addr_t local;
++        if (IP_IS_V4(dest) && n->name[0] == '4') {
++            const uint32_t host = lwip_ntohl(ip4_addr_get_u32(ip_2_ip4(dest)));
++            if (!host || (host >> 24) == 127 || (host >> 28) >= 14) { return NULL; }
++            if (!ip4_addr_isbroadcast(ip_2_ip4(dest), n) && hp_reaches4(n, ip_2_ip4(dest))) {
++                ip_addr_copy_from_ip4(local, *netif_ip4_addr(n));
++                reaches = true;
++            }
++        } else if (IP_IS_V6(dest) && n->name[0] == '6') {
++            const ip6_addr_t* remote = ip_2_ip6(dest);
++            if (ip6_addr_isany(remote) || ip6_addr_isloopback(remote) ||
++                ip6_addr_islinklocal(remote) || ip6_addr_ismulticast(remote) ||
++                ip6_addr_isipv4mappedipv6(remote) || !n->hp_prefix6 || n->hp_prefix6 > 128) { return NULL; }
++            for (int i=0; i<LWIP_IPV6_NUM_ADDRESSES; ++i) {
++                const ip6_addr_t* candidate = netif_ip6_addr(n,i);
++                if (!ip6_addr_isvalid(netif_ip6_addr_state(n,i)) || ip6_addr_isany(candidate) ||
++                    ip6_addr_islinklocal(candidate) || std::memcmp(candidate->addr,n->hp_source6,16)!=0) { continue; }
++                const uint8_t* a = reinterpret_cast<const uint8_t*>(candidate->addr);
++                const uint8_t* b = reinterpret_cast<const uint8_t*>(remote->addr);
++                unsigned bits=n->hp_prefix6; bool same=true;
++                for (unsigned j=0; bits && j<16; ++j) {
++                    const unsigned take=std::min(bits,8u);
++                    const uint8_t mask=static_cast<uint8_t>(0xffu << (8-take));
++                    if ((a[j]&mask)!=(b[j]&mask)) { same=false; break; }
++                    bits-=take;
++                }
++                if (same) { ip_addr_copy_from_ip6(local,*candidate); reaches=true; break; }
++            }
++        }
++        if (reaches) {
++            if (found) { return NULL; } // Ambiguous same-network family is refused.
++            found=n; ip_addr_copy(*source,local);
++        }
++    }
++    return found;
++}
+diff --git a/src/HpBoundSockets.cpp b/src/HpBoundSockets.cpp
+new file mode 100644
+--- /dev/null
++++ b/src/HpBoundSockets.cpp
+@@ -0,0 +1,56 @@
++// herdr-pocket pinned lwIP socket boundary. No system socket/DNS fallback.
++#include "hp_zt_bound.h"
++#include "lwip/sockets.h"
++#include <mutex>
++#include <cstring>
++namespace {
++// libzt's errno can be process-global. Serialize only individual nonblocking
++// socket calls and their errno capture, never a peer wait or manager control.
++std::mutex& io_mutex() { static std::mutex m; return m; }
++int outcome(int value) {
++    if (value >= 0) { return HP_ZT_BOUND_OK; }
++    return hp_zt_lwip_again() ? HP_ZT_BOUND_AGAIN : HP_ZT_BOUND_ERROR;
++}
++}
++extern "C" {
++int hp_zt_bound_open(uint64_t network, const uint8_t* ip, uint32_t length,
++                    uint16_t port, int* fd, uint64_t* epoch) {
++    *fd=-1; *epoch=0;
++    if (!ip || (length!=4 && length!=16) || !port) { return HP_ZT_BOUND_ERROR; }
++    std::lock_guard<std::mutex> lock(io_mutex());
++    *fd=lwip_socket(length==4 ? AF_INET : AF_INET6, SOCK_STREAM, IPPROTO_TCP);
++    if (*fd<0) { return HP_ZT_BOUND_ERROR; }
++    if (lwip_fcntl(*fd,F_SETFL,O_NONBLOCK)!=0) { return HP_ZT_BOUND_ERROR; }
++    int result=hp_zt_lwip_bind(*fd,network,ip,length,epoch);
++    if (result!=HP_ZT_BOUND_OK) { return result; }
++    if (length==4) {
++        struct sockaddr_in address={}; address.sin_len=sizeof(address); address.sin_family=AF_INET;
++        address.sin_port=lwip_htons(port); std::memcpy(&address.sin_addr.s_addr,ip,4);
++        return outcome(lwip_connect(*fd,reinterpret_cast<const struct sockaddr*>(&address),sizeof(address)));
++    }
++    struct sockaddr_in6 address={}; address.sin6_len=sizeof(address); address.sin6_family=AF_INET6;
++    address.sin6_port=lwip_htons(port); std::memcpy(address.sin6_addr.un.u32_addr,ip,16);
++    return outcome(lwip_connect(*fd,reinterpret_cast<const struct sockaddr*>(&address),sizeof(address)));
++}
++int hp_zt_bound_state(int fd,uint64_t network,uint64_t epoch) {
++    std::lock_guard<std::mutex> lock(io_mutex()); return hp_zt_lwip_state(fd,network,epoch);
++}
++int hp_zt_bound_read(int fd,uint8_t* data,uint32_t cap,uint32_t* count) {
++    std::lock_guard<std::mutex> lock(io_mutex()); *count=0;
++    const int value=static_cast<int>(lwip_recv(fd,data,cap,MSG_DONTWAIT));
++    if (value>=0) { *count=static_cast<uint32_t>(value); }
++    return outcome(value);
++}
++int hp_zt_bound_write(int fd,const uint8_t* data,uint32_t length,uint32_t* count) {
++    std::lock_guard<std::mutex> lock(io_mutex()); *count=0;
++    const int value=static_cast<int>(lwip_send(fd,data,length,MSG_DONTWAIT));
++    if (value>=0) { *count=static_cast<uint32_t>(value); }
++    return outcome(value);
++}
++int hp_zt_bound_shutdown_write(int fd) {
++    std::lock_guard<std::mutex> lock(io_mutex()); return outcome(lwip_shutdown(fd,SHUT_WR));
++}
++int hp_zt_bound_close(int fd) {
++    std::lock_guard<std::mutex> lock(io_mutex()); return outcome(lwip_close(fd));
++}
++}
+diff --git a/src/NodeService.cpp b/src/NodeService.cpp
+--- a/src/NodeService.cpp
++++ b/src/NodeService.cpp
+@@ -980,6 +980,7 @@
+     Mutex::Lock _l(_nets_m);
+     NetworkState& n = _nets[net_id];
+ 
++    bool hp_changed = false;
+     switch (op) {
+         case ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_UP:
+             if (! n.tap) {
+@@ -997,10 +998,15 @@
+             // After setting up tap, fall through to CONFIG_UPDATE since we
+             // also want to do this...
+         case ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_CONFIG_UPDATE:
++            // Fence old TCP PCBs BEFORE changing any address/route/MTU/status.
++            // A changed config can never silently retarget an existing stream.
++            hp_changed = memcmp(&(n.config), nwc, sizeof(ZT_VirtualNetworkConfig)) != 0;
++            if (n.tap && hp_changed) { n.tap->hpConfigure(false); }
+             memcpy(&(n.config), nwc, sizeof(ZT_VirtualNetworkConfig));
+             if (n.tap) {   // sanity check
+                 syncManagedStuff(n);
+                 n.tap->setMtu(nwc->mtu);
++                if (hp_changed) { n.tap->hpConfigure(nwc->status == ZT_NETWORK_STATUS_OK); }
+             }
+             else {
+                 _nets.erase(net_id);
+diff --git a/src/VirtualTap.cpp b/src/VirtualTap.cpp
+--- a/src/VirtualTap.cpp
++++ b/src/VirtualTap.cpp
+@@ -118,8 +118,22 @@
+ 
+ void VirtualTap::setGatewayRoutes4(const std::vector<GatewayRoute4>& routes)
+ {
+-    Mutex::Lock _l(_gatewayRoutes4_m);
+-    _gatewayRoutes4 = routes;
++    LOCK_TCPIP_CORE();
++    {
++        Mutex::Lock _l(_gatewayRoutes4_m);
++        _gatewayRoutes4 = routes;
++        if (netif4) {
++            struct netif* n=static_cast<struct netif*>(netif4);
++            n->hp_route_count=static_cast<u8_t>(std::min(routes.size(),size_t(128)));
++            for (unsigned i=0;i<n->hp_route_count;++i) {
++                n->hp_routes[i].network=routes[i].network;
++                n->hp_routes[i].mask=routes[i].mask;
++                n->hp_routes[i].via=routes[i].via;
++                n->hp_routes[i].bits=static_cast<u8_t>(routes[i].bits);
++            }
++        }
++    }
++    UNLOCK_TCPIP_CORE();
+ }
+ 
+ bool VirtualTap::gatewayFor4(uint32_t dest, uint32_t* via, unsigned int* bits)
+@@ -144,9 +158,31 @@
+     _lastConfigUpdateTime = lastConfigUpdateTime;
+ }
+ 
++// Only accessed with the lwIP core lock. Exhaustion fails closed forever.
++static uint64_t hp_next_epoch()
++{
++    static uint64_t epoch = 0;
++    if (epoch == UINT64_MAX) { return 0; }
++    return ++epoch;
++}
++
++void VirtualTap::hpConfigure(bool ready)
++{
++    LOCK_TCPIP_CORE();
++    _hpConfigReady = ready;
++    for (void* ptr : {netif4, netif6}) {
++        if (!ptr) { continue; }
++        struct netif* n = static_cast<struct netif*>(ptr);
++        n->hp_generation = hp_next_epoch();
++        n->hp_ready = ready && _enabled && n->hp_generation;
++    }
++    UNLOCK_TCPIP_CORE();
++}
++
+ void VirtualTap::setEnabled(bool en)
+ {
+     _enabled = en;
++    hpConfigure(_hpConfigReady);
+ }
+ 
+ bool VirtualTap::enabled() const
+@@ -406,6 +442,8 @@
+     }
+     struct netif* n = (struct netif*)netif;
+     LOCK_TCPIP_CORE();
++    n->hp_ready = 0;
++    n->hp_generation = hp_next_epoch();
+     netif_remove(n);
+     netif_set_down(n);
+     netif_set_link_down(n);
+@@ -531,6 +569,12 @@
+     }
+     // Called from core, no need to lock
+     VirtualTap* tap = (VirtualTap*)(n->state);
++    n->hp_network = tap->_net_id;
++    n->hp_generation = hp_next_epoch();
++    n->hp_ready = tap->_hpConfigReady && tap->_enabled && n->hp_generation;
++    n->hp_prefix6 = 0;
++    memset(n->hp_source6,0,sizeof(n->hp_source6));
++    n->hp_route_count = 0;
+     n->hwaddr_len = 6;
+     n->name[0] = '4';
+     n->name[1] = 'a' + netifCount;
+@@ -551,6 +595,12 @@
+     }
+     n->hwaddr_len = sizeof(n->hwaddr);
+     VirtualTap* tap = (VirtualTap*)(n->state);
++    n->hp_network = tap->_net_id;
++    n->hp_generation = hp_next_epoch();
++    n->hp_ready = tap->_hpConfigReady && tap->_enabled && n->hp_generation;
++    n->hp_prefix6 = 0;
++    memset(n->hp_source6,0,sizeof(n->hp_source6));
++    n->hp_route_count = 0;
+     tap->_mac.copyTo(n->hwaddr, n->hwaddr_len);
+     // Called from core, no need to lock
+     n->hwaddr_len = 6;
+@@ -613,6 +663,9 @@
+         static ip6_addr_t ip6;
+         memcpy(&(ip6.addr), ip.rawIpData(), sizeof(ip6.addr));
+         LOCK_TCPIP_CORE();
++        // removeIp unlinks and clears state but intentionally retains storage
++        // for queued lwIP references. Re-register that exact storage on re-add.
++        if (!isNewNetif && !n->state) { isNewNetif=true; }
+         if (isNewNetif) {
+             vtap->netif6 = (void*)n;
+             
+@@ -636,6 +689,11 @@
+             netif_set_up(n);
+             netif_set_default(n);
+         }
++        n->hp_generation = hp_next_epoch();
++        n->hp_ready = vtap->_hpConfigReady && vtap->_enabled && n->hp_generation;
++        memcpy(n->hp_source6,ip6.addr,16);
++        const unsigned hp_prefix=ip.netmaskBits();
++        n->hp_prefix6 = static_cast<u8_t>(hp_prefix<=128 ? hp_prefix : 0);
+         netif_add_ip6_address(n, &ip6, NULL);
+         n->output_ip6 = ethip6_output;
+         UNLOCK_TCPIP_CORE();
+@@ -785,3 +843,5 @@
+     unsigned int bits = 0;
+     return zts_gateway_route4(n, dest, &gw, &bits) ? &gw : NULL;
+ }
++
++
+diff --git a/src/VirtualTap.hpp b/src/VirtualTap.hpp
+--- a/src/VirtualTap.hpp
++++ b/src/VirtualTap.hpp
+@@ -76,6 +76,8 @@
+     ~VirtualTap();
+ 
+     void setEnabled(bool en);
++    void hpConfigure(bool ready);
++    bool _hpConfigReady = false;
+     bool enabled() const;
+ 
+     /**

@@ -72,8 +72,9 @@ javac -Xlint:all,-options -Werror -source 11 -target 11 -classpath "$jar:$tmp/cl
     || { echo 'instrumented sources failed to compile' >&2; exit 1; }
 
 # 2. Package a self-targeting instrumented APK without Gradle.
+mkdir -p "$tmp/dex"
 java -cp "$build_tools/lib/d8.jar" com.android.tools.r8.D8 --lib "$jar" --min-api 35 \
-    --output "$tmp/dex" "$tmp/classes" || { echo 'dexing failed' >&2; exit 1; }
+    --output "$tmp/dex" $(find "$tmp/classes" -name '*.class') || { echo 'dexing failed' >&2; exit 1; }
 "$build_tools/aapt2" link -o "$tmp/base.apk" -I "$jar" \
     --manifest "$here/tests/instrumented/AndroidManifest.xml" \
     --min-sdk-version 35 --target-sdk-version 35 || { echo 'aapt2 link failed' >&2; exit 1; }

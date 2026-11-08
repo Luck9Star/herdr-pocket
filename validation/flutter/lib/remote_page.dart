@@ -352,7 +352,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) stop('应用已暂停，连接已取消；请重新核验后主动连接');
+    // Android reports a short `inactive` for foreground overlays (notification
+    // shade, permission dialogs, split-screen handles); only states that truly
+    // leave the foreground revoke the connection, so `inactive` alone is spared.
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      stop('应用已暂停，连接已取消；请重新核验后主动连接');
+    }
   }
   void stop([String message = '已取消；不会重连或发送输入']) {
     showingFontDiagnostics = false;

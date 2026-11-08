@@ -300,6 +300,39 @@ void main() {
     expect(legacy.observeCommand('term_abcd'),isNot(contains('resize')));
     expect(stream.observeCommand('term_abcd'),isNot(contains('resize')));
   });
+  test('channel retire budget stays two seconds by default and widens per config', () {
+    final base = RemoteConfig.fromJson(fixtureConfig());
+    expect(base.channelRetireTimeout,const Duration(seconds:2));
+    final widened = base.withChannelRetireTimeout(const Duration(seconds:8));
+    expect(widened.channelRetireTimeout,const Duration(seconds:8));
+    expect(widened.host,base.host); expect(widened.port,base.port);
+    expect(widened.socketPath,base.socketPath); expect(widened.session,base.session);
+    expect(widened.paneId,base.paneId); expect(widened.expectedFingerprint,base.expectedFingerprint);
+    expect(widened.observationCols,base.observationCols); expect(widened.observationRows,base.observationRows);
+    expect(widened.withObservationCanvas(160,50).channelRetireTimeout,const Duration(seconds:8));
+    expect(base.withObservationCanvas(160,50).channelRetireTimeout,const Duration(seconds:2));
+    expect(() => base.withChannelRetireTimeout(Duration.zero),throwsA(failure('invalid_config')));
+  });
+  test('a missed observation channel CLOSE deadline still fails the connection closed', () {
+    final evidence = RemoteEvidence();
+    expect(recordChannelRetireMiss(evidence,RemoteChannelRole.observation),isTrue);
+    expect(evidence.channelRetireFailures,['observation']);
+    expect(evidence.toReport('case',true)['channelRetireFailures'],['observation']);
+  });
+  test('watch, snapshot and input CLOSE misses retire only that channel and stay bounded in evidence', () {
+    for (final role in [RemoteChannelRole.watch,RemoteChannelRole.snapshot,RemoteChannelRole.input]) {
+      final evidence = RemoteEvidence();
+      expect(recordChannelRetireMiss(evidence,role),isFalse);
+      expect(evidence.channelRetireFailures,[role.name]);
+      expect(evidence.toReport('case',true)['channelRetireFailures'],[role.name]);
+    }
+    final evidence = RemoteEvidence();
+    for (final role in [RemoteChannelRole.watch,RemoteChannelRole.watch,RemoteChannelRole.input,RemoteChannelRole.observation]) {
+      recordChannelRetireMiss(evidence,role);
+    }
+    expect(evidence.channelRetireFailures,['watch','input','observation']);
+    expect(evidence.toReport('case',true)['channelRetireFailures'],['input','observation','watch']);
+  });
   test('private key single-line input reconstructs only OpenSSH PEM in memory', () {
     final pem = fixtureConfig()['privateKeyPem'] as String;
     final compact = pem.replaceAll('\n','');

@@ -15,12 +15,16 @@ String shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 class RemoteConfig {
   RemoteConfig._(this.host, this.port, this.username, this.expectedHostKey,
     this.privateKeyPem, this.socketPath, this.herdrPath, this.session, this.paneId,
-    this.expectedFingerprint, [this.deviceIdentity,this.observationCols=80,this.observationRows=24]);
+    this.expectedFingerprint, [this.deviceIdentity,this.observationCols=80,this.observationRows=24,
+    this.channelRetireTimeout=const Duration(seconds:2)]);
   final String host, username, expectedHostKey, privateKeyPem, socketPath, herdrPath, session, paneId, expectedFingerprint;
   final int port;
   final SSHIdentity? deviceIdentity;
   // Per-observation rendering preference; never serialized into host identity.
   final int observationCols,observationRows;
+  // Budget the adapter waits for a retired channel's peer CLOSE; never
+  // serialized into host identity. Slow mobile links may widen the default.
+  final Duration channelRetireTimeout;
   static const fields = {'schemaVersion','host','port','username','expectedHostKey',
     'privateKeyPem','socketPath','herdrPath','session','paneId','reviewConfirmed'};
 
@@ -81,7 +85,15 @@ class RemoteConfig {
   RemoteConfig withObservationCanvas(int cols,int rows) {
     if (!validRemoteFrameGeometry(cols,rows)) throw const RemoteFailure('invalid_config');
     return RemoteConfig._(host,port,username,expectedHostKey,privateKeyPem,socketPath,
-      herdrPath,session,paneId,expectedFingerprint,deviceIdentity,cols,rows);
+      herdrPath,session,paneId,expectedFingerprint,deviceIdentity,cols,rows,channelRetireTimeout);
+  }
+
+  /// Widens only the peer-CLOSE wait used when retiring channels; every
+  /// reviewed identity field and the rendering canvas stay unchanged.
+  RemoteConfig withChannelRetireTimeout(Duration timeout) {
+    if (timeout <= Duration.zero) throw const RemoteFailure('invalid_config');
+    return RemoteConfig._(host,port,username,expectedHostKey,privateKeyPem,socketPath,
+      herdrPath,session,paneId,expectedFingerprint,deviceIdentity,observationCols,observationRows,timeout);
   }
 
   String get configRoot {
@@ -100,6 +112,11 @@ class RemoteConfig {
 
 }
 
+/// Retiring a channel waits for its peer CLOSE. Only the observation exec's
+/// CLOSE doubles as the shared SSH transport's liveness proof; the other
+/// channels are transient forwards that retire alone when CLOSE is missed.
+enum RemoteChannelRole { observation, watch, snapshot, input }
+
 class RemoteEvidence {
   bool hostKeyChecked = false, hostKeyMatched = false, authStarted = false;
   bool snapshotReceived = false, fullFrameReceived = false;
@@ -107,6 +124,8 @@ class RemoteEvidence {
   int frameCount = 0, deltaFrames = 0, paneCount = 0, connectionCount = 0, bufferHighWaterBytes = 0;
   int? lastSeq;
   String? errorCode;
+  // Which channel roles missed their CLOSE deadline; bounded to the enum.
+  final Set<String> channelRetireFailures = {};
   // Bounded progress only; never contains an endpoint, frame, or input.
   String observationPhase = 'idle';
   Map<String,Object?> toReport(String testCase, bool passed) => {
@@ -117,7 +136,16 @@ class RemoteEvidence {
     'lateEventsIgnored':lateEventsIgnored,'errorCode':errorCode,
     'frameCount':frameCount,'deltaFrames':deltaFrames,'lastSeq':lastSeq,'paneCount':paneCount,
     'connectionCount':connectionCount,'bufferHighWaterBytes':bufferHighWaterBytes,
+    'channelRetireFailures':channelRetireFailures.toList()..sort(),
   };
+}
+
+/// Records a missed CLOSE deadline for `role`. Returns whether the miss
+/// invalidates the whole connection: true only for the observation channel
+/// (fail closed); watch, snapshot and input channels retire alone.
+bool recordChannelRetireMiss(RemoteEvidence evidence, RemoteChannelRole role) {
+  evidence.channelRetireFailures.add(role.name);
+  return role == RemoteChannelRole.observation;
 }
 
 class RemoteSnapshot {
@@ -555,7 +583,7 @@ class RemoteReadOnlyAdapter {
     }
   }
   Future<T> _openChannel<T extends Object>(_Attempt a,Future<T> Function() open,void Function(T) destroy,
-      {bool input=false,bool observation=false,bool watch=false}) async {
+      {bool input=false,bool observation=false,bool watch=false,required RemoteChannelRole role}) async {
     final tracker = a.channels;
     if (tracker == null) throw const RemoteFailure('connection_failed');
     final epoch = a.observationEpoch, watchEpoch = a.watchEpoch;
@@ -584,8 +612,8 @@ class RemoteReadOnlyAdapter {
             a.lateChannelDestroyFailed = true; _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
           }
           if (ticket != null) {
-            unawaited(tracker.waitTicket(ticket).timeout(const Duration(seconds:2)).catchError((Object _) {
-              if (_valid(a)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
+            unawaited(tracker.waitTicket(ticket).timeout(_channelRetireBudget(a)).catchError((Object _) {
+              if (_valid(a) && recordChannelRetireMiss(a.evidence,role)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
             }));
           }
           throw const RemoteFailure('cancelled');
@@ -608,8 +636,8 @@ class RemoteReadOnlyAdapter {
           }
           if (ticket == null) { _cleanupFailed(a,const RemoteFailure('channel_identity')); }
           else {
-            unawaited(tracker.waitTicket(ticket).timeout(const Duration(seconds:2)).catchError((Object _) {
-              if (_valid(a)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
+            unawaited(tracker.waitTicket(ticket).timeout(_channelRetireBudget(a)).catchError((Object _) {
+              if (_valid(a) && recordChannelRetireMiss(a.evidence,role)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
             }));
           }
         }); } catch (_) {
@@ -635,13 +663,22 @@ class RemoteReadOnlyAdapter {
       }
     }
   }
-  Future<void> _retireChannel(_Attempt a,Object channel) async {
+  Duration _channelRetireBudget(_Attempt a) => a.config?.channelRetireTimeout ?? const Duration(seconds:2);
+  Future<void> _retireChannel(_Attempt a,Object channel,{required RemoteChannelRole role}) async {
     final id = a.channelTickets.remove(channel);
     if (id == null) { _cleanupFailed(a,const RemoteFailure('channel_identity')); throw const RemoteFailure('channel_identity'); }
     // A pause interrupts reads, not the independent obligation to observe
     // this ticket's CLOSE before keeping the SSH transport.
-    try { await a.channels!.waitTicket(id).timeout(const Duration(seconds:2)); }
-    catch (_) { if (_valid(a)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout')); rethrow; }
+    try { await a.channels!.waitTicket(id).timeout(_channelRetireBudget(a)); }
+    catch (_) {
+      if (!_valid(a)) rethrow;
+      // Only the observing channel's CLOSE is the shared transport's liveness
+      // proof; a watch, snapshot or input channel retires alone when missed.
+      if (recordChannelRetireMiss(a.evidence,role)) {
+        _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
+        rethrow;
+      }
+    }
   }
   Future<void> _close(_Attempt a) => a.closing ??= _closeResources(a);
   Future<void> _closeResources(_Attempt a) async {
@@ -822,7 +859,7 @@ class RemoteReadOnlyAdapter {
       if (blocked != null) return const RemoteInputResult.rejected('input_target_pending').withPending(blocked);
       if (!_canWrite(a,target) || !stillCurrent()) return result;
       final opened = await _openChannel<SSHForwardChannel>(a,() => a.client!.forwardLocalUnix(a.config!.socketPath),
-        (c) => c.destroy(),input:true);
+        (c) => c.destroy(),input:true,role:RemoteChannelRole.input);
       channel = opened; a.inputForward = opened;
       if (!_canWrite(a,target) || !stillCurrent()) return result;
       final id = _requestId();
@@ -868,7 +905,7 @@ class RemoteReadOnlyAdapter {
       if (identical(a.inputForward,channel)) a.inputForward = null;
       if (channel != null) {
         try {
-          if (_valid(a) && retired) { await _retireChannel(a,channel); }
+          if (_valid(a) && retired) { await _retireChannel(a,channel,role:RemoteChannelRole.input); }
           else { await _close(a); }
         } catch (_) {
           retired = false; _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout'));
@@ -999,7 +1036,7 @@ class RemoteReadOnlyAdapter {
               (observation && observationEpoch != a.observationEpoch)) throw const RemoteFailure('observation_paused');
           acquired = true;
           final channel = await _openChannel<SSHForwardChannel>(a,() => client.forwardLocalUnix(config.socketPath),
-            (c) => c.destroy(),observation:observation,watch:watch);
+            (c) => c.destroy(),observation:observation,watch:watch,role:RemoteChannelRole.snapshot);
           if (!watch) a.forward = channel;
           try {
             final id = _requestId();
@@ -1014,7 +1051,7 @@ class RemoteReadOnlyAdapter {
               source:RemoteDashboardSource.connected(config,connectedSocketRoute(socket)),observationEpoch:observationEpoch);
           } finally {
             channel.destroy(); if (identical(a.forward,channel)) a.forward = null;
-            if (_valid(a)) await _retireChannel(a,channel);
+            if (_valid(a)) await _retireChannel(a,channel,role:RemoteChannelRole.snapshot);
           }
         } finally {
           if (acquired) { if (!release.isCompleted) release.complete(); }
@@ -1028,7 +1065,7 @@ class RemoteReadOnlyAdapter {
         // Capability discovery is side-effect-free; stock 0.9.5 replies with an
         // error and remains read-only. This is never inferred from version alone.
         final capabilityChannel = await _openChannel<SSHForwardChannel>(a,() => client.forwardLocalUnix(config.socketPath),
-          (c) => c.destroy());
+          (c) => c.destroy(),role:RemoteChannelRole.snapshot);
         a.forward = capabilityChannel;
         final capabilityId = _requestId();
         capabilityChannel.sink.add(utf8.encode('${jsonEncode({'id':capabilityId,
@@ -1040,7 +1077,7 @@ class RemoteReadOnlyAdapter {
           a.inputCapability = RemoteInputCapability.parse(response['result']);
         }
         capabilityChannel.destroy(); a.forward = null;
-        await _retireChannel(a,capabilityChannel);
+        await _retireChannel(a,capabilityChannel,role:RemoteChannelRole.snapshot);
         if (a.inputCapability != null) {
           try {
             final state = _journalState;
@@ -1098,13 +1135,13 @@ class RemoteReadOnlyAdapter {
             if (identical(a.watch,old)) a.watch = null;
             old?.destroy();
             final cancelLines = oldLines?.cancel() ?? Future<void>.value();
-            final retired = old != null && _valid(a) ? _retireChannel(a,old) : Future<void>.value();
-            await Future.wait<void>([cancelLines,retired]).timeout(const Duration(seconds:2));
+            final retired = old != null && _valid(a) ? _retireChannel(a,old,role:RemoteChannelRole.watch) : Future<void>.value();
+            await Future.wait<void>([cancelLines,retired]).timeout(_channelRetireBudget(a));
           }
           Future<void> subscribe(List<RemotePane> panes,{required bool initialGlobal}) async {
             final opened = await _openChannel<SSHForwardChannel>(a,() => client.forwardLocalUnix(config.socketPath),
-              (c) => c.destroy(),watch:true);
-            if (!current()) { opened.destroy(); await _retireChannel(a,opened); throw const RemoteFailure('observation_paused'); }
+              (c) => c.destroy(),watch:true,role:RemoteChannelRole.watch);
+            if (!current()) { opened.destroy(); await _retireChannel(a,opened,role:RemoteChannelRole.watch); throw const RemoteFailure('observation_paused'); }
             channel = opened; a.watch = opened;
             final id = _requestId();
             final subscriptions = dashboardSubscriptions(panes);
@@ -1185,7 +1222,10 @@ class RemoteReadOnlyAdapter {
             } else if (current()) { publishBoard(DashboardFreshness.stale); }
           } finally {
             if (identical(a.wakeWatch,wake)) a.wakeWatch = null;
-            try { await closeSubscription(); } catch (_) { if (_valid(a)) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout')); }
+            // A watch channel's missed CLOSE deadline is recorded by
+            // retirement and retires that channel alone; only a local
+            // teardown failure can invalidate the shared transport here.
+            try { await closeSubscription(); } catch (error) { if (_valid(a) && error is! TimeoutException) _cleanupFailed(a,const RemoteFailure('channel_cleanup_timeout')); }
           }
           if (!current() || unsupported || a.failure != null) return;
           if (++retries > 3) {
@@ -1259,7 +1299,7 @@ class RemoteReadOnlyAdapter {
           e.fullFrameReceived = false;
           e.observationPhase = 'opening';
           observe = await _openChannel<SSHSession>(a,() => client.execute(config.observeCommand(selected.terminalId)),
-            _stopObserver,observation:true);
+            _stopObserver,observation:true,role:RemoteChannelRole.observation);
           checkObservation(); a.observe = observe;
           final current = observe;
           final budget = ObserveByteBudget(continuous:onDashboard != null);
@@ -1316,7 +1356,7 @@ class RemoteReadOnlyAdapter {
           if (onDashboard != null) e.fullFrameReceived = false;
           if (observe != null) _stopObserver(observe);
           if (identical(a.observe,observe)) a.observe = null;
-          if (observe != null && _valid(a)) await _retireChannel(a,observe);
+          if (observe != null && _valid(a)) await _retireChannel(a,observe,role:RemoteChannelRole.observation);
           try { await stderr?.cancel(); } catch (_) { /* retired observer */ }
           if (identical(a.stderr,stderr)) a.stderr = null;
           try { await frames?.cancel().timeout(const Duration(seconds:2)); } catch (_) { /* retired observer */ }

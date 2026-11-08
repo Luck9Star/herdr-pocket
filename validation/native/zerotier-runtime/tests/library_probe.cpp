@@ -36,6 +36,9 @@ bool probe_one_identity(uint8_t *identity, uint64_t expected_node_id) {
         && check(phase == HP_ZT_DEVICE_INITIALIZED, "initialized phase", (int)phase)
         && check(online == 0, "offline node", (int)online)
         && check(public_node_id == expected_node_id, "identity node id", 0);
+    uint8_t ip[4]={10,1,2,3}; uint64_t stream=99;
+    ok = check(hp_zt_stream_new(owner,UINT64_MAX,ip,4,22,&stream)==HP_ZT_MANAGED_STALE && !stream,
+               "invalid network lease cannot allocate socket") && ok;
 
     result = hp_zt_device_stop(owner, 10000);
     ok = check(result == HP_ZT_MANAGED_OK, "stop before node_start", result) && ok;
@@ -53,6 +56,18 @@ int main() {
     if (!check(hp_zt_abi_version() == HP_ZT_ABI_VERSION, "native ABI")) {
         return 1;
     }
+    if (!check(hp_zt_stream_abi_version() == HP_ZT_STREAM_ABI_VERSION, "stream ABI")) { return 1; }
+    // Invalid ownership must fail before any socket operation. No node start.
+    uint8_t ip[4]={10,1,2,3}, data[1]={}; uint64_t stream=99; uint32_t count=99;
+    if (!check(hp_zt_stream_new(UINT64_MAX,1,ip,4,22,&stream)==HP_ZT_MANAGED_STALE && !stream,
+               "foreign stream owner rejected") ||
+        !check(hp_zt_stream_open(UINT64_MAX,1,1,100)==HP_ZT_MANAGED_STALE,"foreign stream open") ||
+        !check(hp_zt_stream_read(UINT64_MAX,1,1,data,1,100,&count)==HP_ZT_MANAGED_STALE && !count,"foreign stream read") ||
+        !check(hp_zt_stream_write(UINT64_MAX,1,1,data,1,100,&count)==HP_ZT_MANAGED_STALE && !count,"foreign stream write") ||
+        !check(hp_zt_stream_shutdown_write(UINT64_MAX,1,1,100)==HP_ZT_MANAGED_STALE,"foreign stream shutdown") ||
+        !check(hp_zt_stream_cancel(UINT64_MAX,1,1)==HP_ZT_MANAGED_STALE,"foreign stream cancel") ||
+        !check(hp_zt_stream_close(UINT64_MAX,1,1,100)==HP_ZT_MANAGED_STALE,"foreign stream close") ||
+        !check(hp_zt_stream_release(UINT64_MAX,1,1)==HP_ZT_MANAGED_STALE,"foreign stream release")) { return 1; }
 
     for (unsigned int iteration = 0; iteration != 2; ++iteration) {
         uint8_t identity[HP_ZT_IDENTITY_WORK_BYTES] = {};

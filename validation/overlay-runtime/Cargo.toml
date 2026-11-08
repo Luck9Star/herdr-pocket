@@ -9,6 +9,9 @@ publish = false
 default = []
 linked-easytier = []
 linked-tailscale = []
+linked-zerotier = []
+# Independent in-memory managed-device/network/socket ABI; never a fallback.
+zerotier-fixture = ["linked-zerotier"]
 # Independent synthetic hp_ts ABI; never selected by a missing native bridge.
 tailscale-fixture = ["linked-tailscale"]
 # Explicitly synthetic: builds the failure-injecting C ABI fixture, not EasyTier.

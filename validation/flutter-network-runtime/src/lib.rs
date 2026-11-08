@@ -431,15 +431,18 @@ impl Bridge {
                     Ok(snapshot) if pending && snapshot.state == State::Stopped => Snapshot {
                         binding: binding.clone(),
                         state: State::Starting,
+                        device_online: None,
                     },
                     Err("overlay_stale_revision") if pending => Snapshot {
                         binding: binding.clone(),
                         state: State::Starting,
+                        device_online: None,
                     },
                     result => result?,
                 },
                 None => Snapshot {
                     binding: binding.clone(),
+                    device_online: None,
                     state: if pending {
                         State::Starting
                     } else {
@@ -614,6 +617,7 @@ impl Bridge {
             None => Snapshot {
                 binding: binding.clone(),
                 state: State::Stopped,
+                device_online: None,
             },
         };
         if snapshot.state == State::Stopped {

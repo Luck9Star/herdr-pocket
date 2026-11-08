@@ -16,6 +16,7 @@ use std::{
 pub mod easytier;
 pub mod nodes;
 pub mod tailscale;
+pub mod zerotier;
 
 pub const MAX_STREAMS: usize = 32;
 pub const MAX_IO: usize = 65_536;
@@ -65,7 +66,9 @@ pub type Result<T> = std::result::Result<T, Failure>;
 
 /// Implementors must return handles only for this provider/profile, never use
 /// system TCP as an overlay fallback, and keep native code loaded for self's
-/// entire lifetime. open's Err must own no native handle; close must be safe
+/// entire lifetime. open's Err exposes no native handle: backends must either
+/// retire it or retain a bounded original cleanup record until managed stop.
+/// Retained records still count toward the native global quota. close must be safe
 /// concurrently with read/write and unblock them. No write retries are allowed.
 pub trait Backend: Send + Sync + 'static {
     fn provider(&self) -> Provider;
@@ -86,14 +89,14 @@ fn lock<T>(value: &Mutex<T>) -> MutexGuard<'_, T> {
 fn valid_deadline(value: Duration) -> bool {
     !value.is_zero() && value <= MAX_DEADLINE
 }
-fn valid_host(host: &str) -> bool {
-    !host.is_empty()
+fn valid_host(host: &str, provider: Provider) -> bool {
+    (provider == Provider::ZeroTier && host.parse::<std::net::IpAddr>().is_ok()) || (!host.is_empty()
         && host.len() <= 253
         && host
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
         && !host.starts_with('.')
-        && !host.ends_with('.')
+        && !host.ends_with('.'))
 }
 struct Profile {
     backend: Arc<dyn Backend>,
@@ -290,6 +293,7 @@ impl OverlayRuntime {
     pub fn require_provider(&self, provider: Provider) -> Result<()> {
         if (provider == Provider::EasyTier && cfg!(feature = "linked-easytier"))
             || (provider == Provider::Tailscale && cfg!(feature = "linked-tailscale"))
+            || (provider == Provider::ZeroTier && cfg!(feature = "linked-zerotier"))
         {
             Ok(())
         } else {
@@ -351,7 +355,7 @@ impl OverlayRuntime {
         if !self.owner_valid(owner) {
             return Err(Failure::WrongOwner);
         }
-        if !valid_host(host) || port == 0 {
+        if !valid_host(host, key.provider) || port == 0 {
             return Err(Failure::InvalidRoute);
         }
         if !valid_deadline(deadline) {

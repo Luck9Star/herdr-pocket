@@ -97,7 +97,7 @@ CARGO_TARGET_DIR=/private/tmp/herdr-portable-stream-target cargo test --locked -
 | owner/profile/revision、C ABI 调用、取消与资源回收 | 23 项 Mac C fixture 与 1 项默认门禁测试通过；不含真实 engine/网络 |
 | EasyTier managed backend | 已实现九个 ABI 调用与 node lease；更新补丁的真实来源 check/link 仍待执行 |
 | Tailscale backend | 新增固定 `hp_ts` ABI 候选与独立 C fixture，见下节；不等于真实 tsnet 节点或网络验证 |
-| ZeroTier backend | 明确 `ProviderUnavailable`，没有替代路径 |
+| ZeroTier backend | 此历史批次未接入；2026-11-07 新源码见下节，缺库仍 `ProviderUnavailable` |
 | GUI/SSHSocket、系统安全存储、稳定 node identity、真实 overlay TCP | 未接入／未验证；默认入口拒绝启动 |
 | iOS、Android、Windows、Linux 的本段运行 | 未验证；C fixture 当前仅 Unix 构建 |
 | 15 格单网络、20 格前台并发矩阵 | 本段不新增任何通过格，继续按[原矩阵](../../docs/09-prototype-validation.md)验收 |
@@ -144,3 +144,19 @@ DYLD_LIBRARY_PATH=/absolute/verified/library/directory /private/tmp/herdr-overla
 ```
 
 build 只证明本 adapter 所用符号能链接；动态库能否找到与加载必须由目标平台 loader 路径和直接运行的独立结果确认。直接运行只读 ABI version 与无效 node 0 的 status，不调用 new/start/login/dial/StateStore。cargo run 的 loader discovery 失败不能冒充加载成功，也不要求把库复制进仓库或修改系统搜索路径。真实库来源、补丁、SHA 与加载结果由上层交付记录另记；C fixture 或 link/load 不能替代真实登录、加密身份重启、手机、overlay TCP、15 格单网和 20 格前台并发矩阵。
+
+## ZeroTier managed backend（2026-11-07）
+
+[`zerotier.rs`](src/zerotier.rs) 接固定 manager/stream ABI v1。`linked-zerotier` 要求显式绝对 `HP_ZT_LIB_DIR`；`zerotier-fixture` 是独立内存 C 替身，不能进入 App 或缺库回退。没有系统 TCP／DNS 路径；目标只接受 numeric IPv4／IPv6，network ID 只接受 16 位非零小写十六进制。
+
+每个 profile 的 `NodeEntry` 保留一份 `NativeDeviceSession` 与独立网络 lease，同一设备可共享 native owner。设备租约的取得放在原 start worker 内，先由 backend 保留结果，再核对取消和同一个 deadline 的剩余时间；不能在会被丢弃的 load 阶段创建设备。已有原生副作用的失败必须携带原 session，不能只返回错误。stop 顺序为原 stream close/release、network leave、session retire；最后一个设备 session 才能 stop/release 设备和退休 vault。任一步失败保留原对象和配额，后续显式 stop 重试。
+
+`NodeStatus::ZeroTier { phase, online }` 分别表示控制器网络配置和设备在线。Configured 不等于目标路由或 SSH 可用；mobile service 仅在 Configured＋online 时提供 dialer，native open 仍核查原 netif 与 generation。未知 write 不重放；read timeout 仅限原同步 read 已返回且消费 0 bytes。失败 open 的未退休原生句柄由原 backend 有界保留，不能因调用方收到 Err 而遗失。
+
+```sh
+cargo test --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml
+cargo test --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --features native-fixture,tailscale-fixture,zerotier-fixture
+cargo clippy --locked --offline --manifest-path validation/overlay-runtime/Cargo.toml --features native-fixture,tailscale-fixture,zerotier-fixture --lib -- -D warnings
+```
+
+本机默认 5 项、三 fixture 43 项及上述 Clippy 通过。覆盖双网独立退休、IPv6 字节、原租约、取消后的迟到 acquire/join、deadline 后禁止新 join、32 个失败 open 保持配额、未知写入一次、网络和 vault 清理失败可重试。没有真实 ZeroTier 节点、手机安装或三网并发结果。

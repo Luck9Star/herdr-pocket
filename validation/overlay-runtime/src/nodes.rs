@@ -3,6 +3,7 @@
 use super::*;
 use crate::easytier::EasyTierBackend;
 use crate::tailscale::{LoginStatus, NativeStateSource, TailscaleBackend};
+use crate::zerotier::{NativeDeviceSource, NetworkPhase, ZeroTierBackend};
 
 pub const MAX_NODES: usize = 8;
 
@@ -19,6 +20,15 @@ trait ManagedBackend: Backend {
     }
 }
 impl ManagedBackend for EasyTierBackend {
+    fn managed_status(&self) -> Result<NodeStatus> {
+        self.node_status()
+    }
+    fn managed_stop(&self, deadline: Duration) -> Result<()> {
+        self.stop_node(deadline)
+    }
+}
+
+impl ManagedBackend for ZeroTierBackend {
     fn managed_status(&self) -> Result<NodeStatus> {
         self.node_status()
     }
@@ -118,6 +128,12 @@ pub enum NodeStatus {
     NeedsLogin,
     NeedsMachineAuth,
     Running,
+    /// Device online is separate from controller network configuration; neither
+    /// alone proves the target is reachable through this network's tap.
+    ZeroTier {
+        phase: NetworkPhase,
+        online: bool,
+    },
     Closing,
     Stopped,
 }
@@ -315,7 +331,7 @@ impl OverlayRuntime {
             spec,
             backend,
             move |spec| source.load(spec),
-            move |config, deadline| starter.start_node(&config, deadline),
+            move |config, deadline, _| starter.start_node(&config, deadline),
             deadline,
         )
     }
@@ -337,7 +353,31 @@ impl OverlayRuntime {
             spec,
             backend,
             move |spec| source.load(spec),
-            move |config, deadline| starter.start_node(config, deadline),
+            move |config, deadline, _| starter.start_node(config, deadline),
+            deadline,
+        )
+    }
+    pub fn start_zerotier_profile(
+        &self,
+        spec: NodeSpec,
+        source: Option<Arc<dyn NativeDeviceSource>>,
+        deadline: Duration,
+    ) -> Result<NodeOperation<NodeLease>> {
+        let source = source.ok_or(Failure::IdentityUnavailable)?;
+        self.require_provider(Provider::ZeroTier)?;
+        if !valid_deadline(deadline) {
+            return Err(Failure::InvalidDeadline);
+        }
+        crate::zerotier::validate_spec(&spec)?;
+        let backend = Arc::new(ZeroTierBackend::managed(&spec)?);
+        let starter = backend.clone();
+        self.start_managed_profile(
+            spec,
+            backend,
+            // This stage is discardable on cancellation. No native/vault
+            // acquisition may run until the backend can retain its result.
+            move |_| Ok(source),
+            move |source, deadline, cancelled| starter.start_node(source, deadline, cancelled),
             deadline,
         )
     }
@@ -352,7 +392,7 @@ impl OverlayRuntime {
     where
         C: Send + 'static,
         L: FnOnce(&NodeSpec) -> Result<C> + Send + 'static,
-        S: FnOnce(C, Duration) -> Result<()> + Send + 'static,
+        S: FnOnce(C, Duration, &AtomicBool) -> Result<()> + Send + 'static,
     {
         if !valid_deadline(deadline) {
             return Err(Failure::InvalidDeadline);
@@ -437,7 +477,7 @@ impl OverlayRuntime {
                         {
                             Err(Failure::Cancelled)
                         } else {
-                            start(config, deadline)
+                            start(config, deadline, &cancelled)
                         }
                     })
                 };

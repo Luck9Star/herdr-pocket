@@ -281,10 +281,13 @@ fn same_address_routes_stay_bound_to_provider_profile_and_native_network() {
     );
     #[cfg(feature = "linked-tailscale")]
     assert_eq!(runtime.require_provider(Provider::Tailscale), Ok(()));
+    #[cfg(not(feature = "linked-zerotier"))]
     assert_eq!(
         runtime.require_provider(Provider::ZeroTier),
         Err(Failure::ProviderUnavailable)
     );
+    #[cfg(feature = "linked-zerotier")]
+    assert_eq!(runtime.require_provider(Provider::ZeroTier), Ok(()));
 }
 
 #[test]

@@ -51,7 +51,8 @@ pub(crate) fn require_overlay_evidence(evidence: Evidence) -> crate::Result<()> 
     if evidence == Evidence::SyntheticNativeFixture
         && !cfg!(any(
             feature = "overlay-native-fixture",
-            feature = "overlay-tailscale-fixture"
+            feature = "overlay-tailscale-fixture",
+            feature = "overlay-zerotier-fixture"
         ))
     {
         Err("overlay_fixture_disabled")

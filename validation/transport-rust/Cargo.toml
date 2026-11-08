@@ -12,11 +12,15 @@ russh = { path = "../vendor/russh-0.65.0" }
 default = []
 overlay-linked-easytier = ["overlay-runtime/linked-easytier"]
 overlay-linked-tailscale = ["overlay-runtime/linked-tailscale"]
+overlay-linked-zerotier = ["overlay-runtime/linked-zerotier"]
+overlay-zerotier-fixture = ["overlay-runtime/zerotier-fixture"]
+android-zerotier = ["dep:herdr-android-network-source", "herdr-android-network-source/zerotier", "overlay-linked-zerotier"]
 overlay-tailscale-fixture = ["overlay-runtime/tailscale-fixture"]
 # Synthetic ABI only, never enabled as a missing-bridge fallback.
 overlay-native-fixture = ["overlay-runtime/native-fixture"]
 
 [dependencies]
+herdr-android-network-source = { version = "=0.1.0", path = "../android-network-source", optional = true }
 overlay-runtime = { package = "herdr-overlay-runtime-probe", version = "=0.1.0", path = "../overlay-runtime" }
 russh = { version = "=0.65.0", default-features = false, features = ["ring"] }
 tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "net", "io-util", "time", "sync"] }

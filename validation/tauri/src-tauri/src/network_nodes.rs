@@ -68,6 +68,8 @@ pub struct View {
     binding: Option<Binding>,
     auth_url: Option<String>,
     review_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    device_online: Option<bool>,
 }
 fn wire_state(state: State) -> &'static str {
     match state {
@@ -76,6 +78,14 @@ fn wire_state(state: State) -> &'static str {
         State::NeedsLogin => "needs-login",
         State::NeedsMachineAuth => "needs-machine-auth",
         State::Running => "running",
+        State::ZeroTierRequesting => "zero-tier-requesting",
+        State::ZeroTierConfigured => "zero-tier-configured",
+        State::ZeroTierDenied => "zero-tier-denied",
+        State::ZeroTierNotFound => "zero-tier-not-found",
+        State::ZeroTierPortError => "zero-tier-port-error",
+        State::ZeroTierClientOld => "zero-tier-client-old",
+        State::ZeroTierAuthRequired => "zero-tier-auth-required",
+        State::ZeroTierUnknown => "zero-tier-unknown",
         State::Closing => "closing",
         State::Stopped => "stopped",
     }
@@ -86,6 +96,7 @@ fn view(s: herdr_readonly_transport::mobile_nodes::Snapshot) -> View {
         binding: Some(s.binding),
         auth_url: None,
         review_token: None,
+        device_online: s.device_online,
     }
 }
 fn ready_view(
@@ -101,6 +112,7 @@ fn ready_view(
             binding: None,
             auth_url: None,
             review_token: None,
+            device_online: None,
         };
     }
     current.map(view).unwrap_or(View {
@@ -108,6 +120,7 @@ fn ready_view(
         binding: None,
         auth_url: None,
         review_token: None,
+        device_online: None,
     })
 }
 /// This book owns private attempt capabilities. Tokens are process-local review IDs,
@@ -512,6 +525,7 @@ impl Nodes {
             state: wire_state(result.state),
             binding: Some(result.binding),
             review_token: url.as_ref().map(|_| token.into()),
+            device_online: None,
             auth_url: url,
         })
     }
@@ -692,6 +706,7 @@ mod tests {
             serde_json::to_value(view(herdr_readonly_transport::mobile_nodes::Snapshot {
                 binding: b,
                 state: State::Running,
+                device_online: None,
             }))
             .unwrap();
         assert!(serialized["authUrl"].is_null());
@@ -884,18 +899,39 @@ mod tests {
             (State::NeedsLogin, "needs-login"),
             (State::NeedsMachineAuth, "needs-machine-auth"),
             (State::Running, "running"),
+            (State::ZeroTierRequesting, "zero-tier-requesting"),
+            (State::ZeroTierConfigured, "zero-tier-configured"),
+            (State::ZeroTierDenied, "zero-tier-denied"),
+            (State::ZeroTierNotFound, "zero-tier-not-found"),
+            (State::ZeroTierPortError, "zero-tier-port-error"),
+            (State::ZeroTierClientOld, "zero-tier-client-old"),
+            (State::ZeroTierAuthRequired, "zero-tier-auth-required"),
+            (State::ZeroTierUnknown, "zero-tier-unknown"),
             (State::Closing, "closing"),
             (State::Stopped, "stopped"),
         ] {
             let wire = serde_json::to_value(view(Snapshot {
                 binding: binding.clone(),
                 state,
+                device_online: None,
             }))
             .unwrap();
             assert_eq!(wire["state"], expected);
             assert_eq!(wire["binding"]["provider"], "tailscale");
             assert_ne!(wire["state"], "ready");
         }
+    }
+    #[test]
+    fn zerotier_status_preserves_device_online_separately() {
+        let binding = Binding::with_provider(
+            BindingProvider::ZeroTier, "a".repeat(32), 1,
+            "0123456789abcdef".into(), "11111111-1111-4111-8111-111111111111".into(),
+        ).unwrap();
+        let wire = serde_json::to_value(view(herdr_readonly_transport::mobile_nodes::Snapshot {
+            binding, state: State::ZeroTierConfigured, device_online: Some(false),
+        })).unwrap();
+        assert_eq!(wire["state"], "zero-tier-configured");
+        assert_eq!(wire["deviceOnline"], false);
     }
     #[test]
     fn unavailable_source_does_not_hide_active_old_binding() {
@@ -909,6 +945,7 @@ mod tests {
         let active = herdr_readonly_transport::mobile_nodes::Snapshot {
             binding: b.clone(),
             state: State::EngineStarted,
+            device_online: None,
         };
         let visible = ready_view(Some(active), false);
         assert_eq!(visible.state, "engine-started");

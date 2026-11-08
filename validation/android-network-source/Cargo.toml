@@ -10,6 +10,7 @@ crate-type = ["rlib", "cdylib"]
 
 [features]
 default = []
+zerotier = ["overlay-runtime/linked-zerotier"]
 # Desktop JVM with self-created Java classes only; never an app fallback.
 jvm-fixture = []
 

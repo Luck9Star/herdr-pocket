@@ -1,6 +1,8 @@
 //! JNI-only vault configuration source. No secret-bearing IPC command or
 //! JNI_OnLoad; the host binds its application Context and originating class.
 pub use jni;
+#[cfg(feature = "zerotier")]
+pub mod zerotier;
 use jni::{
     JNIEnv, JavaVM,
     objects::{GlobalRef, JByteArray, JClass, JObject, JValue},

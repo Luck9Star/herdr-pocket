@@ -9,6 +9,8 @@ pub use overlay_runtime::tailscale::{
     NativeNodeConfig, NativeStateSource, NativeStateStore, NativeVettedDirectory, StateStoreError,
     StateStoreResult,
 };
+use overlay_runtime::zerotier::NetworkPhase;
+pub use overlay_runtime::zerotier::{NativeDeviceConfig, NativeDeviceSession, NativeDeviceSource};
 use overlay_runtime::{Failure, MAX_DEADLINE, OverlayRuntime, ProfileKey, Provider};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -88,6 +90,8 @@ impl Binding {
             || self.profile_revision == 0
             || !bounded(&self.network_name)
             || !bounded(&self.identity_ref)
+            || (self.provider == BindingProvider::ZeroTier
+                && !valid_zerotier_network(&self.network_name))
         {
             return Err("mobile_node_invalid_binding");
         }
@@ -128,6 +132,13 @@ impl Binding {
         }
     }
 }
+fn valid_zerotier_network(value: &str) -> bool {
+    value.len() == 16
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        && u64::from_str_radix(value, 16).is_ok_and(|network| network != 0)
+}
 
 /// EngineStarted means only that the fixed native engine accepted its start.
 /// It says nothing about joining a network, peer reachability or SSH readiness.
@@ -139,6 +150,14 @@ pub enum State {
     NeedsLogin,
     NeedsMachineAuth,
     Running,
+    ZeroTierRequesting,
+    ZeroTierConfigured,
+    ZeroTierDenied,
+    ZeroTierNotFound,
+    ZeroTierPortError,
+    ZeroTierClientOld,
+    ZeroTierAuthRequired,
+    ZeroTierUnknown,
     Closing,
     Stopped,
 }
@@ -151,8 +170,21 @@ impl State {
             NodeStatus::NeedsLogin => Self::NeedsLogin,
             NodeStatus::NeedsMachineAuth => Self::NeedsMachineAuth,
             NodeStatus::Running => Self::Running,
+            NodeStatus::ZeroTier { phase, .. } => Self::from_zerotier_phase(phase),
             NodeStatus::Closing => Self::Closing,
             NodeStatus::Stopped => Self::Stopped,
+        }
+    }
+    fn from_zerotier_phase(phase: NetworkPhase) -> Self {
+        match phase {
+            NetworkPhase::Requesting => Self::ZeroTierRequesting,
+            NetworkPhase::Configured => Self::ZeroTierConfigured,
+            NetworkPhase::Denied => Self::ZeroTierDenied,
+            NetworkPhase::NotFound => Self::ZeroTierNotFound,
+            NetworkPhase::PortError => Self::ZeroTierPortError,
+            NetworkPhase::ClientOld => Self::ZeroTierClientOld,
+            NetworkPhase::AuthRequired => Self::ZeroTierAuthRequired,
+            NetworkPhase::Unknown => Self::ZeroTierUnknown,
         }
     }
     fn live(self) -> bool {
@@ -180,6 +212,8 @@ impl std::fmt::Debug for LoginSnapshot {
 pub struct Snapshot {
     pub binding: Binding,
     pub state: State,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_online: Option<bool>,
 }
 /// Process-local capability for one admitted attempt. Never serialize it or
 /// substitute its attempt number for the durable route profile revision.
@@ -194,6 +228,7 @@ struct Entry {
     attempt: u64,
     state: State,
     node: Option<NodeLease>,
+    device_online: Option<bool>,
 }
 struct Registry {
     next_attempt: u64,
@@ -324,6 +359,19 @@ impl MobileNodeService {
         self.start_with(binding, StartSource::Tailscale(source), timeout, cancel)
             .await
     }
+    pub async fn start_zerotier(
+        &self,
+        binding: Binding,
+        source: Arc<dyn NativeDeviceSource>,
+        timeout: Duration,
+        cancel: Cancellation,
+    ) -> Result<Snapshot> {
+        if binding.provider != BindingProvider::ZeroTier {
+            return Err("overlay_provider_unavailable");
+        }
+        self.start_with(binding, StartSource::ZeroTier(source), timeout, cancel)
+            .await
+    }
     async fn start_with(
         &self,
         binding: Binding,
@@ -389,6 +437,11 @@ impl MobileNodeService {
                     Some(source),
                     timeout,
                 ),
+                StartSource::ZeroTier(source) => self.inner.runtime.start_zerotier_profile(
+                    binding.spec(attempt),
+                    Some(source),
+                    timeout,
+                ),
             }
             .map_err(code)?;
             registry.entries.insert(
@@ -398,6 +451,7 @@ impl MobileNodeService {
                     attempt,
                     state: State::Starting,
                     node: None,
+                    device_online: None,
                 },
             );
             (attempt, operation)
@@ -415,14 +469,21 @@ impl MobileNodeService {
             value = operation => value.map_err(code)?,
         };
         guard.claimed_native = true;
-        let initial_state = if binding.provider == BindingProvider::Tailscale {
+        let (initial_state, initial_online) = if binding.provider == BindingProvider::Tailscale
+            || binding.provider == BindingProvider::ZeroTier
+        {
             let status = self.inner.runtime.node_status(&node).map_err(code)?;
-            tokio::select! { biased;
+            let native = tokio::select! { biased;
                 _=cancel.wait()=>return Err("cancelled"),
-                value=status=>State::from_native(value.map_err(code)?),
-            }
+                value=status=>value.map_err(code)?,
+            };
+            let online = match native {
+                NodeStatus::ZeroTier { online, .. } => Some(online),
+                _ => None,
+            };
+            (State::from_native(native), online)
         } else {
-            State::EngineStarted
+            (State::EngineStarted, None)
         };
         if !initial_state.live() {
             return Err("mobile_node_failed");
@@ -446,11 +507,13 @@ impl MobileNodeService {
             }
             entry.node = Some(node);
             entry.state = initial_state;
+            entry.device_online = initial_online;
         }
         guard.armed = false;
         Ok(Snapshot {
             binding,
             state: initial_state,
+            device_online: initial_online,
         })
     }
 
@@ -616,6 +679,7 @@ impl MobileNodeService {
                 return Ok(Snapshot {
                     binding: binding.clone(),
                     state: State::Stopped,
+                    device_online: None,
                 });
             };
             if expected.is_some_and(|expected| entry.attempt != expected) {
@@ -628,18 +692,26 @@ impl MobileNodeService {
                 return Ok(Snapshot {
                     binding: binding.clone(),
                     state: State::Stopped,
+                    device_online: entry.device_online,
                 });
             }
             entry.attempt
         };
-        let state = match self
+        let (state, online) = match self
             .inner
             .runtime
             .node_status_revision(&binding.profile(), attempt)
         {
-            Err(Failure::ProfileMissing) => State::Stopped,
+            Err(Failure::ProfileMissing) => (State::Stopped, None),
             Err(error) => return Err(code(error)),
-            Ok(operation) => State::from_native(operation.await.map_err(code)?),
+            Ok(operation) => {
+                let native = operation.await.map_err(code)?;
+                let online = match native {
+                    NodeStatus::ZeroTier { online, .. } => Some(online),
+                    _ => None,
+                };
+                (State::from_native(native), online)
+            }
         };
         let mut registry = lock(&self.inner.registry);
         let entry = registry
@@ -651,17 +723,20 @@ impl MobileNodeService {
         }
         // An earlier status response cannot reopen an entry retired by stop or
         // attach a node whose start result has not been claimed by its caller.
-        entry.state = match (entry.state, state) {
-            (State::Closing | State::Stopped, next) if next.live() => entry.state,
-            (State::Starting, next) if next.live() && entry.node.is_none() => State::Starting,
-            _ => state,
-        };
+        let preserve = matches!(entry.state, State::Closing | State::Stopped) && state.live()
+            || entry.state == State::Starting && state.live() && entry.node.is_none();
+        if !preserve {
+            entry.state = state;
+            entry.device_online = online;
+        }
         if entry.state == State::Stopped {
             entry.node = None;
+            entry.device_online = None;
         }
         Ok(Snapshot {
             binding: binding.clone(),
             state: entry.state,
+            device_online: entry.device_online,
         })
     }
 
@@ -710,6 +785,7 @@ impl MobileNodeService {
                 return Ok(Snapshot {
                     binding: binding.clone(),
                     state: State::Stopped,
+                    device_online: None,
                 });
             };
             if expected.is_some_and(|expected| entry.attempt != expected) {
@@ -722,6 +798,7 @@ impl MobileNodeService {
                 return Ok(Snapshot {
                     binding: binding.clone(),
                     state: State::Stopped,
+                    device_online: entry.device_online,
                 });
             }
             entry.state = State::Closing;
@@ -748,9 +825,11 @@ impl MobileNodeService {
         }
         entry.state = State::Stopped;
         entry.node = None;
+        entry.device_online = None;
         Ok(Snapshot {
             binding: binding.clone(),
             state: State::Stopped,
+            device_online: None,
         })
     }
 
@@ -770,7 +849,9 @@ impl MobileNodeService {
         let ready = match binding.provider {
             BindingProvider::EasyTier => entry.state == State::EngineStarted,
             BindingProvider::Tailscale => entry.state == State::Running,
-            BindingProvider::ZeroTier => false,
+            BindingProvider::ZeroTier => {
+                entry.state == State::ZeroTierConfigured && entry.device_online == Some(true)
+            }
         };
         if !ready {
             return Err("mobile_node_not_started");
@@ -785,6 +866,7 @@ impl MobileNodeService {
 enum StartSource {
     EasyTier(Arc<dyn SecureConfigSource>),
     Tailscale(Arc<dyn NativeStateSource>),
+    ZeroTier(Arc<dyn NativeDeviceSource>),
 }
 struct Starting {
     inner: Arc<Inner>,
@@ -823,6 +905,10 @@ impl Drop for Starting {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "mobile_nodes_zerotier_tests.rs"]
+mod zerotier_tests;
 
 #[cfg(all(test, feature = "overlay-native-fixture"))]
 pub(crate) static NATIVE_FIXTURE_SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());

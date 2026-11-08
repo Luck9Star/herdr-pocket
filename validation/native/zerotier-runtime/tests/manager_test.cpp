@@ -18,10 +18,11 @@ struct Gate {
     void wait() { std::unique_lock<std::mutex> lock(mutex); if (!cv.wait_for(lock,std::chrono::seconds(3),[this]{return entered;})) std::abort(); }
     void open() { std::lock_guard<std::mutex> lock(mutex); released=true; cv.notify_all(); }
 };
-Gate validate_gate,quiet_gate,start_gate,online_gate,join_gate;
+Gate validate_gate,quiet_gate,start_gate,online_gate,join_gate,node_id_gate;
 std::atomic<int> starts{0},joins{0},leaves{0},stops{0},validations{0},inits{0};
 std::atomic<int> native_stop{HP_ZT_OK}, native_join{ZTS_ERR_OK}, native_start{ZTS_ERR_OK}, native_init{ZTS_ERR_OK};
 std::atomic<bool> quiet{true}, stop_quiet{true};
+std::atomic<bool> node_online{true};
 std::atomic<uint64_t> node_id{0x123456789aULL};
 std::atomic<int> network_status{1};
 constexpr uint64_t public_id=0x123456789aULL;
@@ -42,8 +43,8 @@ int zts_init_allow_net_cache(unsigned int) { return ZTS_ERR_OK; }
 int zts_init_allow_peer_cache(unsigned int) { return ZTS_ERR_OK; }
 int zts_init_allow_roots_cache(unsigned int) { return ZTS_ERR_OK; }
 int zts_node_start() { ++starts; start_gate.block(); return native_start.load(); }
-int zts_node_is_online() { online_gate.block(); return 1; }
-uint64_t zts_node_get_id() { return node_id.load(); }
+int zts_node_is_online() { online_gate.block(); return node_online.load() ? 1 : 0; }
+uint64_t zts_node_get_id() { node_id_gate.block(); return node_id.load(); }
 int zts_net_join(uint64_t) { ++joins; join_gate.block(); return native_join.load(); }
 int zts_net_leave(uint64_t) { ++leaves; return ZTS_ERR_OK; }
 int zts_net_get_status(uint64_t) { return network_status.load(); }
@@ -138,10 +139,10 @@ static void blocked_cases() {
     check(hp_zt_device_release(owner,1000)==HP_ZT_MANAGED_OK,"explicit exact owner release retry");
 }
 static void online_fence() {
-    uint64_t owner=create(); start(owner); online_gate.arm(); uint64_t lease=0; int result=-1; int before=joins.load();
-    std::thread joiner([&]{result=hp_zt_network_join(owner,42,1000,&lease);}); online_gate.wait();
+    uint64_t owner=create(); start(owner); node_id_gate.arm(); uint64_t lease=0; int result=-1; int before=joins.load();
+    std::thread joiner([&]{result=hp_zt_network_join(owner,42,1000,&lease);}); node_id_gate.wait();
     check(hp_zt_device_stop(owner,20)==HP_ZT_MANAGED_TIMEOUT,"stop fenced while online call blocked");
-    online_gate.open(); joiner.join();
+    node_id_gate.open(); joiner.join();
     check(result==HP_ZT_MANAGED_CLOSING && joins.load()==before && lease==0,"no new native join after closing fence");
     finish(owner);
 }
@@ -149,4 +150,5 @@ int main(int argc,char** argv) {
     if(argc==2 && std::string(argv[1])=="online-fence") online_fence();
     else { normal_cases(); blocked_cases(); }
     std::cout<<"PASS: "<<checks<<" manager checks; synthetic engine, no node/network\n";
+    return 0;
 }

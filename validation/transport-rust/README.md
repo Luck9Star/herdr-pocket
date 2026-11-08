@@ -165,3 +165,17 @@ CARGO_TARGET_DIR=/private/tmp/herdr-watch-target cargo test --locked --offline -
 本批严格 `cargo clippy --all-targets -- -D warnings` 执行失败，当前诊断按位置与内容去重为 12 项；未另建 `fdf40ad` 基线独立对照，因此不能将其全部归因为历史，也不将单元测试通过写成全门禁通过。
 
 上述运行限本机 macOS 与自建 SSH peer／合成 native ABI，没有运行真实 herdr、overlay 网络、GUI 或新 CI。Windows 的目录同步和覆盖 rename、Android／Apple 设备文件系统、断电恢复与文件回滚防护尚未验证；没有安装平台 SDK、读取真实身份或自动修复／清空未知记录。
+
+
+## ZeroTier 设备与网络分离（2026-11-07 后续源码）
+
+`MobileNodeService::start_zerotier` 复用同一取消／原 attempt／退休机制。公开 binding 保存 16 位非零小写 network ID 和设备 vault 引用；不同 profile 可共享该设备引用，仍取得不同网络 lease。新增八个 `zero-tier-*` 状态及可选 `deviceOnline`，旧 EasyTier／Tailscale JSON 不增加该字段。Configured 与 online 均满足才提供原 NodeLease 的 dialer，最终仍由 native netif／generation 检查决定是否能拨号，不能把 GUI 标签当路由证明。
+
+`android-zerotier` 是显式可选 native 源，经固定 JNI 取得设备租约；密钥不经过前端。缺 linked bridge 在读 vault 前拒绝。该源码尚未进入手机 host 的实际设备审查／启动入口或 Android 库 bundle，也不在 `750798fe` APK 中。
+
+本批默认完整测试 83＋1、三 fixture 组合 98＋1 通过。首次 sandbox 内有 24 项本机回环 bind 被系统拒绝；在授权的 sandbox 外使用同一源码、自建临时 SSH peer 重跑全部通过。ZT 的新增状态、共享设备、多网络独立退休测试使用合成 C ABI，不是 ZeroTier 节点或真实 overlay SSH 结果。原严格 Clippy 的 12 项诊断本批未重新验收。
+
+```sh
+cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml
+cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml --features overlay-native-fixture,overlay-tailscale-fixture,overlay-zerotier-fixture
+```

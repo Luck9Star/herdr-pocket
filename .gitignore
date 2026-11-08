@@ -28,8 +28,13 @@ natives/**/*.a
 natives/**/*.so
 natives/**/*.dylib
 natives/**/*.xcframework/
+/validation/flutter-network-runtime/target/
 
 # local probe output
 /tmp-probe/
 *.log
 .DS_Store
+
+# python bytecode caches
+__pycache__/
+*.pyc

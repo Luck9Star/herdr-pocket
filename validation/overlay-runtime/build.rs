@@ -12,6 +12,7 @@ fn fixture(source: &str, library: &str) {
             "-std=c11", "-Wall", "-Wextra", "-Werror", "-pthread", "-c", source, "-o",
         ])
         .arg(&object)
+        .args(["-I", "../native/candidates/zerotier/shim"])
         .status()
         .expect("C fixture compiler unavailable");
     assert!(status.success(), "C fixture compilation failed");
@@ -36,12 +37,14 @@ fn explicit_library(variable: &str, feature: &str) {
     println!("cargo:rustc-link-search=native={}", directory.display());
 }
 fn main() {
-    for variable in ["HEELER_ET_LIB_DIR", "HP_TS_LIB_DIR"] {
+    for variable in ["HEELER_ET_LIB_DIR", "HP_TS_LIB_DIR", "HP_ZT_LIB_DIR"] {
         println!("cargo:rerun-if-env-changed={variable}");
     }
     for source in [
         "tests/native_fixture.c",
         "tests/tailscale_fixture.c",
+        "tests/zerotier_fixture.c",
+        "../native/zerotier-runtime/hp_zt_manager.h",
         "../native/tailscale-runtime/hp_ts.h",
     ] {
         println!("cargo:rerun-if-changed={source}");
@@ -55,5 +58,10 @@ fn main() {
         fixture("tests/tailscale_fixture.c", "hp_tailscale");
     } else if env::var_os("CARGO_FEATURE_LINKED_TAILSCALE").is_some() {
         explicit_library("HP_TS_LIB_DIR", "linked-tailscale");
+    }
+    if env::var_os("CARGO_FEATURE_ZEROTIER_FIXTURE").is_some() {
+        fixture("tests/zerotier_fixture.c", "hp_zerotier");
+    } else if env::var_os("CARGO_FEATURE_LINKED_ZEROTIER").is_some() {
+        explicit_library("HP_ZT_LIB_DIR", "linked-zerotier");
     }
 }

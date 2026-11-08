@@ -23,7 +23,8 @@ binary = output / 'manager-test'
 command = ['clang++', '-std=c++11', '-Wall', '-Wextra', '-Werror', '-O1', '-g',
            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-pthread',
            '-I', str(runtime), '-I', str(shim), '-isystem', str(source / 'include'),
-           str(runtime / 'manager.cpp'), str(runtime / 'tests' / 'manager_test.cpp'), '-o', str(binary)]
+           str(runtime / 'manager.cpp'), str(runtime / 'tests' / 'manager_test.cpp'),
+           str(runtime / 'tests' / 'bound_fixture.cpp'), '-o', str(binary)]
 def run(label, argv):
     result = subprocess.run(argv, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment)
     (output / (label + '.log')).write_text(result.stdout)
@@ -35,5 +36,10 @@ if run('compile', command):
 ordinary = run('manager', [str(binary)])
 fence = run('online-fence', [str(binary), 'online-fence'])
 if ordinary or fence:
+    raise SystemExit(1)
+stream_binary = output / 'stream-test'
+stream_command = [str(runtime / 'tests' / 'stream_test.cpp') if item == str(runtime / 'tests' / 'manager_test.cpp')
+                  else str(stream_binary) if item == str(binary) else item for item in command]
+if run('compile-stream', stream_command) or run('stream', [str(stream_binary)]):
     raise SystemExit(1)
 print('Offline synthetic engine only; no actual ZeroTier node or device validation.')

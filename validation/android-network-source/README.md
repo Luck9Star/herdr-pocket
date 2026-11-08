@@ -55,3 +55,37 @@ binding, bounds, binary keys, exceptions, zeroing and unsafe directory metadata.
 The separate StateStore JCE fixture exercises the real storage core. Neither
 proves AndroidKeyStore, Android filesystem metadata, app packaging, a device or
 network operation. The app host binding above is still required.
+
+## ZeroTier shared device source (2026-11-07)
+
+The explicit `zerotier` feature links the pinned `hp_zerotier` library. The host
+must call `zerotier::bind_zerotier` on its original Java class-loader thread after
+loading the libraries. It retains an application Context and a native-only
+`AndroidZeroTierNative` store; it does not add frontend secret IPC or a library
+fallback. The transport crate's optional `android-zerotier` adapter freezes the
+complete profile attempt and supplies `NativeDeviceConfig` to the runtime.
+
+A process-wide registry shares one original device owner across up to 32 profile
+reservations. Each profile retires only after its own streams and network lease
+have drained. The final reservation stops/releases the exact native owner before
+confirming the Java lease's handle, instance and lease ID. Drop never releases
+custody. Failed and late calls retain their original reservation; ambiguous
+failure is not proof that owner zero is safe. Separate acquisition/callback
+completion markers also allow proven pre-initialization failures to retire.
+Java keeps the original lease strongly referenced, so JNI metadata errors can
+recover that same lease without substituting a new identity.
+
+```sh
+sh validation/android-network-source/tests/run-zerotier-jvm.sh
+sh validation/network-profiles/native/android/tests/run-zerotier-device.sh
+sh validation/network-profiles/native/android/tests/run-zerotier-android.sh
+```
+
+Desktop `-Xcheck:jni` passed 100 checks using the real JNI/Java bridge with a
+synthetic native engine, Android stubs and a test JCE provider. It covers shared
+ownership, start/stop failures, original in-flight initialization, changed
+binding, invalid versus unavailable validation, pre-init deadline expiry, and
+JNI metadata failure followed by exact-lease recovery, and a JNI exception
+after the callback was claimed but before native initialization was dispatched. The separate storage core
+passed 153 checks and Android wrapper 36 checks. These do not prove real libzt
+JNI linking, AndroidKeyStore, Android installation or network connectivity.

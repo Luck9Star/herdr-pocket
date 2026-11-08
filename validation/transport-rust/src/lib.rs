@@ -31,6 +31,8 @@ use tokio::net::TcpStream;
 pub mod transport;
 pub mod overlay;
 pub mod mobile_nodes;
+#[cfg(feature = "android-zerotier")]
+pub mod android_zerotier;
 pub mod tailscale_settings;
 pub mod file_lock;
 pub mod config_transfer;

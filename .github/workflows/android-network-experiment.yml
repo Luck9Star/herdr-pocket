@@ -289,3 +289,37 @@ jobs:
       - name: Report host TUI failure after keeping the built APK
         if: steps.host_tui.outcome == 'failure'
         run: exit 1
+  zerotier-keystore:
+    # The device identity store must work on the platform AndroidKeyStore, not
+    # only against the synthetic provider of the offline JVM suite.
+    if: "!startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-recheck-')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17.0.18+8'
+      - name: Install the pinned Android platform and build tools
+        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0'"
+      - name: Verify the device identity on the platform AndroidKeyStore
+        run: |
+          evidence="$RUNNER_TEMP/zerotier-keystore-evidence"
+          mkdir -p "$evidence/docs/evidence/mobile-pair-gui"
+          AVD_EVIDENCE_DIR="$RUNNER_TEMP/zerotier-keystore-avd" \
+            bash validation/remote-harness/with-android-emulator.sh \
+              bash validation/network-profiles/native/android/tests/run-zerotier-keystore-instrumented.sh \
+                --sdk "$ANDROID_HOME" --output "$evidence/run"
+          cp "$evidence/run/zerotier-android-keystore.json" "$evidence/docs/evidence/mobile-pair-gui/"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-zerotier-keystore-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/zerotier-keystore-evidence/
+            ${{ runner.temp }}/zerotier-keystore-avd/
+          if-no-files-found: warn
+          retention-days: 14

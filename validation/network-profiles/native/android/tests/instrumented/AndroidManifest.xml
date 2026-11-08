@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Self-targeting instrumentation package: the test APK is its own target app,
+     so the production store runs against this package's no-backup directory and
+     the system AndroidKeyStore. Built without Gradle by
+     tests/run-zerotier-keystore-instrumented.sh from the shared production
+     source manifest; never shipped inside a release app.
+     minSdkVersion and targetSdkVersion 35 are applied by aapt2 at link time. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.herdr.network.zerotierkeystore.test"
+    android:versionCode="1"
+    android:versionName="1.0">
+  <instrumentation
+      android:name="org.herdr.network.ZeroTierAndroidKeyStoreInstrumentation"
+      android:targetPackage="org.herdr.network.zerotierkeystore.test"
+      android:label="herdr ZeroTier system KeyStore verification"/>
+  <application
+      android:label="herdr zerotier keystore test"
+      android:debuggable="true"/>
+</manifest>

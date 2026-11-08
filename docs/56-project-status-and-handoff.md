@@ -27,12 +27,12 @@
 
 在 `dd02595` 的[集中构建](https://github.com/Luck9Star/herdr-pocket/actions/runs/42415286185)中，两份分发 APK 构建成功，工作流总体失败。之后的 [Flutter 定向复测](https://github.com/Luck9Star/herdr-pocket/actions/runs/42417473474)通过了只读闭环与同名目标 B 的检查，仍因受保护 TUI 恢复失败。该次复测没有重建 APK。
 
-后续源码已包含看板搜索、Flutter 静默观察修复、网络共享设备的影响范围与恢复审查。设备服务不可用时，手机仍可显示已读到的关联主机和网络。目录读取失败时显示范围未知。Mac 已在 320 与 390 CSS px 的实际 Tauri 页面、两套 Android 宿主的隔离 JVM，以及原生身份算法的 JNI 联跑中验证相应路径。Android 的系统 KeyStore 与原生入网尚未运行。Penpot 两张新状态页有 10 次独立预览点击记录。[手机行为与复跑步骤](55-mobile-shared-network-device.md) · [结构化证据](evidence/mobile-pair-gui/shared-network-device-20261108.json)
+后续源码已包含看板搜索、Flutter 静默观察修复、网络共享设备的影响范围与恢复审查。设备服务不可用时，手机仍可显示已读到的关联主机和网络。目录读取失败时显示范围未知。Mac 已在 320 与 390 CSS px 的实际 Tauri 页面、两套 Android 宿主的隔离 JVM，以及原生身份算法的 JNI 联跑中验证相应路径。Android 的系统 KeyStore 已有独立仪器化验证：不注册 JCE provider，直接编译清单中的三个生产文件，在 CI 的 API 35 模拟器上运行；本机没有 SDK，只完成编译校验，运行结果以 CI 产物为准，模拟器的软件 KeyMint 不构成硬件隔离结论。原生入网尚未运行。Penpot 两张新状态页有 10 次独立预览点击记录。[手机行为与复跑步骤](55-mobile-shared-network-device.md) · [结构化证据](evidence/mobile-pair-gui/shared-network-device-20261108.json)
 
 ## 恢复工作时的顺序
 
 1. **先复测 Flutter 在 Android 上的观察恢复。** 在同一批 API 35 作业中复测两壳的配对、看板与观察。对 Flutter 单独要求隐藏标签恢复后出现原目标的新完整帧、同一观察代的增量，再核对十个 TUI 操作的远端回执。在模拟器脚本补上看板检索和共享设备审查断言，再触发同批验收。随后核验两份同源 arm64 APK 的哈希、ABI 与来源清单。[云端工作流](../.github/workflows/android-network-experiment.yml) · [分场景步骤](53-mobile-connection-diagnostics.md)
-2. **补手机原生网络链路。** 先验证 ZeroTier 身份在 Android 系统 KeyStore 下的创建、重启读回、拒绝错误实例和显式移除，再接指定网络上的 SSH、看板和观察。用独立获准的测试节点分别验收 Tailscale、EasyTier、ZeroTier，再验前台跨网并发。[设备存储与拨号的边界](55-mobile-shared-network-device.md)
+2. **补手机原生网络链路。** ZeroTier 身份在 Android 系统 KeyStore 下的创建、重启读回、拒绝错误实例和显式移除，已由新增的独立仪器化验证覆盖，先取 CI 的 API 35 模拟器产物并如实标注软件 KeyMint 边界，再接指定网络上的 SSH、看板和观察。用独立获准的测试节点分别验收 Tailscale、EasyTier、ZeroTier，再验前台跨网并发。[设备存储与拨号的边界](55-mobile-shared-network-device.md)
 3. **用真机结果决定选型。** 目前可用环境为云端和 Mac。取得实体 Android／iOS 后，使用相同字体、fixture、视口和负载检查扫码、输入法、滚动选择、锁屏、恢复及性能。以正确性作首要门槛，再比较维护成本、收敛高保真和组件库，接续桌面三平台。[技术栈复评](06-technology-evaluation.md) · [设计计划](08-ui-design-plan.md)
 
 本次收尾没有再触发云构建。核对时运行中和排队的 GitHub Actions 均为 0。测试浏览器、独立 Penpot 预览、临时服务与测试 JVM 均已退出，原有 Penpot 编辑页保留。工作区尚有早先的原生流和设计草稿，这些改动继续保留，未计入上述交付。

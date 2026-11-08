@@ -28,6 +28,8 @@
 
 临时浏览器及测试 JVM 已退出，合成身份在各自临时目录中清理。Android 的本地 JVM 测试和设备上的仪器化测试使用不同运行环境。后续设备验收需单独记录硬件状态、锁屏和应用重启行为。[结构化证据](evidence/mobile-pair-gui/shared-network-device-20261108.json) · [Android 本地测试](https://developer.android.com/training/testing/local-tests) · [Android 设备测试](https://developer.android.com/training/testing/instrumented-tests)
 
+Android 系统 KeyStore 的仪器化验证已就绪，但本机没有 Android SDK、NDK 和 AVD，只完成了编译校验，尚未运行。新增的独立仪器化 APK 直接编译 `android-production-sources.txt` 列出的三个生产文件，不注册任何 JCE provider，由 JCA 自行解析平台的 `AndroidKeyStore`，覆盖创建后磁盘只剩 374 字节密文、新建存储实例读回同一身份、篡改密文后的两步人工复核、错误实例号被拒、显式移除后系统密钥为空。运行结果只能来自 CI 的 API 35 模拟器产物；模拟器是软件 KeyMint，只证明平台 provider 路径，不构成硬件隔离、TEE 或 StrongBox 结论，锁屏与应用重启仍需真机。[仪器化说明](../validation/network-profiles/native/android/tests/instrumented/README.md)
+
 ## 如何复测
 
 使用已按仓库清单校验的 Kotlin 工具和本机 Gradle，以下命令均从仓库根目录执行。Gradle 输出参数要求一个尚不存在的目录。
@@ -41,4 +43,4 @@ python3 validation/network-profiles/native/android/tests/run-production-sources.
 
 Mac 原生身份试验另需已校验的公共源码缓存。复测说明列有从干净源码导出校验候选、构建并写出结果的命令，产物仅记录计数、清理结果及来源摘要。[原生身份复测步骤](../validation/native/candidates/zerotier/tests/identity-service/README.md)
 
-下一批先编译 Android 原生身份库，并通过手机宿主与 Android 系统 KeyStore 验证创建、重启重读和删除，再验证指定网络上的 SSH 主机核验、看板与持续观察。将本页的不可用与待定操作、看板检索，以及 Flutter 隐藏标签恢复后的十个 TUI 操作并入同一次 Android 构建验收。三种实际网络之间的前台并发按平台分别记录。[观察恢复与手机看板](54-mobile-host-search-and-observer-retirement.md)
+下一批先编译 Android 原生身份库，并通过手机宿主与 Android 系统 KeyStore 验证创建、重启重读和删除，再验证指定网络上的 SSH 主机核验、看板与持续观察。其中系统 KeyStore 一段已由新增的独立仪器化验证覆盖，先取 CI 的 API 35 模拟器产物，再补真机的锁屏与应用重启记录。将本页的不可用与待定操作、看板检索，以及 Flutter 隐藏标签恢复后的十个 TUI 操作并入同一次 Android 构建验收。三种实际网络之间的前台并发按平台分别记录。[观察恢复与手机看板](54-mobile-host-search-and-observer-retirement.md)

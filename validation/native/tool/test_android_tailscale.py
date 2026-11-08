@@ -217,6 +217,11 @@ class AndroidTailscaleTests(unittest.TestCase):
         elf = b'\x7fELF\x02\x01' + bytes(10) + struct.pack('<HH', 3, 183)
         (self.root / 'libheeler_easytier.so').write_bytes(elf + b'et')
         (self.root / ts.LIBRARY).write_bytes(elf + b'ts')
+        notice_records = {
+            filename: {'data': data, 'sourceLicenseSha256': hashlib.sha256(data).hexdigest()}
+            for filename, data in [('xterm-LICENSE', b'xterm MIT fixture'),
+                                   ('xterm-addon-unicode-graphemes-LICENSE', b'graphemes MIT fixture')]
+        }
         for app, app_lib, required in (
             ('flutter', 'libherdr_flutter_network_runtime.so', bundle.FLUTTER_JNI),
             ('tauri', 'libherdr_pocket_tauri_probe_lib.so', [bundle.BIND_NATIVE]),
@@ -229,11 +234,14 @@ class AndroidTailscaleTests(unittest.TestCase):
                     if include_et: archive.writestr('lib/arm64-v8a/libheeler_easytier.so', et if et is not None else (self.root / 'libheeler_easytier.so').read_bytes())
                     if include_ts: archive.writestr('lib/arm64-v8a/' + ts.LIBRARY, tailscale if tailscale is not None else (self.root / ts.LIBRARY).read_bytes())
                     archive.writestr('lib/arm64-v8a/' + app_lib, elf + b'app')
+                    if app == 'tauri':
+                        for filename, record in notice_records.items():
+                            archive.writestr('assets/' + filename, record['data'])
             def readelf(command, **_kwargs):
                 if '-d' in command:
                     return ''.join(' (NEEDED) Shared library: [' + dep + ']\n' for dep in dependencies) if command[-1].endswith(app_lib) else ''
                 return ''.join(f' {i}: 0000000000000100 16 FUNC GLOBAL DEFAULT 12 {symbol}\n' for i, symbol in enumerate(sorted(symbols)))
-            with self.subTest(app=app), mock.patch.object(bundle, 'verify', return_value={'tailscale': {}}), mock.patch.object(bundle.subprocess, 'check_output', side_effect=readelf):
+            with self.subTest(app=app), mock.patch.object(bundle, 'verify', return_value={'tailscale': {}}), mock.patch.object(bundle.subprocess, 'check_output', side_effect=readelf), mock.patch.object(bundle, 'collect_js_notices', return_value=notice_records):
                 create(); bundle.apk(apk, self.root, 'a' * 40, 'synthetic-readelf', app)
                 for missing in ('et', 'ts'):
                     create(include_et=missing != 'et', include_ts=missing != 'ts')

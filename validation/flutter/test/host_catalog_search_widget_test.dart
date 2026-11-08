@@ -25,7 +25,11 @@ Future<void> mount(WidgetTester tester,HostCatalog catalog,HostTabs tabs,TestDev
     offlineBuilder:(_) => const SizedBox())));
   await tester.pumpAndSettle();
 }
+Finder boardList() => find.descendant(of:find.byKey(const ValueKey('host-catalog-list')),matching:find.byType(Scrollable)).first;
 Future<void> query(WidgetTester tester,String value) async {
+  // The filter dropdown scrolls the board down, so the search field can be
+  // recycled out of the tree; a recycled field cannot scroll itself back.
+  tester.state<ScrollableState>(boardList()).position.jumpTo(0); await tester.pump();
   final field=find.byKey(const ValueKey('hosts-search'));
   await tester.ensureVisible(field); await tester.enterText(field,value); await tester.pump();
 }
@@ -59,9 +63,14 @@ void main() {
     await tester.pump();
     expect(tester.widget<TextField>(field).controller!.value.composing,const TextRange(start:0,end:4));
     expect(find.byKey(ValueKey('host-open-${a.id}')),findsOneWidget);
-    expect(find.byKey(ValueKey('host-open-${b.id}')),findsOneWidget);
     expect(find.byKey(ValueKey('host-card-${a.id}')),findsOneWidget);
     expect(find.textContaining('旧 provider 标签 tailscale 仅为资料'),findsOneWidget);
+    // The second row sits below the 320px viewport, so scroll it into view and
+    // back to the top afterwards to keep the search field mounted.
+    final openB=find.byKey(ValueKey('host-open-${b.id}'));
+    await tester.scrollUntilVisible(openB,250,scrollable:boardList());
+    expect(openB,findsOneWidget);
+    tester.state<ScrollableState>(boardList()).position.jumpTo(0); await tester.pump();
     await tapVisible(tester,'hosts-search-clear'); await tester.pump();
     expect(tester.widget<TextField>(field).controller!.text,isEmpty);
     expect(count(tester),'显示 2 / 2 台主机'); expect(tabs.tabs,isEmpty);

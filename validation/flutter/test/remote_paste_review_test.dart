@@ -248,8 +248,11 @@ void main() {
     final controller = await startDraft(tester,adapter,'original'); await press(tester,'remote-input-draft-paste');
     expect(find.textContaining('PRIVATE CLIP'),findsOneWidget);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden); await tester.pumpAndSettle();
-    expect(find.textContaining('PRIVATE CLIP'),findsNothing); expect(controller.text,'original'); expect(adapter.received,isEmpty);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pump();
+    expect(controller.text,'original'); expect(adapter.received,isEmpty);
+    // A hidden app draws no frames, so the revoked review route only leaves the
+    // tree on the first frame drawn after the app comes back.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pumpAndSettle();
+    expect(find.textContaining('PRIVATE CLIP'),findsNothing);
     expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox());
   });
   testWidgets('disconnect removes clipboard review and invalidates a retained action',(tester) async {

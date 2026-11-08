@@ -30,7 +30,9 @@ Future<void> tapReview(WidgetTester tester,String key) async {
   // Start from the top so scrollUntilVisible can reliably search downwards.
   tester.state<ScrollableState>(scrollable).position.jumpTo(0); await tester.pump();
   await tester.scrollUntilVisible(finder,250,scrollable:scrollable);
-  await tester.ensureVisible(finder); await tester.tap(finder); await tester.pumpAndSettle();
+  // The scroll offset only reaches the render tree on the next frame; without
+  // it the tap lands on the stale offset of a row outside the viewport.
+  await tester.ensureVisible(finder); await tester.pumpAndSettle(); await tester.tap(finder); await tester.pumpAndSettle();
 }
 void main() {
   testWidgets('impact is unknown while catalog is unavailable or writing, independent of native availability',(tester) async {
@@ -65,6 +67,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('networks-zerotier-device'))); await tester.pumpAndSettle();
     expect(find.text('ZeroTier · 共享设备身份'),findsOneWidget); expect(store.reads,1);
     await tapReview(tester,'zt-device-create'); expect(store.creates,1); expect(store.forgets,0);
+    // The create row sits far below the first section, which the list recycles
+    // once it scrolls out of the viewport.
+    final list=find.descendant(of:find.byKey(const ValueKey('zt-device-list')),matching:find.byType(Scrollable)).first;
+    tester.state<ScrollableState>(list).position.jumpTo(0); await tester.pump();
     expect(find.textContaining('所有 ZeroTier 公开网络共享'),findsOneWidget);
     await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
@@ -135,8 +141,10 @@ void main() {
     await showReview(tester,catalog,store,beforeForget:(_) async {});
     await tapReview(tester,'zt-device-review'); await tapReview(tester,'zt-device-acknowledge');
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused); await tester.pump();
-    expect(find.byKey(const ValueKey('zt-device-forget')),findsNothing);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pumpAndSettle();
+    // A paused app draws no frames, so the revoked review only leaves the tree
+    // on the first frame drawn after the app comes back.
+    expect(find.byKey(const ValueKey('zt-device-forget')),findsNothing);
     expect(store.reads,2); expect(store.forgets,0); expect(store.creates,0);
     await tapReview(tester,'zt-device-review');
     expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('zt-device-acknowledge'))).value,isFalse);
@@ -194,8 +202,10 @@ void main() {
     final catalog = ReviewCatalog(),store = MemoryZeroTierDeviceStore()..current = pendingState('recoverPendingDeletion','record-present');
     await showReview(tester,catalog,store); await tapReview(tester,'zt-pending-review-recoverPendingDeletion'); await tapReview(tester,'zt-pending-acknowledge');
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused); await tester.pump();
-    expect(find.byKey(const ValueKey('zt-pending-confirm')),findsNothing);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pumpAndSettle();
+    // A paused app draws no frames, so the revoked review only leaves the tree
+    // on the first frame drawn after the app comes back.
+    expect(find.byKey(const ValueKey('zt-pending-confirm')),findsNothing);
     await tapReview(tester,'zt-pending-review-recoverPendingDeletion');
     expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('zt-pending-acknowledge'))).value,isFalse);
     expect(store.deletionRecoveries,0); expect(store.forgets,0);

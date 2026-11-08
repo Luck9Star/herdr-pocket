@@ -12,6 +12,7 @@ import subprocess
 import sys
 import zipfile
 import android_tailscale
+import android_zerotier
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'validation/network-profiles'))
@@ -26,6 +27,8 @@ FLUTTER_JNI = [BIND_NATIVE] + [
     'Java_dev_herdr_pocket_NetworkRuntimeChannel_' + name
     for name in ('nativeCreateScope', 'nativeReserveOpen', 'nativeCall', 'nativeCloseScope')
 ]
+ZERO_TIER_JNI = ['Java_org_herdr_network_AndroidZeroTierNative_' + name
+                 for name in ('identityCreate', 'identityValidate', 'initializeDevice', 'retiredExactly')]
 SYSTEM = {'libc.so', 'libm.so', 'libdl.so', 'liblog.so', 'libandroid.so', 'libz.so',
           'libjnigraphics.so', 'libEGL.so', 'libGLESv2.so', 'libOpenSLES.so', 'libvulkan.so', 'libstdc++.so',
           'libnativewindow.so'}  # Public NDK library since API 26; this verifier requires API 35.
@@ -52,6 +55,8 @@ def elf(path, readelf, required=(), needed=(), allowed=()):
 
 def verify(bundle, commit, readelf):
     manifest = json.loads((bundle / 'manifest.json').read_text())
+    if manifest.get('provider') == 'zerotier':
+        return verify_zerotier(bundle, manifest, commit, readelf)
     if manifest['sourceCommit'] != commit or not re.fullmatch('[0-9a-f]{40}', commit):
         raise ValueError('source commit mismatch')
     if manifest['abi'] != 'arm64-v8a' or manifest['api'] != 35:
@@ -59,13 +64,22 @@ def verify(bundle, commit, readelf):
     if manifest['sourcesSha256'] != sha(ROOT / 'validation/native/sources.json') or manifest['patchManifestSha256'] != sha(ROOT / 'validation/native/patches/portable-manifest.json'):
         raise ValueError('native sources or patch manifest mismatch')
     files = manifest['files']
-    if manifest.get('schemaVersion', 1) not in (1, 2):
+    schema = manifest.get('schemaVersion', 1)
+    if schema not in (1, 2, 3):
         raise ValueError('unsupported native manifest schema')
-    if (manifest.get('schemaVersion', 1) == 2) != ('tailscale' in manifest):
+    if 'tailscale' in manifest and schema < 2:
         raise ValueError('Tailscale manifest/provider mismatch')
+    if 'zerotier' in manifest and schema < 3:
+        raise ValueError('ZeroTier manifest/provider mismatch')
+    if schema == 2 and 'tailscale' not in manifest:
+        raise ValueError('Tailscale manifest/provider mismatch')
+    if schema == 3 and 'zerotier' not in manifest:
+        raise ValueError('ZeroTier manifest/provider mismatch')
     required_files = {'libheeler_easytier.so', 'upstream-sources.lock', 'Heeler-Cargo.lock',
                       'reference-source.tar', 'easytier-source.tar', 'candidate-provenance.json',
                       'sources.json', 'build-details.json'}
+    if 'zerotier' in manifest:
+        required_files.add(android_zerotier.LIBRARY)
     if not required_files <= files.keys():
         raise ValueError('required library or source materials missing')
     for name, digest in files.items():
@@ -95,9 +109,32 @@ def verify(bundle, commit, readelf):
     elf(bundle / 'libheeler_easytier.so', readelf, SYMBOLS)
     if 'tailscale' in manifest:
         android_tailscale.verify(bundle, manifest['tailscale'], files, readelf, elf)
+    if 'zerotier' in manifest:
+        android_zerotier.verify(bundle, manifest['zerotier'], files, readelf, elf)
     return manifest
 
-def build(out, tailscale=False):
+def verify_zerotier(bundle, manifest, commit, readelf):
+    """Verify the standalone ZeroTier provider artifact."""
+    if manifest.get('schemaVersion') != 3 or manifest.get('provider') != 'zerotier':
+        raise ValueError('unsupported native manifest schema')
+    if manifest['sourceCommit'] != commit or not re.fullmatch('[0-9a-f]{40}', commit):
+        raise ValueError('source commit mismatch')
+    if manifest['abi'] != 'arm64-v8a' or manifest['api'] != 35:
+        raise ValueError('ABI/API mismatch')
+    if manifest['ndk'] != android_zerotier.NDK_VERSION:
+        raise ValueError('Android NDK mismatch')
+    files = manifest['files']
+    for name, digest in files.items():
+        relative = Path(name)
+        if relative.is_absolute() or '..' in relative.parts or not relative.parts:
+            raise ValueError('unsafe manifest path')
+        path = bundle / relative
+        if path.is_symlink() or not path.is_file() or sha(path) != digest:
+            raise ValueError('artifact hash mismatch: ' + name)
+    android_zerotier.verify(bundle, manifest['zerotier'], files, readelf, elf)
+    return manifest
+
+def build(out, tailscale=False, zerotier=False):
     import portable_candidate as candidate
     base = candidate.base
     if os.environ.get('GITHUB_ACTIONS') != 'true':
@@ -136,6 +173,10 @@ def build(out, tailscale=False):
     if tailscale:
         ts_record = android_tailscale.build(out.resolve(), base.WORK / 'tailscale',
             base.WORK / 'go-cache', Path(os.environ['ANDROID_HOME']) / 'ndk/28.2.13676358')
+    zt_record = None
+    if zerotier:
+        zt_record = android_zerotier.build(out.resolve(), base.WORK / 'zerotier',
+            base.WORK / 'zerotier-cache', Path(os.environ['ANDROID_HOME']) / 'ndk/28.2.13676358')
     files = {p.relative_to(out).as_posix(): sha(p) for p in sorted(out.rglob('*')) if p.is_file()}
     manifest = {'schemaVersion': 1, 'sourceCommit': os.environ['GITHUB_SHA'], 'abi': 'arm64-v8a', 'api': 35,
                 'ndk': '28.2.13676358', 'rust': '1.95.0', 'sourcesSha256': sha(ROOT / 'validation/native/sources.json'),
@@ -143,15 +184,39 @@ def build(out, tailscale=False):
                 'staticInspection': 'passed', 'androidLoad': 'not run', 'installation': 'not run', 'node': 'not run'}
     if ts_record:
         manifest.update(schemaVersion=2, tailscale=ts_record)
+    if zt_record:
+        manifest.update(schemaVersion=3, zerotier=zt_record)
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     (out / 'SHA256SUMS').write_text(''.join(f'{v}  {k}\n' for k, v in files.items()))
     verify(out, os.environ['GITHUB_SHA'], str(ndk / 'llvm-readelf'))
 
+def zerotier(out, ndk, work=None, cache=None):
+    """Build and verify the standalone ZeroTier provider artifact."""
+    if os.environ.get('GITHUB_ACTIONS') != 'true':
+        raise ValueError('Android native candidate build is CI-only')
+    temp = Path(os.environ['RUNNER_TEMP'])
+    work = work or temp / ('herdr-android-zerotier-' + os.environ['GITHUB_RUN_ID'])
+    cache = cache or temp / 'herdr-android-zerotier-cache'
+    out.mkdir(parents=True, exist_ok=False)
+    record = android_zerotier.build(out.resolve(), work, cache, Path(ndk))
+    files = {p.relative_to(out).as_posix(): sha(p) for p in sorted(out.rglob('*')) if p.is_file()}
+    manifest = {'schemaVersion': 3, 'provider': 'zerotier', 'sourceCommit': os.environ['GITHUB_SHA'],
+                'abi': 'arm64-v8a', 'api': 35, 'ndk': android_zerotier.NDK_VERSION,
+                'files': files, 'zerotier': record, 'staticInspection': 'passed',
+                'androidLoad': 'not run', 'installation': 'not run', 'node': 'not run'}
+    (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    (out / 'SHA256SUMS').write_text(''.join(f'{v}  {k}\n' for k, v in files.items()))
+    verify(out, os.environ['GITHUB_SHA'], str(android_zerotier.toolchain(ndk)['readelf']))
+
 def apk(path, bundle, commit, readelf, app):
     manifest = verify(bundle, commit, readelf)
+    if isinstance(manifest, dict) and manifest.get('provider') == 'zerotier':
+        raise ValueError('standalone ZeroTier artifact is not an APK provider bundle')
     providers = ['libheeler_easytier.so']
     if isinstance(manifest, dict) and 'tailscale' in manifest:
         providers.append(android_tailscale.LIBRARY)
+    if isinstance(manifest, dict) and 'zerotier' in manifest:
+        providers.append(android_zerotier.LIBRARY)
     app_lib = {'flutter': 'libherdr_flutter_network_runtime.so', 'tauri': 'libherdr_pocket_tauri_probe_lib.so'}[app]
     with zipfile.ZipFile(path) as archive:
         libs = [x for x in archive.namelist() if x.startswith('lib/') and x.endswith('.so')]
@@ -179,19 +244,23 @@ def apk(path, bundle, commit, readelf, app):
                 required = (FLUTTER_JNI if app == 'flutter' else [BIND_NATIVE]) if name == app_lib else []
                 if name == app_lib and android_tailscale.LIBRARY in providers:
                     required = list(required) + [android_tailscale.JNI_BIND]
+                if name == app_lib and android_zerotier.LIBRARY in providers:
+                    required = list(required) + ZERO_TIER_JNI
                 elf(extracted, readelf, required=required, needed=needed, allowed=set(names) - {name})
 
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest='command', required=True)
-    p = sub.add_parser('build'); p.add_argument('bundle', type=Path); p.add_argument('--tailscale', action='store_true')
+    p = sub.add_parser('build'); p.add_argument('bundle', type=Path); p.add_argument('--tailscale', action='store_true'); p.add_argument('--zerotier', action='store_true')
+    p = sub.add_parser('zerotier'); p.add_argument('bundle', type=Path); p.add_argument('--ndk', required=True); p.add_argument('--work', type=Path); p.add_argument('--cache', type=Path)
     p = sub.add_parser('verify'); p.add_argument('bundle', type=Path); p.add_argument('--commit', required=True); p.add_argument('--readelf', required=True)
     p = sub.add_parser('report'); p.add_argument('output', type=Path); p.add_argument('--commit', required=True); p.add_argument('--app', choices=['flutter', 'tauri'], required=True)
     p.add_argument('--checks', choices=['success', 'failure', 'cancelled', 'skipped', 'not_run'], default='not_run')
     p.add_argument('--transport-checks', choices=['success', 'failure', 'cancelled', 'skipped', 'not_run'], default='not_run')
     p = sub.add_parser('apk'); p.add_argument('apk', type=Path); p.add_argument('bundle', type=Path); p.add_argument('--commit', required=True); p.add_argument('--readelf', required=True); p.add_argument('--app', choices=['flutter', 'tauri'], required=True)
     a = parser.parse_args()
-    if a.command == 'build': build(a.bundle, a.tailscale)
+    if a.command == 'build': build(a.bundle, a.tailscale, a.zerotier)
+    elif a.command == 'zerotier': zerotier(a.bundle, a.ndk, a.work, a.cache)
     elif a.command == 'verify': verify(a.bundle, a.commit, a.readelf)
     elif a.command == 'report':
         report = {'sourceCommit': a.commit, 'app': a.app, 'abi': 'arm64-v8a', 'api': 35,

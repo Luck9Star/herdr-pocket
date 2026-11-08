@@ -322,3 +322,28 @@ jobs:
             ${{ runner.temp }}/zerotier-keystore-avd/
           if-no-files-found: warn
           retention-days: 14
+  zerotier-android-abi:
+    # Compile the pinned ZeroTier runtime for arm64-v8a with the pinned NDK.
+    # Standalone provider artifact: never loaded, never packaged into an APK.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - name: Run offline ZeroTier artifact verifier tests
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s validation/native/tool -p test_android_zerotier.py -v
+      - name: Install the pinned Android NDK
+        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager 'ndk;28.2.13676358'"
+      - name: Build and statically inspect the standalone ZeroTier artifact
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 validation/native/tool/android_bundle.py zerotier "$RUNNER_TEMP/android-zerotier" --ndk "$ANDROID_HOME/ndk/28.2.13676358"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-zerotier-native-${{ github.sha }}
+          path: ${{ runner.temp }}/android-zerotier
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

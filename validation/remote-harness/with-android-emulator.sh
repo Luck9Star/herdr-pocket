@@ -46,6 +46,13 @@ if [[ ! -x "$ANDROID_HOME/emulator/emulator" || ! -x "$ANDROID_HOME/platform-too
 fi
 # Save actual tool/image revisions as the SDK registry can update this package.
 cp "$ANDROID_HOME/system-images/android-35/google_apis/x86_64/source.properties" "$evidence_real/image.properties"
+# qemu-system-x86_64 resolves libpulse.so.0 at load time (even for -version),
+# and ubuntu-24.04 runners ship without it; supply it before touching the launcher.
+if ! ldconfig -p | grep -q 'libpulse\.so\.0'; then
+  evidence_event 'environment: installing libpulse0 required by emulator qemu'
+  sudo apt-get update -qq
+  sudo apt-get install -y --no-install-recommends libpulse0
+fi
 # The launcher sets its private library path. Check the actual launcher.
 emulator -version > "$evidence_real/emulator-version.txt"
 printf 'no\n' | avdmanager create avd --name "$name" --package "$image" --device pixel_5

@@ -32,6 +32,11 @@
       "sha256": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693"
     },
     {
+      "path": "zerotier-runtime/hp_zt_bound.h",
+      "destination": "include/hp_zt_bound.h",
+      "sha256": "2b5ba0292016bbee376cf7322485f71992171781562eed06e011bccb419cc456"
+    },
+    {
       "path": "zerotier-runtime/hp_zt_manager.h",
       "destination": "src/hp_zt_manager.h",
       "sha256": "0d476e9f5bb73a2a37814664669ba896d8eb6cf2fe115f8790ef3402096fc8c2"
@@ -109,6 +114,7 @@
     "ext/ZeroTierOne/node/ECC.hpp": "da314ade30130826eebc32aa96a5f5ed40b66cdb6c399e5717054861bb8c07d4",
     "ext/ZeroTierOne/node/Identity.cpp": "84dda1ab7abb90e9df791a714172955980a6b92a9f3f48ca8f8612a89b11a714",
     "include/ZeroTierSockets.h": "286dd2c193eb6423eeaed14cbb2a108eb76426f20547b75e17283ac7750dc3e4",
+    "include/hp_zt_bound.h": "2b5ba0292016bbee376cf7322485f71992171781562eed06e011bccb419cc456",
     "src/Controls.cpp": "67aa07b56e26e55e981cb28358f246f8c1d2d0930818daef19addd16eeacb6b1",
     "src/Events.cpp": "34c5b8a43494391b5c66f193f0a7c15a063f7a71999148b4e6860b55d7b76909",
     "src/Events.hpp": "ed38b2564ed26934a4e9d31dcdcb080469d51f0c7bd7ed2b85f299c74f802f8d",

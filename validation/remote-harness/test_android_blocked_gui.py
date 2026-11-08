@@ -141,6 +141,33 @@ class AndroidBoardAndDeviceGuards(unittest.TestCase):
             with self.subTest(changes=changes),self.assertRaises(android.GuiFailure):
                 android._board_counts({**snapshot,**changes})
 
+    def test_counter_context_separates_a_reset_page_from_a_silent_app_and_a_js_error(self):
+        healthy=android._public_counter_context({'readyState':'complete','internals':True,'invokeType':'function',
+            'url':'http://tauri.localhost/','present':True,'count':3,
+            'tallyKeys':['plugin:herdr|hosts','plugin:herdr|net|list'],'lastJsError':'x'*300})
+        self.assertEqual((healthy['present'],healthy['count']), (True,3))
+        self.assertEqual(healthy['tallyKeys'],['plugin:herdr|hosts','plugin:herdr|net|list'])
+        self.assertEqual(healthy['lastJsError'],'x'*200)
+        reset=android._public_counter_context({})
+        self.assertEqual((reset['present'],reset['count'],reset['tallyKeys'],reset['lastJsError']),(False,0,[],None))
+        hostile=android._public_counter_context({'present':'yes','count':-5,'tallyKeys':[1,'ok'],
+            'lastJsError':object()})
+        self.assertEqual((hostile['present'],hostile['count'],hostile['tallyKeys'],hostile['lastJsError']),(False,0,[],None))
+        overflowing=android._public_counter_context({'present':True,'count':2,'tallyKeys':['k'*80,'k'*80]})
+        self.assertEqual(overflowing['tallyKeys'],['k'*64,'k'*64])
+
+    def test_a_vanished_counter_fails_fast_instead_of_timing_out_as_no_ipc(self):
+        class Gone:
+            def invoke_counter(self):
+                raise android.GuiFailure('android_board_search_counter_read_invalid')
+        class Busy:
+            def invoke_counter(self):
+                raise android.GuiFailure('android_cdp_transport_failed')
+        with self.assertRaises(android.GuiFailure) as gone:
+            android._counter_count_reached(Gone(),1)
+        self.assertEqual(str(gone.exception),'android_board_search_counter_read_invalid')
+        self.assertFalse(android._counter_count_reached(Busy(),1))
+
     def test_shared_device_status_paths_are_classified_without_a_readable_device_state(self):
         self.assertEqual(android._device_class(
             {'status':'设备状态未知或共享设备能力不可用；受影响范围已列出，不能执行设备操作。','pending':False}),'unknown')

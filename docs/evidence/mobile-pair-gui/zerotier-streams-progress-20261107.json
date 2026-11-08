@@ -1,0 +1,351 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-07 Asia/Shanghai",
+  "baseCommit": "98473a699a055006e60b8c5c92ecdd54a28c13d3",
+  "workingTree": {
+    "state": "uncommitted",
+    "note": "This record captures the current worktree snapshot. The logs below do not embed the exact source SHA used at test time; current source snapshot hashes must not be treated as test-time hashes.",
+    "nativeDraftActivated": false,
+    "tapReconfigTest": {
+      "path": "validation/native/zerotier-runtime/tests/tap_reconfig_test.cpp",
+      "gitState": "untracked",
+      "executed": false,
+      "evidence": "No matching test log exists in the reviewed manager-v3 or boundary-v6 log sets."
+    },
+    "inactiveNativeDraft": {
+      "path": "validation/native/candidates/zerotier/drafts/0008-streams-in-progress.patch",
+      "sha256": "691bf868941c0d072946d076f02a6cc39391832676ae0f752f5aa2f49748e108",
+      "candidateManifestIncludesDraft": false
+    }
+  },
+  "checks": [
+    {
+      "name": "Overlay runtime default",
+      "result": "passed",
+      "kind": "Rust tests",
+      "passed": 5,
+      "failed": 0,
+      "log": "/private/tmp/herdr-zt-overlay-default-20261107.log",
+      "logSha256": "3ebefd7499ff32d6224e63fe62480cdc879e44ff9326fdf58d7b0a0a5df41711",
+      "scope": "Missing linked provider refuses before native custody; no ZeroTier node or network."
+    },
+    {
+      "name": "Overlay runtime fixture",
+      "result": "passed",
+      "kind": "Rust tests",
+      "passed": 43,
+      "failed": 0,
+      "log": "/private/tmp/herdr-zt-overlay-final-20261107.log",
+      "logSha256": "940ce4b83cad6d95e937d32e99ca66208c93be209fe962adac2fa95beffe37e5",
+      "scope": "Synthetic in-memory ABI; includes ZeroTier lease, status, stream and cleanup scenarios; no real node or network."
+    },
+    {
+      "name": "Overlay runtime Clippy",
+      "result": "passed",
+      "kind": "static check",
+      "log": "/private/tmp/herdr-zt-overlay-clippy-20261107.log",
+      "logSha256": "eb0644f0688e2772e8082f274651a3c4c5103d6e7562e541666cc1db83f760a7",
+      "scope": "Library target completed; this is not runtime evidence."
+    },
+    {
+      "name": "Android adapter explicit-feature check",
+      "result": "passed",
+      "kind": "cargo check",
+      "log": "/private/tmp/herdr-zt-android-adapter-parent-final-20261107.log",
+      "logSha256": "090b6f48f65f3d830a8c9ccfd96376d44633db488379f49d0dea675a2ed76da2",
+      "scope": "Compile/check only with fixture link configuration; does not prove production libzt or Android dynamic linking."
+    },
+    {
+      "name": "Android device-store core JVM checks",
+      "result": "passed",
+      "passed": 153,
+      "failed": 0,
+      "log": "/private/tmp/herdr-zt-device-core-parent-final-20261107.log",
+      "logSha256": "628cd0a85f430b4bc846f7621393b2639e31fec136ccda697ee0d33fd727562b",
+      "scope": "Desktop JVM, temporary JCE and synthetic identity; no AndroidKeyStore or node."
+    },
+    {
+      "name": "Android store wrapper JVM checks",
+      "result": "passed",
+      "passed": 36,
+      "failed": 0,
+      "log": "/private/tmp/herdr-zt-android-store-parent-20261107.log",
+      "logSha256": "29fdc373686e262fb573ab6b93b6308663223e448cef3f31e93987f091afe523",
+      "scope": "JVM Android stubs and test JCE provider only."
+    },
+    {
+      "name": "JNI checks",
+      "result": "passed",
+      "passed": 100,
+      "failed": 0,
+      "log": "/private/tmp/herdr-zt-jni-parent-final-20261107.log",
+      "logSha256": "ae4451c6d1b91e9d96b7225bf155974e02aaea76d124866058ddcc1b7f2ce168",
+      "scope": "Synthetic engine with JVM Android stubs; no Android device or production libzt runtime."
+    },
+    {
+      "name": "Flutter Rust host tests",
+      "result": "passed",
+      "passed": 13,
+      "failed": 0,
+      "log": "/private/tmp/herdr-zt-flutter-host-20261107.log",
+      "logSha256": "c62a34a1e75cd8273ff069a2f6aa85099ecd2707b6a33099f26022c7305cf530",
+      "scope": "Host Rust contract tests only; not Flutter analyzer, widget, GUI or device validation."
+    },
+    {
+      "name": "Tauri Rust host full suite",
+      "result": "passed",
+      "passed": 42,
+      "failed": 0,
+      "log": "/private/tmp/herdr-zt-tauri-host-20261107.log",
+      "logSha256": "db505f9938281470bc6daada99193a6e4f3ffc4f7e7815f6f713b308b5a11bdc",
+      "scope": "Host Rust tests; no WebView or Android installation proof."
+    },
+    {
+      "name": "Tauri ZeroTier status focused tests",
+      "result": "passed",
+      "passed": 13,
+      "failed": 0,
+      "filtered": 30,
+      "log": "/private/tmp/herdr-zt-tauri-network-final-20261107.log",
+      "logSha256": "675a38d198bbee2925f7c6c739ba2d07ebd9287f90176d0b0d12dfe76afb5d8c",
+      "scope": "Overlaps the Tauri Rust full suite; do not sum the counts."
+    },
+    {
+      "name": "Tauri UI JavaScript suite",
+      "result": "passed",
+      "passed": 135,
+      "failed": 0,
+      "log": "/private/tmp/herdr-zt-device-ui-parent-final2-20261107.log",
+      "logSha256": "c7d4e5c4858c4fb8002ed2b936640211143d398b17b811f6b921837e08c34b3e",
+      "scope": "Final parent rerun after three Tauri files were frozen; lightweight DOM tests, not real WebView or GUI acceptance."
+    },
+    {
+      "name": "Transport default suite",
+      "result": "passed",
+      "passed": 83,
+      "binaryTestsPassed": 1,
+      "failed": 0,
+      "log": "/private/tmp/herdr-zt-streams-mobile-20261107/default.log",
+      "logSha256": "b681acebb103ca8a999ed3a41d08826ea88c2ad4e6f821a6ca6134e743eb9f68",
+      "scope": "Full transport default suite; ZeroTier defaults reject before native source acquisition."
+    },
+    {
+      "name": "Transport combined fixture suite",
+      "result": "passed",
+      "passed": 98,
+      "binaryTestsPassed": 1,
+      "failed": 0,
+      "log": "/private/tmp/herdr-zt-streams-mobile-20261107/combined-fixtures.log",
+      "logSha256": "ecedde5ff4044b2424f07311dd05426416d49bb7fc5cd85a7d030a2e8c682b38",
+      "scope": "Combined EasyTier, Tailscale and ZeroTier synthetic ABI fixtures; verifies shared ZeroTier owner with separate profile leases and status/dial gating."
+    }
+  ],
+  "flutterUi": {
+    "result": "not_run",
+    "frozen": true,
+    "unitTestSourceCount": 15,
+    "widgetTestSourceCount": 9,
+    "scope": "Source review and whitespace only. No local Flutter SDK; analyzer, compilation, widget execution, real GUI and device accessibility remain unverified.",
+    "changes": [
+      "Device-wide operation retention across route closure and new store objects; original Future settles before another explicit mutation.",
+      "PopScope revokes review when route is popped, before reverse animation disposes the widget.",
+      "Status announcements, progress label, system-back coverage and recycled-card scrolling test helper."
+    ]
+  },
+  "nativeHistoricalEvidence": {
+    "sourceBinding": "These historical logs do not contain the final source SHA. They must not be presented as verification of the current native draft.",
+    "records": [
+      {
+        "name": "Manager v3 checks",
+        "passed": 109,
+        "log": "/private/tmp/herdr-zt-stream-manager-v3/manager.log",
+        "logSha256": "ce13f773fb3efd2870885a177ba4295d2f23f3427b18a08e0bb3f2dec9aab48f",
+        "scope": "Synthetic engine; no node or network."
+      },
+      {
+        "name": "Manager online-fence checks",
+        "passed": 6,
+        "log": "/private/tmp/herdr-zt-stream-manager-v3/online-fence.log",
+        "logSha256": "eeb9b4d07bedb4e909b52b0bb2b8946d211551daaaa3708c3ce006158eeeacac",
+        "scope": "Synthetic engine; no node or network."
+      },
+      {
+        "name": "Manager stream checks",
+        "passed": 198,
+        "log": "/private/tmp/herdr-zt-stream-manager-v3/stream.log",
+        "logSha256": "d249ebb6fbb49636ae79f7956a36d33a22193ac7bea6a009b605c72638e5bccb",
+        "scope": "Fault-injected C boundary; no overlay node."
+      },
+      {
+        "name": "lwIP boundary v6 checks",
+        "passed": 114,
+        "log": "/private/tmp/herdr-zt-stream-boundary-v6/test.log",
+        "logSha256": "3847f69fba4b0a8c2643a7076e8426a57bc86cfadbc1e2fc6fc8c1f6737b3695",
+        "scope": "In-memory IPv4/IPv6 checks; no ZeroTier node or host socket. Historical v6 result; later source changed."
+      }
+    ],
+    "compileLogs": [
+      {
+        "path": "/private/tmp/herdr-zt-stream-manager-v3/compile.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/private/tmp/herdr-zt-stream-manager-v3/compile-stream.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "tapReconfig": "No execution record."
+  },
+  "currentSourceSnapshots": {
+    "capturedFrom": "Current uncommitted worktree based on 98473a6; these are snapshot hashes now, not test-time hashes.",
+    "runtimeAndJni": [
+      {
+        "path": "validation/overlay-runtime/src/zerotier.rs",
+        "sha256": "de69dba6d59979bc855b3928cdfc406cbf72526faa9baecf309d36cdb3425dc4"
+      },
+      {
+        "path": "validation/overlay-runtime/src/nodes.rs",
+        "sha256": "d6db71f7853ac35666bbf911583cc5da68454f6db7555a083aa03588fe149f32"
+      },
+      {
+        "path": "validation/overlay-runtime/src/lib.rs",
+        "sha256": "e4fb79c7a061ec9b2e3ecedf5ba53e0fc99e8b72a51c3ac54b2eb345d85b8a4c"
+      },
+      {
+        "path": "validation/transport-rust/src/mobile_nodes.rs",
+        "sha256": "6aee5e4d78a99371cd14a47a27e1924e4d10d0dbe314e04484b85311d906b0f1"
+      },
+      {
+        "path": "validation/transport-rust/src/android_zerotier.rs",
+        "sha256": "bf6f1b578d017e57c7c41c9f0f7f56f6e897fb0b9e28cb8687568b61b15f8a82"
+      },
+      {
+        "path": "validation/android-network-source/src/lib.rs",
+        "sha256": "bb7ecd6a14bf95f3e60cf83fab86a9b4fd86711e1388dffda9bfb85d9dc79b0d"
+      },
+      {
+        "path": "validation/android-network-source/src/zerotier.rs",
+        "sha256": "494c72072d8385915b25e9224cfa7d61855a29bc593e028127f06d6347aad200"
+      },
+      {
+        "path": "validation/network-profiles/native/android/AndroidZeroTierDeviceStore.java",
+        "sha256": "5fa62715f1e53d366be6fd8b9630222e7d58219eb499696ac75e0f8e6b5d8b78"
+      },
+      {
+        "path": "validation/network-profiles/native/android/ZeroTierDeviceStoreCore.java",
+        "sha256": "905c9bfd5d7a139b1608607e35ebe491daf498d9147203221a7948adb742a7c6"
+      },
+      {
+        "path": "validation/network-profiles/native/android/AndroidZeroTierNative.java",
+        "sha256": "e576ec37d69aab33a586fb19fb22b0d55ee543565cac2fb0fcd2ec01e979066f"
+      }
+    ],
+    "frozenTauriUi": [
+      {
+        "path": "validation/tauri/src/zerotier-device-ui.js",
+        "sha256": "75fa41fa4af7c5fc3f6e38c27cea42f07cb0b4a7ff3bd27aa2906fbfd4bceb18"
+      },
+      {
+        "path": "validation/tauri/src/network-ui.js",
+        "sha256": "bc0dd3b36142d9186771011f26b1712ad655c66cb6da7d50ef23fda3da37840f"
+      },
+      {
+        "path": "validation/tauri/test/zerotier-device-ui.test.mjs",
+        "sha256": "7084e45d755f2c59379207e6e717adef2476a7ab11009466d852ef306952c8ec"
+      }
+    ],
+    "flutterUi": [
+      {
+        "path": "validation/flutter/lib/zerotier_device.dart",
+        "sha256": "cc1577ac57f1a92505efb29f9128535847c979a2ad6cc9b4f4f793fbcf0e5737",
+        "tested": false
+      },
+      {
+        "path": "validation/flutter/lib/zerotier_device_dialog.dart",
+        "sha256": "5853f1bb7b0f1b5330983db6ea562bf1268efaa5467040b19bcff148879a7c50",
+        "tested": false
+      },
+      {
+        "path": "validation/flutter/lib/network_profiles_page.dart",
+        "sha256": "d7fc90e7258ca8ccadd8e3bf6a001dccbe7f6f14bb8714ca45e4c64c2bf2e948",
+        "tested": false
+      },
+      {
+        "path": "validation/flutter/test/zerotier_device_test.dart",
+        "sha256": "d511e6b605d2a7b23136bc8eae04c897be781c0c4320fd7bc6c8c5d86edea5d6",
+        "tested": false
+      },
+      {
+        "path": "validation/flutter/test/zerotier_device_dialog_test.dart",
+        "sha256": "5e980f7a248aced311f92dabba9afcbf31bea9d7d7a06c520957084ebee43eda",
+        "tested": false
+      }
+    ]
+  },
+  "priorPublishedArtifacts": {
+    "result": "previous batch only; not a new ZeroTier build",
+    "verification": "Parent read-only GitHub connector check",
+    "runId": "42247482105",
+    "sourceCommit": "750798fe6bf5e396768333c1abe8c96ff0dd2178",
+    "jobs": "flutter-source, native, transport-source, apps(tauri), apps(flutter): completed/success",
+    "artifacts": [
+      {
+        "id": "13519144162",
+        "name": "Flutter APK artifact",
+        "expired": false,
+        "expiresAt": "2026-11-20T16:06:49Z",
+        "zipDigestSha256": "c5eab5cd9c996c7b76086d79298c714e076cde52705f75a5d72768a9860a5156"
+      },
+      {
+        "id": "13518524214",
+        "name": "Tauri APK artifact",
+        "expired": false,
+        "expiresAt": "2026-11-20T16:08:38Z",
+        "zipDigestSha256": "b9d56d8cd3623a47994a9e124c6338faff1e9d2c46cfd2205c9ffaca6a6ddda2"
+      }
+    ],
+    "repositoryVisibility": "public",
+    "checkedOn": "2026-11-07 Asia/Shanghai"
+  },
+  "notEstablished": [
+    "Current native draft is not activated and its final full-library build is not verified.",
+    "No tap_reconfig_test execution is recorded.",
+    "No new CI run or APK was produced for this batch.",
+    "No app was opened; no Android installation, AndroidKeyStore, device, real identity, ZeroTier node, join, host network or real overlay result is claimed.",
+    "Flutter UI tests and analyzer were not run; source snapshots are frozen for later cloud validation, not a claim of compilation or passing tests."
+  ],
+  "safety": {
+    "realCredentialsRead": false,
+    "realIdentityRead": false,
+    "networkNodesStarted": false,
+    "networkJoinAttempted": false,
+    "guiAppsOpened": false,
+    "newCiTriggered": false,
+    "newApkBuilt": false
+  },
+  "nativeInterruption": {
+    "source": "Subagent runtime automatic security review",
+    "reportedReason": "possible cybersecurity risk",
+    "unfinishedPathContinued": false,
+    "scope": "Native manager/stream implementation and independent review interrupted. Incomplete callback lifetime work and native source draft are retained, not activated or validated as current. Independent GUI work continued."
+  },
+  "knownFailures": [
+    {
+      "scope": "Initial transport run in default sandbox",
+      "failed": 24,
+      "reason": "Loopback bind denied (OS 1). Same scoped suite subsequently passed outside sandbox using isolated test peers."
+    },
+    {
+      "scope": "Device core check command",
+      "exitCode": 127,
+      "reason": "Incorrect run-zerotier.sh filename; corrected run-zerotier-device.sh passed."
+    },
+    {
+      "scope": "Transport strict Clippy",
+      "diagnostics": 12,
+      "result": "prior diagnostics remain; not revalidated in this batch"
+    }
+  ]
+}

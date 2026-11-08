@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-11-07 Asia/Shanghai",
+  "baseCommit": "98473a699a055006e60b8c5c92ecdd54a28c13d3",
+  "branch": "codex/core-prototype-validation",
+  "workingTree": "uncommitted",
+  "newCiTriggered": false,
+  "newApkBuilt": false,
+  "guiAppsOpened": false,
+  "zeroTierNativeEnabled": false,
+  "checks": [
+    {
+      "name": "Device core",
+      "command": "sh validation/network-profiles/native/android/tests/run-zerotier-device.sh",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 215,
+      "log": "/private/tmp/herdr-zt-pending-core-20261107.log",
+      "logSha256": "020943e02dd30f5da36de0d4cbd2e913a3d7476368e78198011bf4df24218325",
+      "scope": "Synthetic identity and temporary JCE; real core with isolated filesystem faults; no node."
+    },
+    {
+      "name": "Shared Java service",
+      "command": "sh validation/network-profiles/native/android/tests/run-zerotier-service.sh",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 128,
+      "log": "/private/tmp/herdr-zt-pending-service-parent-20261107.log",
+      "logSha256": "b4cb3682010cd5442ede83a7ec071775fd45a36e4947cdac5379c93cbe26227d",
+      "scope": "Four isolated JVM modes 8/58/40/22; real service/wrapper/core, synthetic Android/JCE; test-side reflected core injection for file faults."
+    },
+    {
+      "name": "Android wrapper",
+      "command": "sh validation/network-profiles/native/android/tests/run-zerotier-android.sh",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 36,
+      "log": "/private/tmp/herdr-zt-pending-wrapper-20261107.log",
+      "logSha256": "29fdc373686e262fb573ab6b93b6308663223e448cef3f31e93987f091afe523",
+      "scope": "JVM Android stubs and test JCE provider; no device KeyStore."
+    },
+    {
+      "name": "JNI regression",
+      "command": "sh validation/android-network-source/tests/run-zerotier-jvm.sh",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 100,
+      "log": "/private/tmp/herdr-zt-pending-jni-20261107.log",
+      "logSha256": "245d87ad97099e48e1b1b99d314ea49535627d07d4c8ab94245e9ed606c3fe53",
+      "scope": "Real JNI/Java with synthetic engine; no actual libzt node/network."
+    },
+    {
+      "name": "Flutter Kotlin channel",
+      "command": "python3 validation/flutter/native/android/tests/run_zerotier_device_probe.py --kotlin-dir /private/tmp/herdr-kotlin-2.2.21-check",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 177,
+      "log": "/private/tmp/herdr-zt-pending-flutter-kotlin-parent-20261107.log",
+      "logSha256": "4c8c11edf1d369e0976026be7e53530e2d8f37ffa15318d0804e90bc0fa5fde7",
+      "scope": "Real Kotlin channel/catalog, synthetic Android/Flutter/service; not end-to-end with the real Java service."
+    },
+    {
+      "name": "Tauri JavaScript",
+      "command": "npm test (cwd: validation/tauri)",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 143,
+      "log": "/private/tmp/herdr-zt-pending-js-parent-20261107.log",
+      "logSha256": "1821082a0c13dd47b3e88a5b929cd78dc4537256010b11b88faf4e7e911c75a6",
+      "scope": "Node tests with synthetic DOM/IPC; no real GUI."
+    },
+    {
+      "name": "Tauri Rust host",
+      "command": "cargo test --offline --lib --manifest-path validation/tauri/src-tauri/Cargo.toml",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 51,
+      "log": "/private/tmp/herdr-zt-pending-rust-parent-20261107.log",
+      "logSha256": "c2f65a0c561a8fd6f37d5fb038002c154717e1ab66c9ec5fd1b3e6998165ce57",
+      "scope": "Mac default features; Android cfg not compiled."
+    },
+    {
+      "name": "Tauri Kotlin plugin",
+      "command": "python3 validation/tauri/test/android-network-plugin-test.py /private/tmp/herdr-kotlin-2.2.21-check",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 3360,
+      "log": "/private/tmp/herdr-zt-pending-tauri-kotlin-parent-20261107.log",
+      "logSha256": "59cb7323fcb8d4423a35ff3c9dde41493c2eb35ec1793a6c3bcee50cc852d6d0",
+      "scope": "Real Kotlin plugin/coordinator with synthetic SDK/service; includes 1100 loop iterations, not 3360 independent device scenarios."
+    }
+  ],
+  "sourceSnapshot": {
+    "binding": "Production sources frozen by owners; parent independently reran listed commands, then captured hashes. Logs do not embed source SHA. Not a committed build provenance record.",
+    "files": [
+      {
+        "path": "validation/network-profiles/native/android/AndroidZeroTierDeviceService.java",
+        "sha256": "ba9b470aa04591d49b1460f4c32a6c81de137d20c3171754c15aec0d2a403315"
+      },
+      {
+        "path": "validation/network-profiles/native/android/AndroidZeroTierDeviceStore.java",
+        "sha256": "19e2aef1479536906046ef5a144a19f50f05429de6dad573b0fe4648d1546471"
+      },
+      {
+        "path": "validation/network-profiles/native/android/ZeroTierDeviceStoreCore.java",
+        "sha256": "b4e56d5134e9268c6f6d5a990e64a3d2bd8ab8356b2bc00858f2038fdd5430b9"
+      },
+      {
+        "path": "validation/network-profiles/native/android/AndroidZeroTierNative.java",
+        "sha256": "a4529006667de87e001241f6f80b7b25c87e0dd82dfe5083b20160abfd6c9f08"
+      },
+      {
+        "path": "validation/network-profiles/native/android/tests/ZeroTierDeviceServiceTest.java",
+        "sha256": "a9694f31f3e5e4c3becbf2f1a439ab70a755bb52d191203655c3c2824fc50e3f"
+      },
+      {
+        "path": "validation/network-profiles/native/android/tests/run-zerotier-service.sh",
+        "sha256": "8d5e4b8b2494ec04a082e5cdff86f248a444fc474a8d2def54f859189400bc28"
+      },
+      {
+        "path": "validation/android-network-source/tests/run-zerotier-jvm.sh",
+        "sha256": "4b6ae5e090ba25e766272c00f2cc41bdf7d6d0af6885be6b2e2c997c7ffcd118"
+      },
+      {
+        "path": "validation/flutter/native/android/ZeroTierDeviceChannel.kt",
+        "sha256": "9085902f3cbbffd2fac34751ecf5a594511b670d43908918709292b86eed9d99"
+      },
+      {
+        "path": "validation/flutter/native/android/HostCatalogFile.kt",
+        "sha256": "a801d95e99a16b81c36745ecd0427b0f3dd14432702e99bd3e98a05fbe5753f3"
+      },
+      {
+        "path": "validation/flutter/native/android/MainActivity.kt",
+        "sha256": "30366e34dc50213ba184d6da7ba083c3d9e9b112ee887cd9d733fcc5e6dffaba"
+      },
+      {
+        "path": "validation/flutter/native/android/tests/ZeroTierDeviceProbe.kt",
+        "sha256": "8b81f71be75d0fa9669b78a03a8a3a7895c94294ad96c893e001f7b0f987aca7"
+      },
+      {
+        "path": "validation/flutter/native/android/tests/run_zerotier_device_probe.py",
+        "sha256": "d38c853591ffa0b433cf209847f9bb62d2d744decbdf453157a73dfce859c3c5"
+      },
+      {
+        "path": "validation/flutter/native/android/tests/run_input_journal_probe.py",
+        "sha256": "aaa94b4389a2ae02e5196bf9dc98803e537071a899ebfdb2d49deb8638cea8c8"
+      },
+      {
+        "path": "validation/flutter/tool/ci.py",
+        "sha256": "f3abefa9e488186187b9a01f2f2bf4c3f65b6b2d50b31a3b6dcbc96a00ae3e60"
+      },
+      {
+        "path": "validation/flutter/lib/zerotier_device.dart",
+        "sha256": "32910041c0286ef3f04d262fd73f26676c85575def6b8cedab1641914e61e887"
+      },
+      {
+        "path": "validation/flutter/lib/zerotier_device_dialog.dart",
+        "sha256": "8187ea79841ad93829ba352eb572e5564ee81121e035c34d45444ec06ea20bda"
+      },
+      {
+        "path": "validation/flutter/lib/network_profiles_page.dart",
+        "sha256": "d7fc90e7258ca8ccadd8e3bf6a001dccbe7f6f14bb8714ca45e4c64c2bf2e948"
+      },
+      {
+        "path": "validation/flutter/test/zerotier_device_test.dart",
+        "sha256": "2cb4dc895abc3dac8056e3b8e39bb72e58c6c9a0796891e1a969950181eea1b0"
+      },
+      {
+        "path": "validation/flutter/test/zerotier_device_dialog_test.dart",
+        "sha256": "6d1852a7468f0fcc2089453e582aedbcaf7a14a48bf71a9002272b3bafe95b1c"
+      },
+      {
+        "path": "validation/tauri/android/DeviceKeysPlugin.kt",
+        "sha256": "2d31c2711f15f541c3f4ecc52bb1756f6bc79d188dbf25fa4e670b25031c85ea"
+      },
+      {
+        "path": "validation/tauri/test/NetworkPluginProbe.kt",
+        "sha256": "40eff01dd1a0ccdb44c0dedae33791cb3afb7d38939fd4bcbb5ae88fdd005b24"
+      },
+      {
+        "path": "validation/tauri/test/android-network-plugin-test.py",
+        "sha256": "b46a2d8445ab0cf4e55bf00521a8ad8578086549c4c17ecc186362f7d0a1b520"
+      },
+      {
+        "path": "validation/tauri/src-tauri/src/zerotier_device.rs",
+        "sha256": "c8bc91ea8968777d851c7a4286c642a4f887461f5b6b6358e659239e033d005d"
+      },
+      {
+        "path": "validation/tauri/src-tauri/src/android_keys.rs",
+        "sha256": "8ee4b0ff856301a24d069ddde354d7e232d6a9086fc38cac4d792e87a3627e25"
+      },
+      {
+        "path": "validation/tauri/src-tauri/src/lib.rs",
+        "sha256": "f89586fafedd412a639c93e398f26dc6ee4fb37902fd0c9ad97d4c4d779297f2"
+      },
+      {
+        "path": "validation/tauri/src-tauri/src/hosts.rs",
+        "sha256": "dd775d35ecbf4508ebc68ecdaaddd24d73ddda15ab2329c69f45db9a1dfb1093"
+      },
+      {
+        "path": "validation/tauri/src-tauri/capabilities/default.json",
+        "sha256": "053cba706b776de94f99fe0833335ccfe78bf0ea4b510c81e164672e020b9712"
+      },
+      {
+        "path": "validation/network-profiles/native/android/tests/ZeroTierDeviceStoreCoreTest.java",
+        "sha256": "a6f522bd516fa5f4b70a71da51695706a37a0965e3b489ad8c8ed7f5a454e60b"
+      },
+      {
+        "path": "validation/tauri/src/zerotier-device-ui.js",
+        "sha256": "b4b559650c5a4d890f38a3d60dcbbf119fbd771f28109865c78bd79d9bd46aed"
+      },
+      {
+        "path": "validation/tauri/test/zerotier-device-ui.test.mjs",
+        "sha256": "2ed70d9748b58cf666e1eb464a50510fc5d3f4afd165936c4c8157d94d95a23c"
+      }
+    ]
+  },
+  "additionalChecks": {
+    "pythonAndProvenance": {
+      "log": "/private/tmp/herdr-zt-pending-provenance-20261107.log",
+      "logSha256": "f12dfbd9455418fd0b5099809ee51b0a0ac3e18f31c3e3d578cdf10348c10cdd",
+      "result": "3 Python source files parsed; 9 ZeroTier source records resolved; no package built"
+    },
+    "protectedHashesUnchanged": {
+      "design/penpot/build-v2.js": "34d9928f02e6fac2e24dc45ed643e7656a8ff1e796e46b70cc7346b5fff52957",
+      "validation/native/zerotier-candidate.json": "40630720f1ba92cea5ca8d7134162fde62e7e3c9f529fac38deba6bad68306e1"
+    }
+  },
+  "flutterTests": {
+    "unitSourceCount": 24,
+    "widgetSourceCount": 14,
+    "state": "not_run",
+    "reason": "No local Flutter SDK; source-only additions and static checks do not establish compilation or execution."
+  },
+  "independentReview": {
+    "agent": "device_host_completion_review",
+    "model": "gpt-6.1-sol",
+    "effort": "xhigh",
+    "scope": "Read-only cross-layer phase checks, epoch/catalog invalidation, no replay, exact pending-only deletion, readback result matching.",
+    "result": "No reproducible new defect found; no tests or external environment accessed."
+  },
+  "reviewCorrection": "Tauri discard confirmation originally accepted an installed record with the same handle. Parent required all three records null; fixed and covered by a negative test before final 143-test parent run.",
+  "phaseContract": {
+    "recoverPendingCreation": [
+      "record-present",
+      "finishing"
+    ],
+    "discardPendingCreation": [
+      "record-pending",
+      "finishing"
+    ],
+    "recoverPendingDeletion": [
+      "record-present",
+      "record-removed",
+      "finishing"
+    ],
+    "create": null,
+    "forget": null
+  },
+  "limits": [
+    "Native ZeroTier store binding not enabled; normal app reports unavailable.",
+    "ZeroTier C++ stream/lifecycle/reconfiguration draft remains unfinished and inactive.",
+    "No current APK includes these working-tree changes.",
+    "Kotlin channel/plugin probes use a synthetic service separately from real service tests.",
+    "Android cfg/full APK/device runtime not tested in this batch.",
+    "No phone touch, IME, camera, real KeyStore or three-network concurrency evidence added.",
+    "No Penpot or actual GUI rendering/accessibility verification in this batch.",
+    "Tauri completion fence retains locks on permanent IPC/storage hang; no bounded recovery-time guarantee."
+  ]
+}

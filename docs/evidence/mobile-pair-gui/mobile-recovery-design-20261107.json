@@ -1,0 +1,472 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-11-07 Asia/Shanghai",
+  "baseCommit": "98473a699a055006e60b8c5c92ecdd54a28c13d3",
+  "branch": "codex/core-prototype-validation",
+  "workingTree": "uncommitted; existing unrelated and earlier batch changes preserved",
+  "newCiTriggered": false,
+  "newApkBuilt": false,
+  "zeroTierNativeEnabled": false,
+  "checks": [
+    {
+      "name": "Tauri JavaScript",
+      "command": "npm test (cwd: validation/tauri)",
+      "result": "passed",
+      "exitCode": 0,
+      "count": 154,
+      "log": "/private/tmp/herdr-mobile-recovery-js-parent-20261107.log",
+      "logSha256": "a021590c4e197679d8d562b170211ca34e74b095ece9de741a315ad7f58ee917",
+      "scope": "Node tests with synthetic DOM/IPC, not native phone runtime."
+    },
+    {
+      "name": "Tauri frontend build",
+      "command": "npm run build (cwd: validation/tauri)",
+      "result": "passed",
+      "exitCode": 0,
+      "count": null,
+      "log": "/private/tmp/herdr-mobile-recovery-build-parent-20261107.log",
+      "logSha256": "7480c6df44cbb89154fc20c4e49c72dac67debcd49ae79004be79775663445ab",
+      "scope": "Vite build and shared font/fixture hashes; not Android native compilation."
+    },
+    {
+      "name": "Dart syntax parse",
+      "command": "tree-sitter-dart parse all validation/flutter/lib and validation/flutter/test Dart sources",
+      "result": "passed",
+      "exitCode": 0,
+      "count": 63,
+      "log": "/private/tmp/herdr-mobile-recovery-dart-parse-20261107.log",
+      "logSha256": "df1f0ef76b980e5d5d6de95d36ef2b5238312ba1766b9b11a0832d641a17d310",
+      "scope": "Syntax only. Flutter analyzer, unit/widget and opt-in SSH not run."
+    }
+  ],
+  "sourceSnapshot": {
+    "binding": "Owners froze these sources; parent independently ran listed checks, then captured current hashes. Test logs do not embed the source SHA; this is not committed-build provenance.",
+    "files": [
+      {
+        "path": "validation/flutter/lib/remote_adapter.dart",
+        "sha256": "ef7ddf8e885a29f7f9ef7b3a7742a3e8a8d81fad2c8ec3a10cb5a62db96ef527"
+      },
+      {
+        "path": "validation/flutter/lib/remote_page.dart",
+        "sha256": "57358bea1bb2fc0de2897a8af7c4d3fc194985feb2142be9906ffd43d72dd935"
+      },
+      {
+        "path": "validation/flutter/test/remote_dashboard_time_test.dart",
+        "sha256": "d6b7e74d62c5770415cb9c7f7c379a08ace9e8c18ea97cc9389e9ef9004fe53a"
+      },
+      {
+        "path": "validation/flutter/test/remote_unsent_drafts_test.dart",
+        "sha256": "c0d298e155538d546ce8e836238e71fb479793fee5c7a6f44f899934e0fa4bd9"
+      },
+      {
+        "path": "validation/flutter/test/pairing_gui_ssh_test.dart",
+        "sha256": "5ee55a27812d098663ee1bd5f1cd1850afab4e5670b1f0f3ddf516d5095cd7b9"
+      },
+      {
+        "path": "validation/tauri/src/tab-workspace.js",
+        "sha256": "ec8154d428eeede18915e41f96bed81463b38d68655d5fe87597d40a7549ea18"
+      },
+      {
+        "path": "validation/tauri/test/tab-workspace.test.mjs",
+        "sha256": "9651baa4258782dce4875a8ff0e45d552522a58b908ff49b17138d1e08acfdce"
+      }
+    ]
+  },
+  "dartParsedSources": [
+    {
+      "path": "validation/flutter/lib/config_transfer.dart",
+      "sha256": "9741c4fb699c711c704a03b5d0b38e84705e88d7a93f1638b966d109a04da2a1"
+    },
+    {
+      "path": "validation/flutter/lib/config_transfer_page.dart",
+      "sha256": "f2993cba5f044cede1b2d99e888665c275d4e9d6c1e4df64e7c4d11dec4fb347"
+    },
+    {
+      "path": "validation/flutter/lib/design_tokens.dart",
+      "sha256": "9e1ad51f28b80d13f8171f7bd61a22d81cc4931df0bf3a71b256053de439f921"
+    },
+    {
+      "path": "validation/flutter/lib/device_keys.dart",
+      "sha256": "998073281bc319f668a524f29d2f887a57aeeb4ef812e4fb0c69605c31c2c0ea"
+    },
+    {
+      "path": "validation/flutter/lib/host_catalog.dart",
+      "sha256": "6009dc59150326e5fb2e02eee5682d89a171892b22777e1b6ca8b660e568ee6e"
+    },
+    {
+      "path": "validation/flutter/lib/host_catalog_page.dart",
+      "sha256": "87910bdb4a0420bc8fa806aa06d4239e00d5749f2ef1be723babda7529670cd7"
+    },
+    {
+      "path": "validation/flutter/lib/host_tabs.dart",
+      "sha256": "b662179a632ea4ea1192e7a37c438a4a348603fb318d3d4a366f1f72c58f29a6"
+    },
+    {
+      "path": "validation/flutter/lib/main.dart",
+      "sha256": "2b2f04aee33f41a4fa4df0d8d45510e88c20da94b704a76c7d430d3c803b45e2"
+    },
+    {
+      "path": "validation/flutter/lib/network_identity.dart",
+      "sha256": "db8afe6e223b5b2369b0f70cd567aaba56d652d5ab1bcadd255585d20148068e"
+    },
+    {
+      "path": "validation/flutter/lib/network_identity_dialog.dart",
+      "sha256": "94c900ef84291a6d39a5f3d3fcf29097743211272e35f4e85b2f92579d100bc8"
+    },
+    {
+      "path": "validation/flutter/lib/network_login.dart",
+      "sha256": "8ac37f6c5e44f2587fc48170bdf3301403538e21f5396f55d9b02888e7e2f352"
+    },
+    {
+      "path": "validation/flutter/lib/network_login_dialog.dart",
+      "sha256": "8bbddebf526af50f657d4ef576bb87194889e56403257066a71d00f5198f9ea1"
+    },
+    {
+      "path": "validation/flutter/lib/network_profiles.dart",
+      "sha256": "f04e2f2e1c53f1e3188bfa7a5c518bd3f18138ef4db9c1cbe9ff6aee6c870b34"
+    },
+    {
+      "path": "validation/flutter/lib/network_profiles_page.dart",
+      "sha256": "d7fc90e7258ca8ccadd8e3bf6a001dccbe7f6f14bb8714ca45e4c64c2bf2e948"
+    },
+    {
+      "path": "validation/flutter/lib/network_runtime.dart",
+      "sha256": "6c72235d4c985ed734f745ca28411c5bbd93e4b3d1d444e3588f9317e2f8aa60"
+    },
+    {
+      "path": "validation/flutter/lib/pairing.dart",
+      "sha256": "49fd14094ea77df8d1346b1242fc7cafe675904f29588b7536b23fee6a08570f"
+    },
+    {
+      "path": "validation/flutter/lib/pairing_page.dart",
+      "sha256": "a0b7f77c57c1979ee351445de0991e319e973f184f27c66905dc46edb8cd3d84"
+    },
+    {
+      "path": "validation/flutter/lib/probe_gate.dart",
+      "sha256": "e789067a30b7dba81fb39066e21efd344d0ab2538368babd3143e5aa75660234"
+    },
+    {
+      "path": "validation/flutter/lib/remote_adapter.dart",
+      "sha256": "ef7ddf8e885a29f7f9ef7b3a7742a3e8a8d81fad2c8ec3a10cb5a62db96ef527"
+    },
+    {
+      "path": "validation/flutter/lib/remote_auxiliary.dart",
+      "sha256": "70d8a0e32aeb4abbbb92e3ac208b2ebe32efbf6ab5a9e2fd3db9d683af3d14ed"
+    },
+    {
+      "path": "validation/flutter/lib/remote_input.dart",
+      "sha256": "6e8af4fb754e5f6c20f49603b01740329b2cfb6c87f6c5f9dd7f01d8ceed7eea"
+    },
+    {
+      "path": "validation/flutter/lib/remote_input_platform.dart",
+      "sha256": "bf2f0fb4a10e644de2025411cb9fd81abdd390fc3f62386b014de4c4b4141b5d"
+    },
+    {
+      "path": "validation/flutter/lib/remote_page.dart",
+      "sha256": "57358bea1bb2fc0de2897a8af7c4d3fc194985feb2142be9906ffd43d72dd935"
+    },
+    {
+      "path": "validation/flutter/lib/zerotier_device.dart",
+      "sha256": "32910041c0286ef3f04d262fd73f26676c85575def6b8cedab1641914e61e887"
+    },
+    {
+      "path": "validation/flutter/lib/zerotier_device_dialog.dart",
+      "sha256": "8187ea79841ad93829ba352eb572e5564ee81121e035c34d45444ec06ea20bda"
+    },
+    {
+      "path": "validation/flutter/test/config_transfer_test.dart",
+      "sha256": "305e2128f4ffb6839e64b13c733d0c027d9ca6a399a8aebaedde52e8a2bb7ae2"
+    },
+    {
+      "path": "validation/flutter/test/config_transfer_v2_test.dart",
+      "sha256": "51870c0ad771f3f46fb047786aeb706f16e27a262859b89baceadca6d5385c36"
+    },
+    {
+      "path": "validation/flutter/test/config_transfer_widget_test.dart",
+      "sha256": "ada11c7e22a82554a849a8a4b6e8e96bf159134510dca05e070d1304536f4384"
+    },
+    {
+      "path": "validation/flutter/test/device_keys_test.dart",
+      "sha256": "29d2e3ac5ae2f55b362ec4e02f06802d6b110618821733f2a7041f43a49248c9"
+    },
+    {
+      "path": "validation/flutter/test/host_catalog_page_test.dart",
+      "sha256": "d470c0ce38cc16f63258dcf8fc2f3cab530e621248d73a472e4d8ce70db3e71b"
+    },
+    {
+      "path": "validation/flutter/test/host_catalog_test.dart",
+      "sha256": "72868b1281000e5252c9c8b94268cd8d3e1965fea295a3c7730d91b3e1b96472"
+    },
+    {
+      "path": "validation/flutter/test/host_tabs_test.dart",
+      "sha256": "4a3b2ce6ddc63d7dec3ce0b695192837b4ce525e061a0c64d89118194a572266"
+    },
+    {
+      "path": "validation/flutter/test/host_tabs_widget_test.dart",
+      "sha256": "2e529fcb64ab3c6bd94276f37a12af3930cdcb3b7e077018f9ec02584ea1d93a"
+    },
+    {
+      "path": "validation/flutter/test/network_identity_catalog_test.dart",
+      "sha256": "f18d36aad698f729ebff2f7300e8a0d164d752f39adf87e07e58e0e066958b0a"
+    },
+    {
+      "path": "validation/flutter/test/network_identity_test.dart",
+      "sha256": "7df18b787441a9db7c57fbc44c346a691561b757255615bc726c1f3372a4c8a6"
+    },
+    {
+      "path": "validation/flutter/test/network_login_test.dart",
+      "sha256": "a5e3694e31946270287c70abee73317f32f46a615900230d3c8034ee2f970ab3"
+    },
+    {
+      "path": "validation/flutter/test/network_profiles_test.dart",
+      "sha256": "fa8c46e366104b9e0b190a67cefcbcf6d91555dd5812abc26d2d43a1fe61d2d6"
+    },
+    {
+      "path": "validation/flutter/test/network_profiles_widget_test.dart",
+      "sha256": "060100ea84f9fa279cbebf36ea4e40a055e26a4f518867f8642164da5d5876c0"
+    },
+    {
+      "path": "validation/flutter/test/network_runtime_test.dart",
+      "sha256": "27da5923fe58dd40ba8a014170a3a21cb8d210549f0f99b2ec52ff89ac65ca22"
+    },
+    {
+      "path": "validation/flutter/test/network_tailscale_test.dart",
+      "sha256": "08a89dbbc165111d037b2b3e62ce17a5c030759765f520b5800ab84a53e20f34"
+    },
+    {
+      "path": "validation/flutter/test/network_tailscale_widget_test.dart",
+      "sha256": "f9c795dc154de3077875e8e1b208c1de8121fdf176e96354f71ae8b5fda98c62"
+    },
+    {
+      "path": "validation/flutter/test/pair_scan_test.dart",
+      "sha256": "0b13889643c8afcba4689a50758204bbad6c90a159d962cb68c60b003f2bf54d"
+    },
+    {
+      "path": "validation/flutter/test/pairing_accept_test.dart",
+      "sha256": "73b3e4269d3891434b7713a25b9bd0ee5f1834bbdbb284ca5d97672f8e5e4a9f"
+    },
+    {
+      "path": "validation/flutter/test/pairing_gui_ssh_test.dart",
+      "sha256": "5ee55a27812d098663ee1bd5f1cd1850afab4e5670b1f0f3ddf516d5095cd7b9"
+    },
+    {
+      "path": "validation/flutter/test/pairing_gui_test.dart",
+      "sha256": "7b80a48293468194dbf23d5984c3ec3d54eb3c4ba91df581678852e93c222e9a"
+    },
+    {
+      "path": "validation/flutter/test/pairing_test.dart",
+      "sha256": "536620e9fae7ab9088e4b8a420be52d1d0b30935ba0391314be626322568937c"
+    },
+    {
+      "path": "validation/flutter/test/probe_gate_test.dart",
+      "sha256": "7f64f4fbbe236c7f2b81f0dda18ab6dd97c24570da8a92f0f5c147fa1b992393"
+    },
+    {
+      "path": "validation/flutter/test/probe_ui_test.dart",
+      "sha256": "1014947fa76067010823e9dba1e758b91678f3b9454100eb1d48f074b391c458"
+    },
+    {
+      "path": "validation/flutter/test/remote_adapter_test.dart",
+      "sha256": "6d2c9a7122203eae070c1f52c7140dd19c7aeb908568d3dbeefcbb8904fd9e8c"
+    },
+    {
+      "path": "validation/flutter/test/remote_auxiliary_test.dart",
+      "sha256": "75297ac6ea2086f5c0ca5c35857cd09b6db1613d0d7d4b096a308d0d22c49090"
+    },
+    {
+      "path": "validation/flutter/test/remote_dashboard_presentation_test.dart",
+      "sha256": "e2d96367814621631afbdf408b6e74e44c02d0f2ad59fe3489adb371b1eb8376"
+    },
+    {
+      "path": "validation/flutter/test/remote_dashboard_time_test.dart",
+      "sha256": "d6b7e74d62c5770415cb9c7f7c379a08ace9e8c18ea97cc9389e9ef9004fe53a"
+    },
+    {
+      "path": "validation/flutter/test/remote_input_journal_test.dart",
+      "sha256": "56ffff26e22c03c403ef0de42b4dc4b4997ed4f28d9b19f7e42388143b431ef1"
+    },
+    {
+      "path": "validation/flutter/test/remote_input_platform_test.dart",
+      "sha256": "ff48cf788cd19c65f03ee5cf5d0cf3c1b8ab881ff4631d34d5af7eecf1636787"
+    },
+    {
+      "path": "validation/flutter/test/remote_input_test.dart",
+      "sha256": "a3d61ba1e4d7d6acfaac4a5ddb65b572d53ad0c2698c9a7b84c05cf7c1580160"
+    },
+    {
+      "path": "validation/flutter/test/remote_input_widget_test.dart",
+      "sha256": "49e1406a893db2da14b97a3a06f731a2b295131c94b2684f5c2800ff71f7879c"
+    },
+    {
+      "path": "validation/flutter/test/remote_page_test.dart",
+      "sha256": "839cf9c4d773d5942b4621db5373e0268e8743093a80e4513af1485dbf8177e9"
+    },
+    {
+      "path": "validation/flutter/test/remote_test_data.dart",
+      "sha256": "43438e451641ace0f9d434bd06d2abe87c761ed0299a4eb3eb32fb8de1ffbf84"
+    },
+    {
+      "path": "validation/flutter/test/remote_unsent_drafts_test.dart",
+      "sha256": "c0d298e155538d546ce8e836238e71fb479793fee5c7a6f44f899934e0fa4bd9"
+    },
+    {
+      "path": "validation/flutter/test/terminal_ime_test.dart",
+      "sha256": "da98c3ab21c2533f320149bea7bc0ed5c2396f7283bbf1250c83671cdc755ba5"
+    },
+    {
+      "path": "validation/flutter/test/terminal_preferences_test.dart",
+      "sha256": "bf6af2b2288d5b1748531c8e8f9716aa13cb1f3c6c856116517b21d5ad1d72ff"
+    },
+    {
+      "path": "validation/flutter/test/zerotier_device_dialog_test.dart",
+      "sha256": "6d1852a7468f0fcc2089453e582aedbcaf7a14a48bf71a9002272b3bafe95b1c"
+    },
+    {
+      "path": "validation/flutter/test/zerotier_device_test.dart",
+      "sha256": "2cb4dc895abc3dac8056e3b8e39bb72e58c6c9a0796891e1a969950181eea1b0"
+    }
+  ],
+  "flutterNewTests": {
+    "declarations": 9,
+    "expandedUnitScenarios": 2,
+    "expandedWidgetScenarios": 9,
+    "executed": false,
+    "existingOptInSshClockAssertionsExecuted": false
+  },
+  "browser": {
+    "app": "Chrome on Mac; local Vite harness with real tab-workspace, xterm and repository CSS",
+    "nativeIpc": "synthetic",
+    "host": "synthetic; example.invalid",
+    "viewportOverride": {
+      "width": 390,
+      "height": 844
+    },
+    "measuredDocumentWidths": {
+      "clientWidth": 375,
+      "scrollWidth": 375,
+      "bodyScrollWidth": 375
+    },
+    "cases": [
+      {
+        "case": "blocked-first dashboard",
+        "observedOrder": [
+          "w1:p2 / term_a002 / Agent B / 受阻",
+          "w1:p1 / term_a001 / Agent A / 工作中"
+        ]
+      },
+      {
+        "case": "paste preview",
+        "draftBeforeChoice": "A",
+        "clipboardFixture": "B\n第二行",
+        "inputWrites": 0
+      },
+      {
+        "case": "append paste",
+        "draft": "AB\n第二行",
+        "inputWrites": 0
+      },
+      {
+        "case": "cancel paste",
+        "draft": "A",
+        "inputWrites": 0
+      },
+      {
+        "case": "replace paste",
+        "draft": "B\n第二行",
+        "inputWrites": 0
+      },
+      {
+        "case": "disconnect and reconnect pending",
+        "oldSnapshotTime": "08:51:27",
+        "oldRowsVisible": true,
+        "oldRowsDisabled": true
+      },
+      {
+        "case": "new authoritative snapshot",
+        "newSnapshotTime": "08:58:46",
+        "rowsEnabled": true,
+        "draftRetained": "AB\n第二行",
+        "inputWrites": 0
+      }
+    ],
+    "harnessDirectory": "/private/tmp/herdr-mobile-ui-20261107",
+    "harnessFiles": [
+      {
+        "path": "/private/tmp/herdr-mobile-ui-20261107/index.html",
+        "sha256": "14c695ced9d8cb1a56898a346188c515a3500d772500d290fc87c3c9d0fcb4f6"
+      },
+      {
+        "path": "/private/tmp/herdr-mobile-ui-20261107/main.js",
+        "sha256": "f037272e00a564d4f0a3151d9736fe38fac22c7f65f5cf5e163ace1be745100b"
+      },
+      {
+        "path": "/private/tmp/herdr-mobile-ui-20261107/style.css",
+        "sha256": "f775e2fc5d0c37c2845cf3a6a64bf16efeb21ac83309e67489007ee71ea03302"
+      },
+      {
+        "path": "/private/tmp/herdr-mobile-ui-20261107/vite.config.mjs",
+        "sha256": "8635a86d51c29080f7b96eb598db867a58289d93aed209331e1944adcc3ebddb"
+      }
+    ],
+    "boundary": "Synthetic clipboard event, IPC and host; no OS clipboard, native IME, mobile touch, soft keyboard, SSH/herdr or overlay proof. Not an APK installation test."
+  },
+  "penpot": {
+    "fileId": "b55064db-d93d-80f9-8008-ddd22e6d398f",
+    "pageId": "7a22df08-251d-8016-8008-de03541c11da",
+    "editorUrl": "https://design.penpot.app/?screen=workspace&team-id=c514c1fb-1cda-8125-8008-a57c5bd4a25d&project-id=9a0c44dc-8874-81e7-8008-ddd20c193c16&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da",
+    "viewerUrl": "https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=2a5fd934-a163-8057-8008-e8230835dfbd",
+    "reloaded": true,
+    "boards": 38,
+    "shapes": 1155,
+    "interactions": 212,
+    "originalObjectsCompared": 1008,
+    "changedOriginalObjects": 0,
+    "comparison": "design/evidence/v2-mobile-recovery-comparison-20261107.json",
+    "rawReloadedReadback": "design/evidence/v2-mobile-recovery-reloaded-20261107.json",
+    "exportedPngs": [
+      "design/evidence/v2-S31-recovery-20261107.png",
+      "design/evidence/v2-S32-retained-draft-20261107.png",
+      "design/evidence/v2-S34-device-recovery-20261107.png",
+      "design/evidence/v2-S36-unknown-result-20261107.png"
+    ],
+    "mcpVersion": "2.15.4",
+    "appVersion": "2.19.0",
+    "versionMismatchWarning": true,
+    "initialFailure": "Empty first line of example text generated invalid empty shape name (:name). Created eight partial boards and one new orphan; original objects retained.",
+    "completionGuardFailure": "Read-only precondition used text rather than documented characters; stopped before mutations. Corrected and completed existing IDs, without recreating boards.",
+    "completion": "Recorded finish script succeeded; reload equality, no orphan/dangling/outside-board text, actual selected viewer paths checked."
+  },
+  "deliveryBaseline": {
+    "mainReadmeCommit": "e836c4aa9f4e86ae251b6a0d74438532236c5ea8",
+    "latestApkRun": 42247482105,
+    "sourceSha": "750798fe6bf5e396768333c1abe8c96ff0dd2178",
+    "flutterArtifact": 13519144162,
+    "tauriArtifact": 13518524214,
+    "scope": "Existing EasyTier + Tailscale APKs, no subsequent ZeroTier or current recovery changes; no new device evidence."
+  },
+  "cleanup": {
+    "localFixtureTabClosed": true,
+    "penpotViewerClosed": true,
+    "originalPenpotEditorPreserved": true,
+    "viewportOverrideReset": true,
+    "penpotPluginClosed": true,
+    "viteStopped": true,
+    "penpotBridgeStopped": true,
+    "listenersChecked": [
+      1429,
+      4400,
+      4401,
+      4402,
+      4403
+    ],
+    "listenersRemaining": []
+  },
+  "notVerified": [
+    "Flutter analyzer/unit/widget/SSH for this batch",
+    "Android/iOS native build and installation for current WIP",
+    "Real phone touch, Chinese IME, soft keyboard, screen reader and camera",
+    "Real KeyStore, device identity, overlay networks and five-platform concurrency",
+    "ZeroTier native stream implementation and actual node activation",
+    "Final framework decision and production readiness"
+  ]
+}

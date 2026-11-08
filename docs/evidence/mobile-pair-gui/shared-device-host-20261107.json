@@ -1,0 +1,305 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-11-07 Asia/Shanghai",
+  "baseCommit": "98473a699a055006e60b8c5c92ecdd54a28c13d3",
+  "workingTree": "uncommitted",
+  "newCiTriggered": false,
+  "newApkBuilt": false,
+  "guiAppsOpened": false,
+  "checks": [
+    {
+      "name": "Shared Java service",
+      "command": "sh validation/network-profiles/native/android/tests/run-zerotier-service.sh",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 89,
+      "log": "/private/tmp/herdr-zt-service-parent-20261107.log",
+      "logSha256": "b4fe6b3bb60ca4899dd982f743367de1dfe0395f2af03a9b32abfe59f2b978db",
+      "scope": "Real service/store; Android stubs, synthetic identity and test JCE; three isolated JVM modes 8/52/29."
+    },
+    {
+      "name": "Device core",
+      "command": "sh validation/network-profiles/native/android/tests/run-zerotier-device.sh",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 153,
+      "log": "/private/tmp/herdr-zt-service-core-20261107.log",
+      "logSha256": "628cd0a85f430b4bc846f7621393b2639e31fec136ccda697ee0d33fd727562b",
+      "scope": "Temporary JCE and synthetic identity; no AndroidKeyStore or node."
+    },
+    {
+      "name": "Android store wrapper",
+      "command": "sh validation/network-profiles/native/android/tests/run-zerotier-android.sh",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 36,
+      "log": "/private/tmp/herdr-zt-service-wrapper-20261107.log",
+      "logSha256": "29fdc373686e262fb573ab6b93b6308663223e448cef3f31e93987f091afe523",
+      "scope": "Desktop JVM Android stubs and test JCE provider."
+    },
+    {
+      "name": "JNI regression",
+      "command": "sh validation/android-network-source/tests/run-zerotier-jvm.sh",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 100,
+      "log": "/private/tmp/herdr-zt-service-jni-20261107.log",
+      "logSha256": "0791861fe55d639fcf8e848e6153eaa7fbaf69cf6499b1361cc19a39c9010e0a",
+      "scope": "Real JNI/Java with synthetic native engine; no actual libzt network."
+    },
+    {
+      "name": "Flutter Kotlin device channel",
+      "command": "python3 validation/flutter/native/android/tests/run_zerotier_device_probe.py --kotlin-dir /private/tmp/herdr-kotlin-2.2.21-check",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 119,
+      "log": "/private/tmp/herdr-zt-flutter-channel-parent-final-20261107.log",
+      "logSha256": "4a1f09cf6febe81c5a7496fa23eed442b0405716593bb9ef879c19bf65ec678a",
+      "scope": "Real channel/CAS; synthetic Android/Flutter/service. Not end-to-end with the real Java service."
+    },
+    {
+      "name": "Flutter existing host regression",
+      "command": "python3 validation/flutter/native/android/tests/run_input_journal_probe.py --kotlin-dir /private/tmp/herdr-kotlin-2.2.21-check",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 64,
+      "log": "/private/tmp/herdr-zt-flutter-host-regression-20261107.log",
+      "logSha256": "718c3d7ec4f238ef381356526adf65ab3acd184c582f0eaafc48486ab922d1b1",
+      "scope": "Real Kotlin journal/CAS/MainActivity compile fixture; Android Os fsync stubbed."
+    },
+    {
+      "name": "Tauri Rust host",
+      "command": "cargo test --offline --lib --manifest-path validation/tauri/src-tauri/Cargo.toml",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 50,
+      "log": "/private/tmp/herdr-zt-device-host-rust-parent-20261107.log",
+      "logSha256": "56317427b022529645218584e24f5ab8f7c0cb40184852b11c896fd5a4193f30",
+      "scope": "Mac default features. Android cfg branch not compiled; operation/completion logic exercised by injectable closures."
+    },
+    {
+      "name": "Tauri Kotlin plugin",
+      "command": "python3 validation/tauri/test/android-network-plugin-test.py /private/tmp/herdr-kotlin-2.2.21-check",
+      "exitCode": 0,
+      "result": "passed",
+      "checksOrTests": 3358,
+      "log": "/private/tmp/herdr-zt-device-host-kotlin-parent-20261107.log",
+      "logSha256": "1cf1e9cb735b2423d5de3d9ce31701e68d45941f6d00366320f1a79ecf129cd6",
+      "scope": "Real Kotlin plugin/coordinator; synthetic Android/Tauri/service. Includes 1100 repeated operations, not 3358 independent device scenarios."
+    }
+  ],
+  "sourceSnapshot": {
+    "binding": "Frozen agent sources reviewed and rerun by parent; hashes captured afterward. Logs do not embed source SHA. This is not a committed build provenance record.",
+    "files": [
+      {
+        "path": "validation/network-profiles/native/android/AndroidZeroTierDeviceService.java",
+        "sha256": "2e195a21a93829ec8b952dd0c9c580df0d4082095bd9315e1b67a61beaa4e65b"
+      },
+      {
+        "path": "validation/network-profiles/native/android/AndroidZeroTierDeviceStore.java",
+        "sha256": "781dea5ec8ccce19305b8582f2d28e4606b0fab583387e3b17b2895769a87ea3"
+      },
+      {
+        "path": "validation/network-profiles/native/android/ZeroTierDeviceStoreCore.java",
+        "sha256": "9c9a89af34e9ee9712333ac77fe14902a531e8879f3123708cc35744cd17f5b6"
+      },
+      {
+        "path": "validation/network-profiles/native/android/AndroidZeroTierNative.java",
+        "sha256": "a4529006667de87e001241f6f80b7b25c87e0dd82dfe5083b20160abfd6c9f08"
+      },
+      {
+        "path": "validation/network-profiles/native/android/tests/ZeroTierDeviceServiceTest.java",
+        "sha256": "529ea9188a64ae62f2ef29fbfd4493fcd298516b9e4ef9e9a7829423f292cca0"
+      },
+      {
+        "path": "validation/network-profiles/native/android/tests/run-zerotier-service.sh",
+        "sha256": "ba00251c6f5d485bfbd6f75bf8674177d7eeabecf3da79fbd8c05e06a90675a5"
+      },
+      {
+        "path": "validation/android-network-source/tests/run-zerotier-jvm.sh",
+        "sha256": "4b6ae5e090ba25e766272c00f2cc41bdf7d6d0af6885be6b2e2c997c7ffcd118"
+      },
+      {
+        "path": "validation/flutter/native/android/ZeroTierDeviceChannel.kt",
+        "sha256": "03270f0bc56a8436981c12d996516eaab650480361796454f8716cb995bf8288"
+      },
+      {
+        "path": "validation/flutter/native/android/HostCatalogFile.kt",
+        "sha256": "a801d95e99a16b81c36745ecd0427b0f3dd14432702e99bd3e98a05fbe5753f3"
+      },
+      {
+        "path": "validation/flutter/native/android/MainActivity.kt",
+        "sha256": "30366e34dc50213ba184d6da7ba083c3d9e9b112ee887cd9d733fcc5e6dffaba"
+      },
+      {
+        "path": "validation/flutter/native/android/tests/ZeroTierDeviceProbe.kt",
+        "sha256": "cac2937d5a197373fb88d2181b57a172947b61da8d66b8f1783447001373a3dc"
+      },
+      {
+        "path": "validation/flutter/native/android/tests/run_zerotier_device_probe.py",
+        "sha256": "6df7a14e403c9e0569124c8a9c65a59da56db72381b00f83dd77ba501453f31a"
+      },
+      {
+        "path": "validation/flutter/native/android/tests/run_input_journal_probe.py",
+        "sha256": "aaa94b4389a2ae02e5196bf9dc98803e537071a899ebfdb2d49deb8638cea8c8"
+      },
+      {
+        "path": "validation/flutter/tool/ci.py",
+        "sha256": "7001c9d71ff288dc620b169003bf69d700f23925a53bcfc6db9e2f34a2ae8ab6"
+      },
+      {
+        "path": "validation/flutter/lib/zerotier_device.dart",
+        "sha256": "cec3ee74a3bafee6876f8967aab8dea10a2106db7da4a66b63b979a6ccac7970"
+      },
+      {
+        "path": "validation/flutter/lib/zerotier_device_dialog.dart",
+        "sha256": "5853f1bb7b0f1b5330983db6ea562bf1268efaa5467040b19bcff148879a7c50"
+      },
+      {
+        "path": "validation/flutter/lib/network_profiles_page.dart",
+        "sha256": "d7fc90e7258ca8ccadd8e3bf6a001dccbe7f6f14bb8714ca45e4c64c2bf2e948"
+      },
+      {
+        "path": "validation/flutter/test/zerotier_device_test.dart",
+        "sha256": "3020d7db4db6399a3bde15e57960aa4d3c3b266f331565b79a0e09d8729280ea"
+      },
+      {
+        "path": "validation/flutter/test/zerotier_device_dialog_test.dart",
+        "sha256": "5e980f7a248aced311f92dabba9afcbf31bea9d7d7a06c520957084ebee43eda"
+      },
+      {
+        "path": "validation/tauri/android/DeviceKeysPlugin.kt",
+        "sha256": "5c4883023918a2bd90ede2c8aa5c4478506e3d9063feca53b36027a6bc9d4028"
+      },
+      {
+        "path": "validation/tauri/test/NetworkPluginProbe.kt",
+        "sha256": "45cbfe5ea01846ab8b9a1dbe09aa55bd3f966eaadd12bdb7ef87e5d20044a2cd"
+      },
+      {
+        "path": "validation/tauri/test/android-network-plugin-test.py",
+        "sha256": "e7fd5dd12d0a54ad0ef5a579e8de350e374673db377742aafcdc90ada022f8d8"
+      },
+      {
+        "path": "validation/tauri/src-tauri/src/zerotier_device.rs",
+        "sha256": "4a9995ef5951c1c619a61fa179ce12cd081e8e3f3249d980d1725e38b4ccb9e9"
+      },
+      {
+        "path": "validation/tauri/src-tauri/src/android_keys.rs",
+        "sha256": "02eda2e62d36bde9b468f849535ef74e3f8a66d7e14391ca2e9e986a123b7c10"
+      },
+      {
+        "path": "validation/tauri/src-tauri/src/lib.rs",
+        "sha256": "b444e78e5146f6f686a34a0614fd5c2266454642dce2c771758b19a9a07ef6b5"
+      },
+      {
+        "path": "validation/tauri/src-tauri/src/hosts.rs",
+        "sha256": "dd775d35ecbf4508ebc68ecdaaddd24d73ddda15ab2329c69f45db9a1dfb1093"
+      },
+      {
+        "path": "validation/tauri/src-tauri/capabilities/default.json",
+        "sha256": "053cba706b776de94f99fe0833335ccfe78bf0ea4b510c81e164672e020b9712"
+      }
+    ]
+  },
+  "pinnedSdkReview": {
+    "result": "Independent read-only Sol review; archive and source hashes rechecked by parent",
+    "packages": [
+      {
+        "name": "tauri",
+        "version": "2.12.5",
+        "archiveSha256": "5fb0244332cfb9cee7e2a568bf5da29a36ed8fdbd717f6f47a66b6b7b358c072",
+        "matchesCargoLock": true,
+        "sourceFiles": [
+          {
+            "path": "src/plugin/mobile.rs",
+            "sha256": "7a59c1bb02d56dc88410c74c4f83fe79aa4b08229b6a2f64f025eace9fc1b186",
+            "matchesPinnedArchive": true
+          },
+          {
+            "path": "src/webview/mod.rs",
+            "sha256": "b5319b171c09a8e652d75585be39d92b387df370340ca90b58141b501c17009a",
+            "matchesPinnedArchive": true
+          },
+          {
+            "path": "mobile/android/src/main/java/app/tauri/plugin/Plugin.kt",
+            "sha256": "c5dc0d1b59ac2024399afd0893f1182ae583b4d4f2cc88a5ba7864d365f77f7c",
+            "matchesPinnedArchive": true
+          },
+          {
+            "path": "mobile/android/src/main/java/app/tauri/plugin/PluginManager.kt",
+            "sha256": "053958be1e83d8633d26348ded26bbd6d4ab21121e662985194fa3342eef1e95",
+            "matchesPinnedArchive": true
+          },
+          {
+            "path": "mobile/android/src/main/java/app/tauri/plugin/PluginHandle.kt",
+            "sha256": "628b69f19d03b861765a2f7f3140e5b6a79bd991966019bb250bf7ae79bfd301",
+            "matchesPinnedArchive": true
+          },
+          {
+            "path": "mobile/android/src/main/java/app/tauri/plugin/Invoke.kt",
+            "sha256": "05cadb94907dbd3979d8c7eaad7bd8f540c38cc9d988a5513777eadd18330028",
+            "matchesPinnedArchive": true
+          }
+        ]
+      },
+      {
+        "name": "wry",
+        "version": "0.57.1",
+        "archiveSha256": "759c50ddad0ef9913bb5496cb9d509a50433a3b78cb0238d61105526589cf0e9",
+        "matchesCargoLock": true,
+        "sourceFiles": [
+          {
+            "path": "src/android/mod.rs",
+            "sha256": "57bbd039d526f28b2b43b79b52c1a6b01cc4bb29aab54a263a19c2d92f33f934",
+            "matchesPinnedArchive": true
+          },
+          {
+            "path": "src/android/main_pipe.rs",
+            "sha256": "3a9f0ea74a7def2ebef7f1d57d085e721f9e036ce2ec7df212ed1ce5e8c51e9d",
+            "matchesPinnedArchive": true
+          }
+        ]
+      }
+    ],
+    "findings": [
+      "Mobile JNI errors are not proof of worker completion.",
+      "MainPipe dispatch can reach a different Activity or no Activity.",
+      "Plugin resolve/reject is callback delivery, not worker lifecycle.",
+      "Current core:default ACL plus Rust Operations and unique writer establish sole producer; expanding devicekeys permissions requires revalidation."
+    ],
+    "androidJsonSource": "https://android.googlesource.com/platform/libcore/+/e4ac325990e11c266cef45366fa9b2aefd145b5d/json/src/main/java/org/json/JSONObject.java"
+  },
+  "flutterUi": {
+    "stateTests": 16,
+    "widgetTests": 9,
+    "executed": false,
+    "analyzerRun": false,
+    "reason": "No local Flutter SDK; defer to combined cloud batch."
+  },
+  "knownInitialFailure": {
+    "command": "python3 validation/flutter/native/android/tests/run_zerotier_device_probe.py",
+    "exitCode": 2,
+    "scope": "Missing required --kotlin-dir argument; no compilation or tests executed. Corrected command above passed.",
+    "log": "/private/tmp/herdr-zt-flutter-channel-parent-20261107.log",
+    "logSha256": "09d85165ec70b65b3b197263e5595a33b5bb596637482f01116f28c659ce8872"
+  },
+  "boundaries": [
+    "Shared service is unavailable until the original native binding installs its exact store; this batch does not enable that app binding/feature or ZeroTier dialing.",
+    "Native C++ stream draft remains inactive and unfinished; no resumed raw-network work in this batch.",
+    "Java device status is atomic under the core data lock; exact ordinary forget does not resume pending deletion.",
+    "Tauri fence retains directory/operation locks until original storage exits or its sequence is permanently rejected; it does not guarantee a bounded wait if IPC/storage never returns.",
+    "No Android cfg compile, Android SDK/device runtime, actual KeyStore, camera, IME, real network or five-platform concurrency result.",
+    "Tauri JavaScript was unchanged and not rerun; prior 135 results retain their recorded source.",
+    "No real credentials, real identities, host authorization files or network nodes were used."
+  ],
+  "openVikingDelivery": {
+    "state": "unconfirmed",
+    "reason": "Read and write requests timed out; the remote server may still have processed a request. No successful readback was received.",
+    "uris": [
+      "viking://user/hadyenvip/resources/herdr-pocket/31-mobile-shared-device-host.md",
+      "viking://user/hadyenvip/resources/herdr-pocket/shared-device-host-20261107.json",
+      "viking://user/hadyenvip/resources/herdr-pocket/notes/shared-device-host-20261107.md"
+    ],
+    "localArtifactsRetained": true
+  }
+}

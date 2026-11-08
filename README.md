@@ -8,7 +8,9 @@
 
 Flutter 的隔离 SSH 测试还验证了同一连接上的隐藏、显式恢复与新快照。两次视口变化期间远端输入为 0，共享 PTY 保持 119×40。两包包含 EasyTier 和 Tailscale；arm64 真机、真实中文 IME、相机扫码、三网及五端并发仍待验证。上一批源码和下载校验记录保留在[双网络测试包记录](docs/27-mobile-tailscale-cloud.md)。
 
-历史 `040eb26` 云模拟器、`546c3eb` 独立终端标签包及各次失败保留原 SHA 与范围，不外推为本批设备运行通过。[ZeroTier 后续实现](docs/29-zerotier-managed-device.md)已修复 ECC 未定义左移并移除排除，新增共享设备 owner／多网络租约和 AndroidKeyStore 包装；Mac 整库 114 TU、动态加载及未启动节点的初始化／退休通过。定向 socket、JNI、GUI 和真实节点仍未完成，不在上述 APK 内；下一批继续这些手机接线，再集中云验收。桌面分屏紧随手机闭环。[历史手机结果](docs/18-mobile-network-profiles.md) · [前一测试包](docs/22-mobile-terminal-tabs.md)
+历史 `040eb26` 云模拟器、`546c3eb` 独立终端标签包及各次失败保留原 SHA 与范围，不外推为本批设备运行通过。[ZeroTier 后续实现](docs/29-zerotier-managed-device.md)已修复 ECC 未定义左移并移除排除，新增共享设备 owner／多网络租约和 AndroidKeyStore 包装；Mac 整库 114 TU、动态加载及未启动节点的初始化／退休通过。最新工作区另有[手机共享设备宿主](docs/31-mobile-shared-device-host.md)及[待定操作恢复界面与验证](docs/32-mobile-device-recovery.md)，尚未提交、未启用 ZeroTier 拨号，也不在上述 APK 内。原生定向流及真实节点仍有未完成项，下一批继续手机集成，再集中云验收。桌面分屏紧随手机闭环。[历史手机结果](docs/18-mobile-network-profiles.md) · [前一测试包](docs/22-mobile-terminal-tabs.md)
+
+本轮另补[手机草稿找回、看板同步时间与恢复设计](docs/33-mobile-recovery-design.md)：Tauri 154 项前端测试及构建通过；Flutter 63 份 Dart 文件仅完成语法解析，新增 widget／SSH 断言未运行。Penpot v2 已保存 S31–S38 并重载核对，共 38 画板／212 交互对象；新增恢复路径已实际点击。该段为当时的工作区记录；已打包的草稿与摘要、最新 Flutter 和 Android 实测范围见[手机闭环验收](docs/34-mobile-host-task-summary.md)。
 
 ## 首版做什么
 
@@ -34,6 +36,10 @@ Heeler 已有三网络的源码实现可供按许可移植：EasyTier 使用 no-
 
 | 文件 | 内容 |
 | --- | --- |
+| [`docs/33-mobile-recovery-design.md`](docs/33-mobile-recovery-design.md) | 后续工作区：原目标草稿找回、权威看板时间、粘贴审查及 Penpot 恢复增量 |
+| [`docs/32-mobile-device-recovery.md`](docs/32-mobile-device-recovery.md) | 后续工作区：手机待定创建／删除审查恢复、原阶段核对与分层验证 |
+| [`docs/31-mobile-shared-device-host.md`](docs/31-mobile-shared-device-host.md) | 后续工作区：两套手机宿主、共享设备存储合同、隔离验证与未启用边界 |
+| [`docs/30-zerotier-streams-and-device-review.md`](docs/30-zerotier-streams-and-device-review.md) | 后续工作区：ZeroTier 流／JNI、共享设备界面及未完成原生草稿 |
 | [`docs/34-mobile-host-task-summary.md`](docs/34-mobile-host-task-summary.md) | 手机主机摘要、配对与持续观察、双 APK 及云模拟器验证 |
 | [`docs/29-zerotier-managed-device.md`](docs/29-zerotier-managed-device.md) | ECC 修复、设备／多网络管理、Android 包装与 Mac 整库证据 |
 | [`docs/28-zerotier-native-foundation.md`](docs/28-zerotier-native-foundation.md) | ZeroTier 单设备身份、事件／退休修复与尚未消除的阻断项 |

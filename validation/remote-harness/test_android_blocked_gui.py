@@ -128,4 +128,54 @@ const results=cases.map(value=>{
         self.assertEqual(values[0],{key:RECEIPT[key] for key in ('paneId','terminalId','observing','markerMatched','otherMarkerAbsent')})
         self.assertEqual(values[1:],[None]*12)
 
+class AndroidBoardAndDeviceGuards(unittest.TestCase):
+    """Board search and shared device review contracts; no host identity or device write leaves the AVD."""
+
+    def test_board_counters_read_the_visible_status_and_both_task_state_buckets(self):
+        snapshot={'statusText':'显示 1 / 2 台主机','currentLabel':'当前待处理（0）','historyLabel':'上次受阻，待核查（1）'}
+        self.assertEqual(android._board_counts(snapshot),(1,2,0,1))
+        empty={'statusText':'没有匹配的主机 · 显示 0 / 2 台主机','currentLabel':'当前待处理（0）',
+               'historyLabel':'上次受阻，待核查（1）'}
+        self.assertEqual(android._board_counts(empty),(0,2,0,1))
+        for changes in ({'statusText':'显示 1 台主机'},{'currentLabel':'当前待处理 0'},{'historyLabel':'上次受阻'}):
+            with self.subTest(changes=changes),self.assertRaises(android.GuiFailure):
+                android._board_counts({**snapshot,**changes})
+
+    def test_shared_device_status_paths_are_classified_without_a_readable_device_state(self):
+        self.assertEqual(android._device_class(
+            {'status':'设备状态未知或共享设备能力不可用；受影响范围已列出，不能执行设备操作。','pending':False}),'unknown')
+        self.assertEqual(android._device_class(
+            {'status':'网络目录或主机清单不可用，受影响范围未知；不能执行设备操作。','pending':False}),'catalog_blocked')
+        self.assertEqual(android._device_class(
+            {'status':'操作已确认；请核对当前设备状态。','pending':True}),'pending')
+        self.assertIsNone(android._device_class(
+            {'status':'操作已确认；请核对当前设备状态。','pending':False}))
+
+    def test_new_phases_are_registered_with_their_bounded_failure_codes(self):
+        self.assertIn('board_search',android.AndroidProgress.PHASES)
+        self.assertIn('device_impact_review',android.AndroidProgress.PHASES)
+        self.assertIn('boardSearchVerified',android.AndroidProgress.COMPLETED)
+        self.assertIn('deviceImpactReviewed',android.AndroidProgress.COMPLETED)
+        for code in ('android_board_search_state_invalid','android_board_search_count_mismatch',
+                     'android_board_search_history_missing','android_board_search_native_call',
+                     'android_board_search_reset_missing','android_board_search_clear_missing',
+                     'android_board_search_counter_unavailable','android_select_option_missing',
+                     'android_select_option_failed','android_device_impact_entry_missing',
+                     'android_device_impact_status_invalid','android_device_impact_action_enabled',
+                     'android_device_impact_reread_invalid','android_device_impact_entry_lost',
+                     'android_device_impact_write_invoked'):
+            self.assertIn(code,android.AndroidProgress.ERROR_CODES)
+
+    def test_the_review_only_reads_and_never_writes_a_device_identity(self):
+        self.assertIn('zerotier_device_write',android.DEVICE_WRITE_COMMANDS)
+        self.assertIn('network_identity_write',android.DEVICE_WRITE_COMMANDS)
+        for read_only in ('network_list','host_list','zerotier_device_status'):
+            self.assertNotIn(read_only,android.DEVICE_WRITE_COMMANDS)
+        source=(HERE/'android_gui.py').read_text()
+        self.assertIn("progress.phase('device_impact_review')",source)
+        self.assertIn("progress.mark('deviceImpactReviewed')",source)
+        self.assertIn("**({'boardSearchEvidence':board_evidence} if board_evidence is not None else {})",source)
+        self.assertIn("**({'deviceImpactEvidence':device_evidence} if device_evidence is not None else {})",source)
+
+
 if __name__=='__main__':unittest.main()

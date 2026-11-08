@@ -29,10 +29,13 @@ BOOL_FIELDS = ('productionMain', 'defaultHostCatalog', 'uninjectedNativeDeviceKe
 STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'handle_save_failed',
           'profile_enter', 'profile_preview', 'profile_fill',
           'signer_create', 'signer_public', 'signer_sign', 'signer_delete', 'signer_read_deleted',
-          'public_key_failed', 'profile_save_failed', 'create_not_available', 'host_board', 'public_request', 'restore_pending', 'host_authorization',
+          'public_key_failed', 'profile_save_failed', 'create_not_available', 'host_board',
+          'board_search_text', 'board_search_state', 'board_search_count', 'board_search_history', 'board_search_clear',
+          'public_request', 'restore_pending', 'host_authorization',
           'target_finish_edit', 'target_review_ready', 'target_review_unchecked', 'target_create_unavailable',
           'target_create_ready', 'target_create_one_tap', 'target_request_wait',
           'response_review', 'ssh_and_dashboard', 'observe_frames', 'observe_canvas_select', 'observe_canvas_render', 'stop',
+          'device_impact_enter', 'device_impact_scope', 'device_impact_reread', 'device_remove_blocked',
           'observe_canvas_open', 'observe_canvas_option', 'observe_canvas_verify',
           'host_task_summary_authoritative', 'host_task_summary_stale', 'local_font_diagnostic',
           'delete_local_identity', 'complete', 'guarded_direct', 'guarded_hidden_draft',
@@ -58,6 +61,10 @@ KEYBOARD_CHECKPOINTS = ('keyboard-direct-shown', 'keyboard-direct-hidden',
 KEYBOARD_OBSERVE_CHECKPOINT = 'keyboard-observe-hidden'
 TUI_CHECKPOINT = 'tui-start'
 TUI_RESUME_STAGES = frozenset({'tui_find_board','tui_return_tab','tui_find_resume','tui_resume_full'})
+BOARD_SEARCH_STAGES = frozenset({'board_search_text','board_search_state','board_search_count',
+                                 'board_search_history','board_search_clear'})
+DEVICE_IMPACT_STAGES = frozenset({'device_impact_enter','device_impact_scope','device_impact_reread',
+                                  'device_remove_blocked'})
 STAGES.update(TUI_RESUME_STAGES)
 STAGES.update({'blocked_history', 'blocked_list', 'blocked_target_open', 'blocked_identity_review',
                'blocked_ssh_review', 'blocked_observe', 'blocked_marker', 'blocked_return'})
@@ -322,7 +329,11 @@ def safe_tui_resume(value):
              'adapterPhase': {'unknown','idle','paused','resuming','snapshot','opening','awaiting_full','streaming','retiring','failed'},
              'adapterError': {'none','other','timeout','channel_cleanup_timeout','channel_identity','channel_capacity',
                  'watch_failed','watch_retry_exhausted','resume_target_changed','observe_ended',
-                 'invalid_first_frame','invalid_frame','invalid_response','sequence_gap','cancelled'}}
+                 'invalid_first_frame','invalid_frame','invalid_response','sequence_gap','cancelled'},
+             'adapterRetireMiss': {'none','input','observation','snapshot','watch',
+                 'input+observation','input+snapshot','input+watch','observation+snapshot','observation+watch',
+                 'snapshot+watch','input+observation+snapshot','input+observation+watch','input+snapshot+watch',
+                 'observation+snapshot+watch','input+observation+snapshot+watch'}}
     if not isinstance(value,dict) or type(value.get('schemaVersion')) is not int:
         raise DeviceFailure(invalid)
     if value['schemaVersion'] == 2:
@@ -341,7 +352,8 @@ def safe_tui_resume(value):
         raise DeviceFailure(invalid)
     if value['schemaVersion'] == 2 and value['pageCount'] != 1 and (
             any(value[k] for k in extra_bools) or value['boardFreshness'] != 'none' or
-            value['adapterPhase'] != 'unknown' or value['adapterError'] != 'none'):
+            value['adapterPhase'] != 'unknown' or value['adapterError'] != 'none' or
+            value['adapterRetireMiss'] != 'none'):
         raise DeviceFailure(invalid)
     if value['sequencePresent'] != (value['sequence'] >= 0) or value['rowsChecked'] not in (0,24):
         raise DeviceFailure(invalid)
@@ -364,10 +376,61 @@ def safe_tui_resume(value):
     return {key:value[key] for key in (*integer_bounds,*sorted(booleans),*(enums if value['schemaVersion'] == 2 else ()))}
 
 
+def safe_board_search(value):
+    """Board search stays on the device: no host identity, terminal text or arbitrary keys may leave the AVD."""
+    invalid = 'flutter_android_board_search_invalid'
+    keys = ('textMatched','dualConditionCount','totalHosts','currentCount','historyCount','historyRows',
+            'historyDistinguished','clearedKeptState','resetRestoredList','nativeCallsAdded')
+    integer_bounds = {'textMatched': (0,64), 'dualConditionCount': (0,64), 'totalHosts': (0,64),
+        'currentCount': (0,64), 'historyCount': (0,64), 'historyRows': (0,64), 'nativeCallsAdded': (0,64)}
+    booleans = ('historyDistinguished','clearedKeptState','resetRestoredList')
+    if not isinstance(value, dict) or set(value) != set(keys):
+        raise DeviceFailure(invalid)
+    for key,(low,high) in integer_bounds.items():
+        if type(value[key]) is not int or not low <= value[key] <= high:
+            raise DeviceFailure(invalid)
+    if any(type(value[key]) is not bool for key in booleans):
+        raise DeviceFailure(invalid)
+    # The text match and both conditions select the same saved host, the task state
+    # survives clearing the text, the reset restores the list and no native call is added.
+    if (value['nativeCallsAdded'] != 0 or value['historyDistinguished'] is not True or
+            value['clearedKeptState'] is not True or value['resetRestoredList'] is not True or
+            value['textMatched'] < 1 or value['dualConditionCount'] < 1 or value['historyRows'] < 1 or
+            value['historyCount'] < 1 or value['dualConditionCount'] > value['totalHosts']):
+        raise DeviceFailure(invalid)
+    return {key: value[key] for key in keys}
+
+
+def safe_device_impact(value):
+    """The shared device review only reads: no identity, network join or write may be claimed."""
+    invalid = 'flutter_android_device_impact_invalid'
+    keys = ('statusClass','scopeListed','deviceActions','rereadCalls','reentered','writeCalls')
+    if not isinstance(value, dict) or set(value) != set(keys):
+        raise DeviceFailure(invalid)
+    if value['statusClass'] not in ('unknown','catalog_blocked','pending'):
+        raise DeviceFailure(invalid)
+    if type(value['scopeListed']) is not bool or type(value['reentered']) is not bool:
+        raise DeviceFailure(invalid)
+    for key in ('deviceActions','rereadCalls','writeCalls'):
+        if type(value[key]) is not int or not 0 <= value[key] <= 64:
+            raise DeviceFailure(invalid)
+    # The review may be read again and re-entered, but it must not write a device identity.
+    if value['writeCalls'] != 0 or value['reentered'] is not True or value['rereadCalls'] < 1:
+        raise DeviceFailure(invalid)
+    if value['statusClass'] in ('unknown','catalog_blocked'):
+        # Without a readable device state no identity operation may be offered.
+        if value['deviceActions'] != 0 or value['scopeListed'] is not (value['statusClass'] == 'unknown'):
+            raise DeviceFailure(invalid)
+    return {key: value[key] for key in keys}
+
+
 def safe_test_failure(value):
     kinds = {'TestFailure', 'StateError', 'TypeError', 'RemoteFailure', 'FormatException',
              'TimeoutException', 'other'}
-    if (not isinstance(value, dict) or set(value) not in ({'stage', 'errorClass', 'line'}, {'stage','errorClass','line','tuiResume'}) or
+    base = {'stage', 'errorClass', 'line'}
+    evidence = {'tuiResume', 'boardSearch', 'deviceImpact'}
+    keys = set(value) if isinstance(value, dict) else set()
+    if (not isinstance(value, dict) or not base <= keys or not keys <= base | evidence or
             not isinstance(value['stage'], str) or not isinstance(value['errorClass'], str) or
             value['stage'] not in STAGES or value['errorClass'] not in kinds or
             type(value['line']) is not int or not 0 <= value['line'] <= 10000):
@@ -377,6 +440,14 @@ def safe_test_failure(value):
         if value['stage'] not in TUI_RESUME_STAGES:
             raise DeviceFailure('flutter_android_failure_metadata_invalid')
         clean['tuiResume'] = safe_tui_resume(value['tuiResume'])
+    if 'boardSearch' in value:
+        if value['stage'] not in BOARD_SEARCH_STAGES:
+            raise DeviceFailure('flutter_android_failure_metadata_invalid')
+        clean['boardSearch'] = safe_board_search(value['boardSearch'])
+    if 'deviceImpact' in value:
+        if value['stage'] not in DEVICE_IMPACT_STAGES:
+            raise DeviceFailure('flutter_android_failure_metadata_invalid')
+        clean['deviceImpact'] = safe_device_impact(value['deviceImpact'])
     return clean
 
 
@@ -576,6 +647,12 @@ def safe_device_result(raw, guarded=False, tui=False):
             raise DeviceFailure(str(exc)) from None
     elif 'tui' in raw:
         raise DeviceFailure('flutter_android_tui_unexpected')
+    # The board search and the shared device review are optional: they are reported
+    # only when the app completed that group of stages.
+    if 'boardSearchEvidence' in raw:
+        clean['boardSearchEvidence'] = safe_board_search(raw['boardSearchEvidence'])
+    if 'deviceImpactEvidence' in raw:
+        clean['deviceImpactEvidence'] = safe_device_impact(raw['deviceImpactEvidence'])
     return clean
 
 

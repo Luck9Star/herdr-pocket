@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import time
 import urllib.request
 
 from paired_gui import GuiFailure, wait_for
@@ -49,16 +50,17 @@ def system_keyboard(visible):
 
 class AndroidProgress:
     """Bounded per-stage evidence survives a later failure; no raw dumps/text."""
-    PHASES = {'setup','pairing','canvas_selection','dashboard','observe_full','observe_delta','canvas_marker','font_diagnostics',
+    PHASES = {'setup','pairing','canvas_selection','dashboard','board_search','observe_full','observe_delta','canvas_marker','font_diagnostics',
         'direct_mode','draft_mode','direct_input_receipt','paste_review','hidden_recovery',
         'draft_input_receipt','tui','stop_observation','blocked_target_entry','complete',
         'keyboard_observe_hidden','keyboard_direct_shown','keyboard_direct_hidden','keyboard_direct_reopened',
         'keyboard_draft_shown','keyboard_draft_back_request','keyboard_draft_back_hidden',
-        'keyboard_draft_back_reopened','keyboard_draft_hidden','local_revocation_review'}
+        'keyboard_draft_back_reopened','keyboard_draft_hidden','local_revocation_review','device_impact_review'}
     COMPLETED = {'publicProfileReviewed','publicRequestCopyReported','revocationReviewed','authorizationReviewed','paneChosen','fullRendered','deltaRendered',
         'canvasSelectionVerified','canvasGeometryVerified','canvasMarkerVisible','canvasViewportRestored',
         'fontDiagnosticsCompleted','directKeyboardCompleted','directReceiptVerified',
-        'draftKeyboardCompleted','pasteReviewCompleted','draftRestored','draftReceiptVerified','tuiCompleted','stoppedStale','blockedTargetVerified'}
+        'draftKeyboardCompleted','pasteReviewCompleted','draftRestored','draftReceiptVerified','tuiCompleted','stoppedStale','blockedTargetVerified',
+        'boardSearchVerified','deviceImpactReviewed'}
     ERROR_CODES = {'android_blocked_target_evidence_invalid','android_blocked_card_missing','android_blocked_same_label_missing','android_blocked_review_required','android_blocked_render_missing','android_blocked_original_form_missing','android_system_ime_target_mismatch','android_system_ime_evidence_unavailable',
         'android_system_ime_show_unconfirmed','android_system_ime_hide_unconfirmed',
         'android_system_ime_expected_state_invalid','android_driver_failure',
@@ -67,7 +69,12 @@ class AndroidProgress:
         'android_canvas_marker_not_visible','android_canvas_viewport_restore_failed',
         'android_theme_selection_invalid','android_theme_selection_missing',
         'android_theme_measurement_missing','android_theme_measurement_invalid',
-        'android_revoke_clock_invalid','android_revoke_device_time_unready','android_revoke_controls_unconfirmed'}
+        'android_revoke_clock_invalid','android_revoke_device_time_unready','android_revoke_controls_unconfirmed',
+        'android_board_search_state_invalid','android_board_search_count_mismatch','android_board_search_history_missing',
+        'android_board_search_native_call','android_board_search_reset_missing','android_board_search_clear_missing',
+        'android_board_search_counter_unavailable','android_select_option_missing','android_select_option_failed',
+        'android_device_impact_entry_missing','android_device_impact_status_invalid','android_device_impact_action_enabled',
+        'android_device_impact_reread_invalid','android_device_impact_entry_lost','android_device_impact_write_invoked'}
     def __init__(self, args):
         self.stream = None; self.success = False
         sha = os.environ.get('GITHUB_SHA','')
@@ -336,7 +343,7 @@ class AndroidWebView:
             self.call('Input.dispatchMouseEvent', {'type': kind, 'x': point['x'], 'y': point['y'],
                                                  'button': 'left', 'clickCount': 1})
 
-    def click_named(self, scope, label):
+    def click_named(self, scope, label, code='android_blocked_card_missing'):
         """Activate a unique visible named button through actual CDP pointer input."""
         expression = r'''(()=>{const root=document.querySelector(%s);if(!root)return null;
           const buttons=[...root.querySelectorAll('button')].filter(e=>e.textContent.trim()===%s &&
@@ -345,7 +352,7 @@ class AndroidWebView:
           const r=e.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;
           return r.width>0 && r.height>0 && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
             e.contains(document.elementFromPoint(x,y))?{x,y}:null})()''' % (json.dumps(scope),json.dumps(label))
-        point=wait_for(lambda:self.evaluate(expression),'android_blocked_card_missing')
+        point=wait_for(lambda:self.evaluate(expression),code)
         for kind in ('mousePressed','mouseReleased'):
             self.call('Input.dispatchMouseEvent',{'type':kind,'x':point['x'],'y':point['y'],'button':'left','clickCount':1})
 
@@ -391,6 +398,57 @@ class AndroidWebView:
             for kind in ('keyDown','keyUp'):
                 self.call('Input.dispatchKeyEvent', {'type':kind,'key':key,'code':key,'windowsVirtualKeyCode':number})
         wait_for(lambda: self.read(selector,'value') == ident, 'android_theme_selection_missing')
+
+    def select_option(self, selector, value):
+        """Choose one option of a real select with CDP keyboard input, never by assignment."""
+        options = wait_for(lambda: self.evaluate(
+            '(()=>{const e=document.querySelector(%s);if(!e||!e.getClientRects().length)return null;'
+            'return [...e.options].map(o=>o.value)})()' % json.dumps(selector)),
+            'android_select_option_missing')
+        if not isinstance(options, list) or value not in options:
+            raise GuiFailure('android_select_option_missing')
+        current = self.read(selector, 'value')
+        if current not in options:
+            raise GuiFailure('android_select_option_failed')
+        steps = options.index(value) - options.index(current)
+        if steps:
+            self.click(selector)
+            key = 'ArrowDown' if steps > 0 else 'ArrowUp'
+            for _ in range(abs(steps)):
+                for kind in ('keyDown', 'keyUp'):
+                    self.call('Input.dispatchKeyEvent', {'type':kind,'key':key,'code':key,'windowsVirtualKeyCode':40})
+            for kind in ('keyDown', 'keyUp'):
+                self.call('Input.dispatchKeyEvent', {'type':kind,'key':'Enter','code':'Enter','windowsVirtualKeyCode':13})
+        wait_for(lambda: self.read(selector, 'value') == value, 'android_select_option_failed')
+
+    def install_invoke_counter(self):
+        """Count real app IPC so a local-only interaction can be proven on the device."""
+        installed = self.evaluate(
+            '(()=>{const i=window.__TAURI_INTERNALS__;if(!i||typeof i.invoke!=="function")return false;'
+            'if(i.__herdrInvokeCounter)return true;const original=i.invoke;'
+            'const c={count:0,tally:{}};i.__herdrInvokeCounter=c;i.__herdrInvokeOriginal=original;'
+            'i.invoke=function(cmd,args,options){c.count+=1;'
+            'if(typeof cmd==="string"&&Object.keys(c.tally).length<64)c.tally[cmd]=(c.tally[cmd]||0)+1;'
+            'return original.call(i,cmd,args,options);};return true;})()')
+        if installed is not True:
+            raise GuiFailure('android_board_search_counter_unavailable')
+
+    def invoke_counter(self):
+        value = self.evaluate(
+            '(()=>{const i=window.__TAURI_INTERNALS__;const c=i&&i.__herdrInvokeCounter;'
+            'return c?{count:c.count,tally:c.tally}:null})()')
+        if (not isinstance(value, dict) or type(value.get('count')) is not int or value['count'] < 0 or
+                not isinstance(value.get('tally'), dict) or len(value['tally']) > 64 or
+                any(not isinstance(name, str) or type(number) is not int or number < 0
+                    for name, number in value['tally'].items())):
+            raise GuiFailure('android_board_search_counter_unavailable')
+        return value
+
+    def remove_invoke_counter(self):
+        self.evaluate(
+            '(()=>{const i=window.__TAURI_INTERNALS__;if(!i||!i.__herdrInvokeOriginal)return false;'
+            'i.invoke=i.__herdrInvokeOriginal;delete i.__herdrInvokeOriginal;delete i.__herdrInvokeCounter;'
+            'return true;})()')
 
     def hidden_key_probe(self):
         # Exercise the old view after navigation; receiver must remain unchanged.
@@ -499,6 +557,12 @@ def exercise_blocked_target(browser,approval,config):
     wait_for(lambda:browser.evaluate("document.querySelector('#tab-workspace').hidden"),'android_blocked_original_form_missing')
     browser.click('#host-return-home')
     wait_for(lambda:browser.evaluate("!document.querySelector('#host-home').hidden"),'android_home_not_visible')
+    _restore_paired_form(browser,config,targets)
+    return evidence
+
+
+def _restore_paired_form(browser,config,targets):
+    """Restore the paired identity form that the revocation review needs."""
     card=_blocked_card(browser,targets)
     browser.click_named(card['selector']+' .saved-host-actions','打开')
     wait_for(lambda:browser.evaluate("!document.querySelector('#host-restore-panel').hidden"),'android_blocked_original_form_missing')
@@ -511,7 +575,267 @@ def exercise_blocked_target(browser,approval,config):
     if (not browser.read('#pair-request','value') or
             browser.evaluate("document.querySelector('#remote-review').checked || !document.querySelector('#remote-connect').disabled") is not False):
         raise GuiFailure('android_blocked_original_form_missing')
-    return evidence
+
+
+BOARD_STATUS_PATTERN = re.compile(r'显示 (\d+) / (\d+) 台主机$')
+BOARD_CURRENT_PATTERN = re.compile(r'^当前待处理（(\d+)）$')
+BOARD_HISTORY_PATTERN = re.compile(r'^上次受阻，待核查（(\d+)）$')
+BOARD_EMPTY_MARK = '没有匹配的主机'
+BOARD_SNAPSHOT_KEYS = {'totalCards','visibleCards','query','state','clearHidden','resetHidden',
+    'statusHidden','statusText','currentLabel','historyLabel','sessionVisible','blockedRows'}
+BOARD_SNAPSHOT = r'''(()=>{const fragment=%s;
+  const list=document.querySelector('#host-list');
+  const cards=list?[...list.children].filter(c=>c.classList.contains('saved-host-card')):[];
+  const visible=cards.filter(c=>!c.hidden);
+  const value=id=>{const e=document.querySelector(id);return e?e.value:null;};
+  const hidden=id=>{const e=document.querySelector(id);return !e||e.hidden===true;};
+  const text=id=>{const e=document.querySelector(id);return e?e.textContent.trim():null;};
+  return {totalCards:cards.length,visibleCards:visible.length,
+    query:value('#host-query'),state:value('#host-attention'),
+    clearHidden:hidden('#host-query-clear'),resetHidden:hidden('#host-filter-reset'),
+    statusHidden:hidden('#host-filter-status'),statusText:text('#host-filter-status'),
+    currentLabel:text('#host-attention-current'),historyLabel:text('#host-attention-history'),
+    sessionVisible:visible.some(c=>c.textContent.includes(fragment)),
+    blockedRows:visible.map(c=>[...c.querySelectorAll('.blocked-target-list button[data-blocked-target]')]
+      .map(b=>b.dataset.blockedTarget))};})()'''
+
+
+def _board_snapshot(browser, fragment):
+    value = browser.evaluate(BOARD_SNAPSHOT % json.dumps(fragment))
+    if not isinstance(value, dict) or set(value) != BOARD_SNAPSHOT_KEYS:
+        raise GuiFailure('android_board_search_count_mismatch')
+    if (type(value['totalCards']) is not int or value['totalCards'] < 0 or
+            type(value['visibleCards']) is not int or value['visibleCards'] < 0 or
+            value['visibleCards'] > value['totalCards'] or
+            not isinstance(value['query'], str) or not isinstance(value['state'], str) or
+            type(value['clearHidden']) is not bool or type(value['resetHidden']) is not bool or
+            type(value['statusHidden']) is not bool or type(value['sessionVisible']) is not bool or
+            not isinstance(value['statusText'], str) or not isinstance(value['currentLabel'], str) or
+            not isinstance(value['historyLabel'], str) or
+            not isinstance(value['blockedRows'], list) or
+            any(not isinstance(ids, list) or any(not isinstance(item, str) for item in ids)
+                for ids in value['blockedRows'])):
+        raise GuiFailure('android_board_search_count_mismatch')
+    return value
+
+
+def _board_counts(snapshot):
+    """Read the dual-condition counter and both task-state counters from the board."""
+    status = BOARD_STATUS_PATTERN.search(snapshot['statusText'])
+    current = BOARD_CURRENT_PATTERN.match(snapshot['currentLabel'])
+    history = BOARD_HISTORY_PATTERN.match(snapshot['historyLabel'])
+    if not status or not current or not history:
+        raise GuiFailure('android_board_search_count_mismatch')
+    return int(status.group(1)), int(status.group(2)), int(current.group(1)), int(history.group(1))
+
+
+def _settled_invoke_count(browser):
+    """Wait until the app stops issuing IPC so a local-only interaction can be measured."""
+    previous = -1
+    stable = 0
+    for _ in range(60):
+        current = browser.invoke_counter()['count']
+        if current == previous:
+            stable += 1
+            if stable >= 3:
+                return current
+        else:
+            stable = 0
+            previous = current
+        time.sleep(0.25)
+    raise GuiFailure('android_board_search_counter_unavailable')
+
+
+def exercise_board_search(browser, approval, config):
+    """Search the saved board locally: text, task state, dual counts, history and reset."""
+    try:
+        targets = checked_targets(approval.blocked_targets)
+    except (ValueError, TypeError, AttributeError):
+        raise GuiFailure('android_blocked_target_evidence_invalid') from None
+    fragment = str(config['session'])[:8]
+    browser.install_invoke_counter()
+    try:
+        browser.click('#host-return-home')
+        wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
+        # The board refresh on return proves that the counter observes real app IPC.
+        if browser.invoke_counter()['count'] < 1:
+            raise GuiFailure('android_board_search_counter_unavailable')
+        baseline = _settled_invoke_count(browser)
+        expected = {row['paneId']+'/'+row['terminalId'] for row in targets}
+
+        # A session fragment finds the saved host and still lists both blocked panes.
+        browser.fill('#host-query', fragment)
+        snapshot = _board_snapshot(browser, fragment)
+        matched, total, current_count, history_count = _board_counts(snapshot)
+        if (snapshot['query'] != fragment or snapshot['clearHidden'] is not False or
+                snapshot['statusHidden'] is not False or snapshot['sessionVisible'] is not True or
+                matched != snapshot['visibleCards'] or total != snapshot['totalCards'] or matched < 1):
+            raise GuiFailure('android_board_search_count_mismatch')
+        rows = [ids for ids in snapshot['blockedRows'] if ids]
+        if (len(rows) != 1 or len(rows[0]) != 2 or len(set(rows[0])) != 2 or set(rows[0]) != expected):
+            raise GuiFailure('android_board_search_history_missing')
+        text_matched = matched
+
+        # The stale report belongs to the history bucket and not to the current one.
+        browser.select_option('#host-attention', 'current')
+        snapshot = _board_snapshot(browser, fragment)
+        matched, total, current_count, history_count = _board_counts(snapshot)
+        if (snapshot['state'] != 'current' or matched != 0 or snapshot['visibleCards'] != 0 or
+                current_count != 0 or history_count < 1):
+            raise GuiFailure('android_board_search_state_invalid')
+
+        # Both conditions together select that blocked host again.
+        browser.select_option('#host-attention', 'history')
+        snapshot = _board_snapshot(browser, fragment)
+        matched, total, current_count, history_count = _board_counts(snapshot)
+        if (snapshot['state'] != 'history' or matched != snapshot['visibleCards'] or
+                total != snapshot['totalCards'] or matched < 1 or matched > history_count):
+            raise GuiFailure('android_board_search_state_invalid')
+        dual_count = matched
+
+        # Clearing the text keeps the task state.
+        browser.click('#host-query-clear')
+        snapshot = _board_snapshot(browser, fragment)
+        matched, total, current_count, history_count = _board_counts(snapshot)
+        if (snapshot['query'] != '' or snapshot['state'] != 'history' or snapshot['clearHidden'] is not True or
+                matched != snapshot['visibleCards'] or matched != history_count):
+            raise GuiFailure('android_board_search_clear_missing')
+
+        # An empty result offers the reset that restores the original list.
+        browser.fill('#host-query', 'no-such-host-'+fragment)
+        snapshot = _board_snapshot(browser, fragment)
+        matched, total, current_count, history_count = _board_counts(snapshot)
+        if (snapshot['visibleCards'] != 0 or matched != 0 or total != snapshot['totalCards'] or
+                snapshot['resetHidden'] is not False or BOARD_EMPTY_MARK not in snapshot['statusText']):
+            raise GuiFailure('android_board_search_reset_missing')
+        browser.click('#host-filter-reset')
+        snapshot = _board_snapshot(browser, fragment)
+        if (snapshot['state'] != 'all' or snapshot['query'] != '' or snapshot['statusHidden'] is not True or
+                snapshot['statusText'] != '' or snapshot['visibleCards'] != snapshot['totalCards']):
+            raise GuiFailure('android_board_search_reset_missing')
+
+        # Searching and filtering stay on the device: no native call is added.
+        added = browser.invoke_counter()['count'] - baseline
+        if added != 0:
+            raise GuiFailure('android_board_search_native_call')
+    finally:
+        browser.remove_invoke_counter()
+    _restore_paired_form(browser, config, targets)
+    return {'textMatched':text_matched, 'dualConditionCount':dual_count, 'totalHosts':total,
+        'currentCount':current_count, 'historyCount':history_count, 'historyRows':2,
+        'historyDistinguished':True, 'clearedKeptState':True, 'resetRestoredList':True,
+        'nativeCallsAdded':added}
+
+
+DEVICE_REVIEW_SELECTOR = 'dialog[aria-labelledby="zerotier-device-title"]'
+DEVICE_ACTION_LABELS = frozenset({'创建共享设备','删除共享设备','恢复待定创建','放弃待定创建',
+    '恢复待定删除','确认操作','取消操作'})
+DEVICE_WRITE_COMMANDS = frozenset({'zerotier_device_write','network_identity_write','network_save',
+    'network_delete','network_bind','network_node_start','network_node_stop','network_node_login',
+    'network_node_open_auth'})
+DEVICE_REVIEW_SNAPSHOT = r'''(()=>{const title=document.querySelector('dialog[open] #zerotier-device-title');
+  if(!title)return null;
+  const dialog=title.closest('dialog');
+  const status=dialog.querySelector('p[role=status]');
+  const lines=[...dialog.querySelectorAll('p')].map(p=>p.textContent.trim());
+  return {title:title.textContent.trim(),status:status?status.textContent.trim():null,
+    hasScope:lines.some(t=>t.startsWith('受影响网络：'))&&lines.some(t=>t.startsWith('受影响主机：')),
+    pending:lines.some(t=>t.startsWith('待定创建：')||t.startsWith('待定删除：')),
+    buttons:[...dialog.querySelectorAll('button')].map(b=>({text:b.textContent.trim(),disabled:b.disabled}))};})()'''
+
+
+def _device_review(browser):
+    value = browser.evaluate(DEVICE_REVIEW_SNAPSHOT)
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) != {'title','status','hasScope','pending','buttons'}:
+        raise GuiFailure('android_device_impact_status_invalid')
+    if (not isinstance(value['title'], str) or not isinstance(value['status'], str) or
+            type(value['hasScope']) is not bool or type(value['pending']) is not bool or
+            not isinstance(value['buttons'], list) or
+            any(not isinstance(item, dict) or set(item) != {'text','disabled'} or
+                not isinstance(item['text'], str) or type(item['disabled']) is not bool
+                for item in value['buttons'])):
+        raise GuiFailure('android_device_impact_status_invalid')
+    return value
+
+
+def _device_class(snapshot):
+    """Classify the shared device display path the unbound Android build can reach."""
+    status = snapshot['status']
+    if '设备状态未知' in status:
+        return 'unknown'
+    if '受影响范围未知' in status:
+        return 'catalog_blocked'
+    if snapshot['pending']:
+        return 'pending'
+    return None
+
+
+def _settled_device_review(browser):
+    snapshot = _device_review(browser)
+    return snapshot if snapshot and _device_class(snapshot) else None
+
+
+def exercise_device_impact_review(browser):
+    """Review the shared device impact without creating identities or joining a network."""
+    browser.install_invoke_counter()
+    try:
+        browser.click('#host-return-home')
+        wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
+        browser.click('#network-open')
+        wait_for(lambda: browser.evaluate(
+            "(()=>{const p=document.querySelector('#network-panel');return !!p&&!p.hidden})()"),
+            'android_device_impact_entry_missing')
+        browser.click_named('#network-panel','审查 ZeroTier 共享设备','android_device_impact_entry_missing')
+        snapshot = wait_for(lambda: _settled_device_review(browser), 'android_device_impact_status_invalid', timeout=60)
+        state = _device_class(snapshot)
+        if state not in ('unknown','catalog_blocked','pending'):
+            raise GuiFailure('android_device_impact_status_invalid')
+        if snapshot['title'] != 'ZeroTier 共享设备':
+            raise GuiFailure('android_device_impact_status_invalid')
+        actions = [item for item in snapshot['buttons'] if item['text'] in DEVICE_ACTION_LABELS]
+        if state in ('unknown','catalog_blocked'):
+            # Without a readable device state no identity operation may be offered.
+            if actions or snapshot['hasScope'] is not (state == 'unknown'):
+                raise GuiFailure('android_device_impact_action_enabled')
+        for label in ('刷新状态','关闭'):
+            if not any(item['text'] == label and item['disabled'] is False for item in snapshot['buttons']):
+                raise GuiFailure('android_device_impact_status_invalid')
+
+        # A second read must issue fresh catalog and device reads.
+        before = browser.invoke_counter()['count']
+        browser.click_named(DEVICE_REVIEW_SELECTOR,'刷新状态','android_device_impact_reread_invalid')
+        wait_for(lambda: browser.invoke_counter()['count'] - before >= 3, 'android_device_impact_reread_invalid', timeout=30)
+        reread_calls = browser.invoke_counter()['count'] - before
+        reread = wait_for(lambda: _settled_device_review(browser), 'android_device_impact_reread_invalid', timeout=60)
+        if _device_class(reread) != state:
+            raise GuiFailure('android_device_impact_reread_invalid')
+
+        # The entry stays available after the dialog returns.
+        browser.click_named(DEVICE_REVIEW_SELECTOR,'关闭','android_device_impact_entry_lost')
+        wait_for(lambda: browser.evaluate("!document.querySelector(%s)" % json.dumps(DEVICE_REVIEW_SELECTOR)),
+                 'android_device_impact_entry_lost')
+        if browser.evaluate("(()=>{const p=document.querySelector('#network-panel');if(!p||p.hidden)return false;"
+                             "return [...p.querySelectorAll('button')].some(b=>b.textContent.trim()==='审查 ZeroTier 共享设备'&&!b.disabled)})()") is not True:
+            raise GuiFailure('android_device_impact_entry_lost')
+        browser.click_named('#network-panel','审查 ZeroTier 共享设备','android_device_impact_entry_lost')
+        again = wait_for(lambda: _settled_device_review(browser), 'android_device_impact_entry_lost', timeout=60)
+        if _device_class(again) != state:
+            raise GuiFailure('android_device_impact_entry_lost')
+        browser.click_named(DEVICE_REVIEW_SELECTOR,'关闭','android_device_impact_entry_lost')
+        wait_for(lambda: browser.evaluate("!document.querySelector(%s)" % json.dumps(DEVICE_REVIEW_SELECTOR)),
+                 'android_device_impact_entry_lost')
+
+        # No identity or network write may be issued by this review.
+        writes = sum(number for name, number in browser.invoke_counter()['tally'].items()
+                     if name in DEVICE_WRITE_COMMANDS)
+        if writes:
+            raise GuiFailure('android_device_impact_write_invoked')
+    finally:
+        browser.remove_invoke_counter()
+    return {'statusClass':state, 'scopeListed':bool(snapshot['hasScope']), 'deviceActions':len(actions),
+        'rereadCalls':reread_calls, 'reentered':True, 'writeCalls':writes}
 
 
 def restore_reviewed_draft(browser, pane_id, terminal_id, rendered):
@@ -1075,10 +1399,15 @@ def run_android(args, root, env, config, approval):
         wait_for(lambda: '陈旧' in (browser.read('#remote-captured') or ''), 'android_stale_marker_missing')
         progress.mark('stoppedStale')
         blocked_evidence=None
+        board_evidence=None
+        device_evidence=None
         if not guarded:
             progress.phase('blocked_target_entry')
             blocked_evidence=exercise_blocked_target(browser,approval,config)
             progress.mark('blockedTargetVerified')
+            progress.phase('board_search')
+            board_evidence=exercise_board_search(browser,approval,config)
+            progress.mark('boardSearchVerified')
         progress.phase('local_revocation_review')
         wait_for(lambda: browser.evaluate("document.querySelector('#remote-cancel').disabled"),
                  'android_observer_still_active')
@@ -1096,12 +1425,18 @@ def run_android(args, root, env, config, approval):
         wait_for(lambda: '目录已确认撤销' in (browser.read('#pair-status') or ''), 'android_revoke_not_persisted')
         if browser.evaluate("!document.querySelector('#remote-connect').disabled || !document.querySelector('#pair-create').disabled"):
             raise GuiFailure('android_revoked_target_still_enabled')
-        progress.mark('revocationReviewed'); progress.success=True
+        progress.mark('revocationReviewed')
+        progress.phase('device_impact_review')
+        device_evidence=exercise_device_impact_review(browser)
+        progress.mark('deviceImpactReviewed')
+        progress.success=True
         return {'paired':True, 'publicProfileReviewed':True, 'publicRequestCopyReported':copy_reported,
                 'revocationReviewed':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                 'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                 'inputQueueAccepted':bool(receipts), 'inputReceipts':receipts,
                 **({'blockedTargetEvidence':blocked_evidence} if blocked_evidence is not None else {}),
+                **({'boardSearchEvidence':board_evidence} if board_evidence is not None else {}),
+                **({'deviceImpactEvidence':device_evidence} if device_evidence is not None else {}),
                 'fontDiagnosticEvidence':font_diagnostic_evidence, 'observerCanvasEvidence':canvas_evidence,
                 **({'tui': tui_evidence} if tui_evidence is not None else {}),
                 **paste_evidence,

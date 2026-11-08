@@ -58,6 +58,21 @@ def tui_resume_report(**changes):
     return value
 
 
+def board_search_report(**changes):
+    value = {'textMatched':1,'dualConditionCount':1,'totalHosts':1,'currentCount':0,'historyCount':1,
+        'historyRows':2,'historyDistinguished':True,'clearedKeptState':True,'resetRestoredList':True,
+        'nativeCallsAdded':0}
+    value.update(changes)
+    return value
+
+
+def device_impact_report(**changes):
+    value = {'statusClass':'unknown','scopeListed':True,'deviceActions':0,'rereadCalls':3,
+        'reentered':True,'writeCalls':0}
+    value.update(changes)
+    return value
+
+
 def checkpoint_payload(label):
     return {'checkpoint': label, **({'viewInsetBottom': 300 if label.endswith(('-shown', '-reopened', '-request')) else 0,
         'editorFocused': True, 'modeReselected': False} if label not in gui.CLIPBOARD_CHECKPOINTS else {})}
@@ -1088,18 +1103,36 @@ class ClipboardCheckpointGuards(unittest.TestCase):
 class TuiResumeDiagnosticGuards(unittest.TestCase):
     def test_resume_v2_reports_only_bounded_page_and_adapter_state(self):
         diagnostic=tui_resume_report(schemaVersion=2,pageCount=1,pageBusy=True,pagePaused=False,
-            pageLive=False,evidenceFull=False,boardFreshness='refreshing',adapterPhase='snapshot',adapterError='none')
+            pageLive=False,evidenceFull=False,boardFreshness='refreshing',adapterPhase='snapshot',
+            adapterError='none',adapterRetireMiss='none')
         record={'stage':'tui_resume_full','errorClass':'TestFailure','line':131,'tuiResume':diagnostic}
         raw=json.dumps(record,separators=(',',':')).encode()
         self.assertLessEqual(len(raw),gui.PUBLIC_LIMITS['failure.json'])
         self.assertEqual(gui.safe_test_failure(record),record)
         self.assertEqual(gui.checked_public_payload(raw,'failure.json'),raw)
         for field,value in [('adapterPhase','private'),('adapterError','private'),('boardFreshness','private'),
-                            ('pageCount',3),('pageLive',1),('private','secret')]:
+                            ('adapterRetireMiss','private'),('pageCount',3),('pageLive',1),('private','secret')]:
             with self.subTest(field=field),self.assertRaises(gui.DeviceFailure):
                 gui.safe_tui_resume({**diagnostic,field:value})
         with self.assertRaises(gui.DeviceFailure):
             gui.safe_tui_resume({**diagnostic,'pageCount':0})
+
+    def test_adapter_retire_miss_reports_sorted_role_sets_or_none_only(self):
+        diagnostic=tui_resume_report(schemaVersion=2,pageCount=1,pageBusy=True,pagePaused=False,
+            pageLive=False,evidenceFull=False,boardFreshness='refreshing',adapterPhase='snapshot',
+            adapterError='none',adapterRetireMiss='none')
+        for value in ('none','watch','observation+watch','input+observation+snapshot+watch'):
+            with self.subTest(value=value):
+                self.assertEqual(gui.safe_tui_resume({**diagnostic,'adapterRetireMiss':value})['adapterRetireMiss'],value)
+        for value in ('tunnel','watch+watch','watch+input','observation+watch+observation',
+                      'none+watch','input+','+','',['watch'],2):
+            with self.subTest(value=value),self.assertRaises(gui.DeviceFailure):
+                gui.safe_tui_resume({**diagnostic,'adapterRetireMiss':value})
+        idle=tui_resume_report(schemaVersion=2,pageCount=0,pageBusy=False,pagePaused=False,
+            pageLive=False,evidenceFull=False,boardFreshness='none',adapterPhase='unknown',
+            adapterError='none',adapterRetireMiss='watch')
+        with self.assertRaises(gui.DeviceFailure):gui.safe_tui_resume(idle)
+        self.assertEqual(gui.safe_tui_resume({**idle,'adapterRetireMiss':'none'})['adapterRetireMiss'],'none')
 
     def test_all_resume_substages_roundtrip_bounded_false_predicates_without_text(self):
         for stage in gui.TUI_RESUME_STAGES:
@@ -1172,10 +1205,85 @@ class TuiResumeDiagnosticGuards(unittest.TestCase):
         self.assertIn("actual == 'Pocket TUI'",snapshot)
         fields=set(re.findall(r"'([A-Za-z]+)':",snapshot))
         expected=tui_resume_report(schemaVersion=2,pageCount=1,pageBusy=True,pagePaused=False,
-            pageLive=False,evidenceFull=False,boardFreshness='refreshing',adapterPhase='snapshot',adapterError='none')
+            pageLive=False,evidenceFull=False,boardFreshness='refreshing',adapterPhase='snapshot',
+            adapterError='none',adapterRetireMiss='none')
         self.assertEqual(fields,set(gui.safe_tui_resume(expected)))
         self.assertIn("'tuiResume':tuiResume",source)
         self.assertIn("'failure.json',jsonEncode(boundedFailure",source)
+
+
+class BoardSearchAndDeviceImpactGuards(unittest.TestCase):
+    """Board search and shared device review evidence; no host identity or device write may leave the AVD."""
+
+    def test_new_stage_groups_are_registered_next_to_their_public_driver_stages(self):
+        self.assertEqual(gui.BOARD_SEARCH_STAGES, frozenset({'board_search_text','board_search_state',
+            'board_search_count','board_search_history','board_search_clear'}))
+        self.assertEqual(gui.DEVICE_IMPACT_STAGES, frozenset({'device_impact_enter','device_impact_scope',
+            'device_impact_reread','device_remove_blocked'}))
+        self.assertLessEqual(gui.BOARD_SEARCH_STAGES | gui.DEVICE_IMPACT_STAGES, gui.STAGES)
+        self.assertTrue(gui.BOARD_SEARCH_STAGES.isdisjoint(gui.DEVICE_IMPACT_STAGES))
+
+    def test_board_search_reports_only_bounded_local_counts(self):
+        report = board_search_report()
+        self.assertEqual(gui.safe_board_search(report), report)
+        for changes in ({'nativeCallsAdded':1},{'historyDistinguished':False},{'clearedKeptState':False},
+                        {'resetRestoredList':False},{'textMatched':0},{'dualConditionCount':0},
+                        {'historyRows':0},{'historyCount':0},{'dualConditionCount':2,'totalHosts':1},
+                        {'textMatched':True},{'totalHosts':'1'},{'historyRows':-1},{'totalHosts':65}):
+            with self.subTest(changes=changes), self.assertRaises(gui.DeviceFailure):
+                gui.safe_board_search(board_search_report(**changes))
+        for value in (None,[],{},dict(board_search_report(),hostName='PRIVATE'),dict(board_search_report(),textMatched='1')):
+            with self.subTest(value=value), self.assertRaises(gui.DeviceFailure):
+                gui.safe_board_search(value)
+
+    def test_device_impact_reports_only_readable_display_paths(self):
+        for report in (device_impact_report(), device_impact_report(statusClass='catalog_blocked',scopeListed=False),
+                       device_impact_report(statusClass='pending',scopeListed=True,deviceActions=1)):
+            self.assertEqual(gui.safe_device_impact(report), report)
+        for changes in ({'writeCalls':1},{'reentered':False},{'rereadCalls':0},{'deviceActions':1},
+                        {'scopeListed':False},{'statusClass':'catalog_blocked'},{'statusClass':'private'},
+                        {'rereadCalls':True},{'deviceActions':-1},{'writeCalls':65},{'scopeListed':1}):
+            with self.subTest(changes=changes), self.assertRaises(gui.DeviceFailure):
+                gui.safe_device_impact(device_impact_report(**changes))
+        for value in (None,[],{},dict(device_impact_report(),handle='PRIVATE')):
+            with self.subTest(value=value), self.assertRaises(gui.DeviceFailure):
+                gui.safe_device_impact(value)
+
+    def test_group_evidence_is_accepted_only_at_the_stages_of_its_own_group(self):
+        for stage in gui.BOARD_SEARCH_STAGES:
+            record = {'stage':stage,'errorClass':'TestFailure','line':68,'boardSearch':board_search_report()}
+            self.assertEqual(gui.safe_test_failure(record), record)
+        for stage in gui.DEVICE_IMPACT_STAGES:
+            record = {'stage':stage,'errorClass':'TestFailure','line':68,'deviceImpact':device_impact_report()}
+            self.assertEqual(gui.safe_test_failure(record), record)
+        for record in ({'stage':'device_impact_enter','errorClass':'TestFailure','line':68,'boardSearch':board_search_report()},
+                       {'stage':'board_search_text','errorClass':'TestFailure','line':68,'deviceImpact':device_impact_report()},
+                       {'stage':'guarded_direct','errorClass':'TestFailure','line':68,'boardSearch':board_search_report()},
+                       {'stage':'guarded_direct','errorClass':'TestFailure','line':68,'deviceImpact':device_impact_report()}):
+            with self.subTest(record=record), self.assertRaises(gui.DeviceFailure):
+                gui.safe_test_failure(record)
+
+    def test_public_result_carries_the_optional_group_evidence(self):
+        clean = gui.safe_device_result(device_report(boardSearchEvidence=board_search_report(),
+            deviceImpactEvidence=device_impact_report()))
+        self.assertEqual(clean['boardSearchEvidence'], board_search_report())
+        self.assertEqual(clean['deviceImpactEvidence'], device_impact_report())
+        self.assertNotIn('boardSearchEvidence', gui.safe_device_result(device_report()))
+        for changes in ({'boardSearchEvidence':device_impact_report()},{'deviceImpactEvidence':board_search_report()},
+                        {'boardSearchEvidence':dict(board_search_report(),nativeCallsAdded=1)},
+                        {'deviceImpactEvidence':dict(device_impact_report(),writeCalls=1)}):
+            with self.subTest(changes=changes), self.assertRaises(gui.DeviceFailure):
+                gui.safe_device_result(device_report(**changes))
+
+    def test_group_evidence_stays_inside_the_public_failure_budget(self):
+        for record in ({'stage':'board_search_count','errorClass':'TimeoutException','line':10000,
+                            'boardSearch':board_search_report()},
+                       {'stage':'device_impact_scope','errorClass':'TimeoutException','line':10000,
+                            'deviceImpact':device_impact_report()}):
+            raw = json.dumps(record,separators=(',',':')).encode()
+            self.assertLessEqual(len(raw), gui.PUBLIC_LIMITS['failure.json'])
+            self.assertEqual(gui.safe_test_failure(record), record)
+            self.assertEqual(gui.checked_public_payload(raw,'failure.json'), raw)
 
 
 class TuiGuards(unittest.TestCase):

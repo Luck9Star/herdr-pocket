@@ -630,12 +630,13 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   final rows=find.descendant(of:group,matching:find.byWidgetPredicate((widget) => widget is ListTile &&
     widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('host-blocked-target-')));
   await until(tester,() => rows.evaluate().isNotEmpty);
-  // A collapsed group keeps its rows in the tree but clips them away, so the
-  // expansion is read from the rendered row and not from the widget list.
+  // A collapsed group clips its rows away or removes them from the tree
+  // entirely, so the expansion is read from hit-testability and not from
+  // the widget list.
   await tester.ensureVisible(rows.first); await tester.pump();
   if (rows.first.hitTestable().evaluate().length == 1) {
     await tap(tester,group); // Collapse the group the blocked review left open.
-    await until(tester,() => rows.first.hitTestable().evaluate().isEmpty);
+    await until(tester,() => rows.hitTestable().evaluate().isEmpty);
   }
   await tap(tester,group);
   await tester.ensureVisible(rows.first); await tester.pump();

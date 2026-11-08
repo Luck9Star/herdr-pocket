@@ -145,7 +145,7 @@ void main() {
     expect(board,findsOneWidget);
     final status = find.byKey(const ValueKey('hosts-status'));
     await tester.scrollUntilVisible(status,-300,
-      scrollable:find.descendant(of:board,matching:find.byType(Scrollable)).first));
+      scrollable:find.descendant(of:board,matching:find.byType(Scrollable)).first);
     expect(status,findsOneWidget);
     expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
   });

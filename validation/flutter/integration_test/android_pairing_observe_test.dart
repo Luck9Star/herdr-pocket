@@ -599,10 +599,16 @@ List<({String paneId,String terminalId})> boardHistoryRows(WidgetTester tester,S
 /// public package must not contain.
 Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String session,String hostId,
     void Function(String) stage) async {
+  stage('board_search_text');
+  final board=find.byKey(const ValueKey('host-catalog-list'));
   final search=find.byKey(const ValueKey('hosts-search'));
   final filter=find.byKey(const ValueKey('hosts-task-filter'));
+  await until(tester,() => board.evaluate().length == 1);
+  // The board retains its scroll position after opening a blocked target, so
+  // its lazily built search controls may be above the visible list.
+  await tester.scrollUntilVisible(search,-300,
+    scrollable:find.descendant(of:board,matching:find.byType(Scrollable)).first);
   await until(tester,() => search.evaluate().length == 1 && filter.evaluate().length == 1);
-  stage('board_search_text');
   await tester.ensureVisible(search);
   await tester.enterText(search,session); await tester.pump();
   final textMatched=boardCounts(tester).shown;

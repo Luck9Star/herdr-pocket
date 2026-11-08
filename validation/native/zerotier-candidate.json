@@ -13,6 +13,10 @@
     {
       "path": "candidates/zerotier/patches/0007-defined-ecc-shifts.patch",
       "sha256": "a65ea3314b2811106f366ac2649bd21d6ee39836da09262481ad0d2403f4c407"
+    },
+    {
+      "path": "candidates/zerotier/patches/0008-streams-and-hp-boundary.patch",
+      "sha256": "9bedbe9c9631fa31144774945b17f9cf315f0baa61812114e2dd73a66d6e4bd1"
     }
   ],
   "copies": [
@@ -70,7 +74,7 @@
     },
     {
       "path": "candidates/zerotier/README.md",
-      "sha256": "5e9b5cfec29ae53c0ff8cba0eefcb9bc298af9d76f031869704949166466e729"
+      "sha256": "d9d0e3f349adc3d6cb714def7548631cd8a2c28b8b4d63ca05616c1b9bfcb73c"
     },
     {
       "path": "candidates/zerotier/tests/ecc_driver.cpp",
@@ -91,16 +95,55 @@
     {
       "path": "zerotier-runtime/tests/run_manager.py",
       "sha256": "084e4d5a025f9c8b37d15c6911772369aa147744e111f6be1f81fb5ad4b88505"
+    },
+    {
+      "path": "zerotier-runtime/tests/bound_fixture.cpp",
+      "sha256": "c7d76a5a149d29a43371b684e7a4ac21b7c28d7a7030fd0543322a8b240ac920"
+    },
+    {
+      "path": "zerotier-runtime/tests/bound_fixture.hpp",
+      "sha256": "2c6f30e0fea8b91389a1f2560d91a61058b284bc491a10867c71f340ba68e5a2"
+    },
+    {
+      "path": "zerotier-runtime/tests/boundary_test.cpp",
+      "sha256": "aebbfdb10cdbf3ee7fc6df4835bb9346a0a15e7c9fd74fb64c5c285018d6117e"
+    },
+    {
+      "path": "zerotier-runtime/tests/library_probe.cpp",
+      "sha256": "c06e8895e21dcd0ef19b4df355a38b6ab1e9a484661af519c31c81f169819159"
+    },
+    {
+      "path": "zerotier-runtime/tests/run_boundary.py",
+      "sha256": "1c8fe8aa8ff9cf5cbd9c1cd0e1eb8a7f1e3b98ec172d7d6584eb54b599cc7b02"
+    },
+    {
+      "path": "zerotier-runtime/tests/stream_test.cpp",
+      "sha256": "3de9e6d465bdbbeb1bf65b6c4e911a84d0667b57fc1dbf899c547b621b23e990"
+    },
+    {
+      "path": "zerotier-runtime/tests/tap_reconfig_test.cpp",
+      "sha256": "1559a379a2e42e91e7302b16779296b457063370f59ec897adfc4b2739d268a1"
     }
   ],
   "beforeFiles": {
     "ext/ZeroTierOne/node/ECC.cpp": "9a9aa9ce6d15745f22babfad7e9905661532f67e9d87fc2518ca75e43cfc581b",
     "ext/ZeroTierOne/node/ECC.hpp": "2ae06fc551a3add96b33f5f8e3f5ab42335bbd2609877b219be8f34020ad66fb",
     "ext/ZeroTierOne/node/Identity.cpp": "0f7f4af189a84b0f93663f29ad0b0ed576e265991011951eaa94aa2cd9a21749",
+    "ext/lwip/src/api/sockets.c": "8fd212ec7b89545f0111c063b3c40e33a63475131a0513f130d465c83c2609bb",
+    "ext/lwip/src/core/netif.c": "84c12e22fee886e757fb0fa6d7793987a901f73522f8dbbc47242eb772f6d00a",
+    "ext/lwip/src/core/tcp.c": "172edcdb736bfe98d7ad8b9f582d9d048634d513adeb003919666c5294be71cb",
+    "ext/lwip/src/core/tcp_in.c": "98c3130c75c122ed0502b77b7ff20698d3df37fa587dbb5b427ab3ebf0e269d4",
+    "ext/lwip/src/core/tcp_out.c": "894814e50ec242c1243f6b6049f16747ce150f9427f15dac937c23b3bd3a796e",
+    "ext/lwip/src/include/lwip/ip.h": "9589862a8cd3d22ad06ac291231d4b0335cb15e2d0e5bcbd1f870808d9f85828",
+    "ext/lwip/src/include/lwip/netif.h": "bed85f2bdd2b57cd90106cfcc4baca8a27cdf4051a595f35b6d9ba4ca7f9a5fa",
+    "ext/lwip/src/include/lwip/priv/sockets_priv.h": "bd45590358b1a07481b7ddae7845e0d1c59bcf482ea48d9093638e0d11aafcc3",
+    "ext/lwip/src/include/lwip/priv/tcp_priv.h": "547929dbf334d846444094ecb363680bf90320b198ac1e49027fda4049c07233",
     "include/ZeroTierSockets.h": "84515706435ccdf3c253cede0a51f0309d00068c3f39cce7185f41fe07d33dc9",
     "src/Controls.cpp": "8ac20ae3cc53af330b9f28d1ed09e05338b551f7c5079e4e65869f9e02c5b260",
     "src/Events.cpp": "39c2db1bdf3bde312e50b4bc39a8d00ae01d6eda4ed7460f303cccb2f53dbaca",
     "src/Events.hpp": "fb447ada6e9a0ee218f853270feb468c2040aa407d991a5a593e016bf96a1edc",
+    "src/HpBoundRoutes.cpp": null,
+    "src/HpBoundSockets.cpp": null,
     "src/HpEventOwnership.hpp": null,
     "src/HpEventProjection.hpp": null,
     "src/HpLifecycle.hpp": null,
@@ -113,18 +156,29 @@
     "ext/ZeroTierOne/node/ECC.cpp": "b74ddffca6e9e80d8dd67dca2a4764b1f09afee579d61b4f6b5a2c48377833b4",
     "ext/ZeroTierOne/node/ECC.hpp": "da314ade30130826eebc32aa96a5f5ed40b66cdb6c399e5717054861bb8c07d4",
     "ext/ZeroTierOne/node/Identity.cpp": "84dda1ab7abb90e9df791a714172955980a6b92a9f3f48ca8f8612a89b11a714",
+    "ext/lwip/src/api/sockets.c": "1b5845f4c22fa8963974bbef34fe97ac9895f8a34f57150f9024a53f5951c750",
+    "ext/lwip/src/core/netif.c": "1c8d308fcb3cc9b51bbc08206c9ea0668df915c6fbf24655735b6b0c9f920258",
+    "ext/lwip/src/core/tcp.c": "481b4010f40325a0dadf0ec57bc81af69b22faf12432e019a038f89a3f465c73",
+    "ext/lwip/src/core/tcp_in.c": "7840c04efdab82ee05ab970be5706934c59b88ed564fbcd2e82e07413efe59b5",
+    "ext/lwip/src/core/tcp_out.c": "7932ce9888ee2c885e942bebe1c6289b870fd0dc380c480f221f4541dce544b1",
+    "ext/lwip/src/include/lwip/ip.h": "d04a6df68e0a3197915bc444c08b8980d16d894e7b6c818c91893e49c89cdc0f",
+    "ext/lwip/src/include/lwip/netif.h": "071bbb47d763267aa2e783c91d317e47ec0eb77a99d8e80c12cdc567a93e0868",
+    "ext/lwip/src/include/lwip/priv/sockets_priv.h": "6cf7e9e19a204ee5b2a58e2a1919ce8629f29e7d20e5b84c0468a67b741259d9",
+    "ext/lwip/src/include/lwip/priv/tcp_priv.h": "56d41a05a7421e5d61521eed78a7ec17d632533882e8407dbfde7f801480bfe6",
     "include/ZeroTierSockets.h": "286dd2c193eb6423eeaed14cbb2a108eb76426f20547b75e17283ac7750dc3e4",
     "include/hp_zt_bound.h": "2b5ba0292016bbee376cf7322485f71992171781562eed06e011bccb419cc456",
     "src/Controls.cpp": "67aa07b56e26e55e981cb28358f246f8c1d2d0930818daef19addd16eeacb6b1",
     "src/Events.cpp": "34c5b8a43494391b5c66f193f0a7c15a063f7a71999148b4e6860b55d7b76909",
     "src/Events.hpp": "ed38b2564ed26934a4e9d31dcdcb080469d51f0c7bd7ed2b85f299c74f802f8d",
+    "src/HpBoundRoutes.cpp": "077c0845bce54ad938b50dfdc218e874b0e90ec763ceeac624d9460bab442ad1",
+    "src/HpBoundSockets.cpp": "c174f5e295fb25ba3f0007e478ea47c622eb84203a2aebc1a8b20a5d8c787522",
     "src/HpEventOwnership.hpp": "a65f218e6111a951b5988910d708b7793a5c88175e300cf24b5897f50e12a813",
     "src/HpEventProjection.hpp": "d67a828e723907a740ad9957627a0dc49a274e4edec37a272406348dc15a46d2",
-    "src/HpLifecycle.hpp": "6040de28a900eb3180110206368fbf7cd5e690f820b6b1b9a66fb09ee1a048a4",
-    "src/NodeService.cpp": "fab73354eac8e905e279abb2b518e400569891b9c8696fd734d4541ef7102adb",
-    "src/NodeService.hpp": "a877bb426a395ff9a7932a1e85254f6f7d834684832ac4f7fbcd7b8d4f253a92",
-    "src/VirtualTap.cpp": "cbf0e79a8fa7086f7be502bd403005e9b5356a48e3bcd16f878a6ab4e038893e",
-    "src/VirtualTap.hpp": "3887342ebe4deaa04ca1baa5c8f74d79d5694842237d6df5d0dfa72d4f384843",
+    "src/HpLifecycle.hpp": "aea395a1f7d895b344ec2ab7bad0f0cd0429248706ffcbbe779625e780c521df",
+    "src/NodeService.cpp": "fd7783cc8775bb8b1362311ab052a817681554ab6f04cb2cc71899887435a400",
+    "src/NodeService.hpp": "ba9e0eb7dffd4a9537db2322f4bd1090cae5706d1f30101826bbcaf64507dc59",
+    "src/VirtualTap.cpp": "4a2c90b30bed258004a3ebfa681c99562bfabb2c28db0f2cd4540264389cacce",
+    "src/VirtualTap.hpp": "44e0cf9de937783abb48bcc9d89e8598a9bb4297fbef6b5b9256ee6996574c28",
     "src/hp_zt.h": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad",
     "src/hp_zt_identity.cpp": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992",
     "src/hp_zt_lifecycle.cpp": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693",

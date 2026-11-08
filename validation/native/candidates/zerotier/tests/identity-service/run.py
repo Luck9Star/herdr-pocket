@@ -55,7 +55,8 @@ def main():
                 raise ValueError('accepted source anchor changed')
         manifest = json.loads((native / 'zerotier-candidate.json').read_text())
         if [Path(row['path']).name for row in manifest['patches']] != [
-                '0005-native-safety.patch', '0006-strict-offline-identity.patch', '0007-defined-ecc-shifts.patch']:
+                '0005-native-safety.patch', '0006-strict-offline-identity.patch',
+                '0007-defined-ecc-shifts.patch', '0008-streams-and-hp-boundary.patch']:
             raise ValueError('unexpected candidate patch set')
         spec = importlib.util.spec_from_file_location('accepted_zt_candidate', native / 'tool/zerotier_candidate.py')
         helper = importlib.util.module_from_spec(spec)

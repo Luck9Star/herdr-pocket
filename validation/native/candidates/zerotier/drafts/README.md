@@ -1,9 +1,8 @@
-# 未完成的网络流草稿
+# ZeroTier 候选补丁草稿归档
 
-2026-11-07。`0008-streams-in-progress.patch` 仅保存本轮临时目录中已写出的修改，基于 `98473a6` 对应的 0005／0006／0007 候选源码。它**未列入** `zerotier-candidate.json`，不是可用于 App 构建的已验证候选。配套 JSON 固定 14 个变更文件的前后 SHA，防止后续把不同源码的测试混为一次结果。
+2026-11-08。此前暂存的 `0008-streams-in-progress.patch` 草稿（网络流与边界绑定）已完成缺陷修复（阶段 A 并发/生命周期修复 + IPv6 DAD 即时 PREFERRED 与 IPv4 对称 re-add），并通过全量回归验证（62 TU 编译 + 118 boundary 测试 + 8 tap-reconfig 原生无注入测试 + 15 gate 测试）。
 
-此草稿在编写定向 socket、netif generation、按网络退出和 IPv6 改址恢复时中断。历史 v6 的 114 项真实 lwIP 内存网络检查，发生在之后的源码修改之前；不能据此证明本草稿或当前 manager 通过。`tap_reconfig_test.cpp` 尚无执行证据；完整 Mac 库也未基于此草稿重建。
+该补丁现已正式转正为 `candidates/zerotier/patches/0008-streams-and-hp-boundary.patch` 并录入 `zerotier-candidate.json`。
 
-原生实现与独立审查子代理被运行环境自动安全审查中断，提示为 `possible cybersecurity risk`。已发现但未完成修复的异步帧回调／原节点生命周期问题仍然存在；不得启用此路径或宣称节点安全退休。此前关于某个局部数组按值捕获后仍是栈指针的说法已经撤回，不能列为已确认缺陷。
+当前 `drafts/` 目录下无未完成的活动草稿。
 
-保留草稿只是为了不丢失本轮工作。后续须继续完成实现、独立审查、绑定最终源码的回归与整库构建，再更新正式候选清单。不要直接把此文件改名并当成正式 `0008` 应用。

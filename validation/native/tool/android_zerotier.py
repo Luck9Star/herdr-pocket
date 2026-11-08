@@ -36,6 +36,14 @@ SYMBOLS = [
     'hp_zt_stream_shutdown_write', 'hp_zt_stream_cancel', 'hp_zt_stream_close',
     'hp_zt_stream_release',
 ]
+BOUND_SYMBOLS = (
+    'hp_zt_bound_open',
+    'hp_zt_bound_state',
+    'hp_zt_bound_read',
+    'hp_zt_bound_write',
+    'hp_zt_bound_shutdown_write',
+    'hp_zt_bound_close',
+)
 REQUIRED_MATERIALS = ('zerotier/source-manifest.json', 'zerotier/prepared-source.json',
                       'zerotier/candidate-source.json', 'zerotier/candidate-manifest.json',
                       'zerotier/materials/sources.lock')
@@ -103,6 +111,13 @@ def group_flags(group):
                 '-DUPNP_VERSION_STRING="UPnP/1.1"',
                 '-DENABLE_STRNATPMPERR', '-DOS_STRING="Darwin/15.0.0"']
     raise ValueError('unknown CMake source group: ' + group)
+
+
+def link_flags():
+    return ['-shared', '-fPIC', '-static-libstdc++',
+            '-Wl,-soname,' + LIBRARY, '-Wl,-z,max-page-size=16384',
+            '-Wl,--no-undefined',
+            '-pthread', '-llog', '-landroid']
 
 
 def environment(output):
@@ -191,10 +206,7 @@ def build(out, work, cache, ndk):
     if failures:
         raise ValueError('translation-unit compilation failed; inspect per-TU logs')
     library = output / LIBRARY
-    link_argv = [str(tools['cxx']), '-shared', '-fPIC', '-static-libstdc++',
-                 '-Wl,-soname,' + LIBRARY, '-Wl,-z,max-page-size=16384',
-                 '-pthread', '-llog', '-landroid',
-                 '-o', str(library)] + [str(obj) for obj in objects]
+    link_argv = [str(tools['cxx'])] + link_flags() + ['-o', str(library)] + [str(obj) for obj in objects]
     link = subprocess.run(link_argv, cwd=output, env=env, stdin=subprocess.DEVNULL,
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                           text=True, check=False)
@@ -256,4 +268,4 @@ def verify(bundle, record, files, readelf, inspect):
     lock = bundle / 'zerotier' / 'materials' / 'sources.lock'
     if not lock.is_file() or git_blob_sha1(lock) != source['reference']['lockGitBlob']:
         raise ValueError('ZeroTier reference sources.lock mismatch')
-    inspect(bundle / LIBRARY, readelf, SYMBOLS)
+    inspect(bundle / LIBRARY, readelf, (*SYMBOLS, *BOUND_SYMBOLS))

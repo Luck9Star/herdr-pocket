@@ -12,7 +12,7 @@ python3 validation/native/candidates/zerotier/tests/identity-service/run.py \
   --native-root "$NATIVE_ROOT" --work "$FRESH_WORK" --output "$NEW_RESULT_JSON"
 ```
 
-`FRESH_WORK` 和结果文件必须尚不存在，结果文件还必须位于两个源码输入目录之外。缓存由现有 `zerotier_candidate.py fetch` 的固定公开归档组成；本测试不下载。完整候选只接受 0005／0006／0007，不允许 0008；输入 manifest 和准备工具还必须与当前仓库锁匹配。测试使用当前仓库真实 Java 存储源码，结果列明所有实际参与源码及 JDK JNI 头的 SHA-256。
+`FRESH_WORK` 和结果文件必须尚不存在，结果文件还必须位于两个源码输入目录之外。缓存由现有 `zerotier_candidate.py fetch` 的固定公开归档组成；本测试不下载。完整候选只接受 0005／0006／0007／0008 四个补丁，顺序固定；输入 manifest 和准备工具还必须与当前仓库锁匹配。测试使用当前仓库真实 Java 存储源码，结果列明所有实际参与源码及 JDK JNI 头的 SHA-256。
 
 每次只生成一个全新临时真实身份，断言加密文件中没有规范明文身份、service 和新建 wrapper 重读同一实例、损坏密文和旧实例删除被拒绝、显式移除后记录／KeyStore 全空，且存储取得的 Java 私有数组已清零。退出移除测试 provider 和整个私有临时目录；运行时 stderr 和异常字符串均不输出、不保存，避免诊断意外包含秘密。结果仅布尔、计数与源码哈希；`passed` 和两个清理结果必须为 true。
 

@@ -2,10 +2,15 @@
 import hashlib
 import io
 from pathlib import Path
+import sys
 import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
+
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
 
 import zerotier_candidate as candidate
 
@@ -129,6 +134,12 @@ class Sources(unittest.TestCase):
         path.write_bytes(b"arbitrary shell cannot be evaluated")
         with self.assertRaisesRegex(ValueError, "blob mismatch"):
             candidate.verify_lock(path, {"reference": {"lockGitBlob": "0" * 40}})
+
+    def test_candidate_manifest_inputs_and_hashes_valid(self):
+        manifest = candidate.candidate_inputs()
+        self.assertEqual(len(manifest["patches"]), 4)
+        self.assertEqual(Path(manifest["patches"][-1]["path"]).name, "0008-streams-and-hp-boundary.patch")
+        self.assertEqual(manifest["patches"][-1]["sha256"], "9bedbe9c9631fa31144774945b17f9cf315f0baa61812114e2dd73a66d6e4bd1")
 
 
 if __name__ == "__main__":

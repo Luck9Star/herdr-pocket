@@ -4,10 +4,16 @@ from pathlib import Path
 import re
 import shutil
 import struct
+import sys
 import tempfile
 import unittest
 import zipfile
 from unittest import mock
+
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+
 import android_bundle as bundle
 import android_zerotier
 
@@ -29,6 +35,20 @@ class ZeroTierSurfaceTests(unittest.TestCase):
                                     (ROOT / relative).read_text()))
         self.assertEqual(names, set(android_zerotier.SYMBOLS))
         self.assertEqual(len(android_zerotier.SYMBOLS), 19)
+
+    def test_bound_symbols_match_the_boundary_header(self):
+        header = (ROOT / 'validation/native/zerotier-runtime/hp_zt_bound.h').read_text()
+        names = set(re.findall(r'\b(hp_zt_bound_[A-Za-z0-9_]+)\(', header))
+        self.assertEqual(names, set(android_zerotier.BOUND_SYMBOLS))
+        self.assertEqual(len(android_zerotier.BOUND_SYMBOLS), 6)
+
+    def test_link_flags_include_hardening_and_page_alignment(self):
+        flags = android_zerotier.link_flags()
+        for flag in ('-shared', '-fPIC', '-static-libstdc++',
+                     '-Wl,-soname,' + android_zerotier.LIBRARY,
+                     '-Wl,-z,max-page-size=16384', '-Wl,--no-undefined',
+                     '-pthread', '-llog', '-landroid'):
+            self.assertIn(flag, flags)
 
     def test_jni_exports_match_the_rust_host(self):
         text = (ROOT / 'validation/android-network-source/src/zerotier.rs').read_text()
@@ -119,8 +139,14 @@ class ZeroTierBundleTests(unittest.TestCase):
 
     def test_standalone_artifact_verifies_and_rejects_tampering(self):
         manifest_patch, candidate_patch = self.pinned()
-        with manifest_patch, candidate_patch, mock.patch.object(bundle, 'elf'):
+        with manifest_patch, candidate_patch, mock.patch.object(bundle, 'elf') as inspect:
             self.assertEqual(bundle.verify(self.out, self.commit, 'readelf')['provider'], 'zerotier')
+            inspect.assert_called_once_with(
+                self.out / android_zerotier.LIBRARY,
+                'readelf',
+                (*android_zerotier.SYMBOLS, *android_zerotier.BOUND_SYMBOLS),
+            )
+            inspect.reset_mock()
             with self.assertRaisesRegex(ValueError, 'source commit mismatch'):
                 bundle.verify(self.out, 'd' * 40, 'readelf')
             manifest = json.loads((self.out / 'manifest.json').read_text())

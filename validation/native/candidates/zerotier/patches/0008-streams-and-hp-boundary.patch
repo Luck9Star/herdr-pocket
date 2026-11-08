@@ -1,7 +1,8 @@
 diff --git a/ext/lwip/src/api/sockets.c b/ext/lwip/src/api/sockets.c
+index a6d682c..08df6d9 100644
 --- a/ext/lwip/src/api/sockets.c
 +++ b/ext/lwip/src/api/sockets.c
-@@ -4160,3 +4160,62 @@
+@@ -4160,3 +4160,62 @@ lwip_socket_drop_registered_mld6_memberships(int s)
  #endif /* LWIP_IPV6_MLD */
  
  #endif /* LWIP_SOCKET */
@@ -65,9 +66,10 @@ diff --git a/ext/lwip/src/api/sockets.c b/ext/lwip/src/api/sockets.c
 +  return errno == EWOULDBLOCK || errno == EAGAIN || errno == EINPROGRESS;
 +}
 diff --git a/ext/lwip/src/core/netif.c b/ext/lwip/src/core/netif.c
+index 15200a2..a73ad91 100644
 --- a/ext/lwip/src/core/netif.c
 +++ b/ext/lwip/src/core/netif.c
-@@ -439,10 +439,10 @@
+@@ -439,10 +439,10 @@ netif_add(struct netif *netif,
  }
  
  static void
@@ -80,7 +82,7 @@ diff --git a/ext/lwip/src/core/netif.c b/ext/lwip/src/core/netif.c
  #endif /* LWIP_TCP */
  #if LWIP_UDP
    udp_netif_ip_addr_changed(old_addr, new_addr);
-@@ -468,7 +468,7 @@
+@@ -468,7 +468,7 @@ netif_do_set_ipaddr(struct netif *netif, const ip4_addr_t *ipaddr, ip_addr_t *ol
      ip_addr_copy(*old_addr, *netif_ip_addr4(netif));
  
      LWIP_DEBUGF(NETIF_DEBUG | LWIP_DBG_STATE, ("netif_set_ipaddr: netif address being changed\n"));
@@ -89,7 +91,7 @@ diff --git a/ext/lwip/src/core/netif.c b/ext/lwip/src/core/netif.c
  
      mib2_remove_ip4(netif);
      mib2_remove_route_ip4(0, netif);
-@@ -750,7 +750,7 @@
+@@ -750,7 +750,7 @@ netif_remove(struct netif *netif)
  
  #if LWIP_IPV4
    if (!ip4_addr_isany_val(*netif_ip4_addr(netif))) {
@@ -98,7 +100,7 @@ diff --git a/ext/lwip/src/core/netif.c b/ext/lwip/src/core/netif.c
    }
  
  #if LWIP_IGMP
-@@ -764,7 +764,7 @@
+@@ -764,7 +764,7 @@ netif_remove(struct netif *netif)
  #if LWIP_IPV6
    for (i = 0; i < LWIP_IPV6_NUM_ADDRESSES; i++) {
      if (ip6_addr_isvalid(netif_ip6_addr_state(netif, i))) {
@@ -107,7 +109,7 @@ diff --git a/ext/lwip/src/core/netif.c b/ext/lwip/src/core/netif.c
      }
    }
  #if LWIP_IPV6_MLD
-@@ -1353,7 +1353,7 @@
+@@ -1353,7 +1353,7 @@ netif_ip6_addr_set_parts(struct netif *netif, s8_t addr_idx, u32_t i0, u32_t i1,
      ip6_addr_assign_zone(ip_2_ip6(&new_ipaddr), IP6_UNICAST, netif);
  
      if (ip6_addr_isvalid(netif_ip6_addr_state(netif, addr_idx))) {
@@ -116,7 +118,7 @@ diff --git a/ext/lwip/src/core/netif.c b/ext/lwip/src/core/netif.c
      }
      /* @todo: remove/readd mib2 ip6 entries? */
  
-@@ -1413,7 +1413,7 @@
+@@ -1413,7 +1413,7 @@ netif_ip6_addr_set_state(struct netif *netif, s8_t addr_idx, u8_t state)
  
      if (old_valid && !new_valid) {
        /* address about to be removed by setting invalid */
@@ -126,9 +128,10 @@ diff --git a/ext/lwip/src/core/netif.c b/ext/lwip/src/core/netif.c
      }
      netif->ip6_addr_state[addr_idx] = state;
 diff --git a/ext/lwip/src/core/tcp.c b/ext/lwip/src/core/tcp.c
+index 11a51da..ffbb5ce 100644
 --- a/ext/lwip/src/core/tcp.c
 +++ b/ext/lwip/src/core/tcp.c
-@@ -766,8 +766,10 @@
+@@ -766,8 +766,10 @@ tcp_bind_netif(struct tcp_pcb *pcb, const struct netif *netif)
    LWIP_ASSERT_CORE_LOCKED();
    if (netif != NULL) {
      pcb->netif_idx = netif_get_index(netif);
@@ -139,7 +142,7 @@ diff --git a/ext/lwip/src/core/tcp.c b/ext/lwip/src/core/tcp.c
    }
  }
  
-@@ -890,7 +892,8 @@
+@@ -890,7 +892,8 @@ tcp_listen_with_backlog_and_err(struct tcp_pcb *pcb, u8_t backlog, err_t *err)
    lpcb->state = LISTEN;
    lpcb->prio = pcb->prio;
    lpcb->so_options = pcb->so_options;
@@ -149,7 +152,7 @@ diff --git a/ext/lwip/src/core/tcp.c b/ext/lwip/src/core/tcp.c
    lpcb->ttl = pcb->ttl;
    lpcb->tos = pcb->tos;
  #if LWIP_IPV4 && LWIP_IPV6
-@@ -1086,6 +1089,8 @@
+@@ -1086,6 +1089,8 @@ tcp_connect(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port,
  
    if (pcb->netif_idx != NETIF_NO_INDEX) {
      netif = netif_get_by_index(pcb->netif_idx);
@@ -158,7 +161,7 @@ diff --git a/ext/lwip/src/core/tcp.c b/ext/lwip/src/core/tcp.c
    } else {
      /* check if we have a route to the remote host */
      netif = ip_route(&pcb->local_ip, &pcb->remote_ip);
-@@ -2300,7 +2305,7 @@
+@@ -2300,7 +2305,7 @@ tcp_eff_send_mss_netif(u16_t sendmss, struct netif *outif, const ip_addr_t *dest
  
  /** Helper function for tcp_netif_ip_addr_changed() that iterates a pcb list */
  static void
@@ -167,7 +170,7 @@ diff --git a/ext/lwip/src/core/tcp.c b/ext/lwip/src/core/tcp.c
  {
    struct tcp_pcb *pcb;
    pcb = pcb_list;
-@@ -2310,6 +2315,7 @@
+@@ -2310,6 +2315,7 @@ tcp_netif_ip_addr_changed_pcblist(const ip_addr_t *old_addr, struct tcp_pcb *pcb
    while (pcb != NULL) {
      /* PCB bound to current local interface address? */
      if (ip_addr_cmp(&pcb->local_ip, old_addr)
@@ -175,7 +178,7 @@ diff --git a/ext/lwip/src/core/tcp.c b/ext/lwip/src/core/tcp.c
  #if LWIP_AUTOIP
          /* connections to link-local addresses must persist (RFC3927 ch. 1.9) */
          && (!IP_IS_V4_VAL(pcb->local_ip) || !ip4_addr_islinklocal(ip_2_ip4(&pcb->local_ip)))
-@@ -2332,19 +2338,20 @@
+@@ -2332,19 +2338,20 @@ tcp_netif_ip_addr_changed_pcblist(const ip_addr_t *old_addr, struct tcp_pcb *pcb
   * @param new_addr IP address of the netif after change or NULL if netif has been removed
   */
  void
@@ -200,24 +203,25 @@ diff --git a/ext/lwip/src/core/tcp.c b/ext/lwip/src/core/tcp.c
            /* The PCB is listening to the old ipaddr and
              * is set to listen to the new one instead */
            ip_addr_copy(lpcb->local_ip, *new_addr);
-@@ -2352,6 +2359,13 @@
-       }
-     }
+@@ -2354,6 +2361,13 @@ tcp_netif_ip_addr_changed(const ip_addr_t *old_addr, const ip_addr_t *new_addr)
    }
-+}
-+
+ }
+ 
 +/* Compatibility for other raw lwIP users without an interface identity. */
 +void
 +tcp_netif_ip_addr_changed(const ip_addr_t *old_addr, const ip_addr_t *new_addr)
 +{
 +  tcp_netif_ip_addr_changed_scoped(old_addr,new_addr,NULL);
- }
- 
++}
++
  const char *
+ tcp_debug_state_str(enum tcp_state s)
+ {
 diff --git a/ext/lwip/src/core/tcp_in.c b/ext/lwip/src/core/tcp_in.c
+index 2202e38..dc1c25c 100644
 --- a/ext/lwip/src/core/tcp_in.c
 +++ b/ext/lwip/src/core/tcp_in.c
-@@ -254,7 +254,9 @@
+@@ -254,7 +254,9 @@ tcp_input(struct pbuf *p, struct netif *inp)
  
      /* check if PCB is bound to specific netif */
      if ((pcb->netif_idx != NETIF_NO_INDEX) &&
@@ -228,7 +232,7 @@ diff --git a/ext/lwip/src/core/tcp_in.c b/ext/lwip/src/core/tcp_in.c
        prev = pcb;
        continue;
      }
-@@ -288,7 +290,9 @@
+@@ -288,7 +290,9 @@ tcp_input(struct pbuf *p, struct netif *inp)
  
        /* check if PCB is bound to specific netif */
        if ((pcb->netif_idx != NETIF_NO_INDEX) &&
@@ -239,7 +243,7 @@ diff --git a/ext/lwip/src/core/tcp_in.c b/ext/lwip/src/core/tcp_in.c
          continue;
        }
  
-@@ -318,7 +322,9 @@
+@@ -318,7 +322,9 @@ tcp_input(struct pbuf *p, struct netif *inp)
      for (lpcb = tcp_listen_pcbs.listen_pcbs; lpcb != NULL; lpcb = lpcb->next) {
        /* check if PCB is bound to specific netif */
        if ((lpcb->netif_idx != NETIF_NO_INDEX) &&
@@ -250,7 +254,7 @@ diff --git a/ext/lwip/src/core/tcp_in.c b/ext/lwip/src/core/tcp_in.c
          prev = (struct tcp_pcb *)lpcb;
          continue;
        }
-@@ -576,8 +582,11 @@
+@@ -576,8 +582,11 @@ aborted:
      if (!(TCPH_FLAGS(tcphdr) & TCP_RST)) {
        TCP_STATS_INC(tcp.proterr);
        TCP_STATS_INC(tcp.drop);
@@ -262,7 +266,7 @@ diff --git a/ext/lwip/src/core/tcp_in.c b/ext/lwip/src/core/tcp_in.c
      }
      pbuf_free(p);
    }
-@@ -693,6 +702,7 @@
+@@ -693,6 +702,7 @@ tcp_listen_input(struct tcp_pcb_listen *pcb)
      /* inherit socket options */
      npcb->so_options = pcb->so_options & SOF_INHERITED;
      npcb->netif_idx = pcb->netif_idx;
@@ -271,9 +275,10 @@ diff --git a/ext/lwip/src/core/tcp_in.c b/ext/lwip/src/core/tcp_in.c
         for it. */
      TCP_REG_ACTIVE(npcb);
 diff --git a/ext/lwip/src/core/tcp_out.c b/ext/lwip/src/core/tcp_out.c
+index 724df10..f230669 100644
 --- a/ext/lwip/src/core/tcp_out.c
 +++ b/ext/lwip/src/core/tcp_out.c
-@@ -134,7 +134,11 @@
+@@ -134,7 +134,11 @@ tcp_route(const struct tcp_pcb *pcb, const ip_addr_t *src, const ip_addr_t *dst)
    LWIP_UNUSED_ARG(src); /* in case IPv4-only and source-based routing is disabled */
  
    if ((pcb != NULL) && (pcb->netif_idx != NETIF_NO_INDEX)) {
@@ -287,9 +292,10 @@ diff --git a/ext/lwip/src/core/tcp_out.c b/ext/lwip/src/core/tcp_out.c
      return ip_route(src, dst);
    }
 diff --git a/ext/lwip/src/include/lwip/ip.h b/ext/lwip/src/include/lwip/ip.h
+index 653c3b2..0c8dea0 100644
 --- a/ext/lwip/src/include/lwip/ip.h
 +++ b/ext/lwip/src/include/lwip/ip.h
-@@ -79,6 +79,7 @@
+@@ -79,6 +79,7 @@ extern "C" {
    ip_addr_t remote_ip;                     \
    /* Bound netif index */                  \
    u8_t netif_idx;                          \
@@ -298,9 +304,10 @@ diff --git a/ext/lwip/src/include/lwip/ip.h b/ext/lwip/src/include/lwip/ip.h
    u8_t so_options;                         \
    /* Type Of Service */                    \
 diff --git a/ext/lwip/src/include/lwip/netif.h b/ext/lwip/src/include/lwip/netif.h
+index 911196a..2a1250d 100644
 --- a/ext/lwip/src/include/lwip/netif.h
 +++ b/ext/lwip/src/include/lwip/netif.h
-@@ -257,7 +257,17 @@
+@@ -257,7 +257,17 @@ struct netif_hint {
  /** Generic data structure used for all lwIP network interfaces.
   *  The following fields should be filled in by the initialization
   *  function for the device driver: hwaddr_len, hwaddr[], mtu, flags */
@@ -319,9 +326,10 @@ diff --git a/ext/lwip/src/include/lwip/netif.h b/ext/lwip/src/include/lwip/netif
    /** pointer to next in linked list */
    struct netif *next;
 diff --git a/ext/lwip/src/include/lwip/priv/sockets_priv.h b/ext/lwip/src/include/lwip/priv/sockets_priv.h
+index d8f9904..a87a74d 100644
 --- a/ext/lwip/src/include/lwip/priv/sockets_priv.h
 +++ b/ext/lwip/src/include/lwip/priv/sockets_priv.h
-@@ -65,6 +65,10 @@
+@@ -65,6 +65,10 @@ union lwip_sock_lastdata {
  
  /** Contains all internal pointers and states used for a socket */
  struct lwip_sock {
@@ -333,9 +341,10 @@ diff --git a/ext/lwip/src/include/lwip/priv/sockets_priv.h b/ext/lwip/src/includ
    struct netconn *conn;
    /** data that was left from the previous read */
 diff --git a/ext/lwip/src/include/lwip/priv/tcp_priv.h b/ext/lwip/src/include/lwip/priv/tcp_priv.h
+index 72f9126..51aa9bb 100644
 --- a/ext/lwip/src/include/lwip/priv/tcp_priv.h
 +++ b/ext/lwip/src/include/lwip/priv/tcp_priv.h
-@@ -505,6 +505,7 @@
+@@ -505,6 +505,7 @@ s16_t tcp_pcbs_sane(void);
  void tcp_timer_needed(void);
  
  void tcp_netif_ip_addr_changed(const ip_addr_t* old_addr, const ip_addr_t* new_addr);
@@ -345,6 +354,7 @@ diff --git a/ext/lwip/src/include/lwip/priv/tcp_priv.h b/ext/lwip/src/include/lw
  void tcp_free_ooseq(struct tcp_pcb *pcb);
 diff --git a/src/HpBoundRoutes.cpp b/src/HpBoundRoutes.cpp
 new file mode 100644
+index 0000000..3a6e821
 --- /dev/null
 +++ b/src/HpBoundRoutes.cpp
 @@ -0,0 +1,65 @@
@@ -415,6 +425,7 @@ new file mode 100644
 +}
 diff --git a/src/HpBoundSockets.cpp b/src/HpBoundSockets.cpp
 new file mode 100644
+index 0000000..46cd313
 --- /dev/null
 +++ b/src/HpBoundSockets.cpp
 @@ -0,0 +1,56 @@
@@ -474,10 +485,39 @@ new file mode 100644
 +    std::lock_guard<std::mutex> lock(io_mutex()); return outcome(lwip_close(fd));
 +}
 +}
+diff --git a/src/HpLifecycle.hpp b/src/HpLifecycle.hpp
+index 827cf6a..90af5d6 100644
+--- a/src/HpLifecycle.hpp
++++ b/src/HpLifecycle.hpp
+@@ -52,6 +52,11 @@ public:
+  bool quiet() const { std::lock_guard<std::mutex> lock(mutex_); return active_==0; }
+  void retire() { std::lock_guard<std::mutex> lock(mutex_); closed_=true; }
+  void drain() { std::unique_lock<std::mutex> lock(mutex_); closed_=true; changed_.wait(lock,[this]{return active_==0;}); }
++ // Re-admit callbacks after a drain() has returned. Call only once the
++ // drained object is gone (its network was erased from the map), so no old
++ // lease can survive the closed window. Never used on the process-shutdown
++ // drain: that gate stays closed for good.
++ void reopen() { std::lock_guard<std::mutex> lock(mutex_); closed_=false; }
+ private:
+  mutable std::mutex mutex_; std::condition_variable changed_; bool closed_=false; unsigned int active_=0;
+ };
 diff --git a/src/NodeService.cpp b/src/NodeService.cpp
+index 2a0b5ff..f7c76b8 100644
 --- a/src/NodeService.cpp
 +++ b/src/NodeService.cpp
-@@ -980,6 +980,7 @@
+@@ -624,6 +624,11 @@ NodeService::ReasonForTermination NodeService::run()
+ 
+     { Mutex::Lock lock(_run_m); _run=false; }
+     _frameGate.drain();
++    // Same rule as above, without the lwIP core or service mutex: retire
++    // any remaining tap leases before the map below frees the taps. This
++    // is process shutdown: unlike the per-network DOWN/DESTROY drain, the
++    // gate deliberately stays closed -- no reopen afterwards.
++    _tapGate.drain();
+     std::lock_guard<std::timed_mutex> service_lock(service_m);
+     {
+         Mutex::Lock _l(_nets_m);
+@@ -980,6 +985,7 @@ int NodeService::nodeVirtualNetworkConfigFunction(
      Mutex::Lock _l(_nets_m);
      NetworkState& n = _nets[net_id];
  
@@ -485,51 +525,164 @@ diff --git a/src/NodeService.cpp b/src/NodeService.cpp
      switch (op) {
          case ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_UP:
              if (! n.tap) {
-@@ -997,10 +998,15 @@
+@@ -997,10 +1003,18 @@ int NodeService::nodeVirtualNetworkConfigFunction(
              // After setting up tap, fall through to CONFIG_UPDATE since we
              // also want to do this...
          case ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_CONFIG_UPDATE:
-+            // Fence old TCP PCBs BEFORE changing any address/route/MTU/status.
-+            // A changed config can never silently retarget an existing stream.
++            // Post a stream fence ahead of any address/route/MTU/status
++            // change. The fence lands on the lwIP thread in tcpip mbox
++            // order; address-class changes additionally abort affected
++            // PCBs synchronously inside addIp/removeIp, and every stale
++            // stream keeps failing the epoch check until it rebinds.
 +            hp_changed = memcmp(&(n.config), nwc, sizeof(ZT_VirtualNetworkConfig)) != 0;
-+            if (n.tap && hp_changed) { n.tap->hpConfigure(false); }
++            if (n.tap && hp_changed) { n.tap->hpConfigure(false, true); }
              memcpy(&(n.config), nwc, sizeof(ZT_VirtualNetworkConfig));
              if (n.tap) {   // sanity check
                  syncManagedStuff(n);
                  n.tap->setMtu(nwc->mtu);
-+                if (hp_changed) { n.tap->hpConfigure(nwc->status == ZT_NETWORK_STATUS_OK); }
++                if (hp_changed) { n.tap->hpConfigure(nwc->status == ZT_NETWORK_STATUS_OK, true); }
              }
              else {
                  _nets.erase(net_id);
+@@ -1015,8 +1029,24 @@ int NodeService::nodeVirtualNetworkConfigFunction(
+             sendEventToUser(ZTS_EVENT_NETWORK_DOWN, (void*)&n);
+             if (n.tap) {   // sanity check
+                 *nuptr = (void*)0;
++                // Retire frame-callback leases before the tap dies. Safe
++                // under _nets_m because of the reverse-edge invariant: a
++                // thread holding the lwIP core lock never waits on _nets_m
++                // or _tapGate (eth_tx -> tapFrameHandler ->
++                // processVirtualNetworkFrame never enters the config path;
++                // config callbacks fire only on the service thread). A lease
++                // holder may acquire the core lock (LWIP_TCPIP_CORE_LOCKING_
++                // INPUT=1 runs input synchronously), but no core-lock holder
++                // waits on us, so this drain cannot deadlock.
++                _tapGate.drain();
+                 delete n.tap;
+                 _nets.erase(net_id);
++                // The gate is shared across networks: re-admit now that the
++                // drain has returned and this network's entry is erased.
++                // Frames for other networks arriving inside the brief
++                // drain->reopen window are dropped; the core retransmits.
++                // run()'s shutdown drain leaves the gate closed for good.
++                _tapGate.reopen();
+                 if (_allowNetworkCaching && !_homePath.empty()) {
+                     if (op == ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_DESTROY) {
+                         char nlcpath[256] = { 0 };
+@@ -1909,6 +1939,12 @@ void NodeService::nodeVirtualNetworkFrameFunction(
+ {
+     ZTS_UNUSED_ARG(vlanId);
+     ZTS_UNUSED_ARG(net_id);
++    // The tap lease outlives the config DOWN path's drain(): without it a
++    // frame callback racing network teardown dereferenced a freed tap.
++    HpFrameLease tapLease(_tapGate);
++    if (! tapLease) {
++        return;
++    }
+     NetworkState* n = reinterpret_cast<NetworkState*>(*nuptr);
+     if ((! n) || (! n->tap)) {
+         return;
+diff --git a/src/NodeService.hpp b/src/NodeService.hpp
+index 7e9aa33..8da336f 100644
+--- a/src/NodeService.hpp
++++ b/src/NodeService.hpp
+@@ -245,6 +245,9 @@ class NodeService {
+     std::atomic<bool> _run;
+     std::atomic<bool> _stopRequested{false};
+     HpFrameGate _frameGate;
++    // Admission fence for tap use in nodeVirtualNetworkFrameFunction; the
++    // config DOWN/DESTROY path drains it before deleting the tap.
++    HpFrameGate _tapGate;
+     /** Lock to control access to termination reason */
+     Mutex _termReason_m;
+     // Termination status information
 diff --git a/src/VirtualTap.cpp b/src/VirtualTap.cpp
+index ab06081..9786f6a 100644
 --- a/src/VirtualTap.cpp
 +++ b/src/VirtualTap.cpp
-@@ -118,8 +118,22 @@
+@@ -116,10 +116,79 @@ VirtualTap::~VirtualTap()
+ #endif
+ }
  
++// Posts work to the lwIP thread, which runs it with the core lock held.
++// Callers can hold NodeService::_nets_m while the lwIP thread enters the
++// config path already holding the core lock (eth_tx -> tapFrameHandler ->
++// core -> config callback), so this path must never take the core lock
++// itself -- that is exactly the ABBA edge being removed. The tcpip mbox is
++// a fixed 128-deep ring (SYS_MBOX_SIZE): ERR_MEM from tcpip_try_callback
++// means the ring is momentarily full (with MEMP_MEM_MALLOC=1 the message
++// allocation is a plain malloc, so it fails only under system OOM). Retry
++// briefly for transient fullness, then fall back to tcpip_callback: it
++// blocks only until the ring has a free slot -- it takes no core lock and
++// waits on no service mutex, so it cannot complete the ABBA cycle, and the
++// reverse-edge invariant (no core-lock holder ever waits on _nets_m)
++// guarantees the lwIP thread keeps draining the ring. Outside OOM the
++// fence therefore always lands in FIFO order -- it is never dropped.
++// Templatized on the message type so the OOM cleanup deletes a typed
++// pointer (deleting a void* is undefined and warns).
++template <typename T>
++static void hp_post(tcpip_callback_fn fn, T* ctx)
++{
++    for (unsigned i = 0; i < 8; ++i) {
++        if (tcpip_try_callback(fn, ctx) == ERR_OK) {
++            return;
++        }
++        sys_msleep(1);
++    }
++    if (tcpip_callback(fn, ctx) != ERR_OK) {
++        // Reached only when the message malloc itself failed (system OOM):
++        // free the message loudly rather than leak. The dropped fence
++        // recovers on the next config change, which posts a fresh one.
++        fprintf(stderr, "herdr-pocket: hp fence post failed under OOM; recovery at next config change\n");
++        delete ctx;
++    }
++}
++
++struct hp_route_mirror_msg {
++    struct netif* netif;
++    u8_t count;
++    struct hp_zt_gateway4 routes[128];
++};
++
++static void hp_apply_route_mirror(void* arg)
++{
++    // lwIP thread, core lock held. The netif outlives every VirtualTap.
++    struct hp_route_mirror_msg* m = (struct hp_route_mirror_msg*)arg;
++    m->netif->hp_route_count = m->count;
++    for (unsigned i = 0; i < m->count; ++i) {
++        m->netif->hp_routes[i] = m->routes[i];
++    }
++    delete m;
++}
++
  void VirtualTap::setGatewayRoutes4(const std::vector<GatewayRoute4>& routes)
  {
 -    Mutex::Lock _l(_gatewayRoutes4_m);
 -    _gatewayRoutes4 = routes;
-+    LOCK_TCPIP_CORE();
 +    {
 +        Mutex::Lock _l(_gatewayRoutes4_m);
 +        _gatewayRoutes4 = routes;
-+        if (netif4) {
-+            struct netif* n=static_cast<struct netif*>(netif4);
-+            n->hp_route_count=static_cast<u8_t>(std::min(routes.size(),size_t(128)));
-+            for (unsigned i=0;i<n->hp_route_count;++i) {
-+                n->hp_routes[i].network=routes[i].network;
-+                n->hp_routes[i].mask=routes[i].mask;
-+                n->hp_routes[i].via=routes[i].via;
-+                n->hp_routes[i].bits=static_cast<u8_t>(routes[i].bits);
-+            }
-+        }
 +    }
-+    UNLOCK_TCPIP_CORE();
++    // Mirror the routes into the netif on the lwIP thread: never take the
++    // core lock here (see hp_post). A stale mirror fails closed --
++    // new binds only match after the same config's fence epoch has landed.
++    if (! netif4) {
++        return;
++    }
++    struct hp_route_mirror_msg* m = new struct hp_route_mirror_msg;
++    m->netif = static_cast<struct netif*>(netif4);
++    m->count = static_cast<u8_t>(std::min(routes.size(), size_t(128)));
++    for (unsigned i = 0; i < m->count; ++i) {
++        m->routes[i].network = routes[i].network;
++        m->routes[i].mask = routes[i].mask;
++        m->routes[i].via = routes[i].via;
++        m->routes[i].bits = static_cast<u8_t>(routes[i].bits);
++    }
++    hp_post(hp_apply_route_mirror, m);
  }
  
  bool VirtualTap::gatewayFor4(uint32_t dest, uint32_t* via, unsigned int* bits)
-@@ -144,9 +158,31 @@
+@@ -144,9 +213,64 @@ void VirtualTap::lastConfigUpdate(uint64_t lastConfigUpdateTime)
      _lastConfigUpdateTime = lastConfigUpdateTime;
  }
  
@@ -541,27 +694,60 @@ diff --git a/src/VirtualTap.cpp b/src/VirtualTap.cpp
 +    return ++epoch;
 +}
 +
-+void VirtualTap::hpConfigure(bool ready)
++struct hp_config_msg {
++    struct netif* netif4;
++    struct netif* netif6;
++    u8_t ready;
++};
++
++static void hp_apply_config(void* arg)
 +{
-+    LOCK_TCPIP_CORE();
-+    _hpConfigReady = ready;
-+    for (void* ptr : {netif4, netif6}) {
-+        if (!ptr) { continue; }
-+        struct netif* n = static_cast<struct netif*>(ptr);
-+        n->hp_generation = hp_next_epoch();
-+        n->hp_ready = ready && _enabled && n->hp_generation;
++    // lwIP thread, core lock held. The netifs outlive every VirtualTap, so
++    // a queued fence after tap teardown only touches detached netifs that
++    // hp_zt_route_locked can no longer reach.
++    struct hp_config_msg* m = (struct hp_config_msg*)arg;
++    const u64_t generation = hp_next_epoch();
++    for (struct netif* n : {m->netif4, m->netif6}) {
++        if (! n) {
++            continue;
++        }
++        n->hp_generation = generation;
++        n->hp_ready = m->ready && generation;
 +    }
++    delete m;
++}
++
++void VirtualTap::hpConfigure(bool ready, bool defer)
++{
++    // Written synchronously: zts_netif_init* reads it under the core lock.
++    _hpConfigReady = ready;
++    struct hp_config_msg* m = new struct hp_config_msg;
++    m->netif4 = static_cast<struct netif*>(netif4);
++    m->netif6 = static_cast<struct netif*>(netif6);
++    m->ready = (ready && _enabled) ? 1 : 0;
++    if (defer) {
++        // Deferred mode is for callers holding NodeService::_nets_m: the
++        // lwIP thread can enter the config path already holding the core
++        // lock (eth_tx -> tapFrameHandler -> core -> config callback), so
++        // taking the core lock here synchronously can deadlock both
++        // threads. The fence lands in tcpip mbox FIFO order instead.
++        hp_post(hp_apply_config, m);
++        return;
++    }
++    LOCK_TCPIP_CORE();
++    hp_apply_config(m);
 +    UNLOCK_TCPIP_CORE();
 +}
 +
  void VirtualTap::setEnabled(bool en)
  {
      _enabled = en;
++    // Synchronous (no _nets_m on this path); mirrors the deferred fence.
 +    hpConfigure(_hpConfigReady);
  }
  
  bool VirtualTap::enabled() const
-@@ -406,6 +442,8 @@
+@@ -406,6 +530,8 @@ void zts_lwip_remove_netif(void* netif)
      }
      struct netif* n = (struct netif*)netif;
      LOCK_TCPIP_CORE();
@@ -570,7 +756,7 @@ diff --git a/src/VirtualTap.cpp b/src/VirtualTap.cpp
      netif_remove(n);
      netif_set_down(n);
      netif_set_link_down(n);
-@@ -531,6 +569,12 @@
+@@ -531,6 +657,12 @@ static err_t zts_netif_init4(struct netif* n)
      }
      // Called from core, no need to lock
      VirtualTap* tap = (VirtualTap*)(n->state);
@@ -583,7 +769,7 @@ diff --git a/src/VirtualTap.cpp b/src/VirtualTap.cpp
      n->hwaddr_len = 6;
      n->name[0] = '4';
      n->name[1] = 'a' + netifCount;
-@@ -551,6 +595,12 @@
+@@ -551,6 +683,12 @@ static err_t zts_netif_init6(struct netif* n)
      }
      n->hwaddr_len = sizeof(n->hwaddr);
      VirtualTap* tap = (VirtualTap*)(n->state);
@@ -596,7 +782,25 @@ diff --git a/src/VirtualTap.cpp b/src/VirtualTap.cpp
      tap->_mac.copyTo(n->hwaddr, n->hwaddr_len);
      // Called from core, no need to lock
      n->hwaddr_len = 6;
-@@ -613,6 +663,9 @@
+@@ -587,7 +725,16 @@ void zts_lwip_init_interface(void* tapref, const InetAddress& ip)
+         ip4.addr = *((u32_t*)ip.rawIpData());
+         netmask.addr = *((u32_t*)ip.netmask().rawIpData());
+         LOCK_TCPIP_CORE();
+-        netif_add(n, &ip4, &netmask, &gw, (void*)vtap, zts_netif_init4, tcpip_input);
++        // Symmetric with the IPv6 branch below: an existing netif that is
++        // still linked on netif_list (n->state set) gets re-addressed, not
++        // re-added -- netif_add would link an already-linked node onto the
++        // list head and loop netif_list on itself. netif_set_addr only
++        // updates address/netmask/gateway (plus its status callbacks).
++        if (isNewNetif || !n->state) {
++            netif_add(n, &ip4, &netmask, &gw, (void*)vtap, zts_netif_init4, tcpip_input);
++        } else {
++            netif_set_addr(n, &ip4, &netmask, &gw);
++        }
+         vtap->netif4 = (void*)n;
+         UNLOCK_TCPIP_CORE();
+         snprintf(
+@@ -613,6 +760,9 @@ void zts_lwip_init_interface(void* tapref, const InetAddress& ip)
          static ip6_addr_t ip6;
          memcpy(&(ip6.addr), ip.rawIpData(), sizeof(ip6.addr));
          LOCK_TCPIP_CORE();
@@ -606,32 +810,44 @@ diff --git a/src/VirtualTap.cpp b/src/VirtualTap.cpp
          if (isNewNetif) {
              vtap->netif6 = (void*)n;
              
-@@ -636,6 +689,11 @@
+@@ -636,7 +786,21 @@ void zts_lwip_init_interface(void* tapref, const InetAddress& ip)
              netif_set_up(n);
              netif_set_default(n);
          }
+-        netif_add_ip6_address(n, &ip6, NULL);
 +        n->hp_generation = hp_next_epoch();
 +        n->hp_ready = vtap->_hpConfigReady && vtap->_enabled && n->hp_generation;
 +        memcpy(n->hp_source6,ip6.addr,16);
 +        const unsigned hp_prefix=ip.netmaskBits();
 +        n->hp_prefix6 = static_cast<u8_t>(hp_prefix<=128 ? hp_prefix : 0);
-         netif_add_ip6_address(n, &ip6, NULL);
++        s8_t hp_ip6_slot = -1;
++        (void)netif_add_ip6_address(n, &ip6, &hp_ip6_slot);
++        // ZT assigns managed addresses from the network controller; there is
++        // no shared-medium SLAAC duplicate to detect, so promote past DAD
++        // immediately via the standard state-machine call (MLD side effects
++        // intact). Route lookups would otherwise black-hole for the whole
++        // tentative window (1-2s) after every address (re-)add.
++        if (hp_ip6_slot >= 0 && ip6_addr_istentative(netif_ip6_addr_state(n, hp_ip6_slot))) {
++            netif_ip6_addr_set_state(n, hp_ip6_slot, IP6_ADDR_PREFERRED);
++        }
          n->output_ip6 = ethip6_output;
          UNLOCK_TCPIP_CORE();
-@@ -785,3 +843,5 @@
+         snprintf(
+@@ -785,3 +949,5 @@ extern "C" const ip4_addr_t* zts_lwip_hook_etharp_get_gw(struct netif* n, const
      unsigned int bits = 0;
      return zts_gateway_route4(n, dest, &gw, &bits) ? &gw : NULL;
  }
 +
 +
 diff --git a/src/VirtualTap.hpp b/src/VirtualTap.hpp
+index 28c7764..3ef2837 100644
 --- a/src/VirtualTap.hpp
 +++ b/src/VirtualTap.hpp
-@@ -76,6 +76,8 @@
+@@ -76,6 +76,8 @@ class VirtualTap {
      ~VirtualTap();
  
      void setEnabled(bool en);
-+    void hpConfigure(bool ready);
++    void hpConfigure(bool ready, bool defer = false);
 +    bool _hpConfigReady = false;
      bool enabled() const;
  

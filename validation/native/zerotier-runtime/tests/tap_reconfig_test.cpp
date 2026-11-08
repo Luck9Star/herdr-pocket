@@ -1,4 +1,6 @@
 // Actual VirtualTap address remove/re-add; no NodeService/Node or identity.
+// Route checks assert the production path directly: init_interface promotes
+// managed IPv6 addresses past DAD itself, so no manual PREFERRED injection.
 #include "InetAddress.hpp"
 #include "MAC.hpp"
 #include "Mutex.hpp"
@@ -21,12 +23,6 @@ std::mutex mutex;std::condition_variable changed;bool ready=false;unsigned check
 void check(bool b,const char* text) { if (!b) { std::cerr<<"FAIL: "<<text<<'\n';std::abort(); }++checks; }
 void initialized(void*) { std::lock_guard<std::mutex> lock(mutex);ready=true;changed.notify_all(); }
 void discard(void*,void*,uint64_t,const ZeroTier::MAC&,const ZeroTier::MAC&,unsigned,unsigned,const void*,unsigned) {}
-void prefer(struct netif* n,const uint8_t* source) {
-    for (int i=0;i<LWIP_IPV6_NUM_ADDRESSES;++i) {
-        if (!std::memcmp(netif_ip6_addr(n,i)->addr,source,16)) { netif_ip6_addr_set_state(n,i,IP6_ADDR_PREFERRED);return; }
-    }
-    check(false,"actual assigned IPv6 slot exists");
-}
 }
 int main() {
     tcpip_init(initialized,nullptr);
@@ -39,12 +35,12 @@ int main() {
         check(tap.addIp(first),"actual add first address");tap.hpConfigure(true);
         auto* original=static_cast<struct netif*>(tap.netif6);uint64_t epoch=0;
         ip_addr_t dest,source;ip_addr_set_zero_ip6(&dest);std::memcpy(ip_2_ip6(&dest)->addr,destination,16);
-        LOCK_TCPIP_CORE();prefer(original,a);epoch=original->hp_generation;
+        LOCK_TCPIP_CORE();epoch=original->hp_generation;
         check(hp_zt_route_locked(900,&dest,&source)==original,"actual first route usable");UNLOCK_TCPIP_CORE();
         tap.hpConfigure(false);check(tap.removeIp(first),"actual remove first address");
         check(tap.addIp(second),"actual add replacement IPv6");tap.hpConfigure(true);
         auto* replacement=static_cast<struct netif*>(tap.netif6);
-        LOCK_TCPIP_CORE();prefer(replacement,b);
+        LOCK_TCPIP_CORE();
         check(replacement->state==&tap && replacement->hp_generation && replacement->hp_generation!=epoch,"replacement registered with new epoch");
         check(!hp_zt_route_locked(900,&dest,&source),"old IPv6 prefix never rebinds");
         std::memcpy(ip_2_ip6(&dest)->addr,b,16);reinterpret_cast<uint8_t*>(ip_2_ip6(&dest)->addr)[15]=2;

@@ -634,7 +634,7 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   // entirely, so the expansion is read from hit-testability and not from
   // the widget list.
   await tester.ensureVisible(rows.first); await tester.pump();
-  if (rows.first.hitTestable().evaluate().length == 1) {
+  if (rows.hitTestable().evaluate().length == 1) {
     await tap(tester,group); // Collapse the group the blocked review left open.
     await until(tester,() => rows.hitTestable().evaluate().isEmpty);
   }
@@ -1354,6 +1354,7 @@ void main() {
       blockedTargetEvidence={'paneId':actualPane,'terminalId':actualTerminal,'listedRows':listedRows,
         'reviewRequired':true,'observing':true,'markerMatched':true,'otherMarkerAbsent':true};
       stage('blocked_return');
+      await tester.pumpAndSettle(const Duration(milliseconds: 300));
       await tapKey(tester,'hosts-board-tab');
       // The board and the shared-device review are driven on the device. The
       // nine new stages below publish their evidence through the two optional

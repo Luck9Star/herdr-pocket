@@ -17,6 +17,10 @@
     {
       "path": "candidates/zerotier/patches/0008-streams-and-hp-boundary.patch",
       "sha256": "ba4654f9ac68dfd9ba65ebb77f11d00a657366acabaf4cba05f1297f1a2e065b"
+    },
+    {
+      "path": "candidates/zerotier/patches/0009-closed-port-rst.patch",
+      "sha256": "e2df90f78dbef804777dcc06a93b71706583c95634a214527d78c401d95c898a"
     }
   ],
   "copies": [
@@ -74,7 +78,7 @@
     },
     {
       "path": "candidates/zerotier/README.md",
-      "sha256": "d9d0e3f349adc3d6cb714def7548631cd8a2c28b8b4d63ca05616c1b9bfcb73c"
+      "sha256": "2896d6ac9891fddea9c474e0291aba04eb9dafcb8493a2358a8e5c1a923e147b"
     },
     {
       "path": "candidates/zerotier/tests/ecc_driver.cpp",
@@ -127,6 +131,14 @@
     {
       "path": "zerotier-runtime/tests/tap_reconfig_test.cpp",
       "sha256": "1559a379a2e42e91e7302b16779296b457063370f59ec897adfc4b2739d268a1"
+    },
+    {
+      "path": "zerotier-runtime/tests/rst_closed_port_test.cpp",
+      "sha256": "e02de803b6f066e4fdc98b374926c907e9422a5872c75b7dbe338424fb271b9c"
+    },
+    {
+      "path": "zerotier-runtime/tests/run_rst.py",
+      "sha256": "f4997dc7c78d78974c1418f2c997bf629a9c11fc2bb53c74c9b567c961079d4d"
     }
   ],
   "beforeFiles": {
@@ -163,8 +175,8 @@
     "ext/lwip/src/api/sockets.c": "1b5845f4c22fa8963974bbef34fe97ac9895f8a34f57150f9024a53f5951c750",
     "ext/lwip/src/core/netif.c": "1c8d308fcb3cc9b51bbc08206c9ea0668df915c6fbf24655735b6b0c9f920258",
     "ext/lwip/src/core/tcp.c": "481b4010f40325a0dadf0ec57bc81af69b22faf12432e019a038f89a3f465c73",
-    "ext/lwip/src/core/tcp_in.c": "7840c04efdab82ee05ab970be5706934c59b88ed564fbcd2e82e07413efe59b5",
-    "ext/lwip/src/core/tcp_out.c": "7932ce9888ee2c885e942bebe1c6289b870fd0dc380c480f221f4541dce544b1",
+    "ext/lwip/src/core/tcp_in.c": "df42b49acc011321c785ad68e3c8b2cc11bb42ec025ea32cd100ddaec3cb4ece",
+    "ext/lwip/src/core/tcp_out.c": "5135c39b6e781b58fb3073ce8841de9c223ca5279c8e40d3322db302ac99a707",
     "ext/lwip/src/include/lwip/ip.h": "d04a6df68e0a3197915bc444c08b8980d16d894e7b6c818c91893e49c89cdc0f",
     "ext/lwip/src/include/lwip/netif.h": "071bbb47d763267aa2e783c91d317e47ec0eb77a99d8e80c12cdc567a93e0868",
     "ext/lwip/src/include/lwip/priv/sockets_priv.h": "6cf7e9e19a204ee5b2a58e2a1919ce8629f29e7d20e5b84c0468a67b741259d9",

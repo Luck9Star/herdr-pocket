@@ -36,7 +36,9 @@
 - **评审伴随项一并修复**：N2 fd 泄漏、N3 注释链、N5 幽灵插入；新增 `gate_reopen_test` 25 项检查（含 B1 交错复刻，评审以变异验证确认非恒真）；
 - **构建与符号加固**：阶段 B 清单完整收录 0008 补丁、bound fixture 与测试套件；阶段 C Android 链接加固加入 `-Wl,--no-undefined` 强链接约束，并强制核验 `BOUND_SYMBOLS` 六元组符号契约（`hp_zt_bound_open`, `hp_zt_bound_state`, `hp_zt_bound_read`, `hp_zt_bound_write`, `hp_zt_bound_shutdown_write`, `hp_zt_bound_close`）；
 - **本地全量验证通过**：干净基线 4044 全过、补丁初版 31/4055 失败、终版 4055 全过；Python 套件 56/56；62 TU ASan+UBSan；boundary 118 项；tap-reconfig 8 项；manager/offline 全过；
-- **待办**：N1（ZT netif RST 抑制失去 ECONNREFUSED）排入 0009 候选；`board_search` 为独立于 0008 的应用层缺陷另线处理；阶段 2 门控（`bindNative` 激活与生产切片倒置）保持锁定，等待用户明示。
+- **待办**：N1（ZT netif RST 抑制失去 ECONNREFUSED）已由 0009 候选补丁闭环（见下节）；`board_search` 为独立于 0008 的应用层缺陷另线处理；阶段 2 门控（`bindNative` 激活与生产切片倒置）保持锁定，等待用户明示。
+
+**ZeroTier 候选补丁 0009（N1 修复）入档**：`0009-closed-port-rst.patch`（sha256 `e2df90f7…`，1890 字节）恢复 closed-port connect 的快速失败语义——0008 在 tcp_input no-listener 分支无条件抑制 pcb-less RST 导致只能等超时；0009 让 pcb-less RST 直接在入站 netif 应答（上游 `tcp_rst_netif()`、commit `3666dcc66c8a` 语义，`tcp_output_control_segment` 在 pcb==NULL 时不再查 route 表，杜绝经重叠网络逸出），并保留 `hp_ready=0` 与已 remove netif 的 drain／teardown 静默。lwIP `ERR_RST` 即其形式的 `ECONNREFUSED`（`ECONNRESET`/104）。`zerotier-candidate.json` 闭环更新：patches 5 项、afterFiles 更新 `tcp_in.c`（`df42b49a…`）与 `tcp_out.c`（`5135c39b…`）、validationFiles 新增 `rst_closed_port_test.cpp` 与 `run_rst.py`；`test_zerotier_candidate.py` 锚点与 identity-service 补丁集合断言同步适配。真实 lwIP 内存线材测试（ASan+UBSan）验证 IPv4／IPv6 快速拒绝、peer 自身 netif 发出 RST、重叠 netif 零泄漏。
 
 **CI 拓扑与路由机制收敛**：梳理并确认了 GitHub Actions 云端工作流矩阵展开与分支命名前缀强依赖规范。在 `.github/workflows/android-network-experiment.yml` 中：
 - `codex/network-batch/with-emulators-*` 前缀激活 `android-pairing` 云端模拟器联跑矩阵；

@@ -1,8 +1,8 @@
 # ZeroTier 原生安全基础候选
 
-状态：2026-11-08。这里只提供固定源码的身份／事件内存／退休基础补丁、网络流与边界绑定补丁与离线检查，尚未接入 ZeroTier managed backend、JNI、GUI 或实际网络。没有调用 node start、join、dial，也没有读取真实身份文件。
+状态：2026-11-09。这里只提供固定源码的身份／事件内存／退休基础补丁、网络流与边界绑定补丁、闭端口 RST 快速失败补丁与离线检查，尚未接入 ZeroTier managed backend、JNI、GUI 或实际网络。没有调用 node start、join、dial，也没有读取真实身份文件。
 
-固定输入为 [Heeler `6a2817fc…` sources.lock](https://github.com/Ylarod/heeler-overlay-natives/blob/6a2817fc02aeb552df251d9478753c22fd4738bb/sources.lock)、[libzt `7e5d0f99…`](https://github.com/Ylarod/libzt/tree/7e5d0f99a2de81c45faa28e44289bcd19d933bf2)、其 gitlink [ZeroTierOne `fc5c3ec2…`](https://github.com/zerotier/ZeroTierOne/tree/fc5c3ec22090b5b2a0f274e863651fe9ca489bf4)、lwIP `32708c0a…` 与 contrib `4fd612c9…`。先按锁验证并应用 Heeler 原四补丁，再依序应用本目录 `patches/0005-native-safety.patch`、`0006-strict-offline-identity.patch`、`0007-defined-ecc-shifts.patch`、`0008-streams-and-hp-boundary.patch`。保留每个上游原始许可和 Heeler 修改归属；本候选不作整体分发许可证结论。旧三桌面 compile／四符号解析不证明这些新增代码或节点运行。
+固定输入为 [Heeler `6a2817fc…` sources.lock](https://github.com/Ylarod/heeler-overlay-natives/blob/6a2817fc02aeb552df251d9478753c22fd4738bb/sources.lock)、[libzt `7e5d0f99…`](https://github.com/Ylarod/libzt/tree/7e5d0f99a2de81c45faa28e44289bcd19d933bf2)、其 gitlink [ZeroTierOne `fc5c3ec2…`](https://github.com/zerotier/ZeroTierOne/tree/fc5c3ec22090b5b2a0f274e863651fe9ca489bf4)、lwIP `32708c0a…` 与 contrib `4fd612c9…`。先按锁验证并应用 Heeler 原四补丁，再依序应用本目录 `patches/0005-native-safety.patch`、`0006-strict-offline-identity.patch`、`0007-defined-ecc-shifts.patch`、`0008-streams-and-hp-boundary.patch`、`0009-closed-port-rst.patch`。保留每个上游原始许可和 Heeler 修改归属；本候选不作整体分发许可证结论。旧三桌面 compile／四符号解析不证明这些新增代码或节点运行。
 
 ## 修复范围
 
@@ -12,6 +12,7 @@
 - **对象寿命。** frame gate 阻止退休后的 core frame 进入，销毁 Node 前等待已准入 frame；虚拟接口退休时清除 state，迟到 lwIP work 不得引用已销毁 tap。pending start 收到停止后不会重新把 run 打开。身份缓冲保留到原 service 收敛，随后尽力 wipe；memory-only 模式不探测 `/roots`、`/networks.d` 或 `/peers.d`。
 - **严格身份。** 新 native ABI 使用 pinned core 离线生成、解析和验证；type-0 私钥文本固定 270 个小写 ASCII 字节，无 NUL，包含 64 字节 public 与 64 字节 private。工作缓冲为 384 字节。必须含 private、通过 public/address proof，并由两个 private 半部分重新派生 DH／Ed25519 public 对比。旧 `zts_id_pair_is_valid` 只验证 public/address，不能代替该校验。`setIdentity` 同时修复 NULL、长度、padding 与无限 strlen／memcpy 边界；native 临时私钥副本尽力 wipe，未改密码算法。
 - **网络流与边界绑定（0008）。** 固定 lwIP 增加 per-socket 的 network／epoch／netif index 绑定：`hp_zt_bound_open` 在 core lock 内选定真实 route 与 source 并把 TCP PCB 绑到该 netif，PCB 与 socket 同时记录 generation。`hp_zt_bound_state` 以 network、epoch、netif index 与 source 地址四者同时复核，route 或 generation 不符即返回 `HP_ZT_BOUND_ROUTE`，SYN_SENT 返回 `HP_ZT_BOUND_AGAIN`，已建立返回 `HP_ZT_BOUND_OK`；旧 netif 索引的收发、重组与重传输入一律拒绝。虚拟接口按 IPv6 DAD 即时置 PREFERRED，IPv4 以对称 re-add 恢复同一地址；地址 remove／re-add 会推进 generation，使旧绑定立即失效。
+- **闭端口 RST 快速失败（0009）。** 0008 在 tcp_input 的 no-listener 分支无条件抑制了 pcb-less RST，向已关闭端口 connect 只能等超时，失去 POSIX `ECONNREFUSED` 的快速失败语义。0009 把该分支改为：pcb-less RST 直接在入站 netif 上应答（上游 `tcp_rst_netif()`、commit `3666dcc66c8a` 的语义：`tcp_output_control_segment` 在 pcb==NULL 时不再查 route 表，因此不可能经另一重叠网络逸出），同时保留 `hp_ready=0`（disable／drain）与已 remove netif 的静默，维持 0008 的拆除语义。lwIP `ERR_RST` 经 err.c 表现为 `ECONNRESET`（104），即 lwIP 形式的 closed-port refusal；`rst_closed_port_test.cpp` 在真实 lwIP 内存线材上验证 IPv4／IPv6 快速拒绝、RST 仅从 peer 自身 netif 发出、重叠 netif 零泄漏与 drain／teardown 静默。
 
 普通 stop 保留 process-global lwIP 栈供以后启动。free 永久禁止重新初始化，并退休 Node／Events／外层 driver；固定 lwIP 的内部 tcpip 线程没有 join API，因此不声称“所有线程和全局资源都已释放”。初始化但尚无 service worker 的同步析构路径要求 Node 为空且 frame gate 已 quiet；真正活动 service 的析构始终由 worker 完成。
 
@@ -32,7 +33,7 @@ native vault 必须先完成原子加密持久化，再允许初始化／start�
 来源准备、archive／gitlink／Heeler patch hash、完整树清单和主构建入口由上层 `zerotier_candidate.py` 与来源 manifest 管理。本目录构建插入顺序：
 
 1. 固定完整 libzt＋三个 gitlink，验证并应用原四 Heeler patches。
-2. 依序应用本目录 `0005`、`0006`、`0007`、`0008` 四个 patch。
+2. 依序应用本目录 `0005`、`0006`、`0007`、`0008`、`0009` 五个 patch。
 3. 将 `shim/hp_zt.h`、`hp_zt_identity.cpp`、`hp_zt_lifecycle.cpp` 复制到 libzt `src/`，并将 `zerotier-runtime/hp_zt_bound.h` 复制到 `include/`、`hp_zt_manager.h` 与 `manager.cpp` 复制到 `src/`。现有 CMake `src/*.cpp` glob 会纳入它们；源码目录内不得留下 binary、object、日志或构建目录。
 4. 运行离线 runner，输出必须为源码树外一个尚不存在的目录：
 

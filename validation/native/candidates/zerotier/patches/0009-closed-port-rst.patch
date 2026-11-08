@@ -1,0 +1,41 @@
+diff --git a/ext/lwip/src/core/tcp_in.c b/ext/lwip/src/core/tcp_in.c
+index dc1c25c..335373f 100644
+--- a/ext/lwip/src/core/tcp_in.c
++++ b/ext/lwip/src/core/tcp_in.c
+@@ -582,8 +582,13 @@ aborted:
+     if (!(TCPH_FLAGS(tcphdr) & TCP_RST)) {
+       TCP_STATS_INC(tcp.proterr);
+       TCP_STATS_INC(tcp.drop);
+-      /* No unbound RST may escape through another overlapping network. */
+-      if (!ip_data.current_input_netif->hp_network) {
++      /* A pcb-less RST never consults the route table: tcp_output_control_segment
++         answers on the ingress netif only (upstream tcp_rst_netif, commit
++         3666dcc66c8a), so it cannot escape into another overlapping network.
++         hp netifs answer only while their current config fence is live, so
++         disable/drain/teardown stays silent. */
++      if (!ip_data.current_input_netif->hp_network ||
++          ip_data.current_input_netif->hp_ready) {
+       tcp_rst(NULL, ackno, seqno + tcplen, ip_current_dest_addr(),
+               ip_current_src_addr(), tcphdr->dest, tcphdr->src);
+       }
+diff --git a/ext/lwip/src/core/tcp_out.c b/ext/lwip/src/core/tcp_out.c
+index f230669..9fd62a1 100644
+--- a/ext/lwip/src/core/tcp_out.c
++++ b/ext/lwip/src/core/tcp_out.c
+@@ -1930,7 +1930,15 @@ tcp_output_control_segment(const struct tcp_pcb *pcb, struct pbuf *p,
+ 
+   LWIP_ASSERT("tcp_output_control_segment: invalid pbuf", p != NULL);
+ 
+-  netif = tcp_route(pcb, src, dst);
++  if (pcb != NULL) {
++    netif = tcp_route(pcb, src, dst);
++  } else {
++    /* pcb==NULL is only the no-listener RST from tcp_input. Answer on the
++       ingress netif (upstream tcp_rst_netif(), commit 3666dcc66c8a) instead
++       of the route table, so a pcb-less reset can never be routed out through
++       another, possibly overlapping hp network. */
++    netif = ip_data.current_input_netif;
++  }
+   if (netif == NULL) {
+     err = ERR_RTE;
+   } else {

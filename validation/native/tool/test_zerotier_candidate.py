@@ -137,9 +137,9 @@ class Sources(unittest.TestCase):
 
     def test_candidate_manifest_inputs_and_hashes_valid(self):
         manifest = candidate.candidate_inputs()
-        self.assertEqual(len(manifest["patches"]), 4)
-        self.assertEqual(Path(manifest["patches"][-1]["path"]).name, "0008-streams-and-hp-boundary.patch")
-        self.assertEqual(manifest["patches"][-1]["sha256"], "ba4654f9ac68dfd9ba65ebb77f11d00a657366acabaf4cba05f1297f1a2e065b")
+        self.assertEqual(len(manifest["patches"]), 5)
+        self.assertEqual(Path(manifest["patches"][-1]["path"]).name, "0009-closed-port-rst.patch")
+        self.assertEqual(manifest["patches"][-1]["sha256"], "e2df90f78dbef804777dcc06a93b71706583c95634a214527d78c401d95c898a")
 
 
 if __name__ == "__main__":

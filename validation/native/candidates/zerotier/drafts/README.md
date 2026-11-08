@@ -4,5 +4,6 @@
 
 该补丁现已正式转正为 `candidates/zerotier/patches/0008-streams-and-hp-boundary.patch` 并录入 `zerotier-candidate.json`。
 
-当前 `drafts/` 目录下无未完成的活动草稿。
+2026-11-09。`0009-rst-econnrefused` 草稿（N1：closed-port RST / ECONNREFUSED 快速失败修复）经独立代码审查 APPROVE 后正式转正为 `candidates/zerotier/patches/0009-closed-port-rst.patch`，配套测试移入 `zerotier-runtime/tests/rst_closed_port_test.cpp` 与 `run_rst.py`，并录入 `zerotier-candidate.json`（patches 5 项、afterFiles 更新 tcp_in.c／tcp_out.c、validationFiles 21 项）。
 
+当前 `drafts/` 目录下无未完成的活动草稿。

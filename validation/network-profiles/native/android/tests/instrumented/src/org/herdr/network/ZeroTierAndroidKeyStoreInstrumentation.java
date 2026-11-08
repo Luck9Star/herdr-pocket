@@ -11,6 +11,11 @@ import android.os.Bundle;
  * keeps the failing check and stack trace in the same output stream.
  */
 public final class ZeroTierAndroidKeyStoreInstrumentation extends Instrumentation {
+    @Override public void onCreate(Bundle arguments) {
+        super.onCreate(arguments);
+        start();
+    }
+
     @Override public void onStart() {
         super.onStart();
         String evidence=null;

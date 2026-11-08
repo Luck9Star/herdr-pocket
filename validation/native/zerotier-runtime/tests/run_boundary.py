@@ -92,4 +92,11 @@ if not args.compile_only:
                     '-Wl,-dead_strip','-pthread','-o',str(tap_binary)])
     run('test-tap',[str(tap_binary)],timeout=20)
     print((output/'test-tap.log').read_text().strip(),flush=True)
+    gate_binary = output/'gate-reopen-test'
+    run('link-gate',['clang++',*flags,'-std=c++11','-Wall','-Wextra',
+                     '-Werror=misleading-indentation','-Wno-unused-parameter',
+                     '-DZTS_C_API_ONLY=1','-DZTS_DISABLE_CENTRAL_API=1',
+                     str(tests/'gate_reopen_test.cpp'),'-pthread','-o',str(gate_binary)])
+    run('test-gate',[str(gate_binary)],timeout=20)
+    print((output/'test-gate.log').read_text().strip(),flush=True)
 print('No ZeroTier node/identity or real network was used.')

@@ -139,7 +139,7 @@ class Sources(unittest.TestCase):
         manifest = candidate.candidate_inputs()
         self.assertEqual(len(manifest["patches"]), 4)
         self.assertEqual(Path(manifest["patches"][-1]["path"]).name, "0008-streams-and-hp-boundary.patch")
-        self.assertEqual(manifest["patches"][-1]["sha256"], "9bedbe9c9631fa31144774945b17f9cf315f0baa61812114e2dd73a66d6e4bd1")
+        self.assertEqual(manifest["patches"][-1]["sha256"], "ba4654f9ac68dfd9ba65ebb77f11d00a657366acabaf4cba05f1297f1a2e065b")
 
 
 if __name__ == "__main__":

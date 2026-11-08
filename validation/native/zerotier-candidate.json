@@ -16,7 +16,7 @@
     },
     {
       "path": "candidates/zerotier/patches/0008-streams-and-hp-boundary.patch",
-      "sha256": "9bedbe9c9631fa31144774945b17f9cf315f0baa61812114e2dd73a66d6e4bd1"
+      "sha256": "ba4654f9ac68dfd9ba65ebb77f11d00a657366acabaf4cba05f1297f1a2e065b"
     }
   ],
   "copies": [
@@ -109,12 +109,16 @@
       "sha256": "aebbfdb10cdbf3ee7fc6df4835bb9346a0a15e7c9fd74fb64c5c285018d6117e"
     },
     {
+      "path": "zerotier-runtime/tests/gate_reopen_test.cpp",
+      "sha256": "11f3e749448998072e2ef770470f4368a6fb85754ff6a5ed4c3f8ffcb4f4abf4"
+    },
+    {
       "path": "zerotier-runtime/tests/library_probe.cpp",
       "sha256": "c06e8895e21dcd0ef19b4df355a38b6ab1e9a484661af519c31c81f169819159"
     },
     {
       "path": "zerotier-runtime/tests/run_boundary.py",
-      "sha256": "1c8fe8aa8ff9cf5cbd9c1cd0e1eb8a7f1e3b98ec172d7d6584eb54b599cc7b02"
+      "sha256": "44c3f632ed7f15aad8cebb6c01b3a3ba2794e9aaacb792147b5804a7105a37ef"
     },
     {
       "path": "zerotier-runtime/tests/stream_test.cpp",
@@ -171,13 +175,13 @@
     "src/Events.cpp": "34c5b8a43494391b5c66f193f0a7c15a063f7a71999148b4e6860b55d7b76909",
     "src/Events.hpp": "ed38b2564ed26934a4e9d31dcdcb080469d51f0c7bd7ed2b85f299c74f802f8d",
     "src/HpBoundRoutes.cpp": "077c0845bce54ad938b50dfdc218e874b0e90ec763ceeac624d9460bab442ad1",
-    "src/HpBoundSockets.cpp": "c174f5e295fb25ba3f0007e478ea47c622eb84203a2aebc1a8b20a5d8c787522",
+    "src/HpBoundSockets.cpp": "322a4fb1010f86a883df97292c1185f797879dcd267f79a36ca5bbb66663ec8f",
     "src/HpEventOwnership.hpp": "a65f218e6111a951b5988910d708b7793a5c88175e300cf24b5897f50e12a813",
     "src/HpEventProjection.hpp": "d67a828e723907a740ad9957627a0dc49a274e4edec37a272406348dc15a46d2",
-    "src/HpLifecycle.hpp": "aea395a1f7d895b344ec2ab7bad0f0cd0429248706ffcbbe779625e780c521df",
-    "src/NodeService.cpp": "fd7783cc8775bb8b1362311ab052a817681554ab6f04cb2cc71899887435a400",
-    "src/NodeService.hpp": "ba9e0eb7dffd4a9537db2322f4bd1090cae5706d1f30101826bbcaf64507dc59",
-    "src/VirtualTap.cpp": "4a2c90b30bed258004a3ebfa681c99562bfabb2c28db0f2cd4540264389cacce",
+    "src/HpLifecycle.hpp": "6b5a0151845c6a3b6a7505fa63a1fe95fbd686801ce3b8a5f801ad34f8dcfd54",
+    "src/NodeService.cpp": "f673cd5069e78025c96c978cff88de8f9b8f91d43e97cbf833f1aa6b90258061",
+    "src/NodeService.hpp": "35e5404071477888adb236fbc014dfc2fdff05fa916735edb0b1150c644b1ee1",
+    "src/VirtualTap.cpp": "d5b6aa478f28e12732f1917bc5946eb5316e89407e56c818e49c463d497736fb",
     "src/VirtualTap.hpp": "44e0cf9de937783abb48bcc9d89e8598a9bb4297fbef6b5b9256ee6996574c28",
     "src/hp_zt.h": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad",
     "src/hp_zt_identity.cpp": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992",

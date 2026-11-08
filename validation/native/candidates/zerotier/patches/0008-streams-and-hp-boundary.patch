@@ -425,10 +425,10 @@ index 0000000..3a6e821
 +}
 diff --git a/src/HpBoundSockets.cpp b/src/HpBoundSockets.cpp
 new file mode 100644
-index 0000000..46cd313
+index 0000000..c87fa1d
 --- /dev/null
 +++ b/src/HpBoundSockets.cpp
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,60 @@
 +// herdr-pocket pinned lwIP socket boundary. No system socket/DNS fallback.
 +#include "hp_zt_bound.h"
 +#include "lwip/sockets.h"
@@ -451,17 +451,21 @@ index 0000000..46cd313
 +    std::lock_guard<std::mutex> lock(io_mutex());
 +    *fd=lwip_socket(length==4 ? AF_INET : AF_INET6, SOCK_STREAM, IPPROTO_TCP);
 +    if (*fd<0) { return HP_ZT_BOUND_ERROR; }
-+    if (lwip_fcntl(*fd,F_SETFL,O_NONBLOCK)!=0) { return HP_ZT_BOUND_ERROR; }
++    if (lwip_fcntl(*fd,F_SETFL,O_NONBLOCK)!=0) { lwip_close(*fd); *fd=-1; return HP_ZT_BOUND_ERROR; }
 +    int result=hp_zt_lwip_bind(*fd,network,ip,length,epoch);
-+    if (result!=HP_ZT_BOUND_OK) { return result; }
++    if (result!=HP_ZT_BOUND_OK) { lwip_close(*fd); *fd=-1; return result; }
 +    if (length==4) {
 +        struct sockaddr_in address={}; address.sin_len=sizeof(address); address.sin_family=AF_INET;
 +        address.sin_port=lwip_htons(port); std::memcpy(&address.sin_addr.s_addr,ip,4);
-+        return outcome(lwip_connect(*fd,reinterpret_cast<const struct sockaddr*>(&address),sizeof(address)));
++        result = outcome(lwip_connect(*fd,reinterpret_cast<const struct sockaddr*>(&address),sizeof(address)));
++        if (result==HP_ZT_BOUND_ERROR) { lwip_close(*fd); *fd=-1; }
++        return result;
 +    }
 +    struct sockaddr_in6 address={}; address.sin6_len=sizeof(address); address.sin6_family=AF_INET6;
 +    address.sin6_port=lwip_htons(port); std::memcpy(address.sin6_addr.un.u32_addr,ip,16);
-+    return outcome(lwip_connect(*fd,reinterpret_cast<const struct sockaddr*>(&address),sizeof(address)));
++    result = outcome(lwip_connect(*fd,reinterpret_cast<const struct sockaddr*>(&address),sizeof(address)));
++    if (result==HP_ZT_BOUND_ERROR) { lwip_close(*fd); *fd=-1; }
++    return result;
 +}
 +int hp_zt_bound_state(int fd,uint64_t network,uint64_t epoch) {
 +    std::lock_guard<std::mutex> lock(io_mutex()); return hp_zt_lwip_state(fd,network,epoch);
@@ -486,46 +490,72 @@ index 0000000..46cd313
 +}
 +}
 diff --git a/src/HpLifecycle.hpp b/src/HpLifecycle.hpp
-index 827cf6a..90af5d6 100644
+index 827cf6a..7d35614 100644
 --- a/src/HpLifecycle.hpp
 +++ b/src/HpLifecycle.hpp
-@@ -52,6 +52,11 @@ public:
+@@ -52,8 +52,18 @@ public:
   bool quiet() const { std::lock_guard<std::mutex> lock(mutex_); return active_==0; }
   void retire() { std::lock_guard<std::mutex> lock(mutex_); closed_=true; }
   void drain() { std::unique_lock<std::mutex> lock(mutex_); closed_=true; changed_.wait(lock,[this]{return active_==0;}); }
++ // Make the next close one-way: after seal(), reopen() can never re-admit
++ // callbacks. Process shutdown seals the gate before its drain; the
++ // per-network DOWN drain does not, so other networks keep receiving frames.
++ void seal() { std::lock_guard<std::mutex> lock(mutex_); closed_=true; sealed_=true; }
 + // Re-admit callbacks after a drain() has returned. Call only once the
 + // drained object is gone (its network was erased from the map), so no old
 + // lease can survive the closed window. Never used on the process-shutdown
-+ // drain: that gate stays closed for good.
-+ void reopen() { std::lock_guard<std::mutex> lock(mutex_); closed_=false; }
++ // drain: that gate stays closed for good -- seal() makes it stick even if
++ // a racing caller-thread DOWN path reaches reopen() after run()'s drain.
++ void reopen() { std::lock_guard<std::mutex> lock(mutex_); if (! sealed_) { closed_=false; } }
  private:
-  mutable std::mutex mutex_; std::condition_variable changed_; bool closed_=false; unsigned int active_=0;
+- mutable std::mutex mutex_; std::condition_variable changed_; bool closed_=false; unsigned int active_=0;
++ mutable std::mutex mutex_; std::condition_variable changed_; bool closed_=false; bool sealed_=false; unsigned int active_=0;
  };
+ class HpFrameLease {
+ public:
 diff --git a/src/NodeService.cpp b/src/NodeService.cpp
-index 2a0b5ff..f7c76b8 100644
+index 2a0b5ff..4747c06 100644
 --- a/src/NodeService.cpp
 +++ b/src/NodeService.cpp
-@@ -624,6 +624,11 @@ NodeService::ReasonForTermination NodeService::run()
+@@ -624,6 +624,17 @@ NodeService::ReasonForTermination NodeService::run()
  
      { Mutex::Lock lock(_run_m); _run=false; }
      _frameGate.drain();
 +    // Same rule as above, without the lwIP core or service mutex: retire
 +    // any remaining tap leases before the map below frees the taps. This
 +    // is process shutdown: unlike the per-network DOWN/DESTROY drain, the
-+    // gate deliberately stays closed -- no reopen afterwards.
++    // gate deliberately stays closed for good. _shuttingDown plus seal()
++    // make that stick: Node::leave fires DESTROY synchronously on its
++    // caller's thread, so a caller-thread DOWN racing this drain must not
++    // reopen the gate afterwards -- and once sealed, reopen() is a no-op
++    // even if the flag check loses that race.
++    _shuttingDown = true;
++    _tapGate.seal();
 +    _tapGate.drain();
      std::lock_guard<std::timed_mutex> service_lock(service_m);
      {
          Mutex::Lock _l(_nets_m);
-@@ -980,6 +985,7 @@ int NodeService::nodeVirtualNetworkConfigFunction(
+@@ -978,8 +989,19 @@ int NodeService::nodeVirtualNetworkConfigFunction(
+     const ZT_VirtualNetworkConfig* nwc)
+ {
      Mutex::Lock _l(_nets_m);
++    if (op == ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_DOWN || op == ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_DESTROY) {
++        if (_nets.find(net_id) == _nets.end()) {
++            // Late teardown for an already-erased network (e.g. the core
++            // firing DOWN from Network::~Network during delete _node): the
++            // operator[] lookup below would otherwise INSERT a phantom
++            // NetworkState, publish a DOWN event for it and drop it again.
++            // There is nothing left to drain or free.
++            return 0;
++        }
++    }
      NetworkState& n = _nets[net_id];
  
 +    bool hp_changed = false;
      switch (op) {
          case ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_UP:
              if (! n.tap) {
-@@ -997,10 +1003,18 @@ int NodeService::nodeVirtualNetworkConfigFunction(
+@@ -997,10 +1019,18 @@ int NodeService::nodeVirtualNetworkConfigFunction(
              // After setting up tap, fall through to CONFIG_UPDATE since we
              // also want to do this...
          case ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_CONFIG_UPDATE:
@@ -544,19 +574,30 @@ index 2a0b5ff..f7c76b8 100644
              }
              else {
                  _nets.erase(net_id);
-@@ -1015,8 +1029,24 @@ int NodeService::nodeVirtualNetworkConfigFunction(
+@@ -1012,11 +1042,43 @@ int NodeService::nodeVirtualNetworkConfigFunction(
+             break;
+         case ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_DOWN:
+         case ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_DESTROY:
++            // sendEventToUser copies the payload out synchronously (a fresh
++            // zts_net_info_t), so the user never holds this map entry itself.
              sendEventToUser(ZTS_EVENT_NETWORK_DOWN, (void*)&n);
              if (n.tap) {   // sanity check
                  *nuptr = (void*)0;
 +                // Retire frame-callback leases before the tap dies. Safe
 +                // under _nets_m because of the reverse-edge invariant: a
 +                // thread holding the lwIP core lock never waits on _nets_m
-+                // or _tapGate (eth_tx -> tapFrameHandler ->
-+                // processVirtualNetworkFrame never enters the config path;
-+                // config callbacks fire only on the service thread). A lease
-+                // holder may acquire the core lock (LWIP_TCPIP_CORE_LOCKING_
-+                // INPUT=1 runs input synchronously), but no core-lock holder
-+                // waits on us, so this drain cannot deadlock.
++                // or _tapGate. Inbound frames arrive on detached threads
++                // (Switch.cpp routes putFrame to std::thread) whose only
++                // lock before the core lock is the _tapGate lease; outbound
++                // tap delivery (tapFrameHandler) uses the separate _frameGate
++                // lease. Config callbacks are on neither frame path, and
++                // they do NOT all run on the service thread: Node::leave
++                // fires DESTROY synchronously on its caller's thread (join/
++                // UP likewise), which is exactly why the reopen below is
++                // guarded. A lease holder may acquire the core lock
++                // (LWIP_TCPIP_CORE_LOCKING_INPUT=1 runs input
++                // synchronously), but no core-lock holder waits on us, so
++                // this drain cannot deadlock.
 +                _tapGate.drain();
                  delete n.tap;
                  _nets.erase(net_id);
@@ -564,12 +605,20 @@ index 2a0b5ff..f7c76b8 100644
 +                // drain has returned and this network's entry is erased.
 +                // Frames for other networks arriving inside the brief
 +                // drain->reopen window are dropped; the core retransmits.
-+                // run()'s shutdown drain leaves the gate closed for good.
-+                _tapGate.reopen();
++                // Skip the reopen once process shutdown has begun: run()
++                // drains this gate for good before freeing every tap, and
++                // a caller-thread DOWN racing that drain must not re-admit
++                // frame callbacks afterwards (seal() enforces the same
++                // rule inside the gate even if this flag check loses the
++                // race). We still hold _nets_m here, so run() cannot have
++                // freed anything yet either way.
++                if (! _shuttingDown.load()) {
++                    _tapGate.reopen();
++                }
                  if (_allowNetworkCaching && !_homePath.empty()) {
                      if (op == ZT_VIRTUAL_NETWORK_CONFIG_OPERATION_DESTROY) {
                          char nlcpath[256] = { 0 };
-@@ -1909,6 +1939,12 @@ void NodeService::nodeVirtualNetworkFrameFunction(
+@@ -1909,6 +1971,12 @@ void NodeService::nodeVirtualNetworkFrameFunction(
  {
      ZTS_UNUSED_ARG(vlanId);
      ZTS_UNUSED_ARG(net_id);
@@ -583,39 +632,50 @@ index 2a0b5ff..f7c76b8 100644
      if ((! n) || (! n->tap)) {
          return;
 diff --git a/src/NodeService.hpp b/src/NodeService.hpp
-index 7e9aa33..8da336f 100644
+index 7e9aa33..0879e11 100644
 --- a/src/NodeService.hpp
 +++ b/src/NodeService.hpp
-@@ -245,6 +245,9 @@ class NodeService {
+@@ -245,6 +245,15 @@ class NodeService {
      std::atomic<bool> _run;
      std::atomic<bool> _stopRequested{false};
      HpFrameGate _frameGate;
 +    // Admission fence for tap use in nodeVirtualNetworkFrameFunction; the
 +    // config DOWN/DESTROY path drains it before deleting the tap.
 +    HpFrameGate _tapGate;
++    // Set before run()'s shutdown _tapGate drain. The per-network DOWN path
++    // reopens the gate only while this is false, so a caller-thread
++    // DOWN/DESTROY racing process shutdown can never re-admit frame
++    // callbacks after run() has drained (_tapGate.seal() backs the same
++    // invariant up inside the gate itself).
++    std::atomic<bool> _shuttingDown{false};
      /** Lock to control access to termination reason */
      Mutex _termReason_m;
      // Termination status information
 diff --git a/src/VirtualTap.cpp b/src/VirtualTap.cpp
-index ab06081..9786f6a 100644
+index ab06081..99934bc 100644
 --- a/src/VirtualTap.cpp
 +++ b/src/VirtualTap.cpp
-@@ -116,10 +116,79 @@ VirtualTap::~VirtualTap()
+@@ -116,10 +116,84 @@ VirtualTap::~VirtualTap()
  #endif
  }
  
 +// Posts work to the lwIP thread, which runs it with the core lock held.
-+// Callers can hold NodeService::_nets_m while the lwIP thread enters the
-+// config path already holding the core lock (eth_tx -> tapFrameHandler ->
-+// core -> config callback), so this path must never take the core lock
-+// itself -- that is exactly the ABBA edge being removed. The tcpip mbox is
++// Callers can hold NodeService::_nets_m, so this path must never take the
++// core lock itself: that would order _nets_m before the core lock and make
++// safety depend on the reverse-edge invariant alone. That invariant holds
++// -- nothing under the core lock enters the config path: the outbound
++// frame path (eth_tx -> tapFrameHandler, a _frameGate lease) ends in
++// Node::processVirtualNetworkFrame, inbound frames enter the stack on
++// detached Switch.cpp putFrame threads, and config callbacks fire on the
++// service or the join/leave caller's thread -- but posting keeps the
++// config side structural instead of invariant-dependent. The tcpip mbox is
 +// a fixed 128-deep ring (SYS_MBOX_SIZE): ERR_MEM from tcpip_try_callback
 +// means the ring is momentarily full (with MEMP_MEM_MALLOC=1 the message
 +// allocation is a plain malloc, so it fails only under system OOM). Retry
 +// briefly for transient fullness, then fall back to tcpip_callback: it
 +// blocks only until the ring has a free slot -- it takes no core lock and
-+// waits on no service mutex, so it cannot complete the ABBA cycle, and the
-+// reverse-edge invariant (no core-lock holder ever waits on _nets_m)
++// waits on no service mutex, so it cannot complete a lock-order cycle, and
++// the reverse-edge invariant (no core-lock holder ever waits on _nets_m)
 +// guarantees the lwIP thread keeps draining the ring. Outside OOM the
 +// fence therefore always lands in FIFO order -- it is never dropped.
 +// Templatized on the message type so the OOM cleanup deletes a typed
@@ -682,7 +742,7 @@ index ab06081..9786f6a 100644
  }
  
  bool VirtualTap::gatewayFor4(uint32_t dest, uint32_t* via, unsigned int* bits)
-@@ -144,9 +213,64 @@ void VirtualTap::lastConfigUpdate(uint64_t lastConfigUpdateTime)
+@@ -144,9 +218,67 @@ void VirtualTap::lastConfigUpdate(uint64_t lastConfigUpdateTime)
      _lastConfigUpdateTime = lastConfigUpdateTime;
  }
  
@@ -726,11 +786,14 @@ index ab06081..9786f6a 100644
 +    m->netif6 = static_cast<struct netif*>(netif6);
 +    m->ready = (ready && _enabled) ? 1 : 0;
 +    if (defer) {
-+        // Deferred mode is for callers holding NodeService::_nets_m: the
-+        // lwIP thread can enter the config path already holding the core
-+        // lock (eth_tx -> tapFrameHandler -> core -> config callback), so
-+        // taking the core lock here synchronously can deadlock both
-+        // threads. The fence lands in tcpip mbox FIFO order instead.
++        // Deferred mode is for callers holding NodeService::_nets_m: taking
++        // the core lock here synchronously would order _nets_m before the
++        // core lock. Nothing under the core lock enters the config path --
++        // the outbound eth_tx -> tapFrameHandler path (a _frameGate lease)
++        // ends in Node::processVirtualNetworkFrame, and config callbacks
++        // fire on the service or the caller's thread -- so the reverse-edge
++        // invariant holds, but posting keeps the fence FIFO-ordered and the
++        // config side structural instead of invariant-dependent.
 +        hp_post(hp_apply_config, m);
 +        return;
 +    }
@@ -747,7 +810,7 @@ index ab06081..9786f6a 100644
  }
  
  bool VirtualTap::enabled() const
-@@ -406,6 +530,8 @@ void zts_lwip_remove_netif(void* netif)
+@@ -406,6 +538,8 @@ void zts_lwip_remove_netif(void* netif)
      }
      struct netif* n = (struct netif*)netif;
      LOCK_TCPIP_CORE();
@@ -756,7 +819,7 @@ index ab06081..9786f6a 100644
      netif_remove(n);
      netif_set_down(n);
      netif_set_link_down(n);
-@@ -531,6 +657,12 @@ static err_t zts_netif_init4(struct netif* n)
+@@ -531,6 +665,12 @@ static err_t zts_netif_init4(struct netif* n)
      }
      // Called from core, no need to lock
      VirtualTap* tap = (VirtualTap*)(n->state);
@@ -769,7 +832,7 @@ index ab06081..9786f6a 100644
      n->hwaddr_len = 6;
      n->name[0] = '4';
      n->name[1] = 'a' + netifCount;
-@@ -551,6 +683,12 @@ static err_t zts_netif_init6(struct netif* n)
+@@ -551,6 +691,12 @@ static err_t zts_netif_init6(struct netif* n)
      }
      n->hwaddr_len = sizeof(n->hwaddr);
      VirtualTap* tap = (VirtualTap*)(n->state);
@@ -782,7 +845,7 @@ index ab06081..9786f6a 100644
      tap->_mac.copyTo(n->hwaddr, n->hwaddr_len);
      // Called from core, no need to lock
      n->hwaddr_len = 6;
-@@ -587,7 +725,16 @@ void zts_lwip_init_interface(void* tapref, const InetAddress& ip)
+@@ -587,7 +733,16 @@ void zts_lwip_init_interface(void* tapref, const InetAddress& ip)
          ip4.addr = *((u32_t*)ip.rawIpData());
          netmask.addr = *((u32_t*)ip.netmask().rawIpData());
          LOCK_TCPIP_CORE();
@@ -800,7 +863,7 @@ index ab06081..9786f6a 100644
          vtap->netif4 = (void*)n;
          UNLOCK_TCPIP_CORE();
          snprintf(
-@@ -613,6 +760,9 @@ void zts_lwip_init_interface(void* tapref, const InetAddress& ip)
+@@ -613,6 +768,9 @@ void zts_lwip_init_interface(void* tapref, const InetAddress& ip)
          static ip6_addr_t ip6;
          memcpy(&(ip6.addr), ip.rawIpData(), sizeof(ip6.addr));
          LOCK_TCPIP_CORE();
@@ -810,7 +873,7 @@ index ab06081..9786f6a 100644
          if (isNewNetif) {
              vtap->netif6 = (void*)n;
              
-@@ -636,7 +786,21 @@ void zts_lwip_init_interface(void* tapref, const InetAddress& ip)
+@@ -636,7 +794,21 @@ void zts_lwip_init_interface(void* tapref, const InetAddress& ip)
              netif_set_up(n);
              netif_set_default(n);
          }
@@ -833,12 +896,6 @@ index ab06081..9786f6a 100644
          n->output_ip6 = ethip6_output;
          UNLOCK_TCPIP_CORE();
          snprintf(
-@@ -785,3 +949,5 @@ extern "C" const ip4_addr_t* zts_lwip_hook_etharp_get_gw(struct netif* n, const
-     unsigned int bits = 0;
-     return zts_gateway_route4(n, dest, &gw, &bits) ? &gw : NULL;
- }
-+
-+
 diff --git a/src/VirtualTap.hpp b/src/VirtualTap.hpp
 index 28c7764..3ef2837 100644
 --- a/src/VirtualTap.hpp

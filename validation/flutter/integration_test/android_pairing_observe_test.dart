@@ -631,16 +631,20 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
     widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('host-blocked-target-')));
   await until(tester,() => rows.evaluate().isNotEmpty);
   // A collapsed group clips its rows away or removes them from the tree
-  // entirely, so the expansion is read from hit-testability and not from
-  // the widget list.
+  // entirely, so a visible expansion is read from hit-testability, while the
+  // closed state is the rows actually leaving the widget list: clipping alone
+  // hides them mid-animation. Re-open only a group that was collapsed — an
+  // unconditional second tap would close a group that stayed open and leave
+  // the wait below polling a tree that no longer holds any row.
   await tester.ensureVisible(rows.first); await tester.pump();
   if (rows.hitTestable().evaluate().isNotEmpty) {
     await tap(tester,group); // Collapse the group the blocked review left open.
-    await until(tester,() => rows.hitTestable().evaluate().isEmpty);
+    await until(tester,() => rows.evaluate().isEmpty);
+    await tap(tester,group); // Re-open only what the tap above collapsed.
   }
-  await tap(tester,group);
-  await until(tester,() => rows.hitTestable().evaluate().isNotEmpty);
+  await until(tester,() => rows.evaluate().isNotEmpty);
   await tester.ensureVisible(rows.first); await tester.pump();
+  await until(tester,() => rows.hitTestable().evaluate().isNotEmpty);
   final history=boardHistoryRows(tester,hostId);
   if (history.isEmpty) throw StateError('board_search_history_empty');
   final distinct=history.map((row) => '${row.paneId} ${row.terminalId}').toSet();

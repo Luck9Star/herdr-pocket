@@ -292,7 +292,6 @@ jobs:
   zerotier-keystore:
     # The device identity store must work on the platform AndroidKeyStore, not
     # only against the synthetic provider of the offline JVM suite.
-    if: "!startsWith(github.ref, 'refs/heads/codex/network-batch/with-emulators-input-recheck-')"
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:

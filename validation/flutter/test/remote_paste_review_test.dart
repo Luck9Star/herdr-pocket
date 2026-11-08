@@ -243,11 +243,11 @@ void main() {
     navigator.pop(); await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('app inactive removes clipboard review and never applies it',(tester) async {
+  testWidgets('app hidden removes clipboard review and never applies it',(tester) async {
     clipboardText('PRIVATE CLIP'); final adapter = input.InputFixtureAdapter();
     final controller = await startDraft(tester,adapter,'original'); await press(tester,'remote-input-draft-paste');
     expect(find.textContaining('PRIVATE CLIP'),findsOneWidget);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive); await tester.pumpAndSettle();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden); await tester.pumpAndSettle();
     expect(find.textContaining('PRIVATE CLIP'),findsNothing); expect(controller.text,'original'); expect(adapter.received,isEmpty);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pump();
     expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox());

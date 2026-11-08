@@ -111,7 +111,7 @@ void main() {
     final adapter = input.InputFixtureAdapter(); await input.start(tester,adapter);
     final oldOpen = tester.widget<OutlinedButton>(find.byKey(openKey)).onPressed!;
     await openSelection(tester); final controller = tester.widget<TextField>(find.byKey(textKey)).controller!;
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive); await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden); await tester.pump();
     oldOpen(); await tester.pump();
     expect(controller.text,isEmpty); expect(find.byKey(textKey),findsNothing); expect(adapter.received,isEmpty);
     base.restoreResumedLifecycle(tester); await tester.pumpWidget(const SizedBox());

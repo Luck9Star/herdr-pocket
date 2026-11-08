@@ -53,7 +53,7 @@ String workspaceTitle(WidgetTester tester) => (tester.widget<ExpansionTile>(find
 String summaryText(WidgetTester tester,String hostId) => tester.widgetList<Text>(find.descendant(
   of:find.byKey(ValueKey('host-task-summary-$hostId')),matching:find.byType(Text))).map((w) => w.data).join('\n');
 Future<void> revealHost(WidgetTester tester,String hostId) async {
-  final scrollable=find.descendant(of:find.byKey(const ValueKey('host-catalog-list')),matching:find.byType(Scrollable));
+  final scrollable=find.descendant(of:find.byKey(const ValueKey('host-catalog-list')),matching:find.byType(Scrollable)).first;
   tester.state<ScrollableState>(scrollable).position.jumpTo(0); await tester.pump();
   await tester.scrollUntilVisible(find.byKey(ValueKey('host-task-summary-$hostId')),200,scrollable:scrollable); await tester.pump();
 }

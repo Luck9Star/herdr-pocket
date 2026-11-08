@@ -43,12 +43,12 @@ void main() {
   hostCatalogSearchCases((name,body) => test(name,body));
   testWidgets('rapid local search keeps IME composing and row identity without connecting',(tester) async {
     final catalog=HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
-    final a=tabProfile('Same host','Build Session','100.64.0.1','tailscale','opaque-search-secret');
-    final b=tabProfile('Same host','Other Session','dev.example.test','direct','opaque-b');
+    final a=tabProfile('Same host','Build-Session','100.64.0.1','tailscale','opaque-search-secret');
+    final b=tabProfile('Same host','Other-Session','dev.example.test','direct','opaque-b');
     await catalog.add(a); await catalog.add(b);
     final tabs=HostTabs(),keys=TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
     await mount(tester,catalog,tabs,keys,width:320);
-    for (final value in ['same','no-match','TAILSCALE','dev.example','Build Session','opaque-search-secret']) {
+    for (final value in ['same','no-match','TAILSCALE','dev.example','Build-Session','opaque-search-secret']) {
       await query(tester,value);
       expect(tabs.tabs,isEmpty); expect(keys.signCalls,0); expect(keys.creates,0);
     }
@@ -117,7 +117,7 @@ void main() {
   });
   testWidgets('normal return home makes the exact blocked task searchable as history and recheckable',(tester) async {
     final catalog=HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
-    final profile=tabProfile('Review host','Review Work','100.64.0.1','direct','review'); await catalog.add(profile);
+    final profile=tabProfile('Review host','Review-Work','100.64.0.1','direct','review'); await catalog.add(profile);
     final tabs=HostTabs(),adapters=<String,summary_ui.SummaryWidgetAdapter>{};
     await summary_ui.setup(tester,catalog,tabs,adapters,width:320);
     final adapter=await summary_ui.connectHost(tester,profile,adapters);
@@ -126,7 +126,7 @@ void main() {
     await tapVisible(tester,'hosts-board-tab'); await tester.pumpAndSettle();
     expect(adapter.pauses,1);
     await chooseStatus(tester,'上次受阻，待核查（1）');
-    await query(tester,'review work'); expect(count(tester),'显示 1 / 1 台主机');
+    await query(tester,'review-work'); expect(count(tester),'显示 1 / 1 台主机');
     expect(tester.widget<DropdownButton<HostTaskFilter>>(find.byKey(const ValueKey('hosts-task-filter'))).value,HostTaskFilter.history);
     await tapVisible(tester,blockedSummaryGroupKey(profile.id)); await tester.pumpAndSettle();
     expect(find.text('上次报告 · 点击后重新核查此目标'),findsOneWidget);

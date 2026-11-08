@@ -25,7 +25,7 @@ Future<void> showReview(WidgetTester tester,ReviewCatalog catalog,MemoryZeroTier
 }
 Future<void> tapReview(WidgetTester tester,String key) async {
   final finder = find.byKey(ValueKey(key));
-  final scrollable = find.descendant(of:find.byKey(const ValueKey('zt-device-list')),matching:find.byType(Scrollable));
+  final scrollable = find.descendant(of:find.byKey(const ValueKey('zt-device-list')),matching:find.byType(Scrollable)).first;
   // A previous action can leave the viewport below a recycled target card.
   // Start from the top so scrollUntilVisible can reliably search downwards.
   tester.state<ScrollableState>(scrollable).position.jumpTo(0); await tester.pump();
@@ -37,7 +37,7 @@ void main() {
     final catalog=ReviewCatalog(),store=MemoryZeroTierDeviceStore()..current=const ZeroTierDeviceStatus.unavailable();
     catalog.profiles=[affectedHost(catalog.networkProfiles.first)];
     await showReview(tester,catalog,store);
-    final scrollable=find.descendant(of:find.byKey(const ValueKey('zt-device-list')),matching:find.byType(Scrollable));
+    final scrollable=find.descendant(of:find.byKey(const ValueKey('zt-device-list')),matching:find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.textContaining('完整影响范围 · 2 个网络 / 1 台主机'),200,scrollable:scrollable); await tester.pump();
     expect(find.textContaining('完整影响范围 · 2 个网络 / 1 台主机'),findsOneWidget);
     await tester.scrollUntilVisible(find.text('离线测试主机 · 停用'),200,scrollable:scrollable); await tester.pump();

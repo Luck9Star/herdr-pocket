@@ -153,6 +153,17 @@ def compile_all(groups, output, source, cc, cxx, env):
                 objects.append(obj)
     records.sort(key=lambda item: (item['group'], item['source']))
     failures = [record for record in records if record['exitCode']]
+    for failure in failures:
+        log = Path(failure['log'])
+        lines = log.read_text(encoding='utf-8').splitlines()
+        print('translation unit failed:', log.stem, 'exit code:', failure['exitCode'])
+        print('argv:', json.dumps(failure['argv']))
+        if len(lines) > 120:
+            print('\n'.join(lines[:20]))
+            print('... {} lines omitted ...'.format(len(lines) - 120))
+            print('\n'.join(lines[-100:]))
+        else:
+            print('\n'.join(lines))
     return objects, records, failures
 
 

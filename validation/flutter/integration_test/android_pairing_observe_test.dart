@@ -9,6 +9,7 @@ import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/main.dart' as app;
 import 'package:herdr_flutter_probe/device_keys.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
+import 'package:herdr_flutter_probe/host_catalog_search.dart' show HostTaskFilter;
 import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/pairing_public_key.dart';
 import 'package:herdr_flutter_probe/remote_page.dart';
@@ -396,7 +397,7 @@ Map<String,Object> tuiResumeSnapshot(WidgetTester tester,Terminal before,String 
   final result = <String,Object>{
     'schemaVersion':2,'actionsCompleted':actionsCompleted,
     'pageCount':count(pages),'pageBusy':false,'pagePaused':false,'pageLive':false,
-    'boardFreshness':'none','adapterPhase':'unknown','adapterError':'none','evidenceFull':false,
+    'boardFreshness':'none','adapterPhase':'unknown','adapterError':'none','adapterRetireMiss':'none','evidenceFull':false,
     'boardCount':count(find.byKey(const ValueKey('hosts-board-tab'))),
     'tabCount':count(find.byKey(ValueKey(tabKey))),
     'resumeCount':count(find.byKey(const ValueKey('remote-resume'))),
@@ -414,9 +415,13 @@ Map<String,Object> tuiResumeSnapshot(WidgetTester tester,Terminal before,String 
       'watch_failed','watch_retry_exhausted','resume_target_changed','observe_ended',
       'invalid_first_frame','invalid_frame','invalid_response','sequence_gap','cancelled'};
     final error = evidence.errorCode;
+    // Which channel roles missed their CLOSE deadline: observation, watch,
+    // snapshot, input; multiple misses join with '+' so one field stays bounded.
+    final retireMiss = evidence.channelRetireFailures.toList()..sort();
     result.addAll({'pageBusy':page.busy == true,'pagePaused':page.viewPaused == true,
       'pageLive':page.live == true,'boardFreshness':board?.freshness.name ?? 'none',
       'adapterPhase':evidence.observationPhase,'adapterError':error == null ? 'none' : errors.contains(error) ? error : 'other',
+      'adapterRetireMiss':retireMiss.isEmpty ? 'none' : retireMiss.join('+'),
       'evidenceFull':evidence.fullFrameReceived == true});
   }
   if (result['directCount'] == 1) result['directEnabled'] = tester.widget<ChoiceChip>(direct).onSelected != null;
@@ -541,6 +546,209 @@ Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
     }
   }
   return {'receipts':receipts,'screenChecks':checks,'observedInitialFull':true};
+}
+
+/// The visible production count line. Both numbers come from the widget, not
+/// from a value this test recomputed.
+({int shown,int total}) boardCounts(WidgetTester tester) {
+  final match=RegExp(r'^显示 ([0-9]+) / ([0-9]+) 台主机$')
+    .firstMatch(tester.widget<Text>(find.byKey(const ValueKey('hosts-filter-count'))).data ?? '');
+  if (match == null) throw StateError('board_filter_count_unreadable');
+  return (shown:int.parse(match.group(1)!),total:int.parse(match.group(2)!));
+}
+
+/// The production selector label, which carries its own host count.
+String taskFilterLabel(WidgetTester tester,HostTaskFilter value) {
+  final items=tester.widget<DropdownButton<HostTaskFilter>>(find.byKey(const ValueKey('hosts-task-filter'))).items!;
+  return (items.singleWhere((item) => item.value == value).child as Text).data ?? '';
+}
+int taskFilterCount(String label) {
+  final match=RegExp(r'（([0-9]+)）$').firstMatch(label);
+  if (match == null) throw StateError('board_task_filter_count_unreadable');
+  return int.parse(match.group(1)!);
+}
+
+/// Rows under the host's blocked group. Each row must display its own pane and
+/// terminal, so two same-name targets stay distinguishable on screen.
+List<({String paneId,String terminalId})> boardHistoryRows(WidgetTester tester,String hostId) {
+  final group=find.byKey(ValueKey(blockedSummaryGroupKey(hostId)));
+  final tiles=find.descendant(of:group,matching:find.byWidgetPredicate((widget) => widget is ListTile &&
+    widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('host-blocked-target-')));
+  final rows=<({String paneId,String terminalId})>[];
+  for (final tile in tester.widgetList<ListTile>(tiles)) {
+    final ids=(jsonDecode((tile.key! as ValueKey<String>).value.substring('host-blocked-target-'.length)) as List).cast<String>();
+    if (ids.length != 3) throw StateError('board_history_row_invalid');
+    final subtitle=(tile.subtitle as Text).data ?? '';
+    final shown=RegExp(r'pane (\S+) · terminal (\S+)$').firstMatch(subtitle);
+    if (shown == null || shown.group(1) != ids[1] || shown.group(2) != ids[2]) {
+      throw StateError('board_history_row_not_displayed');
+    }
+    rows.add((paneId:ids[1],terminalId:ids[2]));
+  }
+  return rows;
+}
+
+/// Drive the production board retrieval on the device: type a session fragment,
+/// pick the task-state selector, read both visible counts, open the history
+/// rows that keep two same-name targets apart, then clear the text and use the
+/// empty-result reset. Every published number is read back from a real widget.
+///
+/// The board filters only rebuild the visible list in memory, and this group
+/// performs no catalog reload, so no native call is added. Counting channel
+/// traffic directly would need an injected channel interceptor, which this
+/// public package must not contain.
+Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String session,String hostId,
+    void Function(String) stage) async {
+  final search=find.byKey(const ValueKey('hosts-search'));
+  final filter=find.byKey(const ValueKey('hosts-task-filter'));
+  await until(tester,() => search.evaluate().length == 1 && filter.evaluate().length == 1);
+  stage('board_search_text');
+  await tester.ensureVisible(search);
+  await tester.enterText(search,session); await tester.pump();
+  final textMatched=boardCounts(tester).shown;
+  if (textMatched < 1) throw StateError('board_search_text_no_match');
+  stage('board_search_state');
+  final currentCount=taskFilterCount(taskFilterLabel(tester,HostTaskFilter.current));
+  final historyLabel=taskFilterLabel(tester,HostTaskFilter.history);
+  final historyCount=taskFilterCount(historyLabel);
+  if (historyCount < 1) throw StateError('board_search_history_empty');
+  await tapStablePointer(tester,filter);
+  await tapPopupOption(tester,find.text(historyLabel));
+  await until(tester,() => tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.history);
+  stage('board_search_count');
+  final counts=boardCounts(tester);
+  if (counts.shown < 1 || counts.shown > counts.total) throw StateError('board_search_count_invalid');
+  stage('board_search_history');
+  final group=find.byKey(ValueKey(blockedSummaryGroupKey(hostId)));
+  await until(tester,() => group.evaluate().length == 1);
+  final rows=find.descendant(of:group,matching:find.byWidgetPredicate((widget) => widget is ListTile &&
+    widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('host-blocked-target-')));
+  await until(tester,() => rows.evaluate().isNotEmpty);
+  // A collapsed group keeps its rows in the tree but clips them away, so the
+  // expansion is read from the rendered row and not from the widget list.
+  await tester.ensureVisible(rows.first); await tester.pump();
+  if (rows.first.hitTestable().evaluate().length == 1) {
+    await tap(tester,group); // Collapse the group the blocked review left open.
+    await until(tester,() => rows.first.hitTestable().evaluate().isEmpty);
+  }
+  await tap(tester,group);
+  await tester.ensureVisible(rows.first); await tester.pump();
+  await until(tester,() => rows.first.hitTestable().evaluate().length == 1);
+  final history=boardHistoryRows(tester,hostId);
+  if (history.isEmpty) throw StateError('board_search_history_empty');
+  final distinct=history.map((row) => '${row.paneId} ${row.terminalId}').toSet();
+  if (distinct.length != history.length) throw StateError('board_search_history_indistinguishable');
+  stage('board_search_clear');
+  await tapKey(tester,'hosts-search-clear');
+  final cleared=boardCounts(tester);
+  final clearedKeptState=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.history &&
+    cleared.shown == historyCount;
+  if (!clearedKeptState) throw StateError('board_search_clear_dropped_state');
+  // The production reset control exists only on an empty result.
+  await tester.enterText(search,'zz-no-such-entry'); await tester.pump();
+  await until(tester,() => find.byKey(const ValueKey('hosts-search-empty')).evaluate().length == 1 &&
+    find.byKey(const ValueKey('hosts-filters-reset')).evaluate().length == 1);
+  await tapKey(tester,'hosts-filters-reset');
+  final restored=boardCounts(tester);
+  final resetRestoredList=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.all &&
+    (tester.widget<TextField>(search).controller?.text ?? '') == '' && restored.shown == restored.total;
+  if (!resetRestoredList) throw StateError('board_search_clear_reset_failed');
+  final evidence=<String,Object>{
+    'textMatched':textMatched,'dualConditionCount':counts.shown,'totalHosts':counts.total,
+    'currentCount':currentCount,'historyCount':historyCount,'historyRows':history.length,
+    'historyDistinguished':true,'clearedKeptState':true,'resetRestoredList':true,'nativeCallsAdded':0};
+  if (evidence.values.whereType<int>().any((value) => value < 0 || value > 64)) {
+    throw StateError('board_search_evidence_out_of_bounds');
+  }
+  return evidence;
+}
+
+/// Map the visible device status line and scope list to the three published
+/// classes (docs/55): an unreadable host/network catalog shows an unknown
+/// scope, an unbound or locked device service shows an unreadable device
+/// state with the scope still listed, and a stored pending operation shows the
+/// pending class. A confirmed present or absent identity cannot be expressed
+/// by that contract, so such a display fails the stage instead of coercing
+/// itself into a class.
+String deviceStateClass(WidgetTester tester) {
+  if (find.byKey(const ValueKey('zt-impact-unknown')).evaluate().isNotEmpty) return 'catalog_blocked';
+  final state=tester.widget<Text>(find.byKey(const ValueKey('zt-device-state'))).data ?? '';
+  if (state.startsWith('尚未确认')) return ''; // The status read is still running.
+  if (state.startsWith('设备身份暂不可用')) return 'unknown';
+  if (state.startsWith('有未完成操作')) return 'pending';
+  throw StateError('device_state_unclassified');
+}
+
+/// Identity controls that could change a device identity. The count is the
+/// number of enabled ones in the visible review.
+int enabledIdentityActions(WidgetTester tester) {
+  var count=0;
+  for (final key in const ['zt-device-create','zt-device-review','zt-device-forget','zt-pending-confirm',
+    'zt-pending-review-recoverPendingCreation','zt-pending-review-discardPendingCreation',
+    'zt-pending-review-recoverPendingDeletion']) {
+    final control=find.byKey(ValueKey(key));
+    if (control.evaluate().length == 1 && tester.widget<ButtonStyleButton>(control).onPressed != null) count++;
+  }
+  return count;
+}
+
+/// Read the shared-device review on the device. This group never taps an
+/// identity action: the status line decides whether such an action is even
+/// offered, and on this build the native engine is not bound, so the review
+/// only shows the unreadable state. No network is joined and no device
+/// identity is created, changed or removed.
+Future<Map<String,Object>> exerciseDeviceImpact(WidgetTester tester,void Function(String) stage) async {
+  stage('device_impact_enter');
+  await tapKey(tester,'hosts-networks');
+  final entry=find.byKey(const ValueKey('networks-zerotier-device'));
+  await until(tester,() => entry.evaluate().length == 1 &&
+    tester.widget<OutlinedButton>(entry).onPressed != null);
+  await tap(tester,entry);
+  await until(tester,() => find.byKey(const ValueKey('zt-device-list')).evaluate().length == 1);
+  var rereadCalls=1; // The review reads the device status once when it opens.
+  stage('device_impact_scope');
+  var statusClass='';
+  await until(tester,() { statusClass=deviceStateClass(tester); return statusClass.isNotEmpty; },seconds:30);
+  final scopeListed=find.textContaining('完整影响范围 · ').evaluate().isNotEmpty;
+  if (statusClass == 'catalog_blocked' && scopeListed) throw StateError('device_impact_scope_inconsistent');
+  if (statusClass == 'unknown' && !scopeListed) throw StateError('device_impact_scope_not_listed');
+  stage('device_impact_reread');
+  final refresh=find.byKey(const ValueKey('zt-device-refresh'));
+  // An enabled re-read control means the previous read has settled.
+  await until(tester,() => refresh.evaluate().length == 1 &&
+    tester.widget<OutlinedButton>(refresh).onPressed != null);
+  await tap(tester,refresh);
+  rereadCalls++; // One explicit re-read of the original status.
+  var rereadClass='';
+  await until(tester,() { rereadClass=deviceStateClass(tester); return rereadClass.isNotEmpty; },seconds:30);
+  if (rereadClass != statusClass) throw StateError('device_impact_reread_class_changed');
+  stage('device_remove_blocked');
+  final actions=enabledIdentityActions(tester);
+  // Removing an identity needs the original identity, the full scope and the
+  // stop proofs, so an unreadable or blocked state offers no identity action.
+  if ((statusClass == 'unknown' || statusClass == 'catalog_blocked') && actions != 0) {
+    throw StateError('device_remove_not_blocked');
+  }
+  await tapKey(tester,'zt-device-close');
+  await until(tester,() => find.byKey(const ValueKey('zt-device-list')).evaluate().isEmpty);
+  await until(tester,() => entry.evaluate().length == 1 &&
+    tester.widget<OutlinedButton>(entry).onPressed != null);
+  await tap(tester,entry);
+  await until(tester,() => find.byKey(const ValueKey('zt-device-list')).evaluate().length == 1);
+  rereadCalls++; // The re-entered review reads the device status again.
+  var reenteredClass='';
+  await until(tester,() { reenteredClass=deviceStateClass(tester); return reenteredClass.isNotEmpty; },seconds:30);
+  if (reenteredClass != statusClass) throw StateError('device_impact_reentry_class_changed');
+  if (enabledIdentityActions(tester) != actions) throw StateError('device_impact_reentry_changed_actions');
+  await tapKey(tester,'zt-device-close');
+  await until(tester,() => find.byKey(const ValueKey('zt-device-list')).evaluate().isEmpty);
+  await tester.pageBack(); await tester.pump(const Duration(milliseconds:400));
+  await until(tester,() => find.byKey(const ValueKey('hosts-add')).evaluate().length == 1);
+  // writeCalls counts identity writes dispatched by this group: none. The only
+  // controls it pressed are the re-read, the close and the re-entry, and on an
+  // unreadable or blocked state every identity action stays disabled.
+  return <String,Object>{'statusClass':statusClass,'scopeListed':scopeListed,'deviceActions':actions,
+    'rereadCalls':rereadCalls,'reentered':true,'writeCalls':0};
 }
 
 // Independent ephemeral identity. It never enters the host catalog or pairing.
@@ -868,6 +1076,8 @@ void main() {
     await until(tester,() => (displayedSequence(tester) ?? -1) > deltaSequence);
     final inputReceipts = <Map<String,Object>>[];
     Map<String,Object>? blockedTargetEvidence;
+    Map<String,Object>? boardSearchEvidence;
+    Map<String,Object>? deviceImpactEvidence;
     List<int>? restoredViewport;
     Map<String,Object>? tuiEvidence;
     if (guardedInput) {
@@ -1138,6 +1348,12 @@ void main() {
         'reviewRequired':true,'observing':true,'markerMatched':true,'otherMarkerAbsent':true};
       stage('blocked_return');
       await tapKey(tester,'hosts-board-tab');
+      // The board and the shared-device review are driven on the device. The
+      // nine new stages below publish their evidence through the two optional
+      // result keys; a failure inside a group reports its stage name only,
+      // because a partial group cannot satisfy the published bounds.
+      boardSearchEvidence = await exerciseBoardSearch(tester,target['session'] as String,id,stage);
+      deviceImpactEvidence = await exerciseDeviceImpact(tester,stage);
     }
     stage('delete_local_identity');
     await tapKey(tester,'host-delete-$id');
@@ -1159,7 +1375,8 @@ void main() {
       'identityCreationActions':identityCreationActions,'firstSequence':firstSequence,'deltaSequence':deltaSequence,
       'localFontMarkerColumns':fontDiagnostics.markers,
       'localThemePromptCursors':fontDiagnostics.themes,
-      if (!guardedInput) ...{'observerCanvas':observerCanvas,'blockedTargetEvidence':blockedTargetEvidence},
+      if (!guardedInput) ...{'observerCanvas':observerCanvas,'blockedTargetEvidence':blockedTargetEvidence,
+        'boardSearchEvidence':boardSearchEvidence,'deviceImpactEvidence':deviceImpactEvidence},
       'frameCountLowerBound':2,'deltaCountLowerBound':1,
       if (guardedInput) ...{
         'guardedInput':true,'directInputAccepted':true,'draftInputAccepted':true,

@@ -1,6 +1,6 @@
 # 未完成的网络流草稿
 
-2026-11-07。`0008-streams-in-progress.patch` 仅保存本轮临时目录中已写出的修改，基于 `98473a6` 对应的 0005／0006／0007 候选源码。它**未列入** `zerotier-candidate.json`，不是可用于 App 构建的已验证候选。配套 JSON 固定 15 个变更文件的前后 SHA，防止后续把不同源码的测试混为一次结果。
+2026-11-07。`0008-streams-in-progress.patch` 仅保存本轮临时目录中已写出的修改，基于 `98473a6` 对应的 0005／0006／0007 候选源码。它**未列入** `zerotier-candidate.json`，不是可用于 App 构建的已验证候选。配套 JSON 固定 14 个变更文件的前后 SHA，防止后续把不同源码的测试混为一次结果。
 
 此草稿在编写定向 socket、netif generation、按网络退出和 IPv6 改址恢复时中断。历史 v6 的 114 项真实 lwIP 内存网络检查，发生在之后的源码修改之前；不能据此证明本草稿或当前 manager 通过。`tap_reconfig_test.cpp` 尚无执行证据；完整 Mac 库也未基于此草稿重建。
 

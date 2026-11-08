@@ -3,7 +3,7 @@
   "date": "2026-11-07",
   "baseCommit": "98473a699a055006e60b8c5c92ecdd54a28c13d3",
   "base": "pinned candidate after patches 0005/0006/0007",
-  "patchSha256": "691bf868941c0d072946d076f02a6cc39391832676ae0f752f5aa2f49748e108",
+  "patchSha256": "02110a48023360025ae574c9eff60500b5dc027756c1708884a07a5b73f20456",
   "files": [
     {
       "path": "ext/lwip/src/api/sockets.c",
@@ -49,11 +49,6 @@
       "path": "ext/lwip/src/include/lwip/priv/tcp_priv.h",
       "before": "547929dbf334d846444094ecb363680bf90320b198ac1e49027fda4049c07233",
       "after": "56d41a05a7421e5d61521eed78a7ec17d632533882e8407dbfde7f801480bfe6"
-    },
-    {
-      "path": "include/hp_zt_bound.h",
-      "before": null,
-      "after": "5eb3d9803ff27dc247ba8b1aff64415e7f59bcf4d800fe724de96a963e2307be"
     },
     {
       "path": "src/HpBoundRoutes.cpp",

@@ -634,13 +634,13 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   // entirely, so the expansion is read from hit-testability and not from
   // the widget list.
   await tester.ensureVisible(rows.first); await tester.pump();
-  if (rows.hitTestable().evaluate().length == 1) {
+  if (rows.hitTestable().evaluate().isNotEmpty) {
     await tap(tester,group); // Collapse the group the blocked review left open.
     await until(tester,() => rows.hitTestable().evaluate().isEmpty);
   }
   await tap(tester,group);
+  await until(tester,() => rows.hitTestable().evaluate().isNotEmpty);
   await tester.ensureVisible(rows.first); await tester.pump();
-  await until(tester,() => rows.first.hitTestable().evaluate().length == 1);
   final history=boardHistoryRows(tester,hostId);
   if (history.isEmpty) throw StateError('board_search_history_empty');
   final distinct=history.map((row) => '${row.paneId} ${row.terminalId}').toSet();

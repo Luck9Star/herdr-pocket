@@ -34,12 +34,12 @@
     {
       "path": "zerotier-runtime/hp_zt_manager.h",
       "destination": "src/hp_zt_manager.h",
-      "sha256": "39d606878f17843abd63db0de5e4163346334cc0104cc715a0eb30b66abe80e3"
+      "sha256": "0d476e9f5bb73a2a37814664669ba896d8eb6cf2fe115f8790ef3402096fc8c2"
     },
     {
       "path": "zerotier-runtime/manager.cpp",
       "destination": "src/hp_zt_manager.cpp",
-      "sha256": "b33305cf145073c81b6ab2989e0540444495eebc81b2bccc28fb84605f6365d0"
+      "sha256": "b6c936e7aa8a8e7fc61db8c3272b756d1dc934e7f37acdc7d197fe7735857c8a"
     }
   ],
   "validationFiles": [
@@ -81,11 +81,11 @@
     },
     {
       "path": "zerotier-runtime/tests/manager_test.cpp",
-      "sha256": "e5290a0ae68a05881068913c794d6c38bdc8a0e1c66859ee1196ebef9f0a8ebd"
+      "sha256": "fc75ea2df35bd70eac2fefbf4dcf89f52198f528051138f4840f0c49e00a01df"
     },
     {
       "path": "zerotier-runtime/tests/run_manager.py",
-      "sha256": "dceb58d702d6098e970ec3bc078163c33dc1ba892cd327d7b37face3d300b363"
+      "sha256": "084e4d5a025f9c8b37d15c6911772369aa147744e111f6be1f81fb5ad4b88505"
     }
   ],
   "beforeFiles": {
@@ -122,8 +122,8 @@
     "src/hp_zt.h": "5ef8d7cf4ffa539a1d0cc1573d3d19147dde2cbe6b4c2b25ba018895c40e43ad",
     "src/hp_zt_identity.cpp": "6338b0697fa16e0e475ce1f365cfc85836be5ed4434b6f0bef2d5c13cb3e6992",
     "src/hp_zt_lifecycle.cpp": "c56bf26c15b6df94967372e82e19e10b7ad49f6d7ca5439c62b8f2ad5f86b693",
-    "src/hp_zt_manager.cpp": "b33305cf145073c81b6ab2989e0540444495eebc81b2bccc28fb84605f6365d0",
-    "src/hp_zt_manager.h": "39d606878f17843abd63db0de5e4163346334cc0104cc715a0eb30b66abe80e3"
+    "src/hp_zt_manager.cpp": "b6c936e7aa8a8e7fc61db8c3272b756d1dc934e7f37acdc7d197fe7735857c8a",
+    "src/hp_zt_manager.h": "0d476e9f5bb73a2a37814664669ba896d8eb6cf2fe115f8790ef3402096fc8c2"
   },
   "scope": "Fixed ZeroTier source with defined ECC arithmetic and device/network control-plane candidate. Offline full ASan/UBSan/vector tests have no ECC exclusion; separate library load checks do not establish node, route, socket, JNI, device or network support."
 }

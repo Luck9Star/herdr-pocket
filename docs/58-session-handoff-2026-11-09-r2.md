@@ -246,9 +246,11 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
 - [x] Stage 2 门控范围审计（三层排除 + A/B/C 改动清单 + S1→S5）
 - [x] 本文档 + docs/56 指针更新
 - [x] `32a77c7` diff 独立审查结论：**GO**（零 CRITICAL/HIGH/MEDIUM，58 项全绿无 skip）
-- [ ] 复核工作树干净（仅 `?? graphify-out/`）
-- [ ] 推 0010 触发分支（守卫 `git diff --cached --name-only | grep graphify-out` 为空）
-- [ ] 后台 until 循环等 run 终态
-- [ ] 读 `counterContext` / `counterClickContext` / `homeStatus`，定案 `no_ipc` 三选一
-- [ ] 验证 flutter-device-key 过 board_search_history
+- [x] 复核工作树干净（仅 `?? graphify-out/`）——第三棒核实
+- [x] 推 0010 触发分支（`codex/network-batch/with-emulators-zerotier-0010-3a3b86a`，run `42543432734` 已终态）
+- [x] 后台 until 循环等 run 终态（0010 failure：7 绿 / 2 device-key 败 / 2 input 跳过；`zerotier-android-abi` 绿＝0009 首次 CI 编译通过）
+- [x] 读 `counterContext` / `counterClickContext` / `homeStatus`——**三选一签名表全部不成立，前提已推翻**：真实根因是 harness 插桩缺陷（tauri 2.12.5 `internals.invoke/ipc/postMessage` 全为不可写 defineProperty，赋值静默无效；旧版脚本假成功路径 → 前几轮 `no_ipc` 同源）。修复 `f7b8e9c`（插桩改挂 `window.ipc` 原生桥）+ `f074a70`（失败上报 ipcProbe 描述符探测）。
+- [x] 验证 flutter-device-key 过 board_search_history——`1a37f17` 生效；新败点 `board_search_clear`＝懒 ListView 回收（滚动后清除按钮出 viewport），修复 `505eba6`（点击前 `jumpTo(0)` 回顶）。
+- [x] 分支整理（第三棒）：本地删 16 支 + main 追平 + 释放 pairing-retry worktree；远端删 39 支（43→3，删前核实无 in-progress run/PR）。待用户裁决：本地 `codex/zerotier-apk-wiring-20261108`（独有 0ab7f76）与远端 `codex/android-baseline-20261105`（独有 b086299）。
+- [ ] 0011 轮（run `42548234405`，分支 `...-0011-505eba6`，HEAD `505eba6`）终态判读：android 看 counter 真计数或 `counterContext.ipcProbe` 定案 `window.ipc` 可写性；flutter 看 `board_search_clear` 之后阶段
 - [ ] **等用户明示授权**后才动 Stage 2 门控（建议先批 S1+S2）

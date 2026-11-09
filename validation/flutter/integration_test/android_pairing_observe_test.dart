@@ -682,19 +682,27 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   // failed this tap with a different signature). Wait for every scheduled
   // frame to drain so the top controls are deterministically built.
   await tester.pumpAndSettle(const Duration(milliseconds: 100));
-  // Four CI runs failed this stage's taps with different signatures (60s
-  // until, empty finder at tap, 10s stable-until timeout twice). Capture the
-  // exact page state right before the pointer so a fifth failure reports
-  // which precondition is missing through the boardSearch evidence channel.
+  // Runs 42548234405/42549882281/42553557053 failed this tap with three
+  // different signatures, and 42556512895 was killed outright at this stage
+  // (flutter_android_test_exited, no failure.json). The 60-second until
+  // spins were also burning the 6-minute test budget. Fail fast here with
+  // the evidence snapshot instead of another blind wait.
+  final clearButton=find.byKey(const ValueKey('hosts-search-clear'));
+  if (clearButton.evaluate().length != 1) {
+    boardSearchFailureProbe = <String,Object>{
+      'textMatched':textMatched,'dualConditionCount':counts.shown,'totalHosts':counts.total,
+      'currentCount':currentCount,'historyCount':historyCount,'historyRows':history.length,
+      'historyDistinguished':true,'clearedKeptState':false,'resetRestoredList':false,'nativeCallsAdded':0};
+    throw StateError('board_search_clear_clear_missing');
+  }
   boardSearchFailureProbe = <String,Object>{
     'textMatched':textMatched,'dualConditionCount':counts.shown,'totalHosts':counts.total,
     'currentCount':currentCount,'historyCount':historyCount,'historyRows':history.length,
     'historyDistinguished':true,'clearedKeptState':false,'resetRestoredList':false,'nativeCallsAdded':0};
-  // Use the stable-pointer tap: between the until() wait and the actual
-  // pointer, a settling lazy list can rebuild this suffix control again
-  // (run 42549882281 failed as FlutterError at the plain tap). The stable
-  // helper re-resolves a hit-testable target on every poll and taps once.
-  await tapStablePointer(tester,find.byKey(const ValueKey('hosts-search-clear')));
+  // Use the stable-pointer tap: between the wait and the pointer, a settling
+  // lazy list can rebuild this suffix control again. The stable helper
+  // re-resolves a hit-testable target on every poll and taps once.
+  await tapStablePointer(tester,clearButton);
   final cleared=boardCounts(tester);
   final clearedKeptState=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.history &&
     cleared.shown == historyCount;

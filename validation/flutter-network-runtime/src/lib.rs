@@ -6,8 +6,8 @@ compile_error!("synthetic native fixture is forbidden in Android app builds");
 use herdr_readonly_transport::{
     Cancellation,
     mobile_nodes::{
-        Binding, BindingProvider, MobileNodeService, NativeStateSource, SecureConfigSource,
-        Snapshot, State,
+        Binding, BindingProvider, MobileNodeService, NativeDeviceSource, NativeStateSource,
+        SecureConfigSource, Snapshot, State,
     },
     tailscale_settings::TailscaleSettings,
     transport::{ByteStream, Dialer},
@@ -57,6 +57,9 @@ trait SourceFactory: Send + Sync {
     ) -> Result<Arc<dyn NativeStateSource>> {
         Err("overlay_provider_unavailable")
     }
+    fn create_zerotier(&self, _binding: &Binding) -> Result<Arc<dyn NativeDeviceSource>> {
+        Err("overlay_provider_unavailable")
+    }
 }
 struct AndroidSource;
 impl SourceFactory for AndroidSource {
@@ -92,18 +95,15 @@ impl SourceFactory for AndroidSource {
                 }
                 Ok(())
             }
+            #[cfg(feature = "network-zerotier")]
             BindingProvider::ZeroTier => {
-                if !cfg!(feature = "network-zerotier") {
-                    return Err("overlay_provider_unavailable");
-                }
-                #[cfg(feature = "network-zerotier")]
-                {
-                    if !herdr_android_network_source::is_zerotier_initialized() {
-                        return Err("network_native_context_unavailable");
-                    }
+                if !herdr_android_network_source::is_zerotier_initialized() {
+                    return Err("network_native_context_unavailable");
                 }
                 Ok(())
             }
+            #[cfg(not(feature = "network-zerotier"))]
+            BindingProvider::ZeroTier => Err("overlay_provider_unavailable"),
         }
     }
     fn create_tailscale(
@@ -122,11 +122,25 @@ impl SourceFactory for AndroidSource {
         )
         .map(|source| Arc::new(source) as Arc<dyn NativeStateSource>)
     }
+    #[cfg(feature = "network-zerotier")]
+    fn create_zerotier(&self, binding: &Binding) -> Result<Arc<dyn NativeDeviceSource>> {
+        self.available_for(&BindingProvider::ZeroTier)?;
+        herdr_readonly_transport::android_zerotier::AndroidZeroTierSource::new(
+            binding.profile_id().into(),
+            binding.profile_revision(),
+            binding.network_name().into(),
+            binding.identity_ref().into(),
+        )
+        .map_err(|_| "network_identity_unavailable")
+        .map(|source| Arc::new(source) as Arc<dyn NativeDeviceSource>)
+    }
 }
 
 enum StartSource {
     EasyTier(Arc<dyn SecureConfigSource>),
     Tailscale(Arc<dyn NativeStateSource>),
+    #[cfg(feature = "network-zerotier")]
+    ZeroTier(Arc<dyn NativeDeviceSource>),
 }
 
 #[derive(Default)]
@@ -502,7 +516,16 @@ impl Bridge {
                 self.factory.available_for(provider)?;
                 StartSource::Tailscale(self.factory.create_tailscale(&args.binding, &settings)?)
             }
-            _ => return Err("overlay_provider_unavailable"),
+            #[cfg(feature = "network-zerotier")]
+            BindingProvider::ZeroTier => {
+                if args.peers.is_some() || args.settings.is_some() {
+                    return Err("invalid_network_request");
+                }
+                self.factory.available_for(provider)?;
+                StartSource::ZeroTier(self.factory.create_zerotier(&args.binding)?)
+            }
+            #[cfg(not(feature = "network-zerotier"))]
+            BindingProvider::ZeroTier => return Err("overlay_provider_unavailable"),
         };
         let (generation, cancel) = {
             let mut registry = lock(&self.registry);
@@ -536,6 +559,12 @@ impl Bridge {
                 StartSource::Tailscale(source) => {
                     self.service
                         .start_tailscale(args.binding.clone(), source, DEADLINE, cancel.clone())
+                        .await
+                }
+                #[cfg(feature = "network-zerotier")]
+                StartSource::ZeroTier(source) => {
+                    self.service
+                        .start_zerotier(args.binding.clone(), source, DEADLINE, cancel.clone())
                         .await
                 }
             }

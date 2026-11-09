@@ -697,6 +697,7 @@ name = "herdr-readonly-transport"
 version = "0.1.0"
 dependencies = [
  "base64ct",
+ "herdr-android-network-source",
  "herdr-overlay-runtime-probe",
  "libc",
  "ring",

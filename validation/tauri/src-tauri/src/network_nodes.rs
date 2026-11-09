@@ -225,6 +225,7 @@ pub fn provider_name(provider: Provider) -> Result<&'static str, String> {
     match provider {
         Provider::Easytier => Ok("easytier"),
         Provider::Tailscale => Ok("tailscale"),
+        Provider::Zerotier => Ok("zerotier"),
         _ => Err("overlay_provider_unavailable".into()),
     }
 }
@@ -232,6 +233,7 @@ pub fn provider_available(provider: Provider) -> bool {
     match provider {
         Provider::Easytier => cfg!(all(target_os = "android", feature = "network-easytier")),
         Provider::Tailscale => cfg!(all(target_os = "android", feature = "network-tailscale")),
+        Provider::Zerotier => cfg!(all(target_os = "android", feature = "network-zerotier")),
         _ => false,
     }
 }
@@ -241,6 +243,16 @@ fn initialized(provider: Provider) -> bool {
         && match provider {
             Provider::Easytier => herdr_android_network_source::is_initialized(),
             Provider::Tailscale => herdr_android_network_source::is_tailscale_initialized(),
+            Provider::Zerotier => {
+                #[cfg(feature = "network-zerotier")]
+                {
+                    herdr_android_network_source::is_zerotier_initialized()
+                }
+                #[cfg(not(feature = "network-zerotier"))]
+                {
+                    false
+                }
+            }
             _ => false,
         }
 }
@@ -275,6 +287,13 @@ pub fn binding_for(profile: &NetworkProfile, handle: String) -> Result<Binding, 
                 handle,
             )
         }
+        (Provider::Zerotier, Settings::Zerotier { network_id }) => Binding::with_provider(
+            BindingProvider::ZeroTier,
+            profile.id.clone(),
+            profile.revision,
+            network_id.clone(),
+            handle,
+        ),
         _ => return Err("overlay_provider_unavailable".into()),
     }
     .map_err(str::to_string)
@@ -432,6 +451,19 @@ impl Nodes {
                     .map_err(|_| "network_identity_unavailable")?;
                     self.service
                         .start_tailscale(binding, Arc::new(source), Duration::from_secs(10), cancel)
+                        .await
+                }
+                #[cfg(feature = "network-zerotier")]
+                (Provider::Zerotier, Settings::Zerotier { network_id }) => {
+                    let source = herdr_readonly_transport::android_zerotier::AndroidZeroTierSource::new(
+                        profile.id.clone(),
+                        profile.revision,
+                        network_id.clone(),
+                        handle,
+                    )
+                    .map_err(|_| "network_identity_unavailable")?;
+                    self.service
+                        .start_zerotier(binding, Arc::new(source), Duration::from_secs(10), cancel)
                         .await
                 }
                 _ => return Err("overlay_provider_unavailable"),

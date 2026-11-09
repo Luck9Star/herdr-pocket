@@ -691,11 +691,11 @@ class PublicExchangeGuards(unittest.TestCase):
 
 
 class CleanupGuards(PreparedFixture):
-    def exercise(self, fail_reverse_cleanup=False, fail_signer=False, guarded=False, fail_checkpoint=None):
+    def exercise(self, fail_reverse_cleanup=False, fail_signer=False, guarded=False, fail_checkpoint=None, adb_failure=None):
         self.prepared(); args = self.args()
         args.android_guarded_input = guarded
         if guarded: args.input_fixture = 'owned-mobile-fixture'
-        state = {'installed': False, 'reverse': False}
+        state = {'installed': False, 'reverse': False, 'adbFailed': False}
         original = (gui.SERIAL, 'tcp:55000', 'tcp:55001')
         owned = (gui.SERIAL, 'tcp:56000', 'tcp:56001')
         forwards = {original}
@@ -726,6 +726,11 @@ class CleanupGuards(PreparedFixture):
                     self.assertTrue((args.output/'flutter-android-system-ime-failure.json').is_file())
         def adb(*parts, **kwargs):
             calls.append(parts)
+            if adb_failure is not None and parts[:1] == adb_failure['verb'] and not state['adbFailed']:
+                state['adbFailed'] = True
+                failure = gui.DeviceFailure('flutter_android_adb_failed')
+                failure.adb_diagnostic = dict(adb_failure['diagnostic'])
+                raise failure
             if fail_checkpoint == 'ack' and parts[-1:] == ('cache/herdr-flutter-android-123/checkpoint-ack.new',):
                 raise gui.DeviceFailure('synthetic_checkpoint_ack_failure')
             if parts[:2] == ('reverse', '--remove'):
@@ -781,7 +786,11 @@ class CleanupGuards(PreparedFixture):
                 patch.object(gui, 'wait_public', side_effect=wait_public), \
                 patch.object(gui, 'verify_signer', side_effect=gui.DeviceFailure('flutter_android_signer_verification_failed') if fail_signer else None,
                     return_value={'stage':'complete','signatureVerified':True,'deleteReturned':True,'readRejected':True}):
-            if fail_reverse_cleanup:
+            if adb_failure is not None:
+                with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_adb_failed$'):
+                    gui._run(args, self.fixture_root, self.env, self.config, approval, process)
+                result = None
+            elif fail_reverse_cleanup:
                 expected = 'flutter_android_signer_verification_failed' if fail_signer else 'flutter_android_cleanup_failed'
                 with self.assertRaisesRegex(gui.DeviceFailure, '^' + expected + '$'):
                     gui._run(args, self.fixture_root, self.env, self.config, approval, process)
@@ -802,14 +811,17 @@ class CleanupGuards(PreparedFixture):
                 result = gui._run(args, self.fixture_root, self.env, self.config, approval, process)
         self.assertEqual(forwards, {original})
         self.assertFalse(state['installed'])
-        self.assertIn(('uninstall', gui.PACKAGE), calls)
-        self.assertEqual(calls.count(('uninstall', gui.PACKAGE)), 1)
-        self.assertNotIn(('forward', '--remove', original[1]), calls)
+        if adb_failure is None:
+            # A failure before the app is installed leaves nothing to uninstall.
+            self.assertIn(('uninstall', gui.PACKAGE), calls)
+            self.assertEqual(calls.count(('uninstall', gui.PACKAGE)), 1)
+            self.assertNotIn(('forward', '--remove', original[1]), calls)
         self.assertFalse((self.fixture_root / 'flutter-android-public-defines.json').exists())
         cleanup = json.loads((args.output / 'flutter-android-device-cleanup.json').read_text())
         evidence = json.loads((args.output / 'flutter-android-signer-probe.json').read_text())
-        self.assertEqual(evidence['signatureVerified'], not fail_signer)
-        self.assertEqual(evidence['stage'], 'verification_failed' if fail_signer else 'complete')
+        if adb_failure is None:
+            self.assertEqual(evidence['signatureVerified'], not fail_signer)
+            self.assertEqual(evidence['stage'], 'verification_failed' if fail_signer else 'complete')
         return result, cleanup
 
     def test_only_owned_package_reverse_and_new_vm_forward_are_cleaned(self):
@@ -861,6 +873,14 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(gui._adb_command_class(('shell', '-T', 'run-as', 'pkg', 'head')), 'shell')
         self.assertEqual(gui._adb_command_class(('exec-out', 'cat', 'file')), 'exec-out')
         self.assertEqual(gui._adb_command_class(('unknown-verb', 'secret-value')), 'other')
+
+    def test_an_adb_failure_is_written_into_the_published_failure_report(self):
+        diagnostic={'command':'shell','exitCode':1,'stdoutBytes':0,'stderrBytes':14}
+        self.exercise(adb_failure={'verb':('reverse',),'diagnostic':diagnostic})
+        report=json.loads((self.runner/'output/flutter-android-test-failure.json').read_text())
+        self.assertEqual(report['adbDiagnostic'],diagnostic)
+        self.assertEqual(report['failure'],None)
+        self.assertNotIn('PRIVATE',json.dumps(report))
 
     def test_failed_cleanup_is_recorded_and_cannot_return_passed(self):
         result, cleanup = self.exercise(fail_reverse_cleanup=True)

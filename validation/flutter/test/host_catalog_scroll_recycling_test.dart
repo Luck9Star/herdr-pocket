@@ -65,11 +65,16 @@ void main() {
 
   testWidgets('the completion notice at the list top is readable again after scrolling away',(tester) async {
     final catalog=HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+    // Two hosts make the board tall enough that the delete button sits below
+    // the fold and the completion notice (rendered at the list top) is
+    // recycled while the board is scrolled down.
     final a=tabProfile('Host A','Build-Session','100.64.0.1','direct','opaque-a');
-    await catalog.add(a);
+    final b=tabProfile('Host B','Other-Session','100.64.0.2','direct','opaque-b');
+    await catalog.add(a); await catalog.add(b);
     final tabs=HostTabs(),keys=TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
     await mountBoard(tester,catalog,tabs,keys);
 
+    // Scroll the delete button into view, which leaves the list top recycled.
     final deleteControl=find.byKey(ValueKey('host-delete-${a.id}'));
     await tester.scrollUntilVisible(deleteControl,300,scrollable:boardScrollable());
     await tester.pump();
@@ -77,11 +82,16 @@ void main() {
     expect(find.text('删除本机资料与设备身份'),findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton,'仅删除本机'));
     await tester.pumpAndSettle();
-    // The notice renders at the list top, so a scrolled-away board hides it.
+    // The deletion itself has completed...
+    expect(catalog.profiles.any((profile) => profile.id == a.id),isFalse);
+    // ...but its notice row is still out of the tree while the board stays
+    // scrolled; a caller that waits for the text without scrolling spins.
+    expect(find.textContaining('本机已删除 · 主机授权未因此撤销').evaluate().isEmpty,isTrue,
+      reason:'the notice must be recycled while the board is scrolled away');
+    // Scrolling back to the top rebuilds the notice row.
     tester.state<ScrollableState>(boardScrollable()).position.jumpTo(0);
     await tester.pump();
     expect(find.textContaining('本机已删除 · 主机授权未因此撤销'),findsOneWidget);
-    expect(catalog.profiles.any((profile) => profile.id == a.id),isFalse);
     await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
   });
 }

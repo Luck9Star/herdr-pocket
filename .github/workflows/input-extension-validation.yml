@@ -7,16 +7,11 @@ on:
         type: boolean
         required: false
         default: false
-      cache_seed:
-        description: Allow the default-branch ref so the shared zig cache is seeded where every branch can restore it
-        type: boolean
-        required: false
-        default: false
 permissions:
   contents: read
 jobs:
   build:
-    if: ${{ !inputs.release_candidate && (startsWith(github.ref, 'refs/heads/codex/') || (inputs.cache_seed && github.ref == 'refs/heads/main')) }}
+    if: ${{ !inputs.release_candidate && startsWith(github.ref, 'refs/heads/codex/') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -60,8 +55,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cache/zig
-            fixture-source/target
-          key: pocket-input-fixture-${{ env.BASE_SHA }}-${{ env.PATCH_SHA256 }}-rust196-zig0160-zcache
+          # The build tree is not worth caching: it is the bulk of the entry and
+          # a fresh branch restores it into a different source path anyway.
+          key: pocket-input-fixture-${{ env.BASE_SHA }}-${{ env.PATCH_SHA256 }}-rust196-zig0160-zcache2
           restore-keys: |
             pocket-input-fixture-${{ env.BASE_SHA }}-${{ env.PATCH_SHA256 }}-rust196-zig0160-
       - name: Prefetch the vendored zig dependencies with retries

@@ -250,7 +250,7 @@ while True:
         build=job(reusable,'build')
         self.assertIn('!inputs.release_candidate',build)
         self.assertIn("startsWith(github.ref, 'refs/heads/codex/')",build)
-        self.assertIn('inputs.cache_seed',build)
+        self.assertIn('restore-keys',job(reusable,'build'))
         release=job(reusable,'release-profile');host=job(caller,'input-host-candidate')
         prefix='refs/heads/codex/network-batch/with-emulators-input-host-'
         self.assertIn("inputs.release_candidate && startsWith(github.ref, '"+prefix+"')",release)

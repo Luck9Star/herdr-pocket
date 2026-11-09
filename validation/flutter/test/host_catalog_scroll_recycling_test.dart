@@ -31,8 +31,7 @@ Future<void> mountBoard(WidgetTester tester, HostCatalog catalog, HostTabs tabs,
 }
 
 Finder boardList() => find.byKey(const ValueKey('host-catalog-list'));
-Finder byKeyOf(String key) => find.byWidgetPredicate((widget) =>
-  widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value == key);
+Finder byKeyOf(String key) => find.byKey(ValueKey(key));
 Finder boardScrollable() =>
     find.descendant(of: boardList(), matching: find.byType(Scrollable)).first;
 

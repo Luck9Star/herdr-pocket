@@ -418,9 +418,26 @@ class AndroidWebView:
                 activeElement:a?(a.id||a.className||a.tagName):null,
                 activeInsideKeys:!!(a&&document.getElementById('remote-input-keys')?.contains(a)),
                 disabled:!!e?.disabled,hidden:!!e?.hidden}})()''' % (json.dumps(selector), json.dumps(selector))))
-        for kind in ('mousePressed', 'mouseReleased'):
-            self.call('Input.dispatchMouseEvent', {'type': kind, 'x': point['x'], 'y': point['y'],
-                                                 'button': 'left', 'clickCount': 1})
+        self.call('Input.dispatchMouseEvent', {'type': 'mousePressed', 'x': point['x'], 'y': point['y'],
+                                             'button': 'left', 'clickCount': 1})
+        # Real-device evidence (0013): pressing a control can blur the terminal,
+        # which closes the IME and reflows the viewport before the release lands.
+        # A release at the stale coordinate then hits a different element, so the
+        # browser never delivers the click to the pressed control. Re-read the
+        # control right before releasing and keep the release on it.
+        release = point
+        try:
+            moved = self.evaluate('''(()=>{const e=document.querySelector(%s); if(!e||e.hidden) return null;
+              const r=e.getBoundingClientRect(); const x=r.left+r.width/2,y=r.top+r.height/2;
+              return r.width>0 && r.height>0 && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
+                     e.contains(document.elementFromPoint(x,y)) ? {x:Math.round(x*4),y:Math.round(y*4)}:null})()'''
+                                 % json.dumps(selector))
+            if isinstance(moved, dict) and isinstance(moved.get('x'), int) and isinstance(moved.get('y'), int):
+                release = {'x': moved['x'] / 4, 'y': moved['y'] / 4}
+        except GuiFailure:
+            pass  # Keep the pressed coordinate when the control cannot be re-read.
+        self.call('Input.dispatchMouseEvent', {'type': 'mouseReleased', 'x': release['x'], 'y': release['y'],
+                                             'button': 'left', 'clickCount': 1})
         # Diagnostic only: many successful clicks hide or remove their control
         # (dialog close, paste-review action), so a post-dispatch hit check must
         # never gate success — that stays with the existing result assertions.
@@ -430,7 +447,7 @@ class AndroidWebView:
                   if(!e||!r||e.hidden) return false; const x=%d,y=%d;
                   return r.left<=x && x<=r.right && r.top<=y && y<=r.bottom &&
                          e.contains(document.elementFromPoint(x,y))})()'''
-                % (json.dumps(selector), point['x'], point['y'])))})
+                % (json.dumps(selector), release['x'], release['y'])))})
         if trace is not None:
             trace.append(self.evaluate('''(()=>{const a=document.activeElement;return {
               activeElement:a?(a.id||a.className||a.tagName):null,

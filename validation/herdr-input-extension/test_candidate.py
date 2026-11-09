@@ -247,7 +247,10 @@ while True:
             match=re.search(r'^  '+re.escape(name)+r':\n(.*?)(?=^  [a-z][a-z0-9-]*:|\Z)',text,re.M|re.S)
             self.assertIsNotNone(match,name);return match.group(1)
         self.assertIn('type: boolean',reusable);self.assertIn('default: false',reusable)
-        self.assertIn("!inputs.release_candidate && startsWith(github.ref, 'refs/heads/codex/')",job(reusable,'build'))
+        build=job(reusable,'build')
+        self.assertIn('!inputs.release_candidate',build)
+        self.assertIn("startsWith(github.ref, 'refs/heads/codex/')",build)
+        self.assertIn('inputs.cache_seed',build)
         release=job(reusable,'release-profile');host=job(caller,'input-host-candidate')
         prefix='refs/heads/codex/network-batch/with-emulators-input-host-'
         self.assertIn("inputs.release_candidate && startsWith(github.ref, '"+prefix+"')",release)

@@ -829,6 +829,10 @@ Future<Map<String,Object>> exerciseDeviceImpact(WidgetTester tester,void Functio
   await tapKey(tester,'zt-device-close');
   await until(tester,() => find.byKey(const ValueKey('zt-device-list')).evaluate().isEmpty);
   await tester.pageBack(); await tester.pump(const Duration(milliseconds:400));
+  // The board stays scrolled where the search group left it, so hosts-add is
+  // still recycled out of the lazy viewport; bring it back before waiting.
+  await tester.scrollUntilVisible(find.byKey(const ValueKey('hosts-add')),-300,
+    scrollable:find.descendant(of:board,matching:find.byType(Scrollable)).first);
   await until(tester,() => find.byKey(const ValueKey('hosts-add')).evaluate().length == 1);
   // writeCalls counts identity writes dispatched by this group: none. The only
   // controls it pressed are the re-read, the close and the re-entry, and on an

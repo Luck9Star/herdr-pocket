@@ -1520,9 +1520,16 @@ def run_android(args, root, env, config, approval):
             progress.mark('publicRequestCopyReported')
         response = approval.approve(request.encode('utf-8'))
         browser.fill('#pair-response', response.decode('utf-8'))
-        browser.click('#pair-preview')
+        pairing_trace = []
+        browser.click('#pair-preview', trace=pairing_trace)
+        if progress is not None:
+            progress.data['pairingPointerTrace'] = pairing_trace[-2:]
+            progress.publish()
         browser.click('#pair-source-review')
-        browser.click('#pair-accept')
+        browser.click('#pair-accept', trace=pairing_trace)
+        if progress is not None:
+            progress.data['pairingPointerTrace'] = pairing_trace[-2:]
+            progress.publish()
         wait_for(lambda: '授权响应已审查' in (browser.read('#pair-status') or ''), 'android_authorization_not_reviewed', timeout=60)
         progress.mark('authorizationReviewed'); progress.phase('canvas_selection')
         guarded=bool(getattr(args,'input_fixture',None))

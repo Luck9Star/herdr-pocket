@@ -50,8 +50,8 @@
 
 ## 恢复工作时的顺序
 
-1. **先复测 Flutter 在 Android 上的观察恢复。** 在同一批 API 35 作业中复测两壳的配对、看板与观察。对 Flutter 单独要求隐藏标签恢复后出现原目标的新完整帧、同一观察代的增量，再核对十个 TUI 操作的远端回执。在模拟器脚本补上看板检索和共享设备审查断言，再触发同批验收。注意：触发云端模拟器矩阵时分支须以 `codex/network-batch/with-emulators-` 命名；运行前确认包含生命周期转态修复（commit `4143bca`：`paused→hidden→inactive→resumed`）与 KeyStore 启动修复（commit `5959b0d`）。随后核验两份同源 arm64 APK 的哈希、ABI 与来源清单。[云端工作流](../.github/workflows/android-network-experiment.yml) · [分场景步骤](53-mobile-connection-diagnostics.md)
-2. **补手机原生网络链路与阶段 2 门控解锁。** ZeroTier 0008 补丁经三轮独立评审定稿（终版 sha256 `ba4654f9…`）并通过 Android `-Wl,--no-undefined` 与六元组符号校验，CI 触发分支验证结果以 workflow run 记录为准。当前阶段 2 门控（`bindNative` 激活与生产切片倒置）保持锁定状态。待用户明确指示后，方可解除门控合入生产业务层，接入真实网络流与指定网络拨号。随后在网络分支与真实网络环境下进行多机配对真机验证，分别验收 Tailscale、EasyTier、ZeroTier 及跨网并发。[设备存储与拨号的边界](55-mobile-shared-network-device.md)
+1. **[已完成] 复测 Flutter 在 Android 上的观察恢复与 TUI 全量回执。** 在 API 35 模拟器作业中完成两壳配对、看板、观察及受保护 TUI 输入验收。Flutter 隐藏标签恢复后成功收到原目标新完整帧、同一观察代增量，十个 TUI 操作远端回执全量核验通过（run `42659301059`，`actionCount: 10`，`applicationStateMatched: true`，全部 checks 绿）。Tauri 端观察与配对全绿，TUI 首键布局漂移经单循环居中静止门修复（`9466e70`）。两份同源 arm64 APK 的哈希、ABI 与来源清单均已校验。[最新交接台账](docs/58-session-handoff-2026-11-09-r2.md) · [云端工作流](../.github/workflows/android-network-experiment.yml)
+2. **[S1–S4 已完成] 补手机原生网络链路与阶段 2 门控解锁。** 阶段 2 门控已遵用户指令解除并完成开发：S1 声明与 JNI 导出、S2 生产切片倒置（`AndroidZeroTierNative` 纳入正式源）、S3 库构建、S4 双壳宿主接线（`System.loadLibrary` + `bindNative`、Cargo feature 与打包链接）均在 CI 全矩阵（run `42632587131`，9 成功 0 失败）通过验证，产物完整包含 `libhp_zerotier.so`。仅余 S5 实体真机在物理网络环境下的入网与多机并发待取得硬件后验收。[设备存储与拨号的边界](55-mobile-shared-network-device.md)
 3. **用真机结果决定选型。** 目前可用环境为云端和 Mac。取得实体 Android／iOS 后，使用相同字体、fixture、视口和负载检查扫码、输入法、滚动选择、锁屏、恢复及性能。以正确性作首要门槛，再比较维护成本、收敛高保真和组件库，接续桌面三平台。[技术栈复评](06-technology-evaluation.md) · [设计计划](08-ui-design-plan.md)
 
 本轮收尾将 0008 终版修复连同哈希锚定测试与交接文档提交为单个 commit，推送 `codex/network-batch/with-emulators-zerotier-0008-<短SHA>` 触发分支由 CI 全矩阵验证（该前缀跳过 input-fixture 以规避 504 高发外依赖，run 结果以 Actions 记录为准）。测试浏览器、独立 Penpot 预览、临时服务与测试 JVM 均已退出，原有 Penpot 编辑页保留。工作区中 ZeroTier 0008 补丁经三轮独立评审定稿入档（`drafts/` 目录中无活动草稿，仅保留归档说明），`zerotier-candidate.json` 哈希闭环，本地全量验证通过。`graphify-out/` 保持未跟踪状态，严禁提交。

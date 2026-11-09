@@ -1217,7 +1217,8 @@ class BoardSearchAndDeviceImpactGuards(unittest.TestCase):
 
     def test_new_stage_groups_are_registered_next_to_their_public_driver_stages(self):
         self.assertEqual(gui.BOARD_SEARCH_STAGES, frozenset({'board_search_text','board_search_state',
-            'board_search_count','board_search_history','board_search_clear'}))
+            'board_search_count','board_search_history','board_search_clear',
+            'board_search_clear_reset_visible','board_search_clear_reset_tap'}))
         self.assertEqual(gui.DEVICE_IMPACT_STAGES, frozenset({'device_impact_enter','device_impact_scope',
             'device_impact_reread','device_remove_blocked'}))
         self.assertLessEqual(gui.BOARD_SEARCH_STAGES | gui.DEVICE_IMPACT_STAGES, gui.STAGES)

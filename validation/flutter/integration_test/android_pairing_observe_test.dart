@@ -347,12 +347,30 @@ Map<String,Object> boundedFailure(Object error,StackTrace stack,String stage,
   const classes = {'TestFailure','StateError','RemoteFailure','FormatException','TimeoutException','FlutterError'};
   final name = error.runtimeType.toString();
   final errorClass = error is TypeError ? 'TypeError' : classes.contains(name) ? name : 'other';
-  final match = RegExp(r'android_pairing_observe_test\.dart:([0-9]+)(?::[0-9]+)?').firstMatch(stack.toString());
-  final parsed = match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
+  // The stack carries the helper frames too: until() raises at its own line and
+  // tapStablePointer() waits inside itself, so the first frame is never the
+  // business line. Report the first frame outside the local helpers instead.
+  const helpers = {'until','tap','tapKey','tapStablePointer','tapPopupOption','checkPointerError',
+    'boardCounts','taskFilterCount','taskFilterLabel','boardHistoryRows','groupHeader',
+    'popupOptionControl','stableReviewCheckbox','visibleReceipt','keyboardCheckpoint','accepted',
+    'visibleTuiScreen','position','readFontDiagnostic'};
+  final frames = RegExp(r'#\d+\s+([\w$.<>]+(?:[ <][^\n(]*?)?)\s*\([^)]*android_pairing_observe_test\.dart:(\d+)')
+      .allMatches(stack.toString()).toList();
+  bool helper(String frame) {
+    final name = frame.trim();
+    final base = name.split('.').first;
+    return helpers.contains(base) || name.startsWith('until.') ||
+      name.startsWith('tap.') || name.startsWith('tapKey.');
+  }
+  final business = frames.where((m) => !helper(m.group(1)!)).toList();
+  // Fall back to the first recorded frame rather than reporting no line at all.
+  final parsed = business.isNotEmpty ? int.tryParse(business.first.group(2)!) ?? 0
+    : (frames.isNotEmpty ? int.tryParse(frames.first.group(2)!) ?? 0 : 0);
   return {'stage':stage,'errorClass':errorClass,'line':parsed >= 1 && parsed <= 10000 ? parsed : 0,
     if (tuiResume != null && tuiResumeStages.contains(stage)) 'tuiResume':tuiResume,
-    if (boardSearch != null && const {'board_search_text','board_search_state','board_search_count',
-        'board_search_history','board_search_clear'}.contains(stage)) 'boardSearch':boardSearch};
+    if (boardSearch != null && (const {'board_search_text','board_search_state','board_search_count',
+        'board_search_history','board_search_clear','board_search_clear_reset_visible',
+        'board_search_clear_reset_tap'}.contains(stage))) 'boardSearch':boardSearch};
 }
 
 Map<String,Object> visibleReceipt(WidgetTester tester, String paneId, int count) {
@@ -693,15 +711,25 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   final cleared=boardCounts(tester);
   final clearedKeptState=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.history &&
     cleared.shown == historyCount;
+  boardSearchFailureProbe = <String,Object>{
+    'textMatched':textMatched,'dualConditionCount':counts.shown,'totalHosts':counts.total,
+    'currentCount':currentCount,'historyCount':historyCount,'historyRows':history.length,
+    'historyDistinguished':true,'clearedKeptState':clearedKeptState,'resetRestoredList':false,'nativeCallsAdded':0};
   if (!clearedKeptState) throw StateError('board_search_clear_dropped_state');
   // The production reset control exists only on an empty result.
   await tester.enterText(search,'zz-no-such-entry'); await tester.pump();
+  stage('board_search_clear_reset_visible');
   await until(tester,() => find.byKey(const ValueKey('hosts-search-empty')).evaluate().length == 1 &&
     find.byKey(const ValueKey('hosts-filters-reset')).evaluate().length == 1);
+  stage('board_search_clear_reset_tap');
   await tapStablePointer(tester,find.byKey(const ValueKey('hosts-filters-reset')));
   final restored=boardCounts(tester);
   final resetRestoredList=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.all &&
     (tester.widget<TextField>(search).controller?.text ?? '') == '' && restored.shown == restored.total;
+  boardSearchFailureProbe = <String,Object>{
+    'textMatched':textMatched,'dualConditionCount':counts.shown,'totalHosts':counts.total,
+    'currentCount':currentCount,'historyCount':historyCount,'historyRows':history.length,
+    'historyDistinguished':true,'clearedKeptState':true,'resetRestoredList':resetRestoredList,'nativeCallsAdded':0};
   if (!resetRestoredList) throw StateError('board_search_clear_reset_failed');
   final evidence=<String,Object>{
     'textMatched':textMatched,'dualConditionCount':counts.shown,'totalHosts':counts.total,
@@ -1449,8 +1477,9 @@ void main() {
       if (directory != null) {
         try { publish(directory,'failure.json',jsonEncode(boundedFailure(error,stack,currentStage,
             tuiResume:tuiResumeDiagnostic,
-            boardSearch:(currentStage == 'board_search_clear' && boardSearchFailureProbe != null)
-              ? {...boardSearchFailureProbe!,'clearedKeptState':false,'resetRestoredList':false} : null))); }
+            boardSearch:(boardSearchFailureProbe != null &&
+                (currentStage == 'board_search_clear' || currentStage.startsWith('board_search_clear_')))
+              ? boardSearchFailureProbe : null))); }
         catch (_) { /* Preserve the original test failure if diagnostics fail. */ }
       }
       rethrow;

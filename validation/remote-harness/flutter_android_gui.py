@@ -31,6 +31,7 @@ STAGES = {'target_invalid', 'catalog_intent_failed', 'device_create_failed', 'ha
           'signer_create', 'signer_public', 'signer_sign', 'signer_delete', 'signer_read_deleted',
           'public_key_failed', 'profile_save_failed', 'create_not_available', 'host_board',
           'board_search_text', 'board_search_state', 'board_search_count', 'board_search_history', 'board_search_clear',
+          'board_search_clear_reset_visible', 'board_search_clear_reset_tap',
           'public_request', 'restore_pending', 'host_authorization',
           'target_finish_edit', 'target_review_ready', 'target_review_unchecked', 'target_create_unavailable',
           'target_create_ready', 'target_create_one_tap', 'target_request_wait',
@@ -62,7 +63,8 @@ KEYBOARD_OBSERVE_CHECKPOINT = 'keyboard-observe-hidden'
 TUI_CHECKPOINT = 'tui-start'
 TUI_RESUME_STAGES = frozenset({'tui_find_board','tui_return_tab','tui_find_resume','tui_resume_full'})
 BOARD_SEARCH_STAGES = frozenset({'board_search_text','board_search_state','board_search_count',
-                                 'board_search_history','board_search_clear'})
+                                 'board_search_history','board_search_clear',
+                                 'board_search_clear_reset_visible','board_search_clear_reset_tap'})
 DEVICE_IMPACT_STAGES = frozenset({'device_impact_enter','device_impact_scope','device_impact_reread',
                                   'device_remove_blocked'})
 STAGES.update(TUI_RESUME_STAGES)

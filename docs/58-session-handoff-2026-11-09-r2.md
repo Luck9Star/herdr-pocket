@@ -258,5 +258,6 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
 - [x] 0013b（run `42553557053`）终态 9 绿/1 败：干净环境，flutter 停在 `board_search_clear`（until 10s 超时 line 132）。
 - [x] 0014（run `42554866937`）：flutter 报 `TestFailure`、行 132（`board_search_clear`）；`apps (tauri)` 因 crates.io 网络瞬断失败；`android-device-key` 绿。
 - [x] 0015~0017 轮次：flutter 产物报 `failure: null`、errorCode 报 `flutter_android_test_exited_board_search_clear`；排查证实 Python harness 的 `safe_board_search` 存在失败路径硬性要求布尔全为 True 导致丢弃未决快照的代码缺陷（0017 云端真实退出路径是否走到该分支未定案）；`android-device-key` 在 0015 绿、0016 因 CDP 握手抖动报 `android_driver_failure`@pairing 挂、0017 恢复全绿。
-- [ ] 当前本地整批开发完成待验（未提交、未推送）：Python harness 支持失败分流允许 False 布尔、Flutter clear 前改手势滚动 `scrollUntilVisible(search, -300)`；全套本地单测与 Widget 探针已验证通过。
+- [x] 0018 轮（run `42565205720`，`0bc3b52`）：`android-device-key` 第 7 次全绿；`apps (tauri)` 因 gradle 下载 HTTP 504 瞬断失败；flutter 产物**首次带出完整 boardSearch 快照**（诊断通道打通，`failure: null` 现象消除）——errorClass TestFailure + 行 132 ＝ `until()` 超时而非清空按钮缺失，两处超时（tapStablePointer 10s 落点 / 等空结果 60s）原行号不可区分。
+- [ ] 当前本地批次完成待验（未提交、未推送）：拆分 `board_search_clear_reset_visible` / `_reset_tap` 两个阶段名以区分两处超时（Python 与 Dart 白名单同步）、失败快照改真实步进值、失败行号改为按函数名过滤 helper 帧取首个业务帧（匹配不到时退回首个含本文件行号的帧）。全套本地单测与 Widget 探针已验证通过。
 - [ ] **等用户明示授权**后才动 Stage 2 门控（建议先批 S1+S2）

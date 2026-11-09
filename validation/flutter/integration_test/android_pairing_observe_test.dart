@@ -777,6 +777,14 @@ int enabledIdentityActions(WidgetTester tester) {
 /// identity is created, changed or removed.
 Future<Map<String,Object>> exerciseDeviceImpact(WidgetTester tester,void Function(String) stage) async {
   stage('device_impact_enter');
+  // The board search group scrolled the host card to the top, evicting the
+  // header controls (hosts-networks included) from the lazy list viewport.
+  // Scroll back up until they are mounted again, matching the search-phase
+  // scrollUntilVisible pattern (proven by test_deep_scroll_device_delete).
+  final board=find.byKey(const ValueKey('host-catalog-list'));
+  await tester.scrollUntilVisible(find.byKey(const ValueKey('hosts-networks')),-300,
+    scrollable:find.descendant(of:board,matching:find.byType(Scrollable)).first);
+  await until(tester,() => find.byKey(const ValueKey('hosts-networks')).evaluate().length == 1);
   await tapKey(tester,'hosts-networks');
   final entry=find.byKey(const ValueKey('networks-zerotier-device'));
   await until(tester,() => entry.evaluate().length == 1 &&
@@ -1435,8 +1443,18 @@ void main() {
       deviceImpactEvidence = await exerciseDeviceImpact(tester,stage);
     }
     stage('delete_local_identity');
+    // The preceding groups left the board scrolled; the delete button lives on
+    // the host card and the completion notice at the list top. Bring both into
+    // the lazy viewport (proven by test_deep_scroll_device_delete).
+    final deleteBoard=find.byKey(const ValueKey('host-catalog-list'));
+    final deleteScrollable=find.descendant(of:deleteBoard,matching:find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.byKey(ValueKey('host-delete-$id')),300,scrollable:deleteScrollable);
+    await until(tester,() => find.byKey(ValueKey('host-delete-$id')).evaluate().length == 1);
     await tapKey(tester,'host-delete-$id');
     await tap(tester,find.widgetWithText(FilledButton,'仅删除本机'));
+    // The notice renders at the list top; jump back so its row is built again.
+    tester.state<ScrollableState>(deleteScrollable).position.jumpTo(0);
+    await tester.pump();
     await until(tester,() => hostOpen().evaluate().isEmpty &&
       find.textContaining('本机已删除 · 主机授权未因此撤销').evaluate().isNotEmpty);
     expect(tester.takeException(),isNull);

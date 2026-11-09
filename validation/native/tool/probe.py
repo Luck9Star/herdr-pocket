@@ -126,8 +126,16 @@ def easytier(reference, lock, check=True):
     licenses('heeler-easytier', reference / 'native/easytier')
     protoc = CONFIG['protoc'][platform.system()]
     archive = WORK / protoc['file']
-    with urllib.request.urlopen('https://github.com/protocolbuffers/protobuf/releases/download/v36.2/' + protoc['file'], timeout=60) as response:
-        content = response.read(32 * 1024 * 1024 + 1)
+    url = 'https://github.com/protocolbuffers/protobuf/releases/download/v36.2/' + protoc['file']
+    content = b''
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response:
+                content = response.read(32 * 1024 * 1024 + 1)
+            break
+        except urllib.error.URLError:
+            if attempt == 3: raise
+            time.sleep(2 ** attempt)
     if len(content) > 32 * 1024 * 1024: raise RuntimeError('protoc archive exceeds 32 MiB budget')
     archive.write_bytes(content)
     if sha(archive) != protoc['sha256']: raise RuntimeError('protoc checksum mismatch')

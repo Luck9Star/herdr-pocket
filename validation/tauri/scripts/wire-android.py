@@ -31,3 +31,10 @@ shutil.copyfile(root/'android/ConfigDocumentPlugin.kt',target.with_name('ConfigD
 shutil.copyfile(root/'android/ClipboardPlugin.kt',target.with_name('ClipboardPlugin.kt'))
 shutil.copyfile(root/'android/TerminalKeyboardPlugin.kt',target.with_name('TerminalKeyboardPlugin.kt'))
 copy_android_assets(root, app/'src/main/assets')
+wrapper_props = project / 'gradle/wrapper/gradle-wrapper.properties'
+if wrapper_props.exists():
+    props_text = wrapper_props.read_text()
+    if 'networkTimeout=10000' in props_text:
+        wrapper_props.write_text(props_text.replace('networkTimeout=10000', 'networkTimeout=120000'))
+    elif 'networkTimeout=' not in props_text:
+        wrapper_props.write_text(props_text + '\nnetworkTimeout=120000\n')

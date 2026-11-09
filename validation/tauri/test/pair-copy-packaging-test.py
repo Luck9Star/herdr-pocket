@@ -44,6 +44,43 @@ class PairCopyPackaging(unittest.TestCase):
         bridge = (TAURI / 'src-tauri/src/clipboard.rs').read_text()
         self.assertIn('"copyPairingRequest"', bridge)
 
+    def test_wire_android_hardens_gradle_wrapper_timeout(self):
+        with tempfile.TemporaryDirectory(prefix='wrapper-timeout-') as temporary:
+            root = Path(temporary) / 'validation/tauri'
+            (root / 'scripts').mkdir(parents=True)
+            for name in ('wire-android.py', 'js_notices.py'):
+                shutil.copyfile(TAURI / 'scripts' / name, root / 'scripts' / name)
+            shutil.copytree(TAURI / 'android', root / 'android')
+            for name in ('package.json', 'package-lock.json'):
+                shutil.copyfile(TAURI / name, root / name)
+            lock = json.loads((TAURI / 'package-lock.json').read_text())
+            for package in ('@xterm/xterm', '@xterm/addon-unicode-graphemes'):
+                folder = root / 'node_modules' / package
+                folder.mkdir(parents=True)
+                for name in ('package.json', 'LICENSE'):
+                    shutil.copyfile(TAURI / 'node_modules' / package / name, folder / name)
+            app = root / 'src-tauri/gen/android/app'
+            app.mkdir(parents=True)
+            (app / 'build.gradle.kts').write_text('// isolated generated-project fixture\n')
+            wrapper_dir = root / 'src-tauri/gen/android/gradle/wrapper'
+            wrapper_dir.mkdir(parents=True)
+            initial_props = (
+                'distributionBase=GRADLE_USER_HOME\n'
+                'distributionPath=wrapper/dists\n'
+                'distributionUrl=https\\://services.gradle.org/distributions/gradle-9.6.1-bin.zip\n'
+                'networkTimeout=10000\n'
+                'validateDistributionUrl=true\n'
+                'zipStoreBase=GRADLE_USER_HOME\n'
+                'zipStorePath=wrapper/dists\n'
+            )
+            (wrapper_dir / 'gradle-wrapper.properties').write_text(initial_props)
+            subprocess.run([sys.executable, str(root / 'scripts/wire-android.py')], check=True, capture_output=True)
+            updated = (wrapper_dir / 'gradle-wrapper.properties').read_text()
+            self.assertIn('networkTimeout=120000', updated)
+            self.assertNotIn('networkTimeout=10000', updated)
+            self.assertIn('distributionUrl=https\\://services.gradle.org/distributions/gradle-9.6.1-bin.zip', updated)
+            self.assertIn('validateDistributionUrl=true', updated)
+
 
 if __name__ == '__main__':
     unittest.main()

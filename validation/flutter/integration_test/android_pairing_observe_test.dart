@@ -675,18 +675,15 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
     of:find.byKey(const ValueKey('host-catalog-list')),
     matching:find.byType(Scrollable)).first;
   tester.state<ScrollableState>(boardScrollable).position.jumpTo(0);
-  // A single frame after the jump is not enough: the lazy list still holds
-  // mid-flight layout from the group's expansion animation and the viewport
-  // rebuild, and the suffix clear control may not be back in the tree within
-  // the stable-tap window (runs 42548234405/42549882281/42553557053 each
-  // failed this tap with a different signature). Wait for every scheduled
-  // frame to drain so the top controls are deterministically built.
-  await tester.pumpAndSettle(const Duration(milliseconds: 100));
+  // Do NOT pumpAndSettle here: hidden tabs in the IndexedStack keep a
+  // blinking terminal cursor alive, so settle never converges and the test
+  // is killed by its own timeout with no failure report (runs 42556512895
+  // and 42558100632 both died exactly here as test_exited). Pump a bounded
+  // number of frames instead so the lazy list rebuilds the top controls.
+  for (var i = 0; i < 20; i++) { await tester.pump(const Duration(milliseconds: 100)); }
   // Runs 42548234405/42549882281/42553557053 failed this tap with three
-  // different signatures, and 42556512895 was killed outright at this stage
-  // (flutter_android_test_exited, no failure.json). The 60-second until
-  // spins were also burning the 6-minute test budget. Fail fast here with
-  // the evidence snapshot instead of another blind wait.
+  // different signatures. Fail fast with the evidence snapshot instead of
+  // another blind 60-second until spin.
   final clearButton=find.byKey(const ValueKey('hosts-search-clear'));
   if (clearButton.evaluate().length != 1) {
     boardSearchFailureProbe = <String,Object>{

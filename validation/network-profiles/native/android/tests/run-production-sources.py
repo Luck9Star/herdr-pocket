@@ -17,10 +17,10 @@ SOURCES = (
     'AndroidEasyTierConfig.java', 'AndroidNetworkEnvelope.java',
     'AndroidNetworkSecretStore.java', 'AndroidTailscaleConfig.java',
     'AndroidTailscaleEnvelope.java', 'AndroidTailscaleStateStore.java',
-    'AndroidZeroTierDeviceStore.java', 'AndroidZeroTierDeviceService.java',
-    'AndroidZeroTierEnvelope.java', 'EasyTierConfigBuilder.java',
-    'NetworkSecretStoreCore.java', 'TailscaleStateStoreCore.java',
-    'ZeroTierDeviceStoreCore.java',
+    'AndroidZeroTierDeviceService.java', 'AndroidZeroTierDeviceStore.java',
+    'AndroidZeroTierEnvelope.java', 'AndroidZeroTierNative.java',
+    'EasyTierConfigBuilder.java', 'NetworkSecretStoreCore.java',
+    'TailscaleStateStoreCore.java', 'ZeroTierDeviceStoreCore.java',
 )
 
 
@@ -38,7 +38,7 @@ def main():
         assert not path.is_symlink() and path.is_file(), f'non-regular production input: {name}'
     assert (source / manifest).read_text().splitlines() == list(SOURCES)
     report = {'schemaVersion': 1, 'scope': 'offline Gradle Sync + desktop JVM/Android stubs',
-              'productionSources': list(SOURCES), 'jniCandidateIncluded': False,
+              'productionSources': list(SOURCES), 'jniCandidateIncluded': True,
               'sourceSHA256': {name: hashlib.sha256((source / name).read_bytes()).hexdigest()
                                for name in (*SOURCES, manifest, 'network-secrets.gradle')}, 'checks': []}
     args.output.mkdir(parents=True, exist_ok=True)
@@ -49,7 +49,6 @@ def main():
         for name in (*SOURCES, manifest, 'network-secrets.gradle'):
             shutil.copyfile(source / name, shared / name)
         # A future top-level draft must not silently enter the Android bundle.
-        (shared / 'AndroidZeroTierNative.java').write_text('NOT VALID JAVA; MUST NOT COMPILE')
         (shared / 'OtherDraft.java').write_text('NOT VALID JAVA; MUST NOT COMPILE')
         (shared / 'tests').mkdir()
         (shared / 'tests' / 'Accidental.java').write_text('NOT VALID JAVA')
@@ -89,14 +88,13 @@ def main():
 
         run(command + tasks)
         verify_sync()
-        report['checks'].append('all 13 checked files copied exactly; two invalid top-level drafts and nested tests excluded')
+        report['checks'].append('all 14 checked files copied exactly; invalid top-level draft and nested tests excluded')
         (generated / 'stale/android').mkdir(parents=True)
         (generated / 'stale/android/Old.java').write_text('NOT VALID JAVA')
-        (generated / 'AndroidZeroTierNative.java').write_text('NOT VALID JAVA')
         rerun = run(command + tasks)
         verify_sync()
         assert '> Task :syncHerdrNetworkSources\n' in rerun
-        report['checks'].append('unchanged-input rerun executes Sync and removes stale nested/JNI sources')
+        report['checks'].append('unchanged-input rerun executes Sync and removes stale nested sources')
         # Every production input is validated before compiling, not merely copied if present.
         for name in SOURCES:
             data = (shared / name).read_bytes()
@@ -104,7 +102,7 @@ def main():
             failure = run(command + ['help'], succeeds=False)
             assert 'missing a required production source' in failure
             (shared / name).write_bytes(data)
-        report['checks'].append('each of 13 missing inputs rejected during Gradle configuration')
+        report['checks'].append('each of 14 missing inputs rejected during Gradle configuration')
         original_manifest = (shared / manifest).read_bytes()
         for invalid in ('', '\n', '../Outside.java\n', 'tests/Nested.java\n',
                         'NotJava.txt\n', 'One.java\nOne.java\n', ' One.java\n'):
@@ -144,7 +142,7 @@ def main():
              *(str(generated / name) for name in SOURCES), str(here / 'ProductionSliceTest.java')])
         proof = run(['java', '-cp', str(classes), 'org.herdr.network.ProductionSliceTest'])
         assert 'PASS production slice' in proof
-        report['checks'].append('exact synced closure compiles without JNI candidate; unbound service status and all five writes fail closed')
+        report['checks'].append('exact synced closure compiles including the unbound JNI bridge; unbound service status and all five writes fail closed')
         report['commandCount'] = count
     report['passed'] = True
     (args.output / 'result.json').write_text(json.dumps(report, indent=2) + '\n')

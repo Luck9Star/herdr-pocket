@@ -17,14 +17,19 @@ class ProductionManifestTest(unittest.TestCase):
             (root/'validation/network-profiles/android_sources.py').write_text('fixture')
             (base/'network-secrets.gradle').write_text('fixture')
             (base/'Safe.java').write_text('synthetic')
-            (base/'AndroidZeroTierNative.java').write_text('excluded')
+            (base/'AndroidZeroTierNative.java').write_text('bridge')
             manifest=base/'android-production-sources.txt';manifest.write_text('Safe.java\n')
             with patch.object(ci,'ROOT',root):
+                # Stage 2: a non-empty manifest without the reviewed JNI
+                # bridge is rejected.
+                with self.assertRaises(SystemExit):
+                    ci.android_network_production_sources()
+                manifest.write_text('Safe.java\nAndroidZeroTierNative.java\n')
                 result=ci.android_network_production_sources()
                 self.assertEqual([Path(record['path']).name for record in result],
-                    ['android-production-sources.txt','network-secrets.gradle','android_sources.py','Safe.java'])
+                    ['android-production-sources.txt','network-secrets.gradle','android_sources.py','Safe.java','AndroidZeroTierNative.java'])
                 for invalid in ('', 'Safe.java\nSafe.java\n', '../Safe.java\n',
-                    'AndroidZeroTierNative.java\n', 'Missing.java\n'):
+                    'Safe.java\nMissing.java\n', 'Missing.java\n'):
                     manifest.write_text(invalid)
                     with self.subTest(invalid=invalid),self.assertRaises(SystemExit):
                         ci.android_network_production_sources()

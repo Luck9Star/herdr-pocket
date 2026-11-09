@@ -3,13 +3,15 @@ package org.herdr.network;
 import java.util.Map;
 import java.util.Set;
 
-/** Runs against only the production slice: no JNI bridge or test fake store. */
-public final class ProductionSliceTest {
-    public static void main(String[] args) throws Exception {
+/** Runs against only the production slice: the JNI bridge class ships in the
+ * slice but stays unbound without a host library, so no test fake store. */
+ public final class ProductionSliceTest {
+     public static void main(String[] args) throws Exception {
+        Class.forName("org.herdr.network.AndroidZeroTierNative");
         try {
-            Class.forName("org.herdr.network.AndroidZeroTierNative");
-            throw new AssertionError("unreviewed JNI candidate present in metadata slice");
-        } catch (ClassNotFoundException expected) { }
+            AndroidZeroTierNative.createStore(null);
+            throw new AssertionError("null-context bridge must reject");
+        } catch (IllegalStateException expected) { }
         Map<String,Object> value=AndroidZeroTierDeviceService.status();
         if (!value.keySet().equals(Set.of("available","device","pendingCreation","pendingDeletion"))
             || !Boolean.FALSE.equals(value.get("available")) || value.get("device")!=null
@@ -30,6 +32,6 @@ public final class ProductionSliceTest {
                 if (!"device store unavailable".equals(expected.getMessage())) throw expected;
             }
         }
-        System.out.println("PASS production slice: no JNI bridge; unavailable status and five mutations");
+        System.out.println("PASS production slice: JNI bridge present yet unbound; unavailable status and five mutations");
     }
 }

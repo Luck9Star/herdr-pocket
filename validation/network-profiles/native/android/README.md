@@ -7,8 +7,9 @@ Apply `network-secrets.gradle` with `herdrNetworkSecretsDir` set to this directo
 ## Android production source boundary (2026-11-08)
 
 `android-production-sources.txt` is the complete shared Java production input
-list: 13 top-level files covering the existing EasyTier vault/config, Tailscale
-state/config, and ZeroTier device core/envelope/wrapper/metadata service. Gradle
+list: 14 top-level files covering the existing EasyTier vault/config, Tailscale
+state/config, the ZeroTier device core/envelope/wrapper/metadata service, and
+— as of Stage 2 — the reviewed `AndroidZeroTierNative.java` JNI bridge. Gradle
 rejects a missing, empty, duplicate or non-basename Java entry, refuses symbolic
 links for the manifest and listed Java sources, and checks every
 listed file before configuration succeeds. Its `Sync` copies only those inputs
@@ -16,16 +17,16 @@ into the generated source root. It executes on each build so a reused build
 directory loses obsolete nested sources and unlisted drafts before Kotlin or
 Java compilation. Packaging provenance must use this same manifest, not a glob.
 
-`AndroidZeroTierNative.java` remains a separate JNI candidate and is **not** in
-this production slice. Neither the device store nor the metadata service refers
-to that class. Their narrow `IdentityFactory` and `NativeOwner` capabilities
-still require a vetted native binding for activation; no fallback generates an
-identity or pretends a runtime retired. Without installation, the service returns
-exactly `available: false` and null device/pending records, and valid mutations
-fail with `device store unavailable`. No native library is loaded and no store
+The JNI bridge never loads a library itself. Until a vetted host explicitly
+loads the ZeroTier provider library and calls `bindNative(Context)` (Stage 4),
+the store stays uninstalled, the narrow `IdentityFactory` and `NativeOwner`
+capabilities stay inert, and no fallback generates an identity or pretends a
+runtime retired. Without installation, the service returns exactly
+`available: false` and null device/pending records, and valid mutations fail
+with `device store unavailable`. No native library is loaded and no store
 directory is created. Publishing this metadata slice needs no ZeroTier upstream
-patch or stream draft; enabling a real identity/node later requires separate
-native candidate, library and application binding validation.
+patch or stream draft; enabling a real identity/node later requires host
+library, binding and application validation beyond this manifest.
 
 Offline closure regression (use an already available local Gradle distribution):
 

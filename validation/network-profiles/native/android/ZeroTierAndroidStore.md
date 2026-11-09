@@ -49,11 +49,12 @@ leases or export identity bytes. Until that binding is enabled, `status` returns
 is never reported as an absent identity.
 
 The shared Android production manifest deliberately includes this service and
-its store/core/envelope dependencies, but excludes `AndroidZeroTierNative.java`.
-No dependency from the service or store requires that JNI candidate. The default
-unbound capability remains unavailable; a future vetted native host must supply
-the same original identity factory and exact-retirement owner before binding.
-The metadata-only slice does not activate the unfinished native stream draft.
+its store/core/envelope dependencies, and — as of Stage 2 — the reviewed
+`AndroidZeroTierNative.java` JNI bridge. The bridge never loads a library
+itself: until a vetted host loads the provider library and calls
+`bindNative(Context)`, the store stays uninstalled and the default unbound
+capability remains unavailable. The metadata-only slice does not activate the
+unfinished native stream draft.
 
 `statusSnapshot` selects authenticated device, pending creation or pending
 deletion under one core data lock. `forgetExact(handle, instanceId)` authenticates

@@ -4,9 +4,10 @@ AndroidNetworkSecretStore.java
 AndroidTailscaleConfig.java
 AndroidTailscaleEnvelope.java
 AndroidTailscaleStateStore.java
-AndroidZeroTierDeviceStore.java
 AndroidZeroTierDeviceService.java
+AndroidZeroTierDeviceStore.java
 AndroidZeroTierEnvelope.java
+AndroidZeroTierNative.java
 EasyTierConfigBuilder.java
 NetworkSecretStoreCore.java
 TailscaleStateStoreCore.java

@@ -159,8 +159,9 @@ def android_network_production_sources():
     manifest = base + 'android-production-sources.txt'
     try:
         hashes = production_java_hashes(ROOT / base)
-        if 'AndroidZeroTierNative.java' in hashes:
-            raise ValueError('Unreleased native binding in production source list')
+        listed = (ROOT / base / 'android-production-sources.txt').read_text().splitlines()
+        if listed and 'AndroidZeroTierNative.java' not in hashes:
+            raise ValueError('Stage 2 production source list must include the reviewed JNI bridge')
     except (OSError,ValueError) as error:
         raise SystemExit('Invalid Android network production source list') from error
     return [source_record(manifest), source_record(base + 'network-secrets.gradle'),
@@ -223,11 +224,11 @@ def pairing_provenance(platform, android_notice):
         'sharedZeroTierDevice': {
             'api': ['status', 'create', 'forget', 'recoverPendingCreation', 'discardPendingCreation', 'recoverPendingDeletion'],
             'scope': 'Public device metadata and exact pending-phase review; private identity never enters Dart',
-            'nativeBinding': 'NOT ENABLED; no ZeroTier runtime activation or native library bundled by these commands',
+            'nativeBinding': 'STAGE 2: reviewed JNI bridge ships in the production slice; host library load and bindNative still pending Stage 4',
             'deviceRuntime': 'NOT RUN by build/package workflow',
             'sources': [source_record('validation/network-profiles/native/android/' + name) for name in
                         ['AndroidZeroTierDeviceService.java', 'AndroidZeroTierDeviceStore.java', 'ZeroTierDeviceStoreCore.java',
-                         'AndroidZeroTierEnvelope.java', 'network-secrets.gradle']] +
+                         'AndroidZeroTierEnvelope.java', 'AndroidZeroTierNative.java', 'network-secrets.gradle']] +
                        [source_record('validation/flutter/' + name) for name in
                         ['lib/zerotier_device.dart', 'lib/zerotier_device_dialog.dart', 'native/android/ZeroTierDeviceChannel.kt']],
         },

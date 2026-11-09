@@ -33,7 +33,7 @@ class BundleTests(unittest.TestCase):
         self.assertEqual(report['androidNetworkVaultSources'], {
             name: bundle.sha(java_root / name) for name in allowlist.read_text().splitlines()})
         self.assertIn('AndroidZeroTierDeviceService.java', report['androidNetworkVaultSources'])
-        self.assertNotIn('AndroidZeroTierNative.java', report['androidNetworkVaultSources'])
+        self.assertIn('AndroidZeroTierNative.java', report['androidNetworkVaultSources'])
         self.assertEqual(report['androidNetworkVaultSourceListSHA256'], bundle.sha(allowlist))
         self.assertEqual(report['sourceChecks'], 'failure')
         self.assertEqual(report['transportChecks'], 'not_run')

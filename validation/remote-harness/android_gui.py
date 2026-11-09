@@ -74,6 +74,8 @@ class AndroidProgress:
         'android_board_search_native_call','android_board_search_reset_missing','android_board_search_clear_missing',
         'android_board_search_counter_install_failed','android_board_search_counter_read_invalid',
         'android_board_search_counter_no_ipc','android_board_search_counter_unsettle_timeout',
+        'android_home_not_visible','android_cdp_transport_failed','android_cdp_command_failed',
+        'android_control_operation_failed',
         'android_select_option_missing','android_select_option_failed',
         'android_device_impact_entry_missing','android_device_impact_status_invalid','android_device_impact_action_enabled',
         'android_device_impact_reread_invalid','android_device_impact_entry_lost','android_device_impact_write_invoked'}
@@ -132,6 +134,8 @@ class AndroidProgress:
         if isinstance(click,dict) and all(isinstance(click.get(part),dict) for part in ('before','after')):
             self.data['counterClickContext']={part:_public_counter_context(click[part])
                                               for part in ('before','after')}
+        home_status=getattr(error,'home_status',None)
+        if isinstance(home_status,str):self.data['homeStatus']=' '.join(home_status.split())[:120]
         self.publish()
     def finish(self,cleanup_failed):
         self.data['status']='passed' if self.success and not cleanup_failed else 'failed'
@@ -276,7 +280,8 @@ def _public_counter_context(value):
     if not isinstance(value, dict):
         return None
     safe = {'readyState':'unknown','internals':False,'invokeType':'unknown','url':'unknown',
-        'present':False,'count':0,'tallyKeys':[],'lastJsError':None}
+        'present':False,'count':0,'tallyKeys':[],'lastJsError':None,
+        'clickSeen':0,'lastClickTarget':None,'errorCount':0}
     if value.get('readyState') in ('loading','interactive','complete'):
         safe['readyState'] = value['readyState']
     if type(value.get('internals')) is bool:
@@ -298,6 +303,12 @@ def _public_counter_context(value):
     last_error = value.get('lastJsError')
     if isinstance(last_error, str) and last_error:
         safe['lastJsError'] = last_error[:200]
+    if type(value.get('clickSeen')) is int:
+        safe['clickSeen'] = min(max(value['clickSeen'],0),1000)
+    if isinstance(value.get('lastClickTarget'),str):
+        safe['lastClickTarget'] = value['lastClickTarget'][:64]
+    if type(value.get('errorCount')) is int:
+        safe['errorCount'] = max(value['errorCount'],0)
     return safe
 
 
@@ -469,10 +480,13 @@ class AndroidWebView:
                 'invokeType:i?typeof i.invoke:"missing",url:location.href,present:!!c,'
                 'count:c&&typeof c.count==="number"&&isFinite(c.count)?Math.trunc(c.count):null,'
                 'tallyKeys:Array.isArray(t)?t.slice(0,16):null,'
+                'clickSeen:c&&typeof c.clickSeen==="number"&&isFinite(c.clickSeen)?Math.trunc(c.clickSeen):null,'
+                'lastClickTarget:c&&typeof c.lastClickTarget==="string"?c.lastClickTarget:null,'
+                'errorCount:c&&typeof c.errorCount==="number"&&isFinite(c.errorCount)?Math.trunc(c.errorCount):null,'
                 'lastJsError:c&&typeof c.lastJsError==="string"?c.lastJsError:null}})()')
         except GuiFailure:
             value = {}  # A failed probe still reports every field as unknown.
-        return _public_counter_context(value)
+        return _public_counter_context(value) or _public_counter_context({})
 
     def _counter_failure(self, code):
         """Counter failures carry page context; a failed probe degrades to unknown."""
@@ -484,18 +498,22 @@ class AndroidWebView:
         """Count real app IPC so a local-only interaction can be proven on the device."""
         script = ('(()=>{const i=window.__TAURI_INTERNALS__;if(!i||typeof i.invoke!=="function")return false;'
             'if(i.__herdrInvokeCounter)return i.invoke===i.__herdrInvokePatched;'
-            'const original=i.invoke;const c={count:0,tally:{},lastJsError:null};'
+            'const original=i.invoke;const c={count:0,tally:{},lastJsError:null,errorCount:0,clickSeen:0,lastClickTarget:null};'
             'i.__herdrInvokeCounter=c;i.__herdrInvokeOriginal=original;'
             'const patched=function(cmd,args,options){c.count+=1;'
             'if(typeof cmd==="string"&&Object.keys(c.tally).length<64)c.tally[cmd]=(c.tally[cmd]||0)+1;'
             'return original.call(i,cmd,args,options);};'
             'i.__herdrInvokePatched=patched;i.invoke=patched;'
+            'if(!window.__herdrClickHook){window.__herdrClickHook=e=>{'
+            'const t=window.__TAURI_INTERNALS__,k=t&&t.__herdrInvokeCounter;'
+            'if(k){k.clickSeen+=1;k.lastClickTarget=(e&&e.target&&e.target.id)||"?";}};'
+            'document.addEventListener("click",window.__herdrClickHook,true);}'
             'if(!window.__herdrErrorHook){window.__herdrErrorHook=true;'
             'const note=v=>{const t=window.__TAURI_INTERNALS__;const k=t&&t.__herdrInvokeCounter;'
-            'if(k)k.lastJsError=String(v).slice(0,200);};'
-            'window.addEventListener("error",e=>note(e&&e.message||"error"));'
+            'if(k){k.errorCount+=1;k.lastJsError=String(v).slice(0,200);}};'
+            'window.addEventListener("error",e=>note("sync:"+((e&&e.message)||"error")));'
             'window.addEventListener("unhandledrejection",'
-            'e=>note(e&&e.reason&&(e.reason.message||e.reason)||"unhandledrejection"));}'
+            'e=>note("async:"+((e&&e.reason&&(e.reason.message||e.reason))||"rejected")));}'
             'return i.invoke===patched;})()')
         def installed():
             # A briefly reset JS context returns false or throws; both self-heal here.
@@ -522,7 +540,9 @@ class AndroidWebView:
 
     def remove_invoke_counter(self):
         self.evaluate(
-            '(()=>{const i=window.__TAURI_INTERNALS__;if(!i||!i.__herdrInvokeOriginal)return false;'
+            '(()=>{if(window.__herdrClickHook){document.removeEventListener("click",window.__herdrClickHook,true);'
+            'delete window.__herdrClickHook;}'
+            'const i=window.__TAURI_INTERNALS__;if(!i||!i.__herdrInvokeOriginal)return false;'
             'i.invoke=i.__herdrInvokeOriginal;delete i.__herdrInvokeOriginal;delete i.__herdrInvokePatched;'
             'delete i.__herdrInvokeCounter;return true;})()')
 
@@ -705,16 +725,26 @@ def _board_counts(snapshot):
     return int(status.group(1)), int(status.group(2)), int(current.group(1)), int(history.group(1))
 
 
-def _counter_count_reached(browser, minimum):
-    """Probe helper: True once the counter reads the minimum despite a brief JS reset."""
+def _counter_probe(browser):
+    """Read a counter, failing fast when the page or CDP transport is unavailable."""
     try:
-        return browser.invoke_counter()['count'] >= minimum
+        return browser.invoke_counter()
     except GuiFailure as error:
-        # A vanished counter is the diagnosis itself (page reset); it must not
-        # run out the clock and be reported as an IPC that never happened.
-        if str(error) == 'android_board_search_counter_read_invalid':
+        if str(error) in ('android_board_search_counter_read_invalid',
+                          'android_cdp_transport_failed','android_cdp_command_failed'):
             raise
-        return False  # Transient transport or evaluate errors keep polling.
+        return None
+
+
+def _counter_count_reached(browser, minimum):
+    """Return whether the counter has reached the requested minimum."""
+    value = _counter_probe(browser)
+    return value is not None and value['count'] >= minimum
+
+
+def _counter_board_command_seen(browser):
+    value = _counter_probe(browser)
+    return value is not None and any(value['tally'].get(name,0) > 0 for name in ('host_list','network_list'))
 
 
 def _settled_invoke_count(browser):
@@ -736,27 +766,28 @@ def _settled_invoke_count(browser):
 
 def exercise_board_search(browser, approval, config):
     """Search the saved board locally: text, task state, dual counts, history and reset."""
+    before_click, after_click = {}, {}
+    install_attempted = False
+    final_context = None
+    def remove_counter():
+        try:
+            browser.remove_invoke_counter()
+        except GuiFailure:
+            pass  # Never let cleanup hide the diagnostic that got us here.
     try:
-        targets = checked_targets(approval.blocked_targets)
-    except (ValueError, TypeError, AttributeError):
-        raise GuiFailure('android_blocked_target_evidence_invalid') from None
-    fragment = str(config['session'])[:8]
-    browser.install_invoke_counter()
-    try:
+        try:
+            targets = checked_targets(approval.blocked_targets)
+        except (ValueError, TypeError, AttributeError):
+            raise GuiFailure('android_blocked_target_evidence_invalid') from None
+        fragment = str(config['session'])[:8]
+        install_attempted = True
+        browser.install_invoke_counter()
         before_click = browser._counter_page_context()
         browser.click('#host-return-home')
-        wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
         after_click = browser._counter_page_context()
-        # The board refresh on return proves that the counter observes real app IPC.
-        try:
-            wait_for(lambda: _counter_count_reached(browser, 1), 'android_board_search_counter_no_ipc',
-                     timeout=15)
-        except GuiFailure as error:
-            if str(error) == 'android_board_search_counter_read_invalid':
-                raise  # The counter vanished; report that cause, not an IPC timeout.
-            failure = browser._counter_failure('android_board_search_counter_no_ipc')
-            failure.counter_click_context = {'before': before_click, 'after': after_click}
-            raise failure from None
+        wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
+        # The board refresh must issue a real host or network list request.
+        wait_for(lambda: _counter_board_command_seen(browser), 'android_board_search_counter_no_ipc', timeout=15)
         baseline = _settled_invoke_count(browser)
         expected = {row['paneId']+'/'+row['terminalId'] for row in targets}
 
@@ -815,13 +846,28 @@ def exercise_board_search(browser, approval, config):
         added = browser.invoke_counter()['count'] - baseline
         if added != 0:
             raise GuiFailure('android_board_search_native_call')
+        final_context = browser._counter_page_context()
+        remove_counter()
+        install_attempted = False
+        _restore_paired_form(browser, config, targets)
+        return {'textMatched':text_matched, 'dualConditionCount':dual_count, 'totalHosts':total,
+            'currentCount':current_count, 'historyCount':history_count, 'historyRows':2,
+            'historyDistinguished':True, 'clearedKeptState':True, 'resetRestoredList':True,
+            'nativeCallsAdded':added}
+    except GuiFailure as error:
+        if not isinstance(getattr(error,'counter_context',None),dict):
+            error.counter_context = (final_context if final_context is not None else
+                                     browser._counter_failure(str(error)).counter_context)
+        error.counter_click_context = {'before':before_click,'after':after_click}
+        try:
+            status = browser.read('#host-home-status')
+            if isinstance(status,str):error.home_status = ' '.join(status.split())[:120]
+        except GuiFailure:
+            pass  # Preserve the original failure if the page is no longer readable.
+        raise
     finally:
-        browser.remove_invoke_counter()
-    _restore_paired_form(browser, config, targets)
-    return {'textMatched':text_matched, 'dualConditionCount':dual_count, 'totalHosts':total,
-        'currentCount':current_count, 'historyCount':history_count, 'historyRows':2,
-        'historyDistinguished':True, 'clearedKeptState':True, 'resetRestoredList':True,
-        'nativeCallsAdded':added}
+        if install_attempted:
+            remove_counter()
 
 
 DEVICE_REVIEW_SELECTOR = 'dialog[aria-labelledby="zerotier-device-title"]'

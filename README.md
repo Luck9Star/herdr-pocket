@@ -39,8 +39,8 @@ Flutter 的隔离 SSH 测试还验证了同一连接上的隐藏、显式恢复�
 | --- | --- | --- |
 | 配对 → 看板 → 持续观察 | 两壳均有独立设备密钥 SSH、看板、所选 pane 首帧及增量、主动停止的模拟器证据。Flutter 与 Tauri 均确认只读观察全程远端收到 0 字节，两条路线均从同名受阻记录打开 B，Tauri 另验收手机撤销。[配对与闭环](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) | arm64 安装、物理相机扫码、锁屏和重启恢复 |
 | 终端与阅读位置 | 两份包包含三档观察画布。Flutter 与 Tauri 的只读模拟器场景均验收了宽画布、标记及阅读位置恢复。[画布与设备验收](https://github.com/Luck9Star/herdr-pocket/blob/71ce10191c2c282bc4d5258f1bfc191a3cbfb882/docs/50-android-paired-tui-validation.md) | 真机触控、锁屏与长时间观察 |
-| 终端输入 | 原版 herdr 保持只读。Tauri 在受保护宿主完成逐键、草稿及十个 TUI 按键。发送结果未知时保留记录，供用户核查。[操作与回执](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) | Flutter 隐藏标签恢复后的 TUI、真实中文 IME 与实体键盘 |
-| 组网与平台 | 两份 APK 包含 EasyTier、Tailscale。ZeroTier 的来源、设备管理及离线原生验证另有记录。[原生验证](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/29-zerotier-managed-device.md) | 三网真实节点、并发及五平台矩阵 |
+| 终端输入 | 原版 herdr 保持只读。Tauri 在受保护宿主完成逐键、草稿及十个 TUI 按键。Flutter 在受保护宿主完成逐键、草稿、隐藏标签恢复及十个 TUI 操作全量回执（docs/56 第 53 行指标全数达成）。[操作与回执](docs/58-session-handoff-2026-11-09-r2.md) | 真实中文 IME 与实体键盘 |
+| 组网与平台 | 两份 APK 包含 EasyTier、Tailscale，并完成 ZeroTier 生产切片反转与双壳宿主接线（Stage 2 S1–S4 全量完成，产物含 libhp_zerotier.so 且真 NDK 链接校验通过）。[Stage 2 台账](docs/58-session-handoff-2026-11-09-r2.md) | 真实物理节点入网、跨网并发及五平台矩阵 |
 
 Flutter 与 Tauri 继续并行验证，物理手机的输入正确性、字形、生命周期和性能仍会影响选型。公开仓库提供源码和测试渠道，项目许可证与原生依赖的分发条件仍在审查。[技术栈复评](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/06-technology-evaluation.md) · [分发与许可](https://github.com/Luck9Star/herdr-pocket/blob/1b7ccf63bd8caafdb54f34fe9b7d3195deeff2f4/docs/17-license-and-distribution-review.md)
 

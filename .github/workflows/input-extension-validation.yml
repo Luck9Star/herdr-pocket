@@ -61,7 +61,7 @@ jobs:
         working-directory: fixture-source/vendor/libghostty-vt
         run: |
           set -euo pipefail
-          urls="$(grep -rhoE 'https://[^"[:space:]]+\.tar\.gz' --include='*.zon' . | sort -u)"
+          urls="$(grep -rhoE 'https://[^"[:space:]]+\.(tar\.gz|tar\.zst|tgz)' --include='*.zon' . | sort -u)"
           count="$(printf '%s\n' "$urls" | grep -c .)"
           echo "prefetching $count vendored zig dependencies"
           delay=15

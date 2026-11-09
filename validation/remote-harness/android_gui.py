@@ -309,6 +309,12 @@ def _public_counter_context(value):
         safe['lastClickTarget'] = value['lastClickTarget'][:64]
     if type(value.get('errorCount')) is int:
         safe['errorCount'] = max(value['errorCount'],0)
+    probe = value.get('ipcProbe')
+    if (isinstance(probe, dict) and type(probe.get('ipcWritable')) in (bool,type(None)) and
+            type(probe.get('ipcConfigurable')) in (bool,type(None)) and
+            type(probe.get('bridgeMissing')) is bool and type(probe.get('bridgeReverted')) is bool):
+        safe['ipcProbe'] = {key: probe[key] for key in
+            ('bridgeMissing','bridgeReverted','ipcWritable','ipcConfigurable')}
     return safe
 
 
@@ -476,6 +482,7 @@ class AndroidWebView:
             value = self.evaluate('(()=>{const i=window.__TAURI_INTERNALS__;'
                 'const c=i&&i.__herdrInvokeCounter;'
                 'const t=c&&c.tally&&typeof c.tally==="object"?Object.keys(c.tally):null;'
+                'const p=i&&i.__herdrIpcProbe&&typeof i.__herdrIpcProbe==="object"?i.__herdrIpcProbe:null;'
                 'return {readyState:document.readyState,internals:!!i,'
                 'invokeType:i?typeof i.invoke:"missing",url:location.href,present:!!c,'
                 'count:c&&typeof c.count==="number"&&isFinite(c.count)?Math.trunc(c.count):null,'
@@ -483,7 +490,10 @@ class AndroidWebView:
                 'clickSeen:c&&typeof c.clickSeen==="number"&&isFinite(c.clickSeen)?Math.trunc(c.clickSeen):null,'
                 'lastClickTarget:c&&typeof c.lastClickTarget==="string"?c.lastClickTarget:null,'
                 'errorCount:c&&typeof c.errorCount==="number"&&isFinite(c.errorCount)?Math.trunc(c.errorCount):null,'
-                'lastJsError:c&&typeof c.lastJsError==="string"?c.lastJsError:null}})()')
+                'lastJsError:c&&typeof c.lastJsError==="string"?c.lastJsError:null,'
+                'ipcProbe:p?{bridgeMissing:p.bridgeMissing===true,bridgeReverted:p.bridgeReverted===true,'
+                'ipcWritable:typeof p.ipcWritable==="boolean"?p.ipcWritable:null,'
+                'ipcConfigurable:typeof p.ipcConfigurable==="boolean"?p.ipcConfigurable:null}:null}})()')
         except GuiFailure:
             value = {}  # A failed probe still reports every field as unknown.
         return _public_counter_context(value) or _public_counter_context({})
@@ -505,7 +515,11 @@ class AndroidWebView:
         window.ipc with a wrapper counts every command at the native boundary.
         """
         script = ('(()=>{const i=window.__TAURI_INTERNALS__;const b=window.ipc;'
-            'if(!i||typeof i.invoke!=="function"||!b||typeof b.postMessage!=="function")return false;'
+            'if(!i||typeof i.invoke!=="function")return false;'
+            'const d=b?Object.getOwnPropertyDescriptor(window,"ipc"):null;'
+            'if(!b||typeof b.postMessage!=="function")'
+            '{i.__herdrIpcProbe={bridgeMissing:true,ipcWritable:d?d.writable:null,'
+            'ipcConfigurable:d?d.configurable:null};return false;}'
             'if(window.__herdrIpcBridge){window.ipc=window.__herdrIpcBridge;'
             'return window.ipc===window.__herdrIpcBridge;}'
             'const c={count:0,tally:{},lastJsError:null,errorCount:0,clickSeen:0,lastClickTarget:null};'
@@ -514,8 +528,11 @@ class AndroidWebView:
             'if(typeof cmd==="string"&&Object.keys(c.tally).length<64)c.tally[cmd]=(c.tally[cmd]||0)+1;'
             'return b.postMessage(message);}};'
             'i.__herdrInvokeCounter=c;'
-            'window.__herdrIpcOriginal=b;window.__herdrIpcBridge=wrapped;window.ipc=wrapped;'
-            'if(window.ipc!==wrapped)return false;'
+            'window.__herdrIpcOriginal=b;window.__herdrIpcBridge=wrapped;'
+            'try{window.ipc=wrapped;}catch(e){}'
+            'if(window.ipc!==wrapped){i.__herdrIpcProbe={bridgeReverted:true,'
+            'ipcWritable:d?d.writable:null,ipcConfigurable:d?d.configurable:null};return false;}'
+            'delete i.__herdrIpcProbe;'
             'if(!window.__herdrClickHook){window.__herdrClickHook=e=>{'
             'const t=window.__TAURI_INTERNALS__,k=t&&t.__herdrInvokeCounter;'
             'if(k){k.clickSeen+=1;k.lastClickTarget=(e&&e.target&&e.target.id)||"?";}};'

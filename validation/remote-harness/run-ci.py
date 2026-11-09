@@ -396,8 +396,15 @@ def main():
         if args.input_fixture:
             binary, report['herdr'] = load_input_fixture(args.input_fixture, env, args.android_tui)
         else:
-            with urllib.request.urlopen(HERDR_URL, timeout=60) as response:
-                binary = response.read(100 * 1024 * 1024 + 1)
+            binary = b''
+            for attempt in range(4):
+                try:
+                    with urllib.request.urlopen(HERDR_URL, timeout=60) as response:
+                        binary = response.read(100 * 1024 * 1024 + 1)
+                    break
+                except (urllib.error.URLError, TimeoutError):
+                    if attempt == 3: raise
+                    time.sleep(2 ** attempt)
             if len(binary) > 100 * 1024 * 1024 or hashlib.sha256(binary).hexdigest() != HERDR_SHA:
                 raise ProbeFailure('herdr_hash_or_size_mismatch')
         herdr = root / 'herdr'

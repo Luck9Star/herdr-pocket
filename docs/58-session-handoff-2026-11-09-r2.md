@@ -108,6 +108,25 @@ Finder groupHeader(Finder group) => find.descendant(
 - 验证：unittest 21+37=**58 项全绿**；Node 沙箱实测注入 JS（双装不累积、remove 后 0 监听器）。
 - **目的**：CI android-device-key 若再挂，`counterContext` / `counterClickContext` / `homeStatus` + 拆分错误码（`no_ipc` / `_unsettle_timeout` / `_install_failed` / `_read_invalid`）足以定案 `no_ipc` **三选一**根因：① `refreshHosts` 吞错（`validation/tauri/src/remote.js:763` onclick 先抛被吞）② revision 早退 ③ native false。
 
+### 5.1 独立 diff 审查结论（已闭环）
+
+**GO / APPROVE**——零 CRITICAL/HIGH/MEDIUM 发现，58 项 unittest 全绿无 skip。2 条信息级观察不阻断：
+
+- tally 64 键上限存在理论遮蔽，但 app 命令面远小于 64，实际不可达；
+- `_counter_count_reached`（`android_gui.py:739`）语义并入 `_counter_probe`（`:728`），仅剩 device-impact 调用方。
+
+审查另确认：**P2 `no_ipc` 判据收紧无 false negative 风险**——新门严格窄于旧门，原判 `no_ipc` 的场景不可能变绿。
+
+### 5.2 `no_ipc` 三分支互斥定案签名（照此判读）
+
+| 根因分支 | 签名（字符串均已在源码核实） |
+| --- | --- |
+| ① `refreshHosts` 吞错 | `homeStatus` = 「本机资料不可用；仍可打开手动连接表单。」 |
+| ② revision 早退 | `homeStatus` 停留初始「正在读取本机资料…」（`validation/tauri/index.html:12` 的 `#host-home-status` 初始文本）+ `clickSeen ≥ 1` + tally 无 `host_list` |
+| ③ native false | `homeStatus` = 「浏览器预览不读取本机主机资料。」（`validation/tauri/src/remote.js`）+ `counterContext` 佐证 |
+
+click 未落地（`clickSeen = 0`）盲区也已由 P0-1 探针补齐。
+
 ---
 
 ## 六、下一轮推送方案（已核验，直接照做）
@@ -191,7 +210,7 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
 ## 九、新会话第一步清单（按序）
 
 1. 复核工作树干净（`git status` 应仅 `?? graphify-out/`）。
-2. **确认 `32a77c7` 的 diff 独立审查结论**（本会话另一代理并行进行，结论见 OpenViking 项目笔记 `viking://user/hadyenvip/resources/herdr-pocket/notes/`）；若为 GO-WITH-CHANGES / NO-GO，修完再推。
+2. `32a77c7` 独立 diff 审查**已闭环：GO / APPROVE，零 CRITICAL/HIGH/MEDIUM 发现**，无修改要求，可直接推送（结论与三分支签名见 §5.1 / §5.2）。
 3. 合并本地栈推 0010 分支（命名规则见 §6.1）+ 单个后台 until 循环监控终态（§6.3）。
 4. 预期焦点：android-pairing 两 job——
    - **android-device-key**：靠新 counter 诊断定案 `no_ipc` 三选一根因（§5）；
@@ -226,7 +245,7 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
 - [x] counter 诊断 P0–P2 加固 `32a77c7`（unittest 58 项全绿 + Node 沙箱实测）
 - [x] Stage 2 门控范围审计（三层排除 + A/B/C 改动清单 + S1→S5）
 - [x] 本文档 + docs/56 指针更新
-- [ ] 确认 `32a77c7` diff 独立审查结论（GO / GO-WITH-CHANGES / NO-GO）
+- [x] `32a77c7` diff 独立审查结论：**GO**（零 CRITICAL/HIGH/MEDIUM，58 项全绿无 skip）
 - [ ] 复核工作树干净（仅 `?? graphify-out/`）
 - [ ] 推 0010 触发分支（守卫 `git diff --cached --name-only | grep graphify-out` 为空）
 - [ ] 后台 until 循环等 run 终态

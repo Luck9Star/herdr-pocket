@@ -1253,6 +1253,10 @@ class BoardSearchAndDeviceImpactGuards(unittest.TestCase):
         for stage in gui.BOARD_SEARCH_STAGES:
             record = {'stage':stage,'errorClass':'TestFailure','line':68,'boardSearch':board_search_report()}
             self.assertEqual(gui.safe_test_failure(record), record)
+            # Failure path also accepts uncompleted clear/reset states.
+            unsettled = {'stage':stage,'errorClass':'StateError','line':68,
+                'boardSearch':board_search_report(clearedKeptState=False,resetRestoredList=False)}
+            self.assertEqual(gui.safe_test_failure(unsettled), unsettled)
         for stage in gui.DEVICE_IMPACT_STAGES:
             record = {'stage':stage,'errorClass':'TestFailure','line':68,'deviceImpact':device_impact_report()}
             self.assertEqual(gui.safe_test_failure(record), record)

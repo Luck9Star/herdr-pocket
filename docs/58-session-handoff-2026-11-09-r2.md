@@ -255,5 +255,8 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
 - [x] 0011（run `42548234405`）终态 9 绿/1 败：**android-device-key 首次全绿**（`window.ipc` 桥 counter 真计数，board gate 过；后三连绿）；flutter 前进为 StateError line 668（jumpTo finder 写法）→ `b8331af` 修正（descendant Scrollable）。
 - [x] 0012（run `42549882281`）终态 9 绿/1 败：flutter errorClass other + line 141（tap 时 finder 已空，FlutterError）→ `2fb8cf1`（clear/reset 改 `tapStablePointer` + 白名单收录 FlutterError）。
 - [x] 0013（run `42552265165`）**adb 基础设施假失败定案**：failure null、cleanup primaryFailure `flutter_android_adb_failed`、signer not_completed、app 未装上、集成测试未开始；非代码回归，按假失败判据原 HEAD 重推 `0013b`（run `42553557053`）验证。
-- [ ] 0013b 终态判读（flutter board_search_clear 修复的首个干净验证轮）
+- [x] 0013b（run `42553557053`）终态 9 绿/1 败：干净环境，flutter 停在 `board_search_clear`（until 10s 超时 line 132）。
+- [x] 0014（run `42554866937`）：flutter 报 `TestFailure`、行 132（`board_search_clear`）；`apps (tauri)` 因 crates.io 网络瞬断失败；`android-device-key` 绿。
+- [x] 0015~0017 轮次：flutter 产物报 `failure: null`、errorCode 报 `flutter_android_test_exited_board_search_clear`；排查证实 Python harness 的 `safe_board_search` 存在失败路径硬性要求布尔全为 True 导致丢弃未决快照的代码缺陷（0017 云端真实退出路径是否走到该分支未定案）；`android-device-key` 在 0015 绿、0016 因 CDP 握手抖动报 `android_driver_failure`@pairing 挂、0017 恢复全绿。
+- [ ] 当前本地整批开发完成待验（未提交、未推送）：Python harness 支持失败分流允许 False 布尔、Flutter clear 前改手势滚动 `scrollUntilVisible(search, -300)`；全套本地单测与 Widget 探针已验证通过。
 - [ ] **等用户明示授权**后才动 Stage 2 门控（建议先批 S1+S2）

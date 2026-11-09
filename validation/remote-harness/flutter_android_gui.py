@@ -376,7 +376,7 @@ def safe_tui_resume(value):
     return {key:value[key] for key in (*integer_bounds,*sorted(booleans),*(enums if value['schemaVersion'] == 2 else ()))}
 
 
-def safe_board_search(value):
+def safe_board_search(value, failure=False):
     """Board search stays on the device: no host identity, terminal text or arbitrary keys may leave the AVD."""
     invalid = 'flutter_android_board_search_invalid'
     keys = ('textMatched','dualConditionCount','totalHosts','currentCount','historyCount','historyRows',
@@ -394,12 +394,11 @@ def safe_board_search(value):
     # The text match and both conditions select the same saved host, the task state
     # survives clearing the text, the reset restores the list and no native call is added.
     if (value['nativeCallsAdded'] != 0 or value['historyDistinguished'] is not True or
-            value['clearedKeptState'] is not True or value['resetRestoredList'] is not True or
+            (not failure and (value['clearedKeptState'] is not True or value['resetRestoredList'] is not True)) or
             value['textMatched'] < 1 or value['dualConditionCount'] < 1 or value['historyRows'] < 1 or
             value['historyCount'] < 1 or value['dualConditionCount'] > value['totalHosts']):
         raise DeviceFailure(invalid)
     return {key: value[key] for key in keys}
-
 
 def safe_device_impact(value):
     """The shared device review only reads: no identity, network join or write may be claimed."""
@@ -443,7 +442,7 @@ def safe_test_failure(value):
     if 'boardSearch' in value:
         if value['stage'] not in BOARD_SEARCH_STAGES:
             raise DeviceFailure('flutter_android_failure_metadata_invalid')
-        clean['boardSearch'] = safe_board_search(value['boardSearch'])
+        clean['boardSearch'] = safe_board_search(value['boardSearch'], failure=True)
     if 'deviceImpact' in value:
         if value['stage'] not in DEVICE_IMPACT_STAGES:
             raise DeviceFailure('flutter_android_failure_metadata_invalid')

@@ -668,22 +668,12 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   stage('board_search_clear');
   // The board is a lazy ListView: the history phase scrolled a host card to
   // the top, evicting the search field (and its clear button) from the
-  // viewport. Return to the top so the control is built again before tapping.
-  // The key sits on the ListView, so resolve its inner Scrollable first —
-  // the same pattern host_catalog_search_widget_test uses via boardList().
-  final boardScrollable=find.descendant(
-    of:find.byKey(const ValueKey('host-catalog-list')),
-    matching:find.byType(Scrollable)).first;
-  tester.state<ScrollableState>(boardScrollable).position.jumpTo(0);
-  // Do NOT pumpAndSettle here: hidden tabs in the IndexedStack keep a
-  // blinking terminal cursor alive, so settle never converges and the test
-  // is killed by its own timeout with no failure report (runs 42556512895
-  // and 42558100632 both died exactly here as test_exited). Pump a bounded
-  // number of frames instead so the lazy list rebuilds the top controls.
-  for (var i = 0; i < 20; i++) { await tester.pump(const Duration(milliseconds: 100)); }
-  // Runs 42548234405/42549882281/42553557053 failed this tap with three
-  // different signatures. Fail fast with the evidence snapshot instead of
-  // another blind 60-second until spin.
+  // viewport. Scroll back up until the search controls are mounted again,
+  // matching the proven scrollUntilVisible pattern used at the start of search.
+  await tester.scrollUntilVisible(search,-300,
+    scrollable:find.descendant(of:board,matching:find.byType(Scrollable)).first);
+  await until(tester,() => search.evaluate().length == 1 && filter.evaluate().length == 1);
+  await tester.ensureVisible(search);
   final clearButton=find.byKey(const ValueKey('hosts-search-clear'));
   if (clearButton.evaluate().length != 1) {
     boardSearchFailureProbe = <String,Object>{

@@ -274,10 +274,9 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
 - [x] 0023 基础设施假失败归因与加固（`9807b0f`）：0023 轮遇 GitHub Releases 偶发 504 断流，`run-ci.py` 在下载 herdr 处抛出网络异常致 `fixture_setup_failed`；已增设 4 次重试与指数退避加固防御，保留 `herdr = root / 'herdr'` 路径定义。
 - [x] 0024 轮归因与预防加固（`4685034`）：0024 轮中 `flutter-device-key` 报出 `flutter_android_test_exited_before_install`，日志无显式发行包下载超时的文字证据（纯属测试进程在安装前提前退出）。为防范与 Tauri 同源的 Gradle 包装器缺省 10 秒超时风险，在 `flutter_android_gui.py` 预防性增设 `networkTimeout=120000` 改写，保留原地址与校验，不带出原始日志。
 - [x] 0025 外部 504 态势诊断：08:07~08:25 间本地探针证实上游 services.gradle.org 与 adoptium 网关发生持续 504 断流，耐受等待外部恢复。
-- [x] 0026 轮（run `42595512698`，`26e34ab`）**全矩阵全绿达成（conclusion: success，9 成功 / 2 跳过 / 0 失败）**：
-  1. `android-pairing / flutter-device-key`: **SUCCESS**，真实产物 `manifest.json` 状态为 `passed`；`boardSearchEvidence`（`clearedKeptState: true`, `resetRestoredList: true`, `historyDistinguished: true`）、`deviceImpactEvidence`（`reentered: true`, `scopeListed: true`）、`blockedTargetEvidence`、`localIdentityDeleted` 全绿，坐实软键盘收起与滚动前置（`d0c813d`）完全彻底解决看板重置超时问题！
-  2. `android-pairing / android-device-key`: **SUCCESS**（第 9 次全绿，看板与设备审查双满分）。
-  3. `apps (flutter)` 与 `apps (tauri)`: **SUCCESS**（双端 arm64 发布包与二进制校验全通过）。
-  4. `native`, `flutter-source`, `zerotier-android-abi`, `zerotier-keystore`, `transport-source`: 全部 **SUCCESS**。
-  5. `input-fixture`, `input-host-candidate`: 按规则正常跳过。
+- [x] 0026 轮（run `42595512698`，`26e34ab`）**本批次目标全绿（conclusion: success，9 成功 / 2 跳过 / 0 失败）**：
+  1. `android-pairing / flutter-device-key`: **SUCCESS**（stock 观察路径 `android-native-pairing-observe`：`boardSearchEvidence` 双真值、`deviceImpactEvidence`、`blockedTargetEvidence`、`localIdentityDeleted` 全绿），坐实软键盘收起与滚动前置（`d0c813d`）解决看板重置超时；注意本分支为 stock 路径：`directModeDisabled`/`draftModeDisabled`＝true、`receivedInputBytes`＝0、仅含 `keyboard-observe-hidden` 检查点——**docs/56 第 53 行的隐藏标签恢复新完整帧、同观察代增量与十个 TUI 操作回执属 guarded/TUI 路径验收，本分支未执行，不构成「第一阶段彻底完成」**。
+  2. `android-pairing / android-device-key`: **SUCCESS**（第 9 次全绿）。
+  3. `apps (flutter)` 与 `apps (tauri)`: **SUCCESS**；`native`, `flutter-source`, `zerotier-android-abi`, `zerotier-keystore`, `transport-source`: 全部 **SUCCESS**；input 两作业按规则跳过。
+- [ ] **下一步（docs/56 第 53 行余项）**：用 `with-emulators-input-tui-<批次>-<SHA>` 前缀分支跑两端同批输入/恢复验收（隐藏标签恢复原目标新完整帧、同观察代增量、十个 TUI 操作回执），保持 Stage 2 锁定。
 - [ ] **等用户明示授权**后才动 Stage 2 门控（建议先批 S1+S2）

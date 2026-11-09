@@ -264,4 +264,8 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
   2. 本地深滚探针坐实**三处同族懒列表缺陷**并修复：`device_impact_enter` 的 hosts-networks、`delete_local_identity` 的完成提示（列表顶部）、设备审查返回后的 hosts-add —— 深滚后均在树中被回收（实测 in tree = 0），裸 until 只会空等 60 秒。
   3. 新增 `validation/flutter/test/host_catalog_scroll_recycling_test.dart` 把回收行为固化为仓库正式回归用例（CI 的 flutter-source 与 flutter-device-key 跑整目录 flutter test）。
 - [x] 0019 轮（run `42571118374`，`3a7f7a8`）终态 failure，逐项归因：`native`＝HTTP 504 瞬断；`android-device-key`＝gradle.org 下载 timeout 10s → APK 构建失败 → AVD 未启动（与 0018 的 apps 504 同源）；`flutter-device-key`＝setup-java 步骤失败（job 启动层）；`flutter-source`＝**真实回归**：新增回收用例带 unused import 使 analyze exit 1——已修复（`0eabffd`）。回归用例第二条按审查意见重写为真实覆盖回收路径（`5ac7843`）。核心验证目标（清空/重置阶段拆分 + 三处懒列表修复）因 gradle.org 网络问题未获云端验证，待下一轮。
+- [x] 0020 轮与基础设施超时防御（`14e6671`）：
+  1. `flutter-source` 在 0020 中因 `0eabffd` 修复 unused import 恢复 **100% 全绿**（analyze 无 issue、521 项测试全过）。
+  2. 根因定案：Gradle wrapper 默认由模板生成 `networkTimeout=10000`（10秒），在 GitHub Actions 遇到网络抖动或慢速响应时必定超时报 `Downloading from ... failed: timeout (10000ms)`；且 `validateDistributionUrl=true` 严格要求 https。在 `validation/tauri/scripts/wire-android.py` 增补将 `networkTimeout` 调升至 120000（2分钟），保留 https 协议，并在 `pair-copy-packaging-test.py` 增加回归测试（`14e6671`）。
+  3. 同时在 `validation/native/tool/probe.py` 为 protoc 下载增补 4 次重试与退避，彻底防御 GitHub Releases 偶发 504。
 - [ ] **等用户明示授权**后才动 Stage 2 门控（建议先批 S1+S2）

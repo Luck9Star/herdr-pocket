@@ -57,18 +57,30 @@ jobs:
             ~/.cache/zig
             fixture-source/target
           key: pocket-input-fixture-${{ env.BASE_SHA }}-${{ env.PATCH_SHA256 }}-rust196-zig0160-zcache
-      - name: Prefetch the wuffs dependency with retries
+      - name: Prefetch the vendored zig dependencies with retries
+        working-directory: fixture-source/vendor/libghostty-vt
         run: |
-          wuffs_url="https://deps.files.ghostty.org/wuffs-7411f488fe2e2c205c3d3b3d28638b7356522930.tar.gz"
-          for attempt in 1 2 3 4 5; do
-            if timeout 120 "$ZIG" fetch "$wuffs_url"; then
-              echo "wuffs prefetched on attempt $attempt"
-              exit 0
-            fi
-            echo "zig fetch attempt $attempt failed; retrying in 15s"
-            sleep 15
+          set -euo pipefail
+          urls="$(grep -rhoE 'https://[^"[:space:]]+\.tar\.gz' --include='*.zon' . | sort -u)"
+          count="$(printf '%s\n' "$urls" | grep -c .)"
+          echo "prefetching $count vendored zig dependencies"
+          delay=15
+          for round in 1 2 3 4 5 6 7 8; do
+            failed=0
+            while read -r url; do
+              [ -z "$url" ] && continue
+              if timeout 180 "$ZIG" fetch "$url" >/dev/null 2>&1; then
+                echo "ok: $url"
+              else
+                echo "miss (round $round): $url"
+                failed=1
+              fi
+            done <<< "$urls"
+            [ "$failed" -eq 0 ] && { echo "all dependencies prefetched (round $round)"; exit 0; }
+            sleep "$delay"
+            delay=$((delay * 2))
           done
-          echo "::error::wuffs prefetch failed after 5 attempts" >&2
+          echo "::error::zig dependency prefetch failed after 8 rounds" >&2
           exit 1
       - name: Check atomic input guard and build the fixture server
         working-directory: fixture-source

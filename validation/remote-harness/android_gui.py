@@ -447,7 +447,11 @@ class AndroidWebView:
                   if(!e||!r||e.hidden) return false; const x=%d,y=%d;
                   return r.left<=x && x<=r.right && r.top<=y && y<=r.bottom &&
                          e.contains(document.elementFromPoint(x,y))})()'''
-                % (json.dumps(selector), release['x'], release['y'])))})
+                % (json.dumps(selector), release['x'], release['y']))),
+                # How far the control moved between the press and the release.
+                'moved': release != point,
+                'pressX': point['x'], 'pressY': point['y'],
+                'releaseX': release['x'], 'releaseY': release['y']})
         if trace is not None:
             trace.append(self.evaluate('''(()=>{const a=document.activeElement;return {
               activeElement:a?(a.id||a.className||a.tagName):null,
@@ -465,8 +469,24 @@ class AndroidWebView:
           return r.width>0 && r.height>0 && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
             e.contains(document.elementFromPoint(x,y))?{x,y}:null})()''' % (json.dumps(scope),json.dumps(label))
         point=wait_for(lambda:self.evaluate(expression),code)
-        for kind in ('mousePressed','mouseReleased'):
-            self.call('Input.dispatchMouseEvent',{'type':kind,'x':point['x'],'y':point['y'],'button':'left','clickCount':1})
+        self.call('Input.dispatchMouseEvent',{'type':'mousePressed','x':point['x'],'y':point['y'],'button':'left','clickCount':1})
+        # The press can blur the terminal and reflow the viewport before the
+        # release lands (0013). Re-read the named control and keep the release
+        # on it so the browser synthesises the click for it.
+        release=point
+        try:
+            moved=self.evaluate(r'''(()=>{const root=document.querySelector(%s);if(!root)return null;
+              const buttons=[...root.querySelectorAll('button')].filter(e=>e.textContent.trim()===%s &&
+                !e.matches(':disabled') && !e.closest('[hidden]') && e.getClientRects().length);
+              if(buttons.length!==1)return null;const e=buttons[0];
+              const r=e.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;
+              return r.width>0 && r.height>0 && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
+                e.contains(document.elementFromPoint(x,y))?{x,y}:null})()''' % (json.dumps(scope),json.dumps(label)))
+            if isinstance(moved,dict) and isinstance(moved.get('x'),(int,float)) and isinstance(moved.get('y'),(int,float)):
+                release={'x':moved['x'],'y':moved['y']}
+        except GuiFailure:
+            pass  # Keep the pressed coordinate when the control cannot be re-read.
+        self.call('Input.dispatchMouseEvent',{'type':'mouseReleased','x':release['x'],'y':release['y'],'button':'left','clickCount':1})
 
     def fill(self, selector, value):
         expression = '''(()=>{const e=document.querySelector(%s); if(!e || !e.getClientRects().length || e.matches(':disabled') || e.readOnly) return false;
@@ -1644,7 +1664,9 @@ def run_android(args, root, env, config, approval):
         stop_trace = []
         browser.click('#remote-cancel', trace=stop_trace)
         if progress is not None:
-            progress.data['stopPointerTrace'] = stop_trace[-2:]
+            # Keep the pre-dispatch geometry as well: the drift between the
+            # press and the release is the evidence this stage needs (0013).
+            progress.data['stopPointerTrace'] = stop_trace[-3:]
             progress.publish()
         wait_for(lambda: '陈旧' in (browser.read('#remote-captured') or ''), 'android_stale_marker_missing')
         progress.mark('stoppedStale')

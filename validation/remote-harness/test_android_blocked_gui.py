@@ -104,6 +104,32 @@ class AndroidBlockedTests(unittest.TestCase):
         self.assertIn("buttons.length!==1",expression);self.assertIn("e.contains(document.elementFromPoint(x,y))",expression)
         self.assertNotIn('.click()',expression)
 
+    def test_release_follows_the_control_after_the_press_reflows_the_viewport(self):
+        # 0013 device evidence: the press blurred the terminal, the IME closed
+        # and the viewport reflowed, so a release at the pressed coordinate hit a
+        # different element and the browser never delivered the click.
+        # The probe reports quarter-pixel coordinates plus the viewport size.
+        view=object.__new__(android.AndroidWebView)
+        view.evaluate=Mock(side_effect=[{'x':492,'y':936,'w':400,'h':800},
+                                          {'x':492,'y':936,'w':400,'h':800},
+                                          {'x':800,'y':720}])
+        view.call=Mock()
+        view.click('#remote-cancel')
+        self.assertEqual([call.args for call in view.call.call_args_list],
+                         [('Input.dispatchMouseEvent',{'type':'mousePressed','x':123,'y':234,'button':'left','clickCount':1}),
+                          ('Input.dispatchMouseEvent',{'type':'mouseReleased','x':200,'y':180,'button':'left','clickCount':1})])
+
+    def test_release_keeps_the_pressed_coordinate_when_the_control_cannot_be_re_read(self):
+        view=object.__new__(android.AndroidWebView)
+        view.evaluate=Mock(side_effect=[{'x':492,'y':936,'w':400,'h':800},
+                                          {'x':492,'y':936,'w':400,'h':800},
+                                          None])
+        view.call=Mock()
+        view.click('#remote-cancel')
+        self.assertEqual([call.args for call in view.call.call_args_list],
+                         [('Input.dispatchMouseEvent',{'type':'mousePressed','x':123,'y':234,'button':'left','clickCount':1}),
+                          ('Input.dispatchMouseEvent',{'type':'mouseReleased','x':123,'y':234,'button':'left','clickCount':1})])
+
     @unittest.skipUnless(shutil.which('node'),'Node is required for the exact DOM measurement expression')
     def test_actual_measurement_expression_requires_complete_b_row_exact_bound_pair_and_observe(self):
         browser=Browser();android.exercise_blocked_target(browser,approval(),CONFIG)

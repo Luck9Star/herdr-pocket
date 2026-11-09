@@ -162,7 +162,8 @@ Finder popupOptionControl(Finder item) => find.ancestor(of:item,matching:find.by
 
 /// Resolve the unique control first, scroll it into view, then require a
 /// stable hit-testable pointer target and tap only once.
-/// Only the canvas dropdown and its enabled popup row use this helper.
+/// Used for the canvas dropdown/popup option and for any tap whose finder's
+/// own box is not the pointer target (e.g. a group's header ListTile).
 Future<void> tapStablePointer(WidgetTester tester,Finder control) async {
   await until(tester,() { checkPointerError(tester); return control.evaluate().length == 1; },seconds:10);
   await Scrollable.ensureVisible(tester.element(control),alignment:0.5);
@@ -181,6 +182,17 @@ Future<void> tapStablePointer(WidgetTester tester,Finder control) async {
   await tester.tap(pointer); // Exactly one explicit pointer tap; no retry.
   await tester.pump(const Duration(milliseconds:350));
 }
+
+/// The expansion toggle lives on the group's header ListTile, not on the
+/// keyed ExpansionTile: an expanded tile's box spans the header plus every
+/// child row, so a center tap on the group lands on a child row and opens
+/// that blocked target instead of toggling the group. Child rows all carry
+/// 'host-blocked-target-…' keys, so the header is the only keyless ListTile
+/// inside the group — match it by the absent key, not by tree order.
+Finder groupHeader(Finder group) => find.descendant(
+  of: group,
+  matching: find.byWidgetPredicate((w) => w is ListTile && w.key == null),
+).first;
 
 /// The enabled popup InkWell owns the whole row; its left-aligned item's
 /// center may be blank and need not itself participate in the hit-test path.
@@ -638,9 +650,9 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   // the wait below polling a tree that no longer holds any row.
   await tester.ensureVisible(rows.first); await tester.pump();
   if (rows.hitTestable().evaluate().isNotEmpty) {
-    await tap(tester,group); // Collapse the group the blocked review left open.
+    await tapStablePointer(tester,groupHeader(group)); // Collapse the group the blocked review left open.
     await until(tester,() => rows.evaluate().isEmpty);
-    await tap(tester,group); // Re-open only what the tap above collapsed.
+    await tapStablePointer(tester,groupHeader(group)); // Re-open only what the tap above collapsed.
   }
   await until(tester,() => rows.evaluate().isNotEmpty);
   await tester.ensureVisible(rows.first); await tester.pump();
@@ -1290,7 +1302,7 @@ void main() {
         tester.widgetList<Text>(find.descendant(of:summary,matching:find.byType(Text))).any((w) => (w.data ?? '').contains('上次主机报告')));
       final group = find.byKey(ValueKey(blockedSummaryGroupKey(id)));
       await until(tester,() => group.evaluate().length == 1);
-      await tap(tester,group);
+      await tapStablePointer(tester,groupHeader(group));
       stage('blocked_list');
       final rows = find.descendant(of:group,matching:find.byWidgetPredicate((widget) => widget is ListTile &&
         widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('host-blocked-target-')));

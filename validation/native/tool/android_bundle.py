@@ -27,8 +27,11 @@ FLUTTER_JNI = [BIND_NATIVE] + [
     'Java_dev_herdr_pocket_NetworkRuntimeChannel_' + name
     for name in ('nativeCreateScope', 'nativeReserveOpen', 'nativeCall', 'nativeCloseScope')
 ]
-ZERO_TIER_JNI = ['Java_org_herdr_network_AndroidZeroTierNative_' + name
-                 for name in ('bindNative', 'identityCreate', 'identityValidate', 'initializeDevice', 'retiredExactly')]
+# The provider crate exports the four data-plane entry points. bindNative is
+# forwarded by each host shell, so a shell library exports all five.
+ZERO_TIER_PROVIDER_JNI = ['Java_org_herdr_network_AndroidZeroTierNative_' + name
+                          for name in ('identityCreate', 'identityValidate', 'initializeDevice', 'retiredExactly')]
+ZERO_TIER_JNI = ['Java_org_herdr_network_AndroidZeroTierNative_bindNative'] + ZERO_TIER_PROVIDER_JNI
 SYSTEM = {'libc.so', 'libm.so', 'libdl.so', 'liblog.so', 'libandroid.so', 'libz.so',
           'libjnigraphics.so', 'libEGL.so', 'libGLESv2.so', 'libOpenSLES.so', 'libvulkan.so', 'libstdc++.so',
           'libnativewindow.so'}  # Public NDK library since API 26; this verifier requires API 35.

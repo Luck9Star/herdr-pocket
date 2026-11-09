@@ -55,7 +55,20 @@ class ZeroTierSurfaceTests(unittest.TestCase):
         names = set(re.findall(
             r'pub extern "system" fn (Java_org_herdr_network_AndroidZeroTierNative_[A-Za-z0-9_]+)',
             text))
-        self.assertEqual(names, set(bundle.ZERO_TIER_JNI))
+        # bindNative is forwarded by each host shell; the provider crate must
+        # not export it too, or the static link sees a duplicate symbol.
+        self.assertEqual(names, set(bundle.ZERO_TIER_PROVIDER_JNI))
+
+    def test_shells_forward_bind_native_exactly_once(self):
+        shells = ('validation/flutter-network-runtime/src/native.rs',
+                  'validation/tauri/src-tauri/src/lib.rs')
+        for relative in shells:
+            with self.subTest(shell=relative):
+                text = (ROOT / relative).read_text()
+                self.assertEqual(
+                    text.count('pub extern "system" fn Java_org_herdr_network_AndroidZeroTierNative_bindNative'),
+                    1)
+                self.assertIn('network-zerotier', text)
 
     def test_compile_flags_mirror_the_upstream_android_build(self):
         self.assertEqual(android_zerotier.group_flags('ztcore'), ['-march=armv8-a+crypto'])

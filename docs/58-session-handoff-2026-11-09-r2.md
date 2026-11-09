@@ -263,5 +263,5 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
   1. 拆分 `board_search_clear_reset_visible` / `_reset_tap` 阶段名（Python 与 Dart 白名单同步），失败快照改真实步进值，失败行号改为按函数名过滤 helper 帧取首个业务帧（匹配不到时退回首个含本文件行号的帧）。
   2. 本地深滚探针坐实**三处同族懒列表缺陷**并修复：`device_impact_enter` 的 hosts-networks、`delete_local_identity` 的完成提示（列表顶部）、设备审查返回后的 hosts-add —— 深滚后均在树中被回收（实测 in tree = 0），裸 until 只会空等 60 秒。
   3. 新增 `validation/flutter/test/host_catalog_scroll_recycling_test.dart` 把回收行为固化为仓库正式回归用例（CI 的 flutter-source 与 flutter-device-key 跑整目录 flutter test）。
-  4. 本地验证：Python Harness 97 项、Blocked GUI 21 项、Helper 15 项、Flutter 全目录 **514 项通过 / 1 skipped / 0 失败**；另经 test_integration_order 与 test_full_integration_order 两个探针按集成同序（检索→历史过滤→清空→重置→设备审查入口→删除→回顶读提示）验证全绿。
+- [x] 0019 轮（run `42571118374`，`3a7f7a8`）终态 failure，逐项归因：`native`＝HTTP 504 瞬断；`android-device-key`＝gradle.org 下载 timeout 10s → APK 构建失败 → AVD 未启动（与 0018 的 apps 504 同源）；`flutter-device-key`＝setup-java 步骤失败（job 启动层）；`flutter-source`＝**真实回归**：新增回收用例带 unused import 使 analyze exit 1——已修复（`0eabffd`）。回归用例第二条按审查意见重写为真实覆盖回收路径（`5ac7843`）。核心验证目标（清空/重置阶段拆分 + 三处懒列表修复）因 gradle.org 网络问题未获云端验证，待下一轮。
 - [ ] **等用户明示授权**后才动 Stage 2 门控（建议先批 S1+S2）

@@ -846,6 +846,22 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(output,{'sourceSHA':self.env['GITHUB_SHA'],'failure':None})
         self.assertNotIn('PRIVATE',json.dumps(output))
 
+    def test_a_failing_adb_call_reports_only_its_class_and_sizes(self):
+        failure=subprocess.CompletedProcess([], 1, b'', b'device offline')
+        with patch.object(gui.subprocess, 'run', return_value=failure):
+            with self.assertRaises(gui.DeviceFailure) as caught:
+                gui.adb('shell', 'getprop', 'ro.kernel.qemu')
+        self.assertEqual(str(caught.exception), 'flutter_android_adb_failed')
+        self.assertEqual(caught.exception.adb_diagnostic,
+                         {'command': 'shell', 'exitCode': 1, 'stdoutBytes': 0, 'stderrBytes': 14})
+
+    def test_the_adb_command_classification_never_repeats_argument_values(self):
+        self.assertEqual(gui._adb_command_class(('shell', 'pm', 'list', 'packages')), 'shell')
+        self.assertEqual(gui._adb_command_class(('reverse', 'tcp:1234', 'tcp:1234')), 'reverse')
+        self.assertEqual(gui._adb_command_class(('shell', '-T', 'run-as', 'pkg', 'head')), 'shell')
+        self.assertEqual(gui._adb_command_class(('exec-out', 'cat', 'file')), 'exec-out')
+        self.assertEqual(gui._adb_command_class(('unknown-verb', 'secret-value')), 'other')
+
     def test_failed_cleanup_is_recorded_and_cannot_return_passed(self):
         result, cleanup = self.exercise(fail_reverse_cleanup=True)
         self.assertIsNone(result)

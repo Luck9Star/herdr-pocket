@@ -686,8 +686,28 @@ def adb(*args, check=True, data=None, timeout=30):
     if len(result.stdout) > 1_048_576 or len(result.stderr) > 1_048_576:
         raise DeviceFailure('flutter_android_adb_output_limit')
     if check and result.returncode:
-        raise DeviceFailure('flutter_android_adb_failed')
+        # Classify the failing call without ever leaving the device: only the
+        # adb verb, the exit status and the output sizes may be published.
+        failure = DeviceFailure('flutter_android_adb_failed')
+        failure.adb_diagnostic = {'command': _adb_command_class(args),
+                                   'exitCode': int(result.returncode),
+                                   'stdoutBytes': len(result.stdout),
+                                   'stderrBytes': len(result.stderr)}
+        raise failure
     return result
+
+
+def _adb_command_class(args):
+    """A fixed vocabulary for the adb verb; never the argument values."""
+    verbs = ('shell', 'push', 'pull', 'install', 'uninstall', 'forward', 'reverse',
+             'devices', 'wait-for-device', 'exec-out', 'logcat', 'start-server', 'kill-server')
+    for arg in args:
+        name = str(arg)
+        if name in verbs:
+            return name
+        if name.startswith('shell'):
+            return 'shell'
+    return 'other'
 
 
 def text(*args, **kwargs):
@@ -1074,6 +1094,7 @@ def _run(args, root, env, config, approval, owned_process):
                'ownedPackageAbsent': False, 'appProcessGone': False, 'reverseRemoved': False,
                'ownedForwardsRemoved': False, 'flutterToolStopped': False, 'rawLogsUploaded': False}
     primary_failure = None
+    adb_diagnostic = None
     try:
         adb('reverse', reverse, reverse); reverse_added = True
         with owned_process(command, cwd=app, env=env, log=root / 'flutter-android-private.log') as process:
@@ -1110,6 +1131,7 @@ def _run(args, root, env, config, approval, owned_process):
                 raise DeviceFailure(failure_stage(relative, 'flutter_android_test_failed'))
     except Exception as error:
         primary_failure = _safe_primary_failure(error)
+        adb_diagnostic = getattr(error, 'adb_diagnostic', None)
         raise
     finally:
         # Only fixed stage/class names and a bounded source line may leave the
@@ -1121,8 +1143,11 @@ def _run(args, root, env, config, approval, owned_process):
                 failure = safe_test_failure(json.loads(raw_failure))
         except (DeviceFailure, ValueError):
             pass
+        report = {'sourceSHA': env['GITHUB_SHA'], 'failure': failure}
+        if isinstance(adb_diagnostic, dict):
+            report['adbDiagnostic'] = adb_diagnostic
         (output / 'flutter-android-test-failure.json').write_text(
-            json.dumps({'sourceSHA': env['GITHUB_SHA'], 'failure': failure}, indent=2) + '\n', encoding='utf-8')
+            json.dumps(report, indent=2) + '\n', encoding='utf-8')
         if signer_evidence['stage'] != 'complete':
             try:
                 label = read_public(relative + '/stage', 40)

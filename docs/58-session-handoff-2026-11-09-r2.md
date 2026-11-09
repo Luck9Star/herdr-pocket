@@ -271,4 +271,5 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
   3. 同时在 `validation/native/tool/probe.py` 针对 `native` 的 protoc 下载增设 4 次重试与退避防御 504（setup-java 的 Temurin 504 属于外部 action 下载，仍依赖 GitHub Releases 恢复）。
 - [x] 0021 轮（run `42575320672`，`3871f7a`）：全矩阵 11 作业中 8 个成功、2 个跳过（`input-fixture`, `input-host-candidate`）、仅 1 个失败（`flutter-device-key`）；Gradle 包装器 120s 超时使 `android-device-key` 顺利构建并验证通过，protoc 重试使 `native` 通过；全仓 CI 收敛至唯一的最后单点：`flutter-device-key` 在 `board_search_clear_reset_tap` 阶段行 725 超时抛出 `TestFailure`（`clearedKeptState: true`，`resetRestoredList: false` 属于行 717 点击前的初始探针默认值，725 中断导致后续 729 行未执行）。
 - [x] 0022 本地修复（`d0c813d`）：分析确认行 720 通过 `enterText` 输入无匹配搜索词后，软键盘保持开启并压缩视口，且 `hosts-filters-reset` 按钮落于底部未前置拉回；依照同文件既有规范发送 `receiveAction(TextInputAction.done)` 结束编辑收起软键盘，并在等待与点击前显式增加 `scrollUntilVisible` 滚动前置，确保稳定指针判定命中。
+- [x] 0023 基础设施假失败归因与加固（`9807b0f`）：0023 轮遇 GitHub Releases 偶发 504 断流，`run-ci.py` 在下载 herdr 处抛出网络异常致 `fixture_setup_failed`；已增设 4 次重试与指数退避加固防御，保留 `herdr = root / 'herdr'` 路径定义。
 - [ ] **等用户明示授权**后才动 Stage 2 门控（建议先批 S1+S2）

@@ -671,7 +671,13 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
     of:find.byKey(const ValueKey('host-catalog-list')),
     matching:find.byType(Scrollable)).first;
   tester.state<ScrollableState>(boardScrollable).position.jumpTo(0);
-  await tester.pump();
+  // A single frame after the jump is not enough: the lazy list still holds
+  // mid-flight layout from the group's expansion animation and the viewport
+  // rebuild, and the suffix clear control may not be back in the tree within
+  // the stable-tap window (runs 42548234405/42549882281/42553557053 each
+  // failed this tap with a different signature). Wait for every scheduled
+  // frame to drain so the top controls are deterministically built.
+  await tester.pumpAndSettle(const Duration(milliseconds: 100));
   // Use the stable-pointer tap: between the until() wait and the actual
   // pointer, a settling lazy list can rebuild this suffix control again
   // (run 42549882281 failed as FlutterError at the plain tap). The stable

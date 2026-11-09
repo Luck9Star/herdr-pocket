@@ -662,6 +662,11 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   final distinct=history.map((row) => '${row.paneId} ${row.terminalId}').toSet();
   if (distinct.length != history.length) throw StateError('board_search_history_indistinguishable');
   stage('board_search_clear');
+  // The board is a lazy ListView: the history phase scrolled a host card to
+  // the top, evicting the search field (and its clear button) from the
+  // viewport. Return to the top so the control is built again before tapping.
+  tester.state<ScrollableState>(find.byKey(const ValueKey('host-catalog-list'))).position.jumpTo(0);
+  await tester.pump();
   await tapKey(tester,'hosts-search-clear');
   final cleared=boardCounts(tester);
   final clearedKeptState=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.history &&

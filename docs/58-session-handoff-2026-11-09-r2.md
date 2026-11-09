@@ -279,4 +279,6 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
   2. `android-pairing / android-device-key`: **SUCCESS**（第 9 次全绿）。
   3. `apps (flutter)` 与 `apps (tauri)`: **SUCCESS**；`native`, `flutter-source`, `zerotier-android-abi`, `zerotier-keystore`, `transport-source`: 全部 **SUCCESS**；input 两作业按规则跳过。
 - [ ] **下一步（docs/56 第 53 行余项）**：用 `with-emulators-input-tui-<批次>-<SHA>` 前缀分支跑两端同批输入/恢复验收（隐藏标签恢复原目标新完整帧、同观察代增量、十个 TUI 操作回执），保持 Stage 2 锁定。
-- [ ] **等用户明示授权**后才动 Stage 2 门控（建议先批 S1+S2）
+- [x] guarded/TUI 停止失败的取证化（`a801c61` → `f70ebcb`）：0021 轮报 `board_search_clear_reset_tap` 行 725 的 `TestFailure`（`manifest.json` 的 `checks[0].errorCode` 即 `android_stale_marker_missing`，说明点击本身成功、失败在点击后 25 秒内未出现「陈旧」）；0022 轮同一代码路径却失败在 TUI 首键回执缺失，**两次结果不同证明是设备侧时序抖动而非单一根因**。据此撤回 `a801c61` 中未经证实的「TUI 后先切回观察模式」绕行（该绕行把失败点从停止阶段前移到 TUI 首键），改为在 harness 中对 TUI 十个辅助键与停止按钮采集**真实指针诊断**（控件矩形、视口尺寸、焦点元素、焦点是否落在辅助键面板内、控件禁用/隐藏、输入状态、是否已有回执；不含终端文本或主机标识），只保留最后两条以守住 16 KiB 产物预算；错误码白名单补齐并透传 `android_control_missing_` 前缀，不再把真实失败点降级为 `android_driver_failure`。**下一轮 CI 给出真实设备上的指针证据后再据此定案并修复。**
+- [x] Stage 2 S1（`a801c61`，用户已授权直接开发）：`AndroidZeroTierNative.java` 增加 `bindNative(Context)` 声明；`zerotier.rs` 增加对应 JNI 导出并在 `lib.rs` re-export；`flutter-network-runtime` 与 `tauri` 各加 `network-zerotier` feature 与 JNI 导出（默认关闭）；`android_bundle.py` 的 `ZERO_TIER_JNI` 符号表加 `bindNative`。**S2 切片反转与 S4 宿主接线未动，仍锁定**。
+- [ ] Stage 2 剩余门控：S2（切片反转）与 S4（宿主接线）**仍锁定**——S4 是唯一不可逆面，需用户二次授权。

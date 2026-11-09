@@ -693,8 +693,15 @@ def adb(*args, check=True, data=None, timeout=30):
     try:
         result = subprocess.run(['adb', '-s', SERIAL, *map(str, args)], input=data,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired):
-        raise DeviceFailure('flutter_android_adb_unavailable') from None
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        # A device that disappeared mid-run most often surfaces as a hung adb
+        # call, not as a non-zero exit status. Classify that path too, so the
+        # report still names the verb and the reason without leaking output.
+        failure = DeviceFailure('flutter_android_adb_unavailable')
+        failure.adb_diagnostic = {'command': _adb_command_class(args),
+                                   'reason': 'timeout' if isinstance(exc, subprocess.TimeoutExpired) else 'oserror',
+                                   'timeoutSeconds': int(timeout)}
+        raise failure from None
     if len(result.stdout) > 1_048_576 or len(result.stderr) > 1_048_576:
         raise DeviceFailure('flutter_android_adb_output_limit')
     if check and result.returncode:

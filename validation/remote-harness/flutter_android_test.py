@@ -867,6 +867,22 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(caught.exception.adb_diagnostic,
                          {'command': 'shell', 'exitCode': 1, 'stdoutBytes': 0, 'stderrBytes': 14})
 
+    def test_a_hung_adb_call_reports_its_verb_and_reason_without_output(self):
+        with patch.object(gui.subprocess, 'run', side_effect=subprocess.TimeoutExpired('adb', 30)):
+            with self.assertRaises(gui.DeviceFailure) as caught:
+                gui.adb('shell', 'getprop', 'ro.kernel.qemu', timeout=30)
+        self.assertEqual(str(caught.exception), 'flutter_android_adb_unavailable')
+        self.assertEqual(caught.exception.adb_diagnostic,
+                         {'command': 'shell', 'reason': 'timeout', 'timeoutSeconds': 30})
+
+    def test_an_adb_oserror_reports_its_verb_and_reason(self):
+        with patch.object(gui.subprocess, 'run', side_effect=OSError('no such file')):
+            with self.assertRaises(gui.DeviceFailure) as caught:
+                gui.adb('shell', 'pm', 'list', 'packages')
+        self.assertEqual(str(caught.exception), 'flutter_android_adb_unavailable')
+        self.assertEqual(caught.exception.adb_diagnostic,
+                         {'command': 'shell', 'reason': 'oserror', 'timeoutSeconds': 30})
+
     def test_the_adb_command_classification_never_repeats_argument_values(self):
         self.assertEqual(gui._adb_command_class(('shell', 'pm', 'list', 'packages')), 'shell')
         self.assertEqual(gui._adb_command_class(('reverse', 'tcp:1234', 'tcp:1234')), 'reverse')

@@ -3,7 +3,7 @@
 > 本文档是**本轮最新交接入口**，可脱离其他文档直接接手。历史全量交接见 [56-project-status-and-handoff.md](56-project-status-and-handoff.md)（保留不改其主体）。
 >
 > 仓库：`/Users/yangyitian/Documents/dev/Agents/herdr-pocket` · remote `Luck9Star/herdr-pocket` · 主干 `main`
-> 交接时工作分支：`codex/network-batch/with-emulators-zerotier-0008-c3d3036`（提交栈顶端 `e3da36e`）
+> 交接时工作分支：`codex/network-batch/with-emulators-zerotier-0008-c3d3036`（本文档基于 `e3da36e`，其上为本文档自身提交 `4f627f9`）
 
 ---
 
@@ -18,7 +18,7 @@
 | android-device-key | **失败**（连续 4 轮），根因收敛中，本轮新增 counterContext 判据 |
 | flutter-device-key | **失败**（失败点已前移 3 次），本轮需接手者取精确断言 |
 | Stage 2 门控 | **锁定**，等用户明示授权 |
-| 未跟踪目录 | `graphify-out/`（约 41MB）保持未跟踪，**严禁提交** |
+| 未跟踪目录 | `graphify-out/`（约 42MB）保持未跟踪，**严禁提交** |
 
 ---
 
@@ -29,7 +29,7 @@
 - 三轮独立评审闭环：**REJECT → REJECT → APPROVE**。
 - 提交：`c3d3036`（`fix: 关闭 0008 候选 B1/B2 阻断项并定稿三方一致哈希`）。
 - 补丁：`validation/native/candidates/zerotier/patches/0008-streams-and-hp-boundary.patch`（终版 911 行，sha256 `ba4654f9…`）。
-- CI 全绿。
+- CI 中 zerotier / native / transport / flutter-source / apps 相关 job 全绿；本轮 run 42484673979 的 android-device-key 与 flutter-device-key 两个 job 失败（属 Android 端测试，与本补丁无关）。
 
 ### 2.2 ZeroTier 0009 候选（N1 closed-port RST / ECONNREFUSED）——本轮正式入档
 
@@ -57,7 +57,7 @@
 ### 2.3 Flutter 集成测试竞态修复（两轮）——已提交
 
 - `b5ca239`（`test: 修复 android_pairing 测试 board_search 空 Finder 访问异常与转场稳定性`）
-  - `rows.first` → 安全判定（Finder 为空时不再直接取 `.first`）
+  - `rows.first.hitTestable().evaluate().length == 1` → `rows.hitTestable().evaluate().length == 1`（去掉对 `rows.first` 的提前取用，避免空 Finder 时 `.first` 抛异常）；另加一处 `pumpAndSettle(300ms)` 稳定转场。**注意：`:636` 的 `ensureVisible(rows.first)` 仍是无条件取 `.first`**，只靠上方 `until(rows.evaluate().isNotEmpty)` 间接兜底。
 - `c1addd6`（`test: 修复 android_pairing 测试 board_search 展开竞态与元素访问时序`）
   - 展开时序倒置修正：**先** `until(rows.hitTestable().evaluate().isNotEmpty)`，**再** `ensureVisible`
   - `.length == 1` → `isNotEmpty`
@@ -67,7 +67,7 @@
 
 **`241bf39`**（`test: 加固 android_gui invoke 计数器时序与错误码拆分诊断`）
 
-- 4 个抛出点错误码拆分（见 `validation/remote-harness/android_gui.py:73-76`）：
+- 4 个抛出点错误码拆分（见 `validation/remote-harness/android_gui.py:75-76`）：
   - `android_board_search_counter_install_failed`
   - `android_board_search_counter_read_invalid`
   - `android_board_search_counter_no_ipc`
@@ -140,7 +140,7 @@ TestFailure 记录在产物 `flutter-android-test-failure.json`（**line 132**�
 
 **待接手者需要自己确认的**：
 
-1. `board_search_history` 的**精确失败断言与堆栈** —— 从 `flutter-android-test-failure.json` 与该 job log 中取。
+1. `board_search_history` 的**精确失败点** —— 产物已给出：`stage=board_search_history`、`errorClass=TestFailure`、`line=132`，即 `android_pairing_observe_test.dart:132` 的 `fail('android_public_ui_phase_timeout')`（`until()` 的 60s 等待超时，**不是**元素访问 StateError）。在 `c1addd6` 版本下超时的是 `:643` 的 `until(rows.hitTestable().evaluate().isNotEmpty)`：无条件第二次 `tap(tester,group)` 把仍展开的 group 又关掉了。
 2. 同类竞态模式的既有教训（见 `validation/remote-harness/flutter_android_gui.py`）：
    - Finder 为空时取 `.first`；
    - 在异步树重建完成前 `ensureVisible` / `tap`。
@@ -156,6 +156,7 @@ TestFailure 记录在产物 `flutter-android-test-failure.json`（**line 132**�
 - 取证：CI run `42501992442` → `flutter-device-key` job → 产物 `flutter-android-test-failure.json`（line 132 附近）+ job log。
 - 定位 Flutter 测试源码中 `board_search_history` 对应断言，实施**最小修复**（同类竞态模式修正：先等 Finder 非空再取元素、先等树重建完成再 `ensureVisible`/`tap`、`.length == 1` → `isNotEmpty`）。
 - 本地提交（**只提测试脚本文件**）。
+- **本轮进展（已确认事实）**：失败点已定位，本地已提交 `a414616`（`test: 修复 android_pairing board_search_history 阶段竞态`）修复该竞态；详见下节「五之后」的「本轮新增事实」。
 
 ### 步骤 2 —— 推一轮新 CI
 
@@ -210,17 +211,25 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
 
 | run | 触发内容 | 结论 |
 | --- | --- | --- |
-| `42484673979` | 0008 候选 | 9/10 绿，仅 flutter-device-key 失败（测试脚本缺陷） |
+| `42484673979` | 0008 候选 | 7 绿 / 2 败 / 2 跳过；失败项为 android-device-key 与 flutter-device-key |
 | `42491948751` | `b5ca239` | flutter-device-key 死于测试内部空 Finder；android-device-key 死于 `counter_unavailable` |
 | `42496318563` | `c1addd6` | 7 项绿；flutter-device-key 死于 harness 级 adb 瞬态；android-device-key 仍 `counter_unavailable`（第 3 连） |
 | `42501992442` | `241bf39`（含 0009 入档） | native / transport / zerotier-keystore / zerotier-android-abi / flutter-source / apps 全绿；两个 device-key 失败（flutter 前移至 `board_search_history`；android 新码 `no_ipc`） |
+
+### 本轮新增事实（交接文档生成之后）
+
+- 本地已提交 `a414616`（`test: 修复 android_pairing board_search_history 阶段竞态`）。
+- 根因：`android_pairing_observe_test.dart` 收起/重开逻辑里的**无条件第二次 tap** 把仍展开的 ExpansionTile 收起，导致 `until(rows.hitTestable().isNotEmpty)` 的 60s 等待永不满足。
+- 修复方式：收起判据改 `evaluate().isEmpty`、重开 tap 移入 if 分支、展开顺序改为「等树重建 → ensureVisible → 等可命中」。
+- 当前本地提交栈（**未推送**）：`c1addd6 → 9f6ce91 → 241bf39 → e3da36e → 4f627f9 → a414616`。
+- 下一轮 CI 触发分支名仍为 `codex/network-batch/with-emulators-zerotier-0010-<newsha>`。
 
 ---
 
 ## 六、CI 操作纪律（务必成文）
 
 1. 一轮只推**一个**触发分支。
-2. **不 force push**；**不删远端分支**；**不用 workflow_dispatch**。
+2. **不 force push**；**不删远端分支**；**不用 workflow_dispatch**（该触发器在 `.github/workflows/android-network-experiment.yml:5` 确实存在，但本项目一律靠推送触发分支来跑 CI）。
 3. **504 基础设施故障** → 最多 **1** 次重跑。
 4. **board_search 应用层失败** → 视为独立缺陷，**不重跑**。
 5. 触发分支前缀决定 CI 路由：
@@ -241,7 +250,7 @@ until gh run view <run_id> --json status --jq '.status' | grep -qE '^(completed|
 
 ## 七、安全边界（提交前必查）
 
-- `graphify-out/`（约 41MB，未跟踪）**绝不可暂存**。
+- `graphify-out/`（约 42MB，未跟踪）**绝不可暂存**。
 - **禁止** `git add -A` / `git add .`；必须**逐路径 add**。
 - 提交前自检：
 
@@ -280,7 +289,7 @@ git diff --cached --name-only                        # 只应含本次目标的�
 | 0009 补丁 | `validation/native/candidates/zerotier/patches/0009-closed-port-rst.patch` |
 | 0008 补丁 | `validation/native/candidates/zerotier/patches/0008-streams-and-hp-boundary.patch` |
 | 候选锚点测试 | `validation/native/**/test_zerotier_candidate.py` |
-| android GUI harness（counter 逻辑） | `validation/remote-harness/android_gui.py`（错误码表 `:73-76`；净化 `:274`；install `:508`；board_search `:737-782`） |
+| android GUI harness（counter 逻辑） | `validation/remote-harness/android_gui.py`（错误码表 `:75-76`；净化 `:274`；install `:508`；board_search `:737-782`） |
 | android GUI 测试 | `validation/remote-harness/test_android_blocked_gui.py`（`:162`、`:168`、`:189-190`） |
 | Flutter GUI harness | `validation/remote-harness/flutter_android_gui.py`（阶段表 `:33`、`:64-65`） |
 | Flutter GUI 测试 | `validation/remote-harness/flutter_android_test.py` |
@@ -292,8 +301,8 @@ git diff --cached --name-only                        # 只应含本次目标的�
 
 ## 十、交接清单（勾选项）
 
-- [ ] 取 `board_search_history` 精确断言 + 堆栈
-- [ ] Flutter 侧最小修复并本地提交
+- [x] 取 `board_search_history` 精确失败点（`stage=board_search_history` / `errorClass=TestFailure` / `line=132`）
+- [x] Flutter 侧最小修复并本地提交（`a414616`）
 - [ ] 合并提交栈 → 新触发分支 `codex/network-batch/with-emulators-zerotier-0010-<newsha>`
 - [ ] 提交前 `git diff --cached --name-only | grep graphify-out` 为空
 - [ ] 推分支（单分支、不 force push）

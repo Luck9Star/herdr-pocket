@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
-import 'package:herdr_flutter_probe/host_catalog_search.dart';
 import 'package:herdr_flutter_probe/host_tabs.dart';
 import 'host_catalog_test.dart' show MemoryCatalogStorage;
 import 'host_tabs_widget_test.dart' show tabProfile;

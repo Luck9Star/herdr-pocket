@@ -41,8 +41,10 @@ class FakeBrowser:
             return '逐键输入已启用'
         raise AssertionError(selector)
 
-    def click(self, selector):
+    def click(self, selector, trace=None):
         self.clicks.append(selector)
+        if trace is not None:
+            trace.append({'activeElement': 'xterm-helper-textarea'})
         if 'data-remote-key=' in selector and not self.no_frame:
             self.delta += 1
 

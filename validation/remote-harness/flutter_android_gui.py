@@ -1036,6 +1036,13 @@ def _run(args, root, env, config, approval, owned_process):
         'HERDR_ANDROID_HOST_FINGERPRINT': public_host_fingerprint(config['expectedHostKey']),
         'HERDR_ANDROID_PUBLIC_DIR': '/data/user/0/' + PACKAGE + '/' + relative}), encoding='utf-8')
     defines.chmod(0o600)
+    wrapper_props = app / 'android/gradle/wrapper/gradle-wrapper.properties'
+    if wrapper_props.exists():
+        text_props = wrapper_props.read_text(encoding='utf-8')
+        if 'networkTimeout=10000' in text_props:
+            wrapper_props.write_text(text_props.replace('networkTimeout=10000', 'networkTimeout=120000'), encoding='utf-8')
+        elif 'networkTimeout=' not in text_props:
+            wrapper_props.write_text(text_props + '\nnetworkTimeout=120000\n', encoding='utf-8')
     command = ['flutter', 'test', '--no-pub', '--no-uninstall', '--reporter', 'expanded', '-d', SERIAL,
                '--dart-define-from-file=' + str(defines), 'integration_test/android_pairing_observe_test.dart']
     process = None

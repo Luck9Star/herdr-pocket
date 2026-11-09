@@ -426,7 +426,7 @@ def safe_device_impact(value):
 
 def safe_test_failure(value):
     kinds = {'TestFailure', 'StateError', 'TypeError', 'RemoteFailure', 'FormatException',
-             'TimeoutException', 'other'}
+             'TimeoutException', 'FlutterError', 'other'}
     base = {'stage', 'errorClass', 'line'}
     evidence = {'tuiResume', 'boardSearch', 'deviceImpact'}
     keys = set(value) if isinstance(value, dict) else set()

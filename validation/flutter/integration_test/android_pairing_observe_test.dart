@@ -343,7 +343,7 @@ Future<void> keyboardCheckpoint(WidgetTester tester,Directory exchange,String la
 }
 
 Map<String,Object> boundedFailure(Object error,StackTrace stack,String stage,{Map<String,Object>? tuiResume}) {
-  const classes = {'TestFailure','StateError','RemoteFailure','FormatException','TimeoutException'};
+  const classes = {'TestFailure','StateError','RemoteFailure','FormatException','TimeoutException','FlutterError'};
   final name = error.runtimeType.toString();
   final errorClass = error is TypeError ? 'TypeError' : classes.contains(name) ? name : 'other';
   final match = RegExp(r'android_pairing_observe_test\.dart:([0-9]+)(?::[0-9]+)?').firstMatch(stack.toString());
@@ -672,7 +672,11 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
     matching:find.byType(Scrollable)).first;
   tester.state<ScrollableState>(boardScrollable).position.jumpTo(0);
   await tester.pump();
-  await tapKey(tester,'hosts-search-clear');
+  // Use the stable-pointer tap: between the until() wait and the actual
+  // pointer, a settling lazy list can rebuild this suffix control again
+  // (run 42549882281 failed as FlutterError at the plain tap). The stable
+  // helper re-resolves a hit-testable target on every poll and taps once.
+  await tapStablePointer(tester,find.byKey(const ValueKey('hosts-search-clear')));
   final cleared=boardCounts(tester);
   final clearedKeptState=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.history &&
     cleared.shown == historyCount;
@@ -681,7 +685,7 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   await tester.enterText(search,'zz-no-such-entry'); await tester.pump();
   await until(tester,() => find.byKey(const ValueKey('hosts-search-empty')).evaluate().length == 1 &&
     find.byKey(const ValueKey('hosts-filters-reset')).evaluate().length == 1);
-  await tapKey(tester,'hosts-filters-reset');
+  await tapStablePointer(tester,find.byKey(const ValueKey('hosts-filters-reset')));
   final restored=boardCounts(tester);
   final resetRestoredList=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.all &&
     (tester.widget<TextField>(search).controller?.text ?? '') == '' && restored.shown == restored.total;

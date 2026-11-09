@@ -126,10 +126,14 @@ bool screenHasMarker(Terminal terminal,String marker,{int firstRow=0,int? endRow
   return false;
 }
 
-Future<void> until(WidgetTester tester, bool Function() ready, {int seconds = 60}) async {
+Map<String,Object?>? untilTimeoutDiagnostic;
+Future<void> until(WidgetTester tester, bool Function() ready, {int seconds = 60, Map<String,Object?> Function()? onTimeout}) async {
   final deadline = DateTime.now().add(Duration(seconds:seconds));
   while (!ready()) {
-    if (DateTime.now().isAfter(deadline)) fail('android_public_ui_phase_timeout');
+    if (DateTime.now().isAfter(deadline)) {
+      untilTimeoutDiagnostic = onTimeout?.call();
+      fail('android_public_ui_phase_timeout');
+    }
     await tester.pump(const Duration(milliseconds:100));
   }
 }
@@ -343,7 +347,7 @@ Future<void> keyboardCheckpoint(WidgetTester tester,Directory exchange,String la
 }
 
 Map<String,Object> boundedFailure(Object error,StackTrace stack,String stage,
-    {Map<String,Object>? tuiResume,Map<String,Object>? boardSearch}) {
+    {Map<String,Object>? tuiResume,Map<String,Object?>? untilTimeout,Map<String,Object>? boardSearch}) {
   const classes = {'TestFailure','StateError','RemoteFailure','FormatException','TimeoutException','FlutterError'};
   final name = error.runtimeType.toString();
   final errorClass = error is TypeError ? 'TypeError' : classes.contains(name) ? name : 'other';
@@ -368,6 +372,7 @@ Map<String,Object> boundedFailure(Object error,StackTrace stack,String stage,
     : (frames.isNotEmpty ? int.tryParse(frames.first.group(2)!) ?? 0 : 0);
   return {'stage':stage,'errorClass':errorClass,'line':parsed >= 1 && parsed <= 10000 ? parsed : 0,
     if (tuiResume != null && tuiResumeStages.contains(stage)) 'tuiResume':tuiResume,
+    if (untilTimeout != null && untilTimeout.isNotEmpty) 'untilTimeout':untilTimeout,
     if (boardSearch != null && (const {'board_search_text','board_search_state','board_search_count',
         'board_search_history','board_search_clear','board_search_clear_reset_visible',
         'board_search_clear_reset_tap'}.contains(stage))) 'boardSearch':boardSearch};
@@ -567,7 +572,12 @@ Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
     expect(label,contains(target['paneId'] as String)); expect(label,contains(terminalId));
     final sequence = displayedSequence(tester)!;
     final button = find.byKey(ValueKey(key));
-    await until(tester,() => button.evaluate().length == 1 && tester.widget<OutlinedButton>(button).onPressed != null);
+    await until(tester,() => button.evaluate().length == 1 && tester.widget<OutlinedButton>(button).onPressed != null,
+        onTimeout:() => <String,Object?>{
+          'key':key,'buttonCount':button.evaluate().length,
+          'imeBlockedNotice':find.byKey(const ValueKey('remote-auxiliary-ime-blocked')).evaluate().length,
+          'inputStatus':tester.widget<Text>(find.byKey(const ValueKey('remote-input-status'))).data ?? '',
+        });
     // Exactly one visible tap, with no retry after an unknown result.
     await tap(tester,button); await accepted(tester,previousRequest:previousRequest);
     final receipt = visibleReceipt(tester,target['paneId'] as String,size);
@@ -1507,6 +1517,7 @@ void main() {
       if (directory != null) {
         try { publish(directory,'failure.json',jsonEncode(boundedFailure(error,stack,currentStage,
             tuiResume:tuiResumeDiagnostic,
+            untilTimeout:untilTimeoutDiagnostic,
             boardSearch:(boardSearchFailureProbe != null &&
                 (currentStage == 'board_search_clear' || currentStage.startsWith('board_search_clear_')))
               ? boardSearchFailureProbe : null))); }

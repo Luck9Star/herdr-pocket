@@ -390,7 +390,7 @@ class AndroidWebView:
         expression = f'(()=>{{const e=document.querySelector({json.dumps(selector)});return e?e.{prop}:null}})()'
         return self.evaluate(expression)
 
-    def click(self, selector):
+    def click(self, selector, trace=None):
         # scrollIntoView is layout-only. Actual activation goes through CDP input.
         expression = '''(()=>{const e=document.querySelector(%s); if(!e || e.matches(':disabled') || e.hidden) return null;
           e.scrollIntoView({block:'center',inline:'center'}); const r=e.getBoundingClientRect();
@@ -398,9 +398,24 @@ class AndroidWebView:
           return r.width>0 && r.height>0 && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
                  e.contains(document.elementFromPoint(x,y)) ? {x,y}:null})()''' % json.dumps(selector)
         point = wait_for(lambda: self.evaluate(expression), 'android_control_missing_'+selector.lstrip('#').replace(' ','_'))
+        if trace is not None:
+            # Bounded pointer evidence only: no text, no identifiers, no secrets.
+            trace.append(self.evaluate('''(()=>{const e=document.querySelector(%s);const r=e?.getBoundingClientRect?.();
+              const a=document.activeElement;return {selector:%s,rect:r?{x:Math.round(r.x),y:Math.round(r.y),
+                w:Math.round(r.width),h:Math.round(r.height)}:null,
+                viewport:{w:innerWidth,h:innerHeight},
+                activeElement:a?(a.id||a.className||a.tagName):null,
+                activeInsideKeys:!!(a&&document.getElementById('remote-input-keys')?.contains(a)),
+                disabled:!!e?.disabled,hidden:!!e?.hidden}})()''' % (json.dumps(selector), json.dumps(selector))))
         for kind in ('mousePressed', 'mouseReleased'):
             self.call('Input.dispatchMouseEvent', {'type': kind, 'x': point['x'], 'y': point['y'],
                                                  'button': 'left', 'clickCount': 1})
+        if trace is not None:
+            trace.append(self.evaluate('''(()=>{const a=document.activeElement;return {
+              activeElement:a?(a.id||a.className||a.tagName):null,
+              activeInsideKeys:!!(a&&document.getElementById('remote-input-keys')?.contains(a)),
+              inputStatus:(document.getElementById('remote-input-status')?.textContent||'').slice(0,80),
+              hasReceipt:!!document.getElementById('remote-input-status')?.dataset.receipt}})()'''))
 
     def click_named(self, scope, label, code='android_blocked_card_missing'):
         """Activate a unique visible named button through actual CDP pointer input."""
@@ -1355,7 +1370,13 @@ def exercise_tui(browser, approval, pane, terminal, previous_receipt, previous_r
                 browser.evaluate("document.querySelector('#remote-captured')?.dataset.state === 'active'") is not True):
             raise GuiFailure('android_tui_target_mismatch')
         before = sum(frame_counts())
-        browser.click(f'#remote-input-keys [data-remote-key="{key}"]')
+        trace = []
+        browser.click(f'#remote-input-keys [data-remote-key="{key}"]', trace=trace)
+        if progress is not None:
+            # Only the latest bounded pointer evidence survives; the report
+            # budget stays small and no terminal text ever enters it.
+            progress.data['tuiPointerTrace'] = trace[-2:]
+            progress.publish()
         raw, receipt = browser.receipt(raw, pane, length)
         if receipt['terminalId'] != terminal or receipt['requestId'] in seen:
             raise GuiFailure('android_tui_receipt_mismatch')
@@ -1570,16 +1591,16 @@ def run_android(args, root, env, config, approval):
             approval.verify_ssh(b'')
             progress.ime(sample)
             keyboard_evidence.append({**sample, 'checkpoint': 'keyboard-observe-hidden'})
-        if getattr(args, 'android_tui', False) and getattr(args, 'input_fixture', None):
-            # The TUI run leaves direct mode holding the terminal focus with
-            # the IME open. Return to observation first so the stop control is
-            # reachable in a settled viewport, exactly like the stock path.
-            browser.click('#remote-input-observe')
-            wait_for(lambda: '观察模式' in (browser.read('#remote-input-status') or ''),
-                     'android_tui_observe_return_missing')
+        # The TUI run leaves direct mode holding the terminal focus. Stopping
+        # observation from that state is the device-only interaction this
+        # batch still has to prove; do not paper over it with a mode switch.
         terminal_board = wait_for(board_phase, 'android_host_board_phase_during_terminal_missing')
         progress.phase('stop_observation')
-        browser.click('#remote-cancel')
+        stop_trace = []
+        browser.click('#remote-cancel', trace=stop_trace)
+        if progress is not None:
+            progress.data['stopPointerTrace'] = stop_trace[-2:]
+            progress.publish()
         wait_for(lambda: '陈旧' in (browser.read('#remote-captured') or ''), 'android_stale_marker_missing')
         progress.mark('stoppedStale')
         blocked_evidence=None

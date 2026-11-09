@@ -7,11 +7,16 @@ on:
         type: boolean
         required: false
         default: false
+      cache_seed:
+        description: Allow the default-branch ref so the shared zig cache is seeded where every branch can restore it
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 jobs:
   build:
-    if: ${{ !inputs.release_candidate && startsWith(github.ref, 'refs/heads/codex/') }}
+    if: ${{ !inputs.release_candidate && (startsWith(github.ref, 'refs/heads/codex/') || (inputs.cache_seed && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -57,19 +62,22 @@ jobs:
             ~/.cache/zig
             fixture-source/target
           key: pocket-input-fixture-${{ env.BASE_SHA }}-${{ env.PATCH_SHA256 }}-rust196-zig0160-zcache
+          restore-keys: |
+            pocket-input-fixture-${{ env.BASE_SHA }}-${{ env.PATCH_SHA256 }}-rust196-zig0160-
       - name: Prefetch the vendored zig dependencies with retries
+        continue-on-error: true
+        timeout-minutes: 8
         working-directory: fixture-source/vendor/libghostty-vt
         run: |
           set -euo pipefail
           urls="$(grep -rhoE 'https://[^"[:space:]]+\.(tar\.gz|tar\.zst|tgz)' --include='*.zon' . | sort -u)"
           count="$(printf '%s\n' "$urls" | grep -c .)"
           echo "prefetching $count vendored zig dependencies"
-          delay=15
-          for round in 1 2 3 4 5 6 7 8; do
+          for round in 1 2 3 4 5 6; do
             failed=0
             while read -r url; do
               [ -z "$url" ] && continue
-              if timeout 180 "$ZIG" fetch "$url" >/dev/null 2>&1; then
+              if timeout 60 "$ZIG" fetch "$url" >/dev/null 2>&1; then
                 echo "ok: $url"
               else
                 echo "miss (round $round): $url"
@@ -77,12 +85,12 @@ jobs:
               fi
             done <<< "$urls"
             [ "$failed" -eq 0 ] && { echo "all dependencies prefetched (round $round)"; exit 0; }
-            sleep "$delay"
-            delay=$((delay * 2))
+            sleep 15
           done
-          echo "::error::zig dependency prefetch failed after 8 rounds" >&2
+          echo "::warning::zig dependency prefetch incomplete after 6 rounds; the build step retries on its own" >&2
           exit 1
       - name: Check atomic input guard and build the fixture server
+        timeout-minutes: 40
         working-directory: fixture-source
         run: |
           set -o pipefail

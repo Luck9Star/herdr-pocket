@@ -130,6 +130,18 @@ class AndroidBlockedTests(unittest.TestCase):
                          [('Input.dispatchMouseEvent',{'type':'mousePressed','x':123,'y':234,'button':'left','clickCount':1}),
                           ('Input.dispatchMouseEvent',{'type':'mouseReleased','x':123,'y':234,'button':'left','clickCount':1})])
 
+    def test_named_control_release_follows_the_button_after_the_press_reflows(self):
+        view=object.__new__(android.AndroidWebView)
+        view.evaluate=Mock(side_effect=[{'x':123,'y':234},{'x':200,'y':180}])
+        view.call=Mock()
+        view.click_named('#view-content','连接')
+        self.assertEqual([call.args for call in view.call.call_args_list],
+                         [('Input.dispatchMouseEvent',{'type':'mousePressed','x':123,'y':234,'button':'left','clickCount':1}),
+                          ('Input.dispatchMouseEvent',{'type':'mouseReleased','x':200,'y':180,'button':'left','clickCount':1})])
+        # The re-read must not scroll: the press already happened, and a scroll
+        # would move the control out from under the pointer.
+        self.assertNotIn('scrollIntoView',view.evaluate.call_args_list[1].args[0])
+
     @unittest.skipUnless(shutil.which('node'),'Node is required for the exact DOM measurement expression')
     def test_actual_measurement_expression_requires_complete_b_row_exact_bound_pair_and_observe(self):
         browser=Browser();android.exercise_blocked_target(browser,approval(),CONFIG)

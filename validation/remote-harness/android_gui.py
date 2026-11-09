@@ -77,6 +77,8 @@ class AndroidProgress:
         'android_home_not_visible','android_cdp_transport_failed','android_cdp_command_failed',
         'android_control_operation_failed',
         'android_select_option_missing','android_select_option_failed',
+        'android_host_board_phase_during_terminal_missing','android_observer_still_active',
+        'android_stale_marker_missing','android_tui_observe_return_missing',
         'android_device_impact_entry_missing','android_device_impact_status_invalid','android_device_impact_action_enabled',
         'android_device_impact_reread_invalid','android_device_impact_entry_lost','android_device_impact_write_invoked'}
     def __init__(self, args):
@@ -125,7 +127,9 @@ class AndroidProgress:
         self.data['systemImeChecks'].append(item); self.publish()
     def fail(self,error):
         code=str(error)
-        self.data.update(status='failed',errorCode=code if code in self.ERROR_CODES else 'android_driver_failure')
+        # Dynamic per-control click waits are bounded static codes, not secrets.
+        published = code if (code in self.ERROR_CODES or code.startswith('android_control_missing_')) else 'android_driver_failure'
+        self.data.update(status='failed',errorCode=published)
         diagnostic=public_ime_diagnostic(getattr(error,'system_ime_diagnostic',None))
         if diagnostic:self.data['systemImeFailure']=diagnostic
         counter=_public_counter_context(getattr(error,'counter_context',None))
@@ -1566,6 +1570,13 @@ def run_android(args, root, env, config, approval):
             approval.verify_ssh(b'')
             progress.ime(sample)
             keyboard_evidence.append({**sample, 'checkpoint': 'keyboard-observe-hidden'})
+        if getattr(args, 'android_tui', False) and getattr(args, 'input_fixture', None):
+            # The TUI run leaves direct mode holding the terminal focus with
+            # the IME open. Return to observation first so the stop control is
+            # reachable in a settled viewport, exactly like the stock path.
+            browser.click('#remote-input-observe')
+            wait_for(lambda: '观察模式' in (browser.read('#remote-input-status') or ''),
+                     'android_tui_observe_return_missing')
         terminal_board = wait_for(board_phase, 'android_host_board_phase_during_terminal_missing')
         progress.phase('stop_observation')
         browser.click('#remote-cancel')

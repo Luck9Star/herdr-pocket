@@ -573,6 +573,15 @@ fn throw_unavailable(env: &mut JNIEnv<'_>) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_org_herdr_network_AndroidZeroTierNative_bindNative(
+    mut env: JNIEnv<'_>,
+    class: JClass<'_>,
+    context: JObject<'_>,
+) -> jboolean {
+    u8::from(bind_zerotier(&mut env, class, context)) as jboolean
+}
+
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_org_herdr_network_AndroidZeroTierNative_identityCreate(
     mut env: JNIEnv<'_>,
     _class: JClass<'_>,

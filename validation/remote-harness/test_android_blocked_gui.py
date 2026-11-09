@@ -393,7 +393,9 @@ process.stdout.write(JSON.stringify({sync,asyncError,unknown,removed,reinstalled
                      'android_select_option_missing','android_select_option_failed','android_device_impact_entry_missing',
                      'android_device_impact_status_invalid','android_device_impact_action_enabled',
                      'android_device_impact_reread_invalid','android_device_impact_entry_lost',
-                     'android_device_impact_write_invoked'):
+                     'android_device_impact_write_invoked',
+                     'android_host_board_phase_during_terminal_missing','android_observer_still_active',
+                     'android_stale_marker_missing','android_tui_observe_return_missing'):
             self.assertIn(code,android.AndroidProgress.ERROR_CODES)
 
     def test_the_review_only_reads_and_never_writes_a_device_identity(self):

@@ -69,6 +69,13 @@ pub extern "system" fn Java_org_herdr_network_AndroidTailscaleConfig_bindNative(
 )->herdr_android_network_source::jni::sys::jboolean {
     if herdr_android_network_source::bind_tailscale(&mut env,class,context) {1} else {0}
 }
+#[cfg(all(target_os="android",feature="network-zerotier"))]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_herdr_network_AndroidZeroTierNative_bindNative(
+    mut env:herdr_android_network_source::jni::JNIEnv<'_>,class:herdr_android_network_source::jni::objects::JClass<'_>,context:herdr_android_network_source::jni::objects::JObject<'_>
+)->herdr_android_network_source::jni::sys::jboolean {
+    if herdr_android_network_source::bind_zerotier(&mut env,class,context) {1} else {0}
+}
 // Host unit tests compile the real Nodes methods against a deliberately rejecting
 // IPC boundary. This is type/logic coverage, not an Android plugin substitute.
 #[cfg(all(test,not(target_os="android")))]

@@ -289,3 +289,5 @@ mod jvm_fixture;
 
 mod tailscale;
 pub use tailscale::{AndroidTailscaleSource, bind_tailscale, is_tailscale_initialized};
+#[cfg(feature = "zerotier")]
+pub use zerotier::{bind_zerotier, is_zerotier_initialized};

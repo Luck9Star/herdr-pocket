@@ -28,7 +28,7 @@ FLUTTER_JNI = [BIND_NATIVE] + [
     for name in ('nativeCreateScope', 'nativeReserveOpen', 'nativeCall', 'nativeCloseScope')
 ]
 ZERO_TIER_JNI = ['Java_org_herdr_network_AndroidZeroTierNative_' + name
-                 for name in ('identityCreate', 'identityValidate', 'initializeDevice', 'retiredExactly')]
+                 for name in ('bindNative', 'identityCreate', 'identityValidate', 'initializeDevice', 'retiredExactly')]
 SYSTEM = {'libc.so', 'libm.so', 'libdl.so', 'liblog.so', 'libandroid.so', 'libz.so',
           'libjnigraphics.so', 'libEGL.so', 'libGLESv2.so', 'libOpenSLES.so', 'libvulkan.so', 'libstdc++.so',
           'libnativewindow.so'}  # Public NDK library since API 26; this verifier requires API 35.

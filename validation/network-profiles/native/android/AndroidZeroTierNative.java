@@ -16,6 +16,9 @@ public final class AndroidZeroTierNative {
     private static native boolean identityValidate(byte[] identity);
     private static native int initializeDevice(long reservation,byte[] identity,int timeoutMs);
     private static native boolean retiredExactly(String handle,String instanceId,String leaseId);
+    /** Host plugin calls this after explicitly loading the ZeroTier provider
+     * library; it binds the store bridge and never loads a library itself. */
+    public static native boolean bindNative(Context context);
 
     /** Invoked once by native binding on the application class-loader thread. */
     public static synchronized AndroidZeroTierDeviceStore createStore(Context context) throws Exception {

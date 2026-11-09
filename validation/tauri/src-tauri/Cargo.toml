@@ -22,6 +22,7 @@ tauri-utils = { version = "=2.10.2", features = ["build-2"] }
 default = []
 network-easytier = ["herdr-readonly-transport/overlay-linked-easytier"]
 network-tailscale = ["herdr-readonly-transport/overlay-linked-tailscale"]
+network-zerotier = ["herdr-readonly-transport/overlay-linked-zerotier", "herdr-android-network-source/zerotier"]
 
 [dependencies]
 tauri = { version = "=2.12.5", features = [] }

@@ -1638,6 +1638,27 @@ test('paired frame updates preserve accurate input status without repeating live
   } finally {h.restore();}
 });
 
+test('stopping after a finished TUI session still marks the frame stale',async()=>{
+  const h=await setup(),n=h.nodes;
+  try {
+    await openInput(h);
+    n['remote-input-direct'].click();await flush();await flush();
+    const all=()=>n['remote-input-keys'].all(),expand=all().find(e=>e.textContent==='更多键');
+    expand.click();
+    // The auxiliary keys mirror the guarded TUI run's closing sequence: focus
+    // stays on the terminal textarea and the expanded panel remains open.
+    for(const name of ['f1','f1','insert','delete','backspace','shift-tab','f5','f10']) {
+      const key=all().find(e=>e.dataset.remoteKey===name);
+      if(!key)throw Error('missing key '+name);
+      key.click();await flush();await flush();
+    }
+    assert.equal(document.activeElement,h.terminal.textarea);
+    n['remote-cancel'].click();
+    assert.match(n['remote-captured'].textContent,/陈旧/);
+    assert.equal(n['remote-captured'].dataset.state,'stale');
+  } finally {h.finish();await flush();h.restore();}
+});
+
 test('live task snapshots retain focused task buttons, revoke old tickets and refresh after focus leaves',async()=>{
  const h=await setup(),n=h.nodes;
  try {

@@ -244,6 +244,7 @@ jobs:
           cargo build --manifest-path validation/flutter-network-runtime/Cargo.toml --locked --target aarch64-linux-android --features network-easytier,network-tailscale,network-zerotier
           mkdir -p "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a"
           cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$HP_TS_LIB_DIR/libhp_tailscale.so" "$HP_ZT_LIB_DIR/libhp_zerotier.so" "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
+          cp validation/flutter-network-runtime/target/aarch64-linux-android/debug/libherdr_flutter_network_runtime.so "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
           cd "$RUNNER_TEMP/flutter-probe"
           flutter pub get --enforce-lockfile
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"

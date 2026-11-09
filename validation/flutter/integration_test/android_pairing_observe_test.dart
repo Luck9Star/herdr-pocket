@@ -716,13 +716,21 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
     'currentCount':currentCount,'historyCount':historyCount,'historyRows':history.length,
     'historyDistinguished':true,'clearedKeptState':clearedKeptState,'resetRestoredList':false,'nativeCallsAdded':0};
   if (!clearedKeptState) throw StateError('board_search_clear_dropped_state');
-  // The production reset control exists only on an empty result.
-  await tester.enterText(search,'zz-no-such-entry'); await tester.pump();
+  // The production reset control exists only on an empty result. Finish the
+  // search editor so the soft keyboard does not cover the bottom controls,
+  // then scroll the reset button into view before acquiring the stable pointer.
+  await tester.enterText(search,'zz-no-such-entry');
+  await tester.testTextInput.receiveAction(TextInputAction.done);
+  await tester.pump(const Duration(milliseconds:350));
   stage('board_search_clear_reset_visible');
+  final resetControl=find.byKey(const ValueKey('hosts-filters-reset'));
+  final boardScrollable=find.descendant(of:board,matching:find.byType(Scrollable)).first;
+  await tester.scrollUntilVisible(resetControl,200,scrollable:boardScrollable);
+  await tester.pump();
   await until(tester,() => find.byKey(const ValueKey('hosts-search-empty')).evaluate().length == 1 &&
-    find.byKey(const ValueKey('hosts-filters-reset')).evaluate().length == 1);
+    resetControl.evaluate().length == 1);
   stage('board_search_clear_reset_tap');
-  await tapStablePointer(tester,find.byKey(const ValueKey('hosts-filters-reset')));
+  await tapStablePointer(tester,resetControl);
   final restored=boardCounts(tester);
   final resetRestoredList=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.all &&
     (tester.widget<TextField>(search).controller?.text ?? '') == '' && restored.shown == restored.total;

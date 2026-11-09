@@ -342,14 +342,17 @@ Future<void> keyboardCheckpoint(WidgetTester tester,Directory exchange,String la
   await until(tester,() => ack.existsSync() && ack.readAsStringSync() == jsonEncode({'checkpoint':label}));
 }
 
-Map<String,Object> boundedFailure(Object error,StackTrace stack,String stage,{Map<String,Object>? tuiResume}) {
+Map<String,Object> boundedFailure(Object error,StackTrace stack,String stage,
+    {Map<String,Object>? tuiResume,Map<String,Object>? boardSearch}) {
   const classes = {'TestFailure','StateError','RemoteFailure','FormatException','TimeoutException','FlutterError'};
   final name = error.runtimeType.toString();
   final errorClass = error is TypeError ? 'TypeError' : classes.contains(name) ? name : 'other';
   final match = RegExp(r'android_pairing_observe_test\.dart:([0-9]+)(?::[0-9]+)?').firstMatch(stack.toString());
   final parsed = match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
   return {'stage':stage,'errorClass':errorClass,'line':parsed >= 1 && parsed <= 10000 ? parsed : 0,
-    if (tuiResume != null && tuiResumeStages.contains(stage)) 'tuiResume':tuiResume};
+    if (tuiResume != null && tuiResumeStages.contains(stage)) 'tuiResume':tuiResume,
+    if (boardSearch != null && const {'board_search_text','board_search_state','board_search_count',
+        'board_search_history','board_search_clear'}.contains(stage)) 'boardSearch':boardSearch};
 }
 
 Map<String,Object> visibleReceipt(WidgetTester tester, String paneId, int count) {
@@ -609,6 +612,7 @@ List<({String paneId,String terminalId})> boardHistoryRows(WidgetTester tester,S
 /// performs no catalog reload, so no native call is added. Counting channel
 /// traffic directly would need an injected channel interceptor, which this
 /// public package must not contain.
+Map<String,Object>? boardSearchFailureProbe;
 Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String session,String hostId,
     void Function(String) stage) async {
   stage('board_search_text');
@@ -678,6 +682,14 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   // failed this tap with a different signature). Wait for every scheduled
   // frame to drain so the top controls are deterministically built.
   await tester.pumpAndSettle(const Duration(milliseconds: 100));
+  // Four CI runs failed this stage's taps with different signatures (60s
+  // until, empty finder at tap, 10s stable-until timeout twice). Capture the
+  // exact page state right before the pointer so a fifth failure reports
+  // which precondition is missing through the boardSearch evidence channel.
+  boardSearchFailureProbe = <String,Object>{
+    'textMatched':textMatched,'dualConditionCount':counts.shown,'totalHosts':counts.total,
+    'currentCount':currentCount,'historyCount':historyCount,'historyRows':history.length,
+    'historyDistinguished':true,'clearedKeptState':false,'resetRestoredList':false,'nativeCallsAdded':0};
   // Use the stable-pointer tap: between the until() wait and the actual
   // pointer, a settling lazy list can rebuild this suffix control again
   // (run 42549882281 failed as FlutterError at the plain tap). The stable
@@ -1440,7 +1452,10 @@ void main() {
     } catch (error,stack) {
       final directory = failureDirectory;
       if (directory != null) {
-        try { publish(directory,'failure.json',jsonEncode(boundedFailure(error,stack,currentStage,tuiResume:tuiResumeDiagnostic))); }
+        try { publish(directory,'failure.json',jsonEncode(boundedFailure(error,stack,currentStage,
+            tuiResume:tuiResumeDiagnostic,
+            boardSearch:(currentStage == 'board_search_clear' && boardSearchFailureProbe != null)
+              ? {...boardSearchFailureProbe!,'clearedKeptState':false,'resetRestoredList':false} : null))); }
         catch (_) { /* Preserve the original test failure if diagnostics fail. */ }
       }
       rethrow;

@@ -188,37 +188,53 @@ class AndroidBoardAndDeviceGuards(unittest.TestCase):
         view.evaluate=Mock(side_effect=[True,{},True])
         view.install_invoke_counter();view._counter_page_context();view.remove_invoke_counter()
         install,context,remove=[call.args[0] for call in view.evaluate.call_args_list]
+        # The fixture mirrors tauri 2.x exactly: internals.invoke/ipc/postMessage are
+        # value-only defineProperty (non-writable, non-configurable) and window.ipc is
+        # the plain Java-bridge property. A plain-object internals would fake-green.
         script=r'''
 const [install,context,remove]=JSON.parse(process.argv[1]);
-const events={},clicks=[],calls=[];
+const events={},clicks=[],nativeSink=[];
 const document={readyState:'complete',addEventListener:(type,fn,capture)=>clicks.push({type,fn,capture}),
   removeEventListener:(type,fn,capture)=>{const i=clicks.findIndex(v=>v.type===type&&v.fn===fn&&v.capture===capture);if(i>=0)clicks.splice(i,1)}};
-const window={__TAURI_INTERNALS__:{invoke:function(...args){calls.push({args,bound:this===window.__TAURI_INTERNALS__});return 'ok'}},
-  addEventListener:(name,fn)=>(events[name]??=[]).push(fn)};
+const bridge={postMessage:function(message){nativeSink.push(message);return 'ok'}};
+const window={ipc:bridge,addEventListener:(name,fn)=>(events[name]??=[]).push(fn)};
+const internals={};
+Object.defineProperty(window,'__TAURI_INTERNALS__',{value:internals});
+const frozen=(name,value)=>Object.defineProperty(internals,name,{value});
+frozen('postMessage',function(message){window.ipc.postMessage(JSON.stringify(message))});
+frozen('ipc',function(message){window.__TAURI_INTERNALS__.postMessage(message)});
+frozen('invoke',function(cmd,args,options){window.__TAURI_INTERNALS__.ipc({cmd,args,options});return 'ok'});
+const frozenInvoke=internals.invoke;
 const run=expr=>new Function('window','document','location','return '+expr)(window,document,{href:'http://tauri.localhost/'});
 const fire=(type,value)=>{for(const fn of events[type]||[])fn(value)};
 const click=target=>{for(const hook of clicks)hook.fn({target})};
 run(install);run(install);click({id:'host-return-home'});
 const result=window.__TAURI_INTERNALS__.invoke('host_list',{fixture:1},{token:2});
+const invokeIdentity=internals.invoke===frozenInvoke;
+const replaced=window.ipc!==bridge;
 fire('error',{message:'bad handler'});const sync=run(context);
 fire('unhandledrejection',{reason:{message:'failed promise'}});const asyncError=run(context);
 click({});const unknown=run(context);
-run(remove);const removed={listeners:clicks.length,marker:!!window.__herdrClickHook};
+run(remove);const removed={listeners:clicks.length,marker:!!window.__herdrClickHook,
+  restored:window.ipc===bridge,deleted:!!window.__herdrIpcBridge};
 run(install);click({id:'again'});const reinstalled=run(context);
-process.stdout.write(JSON.stringify({sync,asyncError,unknown,removed,reinstalled,capture:clicks[0]?.capture,calls,result}));
+process.stdout.write(JSON.stringify({sync,asyncError,unknown,removed,reinstalled,capture:clicks[0]?.capture,
+  nativeSink:nativeSink.map(m=>JSON.parse(m)),result,invokeIdentity,replaced}));
 '''
         result=subprocess.run([shutil.which('node'),'-e',script,json.dumps([install,context,remove])],
                               capture_output=True,text=True,timeout=10,check=True)
         value=json.loads(result.stdout)
         self.assertEqual((value['sync']['clickSeen'],value['sync']['lastClickTarget']), (1,'host-return-home'))
         self.assertEqual((value['sync']['count'],value['sync']['tallyKeys']),(1,['host_list']))
-        self.assertEqual(value['calls'],[{'args':['host_list',{'fixture':1},{'token':2}],'bound':True}])
+        self.assertTrue(value['invokeIdentity'])  # frozen invoke was never patched
+        self.assertTrue(value['replaced'])
+        self.assertEqual(value['nativeSink'],[{'cmd':'host_list','args':{'fixture':1},'options':{'token':2}}])
         self.assertEqual(value['result'],'ok')
         self.assertEqual((value['sync']['errorCount'],value['sync']['lastJsError']), (1,'sync:bad handler'))
         self.assertEqual((value['asyncError']['errorCount'],value['asyncError']['lastJsError']),
                          (2,'async:failed promise'))
         self.assertEqual((value['unknown']['clickSeen'],value['unknown']['lastClickTarget']),(2,'?'))
-        self.assertEqual(value['removed'],{'listeners':0,'marker':False})
+        self.assertEqual(value['removed'],{'listeners':0,'marker':False,'restored':True,'deleted':False})
         self.assertTrue(value['capture'])
         self.assertEqual((value['reinstalled']['clickSeen'],value['reinstalled']['lastClickTarget']), (1,'again'))
 

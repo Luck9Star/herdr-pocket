@@ -495,15 +495,27 @@ class AndroidWebView:
         return failure
 
     def install_invoke_counter(self):
-        """Count real app IPC so a local-only interaction can be proven on the device."""
-        script = ('(()=>{const i=window.__TAURI_INTERNALS__;if(!i||typeof i.invoke!=="function")return false;'
-            'if(i.__herdrInvokeCounter)return i.invoke===i.__herdrInvokePatched;'
-            'const original=i.invoke;const c={count:0,tally:{},lastJsError:null,errorCount:0,clickSeen:0,lastClickTarget:null};'
-            'i.__herdrInvokeCounter=c;i.__herdrInvokeOriginal=original;'
-            'const patched=function(cmd,args,options){c.count+=1;'
+        """Count real app IPC so a local-only interaction can be proven on the device.
+
+        Tauri 2.x defines internals.invoke/ipc/postMessage with value-only
+        Object.defineProperty (non-writable, non-configurable), so assignment
+        silently no-ops and can never report a working patch. The live hook on
+        Android is the wry Java bridge: window.ipc is a plain window property
+        and ipc-protocol.js reads it dynamically at every send, so replacing
+        window.ipc with a wrapper counts every command at the native boundary.
+        """
+        script = ('(()=>{const i=window.__TAURI_INTERNALS__;const b=window.ipc;'
+            'if(!i||typeof i.invoke!=="function"||!b||typeof b.postMessage!=="function")return false;'
+            'if(window.__herdrIpcBridge){window.ipc=window.__herdrIpcBridge;'
+            'return window.ipc===window.__herdrIpcBridge;}'
+            'const c={count:0,tally:{},lastJsError:null,errorCount:0,clickSeen:0,lastClickTarget:null};'
+            'const wrapped={postMessage:function(message){c.count+=1;let cmd=null;'
+            'try{cmd=typeof message==="string"?JSON.parse(message).cmd:null;}catch(e){}'
             'if(typeof cmd==="string"&&Object.keys(c.tally).length<64)c.tally[cmd]=(c.tally[cmd]||0)+1;'
-            'return original.call(i,cmd,args,options);};'
-            'i.__herdrInvokePatched=patched;i.invoke=patched;'
+            'return b.postMessage(message);}};'
+            'i.__herdrInvokeCounter=c;'
+            'window.__herdrIpcOriginal=b;window.__herdrIpcBridge=wrapped;window.ipc=wrapped;'
+            'if(window.ipc!==wrapped)return false;'
             'if(!window.__herdrClickHook){window.__herdrClickHook=e=>{'
             'const t=window.__TAURI_INTERNALS__,k=t&&t.__herdrInvokeCounter;'
             'if(k){k.clickSeen+=1;k.lastClickTarget=(e&&e.target&&e.target.id)||"?";}};'
@@ -514,10 +526,10 @@ class AndroidWebView:
             'window.addEventListener("error",e=>note("sync:"+((e&&e.message)||"error")));'
             'window.addEventListener("unhandledrejection",'
             'e=>note("async:"+((e&&e.reason&&(e.reason.message||e.reason))||"rejected")));}'
-            'return i.invoke===patched;})()')
+            'return window.ipc===wrapped;})()')
         def installed():
             # A briefly reset JS context returns false or throws; both self-heal here.
-            # A wrapper the app silently reverted also stays false until install times out.
+            # A reverted bridge is re-asserted by the install-once guard above.
             try:
                 return self.evaluate(script) is True
             except GuiFailure:
@@ -542,9 +554,10 @@ class AndroidWebView:
         self.evaluate(
             '(()=>{if(window.__herdrClickHook){document.removeEventListener("click",window.__herdrClickHook,true);'
             'delete window.__herdrClickHook;}'
-            'const i=window.__TAURI_INTERNALS__;if(!i||!i.__herdrInvokeOriginal)return false;'
-            'i.invoke=i.__herdrInvokeOriginal;delete i.__herdrInvokeOriginal;delete i.__herdrInvokePatched;'
-            'delete i.__herdrInvokeCounter;return true;})()')
+            'const original=window.__herdrIpcOriginal;if(!original)return false;'
+            'window.ipc=original;delete window.__herdrIpcOriginal;delete window.__herdrIpcBridge;'
+            'const i=window.__TAURI_INTERNALS__;if(i)delete i.__herdrInvokeCounter;'
+            'return window.ipc===original;})()')
 
     def hidden_key_probe(self):
         # Exercise the old view after navigation; receiver must remain unchanged.

@@ -665,7 +665,12 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   // The board is a lazy ListView: the history phase scrolled a host card to
   // the top, evicting the search field (and its clear button) from the
   // viewport. Return to the top so the control is built again before tapping.
-  tester.state<ScrollableState>(find.byKey(const ValueKey('host-catalog-list'))).position.jumpTo(0);
+  // The key sits on the ListView, so resolve its inner Scrollable first —
+  // the same pattern host_catalog_search_widget_test uses via boardList().
+  final boardScrollable=find.descendant(
+    of:find.byKey(const ValueKey('host-catalog-list')),
+    matching:find.byType(Scrollable)).first;
+  tester.state<ScrollableState>(boardScrollable).position.jumpTo(0);
   await tester.pump();
   await tapKey(tester,'hosts-search-clear');
   final cleared=boardCounts(tester);

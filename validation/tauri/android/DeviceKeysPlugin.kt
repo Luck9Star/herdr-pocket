@@ -18,6 +18,7 @@ import org.herdr.network.AndroidEasyTierConfig
 import org.herdr.network.AndroidTailscaleConfig
 import org.herdr.network.AndroidTailscaleStateStore
 import org.herdr.network.AndroidZeroTierDeviceService
+import org.herdr.network.AndroidZeroTierNative
 import org.json.JSONObject
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.atomic.AtomicLong
@@ -75,8 +76,10 @@ class DeviceKeysPlugin(private val activity: Activity): Plugin(activity) {
             }
         }
         // Context registration only. No identity read, engine start or retry loop.
+        try { System.loadLibrary("hp_zerotier") } catch (_:LinkageError) {}
         try { AndroidEasyTierConfig.bindNative(activity.applicationContext) } catch (_:LinkageError) {} catch (_:Exception) {}
         try { AndroidTailscaleConfig.bindNative(activity.applicationContext) } catch (_:LinkageError) {} catch (_:Exception) {}
+        try { AndroidZeroTierNative.bindNative(activity.applicationContext) } catch (_:LinkageError) {} catch (_:Exception) {}
     }
     // No queued writes: background and destroyed activities invalidate each dispatch.
     private val zeroTierExecutor = ThreadPoolExecutor(1,1,0L,TimeUnit.MILLISECONDS,SynchronousQueue<Runnable>())

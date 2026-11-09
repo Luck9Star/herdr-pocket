@@ -92,7 +92,18 @@ impl SourceFactory for AndroidSource {
                 }
                 Ok(())
             }
-            _ => Err("overlay_provider_unavailable"),
+            BindingProvider::ZeroTier => {
+                if !cfg!(feature = "network-zerotier") {
+                    return Err("overlay_provider_unavailable");
+                }
+                #[cfg(feature = "network-zerotier")]
+                {
+                    if !herdr_android_network_source::is_zerotier_initialized() {
+                        return Err("network_native_context_unavailable");
+                    }
+                }
+                Ok(())
+            }
         }
     }
     fn create_tailscale(

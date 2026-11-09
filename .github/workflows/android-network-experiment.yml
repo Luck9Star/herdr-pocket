@@ -150,7 +150,7 @@ jobs:
       - name: Build and statically inspect candidate
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          python3 validation/native/tool/android_bundle.py build "$RUNNER_TEMP/android-native" --tailscale
+          python3 validation/native/tool/android_bundle.py build "$RUNNER_TEMP/android-native" --tailscale --zerotier
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: android-native-${{ github.sha }}
@@ -200,6 +200,7 @@ jobs:
           echo "AR_aarch64_linux_android=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> "$GITHUB_ENV"
           echo "HEELER_ET_LIB_DIR=$RUNNER_TEMP/android-native" >> "$GITHUB_ENV"
           echo "HP_TS_LIB_DIR=$RUNNER_TEMP/android-native" >> "$GITHUB_ENV"
+          echo "HP_ZT_LIB_DIR=$RUNNER_TEMP/android-native" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang" >> "$GITHUB_ENV"
           echo "READELF=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" >> "$GITHUB_ENV"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -218,8 +219,8 @@ jobs:
           npm run tauri -- android init --ci
           python3 scripts/wire-android.py
           mkdir -p src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a
-          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$HP_TS_LIB_DIR/libhp_tailscale.so" src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/
-          npm run tauri -- android build --debug --target aarch64 --features network-easytier,network-tailscale --apk --ci
+          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$HP_TS_LIB_DIR/libhp_tailscale.so" "$HP_ZT_LIB_DIR/libhp_zerotier.so" src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/
+          npm run tauri -- android build --debug --target aarch64 --features network-easytier,network-tailscale,network-zerotier --apk --ci
           mapfile -t apks < <(find src-tauri/gen/android -name '*.apk' -type f)
           test "${#apks[@]}" -eq 1
           cp "${apks[0]}" "$RUNNER_TEMP/app.apk"
@@ -240,10 +241,9 @@ jobs:
           python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
           python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
           cp "$RUNNER_TEMP/flutter-source/pubspec.lock" "$RUNNER_TEMP/flutter-probe/pubspec.lock"
-          cargo build --manifest-path validation/flutter-network-runtime/Cargo.toml --locked --target aarch64-linux-android --features network-easytier,network-tailscale
+          cargo build --manifest-path validation/flutter-network-runtime/Cargo.toml --locked --target aarch64-linux-android --features network-easytier,network-tailscale,network-zerotier
           mkdir -p "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a"
-          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$HP_TS_LIB_DIR/libhp_tailscale.so" "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
-          cp validation/flutter-network-runtime/target/aarch64-linux-android/debug/libherdr_flutter_network_runtime.so "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
+          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$HP_TS_LIB_DIR/libhp_tailscale.so" "$HP_ZT_LIB_DIR/libhp_zerotier.so" "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
           cd "$RUNNER_TEMP/flutter-probe"
           flutter pub get --enforce-lockfile
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"

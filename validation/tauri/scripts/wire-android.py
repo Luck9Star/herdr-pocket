@@ -19,7 +19,7 @@ val sharedNetworkVault = rootProject.projectDir.resolve("../../../../network-pro
 extensions.extraProperties["herdrNetworkSecretsDir"] = sharedNetworkVault
 apply(from = sharedNetworkVault.resolve("network-secrets.gradle"))
 // Preserve the exact candidate bytes required by the native bundle verifier.
-android { packaging { jniLibs.keepDebugSymbols += setOf("**/libheeler_easytier.so", "**/libhp_tailscale.so") } }
+android { packaging { jniLibs.keepDebugSymbols += setOf("**/libheeler_easytier.so", "**/libhp_tailscale.so", "**/libhp_zerotier.so") } }
 '''
 gradle.write_text(text)
 target=app/'src/main/java/org/herdr/pocket/DeviceKeysPlugin.kt'

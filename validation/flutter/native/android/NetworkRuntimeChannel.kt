@@ -11,6 +11,7 @@ import org.herdr.network.AndroidEasyTierConfig
 import org.herdr.network.AndroidNetworkSecretStore
 import org.herdr.network.AndroidTailscaleStateStore
 import org.herdr.network.AndroidTailscaleConfig
+import org.herdr.network.AndroidZeroTierNative
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ArrayBlockingQueue
@@ -59,6 +60,7 @@ class NetworkRuntimeChannel(private val activity: Activity, messenger: BinaryMes
     @Volatile private var scope: Long = 0
     @Volatile private var easyTierBound = false
     @Volatile private var tailscaleBound = false
+    @Volatile private var zeroTierBound = false
     private val loginGate = LoginReviewGate()
     fun setForeground(value: Boolean) { loginGate.foreground(value) }
     private fun pool(name: String, count: Int, capacity: Int) = ThreadPoolExecutor(
@@ -83,10 +85,12 @@ class NetworkRuntimeChannel(private val activity: Activity, messenger: BinaryMes
                 // is absent the runtime itself refuses to load, never a fallback.
                 val etLibrary = try { System.loadLibrary("heeler_easytier"); true } catch (_: LinkageError) { false }
                 val tsLibrary = try { System.loadLibrary("hp_tailscale"); true } catch (_: LinkageError) { false }
+                val ztLibrary = try { System.loadLibrary("hp_zerotier"); true } catch (_: LinkageError) { false }
                 try {
                     System.loadLibrary("herdr_flutter_network_runtime")
                     easyTierBound = etLibrary && try { AndroidEasyTierConfig.bindNative(activity.applicationContext) } catch (_: LinkageError) { false } catch (_: Exception) { false }
                     tailscaleBound = tsLibrary && try { AndroidTailscaleConfig.bindNative(activity.applicationContext) } catch (_: LinkageError) { false } catch (_: Exception) { false }
+                    zeroTierBound = ztLibrary && try { AndroidZeroTierNative.bindNative(activity.applicationContext) } catch (_: LinkageError) { false } catch (_: Exception) { false }
                     val created = nativeCreateScope()
                     synchronized(lifecycle) {
                         if (closed.get()) { if (created != 0L) nativeCloseScope(created) }

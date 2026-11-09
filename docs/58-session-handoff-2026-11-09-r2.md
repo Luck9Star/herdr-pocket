@@ -273,4 +273,11 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
 - [x] 0022 本地修复（`d0c813d`）：分析确认行 720 通过 `enterText` 输入无匹配搜索词后，软键盘保持开启并压缩视口，且 `hosts-filters-reset` 按钮落于底部未前置拉回；依照同文件既有规范发送 `receiveAction(TextInputAction.done)` 结束编辑收起软键盘，并在等待与点击前显式增加 `scrollUntilVisible` 滚动前置，确保稳定指针判定命中。
 - [x] 0023 基础设施假失败归因与加固（`9807b0f`）：0023 轮遇 GitHub Releases 偶发 504 断流，`run-ci.py` 在下载 herdr 处抛出网络异常致 `fixture_setup_failed`；已增设 4 次重试与指数退避加固防御，保留 `herdr = root / 'herdr'` 路径定义。
 - [x] 0024 轮归因与预防加固（`4685034`）：0024 轮中 `flutter-device-key` 报出 `flutter_android_test_exited_before_install`，日志无显式发行包下载超时的文字证据（纯属测试进程在安装前提前退出）。为防范与 Tauri 同源的 Gradle 包装器缺省 10 秒超时风险，在 `flutter_android_gui.py` 预防性增设 `networkTimeout=120000` 改写，保留原地址与校验，不带出原始日志。
+- [x] 0025 外部 504 态势诊断：08:07~08:25 间本地探针证实上游 services.gradle.org 与 adoptium 网关发生持续 504 断流，耐受等待外部恢复。
+- [x] 0026 轮（run `42595512698`，`26e34ab`）**全矩阵全绿达成（conclusion: success，9 成功 / 2 跳过 / 0 失败）**：
+  1. `android-pairing / flutter-device-key`: **SUCCESS**，真实产物 `manifest.json` 状态为 `passed`；`boardSearchEvidence`（`clearedKeptState: true`, `resetRestoredList: true`, `historyDistinguished: true`）、`deviceImpactEvidence`（`reentered: true`, `scopeListed: true`）、`blockedTargetEvidence`、`localIdentityDeleted` 全绿，坐实软键盘收起与滚动前置（`d0c813d`）完全彻底解决看板重置超时问题！
+  2. `android-pairing / android-device-key`: **SUCCESS**（第 9 次全绿，看板与设备审查双满分）。
+  3. `apps (flutter)` 与 `apps (tauri)`: **SUCCESS**（双端 arm64 发布包与二进制校验全通过）。
+  4. `native`, `flutter-source`, `zerotier-android-abi`, `zerotier-keystore`, `transport-source`: 全部 **SUCCESS**。
+  5. `input-fixture`, `input-host-candidate`: 按规则正常跳过。
 - [ ] **等用户明示授权**后才动 Stage 2 门控（建议先批 S1+S2）

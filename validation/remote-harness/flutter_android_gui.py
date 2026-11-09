@@ -89,7 +89,9 @@ class DeviceFailure(ValueError):
 
 # Static, non-sensitive codes only; unknown errors are deliberately collapsed.
 _PRIMARY_FAILURE_CODES = frozenset({
+    'android_blocked_target_evidence_invalid',
     'android_system_back_requires_visible_owned_ime',
+    'android_tui_requires_guarded_input',
     'android_system_ime_evidence_unavailable',
     'android_system_ime_expected_state_invalid',
     'android_system_ime_fixture_configuration_failed',
@@ -149,11 +151,21 @@ _PRIMARY_FAILURE_CODES = frozenset({
     'flutter_android_tui_start_already_attempted',
 })
 
+# The public-file readers derive their failure code from the fixed public file
+# vocabulary. Every one of them is a reachable, non-sensitive stage code and
+# must keep its own identity: collapsing them hides the device-side reason
+# (for example a read that failed because the emulator disappeared).
+_PUBLIC_FILE_KINDS = ('request', 'result', 'signer', 'stage', 'failure', 'checkpoint')
+_PUBLIC_FILE_CODES = frozenset(
+    'flutter_android_public_' + kind + suffix
+    for kind in _PUBLIC_FILE_KINDS
+    for suffix in ('_invalid', '_read_failed'))
+
 def _safe_primary_failure(exc):
     if not isinstance(exc, DeviceFailure):
         return 'flutter_android_primary_failure'
     code = str(exc)
-    if code in _PRIMARY_FAILURE_CODES:
+    if code in _PRIMARY_FAILURE_CODES or code in _PUBLIC_FILE_CODES:
         return code
     for prefix in ('flutter_android_test_exited_', 'flutter_android_phase_timeout_', 'flutter_android_test_failed_'):
         if code.startswith(prefix) and code[len(prefix):] in STAGES:

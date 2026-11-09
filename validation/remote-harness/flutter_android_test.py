@@ -909,6 +909,18 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(gui._safe_primary_failure(gui.DeviceFailure('PRIVATE')), 'flutter_android_primary_failure')
         self.assertEqual(gui._safe_primary_failure(ValueError('PRIVATE')), 'flutter_android_primary_failure')
 
+    def test_a_public_file_read_failure_keeps_its_own_failure_code(self):
+        # Collapsing these into the generic code hides the device-side reason.
+        for kind in ('request', 'result', 'signer', 'stage', 'failure', 'checkpoint'):
+            code = 'flutter_android_public_' + kind + '_read_failed'
+            self.assertEqual(gui._safe_primary_failure(gui.DeviceFailure(code)), code)
+            invalid = 'flutter_android_public_' + kind + '_invalid'
+            self.assertEqual(gui._safe_primary_failure(gui.DeviceFailure(invalid)), invalid)
+
+    def test_a_reachable_guarded_only_code_is_not_collapsed(self):
+        for code in ('android_blocked_target_evidence_invalid', 'android_tui_requires_guarded_input'):
+            self.assertEqual(gui._safe_primary_failure(gui.DeviceFailure(code)), code)
+
     def test_failed_signer_verification_stops_before_host_approval(self):
         result, cleanup = self.exercise(fail_signer=True)
         self.assertIsNone(result)

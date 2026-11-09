@@ -252,5 +252,8 @@ git diff --cached --name-only | grep graphify-out   # 必须为空
 - [x] 读 `counterContext` / `counterClickContext` / `homeStatus`——**三选一签名表全部不成立，前提已推翻**：真实根因是 harness 插桩缺陷（tauri 2.12.5 `internals.invoke/ipc/postMessage` 全为不可写 defineProperty，赋值静默无效；旧版脚本假成功路径 → 前几轮 `no_ipc` 同源）。修复 `f7b8e9c`（插桩改挂 `window.ipc` 原生桥）+ `f074a70`（失败上报 ipcProbe 描述符探测）。
 - [x] 验证 flutter-device-key 过 board_search_history——`1a37f17` 生效；新败点 `board_search_clear`＝懒 ListView 回收（滚动后清除按钮出 viewport），修复 `505eba6`（点击前 `jumpTo(0)` 回顶）。
 - [x] 分支整理（第三棒）：本地删 16 支 + main 追平 + 释放 pairing-retry worktree；远端删 39 支（43→3，删前核实无 in-progress run/PR）。待用户裁决：本地 `codex/zerotier-apk-wiring-20261108`（独有 0ab7f76）与远端 `codex/android-baseline-20261105`（独有 b086299）。
-- [ ] 0011 轮（run `42548234405`，分支 `...-0011-505eba6`，HEAD `505eba6`）终态判读：android 看 counter 真计数或 `counterContext.ipcProbe` 定案 `window.ipc` 可写性；flutter 看 `board_search_clear` 之后阶段
+- [x] 0011（run `42548234405`）终态 9 绿/1 败：**android-device-key 首次全绿**（`window.ipc` 桥 counter 真计数，board gate 过；后三连绿）；flutter 前进为 StateError line 668（jumpTo finder 写法）→ `b8331af` 修正（descendant Scrollable）。
+- [x] 0012（run `42549882281`）终态 9 绿/1 败：flutter errorClass other + line 141（tap 时 finder 已空，FlutterError）→ `2fb8cf1`（clear/reset 改 `tapStablePointer` + 白名单收录 FlutterError）。
+- [x] 0013（run `42552265165`）**adb 基础设施假失败定案**：failure null、cleanup primaryFailure `flutter_android_adb_failed`、signer not_completed、app 未装上、集成测试未开始；非代码回归，按假失败判据原 HEAD 重推 `0013b`（run `42553557053`）验证。
+- [ ] 0013b 终态判读（flutter board_search_clear 修复的首个干净验证轮）
 - [ ] **等用户明示授权**后才动 Stage 2 门控（建议先批 S1+S2）

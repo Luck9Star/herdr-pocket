@@ -425,11 +425,30 @@ def safe_device_impact(value):
     return {key: value[key] for key in keys}
 
 
+def safe_until_timeout(value):
+    invalid = 'flutter_android_until_timeout_invalid'
+    if not isinstance(value, dict):
+        raise DeviceFailure(invalid)
+    keys = {'key', 'buttonCount', 'imeBlockedNotice', 'inputStatus'}
+    if not set(value) <= keys:
+        raise DeviceFailure(invalid)
+    key = value.get('key')
+    if key is not None and (not isinstance(key, str) or len(key) > 64):
+        raise DeviceFailure(invalid)
+    for num in ('buttonCount', 'imeBlockedNotice'):
+        if num in value and (type(value[num]) is not int or not 0 <= value[num] <= 16):
+            raise DeviceFailure(invalid)
+    status = value.get('inputStatus')
+    if status is not None and (not isinstance(status, str) or len(status) > 200):
+        raise DeviceFailure(invalid)
+    return {k: value[k] for k in keys if k in value}
+
+
 def safe_test_failure(value):
     kinds = {'TestFailure', 'StateError', 'TypeError', 'RemoteFailure', 'FormatException',
              'TimeoutException', 'FlutterError', 'other'}
     base = {'stage', 'errorClass', 'line'}
-    evidence = {'tuiResume', 'boardSearch', 'deviceImpact'}
+    evidence = {'tuiResume', 'boardSearch', 'deviceImpact', 'untilTimeout'}
     keys = set(value) if isinstance(value, dict) else set()
     if (not isinstance(value, dict) or not base <= keys or not keys <= base | evidence or
             not isinstance(value['stage'], str) or not isinstance(value['errorClass'], str) or
@@ -449,8 +468,9 @@ def safe_test_failure(value):
         if value['stage'] not in DEVICE_IMPACT_STAGES:
             raise DeviceFailure('flutter_android_failure_metadata_invalid')
         clean['deviceImpact'] = safe_device_impact(value['deviceImpact'])
+    if 'untilTimeout' in value:
+        clean['untilTimeout'] = safe_until_timeout(value['untilTimeout'])
     return clean
-
 
 def public_host_fingerprint(key):
     """Compute OpenSSH SHA256 over a canonical Ed25519 public key blob."""

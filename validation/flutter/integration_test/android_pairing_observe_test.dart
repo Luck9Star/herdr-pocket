@@ -572,6 +572,18 @@ Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
     expect(label,contains(target['paneId'] as String)); expect(label,contains(terminalId));
     final sequence = displayedSequence(tester)!;
     final button = find.byKey(ValueKey(key));
+    if (key.startsWith('remote-function-key-') && button.evaluate().isEmpty) {
+      final toggle = find.byKey(const ValueKey('remote-function-keys-toggle'));
+      if (toggle.evaluate().isNotEmpty) {
+        await tester.ensureVisible(toggle);
+        await tester.tap(toggle);
+        await tester.pump(const Duration(milliseconds:300));
+      }
+    }
+    if (button.evaluate().isNotEmpty) {
+      await tester.ensureVisible(button);
+      await tester.pump(const Duration(milliseconds:100));
+    }
     await until(tester,() => button.evaluate().length == 1 && tester.widget<OutlinedButton>(button).onPressed != null,
         onTimeout:() => <String,Object?>{
           'key':key,'buttonCount':button.evaluate().length,

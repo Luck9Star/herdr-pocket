@@ -396,26 +396,19 @@ class AndroidWebView:
 
     def click(self, selector, trace=None):
         # scrollIntoView is layout-only. Actual activation goes through CDP input.
+        # Real-device evidence (0003 & 0010): between scroll, hit-check, and CDP dispatch
+        # the layout can shift (xterm focus, IME insets, inertia scroll).
+        # We re-center the control on each probe and gate on layout stillness:
+        # two consecutive evaluations must yield identical, valid in-bounds hit coordinates.
         expression = '''(()=>{const e=document.querySelector(%s); if(!e || e.matches(':disabled') || e.hidden) return null;
           e.scrollIntoView({block:'center',inline:'center'}); const r=e.getBoundingClientRect();
           const x=r.left+r.width/2,y=r.top+r.height/2;
           return r.width>0 && r.height>0 && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
-                 e.contains(document.elementFromPoint(x,y)) ? {x,y}:null})()''' % json.dumps(selector)
-        point = wait_for(lambda: self.evaluate(expression), 'android_control_missing_'+selector.lstrip('#').replace(' ','_'))
-        # Real-device evidence (run 42617523564): between the hit-check eval and
-        # the CDP dispatch the layout can still move — xterm focus and IME
-        # insets shift the keys panel — so the stale point misses the control.
-        # Gate on layout stillness: two identical reads before dispatching.
-        stable_expression = '''(()=>{const e=document.querySelector(%s); if(!e) return null;
-          const r=e.getBoundingClientRect(); const x=r.left+r.width/2,y=r.top+r.height/2;
-          return {x:Math.round(x*4),y:Math.round(y*4),w:innerWidth,h:innerHeight,
-                  hit:e.contains(document.elementFromPoint(x,y))}})()''' % json.dumps(selector)
-        wait_for(lambda: (lambda a, b: a if (a and b and a['x'] == b['x'] and a['y'] == b['y']
-                                            and a['w'] == b['w'] and a['h'] == b['h'] and a['hit']) else None)(
-            self.evaluate(stable_expression), self.evaluate(stable_expression)),
-                 'android_control_unstable_'+selector.lstrip('#').replace(' ','_'))
-        point = self.evaluate(stable_expression)
-        point = {'x': point['x'] / 4, 'y': point['y'] / 4}
+                 e.contains(document.elementFromPoint(x,y)) ? {x:Math.round(x*4),y:Math.round(y*4),w:innerWidth,h:innerHeight}:null})()''' % json.dumps(selector)
+        point = wait_for(lambda: (lambda a, b: {'x': a['x']/4, 'y': a['y']/4} if (a and b and a['x'] == b['x'] and a['y'] == b['y']
+                                                   and a['w'] == b['w'] and a['h'] == b['h']) else None)(
+            self.evaluate(expression), self.evaluate(expression)),
+                 'android_control_missing_'+selector.lstrip('#').replace(' ','_'))
         if trace is not None:
             # Bounded pointer evidence only: no text, no identifiers, no secrets.
             trace.append(self.evaluate('''(()=>{const e=document.querySelector(%s);const r=e?.getBoundingClientRect?.();

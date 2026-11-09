@@ -424,13 +424,16 @@ class AndroidWebView:
         for kind in ('mousePressed', 'mouseReleased'):
             self.call('Input.dispatchMouseEvent', {'type': kind, 'x': point['x'], 'y': point['y'],
                                                  'button': 'left', 'clickCount': 1})
-        # The dispatch itself can race a late layout shift: verify the control
-        # was hit at the point we used, and re-verify after the event settles.
-        check_expression = '''(()=>{const e=document.querySelector(%s); const r=e?.getBoundingClientRect?.();
-          if(!e||!r) return null; const x=%d,y=%d;
-          return r.left<=x && x<=r.right && r.top<=y && y<=r.bottom &&
-                 e.contains(document.elementFromPoint(x,y))})()''' % (json.dumps(selector), point['x'], point['y'])
-        wait_for(lambda: self.evaluate(check_expression), 'android_control_missed_'+selector.lstrip('#').replace(' ','_'), timeout=10)
+        # Diagnostic only: many successful clicks hide or remove their control
+        # (dialog close, paste-review action), so a post-dispatch hit check must
+        # never gate success — that stays with the existing result assertions.
+        if trace is not None:
+            trace.append({'postHit': bool(self.evaluate(
+                '''(()=>{const e=document.querySelector(%s); const r=e?.getBoundingClientRect?.();
+                  if(!e||!r||e.hidden) return false; const x=%d,y=%d;
+                  return r.left<=x && x<=r.right && r.top<=y && y<=r.bottom &&
+                         e.contains(document.elementFromPoint(x,y))})()'''
+                % (json.dumps(selector), point['x'], point['y'])))})
         if trace is not None:
             trace.append(self.evaluate('''(()=>{const a=document.activeElement;return {
               activeElement:a?(a.id||a.className||a.tagName):null,

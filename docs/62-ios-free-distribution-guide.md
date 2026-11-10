@@ -47,9 +47,12 @@ Release v0.1.0 资产 `herdr-pocket-flutter-ios-unsigned-v0.1.0.ipa`（36,078,42
 - **签名兼容性反而顺**：包本身未签名、不含 entitlements；AltStore 重签时注入个人 development entitlements（天然带 `get-task-allow`），与 debug 构建的调试需求一致——不会出现「debug 包被分发签名拒绝装」的矛盾。反过来说，这个包**不能**用于 App Store/TestFlight 渠道（那要求 release 构建且 `get-task-allow=false`）。
 - bundle id 固定为 `dev.herdr.herdrFlutterProbe`（`ci.py` create 参数推导），AltStore 升级走同 id 覆盖安装。
 
-### 3.2 Tauri 壳：没有真机包
+### 3.2 Tauri 壳：Release 现已有同款可重签 `.ipa`
 
-CI 只有模拟器架构（`--target aarch64-sim`，`.github/workflows/tauri-validation.yml:95-96`），**装不上真机**。要真机请按 `docs/61` §3.4 本地出（前提是先装 Xcode）。后续项（本文不实施）：给 CI 增加 `aarch64-apple-ios` 真机未签名构建，使 Tauri 壳也能有同款 `.ipa` 资产。
+在 CI run 42878187512 中，通过 commit `d9e9588` 新增的 `aarch64-apple-ios` 真机构建作业，Release v0.1.0 现已补充上架 `herdr-pocket-tauri-ios-unsigned-v0.1.0.ipa`（24.1 MB，SHA256 见 `SHA256SUMS-v0.1.0.txt`）：
+- 由真实真机架构 `aarch64` 未签名构建（`.github/workflows/tauri-validation.yml:98`）出的 `herdr-pocket-tauri-probe.app` 按标准 `Payload/` 结构打包；
+- bundle id 为 `dev.herdrpocket.tauriprobe`；
+- 使用方法与 Flutter 壳完全一致：下载后直接在 AltStore / SideStore 中「+」重签安装。双壳在 iOS 设备上可同时安装、独立共存。
 
 ## 4. 升级与有效期注意
 

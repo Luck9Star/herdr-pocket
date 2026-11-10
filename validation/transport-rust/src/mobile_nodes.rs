@@ -103,6 +103,14 @@ impl Binding {
     pub fn profile_id(&self) -> &str {
         &self.profile_id
     }
+    /// Registry scope shared by host bookkeeping. overlay-runtime keys its
+    /// registries by ProfileKey{provider, id}; hosts keying by profile_id
+    /// alone would let one provider's node block another's at the same
+    /// catalog id. profile_id cannot contain ':' (validated), so this
+    /// composite is collision-free.
+    pub fn registry_key(&self) -> String {
+        format!("{:?}:{}", self.provider, self.profile_id)
+    }
     pub fn profile_revision(&self) -> u32 {
         self.profile_revision
     }
@@ -305,7 +313,7 @@ impl MobileNodeService {
     pub fn capture_attempt(&self, binding: &Binding) -> Result<Option<NodeAttempt>> {
         binding.validate()?;
         let registry = lock(&self.inner.registry);
-        let Some(entry) = registry.entries.get(binding.profile_id()) else {
+        let Some(entry) = registry.entries.get(&binding.registry_key()) else {
             return Ok(None);
         };
         if entry.binding != *binding {
@@ -388,7 +396,7 @@ impl MobileNodeService {
         // separate status call. Do not re-start or retry any prior operation.
         let previous = lock(&self.inner.registry)
             .entries
-            .get(binding.profile_id())
+            .get(&binding.registry_key())
             .map(|e| e.binding.clone());
         if let Some(previous) = previous {
             tokio::select! { biased;
@@ -398,12 +406,12 @@ impl MobileNodeService {
         }
         let (attempt, operation) = {
             let mut registry = lock(&self.inner.registry);
-            if !registry.entries.contains_key(binding.profile_id())
+            if !registry.entries.contains_key(&binding.registry_key())
                 && registry.entries.len() >= MAX_PROFILE_HISTORY
             {
                 return Err("mobile_node_history_capacity");
             }
-            if let Some(entry) = registry.entries.get(binding.profile_id()) {
+            if let Some(entry) = registry.entries.get(&binding.registry_key()) {
                 if entry.state != State::Stopped {
                     return Err(if entry.binding == binding {
                         "mobile_node_busy"
@@ -445,7 +453,7 @@ impl MobileNodeService {
             }
             .map_err(code)?;
             registry.entries.insert(
-                binding.profile_id.clone(),
+                binding.registry_key(),
                 Entry {
                     binding: binding.clone(),
                     attempt,
@@ -495,7 +503,7 @@ impl MobileNodeService {
             let mut registry = lock(&self.inner.registry);
             let entry = registry
                 .entries
-                .get_mut(binding.profile_id())
+                .get_mut(&binding.registry_key())
                 .ok_or("overlay_stale_revision")?;
             // stop/status may have retired this start while native completed.
             if entry.attempt != attempt
@@ -607,7 +615,7 @@ impl MobileNodeService {
             let registry = lock(&self.inner.registry);
             let entry = registry
                 .entries
-                .get(binding.profile_id())
+                .get(&binding.registry_key())
                 .ok_or("mobile_node_not_started")?;
             if entry.binding != *binding {
                 return Err("mobile_node_binding_mismatch");
@@ -640,7 +648,7 @@ impl MobileNodeService {
         let mut registry = lock(&self.inner.registry);
         let entry = registry
             .entries
-            .get_mut(binding.profile_id())
+            .get_mut(&binding.registry_key())
             .ok_or("overlay_stale_revision")?;
         if entry.attempt != attempt
             || entry.binding != *binding
@@ -672,7 +680,7 @@ impl MobileNodeService {
         binding.validate()?;
         let attempt = {
             let registry = lock(&self.inner.registry);
-            let Some(entry) = registry.entries.get(binding.profile_id()) else {
+            let Some(entry) = registry.entries.get(&binding.registry_key()) else {
                 if expected.is_some() {
                     return Err("overlay_stale_revision");
                 }
@@ -716,7 +724,7 @@ impl MobileNodeService {
         let mut registry = lock(&self.inner.registry);
         let entry = registry
             .entries
-            .get_mut(binding.profile_id())
+            .get_mut(&binding.registry_key())
             .ok_or("overlay_stale_revision")?;
         if entry.attempt != attempt || entry.binding != *binding {
             return Err("overlay_stale_revision");
@@ -742,11 +750,16 @@ impl MobileNodeService {
 
     /// Find the service's actual saved binding, even after its vault reference
     /// disappears. A GUI must revoke its SSH sessions before explicit stop.
+    /// The registry is (provider, profile id)-scoped; when providers share one
+    /// catalog id this reports the live node first, the most recent attempt
+    /// breaking a tie between stopped entries.
     pub async fn status_profile(&self, profile_id: &str) -> Result<Option<Snapshot>> {
         let binding = lock(&self.inner.registry)
             .entries
-            .get(profile_id)
-            .map(|e| e.binding.clone());
+            .values()
+            .filter(|entry| entry.binding.profile_id() == profile_id)
+            .max_by_key(|entry| (entry.state.live(), entry.attempt))
+            .map(|entry| entry.binding.clone());
         match binding {
             Some(binding) => self.status(&binding).await.map(Some),
             None => Ok(None),
@@ -778,7 +791,7 @@ impl MobileNodeService {
         deadline(timeout)?;
         let (attempt, operation) = {
             let mut registry = lock(&self.inner.registry);
-            let Some(entry) = registry.entries.get_mut(binding.profile_id()) else {
+            let Some(entry) = registry.entries.get_mut(&binding.registry_key()) else {
                 if expected.is_some() {
                     return Err("overlay_stale_revision");
                 }
@@ -818,7 +831,7 @@ impl MobileNodeService {
         let mut registry = lock(&self.inner.registry);
         let entry = registry
             .entries
-            .get_mut(binding.profile_id())
+            .get_mut(&binding.registry_key())
             .ok_or("overlay_stale_revision")?;
         if entry.attempt != attempt || entry.binding != *binding {
             return Err("overlay_stale_revision");
@@ -841,7 +854,7 @@ impl MobileNodeService {
         let registry = lock(&self.inner.registry);
         let entry = registry
             .entries
-            .get(binding.profile_id())
+            .get(&binding.registry_key())
             .ok_or("mobile_node_not_started")?;
         if entry.binding != *binding {
             return Err("mobile_node_binding_mismatch");
@@ -884,7 +897,7 @@ impl Drop for Starting {
         let mut needs_cleanup = false;
         if let Some(entry) = lock(&self.inner.registry)
             .entries
-            .get_mut(self.binding.profile_id())
+            .get_mut(&self.binding.registry_key())
             && entry.attempt == self.attempt
             && entry.state == State::Starting
         {

@@ -149,11 +149,16 @@ impl<T> Default for Reviews<T> {
 }
 #[cfg(any(test, target_os = "android"))]
 impl<T: Clone> Reviews<T> {
+    /// Reviews are (provider, profile id)-scoped like the transport registry;
+    /// retiring by bare profile id (stop_profile carries no provider) clears
+    /// every provider's review for that catalog id.
     fn retire(&mut self, id: &str) {
-        self.items.remove(id);
+        self.items
+            .retain(|_, review| review.binding.profile_id() != id);
     }
     fn reserve(&mut self, binding: Binding, attempt: T) -> Result<String, String> {
-        if self.items.len() >= 32 && !self.items.contains_key(binding.profile_id()) {
+        let key = binding.registry_key();
+        if self.items.len() >= 32 && !self.items.contains_key(&key) {
             return Err("network_login_review_limit".into());
         }
         self.next = self
@@ -161,20 +166,17 @@ impl<T: Clone> Reviews<T> {
             .checked_add(1)
             .ok_or("network_login_review_limit")?;
         let token = format!("review-{:016x}", self.next);
-        self.items.insert(
-            binding.profile_id().into(),
-            Review {
-                binding,
-                attempt,
-                token: token.clone(),
-                url: None,
-            },
-        );
+        self.items.insert(key, Review {
+            binding,
+            attempt,
+            token: token.clone(),
+            url: None,
+        });
         Ok(token)
     }
     fn get(&self, binding: &Binding) -> Result<Review<T>, String> {
         self.items
-            .get(binding.profile_id())
+            .get(&binding.registry_key())
             .filter(|r| r.binding == *binding)
             .cloned()
             .ok_or("network_login_review_stale".into())
@@ -187,7 +189,7 @@ impl<T: Clone> Reviews<T> {
     ) -> Result<(), String> {
         let review = self
             .items
-            .get_mut(binding.profile_id())
+            .get_mut(&binding.registry_key())
             .filter(|r| r.binding == *binding && r.token == token)
             .ok_or("network_login_review_stale")?;
         if url.as_deref().is_some_and(|s| !reviewed_auth_url(s)) {
@@ -367,8 +369,19 @@ impl Nodes {
             .lock()
             .map_err(|_| "state_unavailable")?
             .retire(id);
-        if let Some(cancel) = self.starts.lock().map_err(|_| "state_unavailable")?.get(id) {
-            cancel.cancel();
+        // Start slots are (provider, profile id)-scoped; a bare-id stop cancels
+        // every provider's in-flight start for that catalog id. Keys are
+        // "{provider}:{id}" and profile ids cannot contain ':'.
+        let suffix = format!(":{id}");
+        for (key, cancel) in self
+            .starts
+            .lock()
+            .map_err(|_| "state_unavailable")?
+            .iter()
+        {
+            if key.ends_with(&suffix) {
+                cancel.cancel();
+            }
         }
         Ok(())
     }
@@ -406,7 +419,7 @@ impl Nodes {
         self.retire(&profile.id)?;
         let binding = binding_for(profile, handle.clone())?;
         let cancel = Cancellation::default();
-        let _slot = StartSlot::reserve(&self.starts, &profile.id, cancel.clone())?;
+        let _slot = StartSlot::reserve(&self.starts, &binding.registry_key(), cancel.clone())?;
         let result = async {
             match (&profile.provider, &profile.settings) {
                 (
@@ -833,6 +846,33 @@ mod tests {
         drop(replacement);
         drop(other);
         assert!(b.is_cancelled());
+    }
+    #[test]
+    fn provider_scoped_keys_keep_same_profile_id_providers_independent() {
+        let ts = ts_binding();
+        let et = Binding::new(
+            ts.profile_id().into(),
+            ts.profile_revision(),
+            "cross-easytier".into(),
+            ts.identity_ref().into(),
+        )
+        .unwrap();
+        assert_ne!(et.registry_key(), ts.registry_key());
+        let mut book = Reviews::default();
+        let et_review = book.reserve(et.clone(), 1u64).unwrap();
+        let ts_review = book.reserve(ts.clone(), 2u64).unwrap();
+        assert_ne!(et_review, ts_review);
+        assert_eq!(book.get(&et).unwrap().attempt, 1);
+        assert_eq!(book.get(&ts).unwrap().attempt, 2);
+        let slots = Mutex::default();
+        let et_slot =
+            StartSlot::reserve(&slots, &et.registry_key(), Cancellation::default()).unwrap();
+        let ts_slot =
+            StartSlot::reserve(&slots, &ts.registry_key(), Cancellation::default()).unwrap();
+        drop((et_slot, ts_slot));
+        book.retire(ts.profile_id());
+        assert!(book.get(&et).is_err());
+        assert!(book.get(&ts).is_err());
     }
     #[test]
     fn tailscale_login_review_rechecks_catalog_revision_and_derived_binding() {

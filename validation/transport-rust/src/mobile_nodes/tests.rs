@@ -295,7 +295,7 @@ mod native {
         // forces the gap between engine readiness and claimed lease publish.
         let attempt = lock(&service.inner.registry)
             .entries
-            .get(saved.profile_id())
+            .get(&saved.registry_key())
             .unwrap()
             .attempt;
         loop {
@@ -662,7 +662,7 @@ mod native {
             until(|| {
                 lock(&service.inner.registry)
                     .entries
-                    .get(saved.profile_id())
+                    .get(&saved.registry_key())
                     .unwrap()
                     .state
                     == State::Closing
@@ -1165,5 +1165,347 @@ mod tailscale_native {
         );
         assert_eq!(source.loaded.load(Ordering::SeqCst), 1);
         assert_eq!(metric(1), 1);
+    }
+
+    /// Cross-provider orchestration for one MobileNodeService holding
+    /// EasyTier (native ABI fixture) and Tailscale (hp_ts fixture) nodes at
+    /// once. Assertions stay at admission/registry/budget level only: the
+    /// fixtures open no sockets, do no DNS and join no network
+    /// (overlay-runtime/tests/native_fixture.c, tailscale_fixture.c headers),
+    /// so nothing here can promote a platform-matrix concurrency cell
+    /// (docs/05 product-design platform-matrix rule).
+    #[cfg(feature = "overlay-native-fixture")]
+    mod cross_provider {
+        use super::*;
+        use crate::transport::{Dialer, OverlayProvider};
+
+        unsafe extern "C" {
+            fn fixture_reset();
+            fn fixture_metric(metric: i32) -> i32;
+        }
+        fn et_metric(index: i32) -> i32 {
+            unsafe { fixture_metric(index) }
+        }
+        /// Hold both fixture engines' serial locks: the EasyTier engine is
+        /// shared with the `native` module via NATIVE_FIXTURE_SERIAL and the
+        /// Tailscale engine with this module's SERIAL. No other test takes
+        /// both locks, so this acquisition order cannot deadlock.
+        async fn isolated_both() -> (
+            tokio::sync::MutexGuard<'static, ()>,
+            tokio::sync::MutexGuard<'static, ()>,
+        ) {
+            let tailscale = isolated().await;
+            let native = NATIVE_FIXTURE_SERIAL.lock().await;
+            until(|| et_metric(0) == 0 && et_metric(5) == 0 && et_metric(7) == 0).await;
+            unsafe { fixture_reset() };
+            (tailscale, native)
+        }
+        struct EtSource {
+            loaded: AtomicUsize,
+            specs: Mutex<Vec<NodeSpec>>,
+        }
+        impl SecureConfigSource for EtSource {
+            fn load(&self, spec: &NodeSpec) -> overlay_runtime::Result<SecretConfig> {
+                self.loaded.fetch_add(1, Ordering::SeqCst);
+                lock(&self.specs).push(spec.clone());
+                SecretConfig::from_bytes(format!("{};{}", spec.network, "cross").into_bytes())
+            }
+        }
+        fn et_source() -> Arc<EtSource> {
+            Arc::new(EtSource {
+                loaded: AtomicUsize::new(0),
+                specs: Mutex::new(Vec::new()),
+            })
+        }
+        struct TsSource {
+            store: Arc<Store>,
+            loaded: AtomicUsize,
+            specs: Mutex<Vec<NodeSpec>>,
+        }
+        impl NativeStateSource for TsSource {
+            fn load(&self, spec: &NodeSpec) -> overlay_runtime::Result<NativeNodeConfig> {
+                self.loaded.fetch_add(1, Ordering::SeqCst);
+                lock(&self.specs).push(spec.clone());
+                NativeNodeConfig::for_spec(
+                    spec,
+                    NativeVettedDirectory::from_native_vetted(std::path::PathBuf::from(
+                        "/native-vetted/synthetic-no-files",
+                    ))?,
+                    "fixture".into(),
+                    "https://controlplane.tailscale.com".into(),
+                    self.store.clone(),
+                )
+            }
+        }
+        fn ts_source() -> Arc<TsSource> {
+            Arc::new(TsSource {
+                store: Arc::new(Store::default()),
+                loaded: AtomicUsize::new(0),
+                specs: Mutex::new(Vec::new()),
+            })
+        }
+        fn et_saved(id: &str) -> Binding {
+            Binding::new(id.into(), 7, "cross-easytier".into(), "cross-vault-et".into()).unwrap()
+        }
+        async fn start_et(service: &MobileNodeService, saved: &Binding, source: &Arc<EtSource>) {
+            assert_eq!(
+                service
+                    .start(saved.clone(), source.clone(), TIME, Cancellation::default())
+                    .await
+                    .unwrap()
+                    .state,
+                State::EngineStarted
+            );
+        }
+        async fn start_ts(service: &MobileNodeService, saved: &Binding, source: &Arc<TsSource>) {
+            assert_eq!(
+                service
+                    .start_tailscale(saved.clone(), source.clone(), TIME, Cancellation::default())
+                    .await
+                    .unwrap()
+                    .state,
+                State::NeedsLogin
+            );
+        }
+        async fn drain(service: &MobileNodeService) {
+            until(|| service.reserved_nodes() == 0 && service.reserved_streams() == 0).await;
+        }
+
+        #[tokio::test]
+        async fn two_providers_hold_nodes_and_stopping_one_leaves_the_other() {
+            let _both = isolated_both().await;
+            let service = MobileNodeService::new();
+            let et = et_saved("cross-hold-et");
+            let ts = saved("cross-hold-ts");
+            start_et(&service, &et, &et_source()).await;
+            start_ts(&service, &ts, &ts_source()).await;
+            assert_eq!(service.reserved_nodes(), 2);
+            assert_eq!(
+                service.status(&et).await.unwrap().state,
+                State::EngineStarted
+            );
+            assert_eq!(
+                service.status(&ts).await.unwrap().state,
+                State::NeedsLogin
+            );
+            service.stop(&ts, TIME).await.unwrap();
+            // docs/04-roadmap foreground-concurrency row: stopping one network
+            // must not disturb the other. Orchestration-level evidence only.
+            assert_eq!(
+                service.status(&et).await.unwrap().state,
+                State::EngineStarted
+            );
+            until(|| service.reserved_nodes() == 1).await;
+            service.stop(&et, TIME).await.unwrap();
+            drain(&service).await;
+        }
+
+        /// G4 regression: one catalog profile id under two providers. With a
+        /// profile-id-only registry key the second provider's start was
+        /// rejected as "mobile_node_binding_mismatch" by the first's entry.
+        #[tokio::test]
+        async fn same_profile_id_starts_independently_per_provider() {
+            let _both = isolated_both().await;
+            let service = MobileNodeService::new();
+            let et = et_saved("shared-catalog-id");
+            let ts = saved("shared-catalog-id");
+            start_et(&service, &et, &et_source()).await;
+            start_ts(&service, &ts, &ts_source()).await;
+            assert_eq!(service.reserved_nodes(), 2);
+            let et_attempt = service.capture_attempt(&et).unwrap().unwrap();
+            let ts_attempt = service.capture_attempt(&ts).unwrap().unwrap();
+            assert_ne!(et_attempt.attempt, ts_attempt.attempt);
+            // Each binding observes only its own provider's node.
+            assert_eq!(
+                service.status_attempt(&et_attempt).await.unwrap().state,
+                State::EngineStarted
+            );
+            assert_eq!(
+                service.status_attempt(&ts_attempt).await.unwrap().state,
+                State::NeedsLogin
+            );
+            // status_profile has no provider dimension; the live node wins,
+            // most recent attempt breaking a tie between stopped entries.
+            let visible = service
+                .status_profile("shared-catalog-id")
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(visible.binding, ts);
+            service.stop(&ts, TIME).await.unwrap();
+            let visible = service
+                .status_profile("shared-catalog-id")
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(visible.binding, et);
+            assert_eq!(visible.state, State::EngineStarted);
+            assert_eq!(
+                service
+                    .capture_attempt(&et)
+                    .unwrap()
+                    .unwrap()
+                    .attempt,
+                et_attempt.attempt
+            );
+            service.stop(&et, TIME).await.unwrap();
+            let tail = service
+                .status_profile("shared-catalog-id")
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(tail.binding, ts);
+            assert_eq!(tail.state, State::Stopped);
+            drain(&service).await;
+        }
+
+        /// Node and stream budgets are process-global across providers
+        /// (overlay-runtime MAX_NODES/MAX_STREAMS). A capacity rejection
+        /// reserves nothing and frees correctly for the other provider.
+        #[tokio::test]
+        async fn shared_budgets_reject_cross_provider_without_leaking() {
+            {
+                let _both = isolated_both().await;
+                let service = MobileNodeService::new();
+                let et_src = et_source();
+                let nodes = (0..8)
+                    .map(|i| et_saved(&format!("cross-budget-{i}")))
+                    .collect::<Vec<_>>();
+                for saved in &nodes {
+                    start_et(&service, saved, &et_src).await;
+                }
+                assert_eq!(service.reserved_nodes(), 8);
+                let ts = saved("cross-budget-ts");
+                let ts_src = ts_source();
+                assert_eq!(
+                    service
+                        .start_tailscale(ts.clone(), ts_src.clone(), TIME, Cancellation::default())
+                        .await
+                        .unwrap_err(),
+                    "mobile_node_capacity"
+                );
+                assert_eq!(
+                    ts_src.loaded.load(Ordering::SeqCst),
+                    0,
+                    "capacity must reject before the source is loaded"
+                );
+                assert_eq!(
+                    service.reserved_nodes(),
+                    8,
+                    "a rejected admission must not reserve a node"
+                );
+                service.stop(&nodes[0], TIME).await.unwrap();
+                until(|| service.reserved_nodes() == 7).await;
+                start_ts(&service, &ts, &ts_src).await;
+                for saved in &nodes[1..] {
+                    service.stop(saved, TIME).await.unwrap();
+                }
+                service.stop(&ts, TIME).await.unwrap();
+                drain(&service).await;
+            }
+            // Stream budget: MAX_STREAMS is shared across provider dialers.
+            let _both = isolated_both().await;
+            let service = MobileNodeService::new();
+            let et = et_saved("cross-streams-et");
+            let ts = saved("cross-streams-ts");
+            start_et(&service, &et, &et_source()).await;
+            let ts_src = ts_source();
+            start_ts(&service, &ts, &ts_src).await;
+            unsafe { hp_ts_fixture_all_running() };
+            assert_eq!(
+                service.status(&ts).await.unwrap().state,
+                State::Running
+            );
+            let et_dialer = service.dialer(&et, TIME).unwrap();
+            let ts_dialer = service.dialer(&ts, TIME).unwrap();
+            let mut held = Vec::new();
+            for _ in 0..32 {
+                held.push(
+                    et_dialer
+                        .dial("cross-echo".into(), 22, Cancellation::default())
+                        .await
+                        .unwrap(),
+                );
+            }
+            assert_eq!(service.reserved_streams(), 32);
+            // Stream-capacity failure keeps the dialer's existing code table.
+            assert_eq!(
+                ts_dialer
+                    .dial("cross-echo".into(), 22, Cancellation::default())
+                    .await
+                    .err(),
+                Some("overlay_transport_failed")
+            );
+            drop(held);
+            until(|| service.reserved_streams() == 0).await;
+            let mut ts_stream = ts_dialer
+                .dial("cross-echo".into(), 22, Cancellation::default())
+                .await
+                .unwrap();
+            assert_eq!(
+                ts_stream.route_identity().unwrap().provider,
+                OverlayProvider::Tailscale
+            );
+            drop(ts_stream);
+            service.stop(&et, TIME).await.unwrap();
+            service.stop(&ts, TIME).await.unwrap();
+            drain(&service).await;
+        }
+
+        /// Identity and secrets stay scoped to their exact binding: each
+        /// provider's start loads only its own spec, readiness never crosses
+        /// the provider boundary, and the within-provider mismatch guard
+        /// keeps its original error at one shared catalog id.
+        #[tokio::test]
+        async fn cross_provider_identity_and_secrets_stay_binding_scoped() {
+            let _both = isolated_both().await;
+            let service = MobileNodeService::new();
+            let et = et_saved("cross-secret-id");
+            let ts = saved("cross-secret-id");
+            let et_src = et_source();
+            let ts_src = ts_source();
+            start_et(&service, &et, &et_src).await;
+            start_ts(&service, &ts, &ts_src).await;
+            {
+                let specs = lock(&et_src.specs);
+                assert_eq!(specs.len(), 1);
+                assert_eq!(specs[0].profile.provider, Provider::EasyTier);
+                assert_eq!(specs[0].network, "cross-easytier");
+            }
+            {
+                let specs = lock(&ts_src.specs);
+                assert_eq!(specs.len(), 1);
+                assert_eq!(specs[0].profile.provider, Provider::Tailscale);
+                assert_eq!(specs[0].network, "synthetic-tailnet");
+            }
+            // Readiness does not cross providers at the same profile id:
+            // EasyTier is engine-started and dialable, Tailscale is still
+            // NeedsLogin and must not borrow the sibling's readiness.
+            assert!(service.dialer(&et, TIME).is_ok());
+            assert_eq!(
+                service.dialer(&ts, TIME).err(),
+                Some("mobile_node_not_started")
+            );
+            // A foreign identity under the same provider key still mismatches.
+            let foreign = Binding::with_provider(
+                BindingProvider::Tailscale,
+                ts.profile_id().into(),
+                ts.profile_revision(),
+                ts.network_name().into(),
+                "foreign-vault".into(),
+            )
+            .unwrap();
+            assert_eq!(
+                service.status(&foreign).await.unwrap_err(),
+                "mobile_node_binding_mismatch"
+            );
+            service.stop(&et, TIME).await.unwrap();
+            assert_eq!(
+                service.status(&ts).await.unwrap().state,
+                State::NeedsLogin
+            );
+            service.stop(&ts, TIME).await.unwrap();
+            drain(&service).await;
+        }
     }
 }

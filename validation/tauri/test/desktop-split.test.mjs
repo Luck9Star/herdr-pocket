@@ -8,7 +8,7 @@ import {initTabWorkspace} from '../src/tab-workspace.js';
 
 // 桌面分屏（切片 2）：多面板同观 + 单一输入焦点 + 不 resize 远端（docs/05:137、docs/04:82）。
 class Element {
-  constructor(tag){this.isConnected=true;this.tagName=tag;this.children=[];this.attrs={};this.dataset={};this.value='';this.disabled=false;this.hidden=false;this.textContent='';}
+  constructor(tag){this.isConnected=true;this.tagName=tag;this.children=[];this.attrs={};this.dataset={};this.value='';this.disabled=false;this.hidden=false;this.textContent='';this.selectionStart=0;this.selectionEnd=0;}
   append(...xs){for(const x of xs)this.children.push(x);}
   replaceChildren(...xs){this.children=[];this.append(...xs);}
   setAttribute(k,v){this.attrs[k]=v;}
@@ -16,6 +16,7 @@ class Element {
   addEventListener(name,fn){this['event_'+name]=fn;}
   focus(){globalThis.document.activeElement=this;}
   blur(){if(globalThis.document.activeElement===this){globalThis.document.activeElement=null;this.event_blur?.({relatedTarget:null});}}
+  setSelectionRange(start,end){this.selectionStart=start;this.selectionEnd=end;}
   contains(node){return node===this || this.all().includes(node);}
   all(){return this.children.flatMap(x=>[x,...x.all()]);}
 }
@@ -256,7 +257,7 @@ test('标签切换进行中（switching 窗口）分屏入口禁用且 toggle �
   } finally { s.restore(); }
 });
 
-test('副面板 stage 事件只做局部刷新：不替换焦点面板的 draftField、不丢焦点', async () => {
+test('副面板 stage 事件不打断焦点面板的草稿输入：焦点、选区与草稿内容均保留', async () => {
   const s=setup({innerWidth:1280});
   try {
     const a=await s.openTab('direct-pane-a');
@@ -264,12 +265,18 @@ test('副面板 stage 事件只做局部刷新：不替换焦点面板的 draftF
     await s.settlePaused(a);
     s.splitButton.onclick();await s.flush();  // 分屏：b 焦点、a 副面板（已 resume）
     s.panelOf(b).all().find(n=>n.tagName==='button'&&n.textContent==='启用草稿输入').onclick();await s.flush();
-    const draft=s.panelOf(b).all().find(n=>n.tagName==='textarea'&&n.getAttribute('aria-label')==='当前标签草稿');
-    draft.focus();
+    const draft=()=>s.panelOf(b).all().find(n=>n.tagName==='textarea'&&n.getAttribute('aria-label')==='当前标签草稿');
+    const field=draft();
+    field.focus();
+    field.value='Pocket';field.oninput?.();field.setSelectionRange(2,4);
     s.send(a,{kind:'stage',stage:'connecting'});await s.flush();
-    const after=()=>s.panelOf(b).all().find(n=>n.tagName==='textarea'&&n.getAttribute('aria-label')==='当前标签草稿');
-    assert.equal(after(),draft,'副面板 stage 不得整页重建焦点面板 DOM（draftField 必须是同一节点）');
-    assert.equal(globalThis.document.activeElement,draft,'草稿输入焦点不得被副面板事件打断');
+    // 可观察契约：草稿内容、焦点与选区都不因副面板事件而丢失（节点可以重建）。
+    const after=draft();
+    assert.ok(after,'焦点面板的草稿输入框必须仍在');
+    assert.equal(after.value,'Pocket','草稿内容不得因副面板事件丢失');
+    assert.equal(globalThis.document.activeElement,after,'草稿输入焦点不得被副面板事件打断');
+    assert.equal(after.selectionStart,2,'选区起点不得丢失');
+    assert.equal(after.selectionEnd,4,'选区终点不得丢失');
     assert.ok(s.panelOf(a).all().some(n=>n.getAttribute('role')==='status'&&n.textContent.includes('正在连接 SSH')),'副面板自身状态文本仍更新');
   } finally { s.restore(); }
 });

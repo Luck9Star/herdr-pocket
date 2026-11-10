@@ -116,10 +116,13 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(fontDiagnostics && !fontDiagnostics.valid()){fontDiagnostics.close(false);fontDiagnostics=null;}
     const focused=tabs.get(tabs.activeId);
     if(focused?.mode==='direct' && ownsInputFocus(focused,document.activeElement) && !focused.suppressBlur){renderDashboard(focused);return;}
-    // 草稿编辑器聚焦（含输入法组合）期间的整页重绘会丢组合缓冲或草稿焦点——与 direct 焦点守卫同款：
-    // 只做看板局部刷新。分屏下副面板事件触发的刷新也不重建焦点面板的 DOM。
-    // 粘贴审查待挂（focusPasteReview）时除外：审查 UI 需要整页渲染才能出现。
-    if(focused && !focused.focusPasteReview && (focused.draftComposing || focused.draftField && document.activeElement===focused.draftField)){renderDashboard(focused);return;}
+    // 草稿编辑器处于输入法组合态时整页重绘会丢组合缓冲——与 direct 焦点守卫同款：
+    // 推迟到组合结束后的下一次刷新。普通草稿焦点**不**走早退（早退会跳过面板挂载，
+    // harness 需要 #view-content 的直接子节点标题），改为渲染后恢复焦点与选区。
+    if(focused && focused.draftComposing && document.activeElement===focused.draftField){renderDashboard(focused);return;}
+    // 渲染前记住草稿焦点与选区，渲染后恢复，避免整页重绘打断正在输入的草稿。
+    const draftFocus=focused&&focused.draftField&&document.activeElement===focused.draftField?focused.draftField:null;
+    const draftSelection=draftFocus?{start:draftFocus.selectionStart,end:draftFocus.selectionEnd}:null;
     // Any unrelated full redraw removes focus from the review; revoke it first.
     if(focused?.pasteReview && !focused.focusPasteReview)focused.pasteReview=null;
     // Only the currently mounted viewports have visible geometry worth retaining.
@@ -145,6 +148,10 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     }
     renderPanel(tab,true);
     if(partner)renderPanel(partner,false);
+    // 恢复草稿焦点与选区：整页重绘替换了 textarea，重建后焦点会丢（分屏下副面板事件也会触发整页重绘）。
+    if(draftFocus&&focused&&focused.draftField&&focused.draftField!==draftFocus){
+      try{focused.draftField.focus({preventScroll:true});if(draftSelection)focused.draftField.setSelectionRange(draftSelection.start,draftSelection.end);}catch{}
+    }
   }
   // 单个终端面板：focused 面板持有唯一输入焦点（docs/04:82）；非焦点面板保持观察，但输入入口全部禁用，不会静默 no-op。
   function renderPanel(tab,focused) {
@@ -583,7 +590,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         if(event.kind==='selection_ready') {if(event.epoch===tab.epoch && paneVisible() && !tab.wantsPause){tab.selectionReady=true;renderDashboard(tab);recheckBlocked(tab);}return;}
         if(event.kind==='stage') {if(!tab.wantsPause && !document.hidden && paneVisible()){tab.diagnostics.stage(event.stage);const text=connectionStageText(event.stage);if(text)status(tab,text);}return;}
         if(event.kind==='observation') {if(!Number.isSafeInteger(event.snapshot?.epoch) || (tab.epoch!==null && event.snapshot.epoch<tab.epoch))return;if(event.snapshot.epoch!==tab.epoch){if(tab.blockedIntent && !tab.blockedVerified)tab.blockedBound=false;tab.selectionTextReady=false;retireDirectPending(tab);tab.suppressBlur=true;tab.board.advance(event.snapshot.epoch);boardEvent(tab,'stale');tab.selectionReady=false;tab.frames=new RemoteFrameQueue();tab.inputRevision++;tab.inputBusy=false;tab.inputReady=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;}tab.epoch=event.snapshot.epoch;tab.state=event.snapshot.phase;if(['paused','pausing','closed'].includes(tab.state)){tab.board.invalidate(tab.state);boardEvent(tab,'stale');tab.selectionReady=false;}status(tab,tab.state==='paused'?'观察已暂停，SSH 保留；需主动恢复。':tab.state==='active'?'观察已连接；输入状态见下方。':'正在切换观察状态…');tab.suppressBlur=false;return;}
-        if(event.kind==='input_ready') {if(event.epoch!==tab.epoch || tab.blockedIntent && !tab.blockedVerified)return;tab.inputReady=true;tab.unknown=event.unknown;tab.recoveryStatus=event.recovery_status;tab.message=event.unknown?'存在未确认的发送结果，输入保持锁定；请核查原目标。':'已收到完整画面，可显式开启草稿输入。';if(tabs.activeId===tab.id)render();else {if(tab.messageElement)tab.messageElement.textContent=tab.message;updateInputMode(tab);}return;}
+        if(event.kind==='input_ready') {if(event.epoch!==tab.epoch || tab.blockedIntent && !tab.blockedVerified)return;tab.inputReady=true;tab.unknown=event.unknown;tab.recoveryStatus=event.recovery_status;tab.message=event.unknown?'存在未确认的发送结果，输入保持锁定；请核查原目标。':'已收到完整画面，可显式开启草稿输入。';render();return;}
         if(event.kind!=='frame' || event.epoch!==tab.epoch || !paneVisible())return;
         if(tab.blockedIntent && !tab.blockedVerified && (!tab.blockedBound || !event.frame?.full || !blockedMatches(tab,tab.target))){void cancel(tab);return;}
         if(!tab.frames.accept(event.frame)){void cancel(tab);return;}

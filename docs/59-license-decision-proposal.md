@@ -1,8 +1,10 @@
 # 项目许可证决策提案与逐产物发行审查
 
-日期：**2026-11-10**  
+日期：**2026-11-10**（2026-11-11 拍板）  
 源码基线：`feat/mobile-feature-batch-0011` (`dd02595` / 当前提交)  
 前置依据：[`docs/17-license-and-distribution-review.md`](17-license-and-distribution-review.md) · [`docs/04-roadmap.md:118`](04-roadmap.md) · [`docs/56-project-status-and-handoff.md:26`](56-project-status-and-handoff.md) · [`README.md`](../README.md) · [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)
+
+> **决定（2026-11-11）**：维护者拍板采用 **GPL-3.0-or-later**，根目录 `LICENSE` 已写入（gnu.org 权威全文，SHA-256 前缀 `3972dc97`）。本页以下内容保留为决策依据与逐产物审查记录。
 
 ---
 

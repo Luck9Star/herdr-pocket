@@ -54,7 +54,7 @@ npm run dev
 | 构建目标 | 预期 artifact | 边界 |
 | --- | --- | --- |
 | Android arm64 | 临时 debug 签名 APK | 可用于侧载测试；不能保证跨 run 原地升级，未安装即未验证 |
-| iOS arm64 simulator | unsigned simulator `.app`/archive | 仅模拟器构建；没有真机签名/账户，不能当作手机安装包 |
+| iOS arm64 simulator | unsigned simulator `.app`/archive | 仅模拟器构建；没有真机签名/账户，不能当作手机安装包。个人账号本地真机构建步骤见 [iOS 指南](../../docs/61-ios-personal-build-guide.md) |
 | macOS runner 架构 | 未签名 `.app.zip` | Gatekeeper/签名/公证和实际运行未验 |
 | Windows x64 | 未签名 NSIS 安装器 | 需 WebView2；签名信誉/目标系统运行未验 |
 | Ubuntu 24.04 x64 | `.deb` | 需相应 WebKitGTK 运行依赖；不外推其他发行版 |

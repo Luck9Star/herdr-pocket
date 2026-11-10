@@ -43,7 +43,7 @@
 | 产物 | 安装/验证范围 |
 | --- | --- |
 | Android debug APK | 开发签名，仅测试；下载安装后才能确认设备运行 |
-| iOS device `.app` | `--no-codesign` 编译产物，**不能直接安装真机**；还缺签名与实际设备 |
+| iOS device `.app` | `--no-codesign` 编译产物，**不能直接安装真机**；还缺签名与实际设备。个人账号本地真机构建步骤见 [iOS 指南](../../docs/61-ios-personal-build-guide.md) |
 | macOS debug `.app` | 测试构建；未公证，实际启动和门禁提示待验 |
 | Windows Debug 目录 | 需对应运行时，启动待验 |
 | Linux debug bundle | 需 GTK 及目标 ABI 环境，启动待验 |

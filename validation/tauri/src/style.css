@@ -100,3 +100,39 @@
 .host-attention{display:flex;align-items:center;gap:8px;min-height:44px;width:fit-content}
 .host-attention select{min-width:0;min-height:44px;max-width:100%;padding:4px 8px;color:var(--hp-textPrimary);font:inherit}
 .host-filters p{margin:4px 0;color:var(--hp-textSecondary)}
+
+/* 桌面工作台（切片 1）：≥900px 时真实远端页镜像 .app-grid 的「侧栏 + 主区」两栏模式；
+   ≤899px 侧栏隐藏、#workbench-main 透明化（display:contents），移动端单列 DOM 与既有形态完全一致。
+   布局切换只改本地视口：终端画布仍由用户显式选择，窗口变化不 resize 远端 PTY（docs/05:137）。 */
+#workbench-sidebar{display:none}
+#workbench-main{display:contents}
+.workbench-pending-item{margin:0;font-size:11px;line-height:1.7;color:var(--hp-textSecondary);overflow-wrap:anywhere}
+.saved-host-empty{margin:0;font-size:11px;line-height:1.7;color:var(--hp-textSecondary)}
+.workbench-pending-heading{margin-top:18px}
+#workbench-host-retry{width:100%;margin:8px 0 4px}
+#workbench-pending-list .blocked-target-list p{font-size:10px;margin:0}
+@media(min-width:900px){
+  #remote-page{max-width:1680px;padding:0;min-height:calc(100vh - 89px);display:grid;grid-template-columns:224px minmax(0,1fr)}
+  #workbench-sidebar{display:block}
+  #workbench-main{display:block;padding:20px 24px;min-width:0}
+  /* 宽屏放开真实终端的固定宽度与高度上限（.terminal-host{width:680px} 与 .term-scroll 高度），仅本地视口。 */
+  .workbench-main .terminal-host{width:auto;max-width:100%}
+  .workbench-main .term-scroll{height:min(560px,60dvh)}
+}
+@media(min-width:900px) and (max-width:1199px){
+  #remote-page{grid-template-columns:190px minmax(0,1fr)}
+  #workbench-sidebar{padding:24px 12px}
+  #workbench-main{padding:24px 20px}
+}
+
+/* 桌面工作台（切片 2）：分屏只变更本地布局——两个面板各自沿用连接时选定的观察画布，不发送 PTY resize（docs/05:137）。
+   ≤899px 双保险隐藏分屏入口；分屏网格只出现在 ≥900px 且 JS 判定可分屏（data-split="2"）时，窄窗 DOM 与既有单面板形态一致。 */
+#workbench-split{margin:8px 0}
+#workbench-split[aria-pressed=true]{background:var(--hp-brandSoft);color:var(--hp-brand);border-color:var(--hp-brandBorder)}
+@media(max-width:899px){#workbench-split{display:none}}
+@media(min-width:900px){
+  #view-content[data-split="2"]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+  #view-content[data-split="2"] .workbench-panel{min-width:0;border:1px solid var(--hp-termBorder);border-radius:12px;padding:12px}
+  #view-content[data-split="2"] .workbench-panel[data-focus="true"]{border-color:var(--hp-brandBorder)}
+  .workbench-panel .panel-head{margin:0 0 10px}
+}

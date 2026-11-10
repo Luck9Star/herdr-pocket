@@ -18,13 +18,21 @@ import {LocalTerminalViewport,terminalViewportIdentity} from './local-terminal-v
 import {observationError} from './observation-error.js';
 import {hostSummaryIdentity} from './host-dashboard-summary.js';
 
-/** A foreground tab owns its native attempt and renderer. No reconnect is automatic. */
+/** A foreground tab owns its native attempt and renderer. No reconnect is automatic.
+ *  桌面分屏（切片 2）：≥900px 且≥2 标签时可双面板同观——后端 visible 是集合语义，仅 focus 独占；
+ *  切换焦点沿用 gate.js 的 focusRevision 语义（旧面板租约立即失效）；分屏绝不 resize 远端画布。 */
 export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null,getFontSize=()=>14,channelFactory,terminalFactory,onDashboard=()=>{},clipboardRead=readClipboardForPaste,keyboardRequest=requestMobileKeyboard}) {
   const tabs=new RemoteTabs(), root=document.getElementById('tab-workspace');
   const nav=document.getElementById('view-tabs'), body=document.getElementById('view-content');
-  let switching=false, textSelection=null, fontDiagnostics=null, mountedTab=null;
+  let switching=false, textSelection=null, fontDiagnostics=null, mountedTabs=[];
+  // 桌面分屏（切片 2）：splitOn 只是本地布局意图；能否真的双面板由窗口宽度与标签数共同决定。
+  // 分屏绝不发送 PTY resize——每个面板沿用自己连接时选定的观察画布（docs/05:137；transport 层已断言观察不含 resize）。
+  let splitOn=false, splitPartnerId=null, lastWide=globalThis.window?.innerWidth>=900;
+  const splitButton=document.getElementById('workbench-split');
+  function isWide(){const width=globalThis.window?.innerWidth;return typeof width==='number' && width>=900;}
+  function splitPartner(){if(!splitOn || !isWide())return null;const tab=tabs.get(splitPartnerId);return tab && tab.id!==tabs.activeId ? tab : null;}
   function boardEvent(tab,type) {if(tab.summaryIdentity && tab.token)onDashboard({type,hostId:tab.hostId,identity:tab.summaryIdentity,source:tab.token,board:tab.board});}
-  function status(tab,message) {tab.message=message;tab.diagnosticView?.update(tab.diagnostics);if(tabs.activeId===tab.id)render();}
+  function status(tab,message) {tab.message=message;tab.diagnosticView?.update(tab.diagnostics);if(tabs.activeId===tab.id || splitPartner()===tab)render();}
   function inputModeMessage(tab) {
     if(tab.unknown)return '输入结果待核实；输入已锁定。';
     if(tab.state!=='active')return '观察未运行；输入已关闭。';
@@ -103,11 +111,16 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(fontDiagnostics && !fontDiagnostics.valid()){fontDiagnostics.close(false);fontDiagnostics=null;}
     const focused=tabs.get(tabs.activeId);
     if(focused?.mode==='direct' && ownsInputFocus(focused,document.activeElement) && !focused.suppressBlur){renderDashboard(focused);return;}
+    // 草稿输入法组合期间的整页重绘会丢组合缓冲——与 direct 焦点守卫同款：推迟到组合结束后的下一次刷新。
+    // （分屏下副面板的状态刷新也走这里，焦点面板的输入过程不被另一侧打断。）
+    if(focused && focused.draftComposing && document.activeElement===focused.draftField){renderDashboard(focused);return;}
     // Any unrelated full redraw removes focus from the review; revoke it first.
     if(focused?.pasteReview && !focused.focusPasteReview)focused.pasteReview=null;
-    // Only the currently mounted viewport has visible geometry worth retaining.
-    mountedTab?.localViewport.detach();mountedTab=null;
+    // Only the currently mounted viewports have visible geometry worth retaining.
+    for(const mounted of mountedTabs)mounted.localViewport.detach();mountedTabs.length=0;
     root.hidden=tabs.list().length===0;nav.replaceChildren();body.replaceChildren();
+    body.setAttribute('data-split',splitPartner()?'2':'1');
+    updateSplitControl();
     for(const tab of tabs.list()) {
       const button=document.createElement('button');button.type='button';
       button.textContent=`${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'}`;
@@ -116,29 +129,55 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       button.onclick=()=>void select(tab.id);nav.append(button);
     }
     const tab=tabs.get(tabs.activeId);if(!tab)return;
-    const title=document.createElement('p');title.textContent=`${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'} · ${tab.target?.terminalId || '待选择'}`;body.append(title);
-    if(tab.blockedIntent && !tab.blockedVerified){const intent=document.createElement('p');intent.textContent=`待重新核查受阻目标：${tab.blockedIntent.paneId} · ${tab.blockedIntent.terminalId} · 原会话 ${tab.blockedSession || '未知'}`;body.append(intent);}
+    const partner=splitPartner();
+    if(partner){const splitNote=document.createElement('p');splitNote.dataset.role='split-note';splitNote.textContent='分屏只变更本地布局：两个面板各自沿用连接时选定的观察画布，未发送 PTY resize。';body.append(splitNote);}
+    else if(splitOn && !isWide() && splitPartnerId){
+      // D2 窄窗回落：分屏意图保留，仅非焦点面板被收纳（上方 resize 监听在回到宽窗时恢复副面板）；全程不触发远端 resize。
+      const stashed=tabs.get(splitPartnerId);
+      if(stashed && stashed.id!==tabs.activeId){const stashNote=document.createElement('p');stashNote.dataset.role='split-stash-note';stashNote.textContent='分屏空间不足；已保留另一面板状态，窗口变宽后自动恢复。';body.append(stashNote);}
+    }
+    renderPanel(tab,true);
+    if(partner)renderPanel(partner,false);
+  }
+  // 单个终端面板：focused 面板持有唯一输入焦点（docs/04:82）；非焦点面板保持观察，但输入入口全部禁用，不会静默 no-op。
+  function renderPanel(tab,focused) {
+    const panel=document.createElement('section');panel.className='workbench-panel';panel.dataset.role='workbench-panel';panel.dataset.tabId=tab.id;panel.dataset.focus=String(focused);
+    if(splitPartner()) {  // 分屏头部：面板标题 + 输入焦点归属（沿用 fixture #split 的面板头范式）
+      const head=document.createElement('div');head.className='panel-head';
+      const headTitle=document.createElement('span');headTitle.className='panel-title';
+      const headName=document.createElement('strong');headName.textContent=`${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'}`;
+      const headMeta=document.createElement('small');headMeta.textContent=`${tab.target?.terminalId || '待选择'} · 画布 ${tab.activeCanvas.cols} × ${tab.activeCanvas.rows} · ${focused?'输入焦点':'观察'}`;
+      headTitle.append(headName,headMeta);
+      const focusButton=document.createElement('button');focusButton.type='button';focusButton.dataset.role='panel-focus';
+      focusButton.textContent=focused?'当前输入焦点':'设为输入焦点';
+      focusButton.setAttribute('aria-pressed',String(focused));
+      focusButton.disabled=focused || switching;
+      focusButton.onclick=()=>void select(tab.id);
+      head.append(headTitle,focusButton);panel.append(head);
+    }
+    const title=document.createElement('p');title.textContent=`${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'} · ${tab.target?.terminalId || '待选择'}`;panel.append(title);
+    if(tab.blockedIntent && !tab.blockedVerified){const intent=document.createElement('p');intent.textContent=`待重新核查受阻目标：${tab.blockedIntent.paneId} · ${tab.blockedIntent.terminalId} · 原会话 ${tab.blockedSession || '未知'}`;panel.append(intent);}
     const info=hostInfo(tab.hostId);const details=document.createElement('p');
-    details.textContent=info ? `${info.target.username}@${info.target.host}:${info.target.port} · 主机公钥 ${info.hostFingerprint} · 设备 ${info.deviceFingerprint || '未保存'} · ${info.networkProfileId?'已绑定网络':'系统连接'}` : '主机资料不可用；请先刷新看板。';body.append(details);
-    if(tab.state==='disconnected'){const review=document.createElement('label');const check=document.createElement('input');check.type='checkbox';check.checked=!!tab.reviewed;check.onchange=()=>{tab.reviewed=check.checked;tab.reviewedHost=check.checked && info ? JSON.stringify({target:info.target,deviceFingerprint:info.deviceFingerprint,networkProfileId:info.networkProfileId ?? null,networkRevision:info.networkRevision ?? null}) : null;render();};review.append(check);const caption=document.createElement('span');caption.textContent='我已核对当前主机、设备与连接路径。';review.append(caption);body.append(review);}
+    details.textContent=info ? `${info.target.username}@${info.target.host}:${info.target.port} · 主机公钥 ${info.hostFingerprint} · 设备 ${info.deviceFingerprint || '未保存'} · ${info.networkProfileId?'已绑定网络':'系统连接'}` : '主机资料不可用；请先刷新看板。';panel.append(details);
+    if(tab.state==='disconnected'){const review=document.createElement('label');const check=document.createElement('input');check.type='checkbox';check.checked=!!tab.reviewed;check.disabled=!focused;check.onchange=()=>{tab.reviewed=check.checked;tab.reviewedHost=check.checked && info ? JSON.stringify({target:info.target,deviceFingerprint:info.deviceFingerprint,networkProfileId:info.networkProfileId ?? null,networkRevision:info.networkRevision ?? null}) : null;render();};review.append(check);const caption=document.createElement('span');caption.textContent='我已核对当前主机、设备与连接路径。';review.append(caption);panel.append(review);}
     const canvasLabel=document.createElement('label');canvasLabel.textContent='此标签下次连接的观察画布 ';const canvasSelect=document.createElement('select');canvasSelect.dataset.role='tab-canvas';
     for(const value of canvasPresets){const option=document.createElement('option');option.value=value;option.textContent=value.replace('x',' × ');canvasSelect.append(option);}
-    canvasSelect.value=tab.canvasChoice;canvasSelect.disabled=tab.state!=='disconnected' || tab.closing || switching;canvasSelect.onchange=()=>{if(tab.state==='disconnected' && parseCanvas(canvasSelect.value))tab.canvasChoice=canvasSelect.value;};canvasLabel.append(canvasSelect);body.append(canvasLabel);
-    const canvasHelp=document.createElement('p');canvasHelp.textContent=tab.state==='disconnected'?'仅影响此标签的下次连接；这是观察画布，不代表远端 PTY 原始尺寸。':`本次观察画布：${tab.activeCanvas.cols} × ${tab.activeCanvas.rows}；暂停恢复沿用本次选择。`;body.append(canvasHelp);
-    if(tab.diagnostics){tab.diagnosticView ??= createConnectionDiagnosticsView();tab.diagnosticView.update(tab.diagnostics);body.append(tab.diagnosticView.element);}
-    const msg=document.createElement('p');msg.setAttribute('role','status');msg.textContent=tab.message;tab.messageElement=msg;body.append(msg);
+    canvasSelect.value=tab.canvasChoice;canvasSelect.disabled=tab.state!=='disconnected' || tab.closing || switching || !focused;canvasSelect.onchange=()=>{if(tab.state==='disconnected' && parseCanvas(canvasSelect.value))tab.canvasChoice=canvasSelect.value;};canvasLabel.append(canvasSelect);panel.append(canvasLabel);
+    const canvasHelp=document.createElement('p');canvasHelp.textContent=tab.state==='disconnected'?'仅影响此标签的下次连接；这是观察画布，不代表远端 PTY 原始尺寸。':`本次观察画布：${tab.activeCanvas.cols} × ${tab.activeCanvas.rows}；暂停恢复沿用本次选择。`;panel.append(canvasHelp);
+    if(tab.diagnostics){tab.diagnosticView ??= createConnectionDiagnosticsView();tab.diagnosticView.update(tab.diagnostics);panel.append(tab.diagnosticView.element);}
+    const msg=document.createElement('p');msg.setAttribute('role','status');msg.textContent=tab.message;tab.messageElement=msg;panel.append(msg);
     tab.inputModeElement ??= document.createElement('p');
     tab.inputModeElement.setAttribute('role','status');tab.inputModeElement.setAttribute('aria-live','polite');
     updateInputMode(tab);
-    body.append(tab.inputModeElement);
+    panel.append(tab.inputModeElement);
     const controls=document.createElement('div');controls.className='remote-actions';
-    const add=(label,enabled,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=!enabled || switching;b.onclick=action;controls.append(b);};
+    const add=(label,enabled,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=!enabled || switching || !focused;b.onclick=action;controls.append(b);};
     add('连接',native && !!info && tab.reviewed && !tab.invalidated && tab.state==='disconnected' && !tab.closing,()=>void connect(tab));
     add('恢复观察',tab.state==='paused' && !tab.closing,()=>void resume(tab));
-    add('关闭此标签',!switching,()=>void close(tab));body.append(controls);
-    renderDashboard(tab);body.append(tab.boardElement);
-    if(tab.pasteReview && !pasteReviewValid(tab,tab.pasteReview))tab.pasteReview=null;
-    if(tab.pasteReview) {
+    add('关闭此标签',!switching,()=>void close(tab));panel.append(controls);
+    renderDashboard(tab);panel.append(tab.boardElement);
+    if(focused && tab.pasteReview && !pasteReviewValid(tab,tab.pasteReview))tab.pasteReview=null;
+    if(focused && tab.pasteReview) {
       const review=tab.pasteReview,group=document.createElement('section');group.setAttribute('aria-label','粘贴内容审查');
       const heading=document.createElement('p');
       heading.textContent=`粘贴到本地草稿 · ${hostName(tab.hostId)} · ${review.paneId} · ${review.terminalId}`;
@@ -167,20 +206,20 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         limit.textContent='追加后超过 4096 个 UTF-8 字节，可替换或取消。';group.append(limit);
       }
       group.onfocusout=e=>{if(tab.pasteReview===review && !group.contains(e.relatedTarget)){tab.pasteReview=null;render();}};
-      body.append(group);if(tab.focusPasteReview){tab.focusPasteReview=false;(append.disabled?replace:append).focus?.();}
+      panel.append(group);if(tab.focusPasteReview){tab.focusPasteReview=false;(append.disabled?replace:append).focus?.();}
     }
     if(tab.inputReady) {
       const text=document.createElement('textarea');text.value=tab.draft;text.placeholder='输入草稿';text.setAttribute('aria-label','当前标签草稿');
-      tab.draftField=text;
+      tab.draftField=text;text.disabled=!focused;
       tab.draftComposing=false;
       text.addEventListener('compositionstart',()=>{tab.pasteReadSequence++;tab.draftComposing=true;refreshKeyboard(tab);});
       text.addEventListener('compositionend',()=>{tab.draftComposing=false;refreshKeyboard(tab);});
       text.addEventListener('blur',()=>{if(!tab.suppressPasteBlur)tab.pasteFocusRevision++;});
       text.addEventListener('paste',event=>void reviewPaste(tab,event,text,tab.draftComposing),true);
-      text.oninput=()=>{if(tab.draftField===text && tabs.activeId===tab.id){tab.draft=text.value;tab.draftRevision++;}};body.append(text);
+      text.oninput=()=>{if(tab.draftField===text && tabs.activeId===tab.id){tab.draft=text.value;tab.draftRevision++;}};panel.append(text);
       const actions=document.createElement('div');actions.className='remote-actions';
-      const direct=document.createElement('button');direct.type='button';direct.textContent='逐键输入';direct.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy;direct.onclick=()=>void enableDirect(tab);actions.append(direct);
-      const enable=document.createElement('button');enable.type='button';enable.textContent='启用草稿输入';enable.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy;
+      const direct=document.createElement('button');direct.type='button';direct.textContent='逐键输入';direct.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || !focused;direct.onclick=()=>void enableDirect(tab);actions.append(direct);
+      const enable=document.createElement('button');enable.type='button';enable.textContent='启用草稿输入';enable.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || !focused;
       enable.onclick=()=>void enableInput(tab);actions.append(enable);
       const show=document.createElement('button');show.type='button';show.id='tab-keyboard-show';show.textContent='展开键盘';show.setAttribute('aria-label','展开键盘');
       const hide=document.createElement('button');hide.type='button';hide.id='tab-keyboard-hide';hide.textContent='收起键盘';hide.setAttribute('aria-label','收起键盘');
@@ -207,20 +246,20 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       };
       tab.keyboardShow=show;tab.keyboardHide=hide;actions.append(show,hide);refreshKeyboard(tab);
 
-      const paste=document.createElement('button');paste.type='button';paste.textContent='粘贴并审查';paste.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || !['draft','direct'].includes(tab.mode) || tab.inputEpoch==null;
+      const paste=document.createElement('button');paste.type='button';paste.textContent='粘贴并审查';paste.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || !['draft','direct'].includes(tab.mode) || tab.inputEpoch==null || !focused;
       paste.onpointerdown=event=>event.preventDefault();paste.onclick=()=>void readPaste(tab);tab.pasteButton=paste;actions.append(paste);
-      const send=document.createElement('button');send.type='button';send.textContent='发送草稿';send.disabled=!tab.target || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null;
+      const send=document.createElement('button');send.type='button';send.textContent='发送草稿';send.disabled=!tab.target || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null || !focused;
       send.onclick=()=>void sendDraft(tab);actions.append(send);
-      if(tab.recoveryStatus==='pending'){const recover=document.createElement('button');recover.type='button';recover.textContent='已核实原目标结果，恢复输入';recover.disabled=!tab.target || tab.state!=='active' || tab.inputBusy;recover.onclick=()=>void recoverInput(tab);actions.append(recover);}
-      body.append(actions);
-      tab.toolbarHost=document.createElement('div');body.append(tab.toolbarHost);
+      if(tab.recoveryStatus==='pending'){const recover=document.createElement('button');recover.type='button';recover.textContent='已核实原目标结果，恢复输入';recover.disabled=!tab.target || tab.state!=='active' || tab.inputBusy || !focused;recover.onclick=()=>void recoverInput(tab);actions.append(recover);}
+      panel.append(actions);
+      tab.toolbarHost=document.createElement('div');panel.append(tab.toolbarHost);
       if(tab.mode==='direct' && tab.toolbar)tab.toolbarHost.append(tab.toolbar.element);
     }
-    if(tab.rejectedDrafts.length){const heading=document.createElement('p');heading.textContent='服务器明确拒绝的原文（只读，不会自动发送）：';body.append(heading);
-      tab.rejectedDrafts.forEach((value,index)=>{const saved=document.createElement('textarea');saved.value=value;saved.readOnly=true;saved.setAttribute('aria-label','被拒绝的原文');body.append(saved);const dismiss=document.createElement('button');dismiss.type='button';dismiss.textContent='移除此找回原文';dismiss.onclick=()=>{tab.rejectedDrafts.splice(index,1);render();};body.append(dismiss);});
+    if(tab.rejectedDrafts.length){const heading=document.createElement('p');heading.textContent='服务器明确拒绝的原文（只读，不会自动发送）：';panel.append(heading);
+      tab.rejectedDrafts.forEach((value,index)=>{const saved=document.createElement('textarea');saved.value=value;saved.readOnly=true;saved.setAttribute('aria-label','被拒绝的原文');panel.append(saved);const dismiss=document.createElement('button');dismiss.type='button';dismiss.textContent='移除此找回原文';dismiss.onclick=()=>{tab.rejectedDrafts.splice(index,1);render();};panel.append(dismiss);});
     }
     if(tab.terminal && tab.target && tab.state==='active') {
-      const selectText=document.createElement('button');selectText.type='button';selectText.disabled=!tab.selectionTextReady;tab.selectionTextButton=selectText;selectText.textContent='选择终端文本';selectText.onpointerdown=event=>event.preventDefault();
+      const selectText=document.createElement('button');selectText.type='button';selectText.disabled=!tab.selectionTextReady || !focused;tab.selectionTextButton=selectText;selectText.textContent='选择终端文本';selectText.onpointerdown=event=>event.preventDefault();
       selectText.onclick=()=>{
         const token=tab.token,generation=tab.nativeGeneration,epoch=tab.epoch,target=tab.target,terminal=tab.terminal;
         const currentSelection=()=>!document.hidden && !switching && tabs.activeId===tab.id && current(tab,token) && tab.nativeGeneration===generation && tab.epoch===epoch && tab.target===target && tab.terminal===terminal && tab.state==='active' && !tab.wantsPause && !tab.closing;
@@ -229,8 +268,8 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         fontDiagnostics?.close(false);fontDiagnostics=null;textSelection?.close();textSelection=null;void loseDirect(tab);
         try {textSelection=createTerminalSelection({terminal,current:currentSelection,label:`${hostName(tab.hostId)} · ${target.paneId} · ${target.terminalId}`});}
         catch(error) {status(tab,String(error).includes('snapshot_too_large')?'可见终端文本超过 64 KiB，无法选择；未复制内容。':'没有可安全测量的可见终端文本，请滚动终端到屏幕内后重试。');}
-      };body.append(selectText);
-      const fontButton=document.createElement('button');fontButton.type='button';fontButton.textContent='字体与字符诊断';fontButton.disabled=!tab.selectionTextReady;fontButton.onpointerdown=event=>event.preventDefault();
+      };panel.append(selectText);
+      const fontButton=document.createElement('button');fontButton.type='button';fontButton.textContent='字体与字符诊断';fontButton.disabled=!tab.selectionTextReady || !focused;fontButton.onpointerdown=event=>event.preventDefault();
       fontButton.onclick=()=>{
         const token=tab.token,generation=tab.nativeGeneration,epoch=tab.epoch,target=tab.target,terminal=tab.terminal;
         const currentDiagnostics=()=>!document.hidden && !switching && tabs.activeId===tab.id && current(tab,token) && tab.nativeGeneration===generation && tab.epoch===epoch && tab.target===target && tab.terminal===terminal && tab.state==='active' && !tab.wantsPause && !tab.closing;
@@ -238,13 +277,14 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         if(tab.inputBusy || tab.directPending){status(tab,'输入仍在处理，暂不能打开字体诊断。');return;}
         textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;void loseDirect(tab);
         let view;try {view=createFontDiagnostics({current:currentDiagnostics,terminalFactory,fontSize:getFontSize(),theme:theme.terminal,returnFocus:fontButton,onClose:()=>{if(fontDiagnostics===view)fontDiagnostics=null;}});fontDiagnostics=view;}catch {status(tab,'字体诊断无法安全打开；输入已锁定。');}
-      };tab.fontDiagnosticsButton=fontButton;body.append(fontButton);
+      };tab.fontDiagnosticsButton=fontButton;panel.append(fontButton);
 
     }
     const viewport=document.createElement('div');viewport.className='term-scroll';
-    if(tab.element)viewport.append(tab.element);body.append(viewport);
+    if(tab.element)viewport.append(tab.element);panel.append(viewport);
     tab.localViewport.mount(viewport,tab.terminal,terminalViewportIdentity(tab.summaryIdentity || hostInfo(tab.hostId),tab.target),!!tab.selectionTextReady);
-    mountedTab=tab;
+    mountedTabs.push(tab);
+    body.append(panel);
   }
   function create(hostId,target) {
     if(!native || !hostId || (target && (!target.paneId || !target.terminalId))) throw Error('tab_target_invalid');
@@ -259,9 +299,18 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   }
   async function select(id) {
     if(switching || id===tabs.activeId)return;
+    const swapping=splitPartner()?.id===id;
     switching=true;render();
     const previous=tabs.get(tabs.activeId);
-    if(previous && ['connecting','starting','active','resuming'].includes(previous.state)) await pause(previous);
+    if(swapping && previous) {
+      // 分屏内移动输入焦点：旧面板保持观察（不暂停），但其输入租约立即失效——
+      // 与 src/gate.js 的 focus()/focusRevision 语义一致：焦点一旦离开，旧 token 全部过期（后端对非焦点标签返回 input_stale）。
+      if(previous.mode!=='observe' || previous.inputEpoch!==null)await loseDirect(previous);
+      else await previous.focusReset;
+      previous.pasteReview=null;
+      splitPartnerId=previous.id;
+    }
+    else if(previous && ['connecting','starting','active','resuming'].includes(previous.state)) await pause(previous);
     if(tabs.get(id))tabs.select(id);
     switching=false;render();
   }
@@ -279,7 +328,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     finally {tab.suppressBlur=false;}
   }
   async function resume(tab) {
-    if(tabs.activeId!==tab.id || tab.state!=='paused')return;
+    if((tabs.activeId!==tab.id && splitPartner()!==tab) || tab.state!=='paused')return;
     tab.diagnostics?.resume();
     const controlRevision=++tab.controlRevision;tab.state='resuming';tab.wantsPause=false;tab.board.invalidate('resuming');boardEvent(tab,'starting');tab.selectionReady=false;render();
     try {const pending=invoke('remote_tab_visible',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration});tab.visibilityPending=pending;await pending;tab.visibilityPending=null;if(tab.wantsPause)return;await invoke('remote_tab_control',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration,action:'resume'});}
@@ -477,7 +526,13 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     tab.state='disconnected';if(wasDisconnected)tab.closing=false;render();
   }
   async function close(tab) {
-    await cancel(tab);tab.localViewport.detach();tab.terminal?.dispose();tabs.close(tab.id);render();
+    await cancel(tab);tab.localViewport.detach();tab.terminal?.dispose();tabs.close(tab.id);
+    if(splitPartnerId) {
+      // 分屏的一侧被关闭即结束分屏：剩余面板升为唯一焦点面板，不留“无面板仍在观察”的隐藏流。
+      if(splitPartnerId===tab.id){splitOn=false;splitPartnerId=null;}
+      else if(tabs.activeId===null){tabs.select(splitPartnerId);splitOn=false;splitPartnerId=null;}
+    }
+    render();
   }
   async function connect(tab) {
     if(tabs.activeId!==tab.id || tab.state!=='disconnected' || tab.closing || tab.invalidated || !tab.reviewed || !hostInfo(tab.hostId))return;
@@ -492,30 +547,33 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       const generation=await invoke('remote_tab_reserve',{tabId:tab.id,clientGeneration:token.generation,hostId:tab.hostId,expectedTarget:reviewed.target,expectedDeviceFingerprint:reviewed.deviceFingerprint,expectedNetworkProfileId:reviewed.networkProfileId,expectedNetworkRevision:reviewed.networkRevision});
       if(!current(tab,token) || tab.closing) {await invoke('remote_tab_cancel',{tabId:tab.id,clientGeneration:token.generation,generation});return;}
       tab.nativeGeneration=generation;
-      if(tabs.activeId!==tab.id){await cancel(tab);return;}
+      if(tabs.activeId!==tab.id && splitPartner()!==tab){await cancel(tab);return;}
       const pendingVisible=invoke('remote_tab_visible',{tabId:tab.id,clientGeneration:token.generation,generation});tab.visibilityPending=pendingVisible;await pendingVisible;tab.visibilityPending=null;
-      if(!current(tab,token) || tabs.activeId!==tab.id || tab.wantsPause){await cancel(tab);return;}
-      const channel=channelFactory();channel.onmessage=event=>{
+      if(!current(tab,token) || (tabs.activeId!==tab.id && splitPartner()!==tab) || tab.wantsPause){await cancel(tab);return;}
+      const channel=channelFactory();
+      // 分屏可见集：活动标签或分屏副面板都可继续接收事件（后端 visible 为集合语义，仅 focus 独占）。
+      const paneVisible=()=>tabs.activeId===tab.id || splitPartner()===tab;
+      channel.onmessage=event=>{
         if(!current(tab,token) || event.generation!==generation)return;
         if(tab.blockedIntent && hostSummaryIdentity(hostInfo(tab.hostId))!==tab.blockedIntent.identity){tab.message='原目标资料或网络已变化；观察已停止。';void cancel(tab);return;}
         if(event.kind==='dashboard_watch') {
-          if(tabs.activeId!==tab.id || tab.wantsPause || document.hidden || ['paused','pausing'].includes(tab.state))return;
+          if(!paneVisible() || tab.wantsPause || document.hidden || ['paused','pausing'].includes(tab.state))return;
           const accepted=tab.board.accept(event.update,tab.epoch);
           if(accepted==='invalid'){void cancel(tab);return;}
           if(accepted==='accepted'){boardEvent(tab,Array.isArray(event.update.panes)?'snapshot':'stale');tab.diagnostics.dashboard(tab.board);tab.diagnosticView?.update(tab.diagnostics);renderDashboard(tab);recheckBlocked(tab);}return;
         }
         if(event.kind==='target_bound') {
-          if(event.epoch!==tab.epoch || tab.wantsPause || document.hidden || tabs.activeId!==tab.id)return;
+          if(event.epoch!==tab.epoch || tab.wantsPause || document.hidden || !paneVisible())return;
           const target={paneId:event.pane_id,terminalId:event.terminal_id},intent=tab.target || tab.selectionIntent;
           if(!validDashboard([target]) || !intent || intent.paneId!==target.paneId || intent.terminalId!==target.terminalId){void cancel(tab);return;}
           if(tab.blockedIntent && !tab.blockedVerified){if(!blockedMatches(tab,target) || tab.blockedSelectionRevision!==tab.board.revision){tab.message='重新核查期间原目标或快照已变化；没有接入观察。';void cancel(tab);return;}tab.blockedBound=true;}
           tab.diagnostics.bind(target);tab.diagnosticView?.update(tab.diagnostics);const changed=tab.target===null;tab.target=Object.freeze(target);tab.selectionReady=false;if(changed)render();return;
         }
-        if(event.kind==='selection_ready') {if(event.epoch===tab.epoch && tabs.activeId===tab.id && !tab.wantsPause){tab.selectionReady=true;renderDashboard(tab);recheckBlocked(tab);}return;}
-        if(event.kind==='stage') {if(!tab.wantsPause && !document.hidden && tabs.activeId===tab.id){tab.diagnostics.stage(event.stage);const text=connectionStageText(event.stage);if(text)status(tab,text);}return;}
+        if(event.kind==='selection_ready') {if(event.epoch===tab.epoch && paneVisible() && !tab.wantsPause){tab.selectionReady=true;renderDashboard(tab);recheckBlocked(tab);}return;}
+        if(event.kind==='stage') {if(!tab.wantsPause && !document.hidden && paneVisible()){tab.diagnostics.stage(event.stage);const text=connectionStageText(event.stage);if(text)status(tab,text);}return;}
         if(event.kind==='observation') {if(!Number.isSafeInteger(event.snapshot?.epoch) || (tab.epoch!==null && event.snapshot.epoch<tab.epoch))return;if(event.snapshot.epoch!==tab.epoch){if(tab.blockedIntent && !tab.blockedVerified)tab.blockedBound=false;tab.selectionTextReady=false;retireDirectPending(tab);tab.suppressBlur=true;tab.board.advance(event.snapshot.epoch);boardEvent(tab,'stale');tab.selectionReady=false;tab.frames=new RemoteFrameQueue();tab.inputRevision++;tab.inputBusy=false;tab.inputReady=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;}tab.epoch=event.snapshot.epoch;tab.state=event.snapshot.phase;if(['paused','pausing','closed'].includes(tab.state)){tab.board.invalidate(tab.state);boardEvent(tab,'stale');tab.selectionReady=false;}status(tab,tab.state==='paused'?'观察已暂停，SSH 保留；需主动恢复。':tab.state==='active'?'观察已连接；输入状态见下方。':'正在切换观察状态…');tab.suppressBlur=false;return;}
         if(event.kind==='input_ready') {if(event.epoch!==tab.epoch || tab.blockedIntent && !tab.blockedVerified)return;tab.inputReady=true;tab.unknown=event.unknown;tab.recoveryStatus=event.recovery_status;tab.message=event.unknown?'存在未确认的发送结果，输入保持锁定；请核查原目标。':'已收到完整画面，可显式开启草稿输入。';render();return;}
-        if(event.kind!=='frame' || event.epoch!==tab.epoch || tabs.activeId!==tab.id)return;
+        if(event.kind!=='frame' || event.epoch!==tab.epoch || !paneVisible())return;
         if(tab.blockedIntent && !tab.blockedVerified && (!tab.blockedBound || !event.frame?.full || !blockedMatches(tab,tab.target))){void cancel(tab);return;}
         if(!tab.frames.accept(event.frame)){void cancel(tab);return;}
         if(!tab.terminal) {
@@ -531,13 +589,13 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
           tab.terminal.textarea.addEventListener('paste',event=>void reviewPaste(tab,event,tab.terminal.textarea,tab.composition.token && !tab.composition.ended),true);
         } else if(event.frame.full) {tab.selectionTextReady=false;if(tab.fontDiagnosticsButton)tab.fontDiagnosticsButton.disabled=true;tab.localViewport.capture();tab.terminal.reset();if(tab.terminal.cols!==event.frame.cols || tab.terminal.rows!==event.frame.rows)tab.terminal.resize(event.frame.cols,event.frame.rows);}
         const frame=event.frame;tab.terminal.write(Uint8Array.from(frame.bytes),()=>{
-          if(!current(tab,token) || tabs.activeId!==tab.id || event.epoch!==tab.epoch)return;
+          if(!current(tab,token) || !paneVisible() || event.epoch!==tab.epoch)return;
           const firstBlockedFull=!!tab.blockedIntent && !tab.blockedVerified;
           if(firstBlockedFull && (!frame.full || !tab.blockedBound || !blockedMatches(tab,tab.target) || tab.wantsPause || tab.closing)){void cancel(tab);return;}
           if(!tab.frames.acknowledge(frame.seq)){void cancel(tab);return;}
           if(firstBlockedFull){tab.blockedVerified=true;tab.element.hidden=false;}
           if(frame.full){tab.localViewport.fullRendered();tab.diagnostics.full(tab.target);tab.diagnosticView?.update(tab.diagnostics);}
-          tab.selectionTextReady=true;if(tab.selectionTextButton)tab.selectionTextButton.disabled=false;if(tab.fontDiagnosticsButton)tab.fontDiagnosticsButton.disabled=false;
+          tab.selectionTextReady=true;const focusedPane=tabs.activeId===tab.id;if(tab.selectionTextButton)tab.selectionTextButton.disabled=!focusedPane;if(tab.fontDiagnosticsButton)tab.fontDiagnosticsButton.disabled=!focusedPane;
           if(firstBlockedFull)render();
           void invoke('remote_tab_ack',{tabId:tab.id,clientGeneration:token.generation,generation,epoch:event.epoch,seq:frame.seq}).catch(()=>void cancel(tab));
         });
@@ -553,7 +611,40 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   function background() {for(const tab of tabs.list())tab.pasteReadSequence++;textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;for(const tab of tabs.list()){tab.pasteReview=null;void cancel(tab);}}
   function prepareHide(){const active=tabs.get(tabs.activeId);if(active)active.pasteReadSequence++;textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;const tab=tabs.get(tabs.activeId);if(tab)tab.suppressBlur=true;}
   function cancelPrepareHide(){const tab=tabs.get(tabs.activeId);if(tab){tab.suppressBlur=false;if(tab.mode==='direct' && document.activeElement!==tab.terminal?.textarea)void loseDirect(tab);}}
-  async function hide() {textSelection?.close();textSelection=null;const tab=tabs.get(tabs.activeId);if(tab && ['connecting','starting','active','resuming'].includes(tab.state))await pause(tab);else if(tab)tab.suppressBlur=false;}
+  async function hide() {textSelection?.close();textSelection=null;const tab=tabs.get(tabs.activeId);if(tab && ['connecting','starting','active','resuming'].includes(tab.state))await pause(tab);else if(tab)tab.suppressBlur=false;const partner=splitPartner();if(partner && ['connecting','starting','active','resuming'].includes(partner.state))await pause(partner);}
   globalThis.window?.addEventListener?.('blur',()=>{let changed=false;for(const tab of tabs.list()){tab.pasteFocusRevision++;if(tab.pasteReview){tab.pasteReview=null;changed=true;}}if(changed)render();});
+  // ---- 桌面分屏（切片 2）：本地布局开关。沿用 fixture #split 的交互范式与诚实声明——
+  // 只变更本地布局；未发送 PTY resize，各面板观察画布保持连接时的选定值（docs/05:137）。 ----
+  function updateSplitControl() {
+    if(!splitButton)return;
+    splitButton.hidden=!(isWide() && tabs.list().length>=2);
+    splitButton.setAttribute('aria-pressed',String(splitOn));
+  }
+  async function setSplit(on) {
+    if(on===splitOn)return;
+    if(on && (!isWide() || tabs.list().length<2))return;  // 窄窗或不足两个标签：分屏入口不可用
+    splitOn=on;
+    if(on) {
+      splitPartnerId=tabs.list().find(candidate=>candidate.id!==tabs.activeId)?.id || null;
+      const partner=tabs.get(splitPartnerId);
+      if(partner && partner.state==='paused')await resume(partner);  // 后端可见集允许双观察，仅输入焦点独占
+    } else {
+      const partner=tabs.get(splitPartnerId);splitPartnerId=null;
+      if(partner && ['connecting','starting','active','resuming'].includes(partner.state))await pause(partner);
+    }
+    render();
+  }
+  if(splitButton)splitButton.onclick=()=>void setSplit(!splitOn);
+  globalThis.window?.addEventListener?.('resize',()=>{
+    const wide=isWide();
+    if(wide===lastWide)return;
+    lastWide=wide;
+    // 只在跨越 900px 边界时处理：窄窗回落单面板并暂停分屏侧；回到宽窗恢复副面板。全程不触发远端 resize。
+    const partner=splitOn ? tabs.get(splitPartnerId) : null;
+    if(!partner){render();return;}
+    if(wide){if(partner.state==='paused')void resume(partner);else render();}
+    else if(['connecting','starting','active','resuming'].includes(partner.state))void pause(partner);
+    else render();
+  });
   render();return {create,createBlocked,select,prepareAffected,affected,background,prepareHide,cancelPrepareHide,hide,setFont};
 }

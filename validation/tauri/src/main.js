@@ -5,6 +5,7 @@ import graphemesLicense from '../node_modules/@xterm/addon-unicode-graphemes/LIC
 import './style.css';
 import { readTheme } from './theme.js';
 import { initRemote } from './remote.js';
+import { initKeyRouter } from './key-router.js';
 import { initializePasteClipboard } from './mobile-clipboard.js';
 
 document.getElementById('xterm-license').textContent = xtermLicense;
@@ -33,3 +34,5 @@ async function openFixture() {
 const native = isTauri();
 void initializePasteClipboard(native);
 initRemote({native,theme,onFixture:openFixture,onLeaveFixture:() => workbench?.pause()});
+// 桌面键盘层（切片 3）：事件期自查页面状态与既有按钮挂钩，不依赖装配顺序（键位表见 key-router.js）。
+initKeyRouter();

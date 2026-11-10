@@ -35,6 +35,17 @@
 </details>
 </main>
 <main id="remote-page" class="remote-page" hidden>
+<aside id="workbench-sidebar" class="sidebar" aria-label="主机侧栏（桌面工作台）">
+<div class="section-heading"><h2>主机</h2><span class="count" id="workbench-host-count">0</span></div>
+<p class="sidebar-note">与主机看板同源；选择后仍需核对身份并主动连接。</p>
+<div id="workbench-host-list" aria-label="已存主机"><p class="workbench-pending-item">正在读取本机资料…</p></div>
+<p id="workbench-host-error" class="mode-message" data-tone="warning" hidden></p>
+<button id="workbench-host-retry" type="button" hidden>重读主机资料</button>
+<div class="section-heading workbench-pending-heading"><h2>待处理</h2><span class="count" id="workbench-pending-count">0</span></div>
+<div id="workbench-pending-list" aria-label="待处理任务摘要"><p class="workbench-pending-item">暂无任务快照；连接主机后显示权威待处理摘要。</p></div>
+<div class="sidebar-foot"><strong>只读边界</strong><p>侧栏仅同步本机资料与任务摘要，不会自动连接或重连；调整窗口只改变本地布局，不改变远端 PTY 画布。</p></div>
+</aside>
+<div id="workbench-main" class="workbench-main">
 <nav id="host-tabs" class="terminal-tabs host-tabs" aria-label="主机标签"></nav><div class="host-home-actions"><button id="host-return-home" type="button">返回主机看板</button></div>
 <section id="host-task-board" class="controls" aria-label="主机任务摘要" hidden></section>
 <section id="host-restore-panel" class="remote-intro" hidden><h2>恢复已存设备</h2><p id="host-restore-description"></p><label><input id="host-restore-review" type="checkbox"> 我已独立核对上方主机与设备公钥指纹。</label><button id="host-restore" type="button">恢复此设备</button><p id="host-restore-status" role="status" aria-live="polite"></p></section>
@@ -99,7 +110,7 @@
 </form>
 <p id="remote-status" class="remote-status" role="status" aria-live="polite"></p>
 <div id="remote-connection-diagnostics"></div>
-<section id="tab-workspace" class="remote-result" hidden aria-label="终端标签"><div class="remote-result-heading"><strong>终端标签</strong><nav id="view-tabs" class="terminal-tabs" aria-label="终端标签"></nav></div><div id="view-content"></div></section>
+<section id="tab-workspace" class="remote-result" hidden aria-label="终端标签"><div class="remote-result-heading"><strong>终端标签</strong><button id="workbench-split" type="button" aria-pressed="false" hidden title="只变更本地布局；未发送 PTY resize">桌面分屏</button><nav id="view-tabs" class="terminal-tabs" aria-label="终端标签"></nav></div><div id="view-content"></div></section>
 <section id="remote-dashboard" class="remote-result" hidden aria-label="当前会话 pane"><h2>当前会话 pane</h2><p>选择会话中的一个 pane 开始只读观察。</p><div id="remote-panes" class="remote-actions"></div></section>
 <section id="remote-result" class="remote-result" hidden aria-label="远端终端观察"><div class="remote-result-heading"><strong>远端终端</strong><p id="remote-captured"></p></div><button type="button" id="remote-font-diagnostics" disabled>字体与字符诊断</button><div class="term-scroll"><div id="remote-terminal" class="terminal-host"></div></div><p>可滚动查看完整观察画布；窗口和键盘变化仅影响本地视口。</p>
 <section id="remote-input-controls" hidden aria-label="远端输入"><h3>远端输入 · 候选扩展</h3><p id="remote-input-target"></p><p id="remote-input-status" role="status" aria-live="polite">观察模式不发送输入。每次最多发送 4096 字节；当前连接内短暂排队并逐笔确认，切换或中断时丢弃未发送项。</p>
@@ -112,7 +123,7 @@
 <section id="remote-paste-review" class="mode-message" aria-label="粘贴内容审查" hidden><p>核对粘贴内容；操作只修改本地草稿，发送仍需单独确认。</p><p id="remote-paste-target"></p><pre id="remote-paste-preview"></pre><p id="remote-paste-status" role="status" aria-live="polite"></p><div class="remote-actions"><button type="button" id="remote-paste-append">追加到草稿</button><button type="button" id="remote-paste-replace">替换草稿</button><button type="button" id="remote-paste-cancel">取消粘贴</button></div></section>
 <section id="remote-rejected-drafts" aria-label="未发送文本找回" hidden></section><div id="remote-input-draft-area" hidden><label>目标草稿<textarea id="remote-input-draft" rows="4" maxlength="4096" placeholder="仅在确认后发送"></textarea></label><button type="button" id="remote-input-preview">预览发送</button><div id="remote-input-preview-area" hidden><p>核对当前目标与内容；控制字符以转义形式显示，换行以 ↵ 标示。不会自动追加回车。</p><pre id="remote-input-preview-text"></pre><button type="button" id="remote-input-confirm">确认发送一次</button></div></div>
 </section></section>
-</main>
+</div></main>
 <main id="fixture-workbench" class="app-grid" hidden>
 <aside class="sidebar" aria-label="测试主机"><div class="section-heading"><h2>主机</h2><span class="count">2</span></div><p class="sidebar-note">共享 fixture 的两个独立目标</p>
 <button class="host-card" data-target="a" aria-pressed="true"><span class="host-icon" aria-hidden="true">⌘</span><span><strong>build-lab</strong><small>Tailscale · 示例路径</small></span><span class="host-focus">A</span></button>

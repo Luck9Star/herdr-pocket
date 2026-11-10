@@ -57,8 +57,9 @@ function setup({innerWidth=1280}={}) {
   const settlePaused=async tab=>{send(tab,{kind:'observation',snapshot:{epoch:1,phase:'paused'}});await flush();};
   return {
     nodes,ui,calls,observes,terminals,resizes,splitButton:nodes['workbench-split'],
-    panels:()=>nodes['view-content'].all().filter(n=>n.dataset.role==='workbench-panel'),
-    panelOf:id=>nodes['view-content'].all().find(n=>n.dataset.role==='workbench-panel'&&n.dataset.tabId===id),
+    // 单面板（未分屏）没有 section 包装层：#view-content 自身就是唯一面板（带同样的 data-role 标记）。
+    panels:()=>{const wrapped=nodes['view-content'].all().filter(n=>n.dataset.role==='workbench-panel');return wrapped.length?wrapped:(nodes['view-content'].dataset.role==='workbench-panel'?[nodes['view-content']]:[]);},
+    panelOf:id=>{const wrapped=nodes['view-content'].all().find(n=>n.dataset.role==='workbench-panel'&&n.dataset.tabId===id);return wrapped??(nodes['view-content'].dataset.role==='workbench-panel'&&nodes['view-content'].dataset.tabId===id?nodes['view-content']:undefined);},
     openTab,settlePaused,send,flush:async()=>{await flush();await flush();},
     setWidth:width=>{globalThis.window.innerWidth=width;for(const fn of listeners.resize||[])fn();},
     restore:()=>{globalThis.document=oldDocument;globalThis.window=oldWindow;},

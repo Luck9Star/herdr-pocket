@@ -52,8 +52,9 @@ function setup({innerWidth=1280}={}) {
   const settlePaused=async tab=>{send(tab,{kind:'observation',snapshot:{epoch:1,phase:'paused'}});await flush();};
   return {
     nodes,ui,calls,observes,terminals,resizes,splitButton:nodes['workbench-split'],
-    panels:()=>nodes['view-content'].all().filter(n=>n.dataset.role==='workbench-panel'),
-    panelOf:id=>nodes['view-content'].all().find(n=>n.dataset.role==='workbench-panel'&&n.dataset.tabId===id),
+    // 单面板（未分屏）没有 section 包装层：#view-content 自身就是唯一面板（带同样的 data-role 标记）。
+    panels:()=>{const wrapped=nodes['view-content'].all().filter(n=>n.dataset.role==='workbench-panel');return wrapped.length?wrapped:(nodes['view-content'].dataset.role==='workbench-panel'?[nodes['view-content']]:[]);},
+    panelOf:id=>{const wrapped=nodes['view-content'].all().find(n=>n.dataset.role==='workbench-panel'&&n.dataset.tabId===id);return wrapped??(nodes['view-content'].dataset.role==='workbench-panel'&&nodes['view-content'].dataset.tabId===id?nodes['view-content']:undefined);},
     connectActive,send,openTab,settlePaused,flush:async()=>{await flush();await flush();},
     setWidth:width=>{globalThis.window.innerWidth=width;for(const fn of listeners.resize||[])fn();},
     restore:()=>{globalThis.document=oldDocument;globalThis.window=oldWindow;},
@@ -96,6 +97,27 @@ test('wide split mounts two panels and the partner keeps observing (visibility s
     // 非焦点面板输入入口禁用，不得出现可点的静默 no-op
     assert.equal(s.panelOf(a).all().find(n=>n.tagName==='button'&&n.textContent==='逐键输入').disabled,true);
     assert.equal(s.panelOf(a).all().find(n=>n.tagName==='button'&&n.dataset.role==='panel-focus').disabled,false,'副面板的“设为输入焦点”必须可用');
+  } finally { s.restore(); }
+});
+
+test('单面板无 section 包装：标题 <p> 是 #view-content 的直接子节点（android_gui.py 测量契约）', async () => {
+  const s=setup({innerWidth:1280});
+  try {
+    const a=await s.openTab('direct-pane-a');
+    const view=s.nodes['view-content'];
+    assert.equal(view.all().filter(n=>n.dataset.role==='workbench-panel').length,0,'单面板不得创建 section 包装层');
+    // 驱动测量按直接子节点取标题：const title=[...view.children].find(e=>e.tagName==='P')
+    const title=[...view.children].find(e=>String(e.tagName).toUpperCase()==='P');
+    assert.ok(title,'标题必须是 #view-content 的直接子节点');
+    const parts=String(title.textContent).split(' · ');
+    assert.equal(parts.at(-2),'w1:p1','测量必须能拆出 paneId');
+    assert.equal(parts.at(-1),'term_a001','测量必须能拆出 terminalId');
+    // 分屏打开后才有包装层，标题随之进入包装层内部
+    await s.openTab('mesh-pane-b');
+    await s.settlePaused(a);
+    s.splitButton.onclick();await s.flush();
+    assert.equal(view.all().filter(n=>n.dataset.role==='workbench-panel').length,2,'分屏时每个面板都有 section 包装层');
+    assert.equal(view.children.filter(e=>String(e.tagName).toUpperCase()==='P').length,1,'分屏时 body 直接子节点里没有面板标题（只剩分屏说明）');
   } finally { s.restore(); }
 });
 
@@ -167,6 +189,9 @@ test('toggling split never resizes terminals and never re-observes the canvas', 
     assert.ok(s.observes.every(o=>o.canvas.cols===80&&o.canvas.rows===24),'观察画布仍是连接时选定的 80×24');
     assert.ok(!s.calls.some(c=>c.name.includes('resize')),'不得出现任何 resize 类后端调用');
     assert.equal(s.panels().length,1,'关闭分屏后回到单面板');
+    assert.equal(s.nodes['view-content'].all().filter(n=>n.dataset.role==='workbench-panel').length,0,'关闭分屏后不得残留 section 包装层');
+    const firstTitle=[...s.nodes['view-content'].children].find(e=>String(e.tagName).toUpperCase()==='P');
+    assert.ok(firstTitle&&firstTitle.textContent.includes(' · w1:p1 · '),'单面板的第一条 <p> 必须是标题（无重复、无残留）');
   } finally { s.restore(); }
 });
 
@@ -208,6 +233,8 @@ test('narrow windows never split: entry hidden, toggle refused, crossing 900px p
     assert.equal(s.panels().length,2);
     s.setWidth(800);await s.flush();
     assert.equal(s.panels().length,1,'窄窗必须回落单面板');
+    assert.equal(s.nodes['view-content'].all().filter(n=>n.dataset.role==='workbench-panel').length,0,'窄窗回落后不得残留 section 包装层');
+    assert.ok(s.nodes['view-content'].children.some(e=>String(e.tagName).toUpperCase()==='P'&&e.textContent.includes(' · w1:p1 · ')),'窄窗回落后标题仍是 #view-content 的直接子节点');
     assert.ok(s.calls.some(c=>c.name==='remote_tab_control'&&c.args.tabId===a&&c.args.action==='pause'),'跨界变窄必须暂停分屏副面板');
     assert.equal(s.nodes['view-content'].getAttribute('data-split'),'1');
   } finally { s.restore(); }

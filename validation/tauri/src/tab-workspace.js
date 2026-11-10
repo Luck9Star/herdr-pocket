@@ -31,6 +31,10 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   const splitButton=document.getElementById('workbench-split');
   function isWide(){const width=globalThis.window?.innerWidth;return typeof width==='number' && width>=900;}
   function splitPartner(){if(!splitOn || !isWide())return null;const tab=tabs.get(splitPartnerId);return tab && tab.id!==tabs.activeId ? tab : null;}
+  // 面板身份标记：单面板（未分屏）时 #view-content 自身就是唯一面板，标记挂在它身上；
+  // 真分屏时标记只存在于各自的 section 包装层上。
+  function markSinglePanel(tab){body.dataset.role='workbench-panel';body.dataset.tabId=tab.id;body.dataset.focus='true';}
+  function clearPanelMark(){delete body.dataset.role;delete body.dataset.tabId;delete body.dataset.focus;}
   function boardEvent(tab,type) {if(tab.summaryIdentity && tab.token)onDashboard({type,hostId:tab.hostId,identity:tab.summaryIdentity,source:tab.token,board:tab.board});}
   function status(tab,message) {tab.message=message;tab.diagnosticView?.update(tab.diagnostics);if(tabs.activeId===tab.id || splitPartner()===tab)render();}
   function inputModeMessage(tab) {
@@ -128,8 +132,9 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       button.onpointerdown=()=>{const active=tabs.get(tabs.activeId);if(active && active.id!==tab.id)active.suppressBlur=true;};button.onpointercancel=()=>cancelPrepareHide();button.onpointerup=()=>setTimeout(()=>{if(!switching)cancelPrepareHide();},0);
       button.onclick=()=>void select(tab.id);nav.append(button);
     }
-    const tab=tabs.get(tabs.activeId);if(!tab)return;
+    const tab=tabs.get(tabs.activeId);if(!tab){clearPanelMark();return;}
     const partner=splitPartner();
+    if(partner)clearPanelMark();else markSinglePanel(tab);
     if(partner){const splitNote=document.createElement('p');splitNote.dataset.role='split-note';splitNote.textContent='分屏只变更本地布局：两个面板各自沿用连接时选定的观察画布，未发送 PTY resize。';body.append(splitNote);}
     else if(splitOn && !isWide() && splitPartnerId){
       // D2 窄窗回落：分屏意图保留，仅非焦点面板被收纳（上方 resize 监听在回到宽窗时恢复副面板）；全程不触发远端 resize。
@@ -141,8 +146,12 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   }
   // 单个终端面板：focused 面板持有唯一输入焦点（docs/04:82）；非焦点面板保持观察，但输入入口全部禁用，不会静默 no-op。
   function renderPanel(tab,focused) {
-    const panel=document.createElement('section');panel.className='workbench-panel';panel.dataset.role='workbench-panel';panel.dataset.tabId=tab.id;panel.dataset.focus=String(focused);
-    if(splitPartner()) {  // 分屏头部：面板标题 + 输入焦点归属（沿用 fixture #split 的面板头范式）
+    // 真分屏才包一层 section：单面板（全部移动端/模拟器路径）的内容直接挂在 #view-content 下——
+    // 标题 <p> 必须是 #view-content 的直接子节点（android_gui.py 的测量按直接子节点取标题）。
+    const split=!!splitPartner();
+    let panel=body;
+    if(split){const section=document.createElement('section');section.className='workbench-panel';section.dataset.role='workbench-panel';section.dataset.tabId=tab.id;section.dataset.focus=String(focused);panel=section;}
+    if(split) {  // 分屏头部：面板标题 + 输入焦点归属（沿用 fixture #split 的面板头范式）
       const head=document.createElement('div');head.className='panel-head';
       const headTitle=document.createElement('span');headTitle.className='panel-title';
       const headName=document.createElement('strong');headName.textContent=`${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'}`;
@@ -284,7 +293,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(tab.element)viewport.append(tab.element);panel.append(viewport);
     tab.localViewport.mount(viewport,tab.terminal,terminalViewportIdentity(tab.summaryIdentity || hostInfo(tab.hostId),tab.target),!!tab.selectionTextReady);
     mountedTabs.push(tab);
-    body.append(panel);
+    if(split)body.append(panel);
   }
   function create(hostId,target) {
     if(!native || !hostId || (target && (!target.paneId || !target.terminalId))) throw Error('tab_target_invalid');

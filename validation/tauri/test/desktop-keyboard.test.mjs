@@ -20,7 +20,7 @@ class Element {
   all(){return this.children.flatMap(x=>[x,...x.all()]);}
 }
 
-function setupRouter({innerWidth=1280,split=false,viewTabs=2,hostTabs=2,hosts=2,pending=1}={}) {
+function setupRouter({innerWidth=1280,split=false,bare=false,viewTabs=2,hostTabs=2,hosts=2,pending=1}={}) {
   const oldDocument=globalThis.document, oldWindow=globalThis.window;
   const clicks=[], listeners={};
   const nodes={};
@@ -36,14 +36,17 @@ function setupRouter({innerWidth=1280,split=false,viewTabs=2,hostTabs=2,hosts=2,
   for(let i=1;i<=viewTabs;i++){const tab=button(`view-tab-${i}`);tab.setAttribute('aria-pressed',String(i===1));viewTabButtons.push(tab);nodes['view-tabs'].append(tab);}
   const panels=[];
   const mkPanel=(id,focused)=>{
-    const panel=new Element('section');panel.dataset.role='workbench-panel';panel.dataset.tabId=id;panel.dataset.focus=String(focused);
+    // bare=true 模拟单面板的真实形态：没有 section 包装层，#view-content 自身就是唯一面板。
+    const panel=bare?nodes['view-content']:new Element('section');
+    if(!bare){panel.dataset.role='workbench-panel';panel.dataset.tabId=id;panel.dataset.focus=String(focused);}
     if(split){const head=new Element('div');const focus=button(`panel-focus-${id}`);focus.dataset.role='panel-focus';focus.setAttribute('aria-pressed',String(focused));focus.disabled=focused;head.append(focus);panel.append(head);}
     panel.append(button(`close-${id}`));
     const draft=new Element('textarea');draft.setAttribute('aria-label','当前标签草稿');draft.disabled=!focused;panel.append(draft);
-    nodes['view-content'].append(panel);panels.push(panel);return panel;
+    if(!bare)nodes['view-content'].append(panel);panels.push(panel);return panel;
   };
   mkPanel('a',true);
   if(split)mkPanel('b',false);
+  if(bare){nodes['view-content'].dataset.role='workbench-panel';nodes['view-content'].dataset.focus='true';}
   nodes['workbench-split'].hidden=!(innerWidth>=900 && viewTabs>=2);
   nodes['workbench-split'].onclick=()=>clicks.push('workbench-split');
   nodes['host-return-home'].onclick=()=>clicks.push('host-return-home');
@@ -282,8 +285,9 @@ function setupWorkspace({innerWidth=1280}={}) {
   const key=over=>{const event={type:'keydown',key:'',ctrlKey:false,shiftKey:false,altKey:false,metaKey:false,repeat:false,isComposing:false,keyCode:0,
     preventDefault(){event.consumed=true;},stopPropagation(){},...over};for(const fn of [...listeners.keydown||[]])fn(event);return event;};
   return {nodes,ui,calls,observes,terminals,resizes,key,flush,openTab,
-    panels:()=>nodes['view-content'].all().filter(n=>n.dataset.role==='workbench-panel'),
-    panelOf:id=>nodes['view-content'].all().find(n=>n.dataset.role==='workbench-panel'&&n.dataset.tabId===id),
+    // 单面板（未分屏）没有 section 包装层：#view-content 自身就是唯一面板（带同样的 data-role 标记）。
+    panels:()=>{const wrapped=nodes['view-content'].all().filter(n=>n.dataset.role==='workbench-panel');return wrapped.length?wrapped:(nodes['view-content'].dataset.role==='workbench-panel'?[nodes['view-content']]:[]);},
+    panelOf:id=>{const wrapped=nodes['view-content'].all().find(n=>n.dataset.role==='workbench-panel'&&n.dataset.tabId===id);return wrapped??(nodes['view-content'].dataset.role==='workbench-panel'&&nodes['view-content'].dataset.tabId===id?nodes['view-content']:undefined);},
     restore:()=>{globalThis.document=oldDocument;globalThis.window=oldWindow;}};
 }
 
@@ -298,6 +302,22 @@ test('Ctrl+数字经真实工作台切标签：走既有 select 路径（旧标�
     assert.equal(s.panelOf(a).dataset.focus,'true','Ctrl+1 与点击标签走同一路径');
     assert.ok(s.calls.some(c=>c.name==='remote_tab_control'&&c.args.tabId!==a&&c.args.action==='pause'),'切走的活动标签被暂停（既有语义）');
     assert.equal(s.resizes.length,0,'切标签不触发任何终端 resize');
+  } finally { s.restore(); }
+});
+
+test('单面板无包装层：#view-content 自身是唯一面板，F6 仍轮转到输入区，Ctrl+F6 无可对调面板', () => {
+  const s=setupRouter({bare:true});
+  try {
+    assert.equal(s.nodes['view-content'].all().filter(n=>n.dataset.role==='workbench-panel').length,0,'单面板不得有 section 包装层');
+    const order=[s.hostCards[0],s.nodes['workbench-pending-list'].children[0],s.hostTabButtons[0],s.viewTabButtons[0],s.nodes['view-content'].children[0],s.draft()];
+    for(const expected of order){const ev=s.key({key:'F6'});assert.ok(ev.consumed,'F6 应被消费');assert.equal(s.active(),expected);}
+    assert.equal(s.active(),s.draft(),'输入区（草稿编辑器）仍是轮转的最后一站');
+    const wrap=s.key({key:'F6',ctrlKey:true,shiftKey:true});
+    assert.ok(wrap.consumed,'Ctrl+Shift+F6 是离开输入区的唯一出口');
+    assert.equal(s.active(),s.hostCards[0],'离开输入区后回到侧栏主机列表');
+    const swap=s.key({key:'F6',ctrlKey:true});
+    assert.equal(swap.consumed,undefined,'单面板没有可对调的副面板');
+    assert.equal(s.clicks.length,0,'焦点轮转只移动焦点，不触发任何按钮');
   } finally { s.restore(); }
 });
 

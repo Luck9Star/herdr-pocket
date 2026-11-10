@@ -63,9 +63,13 @@ function preferred(root) {
   return items.find(node => node.getAttribute?.('aria-pressed') === 'true') || items[0] || null;
 }
 
+/** 分屏时每个面板是独立的 section 包装层；未分屏时没有包装层，#view-content 自身就是唯一面板。 */
 function panels() {
   const body = byId('view-content');
-  return body ? (body.children || []).filter(node => node.dataset?.role === 'workbench-panel') : [];
+  if (!body) return [];
+  const wrapped = (body.children || []).filter(node => node.dataset?.role === 'workbench-panel');
+  if (wrapped.length) return wrapped;
+  return body.dataset?.role === 'workbench-panel' ? [body] : [];
 }
 
 /** 输入区 = 当前焦点面板（dataset.focus="true"）的可写草稿编辑器；只聚焦不启用——

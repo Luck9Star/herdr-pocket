@@ -50,7 +50,8 @@ const summaryBoard = { panes: [{ agentStatus: 'blocked', paneId: 'w1:p1', termin
 
 test('desktop skeleton is declared in index.html and falls back below 900px in style.css', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-  const css = await readFile(new URL('../src/style.css', import.meta.url), 'utf8');
+  // Windows 检出的工作树是 CRLF，断言前统一归一化，避免换行差异造成假失败。
+  const css = (await readFile(new URL('../src/style.css', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
   for (const id of ['workbench-sidebar', 'workbench-host-list', 'workbench-host-error', 'workbench-host-retry', 'workbench-pending-list', 'workbench-host-count', 'workbench-pending-count', 'workbench-main']) {
     assert.ok(html.includes(`id="${id}"`), `index.html 缺少 #${id}`);
   }

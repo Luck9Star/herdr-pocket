@@ -22,7 +22,7 @@
 | 手机终端与输入 | 两壳已有观察、逐键、辅助键、草稿、选择及粘贴审查。Tauri 在受保护的测试宿主完成十个 TUI 操作。发送结果未知时需人工核对，布局变化不隐式调整远端共享 PTY。[输入规则](24-target-input-recovery.md) · [TUI 实测](53-mobile-connection-diagnostics.md) | 原版 herdr 在本项目中走只读路径。Flutter 在 Android 的最近一次受保护输入测试中，前两笔共 10 字节已送达，隐藏恢复后遇到 `channel_cleanup_timeout`，没有新首帧，输入保持关闭。十个 TUI 操作仍待 Android 复测。 |
 | 终端显示 | `terminal_view 0.5.0` 漏绘组合重音已有固定候选补丁及绘制回归。两壳有相同的 Nerd Font、CJK、emoji 和 ANSI 样例。Powerlevel10k 与 Oh My Posh 的固定提示符在 Mac 的两条终端核心得到预期光标列。[组合重音修复](10-blocker-repair.md) · [真实主题样例](52-mobile-theme-prompts.md) | 真机中文 IME 预编辑／提交、复杂字符列宽、系统字体回退、触控选择及长时间重绘性能。 |
 | 配置与设备身份 | 主机、公开网络参数和可选字号支持本地加密导入导出、旧版读取和冲突审查。导入后的网络默认停用，新主机需在本机配对。设备 SSH 私钥与组网身份留在原设备。[迁移实现](18-mobile-network-profiles.md) · [格式与事务](../validation/config-transfer/README.md) | Mac 系统文件选择器的导出和导入已通过。Android／iOS 文件提供方、跨手机实际迁移和耗时待验。 |
-| 三种组网 | 两份 APK 包内的 EasyTier、Tailscale 原生库已核对。EasyTier 的 Linux、Windows 移植编译错误已有修复，三桌面候选完成编译、链接、加载及离线测试。ZeroTier 共享设备审查已接入两壳源码，Mac 已用固定原生身份算法通过 JNI 验证加密保存、重新读取、拒绝损坏密文及显式删除；KeyStore 线程自 onCreate 启动修复（commit 5959b0d）。ZeroTier 原生候选补丁 0008 经三轮独立评审定稿入档（`patches/0008-streams-and-hp-boundary.patch` 终版 911 行，sha256 `ba4654f9…`，`zerotier-candidate.json` 哈希闭环）：首轮评审发现 B1（run() 拆除后无条件 reopen，致分离线程帧回调 UAF），修复复评发现兜底关闭层引入 B2（`_nets_m` 与 join 路径 `_networks_m` 反序持锁成 ABBA 环），删除兜底层后聚焦复核 APPROVE；终态修复为 `_shuttingDown` 条件化 reopen + HpFrameGate 单调 seal（set-flag → seal → drain）；缺口 1 修复（IPv6 DAD PREFERRED 即刻生效消灭黑洞、IPv4 单链表防自环）与阶段 C Android 链接加固（`-Wl,--no-undefined`）与 BOUND_SYMBOLS 六元组符号校验不变，本地全量验证通过。[双网络 Android 证据](27-mobile-tailscale-cloud.md) · [桌面移植](10-blocker-repair.md) · [ZeroTier 最新记录](55-mobile-shared-network-device.md) | ZeroTier 阶段 2 门控（bindNative 与切片倒置保持锁定等待用户指示，未合入生产业务层）。系统 KeyStore 硬件隔离结论与指定网络真实拨号／SSH 链路。网络分支多机配对真机验证。五端的 15 个单网格及 20 个并发组合仍须逐格验收。[平台矩阵](../validation/shared/platform-matrix.json) |
+| 三种组网 | 两份 APK 包内的 EasyTier、Tailscale 原生库已核对。EasyTier 的 Linux、Windows 移植编译错误已有修复，三桌面候选完成编译、链接、加载及离线测试。ZeroTier 共享设备审查已接入两壳源码，Mac 已用固定原生身份算法通过 JNI 验证加密保存、重新读取、拒绝损坏密文及显式删除；KeyStore 线程自 onCreate 启动修复（commit 5959b0d）。ZeroTier 原生候选补丁 0008 经三轮独立评审定稿入档（`patches/0008-streams-and-hp-boundary.patch` 终版 911 行，sha256 `ba4654f9…`，`zerotier-candidate.json` 哈希闭环）：首轮评审发现 B1（run() 拆除后无条件 reopen，致分离线程帧回调 UAF），修复复评发现兜底关闭层引入 B2（`_nets_m` 与 join 路径 `_networks_m` 反序持锁成 ABBA 环），删除兜底层后聚焦复核 APPROVE；终态修复为 `_shuttingDown` 条件化 reopen + HpFrameGate 单调 seal（set-flag → seal → drain）；缺口 1 修复（IPv6 DAD PREFERRED 即刻生效消灭黑洞、IPv4 单链表防自环）与阶段 C Android 链接加固（`-Wl,--no-undefined`）与 BOUND_SYMBOLS 六元组符号校验不变，本地全量验证通过。[双网络 Android 证据](27-mobile-tailscale-cloud.md) · [桌面移植](10-blocker-repair.md) · [ZeroTier 最新记录](55-mobile-shared-network-device.md) | ZeroTier 阶段 2 门控：S1–S4 已完成并经 CI 定案（run `42632587131` 全绿，产物含 `libhp_zerotier.so`）；仅 S5 真机验收未做。系统 KeyStore 硬件隔离结论与指定网络真实拨号／SSH 链路。网络分支多机配对真机验证。五端的 15 个单网格及 20 个并发组合仍须逐格验收。[平台矩阵](../validation/shared/platform-matrix.json) |
 | 设计、桌面与分发 | Penpot 有扫码双端、看板、终端输入、桌面分屏、窄窗和关键失败恢复的交互原型，也有初步组件与语义 tokens。已建立分层测试构建和来源记录。Mac 桌面与各平台构建的既有证据按版本保留。[设计覆盖](../design/v2-coverage.md) · [分层构建](07-build-and-release.md) | 要根据设备实测收敛高保真和组件状态，再验收桌面真实分屏、焦点与恢复。iOS 签名安装、五端产品运行及辅助技术待验。仓库根目录尚无项目许可证，逐产物依赖清单和正式分发审查尚未完成。[分发审查](17-license-and-distribution-review.md) |
 
 ## 最新代码与公开包的差别
@@ -38,7 +38,7 @@
 - **评审伴随项一并修复**：N2 fd 泄漏、N3 注释链、N5 幽灵插入；新增 `gate_reopen_test` 25 项检查（含 B1 交错复刻，评审以变异验证确认非恒真）；
 - **构建与符号加固**：阶段 B 清单完整收录 0008 补丁、bound fixture 与测试套件；阶段 C Android 链接加固加入 `-Wl,--no-undefined` 强链接约束，并强制核验 `BOUND_SYMBOLS` 六元组符号契约（`hp_zt_bound_open`, `hp_zt_bound_state`, `hp_zt_bound_read`, `hp_zt_bound_write`, `hp_zt_bound_shutdown_write`, `hp_zt_bound_close`）；
 - **本地全量验证通过**：干净基线 4044 全过、补丁初版 31/4055 失败、终版 4055 全过；Python 套件 56/56；62 TU ASan+UBSan；boundary 118 项；tap-reconfig 8 项；manager/offline 全过；
-- **待办**：N1（ZT netif RST 抑制失去 ECONNREFUSED）已由 0009 候选补丁闭环（见下节）；`board_search` 为独立于 0008 的应用层缺陷另线处理；阶段 2 门控（`bindNative` 激活与生产切片倒置）保持锁定，等待用户明示。
+- **待办**：N1（ZT netif RST 抑制失去 ECONNREFUSED）已由 0009 候选补丁闭环（见下节）；`board_search` 为独立于 0008 的应用层缺陷另线处理；阶段 2 门控余项：S5 真机物理网络入网与多机并发验收（需硬件）。
 
 **ZeroTier 候选补丁 0009（N1 修复）入档**：`0009-closed-port-rst.patch`（sha256 `e2df90f7…`，1890 字节）恢复 closed-port connect 的快速失败语义——0008 在 tcp_input no-listener 分支无条件抑制 pcb-less RST 导致只能等超时；0009 让 pcb-less RST 直接在入站 netif 应答（上游 `tcp_rst_netif()`、commit `3666dcc66c8a` 语义，`tcp_output_control_segment` 在 pcb==NULL 时不再查 route 表，杜绝经重叠网络逸出），并保留 `hp_ready=0` 与已 remove netif 的 drain／teardown 静默。lwIP `ERR_RST` 即其形式的 `ECONNREFUSED`（`ECONNRESET`/104）。`zerotier-candidate.json` 闭环更新：patches 5 项、afterFiles 更新 `tcp_in.c`（`df42b49a…`）与 `tcp_out.c`（`5135c39b…`）、validationFiles 新增 `rst_closed_port_test.cpp` 与 `run_rst.py`；`test_zerotier_candidate.py` 锚点与 identity-service 补丁集合断言同步适配。真实 lwIP 内存线材测试（ASan+UBSan）验证 IPv4／IPv6 快速拒绝、peer 自身 netif 发出 RST、重叠 netif 零泄漏。
 
@@ -53,5 +53,31 @@
 1. **[已完成] 复测 Flutter 在 Android 上的观察恢复与 TUI 全量回执。** 在 API 35 模拟器作业中完成两壳配对、看板、观察及受保护 TUI 输入验收。Flutter 隐藏标签恢复后成功收到原目标新完整帧、同一观察代增量，十个 TUI 操作远端回执全量核验通过（run `42659301059`，`actionCount: 10`，`applicationStateMatched: true`，全部 checks 绿）。Tauri 端观察与配对全绿，TUI 首键布局漂移经单循环居中静止门修复（`9466e70`）。两份同源 arm64 APK 的哈希、ABI 与来源清单均已校验。[最新交接台账](docs/58-session-handoff-2026-11-09-r2.md) · [云端工作流](../.github/workflows/android-network-experiment.yml)
 2. **[S1–S4 已完成] 补手机原生网络链路与阶段 2 门控解锁。** 阶段 2 门控已遵用户指令解除并完成开发：S1 声明与 JNI 导出、S2 生产切片倒置（`AndroidZeroTierNative` 纳入正式源）、S3 库构建、S4 双壳宿主接线（`System.loadLibrary` + `bindNative`、Cargo feature 与打包链接）均在 CI 全矩阵（run `42632587131`，9 成功 0 失败）通过验证，产物完整包含 `libhp_zerotier.so`。仅余 S5 实体真机在物理网络环境下的入网与多机并发待取得硬件后验收。[设备存储与拨号的边界](55-mobile-shared-network-device.md)
 3. **用真机结果决定选型。** 目前可用环境为云端和 Mac。取得实体 Android／iOS 后，使用相同字体、fixture、视口和负载检查扫码、输入法、滚动选择、锁屏、恢复及性能。以正确性作首要门槛，再比较维护成本、收敛高保真和组件库，接续桌面三平台。[技术栈复评](06-technology-evaluation.md) · [设计计划](08-ui-design-plan.md)
+
+## 五端维度遗留台账（2026-11-10 回填）
+
+配合 [04 路线图勾选判据](04-roadmap.md)与[05 §8 支持矩阵](05-product-design.md#8-五端支持与开源发布)的回填，此处登记本批之后仍为「未完成/部分」的维度；证据细节见 05 §8 格内依据。**需硬件/真机/签名条件的项以 ▲ 标注**。
+
+| 端 | 维度 | 状态 | 缺口性质 |
+| --- | --- | --- | --- |
+| Android | 签名 | 部分 | ▲ 仅 debug 签名，release/商店签名未做 |
+| Android | 分发 | 部分 | ▲ 测试 artifact 渠道已通，正式渠道与真机安装未验 |
+| Android | 设备运行 | 部分 | ▲ 模拟器闭环全通；实体手机摄像头扫码、锁屏/重启恢复、真机 IME 未做 |
+| Android | 安全凭据存储 | 部分 | ▲ 模拟器软件 KeyMint 验证过；硬件 KeyStore 隔离结论未做 |
+| iOS | 构建/自动化 | 部分 | 当前配对/TUI 批次无 iOS 构建，仅桥编译与 typecheck 存量证据 |
+| iOS | 签名、分发、设备运行 | 未做 | ▲ 依赖 Apple 开发者账户/证书与实体 iPhone |
+| iOS | 安全凭据存储 | 部分 | Keychain 后端仅内存替身验证（系统 Keychain 调用数为 0） |
+| Windows | 构建/自动化/分发 | 部分 | 停留在 2026-10-30 第一代验证壳，当前代码未重跑 |
+| Windows | 签名 | 未做 | ▲ 无 Authenticode 记录 |
+| Windows | 设备运行、安全凭据存储 | 未做 | 无 Windows 目标系统运行与凭据验证记录 |
+| macOS | 构建/自动化/分发 | 部分 | 第一代 `.app` 证据＋Mac 本机开发验证；当前批次未重跑，安装器未验 |
+| macOS | 签名 | 未做 | ▲ Developer ID 签名与公证未做 |
+| macOS | 设备运行 | 部分 | 有限原生 smoke 已过；桌面分屏、焦点与恢复的完整验收未做 |
+| macOS | 安全凭据存储 | 部分 | 算法级 JNI 验证过，Keychain 级未验 |
+| Linux | 构建/自动化/分发 | 部分 | 第一代 deb 与 Linux loopback 集成证据；当前批次未重跑 |
+| Linux | 设备运行、安全凭据存储 | 未做 | 无目标系统运行记录；凭据服务缺失/锁定行为验证待办 |
+| 三网 × 五端 | 单网 15 格与 4 组并发 | 未做 | ▲ 全部止步于编译/加载/离线测试或库打包核对，无任何一格完成真实拨号＋SSH 闭环 |
+
+本批 roadmap 勾选（3 条：M0.5 重跑留痕、M1 辅助命令、M1 看板目标观察）均为模拟器级或文档级证据，勾选依据已注记在 [04](04-roadmap.md) 各条目尾。
 
 本轮收尾将 0008 终版修复连同哈希锚定测试与交接文档提交为单个 commit，推送 `codex/network-batch/with-emulators-zerotier-0008-<短SHA>` 触发分支由 CI 全矩阵验证（该前缀跳过 input-fixture 以规避 504 高发外依赖，run 结果以 Actions 记录为准）。测试浏览器、独立 Penpot 预览、临时服务与测试 JVM 均已退出，原有 Penpot 编辑页保留。工作区中 ZeroTier 0008 补丁经三轮独立评审定稿入档（`drafts/` 目录中无活动草稿，仅保留归档说明），`zerotier-candidate.json` 哈希闭环，本地全量验证通过。`graphify-out/` 保持未跟踪状态，严禁提交。

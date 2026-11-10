@@ -224,7 +224,7 @@ def pairing_provenance(platform, android_notice):
         'sharedZeroTierDevice': {
             'api': ['status', 'create', 'forget', 'recoverPendingCreation', 'discardPendingCreation', 'recoverPendingDeletion'],
             'scope': 'Public device metadata and exact pending-phase review; private identity never enters Dart',
-            'nativeBinding': 'STAGE 2: reviewed JNI bridge ships in the production slice; host library load and bindNative still pending Stage 4',
+            'nativeBinding': 'STAGE 2: reviewed JNI bridge ships in the production slice; both hosts load the ZeroTier provider library and call bindNative (Stage 4 wiring implemented)',
             'deviceRuntime': 'NOT RUN by build/package workflow',
             'sources': [source_record('validation/network-profiles/native/android/' + name) for name in
                         ['AndroidZeroTierDeviceService.java', 'AndroidZeroTierDeviceStore.java', 'ZeroTierDeviceStoreCore.java',

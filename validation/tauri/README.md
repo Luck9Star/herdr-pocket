@@ -124,7 +124,7 @@ CARGO_TARGET_DIR=/private/tmp/herdr-tauri-watch-target cargo test --locked --off
 
 网络面板保留 Penpot v2 控件与布局，现增加 Tailscale 的创建／读取／删除本机身份、启动／停止节点、显式登录、等待管理员审批与手动打开授权页面。身份模式固定为 `DEVICE_STATE`，没有 auth key 或 Tailscale 秘密输入。页面与配置导出只接收公开身份句柄；加密 `fullStateStore`、运行目录与 StateStore 回调由 Android 原生实现持有，不进入 JavaScript／IPC。
 
-Android 插件 load 只调用 EasyTier／Tailscale 的 `bindNative` 注册应用 context 和 class loader，不读取身份、不启动节点。身份修改／删除及公开配置修改前，后端先撤销受影响标签的输入和 SSH，再等待原节点明确 `Stopped`；失败或结果未知时不提交身份替换，不自动重试。删除要求用户已审查的原 handle，且 catalog revision、profile revision、受影响主机集合均重新比较。
+Android 插件 load 只调用 EasyTier／Tailscale／ZeroTier 的 `bindNative` 注册应用 context 和 class loader，不读取身份、不启动节点。身份修改／删除及公开配置修改前，后端先撤销受影响标签的输入和 SSH，再等待原节点明确 `Stopped`；失败或结果未知时不提交身份替换，不自动重试。删除要求用户已审查的原 handle，且 catalog revision、profile revision、受影响主机集合均重新比较。
 
 Tailscale 的公开 control URL 与 hostname 经共享 `TailscaleSettings` 同时供应 native source 和 Binding，空值使用同一固定默认值。Binding 的 network name 为共享 `ts1:` SHA-256 配置摘要，包含实际 provider、profile、revision 与设备状态 identity ref。实际 SSH 路径仍走共享 `OverlayDialer`，恢复记录的 route 来自实际 stream 的元数据；绑定 overlay 的主机没有系统 TCP fallback。只有 Tailscale `Running` 可以 dial；`starting`、`needs-login`、`needs-machine-auth`、`running`、`closing`、`stopped` 均按原语义显示，不映射成 EasyTier `engine-started` 或“SSH 已连接”。看板、持续观察和标签继续使用原 pane＋terminal 目标审查、输入 unknown gate 与固定终端尺寸。
 

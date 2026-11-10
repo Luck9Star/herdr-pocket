@@ -17,16 +17,18 @@ into the generated source root. It executes on each build so a reused build
 directory loses obsolete nested sources and unlisted drafts before Kotlin or
 Java compilation. Packaging provenance must use this same manifest, not a glob.
 
-The JNI bridge never loads a library itself. Until a vetted host explicitly
-loads the ZeroTier provider library and calls `bindNative(Context)` (Stage 4),
-the store stays uninstalled, the narrow `IdentityFactory` and `NativeOwner`
-capabilities stay inert, and no fallback generates an identity or pretends a
-runtime retired. Without installation, the service returns exactly
-`available: false` and null device/pending records, and valid mutations fail
-with `device store unavailable`. No native library is loaded and no store
-directory is created. Publishing this metadata slice needs no ZeroTier upstream
-patch or stream draft; enabling a real identity/node later requires host
-library, binding and application validation beyond this manifest.
+The JNI bridge never loads a library itself. Both vetted hosts — the Flutter
+and Tauri Android hosts — load the ZeroTier provider library (`hp_zerotier`)
+and call `bindNative(Context)` (Stage 4 wiring implemented). Until that
+binding runs, the store stays uninstalled, the narrow `IdentityFactory` and
+`NativeOwner` capabilities stay inert, and no fallback generates an identity
+or pretends a runtime retired. Without installation, the service returns
+exactly `available: false` and null device/pending records, and valid
+mutations fail with `device store unavailable`. No native library is loaded
+and no store directory is created. Publishing this metadata slice needs no
+ZeroTier upstream patch or stream draft; enabling a real identity/node later
+requires host library, binding and application validation beyond this
+manifest.
 
 Offline closure regression (use an already available local Gradle distribution):
 

@@ -51,10 +51,11 @@ is never reported as an absent identity.
 The shared Android production manifest deliberately includes this service and
 its store/core/envelope dependencies, and — as of Stage 2 — the reviewed
 `AndroidZeroTierNative.java` JNI bridge. The bridge never loads a library
-itself: until a vetted host loads the provider library and calls
-`bindNative(Context)`, the store stays uninstalled and the default unbound
-capability remains unavailable. The metadata-only slice does not activate the
-unfinished native stream draft.
+itself: both vetted hosts load the ZeroTier provider library and call
+`bindNative(Context)` (Stage 4 wiring implemented), and until that binding
+runs the store stays uninstalled and the default unbound capability remains
+unavailable. The metadata-only slice does not activate the unfinished native
+stream draft.
 
 `statusSnapshot` selects authenticated device, pending creation or pending
 deletion under one core data lock. `forgetExact(handle, instanceId)` authenticates

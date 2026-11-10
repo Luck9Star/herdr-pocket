@@ -137,7 +137,7 @@ def verify_zerotier(bundle, manifest, commit, readelf):
     android_zerotier.verify(bundle, manifest['zerotier'], files, readelf, elf)
     return manifest
 
-def build(out, tailscale=False, zerotier=False):
+def build(out, tailscale=False, zerotier=False, release=False):
     import portable_candidate as candidate
     base = candidate.base
     if os.environ.get('GITHUB_ACTIONS') != 'true':
@@ -158,8 +158,14 @@ def build(out, tailscale=False, zerotier=False):
                 'AR_aarch64_linux_android': str(ndk / 'llvm-ar'),
                 'CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER': str(cc)})
     source = reference / 'native/easytier'
-    base.run('android-arm64-build', ['cargo', '+1.95.0', 'build', '--locked', '--lib', '--target', 'aarch64-linux-android'], cwd=source, env=env, timeout=3600)
-    library = source / 'target/aarch64-linux-android/debug/libheeler_easytier.so'
+    cargo = ['cargo', '+1.95.0', 'build', '--locked', '--lib', '--target', 'aarch64-linux-android']
+    if release:
+        # The reference crate is upstream source; our workspace profile cannot
+        # reach it, so strip rides on RUSTFLAGS for the release artifact.
+        cargo.append('--release')
+        env['RUSTFLAGS'] = '-C strip=symbols'
+    base.run('android-arm64-build', cargo, cwd=source, env=env, timeout=3600)
+    library = source / ('target/aarch64-linux-android/' + ('release' if release else 'debug') + '/libheeler_easytier.so')
     shutil.copy2(library, out / library.name)
     elf(out / library.name, str(ndk / 'llvm-readelf'), SYMBOLS)
     for tree, name in [(reference, 'reference-source.tar'),
@@ -182,7 +188,8 @@ def build(out, tailscale=False, zerotier=False):
             base.WORK / 'zerotier-cache', Path(os.environ['ANDROID_HOME']) / 'ndk/28.2.13676358')
     files = {p.relative_to(out).as_posix(): sha(p) for p in sorted(out.rglob('*')) if p.is_file()}
     manifest = {'schemaVersion': 1, 'sourceCommit': os.environ['GITHUB_SHA'], 'abi': 'arm64-v8a', 'api': 35,
-                'ndk': '28.2.13676358', 'rust': '1.95.0', 'sourcesSha256': sha(ROOT / 'validation/native/sources.json'),
+                'ndk': '28.2.13676358', 'rust': '1.95.0', 'profile': 'release' if release else 'debug',
+                'sourcesSha256': sha(ROOT / 'validation/native/sources.json'),
                 'patchManifestSha256': sha(ROOT / 'validation/native/patches/portable-manifest.json'), 'files': files,
                 'staticInspection': 'passed', 'androidLoad': 'not run', 'installation': 'not run', 'node': 'not run'}
     if ts_record:
@@ -254,7 +261,7 @@ def apk(path, bundle, commit, readelf, app):
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest='command', required=True)
-    p = sub.add_parser('build'); p.add_argument('bundle', type=Path); p.add_argument('--tailscale', action='store_true'); p.add_argument('--zerotier', action='store_true')
+    p = sub.add_parser('build'); p.add_argument('bundle', type=Path); p.add_argument('--tailscale', action='store_true'); p.add_argument('--zerotier', action='store_true'); p.add_argument('--release', action='store_true')
     p = sub.add_parser('zerotier'); p.add_argument('bundle', type=Path); p.add_argument('--ndk', required=True); p.add_argument('--work', type=Path); p.add_argument('--cache', type=Path)
     p = sub.add_parser('verify'); p.add_argument('bundle', type=Path); p.add_argument('--commit', required=True); p.add_argument('--readelf', required=True)
     p = sub.add_parser('report'); p.add_argument('output', type=Path); p.add_argument('--commit', required=True); p.add_argument('--app', choices=['flutter', 'tauri'], required=True)
@@ -262,7 +269,7 @@ def main():
     p.add_argument('--transport-checks', choices=['success', 'failure', 'cancelled', 'skipped', 'not_run'], default='not_run')
     p = sub.add_parser('apk'); p.add_argument('apk', type=Path); p.add_argument('bundle', type=Path); p.add_argument('--commit', required=True); p.add_argument('--readelf', required=True); p.add_argument('--app', choices=['flutter', 'tauri'], required=True)
     a = parser.parse_args()
-    if a.command == 'build': build(a.bundle, a.tailscale, a.zerotier)
+    if a.command == 'build': build(a.bundle, a.tailscale, a.zerotier, a.release)
     elif a.command == 'zerotier': zerotier(a.bundle, a.ndk, a.work, a.cache)
     elif a.command == 'verify': verify(a.bundle, a.commit, a.readelf)
     elif a.command == 'report':

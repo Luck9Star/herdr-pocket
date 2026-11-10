@@ -2,6 +2,7 @@ name: Android network candidate batch (arm64)
 on:
   push:
     branches: ['codex/network-batch/**']
+    tags: ['v*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -150,7 +151,7 @@ jobs:
       - name: Build and statically inspect candidate
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          python3 validation/native/tool/android_bundle.py build "$RUNNER_TEMP/android-native" --tailscale --zerotier
+          python3 validation/native/tool/android_bundle.py build "$RUNNER_TEMP/android-native" --tailscale --zerotier --release
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: android-native-${{ github.sha }}
@@ -169,7 +170,7 @@ jobs:
           retention-days: 14
   apps:
     needs: [native, flutter-source, transport-source]
-    if: "!cancelled() && needs.native.result == 'success'"
+    if: "!cancelled() && needs.native.result == 'success' && !startsWith(github.ref, 'refs/tags/')"
     runs-on: ubuntu-24.04
     timeout-minutes: 100
     strategy:
@@ -291,10 +292,11 @@ jobs:
         if: steps.host_tui.outcome == 'failure'
         run: exit 1
   apps-release:
-    # Signed release APKs for device install; skipped unless the repository
-    # variable ANDROID_RELEASE_KEYSTORE is set to any non-empty sentinel.
+    # Signed release APKs for device install; runs only on release tags
+    # (v*) and only when the repository variable ANDROID_RELEASE_KEYSTORE
+    # is set to any non-empty sentinel.
     needs: [native, flutter-source, transport-source]
-    if: "!cancelled() && needs.native.result == 'success' && vars.ANDROID_RELEASE_KEYSTORE != ''"
+    if: "!cancelled() && needs.native.result == 'success' && startsWith(github.ref, 'refs/tags/v') && vars.ANDROID_RELEASE_KEYSTORE != ''"
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     strategy:

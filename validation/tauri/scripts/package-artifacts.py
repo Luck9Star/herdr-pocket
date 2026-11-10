@@ -31,7 +31,7 @@ def android_apks():
             not candidate.resolve().is_relative_to(runner_temp)):
         raise SystemExit('ANDROID_APK_PATH must name a runner-owned APK')
     return [candidate.resolve()]
-fixture_checksums = (repo/'validation/shared/SHA256SUMS').read_text().splitlines()
+fixture_checksums = (repo/'validation/shared/SHA256SUMS').read_text(encoding='utf-8').splitlines()
 fixture_provenance = {}
 for field, filename in {
     'configTransferFixtureSHA256': 'config-transfer-v1.json',
@@ -77,7 +77,7 @@ js_notice_manifest = {}
 for filename, record in js_notices.items():
     (out/filename).write_bytes(record['data'])
     js_notice_manifest[filename] = {key:value for key,value in record.items() if key != 'data'}
-(out/'js-notices.json').write_text(json.dumps(js_notice_manifest,indent=2)+'\n')
+(out/'js-notices.json').write_text(json.dumps(js_notice_manifest,indent=2)+'\n',encoding='utf-8')
 if (root/'dist').exists(): zip_tree(root/'dist',out/'browser-preview.zip')
 if (out/'browser-preview.zip').exists():
     verify_js_notices(out/'browser-preview.zip',js_notices,'dist/js-notices/')
@@ -114,8 +114,8 @@ if manifest['platform']=='android' and manifest['buildOutcome']=='success':
 for f in sorted(out.iterdir()):
     if f.is_file() and f.name not in ['build-manifest.json','SHA256SUMS']:
         manifest['artifacts'].append({'file':f.name,'bytes':f.stat().st_size,'sha256':sha(f)})
-(out/'build-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
-(out/'SHA256SUMS').write_text(''.join(sha(f)+'  '+str(f.relative_to(out))+'\n' for f in sorted(out.rglob('*')) if f.is_file() and f.name!='SHA256SUMS'))
+(out/'build-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
+(out/'SHA256SUMS').write_text(''.join(sha(f)+'  '+str(f.relative_to(out))+'\n' for f in sorted(out.rglob('*')) if f.is_file() and f.name!='SHA256SUMS'),encoding='utf-8')
 print(json.dumps({'platform':manifest['platform'],'buildOutcome':manifest['buildOutcome'],'files':[x['file'] for x in manifest['artifacts']]}))
 
 if manifest['buildOutcome']=='success' and not native_packages:

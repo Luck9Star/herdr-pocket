@@ -14,7 +14,7 @@ os.environ['NATIVE_PROBE_OUTPUT']=str(ROOT/'validation/native/candidate-artifact
 import probe as base
 
 def apply(reference):
-    manifest=json.loads((ROOT/'validation/native/patches/portable-manifest.json').read_text())
+    manifest=json.loads((ROOT/'validation/native/patches/portable-manifest.json').read_text(encoding='utf-8'))
     patch=ROOT/'validation/native/patches'/manifest['patch']
     if base.sha(patch)!=manifest['patchSha256']:raise RuntimeError('candidate patch hash mismatch')
     for name,digest in manifest.get('sourceTemplates',{}).items():
@@ -33,7 +33,7 @@ def apply(reference):
         source=ROOT/'validation/native/portable-stream'/name
         if base.sha(source)!=manifest['copiedModules'][name]:raise RuntimeError('candidate module hash mismatch: '+name)
         shutil.copy2(source,destination)
-    (base.OUT/'candidate-provenance.json').write_text(json.dumps(manifest,indent=2)+'\n')
+    (base.OUT/'candidate-provenance.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
     shutil.copy2(patch,base.OUT/patch.name)
     return manifest
 
@@ -85,8 +85,8 @@ print('five stream and four managed-node ABI symbols resolved; invalid handles r
         report['status']='passed'
     except Exception as exc:report['error']=str(exc)
     finally:
-        (base.OUT/'results.json').write_text(json.dumps(report,indent=2)+'\n')
-        (base.OUT/'SHA256SUMS').write_text(''.join(base.sha(p)+'  '+str(p.relative_to(base.OUT))+'\n' for p in sorted(base.OUT.rglob('*')) if p.is_file() and p.name!='SHA256SUMS'))
+        (base.OUT/'results.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+        (base.OUT/'SHA256SUMS').write_text(''.join(base.sha(p)+'  '+str(p.relative_to(base.OUT))+'\n' for p in sorted(base.OUT.rglob('*')) if p.is_file() and p.name!='SHA256SUMS'),encoding='utf-8')
     print(json.dumps(report));return 0 if report['status']=='passed' else 1
 
 if __name__=='__main__':sys.exit(main())

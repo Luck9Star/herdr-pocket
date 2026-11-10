@@ -18,9 +18,9 @@ def _sha(data):
 def collect(root):
     """Read package locks and installed package license bytes; fail closed on drift."""
     root = Path(root)
-    package_json = json.loads((root / 'package.json').read_text())
+    package_json = json.loads((root / 'package.json').read_text(encoding='utf-8'))
     lock_path = root / 'package-lock.json'
-    lock = json.loads(lock_path.read_text())
+    lock = json.loads(lock_path.read_text(encoding='utf-8'))
     records = {}
     for package, (version, filename) in PACKAGES.items():
         if package_json.get('dependencies', {}).get(package) != version:
@@ -32,7 +32,7 @@ def collect(root):
         if not isinstance(resolved, str) or not resolved.startswith('https://') or not isinstance(integrity, str) or not integrity.startswith('sha512-'):
             raise ValueError('package-lock source integrity missing: ' + package)
         package_dir = root / 'node_modules' / package
-        metadata = json.loads((package_dir / 'package.json').read_text())
+        metadata = json.loads((package_dir / 'package.json').read_text(encoding='utf-8'))
         if metadata.get('name') != package or metadata.get('version') != version or metadata.get('license') != 'MIT':
             raise ValueError('installed package metadata mismatch: ' + package)
         source = package_dir / 'LICENSE'

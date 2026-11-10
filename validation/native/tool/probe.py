@@ -15,7 +15,7 @@ import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[3]
-CONFIG = json.loads((ROOT / 'validation/native/sources.json').read_text())
+CONFIG = json.loads((ROOT / 'validation/native/sources.json').read_text(encoding='utf-8'))
 OUT = Path(os.environ.get('NATIVE_PROBE_OUTPUT', str(ROOT / 'validation/native/artifacts'))).resolve()
 WORK = Path(os.environ.get('RUNNER_TEMP', '/tmp')) / ('herdr-native-' + os.environ.get('GITHUB_RUN_ID', 'local'))
 REPORT = {'schemaVersion': 1, 'sourceCommit': os.environ.get('GITHUB_SHA', 'local'),
@@ -73,7 +73,7 @@ def checkout(url, commit, destination, label):
 
 def lock_values(reference):
     # Data only: never source an upstream shell file in the runner environment.
-    values = dict(re.findall(r'^([A-Z0-9_]+)="([^"]*)"$', (reference / 'sources.lock').read_text(), re.M))
+    values = dict(re.findall(r'^([A-Z0-9_]+)="([^"]*)"$', (reference / 'sources.lock').read_text(encoding='utf-8'), re.M))
     if values['TAILSCALE_MODULE_VERSION'] != 'v1.104.1' or values['EASYTIER_RUST_TOOLCHAIN'] != '1.95.0':
         raise RuntimeError('Reference lock changed unexpectedly')
     return values
@@ -204,11 +204,11 @@ if __name__ == '__main__':
             except Exception as exc:
                 CURRENT['status'] = 'failed'
                 CURRENT['error'] = str(exc)
-            (OUT / 'results.json').write_text(json.dumps(REPORT, indent=2) + '\n')
+            (OUT / 'results.json').write_text(json.dumps(REPORT, indent=2) + '\n', encoding='utf-8')
     except Exception as exc:
         CURRENT['status'] = 'failed'; CURRENT['error'] = str(exc)
     finally:
-        (OUT / 'results.json').write_text(json.dumps(REPORT, indent=2) + '\n')
-        (OUT / 'SHA256SUMS').write_text(''.join(sha(p) + '  ' + str(p.relative_to(OUT)) + '\n' for p in sorted(OUT.rglob('*')) if p.is_file() and p.name != 'SHA256SUMS'))
+        (OUT / 'results.json').write_text(json.dumps(REPORT, indent=2) + '\n', encoding='utf-8')
+        (OUT / 'SHA256SUMS').write_text(''.join(sha(p) + '  ' + str(p.relative_to(OUT)) + '\n' for p in sorted(OUT.rglob('*')) if p.is_file() and p.name != 'SHA256SUMS'), encoding='utf-8')
     print(json.dumps({name: {'status': row.get('status'), 'error': row.get('error')} for name, row in REPORT['providers'].items()}))
     sys.exit(1 if any(row.get('status') != 'passed' for row in REPORT['providers'].values()) else 0)

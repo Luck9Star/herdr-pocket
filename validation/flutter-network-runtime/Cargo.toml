@@ -29,5 +29,8 @@ zeroize = "=1.9.1"
 
 [workspace]
 
+[profile.release]
+strip = true
+
 [patch.crates-io]
 russh = { path = "../vendor/russh-0.65.0" }

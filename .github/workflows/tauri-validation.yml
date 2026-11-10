@@ -23,9 +23,9 @@ jobs:
       matrix:
         include: >-
           ${{ fromJSON(inputs.include_ios &&
-          '[{"platform":"android","runner":"ubuntu-24.04"},{"platform":"ios-simulator","runner":"macos-15"}]' || inputs.android_only &&
+          '[{"platform":"android","runner":"ubuntu-24.04"},{"platform":"ios-simulator","runner":"macos-15"},{"platform":"ios-device","runner":"macos-15"}]' || inputs.android_only &&
           '[{"platform":"android","runner":"ubuntu-24.04"}]' ||
-          '[{"platform":"android","runner":"ubuntu-24.04"},{"platform":"ios-simulator","runner":"macos-15"},{"platform":"macos","runner":"macos-15"},{"platform":"linux","runner":"ubuntu-24.04"},{"platform":"windows","runner":"windows-2025"}]') }}
+          '[{"platform":"android","runner":"ubuntu-24.04"},{"platform":"ios-simulator","runner":"macos-15"},{"platform":"ios-device","runner":"macos-15"},{"platform":"macos","runner":"macos-15"},{"platform":"linux","runner":"ubuntu-24.04"},{"platform":"windows","runner":"windows-2025"}]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     defaults:
@@ -59,10 +59,10 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358'
           echo "NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
           rustup target add aarch64-linux-android
-      - name: iOS simulator toolchain
-        if: matrix.platform == 'ios-simulator'
+      - name: iOS toolchain
+        if: startsWith(matrix.platform, 'ios')
         run: |
-          rustup target add aarch64-apple-ios-sim
+          rustup target add aarch64-apple-ios-sim aarch64-apple-ios
           xcodebuild -version
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -94,6 +94,11 @@ jobs:
             ios-simulator)
               npm run tauri -- ios init --ci
               npm run tauri -- ios build --debug --target aarch64-sim --no-sign --archive-only --ci
+              ;;
+            ios-device)
+              # Unsigned real-device archive; sideload targets sign it themselves.
+              npm run tauri -- ios init --ci
+              npm run tauri -- ios build --debug --target aarch64 --no-sign --archive-only --ci
               ;;
           esac
       - name: Package test artifacts and provenance

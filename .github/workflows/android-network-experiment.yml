@@ -290,6 +290,177 @@ jobs:
       - name: Report host TUI failure after keeping the built APK
         if: steps.host_tui.outcome == 'failure'
         run: exit 1
+  apps-release:
+    # Signed release APKs for device install; skipped unless the repository
+    # variable ANDROID_RELEASE_KEYSTORE is set to any non-empty sentinel.
+    needs: [native, flutter-source, transport-source]
+    if: "!cancelled() && needs.native.result == 'success' && vars.ANDROID_RELEASE_KEYSTORE != ''"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [flutter, tauri]
+    env:
+      HERDR_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+      HERDR_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+      HERDR_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17.0.18+8'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: android-native-${{ github.sha }}
+          path: ${{ runner.temp }}/android-native
+      - name: Install toolchain and verify native input
+        run: |
+          python3 validation/vendor/verify-russh.py
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358'
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+          rustup target add aarch64-linux-android
+          echo "NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "CC_aarch64_linux_android=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_linux_android=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang++" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> "$GITHUB_ENV"
+          echo "HEELER_ET_LIB_DIR=$RUNNER_TEMP/android-native" >> "$GITHUB_ENV"
+          echo "HP_TS_LIB_DIR=$RUNNER_TEMP/android-native" >> "$GITHUB_ENV"
+          echo "HP_ZT_LIB_DIR=$RUNNER_TEMP/android-native" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang" >> "$GITHUB_ENV"
+          echo "READELF=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" >> "$GITHUB_ENV"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 validation/native/tool/android_bundle.py verify "$RUNNER_TEMP/android-native" --commit "$GITHUB_SHA" --readelf "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+      - name: Decode the release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/herdr-release.jks"
+          echo "HERDR_RELEASE_KEYSTORE=$RUNNER_TEMP/herdr-release.jks" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: matrix.app == 'tauri'
+        with:
+          node-version: '22.22.2'
+      - name: Build Tauri arm64 release APK
+        if: matrix.app == 'tauri'
+        working-directory: validation/tauri
+        run: |
+          npm ci
+          npm test
+          npm run tauri -- icon icon.svg
+          npm run tauri -- android init --ci
+          python3 scripts/wire-android.py
+          cat >> src-tauri/gen/android/app/build.gradle.kts <<'GRADLE'
+          // herdr-pocket CI release signing; generated project only
+          val herdrKeystore = System.getenv("HERDR_RELEASE_KEYSTORE")
+          if (herdrKeystore != null) {
+              android {
+                  signingConfigs {
+                      create("release") {
+                          storeFile = file(herdrKeystore)
+                          storePassword = System.getenv("HERDR_RELEASE_KEYSTORE_PASSWORD")
+                          keyAlias = System.getenv("HERDR_RELEASE_KEY_ALIAS")
+                          keyPassword = System.getenv("HERDR_RELEASE_KEY_PASSWORD")
+                      }
+                  }
+                  buildTypes {
+                      getByName("release") {
+                          signingConfig = signingConfigs.getByName("release")
+                          optimization {
+                              // The wired Kotlin plugins ship no R8 keep rules.
+                              enable = false
+                          }
+                      }
+                  }
+              }
+          }
+          GRADLE
+          mkdir -p src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a
+          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$HP_TS_LIB_DIR/libhp_tailscale.so" "$HP_ZT_LIB_DIR/libhp_zerotier.so" src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/
+          npm run tauri -- android build --target aarch64 --features network-easytier,network-tailscale,network-zerotier --apk --ci
+          mapfile -t apks < <(find src-tauri/gen/android -name '*.apk' -type f)
+          test "${#apks[@]}" -eq 1
+          cp "${apks[0]}" "$RUNNER_TEMP/app.apk"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: matrix.app == 'flutter'
+        with:
+          name: android-network-flutter-source-${{ github.sha }}
+          path: ${{ runner.temp }}/flutter-source
+      - name: Build Flutter arm64 release APK from the verified experimental candidate
+        if: matrix.app == 'flutter'
+        env:
+          VERIFIED_LOCK: ${{ needs.flutter-source.outputs.verified_lock }}
+        run: |
+          test "$VERIFIED_LOCK" = true
+          python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+          echo "$RUNNER_TEMP/flutter-sdk/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/flutter-sdk/bin:$PATH"
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
+          cp "$RUNNER_TEMP/flutter-source/pubspec.lock" "$RUNNER_TEMP/flutter-probe/pubspec.lock"
+          cargo build --manifest-path validation/flutter-network-runtime/Cargo.toml --locked --release --target aarch64-linux-android --features network-easytier,network-tailscale,network-zerotier
+          mkdir -p "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a"
+          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$HP_TS_LIB_DIR/libhp_tailscale.so" "$HP_ZT_LIB_DIR/libhp_zerotier.so" "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
+          cp validation/flutter-network-runtime/target/aarch64-linux-android/release/libherdr_flutter_network_runtime.so "$RUNNER_TEMP/flutter-probe/android/app/src/main/jniLibs/arm64-v8a/"
+          cat >> "$RUNNER_TEMP/flutter-probe/android/app/build.gradle.kts" <<'GRADLE'
+          // herdr-pocket CI release signing; generated project only
+          val herdrKeystore = System.getenv("HERDR_RELEASE_KEYSTORE")
+          if (herdrKeystore != null) {
+              android {
+                  signingConfigs {
+                      create("release") {
+                          storeFile = file(herdrKeystore)
+                          storePassword = System.getenv("HERDR_RELEASE_KEYSTORE_PASSWORD")
+                          keyAlias = System.getenv("HERDR_RELEASE_KEY_ALIAS")
+                          keyPassword = System.getenv("HERDR_RELEASE_KEY_PASSWORD")
+                      }
+                  }
+                  buildTypes {
+                      getByName("release") {
+                          signingConfig = signingConfigs.getByName("release")
+                      }
+                  }
+              }
+          }
+          GRADLE
+          cd "$RUNNER_TEMP/flutter-probe"
+          flutter pub get --enforce-lockfile
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
+          flutter build apk --release --target-platform android-arm64
+          cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/app.apk"
+      - name: Verify APK ABI, native hash and dynamic dependency
+        run: python3 validation/native/tool/android_bundle.py apk "$RUNNER_TEMP/app.apk" "$RUNNER_TEMP/android-native" --commit "$GITHUB_SHA" --readelf "$READELF" --app '${{ matrix.app }}'
+      - name: Record APK provenance and validation boundary
+        env:
+          APP: ${{ matrix.app }}
+          SOURCE_CHECKS: ${{ matrix.app == 'flutter' && needs.flutter-source.result || 'success' }}
+          TRANSPORT_CHECKS: ${{ needs.transport-source.result }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/app-output"
+          cp "$RUNNER_TEMP/app.apk" "$RUNNER_TEMP/app-output/app.apk"
+          cp validation/shared/terminal-function-keys-v1.json "$RUNNER_TEMP/app-output/"
+          cp "$RUNNER_TEMP/android-native/manifest.json" "$RUNNER_TEMP/app-output/native-manifest.json"
+          if test "$APP" = flutter; then
+            cp "$RUNNER_TEMP/flutter-probe/candidate-manifest.json" "$RUNNER_TEMP/app-output/candidate-manifest.json"
+            cp "$RUNNER_TEMP/flutter-probe/candidate/terminal_view/LICENSE" "$RUNNER_TEMP/app-output/terminal_view-LICENSE"
+            cp "$RUNNER_TEMP/flutter-probe/candidate/terminal_view/NOTICE" "$RUNNER_TEMP/app-output/terminal_view-NOTICE"
+          fi
+          cp validation/shared/mobile-tabs-v1.json "$RUNNER_TEMP/app-output/mobile-tabs-v1.json"
+          cp validation/shared/session-watch-v1.json "$RUNNER_TEMP/app-output/session-watch-v1.json"
+          cp validation/shared/tailscale-settings-v1.json "$RUNNER_TEMP/app-output/tailscale-settings-v1.json"
+          cp validation/shared/target-input-journal-v1.json "$RUNNER_TEMP/app-output/target-input-journal-v1.json"
+          cp validation/vendor/RUSSH-NOTICE.md validation/vendor/russh-0.65.0-source.json validation/vendor/russh-0.65.0-local-close.patch "$RUNNER_TEMP/app-output/"
+          cp validation/vendor/russh-0.65.0-LICENSE-APACHE "$RUNNER_TEMP/app-output/russh-LICENSE"
+          python3 validation/native/tool/android_bundle.py report "$RUNNER_TEMP/app-output" --commit "$GITHUB_SHA" --app "$APP" --checks "$SOURCE_CHECKS" --transport-checks "$TRANSPORT_CHECKS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-${{ matrix.app }}-release-${{ github.sha }}
+          path: ${{ runner.temp }}/app-output
+          if-no-files-found: error
+          retention-days: 14
   zerotier-keystore:
     # The device identity store must work on the platform AndroidKeyStore, not
     # only against the synthetic provider of the offline JVM suite.

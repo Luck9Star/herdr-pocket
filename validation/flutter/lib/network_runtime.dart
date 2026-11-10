@@ -10,6 +10,9 @@ import 'network_identity.dart';
 import 'network_profiles.dart';
 import 'remote_adapter.dart';
 import 'remote_input.dart';
+import 'routed_ssh_socket.dart';
+
+export 'routed_ssh_socket.dart' show RoutedSSHSocket;
 
 /// Public binding only; identity material remains in the native vault.
 class NetworkNodeBinding {
@@ -273,8 +276,6 @@ class NativeNetworkRuntime {
 }
 
 /// Actual route accompanies the stream; callers must not fabricate it from GUI state.
-abstract interface class RoutedSSHSocket { String get actualRoute; }
-
 class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket {
   NetworkSSHSocket(this.runtime,this.id,this.actualRoute) {
     _incoming = StreamController<Uint8List>(sync:true,onListen:_read,onResume:_read,onCancel:destroy);

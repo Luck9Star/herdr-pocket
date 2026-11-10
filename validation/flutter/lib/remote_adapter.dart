@@ -8,7 +8,7 @@ import 'remote_failure.dart';
 export 'remote_failure.dart';
 import 'remote_input.dart';
 import 'remote_frame_geometry.dart';
-import 'network_runtime.dart' show RoutedSSHSocket;
+import 'routed_ssh_socket.dart' show RoutedSSHSocket;
 
 String shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 

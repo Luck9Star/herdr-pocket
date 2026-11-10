@@ -67,16 +67,16 @@ def prepare(destination):
     # Client sockets and user-selected document access; no background service.
     for name in ['DebugProfile.entitlements', 'Release.entitlements']:
         entitlements = destination / 'macos/Runner' / name
-        text = entitlements.read_text()
+        text = entitlements.read_text(encoding='utf-8')
         if 'com.apple.security.network.client' not in text:
             text = text.replace('</dict>', '<key>com.apple.security.network.client</key><true/>\n</dict>')
         if 'com.apple.security.files.user-selected.read-write' not in text:
             text = text.replace('</dict>', '<key>com.apple.security.files.user-selected.read-write</key><true/>\n</dict>')
-        entitlements.write_text(text)
+        entitlements.write_text(text, encoding='utf-8')
     manifest = destination / 'android/app/src/main/AndroidManifest.xml'
-    text = manifest.read_text()
+    text = manifest.read_text(encoding='utf-8')
     if 'android.permission.INTERNET' not in text:
-        manifest.write_text(text.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1))
+        manifest.write_text(text.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1), encoding='utf-8')
     # Register bounded native bridges; shared secret stores never enter Dart.
     activity = destination / 'android/app/src/main/kotlin/dev/herdr/herdr_flutter_probe/MainActivity.kt'
     shutil.copy2(source / 'native/android/MainActivity.kt', activity)
@@ -88,7 +88,7 @@ def prepare(destination):
     shutil.copy2(source / 'native/android/ZeroTierDeviceChannel.kt', activity.with_name('ZeroTierDeviceChannel.kt'))
     shutil.copy2(source / 'native/android/NetworkRuntimeChannel.kt', activity.with_name('NetworkRuntimeChannel.kt'))
     gradle = destination / 'android/app/build.gradle.kts'
-    script = gradle.read_text()
+    script = gradle.read_text(encoding='utf-8')
     native = (ROOT / 'validation/pairing/native/android').as_posix()
     script += '\nextra["herdrDeviceKeysDir"] = file("' + native + '")\n'
     script += 'apply(from = "' + native + '/device-keys.gradle")\n'
@@ -98,40 +98,40 @@ def prepare(destination):
     # Preserve the exact prebuilt candidate bytes checked against its source
     # bundle. AGP otherwise strips native debug symbols during APK packaging.
     script += '\nandroid { packaging { jniLibs.keepDebugSymbols += setOf("**/libheeler_easytier.so", "**/libhp_tailscale.so", "**/libhp_zerotier.so") } }\n'
-    gradle.write_text(script)
+    gradle.write_text(script, encoding='utf-8')
     # Generated Swift files include the shared source verbatim at scaffold time;
     # the repository keeps only one storage implementation. No Keychain calls
     # are executed by prepare or channel registration.
-    shared_apple = (ROOT / 'validation/pairing/native/apple/DeviceKeys.swift').read_text()
-    apple_channel = (source / 'native/apple/DeviceKeyChannel.swift').read_text() + '\n' + (source / 'native/apple/HostCatalogFile.swift').read_text() + '\n' + (source / 'native/apple/InputJournalFile.swift').read_text()
-    apple_documents = (ROOT / 'validation/config-transfer/apple/ConfigDocument.swift').read_text() + '\n' + (source / 'native/apple/ConfigDocumentChannel.swift').read_text()
+    shared_apple = (ROOT / 'validation/pairing/native/apple/DeviceKeys.swift').read_text(encoding='utf-8')
+    apple_channel = (source / 'native/apple/DeviceKeyChannel.swift').read_text(encoding='utf-8') + '\n' + (source / 'native/apple/HostCatalogFile.swift').read_text(encoding='utf-8') + '\n' + (source / 'native/apple/InputJournalFile.swift').read_text(encoding='utf-8')
+    apple_documents = (ROOT / 'validation/config-transfer/apple/ConfigDocument.swift').read_text(encoding='utf-8') + '\n' + (source / 'native/apple/ConfigDocumentChannel.swift').read_text(encoding='utf-8')
     ios = destination / 'ios/Runner/AppDelegate.swift'
-    ios_text = ios.read_text()
+    ios_text = ios.read_text(encoding='utf-8')
     marker = 'GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)'
     if marker not in ios_text:
         raise SystemExit('Pinned Flutter iOS implicit-engine registration template changed')
-    scanner = (ROOT / 'validation/pairing/native/camera/apple/PairScanner.swift').read_text()
-    scan_channel = (source / 'native/apple/PairScanChannel.swift').read_text()
+    scanner = (ROOT / 'validation/pairing/native/camera/apple/PairScanner.swift').read_text(encoding='utf-8')
+    scan_channel = (source / 'native/apple/PairScanChannel.swift').read_text(encoding='utf-8')
     ios.write_text(ios_text.replace(marker, marker + '\n    registerHerdrDeviceKeys(messenger: engineBridge.applicationRegistrar.messenger())'
                                     + '\n    registerHerdrPairScanner(messenger: engineBridge.applicationRegistrar.messenger())'
                                     + '\n    registerHerdrConfigDocuments(messenger: engineBridge.applicationRegistrar.messenger())', 1)
-                   + '\n' + shared_apple + '\n' + apple_channel + '\n' + scanner + '\n' + scan_channel + '\n' + apple_documents)
+                   + '\n' + shared_apple + '\n' + apple_channel + '\n' + scanner + '\n' + scan_channel + '\n' + apple_documents, encoding='utf-8')
     info = destination / 'ios/Runner/Info.plist'
     plist = plistlib.loads(info.read_bytes())
     plist['NSCameraUsageDescription'] = '扫描主机的公开配对响应二维码。'
     info.write_bytes(plistlib.dumps(plist, sort_keys=False))
     macos = destination / 'macos/Runner/MainFlutterWindow.swift'
-    mac_text = macos.read_text()
+    mac_text = macos.read_text(encoding='utf-8')
     marker = 'RegisterGeneratedPlugins(registry: flutterViewController)'
     if marker not in mac_text:
         raise SystemExit('Pinned Flutter macOS registration template changed')
     macos.write_text(mac_text.replace(marker, marker + '\n    registerHerdrDeviceKeys(messenger: flutterViewController.engine.binaryMessenger)'
                                      + '\n    registerHerdrConfigDocuments(messenger: flutterViewController.engine.binaryMessenger)', 1)
-                     + '\n' + shared_apple + '\n' + apple_channel + '\n' + apple_documents)
+                     + '\n' + shared_apple + '\n' + apple_channel + '\n' + apple_documents, encoding='utf-8')
 
     shutil.copytree(source / 'diagnostic', destination / 'diagnostic', dirs_exist_ok=True)
     shutil.copytree(source / 'regression', destination / 'regression', dirs_exist_ok=True)
-    (destination / 'analysis_options.yaml').write_text('analyzer:\n  exclude:\n    - candidate/**\n  errors:\n    todo: ignore\n')
+    (destination / 'analysis_options.yaml').write_text('analyzer:\n  exclude:\n    - candidate/**\n  errors:\n    todo: ignore\n', encoding='utf-8')
     shared = ROOT / 'validation/shared'
     fixture = json.loads((shared / 'fixture.json').read_text(encoding='utf-8'))
     font = shared / fixture['font']['file']
@@ -159,7 +159,7 @@ def android_network_production_sources():
     manifest = base + 'android-production-sources.txt'
     try:
         hashes = production_java_hashes(ROOT / base)
-        listed = (ROOT / base / 'android-production-sources.txt').read_text().splitlines()
+        listed = (ROOT / base / 'android-production-sources.txt').read_text(encoding='utf-8').splitlines()
         if listed and 'AndroidZeroTierNative.java' not in hashes:
             raise ValueError('Stage 2 production source list must include the reviewed JNI bridge')
     except (OSError,ValueError) as error:
@@ -325,11 +325,11 @@ def package(destination, platform, output):
         shutil.copy2(candidate_manifest, output / 'candidate-manifest.json')
         for name in ['LICENSE', 'NOTICE']:
             shutil.copy2(destination / 'candidate/terminal_view' / name, output / ('terminal_view-' + name))
-    (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     checksums = [manifest['artifactSha256'] + '  ' + archive.name]
     if platform == 'android':
         checksums.append(manifest['androidApkSha256'] + '  flutter-android-debug.apk')
-    (output / 'SHA256SUMS').write_text('\n'.join(checksums) + '\n')
+    (output / 'SHA256SUMS').write_text('\n'.join(checksums) + '\n', encoding='utf-8')
 
 
 def main():

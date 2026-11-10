@@ -93,7 +93,7 @@ class AndroidBlockedTests(unittest.TestCase):
 
     def test_guarded_run_skips_new_stock_steps_and_new_receipt_field(self):
         source=(HERE/'android_gui.py').read_text();flow=source[source.index('def run_android('):]
-        self.assertRegex(flow,r"if not guarded:\s+progress.phase\('blocked_target_entry'\)\s+blocked_evidence=exercise_blocked_target")
+        self.assertRegex(flow,r"if not guarded:\s+progress.phase\('blocked_target_entry'\)\s+blocked_evidence=retry_stage")
         self.assertIn("**({'blockedTargetEvidence':blocked_evidence} if blocked_evidence is not None else {})",flow)
 
     def test_visible_named_control_uses_real_cdp_pointer_events(self):
@@ -446,6 +446,91 @@ process.stdout.write(JSON.stringify({sync,asyncError,unknown,removed,reinstalled
         self.assertIn("progress.mark('deviceImpactReviewed')",source)
         self.assertIn("**({'boardSearchEvidence':board_evidence} if board_evidence is not None else {})",source)
         self.assertIn("**({'deviceImpactEvidence':device_evidence} if device_evidence is not None else {})",source)
+
+class AndroidStageRetryTests(unittest.TestCase):
+    def progress(self):
+        return types.SimpleNamespace(data={},publish=Mock())
+
+    def test_transient_miss_replays_once_then_succeeds_and_records_it(self):
+        calls=[]
+        def action():
+            calls.append(1)
+            if len(calls)==1:raise android.GuiFailure('android_blocked_render_missing')
+            return 'evidence'
+        progress=self.progress()
+        self.assertEqual(android.retry_stage(progress,'blocked_target_entry',action),'evidence')
+        self.assertEqual(len(calls),2)
+        self.assertEqual(progress.data['retriedStages'],{'blocked_target_entry':1})
+
+    def test_permanent_miss_fails_with_the_original_code_after_one_replay(self):
+        calls=[]
+        def action():
+            calls.append(1);raise android.GuiFailure('android_stale_marker_missing')
+        progress=self.progress()
+        with self.assertRaises(android.GuiFailure) as caught:
+            android.retry_stage(progress,'stop_observation',action)
+        self.assertEqual(str(caught.exception),'android_stale_marker_missing')
+        self.assertEqual(len(calls),2)
+        self.assertEqual(progress.data['retriedStages'],{'stop_observation':1})
+        progress.publish.assert_called()
+
+    def test_non_whitelisted_codes_never_replay(self):
+        for code in ('android_board_search_count_mismatch','android_device_impact_action_enabled',
+                     'android_device_impact_write_invoked','android_paste_receipt_changed',
+                     'android_blocked_target_evidence_invalid','android_canvas_geometry_invalid',
+                     'android_control_operation_failed','android_cdp_transport_failed',
+                     'android_board_search_native_call'):
+            calls=[]
+            def action(code=code):
+                calls.append(1);raise android.GuiFailure(code)
+            progress=self.progress()
+            with self.subTest(code=code),self.assertRaises(android.GuiFailure) as caught:
+                android.retry_stage(progress,'board_search',action)
+            self.assertEqual(str(caught.exception),code)
+            self.assertEqual(len(calls),1)
+            self.assertEqual(progress.data,{})
+
+    def test_dynamic_control_and_text_miss_prefixes_replay(self):
+        for code in ('android_control_missing_pair-accept','android_control_missing_remote-cancel',
+                     'android_text_control_missing_host-query'):
+            calls=[]
+            def action(code=code):
+                calls.append(1);raise android.GuiFailure(code)
+            progress=self.progress()
+            with self.subTest(code=code),self.assertRaises(android.GuiFailure):
+                android.retry_stage(progress,'blocked_target_entry',action)
+            self.assertEqual(len(calls),2)
+            self.assertEqual(progress.data['retriedStages'],{'blocked_target_entry':1})
+
+    def test_recover_runs_between_attempts_and_a_failed_recover_still_replays(self):
+        calls=[];recover=Mock(side_effect=android.GuiFailure('android_home_not_visible'))
+        def action():
+            calls.append(1)
+            if len(calls)==1:raise android.GuiFailure('android_control_missing_host-return-home')
+            return 'ok'
+        progress=self.progress()
+        self.assertEqual(android.retry_stage(progress,'blocked_target_entry',action,recover=recover),'ok')
+        recover.assert_called_once_with()
+        self.assertEqual(len(calls),2)
+        self.assertEqual(progress.data['retriedStages'],{'blocked_target_entry':1})
+
+    def test_only_replay_safe_stages_are_wrapped_and_side_effects_stay_fail_fast(self):
+        source=(HERE/'android_gui.py').read_text();flow=source[source.index('def run_android('):]
+        wrapped=set(re.findall(r"retry_stage\(progress,'([a-z_]+)'",flow))
+        self.assertEqual(wrapped,{'canvas_selection','canvas_marker','direct_mode','paste_review',
+            'stop_observation','blocked_target_entry','board_search','device_impact_review'})
+        # Pairing approval, authorization, revocation and real input stay fail-fast.
+        for anchor in ("approval.approve(request.encode('utf-8'))","receipt = approval.revoke()",
+                       "browser.click('#pair-create')","browser.click('#pair-accept'",
+                       "browser.click('#remote-connect')","tui_evidence = exercise_tui(",
+                       "browser.direct_key('k')"):
+            self.assertIn(anchor,flow)
+        self.assertEqual(flow.count('retry_stage(progress,'),8)
+
+    def test_retried_stages_field_is_reported_without_touching_evidence_booleans(self):
+        self.assertNotIn('retriedStages',android.AndroidProgress({}).data)
+        source=(HERE/'android_gui.py').read_text()
+        self.assertIn("retried = progress.data.setdefault('retriedStages', {})",source)
 
 
 if __name__=='__main__':unittest.main()

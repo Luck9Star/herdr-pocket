@@ -21,7 +21,7 @@ class Element {
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
-function setup({innerWidth=1280}={}) {
+function setup({innerWidth=1280,rejectDrafts=false}={}) {
   const oldDocument=globalThis.document, oldWindow=globalThis.window;
   const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content','workbench-split'].map(id=>[id,new Element('div')]));
   const listeners={};
@@ -32,7 +32,7 @@ function setup({innerWidth=1280}={}) {
   const invoke=(name,args)=>{calls.push({name,args});
     if(name==='remote_tab_reserve')return Promise.resolve(++generation);
     if(name==='remote_tab_input_mode')return Promise.resolve(7);
-    if(name==='remote_tab_input_send'){const pane=tabTargets[args.tabId];return Promise.resolve({status:'accepted',receipt:{requestId:'0'.repeat(32),paneId:pane.paneId,terminalId:pane.terminalId,acceptedBytes:args.bytes.length}});}
+    if(name==='remote_tab_input_send'){if(args.draft && rejectDrafts)return Promise.resolve({status:'rejected',recoveryRequired:true});const pane=tabTargets[args.tabId];return Promise.resolve({status:'accepted',receipt:{requestId:'0'.repeat(32),paneId:pane.paneId,terminalId:pane.terminalId,acceptedBytes:args.bytes.length}});}
     if(name==='remote_tab_observe'){observes.push(args);channels.push(args.onEvent);return new Promise(()=>{});}
     return Promise.resolve();};
   const terminalFactory=options=>{const t={options,cols:options.cols,rows:options.rows,parser:{registerOscHandler(){}},textarea:new Element('textarea'),element:new Element('div'),
@@ -65,7 +65,7 @@ test('split entry is declared in index.html and its grid only applies ≥900px i
   const html=await readFile(new URL('../index.html', import.meta.url),'utf8');
   const css=await readFile(new URL('../src/style.css', import.meta.url),'utf8');
   assert.ok(/<button id="workbench-split"[^>]*aria-pressed="false"/.test(html),'index.html 需声明分屏入口');
-  assert.ok(css.includes('@media(max-width:899px){#workbench-split{display:none}}'),'≤899px 必须隐藏分屏入口');
+  assert.ok(css.includes('@media(max-width:899.98px){#workbench-split{display:none}}'),'≤899.98px 必须隐藏分屏入口（覆盖 899–900px 小数宽度，与 JS ≥900 判定闭合）');
   const desktop=css.slice(css.lastIndexOf('@media(min-width:900px){'));
   assert.ok(desktop.includes('#view-content[data-split="2"]'),'分屏网格必须位于 ≥900px 媒体查询内');
   assert.ok(desktop.includes('grid-template-columns:repeat(2,minmax(0,1fr))'),'分屏必须是两列等宽网格');
@@ -237,5 +237,73 @@ test('narrow windows never split: entry hidden, toggle refused, crossing 900px p
     assert.ok(s.nodes['view-content'].children.some(e=>String(e.tagName).toUpperCase()==='P'&&e.textContent.includes(' · w1:p1 · ')),'窄窗回落后标题仍是 #view-content 的直接子节点');
     assert.ok(s.calls.some(c=>c.name==='remote_tab_control'&&c.args.tabId===a&&c.args.action==='pause'),'跨界变窄必须暂停分屏副面板');
     assert.equal(s.nodes['view-content'].getAttribute('data-split'),'1');
+  } finally { s.restore(); }
+});
+
+test('标签切换进行中（switching 窗口）分屏入口禁用且 toggle 被拒，不产生 aria-pressed 脱节', async () => {
+  const s=setup({innerWidth:1280});
+  try {
+    const a=await s.openTab('direct-pane-a');
+    await s.openTab('mesh-pane-b');  // b 是焦点、a 已暂停
+    const switching=s.ui.select(a);  // 不 await：同步段已置 switching=true 并 render（pause(b) 挂起中）
+    assert.equal(s.splitButton.disabled,true,'切换进行中分屏入口必须禁用');
+    assert.equal(s.splitButton.hidden,false,'宽屏双标签：入口可见，只是禁用');
+    s.splitButton.onclick();await s.flush();await switching;
+    assert.equal(s.splitButton.getAttribute('aria-pressed'),'false','切换窗口内的分屏点击必须被拒，aria-pressed 不得虚挂');
+    assert.equal(s.panels().length,1);
+    assert.ok(!s.calls.some(c=>c.name==='remote_tab_control'&&c.args.action==='resume'),'被拒的 toggle 不得恢复任何面板');
+    assert.equal(s.splitButton.disabled,false,'切换完成后入口恢复可用');
+  } finally { s.restore(); }
+});
+
+test('副面板 stage 事件只做局部刷新：不替换焦点面板的 draftField、不丢焦点', async () => {
+  const s=setup({innerWidth:1280});
+  try {
+    const a=await s.openTab('direct-pane-a');
+    const b=await s.openTab('mesh-pane-b');
+    await s.settlePaused(a);
+    s.splitButton.onclick();await s.flush();  // 分屏：b 焦点、a 副面板（已 resume）
+    s.panelOf(b).all().find(n=>n.tagName==='button'&&n.textContent==='启用草稿输入').onclick();await s.flush();
+    const draft=s.panelOf(b).all().find(n=>n.tagName==='textarea'&&n.getAttribute('aria-label')==='当前标签草稿');
+    draft.focus();
+    s.send(a,{kind:'stage',stage:'connecting'});await s.flush();
+    const after=()=>s.panelOf(b).all().find(n=>n.tagName==='textarea'&&n.getAttribute('aria-label')==='当前标签草稿');
+    assert.equal(after(),draft,'副面板 stage 不得整页重建焦点面板 DOM（draftField 必须是同一节点）');
+    assert.equal(globalThis.document.activeElement,draft,'草稿输入焦点不得被副面板事件打断');
+    assert.ok(s.panelOf(a).all().some(n=>n.getAttribute('role')==='status'&&n.textContent.includes('正在连接 SSH')),'副面板自身状态文本仍更新');
+  } finally { s.restore(); }
+});
+
+test('899.5px 小数宽度：分屏入口隐藏且禁用，toggle 被拒（CSS 899.98px 与 JS ≥900 判定闭合）', async () => {
+  const s=setup({innerWidth:899.5});
+  try {
+    const a=await s.openTab('direct-pane-a');
+    await s.openTab('mesh-pane-b');
+    await s.settlePaused(a);
+    assert.equal(s.splitButton.hidden,true,'899–900px 小数宽度必须隐藏分屏入口');
+    assert.equal(s.splitButton.disabled,true,'隐藏入口同时禁用');
+    s.splitButton.onclick();await s.flush();
+    assert.equal(s.splitButton.getAttribute('aria-pressed'),'false');
+    assert.equal(s.panels().length,1);
+    assert.equal(s.nodes['view-content'].getAttribute('data-split'),'1');
+  } finally { s.restore(); }
+});
+
+test('非焦点面板的「移除此找回原文」禁用：找回区只在焦点面板可操作', async () => {
+  const s=setup({innerWidth:1280,rejectDrafts:true});
+  try {
+    const a=await s.openTab('direct-pane-a');
+    const b=await s.openTab('mesh-pane-b');
+    await s.settlePaused(a);
+    s.splitButton.onclick();await s.flush();
+    s.panelOf(b).all().find(n=>n.tagName==='button'&&n.textContent==='启用草稿输入').onclick();await s.flush();
+    const bDraft=()=>s.panelOf(b).all().find(n=>n.tagName==='textarea'&&n.getAttribute('aria-label')==='当前标签草稿');
+    bDraft().value='待拒草稿';bDraft().oninput();
+    s.panelOf(b).all().find(n=>n.tagName==='button'&&n.textContent==='发送草稿').onclick();await s.flush();
+    const dismissOf=()=>s.panelOf(b).all().find(n=>n.tagName==='button'&&n.textContent==='移除此找回原文');
+    assert.ok(dismissOf(),'服务器拒绝后找回区渲染「移除此找回原文」');
+    assert.equal(dismissOf().disabled,false,'焦点面板的找回按钮可用（对照）');
+    await s.ui.select(a);  // 焦点换到 A：B 变非焦点面板
+    assert.equal(dismissOf().disabled,true,'非焦点面板的找回按钮必须禁用（与其他输入入口同口径）');
   } finally { s.restore(); }
 });

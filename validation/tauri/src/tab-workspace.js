@@ -36,7 +36,8 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   function markSinglePanel(tab){body.dataset.role='workbench-panel';body.dataset.tabId=tab.id;body.dataset.focus='true';}
   function clearPanelMark(){delete body.dataset.role;delete body.dataset.tabId;delete body.dataset.focus;}
   function boardEvent(tab,type) {if(tab.summaryIdentity && tab.token)onDashboard({type,hostId:tab.hostId,identity:tab.summaryIdentity,source:tab.token,board:tab.board});}
-  function status(tab,message) {tab.message=message;tab.diagnosticView?.update(tab.diagnostics);if(tabs.activeId===tab.id || splitPartner()===tab)render();}
+  // 副面板的状态文本直接落 DOM：整页 render 可能被焦点面板的输入守卫跳过（走局部刷新），不能依赖重建。
+  function status(tab,message) {tab.message=message;tab.diagnosticView?.update(tab.diagnostics);const partner=splitPartner()===tab;if(tabs.activeId===tab.id || partner){if(partner && tab.messageElement)tab.messageElement.textContent=message;render();}}
   function inputModeMessage(tab) {
     if(tab.unknown)return '输入结果待核实；输入已锁定。';
     if(tab.state!=='active')return '观察未运行；输入已关闭。';
@@ -115,9 +116,10 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(fontDiagnostics && !fontDiagnostics.valid()){fontDiagnostics.close(false);fontDiagnostics=null;}
     const focused=tabs.get(tabs.activeId);
     if(focused?.mode==='direct' && ownsInputFocus(focused,document.activeElement) && !focused.suppressBlur){renderDashboard(focused);return;}
-    // 草稿输入法组合期间的整页重绘会丢组合缓冲——与 direct 焦点守卫同款：推迟到组合结束后的下一次刷新。
-    // （分屏下副面板的状态刷新也走这里，焦点面板的输入过程不被另一侧打断。）
-    if(focused && focused.draftComposing && document.activeElement===focused.draftField){renderDashboard(focused);return;}
+    // 草稿编辑器聚焦（含输入法组合）期间的整页重绘会丢组合缓冲或草稿焦点——与 direct 焦点守卫同款：
+    // 只做看板局部刷新。分屏下副面板事件触发的刷新也不重建焦点面板的 DOM。
+    // 粘贴审查待挂（focusPasteReview）时除外：审查 UI 需要整页渲染才能出现。
+    if(focused && !focused.focusPasteReview && (focused.draftComposing || focused.draftField && document.activeElement===focused.draftField)){renderDashboard(focused);return;}
     // Any unrelated full redraw removes focus from the review; revoke it first.
     if(focused?.pasteReview && !focused.focusPasteReview)focused.pasteReview=null;
     // Only the currently mounted viewports have visible geometry worth retaining.
@@ -265,7 +267,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       if(tab.mode==='direct' && tab.toolbar)tab.toolbarHost.append(tab.toolbar.element);
     }
     if(tab.rejectedDrafts.length){const heading=document.createElement('p');heading.textContent='服务器明确拒绝的原文（只读，不会自动发送）：';panel.append(heading);
-      tab.rejectedDrafts.forEach((value,index)=>{const saved=document.createElement('textarea');saved.value=value;saved.readOnly=true;saved.setAttribute('aria-label','被拒绝的原文');panel.append(saved);const dismiss=document.createElement('button');dismiss.type='button';dismiss.textContent='移除此找回原文';dismiss.onclick=()=>{tab.rejectedDrafts.splice(index,1);render();};panel.append(dismiss);});
+      tab.rejectedDrafts.forEach((value,index)=>{const saved=document.createElement('textarea');saved.value=value;saved.readOnly=true;saved.setAttribute('aria-label','被拒绝的原文');panel.append(saved);const dismiss=document.createElement('button');dismiss.type='button';dismiss.textContent='移除此找回原文';dismiss.disabled=!focused;dismiss.onclick=()=>{tab.rejectedDrafts.splice(index,1);render();};panel.append(dismiss);});
     }
     if(tab.terminal && tab.target && tab.state==='active') {
       const selectText=document.createElement('button');selectText.type='button';selectText.disabled=!tab.selectionTextReady || !focused;tab.selectionTextButton=selectText;selectText.textContent='选择终端文本';selectText.onpointerdown=event=>event.preventDefault();
@@ -581,7 +583,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         if(event.kind==='selection_ready') {if(event.epoch===tab.epoch && paneVisible() && !tab.wantsPause){tab.selectionReady=true;renderDashboard(tab);recheckBlocked(tab);}return;}
         if(event.kind==='stage') {if(!tab.wantsPause && !document.hidden && paneVisible()){tab.diagnostics.stage(event.stage);const text=connectionStageText(event.stage);if(text)status(tab,text);}return;}
         if(event.kind==='observation') {if(!Number.isSafeInteger(event.snapshot?.epoch) || (tab.epoch!==null && event.snapshot.epoch<tab.epoch))return;if(event.snapshot.epoch!==tab.epoch){if(tab.blockedIntent && !tab.blockedVerified)tab.blockedBound=false;tab.selectionTextReady=false;retireDirectPending(tab);tab.suppressBlur=true;tab.board.advance(event.snapshot.epoch);boardEvent(tab,'stale');tab.selectionReady=false;tab.frames=new RemoteFrameQueue();tab.inputRevision++;tab.inputBusy=false;tab.inputReady=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;}tab.epoch=event.snapshot.epoch;tab.state=event.snapshot.phase;if(['paused','pausing','closed'].includes(tab.state)){tab.board.invalidate(tab.state);boardEvent(tab,'stale');tab.selectionReady=false;}status(tab,tab.state==='paused'?'观察已暂停，SSH 保留；需主动恢复。':tab.state==='active'?'观察已连接；输入状态见下方。':'正在切换观察状态…');tab.suppressBlur=false;return;}
-        if(event.kind==='input_ready') {if(event.epoch!==tab.epoch || tab.blockedIntent && !tab.blockedVerified)return;tab.inputReady=true;tab.unknown=event.unknown;tab.recoveryStatus=event.recovery_status;tab.message=event.unknown?'存在未确认的发送结果，输入保持锁定；请核查原目标。':'已收到完整画面，可显式开启草稿输入。';render();return;}
+        if(event.kind==='input_ready') {if(event.epoch!==tab.epoch || tab.blockedIntent && !tab.blockedVerified)return;tab.inputReady=true;tab.unknown=event.unknown;tab.recoveryStatus=event.recovery_status;tab.message=event.unknown?'存在未确认的发送结果，输入保持锁定；请核查原目标。':'已收到完整画面，可显式开启草稿输入。';if(tabs.activeId===tab.id)render();else {if(tab.messageElement)tab.messageElement.textContent=tab.message;updateInputMode(tab);}return;}
         if(event.kind!=='frame' || event.epoch!==tab.epoch || !paneVisible())return;
         if(tab.blockedIntent && !tab.blockedVerified && (!tab.blockedBound || !event.frame?.full || !blockedMatches(tab,tab.target))){void cancel(tab);return;}
         if(!tab.frames.accept(event.frame)){void cancel(tab);return;}
@@ -627,10 +629,11 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   function updateSplitControl() {
     if(!splitButton)return;
     splitButton.hidden=!(isWide() && tabs.list().length>=2);
+    splitButton.disabled=switching || splitButton.hidden;
     splitButton.setAttribute('aria-pressed',String(splitOn));
   }
   async function setSplit(on) {
-    if(on===splitOn)return;
+    if(switching || on===splitOn)return;  // 标签切换进行中不接分屏：避免 aria-pressed 与真实布局脱节
     if(on && (!isWide() || tabs.list().length<2))return;  // 窄窗或不足两个标签：分屏入口不可用
     splitOn=on;
     if(on) {
@@ -639,7 +642,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       if(partner && partner.state==='paused')await resume(partner);  // 后端可见集允许双观察，仅输入焦点独占
     } else {
       const partner=tabs.get(splitPartnerId);splitPartnerId=null;
-      if(partner && ['connecting','starting','active','resuming'].includes(partner.state))await pause(partner);
+      if(partner && partner.id!==tabs.activeId && ['connecting','starting','active','resuming'].includes(partner.state))await pause(partner);
     }
     render();
   }

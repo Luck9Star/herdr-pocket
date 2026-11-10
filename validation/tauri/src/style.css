@@ -126,10 +126,11 @@
 }
 
 /* 桌面工作台（切片 2）：分屏只变更本地布局——两个面板各自沿用连接时选定的观察画布，不发送 PTY resize（docs/05:137）。
-   ≤899px 双保险隐藏分屏入口；分屏网格只出现在 ≥900px 且 JS 判定可分屏（data-split="2"）时，窄窗 DOM 与既有单面板形态一致。 */
+   ≤899.98px 双保险隐藏分屏入口（覆盖 899–900px 间的小数宽度，与 JS isWide()≥900 的判定闭合）；
+   分屏网格只出现在 ≥900px 且 JS 判定可分屏（data-split="2"）时，窄窗 DOM 与既有单面板形态一致。 */
 #workbench-split{margin:8px 0}
 #workbench-split[aria-pressed=true]{background:var(--hp-brandSoft);color:var(--hp-brand);border-color:var(--hp-brandBorder)}
-@media(max-width:899px){#workbench-split{display:none}}
+@media(max-width:899.98px){#workbench-split{display:none}}
 @media(min-width:900px){
   #view-content[data-split="2"]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
   #view-content[data-split="2"] .workbench-panel{min-width:0;border:1px solid var(--hp-termBorder);border-radius:12px;padding:12px}

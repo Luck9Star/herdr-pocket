@@ -27,7 +27,7 @@ jobs:
           '[{"platform":"android","runner":"ubuntu-24.04"}]' ||
           '[{"platform":"android","runner":"ubuntu-24.04"},{"platform":"ios-simulator","runner":"macos-15"},{"platform":"ios-device","runner":"macos-15"},{"platform":"macos","runner":"macos-15"},{"platform":"linux","runner":"ubuntu-24.04"},{"platform":"windows","runner":"windows-2025"}]') }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -97,8 +97,20 @@ jobs:
               ;;
             ios-device)
               # Unsigned real-device archive; sideload targets sign it themselves.
+              # The pinned Heeler/EasyTier candidate is archived once and linked
+              # statically into the app binary; the same job proves the symbols.
+              rustup toolchain install 1.95.0 --profile minimal
+              rustup target add aarch64-apple-ios --toolchain 1.95.0
+              python3 ../native/tool/ios_bundle.py build "$RUNNER_TEMP/ios-native"
+              export HEELER_ET_LIB_DIR="$RUNNER_TEMP/ios-native"
               npm run tauri -- ios init --ci
-              npm run tauri -- ios build --debug --target aarch64 --no-sign --archive-only --ci
+              npm run tauri -- ios build --debug --target aarch64 --features network-easytier --no-sign --archive-only --ci
+              APP_BIN=$(find src-tauri/gen/apple/build -type f -name 'herdr-pocket-tauri-probe' | head -1)
+              test -n "$APP_BIN"
+              nm -g "$APP_BIN" | grep -q 'heeler_et_node_start'
+              nm -g "$APP_BIN" | grep -q 'heeler_et_stream_connect'
+              mkdir -p artifacts/ios-native
+              cp "$RUNNER_TEMP/ios-native/manifest.json" "$RUNNER_TEMP/ios-native/SHA256SUMS" artifacts/ios-native/
               ;;
           esac
       - name: Package test artifacts and provenance

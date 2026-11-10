@@ -1018,7 +1018,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         ]),
         if (auxiliaryModifiers.held) Wrap(spacing:8,runSpacing:8,children:[
           for (final name in [...'abcdefghijklmnopqrstuvwxyz'.split(''),'space'])
-            OutlinedButton(key:ValueKey('remote-base-$name'),onPressed:auxiliaryReady ? () { if (auxiliaryCurrent()) auxiliaryInput(name); } : null,
+            OutlinedButton(key:ValueKey('remote-base-$name'),style:OutlinedButton.styleFrom(minimumSize:const Size(64,48)),
+              onPressed:auxiliaryReady ? () { if (auxiliaryCurrent()) auxiliaryInput(name); } : null,
               child:Text(name == 'space' ? 'Space' : name.toUpperCase())),
         ]),
       if (inputGate.mode == RemoteInputMode.direct) ...[
@@ -1027,7 +1028,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             'Ctrl+Z':'ctrl-z','Ctrl+A':'ctrl-a','Ctrl+E':'ctrl-e','Ctrl+L':'ctrl-l','Ctrl+R':'ctrl-r',
             'Ctrl+U':'ctrl-u','Ctrl+W':'ctrl-w','↑':'up','↓':'down','←':'left','→':'right',
             'Home':'home','End':'end','PgUp':'pgup','PgDn':'pgdn','Enter':'enter'}.entries)
-            OutlinedButton(key:ValueKey('remote-key-${key.key}'),onPressed:auxiliaryReady ? () { if (auxiliaryCurrent()) auxiliaryInput(key.value); } : null,
+            OutlinedButton(key:ValueKey('remote-key-${key.key}'),style:OutlinedButton.styleFrom(minimumSize:const Size(64,48)),
+              onPressed:auxiliaryReady ? () { if (auxiliaryCurrent()) auxiliaryInput(key.value); } : null,
               child:Text(key.key)),
         ]),
         OutlinedButton.icon(key:const ValueKey('remote-function-keys-toggle'),

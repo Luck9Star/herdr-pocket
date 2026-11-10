@@ -260,6 +260,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       icon:const Icon(Icons.hub_outlined),label:const Text('网络管理 · Tailscale / EasyTier / ZeroTier')),
     OutlinedButton.icon(key:const ValueKey('hosts-transfer'),onPressed:catalog.ready && !busy && !catalog.writing && catalog.pendingCreation == null ? transfer : null,
       icon:const Icon(Icons.import_export),label:const Text('加密导出／导入公开主机资料')),
+    if (catalog.ready && catalog.profiles.length >= maxHostProfiles) Padding(padding:const EdgeInsets.symmetric(vertical:12),
+      child:Text('本机主机资料已达 $maxHostProfiles 个上限 · 上方新增按钮已禁用；需先删除或整理既有资料',key:const ValueKey('hosts-add-limit-notice'))),
     if (catalog.pendingCreation != null) ...[
       const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('上次设备身份创建未完成或结果未知 · 已禁止再次创建，不会自动重放。已返回句柄可明确删除；无句柄时需人工核验本机身份，不能按空记录处理。')),
       if ((catalog.pendingCreation!['handle'] as String).isNotEmpty) TextButton(key:const ValueKey('hosts-delete-pending'),
@@ -335,8 +337,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         decoration:BoxDecoration(border:Border.all(color:tabs.activeId == tab.id ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor),borderRadius:BorderRadius.circular(12)),
         child:Row(mainAxisSize:MainAxisSize.min,children:[
           ValueListenableBuilder<HostTabView>(valueListenable:tab.view,builder:(context,view,_) =>
-            TextButton(key:ValueKey('host-tab-${tab.id}'),onPressed:() => tabs.select(tab.id),child:ConstrainedBox(
-              constraints:const BoxConstraints(maxWidth:260),child:Text('${tab.label} · ${tab.networkLabel}\n${view.target} · ${view.label}',maxLines:2,overflow:TextOverflow.ellipsis)))),
+            MergeSemantics(child:Semantics(selected:tabs.activeId == tab.id,child:TextButton(key:ValueKey('host-tab-${tab.id}'),onPressed:() => tabs.select(tab.id),child:ConstrainedBox(
+              constraints:const BoxConstraints(maxWidth:260),child:Text('${tab.label} · ${tab.networkLabel}\n${view.target} · ${view.label}',maxLines:2,overflow:TextOverflow.ellipsis)))))),
           IconButton(key:ValueKey('host-tab-close-${tab.id}'),tooltip:'关闭本地标签，不终止远端任务',onPressed:() => tabs.close(tab.id),icon:const Icon(Icons.close,size:18)),
         ]))),
     ]));
@@ -352,6 +354,9 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     if (tabs.active != null) ConstrainedBox(constraints:BoxConstraints(maxHeight:constraints.maxHeight*.28),child:SingleChildScrollView(child:workspaceSummary())),
     if (tabs.notice != null) ConstrainedBox(constraints:BoxConstraints(maxHeight:constraints.maxHeight*.12),child:SingleChildScrollView(child:Padding(padding:const EdgeInsets.symmetric(horizontal:16),child:Text(tabs.notice!)))),
     if (tabs.active != null) ConstrainedBox(constraints:BoxConstraints(maxHeight:constraints.maxHeight*.12),child:SingleChildScrollView(child:Padding(padding:const EdgeInsets.symmetric(horizontal:16,vertical:4),child:Text('隐藏标签暂停观察与输入；连接可保留，返回后需主动恢复并等待原目标新画面。',style:Theme.of(context).textTheme.bodySmall)))),
-    Expanded(child:IndexedStack(index:tabs.activeIndex+1,children:[board(),for (final tab in tabs.tabs) KeyedSubtree(key:ValueKey('host-tab-view-${tab.id}'),child:tabNavigator(tab))])),
+    // The nested tab Navigator installs a modal barrier whose BlockSemantics
+    // climbs to the nearest semantic boundary and would otherwise drop the tab
+    // strip, workspace summary and notices from the semantics tree. Contain it.
+    Expanded(child:Semantics(container:true,child:IndexedStack(index:tabs.activeIndex+1,children:[board(),for (final tab in tabs.tabs) KeyedSubtree(key:ValueKey('host-tab-view-${tab.id}'),child:tabNavigator(tab))]))),
   ])))));
 }

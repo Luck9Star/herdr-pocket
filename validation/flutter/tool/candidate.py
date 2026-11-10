@@ -56,14 +56,14 @@ def apply(destination):
         if regression.get('source') != 'regression/selector_preservation.dart':
             raise ValueError('Unexpected selector regression source')
         regression_source = SOURCE / regression['source']
-        if digest(regression_source.read_bytes()) != regression['sha256']:
+        if digest(regression_source.read_bytes().replace(b'\r\n', b'\n')) != regression['sha256']:
             raise ValueError('Selector regression checksum mismatch')
         existing = destination / regression['source']
         if (regression_wrapper.exists() or regression_wrapper.is_symlink()
                 or (destination / 'test').is_symlink()
                 or (destination / 'regression').is_symlink()
                 or existing.is_symlink()
-                or (existing.exists() and digest(existing.read_bytes()) != regression['sha256'])):
+                or (existing.exists() and digest(existing.read_bytes().replace(b'\r\n', b'\n')) != regression['sha256'])):
             raise ValueError('Refusing existing or changed candidate regression')
     with urllib.request.urlopen(metadata['archiveUrl'], timeout=60) as response:
         archive = response.read(64 * 1024 * 1024 + 1)

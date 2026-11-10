@@ -527,9 +527,10 @@ class PublicExchangeGuards(unittest.TestCase):
         if limit is None:
             limit = {'request.json': 2048, 'result.json': 8192, 'stage': 40}[name]
         reply = subprocess.CompletedProcess([], code, stdout, stderr)
-        with patch.object(gui, 'adb', return_value=reply) as adb:
+        with patch.object(gui, 'PUBLIC_READ_RETRY_DELAYS', (0, 0)), \
+             patch.object(gui, 'adb', return_value=reply) as adb:
             value = gui.read_public(self.relative + '/' + name, limit)
-        adb.assert_called_once_with('shell', '-T', 'run-as', gui.PACKAGE,
+        adb.assert_called_with('shell', '-T', 'run-as', gui.PACKAGE,
             'head', '-c', str(limit + 1), self.relative + '/' + name, check=False)
         return value
 
@@ -572,6 +573,22 @@ class PublicExchangeGuards(unittest.TestCase):
             with self.subTest(diagnostic=diagnostic):
                 with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_public_request_read_failed$'):
                     self.read(stderr=diagnostic, code=1)
+
+    def test_transient_read_failure_is_retried_then_succeeds(self):
+        failure = subprocess.CompletedProcess([], 1, b'', b'transport hiccup')
+        ok = subprocess.CompletedProcess([], 0, b'host_authorization', b'')
+        with patch.object(gui, 'PUBLIC_READ_RETRY_DELAYS', (0, 0)), \
+             patch.object(gui, 'adb', side_effect=[failure, failure, ok]) as adb:
+            self.assertEqual(gui.read_public(self.relative + '/stage', 40), b'host_authorization')
+        self.assertEqual(adb.call_count, 3)
+
+    def test_persistent_read_failure_exhausts_two_retries_and_keeps_the_static_code(self):
+        failure = subprocess.CompletedProcess([], 1, b'', b'PRIVATE_DIAGNOSTIC')
+        with patch.object(gui, 'PUBLIC_READ_RETRY_DELAYS', (0, 0)), \
+             patch.object(gui, 'adb', return_value=failure) as adb:
+            with self.assertRaisesRegex(gui.DeviceFailure, '^flutter_android_public_signer_read_failed$'):
+                gui.read_public(self.relative + '/signer.json', 1024)
+        self.assertEqual(adb.call_count, 3)
 
     def test_complete_wrong_request_schema_and_non_json_never_leave_static_errors(self):
         original = json.loads(self.request())

@@ -462,7 +462,18 @@ class AndroidStageRetryTests(unittest.TestCase):
         self.assertEqual(len(calls),2)
         self.assertEqual(progress.data['retriedStages'],{'blocked_target_entry':1})
 
-    def test_permanent_miss_fails_with_the_original_code_after_one_replay(self):
+    def test_second_consecutive_miss_replays_again_then_succeeds(self):
+        calls=[]
+        def action():
+            calls.append(1)
+            if len(calls)<3:raise android.GuiFailure('android_control_missing_host-return-home')
+            return 'ok'
+        progress=self.progress()
+        self.assertEqual(android.retry_stage(progress,'blocked_target_entry',action),'ok')
+        self.assertEqual(len(calls),3)
+        self.assertEqual(progress.data['retriedStages'],{'blocked_target_entry':2})
+
+    def test_permanent_miss_fails_with_the_original_code_after_two_replays(self):
         calls=[]
         def action():
             calls.append(1);raise android.GuiFailure('android_stale_marker_missing')
@@ -470,8 +481,8 @@ class AndroidStageRetryTests(unittest.TestCase):
         with self.assertRaises(android.GuiFailure) as caught:
             android.retry_stage(progress,'stop_observation',action)
         self.assertEqual(str(caught.exception),'android_stale_marker_missing')
-        self.assertEqual(len(calls),2)
-        self.assertEqual(progress.data['retriedStages'],{'stop_observation':1})
+        self.assertEqual(len(calls),3)
+        self.assertEqual(progress.data['retriedStages'],{'stop_observation':2})
         progress.publish.assert_called()
 
     def test_non_whitelisted_codes_never_replay(self):
@@ -499,8 +510,8 @@ class AndroidStageRetryTests(unittest.TestCase):
             progress=self.progress()
             with self.subTest(code=code),self.assertRaises(android.GuiFailure):
                 android.retry_stage(progress,'blocked_target_entry',action)
-            self.assertEqual(len(calls),2)
-            self.assertEqual(progress.data['retriedStages'],{'blocked_target_entry':1})
+            self.assertEqual(len(calls),3)
+            self.assertEqual(progress.data['retriedStages'],{'blocked_target_entry':2})
 
     def test_recover_runs_between_attempts_and_a_failed_recover_still_replays(self):
         calls=[];recover=Mock(side_effect=android.GuiFailure('android_home_not_visible'))

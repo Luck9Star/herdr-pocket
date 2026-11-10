@@ -856,6 +856,12 @@ def checked_public_payload(raw, name):
     return raw
 
 
+# adb reads of device public files flake transiently (runs 0015-0017, r5); the
+# read is pure (file-polling model), so bounded retries are safe. Pending files
+# are not retried here: wait_public owns that cadence.
+PUBLIC_READ_RETRY_DELAYS = (2.0, 5.0)
+
+
 def read_public(relative, limit):
     if not re.fullmatch(r'cache/herdr-flutter-android-[0-9]+/(?:request\.json|result\.json|signer\.json|failure\.json|checkpoint\.json|stage)', relative):
         raise DeviceFailure('flutter_android_public_path_invalid')
@@ -864,9 +870,14 @@ def read_public(relative, limit):
         raise DeviceFailure('flutter_android_public_limit_invalid')
     # shell v2 (without -x) carries remote exit status and separate stderr.
     # exec-out has neither guarantee and can present run-as/head errors as data.
-    reply = adb('shell', '-T', 'run-as', PACKAGE, 'head', '-c', str(limit + 1), relative, check=False)
-    if public_file_pending(reply, relative):
-        return None
+    for attempt in range(3):
+        reply = adb('shell', '-T', 'run-as', PACKAGE, 'head', '-c', str(limit + 1), relative, check=False)
+        if public_file_pending(reply, relative):
+            return None
+        if not (reply.returncode or reply.stderr):
+            break
+        if attempt < 2:
+            time.sleep(PUBLIC_READ_RETRY_DELAYS[attempt])
     if len(reply.stdout) > limit or len(reply.stderr) > limit:
         raise DeviceFailure('flutter_android_public_exchange_oversize')
     if reply.returncode or reply.stderr:

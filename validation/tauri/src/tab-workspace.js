@@ -562,7 +562,19 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(tab.blockedIntent){tab.target=null;tab.blockedVerified=false;tab.blockedBound=false;tab.blockedFailed=false;tab.blockedSelectionRevision=null;if(tab.element)tab.element.hidden=true;}
     const token=tabs.begin(tab.id);tab.token=token;tab.summaryIdentity=actual;onDashboard({type:'starting',hostId:tab.hostId,identity:actual,source:token});tab.epoch=null;tab.selectionTextReady=false;tab.inputReady=false;tab.inputEpoch=null;tab.inputBusy=false;tab.selecting=false;tab.mode='observe';tab.inputRevision++;tab.queue.clear();const previousBoard=tab.board;tab.board=new SessionDashboard();tab.board.panes=previousBoard.panes;tab.board.capturedAt=previousBoard.capturedAt;tab.pasteReview=null;tab.selectionIntent=tab.target;tab.selectionReady=false;tab.wantsPause=false;tab.state='connecting';tab.message='正在连接并核验目标…';tab.frames=new RemoteFrameQueue();render();
     try {
-      const generation=await invoke('remote_tab_reserve',{tabId:tab.id,clientGeneration:token.generation,hostId:tab.hostId,expectedTarget:reviewed.target,expectedDeviceFingerprint:reviewed.deviceFingerprint,expectedNetworkProfileId:reviewed.networkProfileId,expectedNetworkRevision:reviewed.networkRevision});
+      let generation;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          generation = await invoke('remote_tab_reserve',{tabId:tab.id,clientGeneration:token.generation,hostId:tab.hostId,expectedTarget:reviewed.target,expectedDeviceFingerprint:reviewed.deviceFingerprint,expectedNetworkProfileId:reviewed.networkProfileId,expectedNetworkRevision:reviewed.networkRevision});
+          break;
+        } catch (err) {
+          if (String(err) === 'connection_active' && attempt < 4 && current(tab,token) && !tab.closing) {
+            await new Promise(r => setTimeout(r, 100));
+            continue;
+          }
+          throw err;
+        }
+      }
       if(!current(tab,token) || tab.closing) {await invoke('remote_tab_cancel',{tabId:tab.id,clientGeneration:token.generation,generation});return;}
       tab.nativeGeneration=generation;
       if(tabs.activeId!==tab.id && splitPartner()!==tab){await cancel(tab);return;}

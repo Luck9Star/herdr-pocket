@@ -434,8 +434,20 @@ mod remote_flow_tests {
     }
 }
 #[tauri::command]
-fn remote_tab_reserve(tab_id:String,client_generation:u64,host_id:String,expected_target:Target,expected_device_fingerprint:String,expected_network_profile_id:Option<String>,expected_network_revision:Option<u32>,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,ops:State<'_,network_identity::Operations>)->Result<u64,String> {
+async fn remote_tab_reserve(tab_id:String,client_generation:u64,host_id:String,expected_target:Target,expected_device_fingerprint:String,expected_network_profile_id:Option<String>,expected_network_revision:Option<u32>,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,ops:State<'_,network_identity::Operations>)->Result<u64,String> {
     let _op=ops.enter()?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let is_clear = {
+            let f = flow.lock().map_err(|_| "state_unavailable")?;
+            f.owner.is_none()
+        };
+        if is_clear { break; }
+        if std::time::Instant::now() >= deadline {
+            return Err("connection_active".into());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
     let mut flow=flow.lock().map_err(|_|"state_unavailable")?;
     let record=hosts.get(&host_id)?;
     if flow.owner.is_some() {return Err("connection_active".into());}

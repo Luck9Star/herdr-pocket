@@ -1046,6 +1046,9 @@ class RemoteReadOnlyAdapter {
             if (rpc['id'] != id || rpc['error'] != null || rpc['ok'] == false || rpc['result'] is! Map) {
               throw const RemoteFailure('snapshot_rejected');
             }
+            // The snapshot arrived; a later session-binding rejection must not
+            // erase that. Rust records it before its binding checks too.
+            e.snapshotReceived = true;
             final parsed = parseSnapshotDashboard(config,Map<String,dynamic>.from(rpc['result'] as Map),a.generation);
             return RemoteDashboard(parsed.generation,parsed.session,parsed.panes,syncedAt:_clock().toUtc(),
               source:RemoteDashboardSource.connected(config,connectedSocketRoute(socket)),observationEpoch:observationEpoch);
@@ -1060,7 +1063,7 @@ class RemoteReadOnlyAdapter {
       }
       phase('snapshot');
       final dashboard = await snapshot();
-      e.snapshotReceived = true; a.dashboard = dashboard; e.paneCount = dashboard.panes.length;
+      a.dashboard = dashboard; e.paneCount = dashboard.panes.length;
       if (onDashboard != null) {
         // Capability discovery is side-effect-free; stock 0.9.5 replies with an
         // error and remains read-only. This is never inferred from version alone.
@@ -1352,8 +1355,10 @@ class RemoteReadOnlyAdapter {
           _check(a); needsSnapshot = true;
         } finally {
           if (!a.observationPaused && a.observationEpoch == epoch) e.observationPhase = 'retiring';
+          // Nulling inputTarget withdraws every write proof (_canWrite and
+          // journal tickets re-check it); fullFrameReceived stays monotonic
+          // evidence of the received full frame, like the Rust probe.
           a.inputTarget = null;
-          if (onDashboard != null) e.fullFrameReceived = false;
           if (observe != null) _stopObserver(observe);
           if (identical(a.observe,observe)) a.observe = null;
           if (observe != null && _valid(a)) await _retireChannel(a,observe,role:RemoteChannelRole.observation);

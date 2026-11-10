@@ -1733,25 +1733,37 @@ def run_android(args, root, env, config, approval):
         blocked_evidence=None
         board_evidence=None
         device_evidence=None
-        def return_home():
-            # Best-effort stage entry state: close a half-open blocked view first.
+        # recover 必须恢复到该阶段第一条交互可执行的状态。blocked_target_entry、
+        # board_search 与 device_impact_review 的第一条交互都是在远端页点击
+        # #host-return-home，所以每个 recover 都必须终于远端页——r5/r6 双模拟器的
+        # 确定性重试失败正是旧的 return_home 把 app 导去了主机看板：重放的第一步
+        # 在看板上点不到该按钮（android_control_missing_host-return-home）。
+        def reopen_remote_page():
+            # 若失败停在主机看板：先清残留过滤让受阻卡重新可见，再从卡片「打开」
+            # 回到远端页。打开只恢复本地表单草稿，不建立连接，无设备副作用。
+            if not browser.evaluate("!document.querySelector('#host-home').hidden"):
+                return  # Already on the remote page; the replay starts there.
+            if browser.evaluate("document.querySelector('#host-filter-reset') && !document.querySelector('#host-filter-reset').hidden"):
+                browser.click('#host-filter-reset')
+            card=_blocked_card(browser,checked_targets(approval.blocked_targets))
+            browser.click_named(card['selector']+' .saved-host-actions','打开')
+            wait_for(lambda: browser.evaluate("!document.querySelector('#host-restore-panel').hidden"),'android_blocked_original_form_missing')
+        def close_blocked_view():
             if browser.evaluate("document.querySelector('#tab-workspace') && !document.querySelector('#tab-workspace').hidden"):
                 browser.click_named('#view-content','关闭此标签')
                 wait_for(lambda: browser.evaluate("document.querySelector('#tab-workspace').hidden"),'android_blocked_original_form_missing')
-            browser.click('#host-return-home')
-            wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"),'android_home_not_visible')
+            reopen_remote_page()
         def reset_board_filters():
-            return_home()
-            if browser.evaluate("document.querySelector('#host-filter-reset') && !document.querySelector('#host-filter-reset').hidden"):
-                browser.click('#host-filter-reset')
+            reopen_remote_page()
         def close_device_review():
             if browser.evaluate("!!document.querySelector(%s)" % json.dumps(DEVICE_REVIEW_SELECTOR)):
                 browser.click_named(DEVICE_REVIEW_SELECTOR,'关闭','android_device_impact_entry_lost')
                 wait_for(lambda: browser.evaluate("!document.querySelector(%s)" % json.dumps(DEVICE_REVIEW_SELECTOR)),'android_device_impact_entry_lost')
+            reopen_remote_page()
         if not guarded:
             progress.phase('blocked_target_entry')
             blocked_evidence=retry_stage(progress,'blocked_target_entry',
-                lambda: exercise_blocked_target(browser,approval,config),recover=return_home)
+                lambda: exercise_blocked_target(browser,approval,config),recover=close_blocked_view)
             progress.mark('blockedTargetVerified')
             progress.phase('board_search')
             board_evidence=retry_stage(progress,'board_search',

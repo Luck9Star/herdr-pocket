@@ -689,31 +689,46 @@ def safe_device_result(raw, guarded=False, tui=False):
     return clean
 
 
-def adb(*args, check=True, data=None, timeout=30):
-    try:
-        result = subprocess.run(['adb', '-s', SERIAL, *map(str, args)], input=data,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        # A device that disappeared mid-run most often surfaces as a hung adb
-        # call, not as a non-zero exit status. Classify that path too, so the
-        # report still names the verb and the reason without leaking output.
-        failure = DeviceFailure('flutter_android_adb_unavailable')
-        failure.adb_diagnostic = {'command': _adb_command_class(args),
-                                   'reason': 'timeout' if isinstance(exc, subprocess.TimeoutExpired) else 'oserror',
-                                   'timeoutSeconds': int(timeout)}
-        raise failure from None
-    if len(result.stdout) > 1_048_576 or len(result.stderr) > 1_048_576:
-        raise DeviceFailure('flutter_android_adb_output_limit')
-    if check and result.returncode:
-        # Classify the failing call without ever leaving the device: only the
-        # adb verb, the exit status and the output sizes may be published.
-        failure = DeviceFailure('flutter_android_adb_failed')
-        failure.adb_diagnostic = {'command': _adb_command_class(args),
-                                   'exitCode': int(result.returncode),
-                                   'stdoutBytes': len(result.stdout),
-                                   'stderrBytes': len(result.stderr)}
-        raise failure
-    return result
+# adb 客户端在模拟器短暂离线/挂死（0015-0017）时以非零退出加固定 stderr 报错；
+# 逐字枚举这些已知瞬态，不做模糊匹配，避免吞掉真实失败。
+ADB_TRANSIENT_STDERR = ('error: device offline', 'error: closed', 'error: timeout',
+                        'error: device unauthorized')
+ADB_TRANSIENT_RETRY_DELAYS = (2.0, 5.0)
+
+
+def adb(*args, check=True, data=None, timeout=30, transient_retry=False):
+    # transient_retry 是白名单式标注，只给只读 shell 调用点（getprop/dumpsys/
+    # pm list/settings get 等）。input/am/tee/mv/settings put 等写命令重复执行
+    # 有副作用，绝不标注，也绝不在这里按 argv 猜测命令是否只读。
+    for attempt in range(3):
+        try:
+            result = subprocess.run(['adb', '-s', SERIAL, *map(str, args)], input=data,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=timeout)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            # A device that disappeared mid-run most often surfaces as a hung adb
+            # call, not as a non-zero exit status. Classify that path too, so the
+            # report still names the verb and the reason without leaking output.
+            failure = DeviceFailure('flutter_android_adb_unavailable')
+            failure.adb_diagnostic = {'command': _adb_command_class(args),
+                                       'reason': 'timeout' if isinstance(exc, subprocess.TimeoutExpired) else 'oserror',
+                                       'timeoutSeconds': int(timeout)}
+            raise failure from None
+        if len(result.stdout) > 1_048_576 or len(result.stderr) > 1_048_576:
+            raise DeviceFailure('flutter_android_adb_output_limit')
+        if check and result.returncode:
+            if (transient_retry and attempt < 2 and
+                    result.stderr.decode('utf-8', errors='replace').strip() in ADB_TRANSIENT_STDERR):
+                time.sleep(ADB_TRANSIENT_RETRY_DELAYS[attempt])
+                continue
+            # Classify the failing call without ever leaving the device: only the
+            # adb verb, the exit status and the output sizes may be published.
+            failure = DeviceFailure('flutter_android_adb_failed')
+            failure.adb_diagnostic = {'command': _adb_command_class(args),
+                                       'exitCode': int(result.returncode),
+                                       'stdoutBytes': len(result.stdout),
+                                       'stderrBytes': len(result.stderr)}
+            raise failure
+        return result
 
 
 def _adb_command_class(args):
@@ -734,7 +749,7 @@ def text(*args, **kwargs):
 
 
 def package_present():
-    return 'package:' + PACKAGE in text('shell', 'pm', 'list', 'packages', PACKAGE).splitlines()
+    return 'package:' + PACKAGE in text('shell', 'pm', 'list', 'packages', PACKAGE, transient_retry=True).splitlines()
 
 
 def checked_flutter_version():
@@ -925,8 +940,8 @@ class ClipboardCheckpoints:
 
     def system_ime(self, label, visible, *, after_system_back=False):
         try:
-            return wait_system_ime(lambda: (text('shell', 'dumpsys', 'input_method'),
-                text('shell', 'dumpsys', 'window', 'displays')), PACKAGE, visible)
+            return wait_system_ime(lambda: (text('shell', 'dumpsys', 'input_method', transient_retry=True),
+                text('shell', 'dumpsys', 'window', 'displays', transient_retry=True)), PACKAGE, visible)
         except SystemImeFailure as error:
             # Persist before unwinding the owned Flutter tool/app. The original
             # failure still propagates, including if evidence cannot be written.
@@ -1076,16 +1091,16 @@ def _run(args, root, env, config, approval, owned_process):
     devices = [line.split()[:2] for line in text('devices').splitlines()[1:] if line.strip()]
     if devices != [[SERIAL, 'device']]:
         raise DeviceFailure('flutter_android_existing_or_non_emulator_device')
-    if (text('shell', 'getprop', 'ro.kernel.qemu') != '1' or
-            text('shell', 'getprop', 'ro.build.version.sdk') != '35' or
-            text('shell', 'am', 'get-current-user') != '0'):
+    if (text('shell', 'getprop', 'ro.kernel.qemu', transient_retry=True) != '1' or
+            text('shell', 'getprop', 'ro.build.version.sdk', transient_retry=True) != '35' or
+            text('shell', 'am', 'get-current-user', transient_retry=True) != '0'):
         raise DeviceFailure('flutter_android_avd_api_or_user_mismatch')
     if package_present():
         raise DeviceFailure('flutter_android_package_already_present')
     # Only this already-verified, fresh, disposable AVD is changed. Hardware
     # keyboard emulation otherwise suppresses the real software IME window.
     adb('shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
-    if text('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard') != '1':
+    if text('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard', transient_retry=True) != '1':
         raise DeviceFailure('android_system_ime_fixture_configuration_failed')
     reverse = 'tcp:' + str(config['port'])
     if any(reverse in line.split()[1:2] for line in text('reverse', '--list').splitlines()):

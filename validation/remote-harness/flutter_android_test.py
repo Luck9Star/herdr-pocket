@@ -884,6 +884,42 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(caught.exception.adb_diagnostic,
                          {'command': 'shell', 'exitCode': 1, 'stdoutBytes': 0, 'stderrBytes': 14})
 
+    def test_a_transient_offline_adb_call_is_retried_and_succeeds(self):
+        offline=subprocess.CompletedProcess([], 1, b'', b'error: device offline\n')
+        healthy=subprocess.CompletedProcess([], 0, b'ok', b'')
+        sleeps=[]
+        with patch.object(gui.subprocess, 'run', side_effect=[offline, healthy]) as run, \
+                patch.object(gui.time, 'sleep', side_effect=sleeps.append):
+            result=gui.adb('shell', 'dumpsys', 'input_method', transient_retry=True)
+        self.assertEqual(result.stdout, b'ok')
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(sleeps, [2.0])
+        # Exhausted retries still surface the original code and the last diagnostic.
+        with patch.object(gui.subprocess, 'run', return_value=offline) as run, \
+                patch.object(gui.time, 'sleep'):
+            with self.assertRaises(gui.DeviceFailure) as caught:
+                gui.adb('shell', 'dumpsys', 'input_method', transient_retry=True)
+        self.assertEqual(str(caught.exception), 'flutter_android_adb_failed')
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual(caught.exception.adb_diagnostic,
+                         {'command': 'shell', 'exitCode': 1, 'stdoutBytes': 0, 'stderrBytes': 22})
+
+    def test_non_transient_stderr_and_unmarked_calls_never_retry(self):
+        with patch.object(gui.subprocess, 'run',
+                return_value=subprocess.CompletedProcess([], 1, b'', b'error: something else')) as run:
+            with self.assertRaises(gui.DeviceFailure):
+                gui.adb('shell', 'dumpsys', 'input_method', transient_retry=True)
+        self.assertEqual(run.call_count, 1)
+        # Write commands stay unmarked: even the exact transient stderr must not
+        # replay an input/am/tee call (r6 device-key offline hit a read; a replayed
+        # write would duplicate its device side effect).
+        with patch.object(gui.subprocess, 'run',
+                return_value=subprocess.CompletedProcess([], 1, b'', b'error: device offline\n')) as run:
+            with self.assertRaises(gui.DeviceFailure) as caught:
+                gui.adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+        self.assertEqual(str(caught.exception), 'flutter_android_adb_failed')
+        self.assertEqual(run.call_count, 1)
+
     def test_a_hung_adb_call_reports_its_verb_and_reason_without_output(self):
         with patch.object(gui.subprocess, 'run', side_effect=subprocess.TimeoutExpired('adb', 30)):
             with self.assertRaises(gui.DeviceFailure) as caught:

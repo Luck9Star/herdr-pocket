@@ -538,6 +538,18 @@ class AndroidStageRetryTests(unittest.TestCase):
             self.assertIn(anchor,flow)
         self.assertEqual(flow.count('retry_stage(progress,'),8)
 
+    def test_host_board_stage_recovers_stay_on_the_remote_page(self):
+        source=(HERE/'android_gui.py').read_text()
+        recovers=source[source.index('def reopen_remote_page():'):source.index("progress.phase('blocked_target_entry')")]
+        # blocked_target_entry/board_search/device_impact_review 的第一条交互都是
+        # 在远端页点击 #host-return-home，所以 recover 必须终于远端页。recover 自己
+        # 点同一个按钮会把 app 导航去主机看板，重放的第一步在那里必然点不到按钮
+        # （android_control_missing_host-return-home，r5/r6 双模拟器确定性失败）。
+        self.assertNotIn("click('#host-return-home')",recovers)
+        self.assertIn("recover=close_blocked_view",source)
+        self.assertIn("recover=reset_board_filters",source)
+        self.assertIn("recover=close_device_review",source)
+
     def test_retried_stages_field_is_reported_without_touching_evidence_booleans(self):
         self.assertNotIn('retriedStages',android.AndroidProgress({}).data)
         source=(HERE/'android_gui.py').read_text()

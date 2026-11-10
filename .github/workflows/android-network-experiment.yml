@@ -96,7 +96,8 @@ jobs:
           name: input-fixture-${{ github.sha }}
           path: ${{ runner.temp }}/input-fixture
       - name: Test pairing and retained SSH observation with an isolated host
-        if: "!cancelled() && steps.safety.outcome == 'success' && steps.renderer.outcome == 'success'"
+        # run-ci.py is codex-branch-only by design; release tags skip the harness.
+        if: "!cancelled() && startsWith(github.ref, 'refs/heads/') && steps.safety.outcome == 'success' && steps.renderer.outcome == 'success'"
         env:
           GUARDED_INPUT: ${{ needs.input-fixture.result == 'success' }}
         run: |
@@ -466,6 +467,8 @@ jobs:
   zerotier-keystore:
     # The device identity store must work on the platform AndroidKeyStore, not
     # only against the synthetic provider of the offline JVM suite.
+    # with-android-emulator.sh is codex-branch-only; release tags skip it.
+    if: startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:

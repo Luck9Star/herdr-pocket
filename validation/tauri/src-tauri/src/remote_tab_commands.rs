@@ -20,7 +20,7 @@ impl Drop for TabCleanup {fn drop(&mut self) {if let Ok(mut f)=self.flow.lock(){
 #[tauri::command]
 pub async fn remote_tab_observe(tab_id:String,client_generation:u64,generation:u64,pane_id:String,terminal_id:String,canvas:Option<herdr_readonly_transport::ObserveCanvas>,on_event:Channel<TabEvent>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,ops:State<'_,network_identity::Operations>,app:tauri::AppHandle)->Result<(),String> {
     let canvas=canvas.unwrap_or_default().validate().map_err(str::to_string)?;
-    let cancel={let mut f=flow.lock().map_err(|_|"state_unavailable")?;if f.tabs.visible.as_ref()!=Some(&(tab_id.clone(),client_generation,generation)){f.tabs.cancel(&tab_id,client_generation,generation);return Err("tab_stale".into());}f.tabs.claim(&tab_id,client_generation,generation).map_err(str::to_string)?};
+    let cancel={let mut f=flow.lock().map_err(|_|"state_unavailable")?;if !f.tabs.is_visible(&tab_id,client_generation,generation){f.tabs.cancel(&tab_id,client_generation,generation);return Err("tab_stale".into());}f.tabs.claim(&tab_id,client_generation,generation).map_err(str::to_string)?};
     let _cleanup=TabCleanup {flow:flow.inner().clone(),tab:tab_id.clone(),owner:client_generation,generation};
     let result=tab_observe_inner(&tab_id,client_generation,generation,&pane_id,&terminal_id,canvas,on_event,cancel,&flow,&pairing,&hosts,&nodes,&ops,&app).await;
     let accepted=flow.lock().map_err(|_|"state_unavailable")?.tabs.finish(&tab_id,client_generation,generation);
@@ -57,7 +57,7 @@ async fn tab_observe_inner(tab:&str,owner:u64,generation:u64,pane:&str,terminal:
     let watch_flow=flow.clone();let watch_tab=tab.to_owned();let watch_event=on_event.clone();let watch_cancel=cancel.clone();
     control.set_dashboard_listener(Arc::new(move |update| {
         let accepted=watch_flow.lock().ok().is_some_and(|mut f| {
-            if f.tabs.visible.as_ref()!=Some(&(watch_tab.clone(),owner,generation)) || watch_cancel.is_cancelled(){return false;}
+            if !f.tabs.is_visible(&watch_tab,owner,generation) || watch_cancel.is_cancelled(){return false;}
             let Some(s)=f.tabs.get_mut(&watch_tab).filter(|s|s.owner==owner && s.generation==generation)else{return false;};
             let Some(epoch)=s.control.as_ref().map(|c|c.snapshot().epoch)else{return false;};
             s.dashboard.update(epoch,&update)
@@ -107,7 +107,7 @@ async fn tab_observe_inner(tab:&str,owner:u64,generation:u64,pane:&str,terminal:
 #[tauri::command]
 pub fn remote_tab_ack(tab_id:String,client_generation:u64,generation:u64,epoch:u64,seq:u64,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
     let mut f=flow.lock().map_err(|_|"state_unavailable")?;
-    if f.tabs.visible.as_ref()!=Some(&(tab_id.clone(),client_generation,generation)){return Err("tab_stale".into());}
+    if !f.tabs.is_visible(&tab_id,client_generation,generation){return Err("tab_stale".into());}
     let session=f.tabs.get_mut(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation).ok_or("tab_stale")?;
     if session.control.as_ref().is_none_or(|c|c.snapshot().epoch!=epoch) || !session.ack.as_ref().is_some_and(|(g,e,n,_)|*g==generation && *e==epoch && *n==seq){return Err("stale_ack".into());}
     session.ack.take().unwrap().3.send(()).map_err(|_|"cancelled".into())
@@ -115,11 +115,11 @@ pub fn remote_tab_ack(tab_id:String,client_generation:u64,generation:u64,epoch:u
 
 #[tauri::command]
 pub async fn remote_tab_control(tab_id:String,client_generation:u64,generation:u64,action:String,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<ObservationSnapshot,String> {
-    let control={let f=flow.lock().map_err(|_|"state_unavailable")?;if action=="resume" && f.tabs.visible.as_ref()!=Some(&(tab_id.clone(),client_generation,generation)){return Err("tab_stale".into());}f.tabs.get(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation).and_then(|s|s.control.clone()).ok_or("tab_stale")?};
+    let control={let f=flow.lock().map_err(|_|"state_unavailable")?;if action=="resume" && !f.tabs.is_visible(&tab_id,client_generation,generation){return Err("tab_stale".into());}f.tabs.get(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation).and_then(|s|s.control.clone()).ok_or("tab_stale")?};
     // Pause retires the input inside the shared control before local handles are dropped.
     let ack=match action.as_str() {"pause"=>control.pause(),"resume"=>control.resume(),_=>return Err("invalid_control".into())};
     let ack=match ack {Ok(ack)=>ack,Err(error)=>{flow.lock().map_err(|_|"state_unavailable")?.tabs.cancel(&tab_id,client_generation,generation);return Err(error.into());}};
-    if action=="pause" {let mut f=flow.lock().map_err(|_|"state_unavailable")?;if f.tabs.visible.as_ref().is_some_and(|(id,o,g)|id==&tab_id && *o==client_generation && *g==generation){f.tabs.visible=None;}if f.tabs.focus.as_ref().is_some_and(|(id,o,g,_)|id==&tab_id && *o==client_generation && *g==generation){f.tabs.focus=None;}if let Some(s)=f.tabs.get_mut(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation) {s.input.take();s.ack.take();}}
+    if action=="pause" {let mut f=flow.lock().map_err(|_|"state_unavailable")?;if f.tabs.clear_visible(&tab_id,client_generation,generation) {if let Some(s)=f.tabs.get_mut(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation) {s.input.take();s.ack.take();}}}
     ack.await.map_err(str::to_string)
 }
 
@@ -136,19 +136,17 @@ pub fn remote_tab_input_mode(tab_id:String,client_generation:u64,generation:u64,
     let mut f=flow.lock().map_err(|_|"state_unavailable")?;
     let focused=input_mode_focus(&mode,review).map_err(str::to_string)?;
     let key=(tab_id.clone(),client_generation,generation,epoch);
-    if f.tabs.visible.as_ref()!=Some(&(tab_id.clone(),client_generation,generation)){return Err("input_stale".into());}
-    if mode!="observe" && f.tabs.focus.as_ref().is_some_and(|active|active!=&key){return Err("focus_busy".into());}
+    if !f.tabs.is_visible(&tab_id,client_generation,generation){return Err("input_stale".into());}
     let s=f.tabs.get(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation).ok_or("tab_stale")?;
     if s.control.as_ref().is_none_or(|c| {let v=c.snapshot();v.epoch!=epoch || v.phase!=herdr_readonly_transport::ObservationPhase::Active}) {return Err("input_stale".into());}
     let input=s.input.as_ref().filter(|(g,e,_)|*g==generation && *e==epoch).map(|(_,_,v)|v.clone()).ok_or("input_stale")?;
-    let result=input.set_mode(&mode,focused).map_err(str::to_string)?;
-    if mode!="observe" {f.tabs.focus=Some(key);} else if f.tabs.focus.as_ref()==Some(&key) {f.tabs.focus=None;}
-    Ok(result)
+    // Focus arbitration before the transport mutation; see switch_input_mode.
+    remote_sessions::switch_input_mode(&mut f.tabs,key,&mode,focused,|mode,focused|input.set_mode(mode,focused).map_err(str::to_string))
 }
 #[tauri::command]
 pub async fn remote_tab_input_send(tab_id:String,client_generation:u64,generation:u64,epoch:u64,input_epoch:u64,bytes:Vec<u8>,draft:bool,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<serde_json::Value,String> {
     let input={let f=flow.lock().map_err(|_|"state_unavailable")?;
-        if f.tabs.visible.as_ref()!=Some(&(tab_id.clone(),client_generation,generation)) || f.tabs.focus.as_ref()!=Some(&(tab_id.clone(),client_generation,generation,epoch)){return Err("input_stale".into());}
+        f.tabs.input_guard(&tab_id,client_generation,generation,epoch).map_err(str::to_string)?;
         let s=f.tabs.get(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation).ok_or("tab_stale")?;
         if s.control.as_ref().is_none_or(|c| {let v=c.snapshot();v.epoch!=epoch || v.phase!=herdr_readonly_transport::ObservationPhase::Active}) {return Err("input_stale".into());}
         s.input.as_ref().filter(|(g,e,_)|*g==generation && *e==epoch).map(|(_,_,v)|v.clone()).ok_or("input_stale")?
@@ -163,25 +161,25 @@ pub async fn remote_tab_input_send(tab_id:String,client_generation:u64,generatio
     })
 }
 
+// Visibility is an add-to-set operation: several tabs may observe simultaneously
+// (desktop split view); only input focus stays exclusive.
 #[tauri::command]
 pub fn remote_tab_visible(tab_id:String,client_generation:u64,generation:u64,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
-    let mut f=flow.lock().map_err(|_|"state_unavailable")?;let key=(tab_id.clone(),client_generation,generation);
-    if f.tabs.visible.as_ref().is_some_and(|v|v!=&key){return Err("focus_busy".into());}
-    if f.tabs.get(&tab_id).is_none_or(|s|s.owner!=client_generation || s.generation!=generation){return Err("tab_stale".into());}
-    f.tabs.visible=Some(key);Ok(())
+    let mut f=flow.lock().map_err(|_|"state_unavailable")?;
+    f.tabs.set_visible(&tab_id,client_generation,generation).map_err(str::to_string)
 }
 
 #[tauri::command]
 pub fn remote_tab_select(tab_id:String,client_generation:u64,generation:u64,epoch:u64,revision:u64,pane_id:String,terminal_id:String,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
     let mut f=flow.lock().map_err(|_|"state_unavailable")?;
-    if f.tabs.visible.as_ref()!=Some(&(tab_id.clone(),client_generation,generation)){return Err("tab_stale".into());}
+    if !f.tabs.is_visible(&tab_id,client_generation,generation){return Err("tab_stale".into());}
     let s=f.tabs.get_mut(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation).ok_or("tab_stale")?;
     s.select_dashboard(generation,epoch,revision,pane_id,terminal_id).map_err(str::to_string)
 }
 #[tauri::command]
 pub fn remote_tab_input_recover(tab_id:String,client_generation:u64,generation:u64,epoch:u64,input_epoch:u64,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
     let input={let f=flow.lock().map_err(|_|"state_unavailable")?;
-        if f.tabs.visible.as_ref()!=Some(&(tab_id.clone(),client_generation,generation)){return Err("input_stale".into());}
+        if !f.tabs.is_visible(&tab_id,client_generation,generation){return Err("input_stale".into());}
         let s=f.tabs.get(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation).ok_or("tab_stale")?;
         if s.control.as_ref().is_none_or(|c| {let v=c.snapshot();v.epoch!=epoch || v.phase!=herdr_readonly_transport::ObservationPhase::Active}) {return Err("input_stale".into());}
         s.input.as_ref().filter(|(g,e,_)|*g==generation && *e==epoch).map(|(_,_,v)|v.clone()).ok_or("input_stale")?

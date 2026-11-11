@@ -111,6 +111,15 @@ jobs:
               mkdir -p "$HOME/.cargo"
               printf '\n[env]\nHEELER_ET_LIB_DIR = "%s"\n' "$RUNNER_TEMP/ios-native" >> "$HOME/.cargo/config.toml"
               npm run tauri -- ios init --ci
+              # The Rust staticlib records -lheeler_easytier as an auto-link the
+              # Xcode clang++ link must resolve; give every generated xcconfig
+              # the native lib search path (fail loudly if the shape changes).
+              CFG_COUNT=0
+              for cfg in $(find src-tauri/gen/apple -name '*.xcconfig'); do
+                echo "OTHER_LDFLAGS = -L$RUNNER_TEMP/ios-native" >> "$cfg"
+                CFG_COUNT=$((CFG_COUNT+1))
+              done
+              test "$CFG_COUNT" -gt 0
               npm run tauri -- ios build --debug --target aarch64 --features network-easytier --no-sign --archive-only --ci
               APP_BIN=$(find src-tauri/gen/apple/build -type f -name 'herdr-pocket-tauri-probe' | head -1)
               test -n "$APP_BIN"

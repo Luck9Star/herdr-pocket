@@ -64,8 +64,8 @@
 | Android | 分发 | 部分 | ▲ Release v0.1.0/v0.1.1 渠道已通（debug 验证批＋release 精简批）；真机安装未验 |
 | Android | 设备运行 | 部分 | ▲ 模拟器闭环全通；实体手机摄像头扫码、锁屏/重启恢复、真机 IME 未做 |
 | Android | 安全凭据存储 | 部分 | ▲ 模拟器软件 KeyMint 验证过；硬件 KeyStore 隔离结论未做 |
-| iOS | 构建/自动化 | 部分 | r8 起含 aarch64 真机未签名构建（v0.1.0 双壳 ipa）；EasyTier 静态库链接层工具就位（`ios_bundle.py`＋单测），待批次 CI 验证 |
-| iOS | 三网接入 | 未做 | ▲ 依赖链：EasyTier 静态链接（工具就位待验）→ Keychain 身份层（无本地 Xcode/真机）→ 可用性翻转；Tailscale 上游阻塞、ZeroTier libzt 移植另计 |
+| iOS | 构建/自动化 | 部分 | r8 起含 aarch64 真机未签名构建（v0.1.0 双壳 ipa）；batch-0012 r9 起 `ios-device` 作业贯通 EasyTier 静态链接全链（静态库构建→cargo 合并→Xcode 链接→xcarchive→app 二进制符号核验，run 42946118795） |
+| iOS | 三网接入 | 未做 | ▲ 依赖链：EasyTier 静态链接 ✅（2026-11-11）→ Keychain 身份层（无本地 Xcode/真机）→ 可用性翻转；Tailscale 上游阻塞、ZeroTier libzt 移植另计 |
 | iOS | 签名、分发、设备运行 | 未做 | ▲ 依赖 Apple 开发者账户/证书与实体 iPhone |
 | iOS | 安全凭据存储 | 部分 | Keychain 后端仅内存替身验证（系统 Keychain 调用数为 0） |
 | Windows | 构建/自动化/分发 | 部分 | 停留在 2026-10-30 第一代验证壳，当前代码未重跑 |

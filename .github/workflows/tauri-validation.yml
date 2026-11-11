@@ -111,13 +111,13 @@ jobs:
               mkdir -p "$HOME/.cargo"
               printf '\n[env]\nHEELER_ET_LIB_DIR = "%s"\n' "$RUNNER_TEMP/ios-native" >> "$HOME/.cargo/config.toml"
               npm run tauri -- ios init --ci
-              # Writing OTHER_LDFLAGS into the generated xcconfig makes the
-              # tauri CLI exit silently after xcodegen (proven r4/r5). Drop the
-              # archive into the SDK's own default link path instead; sysroot
-              # links resolve -lheeler_easytier from there with no project edits.
-              SDK_LIB="$(xcrun --sdk iphoneos --show-sdk-path)/usr/local/lib"
-              sudo mkdir -p "$SDK_LIB"
-              sudo cp "$RUNNER_TEMP/ios-native/libheeler_easytier.a" "$SDK_LIB/"
+              # R4/R5 proved appending to generated xcconfig files makes the
+              # tauri CLI exit silently after xcodegen, and R6 proved the SDK
+              # link path is not searched for sysroot links. Inject the library
+              # search path at the xcodegen source instead; a duplicate top-level
+              # key would fail loudly here rather than silently later.
+              grep -q '^settings:' src-tauri/gen/apple/project.yml && { echo 'project.yml already has top-level settings; adjust the injection'; exit 1; }
+              printf '\nsettings:\n  base:\n    OTHER_LDFLAGS: "-L%s"\n' "$RUNNER_TEMP/ios-native" >> src-tauri/gen/apple/project.yml
               npm run tauri -- ios build --debug --target aarch64 --features network-easytier --no-sign --archive-only --ci --verbose
               APP_BIN=$(find src-tauri/gen/apple/build -type f -name 'herdr-pocket-tauri-probe' | head -1)
               test -n "$APP_BIN"

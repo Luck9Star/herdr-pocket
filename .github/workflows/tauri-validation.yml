@@ -117,8 +117,10 @@ jobs:
               npm run tauri -- ios build --debug --target aarch64 --features network-easytier --no-sign --archive-only --ci --verbose
               APP_BIN=$(find src-tauri/gen/apple/build -type f -name 'herdr-pocket-tauri-probe' | head -1)
               test -n "$APP_BIN"
-              nm -g "$APP_BIN" | grep -q 'heeler_et_node_start'
-              nm -g "$APP_BIN" | grep -q 'heeler_et_stream_connect'
+              # grep without -q: with pipefail, -q's early exit SIGPIPEs nm and
+              # turns a successful symbol match into a failing pipeline.
+              nm -g "$APP_BIN" | grep 'heeler_et_node_start' >/dev/null
+              nm -g "$APP_BIN" | grep 'heeler_et_stream_connect' >/dev/null
               mkdir -p artifacts/ios-native
               cp "$RUNNER_TEMP/ios-native/manifest.json" "$RUNNER_TEMP/ios-native/SHA256SUMS" artifacts/ios-native/
               ;;

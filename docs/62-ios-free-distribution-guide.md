@@ -49,6 +49,8 @@ Release v0.1.0 资产 `herdr-pocket-flutter-ios-unsigned-v0.1.0.ipa`（36,078,42
 
 ### 3.2 Tauri 壳：Release 现已有同款可重签 `.ipa`
 
+v0.1.1 起新增 `herdr-pocket-tauri-ios-unsigned-easytier-v0.1.1.ipa`（33.9MB，run 42946118795）：**首个静态链入 EasyTier provider 的 iOS 真机包**（app 二进制经 nm 核验含 `heeler_et_*` 符号）。注意运行时可用性翻转尚未落地（docs/56 依赖链），真机验收点是安装、启动与 GUI 链路正常且带库不崩。更早的 v0.1.0 仍有 `herdr-pocket-tauri-ios-unsigned-v0.1.0.ipa`（24.1MB，无网络库）与 Flutter 壳 ipa 可作对照。
+
 在 CI run 42878187512 中，通过 commit `d9e9588` 新增的 `aarch64-apple-ios` 真机构建作业，Release v0.1.0 现已补充上架 `herdr-pocket-tauri-ios-unsigned-v0.1.0.ipa`（24.1 MB，SHA256 见 `SHA256SUMS-v0.1.0.txt`）：
 - 由真实真机架构 `aarch64` 未签名构建（`.github/workflows/tauri-validation.yml:98`）出的 `herdr-pocket-tauri-probe.app` 按标准 `Payload/` 结构打包；
 - bundle id 为 `dev.herdrpocket.tauriprobe`；

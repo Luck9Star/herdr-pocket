@@ -101,6 +101,7 @@ jobs:
               # statically into the app binary; the same job proves the symbols.
               rustup toolchain install 1.95.0 --profile minimal
               rustup target add aarch64-apple-ios --toolchain 1.95.0
+              rustup component add llvm-tools-preview --toolchain 1.95.0
               python3 ../native/tool/ios_bundle.py build "$RUNNER_TEMP/ios-native"
               export HEELER_ET_LIB_DIR="$RUNNER_TEMP/ios-native"
               npm run tauri -- ios init --ci

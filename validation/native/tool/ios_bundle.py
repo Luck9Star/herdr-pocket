@@ -42,7 +42,18 @@ def symbols_from_nm(output: str) -> set:
     return found
 
 
-def verify(bundle: Path, commit: str, nm: str = 'nm') -> dict:
+def default_nm() -> str:
+    """Apple nm cannot parse Rust LLVM-22 object attributes; prefer the matching rust llvm-nm."""
+    try:
+        sysroot = subprocess.check_output(['rustc', '+1.95.0', '--print', 'sysroot'], text=True).strip()
+    except (subprocess.CalledProcessError, OSError):
+        return 'nm'
+    for candidate in sorted(Path(sysroot).glob('lib/rustlib/*/bin/llvm-nm')):
+        return str(candidate)
+    return 'nm'
+
+
+def verify(bundle: Path, commit: str, nm: str | None = None) -> dict:
     manifest = json.loads((bundle / 'manifest.json').read_text(encoding='utf-8'))
     if manifest.get('target') != TARGET or manifest.get('schemaVersion') != 1:
         raise ValueError('unsupported iOS native manifest schema')
@@ -60,7 +71,7 @@ def verify(bundle: Path, commit: str, nm: str = 'nm') -> dict:
         path = bundle / relative
         if path.is_symlink() or not path.is_file() or sha(path) != digest:
             raise ValueError('artifact hash mismatch: ' + name)
-    output = subprocess.check_output([nm, '-g', str(bundle / 'libheeler_easytier.a')], text=True)
+    output = subprocess.check_output([(nm or default_nm()), '-g', str(bundle / 'libheeler_easytier.a')], text=True)
     missing = set(SYMBOLS) - symbols_from_nm(output)
     if missing:
         raise ValueError('required exported symbols missing: ' + ','.join(sorted(missing)))

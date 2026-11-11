@@ -78,29 +78,33 @@ class NetworkRuntimeChannel(private val activity: Activity, messenger: BinaryMes
     private val workers = listOf(fast, starts, statuses, stops, reads, writes, opens)
 
     init {
-        // Library loading and native registration happen off the UI thread.
-        fast.execute {
-            if (!closed.get() && Build.VERSION.SDK_INT >= 35) {
-                // A linked runtime may require both shared libraries; if any DT_NEEDED
-                // is absent the runtime itself refuses to load, never a fallback.
-                val etLibrary = try { System.loadLibrary("heeler_easytier"); true } catch (_: LinkageError) { false }
-                val tsLibrary = try { System.loadLibrary("hp_tailscale"); true } catch (_: LinkageError) { false }
-                val ztLibrary = try { System.loadLibrary("hp_zerotier"); true } catch (_: LinkageError) { false }
-                try {
-                    System.loadLibrary("herdr_flutter_network_runtime")
-                    easyTierBound = etLibrary && try { AndroidEasyTierConfig.bindNative(activity.applicationContext) } catch (_: LinkageError) { false } catch (_: Exception) { false }
-                    tailscaleBound = tsLibrary && try { AndroidTailscaleConfig.bindNative(activity.applicationContext) } catch (_: LinkageError) { false } catch (_: Exception) { false }
-                    zeroTierBound = ztLibrary && try { AndroidZeroTierNative.bindNative(activity.applicationContext) } catch (_: LinkageError) { false } catch (_: Exception) { false }
-                    val created = nativeCreateScope()
-                    synchronized(lifecycle) {
-                        if (closed.get()) { if (created != 0L) nativeCloseScope(created) }
-                        else scope = created
-                    }
-                } catch (_: LinkageError) { /* Required shared library absent. */ }
-                  catch (_: Exception) { /* Do not expose exception contents. */ }
-            }
-        }
+        // Library loading and native registration happen off the UI thread;
+        // initialize() stays callable again because a call may arrive before
+        // the async attempt finishes or after a silent load failure.
+        fast.execute { initialize() }
         channel.setMethodCallHandler(::handle)
+    }
+
+    private fun initialize() {
+        if (closed.get() || Build.VERSION.SDK_INT < 35) return
+        synchronized(lifecycle) {
+            if (closed.get() || scope > 0L) return
+            // A linked runtime may require both shared libraries; if any DT_NEEDED
+            // is absent the runtime itself refuses to load, never a fallback.
+            val etLibrary = try { System.loadLibrary("heeler_easytier"); true } catch (_: LinkageError) { false }
+            val tsLibrary = try { System.loadLibrary("hp_tailscale"); true } catch (_: LinkageError) { false }
+            val ztLibrary = try { System.loadLibrary("hp_zerotier"); true } catch (_: LinkageError) { false }
+            try {
+                System.loadLibrary("herdr_flutter_network_runtime")
+                easyTierBound = etLibrary && try { AndroidEasyTierConfig.bindNative(activity.applicationContext) } catch (_: LinkageError) { false } catch (_: Exception) { false }
+                tailscaleBound = tsLibrary && try { AndroidTailscaleConfig.bindNative(activity.applicationContext) } catch (_: LinkageError) { false } catch (_: Exception) { false }
+                zeroTierBound = ztLibrary && try { AndroidZeroTierNative.bindNative(activity.applicationContext) } catch (_: LinkageError) { false } catch (_: Exception) { false }
+                val created = nativeCreateScope()
+                if (closed.get()) { if (created != 0L) nativeCloseScope(created) }
+                else if (created > 0L) scope = created
+            } catch (_: LinkageError) { /* Required shared library absent. */ }
+              catch (_: Exception) { /* Do not expose exception contents. */ }
+        }
     }
 
     private fun fail(result: MethodChannel.Result, code: String) {
@@ -135,6 +139,9 @@ class NetworkRuntimeChannel(private val activity: Activity, messenger: BinaryMes
         fun abort() { payload?.fill(0) }
     }
     private fun currentScope(): Long {
+        // A call may beat the background init or follow a silent load failure;
+        // retry once on the caller's lane before declaring the provider absent.
+        if (scope <= 0L && !closed.get()) initialize()
         if (closed.get() || scope <= 0L) throw BridgeFailure("overlay_provider_unavailable")
         return scope
     }

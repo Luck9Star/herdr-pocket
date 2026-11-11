@@ -111,13 +111,9 @@ jobs:
               mkdir -p "$HOME/.cargo"
               printf '\n[env]\nHEELER_ET_LIB_DIR = "%s"\n' "$RUNNER_TEMP/ios-native" >> "$HOME/.cargo/config.toml"
               npm run tauri -- ios init --ci
-              # R4/R5 proved appending to generated xcconfig files makes the
-              # tauri CLI exit silently after xcodegen, and R6 proved the SDK
-              # link path is not searched for sysroot links. Inject the library
-              # search path at the xcodegen source instead; a duplicate top-level
-              # key would fail loudly here rather than silently later.
-              grep -q '^settings:' src-tauri/gen/apple/project.yml && { echo 'project.yml already has top-level settings; adjust the injection'; exit 1; }
-              printf '\nsettings:\n  base:\n    OTHER_LDFLAGS: "-L%s"\n' "$RUNNER_TEMP/ios-native" >> src-tauri/gen/apple/project.yml
+              # r3-r7: no external search path reaches the Xcode link; since
+              # r8 the provider archive is merged by cargo itself (overlay-runtime
+              # build.rs) and no injection is needed here.
               npm run tauri -- ios build --debug --target aarch64 --features network-easytier --no-sign --archive-only --ci --verbose
               APP_BIN=$(find src-tauri/gen/apple/build -type f -name 'herdr-pocket-tauri-probe' | head -1)
               test -n "$APP_BIN"

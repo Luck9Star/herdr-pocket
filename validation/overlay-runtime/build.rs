@@ -35,6 +35,14 @@ fn explicit_library(variable: &str, feature: &str) {
         "native library directory must exist and be absolute"
     );
     println!("cargo:rustc-link-search=native={}", directory.display());
+    // iOS ships the app lib as a staticlib consumed by the Xcode link, and no
+    // external search path reaches that link (proven r3-r7). Fold the provider
+    // archive into the staticlib instead; rustc unpacks it during packaging.
+    if variable == "HEELER_ET_LIB_DIR"
+        && env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios")
+    {
+        println!("cargo:rustc-link-lib=static=heeler_easytier");
+    }
 }
 fn main() {
     for variable in ["HEELER_ET_LIB_DIR", "HP_TS_LIB_DIR", "HP_ZT_LIB_DIR"] {

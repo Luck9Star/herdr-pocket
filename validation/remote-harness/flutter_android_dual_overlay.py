@@ -106,7 +106,7 @@ def write_exchange(adb, serial, name, data, *, run):
 
 
 
-READABLE_EXCHANGE = frozenset({'stage', 'et-request.json', 'ts-request.json', 'ts-url.txt', 'result.json'})
+READABLE_EXCHANGE = frozenset({'stage', 'et-request.json', 'ts-request.json', 'ts-url.txt', 'result.json', 'failure.json'})
 
 
 def read_exchange(adb, serial, name, *, run):
@@ -222,10 +222,27 @@ def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, aud
 UI_STAGES = frozenset({'host_board', 'et_network_create', 'ts_network_create', 'ts_login_open',
     'ts_wait_authorization', 'et_pair_profile', 'ts_pair_profile', 'et_pair_review', 'ts_pair_review',
     'et_open_host', 'ts_open_host', 'et_input', 'ts_input', 'et_baseline', 'ts_baseline',
-    'et_resume', 'ts_resume', 'et_stop_network', 'ts_stop_network', 'stopped_audit', 'final_audit'})
+    'et_resume', 'ts_resume', 'et_stop_network', 'ts_stop_network', 'stopped_audit', 'final_audit',
+    'et_network_save', 'ts_network_save', 'et_identity_open', 'ts_identity_open',
+    'et_identity_review', 'ts_identity_review', 'et_identity_create', 'ts_identity_create',
+    'et_node_refresh', 'ts_node_refresh', 'et_node_start', 'ts_node_start'})
 
 
-def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout=900, report_stage=None, audit_records=None):
+def safe_ui_failure(raw):
+    import json
+    try:
+        detail = json.loads(raw)
+        if (isinstance(detail, dict) and set(detail) == {'stage', 'kind'}
+                and isinstance(detail['stage'], str) and detail['stage'] in UI_STAGES
+                and isinstance(detail['kind'], str)
+                and detail['kind'] in {'test_failure', 'flutter_error', 'state_error', 'assertion_error', 'other'}):
+            return detail
+    except (ValueError, UnicodeDecodeError, TypeError):
+        pass
+    return None
+
+
+def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout=900, report_stage=None, report_failure=None, audit_records=None):
     """Drive bounded, ordered UI checkpoints; the host facts gate each reply."""
     import json
     import time
@@ -273,6 +290,11 @@ def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout
                     raise DualOverlayDeviceFailure('device_test_failed')
                 return expected
         if process.poll() is not None:
+            failure = read_exchange(adb, serial, 'failure.json', run=run)
+            if failure is not None and report_failure is not None:
+                detail = safe_ui_failure(failure)
+                if detail is not None:
+                    report_failure(detail)
             raise DualOverlayDeviceFailure('device_test_exited_early')
         time.sleep(0.25)
     raise DualOverlayDeviceFailure('device_run_timeout')
@@ -384,6 +406,7 @@ def run_device(args, env):
                                 case['ui'] = drive_checkpoints(session, process, 'adb', 'emulator-5554',
                                                                first_stop, run=subprocess.run,
                                                                report_stage=lambda stage: case.update(uiStage=stage),
+                                                               report_failure=lambda failure: case.update(uiFailure=failure),
                                                                audit_records=case['hostAudits'])
                             finally:
                                 if process.poll() is None:

@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from flutter_android_dual_overlay import (
-    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints, installed_apk_evidence,
+    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints, installed_apk_evidence, safe_ui_failure,
 )
 
 
@@ -177,6 +177,16 @@ class HostStageTest(unittest.TestCase):
                 handle_stage('stopped_audit', session=session, adb='adb',
                              serial='emulator-5554', run=None, first_stop='et', baselines=baselines)
             write.assert_not_called()
+
+
+class SafeUiFailureTest(unittest.TestCase):
+    def test_only_fixed_stage_and_class_are_published(self):
+        self.assertEqual(safe_ui_failure(b'{"stage":"et_identity_create","kind":"test_failure"}'),
+                         {'stage': 'et_identity_create', 'kind': 'test_failure'})
+        for raw in (b'{"stage":"secret","kind":"test_failure"}',
+                    b'{"stage":"et_identity_create","kind":"secret"}',
+                    b'{"stage":"et_identity_create","kind":"test_failure","message":"secret"}', b'not-json'):
+            self.assertIsNone(safe_ui_failure(raw))
 
 
 class DeviceCheckpointTest(unittest.TestCase):

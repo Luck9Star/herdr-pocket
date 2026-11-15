@@ -16,11 +16,13 @@ class DualOverlayUiSteps {
   DualOverlayUiSteps(this.tester, this.exchange);
   final WidgetTester tester;
   final Directory exchange;
+  String currentStage = 'fixture_validation';
 
   Future<void> stage(String value) async {
     if (!RegExp(r'^[a-z][a-z0-9_]{0,50}$').hasMatch(value)) {
       throw StateError('dual_stage_invalid');
     }
+    currentStage = value;
     existing.publish(exchange, 'stage', value);
     await tester.pump();
   }
@@ -67,6 +69,7 @@ class DualOverlayUiSteps {
       await enter('network-controlUrl', controlUrl);
     }
     await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
+    await stage('${role}_network_save');
     await existing.tapKey(tester, 'network-save');
     final page = tester.widget<NetworkProfilesPage>(find.byType(NetworkProfilesPage));
     await existing.until(tester, () => page.catalog.networkProfiles.where((profile) => profile.label == label).length == 1);
@@ -74,22 +77,27 @@ class DualOverlayUiSteps {
     final profile = matches.single;
     expect(profile.provider, role == 'et' ? 'easytier' : 'tailscale');
     await existing.tap(tester, find.byKey(PageStorageKey('network-details-${profile.id}')));
+    await stage('${role}_identity_open');
     await existing.tapKey(tester, 'network-identity-${profile.id}');
     await existing.until(tester, () => find.byKey(const ValueKey('network-identity-absent')).evaluate().length == 1);
     if (role == 'et') {
       await enter('network-identity-secret', networkSecret);
       await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
     }
+    await stage('${role}_identity_review');
     final review = await existing.stableReviewCheckbox(tester, 'network-identity-review');
     await tester.tap(review); await tester.pump();
+    await stage('${role}_identity_create');
     await existing.tapKey(tester, 'network-identity-create');
     await existing.until(tester, () => find.byKey(const ValueKey('network-identity-present')).evaluate().length == 1);
     await existing.tap(tester, find.text('关闭').last);
+    await stage('${role}_node_refresh');
     await existing.tapKey(tester, 'network-node-refresh-${profile.id}');
     await existing.until(tester, () {
       final control = find.byKey(ValueKey('network-node-start-${profile.id}'));
       return control.evaluate().length == 1 && tester.widget<TextButton>(control).onPressed != null;
     });
+    await stage('${role}_node_start');
     await existing.tapKey(tester, 'network-node-start-${profile.id}');
     return profile.id;
   }

@@ -39,6 +39,7 @@ void main() {
       return result;
     }
     final steps = DualOverlayUiSteps(tester, exchange);
+    try {
     await steps.stage('host_board');
     await app.main();
     await existing.until(tester, () => find.byType(HostCatalogPage).evaluate().length == 1 &&
@@ -90,5 +91,13 @@ void main() {
       'initialInputsAccepted': true, 'survivorInputAccepted': true};
     existing.publish(exchange, 'result.json', jsonEncode(result));
     binding.reportData = result;
+    } catch (error) {
+      final kind = error is TestFailure ? 'test_failure'
+        : error is FlutterError ? 'flutter_error'
+        : error is StateError ? 'state_error'
+        : error is AssertionError ? 'assertion_error' : 'other';
+      existing.publish(exchange, 'failure.json', jsonEncode({'stage': steps.currentStage, 'kind': kind}));
+      rethrow;
+    }
   });
 }

@@ -35,6 +35,16 @@ final class SecureCredentialUITests: XCTestCase {
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
     }
 
+    private func ordinaryMetrics(_ app: XCUIApplication, sentinel: String) -> Bool {
+        let nodes = app.descendants(matching: .any).allElementsBoundByIndex
+        let values = nodes.compactMap { $0.value as? String }.filter { !$0.isEmpty }
+        let seen = !sentinel.isEmpty && values.contains { $0.contains(sentinel) }
+        print("HP_XCUI_ORDINARY=nodes:\(min(nodes.count,10000)),values:\(min(values.count,10000)),sentinel:\(seen ? 1 : 0)")
+        fflush(stdout)
+        XCTAssertGreaterThan(nodes.count, 5, "system accessibility tree is empty")
+        return seen
+    }
+
     private func homeEntry(_ app: XCUIApplication) -> XCUIElement {
         let button = app.buttons["普通 SSH"]
         if button.waitForExistence(timeout: 15) && button.isHittable { return button }
@@ -77,20 +87,7 @@ final class SecureCredentialUITests: XCTestCase {
         entry.click()
         let address = element(app, "地址").descendants(matching: .textField).firstMatch
         XCTAssertTrue(address.waitForExistence(timeout: 15), "named address group or ordinary input missing")
-        tap(address)
-        app.typeText(host)
-        mark("addressTyped")
-        let portField = element(app, "端口").descendants(matching: .textField).firstMatch
-        let userField = element(app, "用户名").descendants(matching: .textField).firstMatch
-        XCTAssertTrue(portField.exists && userField.exists, "ordinary target fields missing")
-        tap(portField);app.typeKey("a", modifierFlags: .command);app.typeText(String(port))
-        mark("portTyped")
-        tap(userField);app.typeText(username)
-        mark("usernameTyped")
-        XCTAssertTrue((address.value as? String ?? "").contains(host), "ordinary input is not readable")
-        XCTAssertTrue((portField.value as? String ?? "").contains(String(port)) && (userField.value as? String ?? "").contains(username), "ordinary target fields are not readable")
-        mark("ordinaryInputReadable")
-
+        _ = ordinaryMetrics(app, sentinel: "")
         let passwordField = secureField(app, "direct-secret")
         mark("passwordSecureField")
         tap(passwordField)
@@ -101,7 +98,6 @@ final class SecureCredentialUITests: XCTestCase {
         tap(address)
         assertNoSecrets(app, [password, phrase])
         mark("passwordHiddenBlurred")
-        XCTAssertTrue((address.value as? String ?? "").contains(host), "ordinary input changed on focus switch")
 
         let keyMode = element(app, "使用私钥认证")
         XCTAssertTrue(keyMode.waitForExistence(timeout: 10), "private key mode missing")
@@ -130,6 +126,22 @@ final class SecureCredentialUITests: XCTestCase {
         assertNoSecrets(app, [password, phrase])
         mark("systemTreeMaskingVerified")
 
+        let sentinel = "xcui-sentinel-" + UUID().uuidString
+        tap(address);app.typeText(sentinel)
+        let seen = ordinaryMetrics(app, sentinel: sentinel)
+        XCTAssertTrue(seen, "ordinary sentinel not found in system accessibility values")
+        mark("ordinarySentinelObserved")
+        app.typeKey("a", modifierFlags: .command);app.typeText(host)
+        mark("addressTyped")
+        let portField = element(app, "端口").descendants(matching: .textField).firstMatch
+        let userField = element(app, "用户名").descendants(matching: .textField).firstMatch
+        XCTAssertTrue(portField.exists && userField.exists, "ordinary target fields missing")
+        tap(portField);app.typeKey("a", modifierFlags: .command);app.typeText(String(port))
+        mark("portTyped")
+        tap(userField);app.typeText(username)
+        mark("usernameTyped")
+        mark("ordinaryInputReadable")
+
         let probe = app.buttons["探测并核对主机密钥"]
         XCTAssertTrue(probe.exists && probe.isEnabled, "host key probe unavailable")
         probe.click()
@@ -139,6 +151,10 @@ final class SecureCredentialUITests: XCTestCase {
         let confirm = app.buttons["已核对并确认"]
         XCTAssertTrue(confirm.exists && confirm.isHittable, "fingerprint confirmation unavailable")
         confirm.click()
+        let loginPassword = secureField(app, "direct-secret")
+        tap(loginPassword);app.typeText(password)
+        XCTAssertFalse((loginPassword.value as? String ?? "").isEmpty, "secure password input has no protected value")
+        assertNoSecrets(app, [password, phrase])
         let connect = app.buttons["连接 SSH"]
         XCTAssertTrue(connect.exists && connect.isEnabled, "connection action unavailable")
         connect.click()

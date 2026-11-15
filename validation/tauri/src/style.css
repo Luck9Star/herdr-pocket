@@ -452,11 +452,18 @@ h1 { font-size:18px; margin:0}
   #network-panel:not([hidden]) { padding:0; border:0; background:transparent; }
   #network-panel > h2 { margin:4px 0 8px; }
   #network-panel > p { margin:6px 0 10px; }
-  .network-profile-card { padding:12px; margin:8px 0; }
-  .network-profile-card h3 { margin-bottom:4px; }
-  .network-profile-card > p { margin:2px 0; line-height:1.4; }
-  .network-profile-management { margin-top:3px; }
-  .network-profile-management > summary { min-height:40px; padding:10px 0; }
+  .network-profile-card {
+    display:grid;
+    grid-template-columns:minmax(0,1fr) max-content;
+    column-gap:8px;
+    padding:12px;
+    margin:8px 0;
+  }
+  .network-profile-card > h3 { min-width:0; margin:0; overflow-wrap:anywhere; }
+  .network-profile-card > p { grid-column:1 / -1; margin:2px 0; line-height:1.4; overflow-wrap:anywhere; }
+  .network-profile-card > p:first-of-type { grid-column:2; align-self:center; }
+  .network-profile-management { grid-column:1 / -1; margin-top:3px; }
+  .network-profile-management > summary { min-height:44px; padding:12px 0; }
 }
 /* Ordinary SSH owns its PTY; this viewport is independent of xterm content. */
 #home-ssh .ssh-scroll { box-sizing:border-box; min-height:80px; height:min(55dvh, 520px, calc(var(--hp-visual-height,100dvh) - 180px)); }

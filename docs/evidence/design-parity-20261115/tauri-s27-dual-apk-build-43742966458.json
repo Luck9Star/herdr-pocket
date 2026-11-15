@@ -1,0 +1,12 @@
+{
+  "sourceSHA": "bf39bb44e6df54140984a0abbe93d40f992c1f23",
+  "nativeSourceSHA": "93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc",
+  "scope": "same-source x86_64 APKs; static checks only; QA TS test-only",
+  "frontendAssetsEqual": true,
+  "easytierEqual": true,
+  "tailscaleVariantsDiffer": true,
+  "normalApkSha256": "1adb24616b7c12c0937b1abd457f38f8647caa952627787c69097b10cc9f5c62",
+  "qaApkSha256": "a25d9f0215724b2dd0babb84fe0b77f55a331e1028eb09e8f695b0d29fcd3ae0",
+  "androidLoad": "not run",
+  "node": "not run"
+}

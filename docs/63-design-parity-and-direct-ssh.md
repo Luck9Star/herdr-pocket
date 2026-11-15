@@ -4,6 +4,8 @@
 
 ## 可下载的同源调试快照
 
+Flutter macOS 另有较新的独立调试包：源码 `79d2d00234dfd91a8c135a32a3606e1e6dfe2da3` 的 [工件 14153820575](https://github.com/Luck9Star/herdr-pocket/actions/runs/43692804010/artifacts/14153820575)，内含 `flutter-macos-debug.tar.gz`，主程序为 Mach-O `arm64`。GitHub 外层 ZIP SHA256 为 `f28486c5803002506c556137ca3cfdb0a9abb9f983f3dad3705b616a9df87df6`；内层 tar.gz SHA256 为 `1076b02c4c358a0575665d1afeed2fb66d82490255db02aa904a43315162f58d`，已与工件清单和 manifest 核对，并下载至 `build/verification/79d2d00/flutter-macos/`。它是未公证的开发测试包，与下表同源批次分开；系统 AX 安全字段的实际验收仍待专门结果。
+
 以下五件来自源码 `d38aff40852d4859cd1e95b4a43899a21740cb9b` 的 [运行 43688956564](https://github.com/Luck9Star/herdr-pocket/actions/runs/43688956564)，27 项成功、7 项按条件跳过。已下载五件，核对 GitHub 外层 ZIP digest、CI 清单和内包 SHA256；表中哈希对应内包。它们是 QA 调试快照，并非公开 Release 或设备验收。
 
 | 平台 / 路线 | GitHub 下载与内包名 | 实际架构 | 内包 SHA256 |

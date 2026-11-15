@@ -89,6 +89,18 @@ class IosDirectSshTests(unittest.TestCase):
                                (valid, {'stage': 'connect_tap'}), (None, stage)]:
             self.assertFalse(runner.safe_screenshot_request(value, current))
 
+    def test_xctest_result_exports_only_bounded_counts_and_markers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result_path = Path(temp) / 'fixture.xcresult'
+            result_path.mkdir()
+            raw = json.dumps({'totalTestCount': 0, 'failedTests': 0,
+                              'issues': ['Failed to launch', 'secret fixture text']}).encode()
+            with patch.object(runner.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, raw, b'')):
+                result = runner.xctest_result_markers(result_path)
+            self.assertEqual(result['totalTestCount'], 0)
+            self.assertTrue(result['launchFailed'])
+            self.assertNotIn('secret', str(result))
+
     def test_generated_xctest_scaffold_is_exact_and_one_shot(self):
         with tempfile.TemporaryDirectory() as temp:
             app = Path(temp)

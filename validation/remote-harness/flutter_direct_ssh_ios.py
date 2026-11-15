@@ -38,7 +38,16 @@ LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
 LOG_MARKERS.update({'xctestBuildSucceeded': '** TEST BUILD SUCCEEDED **',
                     'xctestStarted': 'Test Suite',
                     'xctestSucceeded': '** TEST EXECUTE SUCCEEDED **',
-                    'xctestFailed': '** TEST EXECUTE FAILED **'})
+                    'xctestFailed': '** TEST EXECUTE FAILED **',
+                    'xctestInstallFailed': 'Failed to install',
+                    'xctestLaunchFailed': 'Failed to launch',
+                    'xctestRunnerExited': 'test runner exited',
+                    'xctestEarlyExit': 'Early unexpected exit',
+                    'xctestTimedOut': 'Timed out',
+                    'xctestNoTests': 'No tests were found',
+                    'xctestBundleLoadFailed': 'test bundle could not be loaded',
+                    'xctestConnectionFailed': 'Failed to establish connection',
+                    'xctestCoreSimulatorError': 'CoreSimulatorErrorDomain'})
 
 
 class Failure(ValueError):
@@ -99,6 +108,31 @@ def owned_devices(name, timeout=180):
                 if not re.fullmatch(r'[0-9A-Fa-f-]{36}', identifier):
                     raise Failure('ios_owned_simulator_id_invalid')
                 result.append(identifier)
+    return result
+
+
+def xctest_result_markers(path):
+    if not path.exists():
+        return {'resultBundlePresent': False}
+    result = subprocess.run(['xcrun', 'xcresulttool', 'get', 'test-results', 'summary',
+                             '--path', str(path), '--format', 'json'], capture_output=True, timeout=60)
+    if result.returncode:
+        return {'resultBundlePresent': True, 'summaryReadable': False}
+    try:
+        data = json.loads(result.stdout)
+    except (ValueError, UnicodeError):
+        return {'resultBundlePresent': True, 'summaryReadable': False}
+    result = {'resultBundlePresent': True, 'summaryReadable': True}
+    for field in ('totalTestCount', 'passedTests', 'failedTests', 'skippedTests'):
+        value = data.get(field) if isinstance(data, dict) else None
+        if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 10000:
+            result[field] = value
+    raw = json.dumps(data).lower()
+    for key, marker in {'launchFailed': 'failed to launch', 'installFailed': 'failed to install',
+                        'runnerExited': 'test runner exited', 'timedOut': 'timed out',
+                        'crashed': 'crashed', 'noTests': 'no tests were found',
+                        'bundleLoadFailed': 'test bundle could not be loaded'}.items():
+        result[key] = marker in raw
     return result
 
 
@@ -226,7 +260,8 @@ def run(app, output, env):
                 if result.returncode:
                     raise Failure('ios_xctest_build_failed')
                 phase = 'xctest_launch'
-                process = subprocess.Popen([*build, 'test-without-building'], cwd=app / 'ios', env=env,
+                result_bundle = private / 'test-result.xcresult'
+                process = subprocess.Popen([*build, '-resultBundlePath', str(result_bundle), 'test-without-building'], cwd=app / 'ios', env=env,
                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                 deadline, exchange, confirmed = min(overall_deadline, time.monotonic() + 1200), None, False
                 container_timeouts = 0
@@ -307,6 +342,10 @@ def run(app, output, env):
             report['containerQueryTimeouts'] = container_timeouts
         if private:
             report['flutterLogMarkers'] = log_diagnostics(private / 'flutter-private.log')
+            try:
+                report['xctestResult'] = xctest_result_markers(private / 'test-result.xcresult')
+            except (OSError, subprocess.TimeoutExpired):
+                report['xctestResult'] = {'resultBundlePresent': True, 'summaryReadable': False}
         report['protocol'] = fixture.snapshot()
         if process is not None and process.poll() is None:
             try:

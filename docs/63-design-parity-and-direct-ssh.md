@@ -80,6 +80,16 @@ Flutter 的 `a2ffb4b` [guarded Android 运行 43667868489](https://github.com/Lu
 
 专用 TUI 的 Tauri `c9f191d` [运行 43670510076](https://github.com/Luck9Star/herdr-pocket/actions/runs/43670510076)中，`android-device-key` 作业通过；工件 `14145185000` 的真实 curses 主机状态与 10 个输入回执匹配，`manifest.stoppedStale=true`，`progress.postStopInputUnchanged=true`，停止按钮首次命中。另记录 7 个系统 IME 显示/收起检查点，不能扩大为真实中文组字或实体键盘通过。`receivedInputBytes=10` 是 curses 之外的原始捕获阶段，不代表全部 TUI 输入只有 10 字节。该混合工作流另有 Flutter 作业失败，不能写成整条运行全部通过。
 
+## S17 受理回执与 Android 停止观察
+
+Tauri 主连接与终端标签均只在原生回复的 request ID、pane、terminal 与受理字节数和当前目标及发送长度匹配时，显示可展开的最近一次受理回执；“已受理”只表示服务器入队，执行结果仍看终端。新一笔发送、目标失效或标签切换会清除对应旧回执；未确认或不匹配的回复不能作为成功展示。标签与主连接的显示逻辑有本地回归，下面 Android 设备步骤直接核对的是**主连接草稿回执**，不将其扩大为标签页设备验证。
+
+`3cef14b` 的 [Android 综合运行 43672278898](https://github.com/Luck9Star/herdr-pocket/actions/runs/43672278898)中，Tauri guarded 工件 `14145033655` 的 manifest 为 passed；实际收到并独立核对草稿回执后，通过 CDP 点击展开，比较显示的 request ID、pane、terminal 和字节数，再点击折叠，`progress.receiptDetailsReviewed=true`。同次受保护输入和 curses 10 项动作通过，停止按钮在终端仍持焦时实际触发、画面标记陈旧，`postStopInputUnchanged=true`；7 项 Android 15 系统键盘窗口/Insets 检查通过，设备影响复审及撤销和隔离资源清理确认。该证据来自 API 35 x86_64 模拟器与 CDP 操作，不证明物理手机触控、真实中文 IME 组字或标签页 S17 设备路径。
+
+同一 `3cef14b` 批次 Flutter guarded 在**首个**系统键盘检查 `keyboard-direct-shown` 失败：`adb shell dumpsys input_method` 返回 255、标准输出 382,989 字节、标准错误为空。工件没有原始输出，无法据此认定具体设备原因；清理前模拟器进程仍在，cgroup 未记录 OOM。该轮没有进入 F10，因此不能用它判断前轮 `c9f191d` 的 `tui_finish` 失败，也不能将 Flutter guarded 记为通过。`c9f191d` 主机侧确认 10 项 TUI 动作到达并恢复终端模式，但旧测试把最后一次点击与回执等待放在同一业务行，尚无法确定首错；后续已加入不含回执内容的布尔诊断，等待有效设备复测。
+
+普通 SSH 表单采用 560 逻辑像素最大阅读宽度、分组状态与间隔字段。[390 宽截图](evidence/design-parity-20261115/flutter-direct-ssh-form-390.png)和[桌面截图](evidence/design-parity-20261115/flutter-direct-ssh-form-desktop.png)是从真实首页控件入栈、使用合成地址与用户名及空密码的 Flutter Widget 渲染；截图测试为中文加载本机字体，不冒充原生窗口像素。另以固定 SDK 编译 Dart kernel，替换 4db debug app 的隔离副本、独立 bundle ID 重签后检查 macOS 系统 AX：地址、端口、用户名、密码及私钥/口令分别是**有名容器，内含 text field**；text field 自身并非有名节点。随后对云端 `38630b3` macOS arm64 工件 `14145048657` 独立复核：压缩包 SHA256 `2ccb6b6c49561a3bf2d7fb48e54c3d74b75111ef77e2c44b7f564b144f8183f6`；为隔离测试更换 bundle ID、保留原六项 entitlement 后临时重签，Dart kernel 原样。首页进入普通 SSH 后，系统 AX 的密码模式四组以及切换后的私钥 PEM 和可选口令分组均包含相应 text field。此项为系统 AX 分组证据，不把 Widget 语义等同系统 AX，也不声称输入框自身具名。
+
 ## S27 网络页界面增量
 
 `4be102e` 冻结了手机 S03、普通 SSH 凭据门槛和 S27 网络页；独立归档源码完整验证为 **533 passed / 4 skipped / 0 failed**，analyzer 无问题。S27 使用紧凑配置与节点状态、实际绑定主机名和按需展开管理；40 项定向回归包含停用影响以及撤销、删除保护。[320 宽度](evidence/design-parity-20261115/s27-networks-320.png)与[390 宽度](evidence/design-parity-20261115/s27-networks-390.png)是使用合成节点数据的实际 Widget 渲染，证明界面与交互，不替代真实组网或设备路由证据。

@@ -51,15 +51,17 @@ Flutter S18 隐藏标签显示最后一次实际终端画面的时间；尚未�
 
 Tauri `f1d155d` 的 S08/S09/S18 界面回归在当前会话显示待核实的原目标、提交时间和只读内容；改变目标后仅保留只读审查，不自动补发，须返回原目标、取得新 full 并人工确认才可继续。隐藏标签显示实际最后帧时间；本地前端测试 586 项和构建通过。[未知发送](evidence/design-parity-20261115/tauri-s08-unknown-390.png)、[隐藏暂停](evidence/design-parity-20261115/tauri-s18-paused-390.png)与[恢复等待](evidence/design-parity-20261115/tauri-s18-resuming-390.png)是 390 宽合成资料截图，不是设备或真实远端验证。
 
-以下均为 **390×844、DPR 1** 的实际 Widget 渲染，使用真实字体和合成资料；没有个人凭据。S01 来自看板导航测试，S02–S05 来自[本轮可达性与截图测试](../validation/flutter/test/herdr_workflow_visual_test.dart)。它们用于设计与界面对照，不证明真实 SSH 或手机设备。
+以下截图使用合成资料，没有个人凭据。S01 的 Flutter 图为 320、390、1200×844、DPR 1 的实际 Widget 渲染；Tauri 图为 320、390 宽的合成界面渲染。S02–S05 为 390×844、DPR 1 的 Flutter Widget，来自[本轮可达性与截图测试](../validation/flutter/test/herdr_workflow_visual_test.dart)。它们用于设计与界面对照，不证明真实 SSH 或手机设备。
 
 | 画面 | 稳定截图 |
 | --- | --- |
-| S01 首页与正常入口 | [含实际状态结构的合成看板](evidence/design-parity-20261115/s01-board-populated-390.png)、[空看板](evidence/design-parity-20261115/s01-board-empty-390.png) |
+| S01 首页与正常入口 | Flutter：[320](evidence/design-parity-20261115/s01-board-multi-320.png)、[390](evidence/design-parity-20261115/s01-board-multi-390.png)、[1200](evidence/design-parity-20261115/s01-board-multi-1200.png)；Tauri：[320](evidence/design-parity-20261115/tauri-s01-populated-320.png)、[390](evidence/design-parity-20261115/tauri-s01-populated-390.png) |
 | S02 观察 | [默认只读与真实标签条](evidence/design-parity-20261115/s02-observe-390.png) |
 | S03 逐键输入 | [显式输入与安全提示](evidence/design-parity-20261115/s03-direct-390.png) |
 | S04 草稿 | [本地编辑与预览发送](evidence/design-parity-20261115/s04-draft-390.png) |
 | S05 配对 | [扫码/资料步骤](evidence/design-parity-20261115/s05-pairing-390.png)、[完整指纹卡与独立核验](evidence/design-parity-20261115/s05-fingerprint-390.png) |
+
+首页增量将主机状态、真实报告会话和受阻 pane 分行，使用简短本地同步时间；原目标、精确时间和资料管理按需展开。普通 SSH、配对、搜索与历史筛选保留，缺少在线、延迟或预览资料时不虚构。Flutter 固定候选隔离工程完整测试 **541 passed / 5 skipped**，含 320/390 首屏、真实形状的合成报告、同名主机与目标保护；跳过项不计通过。Tauri 的 `efe29cb` [Android stock 运行 43681215342](https://github.com/Luck9Star/herdr-pocket/actions/runs/43681215342) 工件 `14147958900` 的 manifest 为 passed：正常配对、指定 pane full/delta、同名受阻目标与看板搜索、停止及撤销通过，服务端输入 0 字节。它是 API 35 模拟器上的只读 stock 证据，不代表首页截图中的合成数据或物理手机验收。
 
 ## S06 双侧界面与真实回环验收
 

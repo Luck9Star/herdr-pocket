@@ -380,10 +380,13 @@ def run_device(args, env):
                                                                audit_records=case['hostAudits'])
                             finally:
                                 if process.poll() is None:
-                                    os.killpg(process.pid, signal.SIGTERM)
+                                    try: os.killpg(process.pid, signal.SIGTERM)
+                                    except ProcessLookupError: pass
                                     try: process.wait(timeout=10)
                                     except subprocess.TimeoutExpired:
-                                        os.killpg(process.pid, signal.SIGKILL); process.wait(timeout=10)
+                                        try: os.killpg(process.pid, signal.SIGKILL)
+                                        except ProcessLookupError: pass
+                                        process.wait(timeout=10)
                         installed = private / (first_stop + '-installed.apk')
                         installed_evidence = installed_apk_evidence(device, args.qa_bundle, installed, dual_overlay_apk.verify)
                         case['installedApkSha256'] = installed_evidence['apkSha256']

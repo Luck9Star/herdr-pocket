@@ -83,6 +83,8 @@ class ScaffoldTests(unittest.TestCase):
                      'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
             good_peer={k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}
             (fixture/'facts.json').write_text(json.dumps({'password':good_peer,'encryptedKey':good_peer}))
+            live=root/'macos-secure-private-live.json'
+            live.write_text(json.dumps({'password':True,'key':True}))
             progress={k:True for k in allowed}
             methods=('testSystemMasking','testPasswordSSH','testEncryptedKeySSH','testReturnAndReopen')
             cases=''.join('Test Case '+name+' passed\n' for name in methods)
@@ -93,6 +95,13 @@ class ScaffoldTests(unittest.TestCase):
             def execute():
                 return subprocess.run([sys.executable,'-',str(output),'0'],input=script,text=True,env=env,capture_output=True)
             self.assertEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'passed')
+            for peer in ('password','key'):
+                live.write_text(json.dumps({'password':peer!='password','key':peer!='key'}))
+                self.assertNotEqual(execute().returncode,0)
+                self.assertFalse(json.loads(output.read_text())['peerCloseObservedDuringDisconnectWindows'])
+            live.unlink()
+            self.assertNotEqual(execute().returncode,0)
+            live.write_text(json.dumps({'password':True,'key':True}))
             log.write_text('Executed 0 tests')
             self.assertNotEqual(execute().returncode,0);self.assertFalse(json.loads(output.read_text())['testExecuted'])
             log.write_text('Test Case testSystemMasking failed')

@@ -11,12 +11,69 @@ import subprocess
 import threading
 import time
 import xml.etree.ElementTree as ET
+from urllib.parse import urlsplit
 
 from android_gui import AndroidWebView, PACKAGE, SERIAL, adb
 from android_dual_overlay_reverse import assert_owned_avd
 from paired_gui import GuiFailure, wait_for
 
 AUTH_PACKAGE = 'dev.herdrpocket.dualtestauth'
+
+
+class ConfirmingWebView(AndroidWebView):
+    """Accept only the confirmation resulting from the real, reviewed UI click."""
+    def __init__(self, port):
+        super().__init__(port)
+        self.expectedConfirmation = None
+        self.confirmationObserved = False
+        self.confirmDiagnostic = {}
+        self.confirmationHistory = []
+        self.ws.settimeout(45)
+        self.call('Page.enable')
+        url=self.evaluate('location.href')
+        parsed=urlsplit(url)
+        if parsed.scheme not in ('http','https','tauri') or parsed.hostname not in ('tauri.localhost','localhost'):
+            raise GuiFailure('dual_webview_origin_invalid')
+        self.pageOrigin=(parsed.scheme,parsed.hostname,parsed.port)
+
+    def call(self, method, params=None):
+        self.sequence += 1
+        ident = self.sequence
+        try:
+            self.ws.send(json.dumps({'id':ident,'method':method,'params':params or {}}))
+            while True:
+                frame = self.ws.recv()
+                if len(frame) > 1048576:raise GuiFailure('android_cdp_output_limit')
+                reply = json.loads(frame)
+                if reply.get('method') == 'Page.javascriptDialogOpening':
+                    dialog = reply.get('params', {})
+                    source=urlsplit(dialog.get('url',''))
+                    origin=(source.scheme,source.hostname,source.port)
+                    handler=dialog.get('hasBrowserHandler')
+                    self.confirmDiagnostic={'dialogEvent':True,'originMatched':origin==self.pageOrigin,
+                                            'expectedTextMatched':isinstance(dialog.get('message'),str) and
+                                                self.expectedConfirmation is not None and self.expectedConfirmation in dialog['message'],
+                                            'hasBrowserHandler':handler is True}
+                    if (self.expectedConfirmation is None or self.confirmationObserved or
+                            dialog.get('type') != 'confirm' or origin!=self.pageOrigin or
+                            not self.confirmDiagnostic['expectedTextMatched']):
+                        raise GuiFailure('dual_unexpected_confirmation')
+                    native = {}
+                    clicked=native_dialog_click(self.expectedConfirmation, {'OK','确定'}, timeout=20, diagnostic=native)
+                    self.confirmDiagnostic.update(nativeXmlParsed=native.get('xmlParsed') is True,
+                        nativeExpectedVisible=native.get('expectedSeen') is True,
+                        nativeButtonVisible=native.get('uniqueButton') is True,
+                        nativeClicked=native.get('clicked') is True)
+                    if not clicked:
+                        raise GuiFailure('dual_confirmation_not_user_visible')
+                    self.confirmationHistory.append(dict(self.confirmDiagnostic))
+                    self.confirmationObserved = True
+                    continue
+                if reply.get('id') != ident:continue
+                if 'error' in reply:raise GuiFailure('android_cdp_command_failed')
+                return reply.get('result', {})
+        except GuiFailure:raise
+        except Exception:raise GuiFailure('android_cdp_transport_failed') from None
 
 
 def host_request(control, request, expected):
@@ -54,6 +111,21 @@ def audit(host, role, expected, *, ordinal, sessions_count, active=True, new_ses
     return wait_for(sample, 'dual_peer_evidence_timeout', timeout=30)
 
 
+def native_ui_nodes():
+    # The AVD is owned and disposable. Dump only to one fixed shell-private
+    # path; never publish XML, and remove it even when parsing fails.
+    dump_path='/data/local/tmp/herdr-dual-ui.xml'
+    try:
+        adb('shell','uiautomator','dump',dump_path,timeout=15)
+        xml=adb('shell','cat',dump_path,timeout=5)
+        start=xml.find('<?xml')
+        if start < 0:raise GuiFailure('dual_native_ui_xml_missing')
+        root=ET.fromstring(xml[start:xml.rfind('>')+1])
+        return list(root.iter('node'))
+    finally:
+        adb('shell','rm','-f',dump_path,check=False,timeout=5)
+
+
 def native_dialog_click(expected, button, *, timeout=20, cancelled=None, diagnostic=None):
     """Read the actual system dialog and click its uniquely labeled visible button."""
     deadline = time.monotonic() + timeout
@@ -62,10 +134,7 @@ def native_dialog_click(expected, button, *, timeout=20, cancelled=None, diagnos
     while time.monotonic() < deadline and not (cancelled and cancelled.is_set()):
         try:
             diagnostic['attempts'] += 1
-            xml = adb('shell', 'uiautomator', 'dump', '/dev/tty', timeout=8)
-            xml = xml[xml.find('<?xml'):]
-            root = ET.fromstring(xml[:xml.rfind('>') + 1])
-            nodes = list(root.iter('node'))
+            nodes = native_ui_nodes()
             diagnostic['xmlParsed']=True
             if not any(expected in (n.get('text') or '') for n in nodes):
                 continue
@@ -91,21 +160,19 @@ def native_dialog_click(expected, button, *, timeout=20, cancelled=None, diagnos
 
 
 def confirm_click(browser, scope, label, expected):
-    """Concurrently handle the real native confirmation, never replace confirm()."""
-    results = queue.Queue(maxsize=1)
-    cancelled = threading.Event()
-    diagnostic = {}
-    browser.confirmDiagnostic = diagnostic
-    worker = threading.Thread(target=lambda: results.put(native_dialog_click(expected, {'OK','确定'}, cancelled=cancelled, diagnostic=diagnostic)), daemon=True)
-    worker.start()
+    """Activate a real button and confirm the exact native WebView dialog."""
+    if browser.expectedConfirmation is not None:
+        raise GuiFailure('dual_confirmation_already_pending')
+    browser.expectedConfirmation=expected
+    browser.confirmationObserved=False
     try:
-        browser.click_named(scope, label, 'dual_button_unavailable')
-        worker.join(timeout=25)
+        browser.click_named(scope,label,'dual_button_unavailable')
+        if not browser.confirmationObserved:
+            browser.call('Runtime.evaluate',{'expression':'true','returnByValue':True})
+        if not browser.confirmationObserved:
+            raise GuiFailure('dual_confirmation_not_observed')
     finally:
-        cancelled.set()
-        worker.join(timeout=10)
-    if worker.is_alive() or results.empty() or results.get() is not True:
-        raise GuiFailure('dual_confirmation_not_observed')
+        browser.expectedConfirmation=None
 
 
 def profile_scope(browser, name):
@@ -345,14 +412,19 @@ def run_direction(apk, auth_apk, session, stopped, report):
         forward='tcp:'+port
         def connect():
             try:
-                view=AndroidWebView(int(port))
-                view.ws.settimeout(45)
+                view=ConfirmingWebView(int(port))
                 if view.evaluate("document.readyState==='complete' && !!document.querySelector('#nav-network') && !!window.__TAURI_INTERNALS__"):
                     return view
                 view.close()
             except GuiFailure:pass
             return False
         browser=wait_for(connect,'dual_webview_not_ready',timeout=90)
+        nodes=native_ui_nodes()
+        report['ordinaryNativeTree']={'xmlParsed':True,'nodeCount':min(len(nodes),999),
+            'brandVisible':any('Herdr Pocket' in (node.get('text') or '') or
+                               'Herdr Pocket' in (node.get('content-desc') or '') for node in nodes)}
+        if len(nodes)<3 or not report['ordinaryNativeTree']['brandVisible']:
+            raise GuiFailure('dual_native_ui_tree_incomplete')
         report['stage']='network_setup'
         browser.click('#nav-network')
         wait_for(lambda:browser.evaluate("!document.querySelector('#network-panel').hidden"),'dual_network_page_missing')
@@ -414,7 +486,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         if browser:
             diagnostic=getattr(browser,'confirmDiagnostic',None)
             if isinstance(diagnostic,dict):
-                report['confirmationDiagnostic']={key:value for key,value in diagnostic.items() if key in ('attempts','xmlParsed','expectedSeen','uniqueButton','clicked') and type(value) in (bool,int)}
+                report['confirmationDiagnostic']={key:value for key,value in diagnostic.items() if key in ('dialogEvent','originMatched','expectedTextMatched','hasBrowserHandler','nativeXmlParsed','nativeExpectedVisible','nativeButtonVisible','nativeClicked') and type(value) in (bool,int)}
             try:
                 report['uiDiagnostic']=browser.evaluate("""(()=>{const p=document.querySelector('#network-panel'),f=p?.querySelector('.network-editor');return {
                   networkVisible:!!p&&!p.hidden,editorVisible:!!f&&!!f.getClientRects().length,
@@ -432,6 +504,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         raise
     finally:
         if browser:
+            report['nativeConfirmations']=getattr(browser,'confirmationHistory',[])
             try:browser.close();report['browserClosed']=True
             except Exception:report['browserClosed']=False
         if forward:

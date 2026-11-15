@@ -52,10 +52,31 @@ class DualEvidenceTests(unittest.TestCase):
         xml = ('<?xml version="1.0"?><hierarchy><node text="创建本机加密设备状态"/>'
                '<node text="确定" enabled="true" bounds="[10,20][110,80]"/></hierarchy>')
         diagnostic = {}
-        with patch.object(dual,'adb',side_effect=[xml,'']) as adb:
+        with patch.object(dual,'adb',side_effect=['',xml,'','']) as adb:
             self.assertTrue(dual.native_dialog_click('创建本机加密设备状态',{'确定'},diagnostic=diagnostic))
             adb.assert_any_call('shell','input','tap','60','50')
         self.assertTrue(diagnostic['expectedSeen'] and diagnostic['uniqueButton'] and diagnostic['clicked'])
+
+    def test_cdp_confirmation_requires_matching_origin_and_real_native_tap(self):
+        browser = dual.ConfirmingWebView.__new__(dual.ConfirmingWebView)
+        browser.sequence=0;browser.expectedConfirmation='创建本机加密设备状态'
+        browser.confirmationObserved=False;browser.confirmationHistory=[];browser.pageOrigin=('http','tauri.localhost',None)
+        browser.ws=Mock()
+        event={'method':'Page.javascriptDialogOpening','params':{'url':'http://tauri.localhost/',
+               'type':'confirm','message':'创建本机加密设备状态？','hasBrowserHandler':True}}
+        browser.ws.recv.side_effect=[json.dumps(event),json.dumps({'id':1,'result':{}})]
+        def visible(_expected,_buttons,**kwargs):
+            kwargs['diagnostic'].update(xmlParsed=True,expectedSeen=True,uniqueButton=True,clicked=True)
+            return True
+        with patch.object(dual,'native_dialog_click',side_effect=visible):
+            browser.call('Input.dispatchMouseEvent',{})
+        self.assertTrue(browser.confirmationObserved)
+        self.assertTrue(browser.confirmDiagnostic['nativeClicked'])
+        self.assertEqual(browser.ws.send.call_count,1)  # No JS/IPC override.
+        browser.sequence=0;browser.confirmationObserved=False
+        event['params']['url']='https://elsewhere.invalid/'
+        browser.ws.recv.side_effect=[json.dumps(event)]
+        with self.assertRaises(dual.GuiFailure): browser.call('Input.dispatchMouseEvent',{})
 
     def test_public_host_control_requires_matching_event(self):
         control = Mock()

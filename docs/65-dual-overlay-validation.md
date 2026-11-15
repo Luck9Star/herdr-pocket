@@ -38,6 +38,8 @@
 
 [c38b3de 运行 43726117143](https://github.com/Luck9Star/herdr-pocket/actions/runs/43726117143)在两个独立 case 中尝试有界、被动的 overlay SSH banner 就绪检查（[先停 ET](evidence/dual-overlay-20261115/linux-c38b3de-stop-et.json)、[先停 TS](evidence/dual-overlay-20261115/linux-c38b3de-stop-ts.json)）。Tailscale 两例均首次读到 banner；EasyTier 两例各尝试 246 次、产品接口返回 246 条已打开流，但 25 秒内未读到 banner，独立 peer 的接受流及后端连接均为 0。EasyTier 节点仅报告 engine_started，不能证明 peer 或路由就绪。两例本地 SSH/snapshot/capability 健康检查、显式授权和清理通过；本轮没有进入受保护观察、输入或停网，未证明双网成功。
 
+[143bb8c 运行 43728679763](https://github.com/Luck9Star/herdr-pocket/actions/runs/43728679763)增加存活期间的 peer 快照与单变量对照。默认客户端配置在[先停 ET](evidence/dual-overlay-20261115/linux-143bb8c-et.json)和[先停 TS](evidence/dual-overlay-20261115/linux-143bb8c-ts.json)两例均显示 peer 连接数 0、目标虚拟路由不存在、listener 运行；同一隔离环境的 [ET-only 默认对照](evidence/dual-overlay-20261115/linux-143bb8c-et-only.json)也未到阳性观察，故不能把该差异归因于 TS 并存。[private-loopback 先停 ET](evidence/dual-overlay-20261115/linux-143bb8c-et-private.json)和[先停 TS](evidence/dual-overlay-20261115/linux-143bb8c-ts-private.json)仅将 ET 客户端测试配置 `bind_device` 设为 false，peer 保持默认；两例均出现 peer 连接和目标路由，双方真实 overlay SSH pin/认证、snapshot、full 与输入就绪均已取得。此后旧负路由检查仅看拨号是否立即返回句柄而失败，尚未发送输入或执行停网。各 case 的自有进程、临时凭据及 namespace 已清理。该测试配置只针对封闭 loopback 夹具，不能外推默认物理网络，也不能称双网输入与停网已通过。
+
 ## Linux 测试专用 relay
 
 [614b295 运行 43719537144](https://github.com/Luck9Star/herdr-pocket/actions/runs/43719537144)在 Linux 隔离 namespace 的 relay 测试中 6/6 通过，覆盖三路并发 loopback 回显、拒绝错误所有者/非受控端口、关闭活动连接及 namespace 清理。它仅验证测试转发设施，没有运行真实 Tailscale/EasyTier peer 的联合会话，也没有安装、驱动 Android 应用或验证设备网络。

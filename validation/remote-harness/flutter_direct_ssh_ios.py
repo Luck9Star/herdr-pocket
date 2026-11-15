@@ -22,7 +22,8 @@ FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched', 'e
           'realTerminalView', 'normalTextInputCommit', 'remoteEchoVisible', 'disconnectUiConfirmed',
           'credentialsCleared', 'physicalImeVerified'}
 STAGES = {'home', 'target', 'probe', 'authenticate', 'secret_entry', 'screenshot_wait', 'connect_tap', 'connect_preflight',
-          'await_terminal', 'await_welcome', 'input', 'disconnect'}
+          'await_terminal', 'await_welcome', 'input', 'disconnect', 'disconnect_tap', 'disconnect_wait',
+          'disconnect_secret', 'disconnect_status', 'disconnect_exception', 'disconnect_complete'}
 LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
                'buildError': 'Failed to build iOS app',
                'launchError': 'Error launching application on',
@@ -136,6 +137,23 @@ def sanitized_failure(text, private_values):
     return re.sub(r'\s+', ' ', text).strip()[:240]
 
 
+def failure_facts(text, private_values):
+    if not isinstance(text, str):
+        return {}
+    facts = {}
+    for line in text.splitlines()[:200]:
+        stripped = line.strip()
+        for prefix, field in (('Expected:', 'expected'), ('Actual:', 'actual'), ('Which:', 'which')):
+            if stripped.startswith(prefix) and field not in facts:
+                facts[field] = sanitized_failure(stripped, private_values)
+        match = re.search(r'direct_ssh_ui_steps\.dart:(\d+)', line)
+        if match and 'sourceLine' not in facts:
+            number = int(match.group(1))
+            if 1 <= number <= 1000:
+                facts['sourceLine'] = number
+    return facts
+
+
 def xctest_result_markers(path, private_values=()):
     if not path.exists():
         return {'resultBundlePresent': False}
@@ -159,7 +177,7 @@ def xctest_result_markers(path, private_values=()):
                         'bundleLoadFailed': 'test bundle could not be loaded'}.items():
         result[key] = marker in raw
     failures = data.get('testFailures', []) if isinstance(data, dict) else []
-    messages, identifier = [], None
+    messages, identifier, facts = [], None, {}
     if isinstance(failures, list):
         for item in failures[:3]:
             if not isinstance(item, dict):
@@ -173,6 +191,8 @@ def xctest_result_markers(path, private_values=()):
                 else:
                     result['failureTestIdentifier'] = sanitized_failure(candidate, private_values)
             for field in ('failureText', 'message', 'issueType'):
+                for key, value in failure_facts(item.get(field), private_values).items():
+                    facts.setdefault(key, value)
                 value = sanitized_failure(item.get(field), private_values)
                 if value and value not in messages:
                     messages.append(value)
@@ -189,12 +209,16 @@ def xctest_result_markers(path, private_values=()):
                 if isinstance(value, dict):
                     for key, child in value.items():
                         if key in ('failureText', 'message', 'issueType') and isinstance(child, str):
+                            for fact, entry in failure_facts(child, private_values).items():
+                                facts.setdefault(fact, entry)
                             clean = sanitized_failure(child, private_values)
                             if clean and clean not in messages:
                                 messages.append(clean)
                         elif key in ('failureMessages', 'issues') and isinstance(child, list):
                             for issue in child[:10]:
                                 if isinstance(issue, str):
+                                    for fact, entry in failure_facts(issue, private_values).items():
+                                        facts.setdefault(fact, entry)
                                     clean = sanitized_failure(issue, private_values)
                                     if clean and clean not in messages:
                                         messages.append(clean)
@@ -208,6 +232,8 @@ def xctest_result_markers(path, private_values=()):
             collect(detail_data)
     if messages:
         result['failureReasons'] = messages[:2]
+    if facts:
+        result['failureFacts'] = facts
     return result
 
 

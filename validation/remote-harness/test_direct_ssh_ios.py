@@ -125,6 +125,15 @@ class IosDirectSshTests(unittest.TestCase):
             for secret in ('secret123', 'fixture', '/private/user', '127.0.0.1'):
                 self.assertNotIn(secret, str(result))
 
+    def test_multiline_test_failure_extracts_only_sanitized_assertion_and_source_line(self):
+        text = ('EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK\nExpected: exactly one matching candidate\n'
+                '  Actual: password=secret123 /private/user/path\n'
+                '#4 package direct_ssh_ui_steps.dart:137:9\n')
+        result = runner.failure_facts(text, ('secret123', '/private/user'))
+        self.assertEqual(result['expected'], 'Expected: exactly one matching candidate')
+        self.assertEqual(result['sourceLine'], 137)
+        self.assertNotIn('secret123', str(result)); self.assertNotIn('/private/user', str(result))
+
     def test_generated_xctest_scaffold_is_exact_and_one_shot(self):
         with tempfile.TemporaryDirectory() as temp:
             app = Path(temp)

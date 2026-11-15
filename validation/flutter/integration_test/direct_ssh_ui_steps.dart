@@ -192,18 +192,26 @@ Future<void> runDirectSshUi(
   step('disconnect');
   final disconnect = find.widgetWithText(TextButton, '断开');
   expect(disconnect, findsOneWidget);
+  step('disconnect_tap');
   await tester.tap(disconnect);
+  step('disconnect_wait');
   await until(tester, () => find.byType(TerminalView).evaluate().isEmpty);
-  expect(
-    tester
-        .widget<TextField>(find.byKey(const ValueKey('direct-secret')))
-        .controller!
-        .text,
-    isEmpty,
-  );
-  expect(find.textContaining('已断开'), findsOneWidget);
+  step('disconnect_secret');
+  final clearedSecret = find.byKey(const ValueKey('direct-secret'));
+  await until(tester, () => clearedSecret.evaluate().length == 1);
+  await tester.ensureVisible(clearedSecret);
+  await tester.pump(const Duration(milliseconds: 200));
+  expect(tester.widget<TextField>(clearedSecret).controller!.text, isEmpty);
+  step('disconnect_status');
+  final disconnectedStatus = find.textContaining('已断开');
+  await until(tester, () => disconnectedStatus.evaluate().length == 1);
+  await tester.ensureVisible(disconnectedStatus);
+  await tester.pump(const Duration(milliseconds: 200));
+  expect(disconnectedStatus, findsOneWidget);
   await capture('disconnected');
+  step('disconnect_exception');
   expect(tester.takeException(), isNull);
+  step('disconnect_complete');
   final report = {
     'schemaVersion': 1,
     'platform': platform,

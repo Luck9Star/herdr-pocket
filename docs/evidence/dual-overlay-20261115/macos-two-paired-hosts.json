@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "passed": true,
+  "scope": "two local real OpenSSH/herdr peers; MemoryKeyStore devices; not GUI, platform vault, guarded mobile input or overlay routing",
+  "pairingRequestsSigned": false,
+  "devicePossessionProof": "OpenSSH public-key authentication",
+  "herdrVersion": "herdr 0.9.5",
+  "herdrSha256": "fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2",
+  "hostFingerprintsIndependentlyMatched": true,
+  "crossRequestRejected": true,
+  "crossResponseRejected": true,
+  "crossDeviceSshRejected": true,
+  "crossDeviceKeyObservedAndRejected": true,
+  "twoAuthenticatedSessionsAlive": true,
+  "hosts": {
+    "et": {
+      "acceptedSessions": 1,
+      "approvedDeviceSessions": 1,
+      "otherAcceptedDeviceSessions": 0,
+      "receivedBytes": 10,
+      "exactBytes": true
+    },
+    "ts": {
+      "acceptedSessions": 1,
+      "approvedDeviceSessions": 1,
+      "otherAcceptedDeviceSessions": 0,
+      "receivedBytes": 10,
+      "exactBytes": true
+    }
+  },
+  "authenticatedSessionsClosed": true,
+  "captureProgramsStopped": true,
+  "matchingRevocationsReviewed": true,
+  "ownedServersStopped": true,
+  "temporaryAuthorizationsCleared": true,
+  "temporaryCredentialsRemoved": true
+}

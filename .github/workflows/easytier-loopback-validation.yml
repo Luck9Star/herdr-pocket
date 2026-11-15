@@ -1,0 +1,64 @@
+name: EasyTier real overlay SSH loopback
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    # Explicit opt-in acceptance refs make a new workflow runnable before main.
+    branches: ['codex/acceptance-easytier/**']
+permissions:
+  contents: read
+concurrency:
+  group: easytier-loopback-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  overlay-ssh:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install Linux-only fixture prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config libssl-dev openssh-server iproute2
+          rustup toolchain install 1.95.0 1.96.0 --profile minimal
+      - name: Verify isolated runner and safe evidence contracts
+        run: python3 -m unittest discover -s validation/remote-harness -p test_easytier_loopback.py -v
+      - name: Build fixed native candidate, fixture peer and product probe
+        run: |
+          python3 validation/remote-harness/easytier_loopback.py prepare \
+            --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
+            --output "$RUNNER_TEMP/easytier-evidence"
+      - name: Read a real herdr frame through EasyTier in a loopback-only namespace
+        run: |
+          namespace="hp-et-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          sudo ip netns add "$namespace"
+          sudo ip netns exec "$namespace" ip link set lo up
+          sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
+            GITHUB_ACTIONS=true GITHUB_RUN_ID="$GITHUB_RUN_ID" \
+            GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" GITHUB_REF="$GITHUB_REF" \
+            GITHUB_SHA="$GITHUB_SHA" GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \
+            RUNNER_TEMP="$RUNNER_TEMP" \
+            /usr/bin/python3 "$GITHUB_WORKSPACE/validation/remote-harness/easytier_loopback.py" run \
+              --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
+              --output "$RUNNER_TEMP/easytier-evidence"
+      - name: Verify namespace process cleanup and remove only owned fixtures
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/easytier-evidence/manifest.json"; then
+            python3 validation/remote-harness/easytier_loopback.py finalize \
+              --namespace "hp-et-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+              --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
+              --output "$RUNNER_TEMP/easytier-evidence"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: easytier-real-overlay-ssh-${{ github.sha }}
+          path: ${{ runner.temp }}/easytier-evidence/manifest.json
+          if-no-files-found: error
+          retention-days: 14

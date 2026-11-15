@@ -133,6 +133,7 @@
 @media(max-width:899.98px){#workbench-split{display:none}}
 @media(min-width:900px){
   #view-content[data-split="2"]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+  #view-content[data-split="2"] > [data-role="split-note"]{grid-column:1 / -1}
   #view-content[data-split="2"] .workbench-panel{min-width:0;border:1px solid var(--hp-termBorder);border-radius:12px;padding:12px}
   #view-content[data-split="2"] .workbench-panel[data-focus="true"]{border-color:var(--hp-brandBorder)}
   .workbench-panel .panel-head{margin:0 0 10px}

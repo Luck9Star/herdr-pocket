@@ -26,6 +26,7 @@ import threading
 import time
 
 import easytier_loopback as et
+from go_panic_sanitize import sanitize_go_panic
 
 
 BOOL_FIELDS = ('passed', 'preloginUrlAbsent', 'preloginNeedsLogin', 'beginLoginSubmitted', 'beginLoginSucceeded', 'preloginDialRejected', 'etFull', 'tsFull', 'etFirst',
@@ -58,6 +59,31 @@ def safe_result(raw):
             error if isinstance(error, (str, type(None))) and error in CLIENT_ERRORS else 'other_client_failure')
 
 
+OBSERVER_STAGES = {None, 'connecting', 'host-key-verified', 'authenticated', 'snapshot-received',
+                   'full-frame-received', 'input-unavailable', 'other'}
+OBSERVER_ERRORS = {None, 'invalid_config', 'invalid_private_key', 'invalid_host_key', 'host_key_mismatch',
+                   'overlay_provider_unavailable', 'overlay_stale_revision', 'overlay_wrong_owner',
+                   'overlay_unknown_write', 'overlay_transport_failed', 'handshake_failed',
+                   'authentication_failed', 'socket_unavailable', 'snapshot_failed', 'snapshot_rejected',
+                   'invalid_snapshot', 'pane_missing', 'ambiguous_pane', 'invalid_terminal_id',
+                   'observe_failed', 'invalid_full_frame', 'observe_ended', 'observe_close_failed',
+                   'observe_limit', 'cancelled', 'timeout', 'input_unavailable', 'listener_failed',
+                   'frame_failed', 'resume_target_changed', 'other_observer_error'}
+AUDIT_FIELDS = ('hostKeyChecked', 'hostKeyMatched', 'authStarted', 'snapshotReceived', 'fullFrameReceived')
+
+
+def safe_observer(raw):
+    if not isinstance(raw, dict) or not isinstance(raw.get('audit'), dict):
+        raise et.Failure('observer_result_invalid')
+    audit = raw['audit']
+    if any(type(audit.get(field)) is not bool for field in AUDIT_FIELDS):
+        raise et.Failure('observer_result_invalid')
+    stage, error = raw.get('stage'), raw.get('error')
+    stage = stage if isinstance(stage, (str, type(None))) and stage in OBSERVER_STAGES else 'other'
+    error = error if isinstance(error, (str, type(None))) and error in OBSERVER_ERRORS else 'other_observer_error'
+    return {'stage': stage, 'error': error, 'audit': {field: audit[field] for field in AUDIT_FIELDS}}
+
+
 def case_passed(result, stop_first):
     common = ('passed', 'preloginUrlAbsent', 'preloginNeedsLogin', 'beginLoginSubmitted', 'beginLoginSucceeded', 'preloginDialRejected', 'etFull', 'tsFull',
               'etFirst', 'tsFirst', 'etObserverJoined', 'tsObserverJoined',
@@ -68,6 +94,15 @@ def case_passed(result, stop_first):
                 else ('etStopped', 'etStaleRejected', 'tsAfterStop'))
     return all(result[field] is True for field in common + expected) and all(
         result[field] is False for field in inactive)
+
+
+def peer_diagnostics(output, returncode):
+    lower = output.lower()
+    return {'tsPeerExitBeforeCleanup': returncode,
+            'tsPeerExitedBeforeCleanup': returncode is not None,
+            'tsPeerPanic': b'panic:' in lower,
+            'tsPeerTimeout': b'test timed out' in lower,
+            'tsPeerPanicDetail': sanitize_go_panic(output)}
 
 
 def wait_file(path, process, timeout=25, *, socket_expected=False):
@@ -271,6 +306,28 @@ LogLevel ERROR
             et.command([d / 'herdr', '--session', 'pocket-probe', 'pane', 'run', pane,
                         shlex.join(['/usr/bin/python3', str(echo), str(d), side])], env=host_env)
             wait_file(d / 'capture-ready', server)
+            # Health only: pin this temporary SSH server, authenticate using its
+            # temporary client key, and read socket metadata without input.
+            known = d / 'known_hosts'
+            host_key = ' '.join((d / 'host.pub').read_text().split()[:2])
+            known.write_text(f'[127.0.0.1]:{port} {host_key}\n'); known.chmod(0o600)
+            remote_command = shlex.join(['/usr/bin/python3', str(et.HARNESS / 'dual_overlay_health.py'), str(sock)])
+            health_command = ['ssh', '-F', '/dev/null', '-o', 'BatchMode=yes',
+                '-o', 'StrictHostKeyChecking=yes', '-o', f'UserKnownHostsFile={known}',
+                '-o', 'GlobalKnownHostsFile=/dev/null', '-o', 'IdentitiesOnly=yes',
+                '-o', 'ConnectTimeout=5', '-i', str(d / 'client'), '-p', str(port),
+                f'{user}@127.0.0.1', remote_command]
+            try:
+                health_process = subprocess.run(health_command, env=env, stdout=subprocess.PIPE,
+                                                stderr=subprocess.DEVNULL, timeout=12)
+                health = json.loads(health_process.stdout)
+                ssh_ok = health_process.returncode == 0 and isinstance(health, dict)
+                snapshot_ok = ssh_ok and health.get('snapshot') is True
+                capability_ok = ssh_ok and health.get('inputCapability') is True
+            except (OSError, ValueError, subprocess.TimeoutExpired):
+                ssh_ok = snapshot_ok = capability_ok = False
+            report[side.lower() + 'LocalHealth'] = {'sshPinnedAndAuthenticated': ssh_ok,
+                'snapshot': snapshot_ok, 'inputCapability': capability_ok}
             recovery = d / 'recovery'; recovery.mkdir(mode=0o700)
             remote = {'schemaVersion': 1, 'host': '', 'port': 1, 'username': user,
                       'expectedHostKey': ' '.join((d / 'host.pub').read_text().split()[:2]),
@@ -325,6 +382,7 @@ LogLevel ERROR
         wait_file(root / 'result.json', client, 1)
         result = json.loads((root / 'result.json').read_text())
         report['client'], report['clientError'] = safe_result(result)
+        report['observers'] = {side: safe_observer(result[side + 'Observer']) for side in ('et', 'ts')}
         report['lastTsState'] = safe_state(result.get('lastTsState'))
         et_bytes = (hosts[0][0] / 'received.bin').read_bytes()
         ts_bytes = (hosts[1][0] / 'received.bin').read_bytes()
@@ -336,11 +394,38 @@ LogLevel ERROR
         report['tsPeerCleanup'] = stopped.get('peerClosed') is True and stopped.get('bridgeConnections') == 0
         ts_peer.wait(timeout=10)
         (root / 'stop-peer').touch(); peer.wait(timeout=15)
-        if client.returncode or ts_peer.returncode or peer.returncode or not case_passed(report['client'], stop_first) \
-                or not report['independentExactInput'] or not report['tsPeerCleanup']:
+        peer_result = json.loads((root / 'peer-result.json').read_text())
+        counters = ('acceptedOverlayStreams', 'loopbackTcpConnections', 'activeBridgesAfterStop')
+        if (peer_result.get('loopbackDestinationOnly') is not True or
+                any(type(peer_result.get(key)) is not int or not 0 <= peer_result[key] <= 256 for key in counters)):
+            raise et.Failure('et_peer_result_invalid')
+        report['etPeer'] = {key: peer_result[key] for key in counters}
+        report['etPeer']['loopbackDestinationOnly'] = True
+        if (client.returncode or ts_peer.returncode or peer.returncode
+                or not case_passed(report['client'], stop_first)
+                or not report['independentExactInput'] or not report['tsPeerCleanup']
+                or report['etPeer']['activeBridgesAfterStop'] != 0):
             raise et.Failure('dual_acceptance_failed')
         report.update(status='passed', stage='complete')
     finally:
+        # A helper can terminate after ready while the product is waiting for
+        # its URL. Record only bounded fixed indicators, never raw Go output.
+        ts_process = locals().get('ts_peer')
+        if ts_process is not None:
+            text = bytearray()
+            log = root / 'ts-peer.log'
+            if log.is_file():
+                with log.open('rb') as source:
+                    source.seek(max(0, log.stat().st_size - 1048576))
+                    text.extend(source.read())
+            event_queue = locals().get('events')
+            if event_queue is not None:
+                while not event_queue.empty() and len(text) < 1048576:
+                    try:
+                        text.extend(event_queue.get_nowait()[:8192])
+                    except queue.Empty:
+                        break
+            report.update(peer_diagnostics(bytes(text), ts_process.poll()))
         # A failure before the auth handshake may still have produced a safe
         # Rust result. Preserve only allowlisted fields, never its private input.
         result_file = root / 'result.json'
@@ -348,6 +433,7 @@ LogLevel ERROR
             try:
                 result = json.loads(result_file.read_text())
                 report['client'], report['clientError'] = safe_result(result)
+                report['observers'] = {side: safe_observer(result[side + 'Observer']) for side in ('et', 'ts')}
                 report['lastTsState'] = safe_state(result.get('lastTsState'))
             except (ValueError, OSError, et.Failure):
                 report['clientError'] = 'client_result_invalid'

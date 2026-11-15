@@ -9,7 +9,7 @@ use herdr_overlay_runtime_probe::{
     },
 };
 use herdr_readonly_transport::{
-    Audit, Cancellation, ControlledInputHooks, ObservationControl, RemoteConfig,
+    Audit, AuditSnapshot, Cancellation, ControlledInputHooks, ObservationControl, RemoteConfig,
     input::{LiveInput, SendOutcome},
     observe_interactive_controlled_with_dialer,
     overlay::OverlayDialer,
@@ -71,6 +71,8 @@ struct Report {
     et_after_stop: bool,
     et_observer_joined: bool,
     ts_observer_joined: bool,
+    et_observer: ObserverReport,
+    ts_observer: ObserverReport,
     local_fallback_rejected: bool,
     cross_route_rejected: bool,
     cleanup: bool,
@@ -164,55 +166,140 @@ fn ready_for_explicit_login(status: &LoginStatus) -> bool {
 fn stop(runtime: &OverlayRuntime, node: &NodeLease) -> bool {
     op(runtime.stop_node(node, Duration::from_secs(8))).is_ok()
 }
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ObserverReport {
+    stage: Option<&'static str>,
+    error: Option<&'static str>,
+    audit: AuditSnapshot,
+}
+#[derive(Default)]
+struct ObserverTrace {
+    stage: Mutex<Option<&'static str>>,
+    error: Mutex<Option<&'static str>>,
+    audit: Arc<Audit>,
+}
+impl ObserverTrace {
+    fn snapshot(&self) -> ObserverReport {
+        ObserverReport {
+            stage: self.stage.lock().ok().and_then(|v| *v),
+            error: self.error.lock().ok().and_then(|v| *v),
+            audit: self.audit.snapshot(),
+        }
+    }
+}
+fn observer_error(code: &'static str) -> &'static str {
+    match code {
+        "invalid_config"
+        | "invalid_private_key"
+        | "invalid_host_key"
+        | "host_key_mismatch"
+        | "overlay_provider_unavailable"
+        | "overlay_stale_revision"
+        | "overlay_wrong_owner"
+        | "overlay_unknown_write"
+        | "overlay_transport_failed"
+        | "handshake_failed"
+        | "authentication_failed"
+        | "socket_unavailable"
+        | "snapshot_failed"
+        | "snapshot_rejected"
+        | "invalid_snapshot"
+        | "pane_missing"
+        | "ambiguous_pane"
+        | "invalid_terminal_id"
+        | "observe_failed"
+        | "invalid_full_frame"
+        | "observe_ended"
+        | "observe_close_failed"
+        | "observe_limit"
+        | "cancelled"
+        | "timeout"
+        | "input_unavailable"
+        | "listener_failed"
+        | "frame_failed"
+        | "resume_target_changed" => code,
+        _ => "other_observer_error",
+    }
+}
+fn observer_stage(stage: &'static str) -> &'static str {
+    match stage {
+        "connecting"
+        | "host-key-verified"
+        | "authenticated"
+        | "snapshot-received"
+        | "full-frame-received"
+        | "input-unavailable" => stage,
+        _ => "other",
+    }
+}
 struct Session {
     ready: mpsc::Receiver<Arc<LiveInput>>,
     frames: mpsc::Receiver<Vec<u8>>,
     cancel: Cancellation,
     task: tokio::task::JoinHandle<Result<(), &'static str>>,
+    trace: Arc<ObserverTrace>,
 }
 fn launch(config: RemoteConfig, dialer: Arc<OverlayDialer>, directory: PathBuf) -> Session {
     let (ready_tx, ready) = mpsc::channel(4);
     let (frame_tx, frames) = mpsc::channel(64);
     let cancel = Cancellation::default();
     let task_cancel = cancel.clone();
+    let trace = Arc::new(ObserverTrace::default());
+    let task_trace = trace.clone();
     let task = tokio::spawn(async move {
-        let selected = config.pane_id.clone();
-        let control = ObservationControl::new();
-        control
-            .set_dashboard_listener(Arc::new(|_| {}))
-            .map_err(|_| "listener_failed")?;
-        let hooks = ControlledInputHooks {
-            recovery: Recovery::open(directory),
-            ready: Arc::new(move |_, input| {
-                let _ = ready_tx.try_send(input);
-            }),
-            state: Arc::new(|_| {}),
-        };
-        observe_interactive_controlled_with_dialer(
-            config,
-            None,
-            task_cancel,
-            Arc::new(Audit::default()),
-            |_| {},
-            move |_| {
-                let selected = selected.clone();
-                async move { Ok(selected) }
-            },
-            move |_, frame| {
-                let tx = frame_tx.clone();
-                async move { tx.send(frame.bytes).await.map_err(|_| "frame_failed") }
-            },
-            Some(hooks),
-            control,
-            dialer.as_ref(),
-        )
-        .await
+        let result = async {
+            let selected = config.pane_id.clone();
+            let control = ObservationControl::new();
+            control
+                .set_dashboard_listener(Arc::new(|_| {}))
+                .map_err(|_| "listener_failed")?;
+            let hooks = ControlledInputHooks {
+                recovery: Recovery::open(directory),
+                ready: Arc::new(move |_, input| {
+                    let _ = ready_tx.try_send(input);
+                }),
+                state: Arc::new(|_| {}),
+            };
+            let stage_trace = task_trace.clone();
+            observe_interactive_controlled_with_dialer(
+                config,
+                None,
+                task_cancel,
+                task_trace.audit.clone(),
+                move |stage| {
+                    if let Ok(mut value) = stage_trace.stage.lock() {
+                        *value = Some(observer_stage(stage));
+                    }
+                },
+                move |_| {
+                    let selected = selected.clone();
+                    async move { Ok(selected) }
+                },
+                move |_, frame| {
+                    let tx = frame_tx.clone();
+                    async move { tx.send(frame.bytes).await.map_err(|_| "frame_failed") }
+                },
+                Some(hooks),
+                control,
+                dialer.as_ref(),
+            )
+            .await
+        }
+        .await;
+        if let Err(code) = result {
+            if let Ok(mut value) = task_trace.error.lock() {
+                *value = Some(observer_error(code));
+            }
+        }
+        result
     });
     Session {
         ready,
         frames,
         cancel,
         task,
+        trace,
     }
 }
 async fn wait_input(session: &mut Session) -> Result<Arc<LiveInput>, &'static str> {
@@ -293,10 +380,11 @@ async fn run(
     let mut a_awaited = false;
     let mut b_awaited = false;
     let result = async {
-        let ai = wait_input(&mut a).await?;
-        report.et_full = true;
-        let bi = wait_input(&mut b).await?;
-        report.ts_full = true;
+        let (ai, bi) = tokio::join!(wait_input(&mut a), wait_input(&mut b));
+        report.et_full = ai.is_ok();
+        report.ts_full = bi.is_ok();
+        let ai = ai?;
+        let bi = bi?;
         report.local_fallback_rejected = reject(&et_dial, "127.0.0.1", input.local_port).await
             && reject(&ts_dial, "127.0.0.1", input.local_port).await;
         if !report.local_fallback_rejected {
@@ -408,6 +496,8 @@ async fn run(
     if !report.ts_observer_joined {
         b.task.abort();
     }
+    report.et_observer = a.trace.snapshot();
+    report.ts_observer = b.trace.snapshot();
     if !report.et_observer_joined || !report.ts_observer_joined {
         return Err("observer_join_failed");
     }
@@ -562,6 +652,14 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn observer_diagnostics_keep_only_fixed_error_and_stage_labels() {
+        assert_eq!(observer_error("socket_unavailable"), "socket_unavailable");
+        assert_eq!(observer_error("sensitive input"), "other_observer_error");
+        assert_eq!(observer_stage("snapshot-received"), "snapshot-received");
+        assert_eq!(observer_stage("sensitive input"), "other");
+    }
 
     #[test]
     fn explicit_login_waits_for_needs_login() {

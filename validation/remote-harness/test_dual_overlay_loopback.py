@@ -11,11 +11,13 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import textwrap
 import time
 import unittest
 
 import dual_overlay_loopback as dual
+import dual_overlay_health as health
 
 
 class EventTests(unittest.TestCase):
@@ -123,6 +125,48 @@ class EventTests(unittest.TestCase):
                             dual.wait_file(path, process, timeout=.02, socket_expected=True)
             finally:
                 process.terminate(); process.wait()
+
+    def test_observer_evidence_is_allowlisted(self):
+        audit = {field: False for field in dual.AUDIT_FIELDS}
+        result = dual.safe_observer({'stage': 'private stage', 'error': 'private error', 'audit': audit})
+        self.assertEqual(result['stage'], 'other')
+        self.assertEqual(result['error'], 'other_observer_error')
+        self.assertNotIn('private', json.dumps(result))
+        with self.assertRaises(dual.et.Failure):
+            dual.safe_observer({'stage': None, 'error': None, 'audit': {}})
+
+    def test_passive_socket_health_uses_only_snapshot_and_capabilities(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = str(Path(temp) / 'fixture.sock')
+            methods = []
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(path); server.listen(2)
+                def serve():
+                    for _ in range(2):
+                        client, _ = server.accept()
+                        with client:
+                            request = json.loads(client.recv(4096))
+                            methods.append(request['method'])
+                            body = ({'snapshot': {}} if request['method'] == 'session.snapshot' else
+                                    {'type': 'pocket_input_capabilities', 'version': 1, 'protocol': 22,
+                                     'atomic_terminal_guard': True, 'raw_bytes': True, 'max_input_bytes': 4096})
+                            client.sendall(json.dumps({'id': request['id'], 'result': body}).encode() + b'\n')
+                worker = threading.Thread(target=serve, daemon=True); worker.start()
+                self.assertEqual(health.check(path), {'snapshot': True, 'inputCapability': True})
+                worker.join(timeout=2)
+            self.assertEqual(methods, ['session.snapshot', 'pocket.input.capabilities'])
+
+    def test_peer_panic_diagnostics_exclude_raw_text_and_arguments(self):
+        raw = (b'panic: private token and https://private.invalid/path\n'
+               b'goroutine 42 [running]:\nruntime.main(secret)\n'
+               b'/go/src/runtime/proc.go:42 +0xabc\n')
+        result = dual.peer_diagnostics(raw, 2)
+        self.assertEqual(result['tsPeerExitBeforeCleanup'], 2)
+        self.assertTrue(result['tsPeerPanic'])
+        self.assertEqual(result['tsPeerPanicDetail']['frames'][0]['file'], 'proc.go')
+        self.assertNotIn('secret', json.dumps(result))
+        self.assertNotIn('private', json.dumps(result))
+        self.assertFalse(dual.peer_diagnostics(b'', None)['tsPeerExitedBeforeCleanup'])
 
     def test_redacts_unrecognized_client_error(self):
         payload = {key: False for key in dual.BOOL_FIELDS}

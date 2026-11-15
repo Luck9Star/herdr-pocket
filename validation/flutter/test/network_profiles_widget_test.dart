@@ -57,6 +57,12 @@ class PendingNodeRuntime extends NativeNetworkRuntime {
   }
 }
 
+Future<void> showNetworkDetails(WidgetTester tester,String id) async {
+  if (find.byKey(ValueKey('network-edit-$id')).evaluate().isNotEmpty) return;
+  final details=find.byKey(PageStorageKey('network-details-$id'));
+  await tester.ensureVisible(details); await tester.tap(details); await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('status read during pending start cannot clear an unknown start result',(tester) async {
     final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
@@ -64,15 +70,15 @@ void main() {
     final identities = MemoryNetworkIdentity()..current = NetworkIdentityRecord.checked(identityReply(profile),profile);
     final runtime = PendingNodeRuntime();
     await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(catalog:catalog,closeTabs:(_) {},identityStore:identities,runtime:runtime)));
-    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
-    await tapVisible(tester,'network-node-start-${profile.id}'); await tester.pump(); await tester.pump();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-start-${profile.id}'); await tester.pump(); await tester.pump();
     runtime.reportStopped = true;
-    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pump();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pump();
     runtime.pending.completeError(StateError('unknown')); await tester.pump(); await tester.pump();
     final start = find.byKey(ValueKey('network-node-start-${profile.id}'));
     expect(tester.widget<TextButton>(start).onPressed,isNull);
     expect(find.textContaining('启动结果或期间状态未确认'),findsOneWidget);
-    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pump();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pump();
     expect(tester.widget<TextButton>(start).onPressed,isNotNull);
     await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
@@ -82,11 +88,11 @@ void main() {
     final identities = MemoryNetworkIdentity()..current = NetworkIdentityRecord.checked(identityReply(profile),profile);
     final runtime = PendingNodeRuntime();
     await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(catalog:catalog,closeTabs:(_) {},identityStore:identities,runtime:runtime)));
-    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
-    await tapVisible(tester,'network-node-start-${profile.id}'); await tester.pump(); await tester.pump();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-start-${profile.id}'); await tester.pump(); await tester.pump();
     expect(runtime.starts,1); expect(find.textContaining('正在启动'),findsOneWidget);
-    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pump();
-    await tapVisible(tester,'network-node-stop-${profile.id}'); await tester.pump();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pump();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-stop-${profile.id}'); await tester.pump();
     expect(runtime.stops,1); expect(find.textContaining('已停止'),findsOneWidget);
     runtime.pending.complete(NetworkNodeSnapshot('engine-started',runtime.binding)); await tester.pump();
     expect(find.text('节点：已停止'),findsOneWidget); expect(find.text('节点：引擎已启动 · 入网与 SSH 未验证'),findsNothing);
@@ -115,16 +121,30 @@ void main() {
     await catalog.update(original.change(networkProfileId:network.id,replaceNetwork:true,now:1000));
     final closed = <String>{},runtime = StoppedTailscaleRuntime();
     await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(catalog:catalog,closeTabs:closed.addAll,runtime:runtime)));
-    await tapVisible(tester,'network-delete-${network.id}'); await tester.pumpAndSettle();
-    expect(find.textContaining('Fixture host'),findsOneWidget);
+    await showNetworkDetails(tester,network.id); await tapVisible(tester,'network-delete-${network.id}'); await tester.pumpAndSettle();
+    expect(find.descendant(of:find.byType(AlertDialog),matching:find.textContaining('Fixture host')),findsOneWidget);
     await tapVisible(tester,'network-confirm'); await tester.pumpAndSettle();
     expect(catalog.networkProfiles.single.id,network.id); expect(closed,isEmpty);
     expect(find.textContaining('此网络仍被主机引用'),findsOneWidget);
-    await tapVisible(tester,'network-toggle-${network.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,network.id); await tapVisible(tester,'network-toggle-${network.id}'); await tester.pumpAndSettle();
     await tapVisible(tester,'network-confirm'); await tester.pumpAndSettle();
     expect(catalog.networkProfiles.single.enabled,isFalse); expect(closed,{original.id});
     expect(runtime.statusCalls,1);
     expect(catalog.profiles.single.networkProfileId,network.id);
+    await tester.pumpWidget(const SizedBox()); catalog.dispose();
+  });
+  testWidgets('network deletion review preserves existing device identity and forbids automatic removal',(tester) async {
+    final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+    final network = testNetwork('easytier'); await catalog.addNetwork(network);
+    final identities = MemoryNetworkIdentity()..current = NetworkIdentityRecord.checked(identityReply(network),network);
+    final closed = <String>{};
+    await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(catalog:catalog,closeTabs:closed.addAll,identityStore:identities)));
+    await showNetworkDetails(tester,network.id);
+    await tapVisible(tester,'network-delete-${network.id}'); await tester.pumpAndSettle();
+    await tapVisible(tester,'network-confirm'); await tester.pumpAndSettle();
+    expect(catalog.networkProfiles.single.id,network.id);
+    expect(identities.deletes,0); expect(identities.current,isNotNull); expect(closed,isEmpty);
+    expect(find.textContaining('此配置仍有本机入网资料'),findsOneWidget);
     await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
   testWidgets('disabled overlay without a bridge still permits offline pairing and helper response review after reopening',(tester) async {

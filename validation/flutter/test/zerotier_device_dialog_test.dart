@@ -80,10 +80,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('networks-zerotier-device'))); await tester.pumpAndSettle();
     expect(find.byTooltip('关闭'),findsOneWidget);
     await tester.tap(find.byTooltip('关闭')); await tester.pumpAndSettle();
-    expect(find.text('ZeroTier · 共享设备身份'),findsNothing); expect(find.text('网络管理 · 公开配置'),findsOneWidget);
+    expect(find.text('ZeroTier · 共享设备身份'),findsNothing); expect(find.text('网络配置'),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('networks-zerotier-device'))); await tester.pumpAndSettle();
     await tester.binding.handlePopRoute(); await tester.pumpAndSettle();
-    expect(find.text('ZeroTier · 共享设备身份'),findsNothing); expect(find.text('网络管理 · 公开配置'),findsOneWidget);
+    expect(find.text('ZeroTier · 共享设备身份'),findsNothing); expect(find.text('网络配置'),findsOneWidget);
     expect(store.reads,2); expect(store.creates,0); expect(store.forgets,0);
     await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });

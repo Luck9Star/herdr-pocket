@@ -207,6 +207,7 @@ Future<void> tapPopupOption(WidgetTester tester,Finder item) =>
 /// marker; keep the actual reading even when a candidate disagrees with the
 /// expected column. The remote terminal can contain private output.
 Future<({List<int> markers,Map<String,Map<String,int>> themes})> readFontDiagnostic(WidgetTester tester) async {
+  await tapKey(tester,'remote-display-tools');
   await tapKey(tester,'remote-font-diagnostics-open');
   final preview = find.byKey(const ValueKey('terminal-font-diagnostics-view'));
   await until(tester,() => preview.evaluate().length == 1);

@@ -969,6 +969,34 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     setState(() { showingFontDiagnostics = false; });
   }
 
+  bool get mobileQuickBar => MediaQuery.sizeOf(context).width < 600 && snapshot != null &&
+    inputGate.mode == RemoteInputMode.direct && !showingFontDiagnostics && !selectingScreen;
+
+  /// The mobile bar stays above the soft keyboard. Every callback captures the
+  /// same target and epochs as the ordinary panel and is retired on focus loss.
+  Widget mobileQuickKeys() {
+    final target=inputGate.target, inputEpoch=inputGate.epoch, pageEpoch=observationEpoch;
+    final actionTicket=auxiliaryActionTicket, keyboardTicket=keyboardActionTicket;
+    bool current() => widget.ownsInput && observationEpoch == pageEpoch && inputGate.epoch == inputEpoch &&
+      identical(inputGate.target,target) && widget.visibility?.value != false && !viewPaused;
+    return Material(color:widget.tokens.color('card'),elevation:3,child:SafeArea(top:false,
+      child:Wrap(spacing:2,runSpacing:0,children:[
+        Tooltip(message:'收起键盘',child:OutlinedButton(key:const ValueKey('remote-keyboard-hide'),
+          style:OutlinedButton.styleFrom(minimumSize:const Size(44,48),padding:const EdgeInsets.symmetric(horizontal:4)),
+          onPressed:keyboardControlsEnabled ? () {
+            if (current()) unawaited(hideInputKeyboard(target,RemoteInputMode.direct,inputEpoch,pageEpoch,keyboardTicket));
+          } : null,child:const Icon(Icons.keyboard_hide))),
+        for (final key in const {'Esc':'esc','Tab':'tab','↑':'up','↓':'down','←':'left','→':'right',
+          'Enter':'enter','Ctrl+C':'ctrl-c','Ctrl+D':'ctrl-d'}.entries)
+          OutlinedButton(key:ValueKey('remote-key-${key.key}'),
+            style:OutlinedButton.styleFrom(minimumSize:const Size(44,48),padding:const EdgeInsets.symmetric(horizontal:4)),
+            onPressed:auxiliaryReady ? () {
+              if (current() && auxiliaryReady && identical(auxiliaryActionTicket,actionTicket)) auxiliaryInput(key.value);
+            } : null,child:Text(key.key)),
+      ])));
+
+  }
+
   Widget inputPanel() {
     final available = live && inputGate.capability != null && inputGate.fresh;
     final enabled = widget.ownsInput && available && inputGate.unknown == null && !selectingScreen && !showingFontDiagnostics;
@@ -1013,7 +1041,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             if (panelCurrent()) unawaited(showInputKeyboard(panelTarget,panelMode,panelInputEpoch,panelObservationEpoch,panelKeyboardActionTicket));
           } : null,
           icon:const Icon(Icons.keyboard),label:const Text('展开键盘')),
-        OutlinedButton.icon(key:const ValueKey('remote-keyboard-hide'),
+        if (!mobileQuickBar) OutlinedButton.icon(key:const ValueKey('remote-keyboard-hide'),
           onPressed:keyboardControlsEnabled ? () {
             if (panelCurrent()) unawaited(hideInputKeyboard(panelTarget,panelMode,panelInputEpoch,panelObservationEpoch,panelKeyboardActionTicket));
           } : null,
@@ -1090,6 +1118,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             'Ctrl+Z':'ctrl-z','Ctrl+A':'ctrl-a','Ctrl+E':'ctrl-e','Ctrl+L':'ctrl-l','Ctrl+R':'ctrl-r',
             'Ctrl+U':'ctrl-u','Ctrl+W':'ctrl-w','↑':'up','↓':'down','←':'left','→':'right',
             'Home':'home','End':'end','PgUp':'pgup','PgDn':'pgdn','Enter':'enter'}.entries)
+            if (!mobileQuickBar || !const {'Esc','Tab','Ctrl+C','Ctrl+D','↑','↓','←','→','Enter'}.contains(key.key))
             OutlinedButton(key:ValueKey('remote-key-${key.key}'),style:OutlinedButton.styleFrom(minimumSize:const Size(64,48)),
               onPressed:auxiliaryReady ? () { if (auxiliaryCurrent()) auxiliaryInput(key.value); } : null,
               child:Text(key.key)),
@@ -1291,7 +1320,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final diagnosticSource = terminal,diagnosticTarget = inputGate.target;
     final diagnosticRequest = request,diagnosticObservationEpoch = observationEpoch,diagnosticInputEpoch = inputGate.epoch;
     return PopScope(onPopInvokedWithResult:(didPop,result) {if (didPop) stop();},
-      child:Scaffold(appBar:AppBar(title:Text(snapshot == null ? '连接 herdr 会话' : '${snapshot!.session} · 远端终端'),
+      child:Scaffold(bottomNavigationBar:mobileQuickBar ? Padding(
+        padding:EdgeInsets.only(bottom:MediaQuery.viewInsetsOf(context).bottom),child:mobileQuickKeys()) : null,appBar:AppBar(title:Text(snapshot == null ? '连接 herdr 会话' : '${snapshot!.session} · 远端终端'),
         leading:IconButton(tooltip:'返回离线验证',icon:const Icon(Icons.arrow_back),onPressed:() {stop();Navigator.pop(context);}),
         actions:[if (busy) IconButton(tooltip:'停止并断开',onPressed:stop,icon:const Icon(Icons.stop_circle_outlined))]),
         body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
@@ -1303,11 +1333,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             Text('审查主机身份与目标后，打开真实远端会话。',style:TextStyle(color:widget.tokens.color('textSecondary'))),
             RemoteWorkflowSteps(tokens:widget.tokens,labels:const ['连接目标','身份核验','只读观察'],current:0),
           ],
-          if (dashboard != null) sessionTabs(),
+          if (dashboard != null && MediaQuery.viewInsetsOf(context).bottom == 0) sessionTabs(),
           if (snapshot != null && !widget.ownsInput) RemoteWorkflowNotice(tokens:widget.tokens,child:const Text('另一侧拥有输入焦点 · 本侧持续只读观察；选择此侧后仍需主动启用输入',key:ValueKey('remote-input-ineligible'))),
           if (snapshot != null || inputGate.unknown != null) modeSelector(),
           if ((snapshot != null || inputGate.unknown != null) && inputGate.mode == RemoteInputMode.draft) inputPanel(),
-          if (snapshot != null) Wrap(spacing:8,runSpacing:4,children:[
+          if (snapshot != null) ExpansionTile(key:const ValueKey('remote-display-tools'),
+            title:const Text('显示与选择工具'),children:[Wrap(spacing:8,runSpacing:4,children:[
             OutlinedButton.icon(key:const ValueKey('remote-screen-select'),
               onPressed:live && !viewPaused && widget.visibility?.value != false && !selectingScreen &&
                 !showingFontDiagnostics && !previewOpen && !readingPaste && !inputGate.sending ? () {
@@ -1321,7 +1352,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                     inputGate.epoch == diagnosticInputEpoch) openFontDiagnostics();
               } : null,
               icon:const Icon(Icons.font_download_outlined),label:const Text('字体与字符诊断')),
-          ]),
+          ])]),
           if (snapshot != null && terminal != null) ...[
             const SizedBox(height:12),
             Container(padding:const EdgeInsets.symmetric(horizontal:14,vertical:11),
@@ -1334,7 +1365,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble(),onClose:closeFontDiagnostics)
             else if (selectingScreen) screenSelectionPanel() else RemoteVerticalViewport(
               identity:horizontalTarget,anchors:verticalAnchors,frame:terminal!,fresh:live,
-              builder:(verticalScroll) => SizedBox(height:360,child:ClipRRect(key:terminalViewportKey,borderRadius:BorderRadius.circular(12),
+              builder:(verticalScroll) => SizedBox(height:MediaQuery.sizeOf(context).width < 600
+                ? MediaQuery.viewInsetsOf(context).bottom > 0 ? 160.0 : 240.0
+                : 360,child:ClipRRect(key:terminalViewportKey,borderRadius:BorderRadius.circular(12),
               child:RemoteHorizontalViewport(identity:horizontalTarget,anchors:horizontalAnchors,
                 columns:terminal!.viewWidth,
                 style:TerminalStyle(fontFamily:'ProbeNerd',fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble()),

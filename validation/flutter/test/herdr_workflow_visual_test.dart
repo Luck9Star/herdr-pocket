@@ -87,8 +87,11 @@ void main() {
       '\$ herdr status\r\n\x1b[32m●\x1b[0m agent-a  running\r\n  task: terminal interface review\r\n\r\n'
       '\$ flutter test\r\n\x1b[32mAll tests passed!\x1b[0m\r\n\r\n\$ '));
     await tester.pumpAndSettle();await top(tester,find.byKey(const ValueKey('remote-mode-observe')));
-    expect(find.byKey(const ValueKey('remote-tab-w1:p1')),findsOneWidget);await save(tester,'flutter-observe-390');
+    expect(find.byKey(const ValueKey('remote-tab-w1:p1')),findsOneWidget);
+    tester.widget<Slider>(find.byKey(const ValueKey('remote-vertical-slider'))).onChanged?.call(0); await tester.pump();
+    await save(tester,'flutter-observe-390');
     await input.mode(tester,'direct');await top(tester,find.byKey(const ValueKey('remote-mode-direct')));
+    tester.widget<Slider>(find.byKey(const ValueKey('remote-vertical-slider'))).onChanged?.call(0); await tester.pump();
     expect(adapter.received,isEmpty);await save(tester,'flutter-direct-390');
     await input.mode(tester,'draft');
     await tester.ensureVisible(find.byKey(const ValueKey('remote-input-draft')));

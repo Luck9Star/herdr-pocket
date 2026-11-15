@@ -35,6 +35,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   String? notice;
   bool busy = false;
   int destination = 0;
+  bool collapsePending = false;
+  bool workspaceWide = false;
   final hostSearch = TextEditingController();
   HostTaskFilter taskFilter = HostTaskFilter.all;
   @override
@@ -207,6 +209,17 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     return hostNetworkDescription(declared:profile.provider,requiresBinding:profile.requiresNetworkBinding,
       hasBinding:profile.networkProfileId != null,boundLabel:bound?.label,boundEnabled:bound?.enabled);
   }
+  Widget statusBadge(HostProfile profile) {
+    final report = summaries.forHost(profile.id);
+    final pending = report?.current == true && report!.blockedCount > 0;
+    final label = pending ? '待处理 ${report.blockedCount}' : report == null ? '状态未知'
+      : !report.current ? '待核查' : report.unknownCount > 0 ? '状态未知' : '已同步';
+    return Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: widget.tokens.color(pending ? 'warningSoft' : 'cardSubtle'),
+        borderRadius: BorderRadius.circular(20)),
+      child: Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: widget.tokens.color(pending ? 'warningText' : 'textSecondary'))));
+  }
   Widget hostSummary(HostProfile profile,{bool compact=false}) {
     final value = summaries.forHost(profile.id);
     final distinct = <String,RemotePane>{};
@@ -215,11 +228,14 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     }
     return Column(key:ValueKey('${compact ? 'workspace' : 'host'}-task-summary-${profile.id}'),crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Text(value?.label ?? '任务状态未知 · 尚无此主机的有效会话快照'),
-      if (value != null) Text(value.detail),
+      if (value != null) Text(compact ? value.detail : '最后同步 ${value.syncedAt.toLocal().toIso8601String()}',
+        style: Theme.of(context).textTheme.bodySmall),
       if (value != null && distinct.isNotEmpty)
         ExpansionTile(key:ValueKey(blockedSummaryGroupKey(profile.id,compact:compact)),tilePadding:EdgeInsets.zero,
-          title:Text('受阻窗格 · ${value.blockedCount} 个'),
-          subtitle:Text(value.current ? '打开前仍需审查连接及原目标' : value.freshness == DashboardFreshness.unavailable
+          title:Text(distinct.length == 1
+            ? '受阻窗格 · ${distinct.values.first.label ?? distinct.values.first.paneId}${distinct.values.first.agent == null ? '' : ' / ${distinct.values.first.agent}'}'
+            : '受阻窗格 · ${value.blockedCount} 个'),
+          subtitle:Text(value.current ? '当前受阻 · 原因未提供\n打开前仍需审查连接及原目标' : value.freshness == DashboardFreshness.unavailable
             ? '持续更新不可用 · 单次确认报告，打开前重新核查此目标' : '上次报告 · 点击后重新核查此目标'),
           children:[for (final pane in distinct.values)
             ListTile(key:ValueKey(blockedSummaryTargetKey(profile.id,pane,compact:compact)),
@@ -394,9 +410,9 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             scrollDirection: Axis.horizontal,
             child: Row(children: [
               for (final item in <(HostTaskFilter, String)>[
-                (HostTaskFilter.all, '全部主机 ${ordered.length}'),
-                (HostTaskFilter.current, '当前待处理（${pendingIds.length}）'),
-                (HostTaskFilter.history, '上次受阻，待核查（${historicalIds.length}）'),
+                (HostTaskFilter.all, '全部 ${ordered.length}'),
+                (HostTaskFilter.current, '待处理（${pendingIds.length}）'),
+                (HostTaskFilter.history, '历史待核查（${historicalIds.length}）'),
               ]) Padding(padding: const EdgeInsets.only(right: 8), child: SizedBox(height: 48,
                 child: ChoiceChip(key: ValueKey('hosts-filter-${item.$1.name}'),
                   label: Text(item.$2), selected: taskFilter == item.$1,
@@ -430,20 +446,25 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           Card(
             key: ValueKey('host-card-${profile.id}'),
             color: widget.tokens.color('card'),
+            elevation: 0,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: widget.tokens.color('border'))),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    profile.label,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  Row(children: [
+                    Expanded(child: Text(profile.label, style: Theme.of(context).textTheme.titleMedium)),
+                    statusBadge(profile),
+                  ]),
                   Text(networkDescription(profile), style: Theme.of(context).textTheme.bodySmall),
-                  const Divider(),
-                  Text('会话 ${profile.target['session']}', style: Theme.of(context).textTheme.titleSmall),
-                  hostSummary(profile),
+                  const SizedBox(height: 10),
+                  Material(color: widget.tokens.color('cardSubtle'), borderRadius: BorderRadius.circular(10),
+                    child: Padding(padding: const EdgeInsets.all(10), child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        Text('会话 ${profile.target['session']}', style: Theme.of(context).textTheme.titleSmall),
+                        hostSummary(profile),
+                      ]))),
                   if (!profile.hasIdentity) const Text('导入未配对 · 无本机身份'),
                   FilledButton(
                     key: ValueKey('host-open-${profile.id}'),
@@ -451,7 +472,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                         ? () => open(profile)
                         : null,
                     child: Text(
-                      profile.hasIdentity ? '新建视图并审查连接' : '审查导入目标并在此设备配对',
+                      profile.hasIdentity ? '观察会话 · 审查连接' : '审查导入目标并在此设备配对',
                     ),
                   ),
                   ExpansionTile(
@@ -623,7 +644,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       child:FocusScope(canRequestFocus:visible,child:child!))),
     child:Navigator(key:tab.navigator,onGenerateRoute:(settings) => MaterialPageRoute<void>(settings:settings,
       builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,catalog:catalog,profileId:tab.hostId,
-        adapter:tab.adapter,visibility:tab.visible,onViewState:tab.report,requestedTarget:tab.requestedTarget,
+        adapter:tab.adapter,visibility:tab.visible,inputEligible:tab.inputEligible,onViewState:tab.report,requestedTarget:tab.requestedTarget,
         summaryLeaseFactory:(profile) {
           tab.summaryLease?.close();
           final lease = summaries.open(profile,visible:() => tabs.find(tab.id) == tab && tab.visible.value);
@@ -679,6 +700,9 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                       ),
                     ),
                   ),
+                  if (MediaQuery.sizeOf(context).width >= 960 && tabs.active != null && tabs.activeId != tab.id)
+                    IconButton(key: ValueKey('host-split-${tab.id}'), tooltip: '并排观察此标签',
+                      onPressed: () => tabs.splitWith(tab.id), icon: const Icon(Icons.vertical_split)),
                   IconButton(
                     key: ValueKey('host-tab-close-${tab.id}'),
                     tooltip: '关闭本地标签，不终止远端任务',
@@ -692,6 +716,44 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       ],
     ),
   );
+  Widget desktopSidebar() => Material(color: widget.tokens.color('card'), child: Container(
+    width: 224,
+    decoration: BoxDecoration(border: Border(right: BorderSide(color: widget.tokens.color('border')))),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Padding(padding: EdgeInsets.all(16), child: Text('Herdr Pocket', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+      TextButton.icon(key: const ValueKey('hosts-board-tab'),
+        onPressed: () { tabs.select(null); setState(() => destination = 0); },
+        icon: const Icon(Icons.dashboard_outlined), label: const Text('主机看板')),
+      const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 4), child: Text('主机与已开标签')),
+      Expanded(child: ListView(children: [
+        for (final profile in orderedHosts)
+          ExpansionTile(key: ValueKey('sidebar-host-${profile.id}'), initiallyExpanded: true,
+            title: Text(profile.label, overflow: TextOverflow.ellipsis),
+            subtitle: Text(networkDescription(profile), maxLines: 1, overflow: TextOverflow.ellipsis),
+            children: [
+              ListTile(dense: true, leading: const Icon(Icons.add), title: const Text('新建观察视图'),
+                onTap: profile.enabled && !busy ? () => open(profile) : null),
+              for (final tab in tabs.forHost(profile.id))
+                ValueListenableBuilder<HostTabView>(valueListenable: tab.view, builder: (context, view, _) =>
+                  ListTile(key: ValueKey('host-tab-${tab.id}'), dense: true,
+                    selected: tabs.activeId == tab.id, selectedTileColor: widget.tokens.color('brandSoft'),
+                    title: Text(view.target, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(view.label),
+                    onTap: () { tabs.select(tab.id); setState(() => destination = 1); },
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (tabs.active != null && tabs.activeId != tab.id)
+                        IconButton(key: ValueKey('host-split-${tab.id}'), tooltip: '并排观察此标签',
+                          onPressed: () => tabs.splitWith(tab.id), icon: const Icon(Icons.vertical_split)),
+                      IconButton(key: ValueKey('host-tab-close-${tab.id}'), tooltip: '关闭本地标签，不终止远端任务',
+                        onPressed: () => tabs.close(tab.id), icon: const Icon(Icons.close)),
+                    ]))),
+            ]),
+      ])),
+      ListTile(key: const ValueKey('hosts-networks'), leading: const Icon(Icons.language), title: const Text('网络'),
+        selected: destination == 2, onTap: () { tabs.select(null); setState(() => destination = 2); }),
+      ListTile(leading: const Icon(Icons.settings_outlined), title: const Text('设置'),
+        selected: destination == 3, onTap: () { tabs.select(null); setState(() => destination = 3); }),
+    ])));
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: tabs.activeId == null,
@@ -705,7 +767,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       }
     },
     child: Scaffold(
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: MediaQuery.sizeOf(context).width < 960 ? NavigationBar(
         backgroundColor: widget.tokens.color('card'),
         indicatorColor: widget.tokens.color('brandSoft'),
         selectedIndex: destination,
@@ -727,19 +789,21 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             label: '设置',
           ),
         ],
-      ),
+      ) : null,
       body: SafeArea(
-        child: LayoutBuilder(
+        child: Row(children: [
+          if (MediaQuery.sizeOf(context).width >= 960) desktopSidebar(),
+          Expanded(child: LayoutBuilder(
           builder: (context, constraints) => Column(
             children: [
-              if (tabs.tabs.isNotEmpty && (destination == 0 || destination == 1))
+              if (MediaQuery.sizeOf(context).width < 960 && tabs.tabs.isNotEmpty && (destination == 0 || destination == 1))
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: constraints.maxHeight * .18,
                   ),
                   child: SingleChildScrollView(child: tabBar()),
                 ),
-              if (tabs.active != null)
+              if (tabs.active != null && MediaQuery.sizeOf(context).width < 960)
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: constraints.maxHeight * .28,
@@ -779,37 +843,47 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
               // The nested tab Navigator installs a modal barrier whose BlockSemantics
               // climbs to the nearest semantic boundary and would otherwise drop the tab
               // strip, workspace summary and notices from the semantics tree. Contain it.
-              Expanded(
-                child: Semantics(
-                  container: true,
-                  child: IndexedStack(
-                    index: destination == 1 && tabs.active != null
-                        ? tabs.activeIndex + 4
-                        : destination,
-                    children: [
-                      board(),
-                      terminalList(),
-                      NetworkProfilesPage(
-                        catalog: catalog,
-                        closeTabs: (ids) {
-                          for (final id in ids) {
-                            tabs.closeHost(id);
-                          }
-                        },
-                      ),
-                      settings(),
-                      for (final tab in tabs.tabs)
-                        KeyedSubtree(
-                          key: ValueKey('host-tab-view-${tab.id}'),
-                          child: tabNavigator(tab),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
+              Expanded(child: LayoutBuilder(builder: (context, workspace) {
+                final wide = workspace.maxWidth >= 960;
+                workspaceWide = wide;
+                if (!wide && tabs.splitId != null && !collapsePending) {
+                  collapsePending = true;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    collapsePending = false;
+                    if (mounted && !workspaceWide) tabs.closeSplit();
+                  });
+                }
+                final split = wide && tabs.active != null && tabs.splitId != null;
+                final showingTab = destination == 1 && tabs.active != null;
+                return Semantics(container: true, child: Stack(children: [
+                  Positioned.fill(child: Offstage(offstage: showingTab, child: IndexedStack(
+                    index: destination, children: [board(), terminalList(),
+                      NetworkProfilesPage(catalog: catalog, closeTabs: (ids) {
+                        for (final id in ids) { tabs.closeHost(id); }
+                      }), settings()]))),
+                  for (final tab in tabs.tabs)
+                    Positioned(key: ValueKey('host-tab-view-${tab.id}'), top: 0, bottom: 0,
+                      left: split && tab.id != tabs.splitLeftId ? workspace.maxWidth / 2 : 0,
+                      width: split ? workspace.maxWidth / 2 : workspace.maxWidth,
+                      child: Offstage(offstage: !showingTab || (tab.id != tabs.activeId && (!split || tab.id != tabs.splitId)),
+                        child: DecoratedBox(key: ValueKey('workspace-frame-${tab.id}'), decoration: BoxDecoration(border: Border.all(
+                          color: split && tab.id == tabs.activeId ? widget.tokens.color('brand') : Colors.transparent,
+                          width: split ? 2 : 0)), child: Column(children: [
+                          SizedBox(height: split ? 44 : 0, child: split ? Row(children: [
+                            Expanded(child: TextButton(key: ValueKey('workspace-focus-${tab.id}'),
+                              onPressed: () => tabs.select(tab.id),
+                              child: Text('${tab.label} · ${tab.id == tabs.activeId ? '输入焦点' : '观察'}', overflow: TextOverflow.ellipsis))),
+                            if (tab.id == tabs.splitId) IconButton(key: const ValueKey('workspace-close-split'),
+                              tooltip: '收起并排观察', onPressed: tabs.closeSplit, icon: const Icon(Icons.close)),
+                          ]) : null),
+                          Expanded(child: Semantics(container: true, child: tabNavigator(tab))),
+                        ])))),
+                ]));
+              })),
             ],
           ),
-        ),
+        )),
+        ]),
       ),
     ),
   );

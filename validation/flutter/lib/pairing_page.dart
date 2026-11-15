@@ -16,12 +16,13 @@ import 'host_task_summary.dart';
 /// Public request/response review. Native identity creation is always explicit;
 /// missing/locked storage has no fallback, and responses never establish SSH trust.
 class PairingPage extends StatefulWidget {
-  const PairingPage({super.key,required this.tokens,this.keys,this.adapter,this.onRequest,this.clock,this.catalog,this.profileId,this.visibility,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLeaseFactory});
+  const PairingPage({super.key,required this.tokens,this.keys,this.adapter,this.onRequest,this.clock,this.catalog,this.profileId,this.visibility,this.inputEligible,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLeaseFactory});
   final DesignTokens tokens;
   final DeviceKeys? keys;
   final HostCatalog? catalog;
   final String? profileId;
   final ValueListenable<bool>? visibility;
+  final ValueListenable<bool>? inputEligible;
   final void Function(String,String?,String?)? onViewState;
   final RemotePane? requestedTarget;
   final void Function(RemotePane)? onOpenPane;
@@ -287,7 +288,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     setState(() { busy = true; status = '请在连接页再次审查冻结目标；只有实际 pin 与 SSH 认证成功才标记已配对'; });
     final summaryLease = savedProfile == null ? null : widget.summaryLeaseFactory?.call(savedProfile!);
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => RemotePage(tokens:widget.tokens,
-      adapter:widget.adapter,visibility:widget.visibility,networkBinding:networkBinding,pairedTarget:target,deviceKeys:keys,keyHandle:p.handle,onViewState:widget.onViewState,
+      adapter:widget.adapter,visibility:widget.visibility,inputEligible:widget.inputEligible,networkBinding:networkBinding,pairedTarget:target,deviceKeys:keys,keyHandle:p.handle,onViewState:widget.onViewState,
       requestedTarget:widget.requestedTarget,onOpenPane:widget.onOpenPane,
       summaryLease:summaryLease,
       devicePublicKey:p.request['public_key'] as String,onConnecting:() { ticket = p.connect(); },onAuthenticated:() { p.connectionResult(ticket,true); if (mounted) setState(() {}); },

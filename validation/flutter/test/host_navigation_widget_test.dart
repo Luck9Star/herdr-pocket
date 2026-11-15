@@ -73,7 +73,14 @@ void main() {
     final dynamic state = tester.state(find.byType(HostCatalogPage));
     final registry = state.summaries as HostTaskSummaries;
     final lease = registry.open(profile);
-    lease.begin()!.publish(summaryBoard(profile, freshness: DashboardFreshness.unavailable));
+    final attempt = lease.begin()!;
+    attempt.publish(summaryBoard(profile));
+    await tester.pump(); await tester.pump();
+    expect(find.textContaining('受阻窗格'), findsOneWidget);
+    expect(find.textContaining('w1:p0'), findsOneWidget);
+    expect(find.text('待处理 1'), findsOneWidget);
+    await capture('populated');
+    attempt.publish(summaryBoard(profile, revision: 2, freshness: DashboardFreshness.unavailable));
     await tester.pump(); await tester.pump();
     final history = find.byKey(const ValueKey('hosts-filter-history'));
     await tester.ensureVisible(history); await tester.tap(history); await tester.pumpAndSettle();

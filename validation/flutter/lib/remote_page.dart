@@ -35,7 +35,7 @@ String pemFromSingleLineInput(String text) {
 }
 
 class RemotePage extends StatefulWidget {
-  const RemotePage({super.key,required this.tokens,this.adapter,this.pairedTarget,this.deviceKeys,this.keyHandle,this.devicePublicKey,this.onConnecting,this.onAuthenticated,this.onStopped,this.visibility,this.networkBinding,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLease});
+  const RemotePage({super.key,required this.tokens,this.adapter,this.pairedTarget,this.deviceKeys,this.keyHandle,this.devicePublicKey,this.onConnecting,this.onAuthenticated,this.onStopped,this.visibility,this.inputEligible,this.networkBinding,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLease});
   final DesignTokens tokens;
   final NetworkConnectionBinding? networkBinding;
   final RemoteReadOnlyAdapter? adapter;
@@ -44,6 +44,8 @@ class RemotePage extends StatefulWidget {
   final String? keyHandle, devicePublicKey;
   final VoidCallback? onConnecting, onAuthenticated, onStopped;
   final ValueListenable<bool>? visibility;
+  final ValueListenable<bool>? inputEligible;
+  bool get ownsInput => inputEligible?.value ?? true;
   final void Function(String,String?,String?)? onViewState;
   final RemotePane? requestedTarget;
   final void Function(RemotePane)? onOpenPane;
@@ -111,6 +113,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   bool? lastKeyboardVisible;
   String? inputSuspensionMessage;
   Object keyboardActionTicket = Object();
+  NavigatorState? inputReviewNavigator;
+  DialogRoute<bool>? inputReviewRoute;
   Object? pasteReviewTicket;
   NavigatorState? pasteReviewNavigator;
   Route<String>? pasteReviewRoute;
@@ -126,7 +130,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   bool functionKeysExpanded = false;
   Object functionKeysTicket = Object();
   late final RemoteInputGate inputGate = RemoteInputGate((target,bytes,current) =>
-    adapter.sendInput(target,bytes,stillCurrent:() => current() &&
+    adapter.sendInput(target,bytes,stillCurrent:() => widget.ownsInput && current() &&
       !(inputGate.mode == RemoteInputMode.direct && directKeyboardHidden)),onChanged:() {
       if (selectingScreen && screenSelectionCurrent?.call() != true) clearScreenSelection();
       if (!inputGate.canInput || inputGate.mode != RemoteInputMode.direct) retireFunctionKeys();
@@ -203,6 +207,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     draft.addListener(draftChanged);
     terminalFocus.addListener(terminalFocusChanged);
     widget.visibility?.addListener(visibilityChanged);
+    widget.inputEligible?.addListener(inputEligibilityChanged);
     widget.networkBinding?.changes?.addListener(networkChanged);
     if (widget.visibility?.value == false) status = '标签已隐藏 · 输入关闭；显示后需主动审查恢复';
     final target = widget.pairedTarget;
@@ -223,7 +228,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
     lastKeyboardVisible = keyboardVisible;
   }
-  bool get commonKeyboardControlState => live && !viewPaused && widget.visibility?.value != false &&
+  bool get commonKeyboardControlState => widget.ownsInput && live && !viewPaused && widget.visibility?.value != false &&
     inputGate.fresh && inputGate.unknown == null && !selectingScreen && !previewOpen && !showingFontDiagnostics;
   void retireFunctionKeys() {
     functionKeysExpanded = false;
@@ -310,11 +315,35 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       widget.networkBinding?.changes?.addListener(networkChanged);
       stop('网络绑定已改变 · 已停止，请关闭本页后重新审查');
     }
+    if (!identical(oldWidget.inputEligible,widget.inputEligible)) {
+      oldWidget.inputEligible?.removeListener(inputEligibilityChanged);
+      widget.inputEligible?.addListener(inputEligibilityChanged);
+      inputEligibilityChanged();
+    }
     if (!identical(oldWidget.visibility,widget.visibility)) {
       oldWidget.visibility?.removeListener(visibilityChanged);
       widget.visibility?.addListener(visibilityChanged);
       if (widget.visibility?.value == false || oldWidget.visibility?.value == false) visibilityChanged();
     }
+  }
+  void dismissInputReview() {
+    final navigator = inputReviewNavigator,route = inputReviewRoute;
+    inputReviewNavigator = null; inputReviewRoute = null;
+    if (route == null) return;
+    previewOpen = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (navigator != null && navigator.mounted && route.isActive) navigator.removeRoute(route);
+    });
+  }
+  void inputEligibilityChanged() {
+    if (!widget.ownsInput) {
+      dismissInputReview(); dismissPasteReview(); retirePendingPasteRead();
+      clearScreenSelection(); resetKeyboardControls();
+      inputGate.setFocused(false); inputGate.setMode(RemoteInputMode.observe);
+      terminalFocus.unfocus(); draftFocus.unfocus();
+      bindTerminalOutput();
+    }
+    if (mounted) setState(() {});
   }
   void networkChanged() {
     if (widget.networkBinding?.stillCurrent() == false) {
@@ -376,7 +405,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   @override
   void dispose() {
-    dismissPasteReview();
+    dismissInputReview(); dismissPasteReview();
+    widget.inputEligible?.removeListener(inputEligibilityChanged);
     widget.summaryLease?.registry.removeListener(summaryChanged);
     widget.summaryLease?.close(); summaryAttempt = null;
     widget.visibility?.removeListener(visibilityChanged);
@@ -593,7 +623,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final lease = inputGate.capture();
     if (source == null) return;
     source.onOutput = (text) {
-      if (!mounted || rendering || previewOpen || selectingScreen || directKeyboardHidden || !identical(source,terminal) || !terminalFocus.hasFocus ||
+      if (!mounted || !widget.ownsInput || rendering || previewOpen || selectingScreen || directKeyboardHidden || !identical(source,terminal) || !terminalFocus.hasFocus ||
           lease == null || lease.mode != RemoteInputMode.direct || !inputGate.current(lease)) return;
       // An IME/multiline insertion also goes through preview. Enter generated
       // by the terminal component is CR and remains an explicit key action.
@@ -603,6 +633,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   void setInputMode(RemoteInputMode mode) {
+    if (mode != RemoteInputMode.observe && !widget.ownsInput) return;
     if (selectingScreen || showingFontDiagnostics || !live || viewPaused || widget.visibility?.value == false || !inputGate.fresh ||
         (mode != RemoteInputMode.observe && (inputGate.target == null || inputGate.capability == null || inputGate.unknown != null))) return;
     // Re-selecting the active chip is not a mode change. Preserve the current
@@ -617,7 +648,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final lease = inputGate.capture();
     if (mode == RemoteInputMode.direct && lease != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && inputGate.current(lease)) terminalFocus.requestFocus();
+        if (mounted && widget.ownsInput && inputGate.current(lease)) terminalFocus.requestFocus();
       });
     }
   }
@@ -718,7 +749,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   Future<void> previewInput(String text, RemoteInputLease lease, {bool fromDraft = false}) async {
-    if (selectingScreen || previewOpen || inputGate.sending || !inputGate.current(lease) || text.isEmpty) return;
+    if (!widget.ownsInput || selectingScreen || previewOpen || inputGate.sending || !inputGate.current(lease) || text.isEmpty) return;
     if (utf8ByteLength(text) > remoteInputReviewByteLimit) {
       setState(() { status = '文本超过 4096 bytes · 未发送'; }); return;
     }
@@ -736,7 +767,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       pasteReviewTicket = null; readingPaste = false;
       auxiliaryModifiers.reset(); previewOpen = true;
     });
-    final approved = await showDialog<bool>(context:context,builder:(context) => AlertDialog(
+    final navigator = Navigator.of(context,rootNavigator:true);
+    late DialogRoute<bool> route;
+    void finish(bool approved) {
+      if (!identical(inputReviewRoute,route) || !route.isCurrent) return;
+      if (approved && (!widget.ownsInput || !inputGate.current(lease))) return;
+      navigator.pop(approved);
+    }
+    route = DialogRoute<bool>(context:context,builder:(context) => AlertDialog(
       title:const Text('预览发送文本'),
       content:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
         mainAxisSize:MainAxisSize.min,children:[
@@ -747,14 +785,18 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           const Text('方括号标出控制与不可见字符；只用于审查，发送保留原始字符。'),
           const Text('保留全部换行，不额外附加回车。换行可能被终端解释为执行输入。服务端接收不表示命令已执行。'),
         ])),actions:[
-        TextButton(onPressed:() => Navigator.pop(context,false),child:const Text('取消')),
+        TextButton(onPressed:() => finish(false),child:const Text('取消')),
         FilledButton(key:const ValueKey('remote-input-confirm'),
-          onPressed:() => Navigator.pop(context,true),child:const Text('发送文本')),
+          onPressed:() => finish(true),child:const Text('发送文本')),
       ]));
-    if (!mounted) return;
+    inputReviewNavigator = navigator; inputReviewRoute = route;
+    final approved = await navigator.push<bool>(route);
+    final reviewCurrent = identical(inputReviewRoute,route);
+    if (reviewCurrent) { inputReviewRoute = null; inputReviewNavigator = null; }
+    if (!mounted || !reviewCurrent) return;
     setState(() { previewOpen = false; });
-    if (lease.mode == RemoteInputMode.direct && inputGate.current(lease)) terminalFocus.requestFocus();
-    if (approved != true || observationEpoch != previewEpoch || widget.visibility?.value == false || viewPaused || !inputGate.current(lease)) return;
+    if (widget.ownsInput && lease.mode == RemoteInputMode.direct && inputGate.current(lease)) terminalFocus.requestFocus();
+    if (!widget.ownsInput || approved != true || observationEpoch != previewEpoch || widget.visibility?.value == false || viewPaused || !inputGate.current(lease)) return;
     if (fromDraft && !sameDraft()) {
       setState(() { status = '原草稿已变化 · 本次未发送，请重新预览'; }); return;
     }
@@ -778,11 +820,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Future<void> pasteInput() async {
     final lease = inputGate.capture();
-    if (selectingScreen || lease == null || previewOpen || readingPaste || inputGate.sending) return;
+    if (!widget.ownsInput || selectingScreen || lease == null || previewOpen || readingPaste || inputGate.sending) return;
     final ticket = Object();
     final key = targetKey(lease.target),original = draft.text,version = draftVersions[targetKey(lease.target)];
     final pasteEpoch = observationEpoch;
-    bool sameContext() => mounted && identical(pasteReviewTicket,ticket) && observationEpoch == pasteEpoch && widget.visibility?.value != false &&
+    bool sameContext() => mounted && widget.ownsInput && identical(pasteReviewTicket,ticket) && observationEpoch == pasteEpoch && widget.visibility?.value != false &&
       !viewPaused && !inputGate.sending && inputGate.current(lease) && draftTarget == key && draft.text == original &&
       identical(draftVersions[key],version);
     ValueNotifier<String>? clipboardPreview;
@@ -851,7 +893,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     } finally {
       if (mounted && identical(pasteReviewTicket,ticket)) {
         setState(() { previewOpen = false; readingPaste = false; pasteReviewTicket = null; });
-        if (lease.mode == RemoteInputMode.direct && inputGate.current(lease)) terminalFocus.requestFocus();
+        if (widget.ownsInput && lease.mode == RemoteInputMode.direct && inputGate.current(lease)) terminalFocus.requestFocus();
       }
       if (identical(pasteReviewRoute,route)) {
         pasteReviewRoute = null;
@@ -864,7 +906,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
   }
 
-  bool get auxiliaryTargetReady => live && inputGate.canInput && inputGate.mode == RemoteInputMode.direct &&
+  bool get auxiliaryTargetReady => widget.ownsInput && live && inputGate.canInput && inputGate.mode == RemoteInputMode.direct &&
     terminalFocus.hasFocus && !directKeyboardHidden && !previewOpen && !selectingScreen && !inputGate.sending;
   bool get auxiliaryReady => auxiliaryTargetReady && !terminalIme.blocksAuxiliary(terminal);
 
@@ -879,7 +921,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   void terminalEditingValueChanged(Terminal source,int pageRequest,int pageEpoch,int inputEpoch,TextEditingValue value) {
-    if (!mounted || !identical(terminal,source) || request != pageRequest || observationEpoch != pageEpoch ||
+    if (!mounted || !widget.ownsInput || !identical(terminal,source) || request != pageRequest || observationEpoch != pageEpoch ||
         inputGate.epoch != inputEpoch || inputGate.mode != RemoteInputMode.direct || viewPaused || widget.visibility?.value == false) return;
     final composing = !value.composing.isCollapsed;
     // This callback runs synchronously on every platform update, including
@@ -929,14 +971,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget inputPanel() {
     final available = live && inputGate.capability != null && inputGate.fresh;
-    final enabled = available && inputGate.unknown == null && !selectingScreen && !showingFontDiagnostics;
+    final enabled = widget.ownsInput && available && inputGate.unknown == null && !selectingScreen && !showingFontDiagnostics;
     final panelObservationEpoch = observationEpoch,panelInputEpoch = inputGate.epoch;
     final panelTarget = inputGate.target;
     final panelMode = inputGate.mode;
     final panelKeyboardActionTicket = keyboardActionTicket;
     final panelFunctionKeysTicket = functionKeysTicket;
     final panelAuxiliaryActionTicket = auxiliaryActionTicket;
-    bool panelCurrent() => observationEpoch == panelObservationEpoch && inputGate.epoch == panelInputEpoch &&
+    bool panelCurrent() => widget.ownsInput && observationEpoch == panelObservationEpoch && inputGate.epoch == panelInputEpoch &&
       identical(inputGate.target,panelTarget) && widget.visibility?.value != false && !viewPaused;
     bool auxiliaryCurrent() => panelCurrent() && auxiliaryReady && identical(auxiliaryActionTicket,panelAuxiliaryActionTicket);
     bool functionKeysCurrent() => auxiliaryCurrent() && functionKeysExpanded &&
@@ -1194,7 +1236,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget modeSelector() {
     final observation = observationEpoch,epoch = inputGate.epoch,target = inputGate.target;
-    final enabled = live && inputGate.capability != null && inputGate.fresh && inputGate.unknown == null && !selectingScreen && !showingFontDiagnostics;
+    final enabled = widget.ownsInput && live && inputGate.capability != null && inputGate.fresh && inputGate.unknown == null && !selectingScreen && !showingFontDiagnostics;
     bool current() => observationEpoch == observation && inputGate.epoch == epoch &&
       identical(inputGate.target,target) && widget.visibility?.value != false && !viewPaused;
     return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
@@ -1262,6 +1304,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             RemoteWorkflowSteps(tokens:widget.tokens,labels:const ['连接目标','身份核验','只读观察'],current:0),
           ],
           if (dashboard != null) sessionTabs(),
+          if (snapshot != null && !widget.ownsInput) RemoteWorkflowNotice(tokens:widget.tokens,child:const Text('另一侧拥有输入焦点 · 本侧持续只读观察；选择此侧后仍需主动启用输入',key:ValueKey('remote-input-ineligible'))),
           if (snapshot != null || inputGate.unknown != null) modeSelector(),
           if ((snapshot != null || inputGate.unknown != null) && inputGate.mode == RemoteInputMode.draft) inputPanel(),
           if (snapshot != null) Wrap(spacing:8,runSpacing:4,children:[
@@ -1298,7 +1341,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 child:TerminalView(terminal!,key:ValueKey('remote-terminal-${inputGate.epoch}'),
                 scrollController:verticalScroll,
                 focusNode:terminalFocus,theme:widget.tokens.terminalTheme,
-                autoResize:false,readOnly:!live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput,
+                autoResize:false,readOnly:!widget.ownsInput || !live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput,
                 simulateScroll:false,hardwareKeyboardOnly:inputGate.mode != RemoteInputMode.direct,
                 keyboardType:TextInputType.text,
                 onEditingValueChanged:(value) {
@@ -1307,7 +1350,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 },
                 textStyle:TerminalStyle(fontFamily:'ProbeNerd',fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble()),shortcuts:const {},
                 onKeyEvent:(node,event) {
-                  if (observationEpoch != terminalObservationEpoch || inputGate.epoch != terminalInputEpoch || viewPaused ||
+                  if (!widget.ownsInput || observationEpoch != terminalObservationEpoch || inputGate.epoch != terminalInputEpoch || viewPaused ||
                       widget.visibility?.value == false || !live || inputGate.mode != RemoteInputMode.direct || !inputGate.canInput || previewOpen || selectingScreen) return KeyEventResult.handled;
                   if (event is KeyDownEvent && (((HardwareKeyboard.instance.isControlPressed || HardwareKeyboard.instance.isMetaPressed) &&
                       event.logicalKey == LogicalKeyboardKey.keyV) ||

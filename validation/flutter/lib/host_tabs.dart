@@ -23,6 +23,7 @@ class HostTab {
   final RemotePane? requestedTarget;
   final navigator = GlobalKey<NavigatorState>();
   final visible = ValueNotifier<bool>(false);
+  final inputEligible = ValueNotifier<bool>(false);
   final ValueNotifier<HostTabView> view;
   HostDashboardLease? summaryLease;
   bool _disposed = false;
@@ -42,7 +43,7 @@ class HostTab {
   static String bindingFor(HostProfile p,[List<NetworkProfile> networks=const []]) => jsonEncode({'id':p.id,'target':p.target,
     'networkProfileId':p.networkProfileId,'requiresNetworkBinding':p.requiresNetworkBinding,'network':p.networkProfileId == null ? null : networks.where((n) => n.id == p.networkProfileId).map((n) => n.toJson()).toList(),
     'pairing':{'handle':p.pairingRecord['handle'],'request':p.pairingRecord['request']}});
-  void dispose() { _disposed = true; summaryLease?.close(); visible.value = false; visible.dispose(); view.dispose(); }
+  void dispose() { _disposed = true; summaryLease?.close(); visible.value = false; inputEligible.value = false; visible.dispose(); inputEligible.dispose(); view.dispose(); }
 }
 
 class HostTabView {
@@ -61,6 +62,8 @@ class HostTabs extends ChangeNotifier {
   int _nextId = 0;
   List<HostTab> get tabs => List.unmodifiable(_tabs);
   String? activeId;
+  String? splitId;
+  String? splitLeftId;
   String? notice;
   int get activeIndex => activeId == null ? -1 : _tabs.indexWhere((t) => t.id == activeId);
   HostTab? get active => activeIndex < 0 ? null : _tabs[activeIndex];
@@ -73,16 +76,49 @@ class HostTabs extends ChangeNotifier {
     final tab = HostTab(id,profile,adapter:adapter,requestedTarget:requestedTarget,networks:networks); _tabs.add(tab);
     select(tab.id); return true;
   }
+  /// Both visible tabs may observe; input belongs only to the selected tab.
   void select(String? id) {
     if (id != null && find(id) == null) return;
     if (activeId == id) return;
-    active?.summaryLease?.invalidate(); active?.visible.value = false;
-    activeId = id; active?.visible.value = true; notice = null; notifyListeners();
+    final old = active;
+    old?.inputEligible.value = false;
+    if (splitId != null && id == splitId) {
+      splitId = activeId;
+    } else {
+      old?.summaryLease?.invalidate(); old?.visible.value = false;
+      final other = splitId == null ? null : find(splitId!);
+      other?.summaryLease?.invalidate(); other?.visible.value = false;
+      splitId = null; splitLeftId = null;
+    }
+    activeId = id;
+    active?.visible.value = true;
+    active?.inputEligible.value = true;
+    notice = null; notifyListeners();
+  }
+  void splitWith(String id) {
+    final other = find(id);
+    if (active == null || other == null || id == activeId || id == splitId) return;
+    final previous = splitId == null ? null : find(splitId!);
+    previous?.summaryLease?.invalidate(); previous?.visible.value = false;
+    splitId = id; splitLeftId = activeId;
+    other.visible.value = true;
+    other.inputEligible.value = false;
+    notice = null; notifyListeners();
+  }
+  void closeSplit() {
+    final other = splitId == null ? null : find(splitId!);
+    if (other == null) { splitId = null; splitLeftId = null; return; }
+    other.inputEligible.value = false; other.summaryLease?.invalidate(); other.visible.value = false;
+    splitId = null; splitLeftId = null; notifyListeners();
   }
   void close(String id) {
     final tab = find(id); if (tab == null) return;
-    tab.summaryLease?.close(); tab.visible.value = false;
-    if (activeId == id) activeId = null; // do not implicitly activate another host
+    tab.inputEligible.value = false; tab.summaryLease?.close(); tab.visible.value = false;
+    if (activeId == id) {
+      final other = splitId == null ? null : find(splitId!);
+      other?.summaryLease?.invalidate(); other?.visible.value = false;
+      activeId = null; splitId = null; splitLeftId = null; // do not implicitly activate another host
+    } else if (splitId == id) { splitId = null; splitLeftId = null; }
     _tabs.remove(tab); tab.dispose(); notifyListeners();
   }
   void closeHost(String hostId) { for (final tab in List<HostTab>.of(forHost(hostId))) { close(tab.id); } }

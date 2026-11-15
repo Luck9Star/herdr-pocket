@@ -211,9 +211,10 @@ class ScaffoldTests(unittest.TestCase):
             self.assertLess(case.index('tap(app, '+button+')'),case.index('peerObservationWindow("'+phase+'")'))
             self.assertLess(case.index('peerObservationWindow("'+phase+'")'),case.index('app.terminate()'))
         key=swift[swift.index('func testEncryptedKeySSH'):swift.index('func testReturnAndReopen')]
-        self.assertLess(key.index('app.typeText(phrase)'),key.index('clickFormButton(app, label: "粘贴私钥")'))
+        self.assertLess(key.index('keyPassphrase.typeText(phrase)'),key.index('clickFormButton(app, label: "粘贴私钥")'))
         self.assertIn('try phraseMatches(app)',key)
-        self.assertLess(key.index('field.hasKeyboardFocus'),key.index('app.typeKey("a", modifierFlags: .command)'))
+        self.assertLess(key.index('tap(app, field)'),key.index('field.typeKey("a", modifierFlags: .command)'))
+        self.assertIn('field.typeText(phrase)',key)
         self.assertIn('XCTAssertTrue(phraseConfirmed',key)
         self.assertNotIn('maskedValue.isEmpty',key)
         self.assertLess(key.index('try assertNoSecrets(app, [password, phrase])'),key.index('clickFormButton(app, label: "粘贴私钥")'))

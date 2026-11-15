@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import zipfile
@@ -25,7 +26,7 @@ STAGES = {'initialization', 'private-config', 'load-libraries', 'bind-java-conte
 
 
 def safe_probe(value):
-    if not isinstance(value, dict) or value.get('schemaVersion') != 1:
+    if not isinstance(value, dict) or type(value.get('schemaVersion')) is not int or value.get('schemaVersion') != 1:
         raise ValueError('probe_result_invalid')
     for key, item in value.items():
         if key == 'schemaVersion':
@@ -56,6 +57,43 @@ def safe_probe(value):
     if value.get('loginInvoked') is not False or value.get('dialInvoked') is not False:
         raise ValueError('probe_operation_boundary_invalid')
     return value
+
+
+def probe_report(raw):
+    if len(raw) > 16384:
+        return {'probeReport': 'oversize'}
+    try:
+        value = json.loads(raw)
+    except (ValueError, UnicodeError):
+        return {'probeReport': 'not-json', 'reportFileMissing': b'No such file or directory' in raw}
+    try:
+        return {'probeReport': 'valid', 'probe': safe_probe(value)}
+    except (ValueError, TypeError):
+        partial = {'schemaVersion': 1, 'loginInvoked': False, 'dialInvoked': False}
+        rejected = []
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key in partial:
+                    if item != partial[key] or type(item) is not type(partial[key]): rejected.append('boundary')
+                    continue
+                try:
+                    safe_probe(dict(partial, **{key: item}))
+                    partial[key] = item
+                except (ValueError, TypeError):
+                    rejected.append(key if key in BOOLS | {'directories', 'states', 'lastStage', 'failureStage', 'failureClass'} else 'other-field')
+        for key in ('loginInvoked', 'dialInvoked'):
+            if not isinstance(value, dict) or value.get(key) is not False:
+                partial.pop(key, None)
+        return {'probeReport': 'schema-rejected', 'probePartial': partial, 'rejectedFields': sorted(set(rejected))}
+
+
+def instrument_summary(result):
+    raw = result.stdout[:65536]
+    codes = re.findall(rb'^INSTRUMENTATION_CODE: (-?[0-9]+)\r?$', raw, re.MULTILINE)
+    code = codes[-1].decode() if len(codes) == 1 and codes[0] in (b'-1', b'0', b'1') else 'other'
+    return {'commandSucceeded': result.returncode == 0, 'finished': len(codes) == 1,
+        'returnCode': code, 'processCrash': b'Process crashed' in raw or b'Process crash' in raw,
+        'instrumentationFailed': b'INSTRUMENTATION_FAILED' in raw}
 
 
 def verify_apk(apk, libraries):
@@ -95,6 +133,17 @@ def run(args):
                     if result.returncode != 0 or b'Success' not in result.stdout:
                         raise ValueError('probe_install_failed')
                     installed = True
+                    installed_path = adb('shell', 'pm', 'path', PACKAGE)
+                    lines = installed_path.stdout.decode('ascii').strip().splitlines()
+                    if (installed_path.returncode or len(lines) != 1 or
+                            not re.fullmatch(r'package:/data/app/[A-Za-z0-9_./=+~\-]+/base\.apk', lines[0])
+                            or '/../' in lines[0]):
+                        raise ValueError('probe_installed_apk_path_invalid')
+                    installed_apk = adb('exec-out', 'cat', lines[0][len('package:'):], timeout=60)
+                    if installed_apk.returncode or hashlib.sha256(installed_apk.stdout).hexdigest() != row['apkSha256']:
+                        raise ValueError('probe_installed_apk_mismatch')
+                    row['installedApkSha256'] = hashlib.sha256(installed_apk.stdout).hexdigest()
+                    del installed_apk
                     prepare_private_ca('adb', SERIAL, session.read_ca(), run=subprocess.run)
                     prefix = ('shell', '-T', 'run-as', PACKAGE)
                     config = json.dumps({'controlUrl': session.materials['controlUrl']}).encode()
@@ -102,19 +151,30 @@ def run(args):
                         raise ValueError('probe_config_failed')
                     if adb(*prefix, 'chmod', '600', 'files/ts-node-probe-config.json').returncode:
                         raise ValueError('probe_config_failed')
-                    result = adb('shell', 'am', 'instrument', '-w', '-r', PACKAGE + '/dev.herdr.tsnodeprobe.ProbeInstrumentation', timeout=100)
-                    row['instrumentationCommandSucceeded'] = result.returncode == 0
+                    try:
+                        result = adb('shell', 'am', 'instrument', '-w', '-r', PACKAGE + '/dev.herdr.tsnodeprobe.ProbeInstrumentation', timeout=100)
+                        row['instrumentation'] = instrument_summary(result)
+                    except subprocess.TimeoutExpired:
+                        row['instrumentation'] = {'commandSucceeded': False, 'timedOut': True}
                     response = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-result.json')
-                    if response.returncode == 0 and len(response.stdout) <= 16384:
-                        row['probe'] = safe_probe(json.loads(response.stdout))
+                    if response.returncode == 0:
+                        row.update(probe_report(response.stdout))
                     else:
-                        row['probeResultUnavailable'] = True
+                        row['probeReport'] = 'cat-failed'
                     row['controlAfter'] = session.control.call({'op': 'ts_diagnostics'})
+                    counter_keys = ('keyRequests', 'noiseRequests', 'registerRequests', 'mapRequests', 'tlsHandshakeErrors', 'authCompletions')
+                    delta = {key: row['controlAfter'][key] - row['controlBefore'][key] for key in counter_keys}
+                    if any(value < 0 for value in delta.values()):
+                        raise ValueError('probe_control_counters_not_monotonic')
+                    row['controlDelta'] = delta
+                    row['noNewAuthorizationOrRegistration'] = delta['registerRequests'] == delta['authCompletions'] == 0
                     row['noSshAuthentication'] = all(session.control.call({'op': 'audit', 'role': role,
                         'expectedBase64': ''})['acceptedSessions'] == 0 for role in ('et', 'ts'))
                     if installed:
                         row['packageRemoved'] = adb('uninstall', PACKAGE).returncode == 0 and not adb('shell', 'pm', 'path', PACKAGE).stdout.strip()
                         installed = False
+            except Exception:
+                row['errorCode'] = 'controlled_variant_probe_failed'
             finally:
                 if installed:
                     row['packageRemoved'] = adb('uninstall', PACKAGE).returncode == 0 and not adb('shell', 'pm', 'path', PACKAGE).stdout.strip()
@@ -123,6 +183,7 @@ def run(args):
             if (probe.get('passed') is True and probe.get('stopOk') is True and probe.get('stopState') == 'stopped'
                     and probe.get('nativeScopeClosed') is True and probe.get('identityDeleted') is True
                     and row.get('packageRemoved') is True and row.get('noSshAuthentication') is True
+                    and row.get('noNewAuthorizationOrRegistration') is True
                     and row['session']['cleanup'] and all(row['session']['cleanup'].values())):
                 row['status'] = 'passed'
         if len(output['variants']) == 2 and all(row['status'] == 'passed' for row in output['variants']):

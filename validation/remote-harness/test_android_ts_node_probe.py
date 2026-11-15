@@ -27,6 +27,23 @@ class ProbeGuardsTests(unittest.TestCase):
         changed = copy.deepcopy(value); changed['directories']['identity']['path'] = 'private-value'
         with self.assertRaises(ValueError): probe.safe_probe(changed)
 
+    def test_missing_or_rejected_report_preserves_only_safe_metadata(self):
+        self.assertEqual(probe.probe_report(b'cat: private-path: No such file or directory'),
+            {'probeReport': 'not-json', 'reportFileMissing': True})
+        import json
+        value = {'schemaVersion': 1, 'loginInvoked': False, 'dialInvoked': False,
+            'lastStage': 'native-start', 'contextBound': True, 'secret': 'private-value'}
+        result = probe.probe_report(json.dumps(value).encode())
+        self.assertEqual(result['probeReport'], 'schema-rejected')
+        self.assertEqual(result['probePartial']['lastStage'], 'native-start')
+        self.assertTrue(result['probePartial']['contextBound'])
+        self.assertNotIn('private-value', repr(result)); self.assertNotIn('secret', repr(result))
+        from types import SimpleNamespace
+        result = probe.instrument_summary(SimpleNamespace(returncode=0,
+            stdout=b'INSTRUMENTATION_RESULT: shortMsg=Process crashed.\nINSTRUMENTATION_CODE: 0\n'))
+        self.assertEqual(result['returnCode'], '0'); self.assertTrue(result['processCrash'])
+        self.assertTrue(result['finished'])
+
     def test_apk_contains_exact_fixed_libraries(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder); apk = root / 'probe.apk'

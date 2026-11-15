@@ -47,6 +47,15 @@ public final class ProbeInstrumentation extends Instrumentation {
         return value;
     }
 
+    private void checkpoint(Context app, String value) throws Exception {
+        stage = value;
+        report.put("lastStage", stage).put("passed", false);
+        File pending = new File(app.getFilesDir(), "ts-node-probe-result.json.new");
+        Files.write(pending.toPath(), report.toString().getBytes(StandardCharsets.UTF_8));
+        Files.move(pending.toPath(), new File(app.getFilesDir(), "ts-node-probe-result.json").toPath(),
+            java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+    }
+
     @Override public void onStart() {
         Context app = getTargetContext().getApplicationContext();
         long scope = 0;
@@ -55,24 +64,24 @@ public final class ProbeInstrumentation extends Instrumentation {
         AndroidTailscaleStateStore.Result identity = null;
         try {
             report.put("schemaVersion", 1).put("loginInvoked", false).put("dialInvoked", false);
-            stage = "private-config";
-            JSONObject config = new JSONObject(Files.readString(new File(app.getFilesDir(), "ts-node-probe-config.json").toPath()));
+            checkpoint(app, "private-config");
+            JSONObject config = new JSONObject(new String(Files.readAllBytes(new File(app.getFilesDir(), "ts-node-probe-config.json").toPath()), StandardCharsets.UTF_8));
             String control = config.getString("controlUrl"), hostname = "android-synthetic-probe";
             if (!control.matches("https://127\\.0\\.0\\.1:[0-9]+")) throw new IllegalStateException();
-            stage = "load-libraries";
+            checkpoint(app, "load-libraries");
             System.loadLibrary("heeler_easytier");
             System.loadLibrary("hp_tailscale");
             System.loadLibrary("herdr_flutter_network_runtime");
             report.put("librariesLoaded", true);
-            stage = "bind-java-context";
+            checkpoint(app, "bind-java-context");
             report.put("contextBound", AndroidTailscaleConfig.bindNative(app));
             if (!report.getBoolean("contextBound")) throw new IllegalStateException();
-            stage = "create-identity";
+            checkpoint(app, "create-identity");
             store = new AndroidTailscaleStateStore(app);
             String profile = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
             identity = store.create(profile);
             report.put("identityCreated", identity != null).put("identityReadBack", store.status(profile) != null);
-            stage = "directory-callback";
+            checkpoint(app, "directory-callback");
             report.put("directories", DirectoryProbe.inspect(app, profile, identity.handle));
             StringBuilder hash = new StringBuilder("ts1:");
             for (byte value : MessageDigest.getInstance("SHA-256").digest(
@@ -80,17 +89,17 @@ public final class ProbeInstrumentation extends Instrumentation {
                 hash.append(String.format(java.util.Locale.ROOT, "%02x", value & 255));
             binding = new JSONObject().put("provider", "tailscale").put("profileId", profile)
                 .put("profileRevision", 1).put("networkName", hash.toString()).put("identityRef", identity.handle);
-            stage = "create-native-scope";
+            checkpoint(app, "create-native-scope");
             scope = NetworkRuntimeChannel.nativeCreateScope();
             report.put("nativeScopeCreated", scope > 0);
             if (scope <= 0) throw new IllegalStateException();
-            stage = "native-available";
+            checkpoint(app, "native-available");
             JSONObject available = call(scope, "available", new JSONObject().put("provider", "tailscale"), "available");
             report.put("providerAvailable", available.optBoolean("available", false));
-            stage = "native-start";
+            checkpoint(app, "native-start");
             call(scope, "nodeStart", new JSONObject().put("binding", binding).put("settings",
                 new JSONObject().put("controlUrl", control).put("hostname", hostname)), "start");
-            stage = "native-status";
+            checkpoint(app, "native-status");
             JSONArray states = new JSONArray();
             boolean needsLogin = false;
             long deadline = android.os.SystemClock.elapsedRealtime() + 15000;
@@ -126,7 +135,7 @@ public final class ProbeInstrumentation extends Instrumentation {
                 report.put("passed", report.optBoolean("passed") && report.optBoolean("stopOk")
                     && "stopped".equals(report.optString("stopState")) && report.optBoolean("nativeScopeClosed")
                     && report.optBoolean("identityDeleted") && !report.optBoolean("cleanupFailed"));
-                Files.writeString(new File(app.getFilesDir(), "ts-node-probe-result.json").toPath(), report.toString());
+                Files.write(new File(app.getFilesDir(), "ts-node-probe-result.json").toPath(), report.toString().getBytes(StandardCharsets.UTF_8));
             } catch (Exception ignored) { }
             Bundle result = new Bundle(); result.putString("status", report.optBoolean("passed") ? "passed" : "failed");
             finish(report.optBoolean("passed") ? -1 : 0, result);

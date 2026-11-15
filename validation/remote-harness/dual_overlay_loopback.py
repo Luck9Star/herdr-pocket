@@ -27,18 +27,26 @@ import time
 import easytier_loopback as et
 
 
-BOOL_FIELDS = ('passed', 'preloginUrlAbsent', 'preloginDialRejected', 'etFull', 'tsFull', 'etFirst',
+BOOL_FIELDS = ('passed', 'preloginUrlAbsent', 'preloginNeedsLogin', 'beginLoginSubmitted', 'beginLoginSucceeded', 'preloginDialRejected', 'etFull', 'tsFull', 'etFirst',
                'tsFirst', 'etStopped', 'etStaleRejected', 'tsAfterStop',
                'tsStopped', 'tsStaleRejected', 'etAfterStop', 'etObserverJoined',
                'tsObserverJoined', 'localFallbackRejected', 'crossRouteRejected', 'cleanup')
 
 
 CLIENT_ERRORS = {None, 'real_candidates_required', 'node_operation_failed', 'unexpected_prelogin_url',
-                 'login_url_missing', 'prelogin_dial_not_rejected', 'auth_exchange_failed',
+                 'login_url_missing', 'prelogin_state_timeout', 'prelogin_dial_not_rejected', 'auth_exchange_failed',
                  'auth_exchange_timeout', 'ts_not_running', 'local_fallback_not_rejected',
                  'cross_route_not_rejected', 'input_ready_timeout', 'input_not_ready',
                  'frame_marker_missing', 'input_send_failed', 'input_mode_failed', 'provider_stop_failed', 'observer_join_failed', 'stale_input_not_rejected',
                  'cleanup_failed', 'executor_failed', 'dialer_failed', 'invalid_et_config'}
+
+
+TS_STATES = {None, 'starting', 'engine_started', 'needs_login', 'needs_machine_auth',
+             'running', 'closing', 'stopped', 'other'}
+
+
+def safe_state(raw):
+    return raw if isinstance(raw, (str, type(None))) and raw in TS_STATES else 'other'
 
 
 def safe_result(raw):
@@ -50,7 +58,7 @@ def safe_result(raw):
 
 
 def case_passed(result, stop_first):
-    common = ('passed', 'preloginUrlAbsent', 'preloginDialRejected', 'etFull', 'tsFull',
+    common = ('passed', 'preloginUrlAbsent', 'preloginNeedsLogin', 'beginLoginSubmitted', 'beginLoginSucceeded', 'preloginDialRejected', 'etFull', 'tsFull',
               'etFirst', 'tsFirst', 'etObserverJoined', 'tsObserverJoined',
               'localFallbackRejected', 'crossRouteRejected', 'cleanup')
     expected = (('etStopped', 'etStaleRejected', 'tsAfterStop') if stop_first == 'et'
@@ -265,6 +273,7 @@ LogLevel ERROR
         wait_file(root / 'result.json', client, 1)
         result = json.loads((root / 'result.json').read_text())
         report['client'], report['clientError'] = safe_result(result)
+        report['lastTsState'] = safe_state(result.get('lastTsState'))
         et_bytes = (hosts[0][0] / 'received.bin').read_bytes()
         ts_bytes = (hosts[1][0] / 'received.bin').read_bytes()
         expected = ((b'ET-ONE\n', b'TS-ONE\nTS-TWO\n') if stop_first == 'et'
@@ -285,7 +294,9 @@ LogLevel ERROR
         result_file = root / 'result.json'
         if result_file.is_file() and 'client' not in report:
             try:
-                report['client'], report['clientError'] = safe_result(json.loads(result_file.read_text()))
+                result = json.loads(result_file.read_text())
+                report['client'], report['clientError'] = safe_result(result)
+                report['lastTsState'] = safe_state(result.get('lastTsState'))
             except (ValueError, OSError, et.Failure):
                 report['clientError'] = 'client_result_invalid'
         for d, *_ in locals().get('hosts', []):

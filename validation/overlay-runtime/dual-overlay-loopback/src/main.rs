@@ -4,7 +4,7 @@ use herdr_overlay_runtime_probe::{
     Failure, OverlayRuntime, ProfileKey, Provider,
     nodes::{NodeLease, NodeSpec, NodeStatus, SecretConfig, SecureConfigSource},
     tailscale::{
-        NativeNodeConfig, NativeStateSource, NativeStateStore, NativeVettedDirectory,
+        LoginStatus, NativeNodeConfig, NativeStateSource, NativeStateStore, NativeVettedDirectory,
         StateStoreError, StateStoreResult,
     },
 };
@@ -54,6 +54,10 @@ struct Report {
     passed: bool,
     error: Option<&'static str>,
     prelogin_url_absent: bool,
+    prelogin_needs_login: bool,
+    begin_login_submitted: bool,
+    begin_login_succeeded: bool,
+    last_ts_state: Option<&'static str>,
     prelogin_dial_rejected: bool,
     et_full: bool,
     ts_full: bool,
@@ -141,6 +145,21 @@ fn op<T>(
     result
         .and_then(|operation| operation.wait(Duration::from_secs(15)))
         .map_err(|_| "node_operation_failed")
+}
+fn status_label(state: NodeStatus) -> &'static str {
+    match state {
+        NodeStatus::Starting => "starting",
+        NodeStatus::EngineStarted => "engine_started",
+        NodeStatus::NeedsLogin => "needs_login",
+        NodeStatus::NeedsMachineAuth => "needs_machine_auth",
+        NodeStatus::Running => "running",
+        NodeStatus::Closing => "closing",
+        NodeStatus::Stopped => "stopped",
+        NodeStatus::ZeroTier { .. } => "other",
+    }
+}
+fn ready_for_explicit_login(status: &LoginStatus) -> bool {
+    status.state == NodeStatus::NeedsLogin && status.auth_url.is_none()
 }
 fn stop(runtime: &OverlayRuntime, node: &NodeLease) -> bool {
     op(runtime.stop_node(node, Duration::from_secs(8))).is_ok()
@@ -425,10 +444,24 @@ fn execute(mut input: Input, report: &mut Report) -> Result<(), &'static str> {
         }
     };
     let result = (|| {
-        let before = op(runtime.node_login_status(&ts, Duration::from_secs(5)))?;
-        report.prelogin_url_absent = before.auth_url.is_none();
-        if !report.prelogin_url_absent {
-            return Err("unexpected_prelogin_url");
+        // Start completion is not the same as the engine reaching NeedsLogin.
+        // Calling interactive login while Starting can return before a URL is issued.
+        let prelogin_deadline = Instant::now() + Duration::from_secs(25);
+        loop {
+            let before = op(runtime.node_login_status(&ts, Duration::from_secs(5)))?;
+            report.last_ts_state = Some(status_label(before.state));
+            if before.auth_url.is_some() {
+                return Err("unexpected_prelogin_url");
+            }
+            report.prelogin_url_absent = true;
+            if ready_for_explicit_login(&before) {
+                report.prelogin_needs_login = true;
+                break;
+            }
+            if Instant::now() >= prelogin_deadline {
+                return Err("prelogin_state_timeout");
+            }
+            std::thread::sleep(Duration::from_millis(100));
         }
         let prelogin_dialer =
             OverlayDialer::new(runtime.clone(), ts.clone(), Duration::from_secs(3))
@@ -445,12 +478,17 @@ fn execute(mut input: Input, report: &mut Report) -> Result<(), &'static str> {
         if !report.prelogin_dial_rejected {
             return Err("prelogin_dial_not_rejected");
         }
+        report.begin_login_submitted = true;
         let login = op(runtime.begin_node_login(&ts, Duration::from_secs(8)))?;
+        report.begin_login_succeeded = true;
+        report.last_ts_state = Some(status_label(login.state));
         let mut url = login.auth_url;
         let url_deadline = Instant::now() + Duration::from_secs(20);
         while url.is_none() && Instant::now() < url_deadline {
             std::thread::sleep(Duration::from_millis(100));
-            url = op(runtime.node_login_status(&ts, Duration::from_secs(5)))?.auth_url;
+            let status = op(runtime.node_login_status(&ts, Duration::from_secs(5)))?;
+            report.last_ts_state = Some(status_label(status.state));
+            url = status.auth_url;
         }
         let url = url.ok_or("login_url_missing")?;
         std::fs::write(input.exchange.join("auth-url"), url.as_str())
@@ -464,9 +502,9 @@ fn execute(mut input: Input, report: &mut Report) -> Result<(), &'static str> {
             return Err("auth_exchange_timeout");
         }
         while Instant::now() < until {
-            if op(runtime.node_login_status(&ts, Duration::from_secs(5)))?.state
-                == NodeStatus::Running
-            {
+            let status = op(runtime.node_login_status(&ts, Duration::from_secs(5)))?;
+            report.last_ts_state = Some(status_label(status.state));
+            if status.state == NodeStatus::Running {
                 break;
             }
             std::thread::sleep(Duration::from_millis(100));
@@ -524,6 +562,24 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explicit_login_waits_for_needs_login() {
+        for state in [
+            NodeStatus::Starting,
+            NodeStatus::EngineStarted,
+            NodeStatus::Running,
+        ] {
+            assert!(!ready_for_explicit_login(&LoginStatus {
+                state,
+                auth_url: None
+            }));
+        }
+        assert!(ready_for_explicit_login(&LoginStatus {
+            state: NodeStatus::NeedsLogin,
+            auth_url: None
+        }));
+    }
 
     #[test]
     fn harness_timeout_is_not_a_product_rejection() {

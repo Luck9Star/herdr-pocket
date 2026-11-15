@@ -128,6 +128,9 @@ class EventTests(unittest.TestCase):
         payload['error'] = 'private unexpected value'
         fields, error = dual.safe_result(payload)
         self.assertEqual(error, 'other_client_failure')
+        self.assertEqual(dual.safe_state('private unexpected value'), 'other')
+        self.assertEqual(dual.safe_state(['not', 'a', 'state']), 'other')
+        self.assertEqual(dual.safe_state('needs_login'), 'needs_login')
         self.assertEqual(set(fields), set(dual.BOOL_FIELDS))
 
     def test_both_stop_orders_require_their_own_evidence(self):

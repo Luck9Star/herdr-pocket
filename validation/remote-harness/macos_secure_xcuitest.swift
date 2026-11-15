@@ -142,7 +142,7 @@ final class SecureCredentialUITests: XCTestCase {
         let center = CGPoint(x: frame.midX, y: frame.midY)
         usleep(100_000)
         XCTAssertTrue(!frame.isEmpty && frame == button.frame && windowFrame == window.frame && frame.intersection(windowFrame).contains(center), "requested control center not stable and visible")
-        let overlapping = app.secureTextFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.contains(center) }.count
+        let overlapping = app.secureTextFields.allElementsBoundByIndex.filter { $0.exists && $0.isHittable && $0.frame.contains(center) }.count
         XCTAssertEqual(overlapping, 0, "secure credential overlay obstructs requested control")
         let origin = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
         origin.withOffset(CGVector(dx: center.x - windowFrame.minX, dy: center.y - windowFrame.minY)).click()
@@ -583,13 +583,6 @@ final class SecureCredentialUITests: XCTestCase {
         let privateKey = config["privateKey"] as! String
         let app = XCUIApplication()
         launchSSH(app, stage: "keyHomepage")
-        let keyWindow = app.windows.firstMatch
-        if keyWindow.frame.width < 700 || keyWindow.frame.height < 700 {
-            app.typeKey("f", modifierFlags: [.control, .command])
-            let deadline = Date().addingTimeInterval(10)
-            while (keyWindow.frame.width < 700 || keyWindow.frame.height < 700) && Date() < deadline { usleep(100_000) }
-            mark("keyFullscreenRequested")
-        }
         try enterTarget(app, host: "127.0.0.1", port: keyPort, username: username, phase: "key")
         let keyProbe = app.buttons["探测并核对主机密钥"]
         reveal(app, keyProbe)
@@ -608,6 +601,19 @@ final class SecureCredentialUITests: XCTestCase {
         mark("keyConfirmAttempt")
         try confirmFingerprint(app, phase: "key")
         mark("keyConfirmed")
+        let keyWindow = app.windows.firstMatch
+        if keyWindow.frame.width < 700 || keyWindow.frame.height < 700 {
+            app.typeKey("f", modifierFlags: [.control, .command])
+            let deadline = Date().addingTimeInterval(10)
+            var stable = false
+            repeat {
+                let frame = keyWindow.frame
+                usleep(200_000)
+                stable = frame == keyWindow.frame && frame.width >= 700 && frame.height >= 700
+            } while !stable && Date() < deadline
+            XCTAssertTrue(stable, "key fullscreen window not stable")
+            mark("keyFullscreenRequested")
+        }
         mark("keyCredentialAttempt")
         tap(app, element(app, "使用私钥认证"))
         mark("keyMethodSelected")

@@ -231,6 +231,7 @@ class ScaffoldTests(unittest.TestCase):
         click=swift[swift.index('private func clickWindowCenter'):swift.index('private func clickFormButton')]
         self.assertIn('XCTAssertEqual(matches.count, 1',click)
         self.assertIn('frame.intersection(windowFrame).contains(center)',click)
+        self.assertIn('$0.exists && $0.isHittable && $0.frame.contains(center)',click)
         self.assertIn('XCTAssertEqual(overlapping, 0',click)
         self.assertEqual(click.count('.click()'),1)
         form=swift[swift.index('private func clickFormButton'):swift.index('private func keyInputBits')]

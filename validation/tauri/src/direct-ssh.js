@@ -90,10 +90,10 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     }
   }
   async function resize(cols, rows) {
-    const id = sessionId;
+    const id = sessionId, current = generation;
     if (!ready || !id) return false;
-    try { await invoke('ssh_shell_resize', {sessionId:id, cols, rows}); return id === sessionId; }
-    catch { onStatus('终端尺寸更新失败；请检查连接。', false); ready = false; return false; }
+    try { await invoke('ssh_shell_resize', {sessionId:id, cols, rows}); return current === generation && id === sessionId && ready; }
+    catch { if (current === generation && id === sessionId) { ready = false; onStatus('终端尺寸更新失败；请检查连接。', false); } return false; }
   }
   return {probe, invalidateReview, open, close, write, resize, isReady: () => ready, isActive: () => ready || connecting};
 }

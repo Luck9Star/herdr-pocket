@@ -50,3 +50,16 @@ test('known authentication and host-key failures are distinguished without expos
     if(error==='host_key_mismatch') await assert.rejects(h.ssh.open(target,{password:'x'},true),/review_required/);
   }
 });
+
+test('a late resize failure cannot invalidate a newly connected session',async()=>{
+  let channel, rejectResize, nextId=0;const statuses=[];
+  const ssh=createDirectSsh({invoke:async cmd=>{
+    if(cmd==='ssh_host_key_probe')return key;
+    if(cmd==='ssh_shell_open')return `s${++nextId}`;
+    if(cmd==='ssh_shell_resize')return new Promise((_resolve,reject)=>{rejectResize=reject;});
+  },channelFactory:()=>channel={},onStatus:(...args)=>statuses.push(args),onData:()=>{}});
+  await ssh.probe(target);await ssh.open(target,{password:'x'},true);channel.onmessage({sessionId:'s1',seq:1,kind:'ready'});
+  const pending=ssh.resize(80,12);await ssh.close();await ssh.open(target,{password:'x'},true);channel.onmessage({sessionId:'s2',seq:1,kind:'ready'});
+  rejectResize(Error('late'));assert.equal(await pending,false);assert.equal(ssh.isReady(),true);
+  assert.doesNotMatch(statuses.at(-1)[0],/尺寸更新失败/);
+});

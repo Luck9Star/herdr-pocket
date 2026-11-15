@@ -445,3 +445,9 @@ h1 { font-size:18px; margin:0}
   .network-profile-management { margin-top:3px; }
   .network-profile-management > summary { min-height:40px; padding:10px 0; }
 }
+/* Ordinary SSH owns its PTY; this viewport is independent of xterm content. */
+#home-ssh .ssh-scroll { box-sizing:border-box; min-height:80px; height:min(55dvh, 520px, calc(var(--hp-visual-height,100dvh) - 180px)); }
+#ssh-terminal { width:max-content; min-height:0; }
+@media (max-width:599px) {
+  #home-ssh .ssh-scroll { height:min(45dvh, calc(var(--hp-visual-height,100dvh) - 180px)); }
+}

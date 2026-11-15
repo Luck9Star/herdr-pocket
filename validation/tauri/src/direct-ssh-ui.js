@@ -3,18 +3,11 @@ import { createDirectSsh } from './direct-ssh.js';
 export function initDirectSshUI({native, invoke, channelFactory, terminalFactory}) {
   const $ = id => document.getElementById(id);
   let terminal = null;
-  let resizePending = false;
-  async function resize() {
-    if (!terminal || !controller.isReady() || resizePending) return;
-    const screen = terminal.element?.querySelector('.xterm-screen');
-    const width = screen?.getBoundingClientRect().width;
-    const viewport = $('ssh-terminal').parentElement.clientWidth;
-    if (!width || !viewport) return;
-    const cols = Math.max(20, Math.min(240, Math.floor((viewport - 24) / (width / terminal.cols))));
-    if (cols === terminal.cols) return;
-    resizePending = true;
-    try { if (await controller.resize(cols, 24)) terminal.resize(cols, 24); } finally { resizePending = false; }
-  }
+  const resizer = createDirectSshResizer({
+    measure: () => measureDirectSshViewport($('ssh-terminal').parentElement, terminal),
+    send: (cols, rows) => controller.resize(cols, rows),
+    apply: (cols, rows) => terminal.resize(cols, rows),
+  });
   const controller = createDirectSsh({invoke, channelFactory,
     onStatus: (message, ready, reason) => {
       $('ssh-status').textContent = message;
@@ -22,7 +15,8 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       $('ssh-setup').hidden = ready;
       $('ssh-live').hidden = !ready;
       if (reason === 'host_key_mismatch') $('ssh-review').checked = false;
-      if (ready) { const t = target(); $('ssh-target').textContent = `${t.username}@${t.host}:${t.port} · SSH 已连接`; requestAnimationFrame(resize); }
+      if (ready) { const t = target(); $('ssh-target').textContent = `${t.username}@${t.host}:${t.port} · SSH 已连接`; resizer.start(); requestAnimationFrame(resizer.request); }
+      else resizer.stop();
     },
     onData: (bytes, acknowledge) => terminal?.write(bytes, acknowledge),
   });
@@ -52,7 +46,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       terminal = terminalFactory({cols:80, rows:24, fontSize:14, cursorBlink:true, theme:{background:'#0B0F17',foreground:'#E6EDF3'}});
       terminal.open($('ssh-terminal'));
       terminal.onData(data => controller.write(new TextEncoder().encode(data)));
-      if (typeof ResizeObserver === 'function') new ResizeObserver(() => void resize()).observe($('ssh-terminal').parentElement);
+      if (typeof ResizeObserver === 'function') new ResizeObserver(resizer.request).observe($('ssh-terminal').parentElement);
     } else terminal.reset();
     clearSecrets();
     try { await controller.open(target(), credentials, $('ssh-review').checked); }
@@ -63,5 +57,45 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   $('ssh-cancel').onclick = disconnect;
   $('ssh-focus').onclick = () => terminal?.focus();
   document.addEventListener('visibilitychange', () => { if (document.hidden) { clearSecrets(); void controller.close(); } });
-  return {close: () => {clearSecrets(); void controller.close();}, isReady:controller.isReady, isActive:controller.isActive, show:()=>{ if(controller.isReady()) requestAnimationFrame(resize); }};
+  return {close: () => {clearSecrets(); void controller.close();}, isReady:controller.isReady, isActive:controller.isActive, show:()=>{ if(controller.isReady()) requestAnimationFrame(resizer.request); }};
+}
+
+// Serialize PTY updates and remeasure after each completion. A new session gets
+// its own generation so late replies cannot resize or block the new terminal.
+export function createDirectSshResizer({measure, send, apply}) {
+  let generation=0, active=false, busy=false, dirty=false, synced=null;
+  async function drain(current) {
+    if (!active || busy || current!==generation) return;
+    busy=true;
+    try {
+      while (active && current===generation && dirty) {
+        dirty=false;
+        const size=measure();
+        if (!size || (synced && size.cols===synced.cols && size.rows===synced.rows)) continue;
+        const accepted=await send(size.cols,size.rows);
+        if (!active || current!==generation) return;
+        if (!accepted) return;
+        apply(size.cols,size.rows);
+        synced=size;
+      }
+    } finally { if (current===generation) busy=false; }
+  }
+  function request() { if (!active) return; dirty=true; void drain(generation); }
+  return {
+    start() { generation++; active=true; busy=false; dirty=false; synced=null; },
+    stop() { generation++; active=false; busy=false; dirty=false; synced=null; },
+    request,
+  };
+}
+
+export function measureDirectSshViewport(container, terminal) {
+  const screen=terminal?.element?.querySelector('.xterm-screen');
+  if (!screen || !terminal.cols || !terminal.rows || !container.getClientRects().length) return null;
+  const rect=screen.getBoundingClientRect(), style=getComputedStyle(container);
+  const width=container.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight);
+  const height=container.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom);
+  const cellWidth=rect.width/terminal.cols, cellHeight=rect.height/terminal.rows;
+  if (![width,height,cellWidth,cellHeight].every(value=>Number.isFinite(value) && value>0)) return null;
+  return {cols:Math.max(2,Math.min(240,Math.floor(width/cellWidth))),
+          rows:Math.max(1,Math.min(200,Math.floor(height/cellHeight)))};
 }

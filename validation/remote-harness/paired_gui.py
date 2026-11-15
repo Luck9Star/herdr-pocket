@@ -354,6 +354,15 @@ class WebDriver:
             self.call('DELETE', self.session)
 
 
+def open_host_summary(driver):
+    """Expand the visible details with a WebDriver click before reading innerText."""
+    def is_open():
+        return driver.call('GET', driver.element('#host-task-details') + '/attribute/open')
+    if not is_open():
+        driver.click('#host-task-details > summary')
+        wait_for(is_open, 'host_summary_not_expanded')
+
+
 def run_tauri(args, root, env, config, approval):
     driver = WebDriver()
     with owned_process(['tauri-driver'], cwd=root, env=env, log=root/'driver.log'):
@@ -380,6 +389,7 @@ def run_tauri(args, root, env, config, approval):
             button = wait_for(lambda:driver.read(pane_selector), 'pane_dashboard_missing')
             if not button.startswith(config['paneId']+' · '):
                 raise GuiFailure('unexpected_dashboard_pane')
+            open_host_summary(driver)
             summary_selector = '#host-task-board [data-live-host-summary]'
             phase_selector = '#remote-panes [data-dashboard-phase]'
             session_label = f" · 会话 {config['session']} · 受阻"

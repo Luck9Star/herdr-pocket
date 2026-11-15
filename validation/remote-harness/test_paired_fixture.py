@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 # Legacy read-only harness runs in a Python without pairing dependencies.
 try:
-    from paired_gui import FixtureApproval, GuiFailure, Host, WebDriver, run_gui, widget_failure
+    from paired_gui import FixtureApproval, GuiFailure, Host, WebDriver, open_host_summary, run_gui, widget_failure
     from pairing import MemoryKeyStore, PendingPairing, encode
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
@@ -44,6 +44,23 @@ class GuiFixtureTests(unittest.TestCase):
                         else:
                             self.assertEqual(result['status'], 'failed')
                             self.assertEqual(result['errorCode'], 'mobile_clipboard_receiver_check_missing')
+
+    def test_host_summary_requires_explicit_expansion_before_visible_read(self):
+        driver = Mock()
+        driver.element.return_value = '/details'
+        driver.call.side_effect = [None, None, 'true']
+        open_host_summary(driver)
+        driver.click.assert_called_once_with('#host-task-details > summary')
+        self.assertEqual(driver.call.call_count, 3)
+        driver.call.assert_called_with('GET', '/details/attribute/open')
+
+    def test_host_summary_already_open_is_not_collapsed(self):
+        driver = Mock()
+        driver.element.return_value = '/details'
+        driver.call.return_value = 'true'
+        open_host_summary(driver)
+        driver.click.assert_not_called()
+        driver.call.assert_called_once_with('GET', '/details/attribute/open')
 
     def test_driver_waits_for_the_native_form_before_sending_keys(self):
         driver = WebDriver()

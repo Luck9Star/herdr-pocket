@@ -1,5 +1,6 @@
 """Safety and scaffold contract; actual XCUITest requires macOS and Xcode."""
 import json
+import ast
 import os
 from pathlib import Path
 import subprocess
@@ -78,7 +79,7 @@ class ScaffoldTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);fixture=root/'macos-secure-fixture';fixture.mkdir()
             allowed=['fixtureReadable','appLaunched','homepage','maskingHomepage','passwordHomepage','keyHomepage','returnHomepage','passwordFreshVerified','passwordAddressTyped','passwordPortCleared','passwordPortTyped','passwordUsernameTyped','keyFreshVerified','keyAddressTyped','keyPortCleared','keyPortTyped','keyUsernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted','passwordValuePresent','passphraseValuePresent',
-                     'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
+                     'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','passwordConfirmAttempt','passwordConfirmed','passwordCredentialAttempt','passwordCredentialEntered','passwordConnectAttempt','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','keyConfirmAttempt','keyConfirmed','keyCredentialAttempt','keyCredentialEntered','keyConnectAttempt','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                      'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
             good_peer={k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}
             (fixture/'facts.json').write_text(json.dumps({'password':good_peer,'encryptedKey':good_peer}))
@@ -137,6 +138,18 @@ class ScaffoldTests(unittest.TestCase):
         self.assertLess(workflow.index('flutter build macos --debug'),workflow.index('ci.py" package'))
         self.assertLess(workflow.index('ci.py" package'),workflow.index('--install-hook'))
         self.assertIn("if: success() && github.ref == 'refs/heads/codex/acceptance/macos-secure-design-parity'",workflow)
+
+    def test_owned_fixture_outlives_job_and_has_explicit_cleanup(self):
+        root=Path(__file__).resolve().parents[2]
+        source=(root/'validation/remote-harness/macos_secure_xcui_fixture.py').read_text()
+        tree=ast.parse(source)
+        limit=next(ast.literal_eval(node.value) for node in tree.body if isinstance(node,ast.Assign)
+                   and any(isinstance(target,ast.Name) and target.id=='MAX_LIFETIME_SECONDS' for target in node.targets))
+        workflow=(root/'.github/workflows/flutter-macos-secure-xcui.yml').read_text()
+        self.assertIn('timeout-minutes: 45',workflow)
+        self.assertGreater(limit,45*60)
+        self.assertIn('touch "$RUNNER_TEMP/macos-secure-fixture/stop"',workflow)
+        self.assertIn('wait "$fixture_pid"',workflow)
 
     def test_secure_queries_scroll_with_bounded_real_hits_and_dual_peer_guards(self):
         swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()

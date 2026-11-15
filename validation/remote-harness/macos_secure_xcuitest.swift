@@ -76,18 +76,29 @@ final class SecureCredentialUITests: XCTestCase {
         return exact.firstMatch
     }
 
-    private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
+    private func reveal(_ app: XCUIApplication, _ element: XCUIElement, phase: String = "control") {
+        for _ in 0..<10 {
+            if stableHit(element) { break }
+            usleep(100_000)
+        }
         if !stableHit(element) {
             for delta in [CGFloat(-240), -240, -240, -240, -240, 240, 240, 240, 240, 240, 240] {
                 scrollForm(app, delta)
                 if stableHit(element) { break }
             }
         }
+        if !stableHit(element) {
+            let exists = element.exists
+            let window = app.windows.firstMatch
+            let inside = exists && window.exists && element.frame.intersects(window.frame)
+            print("HP_XCUI_HIT=phase:\(phase),exists:\(exists ? 1 : 0),enabled:\(exists && element.isEnabled ? 1 : 0),hittable:\(exists && element.isHittable ? 1 : 0),inside:\(inside ? 1 : 0)")
+            fflush(stdout)
+        }
         XCTAssertTrue(stableHit(element), "requested control is not hittable")
     }
 
-    private func tap(_ app: XCUIApplication, _ element: XCUIElement) {
-        reveal(app, element)
+    private func tap(_ app: XCUIApplication, _ element: XCUIElement, phase: String = "control") {
+        reveal(app, element, phase: phase)
         XCTAssertTrue(element.isEnabled, "requested control is disabled")
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
     }
@@ -192,11 +203,15 @@ final class SecureCredentialUITests: XCTestCase {
 
     private func reopenSSH(_ app: XCUIApplication, secrets: [String]) throws {
         let buttons = app.buttons
-        let exact = app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["Back", "返回", "后退", "上一页"]))
+        let preferred = buttons.matching(NSPredicate(format: "label == %@", "返回主机列表"))
+        let exact = app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["返回主机列表", "Back", "返回", "后退", "上一页"]))
         let hittable = exact.allElementsBoundByIndex.filter { stableHit($0) }
         print("HP_XCUI_BACK=buttons:\(min(buttons.count,10000)),exact:\(min(exact.count,10000)),hittable:\(min(hittable.count,10000))")
         fflush(stdout)
-        if hittable.count == 1 {
+        if preferred.count == 1 && stableHit(preferred.firstMatch) {
+            tap(app, preferred.firstMatch)
+            mark("returnButtonUsed")
+        } else if hittable.count == 1 {
             tap(app, hittable[0])
             mark("returnButtonUsed")
         } else {
@@ -339,12 +354,17 @@ final class SecureCredentialUITests: XCTestCase {
         let fingerprintMatches = try verifyFingerprint(app, expected: fingerprint, phase: "password")
         XCTAssertTrue(fingerprintMatches, "independently expected host fingerprint missing")
         mark("fingerprintVerified")
-        tap(app, confirm)
+        mark("passwordConfirmAttempt")
+        tap(app, confirm, phase: "passwordConfirm")
+        mark("passwordConfirmed")
+        mark("passwordCredentialAttempt")
         let loginPassword = secureField(app, "direct-secret")
         tap(app, loginPassword);app.typeText(password)
         try assertNoSecrets(app, [password, phrase])
+        mark("passwordCredentialEntered")
         let connect = app.buttons["连接 SSH"]
-        tap(app, connect)
+        mark("passwordConnectAttempt")
+        tap(app, connect, phase: "passwordConnect")
         let connected = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "已连接 · 输入直接发送到远端 shell")).firstMatch
         XCTAssertTrue(connected.waitForExistence(timeout: 30), "native SSH session did not authenticate")
         mark("sshConnected")
@@ -384,7 +404,10 @@ final class SecureCredentialUITests: XCTestCase {
         let keyFingerprintMatches = try verifyFingerprint(app, expected: keyFingerprint, phase: "encryptedKey")
         XCTAssertTrue(keyFingerprintMatches, "independently expected host fingerprint missing")
         mark("encryptedKeyFingerprintVerified")
-        tap(app, keyConfirm)
+        mark("keyConfirmAttempt")
+        tap(app, keyConfirm, phase: "keyConfirm")
+        mark("keyConfirmed")
+        mark("keyCredentialAttempt")
         tap(app, element(app, "使用私钥认证"))
         let pemGroup = element(app, "私钥 PEM（仅本次使用）")
         reveal(app, pemGroup)
@@ -394,8 +417,10 @@ final class SecureCredentialUITests: XCTestCase {
         let keyPassphrase = secureField(app, "direct-passphrase")
         tap(app, keyPassphrase);app.typeText(phrase)
         try assertNoSecrets(app, [password, phrase])
+        mark("keyCredentialEntered")
         let keyConnect = app.buttons["连接 SSH"]
-        tap(app, keyConnect)
+        mark("keyConnectAttempt")
+        tap(app, keyConnect, phase: "keyConnect")
         let keyConnected = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "已连接 · 输入直接发送到远端 shell")).firstMatch
         XCTAssertTrue(keyConnected.waitForExistence(timeout: 30), "encrypted key session did not authenticate")
         mark("encryptedKeyConnected")

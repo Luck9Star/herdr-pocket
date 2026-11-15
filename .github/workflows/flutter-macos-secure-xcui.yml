@@ -119,7 +119,7 @@ jobs:
               if message and diagnostic not in diagnostics: diagnostics.append(diagnostic)
               if len(diagnostics)==3: break
           allowed={'fixtureReadable','appLaunched','homepage','maskingHomepage','passwordHomepage','keyHomepage','returnHomepage','passwordFreshVerified','passwordAddressTyped','passwordPortCleared','passwordPortTyped','passwordUsernameTyped','keyFreshVerified','keyAddressTyped','keyPortCleared','keyPortTyped','keyUsernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted',
-                   'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
+                   'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','passwordConfirmAttempt','passwordConfirmed','passwordCredentialAttempt','passwordCredentialEntered','passwordConnectAttempt','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','keyConfirmAttempt','keyConfirmed','keyCredentialAttempt','keyCredentialEntered','keyConnectAttempt','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                    'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
           optional={'passwordValuePresent','passwordValueUnavailable','passphraseValuePresent','passphraseValueUnavailable','returnButtonUsed','returnEscapeUsed'}
           progress={key:True for key in allowed | optional if 'hp_xcui_stage='+key.lower() in log}
@@ -168,6 +168,8 @@ jobs:
           back_metrics=[dict(zip(('buttons','exact','hittable'),map(int,row))) for row in back_metrics[:2]]
           secure_metrics=re.findall(r'hp_xcui_secure=phase:(password|passphrase),secure:(\d{1,5}),text:(\d{1,5}),other:(\d{1,5}),id:(\d{1,5}),label:(\d{1,5}),securelabel:(\d{1,5})',log)
           secure_metrics=[{'phase':row[0],**dict(zip(('secure','text','other','id','label','secureLabel'),map(int,row[1:])))} for row in secure_metrics[:4]]
+          hits=re.findall(r'hp_xcui_hit=phase:(control|passwordconfirm|passwordconnect|keyconfirm|keyconnect),exists:([01]),enabled:([01]),hittable:([01]),inside:([01])',log)
+          hit_metrics=[{'phase':phase,**dict(zip(('exists','enabled','hittable','insideWindow'),[v=='1' for v in bits]))} for phase,*bits in hits[:8]]
           fingerprints=re.findall(r'hp_xcui_fingerprint=phase:(password|encryptedkey),nodes:(\d{1,5}),prefix:(\d{1,5}),exact:(\d{1,5})',log)
           fingerprints=[{'phase':phase,'nodes':int(nodes),'sha256PrefixCount':int(prefix),'expectedExactCount':int(exact)} for phase,nodes,prefix,exact in fingerprints[:2]]
           inputs=re.findall(r'hp_xcui_input=phase:(sentinel|passwordaddress|passwordport|passworduser|keyaddress|keyport|keyuser),(target):(\d{1,5})',log)
@@ -207,7 +209,7 @@ jobs:
                   'failureMethod':failure_method,'failedMethods':failed_methods,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,
                   'failureCategories':categories,'xcresultDetailsAvailable':details_available,'homeMetrics':home_metrics,
                   'fallbackHomeMetrics':metrics[1] if len(metrics)>1 else {},
-                  'ordinaryMetrics':ordinary,'backMetrics':back_metrics,'secureMetrics':secure_metrics,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
+                  'ordinaryMetrics':ordinary,'backMetrics':back_metrics,'secureMetrics':secure_metrics,'hitMetrics':hit_metrics,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
                   'inputMetrics':inputs,'inputDetails':input_details,'targetMetrics':target_metrics,
                   'progress':progress,'rawLogsUploaded':False}
           if not ok:

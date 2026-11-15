@@ -36,6 +36,8 @@
 
 [7209b9d 运行 43723946869](https://github.com/Luck9Star/herdr-pocket/actions/runs/43723946869)补充两侧独立诊断（[先停 ET](evidence/dual-overlay-20261115/linux-7209b9d-stop-et.json)、[先停 TS](evidence/dual-overlay-20261115/linux-7209b9d-stop-ts.json)）。两套临时主机的本地、只读健康检查均通过 SSH pin/认证、snapshot 与输入能力；这些直连检查仅证明夹具健康。两例 Tailscale 已通过真实 overlay 的 SSH pin/认证、snapshot 和 full 并取得输入就绪，随后因另一侧失败而取消；EasyTier 在 SSH 握手阶段失败，peer 记录未接受任何 overlay 流。没有发送输入或执行停网；清理记录通过。后续通过真实 `OverlayDialer` 有界等待被动 SSH banner，并单独记录尝试及连接数，以检查 ET peer 路由是否需要收敛；这不是 Android 用户连接已验证的结论。
 
+[c38b3de 运行 43726117143](https://github.com/Luck9Star/herdr-pocket/actions/runs/43726117143)在两个独立 case 中尝试有界、被动的 overlay SSH banner 就绪检查（[先停 ET](evidence/dual-overlay-20261115/linux-c38b3de-stop-et.json)、[先停 TS](evidence/dual-overlay-20261115/linux-c38b3de-stop-ts.json)）。Tailscale 两例均首次读到 banner；EasyTier 两例各尝试 246 次、产品接口返回 246 条已打开流，但 25 秒内未读到 banner，独立 peer 的接受流及后端连接均为 0。EasyTier 节点仅报告 engine_started，不能证明 peer 或路由就绪。两例本地 SSH/snapshot/capability 健康检查、显式授权和清理通过；本轮没有进入受保护观察、输入或停网，未证明双网成功。
+
 ## Linux 测试专用 relay
 
 [614b295 运行 43719537144](https://github.com/Luck9Star/herdr-pocket/actions/runs/43719537144)在 Linux 隔离 namespace 的 relay 测试中 6/6 通过，覆盖三路并发 loopback 回显、拒绝错误所有者/非受控端口、关闭活动连接及 namespace 清理。它仅验证测试转发设施，没有运行真实 Tailscale/EasyTier peer 的联合会话，也没有安装、驱动 Android 应用或验证设备网络。

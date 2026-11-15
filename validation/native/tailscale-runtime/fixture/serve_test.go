@@ -36,6 +36,8 @@ func TestServeFixture(t *testing.T) {
 			t.Fatal("invalid fixture command")
 		}
 		switch cmd.Op {
+		case "diagnostics":
+			out.Encode(f.Diagnostics())
 		case "complete_auth":
 			out.Encode(map[string]any{"event": "auth_completed", "ok": f.CompleteAuth(cmd.URL)})
 		case "stop":

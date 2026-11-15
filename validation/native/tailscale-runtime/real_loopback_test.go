@@ -81,6 +81,11 @@ func TestRealHTTPSExplicitLoginAndTCP(t *testing.T) {
 		s, c := m.control(id, 5000, false)
 		return c == ok && s.State == "Running"
 	})
+	diagnostics := f.Diagnostics()
+	if diagnostics.KeyRequests == 0 || diagnostics.NoiseRequests == 0 || diagnostics.RegisterRequests == 0 ||
+		!diagnostics.SecondClientRegistered || diagnostics.AuthCompletions != 1 || diagnostics.TLSHandshakeErrors != 0 {
+		t.Fatal("fixture diagnostics did not distinguish the product client")
+	}
 	stream, c := m.dial(id, address, 10000)
 	if c != ok {
 		t.Fatal("product userspace TCP dial failed")

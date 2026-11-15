@@ -12,6 +12,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"io"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -49,15 +50,17 @@ type Ready struct {
 
 type Fixture struct {
 	Ready
-	control  *testcontrol.Server
-	peer     *tsnet.Server
-	listener net.Listener
-	bridge   string
-	mu       sync.Mutex
-	closed   bool
-	active   map[net.Conn]bool
-	wg       sync.WaitGroup
-	closeErr error
+	control       *testcontrol.Server
+	peer          *tsnet.Server
+	listener      net.Listener
+	bridge        string
+	mu            sync.Mutex
+	closed        bool
+	active        map[net.Conn]bool
+	wg            sync.WaitGroup
+	closeErr      error
+	counters      *counters
+	baselineNodes int
 }
 
 var trustOnce sync.Once
@@ -109,9 +112,15 @@ func New(t testing.TB, work, bridge string) *Fixture {
 	})
 
 	derp := integration.RunDERPAndSTUN(t, logger.Discard, "127.0.0.1")
+	counts := new(counters)
 	control := &testcontrol.Server{DERPMap: derp, RequireAuth: true,
-		DNSConfig: &tailcfg.DNSConfig{Proxied: true}, MagicDNSDomain: "fixture.invalid", Logf: logger.Discard}
-	control.HTTPTestServer = httptest.NewUnstartedServer(control)
+		DNSConfig: &tailcfg.DNSConfig{Proxied: true}, MagicDNSDomain: "fixture.invalid", Logf: logger.Discard,
+		MaybeRejectRequest: counts.machine}
+	control.HTTPTestServer = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		counts.top(r.URL.Path)
+		control.ServeHTTP(w, r)
+	}))
+	control.HTTPTestServer.Config.ErrorLog = log.New(counts, "", 0)
 	control.HTTPTestServer.TLS = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 	control.HTTPTestServer.StartTLS()
 	t.Cleanup(control.HTTPTestServer.Close)
@@ -128,7 +137,7 @@ func New(t testing.TB, work, bridge string) *Fixture {
 	peer := &tsnet.Server{Dir: filepath.Join(work, "peer"), Hostname: "fixture-peer", Store: new(mem.Store),
 		Ephemeral: true, ControlURL: control.HTTPTestServer.URL, ExplicitAuthOnly: true,
 		Logf: logger.Discard, UserLogf: logger.Discard}
-	f := &Fixture{control: control, peer: peer, bridge: bridge, active: map[net.Conn]bool{}}
+	f := &Fixture{control: control, peer: peer, bridge: bridge, active: map[net.Conn]bool{}, counters: counts}
 	t.Cleanup(func() {
 		if err := f.Close(); err != nil {
 			t.Error("fixture peer cleanup failed")
@@ -177,6 +186,8 @@ func New(t testing.TB, work, bridge string) *Fixture {
 	node := derp.Regions[1].Nodes[0]
 	f.Ready = Ready{Event: "ready", ControlURL: control.HTTPTestServer.URL, CAFile: caFile,
 		PeerIP: peerIP, PeerPort: PeerPort, DERPPort: node.DERPPort, STUNPort: node.STUNPort}
+	f.baselineNodes = control.NumNodes()
+	counts.enabled.Store(true)
 	f.wg.Add(1)
 	go f.accept()
 	return f
@@ -190,7 +201,11 @@ func (f *Fixture) CompleteAuth(raw string) bool {
 	if err != nil || u.Scheme != "https" || u.Host != base.Host || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return false
 	}
-	return f.control.CompleteAuth(raw)
+	ok := f.control.CompleteAuth(raw)
+	if ok && f.counters.enabled.Load() {
+		f.counters.authorized.Add(1)
+	}
+	return ok
 }
 
 func (f *Fixture) keep(c net.Conn) bool {

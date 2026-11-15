@@ -17,6 +17,7 @@ class DualOverlayUiSteps {
   final WidgetTester tester;
   final Directory exchange;
   String currentStage = 'fixture_validation';
+  Map<String, Object>? nodeDiagnostic;
 
   Future<void> stage(String value) async {
     if (!RegExp(r'^[a-z][a-z0-9_]{0,50}$').hasMatch(value)) {
@@ -53,10 +54,37 @@ class DualOverlayUiSteps {
     await existing.tapPopupOption(tester, option);
   }
 
+  Map<String, Object> readNodeDiagnostic(String id) {
+    final status = find.byKey(ValueKey('network-node-status-$id'));
+    final text = status.evaluate().length == 1 ? (tester.widget<Text>(status).data ?? '') : '';
+    final state = text.contains('引擎已启动') ? 'engine_started'
+      : text.contains('等待本设备授权') ? 'needs_login'
+      : text.contains('等待网络管理员批准') ? 'needs_machine_auth'
+      : text.contains('Tailscale 已就绪') ? 'running'
+      : text.contains('正在启动') ? 'starting'
+      : text.contains('正在停止') ? 'closing'
+      : text.contains('已停止') ? 'stopped'
+      : text.contains('状态未知') ? 'unknown' : 'other';
+    final edit = find.byKey(ValueKey('network-edit-$id'));
+    final add = find.byKey(const ValueKey('networks-add'));
+    final notice = find.byKey(const ValueKey('networks-notice'));
+    final message = notice.evaluate().length == 1 ? (tester.widget<Text>(notice).data ?? '') : '';
+    final noticeKind = message.isEmpty ? 'none'
+      : message.contains('节点启动未确认') ? 'start_unconfirmed'
+      : message.contains('不支持无密码模式') ? 'public_unsupported' : 'other';
+    return {'nodeState': state,
+      'editPresent': edit.evaluate().length == 1,
+      'editEnabled': edit.evaluate().length == 1 && tester.widget<TextButton>(edit).onPressed != null,
+      'addPresent': add.evaluate().length == 1,
+      'addEnabled': add.evaluate().length == 1 && tester.widget<FilledButton>(add).onPressed != null,
+      'notice': noticeKind};
+  }
+
   Future<String> createNetwork({required String role, required String label,
       required String controlUrl, required String networkName,
       required String peerUrl, required String networkSecret}) async {
     if (!{'et', 'ts'}.contains(role)) throw StateError('dual_role_invalid');
+    nodeDiagnostic = null;
     await stage('${role}_network_create');
     await existing.tapKey(tester, 'networks-add');
     await enter('network-label', label);
@@ -99,6 +127,25 @@ class DualOverlayUiSteps {
     });
     await stage('${role}_node_start');
     await existing.tapKey(tester, 'network-node-start-${profile.id}');
+    await stage('${role}_node_wait');
+    await existing.until(tester, () {
+      nodeDiagnostic = readNodeDiagnostic(profile.id);
+      // Edit is enabled only after this profile's start and catalog operation
+      // have settled; the add control may be outside the lazily built viewport.
+      return nodeDiagnostic!['editEnabled'] == true &&
+        (role == 'ts' || nodeDiagnostic!['nodeState'] == 'engine_started');
+    }, seconds: 90);
+    if (role == 'ts') {
+      await stage('ts_node_ready_refresh');
+      final deadline = DateTime.now().add(const Duration(seconds: 60));
+      while (true) {
+        nodeDiagnostic = readNodeDiagnostic(profile.id);
+        if (nodeDiagnostic!['nodeState'] == 'needs_login') break;
+        if (DateTime.now().isAfter(deadline)) throw StateError('dual_node_not_ready');
+        await existing.tapKey(tester, 'network-node-refresh-${profile.id}');
+        await tester.pump(const Duration(milliseconds: 600));
+      }
+    }
     return profile.id;
   }
 

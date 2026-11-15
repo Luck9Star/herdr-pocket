@@ -96,7 +96,8 @@ void main() {
         : error is FlutterError ? 'flutter_error'
         : error is StateError ? 'state_error'
         : error is AssertionError ? 'assertion_error' : 'other';
-      existing.publish(exchange, 'failure.json', jsonEncode({'stage': steps.currentStage, 'kind': kind}));
+      existing.publish(exchange, 'failure.json', jsonEncode({'stage': steps.currentStage, 'kind': kind,
+        if (steps.nodeDiagnostic != null) ...steps.nodeDiagnostic!}));
       rethrow;
     }
   });

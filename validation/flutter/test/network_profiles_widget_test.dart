@@ -98,6 +98,23 @@ void main() {
     expect(find.text('节点：已停止'),findsOneWidget); expect(find.text('节点：引擎已启动 · 入网与 SSH 未验证'),findsNothing);
     await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
+  testWidgets('profile editing is re-enabled only after node start settles',(tester) async {
+    final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+    final profile = testNetwork('easytier'); await catalog.addNetwork(profile);
+    final identities = MemoryNetworkIdentity()..current = NetworkIdentityRecord.checked(identityReply(profile),profile);
+    final runtime = PendingNodeRuntime();
+    await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(catalog:catalog,closeTabs:(_) {},identityStore:identities,runtime:runtime)));
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-start-${profile.id}'); await tester.pump(); await tester.pump();
+    final edit = find.byKey(ValueKey('network-edit-${profile.id}'));
+    expect(tester.widget<TextButton>(edit).onPressed,isNull);
+    expect(find.textContaining('正在启动'),findsOneWidget);
+    runtime.pending.complete(NetworkNodeSnapshot('engine-started',runtime.binding));
+    await tester.pump(); await tester.pump();
+    expect(tester.widget<TextButton>(edit).onPressed,isNotNull);
+    expect(find.text('节点：引擎已启动 · 入网与 SSH 未验证'),findsOneWidget);
+    await tester.pumpWidget(const SizedBox()); catalog.dispose();
+  });
   testWidgets('normal 360px host board exposes network manager and creates a reusable profile',(tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(360,780);
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);

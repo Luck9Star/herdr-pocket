@@ -225,18 +225,27 @@ UI_STAGES = frozenset({'host_board', 'et_network_create', 'ts_network_create', '
     'et_resume', 'ts_resume', 'et_stop_network', 'ts_stop_network', 'stopped_audit', 'final_audit',
     'et_network_save', 'ts_network_save', 'et_identity_open', 'ts_identity_open',
     'et_identity_review', 'ts_identity_review', 'et_identity_create', 'ts_identity_create',
-    'et_node_refresh', 'ts_node_refresh', 'et_node_start', 'ts_node_start'})
+    'et_node_refresh', 'ts_node_refresh', 'et_node_start', 'ts_node_start',
+    'et_node_wait', 'ts_node_wait', 'ts_node_ready_refresh'})
 
 
 def safe_ui_failure(raw):
     import json
     try:
         detail = json.loads(raw)
-        if (isinstance(detail, dict) and set(detail) == {'stage', 'kind'}
+        basic = {'stage', 'kind'}
+        diagnostic = {'nodeState', 'editPresent', 'editEnabled', 'addPresent', 'addEnabled', 'notice'}
+        if (isinstance(detail, dict) and set(detail) in (basic, basic | diagnostic)
                 and isinstance(detail['stage'], str) and detail['stage'] in UI_STAGES
                 and isinstance(detail['kind'], str)
                 and detail['kind'] in {'test_failure', 'flutter_error', 'state_error', 'assertion_error', 'other'}):
-            return detail
+            if set(detail) == basic:
+                return detail
+            if (detail['nodeState'] in {'engine_started', 'needs_login', 'needs_machine_auth', 'running',
+                                        'starting', 'closing', 'stopped', 'unknown', 'other'}
+                    and all(type(detail[key]) is bool for key in ('editPresent', 'editEnabled', 'addPresent', 'addEnabled'))
+                    and detail['notice'] in {'none', 'start_unconfirmed', 'public_unsupported', 'other'}):
+                return detail
     except (ValueError, UnicodeDecodeError, TypeError):
         pass
     return None

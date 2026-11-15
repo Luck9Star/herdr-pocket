@@ -194,6 +194,9 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     add('恢复观察',tab.state==='paused' && !tab.closing,()=>void resume(tab));
     add('关闭此标签',!switching,()=>void close(tab));panel.append(controls);
     renderDashboard(tab);panel.append(tab.boardElement);
+    // Keep the live terminal next to its mode controls, after the session chooser.
+    const viewport=document.createElement('div');viewport.className='term-scroll';
+    if(tab.element)viewport.append(tab.element);panel.append(viewport);
     if(focused && tab.pasteReview && !pasteReviewValid(tab,tab.pasteReview))tab.pasteReview=null;
     if(focused && tab.pasteReview) {
       const review=tab.pasteReview,group=document.createElement('section');group.setAttribute('aria-label','粘贴内容审查');
@@ -298,8 +301,6 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       };tab.fontDiagnosticsButton=fontButton;panel.append(fontButton);
 
     }
-    const viewport=document.createElement('div');viewport.className='term-scroll';
-    if(tab.element)viewport.append(tab.element);panel.append(viewport);
     tab.localViewport.mount(viewport,tab.terminal,terminalViewportIdentity(tab.summaryIdentity || hostInfo(tab.hostId),tab.target),!!tab.selectionTextReady);
     mountedTabs.push(tab);
     if(split)body.append(panel);
@@ -677,5 +678,5 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     else if(['connecting','starting','active','resuming'].includes(partner.state))void pause(partner);
     else render();
   });
-  render();return {create,createBlocked,select,prepareAffected,affected,background,prepareHide,cancelPrepareHide,hide,setFont};
+  render();return {hasTabs:()=>tabs.list().length>0,create,createBlocked,select,prepareAffected,affected,background,prepareHide,cancelPrepareHide,hide,setFont};
 }

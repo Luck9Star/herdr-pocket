@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "herdr-pocket \u00b7 Tauri terminal probe",
+        "title": "Herdr Pocket",
         "width": 1440,
         "height": 900,
         "minWidth": 360,

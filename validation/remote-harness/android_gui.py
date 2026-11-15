@@ -962,7 +962,7 @@ def exercise_board_search(browser, approval, config):
         text_matched = matched
 
         # The stale report belongs to the history bucket and not to the current one.
-        browser.select_option('#host-attention', 'current')
+        browser.click('#host-filter-current')
         snapshot = _board_snapshot(browser, fragment)
         matched, total, current_count, history_count = _board_counts(snapshot)
         if (snapshot['state'] != 'current' or matched != 0 or snapshot['visibleCards'] != 0 or
@@ -970,7 +970,7 @@ def exercise_board_search(browser, approval, config):
             raise GuiFailure('android_board_search_state_invalid')
 
         # Both conditions together select that blocked host again.
-        browser.select_option('#host-attention', 'history')
+        browser.click('#host-filter-history')
         snapshot = _board_snapshot(browser, fragment)
         matched, total, current_count, history_count = _board_counts(snapshot)
         if (snapshot['state'] != 'history' or matched != snapshot['visibleCards'] or
@@ -1556,6 +1556,7 @@ def run_android(args, root, env, config, approval):
         browser = wait_for(connect, 'android_webview_not_ready', timeout=60)
         progress.phase('pairing')
         browser.click('#host-open-remote')
+        browser.click('#add-herdr')
         browser.fill('#connection-profile-raw', public_profile_json(config))
         browser.click('#connection-profile-preview')
         fingerprint = public_host_fingerprint(config['expectedHostKey'])
@@ -1720,7 +1721,7 @@ def run_android(args, root, env, config, approval):
             if '陈旧' in (browser.read('#remote-captured') or ''):
                 return board  # The first cancel landed late; stale already shows.
             stop_trace = []
-            browser.click('#remote-cancel', trace=stop_trace)
+            browser.click('#remote-stop-visible', trace=stop_trace)
             # Keep the pre-dispatch geometry as well: the drift between the
             # press and the release is the evidence this stage needs (0013).
             progress.data['stopPointerTrace'] = stop_trace[-3:]

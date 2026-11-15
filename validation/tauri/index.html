@@ -1,22 +1,22 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>herdr-pocket · 远端终端原型</title></head><body>
-<header class="app-header"><div class="brand-lockup"><span class="brand-mark" aria-hidden="true">›_</span><div><span class="eyebrow">HERDR POCKET</span><h1>终端工作台 <small>Tauri + xterm.js</small></h1></div></div></header>
-<nav class="route-tabs" aria-label="验证入口"><button id="show-remote" aria-pressed="true">主机</button><button id="show-fixture" disabled aria-pressed="false">离线终端实验室</button></nav>
+<header class="app-header"><div class="brand-lockup"><span class="brand-mark" aria-hidden="true">HP</span><div><h1>Herdr Pocket</h1><span id="brand-caption" class="brand-caption">正在读取主机资料…</span></div></div><button id="host-open-remote" disabled class="primary" type="button">＋ 添加主机</button></header>
+<nav class="route-tabs" aria-label="主导航"><button id="show-remote" aria-pressed="true"><span aria-hidden="true">⌂</span>看板</button><button id="nav-terminal" aria-pressed="false"><span aria-hidden="true">⌨</span>终端</button><button id="nav-network" aria-pressed="false"><span aria-hidden="true">◎</span>网络</button><button id="nav-settings" aria-pressed="false"><span aria-hidden="true">⚙</span>设置</button></nav>
 <div id="remote-unsent-notices" class="remote-status unsent-notices" role="alert" hidden></div>
 <main id="host-home" class="remote-page">
-<section class="remote-intro"><span class="eyebrow">HOSTS · 本机资料</span><h2>连接你的主机</h2><p>已存资料只在本机；选择主机后仍需核对设备身份和连接目标。切换会停止观察，不会自动重连。</p></section>
-<div class="host-home-actions"><button id="host-open-remote" disabled class="primary" type="button">新增主机 / 手动连接</button><button id="network-open" type="button">网络配置</button><button id="config-transfer-open" type="button">导入 / 导出配置</button></div>
-<section id="network-panel" class="config-transfer" aria-label="网络配置" hidden></section>
-<section class="host-save"><label>终端字号（10–28）<input id="terminal-font-size" type="number" min="10" max="28" step="1" value="14" inputmode="numeric"></label><button id="terminal-font-save" type="button">保存字号</button><p id="terminal-font-status" role="status" aria-live="polite"></p></section>
-<section id="config-transfer" class="config-transfer" aria-labelledby="config-transfer-title" hidden></section>
-<p id="host-home-status" class="remote-status" role="status" aria-live="polite">正在读取本机资料…</p>
+<div id="home-dashboard"><section class="board-intro"><h2>主机与会话</h2><p>已存资料仅在本机。连接前请核对设备身份和目标。</p></section><p id="host-home-status" class="remote-status" role="status" aria-live="polite">正在读取本机资料…</p>
 <section id="host-filters" class="host-filters" aria-label="筛选已存主机" hidden>
+  <div class="host-filter-chips" role="group" aria-label="任务状态快捷筛选">
+    <button id="host-filter-all" type="button" aria-pressed="true">全部主机</button>
+    <button id="host-filter-current" type="button" aria-pressed="false">当前待处理</button>
+    <button id="host-filter-history" type="button" aria-pressed="false">上次受阻</button>
+  </div>
   <label for="host-query">查找主机或会话</label>
   <div class="host-query-row">
     <input id="host-query" type="search" placeholder="名称、会话、地址或网络类型" autocomplete="off" spellcheck="false" aria-controls="host-list">
     <button id="host-query-clear" type="button" aria-label="清除搜索" hidden>清除</button>
   </div>
-  <label class="host-attention">任务状态
+  <label class="host-attention visually-hidden">任务状态
     <select id="host-attention" aria-controls="host-list">
       <option value="all">全部任务状态</option>
       <option id="host-attention-current" value="current">当前待处理</option>
@@ -26,13 +26,37 @@
   <p id="host-filter-status" role="status" aria-live="polite" hidden></p>
   <button id="host-filter-reset" type="button" hidden>清除全部筛选</button>
 </section>
-<div id="host-list" class="host-list" aria-label="已存主机"></div>
-<p class="remote-help">Android 配对资料存于本应用 no-backup 目录。Linux/macOS 测试身份只保留在进程内，重启后不可恢复；移除本机资料不会撤销主机上的授权。</p>
+<div id="host-list" class="host-list" aria-label="已存主机"></div><section id="host-empty" class="host-empty" hidden><h3>还没有主机</h3><p>添加主机后，在这里查看会话和任务状态。</p><button id="host-empty-add" type="button" class="primary">添加主机</button></section></div>
+<section id="home-add" hidden><h2>添加连接</h2><p>选择连接方式。</p><div class="ssh-options"><button id="add-herdr" type="button">herdr 配对 / 手动连接</button><button id="add-ssh" type="button">普通 SSH 终端</button></div></section>
+<section id="home-ssh" hidden>
+  <h2>普通 SSH 终端</h2>
+  <div id="ssh-setup"><p>连接普通远程 shell；无需 herdr。先探测指纹并通过可信渠道独立核对，再填写认证方式。</p>
+  <form id="ssh-form" autocomplete="off">
+    <div class="remote-fields-grid">
+      <label>主机地址<input id="ssh-host" required autocomplete="off"></label>
+      <label>端口<input id="ssh-port" type="number" min="1" max="65535" value="22" required></label>
+      <label>用户名<input id="ssh-user" required autocomplete="off"></label>
+    </div>
+    <button id="ssh-probe" type="button">探测主机指纹</button>
+    <p id="ssh-fingerprint" class="ssh-fingerprint">请先探测并独立核对主机指纹。</p>
+    <label class="review-check"><input id="ssh-review" type="checkbox"><span>我已通过可信渠道独立核对以上指纹。</span></label>
+    <label>密码<input id="ssh-password" type="password" autocomplete="new-password"></label>
+    <label>或私钥<textarea id="ssh-key" rows="4" autocomplete="off"></textarea></label>
+    <label>私钥口令（可选）<input id="ssh-passphrase" type="password" autocomplete="new-password"></label>
+    <div class="ssh-options"><button type="submit" class="primary">连接 / 重新连接</button><button id="ssh-cancel" type="button">取消连接</button></div>
+  </form></div>
+  <p id="ssh-status" role="status" aria-live="polite">尚未连接。</p>
+  <section id="ssh-live" hidden aria-label="普通 SSH 会话"><p id="ssh-target" class="ssh-target"></p><div class="term-scroll ssh-scroll"><div id="ssh-terminal" class="terminal-host"></div></div><div class="ssh-options"><button id="ssh-focus" type="button" disabled>打开键盘</button><button id="ssh-disconnect" type="button">断开连接</button></div></section>
+</section>
+<section id="home-terminal" hidden><h2>终端</h2><p>选择主机并连接后，可在终端标签中观察会话。</p><button id="terminal-to-board" type="button">选择主机</button></section>
+<section id="home-network" hidden><h2>网络</h2><p id="network-preview-note" hidden>浏览器预览无法读取或管理本机网络配置，请使用测试安装包。</p><button id="network-open" type="button">打开网络配置</button><section id="network-panel" class="config-transfer" aria-label="网络配置" hidden></section></section>
+<section id="home-settings" hidden><h2>设置</h2><section class="host-save"><label>终端字号（10–28）<input id="terminal-font-size" type="number" min="10" max="28" step="1" value="14" inputmode="numeric"></label><button id="terminal-font-save" type="button">保存字号</button><p id="terminal-font-status" role="status" aria-live="polite"></p></section><button id="config-transfer-open" type="button">导入 / 导出配置</button><section id="config-transfer" class="config-transfer" aria-labelledby="config-transfer-title" hidden></section><button id="show-fixture" disabled aria-pressed="false" type="button">离线终端实验室</button>
+<p class="remote-help">默认观察；输入需显式发送，布局调整不改变远端尺寸。</p><p class="remote-help">Android 配对资料存于本应用 no-backup 目录。Linux/macOS 测试身份只保留在进程内，重启后不可恢复；移除本机资料不会撤销主机上的授权。</p>
 <details class="terminal-notices">
   <summary>终端组件许可</summary>
   <h3>xterm.js 6.0.0</h3><pre id="xterm-license"></pre>
   <h3>@xterm/addon-unicode-graphemes 0.4.0</h3><pre id="xterm-graphemes-license"></pre>
-</details>
+</details></section>
 </main>
 <main id="remote-page" class="remote-page" hidden>
 <aside id="workbench-sidebar" class="sidebar" aria-label="主机侧栏（桌面工作台）">
@@ -47,22 +71,22 @@
 </aside>
 <div id="workbench-main" class="workbench-main">
 <nav id="host-tabs" class="terminal-tabs host-tabs" aria-label="主机标签"></nav><div class="host-home-actions"><button id="host-return-home" type="button">返回主机看板</button></div>
-<section id="host-task-board" class="controls" aria-label="主机任务摘要" hidden></section>
+<details id="host-task-details" class="host-task-details" hidden><summary>主机任务摘要</summary><section id="host-task-board" class="controls" aria-label="主机任务摘要" hidden></section></details>
 <section id="host-restore-panel" class="remote-intro" hidden><h2>恢复已存设备</h2><p id="host-restore-description"></p><label><input id="host-restore-review" type="checkbox"> 我已独立核对上方主机与设备公钥指纹。</label><button id="host-restore" type="button">恢复此设备</button><p id="host-restore-status" role="status" aria-live="polite"></p></section>
-<section class="remote-intro"><span class="eyebrow">REMOTE · READ ONLY</span><h2>查看远端终端</h2><p>手动核验明确的会话，从实际快照选择 pane 并持续只读观察。公开请求与响应需要人工传递及独立审查；实验输入仅在服务器明确提供安全扩展时开放。手机可扫描主机授权响应；实际组网接入按平台单独验证。</p></section>
+<details id="remote-setup" open><summary>配对与连接资料</summary><section class="remote-intro"><h2>连接 herdr 主机</h2><p>核对主机和设备身份后，选择会话中的终端。输入需额外授权。</p></section>
 <p id="remote-native-note" class="mode-message" data-tone="warning">浏览器预览没有原生 SSH 适配器。真实读取仅在测试安装包中可用，预览不会伪造连接成功。</p>
 <form id="remote-form" autocomplete="off">
 <fieldset id="remote-fields"><legend>1. 审查目标与来源</legend>
-<section class="remote-key-section" aria-labelledby="connection-profile-title">
-<h3 id="connection-profile-title">扫描 / 粘贴主机公开连接资料</h3>
-<p>先打开无设备身份的新主机表单，再扫描主机展示的连接二维码，或手动粘贴公开资料（最多 2048 UTF-8 字节）。与下方设备授权响应不同；读取与预览只在本地进行。</p>
-<label>公开连接资料 JSON<textarea id="connection-profile-raw" rows="5" maxlength="2048" spellcheck="false" autocapitalize="none" autocomplete="off"></textarea></label>
-<div class="remote-actions"><button id="connection-profile-scan" type="button">扫描主机连接资料</button><button id="connection-profile-preview" type="button">预览连接资料与指纹</button><button id="connection-profile-cancel" type="button">取消连接资料预览</button></div>
+<details class="remote-key-section" aria-labelledby="connection-profile-title" open><summary id="connection-profile-title">扫描 / 粘贴主机公开连接资料</summary>
+<p>扫描主机二维码，或粘贴公开连接资料；设备授权响应将在后续步骤单独审查。</p>
+<button id="connection-profile-scan" type="button">扫描主机连接资料</button>
+<label>公开连接资料 JSON<textarea id="connection-profile-raw" rows="3" maxlength="2048" spellcheck="false" autocapitalize="none" autocomplete="off"></textarea></label>
+<div class="remote-actions"><button id="connection-profile-preview" type="button">预览连接资料与指纹</button><button id="connection-profile-cancel" type="button">取消连接资料预览</button></div>
 <pre id="connection-profile-details" hidden></pre>
 <p id="connection-profile-fingerprint" hidden></p>
 <button id="connection-profile-apply" type="button" disabled>明确填入新主机表单（清除审查）</button>
 <p id="connection-profile-status" role="status" aria-live="polite"></p>
-</section>
+</details>
 <p class="remote-help">从独立可信渠道核对主机公钥与路径。本轮仅支持 release herdr 0.9.5 的非 default 命名会话。</p>
 <div class="remote-fields-grid">
 <label>主机地址<input id="remote-host" type="text" required maxlength="253" placeholder="主机 IP 或域名" spellcheck="false" autocapitalize="none" autocomplete="off"></label>
@@ -107,11 +131,12 @@
 </fieldset>
 <div class="host-save"><label>本地主机名称<input id="host-save-name" maxlength="96" placeholder="例如：工作站" autocomplete="off"></label><button id="host-save" type="button">保存此主机</button><p id="host-save-status" role="status" aria-live="polite"></p></div>
 <div class="remote-actions"><button id="remote-connect" type="submit" class="primary" disabled>核验并读取看板</button><button id="remote-cancel" type="button" disabled>停止观察</button><button id="remote-hide-keyboard" type="button">收起键盘</button><button id="remote-clear-key" type="button">清除临时私钥</button></div>
-</form>
+</form></details>
+<button id="remote-stop-visible" type="button" hidden>停止观察</button>
 <p id="remote-status" class="remote-status" role="status" aria-live="polite"></p>
-<div id="remote-connection-diagnostics"></div>
+<details class="connection-details"><summary>连接核验详情</summary><div id="remote-connection-diagnostics"></div></details>
 <section id="tab-workspace" class="remote-result" hidden aria-label="终端标签"><div class="remote-result-heading"><strong>终端标签</strong><button id="workbench-split" type="button" aria-pressed="false" hidden title="只变更本地布局；未发送 PTY resize">桌面分屏</button><nav id="view-tabs" class="terminal-tabs" aria-label="终端标签"></nav></div><div id="view-content"></div></section>
-<section id="remote-dashboard" class="remote-result" hidden aria-label="当前会话 pane"><h2>当前会话 pane</h2><p>选择会话中的一个 pane 开始只读观察。</p><div id="remote-panes" class="remote-actions"></div></section>
+<details id="remote-board-container" open hidden><summary>会话窗格</summary><section id="remote-dashboard" class="remote-result" hidden aria-label="当前会话 pane"><h2>当前会话 pane</h2><p>选择会话中的一个 pane 开始只读观察。</p><div id="remote-panes" class="remote-actions"></div></section></details>
 <section id="remote-result" class="remote-result" hidden aria-label="远端终端观察"><div class="remote-result-heading"><strong>远端终端</strong><p id="remote-captured"></p></div><button type="button" id="remote-font-diagnostics" disabled>字体与字符诊断</button><div class="term-scroll"><div id="remote-terminal" class="terminal-host"></div></div><p>可滚动查看完整观察画布；窗口和键盘变化仅影响本地视口。</p>
 <section id="remote-input-controls" hidden aria-label="远端输入"><h3>远端输入 · 候选扩展</h3><p id="remote-input-target"></p><p id="remote-input-status" role="status" aria-live="polite">观察模式不发送输入。每次最多发送 4096 字节；当前连接内短暂排队并逐笔确认，切换或中断时丢弃未发送项。</p>
 <div class="remote-actions"><button type="button" id="remote-input-observe">观察</button><button type="button" id="remote-input-direct">逐键输入</button><button type="button" id="remote-input-draft-mode">草稿</button><button type="button" id="remote-keyboard-show" disabled>展开键盘</button><button type="button" id="remote-keyboard-hide" disabled>收起键盘</button><button type="button" id="remote-read-paste">粘贴并审查</button><button type="button" id="remote-input-recover" hidden>已核实原目标结果，恢复输入</button></div>

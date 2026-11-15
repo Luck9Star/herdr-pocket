@@ -360,6 +360,7 @@ def run_tauri(args, root, env, config, approval):
         try:
             driver.start(args.tauri_app)
             driver.click('#host-open-remote')
+            driver.click('#add-herdr')
             for field, key in [('host','host'), ('port','port'), ('user','username'), ('session','session'),
                                ('herdr','herdrPath'), ('socket','socketPath'), ('pin','expectedHostKey')]:
                 driver.fill('#remote-'+field, config[key])
@@ -410,7 +411,7 @@ def run_tauri(args, root, env, config, approval):
                 driver.click('#remote-input-confirm')
                 wait_for(lambda: '已接收入队' in driver.read('#remote-input-status'), 'input_ack_missing')
             terminal_board = wait_for(current_board, 'direct_host_summary_expired_during_terminal')
-            driver.click('#remote-cancel')
+            driver.click('#remote-stop-visible')
             wait_for(lambda:'陈旧' in driver.read('#remote-captured'), 'stale_marker_missing')
             def stopped_summary():
                 label = driver.read(summary_selector)

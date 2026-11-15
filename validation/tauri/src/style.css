@@ -137,3 +137,144 @@
   #view-content[data-split="2"] .workbench-panel[data-focus="true"]{border-color:var(--hp-brandBorder)}
   .workbench-panel .panel-head{margin:0 0 10px}
 }
+/* S01 board and primary navigation */
+.app-header { max-width:1000px; margin:auto; background:transparent; border:0; padding:20px; gap:8px}
+.brand-mark { width:40px; height:40px; font:700 13px ui-monospace,monospace; border-radius:12px}
+.brand-lockup { gap:10px}
+h1 { font-size:18px; margin:0}
+.brand-caption { font-size:11px; color:var(--hp-textSecondary)}
+#host-open-remote { white-space:nowrap}
+.route-tabs { max-width:960px; padding:0 20px; gap:6px}
+.route-tabs button { flex:1; max-width:none; border:0; background:transparent; color:var(--hp-textSecondary)}
+.route-tabs button span { margin-right:7px; font-size:18px}
+.route-tabs button[aria-pressed=true] { background:var(--hp-brandSoft); color:var(--hp-brand)}
+#host-home { padding-top:12px}
+.board-intro h2 { font-size:18px; margin:4px 0}
+.board-intro p { font-size:12px; color:var(--hp-textSecondary); line-height:1.5}
+.board-note { border:1px solid var(--hp-brandBorder); background:var(--hp-brandSoft); color:var(--hp-brand); border-radius:10px; padding:12px; font-size:12px; line-height:1.5}
+.saved-host-card { box-shadow:0 2px 10px #0f172a08}
+.saved-host-card [data-host-task-summary] { background:var(--hp-cardSubtle); border:1px solid var(--hp-border); border-radius:10px; padding:10px}
+.saved-host-card input { max-width:320px}
+#home-settings>button { margin:8px 8px 0 0}
+#home-terminal p,#home-network p { color:var(--hp-textSecondary); line-height:1.6}
+
+@media(max-width:599px) { body { padding-bottom:calc(74px + env(safe-area-inset-bottom))}
+.app-header { padding:16px 16px 6px}
+.brand-mark { width:36px; height:36px; font-size:12px}
+#host-open-remote { min-height:44px; padding:8px 10px}
+.route-tabs { position:fixed; z-index:50; bottom:0; left:0; right:0; max-width:none; margin:0; padding:4px 8px env(safe-area-inset-bottom); background:var(--hp-card); border-top:1px solid var(--hp-border); box-shadow:0 -4px 20px #0f172a0a}
+.route-tabs button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; font-size:11px; min-height:60px; padding:4px}
+.route-tabs button span { margin:0; font-size:20px; line-height:22px}
+#host-home { padding:12px 16px 28px}
+.saved-host-card { padding:14px}
+}
+
+
+.ssh-options { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+#home-ssh label:not(.review-check) { display:block; margin:12px 0; }
+.ssh-fingerprint { padding:12px; border:1px solid var(--hp-border); border-radius:10px; overflow-wrap:anywhere; background:var(--hp-card); }
+.ssh-scroll { border-radius:12px; height:min(380px, 50dvh); }
+.host-session {
+  background:var(--hp-cardSubtle);
+  border:1px solid var(--hp-border);
+  border-radius:10px;
+  padding:12px;
+}
+.host-session strong { font-size:13px; }
+.host-session small { color:var(--hp-textSecondary); font-size:11px; }
+.saved-host-card .host-session [data-host-task-summary] { padding:0; border:0; margin:6px 0; }
+#remote-setup > summary, .remote-key-section > summary {
+  cursor:pointer;
+  color:var(--hp-brand);
+  font-weight:700;
+  padding:12px 0;
+}
+#remote-stop-visible { margin:12px 0; }
+#ssh-live { margin-top:12px; }
+.ssh-target { font-weight:700; overflow-wrap:anywhere; }
+#home-ssh .ssh-scroll { height:min(55dvh, 520px); }
+@media (max-width:599px) {
+  #home-ssh .ssh-scroll { height:45dvh; }
+  #home-ssh .ssh-options > button { flex:1; }
+}
+.host-task-details > summary, .connection-details > summary, #remote-board-container > summary {
+  cursor:pointer;
+  padding:12px 0;
+  color:var(--hp-textSecondary);
+  font-size:13px;
+  font-weight:700;
+}
+.visually-hidden {
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
+.host-filter-chips {
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding:2px 0 8px;
+}
+.host-filter-chips button {
+  flex:none;
+  min-height:44px;
+  border-radius:999px;
+  padding:8px 12px;
+  font-size:12px;
+}
+.host-filter-chips button[aria-pressed=true] {
+  border-color:var(--hp-brandBorder);
+  background:var(--hp-brandSoft);
+  color:var(--hp-brand);
+}
+.host-filters > label[for=host-query] { font-size:12px; }
+.host-card-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.host-card-heading h3 { margin:0; }
+.host-state {
+  flex:none;
+  border:1px solid var(--hp-border);
+  border-radius:999px;
+  padding:4px 9px;
+  color:var(--hp-textSecondary);
+  background:var(--hp-cardSubtle);
+  font-size:11px;
+}
+.host-state[data-state=current] { color:var(--hp-successText); border-color:var(--hp-successBorder); background:var(--hp-successSoft); }
+.host-state[data-state=history] { color:var(--hp-warningText); border-color:var(--hp-warningBorder); background:var(--hp-warningSoft); }
+.saved-host-card .host-route { margin:4px 0 12px; font-size:12px; }
+.host-session { margin:0 0 12px; }
+.host-session strong { display:block; }
+.saved-host-actions { align-items:flex-start; }
+.saved-host-actions > button { flex:1; }
+.host-manage { flex:0 0 auto; }
+.host-manage > summary {
+  display:grid;
+  min-height:44px;
+  place-items:center;
+  padding:8px 14px;
+  border:1px solid var(--hp-borderStrong);
+  border-radius:10px;
+  background:var(--hp-card);
+  cursor:pointer;
+  font-size:13px;
+  font-weight:600;
+}
+.host-manage[open] { flex-basis:100%; }
+.host-manage[open] > summary { width:fit-content; }
+.host-management-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.host-empty {
+  padding:24px 16px;
+  border:1px solid var(--hp-border);
+  border-radius:16px;
+  background:var(--hp-card);
+  text-align:center;
+}
+.host-empty h3 { margin:0 0 8px; }
+.host-empty p { margin:0 0 16px; color:var(--hp-textSecondary); font-size:13px; }
+.remote-key-section > label { display:block; margin:12px 0; }

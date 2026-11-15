@@ -129,9 +129,24 @@ void main() {
     expect(catalog.networkProfiles.single.label,'Phone mesh');
     expect(catalog.networkProfiles.single.provider,'tailscale');
     expect(catalog.networkProfiles.single.settings,{'controlUrl':'','hostname':''});
-    expect(find.textContaining('provider_unavailable'),findsWidgets);
+    expect(find.textContaining('网络组件暂不可用时，已绑定的主机会保持断开'),findsOneWidget);
+    expect(find.textContaining('provider_unavailable'),findsNothing);
     expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
+  for (final width in [320.0,390.0]) {
+    testWidgets('network guidance stays readable at ${width.toInt()}px',(tester) async {
+      tester.view.devicePixelRatio = 1; tester.view.physicalSize = Size(width,844);
+      addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
+      final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+      await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(catalog:catalog,closeTabs:(_) {})));
+      final guidance = find.textContaining('网络组件暂不可用时，已绑定的主机会保持断开');
+      await tester.ensureVisible(guidance); await tester.pumpAndSettle();
+      expect(guidance,findsOneWidget);
+      expect(find.textContaining('provider_unavailable'),findsNothing);
+      expect(tester.takeException(),isNull);
+      await tester.pumpWidget(const SizedBox()); catalog.dispose();
+    });
+  }
   testWidgets('network impact lists referenced host and refusing delete preserves its binding',(tester) async {
     final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
     final network = testNetwork(),original = await saveCatalogProfile(catalog); await catalog.addNetwork(network);

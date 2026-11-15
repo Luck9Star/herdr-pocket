@@ -293,7 +293,7 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> with WidgetsB
             ]),
           ])])),
       const SizedBox(height:12),
-      Text('本机入网身份单独保管；缺少原生桥时返回 provider_unavailable，不回退到系统直连。',
+      Text('入网身份保存在本机。网络组件暂不可用时，已绑定的主机会保持断开；组件恢复后可重新审查并连接。',
         style:Theme.of(context).textTheme.bodySmall),
     ])));
 

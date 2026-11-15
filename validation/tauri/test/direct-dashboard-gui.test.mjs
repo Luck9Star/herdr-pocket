@@ -277,6 +277,24 @@ async function openInput(h) {
   h.emit({ kind: 'input_ready', generation: 9, epoch:1, unknown: false, recovery_status: 'ready' });
 }
 
+test('paired direct and draft show matched receipts without a live region and clear on failure',async()=>{
+  const h=await setup(),n=h.nodes;
+  try {
+    await openInput(h);n['remote-input-direct'].click();await flush();await flush();
+    h.terminal.data('中');await flush();await flush();
+    assert.equal(n['remote-receipt'].hidden,false);
+    assert.match(n['remote-receipt-text'].textContent,/请求 ID：a{32}.*w1:p1.*term_a001.*受理 3 字节.*命令结果/);
+    assert.equal(n['remote-receipt'].attrs['aria-live'],undefined);
+    n['remote-input-draft-mode'].click();await flush();await flush();
+    n['remote-input-draft'].value='你好';n['remote-input-draft'].dispatch('input');
+    n['remote-input-preview'].click();n['remote-input-confirm'].click();await flush();await flush();
+    assert.match(n['remote-receipt-text'].textContent,/受理 6 字节/);
+    h.setSendResult({status:'unknown'});n['remote-input-draft'].value='x';n['remote-input-draft'].dispatch('input');
+    n['remote-input-preview'].click();n['remote-input-confirm'].click();await flush();await flush();
+    assert.equal(n['remote-receipt'].hidden,true);assert.equal(n['remote-receipt-text'].textContent,'');
+  } finally {h.finish();await flush();h.restore();}
+});
+
 test('paired form keyboard controls use the current editor, revoke on hide and reject late IME', async () => {
   const previous=Object.getOwnPropertyDescriptor(globalThis,'navigator');const keyboard=[];
   Object.defineProperty(globalThis,'navigator',{configurable:true,value:{virtualKeyboard:{show:()=>keyboard.push('show'),hide:()=>keyboard.push('hide')}}});

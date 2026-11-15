@@ -7,3 +7,7 @@ export function matchedReceipt(value, target, length) {
   return {requestId:value.requestId, paneId:value.paneId,
     terminalId:value.terminalId, acceptedBytes:value.acceptedBytes};
 }
+
+export function receiptText(receipt) {
+  return `请求 ID：${receipt.requestId} · pane：${receipt.paneId} · terminal：${receipt.terminalId} · 受理 ${receipt.acceptedBytes} 字节。主机已受理，命令结果请查看终端。`;
+}

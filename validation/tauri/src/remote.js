@@ -15,7 +15,7 @@ import { previewPairingResponse } from './pairing-view.js';
 import { InputComposition, blockPendingKeys } from './input-composition.js';
 import { AuxiliaryModifiers, draftBytes, displayDraft } from './input-codec.js';
 import { OnlineInputQueue } from './online-input-queue.js';
-import { matchedReceipt } from './input-receipt.js';
+import { matchedReceipt, receiptText } from './input-receipt.js';
 import { NativeCameraReturn } from './native-camera-return.js';
 import { pairingCameraRequest,validatePairingCameraResponse,pairingRequestSummary } from './pairing-camera.js';
 import { writePublicRequest } from './public-request-clipboard.js';
@@ -136,6 +136,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   function clearSnapshot() { delete $('remote-captured').dataset.cols;delete $('remote-captured').dataset.rows;$('remote-captured').dataset.state='empty';localViewport.detach(); invalidateInput(); selectTextButton?.remove?.(); selectTextButton=null; terminal?.dispose(); terminal=null; $('remote-terminal').replaceChildren(); $('remote-result').hidden=true; $('remote-dashboard').hidden=true; $('remote-board-container').hidden=true; $('remote-board-container').open=true; $('remote-panes').replaceChildren(); }
   function discardKey() { $('remote-private-key').value=''; }
   function cancel(reason='本次读取已取消。迟到结果不会显示。',nativeCameraBackground=false) {
+    clearReceipt();
     // Each camera purpose owns a bounded return lease for public bytes only.
     // SSH, authorization reviews, input and temporary keys still lose authority.
     if(!nativeCameraBackground){connectionProfiles?.invalidate();pairCamera?.discard();}
@@ -178,6 +179,8 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     $('remote-keyboard-hide').disabled=!editor && !pendingEditor;
   }
   function inputStatus(text) { if($('remote-input-status').textContent!==text)$('remote-input-status').textContent=text; renderAuxiliary();renderKeyboardActions(); }
+  function clearReceipt() { $('remote-receipt').hidden=true; $('remote-receipt-text').textContent=''; delete $('remote-input-status').dataset.receipt; }
+  function showReceipt(receipt) { $('remote-receipt-text').textContent=receiptText(receipt); $('remote-receipt').hidden=false; $('remote-input-status').dataset.receipt=JSON.stringify(receipt); }
   function auxiliaryAllowed() {return currentDirect(inputToken()) && !inputBusy && !(inputComposition.token && !inputComposition.ended);}
   function renderAuxiliary() {
     $('remote-input-controls').dataset.mode=inputMode;
@@ -288,6 +291,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     if(draft && rejectedDrafts.size+pendingDrafts.size>=32) {
       inputStatus('未发送文本找回区已满；请先处理并移除一条，再发送草稿。');return;
     }
+    clearReceipt();
     const generation=token.generation, epoch=token.epoch, owner={}; inputBusy=owner; let proceed=false;
     // Remove the submitted text before the first await. A tab change can now
     // save only the still-unsent draft, even if the reply is lost.
@@ -314,7 +318,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       if(result?.status==='unknown') {inputUnknown=true; cancel('发送结果未知；连接已停止，不自动重放。');}
       else if(result?.status==='rejected') {const lost=onlineInput.clear();recordUnsent(lost.count);if(inputBusy===owner)inputBusy=null;loseInputFocus();inputStatus(`服务器明确拒绝本笔；原文已恢复或可在未发送文本中找回。${lost.count?` ${lost.count} 笔后续输入未发送。`:''}`);}
       else if(receipt) {
-        $('remote-input-status').dataset.receipt=JSON.stringify(receipt);
+        showReceipt(receipt);
         proceed=!draft;inputStatus(`服务器已接收入队 · ${receipt.paneId} · ${receipt.acceptedBytes} 字节。执行结果请查看终端。`);
       }
       else {inputUnknown=true; cancel('发送结果未知；连接已停止，不自动重放。');}
@@ -524,6 +528,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     if(activeHostId && !$('remote-page').hidden)hostStatuses.set(activeHostId,gate.pending || terminal ? '上次观察已停止，重新查看需主动连接。' : $('remote-status').textContent);
   }
   function clearDraftBinding() {
+    clearReceipt();
     draftKey=null; selectedTarget=null; $('remote-input-draft').value=''; draftRevision++;
     draftPreview=null; clearPasteReview(); $('remote-input-preview-area').hidden=true;
   }

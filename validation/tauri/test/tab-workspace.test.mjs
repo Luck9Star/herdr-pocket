@@ -97,9 +97,13 @@ test('MT09 MT10: direct input sends only current visible epoch and stops after s
     channels[0].onmessage({kind:'input_ready',generation:g,epoch:1,unknown:false,recovery_status:'ready'});
     find('逐键输入').onclick();await flush();await flush();term.data('a');await flush();
     assert.equal(calls.filter(c=>c.name==='remote_tab_input_send' && c.args.draft===false).length,1);
+    const receipt=nodes['view-content'].all().find(n=>n.dataset.role==='input-receipt');
+    assert.equal(receipt.hidden,false);assert.match(receipt.children[1].textContent,/请求 ID：a{32}.*w1:p1.*term_a001.*受理 1 字节.*命令结果/);
+    assert.equal(receipt.attrs['aria-live'],undefined);
     const beforeRender=nodes['view-content'].replaceCount;const b=ui.create(mesh.hostId,mesh);
     assert.equal(nodes['view-content'].replaceCount,beforeRender,'another tab must not detach focused direct terminal');
     await ui.select(b);term.data('b');await flush();
+    assert.equal(receipt.hidden,true);
     assert.equal(calls.filter(c=>c.name==='remote_tab_input_send').length,1);
   } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
 });
@@ -488,6 +492,21 @@ const acceptedInput = args => Promise.resolve({
     requestId: 'a'.repeat(32), paneId: 'w1:p1', terminalId: 'term_a001',
     acceptedBytes: args.bytes.length,
   },
+});
+
+test('saved tab draft exposes only its matched receipt and clears it on disconnect',async()=>{
+  let reject=false;
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{send:args=>reject ? Promise.resolve({status:'rejected'}) : acceptedInput(args)});
+  try {
+    await readyKeyboard(h);h.find('启用草稿输入').onclick();await flush();await flush();
+    const draft=h.all().find(n=>n.attrs['aria-label']==='当前标签草稿');draft.value='你好';draft.oninput();
+    h.find('发送草稿').onclick();await flush();await flush();
+    const receipt=h.all().find(n=>n.dataset.role==='input-receipt');
+    assert.equal(receipt.hidden,false);assert.match(receipt.children[1].textContent,/请求 ID：a{32}.*w1:p1.*term_a001.*受理 6 字节/);
+    reject=true;const next=h.all().find(n=>n.attrs['aria-label']==='当前标签草稿');next.value='x';next.oninput();h.find('发送草稿').onclick();await flush();await flush();
+    assert.equal(receipt.hidden,true);assert.equal(receipt.children[1].textContent,'');
+    h.find('关闭此标签').onclick();await flush();assert.equal(receipt.hidden,true);
+  } finally {h.restore();}
 });
 
 test('saved tab keyboard controls revoke direct and draft leases, stale controls cannot send',async()=>{

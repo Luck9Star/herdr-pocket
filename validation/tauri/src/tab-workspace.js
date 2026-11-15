@@ -5,7 +5,7 @@ import {createFontDiagnostics} from './terminal-font-diagnostics.js';
 import {RemoteTabs} from './remote-tabs.js';
 import {RemoteFrameQueue,validDashboard} from './remote-state.js';
 import {SessionDashboard} from './dashboard-watch.js';
-import {matchedReceipt} from './input-receipt.js';
+import {matchedReceipt,receiptText} from './input-receipt.js';
 import {OnlineInputQueue} from './online-input-queue.js';
 import {InputComposition,blockPendingKeys} from './input-composition.js';
 import {draftBytes} from './input-codec.js';
@@ -38,6 +38,8 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   function boardEvent(tab,type) {if(tab.summaryIdentity && tab.token)onDashboard({type,hostId:tab.hostId,identity:tab.summaryIdentity,source:tab.token,board:tab.board});}
   // 副面板的状态文本直接落 DOM：整页 render 可能被焦点面板的输入守卫跳过（走局部刷新），不能依赖重建。
   function status(tab,message) {tab.message=message;tab.diagnosticView?.update(tab.diagnostics);const partner=splitPartner()===tab;if(tabs.activeId===tab.id || partner){if(partner && tab.messageElement)tab.messageElement.textContent=message;render();}}
+  function clearReceipt(tab) {tab.receipt=null;if(tab.receiptDetails)tab.receiptDetails.hidden=true;if(tab.receiptTextElement)tab.receiptTextElement.textContent='';}
+  function showReceipt(tab,receipt) {tab.receipt=receipt;if(tab.receiptDetails)tab.receiptDetails.hidden=false;if(tab.receiptTextElement)tab.receiptTextElement.textContent=receiptText(receipt);}
   function inputModeMessage(tab) {
     if(tab.unknown)return '输入结果待核实；输入已锁定。';
     if(tab.state!=='active')return '观察未运行；输入已关闭。';
@@ -192,6 +194,12 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(tab.diagnostics){tab.diagnosticView ??= createConnectionDiagnosticsView();tab.diagnosticView.update(tab.diagnostics);connectionDetails.append(tab.diagnosticView.element);}
     panel.append(connectionDetails);
     const msg=document.createElement('p');msg.setAttribute('role','status');msg.textContent=tab.message;tab.messageElement=msg;panel.append(msg);
+    tab.receiptDetails ??= document.createElement('details');
+    tab.receiptDetails.dataset.role='input-receipt';
+    tab.receiptDetails.hidden=!tab.receipt;
+    if(!tab.receiptTextElement){const summary=document.createElement('summary');summary.textContent='最近一次受理回执';tab.receiptTextElement=document.createElement('p');tab.receiptDetails.append(summary,tab.receiptTextElement);}
+    tab.receiptTextElement.textContent=tab.receipt ? receiptText(tab.receipt) : '';
+    panel.append(tab.receiptDetails);
     tab.inputModeElement ??= document.createElement('p');
     tab.inputModeElement.setAttribute('role','status');tab.inputModeElement.setAttribute('aria-live','polite');
     updateInputMode(tab);
@@ -341,6 +349,8 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     const swapping=splitPartner()?.id===id;
     switching=true;render();
     const previous=tabs.get(tabs.activeId);
+    if(previous)clearReceipt(previous);
+    const next=tabs.get(id);if(next)clearReceipt(next);
     if(swapping && previous) {
       // 分屏内移动输入焦点：旧面板保持观察（不暂停），但其输入租约立即失效——
       // 与 src/gate.js 的 focus()/focusRevision 语义一致：焦点一旦离开，旧 token 全部过期（后端对非焦点标签返回 input_stale）。
@@ -509,11 +519,12 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   }
   async function pumpDirect(tab) {
     if(tab.inputBusy)return;const key=directToken(tab);if(!directCurrent(tab,key)){tab.queue.clear();return;}
-    const item=tab.queue.take(key);if(!item)return;const binding=lease(tab);tab.inputBusy=true;
+    const item=tab.queue.take(key);if(!item)return;const binding=lease(tab);tab.inputBusy=true;clearReceipt(tab);
     try {const result=await invoke('remote_tab_input_send',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration,epoch:tab.epoch,inputEpoch:key.epoch,bytes:[...item.bytes],draft:false});
       if(!directCurrent(tab,key))return;
       const receipt=result?.status==='accepted'?matchedReceipt(result.receipt,tab.target,item.bytes.length):null;
       if(!receipt || result.recoveryRequired){tab.unknown=result?.status!=='rejected' || !!result.recoveryRequired;tab.queue.clear();tab.inputBusy=false;await loseDirect(tab);if(tab.unknown)await cancel(tab);return;}
+      showReceipt(tab,receipt);
     }catch {if(sameLease(tab,binding)){tab.unknown=true;tab.queue.clear();await cancel(tab);}return;}
     finally {if(sameLease(tab,binding))tab.inputBusy=false;}
     if(directCurrent(tab,key))void pumpDirect(tab);else tab.queue.clear();
@@ -541,7 +552,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(!sameLease(tab,binding) || document.hidden || tabs.activeId!==tab.id || tab.mode!=='draft' ||
         tab.inputEpoch!==inputEpoch || tab.draftRevision!==version || tab.draft!==text ||
         tab.state!=='active' || tab.unknown || tab.inputBusy || tab.draftComposing || (tab.terminal?.modes?.bracketedPasteMode===true)!==bracketed)return;
-    const epoch=binding.epoch,token=binding.token;tab.draft='';const draftRevision=++tab.draftRevision;tab.draftPending++;tab.inputBusy=true;render();
+    const epoch=binding.epoch,token=binding.token;tab.draft='';const draftRevision=++tab.draftRevision;tab.draftPending++;tab.inputBusy=true;clearReceipt(tab);render();
     try {const result=await invoke('remote_tab_input_send',{tabId:tab.id,clientGeneration:token.generation,generation:tab.nativeGeneration,epoch,inputEpoch,bytes:[...bytes],draft:true});
       let restored=false;
       if(result?.status==='rejected' && tabs.get(tab.id)===tab){
@@ -551,12 +562,13 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       if(!sameLease(tab,binding))return;
       const receipt=result?.status==='accepted'?matchedReceipt(result.receipt,tab.target,bytes.length):null;
       if(result?.status==='rejected'){tab.message=restored?'服务器明确拒绝；原草稿已恢复。':'服务器明确拒绝；原文已放入只读找回区。';if(result.recoveryRequired){tab.unknown=true;tab.inputEpoch=null;}}
-      else if(receipt){tab.message=result.recoveryRequired?'服务器已接收入队，但安全记录待核查；输入已锁定。':`服务器已接收入队 ${receipt.acceptedBytes} 字节；执行结果请查看终端。`;if(result.recoveryRequired){tab.unknown=true;tab.inputEpoch=null;}}
+      else if(receipt){showReceipt(tab,receipt);tab.message=result.recoveryRequired?'服务器已接收入队，但安全记录待核查；输入已锁定。':`服务器已接收入队 ${receipt.acceptedBytes} 字节；执行结果请查看终端。`;if(result.recoveryRequired){tab.unknown=true;tab.inputEpoch=null;}}
       else {tab.unknown=true;tab.inputEpoch=null;tab.message='发送结果未知；请核查原目标，不会自动重发。';void cancel(tab);}
     } catch {if(sameLease(tab,binding)){tab.unknown=true;tab.inputEpoch=null;tab.message='发送结果未确认；请核查原目标，不会自动重发。';}}
     finally {if(tabs.get(tab.id)===tab){tab.draftPending--;if(sameLease(tab,binding))tab.inputBusy=false;render();}}
   }
   async function cancel(tab) {
+    clearReceipt(tab);
     tab.diagnostics?.finish('cancelled');tab.diagnosticView?.update(tab.diagnostics);
     retireDirectPending(tab);
     const wasDisconnected=tab.state==='disconnected' && tab.nativeGeneration===null;
@@ -575,6 +587,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   }
   async function connect(tab) {
     if(tabs.activeId!==tab.id || tab.state!=='disconnected' || tab.closing || tab.invalidated || !tab.reviewed || !hostInfo(tab.hostId))return;
+    clearReceipt(tab);
     const reviewed=JSON.parse(tab.reviewedHost || 'null'),actual=hostInfo(tab.hostId);
     if(tab.blockedIntent && hostSummaryIdentity(actual)!==tab.blockedIntent.identity){tab.reviewed=false;status(tab,'原受阻目标的主机、设备、会话或网络已变化；请返回清单重新核查。');return;}
     if(!reviewed || JSON.stringify(reviewed)!==JSON.stringify({target:actual.target,deviceFingerprint:actual.deviceFingerprint,networkProfileId:actual.networkProfileId ?? null,networkRevision:actual.networkRevision ?? null})){tab.reviewed=false;status(tab,'主机资料已变化，请重新核对。');return;}

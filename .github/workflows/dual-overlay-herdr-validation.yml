@@ -57,8 +57,9 @@ jobs:
       - name: Verify herdr fixture provenance and build same-process client
         run: |
           python3 - <<'PY'
-          import importlib.util, os
+          import importlib.util, os, sys
           from pathlib import Path
+          sys.path.insert(0, str(Path('validation/remote-harness').resolve()))
           spec = importlib.util.spec_from_file_location('bootstrap', 'validation/remote-harness/run-ci.py')
           bootstrap = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(bootstrap)

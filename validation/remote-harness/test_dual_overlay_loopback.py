@@ -1,4 +1,6 @@
+import hashlib
 import json
+import shutil
 import os
 from pathlib import Path
 import pty
@@ -7,6 +9,7 @@ import select
 import subprocess
 import sys
 import tempfile
+import textwrap
 import time
 import unittest
 
@@ -32,6 +35,47 @@ class EventTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             dual.et.checked_paths(root / 'hp-easytier-bundle-123', root / 'easytier-evidence', root, '123')
+
+    def test_workflow_inline_bootstrap_reaches_fixture_validation(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / '.github/workflows/dual-overlay-herdr-validation.yml').read_text()
+        inline = workflow.split("python3 - <<'PY'\n", 1)[1].split('\n          PY\n', 1)[0]
+        inline = textwrap.dedent(inline)
+        with tempfile.TemporaryDirectory() as temp:
+            (Path(temp) / 'input-fixture').mkdir()
+            env = dict(os.environ, RUNNER_TEMP=temp, GITHUB_RUN_ID='123', GITHUB_SHA='a' * 40)
+            result = subprocess.run([sys.executable, '-c', inline], cwd=root, env=env,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('input_fixture_file_invalid', result.stderr)
+        self.assertNotIn('ModuleNotFoundError', result.stderr)
+
+    def test_workflow_inline_bootstrap_copies_only_verified_fixture(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / '.github/workflows/dual-overlay-herdr-validation.yml').read_text()
+        inline = workflow.split("python3 - <<'PY'\n", 1)[1].split('\n          PY\n', 1)[0]
+        inline = textwrap.dedent(inline)
+        with tempfile.TemporaryDirectory() as temp:
+            fixture = Path(temp) / 'input-fixture'
+            fixture.mkdir()
+            bundle = Path(temp) / 'hp-easytier-bundle-123'
+            bundle.mkdir()
+            binary = b'synthetic fixture, never executed'
+            (fixture / 'herdr').write_bytes(binary)
+            patch = root / 'validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch'
+            shutil.copyfile(patch, fixture / patch.name)
+            metadata = {'sourceSHA': 'a' * 40, 'upstreamSHA': dual.et.controlled.HERDR_COMMIT,
+                        'patchSHA256': hashlib.sha256(patch.read_bytes()).hexdigest(),
+                        'buildProfile': 'dev', 'configDirectory': 'herdr',
+                        'scope': 'isolated validation fixture', 'binaryDebugAssertions': False,
+                        'readinessAndCapabilitySmokePassed': True,
+                        'binarySHA256': hashlib.sha256(binary).hexdigest()}
+            (fixture / 'manifest.json').write_text(json.dumps(metadata))
+            env = dict(os.environ, RUNNER_TEMP=temp, GITHUB_RUN_ID='123', GITHUB_SHA='a' * 40)
+            result = subprocess.run([sys.executable, '-c', inline], cwd=root, env=env,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((bundle / 'herdr').read_bytes(), binary)
 
     def test_redacts_unrecognized_client_error(self):
         payload = {key: False for key in dual.BOOL_FIELDS}

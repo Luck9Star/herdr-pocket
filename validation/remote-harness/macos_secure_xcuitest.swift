@@ -31,6 +31,10 @@ final class SecureCredentialUITests: XCTestCase {
         return field
     }
 
+    private func tap(_ element: XCUIElement) {
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+    }
+
     private func homeEntry(_ app: XCUIApplication) -> XCUIElement {
         let button = app.buttons["普通 SSH"]
         if button.waitForExistence(timeout: 15) && button.isHittable { return button }
@@ -73,26 +77,58 @@ final class SecureCredentialUITests: XCTestCase {
         entry.click()
         let address = element(app, "地址").descendants(matching: .textField).firstMatch
         XCTAssertTrue(address.waitForExistence(timeout: 15), "named address group or ordinary input missing")
-        address.click()
-        address.typeText(host)
-        XCTAssertTrue((address.value as? String ?? "").contains(host), "ordinary input is not readable")
-        mark("ordinaryInputReadable")
+        tap(address)
+        app.typeText(host)
+        mark("addressTyped")
         let portField = element(app, "端口").descendants(matching: .textField).firstMatch
         let userField = element(app, "用户名").descendants(matching: .textField).firstMatch
         XCTAssertTrue(portField.exists && userField.exists, "ordinary target fields missing")
-        portField.click();portField.typeKey("a", modifierFlags: .command);portField.typeText(String(port))
-        userField.click();userField.typeText(username)
+        tap(portField);app.typeKey("a", modifierFlags: .command);app.typeText(String(port))
+        mark("portTyped")
+        tap(userField);app.typeText(username)
+        mark("usernameTyped")
+        XCTAssertTrue((address.value as? String ?? "").contains(host), "ordinary input is not readable")
+        XCTAssertTrue((portField.value as? String ?? "").contains(String(port)) && (userField.value as? String ?? "").contains(username), "ordinary target fields are not readable")
+        mark("ordinaryInputReadable")
 
         let passwordField = secureField(app, "direct-secret")
         mark("passwordSecureField")
-        passwordField.click()
-        passwordField.typeText(password)
+        tap(passwordField)
+        app.typeText(password)
+        XCTAssertFalse((passwordField.value as? String ?? "").isEmpty, "secure password input has no protected value")
         assertNoSecrets(app, [password, phrase])
         mark("passwordHiddenFocused")
-        address.click()
+        tap(address)
         assertNoSecrets(app, [password, phrase])
         mark("passwordHiddenBlurred")
         XCTAssertTrue((address.value as? String ?? "").contains(host), "ordinary input changed on focus switch")
+
+        let keyMode = element(app, "使用私钥认证")
+        XCTAssertTrue(keyMode.waitForExistence(timeout: 10), "private key mode missing")
+        keyMode.click()
+        let passphraseField = secureField(app, "direct-passphrase")
+        mark("passphraseSecureField")
+        tap(passphraseField)
+        app.typeText(phrase)
+        XCTAssertFalse((passphraseField.value as? String ?? "").isEmpty, "secure passphrase input has no protected value")
+        assertNoSecrets(app, [password, phrase])
+        tap(address)
+        assertNoSecrets(app, [password, phrase])
+        tap(passphraseField)
+        assertNoSecrets(app, [password, phrase])
+        mark("passphraseHiddenAfterFocusChanges")
+        keyMode.click()
+        XCTAssertTrue((secureField(app, "direct-secret").value as? String ?? "").isEmpty, "password retained after mode switch")
+        keyMode.click()
+        XCTAssertTrue((secureField(app, "direct-passphrase").value as? String ?? "").isEmpty, "passphrase retained after mode switch")
+        mark("modeSwitchCleared")
+        assertNoSecrets(app, [password, phrase])
+
+        keyMode.click()
+        let passwordAgain = secureField(app, "direct-secret")
+        tap(passwordAgain);app.typeText(password)
+        assertNoSecrets(app, [password, phrase])
+        mark("systemTreeMaskingVerified")
 
         let probe = app.buttons["探测并核对主机密钥"]
         XCTAssertTrue(probe.exists && probe.isEnabled, "host key probe unavailable")
@@ -116,26 +152,6 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(app.buttons["连接 SSH"].waitForExistence(timeout: 15), "disconnect did not return to form")
         XCTAssertTrue((secureField(app, "direct-secret").value as? String ?? "").isEmpty, "password not cleared after disconnect")
         mark("disconnectedAndCleared")
-
-        let keyMode = element(app, "使用私钥认证")
-        XCTAssertTrue(keyMode.waitForExistence(timeout: 10), "private key mode missing")
-        keyMode.click()
-        let passphraseField = secureField(app, "direct-passphrase")
-        mark("passphraseSecureField")
-        passphraseField.click()
-        passphraseField.typeText(phrase)
-        assertNoSecrets(app, [password, phrase])
-        address.click()
-        assertNoSecrets(app, [password, phrase])
-        passphraseField.click()
-        assertNoSecrets(app, [password, phrase])
-        mark("passphraseHiddenAfterFocusChanges")
-        keyMode.click()
-        XCTAssertTrue((secureField(app, "direct-secret").value as? String ?? "").isEmpty, "password retained after mode switch")
-        keyMode.click()
-        XCTAssertTrue((secureField(app, "direct-passphrase").value as? String ?? "").isEmpty, "passphrase retained after mode switch")
-        mark("modeSwitchCleared")
-        assertNoSecrets(app, [password, phrase])
 
         let back = app.buttons["Back"].exists ? app.buttons["Back"] : app.buttons["返回"]
         XCTAssertTrue(back.exists && back.isHittable, "back action missing")

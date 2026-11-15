@@ -108,39 +108,81 @@ final class SecureCredentialUITests: XCTestCase {
         return exact > 0
     }
 
-    private func fillOrdinary(_ app: XCUIApplication, field: XCUIElement, target: String, sentinel: String, phase: String) throws {
-        tap(app, field)
-        app.typeKey("a", modifierFlags: .command);app.typeText(sentinel)
+    private func typeOrdinaryOnce(_ app: XCUIApplication, field: XCUIElement, value: String, phase: String) throws {
+        tap(app, field);app.typeText(value)
         var nodes = try snapshotNodes(app)
-        let sentinelCount = nodes.filter { ($0.value as? String ?? "") == sentinel }.count
-        print("HP_XCUI_INPUT=phase:\(phase),sentinel:\(min(sentinelCount,10000))")
+        for _ in 0..<20 {
+            if nodes.contains(where: { ($0.value as? String ?? "") == value }) { break }
+            usleep(100_000);nodes = try snapshotNodes(app)
+        }
+        let count = nodes.filter { ($0.value as? String ?? "") == value }.count
+        print("HP_XCUI_INPUT=phase:\(phase),target:\(min(count,10000))")
         fflush(stdout)
-        XCTAssertGreaterThan(sentinelCount, 0, "ordinary field sentinel not read back")
-        mark(phase + "Sentinel")
-        app.typeKey("a", modifierFlags: .command);app.typeText(target)
-        nodes = try snapshotNodes(app)
-        let targetCount = nodes.filter { ($0.value as? String ?? "") == target }.count
-        print("HP_XCUI_INPUT=phase:\(phase),target:\(min(targetCount,10000))")
-        fflush(stdout)
-        XCTAssertGreaterThan(targetCount, 0, "ordinary field target not read back")
+        if count == 0 { try? targetDiagnostics(app, phase: "inputFailure") }
+        XCTAssertGreaterThan(count, 0, "ordinary field target not read back")
     }
 
-    private func targetDiagnostics(_ app: XCUIApplication, phase: String) throws {
+    @discardableResult
+    private func targetDiagnostics(_ app: XCUIApplication, phase: String) throws -> [Bool]? {
         let fields = try snapshotNodes(app).flatMap { [$0.label, $0.value as? String ?? ""] }
-        let expression = try NSRegularExpression(pattern: "HPAX:H([01])P([01])K([01])U([01])V([01])B([01])F([01])E([01])")
+        let expression = try NSRegularExpression(pattern: "HPAX:H([01])P([01])K([01])U([01])V([01])B([01])F([01])E([01])A([01])N([01])T([01])D([01])")
         for field in fields {
             let range = NSRange(field.startIndex..., in: field)
             guard let match = expression.firstMatch(in: field, range: range) else { continue }
-            let bits = (1...8).map { index -> String in
+            let bits = (1...12).map { index -> String in
                 guard let span = Range(match.range(at: index), in: field) else { return "0" }
                 return String(field[span])
             }.joined()
             print("HP_XCUI_TARGET=phase:\(phase),bits:\(bits)")
             fflush(stdout)
-            return
+            return bits.map { $0 == "1" }
         }
         print("HP_XCUI_TARGET=phase:\(phase),bits:missing")
         fflush(stdout)
+        return nil
+    }
+
+    private func requireFreshForm(_ app: XCUIApplication, phase: String) throws {
+        let bits = try targetDiagnostics(app, phase: phase)
+        XCTAssertTrue(bits?.count == 12 && bits?[8] == true && bits?[9] == true && bits?[10] == true,
+                      "fresh ordinary form defaults unconfirmed")
+    }
+
+    private func enterTarget(_ app: XCUIApplication, host: String, port: Int, username: String, phase: String) throws {
+        try requireFreshForm(app, phase: phase + "Fresh")
+        mark(phase + "FreshVerified")
+        let address = element(app, "地址").descendants(matching: .textField).firstMatch
+        let portField = element(app, "端口").descendants(matching: .textField).firstMatch
+        let userField = element(app, "用户名").descendants(matching: .textField).firstMatch
+        try typeOrdinaryOnce(app, field: address, value: host, phase: phase + "Address")
+        mark(phase + "AddressTyped")
+        tap(app, portField)
+        app.typeKey(XCUIKeyboardKey.end, modifierFlags: [])
+        app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
+        app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
+        let cleared = try targetDiagnostics(app, phase: phase + "PortCleared")
+        XCTAssertTrue(cleared?.count == 12 && cleared?[11] == true, "default port was not cleared")
+        mark(phase + "PortCleared")
+        app.typeText(String(port))
+        var nodes = try snapshotNodes(app)
+        for _ in 0..<20 {
+            if nodes.contains(where: { ($0.value as? String ?? "") == String(port) }) { break }
+            usleep(100_000);nodes = try snapshotNodes(app)
+        }
+        let portCount = nodes.filter { ($0.value as? String ?? "") == String(port) }.count
+        print("HP_XCUI_INPUT=phase:\(phase)Port,target:\(min(portCount,10000))");fflush(stdout)
+        XCTAssertGreaterThan(portCount, 0, "ordinary field target not read back")
+        mark(phase + "PortTyped")
+        try typeOrdinaryOnce(app, field: userField, value: username, phase: phase + "User")
+        mark(phase + "UsernameTyped")
+    }
+
+    private func reopenSSH(_ app: XCUIApplication) {
+        let back = app.buttons["Back"].exists ? app.buttons["Back"] : app.buttons["返回"]
+        tap(app, back)
+        let entry = homeEntry(app)
+        XCTAssertTrue(entry.exists && entry.isHittable, "normal homepage did not return")
+        tap(app, entry)
     }
 
     private func homeEntry(_ app: XCUIApplication) -> XCUIElement {
@@ -226,21 +268,17 @@ final class SecureCredentialUITests: XCTestCase {
         try assertNoSecrets(app, [password, phrase])
         mark("maskingScanCompleted")
 
-        try fillOrdinary(app, field: address, target: host, sentinel: "hp-address-" + UUID().uuidString, phase: "address")
+        let sentinel = "hp-address-" + UUID().uuidString
+        try typeOrdinaryOnce(app, field: address, value: sentinel, phase: "sentinel")
         mark("ordinarySentinelObserved")
-        mark("addressTyped")
-        let portField = element(app, "端口").descendants(matching: .textField).firstMatch
-        let userField = element(app, "用户名").descendants(matching: .textField).firstMatch
-        XCTAssertTrue(portField.exists && userField.exists, "ordinary target fields missing")
-        try fillOrdinary(app, field: portField, target: String(port), sentinel: "84927153", phase: "port")
-        mark("portTyped")
-        try fillOrdinary(app, field: userField, target: username, sentinel: "hp-user-" + UUID().uuidString, phase: "username")
-        mark("usernameTyped")
+        reopenSSH(app)
+        try enterTarget(app, host: host, port: port, username: username, phase: "password")
         mark("ordinaryInputReadable")
 
         let probe = app.buttons["探测并核对主机密钥"]
         reveal(app, probe)
-        try targetDiagnostics(app, phase: "passwordBefore")
+        let passwordTarget = try targetDiagnostics(app, phase: "passwordBefore")
+        XCTAssertTrue(passwordTarget?.count == 12 && passwordTarget?[0] == true && passwordTarget?[1] == true && passwordTarget?[3] == true && passwordTarget?[4] == true && passwordTarget?[5] == false && passwordTarget?[6] == true, "password target not confirmed")
         tap(app, probe)
         mark("passwordProbeTapped")
         let confirm = app.buttons["已核对并确认"]
@@ -267,12 +305,12 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue((secureField(app, "direct-secret").value as? String ?? "").isEmpty, "password not cleared after disconnect")
         mark("disconnectedAndCleared")
 
-        let keyPortField = element(app, "端口").descendants(matching: .textField).firstMatch
-        XCTAssertTrue(keyPortField.exists, "ordinary target fields missing")
-        try fillOrdinary(app, field: keyPortField, target: String(keyPort), sentinel: "59318472", phase: "keyPort")
+        reopenSSH(app)
+        try enterTarget(app, host: host, port: keyPort, username: username, phase: "key")
         let keyProbe = app.buttons["探测并核对主机密钥"]
         reveal(app, keyProbe)
-        try targetDiagnostics(app, phase: "keyBefore")
+        let keyTarget = try targetDiagnostics(app, phase: "keyBefore")
+        XCTAssertTrue(keyTarget?.count == 12 && keyTarget?[0] == true && keyTarget?[2] == true && keyTarget?[3] == true && keyTarget?[4] == true && keyTarget?[5] == false && keyTarget?[6] == true, "encrypted key target not confirmed")
         tap(app, keyProbe)
         mark("encryptedKeyProbeTapped")
         let keyConfirm = app.buttons["已核对并确认"]

@@ -22,7 +22,7 @@ class ScaffoldTests(unittest.TestCase):
         (root / 'macos/RunnerTests').mkdir(parents=True)
         (root / 'macos/Runner').mkdir(parents=True)
         (root / 'lib').mkdir()
-        (root / 'lib/direct_ssh_page.dart').write_text("          OutlinedButton(key: const ValueKey('direct-probe')\n")
+        (root / 'lib/direct_ssh_page.dart').write_text("          Semantics(container: true, explicitChildNodes: true, label: '地址'\n          OutlinedButton(key: const ValueKey('direct-probe')\n")
         (root / '.herdr-generated-probe.json').write_text(json.dumps({'kind':'herdr-flutter-validation'}))
         (root / 'macos/Runner.xcodeproj/project.pbxproj').write_text(PROJECT)
         (root / 'macos/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme').write_text('<Scheme><TestAction><Testables><Testable parallelizable = "YES"/></Testables></TestAction></Scheme>')
@@ -77,7 +77,7 @@ class ScaffoldTests(unittest.TestCase):
         script=textwrap.dedent(body)
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);fixture=root/'macos-secure-fixture';fixture.mkdir()
-            allowed=['fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','addressSentinel','portSentinel','usernameSentinel','keyPortSentinel','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted','passwordValuePresent','passphraseValuePresent',
+            allowed=['fixtureReadable','appLaunched','homepage','passwordFreshVerified','passwordAddressTyped','passwordPortCleared','passwordPortTyped','passwordUsernameTyped','keyFreshVerified','keyAddressTyped','keyPortCleared','keyPortTyped','keyUsernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted','passwordValuePresent','passphraseValuePresent',
                      'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                      'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
             good_peer={k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}
@@ -106,7 +106,7 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertEqual(report['fingerprintMetrics'][0]['expectedExactCount'],0)
             self.assertNotIn('private fingerprint material',output.read_text())
-            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed\nHP_XCUI_TARGET=phase:passwordBefore,bits:10111010\nprivate target material')
+            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed\nHP_XCUI_TARGET=phase:passwordBefore,bits:101110101010\nprivate target material')
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertTrue(report['targetMetrics'][0]['hostMatches']);self.assertFalse(report['targetMetrics'][0]['passwordPortMatches'])
             self.assertNotIn('private target material',output.read_text())
@@ -141,6 +141,10 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('passwordValueUnavailable',swift)
         self.assertIn('passphraseValueUnavailable',swift)
         self.assertIn('encryptedKeyConnected',swift)
+        self.assertNotIn('modifierFlags: .command',swift)
+        self.assertIn('XCUIKeyboardKey.end',swift)
+        self.assertEqual(swift.count('app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])'),2)
+        self.assertIn('cleared?[11] == true',swift)
         scanner=swift[swift.index('private func snapshotNodes'):swift.index('private func stableHit')]
         self.assertIn('try app.snapshot()',scanner)
         self.assertIn('pending.append(contentsOf: node.children)',scanner)

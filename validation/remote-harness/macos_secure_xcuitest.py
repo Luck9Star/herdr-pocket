@@ -75,9 +75,12 @@ def prepare(app, fixture=None):
         point = "          OutlinedButton(key: const ValueKey('direct-probe')"
         if dart_text.count(point) != 1 or 'HPAX:H' in dart_text:
             raise ValueError('macos_xcui_dart_unexpected')
-        diagnostic = '''          Text('HPAX:H${host.text.trim() == "127.0.0.1" ? 1 : 0}P${port.text.trim() == "PASSWORD_PORT" ? 1 : 0}K${port.text.trim() == "KEY_PORT" ? 1 : 0}U${user.text.trim() == "fixture" ? 1 : 0}V${valid ? 1 : 0}B${busy ? 1 : 0}F${foreground ? 1 : 0}E${status.startsWith("探测失败") ? 1 : 0}', style: const TextStyle(fontSize: 1)),
+        diagnostic = '''          Text('HPAX:H${host.text.trim() == "127.0.0.1" ? 1 : 0}P${port.text.trim() == "PASSWORD_PORT" ? 1 : 0}K${port.text.trim() == "KEY_PORT" ? 1 : 0}U${user.text.trim() == "fixture" ? 1 : 0}V${valid ? 1 : 0}B${busy ? 1 : 0}F${foreground ? 1 : 0}E${status.startsWith("探测失败") ? 1 : 0}A${host.text.isEmpty ? 1 : 0}N${user.text.isEmpty ? 1 : 0}T${port.text == "22" ? 1 : 0}D${port.text.isEmpty ? 1 : 0}', style: const TextStyle(fontSize: 1)),
 '''.replace('PASSWORD_PORT',str(config['port'])).replace('KEY_PORT',str(config['keyPort']))
-        dart.write_text(dart_text.replace(point, diagnostic + point, 1))
+        address_point = "          Semantics(container: true, explicitChildNodes: true, label: '地址'"
+        if dart_text.count(address_point) != 1:
+            raise ValueError('macos_xcui_dart_unexpected')
+        dart.write_text(dart_text.replace(point, diagnostic + point, 1).replace(address_point, diagnostic + address_point, 1))
     source.write_text(test_source)
 
 

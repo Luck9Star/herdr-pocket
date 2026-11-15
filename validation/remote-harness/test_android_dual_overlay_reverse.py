@@ -80,8 +80,9 @@ class ReverseTests(unittest.TestCase):
         self.assertEqual(fake.calls[-1],('reverse','--remove','tcp:10101'))
     def test_ambiguous_failed_install_is_never_deleted_or_claimed_clean(self):
         fake=FakeAdb(fail_at=2,uncertain=True)
-        with self.run_with(fake),self.assertRaisesRegex(bridge.ReverseError,'reverse_cleanup_unconfirmed'):
+        with self.run_with(fake),self.assertRaisesRegex(bridge.ReverseError,'adb_operation_failed') as caught:
             bridge.OwnedReverseMappings(self.relay,_device_check=lambda:None).__enter__()
+        self.assertEqual(caught.exception.cleanup_code,'reverse_cleanup_unconfirmed')
         self.assertEqual(fake.map,{10102:20102})
         self.assertNotIn(('reverse','--remove','tcp:10102'),fake.calls)
     def test_changed_mapping_is_not_removed(self):
@@ -91,6 +92,13 @@ class ReverseTests(unittest.TestCase):
             fake.map[10101]=29999
             with self.assertRaisesRegex(bridge.ReverseError,'reverse_cleanup_unconfirmed'): mappings.close()
         self.assertEqual(fake.map,{10101:29999})
+    def test_aosp_reverse_tag_is_accepted_without_exporting_ports(self):
+        bridge.REVERSE_LIST_DIAGNOSTICS.clear()
+        with patch.object(bridge,'_text',return_value='(reverse) tcp:10101 tcp:20101'):
+            self.assertEqual(bridge._mapping_list(),{10101:20101})
+        self.assertEqual(bridge.REVERSE_LIST_DIAGNOSTICS[-1],{'lineCount':1,'valid':True,'tags':['reverse']})
+        self.assertNotIn('10101',str(bridge.REVERSE_LIST_DIAGNOSTICS))
+
     def test_malformed_reverse_list_fails_closed(self):
         for value in ('other tcp:1 tcp:2','host tcp:70000 tcp:2','host localabstract:x tcp:2','bad'):
             with self.subTest(value=value),patch.object(bridge,'_text',return_value=value):

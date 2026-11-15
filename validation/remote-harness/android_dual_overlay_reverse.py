@@ -13,6 +13,8 @@ import subprocess
 from android_dual_overlay_relay import ROLES
 
 SERIAL = 'emulator-5554'
+ADB_DIAGNOSTICS = []
+REVERSE_LIST_DIAGNOSTICS = []
 
 
 class ReverseError(ValueError):
@@ -23,6 +25,15 @@ def _adb(*args, input_data=None, timeout=30):
     result = subprocess.run(['adb','-s',SERIAL,*args],input=input_data,stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE,timeout=timeout,check=False)
     if result.returncode:
+        operation = ('reverse_add' if args[:2] == ('reverse','--no-rebind') else
+                     'reverse_remove' if args[:2] == ('reverse','--remove') else
+                     'reverse_list' if args[:2] == ('reverse','--list') else
+                     'shell' if args[:1] == ('shell',) else 'other')
+        text = result.stderr.decode('utf-8',errors='replace').lower()
+        ADB_DIAGNOSTICS.append({'operation':operation,'exitCode':int(result.returncode),
+                                'stdoutBytes':len(result.stdout),'stderrBytes':len(result.stderr),
+                                'unsupportedOption':('unknown option' in text or 'unrecognized option' in text)})
+        del ADB_DIAGNOSTICS[:-12]
         raise ReverseError('adb_operation_failed')
     return result.stdout
 
@@ -61,14 +72,20 @@ def assert_owned_avd():
 def _mapping_list():
     lines=_text('reverse','--list').splitlines()
     mappings={}
+    tags=[]
     for line in lines:
         fields=line.split()
-        if len(fields)!=3 or fields[0] not in (SERIAL,'host') or not all(re.fullmatch(r'tcp:[1-9][0-9]{0,4}',v) for v in fields[1:]):
+        tags.append('reverse' if fields and fields[0]=='(reverse)' else 'serial' if fields and fields[0]==SERIAL else 'host' if fields and fields[0]=='host' else 'other')
+        if len(fields)!=3 or fields[0] not in (SERIAL,'host','(reverse)') or not all(re.fullmatch(r'tcp:[1-9][0-9]{0,4}',v) for v in fields[1:]):
+            REVERSE_LIST_DIAGNOSTICS.append({'lineCount':min(len(lines),100),'fieldCount':min(len(fields),9),'tag':tags[-1],'valid':False})
+            del REVERSE_LIST_DIAGNOSTICS[:-12]
             raise ReverseError('reverse_list_invalid')
         device,host=(int(value[4:]) for value in fields[1:])
         if device>65535 or host>65535 or device in mappings:
             raise ReverseError('reverse_list_invalid')
         mappings[device]=host
+    REVERSE_LIST_DIAGNOSTICS.append({'lineCount':min(len(lines),100),'valid':True,'tags':sorted(set(tags))})
+    del REVERSE_LIST_DIAGNOSTICS[:-12]
     return mappings
 
 
@@ -81,6 +98,8 @@ class OwnedReverseMappings:
         self.baseline={}
         self.cleanup_confirmed=False
         self.uncertain=set()
+        self.installed_count=0
+        self.removed_count=0
 
     def __enter__(self):
         self._device_check()
@@ -101,11 +120,15 @@ class OwnedReverseMappings:
                     self.uncertain.add(device)
                     raise
                 self.created[device]=host
+                self.installed_count+=1
                 if _mapping_list().get(device)!=host:
                     raise ReverseError('reverse_install_unconfirmed')
             return self
-        except BaseException:
-            self.close()
+        except BaseException as original:
+            try:
+                self.close()
+            except ReverseError:
+                original.cleanup_code='reverse_cleanup_unconfirmed'
             raise
 
     def close(self):
@@ -121,6 +144,7 @@ class OwnedReverseMappings:
                     failed=True
                 else:
                     del self.created[device]
+                    self.removed_count+=1
             except (ReverseError, OSError, subprocess.SubprocessError):
                 failed=True
         try:

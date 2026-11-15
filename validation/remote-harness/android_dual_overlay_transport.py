@@ -12,7 +12,8 @@ import sys
 import tempfile
 
 from android_dual_overlay_relay import AndroidDualOverlayRelay, ROLES, _stop_process
-from android_dual_overlay_reverse import OwnedReverseMappings, ReverseError, _adb, assert_owned_avd
+from android_dual_overlay_reverse import (ADB_DIAGNOSTICS, REVERSE_LIST_DIAGNOSTICS, OwnedReverseMappings,
+                                          ReverseError, _adb, assert_owned_avd)
 
 ECHO = '''import json,os,socket,threading
 s=socket.socket();s.bind(('127.0.0.1',0));s.listen(16)
@@ -40,12 +41,14 @@ def run(output):
     result={'schemaVersion':1,'status':'failed','scope':'API35 x86_64 owned AVD shell and three synthetic TCP echoes; no App, SSH or TLS',
             'deviceEcho':{role:False for role in ROLES},'reverseRemoved':False,'relayClosed':False,
             'peerProcessesStopped':False,'privateRemoved':False}
+    phase='namespace_check'
     try:
         # The caller's workflow owns creation/removal of this exact namespace.
         links=subprocess.run(['sudo','-n','ip','netns','exec',namespace,'ip','-j','link','show'],
                              stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=10,check=True)
         if [item.get('ifname') for item in json.loads(links.stdout)] != ['lo']:
             raise ReverseError('namespace_scope_invalid')
+        phase='fixture_setup'
         for role in ROLES:
             peer=subprocess.Popen(['sudo','-n','ip','netns','exec',namespace,'runuser','-u',pwd.getpwuid(os.getuid()).pw_name,'--',
                                    sys.executable,'-u','-c',ECHO],stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
@@ -61,28 +64,39 @@ def run(output):
         config={'namespace':namespace, **{role:records[i]['port'] for i,role in enumerate(ROLES)},
                 'ownerPids':{role:records[i]['pid'] for i,role in enumerate(ROLES)},'sshPorts':[1,2]}
         manifest=root/'manifest.json';manifest.write_text(json.dumps(config));manifest.chmod(0o600)
+        phase='relay_setup'
         relay=AndroidDualOverlayRelay(manifest)
         with relay:
+            phase='reverse_setup'
             mappings=OwnedReverseMappings(relay)
             with mappings:
                 for role in ROLES:
+                    phase='device_echo_'+role
                     marker=('hp-'+role+'-ok').encode('ascii')
                     # A fixed shell program emits only this role's synthetic marker.
                     script=b"printf '"+marker+b"' | /system/bin/toybox nc -w 5 127.0.0.1 "+str(config[role]).encode()+b"\n"
                     reply=_adb('shell','-T','sh',input_data=script,timeout=15)
                     result['deviceEcho'][role]=reply==marker
                     if not result['deviceEcho'][role]: raise ReverseError('device_echo_mismatch')
+            phase='reverse_cleanup'
             result['reverseRemoved']=mappings.cleanup_confirmed
         result['relayClosed']=not any(t.is_alive() for t in relay._threads) and not relay._workers
         if not result['relayClosed']: raise ReverseError('relay_cleanup_unconfirmed')
         result['status']='passed'
     except (ReverseError,OSError,ValueError,subprocess.SubprocessError) as error:
+        result['failurePhase']=phase
+        if getattr(error,'cleanup_code',None): result['cleanupErrorCode']='reverse_cleanup_unconfirmed'
         result['errorCode']=str(error) if isinstance(error,ReverseError) and str(error) in {
             'owned_avd_required','adb_operation_failed','adb_output_invalid','owned_namespace_required','owned_output_required',
-            'fixture_not_ready','fixture_invalid','namespace_scope_invalid','reverse_collision','reverse_install_unconfirmed','reverse_cleanup_unconfirmed',
+            'fixture_not_ready','fixture_invalid','namespace_scope_invalid','reverse_list_invalid','reverse_collision','reverse_install_unconfirmed','reverse_cleanup_unconfirmed',
             'ssh_reverse_forbidden','device_echo_mismatch','relay_cleanup_unconfirmed'} else 'transport_preflight_failed'
     finally:
-        if mappings is not None: result['reverseRemoved']=mappings.cleanup_confirmed
+        if mappings is not None:
+            result['reverseRemoved']=mappings.cleanup_confirmed
+            result['reverseAddsConfirmed']=mappings.installed_count
+            result['reverseRemovalsConfirmed']=mappings.removed_count
+            if not mappings.cleanup_confirmed and (mappings.created or mappings.uncertain):
+                result['cleanupErrorCode']='reverse_cleanup_unconfirmed'
         if relay is not None:
             result['relayClosed']=not any(t.is_alive() for t in relay._threads) and not relay._workers
         stopped=True
@@ -96,6 +110,8 @@ def run(output):
         result['privateRemoved']=not root.exists()
         if not all((result['reverseRemoved'],result['relayClosed'],result['peerProcessesStopped'],result['privateRemoved'])):
             result['status']='failed'
+        result['adbDiagnostics']=ADB_DIAGNOSTICS[-12:]
+        result['reverseListDiagnostics']=REVERSE_LIST_DIAGNOSTICS[-12:]
         (output/'result.json').write_text(json.dumps(result,indent=2)+'\n')
     return result['status']=='passed'
 

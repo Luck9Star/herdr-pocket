@@ -35,7 +35,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: paired-gui-${{ github.ref }}-${{ inputs.input_fixture }}-${{ inputs.s06_split }}-${{ inputs.s06_guarded }}
+  group: paired-gui-${{ github.ref }}-${{ inputs.input_fixture }}-${{ inputs.s06_split }}-${{ inputs.s06_guarded }}-${{ inputs.s06_route }}
   cancel-in-progress: true
 jobs:
   s06-input-fixture:

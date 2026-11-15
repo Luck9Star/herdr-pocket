@@ -45,14 +45,21 @@ class SplitDriver:
         # a product handler, IPC command, renderer or input callback directly.
         def locate():
             found = []
-            for element in self.driver.call('POST', self.driver.session + '/elements',
-                    {'using': 'css selector', 'value': scope + ' ' + tag}):
-                key = element['element-6066-11e4-a52e-4f735466cecf']
-                path = self.driver.session + '/element/' + key
-                label = self.driver.call('GET', path + '/property/textContent')
-                if (isinstance(label, str) and label.strip() == text and
-                        self.driver.call('GET', path + '/displayed') and self.driver.call('GET', path + '/enabled')):
-                    found.append(path)
+            try:
+                for element in self.driver.call('POST', self.driver.session + '/elements',
+                        {'using': 'css selector', 'value': scope + ' ' + tag}):
+                    key = element['element-6066-11e4-a52e-4f735466cecf']
+                    path = self.driver.session + '/element/' + key
+                    label = self.driver.call('GET', path + '/property/textContent')
+                    if (isinstance(label, str) and label.strip() == text and
+                            self.driver.call('GET', path + '/displayed') and self.driver.call('GET', path + '/enabled')):
+                        found.append(path)
+            except GuiFailure as error:
+                if str(error) in {'webdriver_textContent_stale_element_reference',
+                                 'webdriver_displayed_stale_element_reference',
+                                 'webdriver_enabled_stale_element_reference'}:
+                    return None  # No click was sent: relocate the read-only lookup.
+                raise
             if len(found) > 1:
                 raise GuiFailure('s06_tauri_ambiguous_public_control')
             return found[0] if found else None
@@ -142,8 +149,10 @@ def exercise(args, root, env, configs, approvals, expected):
                     stage = 'tab_' + str(index)
                     card = '#host-list .saved-host-card[data-host-id="' + host_id + '"]'
                     ui.named('管理', card, 'summary'); ui.named('新终端标签', card)
-                    tab_id = wait_for(lambda: ui.read('return document.querySelector("#view-content")?.dataset.tabId;'),
-                                      's06_tauri_new_tab_missing')
+                    def created():
+                        value = ui.read('return document.querySelector("#view-content")?.dataset.tabId;')
+                        return value if value and value not in tab_ids else None
+                    tab_id = wait_for(created, 's06_tauri_new_tab_missing')
                     if not isinstance(tab_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', tab_id):
                         raise GuiFailure('s06_tauri_tab_id_invalid')
                     tab_ids.append(tab_id)

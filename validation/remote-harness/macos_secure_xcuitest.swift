@@ -124,6 +124,37 @@ final class SecureCredentialUITests: XCTestCase {
         return exact > 0
     }
 
+    private func confirmFingerprint(_ app: XCUIApplication, phase: String) throws {
+        let matches = app.buttons.matching(NSPredicate(format: "label == %@", "已核对并确认"))
+        XCTAssertEqual(matches.count, 1, "fingerprint confirmation is not unique")
+        let button = matches.firstMatch
+        let window = app.windows.firstMatch
+        XCTAssertTrue(button.exists && button.isEnabled && window.exists && app.state == .runningForeground, "fingerprint confirmation unavailable")
+        let frame = button.frame
+        let windowFrame = window.frame
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        XCTAssertTrue(!frame.isEmpty && frame == button.frame && windowFrame == window.frame && frame.intersection(windowFrame).contains(center), "fingerprint confirmation center not visible")
+        let overlapping = app.secureTextFields.allElementsBoundByIndex.filter { $0.isHittable && $0.frame.contains(center) }.count
+        let windowClick = !button.isHittable
+        print("HP_XCUI_CONFIRM=phase:\(phase),windowclick:\(windowClick ? 1 : 0),secureoverlap:\(min(overlapping,10000))")
+        fflush(stdout)
+        XCTAssertEqual(overlapping, 0, "secure credential overlay obstructs fingerprint confirmation")
+        if windowClick {
+            let origin = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            origin.withOffset(CGVector(dx: center.x - windowFrame.minX, dy: center.y - windowFrame.minY)).click()
+        } else {
+            tap(app, button, phase: phase + "Confirm")
+        }
+        XCTAssertTrue(button.waitForNonExistence(timeout: 15), "fingerprint dialog did not close")
+        for _ in 0..<20 {
+            let target = try targetDiagnostics(app, phase: phase + "Confirmed", emit: false)
+            if target?.count == 13 && target?[12] == true { break }
+            usleep(100_000)
+        }
+        let target = try targetDiagnostics(app, phase: phase + "Confirmed")
+        XCTAssertTrue(target?.count == 13 && target?[12] == true, "fingerprint confirmation not reflected in form")
+    }
+
     private func typeOrdinaryOnce(_ app: XCUIApplication, field: XCUIElement, value: String, phase: String) throws {
         tap(app, field);app.typeText(value)
         var nodes = try snapshotNodes(app)
@@ -141,11 +172,11 @@ final class SecureCredentialUITests: XCTestCase {
     @discardableResult
     private func targetDiagnostics(_ app: XCUIApplication, phase: String, emit: Bool = true) throws -> [Bool]? {
         let fields = try snapshotNodes(app).flatMap { [$0.label, $0.value as? String ?? ""] }
-        let expression = try NSRegularExpression(pattern: "HPAX:H([01])P([01])K([01])U([01])V([01])B([01])F([01])E([01])A([01])N([01])T([01])D([01])")
+        let expression = try NSRegularExpression(pattern: "HPAX:H([01])P([01])K([01])U([01])V([01])B([01])F([01])E([01])A([01])N([01])T([01])D([01])C([01])")
         for field in fields {
             let range = NSRange(field.startIndex..., in: field)
             guard let match = expression.firstMatch(in: field, range: range) else { continue }
-            let bits = (1...12).map { index -> String in
+            let bits = (1...13).map { index -> String in
                 guard let span = Range(match.range(at: index), in: field) else { return "0" }
                 return String(field[span])
             }.joined()
@@ -159,11 +190,11 @@ final class SecureCredentialUITests: XCTestCase {
     private func requireFreshForm(_ app: XCUIApplication, phase: String) throws {
         for _ in 0..<20 {
             let bits = try targetDiagnostics(app, phase: phase, emit: false)
-            if bits?.count == 12 && bits?[8] == true && bits?[9] == true && bits?[10] == true { break }
+            if bits?.count == 13 && bits?[8] == true && bits?[9] == true && bits?[10] == true { break }
             usleep(100_000)
         }
         let bits = try targetDiagnostics(app, phase: phase)
-        XCTAssertTrue(bits?.count == 12 && bits?[8] == true && bits?[9] == true && bits?[10] == true,
+        XCTAssertTrue(bits?.count == 13 && bits?[8] == true && bits?[9] == true && bits?[10] == true,
                       "fresh ordinary form defaults unconfirmed")
     }
 
@@ -181,11 +212,11 @@ final class SecureCredentialUITests: XCTestCase {
         app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
         for _ in 0..<20 {
             let bits = try targetDiagnostics(app, phase: phase + "PortCleared", emit: false)
-            if bits?.count == 12 && bits?[11] == true { break }
+            if bits?.count == 13 && bits?[11] == true { break }
             usleep(100_000)
         }
         let cleared = try targetDiagnostics(app, phase: phase + "PortCleared")
-        XCTAssertTrue(cleared?.count == 12 && cleared?[11] == true, "default port was not cleared")
+        XCTAssertTrue(cleared?.count == 13 && cleared?[11] == true, "default port was not cleared")
         mark(phase + "PortCleared")
         app.typeText(String(port))
         var nodes = try snapshotNodes(app)
@@ -343,7 +374,7 @@ final class SecureCredentialUITests: XCTestCase {
         let probe = app.buttons["探测并核对主机密钥"]
         reveal(app, probe)
         let passwordTarget = try targetDiagnostics(app, phase: "passwordBefore")
-        XCTAssertTrue(passwordTarget?.count == 12 && passwordTarget?[0] == true && passwordTarget?[1] == true && passwordTarget?[3] == true && passwordTarget?[4] == true && passwordTarget?[5] == false && passwordTarget?[6] == true, "password target not confirmed")
+        XCTAssertTrue(passwordTarget?.count == 13 && passwordTarget?[0] == true && passwordTarget?[1] == true && passwordTarget?[3] == true && passwordTarget?[4] == true && passwordTarget?[5] == false && passwordTarget?[6] == true, "password target not confirmed")
         tap(app, probe)
         mark("passwordProbeTapped")
         let confirm = app.buttons["已核对并确认"]
@@ -355,7 +386,7 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(fingerprintMatches, "independently expected host fingerprint missing")
         mark("fingerprintVerified")
         mark("passwordConfirmAttempt")
-        tap(app, confirm, phase: "passwordConfirm")
+        try confirmFingerprint(app, phase: "password")
         mark("passwordConfirmed")
         mark("passwordCredentialAttempt")
         let loginPassword = secureField(app, "direct-secret")
@@ -393,7 +424,7 @@ final class SecureCredentialUITests: XCTestCase {
         let keyProbe = app.buttons["探测并核对主机密钥"]
         reveal(app, keyProbe)
         let keyTarget = try targetDiagnostics(app, phase: "keyBefore")
-        XCTAssertTrue(keyTarget?.count == 12 && keyTarget?[0] == true && keyTarget?[2] == true && keyTarget?[3] == true && keyTarget?[4] == true && keyTarget?[5] == false && keyTarget?[6] == true, "encrypted key target not confirmed")
+        XCTAssertTrue(keyTarget?.count == 13 && keyTarget?[0] == true && keyTarget?[2] == true && keyTarget?[3] == true && keyTarget?[4] == true && keyTarget?[5] == false && keyTarget?[6] == true, "encrypted key target not confirmed")
         tap(app, keyProbe)
         mark("encryptedKeyProbeTapped")
         let keyConfirm = app.buttons["已核对并确认"]
@@ -405,7 +436,7 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(keyFingerprintMatches, "independently expected host fingerprint missing")
         mark("encryptedKeyFingerprintVerified")
         mark("keyConfirmAttempt")
-        tap(app, keyConfirm, phase: "keyConfirm")
+        try confirmFingerprint(app, phase: "key")
         mark("keyConfirmed")
         mark("keyCredentialAttempt")
         tap(app, element(app, "使用私钥认证"))

@@ -151,6 +151,8 @@ jobs:
           fixed += ['ordinary field sentinel not read back','ordinary field target not read back']
           fixed += ['fresh ordinary form defaults unconfirmed','default port was not cleared']
           fixed += ['password target not confirmed','encrypted key target not confirmed']
+          fixed += ['fingerprint confirmation is not unique','fingerprint confirmation center not visible','fingerprint dialog did not close','fingerprint confirmation not reflected in form']
+          fixed += ['secure credential overlay obstructs fingerprint confirmation']
           fixed += ['normal homepage not confirmed','return input state unavailable']
           fixed += ['private key editor missing','encrypted key session did not authenticate','passphrase not cleared after disconnect']
           fixed += ['form scroll target unavailable','requested control is not hittable','requested control is disabled']
@@ -170,14 +172,16 @@ jobs:
           secure_metrics=[{'phase':row[0],**dict(zip(('secure','text','other','id','label','secureLabel'),map(int,row[1:])))} for row in secure_metrics[:4]]
           hits=re.findall(r'hp_xcui_hit=phase:(control|passwordconfirm|passwordconnect|keyconfirm|keyconnect),exists:([01]),enabled:([01]),hittable:([01]),inside:([01])',log)
           hit_metrics=[{'phase':phase,**dict(zip(('exists','enabled','hittable','insideWindow'),[v=='1' for v in bits]))} for phase,*bits in hits[:8]]
+          confirmations=re.findall(r'hp_xcui_confirm=phase:(password|key),windowclick:([01]),secureoverlap:(\d{1,5})',log)
+          confirmations=[{'phase':phase,'windowClick':window=='1','hittableSecureOverlapCount':int(overlap)} for phase,window,overlap in confirmations[:2]]
           fingerprints=re.findall(r'hp_xcui_fingerprint=phase:(password|encryptedkey),nodes:(\d{1,5}),prefix:(\d{1,5}),exact:(\d{1,5})',log)
           fingerprints=[{'phase':phase,'nodes':int(nodes),'sha256PrefixCount':int(prefix),'expectedExactCount':int(exact)} for phase,nodes,prefix,exact in fingerprints[:2]]
           inputs=re.findall(r'hp_xcui_input=phase:(sentinel|passwordaddress|passwordport|passworduser|keyaddress|keyport|keyuser),(target):(\d{1,5})',log)
           inputs=[{'phase':phase,'kind':kind,'exactCount':int(count)} for phase,kind,count in inputs[:7]]
           input_details=re.findall(r'hp_xcui_inputdetail=phase:(address|port|username|keyport),contains:(\d{1,5}),sentinelleft:(\d{1,5})',log)
           input_details=[{'phase':phase,'targetContainedCount':int(contained),'sentinelRemainingCount':int(remaining)} for phase,contained,remaining in input_details[:4]]
-          targets=re.findall(r'hp_xcui_target=phase:(passwordfresh|passwordportcleared|passwordbefore|passwordafter|keyfresh|keyportcleared|keybefore|keyafter|inputfailure),bits:([01]{12}|missing)',log)
-          target_metrics=[{'phase':phase,**dict(zip(('hostMatches','passwordPortMatches','keyPortMatches','userMatches','valid','busy','foreground','probeFailed','hostEmpty','userEmpty','portDefault22','portEmpty'),[c=='1' for c in bits]))} if bits!='missing' else {'phase':phase,'diagnosticMissing':True} for phase,bits in targets[:9]]
+          targets=re.findall(r'hp_xcui_target=phase:(passwordfresh|passwordportcleared|passwordbefore|passwordafter|passwordconfirmed|keyfresh|keyportcleared|keybefore|keyafter|keyconfirmed|inputfailure),bits:([01]{13}|missing)',log)
+          target_metrics=[{'phase':phase,**dict(zip(('hostMatches','passwordPortMatches','keyPortMatches','userMatches','valid','busy','foreground','probeFailed','hostEmpty','userEmpty','portDefault22','portEmpty','fingerprintConfirmed'),[c=='1' for c in bits]))} if bits!='missing' else {'phase':phase,'diagnosticMissing':True} for phase,bits in targets[:11]]
           metrics=re.findall(r'hp_xcui_metric=windows:(\d{1,5}),nodes:(\d{1,5}),buttons:(\d{1,5}),exact:(\d{1,5}),label:(\d{1,5})',log)
           metrics=[dict(zip(('windows','nodes','buttons','exact','label'),map(int,row))) for row in metrics[:2]]
           home_metrics=metrics[0] if metrics else {}
@@ -209,7 +213,7 @@ jobs:
                   'failureMethod':failure_method,'failedMethods':failed_methods,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,
                   'failureCategories':categories,'xcresultDetailsAvailable':details_available,'homeMetrics':home_metrics,
                   'fallbackHomeMetrics':metrics[1] if len(metrics)>1 else {},
-                  'ordinaryMetrics':ordinary,'backMetrics':back_metrics,'secureMetrics':secure_metrics,'hitMetrics':hit_metrics,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
+                  'ordinaryMetrics':ordinary,'backMetrics':back_metrics,'secureMetrics':secure_metrics,'hitMetrics':hit_metrics,'confirmationMetrics':confirmations,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
                   'inputMetrics':inputs,'inputDetails':input_details,'targetMetrics':target_metrics,
                   'progress':progress,'rawLogsUploaded':False}
           if not ok:

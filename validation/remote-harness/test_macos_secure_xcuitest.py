@@ -112,7 +112,7 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertEqual(report['fingerprintMetrics'][0]['expectedExactCount'],0)
             self.assertNotIn('private fingerprint material',output.read_text())
-            log.write_text('Test Case testPasswordSSH failed\nHP_XCUI_TARGET=phase:passwordBefore,bits:101110101010\nprivate target material')
+            log.write_text('Test Case testPasswordSSH failed\nHP_XCUI_TARGET=phase:passwordBefore,bits:1011101010101\nprivate target material')
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertTrue(report['targetMetrics'][0]['hostMatches']);self.assertFalse(report['targetMetrics'][0]['passwordPortMatches'])
             self.assertNotIn('private target material',output.read_text())
@@ -167,6 +167,15 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('try app.snapshot()',scanner)
         self.assertIn('pending.append(contentsOf: node.children)',scanner)
         self.assertNotIn('allElementsBoundByIndex',scanner)
+
+    def test_fingerprint_mouse_fallback_requires_unique_visible_target_and_actual_confirmation(self):
+        swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()
+        helper=swift[swift.index('private func confirmFingerprint'):swift.index('private func typeOrdinaryOnce')]
+        self.assertIn('XCTAssertEqual(matches.count, 1',helper)
+        self.assertIn('frame.intersection(windowFrame).contains(center)',helper)
+        self.assertIn('XCTAssertEqual(overlapping, 0',helper)
+        self.assertIn('button.waitForNonExistence',helper)
+        self.assertIn('target?[12] == true',helper)
 
 if __name__ == '__main__':
     unittest.main()

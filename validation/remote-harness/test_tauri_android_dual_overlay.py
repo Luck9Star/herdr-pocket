@@ -1,6 +1,7 @@
 import unittest
 import subprocess
 import json
+import xml.etree.ElementTree as ET
 from unittest.mock import Mock, patch
 import tauri_android_dual_overlay as dual
 
@@ -77,6 +78,14 @@ class DualEvidenceTests(unittest.TestCase):
         event['params']['url']='https://elsewhere.invalid/'
         browser.ws.recv.side_effect=[json.dumps(event)]
         with self.assertRaises(dual.GuiFailure): browser.call('Input.dispatchMouseEvent',{})
+
+    def test_ordinary_tree_requires_owned_webview_not_brand_text(self):
+        root=ET.fromstring('<hierarchy><node package="other" class="android.webkit.WebView"/>'
+                           '<node package="dev.herdrpocket.tauriprobe" class="android.webkit.WebView"/>'
+                           '<node package="dev.herdrpocket.tauriprobe" class="android.view.View"/></hierarchy>')
+        self.assertTrue(dual.ordinary_native_tree(list(root.iter('node')))['ownedWebView'])
+        self.assertFalse(dual.ordinary_native_tree([root[0]])['ownedWebView'])
+        self.assertFalse(dual.ordinary_native_tree([])['ownedWebView'])
 
     def test_public_host_control_requires_matching_event(self):
         control = Mock()

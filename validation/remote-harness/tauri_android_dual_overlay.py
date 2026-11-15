@@ -126,6 +126,12 @@ def native_ui_nodes():
         adb('shell','rm','-f',dump_path,check=False,timeout=5)
 
 
+def ordinary_native_tree(nodes):
+    return {'xmlParsed':True,'nodeCount':min(len(nodes),999),
+            'ownedWebView':any(node.get('package')==PACKAGE and
+                node.get('class','').endswith('WebView') for node in nodes)}
+
+
 def native_dialog_click(expected, button, *, timeout=20, cancelled=None, diagnostic=None):
     """Read the actual system dialog and click its uniquely labeled visible button."""
     deadline = time.monotonic() + timeout
@@ -420,10 +426,10 @@ def run_direction(apk, auth_apk, session, stopped, report):
             return False
         browser=wait_for(connect,'dual_webview_not_ready',timeout=90)
         nodes=native_ui_nodes()
-        report['ordinaryNativeTree']={'xmlParsed':True,'nodeCount':min(len(nodes),999),
-            'brandVisible':any('Herdr Pocket' in (node.get('text') or '') or
-                               'Herdr Pocket' in (node.get('content-desc') or '') for node in nodes)}
-        if len(nodes)<3 or not report['ordinaryNativeTree']['brandVisible']:
+        report['ordinaryNativeTree']=ordinary_native_tree(nodes)
+        report['ordinaryWebViewHomeVerified']=browser.read('.app-header h1')=='Herdr Pocket'
+        if (len(nodes)<3 or not report['ordinaryNativeTree']['ownedWebView'] or
+                not report['ordinaryWebViewHomeVerified']):
             raise GuiFailure('dual_native_ui_tree_incomplete')
         report['stage']='network_setup'
         browser.click('#nav-network')

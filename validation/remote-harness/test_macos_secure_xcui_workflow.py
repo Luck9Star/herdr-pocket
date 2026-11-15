@@ -64,9 +64,9 @@ for name, peer in (('password', 'password'), ('key', 'encryptedKey')):
             root = Path(tmp)
             env = {**os.environ, 'RUNNER_TEMP': tmp}
             (root / 'macos-secure-private.log').write_text(
-                'HP_XCUI_KEYINPUT=visible:1,key:1,passphrase:0,empty:0,length:1,trimmed:1 secret-data\n'
-                'HP_XCUI_KEYINPUT=visible:0,key:0,passphrase:0,empty:0,length:0,trimmed:0\n'
-                'HP_XCUI_KEYINPUT=visible:1,key:secret-data,passphrase:1,empty:0,length:1,trimmed:1\n'
+                'HP_XCUI_KEYINPUT=visible:1,key:1,passphrase:0,sentinel:0,empty:0,length:1,trimmed:1 secret-data\n'
+                'HP_XCUI_KEYINPUT=visible:0,key:0,passphrase:0,sentinel:0,empty:0,length:0,trimmed:0\n'
+                'HP_XCUI_KEYINPUT=visible:1,key:secret-data,passphrase:1,sentinel:0,empty:0,length:1,trimmed:1\n'
                 'RunnerTests.swift:456: error: form action center not visible and stable secret-data\n'
                 'HP_XCUI_FORM=phase:paste,count:1,enabled:1,hittable:0,inside:0,scroll:1\n'
                 'HP_XCUI_STAGE=returnCredentialEntered\n'
@@ -85,8 +85,8 @@ for name, peer in (('password', 'password'), ('key', 'encryptedKey')):
                     self.assertIs(report['peerCloseObservedDuringDisconnectWindows'], password and key)
                     self.assertEqual(report['status'], 'failed')
                     self.assertEqual(report['keyInputMetrics'], [
-                        {'visible': True, 'key': True, 'passphrase': False, 'empty': False, 'lengthMatches': True, 'trimmedMatches': True},
-                        {'visible': False, 'key': False, 'passphrase': False, 'empty': False, 'lengthMatches': False, 'trimmedMatches': False}])
+                        {'visible': True, 'key': True, 'passphrase': False, 'sentinel': False, 'empty': False, 'lengthMatches': True, 'trimmedMatches': True},
+                        {'visible': False, 'key': False, 'passphrase': False, 'sentinel': False, 'empty': False, 'lengthMatches': False, 'trimmedMatches': False}])
                     self.assertTrue(report['progress']['returnCredentialEntered'])
                     self.assertEqual(report['hitMetrics'][0]['phase'], 'returnsecure')
                     self.assertNotIn('secret-data', output.read_text())

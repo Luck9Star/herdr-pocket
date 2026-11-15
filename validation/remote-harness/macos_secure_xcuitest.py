@@ -81,7 +81,7 @@ def prepare(app, fixture=None):
         phrase_encoded = base64.b64encode(config['passphrase'].encode()).decode()
         key_diagnostic = ("          Text('HPKEY:K${secret.text == utf8.decode(base64.decode(\"" + key_encoded +
                        "\")) ? 1 : 0}P${passphrase.text == utf8.decode(base64.decode(\"" + phrase_encoded +
-                       "\")) ? 1 : 0}E${secret.text.isEmpty ? 1 : 0}L${secret.text.length == utf8.decode(base64.decode(\"" + key_encoded + "\")).length ? 1 : 0}T${secret.text.trimRight() == utf8.decode(base64.decode(\"" + key_encoded + "\")).trimRight() ? 1 : 0}', style: const TextStyle(fontSize: 1)),\n")
+                       "\")) ? 1 : 0}Q${passphrase.text == 'q' ? 1 : 0}E${secret.text.isEmpty ? 1 : 0}L${secret.text.length == utf8.decode(base64.decode(\"" + key_encoded + "\")).length ? 1 : 0}T${secret.text.trimRight() == utf8.decode(base64.decode(\"" + key_encoded + "\")).trimRight() ? 1 : 0}', style: const TextStyle(fontSize: 1)),\n")
         address_point = "          Semantics(container: true, explicitChildNodes: true, label: '地址'"
         if dart_text.count(address_point) != 1:
             raise ValueError('macos_xcui_dart_unexpected')

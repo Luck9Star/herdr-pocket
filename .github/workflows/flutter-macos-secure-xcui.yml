@@ -167,7 +167,7 @@ jobs:
           allowed={'fixtureReadable','appLaunched','homepage','maskingHomepage','passwordHomepage','keyHomepage','returnHomepage','passwordFreshVerified','passwordAddressTyped','passwordPortCleared','passwordPortTyped','passwordUsernameTyped','keyFreshVerified','keyAddressTyped','keyPortCleared','keyPortTyped','keyUsernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted',
                    'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','passwordConfirmAttempt','passwordConfirmed','passwordCredentialAttempt','passwordCredentialEntered','passwordConnectAttempt','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','keyConfirmAttempt','keyConfirmed','keyCredentialAttempt','pemPasteButtonTapped','keyCredentialEntered','keyConnectAttempt','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                    'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
-          optional={'keyMethodSelected','keyPassphraseFound','keyPassphraseEntered','keyPassphraseRetry','keyPassphraseConfirmed','pemPasteButtonAttempt','keyConnectHandlerEntered','keyPemParsed','passwordValuePresent','passwordValueUnavailable','passphraseValuePresent','passphraseValueUnavailable','returnButtonUsed','returnEscapeUsed','returnEntryTapped','returnSecureSelected','returnCredentialEntered','returnBackTapped','returnReopenEntryTapped','returnReopenedSecureSelected'}
+          optional={'keyMethodSelected','keyPassphraseFound','keyPassphraseEntered','keyPassphraseFocusConfirmed','keyPassphraseConfirmed','pemControllerConfirmed','pemPasteButtonAttempt','keyConnectHandlerEntered','keyPemParsed','passwordValuePresent','passwordValueUnavailable','passphraseValuePresent','passphraseValueUnavailable','returnButtonUsed','returnEscapeUsed','returnEntryTapped','returnSecureSelected','returnCredentialEntered','returnBackTapped','returnReopenEntryTapped','returnReopenedSecureSelected'}
           progress={key:True for key in allowed | optional if 'hp_xcui_stage='+key.lower() in log}
           try:
               summary=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private-summary.json')))
@@ -201,7 +201,7 @@ jobs:
           fixed += ['secure credential overlay obstructs fingerprint confirmation']
           fixed += ['normal homepage not confirmed','return input state unavailable']
           fixed += ['private key editor missing','encrypted key session did not authenticate','passphrase not cleared after disconnect']
-          fixed += ['form scroll target unavailable','requested control is not hittable','requested control is disabled', 'form action is not unique','form action center not visible and stable','secure credential overlay obstructs form action','requested control unavailable','pasted key and passphrase not confirmed','passphrase input state empty','passphrase retry focus not confirmed','passphrase controller mismatch']
+          fixed += ['form scroll target unavailable','requested control is not hittable','requested control is disabled', 'form action is not unique','form action center not visible and stable','secure credential overlay obstructs form action','requested control unavailable','pasted key and passphrase not confirmed','passphrase input state empty','passphrase focus sentinel mismatch','passphrase controller mismatch','pasted key controller mismatch']
           failure_lines=sorted({int(n) for n in re.findall(r'runnertests\.swift:(\d{1,5}):(?:\d+:)?\s*error:',diagnostic_text) if 1 <= int(n) <= 10000})[:12]
           fixed_failures=[message for message in fixed if message in diagnostic_text]
           categories=[]
@@ -219,8 +219,8 @@ jobs:
           secure_metrics=[{'phase':row[0],**dict(zip(('secure','text','other','id','label','secureLabel'),map(int,row[1:])))} for row in secure_metrics[:4]]
           hits=re.findall(r'hp_xcui_hit=phase:(control|passwordconfirm|passwordconnect|keyconfirm|keyconnect|returnentry|returnsecure|returnback|returnreopenentry),exists:([01]),enabled:([01]),hittable:([01]),inside:([01])',log)
           hit_metrics=[{'phase':phase,**dict(zip(('exists','enabled','hittable','insideWindow'),[v=='1' for v in bits]))} for phase,*bits in hits[:12]]
-          key_input=re.findall(r'hp_xcui_keyinput=visible:([01]),key:([01]),passphrase:([01]),empty:([01]),length:([01]),trimmed:([01])(?=\s|$)',log)
-          key_input=[dict(zip(('visible','key','passphrase','empty','lengthMatches','trimmedMatches'),(v=='1' for v in row))) for row in key_input[:4]]
+          key_input=re.findall(r'hp_xcui_keyinput=visible:([01]),key:([01]),passphrase:([01]),sentinel:([01]),empty:([01]),length:([01]),trimmed:([01])(?=\s|$)',log)
+          key_input=[dict(zip(('visible','key','passphrase','sentinel','empty','lengthMatches','trimmedMatches'),(v=='1' for v in row))) for row in key_input[:4]]
           form_metrics=re.findall(r'hp_xcui_form=phase:(paste|connect),count:([0-9]),enabled:([01]),hittable:([01]),inside:([01]),scroll:([01])',log)
           form_metrics=[{'phase':phase,'count':int(count),**dict(zip(('enabled','hittable','insideViewport','scrollView'),(v=='1' for v in bits)))} for phase,count,*bits in form_metrics[:4]]
           confirmations=re.findall(r'hp_xcui_confirm=phase:(password|key),windowclick:([01]),secureoverlap:(\d{1,5})',log)

@@ -211,13 +211,10 @@ class ScaffoldTests(unittest.TestCase):
             self.assertLess(case.index('tap(app, '+button+')'),case.index('peerObservationWindow("'+phase+'")'))
             self.assertLess(case.index('peerObservationWindow("'+phase+'")'),case.index('app.terminate()'))
         key=swift[swift.index('func testEncryptedKeySSH'):swift.index('func testReturnAndReopen')]
-        self.assertLess(key.index('keyPassphrase.typeText(phrase)'),key.index('clickFormButton(app, label: "粘贴私钥")'))
-        self.assertIn('try phraseMatches(app)',key)
-        self.assertLess(key.index('tap(app, field)'),key.index('field.typeKey("a", modifierFlags: .command)'))
-        self.assertIn('field.typeText(phrase)',key)
-        self.assertIn('XCTAssertTrue(phraseConfirmed',key)
+        self.assertLess(key.index('clickFormButton(app, label: "粘贴私钥")'),key.index('app.typeText("q")'))
+        self.assertLess(key.index('XCTAssertTrue(sentinelConfirmed'),key.index('app.typeText(phrase)'))
+        self.assertIn('try inputMatches(app, index: 1)',key)
         self.assertNotIn('maskedValue.isEmpty',key)
-        self.assertLess(key.index('try assertNoSecrets(app, [password, phrase])'),key.index('clickFormButton(app, label: "粘贴私钥")'))
 
     def test_fingerprint_mouse_fallback_requires_unique_visible_target_and_actual_confirmation(self):
         swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()
@@ -243,7 +240,7 @@ class ScaffoldTests(unittest.TestCase):
         self.assertNotIn('pemKeyboardFallback',key)
         diagnostics=swift[swift.index('private func diagnoseKeyInputs'):swift.index('private func ordinaryMetrics')]
         self.assertIn('HP_XCUI_KEYINPUT=visible:',diagnostics)
-        self.assertIn('HPKEY:K([01])P([01])E([01])',swift)
+        self.assertIn('HPKEY:K([01])P([01])Q([01])',swift)
         self.assertIn('Date().addingTimeInterval(10)',diagnostics)
         self.assertNotIn('XCTFail',diagnostics)
 

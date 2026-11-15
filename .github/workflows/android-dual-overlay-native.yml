@@ -73,5 +73,49 @@ jobs:
         with:
           name: android-dual-native-x86_64-${{ github.sha }}
           path: ${{ runner.temp }}/android-dual-native
+          # The verified source material includes portable-stream/.gitignore.
+          # This is only the self-created native output directory, never HOME.
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+  download-replay:
+    needs: native-x86
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: android-dual-native-x86_64-${{ github.sha }}
+          path: ${{ runner.temp }}/downloaded-native
+      - name: Replay full verification against downloaded bytes
+        id: replay
+        run: |
+          python3 validation/native/tool/android_bundle.py verify "$RUNNER_TEMP/downloaded-native" \
+            --abi x86_64 --commit "$GITHUB_SHA" --readelf "$(command -v readelf)"
+      - name: Record distribution result separately from compilation
+        if: always()
+        env:
+          REPLAY_STATUS: ${{ steps.replay.outcome }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          path = root / 'downloaded-native/manifest.json'
+          result = {'sourceCommit': os.environ['GITHUB_SHA'], 'abi': 'x86_64',
+                    'downloadedBundleVerification': os.environ['REPLAY_STATUS'],
+                    'androidLoad': 'not run', 'node': 'not run'}
+          if path.is_file():
+              result['nativeManifestSha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+          (root / 'download-replay.json').write_text(json.dumps(result, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: android-dual-native-download-replay-${{ github.sha }}
+          path: ${{ runner.temp }}/download-replay.json
           if-no-files-found: error
           retention-days: 14

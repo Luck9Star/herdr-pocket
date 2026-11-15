@@ -85,6 +85,10 @@ class DualNativeTests(unittest.TestCase):
         text = (bundle.ROOT / '.github/workflows/android-dual-overlay-native.yml').read_text()
         self.assertIn("branches: ['codex/acceptance-android-dual-native/**']", text)
         self.assertIn('--abi x86_64 --tailscale --bridge --release', text)
+        self.assertIn('include-hidden-files: true', text)
+        self.assertIn('needs: native-x86', text)
+        self.assertIn('Replay full verification against downloaded bytes', text)
+        self.assertIn('--readelf "$(command -v readelf)"', text)
         for forbidden in ('acceptance-dual-overlay/**', 'flutter build', 'tauri --', 'emulator -avd', 'adb install'):
             self.assertNotIn(forbidden, text)
 

@@ -137,6 +137,29 @@ class BundleTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'hash mismatch'):
                 bundle.verify(self.path, 'a' * 40, 'readelf')
 
+    def test_download_replay_requires_manifested_hidden_source_file(self):
+        self.prepare_bundle()
+        hidden = 'portable-stream/.gitignore'
+        manifest = json.loads((self.path / 'manifest.json').read_text())
+        self.assertIn(hidden, manifest['files'])
+        # Mirror artifact transport with and without its hidden-file setting.
+        for include_hidden in (False, True):
+            with self.subTest(include_hidden=include_hidden), tempfile.TemporaryDirectory() as target:
+                archive = Path(target) / 'artifact.zip'
+                with zipfile.ZipFile(archive, 'w') as output:
+                    for name in ['manifest.json', *manifest['files']]:
+                        if include_hidden or not any(part.startswith('.') for part in Path(name).parts):
+                            output.write(self.path / name, name)
+                restored = Path(target) / 'downloaded'
+                with zipfile.ZipFile(archive) as source:
+                    source.extractall(restored)
+                with mock.patch.object(bundle, 'elf'):
+                    if include_hidden:
+                        bundle.verify(restored, 'a' * 40, 'readelf')
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'artifact hash mismatch: portable-stream/.gitignore'):
+                            bundle.verify(restored, 'a' * 40, 'readelf')
+
     def test_source_material_cannot_be_forged_or_omitted_with_self_consistent_hashes(self):
         native = bundle.ROOT / 'validation/native'
         portable = json.loads((native / 'patches/portable-manifest.json').read_text())

@@ -2,7 +2,7 @@
 
 > 面向 SSH / herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
-**同源 QA 调试包 · 2026-11-15**　源码 `a9afe9c`：[Flutter Android APK（多架构）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159866197) · [Tauri Android APK（仅 arm64-v8a）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159224253)。[本批运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075)完成：27 项成功、7 项按条件跳过；[macOS/Linux 下载、包名、架构与 SHA256](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。这是 CI 调试快照，与公开 Release 和设备验收分开。
+**同源 QA 调试包 · 2026-11-15**　源码 `d925bd0`：[Flutter Android APK（多架构）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162282781) · [Tauri Android APK（仅 arm64-v8a）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162296306)。[本批运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398)完成：27 项成功、7 项按条件跳过；[macOS/Linux 下载、包名、架构与 SHA256](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。这是 CI 调试快照，与公开 Release 和设备验收分开。
 
 **终端内核评估**　[libghostty-vt 两壳适配与风险](docs/64-libghostty-terminal-core-evaluation.md)：建议先做受控原型，暂不替换生产终端。
 

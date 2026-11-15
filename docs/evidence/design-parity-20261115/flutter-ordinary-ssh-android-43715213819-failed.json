@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "d925bd02f2b47f30a2207da8e4d5eea45909bbb1",
+  "kind": "flutter-android-ordinary-ssh",
+  "status": "failed",
+  "cleanup": {
+    "reverseRemoved": false,
+    "packageRemoved": false,
+    "ownedForwardsRemoved": false,
+    "fixtureClosed": true,
+    "flutterToolStopped": true,
+    "rawLogsUploaded": false
+  },
+  "physicalImeVerified": false,
+  "failureCode": "direct_android_adb_failed",
+  "diagnostic": {
+    "phase": "await_device_result",
+    "exceptionClass": "Failure",
+    "sourceLocations": [
+      {
+        "file": "flutter_direct_ssh_android.py",
+        "line": 103
+      },
+      {
+        "file": "flutter_direct_ssh_android.py",
+        "line": 72
+      },
+      {
+        "file": "flutter_direct_ssh_android.py",
+        "line": 68
+      },
+      {
+        "file": "flutter_direct_ssh_android.py",
+        "line": 63
+      }
+    ]
+  },
+  "lastPhase": "await_device_result",
+  "protocol": {
+    "authAccepted": false,
+    "ptyRequested": false,
+    "shellRequested": false,
+    "markerReceived": false,
+    "sessionClosed": false,
+    "connections": 0,
+    "connectionsClosed": true,
+    "ptySizes": []
+  },
+  "cleanupCode": "direct_android_cleanup_incomplete"
+}

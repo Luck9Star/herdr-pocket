@@ -11,14 +11,18 @@ function contrast(a,b) {
   const [light,dark]=[luminance(a),luminance(b)].sort((x,y)=>y-x);
   return (light+0.05)/(dark+0.05);
 }
+function topLevelCss(css) {
+  return css.replace(/@media[^{}]*\{(?:[^{}]|\{[^{}]*\})*\}/g,'');
+}
 
-test('desktop inactive tab tokens remain readable on normal and hover surfaces',async()=>{
+test('cross-width inactive tab rules keep desktop and narrow-window normal and hover surfaces readable',async()=>{
   const tokens=JSON.parse(await readFile(new URL('../../shared/design-tokens-v2.json',import.meta.url),'utf8'));
   const colors=tokens.colors;
   assert.ok(contrast(colors.termText,colors.termSurface)>=4.5);
   assert.ok(contrast(colors.termText,colors.termKeyBg)>=4.5);
   const css=await readFile(new URL('../src/style.css',import.meta.url),'utf8');
-  assert.match(css,/#tab-workspace #view-tabs button\[aria-pressed=false\]\s*\{\s*color:var\(--hp-termText\)/);
-  assert.match(css,/#tab-workspace #view-tabs button\[aria-pressed=false\]:hover:not\(:disabled\)[\s\S]*?background:var\(--hp-termKeyBg\)/);
-  assert.match(css,/#tab-workspace #view-tabs button:focus-visible\s*\{\s*outline-color:var\(--hp-brandBorder\)/);
+  const topLevel=topLevelCss(css);
+  assert.match(topLevel,/#tab-workspace #view-tabs button\[aria-pressed=false\]\s*\{\s*color:var\(--hp-termText\);\s*\}/);
+  assert.match(topLevel,/#tab-workspace #view-tabs button\[aria-pressed=false\]:hover:not\(:disabled\)\s*\{\s*color:var\(--hp-termText\);\s*background:var\(--hp-termKeyBg\);\s*\}/);
+  assert.match(topLevel,/#tab-workspace #view-tabs button:focus-visible\s*\{\s*outline-color:var\(--hp-brandBorder\);\s*\}/);
 });

@@ -57,6 +57,8 @@ Flutter macOS 归档来源为 [Actions 43669066267](https://github.com/Luck9Star
 
 修复版验收源码为 `32cd6066a0deb07527540bd955dd1e6b8c14bcb5`；其 Flutter 产品页面、Apple 原生代码和工程生成器与历史下载包 `79d2d00` 一致，但测试应用是独立构建。整个 XCTest 仍为失败：后续未找到独立期望的主机指纹，密码和加密私钥的 SSH 认证、PTY 与关闭步骤均未到达。上述系统 AX 遮罩结论不能扩展为该修复版原生双认证通过，先前 Android/iOS 模拟器结果仍按各自源码和范围单列。
 
+后续 macOS 原生专项 [43704701932](evidence/design-parity-20261115/flutter-macos-secure-candidate-43704701932.json) 和 [43705618468](evidence/design-parity-20261115/flutter-macos-secure-candidate-43705618468.json) 均为四项实跑、三项通过：系统遮罩、密码认证与界面主动断开、返回重开通过，密码服务端分别确认认证、PTY、shell 和应用存活期间关闭。前者中 PEM 字段的 Flutter 焦点已确认，系统快捷粘贴后控制器仍为空；后者仅在确认仍为空后以真实键盘逐行输入，PEM 和口令控制器均与一次性夹具精确相等，且已尝试连接，但 key 服务端只观察到探测，未确认认证或关闭。实际未判定粘贴失效原因，也不能据此声称原生加密私钥登录通过。测试应用使用显式测试用 embedder 语义；两次均为独立构建。与之互补的本地 Dart 加密私钥真实回环认证证据见下文，不能代替该原生 UI 结果。
+
 普通 SSH 的 RSA 兼容增量也已从原生 macOS 窗口独立复验：纯 RSA2048 Paramiko、核对 SHA256 指纹、密码登录、输入 `hp-check` 后看到绿色 `POCKET-ANDROID-SSH-OK`，点击断开后服务端记录 `sessionClosed`。窗口缩放让服务端实际收到 80×24 → 106×28 → 106×30 → 104×27 → 104×20 → 104×19 → 106×19，包括列数相同而行数改变。该次使用前端 `f29ea6b` 与 Rust 生产文件 blob `a9e9792` / `502548b`，已纳入功能快照 `621b793`；该次 Tauri 原生私钥输入未验证，Android 范围另见下文。
 
 Tauri 的加密私钥入口随后在 Android API 35 x86_64 模拟器实际通过：[Actions 43682217625](https://github.com/Luck9Star/herdr-pocket/actions/runs/43682217625)，源码 `664be556c5572cb9777bd0ffe6e18266a9d2889a`，验收工件 `14149575567`，APK SHA256 为 `41ca5b685b23a6a7244e214fbb8c2636733c891b2f8bf3992bef4dc6983cbf6c`。应用选择私钥认证，核对临时 loopback 对端指纹，使用有口令保护的一次性 OpenSSH Ed25519 用户私钥连接；对端只接受指定公钥，设备上确认 PTY、shell、`hp-check` 输入、终端回显和主动断开，服务端确认会话关闭；应用、转发及临时连接清理均通过。[原始脱敏 manifest](evidence/design-parity-20261115/tauri-encrypted-ssh-android-43682217625.json)只记录布尔结果。另一本地协议反例确认密码认证被拒、无口令或错误口令无法解密。此设备验证通过 CDP 操作 WebView，不证明物理手机或真实 IME 组字；也不代表其他私钥格式均已验证。
@@ -65,7 +67,7 @@ Rust 仅新增 russh 的独立 `rsa` feature，仍关闭默认 features 并保�
 
 `d5ec372` 的本机固定 SDK、隔离 Flutter 工程与临时 SSH loopback 定向用例 11/11 通过，覆盖 macOS/Android Widget 语义，以及连接中返回后 `SSHClient.done`、`isClosed` 和重新打开的空表单；这是 Widget 与传输回环证据，云端 544/5 与渲染 10 项另行统计。
 
-`d5ec372` 的 [macOS 系统专项记录](evidence/design-parity-20261115/flutter-macos-secure-candidate-43699318795.json)共 4 项中遮罩、实际返回及重开两项通过；测试使用专用 embedder 语义通知。密码和私钥两项均探测并精确核对独立指纹，但确认控件不可命中，尚未到认证，整个专项为失败；不得将其描述为原生 SSH 认证通过。 后续 `2c92641` 的 [运行 43701658581 原始记录](evidence/design-parity-20261115/flutter-macos-secure-candidate-43701658581.json)四项中三项通过：系统遮罩、返回重开及密码 SSH 登录后界面主动断开，密码服务端确认 auth/PTY/shell/close；两种认证的硬性 live 时间窗只导出合值，不能分项倒推，私钥已独立核验并确认指纹、输入 PEM 和口令，但连接按钮测试未命中、key 服务端仅探测；该次测试独立构建，其产品代码与 `d5ec372` 标准包一致。
+`d5ec372` 的 [macOS 系统专项记录](evidence/design-parity-20261115/flutter-macos-secure-candidate-43699318795.json)共 4 项中遮罩、实际返回及重开两项通过；测试使用专用 embedder 语义通知。密码和私钥两项均探测并精确核对独立指纹，但确认控件不可命中，尚未到认证，整个专项为失败；不得将其描述为原生 SSH 认证通过。 后续 `2c92641` 的 [运行 43701658581 原始记录](evidence/design-parity-20261115/flutter-macos-secure-candidate-43701658581.json)四项中三项通过：系统遮罩、返回重开及密码 SSH 登录后界面主动断开，密码服务端确认 auth/PTY/shell/close；两种认证的硬性 live 时间窗只导出合值，不能分项倒推，私钥已独立核验并确认指纹、输入 PEM 和口令，但连接按钮测试未命中、key 服务端仅探测；该次测试独立构建，其产品代码与 `d5ec372` 标准包一致。 另有[本机独立回环记录](evidence/design-parity-20261115/flutter-local-encrypted-openssh-ed25519.json)：固定 Dart 3.13.7、dartssh2 4.1.0 与同一夹具类，使用本地新生成的加密 OpenSSH Ed25519 和仅允许 publickey 的服务端，真实验证独立 pin、错误口令拒绝、PTY、回显与关闭；该证据与原生 UI 互补，两次凭据和输入路径各自独立。
 
 ## S01–S05 设计与可达性
 

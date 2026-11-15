@@ -1,0 +1,64 @@
+{
+  "exactClass": "EncryptedKeyFixture",
+  "serverAllowedAuths": "publickey",
+  "keyAlgorithm": "ssh-ed25519",
+  "envelope": {
+    "format": "OPENSSH PRIVATE KEY",
+    "cipher": "aes256-ctr",
+    "kdf": "bcrypt",
+    "rounds": 24
+  },
+  "dartExit": 0,
+  "dart": {
+    "status": "passed",
+    "passwordAuthConfigured": false,
+    "keyDecrypted": true,
+    "wrongPassphraseRejected": true,
+    "hostKeyAlgorithm": "rsa-sha2-512",
+    "hostPinMatched": true,
+    "publicKeyAuthenticated": true,
+    "ptyShellOpened": true,
+    "shellMarkerObserved": true,
+    "clientClosed": true
+  },
+  "stderrPresent": false,
+  "serverObservedClose": true,
+  "serverConnectionsClosed": true,
+  "server": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true,
+    "connections": 1,
+    "connectionsClosed": true,
+    "ptySizes": []
+  },
+  "environment": {
+    "platform": "Darwin",
+    "architecture": "arm64",
+    "macOS": "27.2.1",
+    "flutterVersion": "3.47.9",
+    "flutterRevision": "c197ca5199e9ee5661e865596c9c07294dfab51c",
+    "engineRevision": "89c39edfdfae2949f6806e4a315c0c08522238b7",
+    "dartSdkVersion": "3.13.7",
+    "dartssh2Version": "4.1.0",
+    "dartssh2PackageUri": "file:///Users/yangyitian/.pub-cache/hosted/pub.dev/dartssh2-4.1.0",
+    "paramikoVersion": "4.0.0",
+    "sshVersion": "OpenSSH_10.5p1, LibreSSL 3.3.6",
+    "repositoryHead": "25b47dd3379e6a8894955c2c39df3e998ec0c185"
+  },
+  "sourceHashes": {
+    "validation/remote-harness/tauri_encrypted_key_fixture.py": "3b21204271370b6a60796dcb42632590be6a23d009dca7267452c2ccd7c32425",
+    "validation/remote-harness/direct_ssh_fixture.py": "ee19500f97885c55b1ebd5110896a2dac3df8015038da4346c32f7f27fc2effc",
+    "validation/flutter/tool/direct_ssh_fixture_runner.py": "774647d3b1a28eedfa77f5c0a5bf4ed626e15af200eb0f2d489e5e9258f7a819"
+  },
+  "scope": {
+    "nativeUIExercised": false,
+    "localExactFixtureClass": true,
+    "cloudPrivateKeyBytesRetrieved": false,
+    "freshGeneratedFixtureOnly": true,
+    "fixtureConfigRemoved": true,
+    "rawSecretsInReport": false
+  }
+}

@@ -24,6 +24,15 @@ class EventTests(unittest.TestCase):
         finally:
             process.wait()
 
+    def test_workflow_uses_owned_easytier_prepare_paths(self):
+        workflow = Path(__file__).resolve().parents[2] / '.github/workflows/dual-overlay-herdr-validation.yml'
+        text = workflow.read_text()
+        self.assertIn('--bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID"', text)
+        self.assertIn('--output "$RUNNER_TEMP/easytier-evidence"', text)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            dual.et.checked_paths(root / 'hp-easytier-bundle-123', root / 'easytier-evidence', root, '123')
+
     def test_redacts_unrecognized_client_error(self):
         payload = {key: False for key in dual.BOOL_FIELDS}
         payload['error'] = 'private unexpected value'

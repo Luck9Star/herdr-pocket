@@ -44,7 +44,7 @@ jobs:
         run: |
           python3 validation/remote-harness/easytier_loopback.py prepare \
             --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
-            --output "$RUNNER_TEMP/easytier-build-evidence"
+            --output "$RUNNER_TEMP/easytier-evidence"
       - name: Prepare and build explicit-auth Tailscale candidate and private peer
         run: |
           python3 validation/native/tool/tailscale_candidate.py prepare "$RUNNER_TEMP/hp-ts-candidate" --cache "$RUNNER_TEMP/hp-ts-cache"

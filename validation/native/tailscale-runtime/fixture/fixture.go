@@ -302,6 +302,10 @@ func certificate(t testing.TB) (tls.Certificate, []byte) {
 	if err != nil {
 		t.Fatal("test CA certificate generation failed")
 	}
+	issuer, err := x509.ParseCertificate(rootDER)
+	if err != nil {
+		t.Fatal("test CA certificate parsing failed")
+	}
 	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal("test TLS key generation failed")
@@ -310,7 +314,7 @@ func certificate(t testing.TB) (tls.Certificate, []byte) {
 		NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour), DNSNames: []string{"localhost"},
 		IPAddresses: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
 		KeyUsage:    x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
-	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, root, &leafKey.PublicKey, rootKey)
+	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, issuer, &leafKey.PublicKey, rootKey)
 	if err != nil {
 		t.Fatal("test TLS certificate generation failed")
 	}

@@ -60,8 +60,8 @@ jobs:
           import json,sys
           try:
               facts=json.load(open(sys.argv[1]))
-              assert all(facts.get(k) is True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed'))
-          except (OSError,ValueError,AssertionError):
+              assert all(all(facts[name].get(k) is True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')) for name in ('password','encryptedKey'))
+          except (OSError,ValueError,AssertionError,KeyError,TypeError):
               sys.exit(1)
           PY
             then break; fi
@@ -72,8 +72,9 @@ jobs:
           sha=os.environ.get('GITHUB_SHA','')
           try:
               facts=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-fixture','facts.json')))
-              peer=all(facts.get(k) is True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed'))
-          except (OSError,ValueError): peer=False
+              valid=lambda value: all(value.get(k) is True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed'))
+              peer=valid(facts['password']); key_peer=valid(facts['encryptedKey'])
+          except (OSError,ValueError,KeyError,TypeError,AttributeError): peer=key_peer=False
           try:
               log=open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private.log'),errors='replace').read().lower()
           except OSError: log=''
@@ -92,7 +93,7 @@ jobs:
               if message and diagnostic not in diagnostics: diagnostics.append(diagnostic)
               if len(diagnostics)==3: break
           allowed={'fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted',
-                   'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField',
+                   'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                    'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
           optional={'passwordValuePresent','passwordValueUnavailable','passphraseValuePresent','passphraseValueUnavailable'}
           progress={key:True for key in allowed | optional if 'hp_xcui_stage='+key.lower() in log}
@@ -112,6 +113,8 @@ jobs:
           fixed += ['ordinary target fields are not readable']
           fixed += ['secure password input has no protected value','secure passphrase input has no protected value']
           fixed += ['ordinary sentinel not found in system accessibility values']
+          fixed += ['private key editor missing','encrypted key session did not authenticate','passphrase not cleared after disconnect']
+          fixed += ['form scroll target unavailable','requested control is not hittable','requested control is disabled']
           fixed_failures=[message for message in fixed if message in log]
           ordinary=re.findall(r'hp_xcui_ordinary=nodes:(\d{1,5}),values:(\d{1,5}),sentinel:([01])',log)
           ordinary=[{'nodes':int(n),'nonemptyValues':int(v),'sentinelObserved':s=='1'} for n,v,s in ordinary[:2]]
@@ -127,16 +130,18 @@ jobs:
           completed=all(progress.get(k) is True for k in allowed)
           mask_stages={'fixtureReadable','appLaunched','homepage','passwordSecureField',
                        'passwordHiddenFocused','passwordHiddenBlurred','passphraseSecureField',
-                       'passphraseHiddenAfterFocusChanges','modeSwitchCleared','maskingScanCompleted',
-                       'passwordValuePresent','passphraseValuePresent'}
-          masking_verified=all(progress.get(k) is True for k in mask_stages)
-          ok=sys.argv[2]=='0' and peer and test_passed and completed and masking_verified
+                       'passphraseHiddenAfterFocusChanges','modeSwitchCleared','maskingScanCompleted'}
+          password_proven=progress.get('passwordValuePresent') is True or peer
+          passphrase_proven=progress.get('passphraseValuePresent') is True or key_peer
+          masking_verified=all(progress.get(k) is True for k in mask_stages) and password_proven and passphrase_proven
+          ok=sys.argv[2]=='0' and peer and key_peer and test_passed and completed and masking_verified
           report={'schemaVersion':1,'sourceSHA':sha if re.fullmatch(r'[0-9a-f]{40}',sha) else None,
                   'platform':'macos-xcuitest','status':'passed' if ok else 'failed',
                   'scope':'native UI security fields and owned SSH loopback; synthetic values; no physical IME',
                   'embedderFallbackRequested':'hp_xcui_stage=embedderfallbackrequested' in log,
                   'systemTreeAndSecureFieldsVerified':masking_verified,'testExecuted':test_executed,'testPassed':test_passed,
-                  'peerAuthenticationPtyShellAndClose':peer,'buildStarted':('swiftcompile' in log or 'build target' in log),
+                  'peerAuthenticationPtyShellAndClose':peer,'encryptedKeyPeerAuthenticationPtyShellAndClose':key_peer,
+                  'passwordInputProven':password_proven,'passphraseInputProven':passphrase_proven,'buildStarted':('swiftcompile' in log or 'build target' in log),
                   'testStarted':('test suite' in log or 'test case' in log),'testCounts':counts,
                   'failureMethod':failure_method,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,'homeMetrics':home_metrics,
                   'fallbackHomeMetrics':metrics[1] if len(metrics)>1 else {},

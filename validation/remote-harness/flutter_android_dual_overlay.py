@@ -401,7 +401,24 @@ def run_device(args, env):
                 case['errorCode'] = str(error) if isinstance(error, DualOverlayDeviceFailure) else 'device_runner_failed'
             finally:
                 if session is not None:
-                    cleanup_report = getattr(session, 'report', {}).get('cleanup', {})
+                    session_report = getattr(session, 'report', {})
+                    known_stages = {'device-and-bundle', 'namespace', 'host-controller',
+                                    'host-only-ready', 'relay-and-reverse', 'host-relay-only-ready', 'ready'}
+                    stage = session_report.get('stage')
+                    case['sharedStage'] = stage if isinstance(stage, str) and stage in known_stages else 'unknown'
+                    for key in ('deviceApi35Verified', 'hostReady'):
+                        if type(session_report.get(key)) is bool: case[key] = session_report[key]
+                    for key in ('relayRoles', 'reverseMappings'):
+                        if type(session_report.get(key)) is int and 0 <= session_report[key] <= 3: case[key] = session_report[key]
+                    relay_codes = {'owned_runner_required', 'private_manifest_path_required', 'private_manifest_permissions_required',
+                        'private_manifest_invalid', 'owned_namespace_required', 'owned_ports_required', 'owned_processes_required',
+                        'namespace_check_failed', 'owned_namespace_missing', 'listener_check_failed', 'owned_listener_required',
+                        'relay_already_started', 'safe_listener_port_unavailable', 'relay_thread_cleanup_failed',
+                        'listener_process_stat_failed', 'listener_process_uid_mismatch', 'listener_process_namespace_mismatch',
+                        'listener_process_namespace_unreadable', 'controlled_relay_failed'}
+                    relay_failure = session_report.get('relayFailure')
+                    if isinstance(relay_failure, str) and relay_failure in relay_codes: case['relayFailure'] = relay_failure
+                    cleanup_report = session_report.get('cleanup', {})
                     case['sharedCleanup'] = {key: value for key, value in cleanup_report.items()
                         if key in {'reverseRemoved', 'relayStopped', 'controllerStopped', 'namespaceRemoved',
                                    'hostPrivateDirectoryRemoved', 'controlReaderStopped', 'privateFilesRemoved'}

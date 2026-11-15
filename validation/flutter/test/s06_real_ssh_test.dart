@@ -45,6 +45,7 @@ void main() {
   setUp(PairingPage.resetMemorySession);
   tearDown(PairingPage.resetMemorySession);
   testWidgets('S06 two reviewed real SSH/herdr sessions keep frames and input targets independent', (tester) async {
+    try {
     final configs = (jsonDecode(File(env['HERDR_S06_CONFIG']!).readAsStringSync()) as List)
       .cast<Map<String, dynamic>>();
     final exchange = Directory(env['HERDR_S06_DIR']!);
@@ -104,7 +105,13 @@ void main() {
       stage('s06_connect_$i');
       await tap('remote-review'); await tap('remote-connect');
       await until(() => adapters[i].currentDashboard?.panes.isNotEmpty == true);
+      stage('s06_select_$i');
+      await until(() {
+        final pane = find.byKey(ValueKey('remote-pane-${configs[i]['paneId']}'));
+        return pane.evaluate().isNotEmpty && tester.widget<FilledButton>(pane.first).onPressed != null;
+      });
       await tap('remote-pane-${configs[i]['paneId']}');
+      stage('s06_frames_$i');
       await until(() => adapters[i].evidence.fullFrameReceived && adapters[i].evidence.deltaFrames > 0);
       expect(adapters[i].runtimeType, RemoteReadOnlyAdapter);
       expect(adapters[i].evidence.hostKeyMatched, isTrue);
@@ -194,5 +201,13 @@ void main() {
     };
     File('${exchange.path}/result.json').writeAsStringSync(jsonEncode(result), flush: true);
     await tester.pumpWidget(const SizedBox());
+    } catch (error, stack) {
+      // Publish locations only, never exception messages, targets or key data.
+      final locations = RegExp(r's06_real_ssh_test\.dart:\d+:\d+').allMatches(stack.toString())
+        .map((m) => m.group(0)!).take(4).toList();
+      File('${env['HERDR_S06_DIR']!}/failure.json').writeAsStringSync(jsonEncode({
+        'kind': error.runtimeType.toString(), 'locations': locations}), flush: true);
+      rethrow;
+    }
   }, skip: !enabled, timeout: const Timeout(Duration(minutes: 4)));
 }

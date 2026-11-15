@@ -2,18 +2,45 @@
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
 
 from paired_gui import (FixtureApproval, GuiFailure, Host, bounded_wire,
-                        fixture_terminal_id, owned_process, wait_for, widget_failure)
+                        fixture_terminal_id, owned_process, wait_for)
 from guarded_input import DRAFT
 
 
 REQUIRED = ('normalHomepage', 'twoReviewedIdentities', 'samePaneDifferentTerminal',
             'bothVisible', 'independentFrames', 'bothAdvanced', 'singleInputFocus',
             'focusDoesNotRestoreInput', 'lateInputRejected', 'stoppedBoth')
+
+
+def widget_failure(exchange, fallback):
+    stages = {'s06_homepage', 's06_pair_0', 's06_pair_1', 's06_connect_0',
+              's06_connect_1', 's06_select_0', 's06_select_1', 's06_frames_0', 's06_frames_1',
+              's06_split_resume', 's06_input_eligibility', 's06_stop_both'}
+    path = exchange / 'stage'
+    if path.is_file():
+        stage = bounded_wire(path, 40).decode('ascii', errors='ignore')
+        if stage in stages:
+            return GuiFailure(f'{fallback}_{stage}')
+    return GuiFailure(fallback)
+
+
+def failure_diagnostics(exchange):
+    try:
+        value = json.loads(bounded_wire(exchange / 'failure.json', 2048))
+        kind, locations = value['kind'], value['locations']
+        if (not isinstance(kind, str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,60}', kind) or
+                not isinstance(locations, list) or len(locations) > 4 or
+                any(not isinstance(item, str) or not re.fullmatch(r's06_real_ssh_test\.dart:\d{1,4}:\d{1,4}', item)
+                    for item in locations)):
+            return {'valid': False}
+        return {'kind': kind, 'locations': locations}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {'valid': False}
 
 
 def checked_widget_result(raw, guarded):
@@ -117,6 +144,7 @@ def run_gui(args, root, env, config, command, final_pty_evidence):
                       scope='real Flutter widget, two real SSH/herdr sessions; explicit test signers and memory journals')
     except GuiFailure as error:
         result['errorCode'] = str(error)
+        result['widgetFailure'] = failure_diagnostics(exchange)
     except (OSError, ValueError, KeyError, subprocess.SubprocessError):
         result['errorCode'] = 's06_fixture_or_exchange_failed'
     finally:

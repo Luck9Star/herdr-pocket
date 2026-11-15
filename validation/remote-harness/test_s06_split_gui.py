@@ -1,9 +1,12 @@
 """Portable S06 evidence gate tests; no personal SSH or external connections."""
 import copy
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
 try:
-    from s06_split_gui import REQUIRED, checked_widget_result, GuiFailure
+    from s06_split_gui import REQUIRED, checked_widget_result, failure_diagnostics, widget_failure, GuiFailure
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
         raise
@@ -50,6 +53,22 @@ class S06EvidenceTests(unittest.TestCase):
         for value in (None, [], {}, {'sides': []}, {**self.evidence(), 'sides': [None, None]}):
             with self.assertRaises(GuiFailure):
                 checked_widget_result(value, False)
+
+    def test_failure_stages_and_locations_never_export_messages_or_paths(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'stage').write_text('s06_connect_0')
+            self.assertEqual(str(widget_failure(root, 'failed')), 'failed_s06_connect_0')
+            (root / 'stage').write_text('private-message')
+            self.assertEqual(str(widget_failure(root, 'failed')), 'failed')
+            (root / 'failure.json').write_text(json.dumps({'kind': 'TestFailure',
+                'locations': ['s06_real_ssh_test.dart:123:4'], 'message': 'do-not-export'}))
+            self.assertEqual(failure_diagnostics(root), {'kind': 'TestFailure',
+                'locations': ['s06_real_ssh_test.dart:123:4']})
+            for invalid in [{'kind': 'private message', 'locations': []},
+                            {'kind': 'TestFailure', 'locations': ['/private/raw.log:1']}, []]:
+                (root / 'failure.json').write_text(json.dumps(invalid))
+                self.assertEqual(failure_diagnostics(root), {'valid': False})
 
 
 if __name__ == '__main__':

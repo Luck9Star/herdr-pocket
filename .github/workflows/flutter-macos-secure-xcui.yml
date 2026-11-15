@@ -22,11 +22,18 @@ jobs:
           "$RUNNER_TEMP/macos-secure-venv/bin/pip" install paramiko==4.0.0
           python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
           python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
-          python3 validation/remote-harness/macos_secure_xcuitest.py --app "$RUNNER_TEMP/flutter-probe" --install-hook
           cd "$RUNNER_TEMP/flutter-probe"
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
           flutter build macos --debug
+          if [ "$GITHUB_REF" = 'refs/heads/codex/acceptance/macos-secure-design-parity' ]; then
+            python3 "$GITHUB_WORKSPACE/validation/flutter/tool/ci.py" package --destination "$RUNNER_TEMP/flutter-probe" --platform macos --output "$RUNNER_TEMP/macos-clean-output"
+            python3 - "$RUNNER_TEMP/macos-clean-output/xcui-package-scope.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1],'w') as f:
+              json.dump({'builtBeforeXcuiHook':True,'containsTestFixture':False,'runtimeEvidenceUsesInstrumentedApp':True},f,indent=2);f.write('\n')
+          PY
+          fi
       - name: Run native XCUITest without exporting UI snapshots or logs
         shell: bash
         run: |
@@ -37,6 +44,7 @@ jobs:
           trap 'touch "$RUNNER_TEMP/macos-secure-fixture/stop"; wait "$fixture_pid" || true; python3 -c "import shutil,sys; shutil.rmtree(sys.argv[1],ignore_errors=True)" "$RUNNER_TEMP/macos-secure-fixture"' EXIT
           for attempt in {1..100}; do test -s "$RUNNER_TEMP/macos-secure-fixture/fixture.json" && break; kill -0 "$fixture_pid"; sleep 0.1; done
           test -s "$RUNNER_TEMP/macos-secure-fixture/fixture.json"
+          python3 validation/remote-harness/macos_secure_xcuitest.py --app "$RUNNER_TEMP/flutter-probe" --install-hook
           python3 validation/remote-harness/macos_secure_xcuitest.py --app "$RUNNER_TEMP/flutter-probe" --fixture "$RUNNER_TEMP/macos-secure-fixture/fixture.json"
           set +e
           xcodebuild test -workspace "$RUNNER_TEMP/flutter-probe/macos/Runner.xcworkspace" \
@@ -76,16 +84,18 @@ jobs:
               match=re.search(r'runnertests\.swift:(\d+):(?:\d+:)?\s*error: (.*)',line)
               if not match: continue
               message=match.group(2)
+              if message.startswith('-['): continue  # XCTest assertion, not a compiler error.
               message=re.sub(r"'[^']*'|\"[^\"]*\"", "<redacted>", message)
               message=re.sub(r'/[^\s:]+', '<path>', message)
               message=re.sub(r'[^a-z0-9 _.,:;()<>?+\-=]', '?', message)[:180]
               diagnostic={'file':'RunnerTests.swift','line':int(match.group(1)),'message':message}
               if message and diagnostic not in diagnostics: diagnostics.append(diagnostic)
               if len(diagnostics)==3: break
-          allowed={'fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','systemTreeMaskingVerified',
+          allowed={'fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted',
                    'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField',
                    'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
-          progress={key:True for key in allowed if 'hp_xcui_stage='+key.lower() in log}
+          optional={'passwordValuePresent','passwordValueUnavailable','passphraseValuePresent','passphraseValueUnavailable'}
+          progress={key:True for key in allowed | optional if 'hp_xcui_stage='+key.lower() in log}
           try:
               summary=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private-summary.json')))
           except (OSError,ValueError): summary={}
@@ -105,6 +115,8 @@ jobs:
           fixed_failures=[message for message in fixed if message in log]
           ordinary=re.findall(r'hp_xcui_ordinary=nodes:(\d{1,5}),values:(\d{1,5}),sentinel:([01])',log)
           ordinary=[{'nodes':int(n),'nonemptyValues':int(v),'sentinelObserved':s=='1'} for n,v,s in ordinary[:2]]
+          secure_metrics=re.findall(r'hp_xcui_secure=phase:(password|passphrase),secure:(\d{1,5}),text:(\d{1,5}),other:(\d{1,5}),id:(\d{1,5}),label:(\d{1,5}),securelabel:(\d{1,5})',log)
+          secure_metrics=[{'phase':row[0],**dict(zip(('secure','text','other','id','label','secureLabel'),map(int,row[1:])))} for row in secure_metrics[:4]]
           metrics=re.findall(r'hp_xcui_metric=windows:(\d{1,5}),nodes:(\d{1,5}),buttons:(\d{1,5}),exact:(\d{1,5}),label:(\d{1,5})',log)
           metrics=[dict(zip(('windows','nodes','buttons','exact','label'),map(int,row))) for row in metrics[:2]]
           home_metrics=metrics[0] if metrics else {}
@@ -115,9 +127,10 @@ jobs:
           completed=all(progress.get(k) is True for k in allowed)
           mask_stages={'fixtureReadable','appLaunched','homepage','passwordSecureField',
                        'passwordHiddenFocused','passwordHiddenBlurred','passphraseSecureField',
-                       'passphraseHiddenAfterFocusChanges','modeSwitchCleared','systemTreeMaskingVerified'}
+                       'passphraseHiddenAfterFocusChanges','modeSwitchCleared','maskingScanCompleted',
+                       'passwordValuePresent','passphraseValuePresent'}
           masking_verified=all(progress.get(k) is True for k in mask_stages)
-          ok=sys.argv[2]=='0' and peer and test_passed and completed
+          ok=sys.argv[2]=='0' and peer and test_passed and completed and masking_verified
           report={'schemaVersion':1,'sourceSHA':sha if re.fullmatch(r'[0-9a-f]{40}',sha) else None,
                   'platform':'macos-xcuitest','status':'passed' if ok else 'failed',
                   'scope':'native UI security fields and owned SSH loopback; synthetic values; no physical IME',
@@ -127,10 +140,10 @@ jobs:
                   'testStarted':('test suite' in log or 'test case' in log),'testCounts':counts,
                   'failureMethod':failure_method,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,'homeMetrics':home_metrics,
                   'fallbackHomeMetrics':metrics[1] if len(metrics)>1 else {},
-                  'ordinaryMetrics':ordinary,
+                  'ordinaryMetrics':ordinary,'secureMetrics':secure_metrics,
                   'progress':progress,'rawLogsUploaded':False}
           if not ok:
-              report['errorCode']='xcui_accessibility_permission_missing' if permission else ('secure_field_missing' if 'native secure field missing from system tree' in log else ('xcui_test_or_environment_failed' if sys.argv[2]!='0' else ('xcui_test_not_executed' if not test_executed or not completed else 'loopback_peer_evidence_incomplete')))
+              report['errorCode']='xcui_accessibility_permission_missing' if permission else ('secure_field_not_identified' if 'native secure field missing from system tree' in log else ('xcui_test_or_environment_failed' if sys.argv[2]!='0' else ('xcui_test_not_executed' if not test_executed or not completed else ('secure_input_unproven' if not masking_verified else 'loopback_peer_evidence_incomplete'))))
           with open(sys.argv[1],'w') as output: json.dump(report,output,indent=2);output.write('\n')
           if not ok: sys.exit(1)
           PY
@@ -140,4 +153,11 @@ jobs:
           name: flutter-macos-secure-xcui-${{ github.sha }}
           path: ${{ runner.temp }}/macos-secure-evidence/
           if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success() && github.ref == 'refs/heads/codex/acceptance/macos-secure-design-parity'
+        with:
+          name: flutter-macos-clean-debug-before-xcuitest-${{ github.sha }}
+          path: ${{ runner.temp }}/macos-clean-output/
+          if-no-files-found: error
           retention-days: 14

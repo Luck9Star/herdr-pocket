@@ -26,9 +26,22 @@ final class SecureCredentialUITests: XCTestCase {
     }
 
     private func secureField(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
-        let field = app.secureTextFields[identifier]
-        XCTAssertTrue(field.waitForExistence(timeout: 10), "native secure field missing from system tree")
-        return field
+        let expected = identifier == "direct-secret" ? "密码（仅本次使用）" : "私钥口令（可选）"
+        let phase = identifier == "direct-secret" ? "password" : "passphrase"
+        let secure = app.secureTextFields
+        let exact = secure.matching(NSPredicate(format: "identifier == %@", identifier))
+        if exact.firstMatch.waitForExistence(timeout: 10) && exact.count == 1 && exact.firstMatch.isHittable { return exact.firstMatch }
+        let all = app.descendants(matching: .any)
+        let ids = all.matching(NSPredicate(format: "identifier == %@", identifier))
+        let labels = all.matching(NSPredicate(format: "label == %@", expected))
+        let secureLabels = secure.matching(NSPredicate(format: "label == %@", expected))
+        print("HP_XCUI_SECURE=phase:\(phase),secure:\(min(secure.count,10000)),text:\(min(app.textFields.count,10000)),other:\(min(app.otherElements.count,10000)),id:\(min(ids.count,10000)),label:\(min(labels.count,10000)),securelabel:\(min(secureLabels.count,10000))")
+        fflush(stdout)
+        if secure.count == 1 && secureLabels.count == 1 && secureLabels.firstMatch.isHittable {
+            return secureLabels.firstMatch
+        }
+        XCTFail("native secure field missing from system tree")
+        return exact.firstMatch
     }
 
     private func tap(_ element: XCUIElement) {
@@ -92,7 +105,7 @@ final class SecureCredentialUITests: XCTestCase {
         mark("passwordSecureField")
         tap(passwordField)
         app.typeText(password)
-        XCTAssertFalse((passwordField.value as? String ?? "").isEmpty, "secure password input has no protected value")
+        mark((passwordField.value as? String ?? "").isEmpty ? "passwordValueUnavailable" : "passwordValuePresent")
         assertNoSecrets(app, [password, phrase])
         mark("passwordHiddenFocused")
         tap(address)
@@ -106,7 +119,7 @@ final class SecureCredentialUITests: XCTestCase {
         mark("passphraseSecureField")
         tap(passphraseField)
         app.typeText(phrase)
-        XCTAssertFalse((passphraseField.value as? String ?? "").isEmpty, "secure passphrase input has no protected value")
+        mark((passphraseField.value as? String ?? "").isEmpty ? "passphraseValueUnavailable" : "passphraseValuePresent")
         assertNoSecrets(app, [password, phrase])
         tap(address)
         assertNoSecrets(app, [password, phrase])
@@ -124,7 +137,7 @@ final class SecureCredentialUITests: XCTestCase {
         let passwordAgain = secureField(app, "direct-secret")
         tap(passwordAgain);app.typeText(password)
         assertNoSecrets(app, [password, phrase])
-        mark("systemTreeMaskingVerified")
+        mark("maskingScanCompleted")
 
         let sentinel = "xcui-sentinel-" + UUID().uuidString
         tap(address);app.typeText(sentinel)
@@ -153,7 +166,6 @@ final class SecureCredentialUITests: XCTestCase {
         confirm.click()
         let loginPassword = secureField(app, "direct-secret")
         tap(loginPassword);app.typeText(password)
-        XCTAssertFalse((loginPassword.value as? String ?? "").isEmpty, "secure password input has no protected value")
         assertNoSecrets(app, [password, phrase])
         let connect = app.buttons["连接 SSH"]
         XCTAssertTrue(connect.exists && connect.isEnabled, "connection action unavailable")

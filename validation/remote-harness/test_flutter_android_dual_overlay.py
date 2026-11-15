@@ -172,7 +172,8 @@ class DeviceCheckpointTest(unittest.TestCase):
         stages = iter([b'ts_wait_authorization', b'et_pair_review', b'ts_pair_review',
                        b'et_baseline', b'ts_baseline', b'stopped_audit', b'final_audit'])
         result = {'status': 'passed', 'firstStop': 'et', 'twoReviewedTargets': True,
-                  'observedBothUpdates': True, 'explicitTsAuthorization': True, 'newFullAfterResume': True,
+                  'observedBothUpdates': True, 'responseMarkersMatched': True,
+                  'explicitTsAuthorization': True, 'newFullAfterResume': True,
                   'stoppedTabRetired': True, 'initialInputsAccepted': True, 'survivorInputAccepted': True}
         process = type('Process', (), {'poll': lambda self: None, 'wait': lambda self, timeout: 1})()
         def read(_adb, _serial, name, **_kwargs):

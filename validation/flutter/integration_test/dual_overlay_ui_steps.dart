@@ -182,12 +182,17 @@ class DualOverlayUiSteps {
     await existing.until(tester, () => find.byType(TerminalView).evaluate().length == 1 &&
       existing.displayedSequence(tester) != null &&
       !identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal, previous) &&
+      existing.screenHasMarker(tester.widget<TerminalView>(find.byType(TerminalView)).terminal,
+        'Synthetic ${role.toUpperCase()} ACK ONE') &&
       find.textContaining('只读观察中').evaluate().isNotEmpty);
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected, isTrue);
   }
 
   Future<void> commitCharacter(String role, String character) async {
-    if (character.length != 1 || character.codeUnitAt(0) > 0x7f) throw StateError('dual_input_invalid');
+    if (!{'et': {'E', 'e'}, 'ts': {'T', 't'}}[role]!.contains(character)) {
+      throw StateError('dual_input_invalid');
+    }
+    final expectedAck = 'Synthetic ${role.toUpperCase()} ACK ${character == character.toUpperCase() ? 'ONE' : 'TWO'}';
     await stage('${role}_input');
     await existing.tapKey(tester, 'remote-mode-direct');
     final terminal = find.byType(TerminalView);
@@ -205,7 +210,7 @@ class DualOverlayUiSteps {
     await existing.until(tester, () => find.byType(TerminalView).evaluate().length == 1 &&
       identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal, activeTerminal) &&
       (existing.displayedSequence(tester) ?? -1) > sequenceAfterReceipt &&
-      existing.screenHasMarker(activeTerminal, 'Synthetic observe tick'));
+      existing.screenHasMarker(activeTerminal, expectedAck));
   }
 
   Future<String> pairHost(String role, String profileJson) async {

@@ -84,7 +84,8 @@ void main() {
     await steps.stage('final_audit');
     expect(await steps.awaitFile('final-audit.txt'), 'accepted');
     final result = {'status': 'passed', 'firstStop': firstStop,
-      'twoReviewedTargets': true, 'observedBothUpdates': true, 'explicitTsAuthorization': true,
+      'twoReviewedTargets': true, 'observedBothUpdates': true, 'responseMarkersMatched': true,
+      'explicitTsAuthorization': true,
       'newFullAfterResume': true, 'stoppedTabRetired': true,
       'initialInputsAccepted': true, 'survivorInputAccepted': true};
     existing.publish(exchange, 'result.json', jsonEncode(result));

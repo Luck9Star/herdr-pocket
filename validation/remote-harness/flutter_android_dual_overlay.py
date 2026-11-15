@@ -254,7 +254,8 @@ def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout
                 except (ValueError, UnicodeDecodeError):
                     raise DualOverlayDeviceFailure('device_result_invalid') from None
                 expected = {'status': 'passed', 'firstStop': first_stop, 'twoReviewedTargets': True,
-                    'observedBothUpdates': True, 'explicitTsAuthorization': True, 'newFullAfterResume': True,
+                    'observedBothUpdates': True, 'responseMarkersMatched': True,
+                    'explicitTsAuthorization': True, 'newFullAfterResume': True,
                     'stoppedTabRetired': True, 'initialInputsAccepted': True, 'survivorInputAccepted': True}
                 if value != expected:
                     raise DualOverlayDeviceFailure('device_result_invalid')

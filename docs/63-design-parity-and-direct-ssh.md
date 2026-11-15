@@ -37,6 +37,8 @@ Flutter macOS 归档来源为 [Actions 43669066267](https://github.com/Luck9Star
 
 普通 SSH 的 RSA 兼容增量也已从原生 macOS 窗口独立复验：纯 RSA2048 Paramiko、核对 SHA256 指纹、密码登录、输入 `hp-check` 后看到绿色 `POCKET-ANDROID-SSH-OK`，点击断开后服务端记录 `sessionClosed`。窗口缩放让服务端实际收到 80×24 → 106×28 → 106×30 → 104×27 → 104×20 → 104×19 → 106×19，包括列数相同而行数改变。该次使用前端 `f29ea6b` 与 Rust 生产文件 blob `a9e9792` / `502548b`，已纳入功能快照 `621b793`；该次 Tauri 原生私钥输入未验证，Android 范围另见下文。
 
+Tauri 的加密私钥入口随后在 Android API 35 x86_64 模拟器实际通过：[Actions 43682217625](https://github.com/Luck9Star/herdr-pocket/actions/runs/43682217625)，源码 `664be556c5572cb9777bd0ffe6e18266a9d2889a`，验收工件 `14149575567`，APK SHA256 为 `41ca5b685b23a6a7244e214fbb8c2636733c891b2f8bf3992bef4dc6983cbf6c`。应用选择私钥认证，核对临时 loopback 对端指纹，使用有口令保护的一次性 OpenSSH Ed25519 用户私钥连接；对端只接受指定公钥，设备上确认 PTY、shell、`hp-check` 输入、终端回显和主动断开，服务端确认会话关闭；应用、转发及临时连接清理均通过。[原始脱敏 manifest](evidence/design-parity-20261115/tauri-encrypted-ssh-android-43682217625.json)只记录布尔结果。另一本地协议反例确认密码认证被拒、无口令或错误口令无法解密。此设备验证通过 CDP 操作 WebView，不证明物理手机或真实 IME 组字；也不代表其他私钥格式均已验证。
+
 Rust 仅新增 russh 的独立 `rsa` feature，仍关闭默认 features 并保留 `ring`；普通 SSH 探测和连接禁止协商旧 RSA/SHA1，RSA 私钥采用服务端支持的 SHA-256/512。公钥 pin 的 `ssh-rsa` 前缀表示公钥编码，并不表示允许 SHA1 签名。三个消费方锁文件同步固定新增依赖，未修改 vendored russh；herdr 配对仍按原 Ed25519 身份验证。测试夹具的子进程由专用线程从创建到回收持有，取消清理继续以 3 秒内连接和子进程计数归零验收。
 
 ## S01–S05 设计与可达性

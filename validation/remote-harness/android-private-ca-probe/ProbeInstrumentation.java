@@ -3,6 +3,7 @@ package org.herdr.tlsprobe;
 import android.app.Instrumentation;
 import android.os.Bundle;
 import android.os.Process;
+import java.io.File;
 
 /** Disposable instrumentation only; no credentials, UI or system trust changes. */
 public final class ProbeInstrumentation extends Instrumentation {
@@ -25,8 +26,13 @@ public final class ProbeInstrumentation extends Instrumentation {
         } catch (Throwable ignored) {
             code = 99;
         }
+        File wrapper = new File(getTargetContext().getApplicationInfo().nativeLibraryDir, "wrap.sh");
+        boolean wrapExists = wrapper.isFile();
+        boolean wrapExecutable = wrapper.canExecute();
+        boolean javaEnvironment = "/data/user/0/org.herdr.tlsprobe/files/ca.pem".equals(System.getenv("SSL_CERT_FILE"))
+                && "/data/user/0/org.herdr.tlsprobe/files/empty-ca".equals(System.getenv("SSL_CERT_DIR"));
         Bundle result = new Bundle();
-        result.putString("stream", "HP_TLS_RESULT pid=" + Process.myPid() + " code=" + code + " wrong=" + wrong + "\n");
+        result.putString("stream", "HP_TLS_RESULT pid=" + Process.myPid() + " code=" + code + " wrong=" + wrong + " wrap=" + (wrapExists ? 1 : 0) + " executable=" + (wrapExecutable ? 1 : 0) + " javaEnv=" + (javaEnvironment ? 1 : 0) + "\n");
         finish(0, result);
     }
 }

@@ -42,7 +42,7 @@ def package_present():
 def instrument(port):
     _adb('shell','am','force-stop',PACKAGE)
     output=_adb('shell','am','instrument','-w','-e','port',str(port),RUNNER,timeout=60)
-    matches=re.findall(rb'HP_TLS_RESULT pid=([0-9]+) code=([0-9]+) wrong=([0-9]+)',output)
+    matches=re.findall(rb'HP_TLS_RESULT pid=([0-9]+) code=([0-9]+) wrong=([0-9]+) wrap=([01]) executable=([01]) javaEnv=([01])',output)
     if len(matches)!=1: raise ReverseError('instrument_result_invalid')
     return tuple(int(value) for value in matches[0])
 
@@ -99,13 +99,16 @@ def run(apk,output):
             mappings=OwnedReverseMappings(relay)
             with mappings:
                 phase='without_ca'
-                pid1,code1,_=instrument(config['control'])
+                pid1,code1,_,wrap,executable,java_env=instrument(config['control'])
+                result['wrapExtracted']=bool(wrap)
+                result['wrapExecutable']=bool(executable)
+                result['javaEnvironmentMatches']=bool(java_env)
                 result['withoutCaCode']=code1 if code1 in (0,1,2,8,9,10,99) else -1
                 result['caAbsentRejected']=code1==1
                 if not result['caAbsentRejected']: raise ReverseError('ca_absent_not_rejected')
                 phase='with_private_ca'
                 _adb('shell','-T','run-as',PACKAGE,'tee','files/ca.pem',input_data=ca_cert.read_bytes())
-                pid2,code2,wrong=instrument(config['control'])
+                pid2,code2,wrong,_,_,_=instrument(config['control'])
                 result['withCaCode']=code2 if code2 in (0,1,2,8,9,10,99) else -1
                 result['wrongHostCode']=wrong if wrong in (0,1,2,8,9,10,99) else -1
                 result['privateCaAccepted']=code2==0
@@ -113,7 +116,7 @@ def run(apk,output):
                 if not result['privateCaAccepted'] or not result['wrongHostnameRejected']: raise ReverseError('private_ca_verification_failed')
                 phase='after_ca_removal'
                 _adb('shell','run-as',PACKAGE,'rm','-f','files/ca.pem')
-                pid3,code3,_=instrument(config['control'])
+                pid3,code3,_,_,_,_=instrument(config['control'])
                 result['afterRemovalCode']=code3 if code3 in (0,1,2,8,9,10,99) else -1
                 result['caRemovedRejected']=code3==1
                 result['freshProcesses']=len({pid1,pid2,pid3})==3

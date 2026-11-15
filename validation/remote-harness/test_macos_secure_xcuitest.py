@@ -229,7 +229,7 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('XCTAssertEqual(overlapping, 0',click)
         self.assertEqual(click.count('.click()'),1)
         form=swift[swift.index('private func clickFormButton'):swift.index('private func keyInputBits')]
-        for condition in ('viewport.contains(center)', 'viewport == currentViewport', 'secure credential overlay', 'stableHit(button)', 'clickWindowCenter(app, matches: matches)'):
+        for condition in ('viewport.contains(center)', 'viewport == currentViewport', 'secure credential overlay', 'stableHit(button)', 'origin.withOffset'):
             self.assertIn(condition,form)
         key=swift[swift.index('func testEncryptedKeySSH'):swift.index('func testReturnAndReopen')]
         self.assertLess(key.index('verifyFingerprint(app, expected: keyFingerprint'),key.index('connectByWindowCenter(app)'))

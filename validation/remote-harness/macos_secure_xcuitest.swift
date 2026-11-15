@@ -48,9 +48,20 @@ final class SecureCredentialUITests: XCTestCase {
         return !first.isEmpty && first == element.frame && element.isHittable
     }
 
+    private func formScroll(_ app: XCUIApplication) -> XCUIElement? {
+        let window = app.windows.firstMatch
+        guard window.exists else { return nil }
+        return app.scrollViews.allElementsBoundByIndex.filter {
+            $0.exists && $0.isHittable && !$0.frame.intersection(window.frame).isEmpty
+        }.max {
+            let a = $0.frame.intersection(window.frame), b = $1.frame.intersection(window.frame)
+            return a.width * a.height < b.width * b.height
+        }
+    }
+
     private func scrollForm(_ app: XCUIApplication, _ amount: CGFloat) {
-        let scroll = app.scrollViews.firstMatch
-        let target = scroll.exists && scroll.isHittable ? scroll : app.windows.firstMatch
+        let scroll = formScroll(app)
+        let target = scroll ?? app.windows.firstMatch
         XCTAssertTrue(target.exists && target.isHittable, "form scroll target unavailable")
         target.scroll(byDeltaX: 0, deltaY: amount)
     }
@@ -130,12 +141,12 @@ final class SecureCredentialUITests: XCTestCase {
             if delta != 0 { scrollForm(app, delta) }
             guard button.exists && button.isEnabled && window.exists else { continue }
             let frame = button.frame
-            let scroll = app.scrollViews.firstMatch
-            let viewport = scroll.exists && !scroll.frame.isEmpty ? window.frame.intersection(scroll.frame) : window.frame
+            let scroll = formScroll(app)
+            let viewport = scroll.map { window.frame.intersection($0.frame) } ?? window.frame
             let center = CGPoint(x: frame.midX, y: frame.midY)
             guard !frame.isEmpty && viewport.contains(center) else { continue }
             usleep(100_000)
-            let currentViewport = scroll.exists && !scroll.frame.isEmpty ? window.frame.intersection(scroll.frame) : window.frame
+            let currentViewport = scroll.map { window.frame.intersection($0.frame) } ?? window.frame
             guard frame == button.frame && viewport == currentViewport && viewport.contains(center) else { continue }
             let blocked = app.secureTextFields.allElementsBoundByIndex.contains {
                 $0.exists && !$0.frame.intersection(viewport).isEmpty && $0.frame.contains(center)
@@ -144,10 +155,17 @@ final class SecureCredentialUITests: XCTestCase {
             if stableHit(button) {
                 button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
             } else {
-                clickWindowCenter(app, matches: matches)
+                let origin = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+                origin.withOffset(CGVector(dx: center.x - window.frame.minX, dy: center.y - window.frame.minY)).click()
             }
             return
         }
+        let scroll = formScroll(app)
+        let viewport = scroll.map { window.frame.intersection($0.frame) } ?? window.frame
+        let center = CGPoint(x: button.frame.midX, y: button.frame.midY)
+        let visible = button.exists && !button.frame.isEmpty && viewport.contains(center)
+        print("HP_XCUI_FORM=phase:\(label == "粘贴私钥" ? "paste" : "connect"),count:\(min(matches.count, 9)),enabled:\(button.exists && button.isEnabled ? 1 : 0),hittable:\(button.exists && button.isHittable ? 1 : 0),inside:\(visible ? 1 : 0),scroll:\(scroll == nil ? 0 : 1)")
+        fflush(stdout)
         XCTFail("form action center not visible and stable")
     }
 
@@ -558,8 +576,11 @@ final class SecureCredentialUITests: XCTestCase {
         mark("keyConfirmed")
         mark("keyCredentialAttempt")
         tap(app, element(app, "使用私钥认证"))
+        mark("keyMethodSelected")
         let keyPassphrase = secureField(app, "direct-passphrase")
+        mark("keyPassphraseFound")
         tap(app, keyPassphrase);app.typeText(phrase)
+        mark("keyPassphraseEntered")
         if let maskedValue = keyPassphrase.value as? String {
             XCTAssertFalse(maskedValue.isEmpty, "passphrase input state empty")
         }
@@ -568,6 +589,7 @@ final class SecureCredentialUITests: XCTestCase {
         clipboard.clearContents()
         defer { clipboard.clearContents() }
         XCTAssertTrue(clipboard.setString(privateKey, forType: .string), "synthetic PEM pasteboard unavailable")
+        mark("pemPasteButtonAttempt")
         clickFormButton(app, label: "粘贴私钥")
         mark("pemPasteButtonTapped")
         let pasted = try diagnoseKeyInputs(app)

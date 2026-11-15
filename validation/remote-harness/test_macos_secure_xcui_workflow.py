@@ -67,6 +67,8 @@ for name, peer in (('password', 'password'), ('key', 'encryptedKey')):
                 'HP_XCUI_KEYINPUT=visible:1,key:1,passphrase:0,empty:0,length:1,trimmed:1 secret-data\n'
                 'HP_XCUI_KEYINPUT=visible:0,key:0,passphrase:0,empty:0,length:0,trimmed:0\n'
                 'HP_XCUI_KEYINPUT=visible:1,key:secret-data,passphrase:1,empty:0,length:1,trimmed:1\n'
+                'RunnerTests.swift:456: error: form action center not visible and stable secret-data\n'
+                'HP_XCUI_FORM=phase:paste,count:1,enabled:1,hittable:0,inside:0,scroll:1\n'
                 'HP_XCUI_STAGE=returnCredentialEntered\n'
                 'HP_XCUI_HIT=phase:returnSecure,exists:1,enabled:1,hittable:0,inside:1\n')
             for password, key in ((True, False), (False, True), (True, True)):
@@ -75,6 +77,9 @@ for name, peer in (('password', 'password'), ('key', 'encryptedKey')):
                     output = root / 'result.json'
                     subprocess.run([sys.executable, '-', str(output), '1'], input=script, text=True, env=env, capture_output=True, check=False)
                     report = json.loads(output.read_text())
+                    self.assertEqual(report['failureSourceLines'], [456])
+                    self.assertIn('form action center not visible and stable',report['fixedFailures'])
+                    self.assertEqual(report['formMetrics'][0], {'phase':'paste','count':1,'enabled':True,'hittable':False,'insideViewport':False,'scrollView':True})
                     self.assertIs(report['passwordPeerCloseObservedDuringDisconnectWindow'], password)
                     self.assertIs(report['encryptedKeyPeerCloseObservedDuringDisconnectWindow'], key)
                     self.assertIs(report['peerCloseObservedDuringDisconnectWindows'], password and key)

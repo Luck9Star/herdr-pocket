@@ -70,6 +70,13 @@ class DirectSshAndroidTests(unittest.TestCase):
             driver.exercise_ui(browser,Closed())
         self.assertNotIn(('click','#ssh-disconnect'),browser.actions)
 
+    def test_probe_diagnostics_are_bounded_and_do_not_include_fixture_secrets(self):
+        fixture=Fixture()
+        fixture.snapshot=lambda: {'connections':2, 'authAccepted':False, 'secret':fixture.password}
+        evidence=driver.probe_evidence(fixture)
+        self.assertEqual(evidence, {'connectionObserved':True, 'authenticationAccepted':False})
+        self.assertNotIn(fixture.password, str(evidence))
+
     def test_device_guard_refuses_non_ci_before_adb(self):
         with patch.dict(driver.os.environ,{'GITHUB_ACTIONS':'false'},clear=True), patch.object(driver,'adb') as adb:
             with self.assertRaisesRegex(driver.GuiFailure,'direct_unsafe_fixture'):

@@ -119,6 +119,13 @@ def run_device(apk, fixture):
     return result
 
 
+def probe_evidence(fixture):
+    """Report only whether the owned peer saw a connection or authentication."""
+    peer = fixture.snapshot()
+    return {'connectionObserved': isinstance(peer.get('connections'), int) and peer['connections'] > 0,
+            'authenticationAccepted': peer.get('authAccepted') is True}
+
+
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--apk',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args()
@@ -134,7 +141,11 @@ def main():
         from direct_ssh_fixture import DirectSshFixture
         report['apkSha256']=hashlib.sha256(args.apk.read_bytes()).hexdigest()
         with DirectSshFixture() as fixture:
-            report.update(run_device(args.apk,fixture))
+            try:
+                report.update(run_device(args.apk,fixture))
+            except GuiFailure:
+                report['probeEvidence'] = probe_evidence(fixture)
+                raise
         if fixture.snapshot().get('connectionsClosed') is not True:
             raise GuiFailure('direct_fixture_cleanup_failed')
         report['cleanup']['fixtureConnections']=True

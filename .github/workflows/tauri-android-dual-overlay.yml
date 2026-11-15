@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 90
     env:
       PYTHONDONTWRITEBYTECODE: '1'
-      NATIVE_SOURCE: 93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
+      NATIVE_SOURCE: 45ea7dc6f9b99b9bc2fba0f2e53f6e31c7a0ccbf
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
       HOST_RUN: '43736430859'
     steps:
@@ -39,14 +39,14 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: android-dual-native-x86_64-93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
-          run-id: 43732345827
+          name: android-dual-native-x86_64-45ea7dc6f9b99b9bc2fba0f2e53f6e31c7a0ccbf
+          run-id: 43776034438
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/dual-normal-native
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: android-dual-native-QA-ONLY-x86_64-93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
-          run-id: 43732345827
+          name: android-dual-native-QA-ONLY-x86_64-45ea7dc6f9b99b9bc2fba0f2e53f6e31c7a0ccbf
+          run-id: 43776034438
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/dual-qa-native
       - name: Verify fixed Android native inputs
@@ -61,6 +61,8 @@ jobs:
           readelf="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
           python3 native-source/validation/native/tool/android_bundle.py verify "$RUNNER_TEMP/dual-normal-native" --abi x86_64 --commit "$NATIVE_SOURCE" --readelf "$readelf"
           python3 native-source/validation/native/tool/android_dual_qa_bundle.py verify --normal "$RUNNER_TEMP/dual-normal-native" --qa "$RUNNER_TEMP/dual-qa-native" --commit "$NATIVE_SOURCE" --readelf "$readelf"
+          test "$(sha256sum "$RUNNER_TEMP/dual-normal-native/manifest.json" | cut -d' ' -f1)" = 3833fedc5c13f6b399c684a840850eb933fc55c4a5dea0dcc43e08dcd0a5e5f2
+          test "$(sha256sum "$RUNNER_TEMP/dual-qa-native/qa-manifest.json" | cut -d' ' -f1)" = e4efc2eaad5ee98ea6ccd0ad11cd8ea11d41be99a6d7696f77824678d8284773
       - name: Build isolated authorization receiver
         run: bash validation/remote-harness/tauri-dual-auth-receiver/build.sh "$RUNNER_TEMP/dual-auth-receiver.apk"
       - name: Build same-source Tauri normal and QA x86_64 APKs

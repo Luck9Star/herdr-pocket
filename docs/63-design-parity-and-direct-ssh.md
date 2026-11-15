@@ -118,7 +118,7 @@ Flutter 的 `a2ffb4b` [guarded Android 运行 43667868489](https://github.com/Lu
 
 专用 TUI 的 Tauri `c9f191d` [运行 43670510076](https://github.com/Luck9Star/herdr-pocket/actions/runs/43670510076)中，`android-device-key` 作业通过；工件 `14145185000` 的真实 curses 主机状态与 10 个输入回执匹配，`manifest.stoppedStale=true`，`progress.postStopInputUnchanged=true`，停止按钮首次命中。另记录 7 个系统 IME 显示/收起检查点，不能扩大为真实中文组字或实体键盘通过。`receivedInputBytes=10` 是 curses 之外的原始捕获阶段，不代表全部 TUI 输入只有 10 字节。该混合工作流另有 Flutter 作业失败，不能写成整条运行全部通过。
 
-S11 的 Tauri 窄窗回归覆盖宽屏观察、收窄后的 pausing、后端 paused 确认及恢复：只有确认暂停后才显示「观察已暂停」，恢复后消失，并检查没有触发共享 PTY resize。普通 SSH 重连回归使用真实 xterm：旧实例尾留半个 emoji 时，复用实例会错误显示 `😀Z中!`；新会话创建新实例后显示 `Z中!`，旧实例已释放。两项是隔离测试及实际 xterm 渲染证据，不声称新的原生设备验证。
+S11 的 Tauri 窄窗回归覆盖宽屏观察、收窄后的 pausing、后端 paused 确认及恢复：只有确认暂停后才显示「观察已暂停」，恢复后消失，并检查没有触发共享 PTY resize。普通 SSH 重连回归使用真实 xterm：旧实例尾留半个 emoji 时，复用实例会错误显示 `😀Z中!`；新会话创建新实例后显示 `Z中!`，旧实例已释放。两项是隔离测试及实际 xterm 渲染证据，不声称新的原生设备验证。 [390×844 截图](evidence/design-parity-20261115/tauri-s11-390.png)和 [900×900 截图](evidence/design-parity-20261115/tauri-s11-900.png)通过真实 `initRemote` 路由与 DOM/CSS、合成网络数据生成：前者显示两个标签，后者显示左侧主机栏和右侧双面板；它们是浏览器界面证据，不是原生设备截图。`20ef361` 下载包早于未选标签跨宽度对比度修正，后续包和最终图片另行核对。
 
 ## S19 macOS 配置文件往返
 

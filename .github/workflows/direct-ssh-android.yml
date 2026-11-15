@@ -1,0 +1,70 @@
+name: Ordinary SSH Android UI acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'codex/acceptance/direct-ssh-android-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-ssh-android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  flutter-ordinary-ssh:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17.0.18+8'
+      - name: Install isolated protocol test dependencies and verify local guards
+        run: |
+          python3 -m venv "$RUNNER_TEMP/direct-ssh-python"
+          "$RUNNER_TEMP/direct-ssh-python/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0'
+          "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_android.py' -v
+      - name: Prepare pinned Flutter and Android build tools
+        run: |
+          python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/direct-ssh-sdk"
+          export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
+          flutter precache --android
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+          sudo apt-get update
+          sudo apt-get install -y acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
+      - name: Prepare the actual production application with SDK-only integration tests
+        run: |
+          export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/direct-ssh-app"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/direct-ssh-app"
+          cd "$RUNNER_TEMP/direct-ssh-app"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/direct-ssh-app"
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" prepare --destination "$RUNNER_TEMP/direct-ssh-app"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/direct-ssh-app"
+          flutter analyze lib integration_test
+      - name: Drive homepage, fingerprint confirmation, input, echo and disconnect on an owned API35 AVD
+        run: |
+          export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
+          AVD_EVIDENCE_DIR="$RUNNER_TEMP/direct-ssh-avd" bash validation/remote-harness/with-android-emulator.sh \
+            "$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/flutter_direct_ssh_android.py \
+            --project "$RUNNER_TEMP/direct-ssh-app" --output "$RUNNER_TEMP/direct-ssh-public"
+      - name: Upload only sanitized device evidence and post-credential screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flutter-ordinary-ssh-android-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/direct-ssh-public/
+            ${{ runner.temp }}/direct-ssh-avd/
+          if-no-files-found: warn

@@ -22,6 +22,7 @@ def main():
         key = temp / 'fixture-key'
         subprocess.run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', 'fixture-passphrase', '-f', str(key)], check=True)
         servers = []
+        flutter_passed = False
         try:
             def start(extra):
                 proc = subprocess.Popen([str(python), str(FIXTURE)], stdout=subprocess.PIPE,
@@ -39,6 +40,7 @@ def main():
                 'HERDR_DIRECT_SSH_KEY_PATH': str(key)}
             subprocess.run(['flutter', 'test', 'test/direct_ssh_widget_test.dart', '--reporter', 'expanded'],
                 cwd=args.project, env=env, check=True)
+            flutter_passed = True
         finally:
             logs = []
             for server in servers:
@@ -48,7 +50,7 @@ def main():
                 except subprocess.TimeoutExpired:
                     server.kill(); output = server.communicate()[0]
                 logs.append(output)
-            if len(logs) == 3:
+            if len(logs) == 3 and flutter_passed:
                 if 'AUTH fixture' not in logs[0] or 'PTY ' not in logs[0] or 'INPUT ' not in logs[0]:
                     raise RuntimeError('password fixture did not observe authentication, PTY and input')
                 if 'AUTH ' in logs[1] or 'PUBLICKEY ' in logs[1]:

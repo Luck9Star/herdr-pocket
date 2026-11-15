@@ -26,6 +26,19 @@ void main() {
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNull);
   });
 
+  testWidgets('returning from ordinary SSH with unsubmitted credentials disposes its listeners safely', (tester) async {
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: Builder(builder: (context) => Scaffold(
+      body: FilledButton(onPressed: () => Navigator.push<void>(context, MaterialPageRoute<void>(
+        builder: (_) => DirectSshPage(tokens: tokens))), child: const Text('Open ordinary SSH'))))));
+    await tester.tap(find.text('Open ordinary SSH')); await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'unsubmitted-temporary-credential');
+    await tester.pump();
+    await tester.tap(find.byType(BackButton)); await tester.pumpAndSettle();
+    expect(find.byType(DirectSshPage), findsNothing); expect(find.text('Open ordinary SSH'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('loopback probe, confirm, password, PTY and background disconnect', (tester) async {
     final fixturePort = Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT'];
     final tokens = (await tester.runAsync(DesignTokens.load))!;
@@ -38,7 +51,17 @@ void main() {
     await waitFor(tester, find.byKey(const ValueKey('direct-trust-key')));
     expect(find.textContaining('SHA256:'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('direct-trust-key'))); await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'temporary');
+    final connect = find.byKey(const ValueKey('direct-connect'));
+    expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+    await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'temporary'); await tester.pump();
+    expect(tester.widget<FilledButton>(connect).onPressed, isNotNull);
+    await tester.enterText(find.byKey(const ValueKey('direct-secret')), ''); await tester.pump();
+    expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+    await tester.tap(find.byType(SwitchListTile)); await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+    await tester.tap(find.byType(SwitchListTile)); await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+    await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'temporary'); await tester.pump();
     await tester.scrollUntilVisible(find.byKey(const ValueKey('direct-connect')), 200, scrollable: find.descendant(of: find.byKey(const ValueKey('direct-form')), matching: find.byType(Scrollable)).first);
     await tester.tap(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
     await waitFor(tester, find.byType(TerminalView));
@@ -61,8 +84,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('direct-probe'))); await tester.pump();
     await waitFor(tester, find.byKey(const ValueKey('direct-trust-key')));
     await tester.tap(find.byKey(const ValueKey('direct-trust-key'))); await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'temporary');
+    await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'temporary'); await tester.pump();
     await tester.scrollUntilVisible(find.byKey(const ValueKey('direct-connect')), 200, scrollable: find.descendant(of: find.byKey(const ValueKey('direct-form')), matching: find.byType(Scrollable)).first);
+    await tester.pump();
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNotNull);
     await tester.tap(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
     await waitFor(tester, find.textContaining('主机密钥不符'));
     expect(find.byType(TerminalView), findsNothing);
@@ -83,8 +108,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('direct-trust-key'))); await tester.pumpAndSettle();
     await tester.tap(find.byType(SwitchListTile)); await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('direct-secret')), key!);
-    await tester.enterText(find.byKey(const ValueKey('direct-passphrase')), 'fixture-passphrase');
+    await tester.enterText(find.byKey(const ValueKey('direct-passphrase')), 'fixture-passphrase'); await tester.pump();
     await tester.scrollUntilVisible(find.byKey(const ValueKey('direct-connect')), 200, scrollable: find.descendant(of: find.byKey(const ValueKey('direct-form')), matching: find.byType(Scrollable)).first);
+    await tester.pump();
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNotNull);
     await tester.tap(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
     await waitFor(tester, find.byType(TerminalView));
     await tester.pumpWidget(const SizedBox());

@@ -30,10 +30,14 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   bool get valid => host.text.trim().isNotEmpty && user.text.trim().isNotEmpty &&
       (int.tryParse(port.text.trim()) ?? 0) > 0 && (int.tryParse(port.text.trim()) ?? 65536) <= 65535;
 
+  bool get canConnect => valid && !busy && fingerprint != null && checkedTarget == target && secret.text.isNotEmpty;
+  void credentialsChanged() { if (mounted) setState(() {}); }
+
   @override
   void initState() {
     super.initState(); WidgetsBinding.instance.addObserver(this);
     for (final field in [host, port, user]) { field.addListener(changed); }
+    secret.addListener(credentialsChanged); passphrase.addListener(credentialsChanged);
     terminal.onOutput = (data) {
       final current = shell;
       if (foreground && connected && current != null) current.write(Uint8List.fromList(utf8.encode(data)));
@@ -61,7 +65,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   }
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this); stop(notify: false); terminal.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    secret.removeListener(credentialsChanged); passphrase.removeListener(credentialsChanged);
+    stop(notify: false); terminal.dispose();
     for (final field in [host, port, user, secret, passphrase]) { field.dispose(); }
     super.dispose();
   }
@@ -161,7 +167,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,
         minLines: 1, maxLines: keyAuth ? 6 : 1, decoration: InputDecoration(labelText: keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）')),
       if (keyAuth) TextField(key: const ValueKey('direct-passphrase'), controller: passphrase, enabled: !busy, obscureText: true, decoration: const InputDecoration(labelText: '私钥口令（可选）')),
-      FilledButton(key: const ValueKey('direct-connect'), onPressed: !busy && fingerprint != null ? connect : null, child: const Text('连接 SSH')),
+      FilledButton(key: const ValueKey('direct-connect'), onPressed: canConnect ? connect : null, child: const Text('连接 SSH')),
       if (busy) TextButton(onPressed: () => stop(message: '已取消，未重放操作。'), child: const Text('取消')),
     ])),
   );

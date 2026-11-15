@@ -114,7 +114,7 @@ jobs:
               /usr/bin/python3 "$GITHUB_WORKSPACE/validation/remote-harness/dual_overlay_loopback.py" \
                 --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
                 --stop-first "$first" \
-                --output "$RUNNER_TEMP/dual-overlay-evidence/$first" || status=1
+                --output "$RUNNER_TEMP/dual-overlay-evidence/$first" || true
           done
           for first in et ts; do
             sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
@@ -130,7 +130,7 @@ jobs:
             RUNNER_TEMP="$RUNNER_TEMP" \
             /usr/bin/python3 "$GITHUB_WORKSPACE/validation/remote-harness/dual_overlay_single_et.py" \
               --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID/single-et" \
-              --output "$RUNNER_TEMP/dual-overlay-evidence/et-only" || status=1
+              --output "$RUNNER_TEMP/dual-overlay-evidence/et-only" || true
           exit "$status"
       - name: Tear down the uniquely owned namespace and bundle
         if: always()
@@ -156,18 +156,44 @@ jobs:
           from pathlib import Path
           output = Path(os.environ['RUNNER_TEMP']) / 'dual-overlay-evidence'
           output.mkdir(parents=True, exist_ok=True)
-          failed = False
-          for case in ('et', 'ts', 'et-private', 'ts-private', 'et-only'):
+          results = {}
+          required = ('et-private', 'ts-private')
+          diagnostics = ('et', 'ts', 'et-only')
+          cleanup_ok = int(os.environ['HP_DUAL_STRAGGLERS']) == 0
+          for case in diagnostics + required:
               path = output / case / 'manifest.json'
               path.parent.mkdir(parents=True, exist_ok=True)
-              result = json.loads(path.read_text()) if path.exists() else {'status': 'failed', 'stage': 'build', 'stopFirst': case}
+              result = json.loads(path.read_text()) if path.exists() else {'status': 'failed', 'stage': 'build'}
               result['namespaceProcessesBeforeTeardown'] = int(os.environ['HP_DUAL_STRAGGLERS'])
               result['namespaceRemoved'] = True
+              result['evidenceRole'] = 'required-private-loopback' if case in required else 'default-diagnostic'
               if result['namespaceProcessesBeforeTeardown']:
                   result.update(status='failed', error='namespace_process_leak')
+              if case == 'et-only':
+                  clean = result.get('cleanup', {})
+                  cleanup_ok &= clean.get('temporaryCredentialsRemoved') is True and clean.get('ownedProcessesStopped') is True
+              else:
+                  cleanup_ok &= (result.get('temporaryCredentialsRemoved') is True and
+                                 result.get('ownedProcessesStopped') is True and result.get('tsPeerCleanup') is True)
               path.write_text(json.dumps(result, indent=2) + '\n')
-              failed |= result['status'] != 'passed'
-          if failed:
+              results[case] = result
+          private_passed = all(results[case].get('status') == 'passed' and
+                               results[case].get('privateLoopbackTransport') is True for case in required)
+          default_complete = all(results[case].get('privateLoopbackTransport') is False and
+                                 isinstance(results[case].get('etPeerAfterBanner'), dict) and
+                                 isinstance(results[case].get('client'), dict) for case in ('et', 'ts'))
+          single = results['et-only']
+          single_complete = (single.get('loopbackOnlyNamespace') is False and
+                             single.get('localSshCanaryBeforeOverlay') is True and
+                             single.get('status') in ('passed', 'failed'))
+          summary = {'sourceSHA': os.environ['GITHUB_SHA'],
+                     'privateLoopbackAcceptancePassed': private_passed,
+                     'defaultDiagnosticsComplete': default_complete,
+                     'singleEtDiagnosticComplete': single_complete,
+                     'cleanupPassed': cleanup_ok,
+                     'status': 'passed' if private_passed and default_complete and single_complete and cleanup_ok else 'failed'}
+          (output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+          if summary['status'] != 'passed':
               raise SystemExit(1)
           PYEND
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

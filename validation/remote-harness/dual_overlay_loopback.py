@@ -39,7 +39,7 @@ CLIENT_ERRORS = {None, 'real_candidates_required', 'node_operation_failed', 'une
                  'login_url_missing', 'prelogin_state_timeout', 'prelogin_dial_not_rejected', 'auth_exchange_failed',
                  'auth_exchange_timeout', 'ts_not_running', 'local_fallback_not_rejected',
                  'cross_route_not_rejected', 'overlay_banner_missing', 'banner_checkpoint_failed',
-                 'banner_diagnostics_timeout', 'input_ready_timeout', 'input_not_ready',
+                 'banner_diagnostics_timeout', 'route_checkpoint_failed', 'route_checkpoint_timeout', 'input_ready_timeout', 'input_not_ready',
                  'frame_marker_missing', 'input_send_failed', 'input_mode_failed', 'provider_stop_failed', 'observer_join_failed', 'stale_input_not_rejected',
                  'cleanup_failed', 'executor_failed', 'dialer_failed', 'invalid_et_config'}
 
@@ -87,6 +87,21 @@ def safe_observer(raw):
     stage = stage if isinstance(stage, (str, type(None))) and stage in OBSERVER_STAGES else 'other'
     error = error if isinstance(error, (str, type(None))) and error in OBSERVER_ERRORS else 'other_observer_error'
     return {'stage': stage, 'error': error, 'audit': {field: audit[field] for field in AUDIT_FIELDS}}
+
+
+ROUTE_PROBE_FIELDS = ('etLocalRoute', 'tsLocalRoute', 'etCrossRoute', 'tsCrossRoute')
+ROUTE_OUTCOMES = {None, 'dial_error', 'stream_eof', 'stream_error', 'received_bytes',
+                  'dial_timeout', 'read_timeout'}
+
+
+def safe_route_probes(result):
+    probes = {}
+    for field in ROUTE_PROBE_FIELDS:
+        value = result.get(field)
+        if not isinstance(value, (str, type(None))) or value not in ROUTE_OUTCOMES:
+            raise et.Failure('route_probe_invalid')
+        probes[field] = value
+    return probes
 
 
 def safe_banner_counts(result):
@@ -151,6 +166,31 @@ def wait_file(path, process, timeout=25, *, socket_expected=False):
         if time.monotonic() >= deadline:
             raise et.Failure('fixture_ready_timeout')
         time.sleep(.05)
+
+
+def wait_file_or_exit(path, process, timeout):
+    deadline = time.monotonic() + timeout
+    while not path.is_file():
+        if process.poll() is not None:
+            return False
+        if time.monotonic() >= deadline:
+            raise et.Failure('fixture_ready_timeout')
+        time.sleep(.025)
+    return True
+
+
+def negative_server_counts(before, after):
+    fields = ('connections', 'authRequests', 'authAccepted')
+    result = {}
+    for side in ('et', 'ts'):
+        if (len(before[side]) != len(fields) or len(after[side]) != len(fields)
+                or any(type(value) is not int for value in before[side] + after[side])):
+            raise et.Failure('negative_server_counts_invalid')
+        delta = [end - start for start, end in zip(before[side], after[side])]
+        if any(value < 0 or value > 256 for value in delta):
+            raise et.Failure('negative_server_counts_invalid')
+        result[side] = dict(zip(fields, delta))
+    return result
 
 
 def free_port():
@@ -304,7 +344,7 @@ AllowStreamLocalForwarding local
 X11Forwarding no
 PrintMotd no
 UseDNS no
-LogLevel ERROR
+LogLevel DEBUG3
 ''')
             et.command(['sudo', '/usr/sbin/sshd', '-t', '-f', config])
             sshd = spawn(['sudo', '/usr/sbin/sshd', '-D', '-e', '-f', config], side + '-sshd', host_env)
@@ -430,12 +470,28 @@ LogLevel ERROR
         wait_file(exchange / 'banner-finished', client, 45)
         report['etPeerAfterBanner'] = read_et_diagnostics(root, peer)
         (exchange / 'banner-diagnostics-read').write_text('ok')
+        if wait_file_or_exit(exchange / 'route-check-ready', client, 35):
+            before = {side.lower(): et.log_counts(root / (side + '-sshd.log')) for side in ('ET', 'TS')}
+            # Each temporary sshd has already accepted its local health login
+            # and the corresponding authenticated overlay observer. This
+            # baseline prevents a silent log-format mismatch from proving zero.
+            report['negativeServerAuditEstablished'] = all(
+                connections >= 2 and requests >= 2 and accepted >= 2
+                for connections, requests, accepted in before.values())
+            (exchange / 'route-check-continue').write_text('ok')
+            wait_file(exchange / 'route-check-finished', client, 50)
+            after = {side.lower(): et.log_counts(root / (side + '-sshd.log')) for side in ('ET', 'TS')}
+            report['negativeWindowServerCounts'] = negative_server_counts(before, after)
+            report['negativeServerCountsUnchanged'] = all(
+                count == 0 for counts in report['negativeWindowServerCounts'].values() for count in counts.values())
+            (exchange / 'route-check-captured').write_text('ok')
         client.wait(timeout=100)
         wait_file(root / 'result.json', client, 1)
         result = json.loads((root / 'result.json').read_text())
         report['client'], report['clientError'] = safe_result(result)
         report['observers'] = {side: safe_observer(result[side + 'Observer']) for side in ('et', 'ts')}
         report['bannerAttempts'], report['bannerConnections'] = safe_banner_counts(result)
+        report['routeProbes'] = safe_route_probes(result)
         report['etNodeStateAfterBanner'] = safe_state(result.get('etNodeStateAfterBanner'))
         report['lastTsState'] = safe_state(result.get('lastTsState'))
         et_bytes = (hosts[0][0] / 'received.bin').read_bytes()
@@ -462,6 +518,10 @@ LogLevel ERROR
         if (client.returncode or ts_peer.returncode or peer.returncode
                 or not case_passed(report['client'], stop_first)
                 or not report['independentExactInput'] or not report['tsPeerCleanup']
+                or report.get('negativeServerCountsUnchanged') is not True
+                or report.get('negativeServerAuditEstablished') is not True
+                or any(value not in {'dial_error', 'stream_eof', 'stream_error'}
+                       for value in report['routeProbes'].values())
                 or report['etPeer']['activeBridgesAfterStop'] != 0):
             raise et.Failure('dual_acceptance_failed')
         report.update(status='passed', stage='complete')
@@ -493,6 +553,7 @@ LogLevel ERROR
                 report['client'], report['clientError'] = safe_result(result)
                 report['observers'] = {side: safe_observer(result[side + 'Observer']) for side in ('et', 'ts')}
                 report['bannerAttempts'], report['bannerConnections'] = safe_banner_counts(result)
+                report['routeProbes'] = safe_route_probes(result)
                 report['etNodeStateAfterBanner'] = safe_state(result.get('etNodeStateAfterBanner'))
                 report['lastTsState'] = safe_state(result.get('lastTsState'))
             except (ValueError, OSError, et.Failure):

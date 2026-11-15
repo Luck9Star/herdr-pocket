@@ -24,7 +24,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader},
     sync::mpsc,
 };
 use zeroize::Zeroize;
@@ -83,6 +83,10 @@ struct Report {
     ts_observer_joined: bool,
     et_observer: ObserverReport,
     ts_observer: ObserverReport,
+    et_local_route: Option<&'static str>,
+    ts_local_route: Option<&'static str>,
+    et_cross_route: Option<&'static str>,
+    ts_cross_route: Option<&'static str>,
     local_fallback_rejected: bool,
     cross_route_rejected: bool,
     cleanup: bool,
@@ -369,7 +373,7 @@ async fn send(input: &LiveInput, data: &[u8]) -> Result<(), &'static str> {
 fn explicit_dial_error<T, E>(outcome: Result<Result<T, E>, tokio::time::error::Elapsed>) -> bool {
     matches!(outcome, Ok(Err(_)))
 }
-async fn reject(dialer: &OverlayDialer, host: &str, port: u16) -> bool {
+async fn reject_before_login(dialer: &OverlayDialer, host: &str, port: u16) -> bool {
     explicit_dial_error(
         tokio::time::timeout(
             Duration::from_secs(5),
@@ -377,6 +381,52 @@ async fn reject(dialer: &OverlayDialer, host: &str, port: u16) -> bool {
         )
         .await,
     )
+}
+
+// A native overlay may return an admitted stream before route establishment.
+// Explicit EOF/read error establishes failure; bytes or a harness timeout do not.
+async fn read_route_outcome<S: AsyncRead + Unpin>(
+    mut stream: S,
+    deadline: Duration,
+) -> &'static str {
+    let mut byte = [0u8; 1];
+    match tokio::time::timeout(deadline, stream.read(&mut byte)).await {
+        Ok(Ok(0)) => "stream_eof",
+        Ok(Ok(_)) => "received_bytes",
+        Ok(Err(_)) => "stream_error",
+        Err(_) => "read_timeout",
+    }
+}
+async fn route_outcome(dialer: &OverlayDialer, host: &str, port: u16) -> &'static str {
+    match tokio::time::timeout(
+        Duration::from_secs(5),
+        dialer.dial(host.to_owned(), port, Cancellation::default()),
+    )
+    .await
+    {
+        Ok(Err(_)) => "dial_error",
+        Ok(Ok(stream)) => read_route_outcome(stream, Duration::from_secs(5)).await,
+        Err(_) => "dial_timeout",
+    }
+}
+fn route_rejected(outcome: &'static str) -> bool {
+    matches!(outcome, "dial_error" | "stream_eof" | "stream_error")
+}
+async fn checkpoint(
+    exchange: &std::path::Path,
+    signal: &str,
+    ack: &str,
+) -> Result<(), &'static str> {
+    std::fs::write(exchange.join(signal), b"ready").map_err(|_| "route_checkpoint_failed")?;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !exchange.join(ack).is_file() && Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    if exchange.join(ack).is_file() {
+        Ok(())
+    } else {
+        Err("route_checkpoint_timeout")
+    }
 }
 
 // A TCP stream may be admitted before the userspace peer route converges.
@@ -474,14 +524,26 @@ async fn run(
         report.ts_full = bi.is_ok();
         let ai = ai?;
         let bi = bi?;
-        report.local_fallback_rejected = reject(&et_dial, "127.0.0.1", input.local_port).await
-            && reject(&ts_dial, "127.0.0.1", input.local_port).await;
+        checkpoint(&input.exchange, "route-check-ready", "route-check-continue").await?;
+        let et_local = route_outcome(&et_dial, "127.0.0.1", input.local_port).await;
+        let ts_local = route_outcome(&ts_dial, "127.0.0.1", input.local_port).await;
+        let et_cross = route_outcome(&et_dial, &input.ts_remote.host, input.ts_remote.port).await;
+        let ts_cross = route_outcome(&ts_dial, &input.et_remote.host, input.et_remote.port).await;
+        report.et_local_route = Some(et_local);
+        report.ts_local_route = Some(ts_local);
+        report.et_cross_route = Some(et_cross);
+        report.ts_cross_route = Some(ts_cross);
+        report.local_fallback_rejected = route_rejected(et_local) && route_rejected(ts_local);
+        report.cross_route_rejected = route_rejected(et_cross) && route_rejected(ts_cross);
+        checkpoint(
+            &input.exchange,
+            "route-check-finished",
+            "route-check-captured",
+        )
+        .await?;
         if !report.local_fallback_rejected {
             return Err("local_fallback_not_rejected");
         }
-        report.cross_route_rejected = reject(&et_dial, &input.ts_remote.host, input.ts_remote.port)
-            .await
-            && reject(&ts_dial, &input.et_remote.host, input.et_remote.port).await;
         if !report.cross_route_rejected {
             return Err("cross_route_not_rejected");
         }
@@ -649,7 +711,7 @@ fn execute(mut input: Input, report: &mut Report) -> Result<(), &'static str> {
             .enable_all()
             .build()
             .map_err(|_| "executor_failed")?;
-        report.prelogin_dial_rejected = prelogin_executor.block_on(reject(
+        report.prelogin_dial_rejected = prelogin_executor.block_on(reject_before_login(
             &prelogin_dialer,
             &input.ts_remote.host,
             input.ts_remote.port,
@@ -766,6 +828,37 @@ mod tests {
             state: NodeStatus::NeedsLogin,
             auth_url: None
         }));
+    }
+
+    #[test]
+    fn route_stream_requires_explicit_eof_or_error_without_bytes() {
+        let exec = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        exec.block_on(async {
+            use tokio::io::AsyncWriteExt;
+            let (read, write) = tokio::io::duplex(16);
+            drop(write);
+            assert_eq!(
+                read_route_outcome(read, Duration::from_millis(20)).await,
+                "stream_eof"
+            );
+            let (read, mut write) = tokio::io::duplex(16);
+            write.write_all(b"SSH-2.0-test\r\n").await.unwrap();
+            assert_eq!(
+                read_route_outcome(read, Duration::from_millis(20)).await,
+                "received_bytes"
+            );
+            let (read, _write) = tokio::io::duplex(16);
+            assert_eq!(
+                read_route_outcome(read, Duration::from_millis(2)).await,
+                "read_timeout"
+            );
+            assert!(route_rejected("stream_error"));
+            assert!(route_rejected("dial_error"));
+            assert!(!route_rejected("dial_timeout"));
+        });
     }
 
     #[test]

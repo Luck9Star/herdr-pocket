@@ -40,6 +40,38 @@ class EventTests(unittest.TestCase):
             root = Path(temp)
             dual.et.checked_paths(root / 'hp-easytier-bundle-123', root / 'easytier-evidence', root, '123')
 
+    def test_workflow_acceptance_gate_keeps_default_failures_as_diagnostics(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / '.github/workflows/dual-overlay-herdr-validation.yml').read_text()
+        inline = workflow.split("python3 - <<'PYEND'\n", 1)[1].split('\n          PYEND\n', 1)[0]
+        inline = textwrap.dedent(inline)
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'dual-overlay-evidence'
+            def write(case, value):
+                path = output / case / 'manifest.json'; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(value))
+            clean = {'temporaryCredentialsRemoved': True, 'ownedProcessesStopped': True, 'tsPeerCleanup': True}
+            for case in ('et', 'ts'):
+                write(case, dict(clean, status='failed', privateLoopbackTransport=False,
+                                 etPeerAfterBanner={}, client={}))
+            write('et-only', {'status': 'failed', 'loopbackOnlyNamespace': False,
+                              'localSshCanaryBeforeOverlay': True,
+                              'cleanup': {'temporaryCredentialsRemoved': True, 'ownedProcessesStopped': True}})
+            for case in ('et-private', 'ts-private'):
+                write(case, dict(clean, status='passed', privateLoopbackTransport=True))
+            env = dict(os.environ, RUNNER_TEMP=temp, GITHUB_SHA='a' * 40, HP_DUAL_STRAGGLERS='0')
+            def invoke():
+                return subprocess.run([sys.executable, '-c', inline], cwd=root, env=env,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            result = invoke()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(json.loads((output / 'summary.json').read_text())['privateLoopbackAcceptancePassed'])
+            write('ts-private', dict(clean, status='failed', privateLoopbackTransport=True))
+            self.assertNotEqual(invoke().returncode, 0)
+            write('ts-private', dict(clean, status='passed', privateLoopbackTransport=True))
+            write('et', dict(clean, status='failed', privateLoopbackTransport=False))
+            self.assertNotEqual(invoke().returncode, 0)
+
     def test_workflow_inline_bootstrap_reaches_fixture_validation(self):
         root = Path(__file__).resolve().parents[2]
         workflow = (root / '.github/workflows/dual-overlay-herdr-validation.yml').read_text()
@@ -135,6 +167,31 @@ class EventTests(unittest.TestCase):
         self.assertNotIn('bind_device = false', default)
         self.assertEqual(private.replace('bind_device = false\n', ''), default)
         self.assertIn('[flags]\nbind_device = false\n', private)
+
+    def test_sshd_audit_parser_detects_pinned_login_baseline(self):
+        with tempfile.TemporaryDirectory() as temp:
+            log = Path(temp) / 'sshd.log'
+            log.write_text('Connection from 127.0.0.1 port 1234 on 127.0.0.1 port 2222\n'
+                           'debug1: userauth-request for user fixture method publickey\n'
+                           'Accepted publickey for fixture from 127.0.0.1 port 1234 ssh2\n')
+            self.assertEqual(dual.et.log_counts(log), (1, 1, 1))
+
+    def test_route_probe_categories_are_fixed_and_complete(self):
+        values = {'etLocalRoute': 'stream_eof', 'tsLocalRoute': 'dial_error',
+                  'etCrossRoute': 'stream_error', 'tsCrossRoute': 'read_timeout'}
+        self.assertEqual(dual.safe_route_probes(values), values)
+        values['tsCrossRoute'] = 'private value'
+        with self.assertRaisesRegex(dual.et.Failure, 'route_probe_invalid'):
+            dual.safe_route_probes(values)
+
+    def test_negative_window_counts_detect_any_server_connection_or_auth(self):
+        before = {'et': (5, 2, 1), 'ts': (6, 3, 2)}
+        same = dual.negative_server_counts(before, dict(before))
+        self.assertTrue(all(value == 0 for row in same.values() for value in row.values()))
+        after = {'et': (6, 2, 1), 'ts': (6, 3, 2)}
+        self.assertEqual(dual.negative_server_counts(before, after)['et']['connections'], 1)
+        with self.assertRaisesRegex(dual.et.Failure, 'negative_server_counts_invalid'):
+            dual.negative_server_counts(before, {'et': (4, 2, 1), 'ts': (6, 3, 2)})
 
     def test_et_peer_diagnostics_wait_for_fresh_allowlisted_snapshot(self):
         class Peer:

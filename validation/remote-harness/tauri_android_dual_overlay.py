@@ -349,9 +349,11 @@ def run_direction(apk, auth_apk, session, stopped, report):
         targets={}
         for role in ('ts','et'):
             targets[role]=open_tab(browser,role)
-            send_draft(browser,role.upper()+'-ONE')
+            send_draft(browser, 'T' if role=='ts' else 'E')
+            marker='Synthetic '+role.upper()+' ACK ONE'
+            wait_for(lambda:marker in (browser.read('#view-content .xterm-rows') or ''), 'dual_first_ack_frame_missing',timeout=60)
         if targets['ts']==targets['et']:raise GuiFailure('dual_targets_not_distinct')
-        initials={role:(role.upper()+'-ONE').encode() for role in ('ts','et')}
+        initials={'ts':b'T','et':b'E'}
         baseline_values={role:baseline(control,role,initials[role]) for role in ('ts','et')}
         report['bothInputAndDistinctTargets']=True
         surviving='et' if stopped=='ts' else 'ts'
@@ -370,8 +372,10 @@ def run_direction(apk, auth_apk, session, stopped, report):
         browser.click_named('#view-content .tab-connection-actions','恢复观察')
         wait_for(lambda:'当前观察画面' in (browser.read('#view-content .tab-frame-status') or ''),
                  'dual_resumed_full_missing',timeout=90)
-        second=(surviving.upper()+'-TWO').encode()
+        second=b't' if surviving=='ts' else b'e'
         send_draft(browser,second.decode())
+        marker='Synthetic '+surviving.upper()+' ACK TWO'
+        wait_for(lambda:marker in (browser.read('#view-content .xterm-rows') or ''), 'dual_second_ack_frame_missing',timeout=60)
         audit(control,surviving,initials[surviving]+second,ordinal=ordinal,sessions_count=count)
         report['survivorSameAuthenticatedSession']=True
         report['staleInputGuard']=guard_stale_target(browser,stopped)

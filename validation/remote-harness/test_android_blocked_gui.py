@@ -615,3 +615,21 @@ class AndroidStageRetryTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+class StopHitDiagnosticsTests(unittest.TestCase):
+    def test_failed_stop_hit_records_bounded_geometry_without_dispatch(self):
+        class Browser:
+            def __init__(self): self.calls=[]
+            def evaluate(self,expression):
+                if 'centerHit:' in expression:
+                    return {'present':True,'disabled':False,'hidden':False,
+                            'rect':{'x':0,'y':360,'w':64,'h':44},
+                            'viewport':{'w':320,'h':700,'visualH':400},'centerHit':False}
+                return None
+            def call(self,*args): self.calls.append(args)
+        browser=Browser();trace=[]
+        with self.assertRaisesRegex(android.GuiFailure,'android_control_missing_remote-stop-dock'):
+            android.AndroidWebView.click(browser,'#remote-stop-dock',trace=trace)
+        self.assertEqual(browser.calls,[])
+        self.assertEqual(trace[0]['viewport']['visualH'],400)
+        self.assertFalse(trace[0]['centerHit'])

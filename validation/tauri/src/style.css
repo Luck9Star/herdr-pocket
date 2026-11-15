@@ -302,7 +302,7 @@ h1 { font-size:18px; margin:0}
   #remote-input-controls #remote-input-target,
   #remote-input-controls #remote-input-status { margin:0 0 5px; font-size:12px; line-height:1.35; overflow-wrap:anywhere; }
   #remote-input-target { font-weight:700; }
-  #remote-input-controls .remote-mode-actions { grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
+  #remote-input-controls .remote-mode-actions { grid-template-columns:repeat(6,minmax(0,1fr)); gap:4px; }
   #remote-input-controls .remote-mode-actions button { min-width:0; min-height:44px; padding:6px 2px; font-size:11px; }
   #remote-input-controls .remote-mode-actions button[aria-pressed=true] { background:var(--hp-brandSoft); border-color:var(--hp-brandBorder); color:var(--hp-brand); }
   #remote-input-controls .remote-extra-actions { display:flex; gap:6px; margin-top:6px; }
@@ -404,7 +404,7 @@ h1 { font-size:18px; margin:0}
   body.keyboard-visible #remote-read-paste,
   body.keyboard-visible #remote-keyboard-show,
   body.keyboard-visible #tab-keyboard-show { display:none; }
-  body.keyboard-visible #remote-input-controls .remote-mode-actions { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  body.keyboard-visible #remote-input-controls .remote-mode-actions { grid-template-columns:repeat(5,minmax(0,1fr)); }
   body.keyboard-visible #remote-input-keys #remote-modifier-status { display:none; }
   body.keyboard-visible #remote-input-keys:has(.remote-modifier-actions [aria-pressed=true]) #remote-modifier-status,
   body.keyboard-visible #remote-input-keys:has(#remote-modifier-ctrl:disabled) #remote-modifier-status { display:block; }

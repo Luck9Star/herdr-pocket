@@ -125,6 +125,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     $('pair-cancel').disabled=!native || gate.pending || pairState==='none' || pairState==='cancelled' || pairState==='revoked' || pairState==='restore-required' || pairState==='storage-failed';
     $('remote-cancel').disabled=!gate.pending;
     $('remote-stop-visible').hidden=!gate.pending; $('remote-stop-visible').disabled=!gate.pending;
+    $('remote-stop-dock').disabled=!gate.pending;
     $('remote-review').checked=gate.reviewed;
     const overlay=requiresNetworkBinding();
     $('remote-profile-network-note').textContent=overlay
@@ -337,7 +338,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('remote-input-observe').onclick=()=>void changeInputMode('observe');
   $('remote-input-direct').onclick=()=>void changeInputMode('direct');
   $('remote-input-draft-mode').onclick=()=>void changeInputMode('draft');
-  for(const id of ['remote-input-observe','remote-input-direct','remote-input-draft-mode','remote-keyboard-show','remote-keyboard-hide']) $(id).addEventListener('pointerdown',e=>e.preventDefault());
+  for(const id of ['remote-input-observe','remote-input-direct','remote-input-draft-mode','remote-keyboard-show','remote-keyboard-hide','remote-stop-dock']) $(id).addEventListener('pointerdown',e=>e.preventDefault());
   $('remote-keyboard-show').onclick=()=>{
     renderKeyboardActions();if($('remote-keyboard-show').disabled)return;
     const editor=keyboardEditor();if(!editor)return;
@@ -927,7 +928,9 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('pair-cancel').onclick=()=>pairOperation(async()=>{ if(activeHostId)workspace.affected([activeHostId]);try { await invoke('pair_cancel'); pairState='cancelled';revocationReview=true; pairStatus('已取消；主机可能已授权，请核查或导入匹配的撤销响应。'); } catch(e) {pairStatus(`取消失败：${String(e)}`);} });
   $('pair-reset').onclick=()=>pairOperation(async()=>{ if(activeHostId)workspace.affected([activeHostId]);try { await invoke('pair_reset');if(activeHostId)runtimeRevokedHosts.delete(activeHostId); pairState='none';pairFingerprint=null;revocationReview=false;pairReviewIdentity=null;clearHandoff(); $('pair-request').value=''; $('pair-response').value=''; previewResponse=''; $('pair-target-review').checked=false; $('pair-source-review').checked=false; $('pair-response-preview').hidden=true; pairStatus('本机身份已删除；请向主机核查或撤销可能存在的授权。');await refreshHosts(); } catch(e) {pairStatus('本机身份删除未确认；请保留本页或返回主机列表核查待清理记录，再按原“仅清身份”意图明确重试。');} });
   $('remote-cancel').onclick=()=>cancel();
-  $('remote-stop-visible').onclick=()=>{cancel();$('remote-setup').open=true;};
+  const stopObservation=()=>{cancel();$('remote-setup').open=true;};
+  $('remote-stop-visible').onclick=stopObservation;
+  $('remote-stop-dock').onclick=stopObservation;
   $('remote-clear-key').onclick=()=>{ cancel('临时私钥已从表单清除。'); };
   $('remote-hide-keyboard').onclick=()=>document.activeElement?.blur();
   $('show-fixture').onclick=()=>{

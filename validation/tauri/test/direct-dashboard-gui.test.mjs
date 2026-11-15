@@ -1832,3 +1832,17 @@ test('mobile mode controls retain editor focus until intentional mode transition
     assert.equal(n['remote-input-draft-area'].hidden,false);
   } finally {h.finish();await flush();h.restore();}
 });
+
+test('dock stop cancels the focused direct session without sending another byte',async()=>{
+  const h=await setup(),n=h.nodes;
+  try {
+    await openInput(h);n['remote-input-direct'].click();await flush();await flush();
+    assert.equal(n['remote-stop-dock'].disabled,false);
+    const before=h.calls.filter(c=>c.name==='remote_input_send').length;
+    let prevented=false;n['remote-stop-dock'].dispatch('pointerdown',{preventDefault(){prevented=true;}});
+    assert.equal(prevented,true);n['remote-stop-dock'].click();await flush();
+    h.terminal.data('late');await flush();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,before);
+    assert.match(n['remote-captured'].textContent,/陈旧/);
+  } finally {h.finish();await flush();h.restore();}
+});

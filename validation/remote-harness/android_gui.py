@@ -477,10 +477,23 @@ class AndroidWebView:
           const x=r.left+r.width/2,y=r.top+r.height/2;
           return r.width>0 && r.height>0 && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
                  e.contains(document.elementFromPoint(x,y)) ? {x:Math.round(x*4),y:Math.round(y*4),w:innerWidth,h:innerHeight}:null})()''' % json.dumps(selector)
-        point = wait_for(lambda: (lambda a, b: {'x': a['x']/4, 'y': a['y']/4} if (a and b and a['x'] == b['x'] and a['y'] == b['y']
-                                                   and a['w'] == b['w'] and a['h'] == b['h']) else None)(
-            self.evaluate(expression), self.evaluate(expression)),
-                 'android_control_missing_'+selector.lstrip('#').replace(' ','_'))
+        try:
+            point = wait_for(lambda: (lambda a, b: {'x': a['x']/4, 'y': a['y']/4} if (a and b and a['x'] == b['x'] and a['y'] == b['y']
+                                                       and a['w'] == b['w'] and a['h'] == b['h']) else None)(
+                self.evaluate(expression), self.evaluate(expression)),
+                     'android_control_missing_'+selector.lstrip('#').replace(' ','_'))
+        except GuiFailure:
+            if trace is not None:
+                try:
+                    diagnostic=self.evaluate('''(()=>{const e=document.querySelector(%s),r=e?.getBoundingClientRect();
+                      const x=r?r.left+r.width/2:0,y=r?r.top+r.height/2:0,v=window.visualViewport;
+                      return {present:!!e,disabled:!!e?.disabled,hidden:!!e?.hidden,
+                        rect:r?{x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.width),h:Math.round(r.height)}:null,
+                        viewport:{w:innerWidth,h:innerHeight,visualH:Math.round(v?.height||innerHeight)},
+                        centerHit:!!(e&&e.contains(document.elementFromPoint(x,y)))};})()''' % json.dumps(selector))
+                    if isinstance(diagnostic, dict): trace.append(diagnostic)
+                except GuiFailure: pass
+            raise
         if trace is not None:
             # Bounded pointer evidence only: no text, no identifiers, no secrets.
             trace.append(self.evaluate('''(()=>{const e=document.querySelector(%s);const r=e?.getBoundingClientRect?.();
@@ -1771,16 +1784,26 @@ def run_android(args, root, env, config, approval):
             if '陈旧' in (browser.read('#remote-captured') or ''):
                 return board  # The first cancel landed late; stale already shows.
             stop_trace = []
-            browser.click('#remote-stop-visible', trace=stop_trace)
-            # Keep the pre-dispatch geometry as well: the drift between the
-            # press and the release is the evidence this stage needs (0013).
-            progress.data['stopPointerTrace'] = stop_trace[-3:]
-            progress.publish()
+            selector = '#remote-stop-dock' if browser.evaluate("!document.querySelector('#remote-input-controls').hidden") else '#remote-stop-visible'
+            try:
+                browser.click(selector, trace=stop_trace)
+            finally:
+                # Preserve even the first failed hit-test for later diagnosis.
+                attempts=progress.data.setdefault('stopPointerAttempts', [])
+                attempts.append(stop_trace[-3:])
+                del attempts[:-3]
+                progress.publish()
             wait_for(lambda: '陈旧' in (browser.read('#remote-captured') or ''), 'android_stale_marker_missing')
             return board
         progress.phase('stop_observation')
         terminal_board = retry_stage(progress,'stop_observation',stop_observation)
         progress.mark('stoppedStale')
+        # Probe the now-retired focused editor with a real key event. The
+        # independent host capture must retain exactly the earlier inputs.
+        browser.hidden_key_probe()
+        approval.verify_ssh('kPocket测'.encode('utf-8') if guarded else b'')
+        progress.data['postStopInputUnchanged'] = True
+        progress.publish()
         blocked_evidence=None
         board_evidence=None
         device_evidence=None

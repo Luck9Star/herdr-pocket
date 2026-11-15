@@ -6,7 +6,7 @@ temporarily exported only for OpenSSH's actual possession proof. A real phone
 instead supplies its own public request and retains its own private key.
 """
 import argparse
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 import hashlib
 import json
 import os
@@ -70,6 +70,92 @@ def receive(root, role):
     if sys.stdin.buffer.read(1): raise RuntimeError('unexpected_extra_input')
 
 
+@contextmanager
+def prepared_pairing_hosts(binary, base):
+    """Own two empty-authorization OpenSSH/herdr fixtures until context exit."""
+    processes, targets, metadata = [], {}, {}
+    with ExitStack() as stack:
+        try:
+            for role in ('et', 'ts'):
+                root = base / role; root.mkdir(mode=0o700)
+                env = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'HOME': str(root),
+                       'XDG_CONFIG_HOME': str(root / 'config'), 'LANG': 'C.UTF-8',
+                       'PYTHONDONTWRITEBYTECODE': '1'}
+                shutil.copy2(binary, root / 'herdr'); (root / 'herdr').chmod(0o700)
+                version = command([root / 'herdr', '--version'], env).decode().strip()
+                if version != 'herdr 0.9.5': raise RuntimeError('fixture_herdr_version_mismatch')
+                metadata['herdrVersion'] = version
+                metadata['herdrSha256'] = hashlib.sha256((root / 'herdr').read_bytes()).hexdigest()
+                command(['/usr/bin/ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', root / 'host'], env)
+                public = ' '.join((root / 'host.pub').read_text().split()[:2])
+                (root / 'authorized_keys').write_bytes(b''); (root / 'authorized_keys').chmod(0o600)
+                with socket.socket() as reserve:
+                    reserve.bind(('127.0.0.1', 0)); port = reserve.getsockname()[1]
+                username = pwd.getpwuid(os.getuid()).pw_name
+                pam = 'yes' if sys.platform == 'linux' else 'no'
+                (root / 'sshd_config').write_text(f'''Port {port}
+    ListenAddress 127.0.0.1
+    HostKey {root}/host
+    PidFile {root}/sshd.pid
+    AuthorizedKeysFile {root}/authorized_keys
+    StrictModes no
+    UsePAM {pam}
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    PubkeyAuthentication yes
+    AuthenticationMethods publickey
+    PermitRootLogin no
+    AllowUsers {username}
+    PermitUserRC no
+    AllowAgentForwarding no
+    AllowTcpForwarding no
+    X11Forwarding no
+    PrintMotd no
+    LogLevel VERBOSE
+    SetEnv HOME={root} XDG_CONFIG_HOME={root}/config PYTHONDONTWRITEBYTECODE=1
+    ''')
+                sshd = (['sudo', '-n'] if sys.platform == 'linux' else []) + ['/usr/sbin/sshd']
+                command(sshd + ['-t', '-f', root / 'sshd_config'], env)
+                server = stack.enter_context(owned_process(sshd + ['-D', '-e', '-f', root / 'sshd_config'],
+                    cwd=root, env=env, log=root / 'sshd.log')); processes.append(server)
+                def reachable():
+                    try:
+                        with socket.create_connection(('127.0.0.1', port), timeout=.2) as sock:
+                            return sock.recv(128).startswith(b'SSH-2.0-')
+                    except OSError: return False
+                wait_for(reachable, 'fixture_ssh_not_ready', timeout=5)
+                config_root = root / 'config/herdr'; config_root.mkdir(parents=True)
+                (config_root / 'config.toml').write_text('[update]\nversion_check = false\nmanifest_check = false\n')
+                herdr = stack.enter_context(owned_process([root / 'herdr', '--session', 'qa-pair', 'server'],
+                    cwd=root, env=env, log=root / 'herdr.log')); processes.append(herdr)
+                sock = config_root / 'sessions/qa-pair/herdr.sock'
+                wait_for(sock.exists, 'fixture_herdr_not_ready', timeout=10)
+                created = json.loads(command([root / 'herdr', '--session', 'qa-pair', 'workspace',
+                    'create', '--cwd', root, '--label', role], env))
+                pane = created['result']['root_pane']['pane_id']
+                shutil.copy2(HERE / 'capture_input.py', root / 'capture_input.py')
+                shutil.copy2(HERE.parent / 'shared/fixture.json', root / 'terminal-fixture.json')
+                command([root / 'herdr', '--session', 'qa-pair', 'pane', 'run', pane,
+                    shlex.join([sys.executable, str(root / 'capture_input.py')])], env)
+                wait_for((root / 'capture-ready').exists, 'fixture_capture_not_ready', timeout=10)
+                config = dict(host='127.0.0.1', port=port, username=username, session='qa-pair',
+                    socketPath=str(sock), herdrPath=str(root / 'herdr'), expectedHostKey=public, paneId=pane)
+                (root / 'peer.json').write_text(json.dumps(config)); (root / 'peer.json').chmod(0o600)
+                target = PairingTarget(role, root, config); targets[role] = target
+                independent = command(['/usr/bin/ssh-keygen', '-lf', root / 'host.pub', '-E', 'sha256'], env).decode().split()[1]
+                if independent != target.host.pin: raise RuntimeError('fixture_pin_review_mismatch')
+                (root / 'public-profile.json').write_bytes(target.public_profile())
+                (root / 'known_hosts').write_text(f'[127.0.0.1]:{port} {public}\n')
+            distinct_targets(targets['et'], targets['ts'])
+            yield targets, processes, metadata
+        finally:
+            for target in targets.values():
+                target.revoke()
+                (target.root / 'stop-capture').touch()
+                wait_for(lambda: not (target.root / 'capture-running').exists(),
+                         'fixture_capture_not_stopped', timeout=5)
+
+
 def demo(binary, output):
     if os.geteuid() == 0: raise RuntimeError('unprivileged_fixture_owner_required')
     report = {'schemaVersion': 1, 'passed': False,
@@ -78,79 +164,17 @@ def demo(binary, output):
     processes, targets = [], {}
     with tempfile.TemporaryDirectory(prefix='hp-pair2-', dir='/tmp') as temporary:
         base = Path(temporary).resolve()
+        env = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'HOME': str(base),
+               'XDG_CONFIG_HOME': str(base / 'config'), 'LANG': 'C.UTF-8',
+               'PYTHONDONTWRITEBYTECODE': '1'}
         keys = MemoryKeyStore(); handles = {}; requests = {}; clients = []
         try:
-            with ExitStack() as stack:
-                for role in ('et', 'ts'):
-                    root = base / role; root.mkdir(mode=0o700)
-                    env = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'HOME': str(root),
-                           'XDG_CONFIG_HOME': str(root / 'config'), 'LANG': 'C.UTF-8',
-                           'PYTHONDONTWRITEBYTECODE': '1'}
-                    shutil.copy2(binary, root / 'herdr'); (root / 'herdr').chmod(0o700)
-                    version = command([root / 'herdr', '--version'], env).decode().strip()
-                    if version != 'herdr 0.9.5': raise RuntimeError('fixture_herdr_version_mismatch')
-                    report['herdrVersion'] = version
-                    report['herdrSha256'] = hashlib.sha256((root / 'herdr').read_bytes()).hexdigest()
-                    command(['/usr/bin/ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', root / 'host'], env)
-                    public = ' '.join((root / 'host.pub').read_text().split()[:2])
-                    (root / 'authorized_keys').write_bytes(b''); (root / 'authorized_keys').chmod(0o600)
-                    with socket.socket() as reserve:
-                        reserve.bind(('127.0.0.1', 0)); port = reserve.getsockname()[1]
-                    username = pwd.getpwuid(os.getuid()).pw_name
-                    pam = 'yes' if sys.platform == 'linux' else 'no'
-                    (root / 'sshd_config').write_text(f'''Port {port}
-ListenAddress 127.0.0.1
-HostKey {root}/host
-PidFile {root}/sshd.pid
-AuthorizedKeysFile {root}/authorized_keys
-StrictModes no
-UsePAM {pam}
-PasswordAuthentication no
-KbdInteractiveAuthentication no
-PubkeyAuthentication yes
-AuthenticationMethods publickey
-PermitRootLogin no
-AllowUsers {username}
-PermitUserRC no
-AllowAgentForwarding no
-AllowTcpForwarding no
-X11Forwarding no
-PrintMotd no
-LogLevel VERBOSE
-SetEnv HOME={root} XDG_CONFIG_HOME={root}/config PYTHONDONTWRITEBYTECODE=1
-''')
-                    sshd = (['sudo', '-n'] if sys.platform == 'linux' else []) + ['/usr/sbin/sshd']
-                    command(sshd + ['-t', '-f', root / 'sshd_config'], env)
-                    server = stack.enter_context(owned_process(sshd + ['-D', '-e', '-f', root / 'sshd_config'],
-                        cwd=root, env=env, log=root / 'sshd.log')); processes.append(server)
-                    def reachable():
-                        try:
-                            with socket.create_connection(('127.0.0.1', port), timeout=.2) as sock:
-                                return sock.recv(128).startswith(b'SSH-2.0-')
-                        except OSError: return False
-                    wait_for(reachable, 'fixture_ssh_not_ready', timeout=5)
-                    config_root = root / 'config/herdr'; config_root.mkdir(parents=True)
-                    (config_root / 'config.toml').write_text('[update]\nversion_check = false\nmanifest_check = false\n')
-                    herdr = stack.enter_context(owned_process([root / 'herdr', '--session', 'qa-pair', 'server'],
-                        cwd=root, env=env, log=root / 'herdr.log')); processes.append(herdr)
-                    sock = config_root / 'sessions/qa-pair/herdr.sock'
-                    wait_for(sock.exists, 'fixture_herdr_not_ready', timeout=10)
-                    created = json.loads(command([root / 'herdr', '--session', 'qa-pair', 'workspace',
-                        'create', '--cwd', root, '--label', role], env))
-                    pane = created['result']['root_pane']['pane_id']
-                    shutil.copy2(HERE / 'capture_input.py', root / 'capture_input.py')
-                    shutil.copy2(HERE.parent / 'shared/fixture.json', root / 'terminal-fixture.json')
-                    command([root / 'herdr', '--session', 'qa-pair', 'pane', 'run', pane,
-                        shlex.join([sys.executable, str(root / 'capture_input.py')])], env)
-                    wait_for((root / 'capture-ready').exists, 'fixture_capture_not_ready', timeout=10)
-                    config = dict(host='127.0.0.1', port=port, username=username, session='qa-pair',
-                        socketPath=str(sock), herdrPath=str(root / 'herdr'), expectedHostKey=public, paneId=pane)
-                    (root / 'peer.json').write_text(json.dumps(config)); (root / 'peer.json').chmod(0o600)
-                    target = PairingTarget(role, root, config); targets[role] = target
-                    independent = command(['/usr/bin/ssh-keygen', '-lf', root / 'host.pub', '-E', 'sha256'], env).decode().split()[1]
-                    if independent != target.host.pin: raise RuntimeError('fixture_pin_review_mismatch')
-                    (root / 'public-profile.json').write_bytes(target.public_profile())
-                    (root / 'known_hosts').write_text(f'[127.0.0.1]:{port} {public}\n')
+            with ExitStack() as stack, prepared_pairing_hosts(binary, base) as prepared:
+                targets, processes, metadata = prepared
+                report.update(metadata)
+                for role, target in targets.items():
+                    root = target.root
+                    username = target.config['username']
                     handle = keys.create(); handles[role] = handle
                     requests[role] = PendingPairing(keys, handle, account=username,
                         expected_host_key=target.host.pin, device='synthetic-' + role, now=int(time.time()))

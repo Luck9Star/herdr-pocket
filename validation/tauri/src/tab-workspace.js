@@ -37,6 +37,10 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   function markSinglePanel(tab){body.dataset.role='workbench-panel';body.dataset.tabId=tab.id;body.dataset.focus='true';}
   function clearPanelMark(){delete body.dataset.role;delete body.dataset.tabId;delete body.dataset.focus;}
   function boardEvent(tab,type) {if(tab.summaryIdentity && tab.token)onDashboard({type,hostId:tab.hostId,identity:tab.summaryIdentity,source:tab.token,board:tab.board});}
+  // S11（docs/08 切片 11）：被收纳副面板的“观察已暂停”标注直接落在 nav button 上——
+  // 整页 render 会被焦点面板的输入守卫跳过，paused 快照到达时必须可靠更新（display 条件不含 pausing）。
+  function navPausedSuffix(tab) {return splitOn && !isWide() && splitPartnerId===tab.id && tabs.activeId!==tab.id && tab.state==='paused' ? ' · 观察已暂停':'';}
+  function updateTabButton(tab) {if(tab.navButton)tab.navButton.textContent=`${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'}${navPausedSuffix(tab)}`;}
   // 副面板的状态文本直接落 DOM：整页 render 可能被焦点面板的输入守卫跳过（走局部刷新），不能依赖重建。
   function status(tab,message) {tab.message=message;tab.diagnosticView?.update(tab.diagnostics);const partner=splitPartner()===tab;if(tabs.activeId===tab.id || partner){if(partner && tab.messageElement)tab.messageElement.textContent=message;render();}}
   function clearReceipt(tab) {tab.receipt=null;if(tab.receiptDetails)tab.receiptDetails.hidden=true;if(tab.receiptTextElement)tab.receiptTextElement.textContent='';}
@@ -148,7 +152,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     updateSplitControl();
     for(const tab of tabs.list()) {
       const button=document.createElement('button');button.type='button';
-      button.textContent=`${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'}`;
+      tab.navButton=button;updateTabButton(tab);
       button.setAttribute('aria-pressed',String(tabs.activeId===tab.id));button.disabled=switching;
       button.onpointerdown=()=>{const active=tabs.get(tabs.activeId);if(active && active.id!==tab.id)active.suppressBlur=true;};button.onpointercancel=()=>cancelPrepareHide();button.onpointerup=()=>setTimeout(()=>{if(!switching)cancelPrepareHide();},0);
       button.onclick=()=>void select(tab.id);nav.append(button);
@@ -652,7 +656,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         }
         if(event.kind==='selection_ready') {if(event.epoch===tab.epoch && paneVisible() && !tab.wantsPause){tab.selectionReady=true;renderDashboard(tab);recheckBlocked(tab);}return;}
         if(event.kind==='stage') {if(!tab.wantsPause && !document.hidden && paneVisible()){tab.diagnostics.stage(event.stage);const text=connectionStageText(event.stage);if(text)status(tab,text);}return;}
-        if(event.kind==='observation') {if(!Number.isSafeInteger(event.snapshot?.epoch) || (tab.epoch!==null && event.snapshot.epoch<tab.epoch))return;if(event.snapshot.epoch!==tab.epoch){if(tab.blockedIntent && !tab.blockedVerified)tab.blockedBound=false;tab.selectionTextReady=false;retireDirectPending(tab);tab.suppressBlur=true;tab.board.advance(event.snapshot.epoch);boardEvent(tab,'stale');tab.selectionReady=false;tab.frames=new RemoteFrameQueue();tab.inputRevision++;tab.inputBusy=false;tab.inputReady=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;}tab.epoch=event.snapshot.epoch;tab.state=event.snapshot.phase;if(['paused','pausing','closed'].includes(tab.state)){tab.board.invalidate(tab.state);boardEvent(tab,'stale');tab.selectionReady=false;}status(tab,tab.state==='paused'?'观察已暂停，SSH 保留；需主动恢复。':tab.state==='active'?'观察已连接；输入状态见下方。':'正在切换观察状态…');tab.suppressBlur=false;return;}
+        if(event.kind==='observation') {if(!Number.isSafeInteger(event.snapshot?.epoch) || (tab.epoch!==null && event.snapshot.epoch<tab.epoch))return;if(event.snapshot.epoch!==tab.epoch){if(tab.blockedIntent && !tab.blockedVerified)tab.blockedBound=false;tab.selectionTextReady=false;retireDirectPending(tab);tab.suppressBlur=true;tab.board.advance(event.snapshot.epoch);boardEvent(tab,'stale');tab.selectionReady=false;tab.frames=new RemoteFrameQueue();tab.inputRevision++;tab.inputBusy=false;tab.inputReady=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;}tab.epoch=event.snapshot.epoch;tab.state=event.snapshot.phase;if(['paused','pausing','closed'].includes(tab.state)){tab.board.invalidate(tab.state);boardEvent(tab,'stale');tab.selectionReady=false;}status(tab,tab.state==='paused'?'观察已暂停，SSH 保留；需主动恢复。':tab.state==='active'?'观察已连接；输入状态见下方。':'正在切换观察状态…');updateTabButton(tab);tab.suppressBlur=false;return;}
         if(event.kind==='input_ready') {if(event.epoch!==tab.epoch || tab.blockedIntent && !tab.blockedVerified)return;tab.inputReady=true;tab.unknown=event.unknown || event.recovery_status==='unavailable' || !!(tab.unknownReview && tab.unknownReview.target.paneId===tab.target?.paneId && tab.unknownReview.target.terminalId===tab.target?.terminalId);tab.recoveryStatus=event.recovery_status;tab.message=event.recovery_status==='unavailable'?'安全记录不可用；输入保持锁定。':event.unknown?'存在未确认的发送结果，输入保持锁定；请核查原目标。':'已收到完整画面，可显式开启草稿输入。';render();return;}
         if(event.kind!=='frame' || event.epoch!==tab.epoch || !paneVisible())return;
         if(tab.blockedIntent && !tab.blockedVerified && (!tab.blockedBound || !event.frame?.full || !blockedMatches(tab,tab.target))){void cancel(tab);return;}

@@ -2,6 +2,7 @@
 import tempfile
 import unittest
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -60,6 +61,14 @@ class IosDirectSshTests(unittest.TestCase):
         with patch.object(runner.subprocess, 'run', side_effect=responses):
             self.assertEqual(runner.app_container('fixture-id', 15), (None, True))
             self.assertEqual(runner.app_container('fixture-id', 15), (Path('/private/app'), False))
+
+    def test_cleanup_lookup_only_returns_exact_run_owned_name(self):
+        owned = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        listing = {'devices': {'runtime': [{'name': 'herdr-direct-unique', 'udid': owned},
+                                          {'name': 'herdr-direct-other', 'udid': 'b' * 36}]}}
+        with patch.object(runner, 'command', return_value=json.dumps(listing)):
+            self.assertEqual(runner.owned_devices('herdr-direct-unique'), [owned])
+            self.assertEqual(runner.owned_devices('herdr-direct-missing'), [])
 
 
 if __name__ == '__main__':

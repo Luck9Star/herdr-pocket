@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 
 from flutter_direct_ssh_android import safe_failure, verify_prepared
 
@@ -69,6 +70,19 @@ def app_container(device, timeout):
     return (Path(result.stdout.decode().strip()) if result.returncode == 0 else None), False
 
 
+def owned_devices(name, timeout=180):
+    listing = json.loads(command('xcrun', 'simctl', 'list', 'devices', '--json', timeout=timeout))
+    result = []
+    for devices in listing['devices'].values():
+        for item in devices:
+            if item.get('name') == name:
+                identifier = item.get('udid', '')
+                if not re.fullmatch(r'[0-9A-Fa-f-]{36}', identifier):
+                    raise Failure('ios_owned_simulator_id_invalid')
+                result.append(identifier)
+    return result
+
+
 def check_result(value):
     if (set(value) != FIELDS or value['schemaVersion'] != 1 or value['platform'] != 'ios-simulator' or
             value['physicalImeVerified'] is not False or
@@ -100,28 +114,48 @@ def run(app, output, env):
               'status': 'failed', 'cleanup': cleanup, 'physicalImeVerified': False}
     from direct_ssh_fixture import DirectSshFixture
     fixture, device, process, private, phase, primary = DirectSshFixture(), None, None, None, 'runtime_selection', None
+    device_name = 'herdr-direct-' + env['GITHUB_RUN_ID'] + '-' + uuid.uuid4().hex
+    create_attempted = False
+    create_timed_out = False
+    overall_deadline = time.monotonic() + 1800
+    def remaining(limit):
+        left = overall_deadline - time.monotonic()
+        if left <= 0:
+            raise Failure('ios_overall_timeout')
+        return min(limit, left)
     try:
-        runtimes = json.loads(command('xcrun', 'simctl', 'list', 'runtimes', '--json'))['runtimes']
+        phase = 'runtime_list'
+        runtimes = json.loads(command('xcrun', 'simctl', 'list', 'runtimes', '--json', timeout=remaining(240)))['runtimes']
         ios = [r for r in runtimes if r.get('isAvailable') and r.get('identifier', '').startswith('com.apple.CoreSimulator.SimRuntime.iOS-')]
-        types = json.loads(command('xcrun', 'simctl', 'list', 'devicetypes', '--json'))['devicetypes']
+        phase = 'device_type_list'
+        types = json.loads(command('xcrun', 'simctl', 'list', 'devicetypes', '--json', timeout=remaining(240)))['devicetypes']
         phones = [d for d in types if d.get('name', '').startswith('iPhone ')]
         if not ios or not phones:
             raise Failure('ios_simulator_runtime_or_phone_unavailable')
         runtime = sorted(ios, key=lambda r: [int(x) for x in r['version'].split('.')])[-1]
-        phase = 'simulator_boot'
+        phase = 'simulator_create'
         for phone in reversed(phones):
-            attempt = subprocess.run(['xcrun', 'simctl', 'create', 'herdr-direct-' + env['GITHUB_RUN_ID'],
-                                      phone['identifier'], runtime['identifier']], capture_output=True, timeout=60)
+            create_attempted = True
+            try:
+                attempt = subprocess.run(['xcrun', 'simctl', 'create', device_name,
+                                          phone['identifier'], runtime['identifier']], capture_output=True, timeout=remaining(240))
+            except subprocess.TimeoutExpired:
+                create_timed_out = True
+                raise
             if attempt.returncode == 0:
                 device = attempt.stdout.decode().strip()
                 break
+            if owned_devices(device_name, timeout=remaining(180)):
+                raise Failure('ios_simulator_create_unconfirmed')
         if not device:
             raise Failure('ios_simulator_compatible_phone_unavailable')
         report['simulator'] = {'runtime': runtime['identifier'], 'runtimeVersion': runtime['version'], 'deviceType': phone['name']}
         if not re.fullmatch(r'[0-9A-Fa-f-]{36}', device):
             raise Failure('ios_simulator_id_invalid')
-        command('xcrun', 'simctl', 'boot', device)
-        command('xcrun', 'simctl', 'bootstatus', device, '-b', timeout=300)
+        phase = 'simulator_boot'
+        command('xcrun', 'simctl', 'boot', device, timeout=remaining(240))
+        phase = 'simulator_boot_ready'
+        command('xcrun', 'simctl', 'bootstatus', device, '-b', timeout=remaining(360))
         phase = 'fixture_start'
         with fixture:
             private = Path(tempfile.mkdtemp(prefix='herdr-direct-ios-private-', dir=base))
@@ -135,7 +169,7 @@ def run(app, output, env):
                 process = subprocess.Popen(['flutter', 'test', '--no-pub', '--reporter', 'expanded', '-d', device,
                     '--dart-define-from-file=' + str(defines), TARGET], cwd=app, env=env,
                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-                deadline, exchange, confirmed = time.monotonic() + 1200, None, False
+                deadline, exchange, confirmed = min(overall_deadline, time.monotonic() + 1200), None, False
                 container_timeouts = 0
                 while process.poll() is None and time.monotonic() < deadline:
                     phase = 'await_device_result'
@@ -199,10 +233,25 @@ def run(app, output, env):
         cleanup['flutterToolStopped'] = process is None or process.poll() is not None
         fixture.close()
         cleanup['fixtureClosed'] = fixture.snapshot()['connectionsClosed']
-        if device:
-            subprocess.run(['xcrun', 'simctl', 'shutdown', device], capture_output=True, timeout=60)
-            result = subprocess.run(['xcrun', 'simctl', 'delete', device], capture_output=True, timeout=60)
-            cleanup['simulatorDeleted'] = result.returncode == 0
+        report['simulatorCreateAttempted'] = create_attempted
+        if not create_attempted:
+            cleanup['simulatorDeleted'] = True
+            report['simulatorCleanup'] = 'not_created'
+        else:
+            try:
+                # On create timeout the service may have created the device
+                # despite the lost reply. Only this run's random name is ours.
+                owned = owned_devices(device_name)
+                if device and device not in owned:
+                    raise Failure('ios_owned_simulator_not_found')
+                for identifier in owned:
+                    subprocess.run(['xcrun', 'simctl', 'shutdown', identifier], capture_output=True, timeout=120)
+                    command('xcrun', 'simctl', 'delete', identifier, timeout=180)
+                cleanup['simulatorDeleted'] = not owned_devices(device_name) and (bool(owned) or not create_timed_out)
+                report['simulatorCleanup'] = ('deleted' if owned else
+                    'create_timed_out_no_device_found' if create_timed_out else 'no_owned_device_found')
+            except (Failure, OSError, ValueError, subprocess.TimeoutExpired):
+                report['simulatorCleanup'] = 'unconfirmed'
         if private:
             shutil.rmtree(private)
         if not all(cleanup[k] for k in cleanup if k != 'rawLogsUploaded'):

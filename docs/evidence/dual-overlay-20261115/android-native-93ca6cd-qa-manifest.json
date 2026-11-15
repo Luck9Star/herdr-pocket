@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "variant": "test-only-private-ca-android-x86_64",
+  "sourceCommit": "93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc",
+  "normalManifestSha256": "2b6c67b84c61a3ddec1c499f956b1b5f1338075451b9ed8cc6deea16de2799e6",
+  "qaSourceSha256": "9b40bb7e211b7d8dd08f024cd3b0469b196fe5a14190d333f024b88449f17090",
+  "files": {
+    "libheeler_easytier.so": "e617a7084ff1c8444f16c01b56db03aa3301d99a7513ae3c275b93540e557648",
+    "libhp_tailscale.so": "d8df15a02924c5414cbf1b1f69dd75f29f286d6714df754baed88314e4528384",
+    "libherdr_flutter_network_runtime.so": "bb5e3b7c02abb2a211aac558b201dfeecb786846f68561b2a9c1c44ce2e803a6"
+  },
+  "androidLoad": "not run",
+  "node": "not run"
+}

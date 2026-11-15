@@ -1,0 +1,13 @@
+{
+  "sourceCommit": "93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc",
+  "abi": "x86_64",
+  "api": 35,
+  "build": "success",
+  "staticVerification": "success",
+  "androidLoad": "not run",
+  "installation": "not run",
+  "node": "not run",
+  "apk": "not built",
+  "gui": "not run",
+  "nativeManifestSha256": "2b6c67b84c61a3ddec1c499f956b1b5f1338075451b9ed8cc6deea16de2799e6"
+}

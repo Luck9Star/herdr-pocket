@@ -132,7 +132,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
 
   const invoke = async (name, args = {}) => {
     calls.push({ name, args });
-    if (['host_init', 'host_new', 'remote_cancel', 'remote_select', 'remote_ack'].includes(name)) return;
+    if (['host_init', 'host_new', 'remote_cancel', 'remote_select', 'remote_ack', 'remote_input_recover'].includes(name)) return;
     if (name === 'pair_scan_response') return scanResponse ? scanResponse() : '';
     if (name === 'remote_input_mode') return inputMode(args);
     if (name === 'remote_input_send' && sendResult) return sendResult;
@@ -951,6 +951,11 @@ test('an unknown draft send never returns to the sendable editor', async () => {
     n['remote-input-confirm'].click();
     await flush();
     assert.equal(n['remote-input-draft'].value, '');
+    const review=n['remote-result'].all().find(node=>node.className==='unknown-input-review');
+    assert.equal(review.hidden,false);
+    assert.ok(review.all().some(node=>node.textContent.includes('w1:p1') && node.textContent.includes('term_a001')));
+    assert.ok(review.all().some(node=>node.textContent.startsWith('发送时间：')));
+    assert.ok(review.all().some(node=>node.tagName==='pre' && node.textContent==='不重放'));
     await reconnectTo(h, blockedPane()[0]);
     assert.equal(n['remote-input-draft'].value, '');
     assert.equal(h.calls.filter(call => call.name === 'remote_input_send').length, 1);
@@ -1862,5 +1867,24 @@ test('dock stop cancels the focused direct session without sending another byte'
     h.terminal.data('late');await flush();
     assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,before);
     assert.match(n['remote-captured'].textContent,/陈旧/);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('main recovery waits for a rendered full and explicit user confirmation',async()=>{
+  const h=await setup(),n=h.nodes;
+  try {
+    await pairAndConnect(h);publishDashboard(h,blockedPane());
+    n['remote-panes'].children.find(e=>e.tagName==='button' && e.textContent.startsWith('w1:p1')).click();
+    h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});
+    h.emit({kind:'input_ready',generation:9,epoch:1,unknown:true,recovery_status:'pending'});
+    assert.equal(n['remote-input-recover'].disabled,true);assert.equal(n['remote-input-direct'].disabled,true);
+    await n['remote-input-recover'].onclick();assert.equal(h.calls.filter(c=>c.name==='remote_input_recover').length,0);
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();
+    assert.equal(n['remote-input-recover'].disabled,false);
+    window.confirm=()=>false;await n['remote-input-recover'].onclick();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_recover').length,0);
+    window.confirm=()=>true;await n['remote-input-recover'].onclick();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_recover').length,1);
+    assert.equal(n['remote-input-recover'].hidden,true);
   } finally {h.finish();await flush();h.restore();}
 });

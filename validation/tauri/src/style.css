@@ -461,3 +461,22 @@ h1 { font-size:18px; margin:0}
   }
   #tab-workspace #view-tabs button:focus-visible { outline-color:var(--hp-brandBorder); }
 }
+.unknown-input-review {
+  margin:12px 0;
+  padding:12px;
+  color:var(--hp-warningText);
+  background:var(--hp-warningSoft);
+  border:1px solid var(--hp-warningBorder);
+  border-radius:12px;
+}
+.unknown-input-review p { margin:6px 0; line-height:1.5; }
+.unknown-input-review pre {
+  max-height:140px;
+  overflow:auto;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  color:var(--hp-textPrimary);
+  background:var(--hp-card);
+  padding:8px;
+  border-radius:8px;
+}

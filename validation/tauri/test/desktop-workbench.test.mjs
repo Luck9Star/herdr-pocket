@@ -14,6 +14,7 @@ class Element {
     this.textContent = '';
   }
   append(...nodes) { this.children.push(...nodes); }
+  prepend(...nodes) { this.children.unshift(...nodes); }
   replaceChildren(...nodes) { this.children = [...nodes]; }
   setAttribute(key, value) { this.attrs[key] = value; }
   addEventListener(name, fn) { (this.events ??= {})[name] ??= []; this.events[name].push(fn); }

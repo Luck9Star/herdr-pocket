@@ -58,6 +58,7 @@ class DualOverlayUiSteps {
     await stage('${role}_network_create');
     await existing.tapKey(tester, 'networks-add');
     await enter('network-label', label);
+    await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
     if (role == 'et') {
       await choose('network-provider', 'easytier');
       await enter('network-networkName', networkName);
@@ -65,6 +66,7 @@ class DualOverlayUiSteps {
     } else {
       await enter('network-controlUrl', controlUrl);
     }
+    await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
     await existing.tapKey(tester, 'network-save');
     final page = tester.widget<NetworkProfilesPage>(find.byType(NetworkProfilesPage));
     await existing.until(tester, () => page.catalog.networkProfiles.where((profile) => profile.label == label).length == 1);

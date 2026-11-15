@@ -46,7 +46,10 @@ def checked_paths(app, output, env):
 
 
 def safe_result(raw):
-    result = json.loads(raw)
+    try:
+        result = json.loads(raw)
+    except (ValueError, UnicodeError):
+        raise Failure('direct_android_device_result_not_json') from None
     if not isinstance(result, dict) or set(result) != PUBLIC_FIELDS or result['schemaVersion'] != 1 or result['platform'] != 'android-api35-emulator':
         raise Failure('direct_android_invalid_device_result')
     if result['physicalImeVerified'] is not False or any(result[key] is not True for key in PUBLIC_FIELDS - {'schemaVersion', 'platform', 'physicalImeVerified'}):
@@ -71,6 +74,59 @@ def package_present():
 
 def forward_set():
     return set(text('forward', '--list').splitlines())
+
+
+def checked_public_reply(reply, relative, limit):
+    # Share the already verified pending diagnostics from the paired Android
+    # runner. exec-out can report status zero with run-as errors as stdout.
+    from flutter_android_gui import public_file_pending
+    if public_file_pending(reply, relative):
+        return None
+    if len(reply.stdout) > limit or len(reply.stderr) > limit:
+        raise Failure('direct_android_public_json_oversize')
+    if reply.returncode or reply.stderr:
+        raise Failure('direct_android_public_json_read_failed')
+    if not reply.stdout.strip():
+        raise Failure('direct_android_public_json_empty')
+    try:
+        value = json.loads(reply.stdout)
+    except (ValueError, UnicodeError):
+        raise Failure('direct_android_public_json_invalid') from None
+    if not isinstance(value, dict):
+        raise Failure('direct_android_public_json_invalid')
+    return value
+
+
+def read_public_json(relative, limit=4096):
+    if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:result|stage|failure)\.json', relative):
+        raise Failure('direct_android_public_path_invalid')
+    if not package_present():
+        return None
+    exists = adb('shell', '-T', 'run-as', PACKAGE, 'test', '-f', relative, check=False)
+    if exists.returncode == 1 and not exists.stdout.strip() and not exists.stderr.strip():
+        return None
+    from flutter_android_gui import public_file_pending
+    if public_file_pending(exists, relative):
+        return None
+    if exists.returncode or exists.stdout.strip() or exists.stderr.strip():
+        raise Failure('direct_android_public_file_probe_failed')
+    reply = adb('shell', '-T', 'run-as', PACKAGE, 'head', '-c', str(limit + 1), relative, check=False)
+    return checked_public_reply(reply, relative, limit)
+
+
+def safe_failure(error, phase):
+    # Exception classes and source locations are diagnostic facts; exception
+    # messages/locals may contain credentials and must never be exported.
+    frames = []
+    trace = error.__traceback__
+    while trace is not None:
+        file = Path(trace.tb_frame.f_code.co_filename).name
+        if re.fullmatch(r'[A-Za-z0-9_.-]{1,80}', file):
+            frames.append({'file': file, 'line': trace.tb_lineno})
+        trace = trace.tb_next
+    kind = type(error).__name__
+    return {'phase': phase, 'exceptionClass': kind if re.fullmatch(r'[A-Za-z0-9_]{1,80}', kind) else 'Exception',
+            'sourceLocations': frames[-4:]}
 
 
 def verify_prepared(app, env):
@@ -102,6 +158,7 @@ def run(args, env):
     report = {'schemaVersion': 1, 'sourceSHA': env['GITHUB_SHA'], 'kind': 'flutter-android-ordinary-ssh',
               'status': 'failed', 'cleanup': cleanup, 'physicalImeVerified': False}
     primary = None
+    phase = 'fixture_start'
     from direct_ssh_fixture import DirectSshFixture
     fixture = DirectSshFixture()
     reverse_added = False
@@ -109,11 +166,13 @@ def run(args, env):
     private = None
     try:
         with fixture:
+            phase = 'reverse_setup'
             reverse = 'tcp:' + str(fixture.port)
             if any(reverse in line.split()[1:2] for line in text('reverse', '--list').splitlines()):
                 raise Failure('direct_android_reverse_already_present')
             adb('reverse', reverse, reverse)
             reverse_added = True
+            phase = 'private_defines'
             private = Path(tempfile.mkdtemp(prefix='herdr-direct-android-private-', dir=env['RUNNER_TEMP']))
             defines = private / 'defines.json'
             defines.write_text(json.dumps({'HERDR_ANDROID_DIRECT_SSH': '1', 'HERDR_ANDROID_RUN_ID': env['GITHUB_RUN_ID'],
@@ -123,16 +182,17 @@ def run(args, env):
             relative = 'cache/herdr-direct-ssh-' + env['GITHUB_RUN_ID']
             command = ['flutter', 'test', '--no-pub', '--no-uninstall', '--reporter', 'expanded', '-d', SERIAL,
                        '--dart-define-from-file=' + str(defines), TARGET]
+            phase = 'driver_start'
             with (private / 'flutter-private.log').open('wb') as log:
                 process = subprocess.Popen(command, cwd=app, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                 deadline = time.monotonic() + 1200
                 peer_confirmed = False
                 while process.poll() is None and time.monotonic() < deadline:
-                    public = adb('exec-out', 'run-as', PACKAGE, 'cat', relative + '/result.json', check=False)
-                    if public.returncode == 0:
-                        if len(public.stdout) > 4096:
-                            raise Failure('direct_android_result_too_large')
-                        safe_result(public.stdout)
+                    phase = 'await_device_result'
+                    public = read_public_json(relative + '/result.json')
+                    if public is not None:
+                        safe_result(json.dumps(public))
+                        phase = 'peer_close_confirmation'
                         if not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed'):
                             raise Failure('direct_android_remote_input_or_close_missing')
                         if process.poll() is not None:
@@ -147,6 +207,7 @@ def run(args, env):
                         report['peerClosedBeforeDriverExit'] = True
                         break
                     time.sleep(.5)
+                phase = 'await_driver_exit'
                 try:
                     code = process.wait(timeout=max(1, deadline - time.monotonic()))
                 except subprocess.TimeoutExpired:
@@ -156,24 +217,24 @@ def run(args, env):
             cleanup['flutterToolStopped'] = True
             if code:
                 # Stage is an enum from our test; never export the raw test log.
-                failure = adb('exec-out', 'run-as', PACKAGE, 'cat', relative + '/failure.json', check=False)
-                try:
-                    stage = json.loads(failure.stdout).get('stage', '')
-                    if re.fullmatch(r'[a-z_]{1,40}', stage):
+                failure = read_public_json(relative + '/failure.json', 256)
+                if failure is not None:
+                    stage = failure.get('stage', '')
+                    if isinstance(stage, str) and re.fullmatch(r'[a-z_]{1,40}', stage):
                         report['failureStage'] = stage
-                except (ValueError, TypeError):
-                    pass
                 raise Failure('direct_android_device_test_failed')
-            raw = adb('exec-out', 'run-as', PACKAGE, 'cat', relative + '/result.json').stdout
-            if len(raw) > 4096:
-                raise Failure('direct_android_result_too_large')
-            report['device'] = safe_result(raw)
+            phase = 'read_device_result'
+            public = read_public_json(relative + '/result.json')
+            if public is None:
+                raise Failure('direct_android_device_result_missing')
+            report['device'] = safe_result(json.dumps(public))
             if not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed'):
                 raise Failure('direct_android_remote_input_or_close_missing')
             evidence = fixture.snapshot()
             if not all(evidence[name] for name in ('authAccepted', 'ptyRequested', 'shellRequested', 'markerReceived', 'sessionClosed')):
                 raise Failure('direct_android_protocol_evidence_incomplete')
             report['protocol'] = evidence
+            phase = 'read_screenshots'
             for name in ('home', 'connected', 'disconnected'):
                 png = adb('exec-out', 'run-as', PACKAGE, 'cat', relative + '/' + name + '.png').stdout
                 if not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png) > 8_000_000:
@@ -183,7 +244,10 @@ def run(args, env):
     except Exception as error:
         primary = str(error) if isinstance(error, Failure) else 'direct_android_runner_failed'
         report['failureCode'] = primary
+        report['diagnostic'] = safe_failure(error, phase)
     finally:
+        report['lastPhase'] = phase
+        report['protocol'] = fixture.snapshot()
         if process is not None and process.poll() is None:
             try:
                 os.killpg(process.pid, signal.SIGTERM)

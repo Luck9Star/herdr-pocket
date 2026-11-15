@@ -3,6 +3,8 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+from subprocess import CompletedProcess
+from unittest.mock import patch
 import unittest
 
 HERE = Path(__file__).resolve().parent
@@ -38,6 +40,38 @@ class GuardTests(unittest.TestCase):
         for change in ({'remoteEchoVisible': False}, {'physicalImeVerified': True}, {'password': 'must-not-export'}):
             with self.subTest(change=tuple(change)), self.assertRaises(runner.Failure):
                 runner.safe_result(json.dumps({**result, **change}))
+
+    def test_pending_diagnostics_and_non_json_never_become_device_success(self):
+        relative = 'cache/herdr-direct-ssh-123/result.json'
+        for status, stdout, stderr in [
+            (0, b'run-as: unknown package: ' + runner.PACKAGE.encode(), b''),
+            (1, b'', ('head: ' + relative + ': No such file or directory').encode()),
+        ]:
+            with self.subTest(status=status):
+                self.assertIsNone(runner.checked_public_reply(CompletedProcess([], status, stdout, stderr), relative, 4096))
+        for stdout in (b'not JSON', b'', b'[]', b'{' + b'x' * 4097):
+            with self.subTest(size=len(stdout)), self.assertRaises(runner.Failure):
+                runner.checked_public_reply(CompletedProcess([], 0, stdout, b''), relative, 4096)
+        with self.assertRaisesRegex(runner.Failure, 'not_json'):
+            runner.safe_result(b'run-as: unknown package')
+
+    def test_file_poll_uses_shell_exit_status_before_reading_and_limits_diagnostics(self):
+        relative = 'cache/herdr-direct-ssh-123/result.json'
+        with patch.object(runner, 'package_present', return_value=False), patch.object(runner, 'adb') as adb:
+            self.assertIsNone(runner.read_public_json(relative))
+            adb.assert_not_called()
+        missing = CompletedProcess([], 1, b'', b'')
+        with patch.object(runner, 'package_present', return_value=True), patch.object(runner, 'adb', return_value=missing) as adb:
+            self.assertIsNone(runner.read_public_json(relative))
+            self.assertEqual(adb.call_args.args[:5], ('shell', '-T', 'run-as', runner.PACKAGE, 'test'))
+        with patch.object(runner, 'package_present', return_value=True), patch.object(runner, 'adb', side_effect=[
+            CompletedProcess([], 0, b'', b''), CompletedProcess([], 0, b'{"ready":true}', b'')]) as adb:
+            self.assertEqual(runner.read_public_json(relative), {'ready': True})
+            self.assertEqual(adb.call_args.args[:5], ('shell', '-T', 'run-as', runner.PACKAGE, 'head'))
+        secret = 'must-never-be-exported'
+        evidence = runner.safe_failure(ValueError(secret), 'await_device_result')
+        self.assertEqual(evidence['exceptionClass'], 'ValueError')
+        self.assertNotIn(secret, json.dumps(evidence))
 
 
 class LoopbackTests(unittest.TestCase):

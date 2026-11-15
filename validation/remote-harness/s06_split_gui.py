@@ -38,8 +38,29 @@ def failure_diagnostics(exchange):
                 any(not isinstance(item, str) or not re.fullmatch(r's06_real_ssh_test\.dart:\d{1,4}:\d{1,4}', item)
                     for item in locations)):
             return {'valid': False}
-        return {'kind': kind, 'locations': locations}
-    except (OSError, ValueError, KeyError, TypeError):
+        clean = {'kind': kind, 'locations': locations}
+        for key in ('splitActive',):
+            if type(value.get(key)) is bool:
+                clean[key] = value[key]
+        for key in ('visibleTabs', 'resumeOnstage', 'resumeAnywhere'):
+            if type(value.get(key)) is int and 0 <= value[key] <= 8:
+                clean[key] = value[key]
+        peers = value.get('peers')
+        phases = {'idle', 'paused', 'resuming', 'snapshot', 'opening', 'awaiting_full', 'streaming', 'retiring', 'failed'}
+        errors = {'none', 'channel_cleanup_timeout', 'observe_ended', 'cancelled', 'watch_retry_exhausted',
+                  'connection_failed', 'session_mismatch', 'resume_target_changed', 'timeout', 'other_public_failure'}
+        if isinstance(peers, list) and len(peers) <= 2:
+            clean['peers'] = []
+            for peer in peers:
+                if (not isinstance(peer, dict) or peer.get('phase') not in phases or peer.get('error') not in errors or
+                        type(peer.get('observationCloseFailed')) is not bool or
+                        any(type(peer.get(key)) is not int or not 0 <= peer[key] <= 1_000_000
+                            for key in ('connectionCount', 'frameCount', 'deltaFrames'))):
+                    return {'valid': False}
+                clean['peers'].append({key: peer[key] for key in ('connectionCount', 'frameCount',
+                    'deltaFrames', 'phase', 'error', 'observationCloseFailed')})
+        return clean
+    except (GuiFailure, OSError, ValueError, KeyError, TypeError):
         return {'valid': False}
 
 

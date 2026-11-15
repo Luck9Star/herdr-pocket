@@ -45,6 +45,8 @@ void main() {
   setUp(PairingPage.resetMemorySession);
   tearDown(PairingPage.resetMemorySession);
   testWidgets('S06 two reviewed real SSH/herdr sessions keep frames and input targets independent', (tester) async {
+    final traceAdapters = <RemoteReadOnlyAdapter>[];
+    HostTabs? traceTabs;
     try {
     final configs = (jsonDecode(File(env['HERDR_S06_CONFIG']!).readAsStringSync()) as List)
       .cast<Map<String, dynamic>>();
@@ -55,8 +57,13 @@ void main() {
     final journals = [GuiSshMemoryInputJournal(), GuiSshMemoryInputJournal()];
     final adapters = [for (final journal in journals) RemoteReadOnlyAdapter(inputJournal: journal)];
     final catalog = HostCatalog(storage: MemoryCatalogStorage()), tabs = HostTabs();
+    traceAdapters.addAll(adapters); traceTabs = tabs;
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(1440, 1000);
+    // Live binding keeps an independent 800x600 render surface unless this is
+    // set; physicalSize alone changes MediaQuery but not layout constraints.
+    await tester.binding.setSurfaceSize(const Size(1440, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
     addTearDown(() async {
       await tester.runAsync(() async { for (final adapter in adapters) { await adapter.cancel(); } });
@@ -76,7 +83,9 @@ void main() {
       final control = owner == null ? all : find.descendant(of: owner, matching: all);
       await until(() => control.evaluate().isNotEmpty);
       await tester.ensureVisible(control.first); await tester.pump();
-      await tester.tap(control.first); await tester.pump();
+      final hit = control.hitTestable();
+      expect(hit, findsOneWidget);
+      await tester.tap(hit); await tester.pump();
     }
     stage('s06_homepage');
     await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: HostCatalogPage(
@@ -84,6 +93,7 @@ void main() {
       adapterFactory: (profile) => adapters[profile.target['session'] == configs[0]['session'] ? 0 : 1],
       offlineBuilder: (_) => const SizedBox())));
     await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(HostCatalogPage)), const Size(1440, 1000));
     final tabIds = <String>[];
     for (var i = 0; i < 2; i++) {
       stage('s06_pair_$i');
@@ -123,7 +133,11 @@ void main() {
     expect(configs[0]['paneId'], configs[1]['paneId']);
     expect(adapters[0].inputTarget, isNull); // Hidden A is paused, not reconnected.
     stage('s06_split_resume');
+    expect(tabs.activeId, tabIds[1]);
     await tap('host-split-${tabIds[0]}'); await tester.pump();
+    expect(tabs.activeId, tabIds[1]); expect(tabs.splitId, tabIds[0]);
+    expect(tabs.find(tabIds[0])!.visible.value, isTrue);
+    expect(tabs.find(tabIds[1])!.visible.value, isTrue);
     final views = [for (final id in tabIds) find.byKey(ValueKey('host-tab-view-$id'))];
     await tap('remote-resume', owner: views[0]);
     await until(() => adapters.every((a) => a.evidence.fullFrameReceived && a.inputTarget != null));
@@ -205,8 +219,21 @@ void main() {
       // Publish locations only, never exception messages, targets or key data.
       final locations = RegExp(r's06_real_ssh_test\.dart:\d+:\d+').allMatches(stack.toString())
         .map((m) => m.group(0)!).take(4).toList();
+      const knownErrors = {'channel_cleanup_timeout', 'observe_ended', 'cancelled',
+        'watch_retry_exhausted', 'connection_failed', 'session_mismatch', 'resume_target_changed', 'timeout'};
       File('${env['HERDR_S06_DIR']!}/failure.json').writeAsStringSync(jsonEncode({
-        'kind': error.runtimeType.toString(), 'locations': locations}), flush: true);
+        'kind': error.runtimeType.toString(), 'locations': locations,
+        'splitActive': traceTabs?.splitId != null,
+        'visibleTabs': traceTabs?.tabs.where((t) => t.visible.value).length ?? 0,
+        'resumeOnstage': find.byKey(const ValueKey('remote-resume')).evaluate().length,
+        'resumeAnywhere': find.byKey(const ValueKey('remote-resume'), skipOffstage: false).evaluate().length,
+        'peers': [for (final a in traceAdapters) {'connectionCount': a.evidence.connectionCount,
+          'frameCount': a.evidence.frameCount, 'deltaFrames': a.evidence.deltaFrames,
+          'phase': a.evidence.observationPhase,
+          'error': a.evidence.errorCode == null ? 'none' : knownErrors.contains(a.evidence.errorCode)
+            ? a.evidence.errorCode : 'other_public_failure',
+          'observationCloseFailed': a.evidence.channelRetireFailures.contains('observation')}],
+      }), flush: true);
       rethrow;
     }
   }, skip: !enabled, timeout: const Timeout(Duration(minutes: 4)));

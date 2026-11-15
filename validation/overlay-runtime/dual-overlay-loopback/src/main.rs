@@ -23,7 +23,10 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
-use tokio::sync::mpsc;
+use tokio::{
+    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    sync::mpsc,
+};
 use zeroize::Zeroize;
 
 #[derive(Clone, Copy, Deserialize)]
@@ -59,6 +62,13 @@ struct Report {
     begin_login_succeeded: bool,
     last_ts_state: Option<&'static str>,
     prelogin_dial_rejected: bool,
+    et_banner: bool,
+    ts_banner: bool,
+    et_banner_attempts: u32,
+    ts_banner_attempts: u32,
+    et_banner_connections: u32,
+    ts_banner_connections: u32,
+    et_node_state_after_banner: Option<&'static str>,
     et_full: bool,
     ts_full: bool,
     et_first: bool,
@@ -218,7 +228,24 @@ fn observer_error(code: &'static str) -> &'static str {
         | "input_unavailable"
         | "listener_failed"
         | "frame_failed"
-        | "resume_target_changed" => code,
+        | "resume_target_changed"
+        | "session_mismatch"
+        | "watch_invalid"
+        | "watch_ended"
+        | "watch_failed"
+        | "watch_close_failed"
+        | "watch_disconnected"
+        | "watch_limit"
+        | "watch_open_failed"
+        | "watch_rejected"
+        | "watch_stopped"
+        | "watch_unsupported"
+        | "watch_write_failed"
+        | "unsupported_protocol"
+        | "invalid_frame"
+        | "sequence_gap"
+        | "snapshot_limit"
+        | "rpc_failed" => code,
         _ => "other_observer_error",
     }
 }
@@ -352,6 +379,35 @@ async fn reject(dialer: &OverlayDialer, host: &str, port: u16) -> bool {
     )
 }
 
+// A TCP stream may be admitted before the userspace peer route converges.
+// Read only the SSH banner over the product dialer; no authentication/input.
+async fn overlay_banner(dialer: &OverlayDialer, host: &str, port: u16) -> (bool, u32, u32) {
+    let until = Instant::now() + Duration::from_secs(25);
+    let mut attempts = 0;
+    let mut connections = 0;
+    while Instant::now() < until {
+        attempts += 1;
+        if let Ok(stream) = dialer
+            .dial(host.to_owned(), port, Cancellation::default())
+            .await
+        {
+            connections += 1;
+            let mut reader = BufReader::new(stream.take(256));
+            let mut line = Vec::new();
+            if matches!(
+                tokio::time::timeout(Duration::from_secs(2), reader.read_until(b'\n', &mut line))
+                    .await,
+                Ok(Ok(_))
+            ) && line.starts_with(b"SSH-2.0-")
+            {
+                return (true, attempts, connections);
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    (false, attempts, connections)
+}
+
 async fn run(
     input: &Input,
     runtime: Arc<OverlayRuntime>,
@@ -367,6 +423,26 @@ async fn run(
         OverlayDialer::new(runtime.clone(), ts.clone(), Duration::from_secs(3))
             .map_err(|_| "dialer_failed")?,
     );
+    let ((et_banner, et_attempts, et_connections), (ts_banner, ts_attempts, ts_connections)) = tokio::join!(
+        overlay_banner(&et_dial, &input.et_remote.host, input.et_remote.port),
+        overlay_banner(&ts_dial, &input.ts_remote.host, input.ts_remote.port),
+    );
+    report.et_banner = et_banner;
+    report.ts_banner = ts_banner;
+    report.et_banner_attempts = et_attempts;
+    report.ts_banner_attempts = ts_attempts;
+    report.et_banner_connections = et_connections;
+    report.ts_banner_connections = ts_connections;
+    let rt = runtime.clone();
+    let node = et.clone();
+    report.et_node_state_after_banner =
+        tokio::task::spawn_blocking(move || op(rt.node_status(&node)).ok().map(status_label))
+            .await
+            .ok()
+            .flatten();
+    if !et_banner || !ts_banner {
+        return Err("overlay_banner_missing");
+    }
     let mut a = launch(
         input.et_remote.clone(),
         et_dial.clone(),

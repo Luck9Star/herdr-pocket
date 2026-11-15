@@ -126,6 +126,17 @@ class EventTests(unittest.TestCase):
             finally:
                 process.terminate(); process.wait()
 
+    def test_banner_counts_cannot_exceed_real_attempts(self):
+        result = {'etBannerAttempts': 3, 'tsBannerAttempts': 1,
+                  'etBannerConnections': 2, 'tsBannerConnections': 1}
+        self.assertEqual(dual.safe_banner_counts(result), ({'et': 3, 'ts': 1}, {'et': 2, 'ts': 1}))
+        result['etBannerConnections'] = 4
+        with self.assertRaisesRegex(dual.et.Failure, 'banner_connections_invalid'):
+            dual.safe_banner_counts(result)
+        result['etBannerConnections'] = True
+        with self.assertRaisesRegex(dual.et.Failure, 'banner_connections_invalid'):
+            dual.safe_banner_counts(result)
+
     def test_observer_evidence_is_allowlisted(self):
         audit = {field: False for field in dual.AUDIT_FIELDS}
         result = dual.safe_observer({'stage': 'private stage', 'error': 'private error', 'audit': audit})

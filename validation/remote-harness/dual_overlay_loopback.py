@@ -29,7 +29,7 @@ import easytier_loopback as et
 from go_panic_sanitize import sanitize_go_panic
 
 
-BOOL_FIELDS = ('passed', 'preloginUrlAbsent', 'preloginNeedsLogin', 'beginLoginSubmitted', 'beginLoginSucceeded', 'preloginDialRejected', 'etFull', 'tsFull', 'etFirst',
+BOOL_FIELDS = ('passed', 'preloginUrlAbsent', 'preloginNeedsLogin', 'beginLoginSubmitted', 'beginLoginSucceeded', 'preloginDialRejected', 'etBanner', 'tsBanner', 'etFull', 'tsFull', 'etFirst',
                'tsFirst', 'etStopped', 'etStaleRejected', 'tsAfterStop',
                'tsStopped', 'tsStaleRejected', 'etAfterStop', 'etObserverJoined',
                'tsObserverJoined', 'localFallbackRejected', 'crossRouteRejected', 'cleanup')
@@ -38,7 +38,7 @@ BOOL_FIELDS = ('passed', 'preloginUrlAbsent', 'preloginNeedsLogin', 'beginLoginS
 CLIENT_ERRORS = {None, 'real_candidates_required', 'node_operation_failed', 'unexpected_prelogin_url',
                  'login_url_missing', 'prelogin_state_timeout', 'prelogin_dial_not_rejected', 'auth_exchange_failed',
                  'auth_exchange_timeout', 'ts_not_running', 'local_fallback_not_rejected',
-                 'cross_route_not_rejected', 'input_ready_timeout', 'input_not_ready',
+                 'cross_route_not_rejected', 'overlay_banner_missing', 'input_ready_timeout', 'input_not_ready',
                  'frame_marker_missing', 'input_send_failed', 'input_mode_failed', 'provider_stop_failed', 'observer_join_failed', 'stale_input_not_rejected',
                  'cleanup_failed', 'executor_failed', 'dialer_failed', 'invalid_et_config'}
 
@@ -68,7 +68,11 @@ OBSERVER_ERRORS = {None, 'invalid_config', 'invalid_private_key', 'invalid_host_
                    'invalid_snapshot', 'pane_missing', 'ambiguous_pane', 'invalid_terminal_id',
                    'observe_failed', 'invalid_full_frame', 'observe_ended', 'observe_close_failed',
                    'observe_limit', 'cancelled', 'timeout', 'input_unavailable', 'listener_failed',
-                   'frame_failed', 'resume_target_changed', 'other_observer_error'}
+                   'frame_failed', 'resume_target_changed', 'session_mismatch', 'watch_invalid', 'watch_ended',
+                   'watch_failed', 'watch_close_failed', 'watch_disconnected', 'watch_limit',
+                   'watch_open_failed', 'watch_rejected', 'watch_stopped', 'watch_unsupported',
+                   'watch_write_failed', 'unsupported_protocol', 'invalid_frame', 'sequence_gap',
+                   'snapshot_limit', 'rpc_failed', 'other_observer_error'}
 AUDIT_FIELDS = ('hostKeyChecked', 'hostKeyMatched', 'authStarted', 'snapshotReceived', 'fullFrameReceived')
 
 
@@ -84,8 +88,19 @@ def safe_observer(raw):
     return {'stage': stage, 'error': error, 'audit': {field: audit[field] for field in AUDIT_FIELDS}}
 
 
+def safe_banner_counts(result):
+    attempts = {side: result.get(side + 'BannerAttempts') for side in ('et', 'ts')}
+    connections = {side: result.get(side + 'BannerConnections') for side in ('et', 'ts')}
+    if any(type(value) is not int or not 0 <= value <= 1000 for value in attempts.values()):
+        raise et.Failure('banner_attempts_invalid')
+    if any(type(value) is not int or not 0 <= value <= attempts[side]
+           for side, value in connections.items()):
+        raise et.Failure('banner_connections_invalid')
+    return attempts, connections
+
+
 def case_passed(result, stop_first):
-    common = ('passed', 'preloginUrlAbsent', 'preloginNeedsLogin', 'beginLoginSubmitted', 'beginLoginSucceeded', 'preloginDialRejected', 'etFull', 'tsFull',
+    common = ('passed', 'preloginUrlAbsent', 'preloginNeedsLogin', 'beginLoginSubmitted', 'beginLoginSucceeded', 'preloginDialRejected', 'etBanner', 'tsBanner', 'etFull', 'tsFull',
               'etFirst', 'tsFirst', 'etObserverJoined', 'tsObserverJoined',
               'localFallbackRejected', 'crossRouteRejected', 'cleanup')
     expected = (('etStopped', 'etStaleRejected', 'tsAfterStop') if stop_first == 'et'
@@ -383,6 +398,8 @@ LogLevel ERROR
         result = json.loads((root / 'result.json').read_text())
         report['client'], report['clientError'] = safe_result(result)
         report['observers'] = {side: safe_observer(result[side + 'Observer']) for side in ('et', 'ts')}
+        report['bannerAttempts'], report['bannerConnections'] = safe_banner_counts(result)
+        report['etNodeStateAfterBanner'] = safe_state(result.get('etNodeStateAfterBanner'))
         report['lastTsState'] = safe_state(result.get('lastTsState'))
         et_bytes = (hosts[0][0] / 'received.bin').read_bytes()
         ts_bytes = (hosts[1][0] / 'received.bin').read_bytes()
@@ -393,6 +410,10 @@ LogLevel ERROR
         stopped = read_event(events, 'cleanup', ts_peer, 15)
         report['tsPeerCleanup'] = stopped.get('peerClosed') is True and stopped.get('bridgeConnections') == 0
         ts_peer.wait(timeout=10)
+        peer_stage = (root / 'peer-stage').read_text() if (root / 'peer-stage').is_file() else ''
+        if peer_stage in {'parse-config', 'create-instance', 'start-instance', 'bind-virtual-tcp',
+                          'accepting', 'stop-instance', 'drain-bridges', 'stopped'}:
+            report['etPeerStageBeforeStop'] = peer_stage
         (root / 'stop-peer').touch(); peer.wait(timeout=15)
         peer_result = json.loads((root / 'peer-result.json').read_text())
         counters = ('acceptedOverlayStreams', 'loopbackTcpConnections', 'activeBridgesAfterStop')
@@ -434,6 +455,8 @@ LogLevel ERROR
                 result = json.loads(result_file.read_text())
                 report['client'], report['clientError'] = safe_result(result)
                 report['observers'] = {side: safe_observer(result[side + 'Observer']) for side in ('et', 'ts')}
+                report['bannerAttempts'], report['bannerConnections'] = safe_banner_counts(result)
+                report['etNodeStateAfterBanner'] = safe_state(result.get('etNodeStateAfterBanner'))
                 report['lastTsState'] = safe_state(result.get('lastTsState'))
             except (ValueError, OSError, et.Failure):
                 report['clientError'] = 'client_result_invalid'

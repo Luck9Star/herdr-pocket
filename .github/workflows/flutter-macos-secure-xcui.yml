@@ -1,0 +1,95 @@
+name: Flutter macOS secure field XCUITest (opt-in)
+on:
+  push:
+    branches: ['codex/acceptance/macos-secure-design-parity']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-secure-fields:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install locked Flutter SDK
+        run: python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+      - name: Prepare owned candidate app
+        run: |
+          python3 -m venv "$RUNNER_TEMP/macos-secure-venv"
+          "$RUNNER_TEMP/macos-secure-venv/bin/pip" install paramiko==4.0.0
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
+          cd "$RUNNER_TEMP/flutter-probe"
+          flutter pub get --enforce-lockfile
+          flutter build macos --debug
+      - name: Run native XCUITest without exporting UI snapshots or logs
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/macos-secure-evidence"
+          mkdir -m 700 "$RUNNER_TEMP/macos-secure-fixture"
+          "$RUNNER_TEMP/macos-secure-venv/bin/python" validation/remote-harness/macos_secure_xcui_fixture.py "$RUNNER_TEMP/macos-secure-fixture" > "$RUNNER_TEMP/macos-fixture-private.log" 2>&1 &
+          fixture_pid=$!
+          trap 'touch "$RUNNER_TEMP/macos-secure-fixture/stop"; wait "$fixture_pid" || true; python3 -c "import shutil,sys; shutil.rmtree(sys.argv[1],ignore_errors=True)" "$RUNNER_TEMP/macos-secure-fixture"' EXIT
+          for attempt in {1..100}; do test -s "$RUNNER_TEMP/macos-secure-fixture/fixture.json" && break; kill -0 "$fixture_pid"; sleep 0.1; done
+          test -s "$RUNNER_TEMP/macos-secure-fixture/fixture.json"
+          python3 validation/remote-harness/macos_secure_xcuitest.py --app "$RUNNER_TEMP/flutter-probe" --fixture "$RUNNER_TEMP/macos-secure-fixture/fixture.json"
+          set +e
+          xcodebuild test -workspace "$RUNNER_TEMP/flutter-probe/macos/Runner.xcworkspace" \
+            -scheme Runner -configuration Debug -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/macos-secure-derived" \
+            > "$RUNNER_TEMP/macos-secure-private.log" 2>&1
+          result=$?
+          set -e
+          for attempt in {1..100}; do
+            if python3 - "$RUNNER_TEMP/macos-secure-fixture/facts.json" <<'PY'
+          import json,sys
+          try:
+              facts=json.load(open(sys.argv[1]))
+              assert all(facts.get(k) is True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed'))
+          except (OSError,ValueError,AssertionError):
+              sys.exit(1)
+          PY
+            then break; fi
+            sleep 0.1
+          done
+          python3 - "$RUNNER_TEMP/macos-secure-evidence/result.json" "$result" <<'PY'
+          import json, os, re, sys
+          sha=os.environ.get('GITHUB_SHA','')
+          try:
+              facts=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-fixture','facts.json')))
+              peer=all(facts.get(k) is True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed'))
+          except (OSError,ValueError): peer=False
+          try:
+              log=open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private.log'),errors='replace').read().lower()
+          except OSError: log=''
+          permission = any(text in log for text in ('not authorized to use accessibility', 'not authorized to control', 'accessibility access is not enabled'))
+          allowed={'homepage','ordinaryInputReadable','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred',
+                   'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField',
+                   'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
+          try:
+              raw=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-fixture','progress.json')))
+              progress={k:True for k,v in raw.items() if k in allowed and v is True}
+          except (OSError,ValueError,AttributeError): progress={}
+          test_executed=bool(re.search(r'testpasswordandprivatekeypassphrasearesecure[^\n]{0,100}\bpassed\b',log))
+          completed=all(progress.get(k) is True for k in allowed)
+          ok=sys.argv[2]=='0' and peer and test_executed and completed
+          report={'schemaVersion':1,'sourceSHA':sha if re.fullmatch(r'[0-9a-f]{40}',sha) else None,
+                  'platform':'macos-xcuitest','status':'passed' if ok else 'failed',
+                  'scope':'native UI security fields and owned SSH loopback; synthetic values; no physical IME',
+                  'systemTreeAndSecureFieldsVerified':test_executed and completed,'testExecuted':test_executed,
+                  'peerAuthenticationPtyShellAndClose':peer,
+                  'progress':progress,'rawLogsUploaded':False}
+          if not ok:
+              report['errorCode']='xcui_accessibility_permission_missing' if permission else ('secure_field_missing' if 'native secure field missing from system tree' in log else ('xcui_test_or_environment_failed' if sys.argv[2]!='0' else ('xcui_test_not_executed' if not test_executed or not completed else 'loopback_peer_evidence_incomplete')))
+          with open(sys.argv[1],'w') as output: json.dump(report,output,indent=2);output.write('\n')
+          if not ok: sys.exit(1)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: flutter-macos-secure-xcui-${{ github.sha }}
+          path: ${{ runner.temp }}/macos-secure-evidence/
+          if-no-files-found: warn
+          retention-days: 14

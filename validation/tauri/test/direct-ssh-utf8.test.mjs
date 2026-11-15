@@ -55,9 +55,24 @@ function uiHarness({ Terminal, createUnicodeTerminal }) {
   nodes['ssh-terminal'].parentElement = new Element('div');
   const oldDocument = globalThis.document;
   const oldRaf = globalThis.requestAnimationFrame;
+  const oldCancelRaf = globalThis.cancelAnimationFrame;
   const oldObserver = globalThis.ResizeObserver;
   globalThis.document = { getElementById: (id) => nodes[id], addEventListener() {}, hidden: false };
-  globalThis.requestAnimationFrame = (fn) => setImmediate(fn);
+  // Own the frame queue instead of leaving setImmediate callbacks alive after
+  // the fake document is restored. Frames run explicitly at write/close fences.
+  const animationFrames = new Map();
+  let frameId = 0;
+  globalThis.requestAnimationFrame = (fn) => { const id = ++frameId; animationFrames.set(id, fn); return id; };
+  globalThis.cancelAnimationFrame = (id) => animationFrames.delete(id);
+  const runAnimationFrames = () => {
+    while (animationFrames.size) {
+      const frames = [...animationFrames];
+      for (const [id, fn] of frames) {
+        if (!animationFrames.delete(id)) continue;
+        fn(performance.now());
+      }
+    }
+  };
   const observers = [];
   globalThis.ResizeObserver = class { constructor(callback) { observers.push({ callback, observed: [] }); } observe(node) { observers.at(-1).observed.push(node); } };
   const terminals = [], disposals = [], rawWrites = [];
@@ -76,12 +91,14 @@ function uiHarness({ Terminal, createUnicodeTerminal }) {
   // many terminal instances the UI created: a reused terminal must still get
   // the second session's events, or the defect would hide behind dropped data.
   let openCount = 0;
-  const invoke = async (command) => {
+  const closedSessions = [];
+  const invoke = async (command, args) => {
     if (command === 'ssh_host_key_probe') return key;
     if (command === 'ssh_shell_open') return `s${++openCount}`;
+    if (command === 'ssh_shell_close') closedSessions.push(args.sessionId);
     return {};
   };
-  initDirectSshUI({ native: true, invoke, channelFactory: () => (channel = {}), terminalFactory });
+  const ui = initDirectSshUI({ native: true, invoke, channelFactory: () => (channel = {}), terminalFactory });
   // Production flow: probe fills the fingerprint (controller.reviewed), the
   // user re-checks review (probe unchecks it), re-enters the password (the
   // form clears secrets after every attempt by design), then connects.
@@ -101,10 +118,27 @@ function uiHarness({ Terminal, createUnicodeTerminal }) {
     return text;
   };
   // Progress is driven by write completion callbacks, never fixed sleeps.
-  const written = (t) => new Promise((resolve) => t.write('', resolve));
+  const written = async (t) => { await new Promise((resolve) => t.write('', resolve)); runAnimationFrames(); };
   const dataWrites = () => rawWrites.filter((w) => w.length);
-  const restore = () => { globalThis.document = oldDocument; globalThis.requestAnimationFrame = oldRaf; globalThis.ResizeObserver = oldObserver; };
-  return { nodes, terminals, disposals, observers, dataWrites, submit, emit, readLine, written, restore, disposeAll: () => terminals.forEach((t) => { try { t.dispose(); } catch {} }) };
+  const cleanup = async () => {
+    try {
+      ui.close();
+      // close() deliberately returns void; this event-loop fence lets its
+      // resolved native-close promise stop the real resizer before frames run.
+      await flush();
+      assert.equal(ui.isActive(), false, 'teardown closes the real controller');
+      await Promise.all(terminals.filter((t) => !disposals.includes(t)).map(written));
+      runAnimationFrames();
+      for (const t of terminals) if (!disposals.includes(t)) t.dispose();
+      assert.equal(animationFrames.size, 0, 'no frame callback outlives the fixture');
+    } finally {
+      globalThis.document = oldDocument;
+      globalThis.requestAnimationFrame = oldRaf;
+      globalThis.cancelAnimationFrame = oldCancelRaf;
+      globalThis.ResizeObserver = oldObserver;
+    }
+  };
+  return { nodes, terminals, disposals, observers, closedSessions, dataWrites, submit, emit, readLine, written, cleanup, pendingFrames: () => animationFrames.size };
 }
 
 async function realXtermHarness() {
@@ -124,7 +158,7 @@ test('same connection: SSH chunks split mid-UTF-8 render CJK/emoji without repla
     assert.ok(!line.includes('\uFFFD'), 'no U+FFFD replacement char');
     // Raw-byte wiring: chunk boundaries preserved, no decode/re-encode/loss.
     assert.deepEqual(ui.dataWrites(), SPLIT_CHUNKS.map((c) => c.data));
-  } finally { ui.restore(); ui.disposeAll(); }
+  } finally { await ui.cleanup(); }
 });
 
 test('reconnection: fresh xterm isolates the previous session (real xterm)', async () => {
@@ -164,5 +198,23 @@ test('reconnection: fresh xterm isolates the previous session (real xterm)', asy
     assert.ok(ui.disposals.includes(ui.terminals[0]), 'previous terminal is disposed on reconnection');
     // One resize watcher total: reconnections reuse it, never stack.
     assert.equal(ui.observers.length, 1, 'ResizeObserver created exactly once across reconnections');
-  } finally { ui.restore(); ui.disposeAll(); }
+  } finally { await ui.cleanup(); }
+});
+
+test('fixture teardown closes a ready SSH session and drains its queued animation frame', async () => {
+  const oldDocument = globalThis.document;
+  const oldRaf = globalThis.requestAnimationFrame;
+  const oldCancelRaf = globalThis.cancelAnimationFrame;
+  const ui = await realXtermHarness();
+  try {
+    await ui.submit();
+    ui.emit('s1', [{ seq: 1, kind: 'ready' }]);
+    assert.equal(ui.pendingFrames(), 1, 'ready queues the production resizer frame');
+  } finally { await ui.cleanup(); }
+  assert.deepEqual(ui.closedSessions, ['s1'], 'teardown closes the live native session');
+  assert.equal(ui.pendingFrames(), 0);
+  assert.deepEqual(ui.disposals, ui.terminals, 'all real terminals are disposed exactly once');
+  assert.equal(globalThis.document, oldDocument);
+  assert.equal(globalThis.requestAnimationFrame, oldRaf);
+  assert.equal(globalThis.cancelAnimationFrame, oldCancelRaf);
 });

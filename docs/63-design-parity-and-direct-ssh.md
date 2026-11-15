@@ -202,6 +202,8 @@ RSA 功能快照 `621b793349d7e44332d617e76a345086c272e931` 的两壳 API35 Andr
 
 ## Flutter 普通 SSH iOS Simulator
 
+产品代码与 `a9afe9c` 下载批次一致、验收 harness 不同的 `316a9bf812bb543462927621b6e2449894b5f2b7`，在 [运行 43710878101](https://github.com/Luck9Star/herdr-pocket/actions/runs/43710878101) 的 iPhone 11 / iOS 26.2 模拟器通过 XCTest 1/1；[脱敏原始记录](evidence/design-parity-20261115/flutter-ordinary-ssh-ios-43710878101.json)确认从首页核对指纹、临时密码登录、终端输入与远端回显、主动断开和凭据清空，独立服务端确认认证、PTY、shell、输入标记以及两连接关闭，模拟器和临时资料已清理。容器查询共 5 次、2 次超时；这不能确定下述首轮失败的原因。测试语义固定开启，输入来自测试接口，不证明 VoiceOver、真实 IME、实体设备或 iOS 私钥认证；这是独立 debug 构建，与下载包不是同一二进制。
+
 `a9afe9c` 的 [运行 43708649945](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708649945)及[脱敏失败记录](evidence/design-parity-20261115/flutter-ordinary-ssh-ios-43708649945.json)在 iPhone 11 / iOS 26.2 模拟器进入主机密钥探测后等待确认对话框超时，XCTest 0/1；服务端记录一次连接并已关闭，认证、PTY、shell 和输入标记均未到达，模拟器与临时资料已清理。当前证据不足以确定握手或界面未显示的根因，不记为该源码 iOS 验收通过；下方成功结果属于各自历史源码。
 
 最新同源码 `d5ec372d50060f4824401755e213c826f0c4ab01` 的 [运行 43699319130](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699319130)与[原始脱敏记录](evidence/design-parity-20261115/flutter-ordinary-ssh-ios-43699319130.json)显示，专属 iPhone 11 / iOS 26.2 模拟器 XCTest 1 项通过、0 失败。首页、主机指纹确认、临时密码、真实终端输入回显和主动断开清空均已验证；独立服务端确认认证、PTY、shell、输入标记和两连接关闭，模拟器及临时资料已清理。测试未记录输入总字节数，语义固定开启，不证明 VoiceOver、真实 IME、实体设备或 iOS 私钥认证；它是独立 debug 构建，与下载包同源码但非同一二进制。

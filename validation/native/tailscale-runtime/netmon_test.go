@@ -294,8 +294,9 @@ func TestDiagnoseWriteFailureDoesNotAffectStart(t *testing.T) {
 	stubNetmonPaths(t, goodGoNet, failingGetifaddrs)
 	dir := t.TempDir()
 	enableNetmonForTest(t, dir)
-	// Marker exists but the diagnose filename is occupied by a directory:
-	// every persist attempt fails after measuring, on both start and status.
+	// Real write failure: the opt-in marker is present, but the diagnose
+	// filename is occupied by a directory, so every persist attempt fails
+	// after the measurement. Node lifecycle return codes must stay intact.
 	if err := os.Mkdir(filepath.Join(dir, netmonDiagnoseFileName), 0o755); err != nil {
 		t.Fatal(err)
 	}

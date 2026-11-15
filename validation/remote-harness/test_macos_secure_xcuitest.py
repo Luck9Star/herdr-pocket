@@ -35,16 +35,16 @@ class ScaffoldTests(unittest.TestCase):
             self.assertIn('secureTextFields', (root / 'macos/RunnerTests/RunnerTests.swift').read_text())
             with self.assertRaises(ValueError):runner.prepare(root)
 
-    def test_fixture_path_is_escaped_and_forwarded_to_test_process(self):
+    def test_fixture_embedded_only_in_disposable_test_source(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);self.scaffold(root)
-            # Fixture name contains XML metacharacters; no credential is in the scheme.
-            fixture=root / 'fixture&config.json';fixture.write_text('{}')
+            fixture=root / 'fixture&config.json';fixture.write_text(json.dumps({'port':2222,'username':'fixture','password':'a'*32,'fingerprint':'SHA256:'+'B'*43}))
             runner.prepare(root,fixture)
             scheme=ET.parse(root / 'macos/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme')
-            env=scheme.find('.//EnvironmentVariable')
-            self.assertEqual(env.get('key'),'HP_MAC_AX_FIXTURE')
-            self.assertEqual(env.get('value'),str(fixture.resolve()))
+            self.assertIsNone(scheme.find('.//EnvironmentVariable'))
+            source=(root / 'macos/RunnerTests/RunnerTests.swift').read_text()
+            self.assertNotIn('__HP_FIXTURE_BASE64__',source)
+            self.assertNotIn('a'*32,source)
 
     def test_unknown_project_or_missing_marker_is_not_modified(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -66,18 +66,20 @@ class ScaffoldTests(unittest.TestCase):
                      'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField',
                      'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
             (fixture/'facts.json').write_text(json.dumps({k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}))
-            progress={k:True for k in allowed};(fixture/'progress.json').write_text(json.dumps(progress))
-            log=root/'macos-secure-private.log';log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed')
+            progress={k:True for k in allowed}
+            good_log='Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed\n'+''.join('HP_XCUI_STAGE='+k+'\n' for k in progress)
+            log=root/'macos-secure-private.log';log.write_text(good_log)
             output=root/'result.json';env={**os.environ,'RUNNER_TEMP':temp,'GITHUB_SHA':'a'*40}
             def execute():
                 return subprocess.run([sys.executable,'-',str(output),'0'],input=script,text=True,env=env,capture_output=True)
             self.assertEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'passed')
             log.write_text('Executed 0 tests')
             self.assertNotEqual(execute().returncode,0);self.assertFalse(json.loads(output.read_text())['testExecuted'])
-            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed')
-            del progress['returnAndReopenCleared'];(fixture/'progress.json').write_text(json.dumps(progress))
+            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed')
+            self.assertNotEqual(execute().returncode,0);self.assertTrue(json.loads(output.read_text())['testExecuted']);self.assertFalse(json.loads(output.read_text())['testPassed'])
+            del progress['returnAndReopenCleared'];log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed\n'+''.join('HP_XCUI_STAGE='+k+'\n' for k in progress))
             self.assertNotEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'failed')
-            progress['returnAndReopenCleared']=True;(fixture/'progress.json').write_text(json.dumps(progress))
+            log.write_text(good_log)
             (fixture/'facts.json').write_text(json.dumps({'authAccepted':False}))
             self.assertNotEqual(execute().returncode,0);self.assertFalse(json.loads(output.read_text())['peerAuthenticationPtyShellAndClose'])
 

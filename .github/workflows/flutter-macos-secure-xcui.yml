@@ -84,15 +84,12 @@ jobs:
           allowed={'fixtureReadable','appLaunched','homepage','ordinaryInputReadable','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred',
                    'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField',
                    'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
-          try:
-              raw=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-fixture','progress.json')))
-              progress={k:True for k,v in raw.items() if k in allowed and v is True}
-          except (OSError,ValueError,AttributeError): progress={}
+          progress={key:True for key in allowed if 'hp_xcui_stage='+key.lower() in log}
           try:
               summary=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private-summary.json')))
           except (OSError,ValueError): summary={}
           counts={k:summary[k] for k in ('totalTestCount','passedTests','failedTests','skippedTests') if type(summary.get(k)) is int}
-          fixed=['owned loopback fixture unavailable','candidate app did not launch','normal homepage ssh entry missing',
+          fixed=['owned loopback fixture unavailable','owned fixture path missing','owned fixture file unreadable','candidate app did not launch','normal homepage ssh entry missing',
                  'named address group or ordinary input missing','ordinary input is not readable',
                  'system accessibility tree is empty','native secure field missing from system tree',
                  'synthetic credential exposed in system accessibility tree','host key probe unavailable',
@@ -104,13 +101,14 @@ jobs:
           fixed_failures=[message for message in fixed if message in log]
           method='testPasswordAndPrivateKeyPassphraseAreSecure'
           failure_method=method if (summary.get('failedTests',0) and method.lower() in json.dumps(summary).lower()) or (fixed_failures and method.lower() in log) else None
-          test_executed=bool(re.search(r'testpasswordandprivatekeypassphrasearesecure[^\n]{0,100}\bpassed\b',log))
+          test_executed=bool(re.search(r'test case[^\n]*testpasswordandprivatekeypassphrasearesecure',log))
+          test_passed=bool(re.search(r'testpasswordandprivatekeypassphrasearesecure[^\n]{0,100}\bpassed\b',log))
           completed=all(progress.get(k) is True for k in allowed)
-          ok=sys.argv[2]=='0' and peer and test_executed and completed
+          ok=sys.argv[2]=='0' and peer and test_passed and completed
           report={'schemaVersion':1,'sourceSHA':sha if re.fullmatch(r'[0-9a-f]{40}',sha) else None,
                   'platform':'macos-xcuitest','status':'passed' if ok else 'failed',
                   'scope':'native UI security fields and owned SSH loopback; synthetic values; no physical IME',
-                  'systemTreeAndSecureFieldsVerified':test_executed and completed,'testExecuted':test_executed,
+                  'systemTreeAndSecureFieldsVerified':test_passed and completed,'testExecuted':test_executed,'testPassed':test_passed,
                   'peerAuthenticationPtyShellAndClose':peer,'buildStarted':('swiftcompile' in log or 'build target' in log),
                   'testStarted':('test suite' in log or 'test case' in log),'testCounts':counts,
                   'failureMethod':failure_method,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,

@@ -35,7 +35,14 @@ def command(args, env, timeout=10):
     value = subprocess.run(list(map(str, args)), env=env, stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE, timeout=timeout)
     if value.returncode or len(value.stdout) > 2097152:
-        raise RuntimeError('paired_fixture_command_failed')
+        error = RuntimeError('paired_fixture_command_failed')
+        text = value.stderr.lower()
+        error.fixture_code = ('sshd_privsep_directory_missing' if b'privilege separation directory' in text else
+            'fixture_shell_unavailable' if b'shell' in text and (b'not found' in text or b'not set' in text) else
+            'fixture_permission_denied' if b'permission denied' in text else
+            'fixture_dynamic_dependency_missing' if b'error while loading shared libraries' in text else
+            'fixture_command_failed')
+        raise error
     return value.stdout
 
 
@@ -71,12 +78,15 @@ def receive(root, role):
 
 
 @contextmanager
-def prepared_pairing_hosts(binary, base):
+def prepared_pairing_hosts(binary, base, stage_callback=None):
     """Own two empty-authorization OpenSSH/herdr fixtures until context exit."""
     processes, targets, metadata = [], {}, {}
+    def stage(role, value):
+        if stage_callback is not None: stage_callback(role + '_' + value)
     with ExitStack() as stack:
         try:
             for role in ('et', 'ts'):
+                stage(role, 'version')
                 root = base / role; root.mkdir(mode=0o700)
                 env = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'HOME': str(root),
                        'XDG_CONFIG_HOME': str(root / 'config'), 'LANG': 'C.UTF-8',
@@ -86,6 +96,7 @@ def prepared_pairing_hosts(binary, base):
                 if version != 'herdr 0.9.5': raise RuntimeError('fixture_herdr_version_mismatch')
                 metadata['herdrVersion'] = version
                 metadata['herdrSha256'] = hashlib.sha256((root / 'herdr').read_bytes()).hexdigest()
+                stage(role, 'host_key')
                 command(['/usr/bin/ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', root / 'host'], env)
                 public = ' '.join((root / 'host.pub').read_text().split()[:2])
                 (root / 'authorized_keys').write_bytes(b''); (root / 'authorized_keys').chmod(0o600)
@@ -115,7 +126,9 @@ def prepared_pairing_hosts(binary, base):
     SetEnv HOME={root} XDG_CONFIG_HOME={root}/config PYTHONDONTWRITEBYTECODE=1
     ''')
                 sshd = (['sudo', '-n'] if sys.platform == 'linux' else []) + ['/usr/sbin/sshd']
+                stage(role, 'sshd_check')
                 command(sshd + ['-t', '-f', root / 'sshd_config'], env)
+                stage(role, 'sshd_start')
                 server = stack.enter_context(owned_process(sshd + ['-D', '-e', '-f', root / 'sshd_config'],
                     cwd=root, env=env, log=root / 'sshd.log')); processes.append(server)
                 def reachable():
@@ -126,21 +139,25 @@ def prepared_pairing_hosts(binary, base):
                 wait_for(reachable, 'fixture_ssh_not_ready', timeout=5)
                 config_root = root / 'config/herdr'; config_root.mkdir(parents=True)
                 (config_root / 'config.toml').write_text('[update]\nversion_check = false\nmanifest_check = false\n')
+                stage(role, 'herdr_start')
                 herdr = stack.enter_context(owned_process([root / 'herdr', '--session', 'qa-pair', 'server'],
                     cwd=root, env=env, log=root / 'herdr.log')); processes.append(herdr)
                 sock = config_root / 'sessions/qa-pair/herdr.sock'
                 wait_for(sock.exists, 'fixture_herdr_not_ready', timeout=10)
+                stage(role, 'workspace_create')
                 created = json.loads(command([root / 'herdr', '--session', 'qa-pair', 'workspace',
                     'create', '--cwd', root, '--label', role], env))
                 pane = created['result']['root_pane']['pane_id']
                 shutil.copy2(HERE / 'capture_input.py', root / 'capture_input.py')
                 shutil.copy2(HERE.parent / 'shared/fixture.json', root / 'terminal-fixture.json')
+                stage(role, 'capture_start')
                 command([root / 'herdr', '--session', 'qa-pair', 'pane', 'run', pane,
                     shlex.join([sys.executable, str(root / 'capture_input.py')])], env)
                 wait_for((root / 'capture-ready').exists, 'fixture_capture_not_ready', timeout=10)
                 config = dict(host='127.0.0.1', port=port, username=username, session='qa-pair',
                     socketPath=str(sock), herdrPath=str(root / 'herdr'), expectedHostKey=public, paneId=pane)
                 (root / 'peer.json').write_text(json.dumps(config)); (root / 'peer.json').chmod(0o600)
+                stage(role, 'profile')
                 target = PairingTarget(role, root, config); targets[role] = target
                 independent = command(['/usr/bin/ssh-keygen', '-lf', root / 'host.pub', '-E', 'sha256'], env).decode().split()[1]
                 if independent != target.host.pin: raise RuntimeError('fixture_pin_review_mismatch')

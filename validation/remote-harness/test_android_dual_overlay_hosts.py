@@ -9,6 +9,7 @@ from unittest import mock
 
 import android_dual_overlay_hosts as hosts
 import test_paired_dual_fixture as fixtures
+import paired_dual_demo as provisioning
 from pairing import encode
 
 
@@ -117,6 +118,21 @@ class HostControlTests(unittest.TestCase):
         self.assertEqual([row['event'] for row in rows], ['ready', 'synthetic_reply', 'cleanup'])
         self.assertEqual(rows[-1]['stopReason'], 'explicit-stop')
         harness.control.dispatch.assert_called_once_with({'op': 'synthetic'})
+
+    def test_startup_diagnostics_only_emit_fixed_enums(self):
+        value = mock.Mock(returncode=1, stdout=b'', stderr=b'Missing privilege separation directory: /run/sshd')
+        with mock.patch.object(provisioning.subprocess, 'run', return_value=value):
+            with self.assertRaises(RuntimeError) as caught:
+                provisioning.command(['/usr/sbin/sshd', '-t'], {})
+        self.assertEqual(caught.exception.fixture_code, 'sshd_privsep_directory_missing')
+        self.assertNotIn('/run/sshd', str(caught.exception))
+        self.assertEqual(hosts.safe_startup_failure({'stage': 'et_sshd_check',
+            'errorCode': caught.exception.fixture_code}),
+            {'stage': 'et_sshd_check', 'errorCode': 'sshd_privsep_directory_missing'})
+        for value in ({'stage': 'https://private.invalid/', 'errorCode': 'one-time-value'},
+                      {'stage': [], 'errorCode': {}}):
+            self.assertEqual(hosts.safe_startup_failure(value),
+                             {'stage': 'unknown', 'errorCode': 'fixture_startup_failed'})
 
 
 if __name__ == '__main__':

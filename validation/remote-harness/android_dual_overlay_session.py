@@ -23,6 +23,7 @@ import time
 from android_dual_overlay_relay import AndroidDualOverlayRelay
 from android_dual_overlay_reverse import OwnedReverseMappings, SERIAL, assert_owned_avd, _adb
 from dual_overlay_loopback import read_event
+from android_dual_overlay_hosts import safe_startup_failure
 
 HERE = Path(__file__).resolve().parent
 CONTROLLER_CLEANUP = {'tsPeerCleanup', 'etPeerCleanup', 'hostContextsClosed', 'collectorStopped',
@@ -50,11 +51,18 @@ class PrivateHostControl:
     def __init__(self, process):
         self.process, self.events, self.lock = process, queue.Queue(), threading.Lock()
         self.reader_failed = False
+        self.failure = None
         def collect():
             for line in iter(lambda: process.stdout.readline(131073), b''):
                 if len(line) > 131072:
                     self.reader_failed = True
                     return
+                try:
+                    value = json.loads(line)
+                    if isinstance(value, dict) and value.get('event') == 'failed':
+                        self.failure = safe_startup_failure(value)
+                except ValueError:
+                    pass
                 self.events.put(line)
         self.reader = threading.Thread(target=collect, daemon=True); self.reader.start()
 
@@ -105,7 +113,7 @@ def signal_owned_residents(namespace_path, inode, owner, sig, pids):
 
 class AndroidDualOverlaySession:
     def __init__(self, bundle, work_root, *, host_source, source_checkout,
-                 device=SERIAL, lifetime=900):
+                 device=SERIAL, lifetime=900, _host_only=False):
         if not re.fullmatch(r'[0-9a-f]{40}', host_source) or device != SERIAL:
             raise SessionError('fixed_host_source_and_owned_device_required')
         if type(lifetime) is not int or not 60 <= lifetime <= 1800:
@@ -114,6 +122,7 @@ class AndroidDualOverlaySession:
         self.work_root = Path(work_root).resolve(strict=True)
         self.source_checkout = Path(source_checkout).resolve(strict=True)
         self.host_source, self.lifetime = host_source, lifetime
+        self.host_only = _host_only
         self.namespace = None
         self.namespace_inode = None
         self.namespace_owned = False
@@ -152,8 +161,9 @@ class AndroidDualOverlaySession:
         if not self.work_root.is_relative_to(root) or self.work_root.stat().st_uid != os.getuid():
             raise SessionError('owned_runner_work_directory_required')
         self.report['stage'] = 'device-and-bundle'
-        assert_owned_avd()
-        self.report['deviceApi35Verified'] = True
+        if not self.host_only:
+            assert_owned_avd()
+            self.report['deviceApi35Verified'] = True
         command([sys.executable, self.source_checkout / 'validation/remote-harness/dual_overlay_shared_bundle.py',
                  'verify', '--bundle', self.bundle, '--source-sha', self.host_source, '--restore-executable'], 60)
         self.private = Path(tempfile.mkdtemp(prefix='hp-device-overlay-', dir=self.work_root))
@@ -195,6 +205,9 @@ class AndroidDualOverlaySession:
                 or self.materials.get('deviceTailscaleReachabilityVerified') is not False):
             raise SessionError('host_material_reachability_claim_invalid')
         self.report['hostReady'] = True
+        if self.host_only:
+            self.report['stage'] = 'host-only-ready'
+            return
         manifest = Path(ready['relayManifestFile'])
         self._private_file(manifest, 4096)
         self.report['stage'] = 'relay-and-reverse'
@@ -301,12 +314,25 @@ class AndroidDualOverlaySession:
         if self.process is not None:
             try: self.process.wait(timeout=5)
             except subprocess.TimeoutExpired: cleanup['controllerStopped'] = False
+            exit_code = self.process.poll()
+            self.report['controllerProcessExited'] = exit_code is not None
+            self.report['controllerExitType'] = ('running' if exit_code is None else
+                'success' if exit_code == 0 else 'signal' if exit_code < 0 else 'nonzero')
             if self.control is not None:
                 self.control.reader.join(timeout=2)
                 cleanup['controlReaderStopped'] = not self.control.reader.is_alive()
             if self.process.poll() is not None:
                 self.process.stdin.close(); self.process.stdout.close()
+        else:
+            self.report['controllerProcessExited'] = False
+            self.report['controllerExitType'] = 'not_started'
         if self.private is not None:
+            failure = self.control.failure if self.control is not None else None
+            path = self.private / 'hosts/startup-error.json'
+            if failure is None and path.is_file():
+                failure = safe_startup_failure(json.loads(self._private_file(path, 4096)))
+            if failure is not None:
+                self.report['hostStartupFailure'] = safe_startup_failure(failure)
             shutil.rmtree(self.private)
         cleanup['privateFilesRemoved'] = self.private is None or not self.private.exists()
         if not all(cleanup.values()):
@@ -323,11 +349,13 @@ def smoke(args):
     result = {'schemaVersion': 1, 'status': 'failed', 'hostSource': args.host_source,
               'scope': 'owned API35 x86_64 AVD, real host fixtures, three TCP relays/reverse and cleanup; no product provider SSH, peer protocol or userspace reachability claim',
               'deviceProviderReachabilityVerified': False, 'udpStunRelayed': False, 'rounds': []}
+    if args.host_only:
+        result['scope'] = 'Linux real host controller startup/stop only; no AVD, relay, reverse or device validation'
     previous_keys = None
     try:
         for _ in range(2):
             current = AndroidDualOverlaySession(args.bundle, args.work_root,
-                host_source=args.host_source, source_checkout=args.source_checkout, lifetime=180)
+                host_source=args.host_source, source_checkout=args.source_checkout, lifetime=180, _host_only=args.host_only)
             row = {}
             try:
                 with current:
@@ -338,7 +366,7 @@ def smoke(args):
                     row['publicCaAvailable'] = bool(current.read_ca())
                     row['noPreapprovedDevice'] = all(current.control.call({'op': 'audit', 'role': role,
                         'expectedBase64': ''})['acceptedSessions'] == 0 for role in ('et', 'ts'))
-                    for role in ('control', 'derp', 'easytier'):
+                    for role in (() if args.host_only else ('control', 'derp', 'easytier')):
                         port = current.relay.config[role]
                         path = '/key?v=1' if role == 'control' else '/'
                         request = '' if role == 'easytier' else 'GET ' + path + ' HTTP/1.0\\r\\nHost: 127.0.0.1\\r\\n\\r\\n'
@@ -352,19 +380,21 @@ def smoke(args):
                             row['controlPlaintextRejected'] = bool(re.match(rb'HTTP/1\.[01] 400', output))
                         if role == 'derp':
                             row['derpHttpResponse'] = output.startswith(b'HTTP/1.')
-                    deadline = time.monotonic() + 8
-                    while time.monotonic() < deadline:
-                        with current.relay._lock:
-                            idle = not current.relay._clients and not current.relay._workers
-                        if idle: break
-                        time.sleep(.05)
-                    if not idle: raise SessionError('transport_connections_not_drained')
-                    row['roleTcpCounters'] = current.relay.stats()
-                    if not all(value['accepted'] >= 1 and value['workerFailures'] == 0
-                               for value in row['roleTcpCounters'].values()):
-                        raise SessionError('three_owned_tcp_paths_not_proven')
-                    if not all(row.get(field) is True for field in ('newHostIdentities', 'publicCaAvailable',
-                            'noPreapprovedDevice', 'controlPlaintextRejected', 'derpHttpResponse')):
+                    if not args.host_only:
+                        deadline = time.monotonic() + 8
+                        while time.monotonic() < deadline:
+                            with current.relay._lock:
+                                idle = not current.relay._clients and not current.relay._workers
+                            if idle: break
+                            time.sleep(.05)
+                        if not idle: raise SessionError('transport_connections_not_drained')
+                        row['roleTcpCounters'] = current.relay.stats()
+                        if not all(value['accepted'] >= 1 and value['workerFailures'] == 0
+                                   for value in row['roleTcpCounters'].values()):
+                            raise SessionError('three_owned_tcp_paths_not_proven')
+                    required = ['newHostIdentities', 'publicCaAvailable', 'noPreapprovedDevice']
+                    if not args.host_only: required += ['controlPlaintextRejected', 'derpHttpResponse']
+                    if not all(row.get(field) is True for field in required):
                         raise SessionError('transport_smoke_not_proven')
                 row['status'] = 'passed'
             finally:
@@ -389,6 +419,7 @@ if __name__ == '__main__':
     else:
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument('--smoke', action='store_true', required=True)
+        parser.add_argument('--host-only', action='store_true', help='Linux fixture diagnosis only; no device claim')
         for name in ('bundle', 'work-root', 'source-checkout', 'output'):
             parser.add_argument('--' + name, type=Path, required=True)
         parser.add_argument('--host-source', required=True)

@@ -36,6 +36,26 @@ class HostControlError(RuntimeError):
     pass
 
 
+STARTUP_STAGES = {'initialization', 'work_validation', 'bundle_validation', 'host_directory', 'et_peer_start', 'et_peer_ready',
+    'ts_peer_start', 'ts_peer_ready', 'materials', 'unknown'} | {
+    role + '_' + step for role in ('et', 'ts') for step in
+    ('version', 'host_key', 'sshd_check', 'sshd_start', 'herdr_start', 'workspace_create', 'capture_start', 'profile')}
+STARTUP_ERRORS = {'fixture_startup_failed', 'paired_fixture_command_failed', 'sshd_privsep_directory_missing',
+    'fixture_shell_unavailable', 'fixture_permission_denied', 'fixture_dynamic_dependency_missing',
+    'fixture_command_failed', 'fixture_herdr_version_mismatch', 'fixture_command_timeout',
+    'controlled_et_peer_not_ready', 'controlled_et_peer_exited', 'controlled_ts_material_invalid',
+    'ts_fixture_exited_early', 'ts_fixture_event_invalid', 'ts_fixture_event_timeout', 'fixture_value_rejected',
+    'empty_owned_private_work_directory_required', 'reviewed_fixture_binary_required',
+    'isolated_unprivileged_linux_required', 'local_probe_requires_macos_provider_sandbox'}
+
+
+def safe_startup_failure(value):
+    if (isinstance(value, dict) and isinstance(value.get('stage'), str) and isinstance(value.get('errorCode'), str)
+            and value['stage'] in STARTUP_STAGES and value['errorCode'] in STARTUP_ERRORS):
+        return {'stage': value['stage'], 'errorCode': value['errorCode']}
+    return {'stage': 'unknown', 'errorCode': 'fixture_startup_failed'}
+
+
 def write_private(path, value):
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, 'w') as stream:
@@ -153,14 +173,26 @@ class HostHarness:
         self.ts = None
         self.peer = None
         self.closed = False
+        self.phase = 'initialization'
+        self.startup_failure = None
 
     def __enter__(self):
         try:
             self.start()
             return self
-        except BaseException:
+        except BaseException as error:
+            code = getattr(error, 'fixture_code', str(error))
+            if isinstance(error, subprocess.TimeoutExpired): code = 'fixture_command_timeout'
+            elif isinstance(error, ValueError): code = 'fixture_value_rejected'
+            self.startup_failure = safe_startup_failure({'stage': self.phase, 'errorCode': code})
             self.close()
+            if getattr(self, 'work_owned', False):
+                write_private(self.root / 'startup-error.json', self.startup_failure)
             raise
+
+    def set_phase(self, phase):
+        if phase not in STARTUP_STAGES: raise HostControlError('fixture_startup_failed')
+        self.phase = phase
 
     def start(self):
         if not self.local_probe:
@@ -169,20 +201,25 @@ class HostHarness:
             check_current_namespace()
         elif sys.platform != 'darwin' or not self.provider_prefix:
             raise HostControlError('local_probe_requires_macos_provider_sandbox')
+        self.set_phase('work_validation')
         info = self.root.stat()
         if self.root.is_symlink() or info.st_uid != os.geteuid() or info.st_mode & 0o077 or any(self.root.iterdir()):
             raise HostControlError('empty_owned_private_work_directory_required')
+        self.work_owned = True
+        self.set_phase('bundle_validation')
         for name in ('herdr', 'peer', 'ts-fixture'):
             path = self.bundle / name
             if path.is_symlink() or not path.is_file() or not os.access(path, os.X_OK):
                 raise HostControlError('reviewed_fixture_binary_required')
         # PairingTarget deliberately accepts only owned temporary fixture roots.
         # Keep hosts in /tmp while relay/material files live in RUNNER_TEMP.
+        self.set_phase('host_directory')
         hosts = Path(self.stack.enter_context(tempfile.TemporaryDirectory(prefix='hp-device-hosts-', dir='/tmp')))
         self.host_directory = hosts.resolve(strict=True)
         write_private(self.root / 'host-owner.json', {'directory': str(self.host_directory),
             'inode': self.host_directory.stat().st_ino, 'owner': os.getuid()})
-        self.targets, self.host_processes, _ = self.stack.enter_context(prepared_pairing_hosts(self.bundle / 'herdr', hosts))
+        self.targets, self.host_processes, _ = self.stack.enter_context(prepared_pairing_hosts(
+            self.bundle / 'herdr', hosts, self.set_phase))
         self.env = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'HOME': str(self.root),
                     'XDG_CONFIG_HOME': str(self.root / 'config'), 'LANG': 'C.UTF-8',
                     'PYTHONDONTWRITEBYTECODE': '1'}
@@ -194,17 +231,20 @@ class HostHarness:
         descriptor = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(descriptor, 'w') as stream:
             stream.write(native_config(network, secret, peer_port, server=True))
+        self.set_phase('et_peer_start')
         self.peer = self.stack.enter_context(owned_process(self.provider_prefix +
             [str(self.bundle / 'peer'), str(config), str(peer_root), str(self.targets['et'].config['port']),
              str(self.lifetime + 60)],
             cwd=self.root, env=self.env, log=self.root / 'et-peer.private.log'))
         self.children.append(self.peer)
+        self.set_phase('et_peer_ready')
         wait_for(lambda: (peer_root / 'peer-ready').is_file() or self.peer.poll() is not None,
                  'controlled_et_peer_not_ready', timeout=15)
         if self.peer.poll() is not None:
             raise HostControlError('controlled_et_peer_exited')
         virtual_port = json.loads((peer_root / 'peer-ready').read_text())['virtualTcpPort']
         ts_root = self.root / 'ts-peer'; ts_root.mkdir(mode=0o700)
+        self.set_phase('ts_peer_start')
         self.ts = subprocess.Popen(self.provider_prefix + [str(self.bundle / 'ts-fixture'),
             '-test.run=^TestServeFixture$', '-test.timeout=' + str(self.lifetime + 90) + 's'], cwd=self.root,
             env=dict(self.env, HP_TS_FIXTURE_WORK_DIR=str(ts_root),
@@ -218,11 +258,13 @@ class HostHarness:
                     break
                 self.events.put(line)
         self.collector = threading.Thread(target=collect, daemon=True); self.collector.start()
+        self.set_phase('ts_peer_ready')
         ready = read_event(self.events, 'ready', self.ts)
         control = urlsplit(ready['controlUrl'])
         if control.scheme != 'https' or control.hostname != '127.0.0.1' or ready['peerPort'] != 2222:
             raise HostControlError('controlled_ts_material_invalid')
         self.control = PairingControl(self.targets, self.complete_auth, ready['controlUrl'])
+        self.set_phase('materials')
         profiles = {}
         for role, host, port in [('et', '10.126.126.2', virtual_port), ('ts', ready['peerIp'], 2222)]:
             target = self.targets[role]
@@ -359,7 +401,7 @@ def main():
         emit(dict(event='cleanup', stopReason=reason, **harness.cleanup))
         return 0 if all(harness.cleanup.values()) and reason != 'provider-exited' else 1
     except Exception:
-        emit({'event': 'failed', 'stage': 'controlled_host_fixture'})
+        emit(dict(event='failed', **safe_startup_failure(harness.startup_failure)))
         return 1
 
 

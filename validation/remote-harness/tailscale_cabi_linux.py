@@ -162,13 +162,13 @@ def run(bundle, output, mode):
     output = Path(output).resolve()
     if bundle == owned_root or output == owned_root or not bundle.is_relative_to(owned_root) or not output.is_relative_to(owned_root):
         raise Failure('owned_paths_required')
-    library, fixture = bundle/'libhp_tailscale.so', bundle/'ts-fixture'
-    if not library.is_file() or not fixture.is_file(): raise Failure('candidate_missing')
+    library, fixture, netmon = bundle/'libhp_tailscale.so', bundle/'ts-fixture', bundle/'netmon-probe'
+    if not library.is_file() or not fixture.is_file() or not netmon.is_file(): raise Failure('candidate_missing')
     output = Path(output); output.mkdir(parents=True,exist_ok=True)
     root = Path(tempfile.mkdtemp(prefix='hp-cabi-',dir=os.environ['RUNNER_TEMP'])); root.chmod(0o700)
     helper_dir, worker_dir = root/'fixture',root/'worker'
     for item in (helper_dir,worker_dir): item.mkdir(mode=0o700)
-    processes=[]; readers=[]
+    processes=[]; readers=[]; error_files=[]
     helper = None; events = None
     result={'schemaVersion':1,'networkMode':mode,'status':'failed','stage':'start','controlReached':False,
             'authorizationCompleted':False,'fixtureCleanup':False,'processesStopped':False,'privateRemoved':False}
@@ -177,11 +177,19 @@ def run(bundle, output, mode):
     result['proxyEnvironment']={name:bool(env.get(name)) for name in ('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY','http_proxy','https_proxy','all_proxy','no_proxy')}
     result['sslCertDirInherited']=bool(env.get('SSL_CERT_DIR'))
     def launch(args, child_env):
-        proc=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,env=child_env,start_new_session=True)
+        error_path=root / ('helper.stderr' if not processes else 'worker.stderr')
+        error_file=error_path.open('wb'); error_files.append(error_file)
+        proc=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=error_file,env=child_env,start_new_session=True)
         processes.append(proc); events=queue.Queue()
         thread=threading.Thread(target=lambda: [events.put(line) for line in proc.stdout],daemon=True)
         readers.append(thread);thread.start();return proc,events
     try:
+        result['stage']='netmon'
+        probe=subprocess.run([str(netmon)],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,env=env,timeout=10,check=True)
+        state=json.loads(probe.stdout)
+        if not isinstance(state,dict) or set(state) != {'haveV4','haveV6','anyInterfaceUp'} or any(type(v) is not bool for v in state.values()):
+            raise Failure('netmon_result_invalid')
+        result['netmon']=state
         result['stage']='fixture'
         helper,events=launch([str(fixture),'-test.run=^TestServeFixture$','-test.timeout=180s'],dict(env,HP_TS_FIXTURE_WORK_DIR=str(helper_dir)))
         ready=read_event(events,helper,'ready');control,ca,peer,port=ready_checked(ready,helper_dir)
@@ -217,17 +225,28 @@ def run(bundle, output, mode):
     except (Failure, OSError, subprocess.SubprocessError, ValueError) as error:
         if isinstance(error, WorkerEnded): result['partialCabi'] = error.evidence
         result['errorCode']=str(error) if isinstance(error,Failure) else 'isolated_runner_failed'
+        if helper is not None:
+            result['fixtureAliveAtFailure'] = helper.poll() is None
+            if helper.poll() is not None: result['fixtureExitCodeAtFailure'] = helper.returncode
         if helper is not None and events is not None and helper.poll() is None and 'controlDiagnostics' in result:
-            try: result['controlDiagnostics']['failure']=diagnostics()
-            except (Failure, OSError, ValueError): pass
+            try:
+                result['controlDiagnostics']['failure']=diagnostics()
+                result['failureDiagnosticsOutcome']='received'
+            except (Failure, OSError, ValueError) as diag_error:
+                result['failureDiagnosticsOutcome'] = ('event_missing' if isinstance(diag_error, Failure) and str(diag_error) == 'diagnostics_not_received'
+                                                       else 'invalid_or_io')
     finally:
         if helper is not None and events is not None and helper.poll() is None and not result['fixtureCleanup']:
             try:
                 helper.stdin.write(b'{"op":"stop"}\n'); helper.stdin.flush()
                 cleanup_event = read_event(events,helper,'cleanup',timeout=15)
                 result['fixtureCleanup'] = cleanup_event.get('peerClosed') is True and cleanup_event.get('bridgeConnections') == 0
-            except (Failure, OSError, ValueError):
-                pass
+                result['fixtureStopOutcome'] = 'confirmed' if result['fixtureCleanup'] else 'incomplete'
+            except (Failure, OSError, ValueError) as stop_error:
+                result['fixtureStopOutcome'] = ('event_missing' if isinstance(stop_error,Failure) and str(stop_error) == 'cleanup_not_received'
+                                                else 'invalid_or_io')
+        elif helper is not None and not result['fixtureCleanup']:
+            result['fixtureStopOutcome'] = 'process_already_exited'
         for proc in processes:
             if proc.poll() is None:
                 try: os.killpg(proc.pid,signal.SIGTERM)
@@ -239,6 +258,14 @@ def run(bundle, output, mode):
                 try: pipe.close()
                 except (OSError,ValueError): pass
         for thread in readers: thread.join(timeout=2)
+        for error_file in error_files: error_file.close()
+        helper_log=root/'helper.stderr'
+        if helper_log.exists():
+            with helper_log.open('rb') as source:
+                source.seek(max(0, helper_log.stat().st_size - 1048576))
+                safe_text=source.read().lower()
+            result['fixtureStderrIndicators']={key:token in safe_text for key,token in
+                (('panic',b'panic:'),('testTimeout',b'test timed out'),('tlsError',b'tls handshake error'),('testFailure',b'--- fail:'))}
         result['processesStopped']=all(proc.poll() is not None for proc in processes) and not any(t.is_alive() for t in readers)
         try:
             shutil.rmtree(root)

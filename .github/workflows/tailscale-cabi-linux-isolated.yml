@@ -30,6 +30,10 @@ jobs:
           GOENV=off GOTOOLCHAIN=local CGO_ENABLED=1 GOFLAGS=-mod=readonly \
             GOMODCACHE="$RUNNER_TEMP/ts-cabi-cache/modules" GOCACHE="$RUNNER_TEMP/ts-cabi-cache/build" \
             GOPATH="$RUNNER_TEMP/ts-cabi-cache/gopath" go test -c -o "$RUNNER_TEMP/ts-cabi-bundle/ts-fixture" ./fixture
+          GOENV=off GOTOOLCHAIN=local CGO_ENABLED=1 GOFLAGS=-mod=readonly \
+            GOMODCACHE="$RUNNER_TEMP/ts-cabi-cache/modules" GOCACHE="$RUNNER_TEMP/ts-cabi-cache/build" \
+            GOPATH="$RUNNER_TEMP/ts-cabi-cache/gopath" go build -o "$RUNNER_TEMP/ts-cabi-bundle/netmon-probe" \
+              "$GITHUB_WORKSPACE/validation/remote-harness/tailscale_netmon_probe.go"
       - name: Run production C ABI against private loopback fixture
         shell: bash
         run: |

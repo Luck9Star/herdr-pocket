@@ -4,7 +4,7 @@
 
 **同源 QA 调试包 · 2026-11-15**　源码 `d38aff4`：[Flutter Android APK（多架构）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43688956564/artifacts/14151777373) · [Tauri Android APK（arm64-v8a）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43688956564/artifacts/14152135413)。[本批运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/43688956564)完成：27 项成功、7 项按条件跳过；[macOS/Linux 下载、包名、架构与 SHA256](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。这是 CI 调试快照，与公开 Release 和设备验收分开。
 
-**新版 Flutter macOS 调试包**　源码 `79d2d00`：[下载 Apple Silicon 工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43692804010/artifacts/14153820575) · [内包哈希与范围](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。此包独立于上述同源批次，系统 AX 安全字段仍待专项验收。
+**新版 Flutter macOS 调试包**　源码 `79d2d00`：[下载 Apple Silicon 工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43692804010/artifacts/14153820575) · [内包哈希与范围](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。此包独立于上述同源批次；系统 AX 安全字段遮罩分项已验证，完整原生 SSH 认证仍待复验。
 
 **本分支入口 · 2026-11-15**　首页提供「普通 SSH」和「配对添加」：普通服务器核验指纹后，可用账号密码（仅本次连接在内存使用）或已有私钥打开真实远端 PTY；herdr 路线继续提供配对、会话看板与观察／逐键／草稿。新版看板分行呈现真实会话和受阻目标，并保留搜索与复核；[320/390/桌面界面及验收证据](docs/63-design-parity-and-direct-ssh.md#s01s05-设计与可达性)注明合成截图和设备证据的区别。S06 两条真实 SSH/herdr 的只读与受保护输入，已分别完成 Flutter Widget 回环与 Tauri 原生 Linux GTK 验收；普通 SSH 两壳在同源码 `d38aff4` 的各自 debug 构建中通过 API35 Android 模拟器验收，Flutter 另有同源码的 [iOS Simulator 密码连接实测](docs/63-design-parity-and-direct-ssh.md#flutter-普通-ssh-ios-simulator)。同源码不等于同一二进制；CI 调试包与公开 Release 分开，具体功能须按 artifact 对应源码 SHA 核对，不能外推手机真机或五平台运行验收。
 

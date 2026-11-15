@@ -4,7 +4,7 @@
 
 ## 可下载的同源调试快照
 
-Flutter macOS 另有较新的独立调试包：源码 `79d2d00234dfd91a8c135a32a3606e1e6dfe2da3` 的 [工件 14153820575](https://github.com/Luck9Star/herdr-pocket/actions/runs/43692804010/artifacts/14153820575)，内含 `flutter-macos-debug.tar.gz`，主程序为 Mach-O `arm64`。GitHub 外层 ZIP SHA256 为 `f28486c5803002506c556137ca3cfdb0a9abb9f983f3dad3705b616a9df87df6`；内层 tar.gz SHA256 为 `1076b02c4c358a0575665d1afeed2fb66d82490255db02aa904a43315162f58d`，已与工件清单和 manifest 核对，并下载至 `build/verification/79d2d00/flutter-macos/`。它是未公证的开发测试包，与下表同源批次分开；系统 AX 安全字段的实际验收仍待专门结果。
+Flutter macOS 另有较新的独立调试包：源码 `79d2d00234dfd91a8c135a32a3606e1e6dfe2da3` 的 [工件 14153820575](https://github.com/Luck9Star/herdr-pocket/actions/runs/43692804010/artifacts/14153820575)，内含 `flutter-macos-debug.tar.gz`，主程序为 Mach-O `arm64`。GitHub 外层 ZIP SHA256 为 `f28486c5803002506c556137ca3cfdb0a9abb9f983f3dad3705b616a9df87df6`；内层 tar.gz SHA256 为 `1076b02c4c358a0575665d1afeed2fb66d82490255db02aa904a43315162f58d`，已与工件清单和 manifest 核对，并下载至 `build/verification/79d2d00/flutter-macos/`。它是未公证的开发测试包，与下表同源批次分开；系统 AX 遮罩分项及尚未完成的原生认证见下文。
 
 以下五件来自源码 `d38aff40852d4859cd1e95b4a43899a21740cb9b` 的 [运行 43688956564](https://github.com/Luck9Star/herdr-pocket/actions/runs/43688956564)，27 项成功、7 项按条件跳过。已下载五件，核对 GitHub 外层 ZIP digest、CI 清单和内包 SHA256；表中哈希对应内包。它们是 QA 调试快照，并非公开 Release 或设备验收。
 
@@ -18,7 +18,7 @@ Flutter macOS 另有较新的独立调试包：源码 `79d2d00234dfd91a8c135a32a
 
 Flutter Android 的 manifest 主哈希对应工件内另一份 ZIP，APK 自身通过同工件的 `SHA256SUMS` 核对。五件与清单本地保存在 `build/verification/d38aff4/`；包体校验不能替代设备验收。
 
-同源云端 Linux Flutter 候选 [工件 14151741968](https://github.com/Luck9Star/herdr-pocket/actions/runs/43688956564/artifacts/14151741968) 的 analyze 无问题，Widget 543 项通过、5 项条件跳过，另有渲染 10 项通过；macOS 本机隔离候选同为 543 项通过、5 项跳过与渲染 10 项通过。macOS 本机另以合成 loopback 补跑普通 SSH 10 项，验证密码、PTY、输入、主机 key 变化时不认证及加密私钥。Tauri 当前源码本机 `npm test` 为 591 项通过、0 跳过、0 失败；其产品文件与 `d38aff4` 一致。Flutter macOS 的系统 AX 遮罩与节点归属仍需专门验收，Widget 测试和构建本身不能证明系统 AX。
+同源云端 Linux Flutter 候选 [工件 14151741968](https://github.com/Luck9Star/herdr-pocket/actions/runs/43688956564/artifacts/14151741968) 的 analyze 无问题，Widget 543 项通过、5 项条件跳过，另有渲染 10 项通过；macOS 本机隔离候选同为 543 项通过、5 项跳过与渲染 10 项通过。macOS 本机另以合成 loopback 补跑普通 SSH 10 项，验证密码、PTY、输入、主机 key 变化时不认证及加密私钥。Tauri 当前源码本机 `npm test` 为 591 项通过、0 跳过、0 失败；其产品文件与 `d38aff4` 一致。Flutter macOS 系统 AX 的专门对照见下文；Widget 测试和构建本身不能证明系统 AX。
 
 ### 上一批调试快照
 
@@ -65,7 +65,11 @@ Flutter macOS 归档来源为 [Actions 43669066267](https://github.com/Luck9Star
 
 另以本机隔离 Flutter candidate bundle `dev.herdrpocket.axcandidate` 测试私钥入口：连接只监听 `127.0.0.1` 的[合成 SSH 夹具](../validation/flutter/test/direct_ssh_fixture.py)，界面显示的 RSA `rsa-sha2-512` 主机指纹与独立计算一致；明确确认后，使用有口令保护的临时 OpenSSH Ed25519 用户私钥登录，看到中文 banner 并发送 `key-ui-ok` 与回车。服务端记录公钥认证、PTY 80×24 → 95×33 和预期 10 字节；客户端明确断开后，表单中已无私钥或口令，临时目录已删除。该隔离包的 Dart kernel SHA256 为 `a3fe947ec0b350b66dc561b1a7687bfcec886466a38a10fe5a4ee93a39d17c7f`；其生成工程的 `direct_ssh_page.dart` blob `91fe77a24d9431d964d4c8468ca8efed7f30a1d5` 与分支同文件一致，不能据此声称整个源码或云端包一致。此项为本机 debug UI 和合成服务验证，不包含手机、其他私钥格式或正式发布包。
 
-同一类隔离 Mac AX 检查发现：私钥口令字段获焦时，调查工具从系统可访问性树中的普通文本输入节点读回了合成测试口令；焦点移至其他字段时还观察到值挂在错误输入组。测试值只在内存中使用且已清理，没有使用个人秘密。Flutter Widget 层的口令字段启用 `obscureText`；使用合成值核对获焦与失焦状态，其可编辑语义节点均标记 `isObscured` 且语义值不含原文。固定引擎的 macOS 文本输入源码存在将活动编辑模型原文交给原生 field editor 的路径，与现象相符，但尚不足以单独证明根因或其他辅助技术的行为；系统 AX 层的遮罩与输入节点归属仍待修复和独立复验。多行私钥 PEM 输入本身用于明文编辑，不应与口令遮罩等同。
+同一类隔离 Mac AX 检查发现：私钥口令字段获焦时，调查工具从系统可访问性树中的普通文本输入节点读回了合成测试口令；焦点移至其他字段时还观察到值挂在错误输入组。测试值只在内存中使用且已清理，没有使用个人秘密。Flutter Widget 层的口令字段启用 `obscureText`；使用合成值核对获焦与失焦状态，其可编辑语义节点均标记 `isObscured` 且语义值不含原文。固定引擎的 macOS 文本输入源码存在将活动编辑模型原文交给原生 field editor 的路径，与现象相符，但尚不足以单独证明根因或其他辅助技术的行为；该次历史观察本身不能确定修复后的系统 AX 行为。多行私钥 PEM 输入本身用于明文编辑，不应与口令遮罩等同。
+
+独立 macOS XCUITest 对照中，[旧版 43693881242 的脱敏记录](evidence/design-parity-20261115/flutter-macos-secure-baseline-43693881242.json)显示系统树中未找到原生安全字段；[修复版 43693881355 的脱敏记录](evidence/design-parity-20261115/flutter-macos-secure-candidate-43693881355.json)确认密码和私钥口令均为系统识别的 secure 控件，合成输入均产生受保护值。密码在聚焦、失焦时以及口令在切换焦点时的系统树扫描未见合成明文；认证方式切换清空字段，普通字段哨兵可读，证明扫描并非对所有值一律失明。验收应用显式开启测试用 embedder 语义，这不是 VoiceOver 验收。
+
+修复版验收源码为 `32cd6066a0deb07527540bd955dd1e6b8c14bcb5`；其 Flutter 产品页面、Apple 原生代码和工程生成器与上述下载包 `79d2d00` 一致，但测试应用是独立构建。整个 XCTest 仍为失败：后续未找到独立期望的主机指纹，密码和加密私钥的 SSH 认证、PTY 与关闭步骤均未到达。上述系统 AX 遮罩结论不能扩展为该修复版原生双认证通过，先前 Android/iOS 模拟器结果仍按各自源码和范围单列。
 
 普通 SSH 的 RSA 兼容增量也已从原生 macOS 窗口独立复验：纯 RSA2048 Paramiko、核对 SHA256 指纹、密码登录、输入 `hp-check` 后看到绿色 `POCKET-ANDROID-SSH-OK`，点击断开后服务端记录 `sessionClosed`。窗口缩放让服务端实际收到 80×24 → 106×28 → 106×30 → 104×27 → 104×20 → 104×19 → 106×19，包括列数相同而行数改变。该次使用前端 `f29ea6b` 与 Rust 生产文件 blob `a9e9792` / `502548b`，已纳入功能快照 `621b793`；该次 Tauri 原生私钥输入未验证，Android 范围另见下文。
 

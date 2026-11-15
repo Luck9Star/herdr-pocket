@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "32cd6066a0deb07527540bd955dd1e6b8c14bcb5",
+  "platform": "macos-xcuitest",
+  "status": "failed",
+  "scope": "native UI security fields and owned SSH loopback; synthetic values; no physical IME",
+  "embedderFallbackRequested": true,
+  "systemTreeAndSecureFieldsVerified": true,
+  "testExecuted": true,
+  "testPassed": false,
+  "peerAuthenticationPtyShellAndClose": false,
+  "encryptedKeyPeerAuthenticationPtyShellAndClose": false,
+  "passwordInputProven": true,
+  "passphraseInputProven": true,
+  "buildStarted": true,
+  "testStarted": true,
+  "testCounts": {
+    "totalTestCount": 1,
+    "passedTests": 0,
+    "failedTests": 1,
+    "skippedTests": 0
+  },
+  "failureMethod": "testPasswordAndPrivateKeyPassphraseAreSecure",
+  "buildDiagnostics": [],
+  "fixedFailures": [
+    "independently expected host fingerprint missing"
+  ],
+  "failureCategories": [],
+  "xcresultDetailsAvailable": true,
+  "homeMetrics": {
+    "windows": 1,
+    "nodes": 187,
+    "buttons": 3,
+    "exact": 0,
+    "label": 0
+  },
+  "fallbackHomeMetrics": {},
+  "ordinaryMetrics": [
+    {
+      "nodes": 210,
+      "nonemptyValues": 1,
+      "sentinelObserved": false
+    },
+    {
+      "nodes": 212,
+      "nonemptyValues": 2,
+      "sentinelObserved": true
+    }
+  ],
+  "secureMetrics": [],
+  "progress": {
+    "ordinarySentinelObserved": true,
+    "passwordHiddenBlurred": true,
+    "appLaunched": true,
+    "addressTyped": true,
+    "maskingScanCompleted": true,
+    "passphraseHiddenAfterFocusChanges": true,
+    "usernameTyped": true,
+    "modeSwitchCleared": true,
+    "passwordValuePresent": true,
+    "homepage": true,
+    "passwordHiddenFocused": true,
+    "passphraseValuePresent": true,
+    "passwordSecureField": true,
+    "ordinaryInputReadable": true,
+    "portTyped": true,
+    "passphraseSecureField": true,
+    "fixtureReadable": true
+  },
+  "rawLogsUploaded": false,
+  "errorCode": "xcui_test_or_environment_failed"
+}

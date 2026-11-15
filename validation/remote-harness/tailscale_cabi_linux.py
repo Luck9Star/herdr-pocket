@@ -122,16 +122,41 @@ def read_event(events, proc, name, timeout=40):
     raise Failure(name + '_not_received')
 
 
-def run(bundle, output):
+def network_checked(mode, links, addresses, routes4, routes6):
+    if mode not in ('loopback', 'dummy') or not all(isinstance(value,list) for value in (links,addresses,routes4,routes6)):
+        raise Failure('network_scope_invalid')
+    names = {item.get('ifname') for item in links}
+    expected = {'lo'} if mode == 'loopback' else {'lo','hp-fixture0'}
+    if names != expected or len(links) != len(expected) or routes4 or routes6:
+        raise Failure('network_scope_invalid')
+    if {item.get('ifname') for item in addresses} != expected or len(addresses) != len(expected):
+        raise Failure('network_scope_invalid')
+    loop = next(item for item in addresses if item.get('ifname') == 'lo')
+    loop_addresses = {(item.get('family'),item.get('local'),item.get('prefixlen')) for item in loop.get('addr_info',[])}
+    if ('inet','127.0.0.1',8) not in loop_addresses or not loop_addresses <= {('inet','127.0.0.1',8),('inet6','::1',128)}:
+        raise Failure('network_scope_invalid')
+    if mode == 'dummy':
+        link = next(item for item in links if item.get('ifname') == 'hp-fixture0')
+        if link.get('linkinfo',{}).get('info_kind') != 'dummy' or 'UP' not in link.get('flags',[]):
+            raise Failure('network_scope_invalid')
+        matching = [item for item in addresses if item.get('ifname') == 'hp-fixture0']
+        if len(matching) != 1 or [(item.get('family'),item.get('local'),item.get('prefixlen')) for item in matching[0].get('addr_info',[])] != [('inet','192.0.2.1',32)]:
+            raise Failure('network_scope_invalid')
+    return True
+
+
+def run(bundle, output, mode):
     if sys.platform != 'linux' or os.geteuid() == 0 or os.environ.get('GITHUB_ACTIONS') != 'true':
         raise Failure('owned_linux_runner_required')
     run_id, attempt = os.environ.get('GITHUB_RUN_ID',''), os.environ.get('GITHUB_RUN_ATTEMPT','')
     if not run_id.isdigit() or not attempt.isdigit(): raise Failure('owned_namespace_required')
     expected = f'/run/netns/hp-ts-cabi-{run_id}-{attempt}'
     if os.stat(expected).st_ino != os.stat('/proc/self/ns/net').st_ino: raise Failure('owned_namespace_required')
-    links = subprocess.run(['ip','-j','link','show'],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=10,check=True)
-    if [x.get('ifname') for x in json.loads(links.stdout)] != ['lo']:
-        raise Failure('loopback_only_namespace_required')
+    def ip_json(*args):
+        reply = subprocess.run(['ip','-j',*args],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=10,check=True)
+        return json.loads(reply.stdout)
+    network_checked(mode,ip_json('-d','link','show'),ip_json('address','show'),
+                    ip_json('-4','route','show','table','main'),ip_json('-6','route','show','table','main'))
     owned_root = Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
     bundle = Path(bundle).resolve(strict=True)
     output = Path(output).resolve()
@@ -145,7 +170,7 @@ def run(bundle, output):
     for item in (helper_dir,worker_dir): item.mkdir(mode=0o700)
     processes=[]; readers=[]
     helper = None; events = None
-    result={'schemaVersion':1,'status':'failed','stage':'start','controlReached':False,
+    result={'schemaVersion':1,'networkMode':mode,'status':'failed','stage':'start','controlReached':False,
             'authorizationCompleted':False,'fixtureCleanup':False,'processesStopped':False,'privateRemoved':False}
     env={k:v for k,v in os.environ.items() if not k.startswith('HERDR_') and k not in ('SSH_AUTH_SOCK','SSH_AGENT_PID','BASH_ENV')}
     env.update(SHELL='/bin/sh', LD_LIBRARY_PATH=str(bundle))
@@ -183,6 +208,7 @@ def run(bundle, output):
         evidence=read_event(wevents,worker,'cabi_result',timeout=50)
         result['cabi']=report_checked(evidence)
         if worker.wait(timeout=15) != 0: raise Failure('cabi_worker_failed')
+        result['controlDiagnostics']['afterRun']=diagnostics()
         helper.stdin.write(b'{"op":"stop"}\n');helper.stdin.flush()
         event=read_event(events,helper,'cleanup',timeout=30)
         result['fixtureCleanup']=event.get('peerClosed') is True and event.get('bridgeConnections') == 0
@@ -225,5 +251,5 @@ def run(bundle, output):
 
 
 if __name__ == '__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--bundle',required=True);parser.add_argument('--output',required=True)
-    args=parser.parse_args();sys.exit(0 if run(args.bundle,args.output) else 1)
+    parser=argparse.ArgumentParser();parser.add_argument('--bundle',required=True);parser.add_argument('--output',required=True);parser.add_argument('--network-mode',choices=('loopback','dummy'),required=True)
+    args=parser.parse_args();sys.exit(0 if run(args.bundle,args.output,args.network_mode) else 1)

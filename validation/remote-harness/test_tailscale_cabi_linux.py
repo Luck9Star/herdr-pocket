@@ -18,6 +18,18 @@ class CabiGuards(unittest.TestCase):
             for change in ({'controlUrl':'https://example.com:32123'}, {'peerIp':'127.0.0.1'},
                            {'peerPort':22}, {'caFile':'/etc/hosts'}, {'controlUrl':'http://127.0.0.1:32123'}):
                 with self.subTest(change=change), self.assertRaises(runner.Failure): runner.ready_checked({**good,**change},root)
+    def test_network_scope_accepts_only_isolated_dummy_and_no_routes(self):
+        loop={'ifname':'lo','flags':['UP']}
+        dummy={'ifname':'hp-fixture0','flags':['UP'],'linkinfo':{'info_kind':'dummy'}}
+        loop_address={'ifname':'lo','addr_info':[{'family':'inet','local':'127.0.0.1','prefixlen':8}]}
+        address={'ifname':'hp-fixture0','addr_info':[{'family':'inet','local':'192.0.2.1','prefixlen':32}]}
+        self.assertTrue(runner.network_checked('loopback',[loop],[loop_address],[],[]))
+        self.assertTrue(runner.network_checked('dummy',[loop,dummy],[loop_address,address],[],[]))
+        for links,addresses,v4,v6 in (([loop,dummy],[address],[{'dst':'default'}],[]),
+                                        ([loop,{'ifname':'eth0'}],[address],[],[]),
+                                        ([loop,dummy],[{'ifname':'hp-fixture0','addr_info':[]}],[],[])):
+            with self.assertRaises(runner.Failure): runner.network_checked('dummy',links,addresses,v4,v6)
+
     def test_control_diagnostics_allow_only_bounded_counts_and_boolean(self):
         good={'event':'diagnostics','keyRequests':1,'noiseRequests':2,'registerRequests':3,
               'mapRequests':4,'tlsHandshakeErrors':0,'authCompletions':1,'secondClientRegistered':True,

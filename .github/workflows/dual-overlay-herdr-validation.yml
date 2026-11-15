@@ -1,0 +1,122 @@
+name: Isolated dual overlay herdr acceptance
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/acceptance-dual-overlay/**']
+permissions:
+  contents: read
+concurrency:
+  group: dual-overlay-herdr-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  input-fixture:
+    uses: ./.github/workflows/input-extension-validation.yml
+  dual-overlay:
+    needs: input-fixture
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CARGO_BUILD_JOBS: '2'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - name: Install isolated fixture prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config libssl-dev openssh-server iproute2
+          rustup toolchain install 1.95.0 1.96.0 --profile minimal
+      - name: Check runner and fixture behavior
+        run: |
+          python3 -m unittest discover -s validation/remote-harness -p test_dual_overlay_loopback.py -v
+          python3 -m unittest discover -s validation/remote-harness -p test_easytier_loopback.py -v
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: input-fixture-${{ github.sha }}
+          path: ${{ runner.temp }}/input-fixture
+      - name: Build pinned EasyTier candidate and upstream peer
+        run: |
+          python3 validation/remote-harness/easytier_loopback.py prepare \
+            --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
+            --output "$RUNNER_TEMP/easytier-build-evidence"
+      - name: Prepare and build explicit-auth Tailscale candidate and private peer
+        run: |
+          python3 validation/native/tool/tailscale_candidate.py prepare "$RUNNER_TEMP/hp-ts-candidate" --cache "$RUNNER_TEMP/hp-ts-cache"
+          python3 validation/native/tool/tailscale_candidate.py build "$RUNNER_TEMP/hp-ts-candidate" --cache "$RUNNER_TEMP/hp-ts-cache"
+          cd "$RUNNER_TEMP/hp-ts-candidate"
+          GOENV=off GOTOOLCHAIN=local CGO_ENABLED=1 GOFLAGS=-mod=readonly \
+            GOMODCACHE="$RUNNER_TEMP/hp-ts-cache/modules" GOCACHE="$RUNNER_TEMP/hp-ts-cache/build" \
+            GOPATH="$RUNNER_TEMP/hp-ts-cache/gopath" go test -c -o "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID/ts-fixture" ./fixture
+          cp libhp_tailscale.so "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID/lib/"
+      - name: Verify herdr fixture provenance and build same-process client
+        run: |
+          python3 - <<'PY'
+          import importlib.util, os
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location('bootstrap', 'validation/remote-harness/run-ci.py')
+          bootstrap = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(bootstrap)
+          source = Path(os.environ['RUNNER_TEMP']) / 'input-fixture'
+          binary, _ = bootstrap.load_input_fixture(source, os.environ)
+          bundle = Path(os.environ['RUNNER_TEMP']) / ('hp-easytier-bundle-' + os.environ['GITHUB_RUN_ID'])
+          (bundle / 'herdr').write_bytes(binary)
+          (bundle / 'herdr').chmod(0o700)
+          PY
+          bundle="$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID"
+          HEELER_ET_LIB_DIR="$bundle/lib" HP_TS_LIB_DIR="$bundle/lib" CARGO_TARGET_DIR="$bundle/target" \
+            cargo +1.96.0 build --locked --features real \
+              --manifest-path validation/overlay-runtime/dual-overlay-loopback/Cargo.toml
+          cp "$bundle/target/debug/herdr-dual-overlay-loopback" "$bundle/probe"
+      - name: Exercise both providers in a loopback-only namespace
+        run: |
+          namespace="hp-dual-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          sudo ip netns add "$namespace"
+          sudo ip netns exec "$namespace" ip link set lo up
+          sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
+            GITHUB_SHA="$GITHUB_SHA" RUNNER_TEMP="$RUNNER_TEMP" \
+            /usr/bin/python3 "$GITHUB_WORKSPACE/validation/remote-harness/dual_overlay_loopback.py" \
+              --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
+              --output "$RUNNER_TEMP/dual-overlay-evidence"
+      - name: Tear down the uniquely owned namespace and bundle
+        if: always()
+        run: |
+          namespace="hp-dual-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          remaining=0
+          if sudo ip netns list | awk '{print $1}' | grep -Fxq "$namespace"; then
+            pids=$(sudo ip netns pids "$namespace")
+            remaining=$(printf '%s\n' "$pids" | wc -w | tr -d ' ')
+            if [ -n "$pids" ]; then sudo kill -TERM $pids || true; sleep 1; fi
+            pids=$(sudo ip netns pids "$namespace")
+            if [ -n "$pids" ]; then sudo kill -KILL $pids || true; fi
+            sudo ip netns delete "$namespace"
+          fi
+          rm -rf -- "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" "$RUNNER_TEMP/hp-ts-candidate" "$RUNNER_TEMP/hp-ts-cache"
+          export HP_DUAL_STRAGGLERS="$remaining"
+          python3 - <<'PYEND'
+          import json, os
+          from pathlib import Path
+          output = Path(os.environ['RUNNER_TEMP']) / 'dual-overlay-evidence'
+          output.mkdir(parents=True, exist_ok=True)
+          path = output / 'manifest.json'
+          result = json.loads(path.read_text()) if path.exists() else {'status': 'failed', 'stage': 'build'}
+          result['namespaceProcessesBeforeTeardown'] = int(os.environ['HP_DUAL_STRAGGLERS'])
+          result['namespaceRemoved'] = True
+          if result['namespaceProcessesBeforeTeardown']:
+              result.update(status='failed', error='namespace_process_leak')
+          path.write_text(json.dumps(result, indent=2) + '\n')
+          if result['status'] != 'passed':
+              raise SystemExit(1)
+          PYEND
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: dual-overlay-herdr-${{ github.sha }}
+          path: ${{ runner.temp }}/dual-overlay-evidence/manifest.json
+          if-no-files-found: error
+          retention-days: 14

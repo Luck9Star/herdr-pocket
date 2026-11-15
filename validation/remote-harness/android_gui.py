@@ -142,6 +142,12 @@ class AndroidProgress:
         if isinstance(click,dict) and all(isinstance(click.get(part),dict) for part in ('before','after')):
             self.data['counterClickContext']={part:_public_counter_context(click[part])
                                               for part in ('before','after')}
+        blocked=getattr(error,'blocked_render_diagnostic',None)
+        if isinstance(blocked,dict):
+            allowed=('viewVisible','terminalPresent','terminalVisible','targetMatched','terminalVerified',
+                     'modeObserve','readOnly','inputModeNone','notFocused','markerMatched','otherMarkerAbsent')
+            if set(blocked)==set(allowed) and all(type(blocked[key]) is bool for key in allowed):
+                self.data['blockedRenderDiagnostic']={key:blocked[key] for key in allowed}
         home_status=getattr(error,'home_status',None)
         if isinstance(home_status,str):self.data['homeStatus']=' '.join(home_status.split())[:120]
         self.publish()
@@ -795,7 +801,26 @@ def exercise_blocked_target(browser,approval,config):
       const otherMarkerAbsent=rows.length>0 && rows.every(line=>!line.includes('POCKET-BLOCKED-A'));
       if(paneId!==expected.paneId || terminalId!==expected.terminalId || !verified || !observing || !markerMatched || !otherMarkerAbsent)return null;
       return {paneId,terminalId,observing,markerMatched,otherMarkerAbsent}})()''' % json.dumps(target)
-    raw=wait_for(lambda:browser.evaluate(measurement),'android_blocked_render_missing',timeout=60)
+    try:
+        raw=wait_for(lambda:browser.evaluate(measurement),'android_blocked_render_missing',timeout=60)
+    except GuiFailure as error:
+        # Capture predicates only; never publish pane names, terminal text or keys.
+        diagnostic=r'''(()=>{const view=document.querySelector('#view-content'),term=view?.querySelector('.terminal-host');
+          const title=[...(view?.children||[])].find(e=>e.tagName==='P')?.textContent.split(' · ') || [];
+          const expected=%s,area=term?.querySelector('.xterm-helper-textarea');
+          const rows=[...(term?.querySelectorAll('.xterm-rows > div')||[])].map(e=>e.textContent.replace(/\u00a0/g,' ').trim());
+          const mode=view?.querySelector('p[aria-live=polite]');
+          return {viewVisible:!!view&&!view.closest('[hidden]'),terminalPresent:!!term,
+            terminalVisible:!!term&&!term.closest('[hidden]')&&!!term.getClientRects().length,
+            targetMatched:title.at(-2)===expected.paneId&&title.at(-1)===expected.terminalId,
+            terminalVerified:view?.querySelector('[data-connection-stage=terminal]')?.dataset.stageState==='verified',
+            modeObserve:mode?.textContent==='观察模式；输入已关闭。',readOnly:!!area&&area.readOnly===true,
+            inputModeNone:!!area&&area.getAttribute('inputmode')==='none',notFocused:!!area&&document.activeElement!==area,
+            markerMatched:rows.some(line=>/^POCKET-BLOCKED-B(?: frame [0-9]+)?$/.test(line)),
+            otherMarkerAbsent:rows.length>0&&rows.every(line=>!line.includes('POCKET-BLOCKED-A'))};})()''' % json.dumps(target)
+        try: error.blocked_render_diagnostic=browser.evaluate(diagnostic)
+        except GuiFailure: pass
+        raise
     if not isinstance(raw,dict):
         raise GuiFailure('android_blocked_target_evidence_invalid')
     raw={**raw,'listedRows':card['listedRows'],'reviewRequired':True}

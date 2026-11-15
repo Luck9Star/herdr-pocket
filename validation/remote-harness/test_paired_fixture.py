@@ -47,20 +47,43 @@ class GuiFixtureTests(unittest.TestCase):
 
     def test_host_summary_requires_explicit_expansion_before_visible_read(self):
         driver = Mock()
-        driver.element.return_value = '/details'
-        driver.call.side_effect = [None, None, 'true']
+        driver.attribute.side_effect = [None, None, 'true']
         open_host_summary(driver)
         driver.click.assert_called_once_with('#host-task-details > summary')
-        self.assertEqual(driver.call.call_count, 3)
-        driver.call.assert_called_with('GET', '/details/attribute/open')
+        self.assertEqual(driver.attribute.call_count, 3)
+        driver.attribute.assert_called_with('#host-task-details', 'open')
 
     def test_host_summary_already_open_is_not_collapsed(self):
         driver = Mock()
-        driver.element.return_value = '/details'
-        driver.call.return_value = 'true'
+        driver.attribute.return_value = 'true'
         open_host_summary(driver)
         driver.click.assert_not_called()
-        driver.call.assert_called_once_with('GET', '/details/attribute/open')
+        driver.attribute.assert_called_once_with('#host-task-details', 'open')
+
+    def test_read_relocates_only_stale_element_and_bounds_retries(self):
+        driver = WebDriver()
+        driver.element = Mock(side_effect=['/old', '/new'])
+        driver.call = Mock(side_effect=[GuiFailure('webdriver_innerText_stale_element_reference'), 'ready'])
+        self.assertEqual(driver.read('#summary'), 'ready')
+        self.assertEqual(driver.call.call_args_list[1].args, ('GET', '/new/property/innerText'))
+        driver.element = Mock(return_value='/node')
+        driver.call = Mock(side_effect=GuiFailure('webdriver_innerText_stale_element_reference'))
+        with self.assertRaises(GuiFailure): driver.read('#summary')
+        self.assertEqual(driver.call.call_count, 5)
+        driver.call = Mock(side_effect=GuiFailure('webdriver_innerText_invalid_session_id'))
+        with self.assertRaises(GuiFailure): driver.read('#summary')
+        self.assertEqual(driver.call.call_count, 1)
+
+    def test_attribute_relocates_stale_but_click_is_not_replayed(self):
+        driver = WebDriver()
+        driver.element = Mock(side_effect=['/old', '/new'])
+        driver.call = Mock(side_effect=[GuiFailure('webdriver_open_stale_element_reference'), 'true'])
+        self.assertEqual(driver.attribute('#details', 'open'), 'true')
+        driver.wait_control = Mock()
+        driver.element = Mock(return_value='/button')
+        driver.call = Mock(side_effect=GuiFailure('webdriver_click_stale_element_reference'))
+        with self.assertRaises(GuiFailure): driver.click('#button')
+        self.assertEqual(driver.call.call_count, 1)
 
     def test_driver_waits_for_the_native_form_before_sending_keys(self):
         driver = WebDriver()

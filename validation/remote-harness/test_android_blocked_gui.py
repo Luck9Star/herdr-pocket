@@ -57,6 +57,20 @@ def approval():
     return types.SimpleNamespace(blocked_targets=TARGETS,verify_blocked_targets=Mock(return_value=TARGETS),verify_ssh=Mock())
 
 class AndroidBlockedTests(unittest.TestCase):
+    def test_blocked_render_failure_reports_only_bounded_boolean_predicates(self):
+        keys=('viewVisible','terminalPresent','terminalVisible','targetMatched','terminalVerified',
+              'modeObserve','readOnly','inputModeNone','notFocused','markerMatched','otherMarkerAbsent')
+        progress=android.AndroidProgress(types.SimpleNamespace(output=None))
+        error=android.GuiFailure('android_blocked_render_missing')
+        error.blocked_render_diagnostic={key:key!='markerMatched' for key in keys}
+        progress.fail(error)
+        self.assertFalse(progress.data['blockedRenderDiagnostic']['markerMatched'])
+        self.assertEqual(set(progress.data['blockedRenderDiagnostic']),set(keys))
+        progress=android.AndroidProgress(types.SimpleNamespace(output=None))
+        error.blocked_render_diagnostic={**error.blocked_render_diagnostic,'secret':'raw terminal'}
+        progress.fail(error)
+        self.assertNotIn('blockedRenderDiagnostic',progress.data)
+
     def test_primary_pane_selector_never_chooses_first_of_three_or_injects_css(self):
         self.assertEqual(android.primary_pane_selector('w1:p1'),'#remote-panes button[data-pane-id="w1:p1"]')
         for value in ('',None,'p"],button','p\\x','x'*129):

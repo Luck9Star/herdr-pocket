@@ -346,8 +346,24 @@ class WebDriver:
         if self.read(selector,'value') != str(value):
             raise GuiFailure('form_input_mismatch_'+label)
 
+    def _read_element(self, selector, kind, name):
+        # A live dashboard can replace a node between lookup and an idempotent
+        # property read. Relocate only for that exact W3C error; never replay a
+        # click, fill or other state-changing operation.
+        stale = 'webdriver_' + name[:18] + '_stale_element_reference'
+        for attempt in range(5):
+            try:
+                return self.call('GET', self.element(selector)+'/'+kind+'/'+name)
+            except GuiFailure as error:
+                if str(error) != stale or attempt == 4:
+                    raise
+                time.sleep(0.05)
+
     def read(self, selector, prop='innerText'):
-        return self.call('GET', self.element(selector)+'/property/'+prop)
+        return self._read_element(selector, 'property', prop)
+
+    def attribute(self, selector, name):
+        return self._read_element(selector, 'attribute', name)
 
     def close(self):
         if self.session:
@@ -357,7 +373,7 @@ class WebDriver:
 def open_host_summary(driver):
     """Expand the visible details with a WebDriver click before reading innerText."""
     def is_open():
-        return driver.call('GET', driver.element('#host-task-details') + '/attribute/open')
+        return driver.attribute('#host-task-details', 'open')
     if not is_open():
         driver.click('#host-task-details > summary')
         wait_for(is_open, 'host_summary_not_expanded')
@@ -394,15 +410,14 @@ def run_tauri(args, root, env, config, approval):
             phase_selector = '#remote-panes [data-dashboard-phase]'
             session_label = f" · 会话 {config['session']} · 受阻"
             def current_board():
-                phase = driver.call('GET', driver.element(phase_selector)+'/attribute/data-dashboard-phase')
+                phase = driver.attribute(phase_selector,'data-dashboard-phase')
                 prefix = {'fresh': '当前快照', 'unavailable': '本次快照（持续更新不可用）'}.get(phase)
                 summary = driver.read(summary_selector)
                 return phase if prefix and prefix + session_label in summary and ' · 同步 ' in summary else None
             initial_board = wait_for(current_board, 'direct_host_summary_missing')
             driver.click(pane_selector)
             def rendered(attr):
-                path = driver.element('#remote-captured')+'/attribute/data-'+attr+'-frames'
-                value = driver.call('GET', path)
+                value = driver.attribute('#remote-captured','data-'+attr+'-frames')
                 return int(value) if value and value.isdigit() else 0
             full = wait_for(lambda:rendered('full'), 'full_render_ack_missing')
             deltas = wait_for(lambda:rendered('delta'), 'delta_render_ack_missing')

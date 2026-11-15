@@ -38,6 +38,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   bool collapsePending = false;
   bool workspaceWide = false;
   final hostSearch = TextEditingController();
+  final expandedHostManagement = <String>{};
   HostTaskFilter taskFilter = HostTaskFilter.all;
   @override
   void initState() {
@@ -226,6 +227,39 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     for (final pane in value?.blockedPanes ?? const <RemotePane>[]) {
       distinct.putIfAbsent(jsonEncode([pane.paneId,pane.terminalId]),() => pane);
     }
+    if (!compact) {
+      final time = value?.syncedAt.toLocal();
+      String two(int n) => n.toString().padLeft(2,'0');
+      final sync = time == null ? null : '${two(time.month)}-${two(time.day)} ${two(time.hour)}:${two(time.minute)}';
+      final count = value == null ? null : value.paneCount == 0 ? '快照确认为空' : '受阻${value.unknownCount > 0 ? '至少' : ''} ${value.blockedCount} 个${value.unknownCount > 0 ? ' · ${value.unknownCount} 个状态未知' : ''} · 共 ${value.paneCount} 个窗格';
+      return Column(key:ValueKey('host-task-summary-${profile.id}'),crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        Text('会话 ${profile.target['session']}',style:Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height:4),
+        Text(value == null ? '任务状态未知 · 尚无有效会话快照' : '${value.current ? '主机报告' : value.freshness == DashboardFreshness.unavailable ? '单次主机报告' : '上次主机报告'} · $count',
+          style:Theme.of(context).textTheme.bodySmall?.copyWith(color:widget.tokens.color('textSecondary'))),
+        if (sync != null) Tooltip(message:value!.detail,child:Text('同步 $sync${value.current ? '' : ' · 待核查'}',
+          style:Theme.of(context).textTheme.bodySmall?.copyWith(color:widget.tokens.color('textSecondary')))),
+        if (value != null && distinct.isNotEmpty) ...[
+          for (final pane in distinct.values) Padding(padding:const EdgeInsets.only(top:8),child:Row(children:[
+            Expanded(child:Text('${pane.label == null ? pane.paneId : '${pane.label} · ${pane.paneId}'}${pane.agent == null ? '' : ' / ${pane.agent}'}',
+              style:Theme.of(context).textTheme.labelLarge)),
+            Text(value.current ? '待处理' : '待核查',style:Theme.of(context).textTheme.labelSmall?.copyWith(
+              color:widget.tokens.color(value.current ? 'warningText' : 'textSecondary'))),
+          ])),
+          ExpansionTile(key:ValueKey(blockedSummaryGroupKey(profile.id)),tilePadding:EdgeInsets.zero,dense:true,
+            title:const Text('受阻窗格 · 核查原目标'),
+            children:[Text(value.current ? '原因未提供 · 打开前审查连接' : value.freshness == DashboardFreshness.unavailable
+              ? '持续更新不可用 · 打开前重新核查此目标' : '上次报告 · 点击后重新核查此目标'),
+              Text(value.detail,style:Theme.of(context).textTheme.bodySmall),
+              for (final pane in distinct.values)
+              ListTile(key:ValueKey(blockedSummaryTargetKey(profile.id,pane)),
+                title:Text(pane.label ?? '受阻窗格'),
+                subtitle:Text('主机 ${profile.label} · 原会话 ${value.source.session}\npane ${pane.paneId} · terminal ${pane.terminalId}'),
+                trailing:const Icon(Icons.chevron_right),
+                onTap:busy || !catalog.ready || catalog.writing ? null : () => openBlocked(profile,value,pane))]),
+        ],
+      ]);
+    }
     return Column(key:ValueKey('${compact ? 'workspace' : 'host'}-task-summary-${profile.id}'),crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Text(value?.label ?? '任务状态未知 · 尚无此主机的有效会话快照'),
       if (value != null) Text(compact ? value.detail : '最后同步 ${value.syncedAt.toLocal().toIso8601String()}',
@@ -281,6 +315,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       current: (host) => pendingIds.contains(host.id),
       history: (host) => historicalIds.contains(host.id),
     );
+    final ordinaryStatus = catalog.ready &&
+      (catalog.status.startsWith('已恢复 ') || catalog.status == '本机资料已保存 · 不代表主机授权或当前在线');
     return ListView(
       key: const ValueKey('host-catalog-list'),
       padding: const EdgeInsets.all(16),
@@ -340,7 +376,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           key: const ValueKey('hosts-direct-ssh'), onPressed: () { tabs.select(null); Navigator.push<void>(context, MaterialPageRoute(builder: (_) => DirectSshPage(tokens: widget.tokens))); },
           icon: const Icon(Icons.terminal), label: const Text('普通 SSH'))),
         const SizedBox(height: 4),
-        Text(
+        if (!ordinaryStatus) Text(
           catalog.status,
           key: const ValueKey('hosts-status'),
           style: Theme.of(context).textTheme.bodySmall,
@@ -411,15 +447,15 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             child: Row(children: [
               for (final item in <(HostTaskFilter, String)>[
                 (HostTaskFilter.all, '全部 ${ordered.length}'),
-                (HostTaskFilter.current, '待处理（${pendingIds.length}）'),
-                (HostTaskFilter.history, '历史待核查（${historicalIds.length}）'),
+                (HostTaskFilter.current, '待处理 ${pendingIds.length}'),
+                (HostTaskFilter.history, '历史待核查 ${historicalIds.length}'),
               ]) Padding(padding: const EdgeInsets.only(right: 8), child: SizedBox(height: 48,
                 child: ChoiceChip(key: ValueKey('hosts-filter-${item.$1.name}'),
-                  label: Text(item.$2), selected: taskFilter == item.$1,
+                  label: Text(item.$2), labelPadding:const EdgeInsets.symmetric(horizontal:2), selected: taskFilter == item.$1,
                   onSelected: (_) => setState(() => taskFilter = item.$1)))),
             ]),
           ),
-          Text(
+          if (taskFilter != HostTaskFilter.all || hostSearch.text.isNotEmpty) Text(
             '显示 ${shown.length} / ${ordered.length} 台主机',
             key: const ValueKey('hosts-filter-count'),
           ),
@@ -462,23 +498,27 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                   Material(color: widget.tokens.color('cardSubtle'), borderRadius: BorderRadius.circular(10),
                     child: Padding(padding: const EdgeInsets.all(10), child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                        Text('会话 ${profile.target['session']}', style: Theme.of(context).textTheme.titleSmall),
                         hostSummary(profile),
                       ]))),
                   if (!profile.hasIdentity) const Text('导入未配对 · 无本机身份'),
-                  FilledButton(
-                    key: ValueKey('host-open-${profile.id}'),
-                    onPressed: !busy && catalog.ready && profile.enabled
-                        ? () => open(profile)
-                        : null,
-                    child: Text(
-                      profile.hasIdentity ? '观察会话 · 审查连接' : '审查导入目标并在此设备配对',
-                    ),
-                  ),
-                  ExpansionTile(
-                    key: ValueKey('host-management-${profile.id}'),
-                    title: const Text('主机资料与管理'),
-                    tilePadding: EdgeInsets.zero,
+                  Row(children: [
+                    Expanded(child:FilledButton(
+                      key: ValueKey('host-open-${profile.id}'),
+                      style:FilledButton.styleFrom(minimumSize:const Size(0,44)),
+                      onPressed: !busy && catalog.ready && profile.enabled ? () => open(profile) : null,
+                      child: Text(profile.hasIdentity ? '观察会话 · 审查' : '审查目标并配对'),
+                    )),
+                    const SizedBox(width:8),
+                    Semantics(expanded:expandedHostManagement.contains(profile.id),child:TextButton.icon(key:ValueKey('host-management-${profile.id}'),
+                      style:TextButton.styleFrom(minimumSize:const Size(0,44)),
+                      onPressed:() => setState(() {
+                        if (!expandedHostManagement.add(profile.id)) expandedHostManagement.remove(profile.id);
+                      }),
+                      icon:Icon(expandedHostManagement.contains(profile.id) ? Icons.expand_less : Icons.expand_more),
+                      label:const Text('管理'))),
+                  ]),
+                  if (expandedHostManagement.contains(profile.id)) Column(
+                    crossAxisAlignment:CrossAxisAlignment.stretch,
                     children: [
                       Text(
                         '资料 provider：${hostProviderLabel(profile.provider)} · 入网状态未知\n${profile.target['username']}@${profile.target['host']}:${profile.target['port']}\n会话 ${profile.target['session']} · ${profile.retired
@@ -562,6 +602,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           '资料不会自动连接、替换主机公钥或重放未知操作。',
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        if (ordinaryStatus) Text(catalog.status,key:const ValueKey('hosts-status'),
+          style:Theme.of(context).textTheme.bodySmall),
       ],
     );
   }

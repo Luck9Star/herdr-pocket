@@ -158,7 +158,7 @@ void main() {
     // that position need scrolling back into view before they can be found.
     final board = find.byType(ListView);
     expect(board,findsOneWidget);
-    final status = find.byKey(const ValueKey('hosts-status'));
+    final status = find.byKey(const ValueKey('hosts-search'));
     await tester.scrollUntilVisible(status,-300,
       scrollable:find.descendant(of:board,matching:find.byType(Scrollable)).first);
     expect(status,findsOneWidget);

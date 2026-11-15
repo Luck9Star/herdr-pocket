@@ -36,9 +36,20 @@ HostTaskSummaries pageSummaries(WidgetTester tester) {
   final dynamic state=tester.state(find.byType(HostCatalogPage));
   return state.summaries as HostTaskSummaries;
 }
-String count(WidgetTester tester) => tester.widget<Text>(find.byKey(const ValueKey('hosts-filter-count'))).data!;
+String count(WidgetTester tester) {
+  final counter=find.byKey(const ValueKey('hosts-filter-count'));
+  if (counter.evaluate().isNotEmpty) return tester.widget<Text>(counter).data!;
+  final all=tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-all')));
+  final search=tester.widget<TextField>(find.byKey(const ValueKey('hosts-search')));
+  final total=RegExp(r'^全部 ([0-9]+)$').firstMatch((all.label as Text).data ?? '');
+  expect(all.selected,isTrue); expect(search.controller!.text,isEmpty); expect(total,isNotNull);
+  return '显示 ${total!.group(1)} / ${total.group(1)} 台主机';
+}
 Future<void> chooseStatus(WidgetTester tester,String label) async {
-  final item=find.text(label); await tester.ensureVisible(item); await tester.tap(item); await tester.pumpAndSettle();
+  final name=label.startsWith('待处理') ? 'current' : label.startsWith('历史待核查') ? 'history' : 'all';
+  final item=find.byKey(ValueKey('hosts-filter-$name'));
+  expect(find.descendant(of:item,matching:find.text(label)),findsOneWidget);
+  await tester.ensureVisible(item); await tester.tap(item); await tester.pumpAndSettle();
 }
 
 void main() {
@@ -84,23 +95,23 @@ void main() {
     await mount(tester,catalog,tabs,keys);
     final registry=pageSummaries(tester),lease=registry.open(a),attempt=lease.begin()!;
     attempt.publish(summaryBoard(a)); await tester.pump(); await tester.pump();
-    await chooseStatus(tester,'待处理（1）');
+    await chooseStatus(tester,'待处理 1');
     expect(count(tester),'显示 1 / 2 台主机');
     await query(tester,'Other'); expect(count(tester),'显示 0 / 2 台主机');
-    expect(find.text('待处理（1）'),findsWidgets);
+    expect(find.text('待处理 1'),findsWidgets);
     await tapVisible(tester,'hosts-search-clear'); await tester.pump();
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-current'))).selected,true);
     expect(count(tester),'显示 1 / 2 台主机');
     attempt.publish(summaryBoard(a,revision:2,freshness:DashboardFreshness.unavailable));
     await tester.pump(); await tester.pump();
-    expect(count(tester),'显示 0 / 2 台主机'); expect(find.text('待处理（0）'),findsWidgets);
-    await chooseStatus(tester,'历史待核查（1）');
+    expect(count(tester),'显示 0 / 2 台主机'); expect(find.text('待处理 0'),findsWidgets);
+    await chooseStatus(tester,'历史待核查 1');
     expect(count(tester),'显示 1 / 2 台主机');
     await query(tester,'no-match'); expect(count(tester),'显示 0 / 2 台主机');
     await tapVisible(tester,'hosts-search-clear'); await tester.pump();
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-history'))).selected,true);
     expect(count(tester),'显示 1 / 2 台主机');
-    await chooseStatus(tester,'待处理（0）');
+    await chooseStatus(tester,'待处理 0');
     attempt.publish(summaryBoard(a,revision:3)); await tester.pump(); await tester.pump();
     expect(count(tester),'显示 1 / 2 台主机');
     lease.invalidate(); await tester.pump(); await tester.pump();
@@ -132,7 +143,7 @@ void main() {
     final original=tabs.active!.id;
     await tapVisible(tester,'hosts-board-tab'); await tester.pumpAndSettle();
     expect(adapter.pauses,1);
-    await chooseStatus(tester,'历史待核查（1）');
+    await chooseStatus(tester,'历史待核查 1');
     await query(tester,'review-work'); expect(count(tester),'显示 1 / 1 台主机');
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-history'))).selected,true);
     await tapVisible(tester,blockedSummaryGroupKey(profile.id)); await tester.pumpAndSettle();

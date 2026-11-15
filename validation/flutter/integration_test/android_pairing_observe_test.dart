@@ -616,6 +616,18 @@ Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
 /// The visible production count line. Both numbers come from the widget, not
 /// from a value this test recomputed.
 ({int shown,int total}) boardCounts(WidgetTester tester) {
+  if (find.byKey(const ValueKey('hosts-filter-count')).evaluate().isEmpty) {
+    final all=tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-all')));
+    final search=tester.widget<TextField>(find.byKey(const ValueKey('hosts-search')));
+    final total=RegExp(r'^全部 ([0-9]+)$').firstMatch((all.label as Text).data ?? '');
+    if (!all.selected || (search.controller?.text ?? '').isNotEmpty || total == null ||
+        find.byWidgetPredicate((w) => w is Card && w.key is ValueKey<String> &&
+          (w.key! as ValueKey<String>).value.startsWith('host-card-')).evaluate().isEmpty) {
+      throw StateError('board_unfiltered_count_unreadable');
+    }
+    final value=int.parse(total.group(1)!);
+    return (shown:value,total:value);
+  }
   final match=RegExp(r'^显示 ([0-9]+) / ([0-9]+) 台主机$')
     .firstMatch(tester.widget<Text>(find.byKey(const ValueKey('hosts-filter-count'))).data ?? '');
   if (match == null) throw StateError('board_filter_count_unreadable');
@@ -629,7 +641,7 @@ String taskFilterLabel(WidgetTester tester,HostTaskFilter value) {
 
 }
 int taskFilterCount(String label) {
-  final match=RegExp(r'（([0-9]+)）$').firstMatch(label);
+  final match=RegExp(r' ([0-9]+)$').firstMatch(label);
   if (match == null) throw StateError('board_task_filter_count_unreadable');
   return int.parse(match.group(1)!);
 }

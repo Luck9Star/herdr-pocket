@@ -78,19 +78,46 @@ void main() {
     await tester.pump(); await tester.pump();
     expect(find.textContaining('受阻窗格'), findsOneWidget);
     expect(find.textContaining('w1:p0'), findsOneWidget);
-    expect(find.text('待处理 1'), findsOneWidget);
+    expect(find.descendant(of:find.byKey(ValueKey('host-card-${profile.id}')),matching:find.text('待处理 1')), findsOneWidget);
     final card = find.byKey(ValueKey('host-card-${profile.id}'));
     expect(find.descendant(of:card, matching:find.text('会话 build-session')), findsOneWidget);
+    final time = DateTime.utc(2026,11,7,10).toLocal();
+    String two(int n) => n.toString().padLeft(2,'0');
     expect(find.descendant(of:card, matching:find.text(
-      '最后同步 ${DateTime.utc(2026,11,7,10).toLocal().toIso8601String()}')), findsOneWidget);
+      '同步 ${two(time.month)}-${two(time.day)} ${two(time.hour)}:${two(time.minute)}')), findsOneWidget);
     await capture('populated');
-    attempt.publish(summaryBoard(profile, revision: 2, freshness: DashboardFreshness.unavailable));
+    attempt.publish(summaryBoard(profile, blocked: 2, revision: 2));
+    final other = tabProfile('工作站', 'review-session', '100.64.0.2', 'direct', 'fixture-other');
+    await catalog.add(other); await tester.pump(); await tester.pump();
+    final otherLease = registry.open(other), otherAttempt = otherLease.begin()!;
+    otherAttempt.publish(summaryBoard(other, blocked: 0)); await tester.pump(); await tester.pump();
+    expect(find.text('w1:p0'), findsOneWidget); expect(find.text('w1:p1'), findsOneWidget);
+    final secondCard=find.byKey(ValueKey('host-card-${other.id}'));
+    final secondSession=find.descendant(of:secondCard,matching:find.text('会话 review-session'));
+    final secondStatus=find.descendant(of:secondCard,matching:find.text('状态未知'));
+    expect(secondSession,findsOneWidget); expect(secondStatus,findsOneWidget);
+    expect(tester.getRect(secondSession).bottom,lessThan(tester.getRect(find.byType(NavigationBar)).top));
+    for (final key in ['host-open-${profile.id}','host-management-${profile.id}']) {
+      expect(tester.getSize(find.byKey(ValueKey(key))).height,greaterThanOrEqualTo(44));
+    }
+    await capture('multi-390');
+    tester.view.physicalSize = const Size(320,844); await tester.pumpAndSettle();
+    for (final name in ['all','current','history']) {
+      final chip=find.byKey(ValueKey('hosts-filter-$name'));
+      expect(tester.getRect(chip).right,lessThanOrEqualTo(304));
+      expect(chip.hitTestable(),findsOneWidget);
+    }
+    expect(tester.getRect(secondSession).bottom,lessThan(tester.getRect(find.byType(NavigationBar)).top));
+    await capture('multi-320');
+    tester.view.physicalSize = const Size(1200,844); await tester.pumpAndSettle(); await capture('multi-1200');
+    tester.view.physicalSize = const Size(390,844); await tester.pumpAndSettle();
+    attempt.publish(summaryBoard(profile, revision: 3, freshness: DashboardFreshness.unavailable));
     await tester.pump(); await tester.pump();
     final history = find.byKey(const ValueKey('hosts-filter-history'));
     await tester.ensureVisible(history); await tester.tap(history); await tester.pumpAndSettle();
     expect(tester.widget<ChoiceChip>(history).selected, isTrue);
     await capture('history');
-    lease.close();
+    lease.close(); otherLease.close();
     await tester.ensureVisible(find.byKey(const ValueKey('hosts-direct-ssh')));
     await tester.tap(find.byKey(const ValueKey('hosts-direct-ssh'))); await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('direct-probe')), findsOneWidget);

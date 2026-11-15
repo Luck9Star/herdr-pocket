@@ -904,7 +904,8 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(str(caught.exception), 'flutter_android_adb_failed')
         self.assertEqual(run.call_count, 3)
         self.assertEqual(caught.exception.adb_diagnostic,
-                         {'command': 'shell', 'exitCode': 1, 'stdoutBytes': 0, 'stderrBytes': 22, 'operation': 'ime-state'})
+                         {'command': 'shell', 'exitCode': 1, 'stdoutBytes': 0, 'stderrBytes': 22, 'operation': 'ime-state',
+                          'retry': {'operation':'ime-state','first':{'exitCode':1,'stdoutBytes':0,'stderrBytes':22},'attempts':3,'recovered':False}})
 
     def test_non_transient_stderr_and_unmarked_calls_never_retry(self):
         with patch.object(gui.subprocess, 'run',
@@ -1659,6 +1660,41 @@ class TuiFinishDiagnosticTests(unittest.TestCase):
         for invalid in ({'receiptPresent':'private'}, {'acceptedNotice':1}, {'receiptText':'private'}):
             with self.subTest(invalid=invalid), self.assertRaises(gui.DeviceFailure):
                 gui.safe_until_timeout(invalid)
+
+
+class ImeReadRetryTests(unittest.TestCase):
+    def test_partial_255_then_success_records_first_without_output(self):
+        failed=subprocess.CompletedProcess([],255,b'PRIVATE PARTIAL',b'')
+        ok=subprocess.CompletedProcess([],0,b'complete',b'')
+        records=[]
+        with patch.object(gui.subprocess,'run',side_effect=[failed,ok]) as run, patch.object(gui.time,'sleep'):
+            result=gui.adb('shell','dumpsys','input_method',transient_retry=True,retry_diagnostics=records)
+        self.assertEqual(result.stdout,b'complete');self.assertEqual(run.call_count,2)
+        self.assertEqual(records,[{'operation':'ime-state','first':{'exitCode':255,'stdoutBytes':15,'stderrBytes':0},'attempts':2,'recovered':True}])
+        self.assertNotIn('PRIVATE',str(records))
+
+    def test_timeout_then_success_and_persistent_failure(self):
+        timed=subprocess.TimeoutExpired('adb',30)
+        ok=subprocess.CompletedProcess([],0,b'complete',b'')
+        records=[]
+        with patch.object(gui.subprocess,'run',side_effect=[timed,ok]), patch.object(gui.time,'sleep'):
+            gui.adb('shell','dumpsys','window','displays',transient_retry=True,retry_diagnostics=records)
+        self.assertEqual(records[0]['first'],{'reason':'timeout','timeoutSeconds':30})
+        self.assertEqual(records[0]['attempts'],2);self.assertTrue(records[0]['recovered'])
+        failed=subprocess.CompletedProcess([],255,b'partial',b'');records=[]
+        with patch.object(gui.subprocess,'run',return_value=failed) as run, patch.object(gui.time,'sleep'):
+            with self.assertRaises(gui.DeviceFailure) as caught:
+                gui.adb('shell','dumpsys','input_method',transient_retry=True,retry_diagnostics=records)
+        self.assertEqual(run.call_count,3);self.assertEqual(records[0]['attempts'],3)
+        self.assertFalse(records[0]['recovered']);self.assertEqual(caught.exception.adb_diagnostic['retry'],records[0])
+
+    def test_input_and_other_queries_never_repeat_partial_or_timeout(self):
+        failed=subprocess.CompletedProcess([],255,b'partial',b'')
+        for args, outcome in [(('shell','input','keyevent','KEYCODE_BACK'),failed),
+                              (('shell','getprop','ro.kernel.qemu'),subprocess.TimeoutExpired('adb',30))]:
+            with self.subTest(args=args), patch.object(gui.subprocess,'run',side_effect=[outcome]) as run, patch.object(gui.time,'sleep'):
+                with self.assertRaises(gui.DeviceFailure): gui.adb(*args,transient_retry=True)
+                self.assertEqual(run.call_count,1)
 
 
 if __name__ == '__main__':

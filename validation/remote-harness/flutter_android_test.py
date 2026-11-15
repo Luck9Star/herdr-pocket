@@ -1504,7 +1504,9 @@ class TuiGuards(unittest.TestCase):
         self.assertIn('visibleRemoteScreenCells(terminal,render,',source)
         self.assertIn('!identical(tester.widget<TerminalView>',source)
         self.assertIn('(displayedSequence(tester) ?? -1) > sequence',source)
-        self.assertIn('await tap(tester,button); await accepted',source)
+        self.assertLess(source.index('await tap(tester,button);',source.index('Future<Map<String,Object>> exerciseTui')),
+                        source.index('await accepted(tester,previousRequest:previousRequest)',source.index('Future<Map<String,Object>> exerciseTui')))
+        self.assertIn("stage('tui_finish_receipt')",source)
         self.assertLess(source.index("inputReceipts.add(visibleReceipt(tester,target['paneId'] as String,9))"),source.index('tuiEvidence = await exerciseTui'))
         self.assertIn("'acceptedByteCounts':[1,9]",source)
         for key in ('remote-key-↓','remote-key-Tab',*('remote-function-key-'+name for name in ('backspace','shift-tab','insert','delete','f1','f5','f10'))):
@@ -1647,6 +1649,16 @@ class SystemKeyboardGuards(unittest.TestCase):
                 self.assertEqual(len(back), 0 if failure == 'not-owned' else 1)
                 if failure:
                     self.assertEqual(len(adb.call_args_list), len(back))  # No ACK on unconfirmed hide.
+
+
+class TuiFinishDiagnosticTests(unittest.TestCase):
+    def test_finish_receipt_timeout_exports_only_booleans(self):
+        report={'stage':'tui_finish_receipt','errorClass':'TestFailure','line':595,
+                'untilTimeout':{'receiptPresent':True,'receiptChanged':True,'acceptedNotice':False}}
+        self.assertEqual(gui.safe_test_failure(report),report)
+        for invalid in ({'receiptPresent':'private'}, {'acceptedNotice':1}, {'receiptText':'private'}):
+            with self.subTest(invalid=invalid), self.assertRaises(gui.DeviceFailure):
+                gui.safe_until_timeout(invalid)
 
 
 if __name__ == '__main__':

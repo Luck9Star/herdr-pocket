@@ -389,12 +389,19 @@ Map<String,Object> visibleReceipt(WidgetTester tester, String paneId, int count)
     'terminalId':match.group(3)!,'acceptedBytes':count};
 }
 
-Future<void> accepted(WidgetTester tester, {String? previousRequest}) => until(tester,() {
-  final control = find.byKey(const ValueKey('remote-input-receipt'));
-  return control.evaluate().length == 1 &&
-    !(tester.widget<Text>(control).data ?? '').contains(previousRequest ?? 'never-a-request') &&
-    find.textContaining('服务端已接收 · 仅确认队列受理').evaluate().isNotEmpty;
-});
+Future<void> accepted(WidgetTester tester, {String? previousRequest}) {
+  Map<String,Object?> evidence() {
+    final control=find.byKey(const ValueKey('remote-input-receipt'));
+    final present=control.evaluate().length == 1;
+    return {'receiptPresent':present,
+      'receiptChanged':present && !(tester.widget<Text>(control).data ?? '').contains(previousRequest ?? 'never-a-request'),
+      'acceptedNotice':find.textContaining('服务端已接收 · 仅确认队列受理').evaluate().isNotEmpty};
+  }
+  return until(tester,() {
+    final state=evidence();
+    return state.values.every((value)=>value == true);
+  },onTimeout:evidence);
+}
 
 // Only the self-created curses fixture's exact current screen is read. Never
 // search accumulated ANSI or scrollback, and never export terminal contents.
@@ -592,7 +599,9 @@ Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
           'inputStatus':tester.widget<Text>(find.byKey(const ValueKey('remote-input-status'))).data ?? '',
         });
     // Exactly one visible tap, with no retry after an unknown result.
-    await tap(tester,button); await accepted(tester,previousRequest:previousRequest);
+    await tap(tester,button);
+    if (marker == null) stage('tui_finish_receipt');
+    await accepted(tester,previousRequest:previousRequest);
     final receipt = visibleReceipt(tester,target['paneId'] as String,size);
     expect(receipt['terminalId'],terminalId); expect(seen.add(receipt['requestId']),isTrue);
     receipts.add(receipt); previousRequest = receipt['requestId'] as String;

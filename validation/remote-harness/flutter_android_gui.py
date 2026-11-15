@@ -72,7 +72,7 @@ STAGES.update({'blocked_history', 'blocked_list', 'blocked_target_open', 'blocke
                'blocked_ssh_review', 'blocked_observe', 'blocked_marker', 'blocked_return'})
 STAGES.update({'tui_start','tui_resume_full','tui_initial','tui_select_next','tui_focus_detail',
     'tui_erase_character','tui_focus_list','tui_insert_row','tui_delete_row','tui_open_help',
-    'tui_close_help','tui_refresh','tui_finish'})
+    'tui_close_help','tui_refresh','tui_finish','tui_finish_receipt'})
 STAGES.update(label.replace('-', '_') for label in (*KEYBOARD_CHECKPOINTS, KEYBOARD_OBSERVE_CHECKPOINT))
 GUARDED_FIELDS = ('guardedInput', 'directInputAccepted', 'draftInputAccepted', 'hiddenTabStopped',
                   'hiddenTabManualRecovery', 'unsentDraftRestored', 'postStopInputDisabled') + CLIPBOARD_FIELDS
@@ -441,7 +441,8 @@ def safe_until_timeout(value):
     invalid = 'flutter_android_until_timeout_invalid'
     if not isinstance(value, dict):
         raise DeviceFailure(invalid)
-    keys = {'key', 'buttonCount', 'imeBlockedNotice', 'inputStatus'}
+    keys = {'key', 'buttonCount', 'imeBlockedNotice', 'inputStatus',
+            'receiptPresent', 'receiptChanged', 'acceptedNotice'}
     if not set(value) <= keys:
         raise DeviceFailure(invalid)
     key = value.get('key')
@@ -449,6 +450,9 @@ def safe_until_timeout(value):
         raise DeviceFailure(invalid)
     for num in ('buttonCount', 'imeBlockedNotice'):
         if num in value and (type(value[num]) is not int or not 0 <= value[num] <= 16):
+            raise DeviceFailure(invalid)
+    for flag in ('receiptPresent', 'receiptChanged', 'acceptedNotice'):
+        if flag in value and type(value[flag]) is not bool:
             raise DeviceFailure(invalid)
     status = value.get('inputStatus')
     if status is not None and (not isinstance(status, str) or len(status) > 200):

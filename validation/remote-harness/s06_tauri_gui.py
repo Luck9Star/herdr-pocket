@@ -302,6 +302,11 @@ def exercise(args, root, env, configs, approvals, expected):
                 stage = 'close'
                 for panel in panels:
                     ui.focus(panel); ui.named('关闭此标签', panel + ' .tab-connection-actions')
+                    # The click starts an async cancel. Wait for that real tab
+                    # to disappear before addressing the remaining single view;
+                    # its split-only focus header is intentionally gone then.
+                    wait_for(lambda: ui.read('return !document.querySelector(arguments[0]);', panel) is True,
+                             's06_tauri_closed_panel_still_present')
                 wait_for(lambda: ui.read('return document.querySelector("#tab-workspace").hidden;') is True,
                          's06_tauri_tabs_not_closed')
                 wait_for(lambda: all(peer_connection_evidence(a) == {'authenticationCount': 1, 'closed': True}

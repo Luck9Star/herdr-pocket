@@ -49,6 +49,12 @@ jobs:
           flutter analyze lib integration_test
           cp integration_test/direct_ssh_tap_test.dart test/direct_ssh_tap_test.dart
           flutter test test/direct_ssh_tap_test.dart --reporter expanded
+          cp integration_test/ios_semantics_fixture.dart test/ios_semantics_fixture_test.dart
+          flutter test test/ios_semantics_fixture_test.dart --plain-name 'stable semantics baseline is preserved' --reporter expanded
+          if flutter test test/ios_semantics_fixture_test.dart --plain-name 'additional leaked handle remains detectable' --reporter expanded > "$RUNNER_TEMP/semantics-negative.log" 2>&1; then
+            echo 'Leaked semantics handle unexpectedly passed.'; exit 1
+          fi
+          grep -Fq 'A SemanticsHandle was active at the end of the test' "$RUNNER_TEMP/semantics-negative.log"
       - name: Drive real UI with loopback SSH on a disposable iOS Simulator
         run: |
           export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"

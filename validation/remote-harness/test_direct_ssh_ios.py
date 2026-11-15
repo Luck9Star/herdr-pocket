@@ -145,6 +145,13 @@ class IosDirectSshTests(unittest.TestCase):
         self.assertNotIn('secret123', str(result)); self.assertNotIn('/private/user', str(result))
         self.assertNotIn('password', result)
 
+    def test_semantics_probe_only_accepts_fixed_boolean_and_bounded_counts(self):
+        valid = {'platformEnabled': True, 'realPlatformEnabled': False, 'bindingHandles': 1, 'pipelineHandles': 2}
+        self.assertEqual(runner.semantics_probe(valid), valid)
+        for value in ({**valid, 'extra':'secret'}, {**valid, 'bindingHandles':True},
+                      {**valid, 'pipelineHandles':101}, {**valid, 'platformEnabled':1}):
+            self.assertIsNone(runner.semantics_probe(value))
+
     def test_generated_xctest_scaffold_is_exact_and_one_shot(self):
         with tempfile.TemporaryDirectory() as temp:
             app = Path(temp)

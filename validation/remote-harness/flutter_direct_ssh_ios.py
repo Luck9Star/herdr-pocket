@@ -292,7 +292,21 @@ def framework_diagnostic(value, private_values):
     if isinstance(excerpt, list):
         result['excerpt'] = [safe for item in excerpt[:3]
                              if (safe := sanitized_failure(item, private_values))]
+    probe = semantics_probe(value.get('semantics'))
+    if probe is not None:
+        result['semantics'] = probe
     return result
+
+
+def semantics_probe(value):
+    if not isinstance(value, dict) or set(value) != {'platformEnabled', 'realPlatformEnabled', 'bindingHandles', 'pipelineHandles'}:
+        return None
+    if not isinstance(value['platformEnabled'], bool) or not isinstance(value['realPlatformEnabled'], bool):
+        return None
+    if any(not isinstance(value[key], int) or isinstance(value[key], bool) or not 0 <= value[key] <= 100
+           for key in ('bindingHandles', 'pipelineHandles')):
+        return None
+    return value
 
 
 def run(app, output, env):
@@ -454,6 +468,13 @@ def run(app, output, env):
                     if framework:
                         report['frameworkDiagnostic'] = framework_diagnostic(framework,
                             (fixture.password, fixture.username, fixture.fingerprint, str(private), str(app), str(base)))
+                    probes = {}
+                    for name in ('baseline', 'home', 'report_data_set'):
+                        probe = semantics_probe(read_json(exchange / ('semantics-' + name + '.json')))
+                        if probe is not None:
+                            probes[name] = probe
+                    if probes:
+                        report['semanticsProbes'] = probes
                 if code or not confirmed:
                     preflight = read_json(exchange / 'connect-diagnostic.json') if exchange else None
                     if preflight:

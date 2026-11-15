@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -47,6 +48,22 @@ void publish(String name, Object value) {
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  Map<String, Object> semanticsProbe() => {
+    'platformEnabled': binding.platformDispatcher.semanticsEnabled,
+    'realPlatformEnabled': ui.PlatformDispatcher.instance.semanticsEnabled,
+    'bindingHandles': binding.debugOutstandingSemanticsHandles,
+    // The test framework verifies both counters separately.
+    // ignore: deprecated_member_use
+    'pipelineHandles': binding.pipelineOwner.debugOutstandingSemanticsHandles,
+  };
+  late Map<String, Object> semanticsBaseline;
+  setUpAll(() {
+    // Establish the platform semantics handle before testWidgets records its
+    // baseline; retain the framework's normal leak checks throughout the test.
+    binding.platformDispatcher.semanticsEnabledTestValue = true;
+    semanticsBaseline = semanticsProbe();
+  });
+  tearDownAll(binding.platformDispatcher.clearSemanticsEnabledTestValue);
   var activeFixture = false;
   var privateValues = <String>[];
   final previousReporter = reportTestException;
@@ -101,6 +118,7 @@ void main() {
               : 'other',
           'sourceLine': source == null ? null : int.tryParse(source.group(1)!),
           'excerpt': excerpt,
+          'semantics': semanticsProbe(),
         });
       }
     } catch (_) {
@@ -125,12 +143,16 @@ void main() {
           config['fingerprint'] as String,
           directory,
         ];
+        publish('semantics-baseline.json', semanticsBaseline);
         expect(tester.testTextInput.isRegistered, isFalse);
         if (Directory(directory).existsSync())
           throw StateError('direct_ssh_ios_exchange_exists');
         void step(String next) {
           stage = next;
           publish('stage.json', {'stage': next});
+          if (next == 'home' || next == 'report_data_set') {
+            publish('semantics-$next.json', semanticsProbe());
+          }
         }
 
         Future<void> capture(String name) async {

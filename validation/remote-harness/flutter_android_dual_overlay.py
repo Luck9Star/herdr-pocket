@@ -271,6 +271,23 @@ def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout
     raise DualOverlayDeviceFailure('device_run_timeout')
 
 
+def installed_apk_evidence(device, bundle, destination, verify):
+    """Inspect the installed app without publishing its private package path."""
+    import re
+    try:
+        output = device.adb('shell', 'pm', 'path', device.PACKAGE).stdout.decode('ascii').strip()
+    except (UnicodeError, AttributeError):
+        raise DualOverlayDeviceFailure('installed_apk_path_invalid') from None
+    match = re.fullmatch(r'package:(/data/app/[A-Za-z0-9_./+=~-]+/base\.apk)', output)
+    if match is None or '..' in match.group(1).split('/'):
+        raise DualOverlayDeviceFailure('installed_apk_path_invalid')
+    data = device.adb('exec-out', 'cat', match.group(1)).stdout
+    if not isinstance(data, bytes) or not 0 < len(data) <= 300 * 1024 * 1024:
+        raise DualOverlayDeviceFailure('installed_apk_invalid')
+    destination.write_bytes(data)
+    return verify(bundle, destination)
+
+
 def run_device(args, env):
     """Run two fresh owned-device cases; publish only fixed result categories."""
     import json
@@ -367,8 +384,9 @@ def run_device(args, env):
                                     try: process.wait(timeout=10)
                                     except subprocess.TimeoutExpired:
                                         os.killpg(process.pid, signal.SIGKILL); process.wait(timeout=10)
-                        # Flutter may rebuild during test; check the installed build's native inputs again.
-                        dual_overlay_apk.verify(args.qa_bundle, built)
+                        installed = private / (first_stop + '-installed.apk')
+                        installed_evidence = installed_apk_evidence(device, args.qa_bundle, installed, dual_overlay_apk.verify)
+                        case['installedApkSha256'] = installed_evidence['apkSha256']
                         case['stage'] = 'host_cleanup'
                     cleanup = session.report.get('cleanup', {})
                     if not cleanup or any(value is not True for value in cleanup.values()):

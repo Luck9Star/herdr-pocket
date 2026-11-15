@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from flutter_android_dual_overlay import (
-    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints,
+    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints, installed_apk_evidence,
 )
 
 
@@ -182,6 +182,27 @@ class DeviceCheckpointTest(unittest.TestCase):
              patch('time.sleep'):
             with self.assertRaisesRegex(DualOverlayDeviceFailure, 'device_test_failed'):
                 drive_checkpoints(None, process, 'adb', 'emulator-5554', 'et', run=None)
+
+
+class InstalledApkTest(unittest.TestCase):
+    def test_verify_actual_app_copy_and_reject_non_package_paths(self):
+        import tempfile
+        from pathlib import Path
+        class Device:
+            PACKAGE = 'dev.herdr.herdr_flutter_probe'
+            path = b'package:/data/app/~~owned/dev.herdr-probe/base.apk\n'
+            def adb(self, *args):
+                return type('Result', (), {'stdout': self.path if args[:3] == ('shell', 'pm', 'path') else b'APK'})()
+        device = Device()
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'installed.apk'
+            result = installed_apk_evidence(device, 'qa', target,
+                lambda bundle, path: {'apkSha256': 'checked' if path.read_bytes() == b'APK' else 'bad'})
+            self.assertEqual(result['apkSha256'], 'checked')
+            for invalid in (b'package:/data/app/../secret/base.apk', b'package:/etc/passwd', b'multiple\nlines'):
+                device.path = invalid
+                with self.assertRaisesRegex(DualOverlayDeviceFailure, 'installed_apk_path_invalid'):
+                    installed_apk_evidence(device, 'qa', target, lambda *_: {})
 
 
 if __name__ == '__main__':

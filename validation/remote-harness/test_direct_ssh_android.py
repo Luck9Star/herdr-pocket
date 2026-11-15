@@ -1,6 +1,7 @@
 """Standard-library guards plus an actual loopback SSH protocol/cleanup test."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 from subprocess import CompletedProcess
@@ -14,6 +15,10 @@ _spec.loader.exec_module(runner)
 
 
 class GuardTests(unittest.TestCase):
+    def test_protocol_dependency_is_present_when_required(self):
+        if os.environ.get('HERDR_REQUIRE_PARAMIKO') == '1':
+            self.assertIsNotNone(importlib.util.find_spec('paramiko'), 'Paramiko is required for direct SSH acceptance')
+
     def test_runner_rejects_local_non_ci_real_devices_and_paths_outside_owned_temp(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -74,6 +79,7 @@ class GuardTests(unittest.TestCase):
         self.assertNotIn(secret, json.dumps(evidence))
 
 
+@unittest.skipUnless(importlib.util.find_spec('paramiko') is not None, 'Paramiko is unavailable; loopback protocol test is optional in this environment')
 class LoopbackTests(unittest.TestCase):
     def test_shared_peer_requires_auth_pty_shell_marker_and_peer_close_then_cleans(self):
         import paramiko

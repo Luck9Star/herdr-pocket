@@ -34,7 +34,7 @@ jobs:
           sudo apt-get install -y acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
           python3 -m venv "$RUNNER_TEMP/direct-ssh-venv"
           "$RUNNER_TEMP/direct-ssh-venv/bin/pip" install -r validation/pairing/requirements.txt websocket-client==1.8.0 paramiko==4.0.0
-          "$RUNNER_TEMP/direct-ssh-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_*.py' -v
+          HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_*.py' -v
       - name: Build the current x86_64 Android application
         working-directory: validation/tauri
         run: |

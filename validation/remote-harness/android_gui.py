@@ -1508,6 +1508,23 @@ def tui_screen_matches(browser, marker):
     return browser.evaluate(expression) is True
 
 
+def review_receipt_details(browser, receipt):
+    """Review the real visible detail without exporting receipt values."""
+    closed = "(()=>{const e=document.querySelector('#remote-receipt');return !!e&&!e.hidden&&!e.open})()"
+    opened = "(()=>{const e=document.querySelector('#remote-receipt');return !!e&&!e.hidden&&e.open})()"
+    wait_for(lambda: browser.evaluate(closed), 'android_receipt_details_unavailable')
+    browser.click('#remote-receipt summary')
+    wait_for(lambda: browser.evaluate(opened), 'android_receipt_details_not_open')
+    expected = (f"请求 ID：{receipt['requestId']} · pane：{receipt['paneId']} · "
+                f"terminal：{receipt['terminalId']} · 受理 {receipt['acceptedBytes']} 字节。"
+                "主机已受理，命令结果请查看终端。")
+    if browser.read('#remote-receipt-text') != expected:
+        raise GuiFailure('android_receipt_details_mismatch')
+    browser.click('#remote-receipt summary')
+    wait_for(lambda: browser.evaluate(closed), 'android_receipt_details_not_closed')
+    return True
+
+
 def exercise_tui(browser, approval, pane, terminal, previous_receipt, previous_request_ids, progress=None):
     """Drive only the reviewed target with real auxiliary-button clicks."""
     expected_target = f'目标：{pane} · {terminal}'
@@ -1762,6 +1779,9 @@ def run_android(args, root, env, config, approval):
             if browser.read('#remote-input-draft', 'value'):
                 raise GuiFailure('android_submitted_draft_retained')
             receipts.append(second); progress.mark('draftReceiptVerified'); progress.count('inputReceiptCount',2)
+            review_receipt_details(browser, second)
+            progress.data['receiptDetailsReviewed'] = True
+            progress.publish()
             if getattr(args, 'android_tui', False):
                 approval.verify_ssh('kPocket测'.encode('utf-8'))
                 progress.phase('tui')

@@ -633,4 +633,24 @@ class StopHitDiagnosticsTests(unittest.TestCase):
         self.assertEqual(trace[0]['viewport']['visualH'],400)
         self.assertFalse(trace[0]['centerHit'])
 
+class ReceiptDetailsTests(unittest.TestCase):
+    def test_actual_expand_compare_and_collapse(self):
+        receipt={'requestId':'a'*32,'paneId':'w1:p1','terminalId':'term_fixture','acceptedBytes':9}
+        class Browser:
+            def __init__(self): self.open=False; self.actions=[]; self.wrong=False
+            def evaluate(self,expression): return self.open if '&&e.open' in expression else not self.open
+            def click(self,selector): self.actions.append(selector);self.open=not self.open
+            def read(self,selector):
+                self.assert_selector=selector
+                return (f"请求 ID：{receipt['requestId']} · pane：{receipt['paneId']} · "
+                        f"terminal：{receipt['terminalId']} · 受理 {8 if self.wrong else 9} 字节。"
+                        "主机已受理，命令结果请查看终端。")
+        browser=Browser();self.assertTrue(android.review_receipt_details(browser,receipt))
+        self.assertEqual(browser.actions,['#remote-receipt summary']*2);self.assertFalse(browser.open)
+        self.assertEqual(browser.assert_selector,'#remote-receipt-text')
+        browser=Browser();browser.wrong=True
+        with self.assertRaisesRegex(android.GuiFailure,'android_receipt_details_mismatch'):
+            android.review_receipt_details(browser,receipt)
+        self.assertEqual(browser.actions,['#remote-receipt summary'])
+
 if __name__=='__main__':unittest.main()

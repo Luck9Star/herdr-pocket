@@ -6,6 +6,9 @@ import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'package:terminal_view/terminal_view.dart';
 
+void portableTestWidgets(String description, WidgetTesterCallback callback, {bool? skip}) => testWidgets(
+  description, callback, skip: skip, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
 Future<void> waitFor(WidgetTester tester, Finder finder) async {
   for (var i = 0; i < 120 && finder.evaluate().isEmpty; i++) {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
@@ -15,7 +18,8 @@ Future<void> waitFor(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
-  testWidgets('private key passphrase remains obscured in Flutter semantics while focused and unfocused', (tester) async {
+  // Portable EditableText path; native macOS has separate view/channel and AX tests.
+  portableTestWidgets('portable passphrase remains obscured in Flutter semantics while focused and unfocused', (tester) async {
     final semantics = tester.ensureSemantics();
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:DirectSshPage(tokens:tokens)));
@@ -40,7 +44,7 @@ void main() {
     await tester.ensureVisible(address); await tester.tap(address); await tester.pump();
     verify(); semantics.dispose();
   });
-  testWidgets('ordinary SSH requires explicit fingerprint confirmation', (tester) async {
+  portableTestWidgets('ordinary SSH requires explicit fingerprint confirmation', (tester) async {
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
     expect(tester.widget<OutlinedButton>(find.byKey(const ValueKey('direct-probe'))).onPressed, isNull);
@@ -52,7 +56,7 @@ void main() {
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNull);
   });
 
-  testWidgets('returning from ordinary SSH with unsubmitted credentials disposes its listeners safely', (tester) async {
+  portableTestWidgets('returning from ordinary SSH with unsubmitted credentials disposes its listeners safely', (tester) async {
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: Builder(builder: (context) => Scaffold(
       body: FilledButton(onPressed: () => Navigator.push<void>(context, MaterialPageRoute<void>(
@@ -65,7 +69,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('loopback probe, confirm, password, PTY and background disconnect', (tester) async {
+  portableTestWidgets('loopback probe, confirm, password, PTY and background disconnect', (tester) async {
     final fixturePort = Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT'];
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
@@ -102,7 +106,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
   }, skip: Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT'] == null);
-  testWidgets('changed host key blocks the second connection before authentication', (tester) async {
+  portableTestWidgets('changed host key blocks the second connection before authentication', (tester) async {
     final fixturePort = Platform.environment['HERDR_DIRECT_SSH_ROTATE_PORT']!;
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
@@ -122,7 +126,7 @@ void main() {
     expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-secret'))).controller!.text, isEmpty);
   }, skip: Platform.environment['HERDR_DIRECT_SSH_ROTATE_PORT'] == null);
 
-  testWidgets('encrypted private key authenticates to the isolated shell', (tester) async {
+  portableTestWidgets('encrypted private key authenticates to the isolated shell', (tester) async {
     final fixturePort = Platform.environment['HERDR_DIRECT_SSH_KEY_PORT']!;
     final keyPath = Platform.environment['HERDR_DIRECT_SSH_KEY_PATH']!;
     final tokens = (await tester.runAsync(DesignTokens.load))!;
@@ -146,7 +150,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   }, skip: Platform.environment['HERDR_DIRECT_SSH_KEY_PORT'] == null || Platform.environment['HERDR_DIRECT_SSH_KEY_PATH'] == null);
 
-  testWidgets('ordinary SSH form constrains width and exposes named editable fields', (tester) async {
+  portableTestWidgets('ordinary SSH form constrains width and exposes named editable fields', (tester) async {
     final semantics = tester.ensureSemantics();
     tester.view.physicalSize = const Size(800, 900);
     tester.view.devicePixelRatio = 1;
@@ -179,7 +183,7 @@ void main() {
   });
 
   for (final width in [320.0, 390.0]) {
-    testWidgets('ordinary SSH controls remain reachable at width $width with keyboard inset', (tester) async {
+    portableTestWidgets('ordinary SSH controls remain reachable at width $width with keyboard inset', (tester) async {
       final semantics = tester.ensureSemantics();
         tester.view.physicalSize = Size(width, 844);
       tester.view.devicePixelRatio = 1;
@@ -204,7 +208,7 @@ void main() {
     });
   }
 
-  testWidgets('probe error remains readable and fields retain accessible names', (tester) async {
+  portableTestWidgets('probe error remains readable and fields retain accessible names', (tester) async {
     final semantics=tester.ensureSemantics();
     final socket=await tester.runAsync(()=>ServerSocket.bind(InternetAddress.loopbackIPv4, 0));
     final closedPort=socket!.port;

@@ -126,8 +126,10 @@ def prepare(destination):
     if marker not in mac_text:
         raise SystemExit('Pinned Flutter macOS registration template changed')
     macos.write_text(mac_text.replace(marker, marker + '\n    registerHerdrDeviceKeys(messenger: flutterViewController.engine.binaryMessenger)'
-                                     + '\n    registerHerdrConfigDocuments(messenger: flutterViewController.engine.binaryMessenger)', 1)
-                     + '\n' + shared_apple + '\n' + apple_channel + '\n' + apple_documents, encoding='utf-8')
+                                     + '\n    registerHerdrConfigDocuments(messenger: flutterViewController.engine.binaryMessenger)'
+                                     + '\n    registerHerdrSecureCredentialFields(registrar: flutterViewController.registrar(forPlugin: "HerdrSecureCredentialFields"))', 1)
+                     + '\n' + shared_apple + '\n' + apple_channel + '\n' + apple_documents
+                     + '\n' + (source / 'native/apple/SecureCredentialView.swift').read_text(encoding='utf-8'), encoding='utf-8')
 
     shutil.copytree(source / 'diagnostic', destination / 'diagnostic', dirs_exist_ok=True)
     shutil.copytree(source / 'regression', destination / 'regression', dirs_exist_ok=True)

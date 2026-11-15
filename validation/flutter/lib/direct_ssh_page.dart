@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
+import 'macos_secure_credential_field.dart';
 
 /// Standalone SSH shell. Host key verification precedes every authentication.
 class DirectSshPage extends StatefulWidget {
@@ -184,12 +186,19 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
             onChanged: busy ? null : (value) => setState(() { keyAuth = value; secret.clear(); passphrase.clear(); })),
           const SizedBox(height: 12),
           Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）',
-            child: TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,
+            child: !keyAuth && !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS
+              ? MacosSecureCredentialField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy,
+                  label: '密码（仅本次使用）', identifier: 'direct-secret')
+              : TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,
               minLines: 1, maxLines: keyAuth ? 6 : 1, decoration: InputDecoration(label: ExcludeSemantics(child: Text(keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）'))))),
           if (keyAuth) ...[
             const SizedBox(height: 16),
-            Semantics(container: true, explicitChildNodes: true, label: '私钥口令（可选）', child: TextField(key: const ValueKey('direct-passphrase'), controller: passphrase,
-              enabled: !busy, obscureText: true, decoration: const InputDecoration(label: ExcludeSemantics(child: Text('私钥口令（可选）'))))),
+            Semantics(container: true, explicitChildNodes: true, label: '私钥口令（可选）',
+              child: !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS
+                ? MacosSecureCredentialField(key: const ValueKey('direct-passphrase'), controller: passphrase, enabled: !busy,
+                    label: '私钥口令（可选）', identifier: 'direct-passphrase')
+                : TextField(key: const ValueKey('direct-passphrase'), controller: passphrase,
+                    enabled: !busy, obscureText: true, decoration: const InputDecoration(label: ExcludeSemantics(child: Text('私钥口令（可选）'))))),
           ],
           const SizedBox(height: 20),
           FilledButton(key: const ValueKey('direct-connect'), onPressed: canConnect ? connect : null, child: const Text('连接 SSH')),

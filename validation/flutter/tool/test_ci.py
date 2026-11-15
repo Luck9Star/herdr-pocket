@@ -62,6 +62,16 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
     diagnostic = 'terminal-font-diagnostics-v1.json'
     theme_prompts = 'theme-prompt-samples-v1.json'
 
+    def test_secure_appkit_factory_is_included_only_in_generated_macos_runner(self):
+        app = self.flutter_scaffold()
+        mac = (app / 'macos/Runner/MainFlutterWindow.swift').read_text()
+        ios = (app / 'ios/Runner/AppDelegate.swift').read_text()
+        source = (ci.ROOT / 'validation/flutter/native/apple/SecureCredentialView.swift').read_text()
+        self.assertIn(source, mac)
+        self.assertIn('registerHerdrSecureCredentialFields(registrar:', mac)
+        self.assertIn('registrar(forPlugin: "HerdrSecureCredentialFields")', mac)
+        self.assertNotIn('HerdrSecureCredential', ios)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='herdr-shared-diagnostic-assets-')
         self.addCleanup(self.temporary.cleanup)

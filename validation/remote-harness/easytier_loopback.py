@@ -98,22 +98,25 @@ def safe_client_result(raw, case):
         raise Failure('client_report_error_label')
     result['errorCode'] = error
     transport_error = raw.get('transportErrorCode')
-    if not (transport_error is None or isinstance(transport_error, str)) or transport_error not in ERRORS:
+    if not (transport_error is None or isinstance(transport_error, str)):
         raise Failure('client_report_transport_error')
-    result['transportErrorCode'] = transport_error
+    recognized = transport_error in ERRORS
+    result['transportErrorCode'] = transport_error if recognized else 'other_transport_error'
+    result['transportErrorRecognized'] = recognized
     return result
 
 
 def validate_case(result, connections, requests, accepted, target_connections):
     case, audit = result['case'], result['audit']
-    if not (result['passed'] and result['nodeStarted'] and result['candidateAbi']
+    if not (result['passed'] and result['errorCode'] is None and result['transportErrorRecognized']
+            and result['nodeStarted'] and result['candidateAbi']
             and result['sshBannerViaOverlay'] and result['bannerConnections'] >= 1
             and result['attemptCheckpointReached'] and connections >= 1
             and result['nativeStopCompleted'] and result['reservedNodesAfterCleanup'] == 0
             and result['reservedStreamsAfterCleanup'] == 0):
         raise Failure('client_case_or_cleanup_failed')
     if case == 'positive':
-        if not (all(audit.values()) and result['frameMarkerPresent']
+        if not (all(audit.values()) and result['frameMarkerPresent'] and result['transportErrorCode'] is None
                 and result['frameRows'] > 0 and result['frameColumns'] > 0
                 and requests >= 1 and accepted == 1 and target_connections == 1):
             raise Failure('real_overlay_frame_not_proven')

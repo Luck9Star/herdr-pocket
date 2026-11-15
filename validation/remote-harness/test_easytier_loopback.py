@@ -12,6 +12,7 @@ import easytier_loopback as probe
 def result(case):
     positive = case == 'positive'
     return {'schemaVersion': 1, 'case': case, 'passed': True, 'errorCode': None,
+            'transportErrorRecognized': True,
             'transportErrorCode': (None if positive else 'host_key_mismatch'
                                    if case == 'wrong-pin' else 'overlay_transport_failed'),
             'nodeStarted': True, 'candidateAbi': True, 'sshBannerViaOverlay': True,
@@ -66,9 +67,14 @@ class EvidenceTests(unittest.TestCase):
         raw.update(privateKeyPem='temporary-secret', stdout='arbitrary remote response')
         raw['audit']['privateKey'] = 'temporary-secret'
         self.assertNotIn('temporary-secret', json.dumps(probe.safe_client_result(raw, 'positive')))
-        for field in ('errorCode', 'transportErrorCode'):
-            raw = result('positive'); raw[field] = 'temporary_secret'
-            with self.assertRaises(probe.Failure): probe.safe_client_result(raw, 'positive')
+        raw = result('positive'); raw['errorCode'] = 'temporary_secret'
+        with self.assertRaises(probe.Failure): probe.safe_client_result(raw, 'positive')
+        raw = result('positive'); raw['transportErrorCode'] = 'temporary_secret'
+        safe = probe.safe_client_result(raw, 'positive')
+        self.assertEqual(safe['transportErrorCode'], 'other_transport_error')
+        self.assertFalse(safe['transportErrorRecognized'])
+        self.assertNotIn('temporary_secret', json.dumps(safe))
+        with self.assertRaises(probe.Failure): probe.validate_case(safe, 2, 2, 1, 1)
 
     def test_non_json_wrong_case_and_numeric_booleans_are_rejected(self):
         for raw in ('run-as: unknown package', None, [], {'case': 'positive'}):

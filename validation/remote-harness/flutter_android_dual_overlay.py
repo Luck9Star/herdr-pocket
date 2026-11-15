@@ -61,20 +61,23 @@ def prepare_private_ca(adb, serial, certificate, *, run):
             or b'-----BEGIN CERTIFICATE-----' not in certificate
             or b'PRIVATE KEY' in certificate):
         raise DualOverlayDeviceFailure('private_ca_input_invalid')
-    prefix = [str(adb), '-s', serial, 'shell', 'run-as', 'dev.herdr.herdr_flutter_probe']
-    # Fixed commands have no interpolation; sensitive bytes travel via stdin.
+    prefix = [str(adb), '-s', serial, 'shell', '-T', 'run-as', 'dev.herdr.herdr_flutter_probe']
     commands = [
-        (['mkdir', '-p', 'files/empty-dual-overlay-ca'], None),
-        (['sh', '-c', 'umask 077; cat > files/dual-overlay-ca.pem'], certificate),
-        (['sh', '-c', 'umask 077; : > files/enable-dual-overlay-private-ca'], None),
+        ('private_ca_mkdir_failed', ['mkdir', '-p', 'files/empty-dual-overlay-ca'], None),
+        ('private_ca_cert_failed', ['tee', 'files/dual-overlay-ca.pem'], certificate),
+        ('private_ca_permissions_failed', ['chmod', '600', 'files/dual-overlay-ca.pem'], None),
+        ('private_ca_readback_failed', ['cat', 'files/dual-overlay-ca.pem'], None),
+        ('private_ca_marker_failed', ['touch', 'files/enable-dual-overlay-private-ca'], None),
+        ('private_ca_marker_failed', ['chmod', '600', 'files/enable-dual-overlay-private-ca'], None),
     ]
-    for command, data in commands:
+    for failure_code, command, data in commands:
         try:
             result = run(prefix + command, input=data, stdout=-1, stderr=-1, timeout=20, check=False)
         except (OSError, subprocess.TimeoutExpired):
-            raise DualOverlayDeviceFailure('private_ca_prepare_failed') from None
-        if result.returncode != 0:
-            raise DualOverlayDeviceFailure('private_ca_prepare_failed')
+            raise DualOverlayDeviceFailure(failure_code) from None
+        if result.returncode != 0 or (failure_code == 'private_ca_readback_failed' and result.stdout != certificate):
+            raise DualOverlayDeviceFailure(failure_code)
+
 
 
 EXCHANGE_FILES = frozenset({'config.json', 'et-response.json', 'ts-response.json',
@@ -87,10 +90,12 @@ def write_exchange(adb, serial, name, data, *, run):
             or not isinstance(serial, str) or not serial or any(c not in
                 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_:.' for c in serial)):
         raise DualOverlayDeviceFailure('private_exchange_input_invalid')
-    prefix = [str(adb), '-s', serial, 'shell', 'run-as', 'dev.herdr.herdr_flutter_probe']
+    prefix = [str(adb), '-s', serial, 'shell', '-T', 'run-as', 'dev.herdr.herdr_flutter_probe']
+    relative = 'files/dual-overlay-exchange/' + name
     commands = [(['mkdir', '-p', 'files/dual-overlay-exchange'], None),
-                (['sh', '-c', 'umask 077; cat > files/dual-overlay-exchange/' + name +
-                  '.new && mv files/dual-overlay-exchange/' + name + '.new files/dual-overlay-exchange/' + name], data)]
+                (['tee', relative + '.new'], data),
+                (['chmod', '600', relative + '.new'], None),
+                (['mv', relative + '.new', relative], None)]
     for command, content in commands:
         try:
             result = run(prefix + command, input=content, stdout=-1, stderr=-1, timeout=20, check=False)
@@ -98,6 +103,7 @@ def write_exchange(adb, serial, name, data, *, run):
             raise DualOverlayDeviceFailure('private_exchange_write_failed') from None
         if result.returncode != 0:
             raise DualOverlayDeviceFailure('private_exchange_write_failed')
+
 
 
 READABLE_EXCHANGE = frozenset({'stage', 'et-request.json', 'ts-request.json', 'ts-url.txt', 'result.json'})

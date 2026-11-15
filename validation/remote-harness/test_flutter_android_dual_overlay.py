@@ -44,43 +44,62 @@ class SessionAuditTest(unittest.TestCase):
 
 
 class PrivateCATest(unittest.TestCase):
-    def test_private_ca_is_written_before_marker_without_command_interpolation(self):
+    def test_real_commands_write_readback_and_marker_in_private_directory(self):
+        import subprocess
+        import tempfile
+        from pathlib import Path
         calls = []
-        def run(command, **kwargs):
-            calls.append((command, kwargs))
-            return type('Result', (), {'returncode': 0})()
         cert = b'-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----'
-        prepare_private_ca('adb', 'emulator-5554', cert, run=run)
-        self.assertEqual(len(calls), 3)
-        self.assertEqual(calls[1][1]['input'], cert)
-        self.assertNotIn('fixture', repr([call[0] for call in calls]))
-        self.assertIn('enable-dual-overlay-private-ca', calls[2][0][-1])
+        with tempfile.TemporaryDirectory() as tmp:
+            def run(command, **kwargs):
+                calls.append((command, kwargs))
+                self.assertEqual(command[:7], ['adb', '-s', 'emulator-5554', 'shell', '-T',
+                                                'run-as', 'dev.herdr.herdr_flutter_probe'])
+                return subprocess.run(command[7:], cwd=tmp, **kwargs)
+            prepare_private_ca('adb', 'emulator-5554', cert, run=run)
+            self.assertEqual(len(calls), 6)
+            self.assertEqual(calls[1][1]['input'], cert)
+            self.assertNotIn('fixture', repr([call[0] for call in calls]))
+            self.assertEqual((Path(tmp) / 'files/dual-overlay-ca.pem').read_bytes(), cert)
+            self.assertEqual((Path(tmp) / 'files/dual-overlay-ca.pem').stat().st_mode & 0o777, 0o600)
+            self.assertEqual((Path(tmp) / 'files/enable-dual-overlay-private-ca').stat().st_mode & 0o777, 0o600)
 
-    def test_invalid_or_failed_write_never_creates_marker(self):
+    def test_invalid_or_failed_readback_never_creates_marker(self):
         calls = []
         def run(command, **kwargs):
             calls.append(command)
-            return type('Result', (), {'returncode': 1})()
+            return type('Result', (), {'returncode': 0, 'stdout': b'wrong'})()
         with self.assertRaises(DualOverlayDeviceFailure):
             prepare_private_ca('adb', 'emulator-5554', b'not a certificate', run=run)
         self.assertEqual(calls, [])
-        with self.assertRaises(DualOverlayDeviceFailure):
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'private_ca_readback_failed'):
             prepare_private_ca('adb', 'emulator-5554', b'-----BEGIN CERTIFICATE-----', run=run)
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls), 4)
+        self.assertFalse(any('enable-dual-overlay-private-ca' in repr(call) for call in calls))
 
 
 class PrivateExchangeTest(unittest.TestCase):
-    def test_only_allowlisted_file_names_and_stdin_payload(self):
+    def test_only_allowlisted_file_names_and_atomic_private_payload(self):
+        import subprocess
+        import tempfile
+        from pathlib import Path
         calls = []
-        def run(command, **kwargs):
-            calls.append((command, kwargs))
-            return type('Result', (), {'returncode': 0})()
-        write_exchange('adb', 'emulator-5554', 'config.json', b'test secret', run=run)
-        self.assertEqual(calls[-1][1]['input'], b'test secret')
-        self.assertNotIn('test secret', repr([call[0] for call in calls]))
-        with self.assertRaises(DualOverlayDeviceFailure):
-            write_exchange('adb', 'emulator-5554', '../bad', b'', run=run)
-        self.assertEqual(len(calls), 2)
+        with tempfile.TemporaryDirectory() as tmp:
+            def run(command, **kwargs):
+                calls.append((command, kwargs))
+                self.assertEqual(command[:7], ['adb', '-s', 'emulator-5554', 'shell', '-T',
+                                                'run-as', 'dev.herdr.herdr_flutter_probe'])
+                return subprocess.run(command[7:], cwd=tmp, **kwargs)
+            write_exchange('adb', 'emulator-5554', 'config.json', b'test secret', run=run)
+            self.assertEqual(calls[1][1]['input'], b'test secret')
+            self.assertNotIn('test secret', repr([call[0] for call in calls]))
+            file = Path(tmp) / 'files/dual-overlay-exchange/config.json'
+            self.assertEqual(file.read_bytes(), b'test secret')
+            self.assertEqual(file.stat().st_mode & 0o777, 0o600)
+            self.assertFalse(file.with_name('config.json.new').exists())
+            with self.assertRaises(DualOverlayDeviceFailure):
+                write_exchange('adb', 'emulator-5554', '../bad', b'', run=run)
+            self.assertEqual(len(calls), 4)
 
 
 class PrivateExchangeReadTest(unittest.TestCase):

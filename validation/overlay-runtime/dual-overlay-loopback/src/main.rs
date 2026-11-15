@@ -26,9 +26,17 @@ use std::{
 use tokio::sync::mpsc;
 use zeroize::Zeroize;
 
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum StopFirst {
+    Et,
+    Ts,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Input {
+    stop_first: StopFirst,
     network: String,
     native_config: String,
     control_url: String,
@@ -54,6 +62,11 @@ struct Report {
     et_stopped: bool,
     et_stale_rejected: bool,
     ts_after_stop: bool,
+    ts_stopped: bool,
+    ts_stale_rejected: bool,
+    et_after_stop: bool,
+    et_observer_joined: bool,
+    ts_observer_joined: bool,
     local_fallback_rejected: bool,
     cross_route_rejected: bool,
     cleanup: bool,
@@ -255,6 +268,8 @@ async fn run(
         ts_dial.clone(),
         input.ts_recovery.clone(),
     );
+    let mut a_awaited = false;
+    let mut b_awaited = false;
     let result = async {
         let ai = wait_input(&mut a).await?;
         report.et_full = true;
@@ -277,37 +292,103 @@ async fn run(
         send(&bi, b"TS-ONE\n").await?;
         marker(&mut b, b"ACK-TS-ONE").await?;
         report.ts_first = true;
-        let stale = ai
+        let (retired, survivor, old_input, live_input, node, stale_bytes, next_bytes, ack) =
+            match input.stop_first {
+                StopFirst::Et => (
+                    &mut a,
+                    &mut b,
+                    &ai,
+                    &bi,
+                    et.clone(),
+                    b"ET-STALE\n".as_slice(),
+                    b"TS-TWO\n".as_slice(),
+                    b"ACK-TS-TWO".as_slice(),
+                ),
+                StopFirst::Ts => (
+                    &mut b,
+                    &mut a,
+                    &bi,
+                    &ai,
+                    ts.clone(),
+                    b"TS-STALE\n".as_slice(),
+                    b"ET-TWO\n".as_slice(),
+                    b"ACK-ET-TWO".as_slice(),
+                ),
+            };
+        let stale = old_input
             .set_mode("direct", true)
             .map_err(|_| "input_mode_failed")?;
         let rt = runtime.clone();
-        let node = et.clone();
-        report.et_stopped = tokio::task::spawn_blocking(move || stop(&rt, &node))
+        let stopped = tokio::task::spawn_blocking(move || stop(&rt, &node))
             .await
             .unwrap_or(false);
-        if !report.et_stopped {
-            return Err("et_stop_failed");
+        match input.stop_first {
+            StopFirst::Et => report.et_stopped = stopped,
+            StopFirst::Ts => report.ts_stopped = stopped,
         }
-        let _ = tokio::time::timeout(Duration::from_secs(8), &mut a.task)
+        if !stopped {
+            return Err("provider_stop_failed");
+        }
+        let joined = matches!(
+            tokio::time::timeout(Duration::from_secs(8), &mut retired.task).await,
+            Ok(Ok(_))
+        );
+        match input.stop_first {
+            StopFirst::Et => {
+                a_awaited = true;
+                report.et_observer_joined = joined;
+            }
+            StopFirst::Ts => {
+                b_awaited = true;
+                report.ts_observer_joined = joined;
+            }
+        }
+        if !joined {
+            return Err("observer_join_failed");
+        }
+        let rejected = old_input
+            .send(stale, stale_bytes.to_vec(), false)
             .await
-            .map_err(|_| "et_observer_not_retired")?
-            .map_err(|_| "et_observer_panicked")?;
-        report.et_stale_rejected = ai.send(stale, b"ET-STALE\n".to_vec(), false).await.is_err();
-        if !report.et_stale_rejected {
+            .is_err();
+        match input.stop_first {
+            StopFirst::Et => report.et_stale_rejected = rejected,
+            StopFirst::Ts => report.ts_stale_rejected = rejected,
+        }
+        if !rejected {
             return Err("stale_input_not_rejected");
         }
-        send(&bi, b"TS-TWO\n").await?;
-        marker(&mut b, b"ACK-TS-TWO").await?;
-        report.ts_after_stop = true;
+        send(live_input, next_bytes).await?;
+        marker(survivor, ack).await?;
+        match input.stop_first {
+            StopFirst::Et => report.ts_after_stop = true,
+            StopFirst::Ts => report.et_after_stop = true,
+        }
         Ok(())
     }
     .await;
     a.cancel.cancel();
     b.cancel.cancel();
-    if !report.et_stopped {
-        let _ = tokio::time::timeout(Duration::from_secs(5), &mut a.task).await;
+    if !a_awaited {
+        report.et_observer_joined = matches!(
+            tokio::time::timeout(Duration::from_secs(8), &mut a.task).await,
+            Ok(Ok(_))
+        );
     }
-    let _ = tokio::time::timeout(Duration::from_secs(5), b.task).await;
+    if !b_awaited {
+        report.ts_observer_joined = matches!(
+            tokio::time::timeout(Duration::from_secs(8), &mut b.task).await,
+            Ok(Ok(_))
+        );
+    }
+    if !report.et_observer_joined {
+        a.task.abort();
+    }
+    if !report.ts_observer_joined {
+        b.task.abort();
+    }
+    if !report.et_observer_joined || !report.ts_observer_joined {
+        return Err("observer_join_failed");
+    }
     result
 }
 fn execute(mut input: Input, report: &mut Report) -> Result<(), &'static str> {
@@ -399,7 +480,7 @@ fn execute(mut input: Input, report: &mut Report) -> Result<(), &'static str> {
         exec.block_on(run(&input, runtime.clone(), et.clone(), ts.clone(), report))
     })();
     let et_done = report.et_stopped || stop(&runtime, &et);
-    let ts_done = stop(&runtime, &ts);
+    let ts_done = report.ts_stopped || stop(&runtime, &ts);
     let drain_deadline = Instant::now() + Duration::from_secs(5);
     while runtime.reserved_streams() != 0 && Instant::now() < drain_deadline {
         std::thread::sleep(Duration::from_millis(20));

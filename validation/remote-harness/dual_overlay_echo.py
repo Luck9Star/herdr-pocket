@@ -15,7 +15,7 @@ def main():
     if side not in ('ET', 'TS') or not root.is_dir():
         return 2
     expected = {b'ET-ONE\n': b'ACK-ET-ONE', b'TS-ONE\n': b'ACK-TS-ONE',
-                b'TS-TWO\n': b'ACK-TS-TWO'}
+                b'TS-TWO\n': b'ACK-TS-TWO', b'ET-TWO\n': b'ACK-ET-TWO'}
     fd = sys.stdin.fileno()
     original = termios.tcgetattr(fd)
     try:

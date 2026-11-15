@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-15",
+  "sourceSHA": "14765970b32fc2def98016a0104c0278e96f7be9",
+  "scope": "native macOS product Go manager/adapter over real tsnet userspace TCP; isolated synthetic control plane and peer",
+  "environment": {
+    "os": "macOS 27.2.1",
+    "architecture": "arm64",
+    "go": "1.27.3",
+    "tailscale": "v1.104.1",
+    "tailscaleCommit": "9a522a9786c97eb7910c01ccb7bd66557b04c910",
+    "moduleSum": "h1:9GNOm9Izqll9RH5jA5NWcLiCzXi/WtqY4EHQY2Dy2zk=",
+    "explicitAuthPatchSha256": "29b70583aadd99fa2ba79908be89c77306faffe2eeae979fec83410f4df0569e",
+    "network": "sandbox-exec localhost-only outbound",
+    "systemTrustChanged": false
+  },
+  "sourceFileSha256": {
+    "validation/native/tailscale-runtime/real_loopback_test.go": "3c41db0bf598f96ab994a52703d8319500eff74a0d27176d0b90ef760a2fdb4b",
+    "validation/native/tailscale-runtime/fixture/fixture.go": "b4d5faf3e5491aa1284faac5d5b9b83e8af1f0dc5640587b13047e7048420102",
+    "validation/native/tailscale-runtime/fixture/serve_test.go": "77fc61c04db9ddfbde584c186ba58a1fb297423d0a6dee3fce3783f0d63b16f5"
+  },
+  "productRuns": [
+    {
+      "attempt": 1,
+      "exitCode": 0,
+      "seconds": 1.062,
+      "phases": {
+        "bridgeConnections": 0,
+        "bytes": 37,
+        "event": "product_loopback",
+        "explicitHttpsAuth": true,
+        "nodes": 0,
+        "preLoginDialRejected": true,
+        "preLoginNoAuthUrl": true,
+        "running": true,
+        "streams": 0,
+        "tcpPayloadEqual": true
+      }
+    },
+    {
+      "attempt": 2,
+      "exitCode": 0,
+      "seconds": 0.906,
+      "phases": {
+        "bridgeConnections": 0,
+        "bytes": 37,
+        "event": "product_loopback",
+        "explicitHttpsAuth": true,
+        "nodes": 0,
+        "preLoginDialRejected": true,
+        "preLoginNoAuthUrl": true,
+        "running": true,
+        "streams": 0,
+        "tcpPayloadEqual": true
+      }
+    },
+    {
+      "attempt": 3,
+      "exitCode": 0,
+      "seconds": 0.925,
+      "phases": {
+        "bridgeConnections": 0,
+        "bytes": 37,
+        "event": "product_loopback",
+        "explicitHttpsAuth": true,
+        "nodes": 0,
+        "preLoginDialRejected": true,
+        "preLoginNoAuthUrl": true,
+        "running": true,
+        "streams": 0,
+        "tcpPayloadEqual": true
+      }
+    }
+  ],
+  "fixtureLifecycle": {
+    "exitCode": 0,
+    "httpsControlReady": true,
+    "realPeerRunningAndVirtualListenerReady": true,
+    "unissuedAuthUrlRejected": true,
+    "cleanup": {
+      "bridgeConnections": 0,
+      "event": "cleanup",
+      "peerClosed": true
+    },
+    "portsReleased": {
+      "control": true,
+      "derp": true,
+      "stun": true
+    }
+  },
+  "buildChecks": {
+    "explicitAuthPatchTestsPassed": true,
+    "raceSuitePassed": true,
+    "racePassedTests": 30,
+    "explicitNetworkTestsSkippedByDefault": 2,
+    "cSharedBuildAndLoadPassed": true,
+    "abiLoadProbeStartedNode": false
+  },
+  "binarySha256": {
+    "productTest": "e74673893d27d5923e2f22828db3e080c1158c15be0f01b9d7950c39c23bd999",
+    "macosArm64Library": "bc85f5d47ed445456355abb499446a19bd17465e8b608403647243e99f3560da"
+  },
+  "notEstablished": [
+    "real network through C ABI",
+    "SSH host pin/authentication/herdr/input",
+    "Headscale or commercial coordination plane compatibility",
+    "Linux dual-provider concurrency",
+    "Android/iOS or GUI/vault integration",
+    "overlapping virtual addresses",
+    "physical network or background persistence"
+  ]
+}

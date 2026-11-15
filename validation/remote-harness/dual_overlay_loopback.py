@@ -29,15 +29,15 @@ import easytier_loopback as et
 
 BOOL_FIELDS = ('passed', 'preloginUrlAbsent', 'preloginDialRejected', 'etFull', 'tsFull', 'etFirst',
                'tsFirst', 'etStopped', 'etStaleRejected', 'tsAfterStop',
-               'localFallbackRejected', 'crossRouteRejected', 'cleanup')
+               'tsStopped', 'tsStaleRejected', 'etAfterStop', 'etObserverJoined',
+               'tsObserverJoined', 'localFallbackRejected', 'crossRouteRejected', 'cleanup')
 
 
 CLIENT_ERRORS = {None, 'real_candidates_required', 'node_operation_failed', 'unexpected_prelogin_url',
                  'login_url_missing', 'prelogin_dial_not_rejected', 'auth_exchange_failed',
                  'auth_exchange_timeout', 'ts_not_running', 'local_fallback_not_rejected',
                  'cross_route_not_rejected', 'input_ready_timeout', 'input_not_ready',
-                 'frame_marker_missing', 'input_send_failed', 'input_mode_failed', 'et_stop_failed',
-                 'et_observer_not_retired', 'et_observer_panicked', 'stale_input_not_rejected',
+                 'frame_marker_missing', 'input_send_failed', 'input_mode_failed', 'provider_stop_failed', 'observer_join_failed', 'stale_input_not_rejected',
                  'cleanup_failed', 'executor_failed', 'dialer_failed', 'invalid_et_config'}
 
 
@@ -47,6 +47,18 @@ def safe_result(raw):
     error = raw.get('error')
     return ({field: raw[field] for field in BOOL_FIELDS},
             error if isinstance(error, (str, type(None))) and error in CLIENT_ERRORS else 'other_client_failure')
+
+
+def case_passed(result, stop_first):
+    common = ('passed', 'preloginUrlAbsent', 'preloginDialRejected', 'etFull', 'tsFull',
+              'etFirst', 'tsFirst', 'etObserverJoined', 'tsObserverJoined',
+              'localFallbackRejected', 'crossRouteRejected', 'cleanup')
+    expected = (('etStopped', 'etStaleRejected', 'tsAfterStop') if stop_first == 'et'
+                else ('tsStopped', 'tsStaleRejected', 'etAfterStop'))
+    inactive = (('tsStopped', 'tsStaleRejected', 'etAfterStop') if stop_first == 'et'
+                else ('etStopped', 'etStaleRejected', 'tsAfterStop'))
+    return all(result[field] is True for field in common + expected) and all(
+        result[field] is False for field in inactive)
 
 
 def wait_file(path, process, timeout=25):
@@ -84,7 +96,7 @@ def read_event(events, expected, process, timeout=45):
     raise et.Failure('ts_fixture_event_timeout')
 
 
-def run(bundle, output):
+def run(bundle, output, stop_first):
     if sys.platform != 'linux' or os.geteuid() == 0:
         raise et.Failure('linux_unprivileged_runner_required')
     et.checked_namespace(json.loads(et.command(['ip', '-j', 'link', 'show'])))
@@ -95,7 +107,7 @@ def run(bundle, output):
     root.chmod(0o700)
     processes, handles = [], []
     report = {'schemaVersion': 1, 'sourceSHA': os.environ.get('GITHUB_SHA', ''),
-              'status': 'failed', 'stage': 'fixture',
+              'status': 'failed', 'stage': 'fixture', 'stopFirst': stop_first,
               'loopbackOnlyNamespace': True, 'temporaryCredentialsRemoved': False,
               'ownedProcessesStopped': False, 'tsPeerCleanup': False}
     report['binarySha256'] = {name: et.digest(bundle / name) for name in
@@ -229,7 +241,7 @@ LogLevel ERROR
         hosts[1][2].update(host=ready['peerIp'], port=2222)
         node_dir = root / 'ts-node'; node_dir.mkdir(mode=0o700)
         exchange = root / 'exchange'; exchange.mkdir(mode=0o700)
-        request = {'network': network, 'nativeConfig': et.native_config(network, secret, peer_port),
+        request = {'stopFirst': stop_first, 'network': network, 'nativeConfig': et.native_config(network, secret, peer_port),
                    'controlUrl': ready['controlUrl'], 'nodeDir': str(node_dir), 'exchange': str(exchange),
                    'etRecovery': str(hosts[0][3]), 'tsRecovery': str(hosts[1][3]),
                    'etRemote': hosts[0][2], 'tsRemote': hosts[1][2], 'localPort': hosts[0][1]}
@@ -249,13 +261,15 @@ LogLevel ERROR
         report['client'], report['clientError'] = safe_result(result)
         et_bytes = (hosts[0][0] / 'received.bin').read_bytes()
         ts_bytes = (hosts[1][0] / 'received.bin').read_bytes()
-        report['independentExactInput'] = et_bytes == b'ET-ONE\n' and ts_bytes == b'TS-ONE\nTS-TWO\n'
+        expected = ((b'ET-ONE\n', b'TS-ONE\nTS-TWO\n') if stop_first == 'et'
+                    else (b'ET-ONE\nET-TWO\n', b'TS-ONE\n'))
+        report['independentExactInput'] = (et_bytes, ts_bytes) == expected
         ts_peer.stdin.write(b'{"op":"stop"}\n'); ts_peer.stdin.flush()
         stopped = read_event(events, 'cleanup', ts_peer, 15)
         report['tsPeerCleanup'] = stopped.get('peerClosed') is True and stopped.get('bridgeConnections') == 0
         ts_peer.wait(timeout=10)
         (root / 'stop-peer').touch(); peer.wait(timeout=15)
-        if client.returncode or ts_peer.returncode or peer.returncode or not all(report['client'].values()) \
+        if client.returncode or ts_peer.returncode or peer.returncode or not case_passed(report['client'], stop_first) \
                 or not report['independentExactInput'] or not report['tsPeerCleanup']:
             raise et.Failure('dual_acceptance_failed')
         report.update(status='passed', stage='complete')
@@ -298,9 +312,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bundle', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--stop-first', required=True, choices=('et', 'ts'))
     args = parser.parse_args()
     try:
-        result = run(args.bundle.resolve(strict=True), args.output.resolve())
+        result = run(args.bundle.resolve(strict=True), args.output.resolve(), args.stop_first)
     except Exception as error:
         path = args.output / 'manifest.json'
         result = json.loads(path.read_text()) if path.is_file() else {'status': 'failed', 'stage': 'precondition'}

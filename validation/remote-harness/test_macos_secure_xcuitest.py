@@ -77,13 +77,16 @@ class ScaffoldTests(unittest.TestCase):
         script=textwrap.dedent(body)
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);fixture=root/'macos-secure-fixture';fixture.mkdir()
-            allowed=['fixtureReadable','appLaunched','homepage','passwordFreshVerified','passwordAddressTyped','passwordPortCleared','passwordPortTyped','passwordUsernameTyped','keyFreshVerified','keyAddressTyped','keyPortCleared','keyPortTyped','keyUsernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted','passwordValuePresent','passphraseValuePresent',
+            allowed=['fixtureReadable','appLaunched','homepage','maskingHomepage','passwordHomepage','keyHomepage','returnHomepage','passwordFreshVerified','passwordAddressTyped','passwordPortCleared','passwordPortTyped','passwordUsernameTyped','keyFreshVerified','keyAddressTyped','keyPortCleared','keyPortTyped','keyUsernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted','passwordValuePresent','passphraseValuePresent',
                      'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                      'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
             good_peer={k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}
             (fixture/'facts.json').write_text(json.dumps({'password':good_peer,'encryptedKey':good_peer}))
             progress={k:True for k in allowed}
-            good_log='Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed\n'+''.join('HP_XCUI_STAGE='+k+'\n' for k in progress)
+            methods=('testSystemMasking','testPasswordSSH','testEncryptedKeySSH','testReturnAndReopen')
+            cases=''.join('Test Case '+name+' passed\n' for name in methods)
+            good_log=cases+''.join('HP_XCUI_STAGE='+k+'\n' for k in progress)
+            (root/'macos-secure-private-summary.json').write_text(json.dumps({'totalTestCount':4,'passedTests':4,'failedTests':0,'skippedTests':0}))
             log=root/'macos-secure-private.log';log.write_text(good_log)
             output=root/'result.json';env={**os.environ,'RUNNER_TEMP':temp,'GITHUB_SHA':'a'*40}
             def execute():
@@ -91,22 +94,24 @@ class ScaffoldTests(unittest.TestCase):
             self.assertEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'passed')
             log.write_text('Executed 0 tests')
             self.assertNotEqual(execute().returncode,0);self.assertFalse(json.loads(output.read_text())['testExecuted'])
-            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed')
-            self.assertNotEqual(execute().returncode,0);self.assertTrue(json.loads(output.read_text())['testExecuted']);self.assertFalse(json.loads(output.read_text())['testPassed'])
-            mask=['fixtureReadable','appLaunched','homepage','passwordSecureField',
+            log.write_text('Test Case testSystemMasking failed')
+            self.assertNotEqual(execute().returncode,0);self.assertTrue(json.loads(output.read_text())['cases']['testSystemMasking']['executed']);self.assertFalse(json.loads(output.read_text())['testPassed'])
+            mask=['fixtureReadable','appLaunched','homepage','maskingHomepage','passwordSecureField',
                   'passwordHiddenFocused','passwordHiddenBlurred','passphraseSecureField',
                   'passphraseHiddenAfterFocusChanges','modeSwitchCleared','maskingScanCompleted','passwordValuePresent','passphraseValuePresent']
-            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed\n'+''.join('HP_XCUI_STAGE='+k+'\n' for k in mask))
-            self.assertNotEqual(execute().returncode,0);self.assertTrue(json.loads(output.read_text())['systemTreeAndSecureFieldsVerified'])
-            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed\nHP_XCUI_METRIC=windows:1,nodes:10,buttons:2,exact:1,label:1\nprivate fixture material')
+            log.write_text('Test Case testSystemMasking passed\n'+''.join('HP_XCUI_STAGE='+k+'\n' for k in mask))
+            self.assertNotEqual(execute().returncode,0)
+            report=json.loads(output.read_text());self.assertTrue(report['systemTreeAndSecureFieldsVerified'])
+            self.assertTrue(report['cases']['testSystemMasking']['passed']);self.assertFalse(report['cases']['testPasswordSSH']['executed'])
+            log.write_text('Test Case testSystemMasking failed\nHP_XCUI_METRIC=windows:1,nodes:10,buttons:2,exact:1,label:1\nprivate fixture material')
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertEqual(report['homeMetrics']['nodes'],10)
             self.assertNotIn('private fixture material',output.read_text())
-            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed\nHP_XCUI_FINGERPRINT=phase:password,nodes:12,prefix:1,exact:0\nprivate fingerprint material')
+            log.write_text('Test Case testPasswordSSH failed\nHP_XCUI_FINGERPRINT=phase:password,nodes:12,prefix:1,exact:0\nprivate fingerprint material')
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertEqual(report['fingerprintMetrics'][0]['expectedExactCount'],0)
             self.assertNotIn('private fingerprint material',output.read_text())
-            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed\nHP_XCUI_TARGET=phase:passwordBefore,bits:101110101010\nprivate target material')
+            log.write_text('Test Case testPasswordSSH failed\nHP_XCUI_TARGET=phase:passwordBefore,bits:101110101010\nprivate target material')
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertTrue(report['targetMetrics'][0]['hostMatches']);self.assertFalse(report['targetMetrics'][0]['passwordPortMatches'])
             self.assertNotIn('private target material',output.read_text())
@@ -114,7 +119,7 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertIn('timeout',report['failureCategories']);self.assertTrue(report['xcresultDetailsAvailable'])
             self.assertNotIn('synthetic credential',output.read_text())
-            del progress['returnAndReopenCleared'];log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed\n'+''.join('HP_XCUI_STAGE='+k+'\n' for k in progress))
+            del progress['returnAndReopenCleared'];log.write_text(cases+''.join('HP_XCUI_STAGE='+k+'\n' for k in progress))
             self.assertNotEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'failed')
             log.write_text(good_log)
             (fixture/'facts.json').write_text(json.dumps({'password':{'authAccepted':False},'encryptedKey':good_peer}))

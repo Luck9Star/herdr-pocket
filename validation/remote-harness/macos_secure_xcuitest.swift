@@ -3,6 +3,11 @@ import Darwin
 
 @available(macOS 15.0, *)
 final class SecureCredentialUITests: XCTestCase {
+    override func tearDown() {
+        XCUIApplication().terminate()
+        super.tearDown()
+    }
+
     private func mark(_ name: String) {
         print("HP_XCUI_STAGE=\(name)")
         fflush(stdout)
@@ -198,6 +203,7 @@ final class SecureCredentialUITests: XCTestCase {
             app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
             mark("returnEscapeUsed")
         }
+        XCTAssertTrue(homeVisible(app), "normal homepage did not return")
         let entry = homeEntry(app)
         XCTAssertTrue(entry.exists && entry.isHittable, "normal homepage did not return")
         try assertNoSecrets(app, secrets)
@@ -214,39 +220,53 @@ final class SecureCredentialUITests: XCTestCase {
         return matches.allElementsBoundByIndex.first(where: { $0.isHittable }) ?? button
     }
 
-    func testPasswordAndPrivateKeyPassphraseAreSecure() throws {
-        continueAfterFailure = false
+    private var forcedEmbedder = false
+
+    private func fixture() throws -> [String: Any] {
         guard let data = Data(base64Encoded: "__HP_FIXTURE_BASE64__"),
-              let fixture = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let password = fixture["password"] as? String,
-              let username = fixture["username"] as? String,
-              let port = fixture["port"] as? Int,
-              let fingerprint = fixture["fingerprint"] as? String,
-              let keyPort = fixture["keyPort"] as? Int,
-              let keyFingerprint = fixture["keyFingerprint"] as? String,
-              let privateKey = fixture["privateKey"] as? String,
-              let phrase = fixture["passphrase"] as? String else {
+              let config = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              config["password"] is String, config["username"] is String,
+              config["port"] is Int, config["fingerprint"] is String,
+              config["keyPort"] is Int, config["keyFingerprint"] is String,
+              config["privateKey"] is String, config["passphrase"] is String else {
             XCTFail("owned loopback fixture unavailable")
-            return
+            throw NSError(domain: "fixture", code: 1)
         }
-        let host = "127.0.0.1"
         mark("fixtureReadable")
-        let app = XCUIApplication()
+        return config
+    }
+
+    private func homeVisible(_ app: XCUIApplication) -> Bool {
+        let add = element(app, "配对添加")
+        return add.waitForExistence(timeout: 15) && !element(app, "地址").exists
+    }
+
+    private func launchSSH(_ app: XCUIApplication, stage: String) {
+        app.launchArguments = forcedEmbedder ? ["--herdr-xcui-embedder-semantics"] : []
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "candidate app did not launch")
         mark("appLaunched")
-        var entry = homeEntry(app)
-        if !entry.exists || !entry.isHittable {
-            app.terminate()
+        if !homeVisible(app) && !forcedEmbedder {
+            app.terminate();forcedEmbedder = true
             app.launchArguments = ["--herdr-xcui-embedder-semantics"]
             mark("embedderFallbackRequested")
             app.launch()
             XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "candidate app did not launch")
-            entry = homeEntry(app)
         }
+        XCTAssertTrue(homeVisible(app), "normal homepage not confirmed")
+        mark("homepage");mark(stage)
+        let entry = homeEntry(app)
         XCTAssertTrue(entry.exists && entry.isHittable, "normal homepage SSH entry missing")
-        mark("homepage")
         tap(app, entry)
+    }
+
+    func testSystemMasking() throws {
+        continueAfterFailure = false
+        let config = try fixture()
+        let password = config["password"] as! String
+        let phrase = config["passphrase"] as! String
+        let app = XCUIApplication()
+        launchSSH(app, stage: "maskingHomepage")
         let address = element(app, "地址").descendants(matching: .textField).firstMatch
         XCTAssertTrue(address.waitForExistence(timeout: 15), "named address group or ordinary input missing")
         _ = try ordinaryMetrics(app, sentinel: "")
@@ -290,10 +310,21 @@ final class SecureCredentialUITests: XCTestCase {
         let sentinel = "hp-address-" + UUID().uuidString
         try typeOrdinaryOnce(app, field: address, value: sentinel, phase: "sentinel")
         mark("ordinarySentinelObserved")
-        try reopenSSH(app, secrets: [password, phrase])
-        try enterTarget(app, host: host, port: port, username: username, phase: "password")
-        mark("ordinaryInputReadable")
+        app.terminate()
+    }
 
+    func testPasswordSSH() throws {
+        continueAfterFailure = false
+        let config = try fixture()
+        let password = config["password"] as! String
+        let phrase = config["passphrase"] as! String
+        let username = config["username"] as! String
+        let port = config["port"] as! Int
+        let fingerprint = config["fingerprint"] as! String
+        let app = XCUIApplication()
+        launchSSH(app, stage: "passwordHomepage")
+        try enterTarget(app, host: "127.0.0.1", port: port, username: username, phase: "password")
+        mark("ordinaryInputReadable")
         let probe = app.buttons["探测并核对主机密钥"]
         reveal(app, probe)
         let passwordTarget = try targetDiagnostics(app, phase: "passwordBefore")
@@ -324,8 +355,21 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue((secureField(app, "direct-secret").value as? String ?? "").isEmpty, "password not cleared after disconnect")
         mark("disconnectedAndCleared")
 
-        try reopenSSH(app, secrets: [password, phrase])
-        try enterTarget(app, host: host, port: keyPort, username: username, phase: "key")
+        app.terminate()
+    }
+
+    func testEncryptedKeySSH() throws {
+        continueAfterFailure = false
+        let config = try fixture()
+        let password = config["password"] as! String
+        let phrase = config["passphrase"] as! String
+        let username = config["username"] as! String
+        let keyPort = config["keyPort"] as! Int
+        let keyFingerprint = config["keyFingerprint"] as! String
+        let privateKey = config["privateKey"] as! String
+        let app = XCUIApplication()
+        launchSSH(app, stage: "keyHomepage")
+        try enterTarget(app, host: "127.0.0.1", port: keyPort, username: username, phase: "key")
         let keyProbe = app.buttons["探测并核对主机密钥"]
         reveal(app, keyProbe)
         let keyTarget = try targetDiagnostics(app, phase: "keyBefore")
@@ -361,6 +405,20 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue((secureField(app, "direct-passphrase").value as? String ?? "").isEmpty, "passphrase not cleared after disconnect")
         mark("encryptedKeyDisconnectedAndCleared")
 
+        app.terminate()
+    }
+
+    func testReturnAndReopen() throws {
+        continueAfterFailure = false
+        let config = try fixture()
+        let password = config["password"] as! String
+        let phrase = config["passphrase"] as! String
+        let app = XCUIApplication()
+        launchSSH(app, stage: "returnHomepage")
+        let field = secureField(app, "direct-secret")
+        tap(app, field);app.typeText(password)
+        XCTAssertFalse((field.value as? String ?? "").isEmpty, "return input state unavailable")
+        try assertNoSecrets(app, [password, phrase])
         try reopenSSH(app, secrets: [password, phrase])
         let reopened = secureField(app, "direct-secret")
         XCTAssertTrue((reopened.value as? String ?? "").isEmpty, "prior credential retained")

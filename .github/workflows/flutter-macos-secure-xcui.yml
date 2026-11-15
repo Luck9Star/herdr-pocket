@@ -65,7 +65,7 @@ jobs:
               if isinstance(value,dict):
                   for key in ('nodeIdentifier','testIdentifier','testIdentifierURL','identifier'):
                       item=value.get(key)
-                      if isinstance(item,str) and 'testPasswordAndPrivateKeyPassphraseAreSecure' in item and re.fullmatch(r'[A-Za-z0-9_./():%+-]+',item): return item
+                      if isinstance(item,str) and any(name in item for name in ('testSystemMasking','testPasswordSSH','testEncryptedKeySSH','testReturnAndReopen')) and re.fullmatch(r'[A-Za-z0-9_./():%+-]+',item): return item
                   for item in value.values():
                       found=find(item)
                       if found:return found
@@ -118,7 +118,7 @@ jobs:
               diagnostic={'file':'RunnerTests.swift','line':int(match.group(1)),'message':message}
               if message and diagnostic not in diagnostics: diagnostics.append(diagnostic)
               if len(diagnostics)==3: break
-          allowed={'fixtureReadable','appLaunched','homepage','passwordFreshVerified','passwordAddressTyped','passwordPortCleared','passwordPortTyped','passwordUsernameTyped','keyFreshVerified','keyAddressTyped','keyPortCleared','keyPortTyped','keyUsernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted',
+          allowed={'fixtureReadable','appLaunched','homepage','maskingHomepage','passwordHomepage','keyHomepage','returnHomepage','passwordFreshVerified','passwordAddressTyped','passwordPortCleared','passwordPortTyped','passwordUsernameTyped','keyFreshVerified','keyAddressTyped','keyPortCleared','keyPortTyped','keyUsernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted',
                    'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                    'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
           optional={'passwordValuePresent','passwordValueUnavailable','passphraseValuePresent','passphraseValueUnavailable','returnButtonUsed','returnEscapeUsed'}
@@ -151,6 +151,7 @@ jobs:
           fixed += ['ordinary field sentinel not read back','ordinary field target not read back']
           fixed += ['fresh ordinary form defaults unconfirmed','default port was not cleared']
           fixed += ['password target not confirmed','encrypted key target not confirmed']
+          fixed += ['normal homepage not confirmed','return input state unavailable']
           fixed += ['private key editor missing','encrypted key session did not authenticate','passphrase not cleared after disconnect']
           fixed += ['form scroll target unavailable','requested control is not hittable','requested control is disabled']
           fixed_failures=[message for message in fixed if message in diagnostic_text]
@@ -178,35 +179,39 @@ jobs:
           metrics=re.findall(r'hp_xcui_metric=windows:(\d{1,5}),nodes:(\d{1,5}),buttons:(\d{1,5}),exact:(\d{1,5}),label:(\d{1,5})',log)
           metrics=[dict(zip(('windows','nodes','buttons','exact','label'),map(int,row))) for row in metrics[:2]]
           home_metrics=metrics[0] if metrics else {}
-          method='testPasswordAndPrivateKeyPassphraseAreSecure'
-          failure_method=method if (summary.get('failedTests',0) and method.lower() in json.dumps(summary).lower()) or (fixed_failures and method.lower() in log) else None
-          test_executed=bool(re.search(r'test case[^\n]*testpasswordandprivatekeypassphrasearesecure',log))
-          test_passed=bool(re.search(r'testpasswordandprivatekeypassphrasearesecure[^\n]{0,100}\bpassed\b',log))
+          methods=('testSystemMasking','testPasswordSSH','testEncryptedKeySSH','testReturnAndReopen')
+          cases={name:{'executed':bool(re.search(r'test case[^\n]*'+name.lower(),log)),
+                       'passed':bool(re.search(name.lower()+r'[^\n]{0,100}\bpassed\b',log))} for name in methods}
+          failed_methods=[name for name in methods if cases[name]['executed'] and not cases[name]['passed']]
+          failure_method=failed_methods[0] if failed_methods else None
+          test_executed=all(case['executed'] for case in cases.values())
+          test_passed=all(case['passed'] for case in cases.values())
           if test_passed: categories=[]
           completed=all(progress.get(k) is True for k in allowed)
-          mask_stages={'fixtureReadable','appLaunched','homepage','passwordSecureField',
+          mask_stages={'fixtureReadable','appLaunched','homepage','maskingHomepage','passwordSecureField',
                        'passwordHiddenFocused','passwordHiddenBlurred','passphraseSecureField',
                        'passphraseHiddenAfterFocusChanges','modeSwitchCleared','maskingScanCompleted'}
           password_proven=progress.get('passwordValuePresent') is True or peer
           passphrase_proven=progress.get('passphraseValuePresent') is True or key_peer
-          masking_verified=all(progress.get(k) is True for k in mask_stages) and password_proven and passphrase_proven
-          ok=sys.argv[2]=='0' and peer and key_peer and test_passed and completed and masking_verified
+          masking_verified=cases['testSystemMasking']['passed'] and all(progress.get(k) is True for k in mask_stages) and password_proven and passphrase_proven
+          exact_counts=counts.get('totalTestCount')==4 and counts.get('passedTests')==4 and counts.get('failedTests')==0 and counts.get('skippedTests')==0
+          ok=sys.argv[2]=='0' and peer and key_peer and test_passed and completed and masking_verified and exact_counts
           report={'schemaVersion':1,'sourceSHA':sha if re.fullmatch(r'[0-9a-f]{40}',sha) else None,
                   'platform':'macos-xcuitest','status':'passed' if ok else 'failed',
                   'scope':'native UI security fields and owned SSH loopback; synthetic values; no physical IME',
                   'embedderFallbackRequested':'hp_xcui_stage=embedderfallbackrequested' in log,
-                  'systemTreeAndSecureFieldsVerified':masking_verified,'testExecuted':test_executed,'testPassed':test_passed,
+                  'systemTreeAndSecureFieldsVerified':masking_verified,'testExecuted':test_executed,'testPassed':test_passed,'cases':cases,
                   'peerAuthenticationPtyShellAndClose':peer,'encryptedKeyPeerAuthenticationPtyShellAndClose':key_peer,
                   'passwordInputProven':password_proven,'passphraseInputProven':passphrase_proven,'buildStarted':('swiftcompile' in log or 'build target' in log),
                   'testStarted':('test suite' in log or 'test case' in log),'testCounts':counts,
-                  'failureMethod':failure_method,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,
+                  'failureMethod':failure_method,'failedMethods':failed_methods,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,
                   'failureCategories':categories,'xcresultDetailsAvailable':details_available,'homeMetrics':home_metrics,
                   'fallbackHomeMetrics':metrics[1] if len(metrics)>1 else {},
                   'ordinaryMetrics':ordinary,'backMetrics':back_metrics,'secureMetrics':secure_metrics,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
                   'inputMetrics':inputs,'inputDetails':input_details,'targetMetrics':target_metrics,
                   'progress':progress,'rawLogsUploaded':False}
           if not ok:
-              report['errorCode']='xcui_accessibility_permission_missing' if permission else ('secure_field_not_identified' if 'native secure field missing from system tree' in log else ('xcui_test_or_environment_failed' if sys.argv[2]!='0' else ('xcui_test_not_executed' if not test_executed or not completed else ('secure_input_unproven' if not masking_verified else 'loopback_peer_evidence_incomplete'))))
+              report['errorCode']='xcui_accessibility_permission_missing' if permission else ('secure_field_not_identified' if 'native secure field missing from system tree' in log else ('xcui_test_or_environment_failed' if sys.argv[2]!='0' else ('xcui_test_not_executed' if not test_executed or not completed else ('xcui_test_count_unverified' if not exact_counts else ('secure_input_unproven' if not masking_verified else 'loopback_peer_evidence_incomplete')))))
           with open(sys.argv[1],'w') as output: json.dump(report,output,indent=2);output.write('\n')
           if not ok: sys.exit(1)
           PY

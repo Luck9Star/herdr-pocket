@@ -291,11 +291,16 @@ func TestStatusRefreshesDiagnoseAfterStartFailure(t *testing.T) {
 }
 
 func TestDiagnoseWriteFailureDoesNotAffectStart(t *testing.T) {
-	old := netmonPersistDiagnose
-	netmonPersistDiagnose = func(string) error { return errors.New("disk full") }
-	t.Cleanup(func() { netmonPersistDiagnose = old })
+	stubNetmonPaths(t, goodGoNet, failingGetifaddrs)
+	dir := t.TempDir()
+	enableNetmonForTest(t, dir)
+	// Marker exists but the diagnose filename is occupied by a directory:
+	// every persist attempt fails after measuring, on both start and status.
+	if err := os.Mkdir(filepath.Join(dir, netmonDiagnoseFileName), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	m := managerWith(&fakeEngine{})
-	id := addNode(t, m, t.TempDir()) // newNode stays ok despite write failure
+	id := addNode(t, m, dir)
 	defer closeNode(t, m, id)
 	if c := m.start(id, 1000); c != ok {
 		t.Fatalf("start=%v with failing diagnose writer", c)

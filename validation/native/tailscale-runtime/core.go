@@ -129,8 +129,15 @@ type stream struct {
 	ops                       sync.WaitGroup
 }
 
+// Optional hooks wired by the netmon shim (netmon.go). Defaults keep the
+// module self-contained so the isolated GO111MODULE=off core test compiles
+// without third-party imports.
+var (
+	ensureNetmonGetter   = func() {}
+	persistNetmonDiagOne = func(string) {}
+)
+
 func newManager(f factory) *manager {
-	ensureNetmonGetter()
 	return &manager{nodes: map[uint64]*node{}, streams: map[uint64]*stream{}, makeEngine: f}
 }
 func (m *manager) alloc() uint64 {
@@ -400,7 +407,7 @@ func (m *manager) control(id uint64, ms uint32, login bool) (snapshot, code) {
 	}
 	if !login {
 		// Refresh measured diagnose on every status call, best-effort.
-		_ = netmonPersistDiagnose(n.directory)
+		persistNetmonDiagOne(n.directory)
 	}
 	n.mu.Lock()
 	if n.closing {

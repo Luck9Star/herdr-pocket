@@ -137,7 +137,7 @@ var (
 // Production registers the alternate getter only on Android: desktop hosts
 // keep stock netmon behavior (already-validated Linux/macOS paths). Tests
 // call registerNetmonGetterForTest directly on any platform.
-func ensureNetmonGetter() {
+func realEnsureNetmonGetter() {
 	if runtime.GOOS != "android" {
 		return
 	}
@@ -243,8 +243,13 @@ func diagnoseNetmon() netmonDiagnose {
 	return d
 }
 
-// Best-effort persistence; failures never alter node lifecycle return codes.
-var netmonPersistDiagnose = persistNetmonDiagnose
+// Wire the self-contained core hooks (core.go declares inert defaults so the
+// isolated GO111MODULE=off core test compiles without this shim).
+var _ = func() bool {
+	ensureNetmonGetter = realEnsureNetmonGetter
+	persistNetmonDiagOne = func(dir string) { _ = persistNetmonDiagnose(dir) }
+	return true
+}()
 
 func persistNetmonDiagnose(dir string) error {
 	if dir == "" {

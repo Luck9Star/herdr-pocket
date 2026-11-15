@@ -55,7 +55,7 @@ jobs:
         id: smoke
         run: |
           mkdir -p "$RUNNER_TEMP/session-work"
-          "$RUNNER_TEMP/session-env/bin/python" validation/remote-harness/android_dual_overlay_session.py --smoke --host-only \
+          "$RUNNER_TEMP/session-env/bin/python" validation/remote-harness/android_dual_overlay_session.py --smoke --relay-only \
             --bundle "$RUNNER_TEMP/host-bundle" --work-root "$RUNNER_TEMP/session-work" \
             --source-checkout "$GITHUB_WORKSPACE/host-source" --host-source "$HOST_SOURCE" \
             --output "$RUNNER_TEMP/session-evidence/result.json"

@@ -76,8 +76,18 @@ def _verify_owned_listeners(config):
     try:
         ns_inode = os.stat('/run/netns/' + config['namespace']).st_ino
         for pid in config['ownerPids'].values():
-            if os.stat(f'/proc/{pid}').st_uid != os.getuid() or os.stat(f'/proc/{pid}/ns/net').st_ino != ns_inode:
-                raise RelayError('owned_processes_required')
+            try:
+                process_uid = os.stat(f'/proc/{pid}').st_uid
+            except OSError:
+                raise RelayError('listener_process_stat_failed') from None
+            if process_uid != os.getuid():
+                raise RelayError('listener_process_uid_mismatch')
+            try:
+                process_inode = os.stat(f'/proc/{pid}/ns/net').st_ino
+            except OSError:
+                raise RelayError('listener_process_namespace_unreadable') from None
+            if process_inode != ns_inode:
+                raise RelayError('listener_process_namespace_mismatch')
         result = subprocess.run(['sudo', '-n', 'ip', 'netns', 'exec', config['namespace'], 'ss', '-H', '-ltnp'],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10, check=False)
         if result.returncode:

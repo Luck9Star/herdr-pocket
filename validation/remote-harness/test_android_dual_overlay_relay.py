@@ -65,6 +65,24 @@ class RelayTests(unittest.TestCase):
         with self.assertRaises(relay.RelayError): relay.checked_manifest(alias)
         with patch.dict(os.environ, {'GITHUB_ACTIONS':'false'}):
             with self.assertRaises(relay.RelayError): relay.checked_manifest(self.manifest)
+    def test_listener_rejection_codes_are_fixed_and_keep_all_guards(self):
+        config = relay.checked_manifest(self.manifest)
+        for failure, expected in (('process', 'listener_process_stat_failed'),
+                                  ('uid', 'listener_process_uid_mismatch'),
+                                  ('namespace_read', 'listener_process_namespace_unreadable'),
+                                  ('namespace', 'listener_process_namespace_mismatch')):
+            def checked_stat(path):
+                value = str(path)
+                if failure == 'process' and value.startswith('/proc/') and not value.endswith('/ns/net'):
+                    raise PermissionError('private detail must not escape')
+                if failure == 'namespace_read' and value.endswith('/ns/net'):
+                    raise PermissionError('private detail must not escape')
+                return SimpleNamespace(st_uid=os.getuid() + (1 if failure == 'uid' else 0),
+                    st_ino=99 if failure == 'namespace' and value.endswith('/ns/net') else 42)
+            with self.subTest(failure=failure), patch.object(relay.os, 'stat', side_effect=checked_stat):
+                with self.assertRaisesRegex(relay.RelayError, '^' + expected + '$'):
+                    relay._verify_owned_listeners(config)
+
     def test_actual_listener_guard_rejects_wrong_owner_or_wildcard(self):
         config=relay.checked_manifest(self.manifest)
         def fake_stat(path):

@@ -11,10 +11,10 @@ spec.loader.exec_module(probe)
 
 class PrivateCaProbeTests(unittest.TestCase):
     def test_instrument_requires_one_well_formed_result_after_force_stop(self):
-        with patch.object(probe, '_adb', side_effect=[b'', b'HP_TLS_RESULT pid=42 code=0 wrong=2 wrap=1 executable=1 javaEnv=1']) as adb:
-            self.assertEqual(probe.instrument(1234), (42, 0, 2, 1, 1, 1))
+        with patch.object(probe, '_adb', side_effect=[b'', b'HP_TLS_RESULT pid=42 code=0 wrong=2 prep=2 wrap=1 executable=1 javaEnv=1']) as adb:
+            self.assertEqual(probe.instrument(1234), (42, 0, 2, 2, 1, 1, 1))
             self.assertEqual(adb.call_args_list[0].args, ('shell', 'am', 'force-stop', probe.PACKAGE))
-        for value in (b'', b'HP_TLS_RESULT pid=42 code=0 wrong=2 wrap=1 executable=1 javaEnv=1\nHP_TLS_RESULT pid=42 code=0 wrong=2 wrap=1 executable=1 javaEnv=1'):
+        for value in (b'', b'HP_TLS_RESULT pid=42 code=0 wrong=2 prep=2 wrap=1 executable=1 javaEnv=1\nHP_TLS_RESULT pid=42 code=0 wrong=2 prep=2 wrap=1 executable=1 javaEnv=1'):
             with self.subTest(value=value), patch.object(probe, '_adb', side_effect=[b'', value]):
                 with self.assertRaises(probe.ReverseError):
                     probe.instrument(1234)

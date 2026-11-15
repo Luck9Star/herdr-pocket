@@ -42,7 +42,7 @@ def package_present():
 def instrument(port):
     _adb('shell','am','force-stop',PACKAGE)
     output=_adb('shell','am','instrument','-w','-e','port',str(port),RUNNER,timeout=60)
-    matches=re.findall(rb'HP_TLS_RESULT pid=([0-9]+) code=([0-9]+) wrong=([0-9]+) wrap=([01]) executable=([01]) javaEnv=([01])',output)
+    matches=re.findall(rb'HP_TLS_RESULT pid=([0-9]+) code=([0-9]+) wrong=([0-9]+) prep=([0-9]+) wrap=([01]) executable=([01]) javaEnv=([01])',output)
     if len(matches)!=1: raise ReverseError('instrument_result_invalid')
     return tuple(int(value) for value in matches[0])
 
@@ -59,7 +59,7 @@ def run(apk,output):
     output.mkdir(parents=True,exist_ok=True)
     if package_present(): raise ReverseError('probe_package_already_present')
     root=Path(tempfile.mkdtemp(prefix='hp-private-ca-',dir=base));root.chmod(0o700)
-    result={'schemaVersion':1,'status':'failed','scope':'API35 x86_64 disposable debug instrumentation and standard Go TLS; synthetic CA; no product App or system trust changes',
+    result={'schemaVersion':1,'status':'failed','scope':'API35 x86_64 disposable debug instrumentation and standard Go TLS with test-only private-path Go environment initialization; synthetic CA; no product App or system trust changes',
             'caAbsentRejected':False,'privateCaAccepted':False,'wrongHostnameRejected':False,'caRemovedRejected':False,
             'freshProcesses':False,'reverseRemoved':False,'relayClosed':False,'packageRemoved':False,
             'peerProcessesStopped':False,'privateRemoved':False}
@@ -99,7 +99,8 @@ def run(apk,output):
             mappings=OwnedReverseMappings(relay)
             with mappings:
                 phase='without_ca'
-                pid1,code1,_,wrap,executable,java_env=instrument(config['control'])
+                pid1,code1,_,prep,wrap,executable,java_env=instrument(config['control'])
+                result['goEnvironmentPreparation']=prep if prep in (1,2,8,9,99) else -1
                 result['wrapExtracted']=bool(wrap)
                 result['wrapExecutable']=bool(executable)
                 result['javaEnvironmentMatches']=bool(java_env)
@@ -108,7 +109,7 @@ def run(apk,output):
                 if not result['caAbsentRejected']: raise ReverseError('ca_absent_not_rejected')
                 phase='with_private_ca'
                 _adb('shell','-T','run-as',PACKAGE,'tee','files/ca.pem',input_data=ca_cert.read_bytes())
-                pid2,code2,wrong,_,_,_=instrument(config['control'])
+                pid2,code2,wrong,_,_,_,_=instrument(config['control'])
                 result['withCaCode']=code2 if code2 in (0,1,2,8,9,10,99) else -1
                 result['wrongHostCode']=wrong if wrong in (0,1,2,8,9,10,99) else -1
                 result['privateCaAccepted']=code2==0
@@ -116,7 +117,7 @@ def run(apk,output):
                 if not result['privateCaAccepted'] or not result['wrongHostnameRejected']: raise ReverseError('private_ca_verification_failed')
                 phase='after_ca_removal'
                 _adb('shell','run-as',PACKAGE,'rm','-f','files/ca.pem')
-                pid3,code3,_,_,_,_=instrument(config['control'])
+                pid3,code3,_,_,_,_,_=instrument(config['control'])
                 result['afterRemovalCode']=code3 if code3 in (0,1,2,8,9,10,99) else -1
                 result['caRemovedRejected']=code3==1
                 result['freshProcesses']=len({pid1,pid2,pid3})==3

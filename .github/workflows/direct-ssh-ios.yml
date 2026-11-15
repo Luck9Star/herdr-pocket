@@ -1,0 +1,60 @@
+name: Ordinary SSH iOS Simulator UI acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'codex/acceptance/direct-ssh-ios-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-ssh-ios-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  flutter-ordinary-ssh-ios:
+    if: startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-')
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Prepare isolated Python and verify guards
+        run: |
+          python3 -m venv "$RUNNER_TEMP/direct-ssh-python"
+          "$RUNNER_TEMP/direct-ssh-python/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0'
+          HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_ios.py' -v
+      - name: Prepare pinned Flutter
+        run: |
+          python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/direct-ssh-sdk"
+          export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
+          flutter precache --ios
+      - name: Prepare production application and SDK-only integration tests
+        run: |
+          export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/direct-ssh-app"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/direct-ssh-app"
+          cd "$RUNNER_TEMP/direct-ssh-app"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/direct-ssh-app"
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" prepare --destination "$RUNNER_TEMP/direct-ssh-app"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/direct-ssh-app"
+          flutter analyze lib integration_test
+      - name: Drive real UI with loopback SSH on a disposable iOS Simulator
+        run: |
+          export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
+          "$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/flutter_direct_ssh_ios.py \
+            --project "$RUNNER_TEMP/direct-ssh-app" --output "$RUNNER_TEMP/direct-ssh-public"
+      - name: Upload sanitized evidence only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flutter-ordinary-ssh-ios-${{ github.sha }}
+          path: ${{ runner.temp }}/direct-ssh-public/
+          if-no-files-found: warn

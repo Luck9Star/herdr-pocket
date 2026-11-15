@@ -136,8 +136,10 @@ def verify_prepared(app, env):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.verify_lock(app, env)
-    if (app / TARGET).is_symlink() or not (app / TARGET).is_file() or (app / TARGET).read_bytes() != (ROOT / 'validation/flutter' / TARGET).read_bytes():
-        raise Failure('direct_android_integration_source_mismatch')
+    for relative in (TARGET, 'integration_test/direct_ssh_ui_steps.dart'):
+        if ((app / relative).is_symlink() or not (app / relative).is_file() or
+                (app / relative).read_bytes() != (ROOT / 'validation/flutter' / relative).read_bytes()):
+            raise Failure('direct_android_integration_source_mismatch')
     version = json.loads(subprocess.run(['flutter', '--version', '--machine'], capture_output=True, check=True, timeout=60).stdout)
     if version.get('frameworkRevision') != module.FLUTTER_COMMIT or version.get('frameworkVersion') != module.FLUTTER_VERSION:
         raise Failure('direct_android_flutter_version_mismatch')

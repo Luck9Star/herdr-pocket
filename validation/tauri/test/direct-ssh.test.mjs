@@ -43,7 +43,7 @@ test('data acknowledgement occurs once on consumption and late callbacks never a
 });
 
 test('known authentication and host-key failures are distinguished without exposing error text',async()=>{
-  for (const [error,expected] of [['host_key_mismatch',/公钥.*不一致/],['authentication_failed',/认证失败/],['secret from backend',/连接失败/]]) {
+  for (const [error,expected] of [['host_key_mismatch',/公钥.*不一致/],['authentication_failed',/认证失败/],['rsa_sha2_required',/RSA SHA-2 用户认证.*RSA 私钥无法登录/],['secret from backend',/连接失败/]]) {
     const h=harness();const {pending}=await opening(h);h.resolveOpen('s1');await pending;
     h.channel.onmessage({sessionId:'s1',seq:1,kind:'error',error});
     assert.match(h.statuses.at(-1)[0],expected);assert.ok(!h.statuses.at(-1)[0].includes('secret from backend'));

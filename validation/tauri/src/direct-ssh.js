@@ -58,7 +58,7 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
       }
       else if (event.kind === 'exit' || event.kind === 'error') {
         connecting = false; ready = false;
-        const messages = {host_key_mismatch:'主机公钥与已核对的指纹不一致，连接已拒绝。请重新探测并核对。', authentication_failed:'认证失败，请检查用户名和认证方式后重试。'};
+        const messages = {host_key_mismatch:'主机公钥与已核对的指纹不一致，连接已拒绝。请重新探测并核对。', authentication_failed:'认证失败，请检查用户名和认证方式后重试。', rsa_sha2_required:'服务器未提供 RSA SHA-2 用户认证，当前 RSA 私钥无法登录。'};
         if (event.error === 'host_key_mismatch') invalidateReview();
         onStatus(event.kind === 'exit' ? '远端会话已结束。' : messages[event.error] || '连接失败或已中断，请核查连接资料。', false, event.error || event.kind);
       }

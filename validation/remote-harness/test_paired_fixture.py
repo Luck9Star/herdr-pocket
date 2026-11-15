@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 # Legacy read-only harness runs in a Python without pairing dependencies.
 try:
-    from paired_gui import FixtureApproval, GuiFailure, Host, WebDriver, open_host_summary, run_gui, widget_failure
+    from paired_gui import FixtureApproval, GuiFailure, Host, WebDriver, open_host_summary, run_gui, stop_tauri_observation, widget_failure
     from pairing import MemoryKeyStore, PendingPairing, encode
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
@@ -20,6 +20,21 @@ except ModuleNotFoundError as missing:
 
 @unittest.skipIf(FixtureApproval is None, 'pairing requirements are installed in the GUI workflow')
 class GuiFixtureTests(unittest.TestCase):
+    def test_stop_selects_visible_control_once_and_requires_stale_and_input_retirement(self):
+        for selector in ('#remote-stop-dock', '#remote-stop-visible'):
+            with self.subTest(selector=selector):
+                driver = Mock(session='/session/test')
+                driver.call.side_effect = [selector, True]
+                driver.read.return_value = '观察已停止 · 画面陈旧'
+                stop_tauri_observation(driver)
+                driver.click.assert_called_once_with(selector)
+                self.assertIn('remote-input-controls', driver.call.call_args.args[2]['script'])
+        driver = Mock(session='/session/test')
+        driver.call.return_value = '#unexpected'
+        with self.assertRaisesRegex(GuiFailure, 'stop_control_invalid'):
+            stop_tauri_observation(driver)
+        driver.click.assert_not_called()
+
     def test_mobile_guarded_run_requires_an_independent_clipboard_receiver_check(self):
         first = dict(paneId='p', terminalId='term_ab', acceptedBytes=1, requestId='0' * 32)
         second = dict(first, acceptedBytes=9, requestId='1' * 32)

@@ -379,6 +379,25 @@ def open_host_summary(driver):
         wait_for(is_open, 'host_summary_not_expanded')
 
 
+def stop_tauri_observation(driver):
+    # In the guarded layout the input dock is the reachable stop action;
+    # stock observation has only the separate stop action. Click once only.
+    script = """for (const selector of ['#remote-stop-dock','#remote-stop-visible']) {
+        const e=document.querySelector(selector);
+        if (e && e.getClientRects().length && !e.matches(':disabled') &&
+            getComputedStyle(e).visibility === 'visible') return selector;
+    } return null;"""
+    selector = wait_for(lambda: driver.call('POST', driver.session + '/execute/sync',
+                                           {'script': script, 'args': []}), 'stop_control_unavailable')
+    if selector not in ('#remote-stop-dock', '#remote-stop-visible'):
+        raise GuiFailure('stop_control_invalid')
+    driver.click(selector)
+    wait_for(lambda: '陈旧' in driver.read('#remote-captured'), 'stale_marker_missing')
+    wait_for(lambda: driver.call('POST', driver.session + '/execute/sync',
+        {'script': "return document.querySelector('#remote-input-controls').hidden;", 'args': []}) is True,
+        'input_controls_not_retired_after_stop')
+
+
 def run_tauri(args, root, env, config, approval):
     driver = WebDriver()
     with owned_process(['tauri-driver'], cwd=root, env=env, log=root/'driver.log'):
@@ -436,8 +455,7 @@ def run_tauri(args, root, env, config, approval):
                 driver.click('#remote-input-confirm')
                 wait_for(lambda: '已接收入队' in driver.read('#remote-input-status'), 'input_ack_missing')
             terminal_board = wait_for(current_board, 'direct_host_summary_expired_during_terminal')
-            driver.click('#remote-stop-visible')
-            wait_for(lambda:'陈旧' in driver.read('#remote-captured'), 'stale_marker_missing')
+            stop_tauri_observation(driver)
             def stopped_summary():
                 label = driver.read(summary_selector)
                 position = label.find('上次快照（状态已陈旧）' + session_label)

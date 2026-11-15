@@ -24,6 +24,46 @@ ERRORS = {'overlay_provider_unavailable', 'mobile_node_binding_mismatch', 'mobil
 STAGES = {'initialization', 'private-config', 'load-libraries', 'bind-java-context', 'create-identity', 'directory-callback',
     'create-native-scope', 'native-available', 'native-start', 'native-status', 'netmon-diagnose'}
 
+NETMON_ERR_CLASSES = {'', 'none', 'permission', 'empty', 'other'}
+NETMON_PATHS = {'goNet', 'getifaddrs'}
+
+
+def _safe_netmon_diagnose(item):
+    # Mirrors the committed netmon.go JSON schema exactly: fixed keys, the two
+    # real paths, boolean flags, non-negative counts, bounded err classes.
+    # Anything else (nested surprises, extra fields) rejects the whole report.
+    if not isinstance(item, dict) or set(item) != {
+            'event', 'getterRegistered', 'getterCalls', 'paths', 'selected',
+            'stateBuilt', 'stateErrClass', 'haveV4', 'haveV6', 'anyUp'}:
+        return False
+    if item['event'] != 'netmon_diagnose' or type(item['getterRegistered']) is not bool:
+        return False
+    if type(item['getterCalls']) is not int or item['getterCalls'] < 0:
+        return False
+    if item['selected'] not in NETMON_PATHS | {'none'}:
+        return False
+    if not all(type(item[name]) is bool for name in ('stateBuilt', 'haveV4', 'haveV6', 'anyUp')):
+        return False
+    if item['stateErrClass'] not in NETMON_ERR_CLASSES:
+        return False
+    if item['stateBuilt'] and item['stateErrClass'] in ('', ):
+        return False
+    paths = item['paths']
+    if not isinstance(paths, list) or len(paths) > 2 or [p.get('path') if isinstance(p, dict) else None for p in paths] != ['goNet', 'getifaddrs'][:len(paths)]:
+        return False
+    for p in paths:
+        if not isinstance(p, dict) or set(p) != {'path', 'ok', 'errClass', 'interfaces', 'addresses'}:
+            return False
+        if type(p['ok']) is not bool or p['errClass'] not in NETMON_ERR_CLASSES:
+            return False
+        if type(p['interfaces']) is not int or p['interfaces'] < 0 or type(p['addresses']) is not int or p['addresses'] < 0:
+            return False
+        if p['ok'] and p['errClass'] not in ('none',):
+            return False
+        if not p['ok'] and p['errClass'] in ('', 'none'):
+            return False
+    return True
+
 
 def safe_probe(value):
     if not isinstance(value, dict) or type(value.get('schemaVersion')) is not int or value.get('schemaVersion') != 1:
@@ -54,9 +94,14 @@ def safe_probe(value):
             valid = (isinstance(item, dict) and set(item) == {'ok', 'interfaces', 'addresses', 'errClass'}
                 and type(item['ok']) is bool and type(item['interfaces']) is int
                 and type(item['addresses']) is int and isinstance(item['errClass'], str)
-                and item['interfaces'] >= 0 and item['addresses'] >= 0 and len(item['errClass']) <= 64)
+                and item['interfaces'] >= 0 and item['addresses'] >= 0
+                and (item['errClass'] == '' or item['errClass'].isidentifier()))
+            if valid and item['ok'] and (item['errClass'] != '' or item['interfaces'] == 0):
+                valid = False
+            if valid and not item['ok'] and item['errClass'] == '':
+                valid = False
         elif key == 'netmonDiagnose':
-            valid = isinstance(item, dict) and len(item) <= 64
+            valid = _safe_netmon_diagnose(item)
         else:
             valid = False
         if not valid:

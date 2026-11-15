@@ -520,6 +520,15 @@ fn parse_frame(value: Value) -> Result<Vec<u8>> {
     let text = value["bytes"].as_str().ok_or("invalid_full_frame")?;
     Base64::decode_vec(text).map_err(|_| "invalid_full_frame")
 }
+// Raw RSA public keys remain encoded as ssh-rsa, but host signatures must
+// negotiate rsa-sha2-256/512. Never offer the legacy RSA/SHA1 signature.
+fn safe_ssh_preferences() -> russh::Preferred {
+    let mut preferred = russh::Preferred::default();
+    preferred.key = std::borrow::Cow::Owned(preferred.key.iter()
+        .filter(|algorithm| !matches!(algorithm, Algorithm::Rsa { hash: None }))
+        .cloned().collect());
+    preferred
+}
 async fn connect_pinned(
     config: &RemoteConfig, cancel: &Cancellation, audit: Arc<Audit>, expected: PublicKey,
     inactivity_timeout: Option<Duration>, dialer: &dyn transport::Dialer,
@@ -540,6 +549,7 @@ async fn connect_pinned_endpoint(
         maximum_packet_size: 32768,
         channel_buffer_size: 2,
         inactivity_timeout,
+        preferred: safe_ssh_preferences(),
         ..Default::default()
     };
     let connect = bounded(

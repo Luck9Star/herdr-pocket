@@ -25,6 +25,11 @@ struct Facts {
     auth: AtomicUsize,
     shells: AtomicUsize,
     sizes: Mutex<Vec<(u32, u32)>>,
+    auth_algorithms: Mutex<Vec<String>>,
+    children: AtomicUsize,
+    kill_requests: AtomicUsize,
+    reaped: AtomicUsize,
+    cleanup_failures: AtomicUsize,
 }
 struct Factory {
     key: PublicKey,
@@ -39,16 +44,11 @@ struct Peer {
     reject: &'static str,
     master: Option<Arc<AsyncFd<File>>>,
     slave: Option<File>,
-    child: Arc<Mutex<Option<Child>>>,
     stop: Cancellation,
 }
 impl Drop for Peer {
     fn drop(&mut self) {
         self.stop.cancel();
-        if let Some(mut child) = self.child.lock().unwrap().take() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
         self.facts.active.fetch_sub(1, Ordering::SeqCst);
     }
 }
@@ -63,7 +63,6 @@ impl server::Server for Factory {
             reject: self.reject,
             master: None,
             slave: None,
-            child: Arc::new(Mutex::new(None)),
             stop: Cancellation::default(),
         }
     }
@@ -109,6 +108,11 @@ impl server::Handler for Peer {
         key: server::VerifiedPublicKey<'_>,
     ) -> std::result::Result<server::Auth, Self::Error> {
         self.facts.auth.fetch_add(1, Ordering::SeqCst);
+        self.facts
+            .auth_algorithms
+            .lock()
+            .unwrap()
+            .push(key.algorithm.to_string());
         Ok(
             if user == "fixture" && key.public_key.key_data() == self.key.key_data() {
                 server::Auth::Accept
@@ -180,6 +184,15 @@ impl server::Handler for Peer {
             },
             0
         );
+        // A concurrent fixture shell must not inherit this PTY's descriptors.
+        assert_eq!(
+            unsafe { libc::fcntl(master, libc::F_SETFD, libc::FD_CLOEXEC) },
+            0
+        );
+        assert_eq!(
+            unsafe { libc::fcntl(slave, libc::F_SETFD, libc::FD_CLOEXEC) },
+            0
+        );
         let master = unsafe { File::from_raw_fd(master) };
         let flags = unsafe { libc::fcntl(master.as_raw_fd(), libc::F_GETFL) };
         assert_eq!(
@@ -222,11 +235,50 @@ impl server::Handler for Peer {
                 Ok(())
             });
         }
-        *self.child.lock().unwrap() = Some(command.spawn().unwrap());
+        self.facts.children.fetch_add(1, Ordering::SeqCst);
+        let stop_child = self.stop.clone();
+        let child_facts = self.facts.clone();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (exit_tx, exit_rx) = tokio::sync::oneshot::channel();
+        // One owner spawns and reaps, including cancellation while spawn is in
+        // progress. No Tokio worker or PTY reader waits on a Child mutex.
+        std::thread::spawn(move || {
+            let mut child = match command.spawn() {
+                Ok(child) => child,
+                Err(error) => {
+                    child_facts.cleanup_failures.fetch_add(1, Ordering::SeqCst);
+                    child_facts.children.fetch_sub(1, Ordering::SeqCst);
+                    let _ = started_tx.send(Err(error));
+                    return;
+                }
+            };
+            let _ = started_tx.send(Ok(()));
+            let mut killed = false;
+            loop {
+                if stop_child.is_cancelled() && !killed {
+                    killed = true;
+                    child_facts.kill_requests.fetch_add(1, Ordering::SeqCst);
+                    let _ = child.kill();
+                }
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        child_facts.children.fetch_sub(1, Ordering::SeqCst);
+                        child_facts.reaped.fetch_add(1, Ordering::SeqCst);
+                        let _ = exit_tx.send(status.code().unwrap_or(255) as u32);
+                        return;
+                    }
+                    Ok(None) => std::thread::sleep(Duration::from_millis(10)),
+                    Err(_) => {
+                        child_facts.cleanup_failures.fetch_add(1, Ordering::SeqCst);
+                        return; // Keep children > 0 so cleaned() fails with evidence.
+                    }
+                }
+            }
+        });
+        started_rx.await.unwrap().unwrap();
         session.channel_success(id)?;
         let fd = self.master.clone().unwrap();
         let stop = self.stop.clone();
-        let child = self.child.clone();
         let handle = session.handle();
         tokio::spawn(async move {
             let mut bytes = [0u8; 4096];
@@ -239,13 +291,7 @@ impl server::Handler for Peer {
                     return;
                 }
             }
-            let status = child
-                .lock()
-                .unwrap()
-                .as_mut()
-                .and_then(|c| c.wait().ok())
-                .and_then(|s| s.code())
-                .unwrap_or(255) as u32;
+            let status = exit_rx.await.unwrap_or(255);
             let _ = handle.exit_status_request(id, status).await;
             let _ = handle.eof(id).await;
             let _ = handle.close(id).await;
@@ -308,6 +354,13 @@ impl Drop for Fixture {
 }
 impl Fixture {
     async fn start(reject: &'static str) -> Self {
+        Self::start_with_key(reject, "ed25519", None).await
+    }
+    async fn start_with_key(
+        reject: &'static str,
+        algorithm: &str,
+        host_hash: Option<Option<russh::keys::HashAlg>>,
+    ) -> Self {
         use ring::rand::SecureRandom;
         let mut nonce = [0u8; 16];
         ring::rand::SystemRandom::new().fill(&mut nonce).unwrap();
@@ -317,16 +370,27 @@ impl Fixture {
         )));
         std::fs::create_dir(&temp.0).unwrap();
         let key_path = temp.0.join("key");
-        assert!(
-            Process::new("ssh-keygen")
-                .args(["-q", "-t", "ed25519", "-N", "", "-f"])
-                .arg(&key_path)
-                .status()
-                .unwrap()
-                .success()
-        );
-        let pem = std::fs::read_to_string(key_path).unwrap();
-        let key = decode_secret_key(&pem, None).unwrap();
+        let algorithm = algorithm.to_owned();
+        let (pem, key) = tokio::task::spawn_blocking(move || {
+            let mut command = Process::new("ssh-keygen");
+            command.args(["-q", "-t", &algorithm]);
+            if algorithm == "rsa" {
+                command.args(["-b", "2048"]);
+            }
+            assert!(
+                command
+                    .args(["-N", "", "-f"])
+                    .arg(&key_path)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+            let pem = std::fs::read_to_string(key_path).unwrap();
+            let key = decode_secret_key(&pem, None).unwrap();
+            (pem, key)
+        })
+        .await
+        .unwrap();
         let public = key.public_key().clone();
         let pin = public
             .to_openssh()
@@ -335,8 +399,13 @@ impl Fixture {
             .take(2)
             .collect::<Vec<_>>()
             .join(" ");
+        let mut preferred = russh::Preferred::default();
+        if let Some(hash) = host_hash {
+            preferred.key = std::borrow::Cow::Owned(vec![Algorithm::Rsa { hash }]);
+        }
         let config = Arc::new(server::Config {
             keys: vec![key],
+            preferred,
             auth_rejection_time: Duration::ZERO,
             auth_rejection_time_initial: Some(Duration::ZERO),
             ..Default::default()
@@ -377,13 +446,23 @@ impl Fixture {
         }
     }
     async fn cleaned(&self) {
-        timeout(Duration::from_secs(3), async {
-            while self.facts.active.load(Ordering::SeqCst) != 0 {
+        let result = timeout(Duration::from_secs(3), async {
+            while self.facts.active.load(Ordering::SeqCst) != 0
+                || self.facts.children.load(Ordering::SeqCst) != 0
+            {
                 tokio::task::yield_now().await;
             }
         })
-        .await
-        .expect("SSH connections and PTY children retired");
+        .await;
+        assert!(
+            result.is_ok(),
+            "fixture cleanup failed: connections={} children={} kill_requests={} reaped={} cleanup_failures={}",
+            self.facts.active.load(Ordering::SeqCst),
+            self.facts.children.load(Ordering::SeqCst),
+            self.facts.kill_requests.load(Ordering::SeqCst),
+            self.facts.reaped.load(Ordering::SeqCst),
+            self.facts.cleanup_failures.load(Ordering::SeqCst)
+        );
     }
 }
 struct OpenShell {
@@ -639,5 +718,159 @@ async fn input_receipt_timeout_retires_queued_input_and_connection() {
             .unwrap(),
         Err("cancelled")
     );
+    fixture.cleaned().await;
+}
+
+/// Optional interoperability probe against the shared external RSA-only peer.
+/// Explicit Python path must point to an isolated environment with Paramiko 4.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires HERDR_RSA_FIXTURE_PYTHON from an isolated Paramiko environment"]
+async fn rsa_only_paramiko_peer_runs_actual_rust_shell() {
+    use std::io::{BufRead, Write};
+    let python =
+        std::env::var("HERDR_RSA_FIXTURE_PYTHON").expect("explicit isolated fixture Python");
+    let harness = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../remote-harness");
+    struct ProcessGuard(Child);
+    impl Drop for ProcessGuard {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let script = r#"
+import json,sys
+sys.path.insert(0,sys.argv[1])
+from direct_ssh_fixture import DirectSshFixture
+with DirectSshFixture() as peer:
+ print(json.dumps({'port':peer.port,'pin':peer.public_key,'password':peer.password}),flush=True)
+ for line in sys.stdin:
+  if line.strip()=='snapshot': print(json.dumps(peer.snapshot()),flush=True)
+"#;
+    let mut process = ProcessGuard(
+        Process::new(python)
+            .args(["-u", "-c", script])
+            .arg(harness)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    let mut output = std::io::BufReader::new(process.0.stdout.take().unwrap());
+    let mut line = String::new();
+    output.read_line(&mut line).unwrap();
+    let target: Value = serde_json::from_str(&line).expect("isolated RSA peer started");
+    assert!(target["pin"].as_str().unwrap().starts_with("ssh-rsa "));
+    let config = ShellConfig {
+        host: "127.0.0.1".into(),
+        port: target["port"].as_u64().unwrap() as u16,
+        username: "fixture".into(),
+        expected_host_key: target["pin"].as_str().unwrap().into(),
+        review_confirmed: true,
+        cols: 80,
+        rows: 24,
+        password: Some(target["password"].as_str().unwrap().into()),
+        private_key_pem: None,
+        private_key_passphrase: None,
+    };
+    let mut shell = OpenShell::start(config);
+    let first = timeout(Duration::from_secs(5), shell.events.recv())
+        .await
+        .unwrap();
+    if first.is_none() {
+        let result = shell.task.await.unwrap();
+        assert!(
+            result.is_ok(),
+            "actual Rust shell rejected the RSA-only peer: {result:?}"
+        );
+        return;
+    }
+    let event = first.unwrap();
+    assert_eq!(event.kind, "ready");
+    shell.previous = event.seq;
+    shell.control.write(b"hp-check\r".to_vec()).await.unwrap();
+    assert!(
+        shell
+            .until("POCKET-ANDROID-SSH-OK")
+            .await
+            .contains("POCKET-ANDROID-SSH-OK")
+    );
+    shell.control.close();
+    assert_eq!(shell.task.await.unwrap(), Err("cancelled"));
+    process
+        .0
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"snapshot\n")
+        .unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    let evidence: Value = serde_json::from_str(&line).unwrap();
+    assert_eq!(evidence["authAccepted"], true);
+    assert_eq!(evidence["markerReceived"], true);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rsa_sha2_host_and_user_signatures_keep_exact_pins_and_real_pty() {
+    for hash in [russh::keys::HashAlg::Sha256, russh::keys::HashAlg::Sha512] {
+        let fixture = Fixture::start_with_key("", "rsa", Some(Some(hash))).await;
+        let probe = probe_host_key("127.0.0.1".into(), fixture.port)
+            .await
+            .unwrap();
+        assert_eq!(probe.public_key, fixture.pin);
+        let other = Fixture::start("").await;
+        let mut mismatched = fixture.config(true);
+        mismatched.expected_host_key = other.pin.clone();
+        let shell = OpenShell::start(mismatched);
+        assert_eq!(shell.task.await.unwrap(), Err("host_key_mismatch"));
+        assert_eq!(fixture.facts.auth.load(Ordering::SeqCst), 0);
+        let mut shell = OpenShell::start(fixture.config(false));
+        shell.ready().await;
+        shell
+            .control
+            .write(b"printf 'rsa-sha2-pty\\n'\n".to_vec())
+            .await
+            .unwrap();
+        assert!(
+            shell
+                .until("rsa-sha2-pty\r\n")
+                .await
+                .contains("rsa-sha2-pty")
+        );
+        shell.control.close();
+        assert_eq!(shell.task.await.unwrap(), Err("cancelled"));
+        fixture.cleaned().await;
+        assert_eq!(
+            *fixture.facts.auth_algorithms.lock().unwrap(),
+            vec![format!(
+                "rsa-sha2-{}",
+                if hash == russh::keys::HashAlg::Sha256 {
+                    256
+                } else {
+                    512
+                }
+            )]
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn legacy_rsa_sha1_only_server_is_rejected_before_any_authentication() {
+    assert!(
+        !crate::safe_ssh_preferences()
+            .key
+            .iter()
+            .any(|key| matches!(key, Algorithm::Rsa { hash: None }))
+    );
+    let fixture = Fixture::start_with_key("", "rsa", Some(None)).await;
+    assert!(
+        probe_host_key("127.0.0.1".into(), fixture.port)
+            .await
+            .is_err()
+    );
+    let shell = OpenShell::start(fixture.config(true));
+    assert_eq!(shell.task.await.unwrap(), Err("handshake_failed"));
+    assert_eq!(fixture.facts.auth.load(Ordering::SeqCst), 0);
     fixture.cleaned().await;
 }

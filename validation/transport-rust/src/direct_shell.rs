@@ -122,7 +122,10 @@ pub async fn probe_host_key(host: String, port: u16) -> Result<HostKey> {
         8,
         "handshake_failed",
         client::connect_stream(
-            Arc::new(client::Config::default()),
+            Arc::new(client::Config {
+                preferred: crate::safe_ssh_preferences(),
+                ..Default::default()
+            }),
             AbortableStream {
                 inner: Box::new(stream),
                 cancel: cancel.clone(),
@@ -305,14 +308,23 @@ async fn shell_connection(
             config.private_key_passphrase.as_deref(),
         )
         .map_err(|_| "invalid_private_key")?;
-        let hash = bounded(
-            &cancel,
-            8,
-            "authentication_failed",
-            ssh.best_supported_rsa_hash(),
-        )
-        .await?
-        .flatten();
+        let hash = if key.algorithm().is_rsa() {
+            match bounded(
+                &cancel,
+                8,
+                "authentication_failed",
+                ssh.best_supported_rsa_hash(),
+            )
+            .await?
+            {
+                Some(Some(
+                    hash @ (russh::keys::HashAlg::Sha256 | russh::keys::HashAlg::Sha512),
+                )) => Some(hash),
+                _ => return Err("rsa_sha2_required"),
+            }
+        } else {
+            None
+        };
         bounded(
             &cancel,
             8,

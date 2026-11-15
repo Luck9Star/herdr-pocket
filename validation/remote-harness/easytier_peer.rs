@@ -2,8 +2,9 @@
 //! The peer bridges one userspace virtual TCP port to a loopback SSH server.
 //! It is fixture infrastructure, not a product provider or native API change.
 use easytier::common::config::{ConfigLoader, TomlConfigLoader};
-use easytier::instance::factory::create_native_instance;
+use easytier::instance::factory::{NativeCoreInstance, create_native_instance};
 use std::{
+    net::Ipv4Addr,
     path::PathBuf,
     sync::{
         Arc,
@@ -16,6 +17,34 @@ impl Drop for Active {
     fn drop(&mut self) {
         self.0.fetch_sub(1, Ordering::SeqCst);
     }
+}
+
+// Only counts and booleans cross this fixture boundary. In this fixed two-node
+// fixture native_config assigns the outbound client 10.126.126.3/24.
+async fn diagnostics(instance: &NativeCoreInstance, listener_active: bool) -> serde_json::Value {
+    let peers = instance.peer_snapshots().await;
+    let routes = instance.route_snapshots().await;
+    serde_json::json!({
+        "connectedPeerCount": peers.iter()
+            .filter(|peer| peer.conns.iter().any(|conn| !conn.is_closed)).count(),
+        "expectedVirtualRoutePresent": routes.iter().any(|route|
+            route.ipv4_addr.and_then(|inet| inet.address).map(Ipv4Addr::from)
+                == Some(Ipv4Addr::new(10, 126, 126, 3))),
+        "virtualSshListenerActive": listener_active,
+    })
+}
+
+fn write_diagnostics(control: &std::path::Path, value: &serde_json::Value) {
+    std::fs::write(
+        control.join("peer-diagnostics.tmp"),
+        serde_json::to_vec(value).unwrap(),
+    )
+    .expect("controlled diagnostic file");
+    std::fs::rename(
+        control.join("peer-diagnostics.tmp"),
+        control.join("peer-diagnostics.json"),
+    )
+    .expect("controlled atomic diagnostic");
 }
 
 fn main() {
@@ -98,6 +127,10 @@ fn main() {
             tasks.shutdown().await;
         });
         stage("accepting");
+        write_diagnostics(
+            &control,
+            &diagnostics(&instance, !bridges.is_finished()).await,
+        );
         std::fs::write(
             control.join("peer-ready.tmp"),
             serde_json::to_vec(&serde_json::json!({"virtualTcpPort": virtual_port})).unwrap(),
@@ -107,8 +140,20 @@ fn main() {
             .expect("controlled atomic ready");
         let until = Instant::now() + Duration::from_secs(240);
         while !control.join("stop-peer").exists() && Instant::now() < until {
+            // Touch this file, wait for its removal, then read the atomically
+            // replaced snapshot. No request data is read or echoed.
+            let request = control.join("peer-diagnostics-request");
+            if request.is_file() {
+                write_diagnostics(
+                    &control,
+                    &diagnostics(&instance, !bridges.is_finished()).await,
+                );
+                std::fs::remove_file(request).expect("controlled diagnostic request");
+            }
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
+        let before_stop = diagnostics(&instance, !bridges.is_finished()).await;
+        write_diagnostics(&control, &before_stop);
         stage("stop-instance");
         if tokio::time::timeout(Duration::from_secs(5), instance.stop())
             .await
@@ -126,11 +171,15 @@ fn main() {
         if active.load(Ordering::SeqCst) != 0 {
             return false;
         }
+        let after_stop = diagnostics(&instance, false).await;
+        write_diagnostics(&control, &after_stop);
         let result = serde_json::json!({"schemaVersion": 1,
             "acceptedOverlayStreams": accepted.load(Ordering::SeqCst),
             "loopbackTcpConnections": connected.load(Ordering::SeqCst),
             "activeBridgesAfterStop": active.load(Ordering::SeqCst),
-            "loopbackDestinationOnly": true});
+            "loopbackDestinationOnly": true,
+            "diagnosticsBeforeStop": before_stop,
+            "diagnosticsAfterStop": after_stop});
         std::fs::write(
             control.join("peer-result.json"),
             serde_json::to_vec(&result).unwrap(),

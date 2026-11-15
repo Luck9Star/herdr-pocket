@@ -99,6 +99,13 @@ def safe_screenshot_request(request, stage):
             stage == {'stage': 'screenshot_wait'})
 
 
+def xctest_execution(build, result_bundle):
+    return [*build, '-parallel-testing-enabled', 'NO',
+            '-maximum-concurrent-test-simulator-destinations', '1',
+            '-resultBundlePath', str(result_bundle),
+            'test-without-building']
+
+
 def owned_devices(name, timeout=180):
     listing = json.loads(command('xcrun', 'simctl', 'list', 'devices', '--json', timeout=timeout))
     result = []
@@ -329,7 +336,7 @@ def run(app, output, env):
                     raise Failure('ios_xctest_build_failed')
                 phase = 'xctest_launch'
                 result_bundle = private / 'test-result.xcresult'
-                process = subprocess.Popen([*build, '-resultBundlePath', str(result_bundle), 'test-without-building'], cwd=app / 'ios', env=env,
+                process = subprocess.Popen(xctest_execution(build, result_bundle), cwd=app / 'ios', env=env,
                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                 deadline, exchange, confirmed = min(overall_deadline, time.monotonic() + 1200), None, False
                 container_timeouts = 0

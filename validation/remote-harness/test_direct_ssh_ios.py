@@ -63,6 +63,14 @@ class IosDirectSshTests(unittest.TestCase):
             self.assertEqual(runner.app_container('fixture-id', 15), (None, True))
             self.assertEqual(runner.app_container('fixture-id', 15), (Path('/private/app'), False))
 
+    def test_xctest_execution_disables_clones_and_preserves_the_owned_destination(self):
+        command = runner.xctest_execution(['xcodebuild', '-destination', 'id=owned-fixture'], '/private/result')
+        self.assertEqual(command.count('-destination'), 1)
+        self.assertEqual(command[command.index('-destination') + 1], 'id=owned-fixture')
+        self.assertEqual(command[command.index('-parallel-testing-enabled') + 1], 'NO')
+        self.assertEqual(command[command.index('-maximum-concurrent-test-simulator-destinations') + 1], '1')
+        self.assertNotIn('-parallel-testing-worker-count', command)
+
     def test_cleanup_lookup_only_returns_exact_run_owned_name(self):
         owned = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
         listing = {'devices': {'runtime': [{'name': 'herdr-direct-unique', 'udid': owned},
@@ -130,6 +138,9 @@ class IosDirectSshTests(unittest.TestCase):
             debug = app / 'ios/Flutter/Debug.xcconfig'
             debug.parent.mkdir(parents=True)
             debug.write_text('#include "Generated.xcconfig"\n')
+            scheme = app / 'ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme'
+            scheme.parent.mkdir(parents=True)
+            scheme.write_text('<TestableReference parallelizable = "YES"/>')
             ios_xctest_scaffold.prepare(app)
             self.assertFalse(swift.exists())
             self.assertIn('INTEGRATION_TEST_IOS_RUNNER(RunnerTests)',
@@ -137,6 +148,7 @@ class IosDirectSshTests(unittest.TestCase):
             self.assertIn('sourcecode.c.objc; path = RunnerTests.m;', project.read_text())
             self.assertIn("target 'RunnerTests'", (app / 'ios/Podfile').read_text())
             self.assertIn('Pods-Runner.debug.xcconfig', debug.read_text())
+            self.assertIn('parallelizable = "NO"', scheme.read_text())
             with self.assertRaisesRegex(ValueError, 'ios_xctest_scaffold_unexpected'):
                 ios_xctest_scaffold.prepare(app)
 
@@ -154,6 +166,9 @@ class IosDirectSshTests(unittest.TestCase):
             debug.parent.mkdir(parents=True)
             original = '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"\n#include "Generated.xcconfig"\n'
             debug.write_text(original)
+            scheme = app / 'ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme'
+            scheme.parent.mkdir(parents=True)
+            scheme.write_text('<TestableReference parallelizable = "YES"/>')
             podfile = app / 'ios/Podfile'
             podfile.write_text(ios_xctest_scaffold.PODFILE)
             ios_xctest_scaffold.prepare(app)

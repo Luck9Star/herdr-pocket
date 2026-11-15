@@ -37,6 +37,7 @@ def prepare(app):
     objc = app / 'ios/RunnerTests/RunnerTests.m'
     podfile = app / 'ios/Podfile'
     debug = app / 'ios/Flutter/Debug.xcconfig'
+    scheme = app / 'ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme'
     if not swift.is_file() or objc.exists() or podfile.is_symlink():
         raise ValueError('ios_xctest_scaffold_unexpected')
     if podfile.exists():
@@ -51,12 +52,16 @@ def prepare(app):
     text = text.replace(old, 'lastKnownFileType = sourcecode.c.objc; path = RunnerTests.m;')
     text = text.replace('RunnerTests.swift', 'RunnerTests.m')
     config = debug.read_text()
+    scheme_text = scheme.read_text()
+    if scheme_text.count('parallelizable = "YES"') != 1:
+        raise ValueError('ios_xctest_scheme_unexpected')
     pods_line = '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"\n'
     if config not in ('#include "Generated.xcconfig"\n', pods_line + '#include "Generated.xcconfig"\n'):
         raise ValueError('ios_xctest_config_unexpected')
     objc.write_text(RUNNER_TEST)
     swift.unlink()
     project.write_text(text)
+    scheme.write_text(scheme_text.replace('parallelizable = "YES"', 'parallelizable = "NO"'))
     if not config.startswith(pods_line):
         debug.write_text(pods_line + config)
     if not podfile.exists():

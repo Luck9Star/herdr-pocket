@@ -98,6 +98,10 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertEqual(report['homeMetrics']['nodes'],10)
             self.assertNotIn('private fixture material',output.read_text())
+            (root/'macos-secure-private-details.json').write_text(json.dumps({'message':'test timed out','private':'synthetic credential'}))
+            self.assertNotEqual(execute().returncode,0)
+            report=json.loads(output.read_text());self.assertIn('timeout',report['failureCategories']);self.assertTrue(report['xcresultDetailsAvailable'])
+            self.assertNotIn('synthetic credential',output.read_text())
             del progress['returnAndReopenCleared'];log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed\n'+''.join('HP_XCUI_STAGE='+k+'\n' for k in progress))
             self.assertNotEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'failed')
             log.write_text(good_log)
@@ -125,6 +129,10 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('passwordValueUnavailable',swift)
         self.assertIn('passphraseValueUnavailable',swift)
         self.assertIn('encryptedKeyConnected',swift)
+        scanner=swift[swift.index('private func snapshotNodes'):swift.index('private func stableHit')]
+        self.assertIn('try app.snapshot()',scanner)
+        self.assertIn('pending.append(contentsOf: node.children)',scanner)
+        self.assertNotIn('allElementsBoundByIndex',scanner)
 
 if __name__ == '__main__':
     unittest.main()

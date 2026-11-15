@@ -1,6 +1,7 @@
 import XCTest
 import Darwin
 
+@available(macOS 15.0, *)
 final class SecureCredentialUITests: XCTestCase {
     private func mark(_ name: String) {
         print("HP_XCUI_STAGE=\(name)")
@@ -11,18 +12,28 @@ final class SecureCredentialUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: label).firstMatch
     }
 
-    // Never print snapshots or values: only assertions on synthetic values escape.
-    private func assertNoSecrets(_ app: XCUIApplication, _ secrets: [String]) {
-        let nodes = app.descendants(matching: .any).allElementsBoundByIndex
+    // One system snapshot per state; never print the tree or its values.
+    private func snapshotNodes(_ app: XCUIApplication) throws -> [any XCUIElementSnapshot] {
+        let root = try app.snapshot()
+        var pending: [any XCUIElementSnapshot] = [root]
+        var nodes: [any XCUIElementSnapshot] = []
+        while let node = pending.popLast() {
+            nodes.append(node)
+            pending.append(contentsOf: node.children)
+            if nodes.count > 10000 { XCTFail("system accessibility tree exceeds limit"); break }
+        }
         XCTAssertGreaterThan(nodes.count, 5, "system accessibility tree is empty")
-        for node in nodes {
-            let fields = [node.label, node.identifier, node.value as? String ?? ""]
-            for field in fields {
-                for secret in secrets {
-                    XCTAssertFalse(field.contains(secret), "synthetic credential exposed in system accessibility tree")
-                }
+        return nodes
+    }
+
+    private func assertNoSecrets(_ app: XCUIApplication, _ secrets: [String]) throws {
+        let nodes = try snapshotNodes(app)
+        let exposed = nodes.contains { node in
+            [node.label, node.identifier, node.value as? String ?? ""].contains { field in
+                secrets.contains { field.contains($0) }
             }
         }
+        XCTAssertFalse(exposed, "synthetic credential exposed in system accessibility tree")
     }
 
     private func stableHit(_ element: XCUIElement) -> Bool {
@@ -76,8 +87,8 @@ final class SecureCredentialUITests: XCTestCase {
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
     }
 
-    private func ordinaryMetrics(_ app: XCUIApplication, sentinel: String) -> Bool {
-        let nodes = app.descendants(matching: .any).allElementsBoundByIndex
+    private func ordinaryMetrics(_ app: XCUIApplication, sentinel: String) throws -> Bool {
+        let nodes = try snapshotNodes(app)
         let values = nodes.compactMap { $0.value as? String }.filter { !$0.isEmpty }
         let seen = !sentinel.isEmpty && values.contains { $0.contains(sentinel) }
         print("HP_XCUI_ORDINARY=nodes:\(min(nodes.count,10000)),values:\(min(values.count,10000)),sentinel:\(seen ? 1 : 0)")
@@ -131,16 +142,16 @@ final class SecureCredentialUITests: XCTestCase {
         tap(app, entry)
         let address = element(app, "地址").descendants(matching: .textField).firstMatch
         XCTAssertTrue(address.waitForExistence(timeout: 15), "named address group or ordinary input missing")
-        _ = ordinaryMetrics(app, sentinel: "")
+        _ = try ordinaryMetrics(app, sentinel: "")
         let passwordField = secureField(app, "direct-secret")
         mark("passwordSecureField")
         tap(app, passwordField)
         app.typeText(password)
         mark((passwordField.value as? String ?? "").isEmpty ? "passwordValueUnavailable" : "passwordValuePresent")
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
         mark("passwordHiddenFocused")
         tap(app, address)
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
         mark("passwordHiddenBlurred")
 
         let keyMode = element(app, "使用私钥认证")
@@ -150,28 +161,28 @@ final class SecureCredentialUITests: XCTestCase {
         tap(app, passphraseField)
         app.typeText(phrase)
         mark((passphraseField.value as? String ?? "").isEmpty ? "passphraseValueUnavailable" : "passphraseValuePresent")
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
         tap(app, address)
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
         tap(app, passphraseField)
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
         mark("passphraseHiddenAfterFocusChanges")
         tap(app, keyMode)
         XCTAssertTrue((secureField(app, "direct-secret").value as? String ?? "").isEmpty, "password retained after mode switch")
         tap(app, keyMode)
         XCTAssertTrue((secureField(app, "direct-passphrase").value as? String ?? "").isEmpty, "passphrase retained after mode switch")
         mark("modeSwitchCleared")
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
 
         tap(app, keyMode)
         let passwordAgain = secureField(app, "direct-secret")
         tap(app, passwordAgain);app.typeText(password)
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
         mark("maskingScanCompleted")
 
         let sentinel = "xcui-sentinel-" + UUID().uuidString
         tap(app, address);app.typeText(sentinel)
-        let seen = ordinaryMetrics(app, sentinel: sentinel)
+        let seen = try ordinaryMetrics(app, sentinel: sentinel)
         XCTAssertTrue(seen, "ordinary sentinel not found in system accessibility values")
         mark("ordinarySentinelObserved")
         app.typeKey("a", modifierFlags: .command);app.typeText(host)
@@ -195,7 +206,7 @@ final class SecureCredentialUITests: XCTestCase {
         tap(app, confirm)
         let loginPassword = secureField(app, "direct-secret")
         tap(app, loginPassword);app.typeText(password)
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
         let connect = app.buttons["连接 SSH"]
         tap(app, connect)
         let connected = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "已连接 · 输入直接发送到远端 shell")).firstMatch
@@ -203,7 +214,7 @@ final class SecureCredentialUITests: XCTestCase {
         mark("sshConnected")
         let disconnect = app.buttons["断开"]
         XCTAssertTrue(disconnect.waitForExistence(timeout: 10), "disconnect action missing")
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
         tap(app, disconnect)
         XCTAssertTrue((secureField(app, "direct-secret").value as? String ?? "").isEmpty, "password not cleared after disconnect")
         mark("disconnectedAndCleared")
@@ -227,7 +238,7 @@ final class SecureCredentialUITests: XCTestCase {
         tap(app, pem);app.typeText(privateKey)
         let keyPassphrase = secureField(app, "direct-passphrase")
         tap(app, keyPassphrase);app.typeText(phrase)
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
         let keyConnect = app.buttons["连接 SSH"]
         tap(app, keyConnect)
         let keyConnected = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "已连接 · 输入直接发送到远端 shell")).firstMatch
@@ -244,11 +255,11 @@ final class SecureCredentialUITests: XCTestCase {
         tap(app, back)
         let returnedEntry = homeEntry(app)
         XCTAssertTrue(returnedEntry.exists && returnedEntry.isHittable, "normal homepage did not return")
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
         tap(app, returnedEntry)
         let reopened = secureField(app, "direct-secret")
         XCTAssertTrue((reopened.value as? String ?? "").isEmpty, "prior credential retained")
-        assertNoSecrets(app, [password, phrase])
+        try assertNoSecrets(app, [password, phrase])
         mark("returnAndReopenCleared")
         app.terminate()
     }

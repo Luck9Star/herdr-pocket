@@ -48,6 +48,19 @@ jobs:
           python3 validation/native/tool/android_bundle.py verify "$RUNNER_TEMP/android-dual-native" \
             --abi x86_64 --commit "$GITHUB_SHA" \
             --readelf "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+      - name: Build separately marked QA-only TS trust variant
+        id: qa
+        run: |
+          python3 validation/native/tool/android_dual_qa_bundle.py build \
+            --normal "$RUNNER_TEMP/android-dual-native" --qa "$RUNNER_TEMP/android-dual-native-qa" \
+            --commit "$GITHUB_SHA" --readelf "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: steps.qa.outcome == 'success'
+        with:
+          name: android-dual-native-QA-ONLY-x86_64-${{ github.sha }}
+          path: ${{ runner.temp }}/android-dual-native-qa
+          if-no-files-found: error
+          retention-days: 14
       - name: Preserve exact validation scope
         if: always()
         env:
@@ -90,11 +103,18 @@ jobs:
         with:
           name: android-dual-native-x86_64-${{ github.sha }}
           path: ${{ runner.temp }}/downloaded-native
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: android-dual-native-QA-ONLY-x86_64-${{ github.sha }}
+          path: ${{ runner.temp }}/downloaded-native-qa
       - name: Replay full verification against downloaded bytes
         id: replay
         run: |
           python3 validation/native/tool/android_bundle.py verify "$RUNNER_TEMP/downloaded-native" \
             --abi x86_64 --commit "$GITHUB_SHA" --readelf "$(command -v readelf)"
+          python3 validation/native/tool/android_dual_qa_bundle.py verify \
+            --normal "$RUNNER_TEMP/downloaded-native" --qa "$RUNNER_TEMP/downloaded-native-qa" \
+            --commit "$GITHUB_SHA" --readelf "$(command -v readelf)"
       - name: Record distribution result separately from compilation
         if: always()
         env:

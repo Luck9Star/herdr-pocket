@@ -148,7 +148,10 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   }
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('普通 SSH'), actions: [if (busy || connected) TextButton(onPressed: () => stop(message: '已断开；未重放输入。'), child: const Text('断开'))]),
+    appBar: AppBar(title: const Text('普通 SSH'),
+      leading: (ModalRoute.of(context)?.impliesAppBarDismissal ?? false)
+        ? MergeSemantics(child: Semantics(identifier: 'direct-back', label: '返回主机列表', child: const BackButton())) : null,
+      actions: [if (busy || connected) TextButton(onPressed: () => stop(message: '已断开；未重放输入。'), child: const Text('断开'))]),
     body: SafeArea(child: connected ? Column(children: [
       Padding(padding: const EdgeInsets.all(8), child: Text(status)),
       Expanded(child: TerminalView(terminal, theme: widget.tokens.terminalTheme, autoResize: true,

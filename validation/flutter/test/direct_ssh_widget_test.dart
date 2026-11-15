@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'package:dartssh2/dartssh2.dart' show SSHClient;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
+import 'package:herdr_flutter_probe/macos_secure_credential_field.dart';
 import 'package:terminal_view/terminal_view.dart';
 
 void portableTestWidgets(String description, WidgetTesterCallback callback, {bool? skip}) => testWidgets(
@@ -16,6 +19,11 @@ Future<void> waitFor(WidgetTester tester, Finder finder) async {
   }
   expect(finder, findsOneWidget);
 }
+
+Future<void> pumpOrdinaryHome(WidgetTester tester, DesignTokens tokens) => tester.pumpWidget(
+  MaterialApp(theme: tokens.theme, home: Builder(builder: (context) => Scaffold(
+    body: FilledButton(onPressed: () => Navigator.push<void>(context, MaterialPageRoute<void>(
+      builder: (_) => DirectSshPage(tokens: tokens))), child: const Text('Open ordinary SSH'))))));
 
 void main() {
   // Portable EditableText path; native macOS has separate view/channel and AX tests.
@@ -47,6 +55,7 @@ void main() {
   portableTestWidgets('ordinary SSH requires explicit fingerprint confirmation', (tester) async {
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+    expect(find.bySemanticsIdentifier('direct-back'), findsNothing);
     expect(tester.widget<OutlinedButton>(find.byKey(const ValueKey('direct-probe'))).onPressed, isNull);
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNull);
     await tester.enterText(find.byKey(const ValueKey('direct-host')), '127.0.0.1');
@@ -56,18 +65,53 @@ void main() {
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNull);
   });
 
-  portableTestWidgets('returning from ordinary SSH with unsubmitted credentials disposes its listeners safely', (tester) async {
+  testWidgets('returning from ordinary SSH with unsubmitted credentials disposes its listeners safely', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final messenger = tester.binding.defaultBinaryMessenger;
+    final nativeIds = <int>[];
+    messenger.setMockMethodCallHandler(SystemChannels.platform_views, (call) async {
+      if (call.method == 'create') {
+        final id = (call.arguments as Map)['id'] as int;
+        nativeIds.add(id);
+        messenger.setMockMethodCallHandler(MethodChannel('herdr.pocket/secure-field/$id'), (_) async => null);
+      }
+      return null;
+    });
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(SystemChannels.platform_views, null);
+      for (final id in nativeIds) messenger.setMockMethodCallHandler(MethodChannel('herdr.pocket/secure-field/$id'), null);
+    });
     final tokens = (await tester.runAsync(DesignTokens.load))!;
-    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: Builder(builder: (context) => Scaffold(
-      body: FilledButton(onPressed: () => Navigator.push<void>(context, MaterialPageRoute<void>(
-        builder: (_) => DirectSshPage(tokens: tokens))), child: const Text('Open ordinary SSH'))))));
+    await pumpOrdinaryHome(tester, tokens);
     await tester.tap(find.text('Open ordinary SSH')); await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'unsubmitted-temporary-credential');
+    final credential = find.byWidgetPredicate((widget) => widget.key == const ValueKey('direct-secret') &&
+      (widget is TextField || widget is MacosSecureCredentialField));
+    if (tester.widget(credential) is MacosSecureCredentialField) {
+      tester.widget<MacosSecureCredentialField>(credential).controller.text = 'unsubmitted-temporary-credential';
+    } else {
+      await tester.enterText(credential, 'unsubmitted-temporary-credential');
+    }
     await tester.pump();
-    await tester.tap(find.byType(BackButton)); await tester.pumpAndSettle();
+    final back = find.bySemanticsIdentifier('direct-back');
+    expect(back, findsOneWidget);
+    final data = tester.getSemantics(back).getSemanticsData();
+    expect(data.label, contains('返回主机列表'));
+    expect(data.flagsCollection.isButton, isTrue);
+    expect(data.hasAction(SemanticsAction.tap), isTrue);
+    if (tester.widget(credential) is MacosSecureCredentialField) expect(data.label, '返回主机列表');
+    await tester.tap(back); await tester.pumpAndSettle();
+    expect(find.byType(DirectSshPage), findsNothing); expect(find.text('Open ordinary SSH'), findsOneWidget);
+    await tester.tap(find.text('Open ordinary SSH')); await tester.pumpAndSettle();
+    final reopened = tester.widget(credential);
+    final controller = reopened is MacosSecureCredentialField ? reopened.controller : (reopened as TextField).controller!;
+    expect(controller.text, isEmpty);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-host'))).controller!.text, isEmpty);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNull);
+    await tester.binding.handlePopRoute(); await tester.pumpAndSettle();
     expect(find.byType(DirectSshPage), findsNothing); expect(find.text('Open ordinary SSH'), findsOneWidget);
     expect(tester.takeException(), isNull);
-  });
+    semantics.dispose();
+  }, variant: TargetPlatformVariant({TargetPlatform.android, TargetPlatform.macOS}));
 
   portableTestWidgets('loopback probe, confirm, password, PTY and background disconnect', (tester) async {
     final fixturePort = Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT'];
@@ -127,11 +171,13 @@ void main() {
   }, skip: Platform.environment['HERDR_DIRECT_SSH_ROTATE_PORT'] == null);
 
   portableTestWidgets('encrypted private key authenticates to the isolated shell', (tester) async {
+    final semantics = tester.ensureSemantics();
     final fixturePort = Platform.environment['HERDR_DIRECT_SSH_KEY_PORT']!;
     final keyPath = Platform.environment['HERDR_DIRECT_SSH_KEY_PATH']!;
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     final key = await tester.runAsync(() => File(keyPath).readAsString());
-    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+    await pumpOrdinaryHome(tester, tokens);
+    await tester.tap(find.text('Open ordinary SSH')); await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('direct-host')), '127.0.0.1');
     await tester.enterText(find.byKey(const ValueKey('direct-port')), fixturePort);
     await tester.enterText(find.byKey(const ValueKey('direct-user')), 'fixture'); await tester.pump();
@@ -147,7 +193,18 @@ void main() {
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNotNull);
     await tester.tap(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
     await waitFor(tester, find.byType(TerminalView));
-    await tester.pumpWidget(const SizedBox());
+    final client = (tester.state(find.byType(DirectSshPage)) as dynamic).client as SSHClient;
+    await tester.tap(find.bySemanticsIdentifier('direct-back')); await tester.pumpAndSettle();
+    await tester.runAsync(() => client.done);
+    expect(client.isClosed, isTrue);
+    expect(find.byType(DirectSshPage), findsNothing);
+    expect(find.text('Open ordinary SSH'), findsOneWidget);
+    await tester.tap(find.text('Open ordinary SSH')); await tester.pumpAndSettle();
+    expect(find.byType(TerminalView), findsNothing);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-secret'))).controller!.text, isEmpty);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNull);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
   }, skip: Platform.environment['HERDR_DIRECT_SSH_KEY_PORT'] == null || Platform.environment['HERDR_DIRECT_SSH_KEY_PATH'] == null);
 
   portableTestWidgets('ordinary SSH form constrains width and exposes named editable fields', (tester) async {

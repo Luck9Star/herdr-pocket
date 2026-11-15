@@ -216,6 +216,9 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('try inputMatches(app, index: 0)',key)
         self.assertIn('clickNativeKeyPassphrase(app)',key)
         self.assertIn('keyPassphraseNativeClicked',swift)
+        return_case=swift[swift.index('func testReturnAndReopen'): ]
+        self.assertIn('field.click();app.typeText(password)',return_case)
+        self.assertNotIn('tap(app, field, phase: "returnSecure")',return_case)
         self.assertIn('gutter.scroll(byDeltaX: 0, deltaY: amount)',swift)
         self.assertIn('try inputMatches(app, index: 1)',key)
         self.assertNotIn('maskedValue.isEmpty',key)

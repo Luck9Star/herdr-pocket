@@ -695,7 +695,7 @@ final class SecureCredentialUITests: XCTestCase {
         launchSSH(app, stage: "returnHomepage")
         let field = secureField(app, "direct-secret")
         mark("returnSecureSelected")
-        tap(app, field, phase: "returnSecure");app.typeText(password)
+        field.click();app.typeText(password)
         mark("returnCredentialEntered")
         XCTAssertFalse((field.value as? String ?? "").isEmpty, "return input state unavailable")
         try assertNoSecrets(app, [password, phrase])

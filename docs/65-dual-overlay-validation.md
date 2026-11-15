@@ -1,6 +1,6 @@
 # 双网络隔离验收进展
 
-更新：2026-11-15。本文记录 [M2 的 Tailscale + EasyTier 前台并发要求](04-roadmap.md#m2--按-provider--平台集成三网络)的分层证据。当前已验证 **Mac 本机单 Tailscale 产品链路**与 **Linux 测试用隔离 relay**；Linux 双网和 Android 应用尚未通过验收。
+更新：2026-11-15。本文记录 [M2 的 Tailscale + EasyTier 前台并发要求](04-roadmap.md#m2--按-provider--平台集成三网络)的分层证据。当前已验证 **Mac 本机单 Tailscale 产品链路**与 **Linux 测试用隔离 relay**；Linux 封闭测试网络中的双网双方向受保护会话已通过；默认 EasyTier 配置对照及 Android 应用尚未通过验收。
 
 ## 已通过的单 TS 原生链路
 
@@ -23,6 +23,12 @@
 [62fc7ea 运行 43723332026](https://github.com/Luck9Star/herdr-pocket/actions/runs/43723332026)以不同的新进程和临时 fixture 分别测试两种封闭 namespace，整体[比较记录](evidence/dual-overlay-20261115/linux-ts-cabi-62fc7ea/comparison.json)通过。仅 `lo` 的[负例](evidence/dual-overlay-20261115/linux-ts-cabi-62fc7ea/loopback/result.json)显示 `AnyInterfaceUp=false`，显式 begin 返回成功但没有 URL；控制面仅有健康检查的基线 key 请求，未收到第二客户端注册。[dummy 正例](evidence/dual-overlay-20261115/linux-ts-cabi-62fc7ea/dummy/result.json)的 `AnyInterfaceUp=true`，真实 C ABI 完成显式授权、Running 和中文/emoji TCP 字节等值，控制面收到产品节点的 key、noise、register 与 map 请求，TLS 错误数为 0；stream/node 关闭和释放均成功。两个 fixture、私有目录、进程和 namespace 均清理；另有[空闲 fixture 对照](evidence/dual-overlay-20261115/linux-ts-cabi-62fc7ea/idle/result.json)。这是不同进程的单网络对照，不证明同一节点随接口变化的恢复，也不证明双网或 Android。原始工件为 [14165522757](https://github.com/Luck9Star/herdr-pocket/actions/runs/43723332026/artifacts/14165522757)。
 
 [0199351 运行 43723761543](https://github.com/Luck9Star/herdr-pocket/actions/runs/43723761543)使用严格有效的测试证书再次得到一致结果：[比较记录](evidence/dual-overlay-20261115/linux-ts-cabi-0199351/comparison.json)、[idle](evidence/dual-overlay-20261115/linux-ts-cabi-0199351/idle/result.json)、[lo 负例](evidence/dual-overlay-20261115/linux-ts-cabi-0199351/loopback/result.json)与 [dummy 正例](evidence/dual-overlay-20261115/linux-ts-cabi-0199351/dummy/result.json)均为原始脱敏输出。dummy 侧完成真实授权和 TCP 等值，控制面 key 2、noise 1、register 2、map 5、TLS 错误 0；清理通过。原始工件为 [14166185694](https://github.com/Luck9Star/herdr-pocket/actions/runs/43723761543/artifacts/14166185694)。此前故障对照中额外请求未支持的控制路径曾使 helper panic；该脚本问题已修复，不能作为产品节点授权失败的证据。
+
+## Tailscale 目标名称的路由边界
+
+当前候选的 fail-closed 路由修复正在验证：允许已批准的节点 IP、该节点当前 MagicDNS/ExtraDNS 映射名称，以及节点已接受子网内的 IP；解析后固定为同一个 IP 并只通过该节点的 userspace netstack 拨号。仅由 split-DNS 查询才能解析、且不在节点当前映射中的名称暂不支持；可使用已批准的 IP 或已映射名称。原通用拨号对非映射名称可能依赖系统 resolver，不能将其当成本节点可独立解析的能力。
+
+双壳后续应在此类名称无法路由时给出可操作提示；普通 SSH 的原有系统网络行为不随此策略改变。`93ca6cd` 的固定上游路由单元测试、Go race 与本机分离进程 C ABI 正反例已通过：[脱敏记录](evidence/dual-overlay-20261115/tailscale-c-abi-netstack-only-macos-93ca6cd.json)中可信 CA 下显式授权与 TCP 等值成功，缺少测试 CA 的负例未获得授权，资源已释放。其 Linux 封闭测试网络双网结果见下；Android 设备验证尚待完成。
 
 ## Linux 双网首轮与修复
 
@@ -89,8 +95,14 @@ done
 
 [e2c19b8 运行 43720964247](https://github.com/Luck9Star/herdr-pocket/actions/runs/43720964247)构建并静态检查 EasyTier、Tailscale 与独立 Flutter JNI 桥的三个 Android x86_64 ELF；三者均为 `ET_DYN` / `EM_X86_64`。原始[原生构建工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43720964247/artifacts/14164119259)的外层 ZIP digest 和清单 87/87 文件已独立核验；另一个 job 从下载工件重放验证成功（[脱敏结果](evidence/dual-overlay-20261115/android-native-e2c19b8-download-replay.json)，[原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43720964247/artifacts/14164424875)）。这仅是 API 35 目标的 native 构建和 ELF 静态证据，没有加载 Android 库、启动节点、构建或操作 App，也没有设备双网结果。此前 `b250c58` 的三 ELF 已构建，但首次归档缺少一个源码文件，不能替代此轮完整归档。
 
+## Linux 双网双方向结果
+
+[93ca6cd 运行 43732347031](https://github.com/Luck9Star/herdr-pocket/actions/runs/43732347031) 的[汇总](evidence/dual-overlay-20261115/linux-93ca6cd-summary.json)和[原始工件 14169154663](https://github.com/Luck9Star/herdr-pocket/actions/runs/43732347031/artifacts/14169154663)记录了同一产品进程中的两个真实 provider、各自的临时 SSH/herdr 目标与受保护输入。[先停 EasyTier](evidence/dual-overlay-20261115/linux-93ca6cd-et-private.json)和[先停 Tailscale](evidence/dual-overlay-20261115/linux-93ca6cd-ts-private.json)两次独立运行均完成双方指纹核验、认证、full 画面及各自准确输入；停网后旧输入被拒，另一侧仍收到新输入，独立对端字节核验通过，两个观察任务均退出。负向本机及跨 provider 探测中，ET 流返回错误、TS 拨号返回错误；两个服务器的连接和认证增量均为零。临时凭据、自有进程、节点、流及 namespace 均清理。
+
+该通过结果只针对严格无外部路由的测试 namespace，ET 客户端测试配置为 `bind_device=false`，peer 保持默认。[默认 ET 先停 ET](evidence/dual-overlay-20261115/linux-93ca6cd-et.json)、[默认 ET 先停 TS](evidence/dual-overlay-20261115/linux-93ca6cd-ts.json)及[默认 ET 单网](evidence/dual-overlay-20261115/linux-93ca6cd-et-only.json)均未通过正向观察，不应与通过项混同。不同网络的虚拟目标地址并不重叠；同址选择、真实物理网络、GUI 与 Android 应用尚未验证。
+
 ## 待补的双网及平台结果
 
-Linux 的 [可选双网 runner](../validation/overlay-runtime/dual-overlay-loopback/README.md)与[工作流](../.github/workflows/dual-overlay-herdr-validation.yml)已实现同一个 `OverlayRuntime` 下两套真实 provider、两台临时 SSH/herdr 主机与受保护输入。验收须同时保留：pre-login 拒绝；两边实际完整帧与准确输入；独立 case 分别停 EasyTier、停 Tailscale，旧输入拒绝且另一网下一次输入仍成功；独立远端字节记录；两个观察任务退出以及节点、流、夹具进程与 namespace 清理。**代码存在不计为运行通过。** 后续在本节补运行/工件及脱敏 manifest，单方向结果只按该方向记录。
+Linux 的 [可选双网 runner](../validation/overlay-runtime/dual-overlay-loopback/README.md)与[工作流](../.github/workflows/dual-overlay-herdr-validation.yml)已实现同一个 `OverlayRuntime` 下两套真实 provider、两台临时 SSH/herdr 主机与受保护输入。验收须同时保留：pre-login 拒绝；两边实际完整帧与准确输入；独立 case 分别停 EasyTier、停 Tailscale，旧输入拒绝且另一网下一次输入仍成功；独立远端字节记录；两个观察任务退出以及节点、流、夹具进程与 namespace 清理。上述 93ca6cd 结果满足这些条件，范围限定于所述 private-loopback 测试配置；其他平台和网络条件仍需分别验证。
 
 交叉 provider 的不同虚拟 IP 与可用系统 loopback 被拒绝，不等于重叠虚拟地址已验证。Android 两壳的正常 UI、存储桥及会话切换须另验；本页目前不新增平台支持格。所有本地控制面结果均不证明 Headscale/商业协调面互通、个人 tailnet、物理网络或后台常连。

@@ -1,0 +1,137 @@
+{
+  "scope": "macOS arm64 Go1.27.3 real c-shared fresh process; positive/negative standard SSL_CERT_FILE; no inherited fixture globals or TLS bypass",
+  "cases": [
+    {
+      "case": "trusted",
+      "exitCode": 0,
+      "proxyEnvironmentPresent": {
+        "ALL_PROXY": false,
+        "HTTP_PROXY": false,
+        "HTTPS_PROXY": false,
+        "NO_PROXY": false,
+        "all_proxy": false,
+        "http_proxy": false,
+        "https_proxy": false,
+        "no_proxy": false
+      },
+      "baseline": {
+        "event": "diagnostics",
+        "keyRequests": 0,
+        "noiseRequests": 0,
+        "registerRequests": 0,
+        "mapRequests": 0,
+        "tlsHandshakeErrors": 0,
+        "secondClientRegistered": false,
+        "authCompletions": 0
+      },
+      "authorizationRequested": {
+        "event": "diagnostics",
+        "keyRequests": 1,
+        "noiseRequests": 1,
+        "registerRequests": 2,
+        "mapRequests": 1,
+        "tlsHandshakeErrors": 0,
+        "secondClientRegistered": true,
+        "authCompletions": 0
+      },
+      "after": {
+        "event": "diagnostics",
+        "keyRequests": 1,
+        "noiseRequests": 1,
+        "registerRequests": 2,
+        "mapRequests": 7,
+        "tlsHandshakeErrors": 0,
+        "secondClientRegistered": true,
+        "authCompletions": 1
+      },
+      "client": {
+        "event": "cabi_result",
+        "states": [
+          "NeedsLogin",
+          "Starting",
+          "Running"
+        ],
+        "startCode": 0,
+        "preLoginNoUrl": true,
+        "preLoginDialCode": 7,
+        "beginLoginCode": 0,
+        "authUrlPresent": true,
+        "running": true,
+        "dialCode": 0,
+        "payloadEqual": true,
+        "streamCloseCode": 0,
+        "streamReleaseCode": 0,
+        "nodeCloseCode": 0,
+        "nodeReleaseCode": 0,
+        "outstandingReadBuffers": 0
+      },
+      "cleanup": {
+        "bridgeConnections": 0,
+        "event": "cleanup",
+        "peerClosed": true
+      }
+    },
+    {
+      "case": "missing-ca",
+      "exitCode": 0,
+      "proxyEnvironmentPresent": {
+        "ALL_PROXY": false,
+        "HTTP_PROXY": false,
+        "HTTPS_PROXY": false,
+        "NO_PROXY": false,
+        "all_proxy": false,
+        "http_proxy": false,
+        "https_proxy": false,
+        "no_proxy": false
+      },
+      "baseline": {
+        "event": "diagnostics",
+        "keyRequests": 0,
+        "noiseRequests": 0,
+        "registerRequests": 0,
+        "mapRequests": 0,
+        "tlsHandshakeErrors": 0,
+        "secondClientRegistered": false,
+        "authCompletions": 0
+      },
+      "authorizationRequested": null,
+      "after": {
+        "event": "diagnostics",
+        "keyRequests": 0,
+        "noiseRequests": 0,
+        "registerRequests": 0,
+        "mapRequests": 1,
+        "tlsHandshakeErrors": 20,
+        "secondClientRegistered": false,
+        "authCompletions": 0
+      },
+      "client": {
+        "event": "cabi_result",
+        "states": [
+          "NeedsLogin"
+        ],
+        "startCode": 0,
+        "preLoginNoUrl": true,
+        "preLoginDialCode": 7,
+        "beginLoginCode": 0,
+        "authUrlPresent": false,
+        "nodeCloseCode": 0,
+        "nodeReleaseCode": 0,
+        "outstandingReadBuffers": 0
+      },
+      "cleanup": {
+        "bridgeConnections": 0,
+        "event": "cleanup",
+        "peerClosed": true
+      }
+    }
+  ],
+  "privateAuthUrlsRemoved": true,
+  "candidateLibrarySha256": "52944f9ee8b38d6f7f95f8659e1ccac7d5bf867af249c44c7b4602a917a0688e",
+  "validationBoundary": "single Tailscale C ABI; not dual provider, Android or iOS",
+  "productionSourceCommit": "93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc",
+  "fixedTailscaleVersion": "v1.104.1",
+  "goVersion": "go1.27.3",
+  "sourceManifestSha256": "85d6bd5c4cd10caccd046cc09e50a24ea5dbab3dd7b5e2d5df16dd0b5f09ea00",
+  "currentFixtureBinarySha256": "c89d3f6c769dfd01d8e37c3166db48938480a88e3c97811a2fe23258d94b4276"
+}

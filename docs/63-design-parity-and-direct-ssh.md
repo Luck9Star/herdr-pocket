@@ -168,6 +168,8 @@ RSA 功能快照 `621b793349d7e44332d617e76a345086c272e931` 的两壳 API35 Andr
 
 `38630b3` 的[完整批次 43672818989](https://github.com/Luck9Star/herdr-pocket/actions/runs/43672818989)为 27 个启用作业通过、7 个跳过；包含双壳五端构建、Linux stock/guarded 及各自实际执行的模拟器路径。相同源码的普通 SSH API35 也独立完成：[Flutter 43673540526](https://github.com/Luck9Star/herdr-pocket/actions/runs/43673540526) 工件 `14145477748` 的首页、指纹确认、终端回显和断开及服务端 auth/PTy/shell/marker/关闭均通过；[Tauri 43673540478](https://github.com/Luck9Star/herdr-pocket/actions/runs/43673540478) 工件 `14145333807` 对应指纹、凭据状态、输入回显、断开及服务端关闭和清理通过。两者都是临时 loopback 服务器和 API35 模拟器；Flutter 明确 `physicalImeVerified=false`，Tauri 使用 CDP 输入，不作为实体手机或真实 IME 组字证据。
 
+更新的同源码 `bc430761b71a470eeba94a01b148f0521343c822` 两壳普通 SSH 又分别通过 API35 模拟器：Flutter [43684909905](https://github.com/Luck9Star/herdr-pocket/actions/runs/43684909905) 的[原始脱敏记录](evidence/design-parity-20261115/flutter-ordinary-ssh-android-43684909905.json)确认首页、指纹、实际终端输入/回显、断开及服务端提前关闭；Tauri [43684909875](https://github.com/Luck9Star/herdr-pocket/actions/runs/43684909875) 的[原始脱敏记录](evidence/design-parity-20261115/tauri-ordinary-ssh-android-43684909875.json)分别验证了密码与加密私钥的相应流程及清理。两次使用临时 loopback 服务与各自 debug 构建；**同源码不等于同一二进制**，也不证明实体手机或真实 IME 组字。
+
 `a5082d0` 的[完整批次 43669066267](https://github.com/Luck9Star/herdr-pocket/actions/runs/43669066267)已独立分页核对：32 个作业中 27 个启用作业全部通过、5 个跳过不计通过，包含双壳五端构建与 Linux 双壳 stock/guarded。它证明对应源码的构建和明确执行的 Linux 路径，不能扩大成五端设备运行。Flutter macOS 原生窗口的本机实测来源与重签范围见上文。iOS 普通 SSH 应单列其自身模拟器/真机运行和签名来源，不由 Android 成功或 iOS 编译结果代替；本页此时没有登记 iOS 运行通过。
 
 ## 尚待独立补证

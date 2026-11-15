@@ -70,6 +70,15 @@ class IosDirectSshTests(unittest.TestCase):
             self.assertEqual(runner.owned_devices('herdr-direct-unique'), [owned])
             self.assertEqual(runner.owned_devices('herdr-direct-missing'), [])
 
+    def test_ui_diagnostic_drops_raw_status_credentials_and_untrusted_fields(self):
+        actual = runner.ui_diagnostic({'connectExists': True, 'connectEnabled': False,
+            'connectHitTestable': True, 'exceptionClass': 'TestFailure', 'sourceLine': 73,
+            'statusCode': 'fingerprint_confirmed', 'password': 'secret', 'status': 'secret target'})
+        self.assertEqual(actual, {'connectExists': True, 'connectEnabled': False, 'connectHitTestable': True,
+            'exceptionClass': 'TestFailure', 'sourceLine': 73, 'statusCode': 'fingerprint_confirmed'})
+        self.assertNotIn('secret', str(actual))
+        self.assertNotIn('sourceLine', runner.ui_diagnostic({'sourceLine': True}))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'direct_ssh_ui_steps.dart';
 
 const enabled = String.fromEnvironment('HERDR_IOS_DIRECT_SSH');
@@ -72,11 +74,61 @@ void main() {
           publish: publish,
           capture: capture,
         );
-      } catch (_) {
+      } catch (error, stack) {
         if (fixtureValidated) {
+          final detail = error.toString();
+          final statusFinder = find.byKey(const ValueKey('direct-status'));
+          final status = statusFinder.evaluate().length == 1
+              ? tester.widget<Text>(statusFinder).data
+              : null;
+          final statusCode = status == '已确认本次主机密钥；连接时将重新核对。'
+              ? 'fingerprint_confirmed'
+              : status == '正在重新核对主机密钥并连接…'
+              ? 'connecting'
+              : status == '认证失败，请检查凭据。'
+              ? 'auth_failed'
+              : status == '主机密钥不符，已阻止认证；请重新核对。'
+              ? 'key_mismatch'
+              : status == '连接失败或超时，请检查网络、密钥与目标。'
+              ? 'connect_failed'
+              : status == '应用进入后台，连接已关闭；返回后需重新连接，不会重放输入。'
+              ? 'background_closed'
+              : status == '已断开；未重放输入。'
+              ? 'disconnected'
+              : status?.startsWith('远端 shell 已结束') == true
+              ? 'shell_ended'
+              : find.text('已连接 · 输入直接发送到远端 shell').evaluate().isNotEmpty
+              ? 'connected'
+              : find.byType(DirectSshPage).evaluate().isEmpty
+              ? 'page_absent'
+              : 'other';
+          final connect = find.byKey(const ValueKey('direct-connect'));
+          final exists = connect.evaluate().length == 1;
+          final type = error.runtimeType.toString();
+          final line = RegExp(
+            r'direct_ssh_ui_steps\.dart:(\d+)',
+          ).firstMatch(stack.toString());
           publish('failure.json', {
             'stage': stage,
             'code': 'direct_ssh_ios_ui_failed',
+            'kind': detail.contains('ui_timeout')
+                ? 'timeout'
+                : detail.contains('hitTestable')
+                ? 'not_hit_testable'
+                : 'other',
+            'exceptionClass':
+                {'TestFailure', 'StateError', 'FlutterError'}.contains(type)
+                ? type
+                : 'other',
+            'sourceLine': line == null ? null : int.tryParse(line.group(1)!),
+            'statusCode': statusCode,
+            'connectExists': exists,
+            'connectEnabled': exists
+                ? tester.widget<FilledButton>(connect).onPressed != null
+                : null,
+            'connectHitTestable': exists
+                ? connect.hitTestable().evaluate().length == 1
+                : null,
           });
         }
         rethrow;

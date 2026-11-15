@@ -93,14 +93,18 @@ Future<void> runDirectSshUi(
   expect(find.textContaining(config['fingerprint'] as String), findsOneWidget);
   await tap(tester, 'direct-trust-key');
   step('authenticate');
+  step('secret_entry');
   final secret = find.byKey(const ValueKey('direct-secret'));
   await tester.ensureVisible(secret);
   await tester.enterText(secret, config['password'] as String);
   await tester.pump();
+  step('connect_tap');
   await tap(tester, 'direct-connect');
+  step('await_terminal');
   await until(tester, () => find.byType(TerminalView).evaluate().length == 1);
   final terminalView = find.byType(TerminalView);
   final terminal = tester.widget<TerminalView>(terminalView).terminal;
+  step('await_welcome');
   await until(tester, () => hasMarker(terminal, 'POCKET-ANDROID-READY'));
   step('input');
   await tester.tap(terminalView);

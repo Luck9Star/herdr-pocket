@@ -20,7 +20,8 @@ TARGET = 'integration_test/ios_direct_ssh_test.dart'
 FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched', 'explicitTrustRequired',
           'realTerminalView', 'normalTextInputCommit', 'remoteEchoVisible', 'disconnectUiConfirmed',
           'credentialsCleared', 'physicalImeVerified'}
-STAGES = {'home', 'target', 'probe', 'authenticate', 'input', 'disconnect'}
+STAGES = {'home', 'target', 'probe', 'authenticate', 'secret_entry', 'connect_tap',
+          'await_terminal', 'await_welcome', 'input', 'disconnect'}
 LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
                'buildError': 'Failed to build iOS app',
                'launchError': 'Error launching application on',
@@ -89,6 +90,24 @@ def check_result(value):
             any(value[key] is not True for key in FIELDS - {'schemaVersion', 'platform', 'physicalImeVerified'})):
         raise Failure('ios_result_incomplete')
     return value
+
+
+def ui_diagnostic(failure):
+    diagnostic = {}
+    for field in ('connectExists', 'connectEnabled', 'connectHitTestable'):
+        if failure.get(field) is None or isinstance(failure.get(field), bool):
+            diagnostic[field] = failure.get(field)
+    for field, allowed in {
+        'exceptionClass': {'TestFailure', 'StateError', 'FlutterError', 'other'},
+        'statusCode': {'fingerprint_confirmed', 'connecting', 'auth_failed', 'key_mismatch', 'connect_failed',
+                       'background_closed', 'disconnected', 'shell_ended', 'connected', 'page_absent', 'other'},
+    }.items():
+        if isinstance(failure.get(field), str) and failure[field] in allowed:
+            diagnostic[field] = failure[field]
+    line = failure.get('sourceLine')
+    if isinstance(line, int) and not isinstance(line, bool) and 1 <= line <= 1000:
+        diagnostic['sourceLine'] = line
+    return diagnostic
 
 
 def run(app, output, env):
@@ -206,6 +225,9 @@ def run(app, output, env):
                     failure = read_json(exchange / 'failure.json') if exchange else None
                     if failure and re.fullmatch(r'[a-z_]{1,40}', failure.get('stage', '')):
                         report['failureStage'] = failure['stage']
+                        if failure.get('kind') in {'timeout', 'not_hit_testable', 'other'}:
+                            report['failureKind'] = failure['kind']
+                        report['uiDiagnostic'] = ui_diagnostic(failure)
                     raise Failure('ios_device_test_failed' if code else 'ios_peer_confirmation_missing')
                 report['device'] = check_result(read_json(exchange / 'result.json'))
                 report['protocol'] = fixture.snapshot()

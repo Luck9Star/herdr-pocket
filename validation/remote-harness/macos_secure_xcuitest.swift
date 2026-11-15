@@ -104,6 +104,34 @@ final class SecureCredentialUITests: XCTestCase {
         fflush(stdout)
     }
 
+    private func clickNativeKeyPassphrase(_ app: XCUIApplication) {
+        let native = app.secureTextFields.matching(NSPredicate(format: "identifier == %@", "direct-passphrase"))
+        let window = app.windows.firstMatch
+        for delta in [CGFloat(0), -200, -200, -200, 200, 200, 200] {
+            if delta != 0 { scrollKeyGutter(app, delta) }
+            guard native.count == 1 && window.exists else { continue }
+            let field = native.firstMatch, frame = field.frame
+            let center = CGPoint(x: frame.midX, y: frame.midY)
+            let visible = !frame.isEmpty && window.frame.contains(center)
+            func bounded(_ v: CGFloat) -> Int { max(-10000, min(10000, Int(v.rounded()))) }
+            print("HP_XCUI_NATIVEFIELD=count:1,hittable:\(field.isHittable ? 1 : 0),visible:\(visible ? 1 : 0),x:\(bounded(frame.minX-window.frame.minX)),y:\(bounded(frame.minY-window.frame.minY)),w:\(bounded(frame.width)),h:\(bounded(frame.height))")
+            fflush(stdout)
+            guard visible else { continue }
+            let windowFrame = window.frame
+            usleep(100_000)
+            guard frame == field.frame && windowFrame == window.frame else { continue }
+            if field.isHittable {
+                field.click()
+            } else {
+                let origin = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+                origin.withOffset(CGVector(dx: center.x-windowFrame.minX, dy: center.y-windowFrame.minY)).click()
+            }
+            mark("keyPassphraseNativeClicked")
+            return
+        }
+        XCTFail("native passphrase field not visibly clickable")
+    }
+
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement, phase: String = "control") {
         for _ in 0..<10 {
             if stableHit(element) { break }
@@ -629,8 +657,7 @@ final class SecureCredentialUITests: XCTestCase {
         let nativeCount = app.secureTextFields.matching(NSPredicate(format: "identifier == %@", "direct-passphrase")).count
         print("HP_XCUI_PASSFIELD=native:\(min(nativeCount,9)),groups:\(min(app.descendants(matching: .any).matching(identifier: "私钥口令（可选）").count,9))")
         fflush(stdout)
-        app.typeKey(.tab, modifierFlags: [])
-        mark("keyPassphraseTabAttempt")
+        clickNativeKeyPassphrase(app)
         app.typeText("q")
         let sentinelConfirmed = try inputMatches(app, index: 2)
         XCTAssertTrue(sentinelConfirmed, "passphrase focus sentinel mismatch")

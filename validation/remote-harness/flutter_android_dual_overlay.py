@@ -519,7 +519,7 @@ def main():
     parser.add_argument('--native-source', required=True)
     args = parser.parse_args()
     try:
-        if args.native_source != '93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc':
+        if args.native_source != '45ea7dc6f9b99b9bc2fba0f2e53f6e31c7a0ccbf':
             raise DualOverlayDeviceFailure('native_source_invalid')
         if args.host_source != '5404adfb3c86f5174edda38f1d0c63c8d81996c5':
             raise DualOverlayDeviceFailure('host_source_invalid')

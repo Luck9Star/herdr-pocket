@@ -3,6 +3,7 @@ import { createDirectSsh } from './direct-ssh.js';
 export function initDirectSshUI({native, invoke, channelFactory, terminalFactory}) {
   const $ = id => document.getElementById(id);
   let terminal = null;
+  let resizeWatch = null;
   const resizer = createDirectSshResizer({
     measure: () => measureDirectSshViewport($('ssh-terminal').parentElement, terminal),
     send: (cols, rows) => controller.resize(cols, rows),
@@ -50,12 +51,20 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     const credentials = $('ssh-auth-method').value === 'key'
       ? (privateKeyPem ? {privateKeyPem, ...(passphrase ? {privateKeyPassphrase:passphrase} : {})} : {})
       : (password ? {password} : {});
-    if (!terminal) {
-      terminal = terminalFactory({cols:80, rows:24, fontSize:14, cursorBlink:true, theme:{background:'#0B0F17',foreground:'#E6EDF3'}});
-      terminal.open($('ssh-terminal'));
-      terminal.onData(data => controller.write(new TextEncoder().encode(data)));
-      if (typeof ResizeObserver === 'function') new ResizeObserver(resizer.request).observe($('ssh-terminal').parentElement);
-    } else terminal.reset();
+    // A fresh xterm per connection: reset() does not clear the WriteBuffer's
+    // dangling partial UTF-8 sequence from the previous session, which would
+    // corrupt the first characters of the next session. Disposing also drops
+    // the old instance's subscriptions and renderer.
+    terminal?.dispose();
+    terminal = terminalFactory({cols:80, rows:24, fontSize:14, cursorBlink:true, theme:{background:'#0B0F17',foreground:'#E6EDF3'}});
+    terminal.open($('ssh-terminal'));
+    terminal.onData(data => controller.write(new TextEncoder().encode(data)));
+    // observe() returns void; keep the observer itself so reconnections don't
+    // stack a new watcher on the same container.
+    if (typeof ResizeObserver === 'function' && !resizeWatch) {
+      resizeWatch = new ResizeObserver(resizer.request);
+      resizeWatch.observe($('ssh-terminal').parentElement);
+    }
     clearSecrets();
     try { await controller.open(target(), credentials, $('ssh-review').checked); }
     catch { $('ssh-status').textContent = '请先核对指纹并选择一种认证方式。'; }

@@ -1,6 +1,6 @@
 # 界面设计落实与普通 SSH 终端
 
-状态：2026-11-15 原型验证交接。此记录覆盖普通 SSH、S01–S06 与 S27 的界面增量，以及 Flutter Android 模拟器普通 SSH 验收；CI 调试 APK、公开 Release、手机真机和五平台运行须分别核对。历史 ADR 和此前 APK 的证据范围保持原样。
+状态：2026-11-15 原型验证交接。此记录覆盖普通 SSH、S01–S06 与 S27 的界面增量，以及 Flutter / Tauri Android 模拟器普通 SSH 验收；CI 调试 APK、公开 Release、手机真机和五平台运行须分别核对。历史 ADR 和此前 APK 的证据范围保持原样。
 
 ## 从首页选择接入方式
 
@@ -28,7 +28,7 @@
 
 原生 debug app 使用隔离标识 `dev.herdrpocket.acceptance20261115`。构建日志留在本次本地运行目录；这些原生 UI 检查不构成发布验收；已有可下载的 CI 调试 APK 须核对对应源码 SHA，不能当成公开 Release 或手机真机通过。Rust 复核入口为 `cargo test --locked --offline --manifest-path validation/transport-rust/Cargo.toml direct_shell`；Flutter 准备与 runner 用法见[验证壳 README](../validation/flutter/README.md#普通-ssh-回环验证)。
 
-普通 SSH 的 RSA 兼容增量也已从原生 macOS 窗口独立复验：纯 RSA2048 Paramiko、核对 SHA256 指纹、密码登录、输入 `hp-check` 后看到绿色 `POCKET-ANDROID-SSH-OK`，点击断开后服务端记录 `sessionClosed`。窗口缩放让服务端实际收到 80×24 → 106×28 → 106×30 → 104×27 → 104×20 → 104×19 → 106×19，包括列数相同而行数改变。该次使用前端 `f29ea6b` 与 Rust 生产文件 blob `a9e9792` / `502548b`，已纳入功能快照 `621b793`；未据此声称原生私钥输入或 Android Tauri 已通过。
+普通 SSH 的 RSA 兼容增量也已从原生 macOS 窗口独立复验：纯 RSA2048 Paramiko、核对 SHA256 指纹、密码登录、输入 `hp-check` 后看到绿色 `POCKET-ANDROID-SSH-OK`，点击断开后服务端记录 `sessionClosed`。窗口缩放让服务端实际收到 80×24 → 106×28 → 106×30 → 104×27 → 104×20 → 104×19 → 106×19，包括列数相同而行数改变。该次使用前端 `f29ea6b` 与 Rust 生产文件 blob `a9e9792` / `502548b`，已纳入功能快照 `621b793`；原生私钥输入未验证，Android 范围另见下文。
 
 Rust 仅新增 russh 的独立 `rsa` feature，仍关闭默认 features 并保留 `ring`；普通 SSH 探测和连接禁止协商旧 RSA/SHA1，RSA 私钥采用服务端支持的 SHA-256/512。公钥 pin 的 `ssh-rsa` 前缀表示公钥编码，并不表示允许 SHA1 签名。三个消费方锁文件同步固定新增依赖，未修改 vendored russh；herdr 配对仍按原 Ed25519 身份验证。测试夹具的子进程由专用线程从创建到回收持有，取消清理继续以 3 秒内连接和子进程计数归零验收。
 
@@ -60,6 +60,8 @@ Rust 仅新增 russh 的独立 `rsa` feature，仍关闭默认 features 并保�
 
 作为另一层独立证据，`e5cdaeb` 的 Linux 原生 Flutter 与 Tauri stock herdr 配对都通过，两个 manifest 均记录输入 0 字节；`bd083d8` 的双壳五端构建通过。它们分别证明对应版本的配对观察路径与构建，不可扩成普通 SSH Android UI 或 S06 真实双连接运行通过。
 
+Flutter 的 `a2ffb4b` [guarded Android 运行 43667868489](https://github.com/Luck9Star/herdr-pocket/actions/runs/43667868489)也已独立回读通过：stock 路径输入 0 字节，guarded 工件 `14143482126` 记录 10 字节，逐键与草稿各自受理；粘贴取消、再次预览和本地追加没有额外 SSH 字节，生命周期与原目标核对通过。这是对应版本单端受保护输入的模拟器证据，不是 S06 真实双连接或物理 IME 验证。旧 `fba4` 运行的 AVD 255 根因仍未查明，诊断或用例依赖修复不构成该故障已根治的证据；专用 TUI 运行另行核对。
+
 ## S27 网络页界面增量
 
 `4be102e` 冻结了手机 S03、普通 SSH 凭据门槛和 S27 网络页；独立归档源码完整验证为 **533 passed / 4 skipped / 0 failed**，analyzer 无问题。S27 使用紧凑配置与节点状态、实际绑定主机名和按需展开管理；40 项定向回归包含停用影响以及撤销、删除保护。[320 宽度](evidence/design-parity-20261115/s27-networks-320.png)与[390 宽度](evidence/design-parity-20261115/s27-networks-390.png)是使用合成节点数据的实际 Widget 渲染，证明界面与交互，不替代真实组网或设备路由证据。
@@ -72,12 +74,17 @@ Rust 仅新增 russh 的独立 `rsa` feature，仍关闭默认 features 并保�
 
 修复后 [Flutter API35 Android 模拟器复测 43666350464](https://github.com/Luck9Star/herdr-pocket/actions/runs/43666350464) **通过**，源码 `db91fce84640c4dfdb1c51558ade419f8e5dca39`，Actions 工件 ID `14142083552`。设备报告确认从首页进入、pin 一致且明确确认、真实 `TerminalView` 的正常文本提交、远端回显可见、界面断开与凭据清空；独立服务端确认认证、PTY、shell、标记输入和关闭，且在测试驱动退出前已关闭，全部清理项通过。实际[已连接截图](evidence/design-parity-20261115/flutter-android-ssh-connected-43666350464.png)记录的是 READY 阶段；回显断言与关闭证据见[脱敏报告](evidence/design-parity-20261115/flutter-android-ssh-43666350464.json)。该模拟器使用测试输入接口提交文本，物理 IME 未验证。
 
-[Tauri Android 普通 SSH 首轮](https://github.com/Luck9Star/herdr-pocket/actions/runs/43665538049)与后续 RSA 修复的设备结论分别回读；本页当前不记录其通过。
+最终功能快照 `621b793349d7e44332d617e76a345086c272e931` 的两壳 API35 Android 模拟器普通 SSH 均已通过，并独立回读实际工件：
 
-功能快照 `621b793` 的新一轮 [Flutter 普通 SSH](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668558676)、[Tauri 普通 SSH](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668503928)、[五端构建](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668503775)及 [arm64 网络/TUI](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668490261)已启动，结果尚待回读，不计入通过范围。
+| 路线 | 固定运行与工件 | 实际证据与输入方式 |
+| --- | --- | --- |
+| Flutter | [run 43668558676](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668558676)，工件 `14143074595`；[最终脱敏报告](evidence/design-parity-20261115/flutter-android-ssh-43668558676.json) | 从首页进入、明确指纹确认、真实 TerminalView 正常文本提交、远端回显、界面断开和凭据清空均通过；服务端在驱动退出前确认关闭，清理全部通过。输入来自 Flutter 平台测试接口 |
+| Tauri | [run 43668503928](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668503928)，工件 `14143189049`；[最终脱敏报告](evidence/design-parity-20261115/tauri-android-ssh-43668503928.json) | 真实 Android WebView 的首页与指纹审查、认证、终端输入/回显、界面断开、密码清空及服务端关闭均通过，清理全部通过。输入来自 CDP；x86_64 调试 APK SHA256 为 `4121aa825ac4d6f3913efb4e710f3f7081ed0ddccb52024708ddce6794fd87ae` |
+
+两者均访问 runner 自建的 RSA2048 loopback 夹具，不访问个人主机；没有验证物理 IME 组字或手机真机。上面的 Flutter READY 截图来自前一轮 `db91fce`，保留原 SHA，不将近似画面冒充最终快照截图。[Tauri 首轮](https://github.com/Luck9Star/herdr-pocket/actions/runs/43665538049)保留为 RSA 修复前的历史运行。此时同快照的[五端构建](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668503775)及 [arm64 网络/TUI](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668490261)仍待独立回读，本页未将其计入通过。
 
 本地普通 SSH 真实 Widget 复核已执行 5/5，包含新增空凭据门槛与正常返回销毁回归。只有服务端后验与 UI 身份拒绝断言全部通过，runner 才输出成功摘要；认证未发生但连接未尝试的情况不算身份验证成功。Android 集成源码与普通 SSH 页面 analyzer 无问题，修复后的 CI/目录/设备守卫、结果解析反例与真实 Paramiko loopback 5/5。这些本地检查与上面的实际模拟器结论分层记录。
 
 ## 尚待独立补证
 
-S06 的真实双 SSH 与原生设备、Tauri Android 普通 SSH、手机真机触控/IME/相机/系统密钥存储、其他主机算法与认证组合、三网路由、长时间运行和正式发布均不能由本页证据推出。后续每项新增结论必须对应新的实际运行记录；历史“只允许远端 herdr”作为当时基线保留，现行两类远端接入范围以本页及架构/产品设计的 2026-11-15 增量为准。
+S06 的真实双 SSH 与原生设备、手机真机触控/IME/相机/系统密钥存储、其他主机算法与认证组合、三网路由、长时间运行和正式发布均不能由本页证据推出。后续每项新增结论必须对应新的实际运行记录；历史“只允许远端 herdr”作为当时基线保留，现行两类远端接入范围以本页及架构/产品设计的 2026-11-15 增量为准。

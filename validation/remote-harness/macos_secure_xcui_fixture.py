@@ -12,8 +12,10 @@ if os.environ.get('GITHUB_ACTIONS') != 'true' or not root.is_dir() or not root.i
     raise SystemExit('fixture_scope_invalid')
 os.umask(0o077)
 with DirectSshFixture() as peer:
-    (root / 'fixture.json').write_text(json.dumps({'port':peer.port,'username':peer.username,
+    pending = root / 'fixture.pending'
+    pending.write_text(json.dumps({'port':peer.port,'username':peer.username,
         'password':peer.password,'fingerprint':peer.fingerprint}))
+    pending.replace(root / 'fixture.json')
     for _ in range(1800):
         (root / 'facts.json').write_text(json.dumps(peer.snapshot()))
         if (root / 'stop').exists():

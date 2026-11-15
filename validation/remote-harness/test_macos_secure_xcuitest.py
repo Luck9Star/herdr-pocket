@@ -1,7 +1,11 @@
 """Safety and scaffold contract; actual XCUITest requires macOS and Xcode."""
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
+import textwrap
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -50,6 +54,32 @@ class ScaffoldTests(unittest.TestCase):
             project=root / 'macos/Runner.xcodeproj/project.pbxproj';project.write_text('unrecognized')
             with self.assertRaises(ValueError):runner.prepare(root)
             self.assertEqual(project.read_text(),'unrecognized')
+
+    def test_workflow_report_requires_case_progress_and_peer(self):
+        workflow=(Path(__file__).resolve().parents[2] / '.github/workflows/flutter-macos-secure-xcui.yml').read_text()
+        start=workflow.index("          python3 - \"$RUNNER_TEMP/macos-secure-evidence/result.json\" \"$result\" <<'PY'\n")
+        body=workflow[start:].split("\n          PY\n",1)[0].split("<<'PY'\n",1)[1]
+        script=textwrap.dedent(body)
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);fixture=root/'macos-secure-fixture';fixture.mkdir()
+            allowed=['fixtureReadable','appLaunched','homepage','ordinaryInputReadable','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred',
+                     'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField',
+                     'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
+            (fixture/'facts.json').write_text(json.dumps({k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}))
+            progress={k:True for k in allowed};(fixture/'progress.json').write_text(json.dumps(progress))
+            log=root/'macos-secure-private.log';log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed')
+            output=root/'result.json';env={**os.environ,'RUNNER_TEMP':temp,'GITHUB_SHA':'a'*40}
+            def execute():
+                return subprocess.run([sys.executable,'-',str(output),'0'],input=script,text=True,env=env,capture_output=True)
+            self.assertEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'passed')
+            log.write_text('Executed 0 tests')
+            self.assertNotEqual(execute().returncode,0);self.assertFalse(json.loads(output.read_text())['testExecuted'])
+            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed')
+            del progress['returnAndReopenCleared'];(fixture/'progress.json').write_text(json.dumps(progress))
+            self.assertNotEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'failed')
+            progress['returnAndReopenCleared']=True;(fixture/'progress.json').write_text(json.dumps(progress))
+            (fixture/'facts.json').write_text(json.dumps({'authAccepted':False}))
+            self.assertNotEqual(execute().returncode,0);self.assertFalse(json.loads(output.read_text())['peerAuthenticationPtyShellAndClose'])
 
 if __name__ == '__main__':
     unittest.main()

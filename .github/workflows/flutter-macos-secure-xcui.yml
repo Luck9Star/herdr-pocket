@@ -21,8 +21,10 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/macos-secure-venv"
           "$RUNNER_TEMP/macos-secure-venv/bin/pip" install paramiko==4.0.0
           python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-probe"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-probe"
           cd "$RUNNER_TEMP/flutter-probe"
-          flutter pub get --enforce-lockfile
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-probe"
           flutter build macos --debug
       - name: Run native XCUITest without exporting UI snapshots or logs
         shell: bash
@@ -39,9 +41,11 @@ jobs:
           xcodebuild test -workspace "$RUNNER_TEMP/flutter-probe/macos/Runner.xcworkspace" \
             -scheme Runner -configuration Debug -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/macos-secure-derived" \
+            -resultBundlePath "$RUNNER_TEMP/macos-secure-private.xcresult" \
             > "$RUNNER_TEMP/macos-secure-private.log" 2>&1
           result=$?
           set -e
+          xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/macos-secure-private.xcresult" --format json > "$RUNNER_TEMP/macos-secure-private-summary.json" 2>/dev/null || true
           for attempt in {1..100}; do
             if python3 - "$RUNNER_TEMP/macos-secure-fixture/facts.json" <<'PY'
           import json,sys
@@ -65,13 +69,41 @@ jobs:
               log=open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private.log'),errors='replace').read().lower()
           except OSError: log=''
           permission = any(text in log for text in ('not authorized to use accessibility', 'not authorized to control', 'accessibility access is not enabled'))
-          allowed={'homepage','ordinaryInputReadable','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred',
+          # Only bounded, redacted test-source compiler diagnostics; never upload the private log.
+          diagnostics=[]
+          for line in log.splitlines():
+              match=re.search(r'runnertests\.swift:(\d+):(?:\d+:)?\s*error: (.*)',line)
+              if not match: continue
+              message=match.group(2)
+              message=re.sub(r"'[^']*'|\"[^\"]*\"", "<redacted>", message)
+              message=re.sub(r'/[^\s:]+', '<path>', message)
+              message=re.sub(r'[^a-z0-9 _.,:;()<>?+\-=]', '?', message)[:180]
+              diagnostic={'file':'RunnerTests.swift','line':int(match.group(1)),'message':message}
+              if message and diagnostic not in diagnostics: diagnostics.append(diagnostic)
+              if len(diagnostics)==3: break
+          allowed={'fixtureReadable','appLaunched','homepage','ordinaryInputReadable','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred',
                    'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField',
                    'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
           try:
               raw=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-fixture','progress.json')))
               progress={k:True for k,v in raw.items() if k in allowed and v is True}
           except (OSError,ValueError,AttributeError): progress={}
+          try:
+              summary=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private-summary.json')))
+          except (OSError,ValueError): summary={}
+          counts={k:summary[k] for k in ('totalTestCount','passedTests','failedTests','skippedTests') if type(summary.get(k)) is int}
+          fixed=['owned loopback fixture unavailable','candidate app did not launch','normal homepage ssh entry missing',
+                 'named address group or ordinary input missing','ordinary input is not readable',
+                 'system accessibility tree is empty','native secure field missing from system tree',
+                 'synthetic credential exposed in system accessibility tree','host key probe unavailable',
+                 'independently expected host fingerprint missing','fingerprint confirmation unavailable',
+                 'connection action unavailable','native ssh session did not authenticate','disconnect action missing',
+                 'disconnect did not return to form','password not cleared after disconnect','private key mode missing',
+                 'password retained after mode switch','passphrase retained after mode switch','back action missing',
+                 'normal homepage did not return','prior credential retained']
+          fixed_failures=[message for message in fixed if message in log]
+          method='testPasswordAndPrivateKeyPassphraseAreSecure'
+          failure_method=method if (summary.get('failedTests',0) and method.lower() in json.dumps(summary).lower()) or (fixed_failures and method.lower() in log) else None
           test_executed=bool(re.search(r'testpasswordandprivatekeypassphrasearesecure[^\n]{0,100}\bpassed\b',log))
           completed=all(progress.get(k) is True for k in allowed)
           ok=sys.argv[2]=='0' and peer and test_executed and completed
@@ -79,7 +111,9 @@ jobs:
                   'platform':'macos-xcuitest','status':'passed' if ok else 'failed',
                   'scope':'native UI security fields and owned SSH loopback; synthetic values; no physical IME',
                   'systemTreeAndSecureFieldsVerified':test_executed and completed,'testExecuted':test_executed,
-                  'peerAuthenticationPtyShellAndClose':peer,
+                  'peerAuthenticationPtyShellAndClose':peer,'buildStarted':('swiftcompile' in log or 'build target' in log),
+                  'testStarted':('test suite' in log or 'test case' in log),'testCounts':counts,
+                  'failureMethod':failure_method,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,
                   'progress':progress,'rawLogsUploaded':False}
           if not ok:
               report['errorCode']='xcui_accessibility_permission_missing' if permission else ('secure_field_missing' if 'native secure field missing from system tree' in log else ('xcui_test_or_environment_failed' if sys.argv[2]!='0' else ('xcui_test_not_executed' if not test_executed or not completed else 'loopback_peer_evidence_incomplete')))

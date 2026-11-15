@@ -49,8 +49,11 @@ final class SecureCredentialUITests: XCTestCase {
         let phrase = "fixture-passphrase-" + UUID().uuidString
         let host = "127.0.0.1"
         progressURL = URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("progress.json")
+        try mark("fixtureReadable")
         let app = XCUIApplication()
         app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "candidate app did not launch")
+        try mark("appLaunched")
         let entry = app.buttons["普通 SSH"]
         XCTAssertTrue(entry.waitForExistence(timeout: 30), "normal homepage SSH entry missing")
         try mark("homepage")

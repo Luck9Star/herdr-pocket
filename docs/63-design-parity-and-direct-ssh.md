@@ -4,21 +4,21 @@
 
 ## 可下载的同源调试快照
 
-以下五件来自源码 `d5ec372d50060f4824401755e213c826f0c4ab01` 的 [运行 43699318869](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869)：27 项成功、7 项按条件跳过。五件均已下载并核对 GitHub 外层 ZIP digest、CI 清单及内包 SHA256；下表哈希对应内包。这是 QA 调试快照，不等同公开 Release 或设备验收。
+以下五件来自源码 `a9afe9cdbb1f3809f7bb975f41b83705a4825510` 的 [运行 43708650075](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075)：27 项成功、7 项按条件跳过。五件均已下载并核对 GitHub 外层 ZIP digest、CI 清单及内包 SHA256；下表哈希对应内包。这是 QA 调试快照，不等同公开 Release 或设备验收。
 
 | 平台 / 路线 | GitHub 下载与内包名 | 实际架构 | 内包 SHA256 |
 | --- | --- | --- | --- |
-| Flutter Android | [工件 14155748178](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869/artifacts/14155748178) · `flutter-android-debug.apk` | `arm64-v8a` / `armeabi-v7a` / `x86_64` | `ff6ec8e7ea16d416ccd109cd71d4c6d212a95c0d2124df84d35b73a40d7896a3` |
-| Tauri Android | [工件 14155712798](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869/artifacts/14155712798) · `app-universal-debug.apk` | 仅 `arm64-v8a` | `2c9912254cd9d727e9f0fc4043cd8efbb21f5c3000634c885c390e1258a7fef7` |
-| Flutter macOS | [工件 14155169699](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869/artifacts/14155169699) · `flutter-macos-debug.tar.gz` | Mach-O `arm64` | `9773cf0487442dd09264c1f2efef331bbd8fffbd0462d1b05958e4d632189920` |
-| Tauri macOS | [工件 14155453250](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869/artifacts/14155453250) · `herdr-pocket-tauri-probe.app.zip` | Mach-O `arm64` | `dae43eff9b34ecf99c4d6ef0a3027bef86e15a99ddd686099db6db396bef802c` |
-| Tauri Linux | [工件 14155748031](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869/artifacts/14155748031) · `herdr-pocket-tauri-probe_0.1.0_amd64.deb` | Debian `amd64` | `d60b3783a632635834107ca5577bbd375f879893139717c4c82eb94d4edf7538` |
+| Flutter Android | [工件 14159866197](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159866197) · `flutter-android-debug.apk` | `arm64-v8a` / `armeabi-v7a` / `x86_64` | `80e8d93bf3d90f3a3ce0cf8458ef900ac11a2b8c84a6b8a7366015ca3461f904` |
+| Tauri Android | [工件 14159224253](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159224253) · `app-universal-debug.apk` | 仅 `arm64-v8a` | `f563370e34459f113bf8a7bc0b3869eb30e48df536dbd469e31e17cd520c81aa` |
+| Flutter macOS | [工件 14159817543](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159817543) · `flutter-macos-debug.tar.gz` | Mach-O `arm64` | `ee24e490dfbf9f6442d0a858904e04daf031c1ec4e26ec0dea105a89b2f6284a` |
+| Tauri macOS | [工件 14160085140](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14160085140) · `herdr-pocket-tauri-probe.app.zip` | Mach-O `arm64` | `183b2d0eaee22209119734c5b230c16746e492170e9f6395411550735d477cc5` |
+| Tauri Linux | [工件 14159857019](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159857019) · `herdr-pocket-tauri-probe_0.1.0_amd64.deb` | Debian `amd64` | `24e421ef584ea0ca21414eca94473b1c1a9c8c0646766d4fa6fccb07818b4859` |
 
-Tauri Android 文件名虽含 `universal`，包内仅有 `arm64-v8a`；下文的 API35 模拟器验收使用另行构建的 x86_64 应用，不是上表 APK。Flutter Android 的 manifest 主哈希对应工件内另一份 ZIP，APK 自身通过同工件 `SHA256SUMS` 核对。五件与清单保存在本地 `build/verification/d5ec372/`。
+Tauri Android 文件名虽含 `universal`，包内仅有 `arm64-v8a`；下文的 API35 模拟器验收使用另行构建的 x86_64 应用，不是上表 APK。Flutter Android 的 manifest 主哈希对应工件内另一份 ZIP，APK 自身通过同工件 `SHA256SUMS` 核对。五件与清单保存在本地 `build/verification/a9afe9c/`。
 
-云端 Linux Flutter 候选 [工件 14155368810](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869/artifacts/14155368810) 为 544 项通过、5 项条件跳过，另有渲染 10 项通过。macOS 本机隔离候选 `d38aff4` 为 543 项通过、5 项跳过与渲染 10 项通过，另以合成 loopback 补跑普通 SSH 10 项；两批分开记账。当前 `d5ec372` 的 Tauri 在 Node 22.22.2 上 `npm test` 为 594 项通过、0 失败，`npm run build` 通过；helper 测试 15/15 通过；测试不替代设备运行。
+云端 Linux Flutter 候选 [工件 14159955842](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159955842) 为 556 项通过、5 项条件跳过，另有渲染 10 项通过。macOS 本机隔离候选 `d38aff4` 为 543 项通过、5 项跳过与渲染 10 项通过，另以合成 loopback 补跑普通 SSH 10 项；两批分开记账。此前 `d5ec372` 的 Tauri 在 Node 22.22.2 上 `npm test` 为 594 项通过、0 失败，`npm run build` 通过；helper 测试 15/15 通过；测试不替代设备运行。
 
-历史下载：[20ef361 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43696926797) · [d38aff4 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43688956564) · [bc43076 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816) · [79d2d00 Flutter macOS 独立包](https://github.com/Luck9Star/herdr-pocket/actions/runs/43692804010/artifacts/14153820575)。历史包的已核验文件保留于本地相应 `build/verification/` 目录；各次系统 AX 和设备结果见下文。
+历史下载：[d5ec372 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869) · [20ef361 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43696926797) · [d38aff4 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43688956564) · [bc43076 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816) · [79d2d00 Flutter macOS 独立包](https://github.com/Luck9Star/herdr-pocket/actions/runs/43692804010/artifacts/14153820575)。历史包的已核验文件保留于本地相应 `build/verification/` 目录；各次系统 AX 和设备结果见下文。
 
 ## 从首页选择接入方式
 
@@ -140,7 +140,9 @@ Tauri 主连接与终端标签均只在原生回复的 request ID、pane、termi
 
 普通 SSH 表单采用 560 逻辑像素最大阅读宽度、分组状态与间隔字段。[390 宽截图](evidence/design-parity-20261115/flutter-direct-ssh-form-390.png)和[桌面截图](evidence/design-parity-20261115/flutter-direct-ssh-form-desktop.png)是从真实首页控件入栈、使用合成地址与用户名及空密码的 Flutter Widget 渲染；截图测试为中文加载本机字体，不冒充原生窗口像素。另以固定 SDK 编译 Dart kernel，替换 4db debug app 的隔离副本、独立 bundle ID 重签后检查 macOS 系统 AX：地址、端口、用户名、密码及私钥/口令分别是**有名容器，内含 text field**；text field 自身并非有名节点。随后对云端 `38630b3` macOS arm64 工件 `14145048657` 独立复核：压缩包 SHA256 `2ccb6b6c49561a3bf2d7fb48e54c3d74b75111ef77e2c44b7f564b144f8183f6`；为隔离测试更换 bundle ID、保留原六项 entitlement 后临时重签，Dart kernel 原样。首页进入普通 SSH 后，系统 AX 的密码模式四组以及切换后的私钥 PEM 和可选口令分组均包含相应 text field。此项为系统 AX 分组证据，不把 Widget 语义等同系统 AX，也不声称输入框自身具名。
 
-Tauri 普通 SSH 会话新增 Esc、Tab、方向键与 Ctrl-C；方向键按实际 xterm 光标模式输出普通或应用模式序列，隐藏、断开和切换后不重放旧输入。[320×844](evidence/design-parity-20261115/tauri-ordinary-ssh-keys-320.png) 和 [390×844](evidence/design-parity-20261115/tauri-ordinary-ssh-keys-390.png) 使用真实首页与 `initRemote` 路由、真实 xterm 和合成主机目录/SSH 对端：从看板进入、探测并确认后主动连接；另在 320×500 缩小视口滚动并逐一点击七键，控件均至少 44×44，页面无横向溢出。这些是浏览器与合成对端证据，不能替代真实 Android 软键盘或服务端字节验收。
+Tauri 普通 SSH 会话新增 Esc、Tab、方向键与 Ctrl-C；方向键按实际 xterm 光标模式输出普通或应用模式序列，隐藏、断开和切换后不重放旧输入。[320×844](evidence/design-parity-20261115/tauri-ordinary-ssh-keys-320.png) 和 [390×844](evidence/design-parity-20261115/tauri-ordinary-ssh-keys-390.png) 使用真实首页与 `initRemote` 路由、真实 xterm 和合成主机目录/SSH 对端：从看板进入、探测并确认后主动连接；另在 320×500 缩小视口滚动并逐一点击七键，控件均至少 44×44，页面无横向溢出。这些截图是浏览器与合成对端证据；后续 Android 模拟器的服务端字节结果见下文，仍未验证真实软键盘。
+
+Flutter 普通 SSH 新增显式“粘贴私钥”入口：只在私钥模式主动读取，异步结果须仍属于原页面、目标及编辑状态；连接重开时创建新的终端实例，退休旧实例的输出与尺寸回调。`a9afe9c` 云端 Flutter 候选包含这些 Widget 回归，合计 556 项通过、5 项按条件跳过及 10 项渲染回归通过；这不等同于系统剪贴板或真实 IME 的设备验收。
 
 ## S27 网络页界面增量
 
@@ -186,7 +188,9 @@ RSA 功能快照 `621b793349d7e44332d617e76a345086c272e931` 的两壳 API35 Andr
 
 `38630b3` 的[完整批次 43672818989](https://github.com/Luck9Star/herdr-pocket/actions/runs/43672818989)为 27 个启用作业通过、7 个跳过；包含双壳五端构建、Linux stock/guarded 及各自实际执行的模拟器路径。相同源码的普通 SSH API35 也独立完成：[Flutter 43673540526](https://github.com/Luck9Star/herdr-pocket/actions/runs/43673540526) 工件 `14145477748` 的首页、指纹确认、终端回显和断开及服务端 auth/PTy/shell/marker/关闭均通过；[Tauri 43673540478](https://github.com/Luck9Star/herdr-pocket/actions/runs/43673540478) 工件 `14145333807` 对应指纹、凭据状态、输入回显、断开及服务端关闭和清理通过。两者都是临时 loopback 服务器和 API35 模拟器；Flutter 明确 `physicalImeVerified=false`，Tauri 使用 CDP 输入，不作为实体手机或真实 IME 组字证据。
 
-最新同源码 `d5ec372d50060f4824401755e213c826f0c4ab01` 的 API35 模拟器普通 SSH 已通过：Flutter [43699318300](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318300) 的[脱敏记录](evidence/design-parity-20261115/flutter-ordinary-ssh-android-43699318300.json)覆盖首页、指纹确认、临时密码、终端输入回显、断开与凭据清空，服务端确认认证、PTY、shell、输入标记及两连接关闭；Tauri [43699318224](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318224) 的[脱敏记录](evidence/design-parity-20261115/tauri-ordinary-ssh-android-43699318224.json)分别覆盖密码与加密私钥路径及关闭。独立测试构建与合成 loopback 不等同下载包二进制；Flutter 测试接口和 Tauri CDP 未验证真实 IME，也不代表实体手机。
+最新同源码 `a9afe9cdbb1f3809f7bb975f41b83705a4825510` 的 API35 模拟器普通 SSH 已通过：Flutter [43708649955](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708649955) 的[脱敏记录](evidence/design-parity-20261115/flutter-ordinary-ssh-android-43708649955.json)覆盖首页、指纹确认、临时密码、终端输入回显、断开与凭据清空，独立服务端确认认证、PTY、shell、输入标记及两次连接关闭；Tauri [43708649975](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708649975) 的[脱敏记录](evidence/design-parity-20261115/tauri-ordinary-ssh-android-43708649975.json)分别覆盖密码和加密私钥连接、回显与关闭，密码路径还由服务端精确确认 Esc、Tab、左方向、Ctrl-C 依次为 `1b 09 1b 5b 44 03`；该键序未在私钥路径重复验证。模拟器使用独立测试构建和合成 loopback，Tauri 使用 CDP、Flutter 使用测试接口，均不证明实体手机或真实 IME。
+
+此前同源码 `d5ec372d50060f4824401755e213c826f0c4ab01` 的 API35 模拟器普通 SSH 已通过：Flutter [43699318300](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318300) 的[脱敏记录](evidence/design-parity-20261115/flutter-ordinary-ssh-android-43699318300.json)覆盖首页、指纹确认、临时密码、终端输入回显、断开与凭据清空，服务端确认认证、PTY、shell、输入标记及两连接关闭；Tauri [43699318224](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318224) 的[脱敏记录](evidence/design-parity-20261115/tauri-ordinary-ssh-android-43699318224.json)分别覆盖密码与加密私钥路径及关闭。独立测试构建与合成 loopback 不等同下载包二进制；Flutter 测试接口和 Tauri CDP 未验证真实 IME，也不代表实体手机。
 
 此前同源码 `20ef361ae4a7624c6de0afd9d970764d4429a588` 的 API35 模拟器复测通过：Flutter [43696926794](https://github.com/Luck9Star/herdr-pocket/actions/runs/43696926794) 的[脱敏记录](evidence/design-parity-20261115/flutter-ordinary-ssh-android-43696926794.json)覆盖首页、主机指纹确认、临时密码、终端输入回显、断开与凭据清空，服务端确认认证、PTY、shell、输入标记与两次连接关闭；Tauri [43696926711](https://github.com/Luck9Star/herdr-pocket/actions/runs/43696926711) 的[脱敏记录](evidence/design-parity-20261115/tauri-ordinary-ssh-android-43696926711.json)分别覆盖密码和加密私钥的对应流程及关闭。两者使用独立 debug 测试构建和合成 loopback 服务；Tauri 使用 CDP，Flutter 测试接口也未验证真实 IME，不代表实体手机。
 
@@ -197,6 +201,8 @@ RSA 功能快照 `621b793349d7e44332d617e76a345086c272e931` 的两壳 API35 Andr
 `a5082d0` 的[完整批次 43669066267](https://github.com/Luck9Star/herdr-pocket/actions/runs/43669066267)已独立分页核对：32 个作业中 27 个启用作业全部通过、5 个跳过不计通过，包含双壳五端构建与 Linux 双壳 stock/guarded。它证明对应源码的构建和明确执行的 Linux 路径，不能扩大成五端设备运行。Flutter macOS 原生窗口的本机实测来源与重签范围见上文；iOS 模拟器证据只限下节单独记录的源码和场景，不由 Android 成功或 iOS 编译结果代替。
 
 ## Flutter 普通 SSH iOS Simulator
+
+`a9afe9c` 的 [运行 43708649945](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708649945)及[脱敏失败记录](evidence/design-parity-20261115/flutter-ordinary-ssh-ios-43708649945.json)在 iPhone 11 / iOS 26.2 模拟器进入主机密钥探测后等待确认对话框超时，XCTest 0/1；服务端记录一次连接并已关闭，认证、PTY、shell 和输入标记均未到达，模拟器与临时资料已清理。当前证据不足以确定握手或界面未显示的根因，不记为该源码 iOS 验收通过；下方成功结果属于各自历史源码。
 
 最新同源码 `d5ec372d50060f4824401755e213c826f0c4ab01` 的 [运行 43699319130](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699319130)与[原始脱敏记录](evidence/design-parity-20261115/flutter-ordinary-ssh-ios-43699319130.json)显示，专属 iPhone 11 / iOS 26.2 模拟器 XCTest 1 项通过、0 失败。首页、主机指纹确认、临时密码、真实终端输入回显和主动断开清空均已验证；独立服务端确认认证、PTY、shell、输入标记和两连接关闭，模拟器及临时资料已清理。测试未记录输入总字节数，语义固定开启，不证明 VoiceOver、真实 IME、实体设备或 iOS 私钥认证；它是独立 debug 构建，与下载包同源码但非同一二进制。
 

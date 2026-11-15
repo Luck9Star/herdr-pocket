@@ -4,10 +4,13 @@ import android.app.Instrumentation;
 import android.content.Context;
 import android.os.Bundle;
 import java.io.File;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
 import org.json.JSONArray;
@@ -96,6 +99,22 @@ public final class ProbeInstrumentation extends Instrumentation {
             checkpoint(app, "native-available");
             JSONObject available = call(scope, "available", new JSONObject().put("provider", "tailscale"), "available");
             report.put("providerAvailable", available.optBoolean("available", false));
+            try {
+                int interfaceCount = 0, addressCount = 0;
+                for (Enumeration<NetworkInterface> list = NetworkInterface.getNetworkInterfaces(); list != null && list.hasMoreElements(); ) {
+                    NetworkInterface networkInterface = list.nextElement();
+                    interfaceCount++;
+                    for (Enumeration<InetAddress> addresses = networkInterface.getInetAddresses(); addresses != null && addresses.hasMoreElements(); addresses.nextElement())
+                        addressCount++;
+                }
+                report.put("javaInterfaces", new JSONObject().put("ok", true).put("interfaces", interfaceCount)
+                    .put("addresses", addressCount).put("errClass", ""));
+            } catch (Exception error) {
+                report.put("javaInterfaces", new JSONObject().put("ok", false).put("interfaces", 0)
+                    .put("addresses", 0).put("errClass", error.getClass().getSimpleName()));
+            }
+            try { report.put("netmonOptIn", DirectoryProbe.enableNetmonDiagnose(app, profile, identity.handle)); }
+            catch (Exception ignored) { }
             checkpoint(app, "native-start");
             call(scope, "nodeStart", new JSONObject().put("binding", binding).put("settings",
                 new JSONObject().put("controlUrl", control).put("hostname", hostname)), "start");
@@ -113,6 +132,9 @@ public final class ProbeInstrumentation extends Instrumentation {
                 android.os.SystemClock.sleep(100);
             }
             report.put("states", states).put("needsLoginReached", needsLogin);
+            checkpoint(app, "netmon-diagnose");
+            try { report.put("netmonDiagnose", DirectoryProbe.readNetmonDiagnose(app, profile, identity.handle)); }
+            catch (Exception ignored) { }
             report.put("passed", needsLogin && report.optBoolean("startOk"));
         } catch (Throwable error) {
             try { report.put("passed", false).put("failureStage", stage)

@@ -16,13 +16,13 @@ PACKAGE = 'dev.herdr.herdr_flutter_probe'
 LIBRARIES = ('libheeler_easytier.so', 'libhp_tailscale.so', 'libherdr_flutter_network_runtime.so')
 BOOLS = {'loginInvoked', 'dialInvoked', 'librariesLoaded', 'contextBound', 'identityCreated', 'identityReadBack',
     'nativeScopeCreated', 'providerAvailable', 'availableOk', 'startOk', 'statusOk', 'stopOk', 'needsLoginReached',
-    'passed', 'nativeScopeClosed', 'identityDeleted', 'cleanupFailed'}
+    'passed', 'nativeScopeClosed', 'identityDeleted', 'cleanupFailed', 'netmonOptIn'}
 STATES = {'unavailable', 'stopped', 'starting', 'engine-started', 'needs-login', 'needs-machine-auth', 'running', 'closing', 'error', 'other_state'}
 ERRORS = {'overlay_provider_unavailable', 'mobile_node_binding_mismatch', 'mobile_node_busy', 'mobile_node_not_started',
     'network_scope_unavailable', 'identity_unavailable', 'invalid_network_request', 'network_failed',
     'cancelled', 'timeout', 'timed_out', 'close_pending', 'state_store_unavailable', 'other_product_error'}
 STAGES = {'initialization', 'private-config', 'load-libraries', 'bind-java-context', 'create-identity', 'directory-callback',
-    'create-native-scope', 'native-available', 'native-start', 'native-status'}
+    'create-native-scope', 'native-available', 'native-start', 'native-status', 'netmon-diagnose'}
 
 
 def safe_probe(value):
@@ -50,6 +50,13 @@ def safe_probe(value):
                 allowed = {'exists', 'directory', 'ownerMatches', 'permissionBits0700', 'fullMode0700', 'setgid'}
                 valid = valid and all(isinstance(item[name], dict) and set(item[name]) in ({'exists'}, allowed)
                     and all(type(flag) is bool for flag in item[name].values()) for name in ('root', 'runtime', 'identity'))
+        elif key == 'javaInterfaces':
+            valid = (isinstance(item, dict) and set(item) == {'ok', 'interfaces', 'addresses', 'errClass'}
+                and type(item['ok']) is bool and type(item['interfaces']) is int
+                and type(item['addresses']) is int and isinstance(item['errClass'], str)
+                and item['interfaces'] >= 0 and item['addresses'] >= 0 and len(item['errClass']) <= 64)
+        elif key == 'netmonDiagnose':
+            valid = isinstance(item, dict) and len(item) <= 64
         else:
             valid = False
         if not valid:
@@ -60,7 +67,7 @@ def safe_probe(value):
 
 
 def probe_report(raw):
-    if len(raw) > 16384:
+    if len(raw) > 65536:
         return {'probeReport': 'oversize'}
     try:
         value = json.loads(raw)
@@ -106,6 +113,10 @@ def verify_apk(apk, libraries):
                 raise ValueError('probe_apk_native_mismatch')
             hashes[name] = hashlib.sha256(binary).hexdigest()
     return hashes
+
+
+def netmon_diagnose_collected(variants):
+    return bool(variants) and all(isinstance(row.get('probe', {}).get('netmonDiagnose'), dict) for row in variants)
 
 
 def run(args):
@@ -186,6 +197,7 @@ def run(args):
                     and row.get('noNewAuthorizationOrRegistration') is True
                     and row['session']['cleanup'] and all(row['session']['cleanup'].values())):
                 row['status'] = 'passed'
+        output['netmonDiagnoseCollected'] = netmon_diagnose_collected(output['variants'])
         if len(output['variants']) == 2 and all(row['status'] == 'passed' for row in output['variants']):
             output['status'] = 'passed'
     except Exception:

@@ -39,4 +39,33 @@ public final class DirectoryProbe {
         out.put("productDirectoryCallbackSucceeded", callback);
         return out;
     }
+    private static Path netmonFile(Context app, String profile, String handle, String name) {
+        return java.nio.file.Paths.get(new AndroidTailscaleStateStore(app).runtimeDirectory(profile, handle))
+            .resolve(name);
+    }
+    public static boolean enableNetmonDiagnose(Context app, String profile, String handle) {
+        try {
+            Path marker = netmonFile(app, profile, handle, "netmon-diagnose.optin");
+            java.nio.file.Files.write(marker, new byte[0]);
+            try {
+                java.nio.file.Files.setPosixFilePermissions(marker,
+                    java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+            } catch (Exception permissionFailure) { }
+            return java.nio.file.Files.exists(marker);
+        } catch (Exception markerFailure) {
+            return false;
+        }
+    }
+    public static JSONObject readNetmonDiagnose(Context app, String profile, String handle) {
+        try {
+            Path file = netmonFile(app, profile, handle, "netmon-diagnose.json");
+            if (!java.nio.file.Files.isRegularFile(file))
+                return new JSONObject().put("fileMissing", true);
+            return new JSONObject(new String(java.nio.file.Files.readAllBytes(file),
+                java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception readableFailure) {
+            try { return new JSONObject().put("parseError", true); }
+            catch (Exception ignored) { return new JSONObject(); }
+        }
+    }
 }

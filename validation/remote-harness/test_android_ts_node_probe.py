@@ -27,6 +27,20 @@ class ProbeGuardsTests(unittest.TestCase):
         changed = copy.deepcopy(value); changed['directories']['identity']['path'] = 'private-value'
         with self.assertRaises(ValueError): probe.safe_probe(changed)
 
+    def test_netmon_diagnose_and_java_interfaces_are_exportable(self):
+        value = {'schemaVersion': 1, 'loginInvoked': False, 'dialInvoked': False, 'passed': False,
+            'states': ['starting', 'needs-login'], 'startError': 'identity_unavailable', 'lastStage': 'native-status'}
+        accepted = {**value, 'javaInterfaces': {'ok': True, 'interfaces': 3, 'addresses': 5, 'errClass': ''},
+            'netmonDiagnose': {'event': 'netmon_diagnose', 'fileMissing': True}}
+        self.assertEqual(probe.safe_probe(accepted), accepted)
+        for rejected in ({**value, 'javaInterfaces': 'private-value'},
+                         {**value, 'netmonDiagnose': 'private-value'},
+                         {**value, 'javaInterfaces': {'ok': True, 'interfaces': -1, 'addresses': 0, 'errClass': ''}},
+                         {**value, 'netmonOptIn': 'yes'}):
+            with self.assertRaises(ValueError): probe.safe_probe(rejected)
+        for accepted in ({**value, 'netmonOptIn': True}, {**value, 'netmonOptIn': False}):
+            self.assertEqual(probe.safe_probe(accepted), accepted)
+
     def test_missing_or_rejected_report_preserves_only_safe_metadata(self):
         self.assertEqual(probe.probe_report(b'cat: private-path: No such file or directory'),
             {'probeReport': 'not-json', 'reportFileMissing': True})
@@ -62,5 +76,13 @@ class ProbeGuardsTests(unittest.TestCase):
         self.assertIn('"nodeStart"', source)
         self.assertIn('"nodeStop"', source)
 
+
+    def test_netmon_diagnose_collected_requires_both_variants(self):
+        with_ok = [{'probe': {'netmonDiagnose': {'event': 'netmon_diagnose'}}},
+                   {'probe': {'netmonDiagnose': {'fileMissing': True}}}]
+        self.assertTrue(probe.netmon_diagnose_collected(with_ok))
+        self.assertFalse(probe.netmon_diagnose_collected(
+            [{'probe': {'netmonDiagnose': {'event': 'netmon_diagnose'}}}, {'probe': {}}]))
+        self.assertFalse(probe.netmon_diagnose_collected([]))
 
 if __name__ == '__main__': unittest.main()

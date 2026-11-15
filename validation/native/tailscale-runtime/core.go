@@ -130,6 +130,7 @@ type stream struct {
 }
 
 func newManager(f factory) *manager {
+	ensureNetmonGetter()
 	return &manager{nodes: map[uint64]*node{}, streams: map[uint64]*stream{}, makeEngine: f}
 }
 func (m *manager) alloc() uint64 {
@@ -189,6 +190,9 @@ func (m *manager) newNode(c config, store stateStore) (uint64, code) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	gate := &gatedStore{underlying: store}
+	// Product fix, independent of diagnostics: register the Android netmon
+	// getter (no-op on other platforms) before any engine can start.
+	ensureNetmonGetter()
 	m.nodes[id] = &node{id: id, directory: c.Directory, store: gate, engine: m.makeEngine(c, gate), ctx: ctx, cancel: cancel, startDone: make(chan struct{}), closeDone: make(chan struct{})}
 	return id, ok
 }
@@ -393,6 +397,10 @@ func (m *manager) control(id uint64, ms uint32, login bool) (snapshot, code) {
 	n := m.getNode(id)
 	if n == nil {
 		return snapshot{}, notFound
+	}
+	if !login {
+		// Refresh measured diagnose on every status call, best-effort.
+		_ = netmonPersistDiagnose(n.directory)
 	}
 	n.mu.Lock()
 	if n.closing {

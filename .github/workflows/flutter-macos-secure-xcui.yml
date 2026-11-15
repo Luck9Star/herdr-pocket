@@ -82,7 +82,7 @@ jobs:
               diagnostic={'file':'RunnerTests.swift','line':int(match.group(1)),'message':message}
               if message and diagnostic not in diagnostics: diagnostics.append(diagnostic)
               if len(diagnostics)==3: break
-          allowed={'fixtureReadable','appLaunched','homepage','ordinaryInputReadable','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred',
+          allowed={'fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','systemTreeMaskingVerified',
                    'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField',
                    'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
           progress={key:True for key in allowed if 'hp_xcui_stage='+key.lower() in log}
@@ -99,6 +99,8 @@ jobs:
                  'disconnect did not return to form','password not cleared after disconnect','private key mode missing',
                  'password retained after mode switch','passphrase retained after mode switch','back action missing',
                  'normal homepage did not return','prior credential retained']
+          fixed += ['ordinary target fields are not readable']
+          fixed += ['secure password input has no protected value','secure passphrase input has no protected value']
           fixed_failures=[message for message in fixed if message in log]
           metrics=re.findall(r'hp_xcui_metric=windows:(\d{1,5}),nodes:(\d{1,5}),buttons:(\d{1,5}),exact:(\d{1,5}),label:(\d{1,5})',log)
           metrics=[dict(zip(('windows','nodes','buttons','exact','label'),map(int,row))) for row in metrics[:2]]
@@ -108,12 +110,16 @@ jobs:
           test_executed=bool(re.search(r'test case[^\n]*testpasswordandprivatekeypassphrasearesecure',log))
           test_passed=bool(re.search(r'testpasswordandprivatekeypassphrasearesecure[^\n]{0,100}\bpassed\b',log))
           completed=all(progress.get(k) is True for k in allowed)
+          mask_stages={'fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','passwordSecureField',
+                       'passwordHiddenFocused','passwordHiddenBlurred','passphraseSecureField',
+                       'passphraseHiddenAfterFocusChanges','modeSwitchCleared','systemTreeMaskingVerified'}
+          masking_verified=all(progress.get(k) is True for k in mask_stages)
           ok=sys.argv[2]=='0' and peer and test_passed and completed
           report={'schemaVersion':1,'sourceSHA':sha if re.fullmatch(r'[0-9a-f]{40}',sha) else None,
                   'platform':'macos-xcuitest','status':'passed' if ok else 'failed',
                   'scope':'native UI security fields and owned SSH loopback; synthetic values; no physical IME',
                   'embedderFallbackRequested':'hp_xcui_stage=embedderfallbackrequested' in log,
-                  'systemTreeAndSecureFieldsVerified':test_passed and completed,'testExecuted':test_executed,'testPassed':test_passed,
+                  'systemTreeAndSecureFieldsVerified':masking_verified,'testExecuted':test_executed,'testPassed':test_passed,
                   'peerAuthenticationPtyShellAndClose':peer,'buildStarted':('swiftcompile' in log or 'build target' in log),
                   'testStarted':('test suite' in log or 'test case' in log),'testCounts':counts,
                   'failureMethod':failure_method,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,'homeMetrics':home_metrics,

@@ -73,7 +73,7 @@ class ScaffoldTests(unittest.TestCase):
         script=textwrap.dedent(body)
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);fixture=root/'macos-secure-fixture';fixture.mkdir()
-            allowed=['fixtureReadable','appLaunched','homepage','ordinaryInputReadable','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred',
+            allowed=['fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','systemTreeMaskingVerified',
                      'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField',
                      'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
             (fixture/'facts.json').write_text(json.dumps({k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}))
@@ -88,6 +88,11 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotEqual(execute().returncode,0);self.assertFalse(json.loads(output.read_text())['testExecuted'])
             log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed')
             self.assertNotEqual(execute().returncode,0);self.assertTrue(json.loads(output.read_text())['testExecuted']);self.assertFalse(json.loads(output.read_text())['testPassed'])
+            mask=['fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','passwordSecureField',
+                  'passwordHiddenFocused','passwordHiddenBlurred','passphraseSecureField',
+                  'passphraseHiddenAfterFocusChanges','modeSwitchCleared','systemTreeMaskingVerified']
+            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed\n'+''.join('HP_XCUI_STAGE='+k+'\n' for k in mask))
+            self.assertNotEqual(execute().returncode,0);self.assertTrue(json.loads(output.read_text())['systemTreeAndSecureFieldsVerified'])
             log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed\nHP_XCUI_METRIC=windows:1,nodes:10,buttons:2,exact:1,label:1\nprivate fixture material')
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertEqual(report['homeMetrics']['nodes'],10)

@@ -39,7 +39,7 @@ public final class DirectoryProbe {
         out.put("productDirectoryCallbackSucceeded", callback);
         return out;
     }
-    private static Path netmonFile(Context app, String profile, String handle, String name) {
+    private static Path netmonFile(Context app, String profile, String handle, String name) throws Exception {
         return java.nio.file.Paths.get(new AndroidTailscaleStateStore(app).runtimeDirectory(profile, handle))
             .resolve(name);
     }

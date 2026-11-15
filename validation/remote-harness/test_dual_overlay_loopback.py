@@ -126,6 +126,41 @@ class EventTests(unittest.TestCase):
             finally:
                 process.terminate(); process.wait()
 
+    def test_private_loopback_changes_only_explicit_client_bind_policy(self):
+        # Ignore random instance UUIDs when comparing two generated configs.
+        from unittest.mock import patch
+        with patch.object(dual.et.uuid, 'uuid4', return_value='fixed-id'):
+            default = dual.client_et_config('fixture-net', 'fixture-secret', 32123, False)
+            private = dual.client_et_config('fixture-net', 'fixture-secret', 32123, True)
+        self.assertNotIn('bind_device = false', default)
+        self.assertEqual(private.replace('bind_device = false\n', ''), default)
+        self.assertIn('[flags]\nbind_device = false\n', private)
+
+    def test_et_peer_diagnostics_wait_for_fresh_allowlisted_snapshot(self):
+        class Peer:
+            def poll(self): return None
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = root / 'peer-diagnostics.json'
+            path.write_text(json.dumps({'stale': True}))
+            expected = {'connectedPeerCount': 1, 'expectedVirtualRoutePresent': True,
+                        'virtualSshListenerActive': True}
+            def respond(value):
+                request = root / 'peer-diagnostics-request'
+                deadline = time.monotonic() + 2
+                while not request.exists() and time.monotonic() < deadline:
+                    time.sleep(.005)
+                path.write_text(json.dumps(value))
+                request.unlink()
+            thread = threading.Thread(target=respond, args=(expected,), daemon=True); thread.start()
+            self.assertEqual(dual.read_et_diagnostics(root, Peer()), expected)
+            thread.join(timeout=2)
+            bad = dict(expected, untrusted='secret')
+            thread = threading.Thread(target=respond, args=(bad,), daemon=True); thread.start()
+            with self.assertRaisesRegex(dual.et.Failure, 'et_peer_diagnostics_invalid'):
+                dual.read_et_diagnostics(root, Peer())
+            thread.join(timeout=2)
+
     def test_banner_counts_cannot_exceed_real_attempts(self):
         result = {'etBannerAttempts': 3, 'tsBannerAttempts': 1,
                   'etBannerConnections': 2, 'tsBannerConnections': 1}

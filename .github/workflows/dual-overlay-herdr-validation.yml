@@ -91,6 +91,9 @@ jobs:
           (bundle / 'herdr').chmod(0o700)
           PY
           bundle="$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID"
+          mkdir -p "$bundle/single-et/lib"
+          cp "$bundle/peer" "$bundle/probe" "$bundle/herdr" "$bundle/single-et/"
+          cp "$bundle/lib/libheeler_easytier.so" "$bundle/single-et/lib/"
           HEELER_ET_LIB_DIR="$bundle/lib" HP_TS_LIB_DIR="$bundle/lib" CARGO_TARGET_DIR="$bundle/target" \
             cargo +1.96.0 build --locked --features real \
               --manifest-path validation/overlay-runtime/dual-overlay-loopback/Cargo.toml
@@ -113,6 +116,21 @@ jobs:
                 --stop-first "$first" \
                 --output "$RUNNER_TEMP/dual-overlay-evidence/$first" || status=1
           done
+          for first in et ts; do
+            sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
+              GITHUB_SHA="$GITHUB_SHA" RUNNER_TEMP="$RUNNER_TEMP" \
+              /usr/bin/python3 "$GITHUB_WORKSPACE/validation/remote-harness/dual_overlay_loopback.py" \
+                --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
+                --stop-first "$first" --private-loopback \
+                --output "$RUNNER_TEMP/dual-overlay-evidence/$first-private" || status=1
+          done
+          sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
+            GITHUB_ACTIONS=true GITHUB_RUN_ID="$GITHUB_RUN_ID" GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+            GITHUB_REF="$GITHUB_REF" GITHUB_SHA="$GITHUB_SHA" GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \
+            RUNNER_TEMP="$RUNNER_TEMP" \
+            /usr/bin/python3 "$GITHUB_WORKSPACE/validation/remote-harness/dual_overlay_single_et.py" \
+              --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID/single-et" \
+              --output "$RUNNER_TEMP/dual-overlay-evidence/et-only" || status=1
           exit "$status"
       - name: Tear down the uniquely owned namespace and bundle
         if: always()
@@ -139,7 +157,7 @@ jobs:
           output = Path(os.environ['RUNNER_TEMP']) / 'dual-overlay-evidence'
           output.mkdir(parents=True, exist_ok=True)
           failed = False
-          for case in ('et', 'ts'):
+          for case in ('et', 'ts', 'et-private', 'ts-private', 'et-only'):
               path = output / case / 'manifest.json'
               path.parent.mkdir(parents=True, exist_ok=True)
               result = json.loads(path.read_text()) if path.exists() else {'status': 'failed', 'stage': 'build', 'stopFirst': case}

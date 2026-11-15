@@ -244,11 +244,11 @@ def prepare(bundle, output, report):
     report.update(status='prepared', stage='prepared')
 
 
-def run(bundle, output, report):
+def run(bundle, output, report, namespace_check=checked_namespace, *, loopback_only=True):
     if sys.platform != 'linux' or os.geteuid() == 0:
         raise Failure('linux_unprivileged_runner_required')
-    checked_namespace(json.loads(command(['ip', '-j', 'link', 'show'])))
-    report['loopbackOnlyNamespace'] = True
+    namespace_check(json.loads(command(['ip', '-j', 'link', 'show'])))
+    report['loopbackOnlyNamespace'] = loopback_only
     root = Path(tempfile.mkdtemp(prefix='hp-et-', dir='/tmp')); root.chmod(0o700)
     processes = []
     env = {k: v for k, v in os.environ.items()

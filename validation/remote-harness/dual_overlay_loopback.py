@@ -38,7 +38,8 @@ BOOL_FIELDS = ('passed', 'preloginUrlAbsent', 'preloginNeedsLogin', 'beginLoginS
 CLIENT_ERRORS = {None, 'real_candidates_required', 'node_operation_failed', 'unexpected_prelogin_url',
                  'login_url_missing', 'prelogin_state_timeout', 'prelogin_dial_not_rejected', 'auth_exchange_failed',
                  'auth_exchange_timeout', 'ts_not_running', 'local_fallback_not_rejected',
-                 'cross_route_not_rejected', 'overlay_banner_missing', 'input_ready_timeout', 'input_not_ready',
+                 'cross_route_not_rejected', 'overlay_banner_missing', 'banner_checkpoint_failed',
+                 'banner_diagnostics_timeout', 'input_ready_timeout', 'input_not_ready',
                  'frame_marker_missing', 'input_send_failed', 'input_mode_failed', 'provider_stop_failed', 'observer_join_failed', 'stale_input_not_rejected',
                  'cleanup_failed', 'executor_failed', 'dialer_failed', 'invalid_et_config'}
 
@@ -109,6 +110,27 @@ def case_passed(result, stop_first):
                 else ('etStopped', 'etStaleRejected', 'tsAfterStop'))
     return all(result[field] is True for field in common + expected) and all(
         result[field] is False for field in inactive)
+
+
+def read_et_diagnostics(root, peer, timeout=5):
+    request = root / 'peer-diagnostics-request'
+    request.touch(exist_ok=False)
+    deadline = time.monotonic() + timeout
+    while request.exists():
+        if peer.poll() is not None:
+            raise et.Failure('et_peer_diagnostics_peer_exited')
+        if time.monotonic() >= deadline:
+            raise et.Failure('et_peer_diagnostics_timeout')
+        time.sleep(.025)
+    value = json.loads((root / 'peer-diagnostics.json').read_text())
+    fields = {'connectedPeerCount', 'expectedVirtualRoutePresent', 'virtualSshListenerActive'}
+    if (not isinstance(value, dict) or set(value) != fields
+            or type(value['connectedPeerCount']) is not int
+            or not 0 <= value['connectedPeerCount'] <= 256
+            or type(value['expectedVirtualRoutePresent']) is not bool
+            or type(value['virtualSshListenerActive']) is not bool):
+        raise et.Failure('et_peer_diagnostics_invalid')
+    return value
 
 
 def peer_diagnostics(output, returncode):
@@ -206,7 +228,16 @@ def check_current_namespace():
     checked_isolated_namespace(links, addresses, routes)
 
 
-def run(bundle, output, stop_first):
+def client_et_config(network, secret, peer_port, private_loopback):
+    config = et.native_config(network, secret, peer_port)
+    if private_loopback:
+        # Test-only control: the peer endpoint is an owned loopback listener.
+        # Production defaults and the peer's own configuration remain unchanged.
+        config = config.replace('[flags]\n', '[flags]\nbind_device = false\n', 1)
+    return config
+
+
+def run(bundle, output, stop_first, private_loopback):
     if sys.platform != 'linux' or os.geteuid() == 0:
         raise et.Failure('linux_unprivileged_runner_required')
     check_current_namespace()
@@ -218,6 +249,7 @@ def run(bundle, output, stop_first):
     processes, handles = [], []
     report = {'schemaVersion': 1, 'sourceSHA': os.environ.get('GITHUB_SHA', ''),
               'status': 'failed', 'stage': 'fixture', 'stopFirst': stop_first,
+              'privateLoopbackTransport': private_loopback,
               'isolatedNamespace': True, 'testOnlyDummy': True, 'noExternalRoutes': True,
               'temporaryCredentialsRemoved': False,
               'ownedProcessesStopped': False, 'tsPeerCleanup': False}
@@ -379,7 +411,7 @@ LogLevel ERROR
         hosts[1][2].update(host=ready['peerIp'], port=2222)
         node_dir = root / 'ts-node'; node_dir.mkdir(mode=0o700)
         exchange = root / 'exchange'; exchange.mkdir(mode=0o700)
-        request = {'stopFirst': stop_first, 'network': network, 'nativeConfig': et.native_config(network, secret, peer_port),
+        request = {'stopFirst': stop_first, 'network': network, 'nativeConfig': client_et_config(network, secret, peer_port, private_loopback),
                    'controlUrl': ready['controlUrl'], 'nodeDir': str(node_dir), 'exchange': str(exchange),
                    'etRecovery': str(hosts[0][3]), 'tsRecovery': str(hosts[1][3]),
                    'etRemote': hosts[0][2], 'tsRemote': hosts[1][2], 'localPort': hosts[0][1]}
@@ -393,6 +425,11 @@ LogLevel ERROR
         if auth.get('ok') is not True:
             raise et.Failure('ts_auth_not_completed')
         (exchange / 'auth-complete').write_text('ok')
+        wait_file(exchange / 'banner-started', client, 45)
+        report['etPeerDuringBanner'] = read_et_diagnostics(root, peer)
+        wait_file(exchange / 'banner-finished', client, 45)
+        report['etPeerAfterBanner'] = read_et_diagnostics(root, peer)
+        (exchange / 'banner-diagnostics-read').write_text('ok')
         client.wait(timeout=100)
         wait_file(root / 'result.json', client, 1)
         result = json.loads((root / 'result.json').read_text())
@@ -491,9 +528,10 @@ def main():
     parser.add_argument('--bundle', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--stop-first', required=True, choices=('et', 'ts'))
+    parser.add_argument('--private-loopback', action='store_true')
     args = parser.parse_args()
     try:
-        result = run(args.bundle.resolve(strict=True), args.output.resolve(), args.stop_first)
+        result = run(args.bundle.resolve(strict=True), args.output.resolve(), args.stop_first, args.private_loopback)
     except Exception as error:
         path = args.output / 'manifest.json'
         result = json.loads(path.read_text()) if path.is_file() else {'status': 'failed', 'stage': 'precondition'}

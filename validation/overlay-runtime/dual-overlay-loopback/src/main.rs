@@ -423,6 +423,8 @@ async fn run(
         OverlayDialer::new(runtime.clone(), ts.clone(), Duration::from_secs(3))
             .map_err(|_| "dialer_failed")?,
     );
+    std::fs::write(input.exchange.join("banner-started"), b"ready")
+        .map_err(|_| "banner_checkpoint_failed")?;
     let ((et_banner, et_attempts, et_connections), (ts_banner, ts_attempts, ts_connections)) = tokio::join!(
         overlay_banner(&et_dial, &input.et_remote.host, input.et_remote.port),
         overlay_banner(&ts_dial, &input.ts_remote.host, input.ts_remote.port),
@@ -433,6 +435,17 @@ async fn run(
     report.ts_banner_attempts = ts_attempts;
     report.et_banner_connections = et_connections;
     report.ts_banner_connections = ts_connections;
+    std::fs::write(input.exchange.join("banner-finished"), b"ready")
+        .map_err(|_| "banner_checkpoint_failed")?;
+    let diagnostic_deadline = Instant::now() + Duration::from_secs(15);
+    while !input.exchange.join("banner-diagnostics-read").is_file()
+        && Instant::now() < diagnostic_deadline
+    {
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    if !input.exchange.join("banner-diagnostics-read").is_file() {
+        return Err("banner_diagnostics_timeout");
+    }
     let rt = runtime.clone();
     let node = et.clone();
     report.et_node_state_after_banner =

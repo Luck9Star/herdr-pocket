@@ -179,6 +179,10 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   function inputStatus(text) { if($('remote-input-status').textContent!==text)$('remote-input-status').textContent=text; renderAuxiliary();renderKeyboardActions(); }
   function auxiliaryAllowed() {return currentDirect(inputToken()) && !inputBusy && !(inputComposition.token && !inputComposition.ended);}
   function renderAuxiliary() {
+    $('remote-input-controls').dataset.mode=inputMode;
+    for (const [id,mode] of [['remote-input-observe','observe'],['remote-input-direct','direct'],['remote-input-draft-mode','draft']]) {
+      $(id).setAttribute('aria-pressed',String(inputMode===mode));
+    }
     const allowed=auxiliaryAllowed();
     if(!allowed){auxiliaryModifiers.reset();if(moreKeys && (!currentDirect(inputToken()) || (inputComposition.token && !inputComposition.ended)))moreKeys.hidden=true;}
     if(moreKeysButton){moreKeysButton.disabled=!allowed;moreKeysButton.setAttribute('aria-expanded',String(!moreKeys.hidden));moreKeysButton.setAttribute('aria-label',moreKeys.hidden?'展开更多终端键':'收起更多终端键');}
@@ -333,7 +337,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('remote-input-observe').onclick=()=>void changeInputMode('observe');
   $('remote-input-direct').onclick=()=>void changeInputMode('direct');
   $('remote-input-draft-mode').onclick=()=>void changeInputMode('draft');
-  for(const id of ['remote-keyboard-show','remote-keyboard-hide']) $(id).addEventListener('pointerdown',e=>e.preventDefault());
+  for(const id of ['remote-input-observe','remote-input-direct','remote-input-draft-mode','remote-keyboard-show','remote-keyboard-hide']) $(id).addEventListener('pointerdown',e=>e.preventDefault());
   $('remote-keyboard-show').onclick=()=>{
     renderKeyboardActions();if($('remote-keyboard-show').disabled)return;
     const editor=keyboardEditor();if(!editor)return;
@@ -676,7 +680,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       const manageTitle=document.createElement('summary');manageTitle.textContent='管理';manage.append(manageTitle,detail,name);
       const management=document.createElement('div');management.className='host-management-actions';manage.append(management);
       actionContainer=management;
-      const openTab=button('新终端标签',async()=>{try {await waitForOldConnection(++hostNavigation);const id=workspace.create(host.id,null);showRemotePage();await workspace.select(id);}catch{hostMessage('无法新建标签；请核对设备身份与八标签上限。');}});openTab.disabled=pairBusy || !host.enabled || !host.deviceFingerprint || host.pairingStatus==='revoked' || runtimeRevokedHosts.has(host.id);openTab.setAttribute('aria-describedby',detailId);
+      const openTab=button('新终端标签',async()=>{try {await waitForOldConnection(++hostNavigation);const id=workspace.create(host.id,null);showRemotePage();$('remote-setup').open=false;await workspace.select(id);}catch{hostMessage('无法新建标签；请核对设备身份与八标签上限。');}});openTab.disabled=pairBusy || !host.enabled || !host.deviceFingerprint || host.pairingStatus==='revoked' || runtimeRevokedHosts.has(host.id);openTab.setAttribute('aria-describedby',detailId);
       button('保存名称',async()=>{try {await invoke('host_update',{id:host.id,name:name.value,enabled:null});await refreshHosts();}catch {await refreshHosts();hostMessage('名称保存未确认，请核查。');}});
       if(!host.retired && !host.keyDeletionPending) button(host.enabled?'停用':'启用',async()=>{try {await waitForOldConnection(++hostNavigation);if(host.enabled)workspace.affected([host.id]);await invoke('host_update',{id:host.id,name:null,enabled:!host.enabled});await refreshHosts();}catch {await refreshHosts();hostMessage('操作未确认，请核查状态并确保连接已结束。');}});
       const cleanupIdentity=host.keyDeletionPending && host.keyCleanupMode==='identity';
@@ -733,7 +737,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     try {
       await waitForOldConnection(navigation);
       if(navigation!==hostNavigation || pairBusy || !current())return;
-      const id=workspace.createBlocked(hostId,target);showRemotePage();await workspace.select(id);
+      const id=workspace.createBlocked(hostId,target);showRemotePage();$('remote-setup').open=false;await workspace.select(id);
     } catch {hostMessage('无法重新核查原受阻目标；请刷新资料并核对八标签上限。');}
   }
   let summaryRenderPending=false,liveSummaryRenderPending=false;
@@ -990,7 +994,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
           $('remote-panes').append(button);
           const newTab=document.createElement('button');newTab.type='button';newTab.textContent=`在新标签打开 ${pane.paneId}`;newTab.setAttribute('aria-describedby',phaseNote);
           newTab.disabled=!activeHostId || !$('pair-mode').checked || !board.reviewed(intent,epoch,revision);
-          newTab.onclick=async()=>{if(!gate.accepts(generation,boardNativeGeneration) || !showingRemote || document.hidden || !board.reviewed(intent,epoch,revision))return;const host=activeHostId;try {await waitForOldConnection(++hostNavigation);const id=workspace.create(host,intent);await workspace.select(id);status('目标已固定；请在标签中主动连接。');}catch {status('无法新建标签；请确认设备身份、连接状态和八标签上限。','warning');}};
+          newTab.onclick=async()=>{if(!gate.accepts(generation,boardNativeGeneration) || !showingRemote || document.hidden || !board.reviewed(intent,epoch,revision))return;const host=activeHostId;try {await waitForOldConnection(++hostNavigation);const id=workspace.create(host,intent);$('remote-setup').open=false;await workspace.select(id);status('目标已固定；请在标签中主动连接。');}catch {status('无法新建标签；请确认设备身份、连接状态和八标签上限。','warning');}};
           $('remote-panes').append(newTab);
         }
       }

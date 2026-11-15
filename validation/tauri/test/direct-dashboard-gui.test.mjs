@@ -1812,3 +1812,23 @@ test('SSH credential input preserves reviewed host key; endpoint and identity ed
     assert.match(n['ssh-fingerprint'].textContent,/请先探测/);
   } finally { h.finish(); h.restore(); }
 });
+
+test('mobile mode controls retain editor focus until intentional mode transition', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    await openInput(h);
+    let prevented=false;
+    n['remote-input-direct'].dispatch('pointerdown',{preventDefault(){prevented=true;}});
+    assert.equal(prevented,true);
+    n['remote-input-direct'].click();await flush();await flush();
+    assert.equal(n['remote-input-controls'].dataset.mode,'direct');
+    assert.equal(n['remote-input-direct'].attrs['aria-pressed'],'true');
+    prevented=false;
+    n['remote-input-draft-mode'].dispatch('pointerdown',{preventDefault(){prevented=true;}});
+    assert.equal(prevented,true);
+    n['remote-input-draft-mode'].click();await flush();await flush();
+    assert.equal(n['remote-input-controls'].dataset.mode,'draft');
+    assert.equal(n['remote-input-draft-mode'].attrs['aria-pressed'],'true');
+    assert.equal(n['remote-input-draft-area'].hidden,false);
+  } finally {h.finish();await flush();h.restore();}
+});

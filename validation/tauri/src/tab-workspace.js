@@ -45,7 +45,12 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(tab.inputEpoch!==null && tab.mode==='draft')return '草稿输入已启用；仅在核对并确认后发送。';
     return '观察模式；输入已关闭。';
   }
-  function updateInputMode(tab) {const message=inputModeMessage(tab);if(tab.inputModeElement && tab.inputModeElement.textContent!==message)tab.inputModeElement.textContent=message;}
+  function updateInputMode(tab) {
+    const message=inputModeMessage(tab);
+    if(tab.inputModeElement && tab.inputModeElement.textContent!==message)tab.inputModeElement.textContent=message;
+    if(tab.mobileControls)tab.mobileControls.dataset.mode=tab.mode;
+    for(const [mode,button] of Object.entries(tab.modeButtons || {}))button.setAttribute('aria-pressed',String(tab.mode===mode));
+  }
   function lease(tab) {return {token:tab.token,generation:tab.nativeGeneration,epoch:tab.epoch,revision:tab.inputRevision};}
   function sameLease(tab,old) {return current(tab,old.token) && tab.nativeGeneration===old.generation && tab.epoch===old.epoch && tab.inputRevision===old.revision;}
   function current(tab,token) {return tabs.get(tab.id)===tab && tabs.accepts(token);}
@@ -176,24 +181,27 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     const title=document.createElement('p');title.textContent=`${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'} · ${tab.target?.terminalId || '待选择'}`;panel.append(title);
     if(tab.blockedIntent && !tab.blockedVerified){const intent=document.createElement('p');intent.textContent=`待重新核查受阻目标：${tab.blockedIntent.paneId} · ${tab.blockedIntent.terminalId} · 原会话 ${tab.blockedSession || '未知'}`;panel.append(intent);}
     const info=hostInfo(tab.hostId);const details=document.createElement('p');
-    details.textContent=info ? `${info.target.username}@${info.target.host}:${info.target.port} · 主机公钥 ${info.hostFingerprint} · 设备 ${info.deviceFingerprint || '未保存'} · ${info.networkProfileId?'已绑定网络':'系统连接'}` : '主机资料不可用；请先刷新看板。';panel.append(details);
+    details.textContent=info ? `${info.target.username}@${info.target.host}:${info.target.port} · 主机公钥 ${info.hostFingerprint} · 设备 ${info.deviceFingerprint || '未保存'} · ${info.networkProfileId?'已绑定网络':'系统连接'}` : '主机资料不可用；请先刷新看板。';
+    const connectionDetails=document.createElement('details');connectionDetails.className='tab-connection-details';connectionDetails.open=tab.state==='disconnected' || isWide();
+    const connectionSummary=document.createElement('summary');connectionSummary.textContent='连接资料与诊断';connectionDetails.append(connectionSummary,details);
     if(tab.state==='disconnected'){const review=document.createElement('label');const check=document.createElement('input');check.type='checkbox';check.checked=!!tab.reviewed;check.disabled=!focused;check.onchange=()=>{tab.reviewed=check.checked;tab.reviewedHost=check.checked && info ? JSON.stringify({target:info.target,deviceFingerprint:info.deviceFingerprint,networkProfileId:info.networkProfileId ?? null,networkRevision:info.networkRevision ?? null}) : null;render();};review.append(check);const caption=document.createElement('span');caption.textContent='我已核对当前主机、设备与连接路径。';review.append(caption);panel.append(review);}
     const canvasLabel=document.createElement('label');canvasLabel.textContent='此标签下次连接的观察画布 ';const canvasSelect=document.createElement('select');canvasSelect.dataset.role='tab-canvas';
     for(const value of canvasPresets){const option=document.createElement('option');option.value=value;option.textContent=value.replace('x',' × ');canvasSelect.append(option);}
-    canvasSelect.value=tab.canvasChoice;canvasSelect.disabled=tab.state!=='disconnected' || tab.closing || switching || !focused;canvasSelect.onchange=()=>{if(tab.state==='disconnected' && parseCanvas(canvasSelect.value))tab.canvasChoice=canvasSelect.value;};canvasLabel.append(canvasSelect);panel.append(canvasLabel);
-    const canvasHelp=document.createElement('p');canvasHelp.textContent=tab.state==='disconnected'?'仅影响此标签的下次连接；这是观察画布，不代表远端 PTY 原始尺寸。':`本次观察画布：${tab.activeCanvas.cols} × ${tab.activeCanvas.rows}；暂停恢复沿用本次选择。`;panel.append(canvasHelp);
-    if(tab.diagnostics){tab.diagnosticView ??= createConnectionDiagnosticsView();tab.diagnosticView.update(tab.diagnostics);panel.append(tab.diagnosticView.element);}
+    canvasSelect.value=tab.canvasChoice;canvasSelect.disabled=tab.state!=='disconnected' || tab.closing || switching || !focused;canvasSelect.onchange=()=>{if(tab.state==='disconnected' && parseCanvas(canvasSelect.value))tab.canvasChoice=canvasSelect.value;};canvasLabel.append(canvasSelect);connectionDetails.append(canvasLabel);
+    const canvasHelp=document.createElement('p');canvasHelp.textContent=tab.state==='disconnected'?'仅影响此标签的下次连接；这是观察画布，不代表远端 PTY 原始尺寸。':`本次观察画布：${tab.activeCanvas.cols} × ${tab.activeCanvas.rows}；暂停恢复沿用本次选择。`;connectionDetails.append(canvasHelp);
+    if(tab.diagnostics){tab.diagnosticView ??= createConnectionDiagnosticsView();tab.diagnosticView.update(tab.diagnostics);connectionDetails.append(tab.diagnosticView.element);}
+    panel.append(connectionDetails);
     const msg=document.createElement('p');msg.setAttribute('role','status');msg.textContent=tab.message;tab.messageElement=msg;panel.append(msg);
     tab.inputModeElement ??= document.createElement('p');
     tab.inputModeElement.setAttribute('role','status');tab.inputModeElement.setAttribute('aria-live','polite');
     updateInputMode(tab);
     panel.append(tab.inputModeElement);
-    const controls=document.createElement('div');controls.className='remote-actions';
+    const controls=document.createElement('div');controls.className='remote-actions tab-connection-actions';controls.dataset.state=tab.state;
     const add=(label,enabled,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=!enabled || switching || !focused;b.onclick=action;controls.append(b);};
     add('连接',native && !!info && tab.reviewed && !tab.invalidated && tab.state==='disconnected' && !tab.closing,()=>void connect(tab));
     add('恢复观察',tab.state==='paused' && !tab.closing,()=>void resume(tab));
     add('关闭此标签',!switching,()=>void close(tab));panel.append(controls);
-    renderDashboard(tab);panel.append(tab.boardElement);
+    renderDashboard(tab);const boardSection=document.createElement('details');boardSection.className='tab-board-details';boardSection.open=!tab.target || isWide();const boardSummary=document.createElement('summary');boardSummary.textContent='会话窗格';boardSection.append(boardSummary,tab.boardElement);panel.append(boardSection);
     // Keep the live terminal next to its mode controls, after the session chooser.
     const viewport=document.createElement('div');viewport.className='term-scroll';
     if(tab.element)viewport.append(tab.element);panel.append(viewport);
@@ -230,6 +238,9 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       panel.append(group);if(tab.focusPasteReview){tab.focusPasteReview=false;(append.disabled?replace:append).focus?.();}
     }
     if(tab.inputReady) {
+      const dock=document.createElement('section');dock.className='tab-mobile-controls';dock.dataset.mode=tab.mode;tab.mobileControls=dock;
+      const dockTarget=document.createElement('p');dockTarget.className='tab-dock-target';dockTarget.textContent=`目标：${hostName(tab.hostId)} · ${tab.target?.paneId || '待选择'} · ${tab.target?.terminalId || '待选择'}`;
+      dock.append(dockTarget,tab.inputModeElement);
       const text=document.createElement('textarea');text.value=tab.draft;text.placeholder='输入草稿';text.setAttribute('aria-label','当前标签草稿');
       tab.draftField=text;text.disabled=!focused;
       tab.draftComposing=false;
@@ -237,11 +248,19 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       text.addEventListener('compositionend',()=>{tab.draftComposing=false;refreshKeyboard(tab);});
       text.addEventListener('blur',()=>{if(!tab.suppressPasteBlur)tab.pasteFocusRevision++;});
       text.addEventListener('paste',event=>void reviewPaste(tab,event,text,tab.draftComposing),true);
-      text.oninput=()=>{if(tab.draftField===text && tabs.activeId===tab.id){tab.draft=text.value;tab.draftRevision++;}};panel.append(text);
-      const actions=document.createElement('div');actions.className='remote-actions';
-      const direct=document.createElement('button');direct.type='button';direct.textContent='逐键输入';direct.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || !focused;direct.onclick=()=>void enableDirect(tab);actions.append(direct);
+      text.oninput=()=>{if(tab.draftField===text && tabs.activeId===tab.id){tab.draft=text.value;tab.draftRevision++;}};
+      const actions=document.createElement('div');actions.className='remote-actions tab-mode-actions';
+      const observe=document.createElement('button');observe.type='button';observe.textContent='观察';observe.disabled=!focused || tab.state!=='active' || tab.inputBusy;observe.onpointerdown=event=>event.preventDefault();observe.onclick=()=>{
+        tab.suppressBlur=true;
+        try {
+          if(document.activeElement===tab.terminal?.textarea)tab.terminal.textarea.blur();
+          else if(document.activeElement===tab.draftField)tab.draftField.blur();
+        } finally {tab.suppressBlur=false;}
+        void loseDirect(tab);
+      };actions.append(observe);
+      const direct=document.createElement('button');direct.type='button';direct.textContent='逐键输入';direct.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || !focused;direct.onpointerdown=event=>event.preventDefault();direct.onclick=()=>void enableDirect(tab);actions.append(direct);
       const enable=document.createElement('button');enable.type='button';enable.textContent='启用草稿输入';enable.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || !focused;
-      enable.onclick=()=>void enableInput(tab);actions.append(enable);
+      enable.onpointerdown=event=>event.preventDefault();enable.onclick=()=>void enableInput(tab);actions.append(enable);tab.modeButtons={observe,direct,draft:enable};updateInputMode(tab);
       const show=document.createElement('button');show.type='button';show.id='tab-keyboard-show';show.textContent='展开键盘';show.setAttribute('aria-label','展开键盘');
       const hide=document.createElement('button');hide.type='button';hide.id='tab-keyboard-hide';hide.textContent='收起键盘';hide.setAttribute('aria-label','收起键盘');
       show.onpointerdown=hide.onpointerdown=event=>event.preventDefault();
@@ -269,18 +288,19 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
 
       const paste=document.createElement('button');paste.type='button';paste.textContent='粘贴并审查';paste.disabled=!tab.target || tab.state!=='active' || tab.unknown || tab.inputBusy || !['draft','direct'].includes(tab.mode) || tab.inputEpoch==null || !focused;
       paste.onpointerdown=event=>event.preventDefault();paste.onclick=()=>void readPaste(tab);tab.pasteButton=paste;actions.append(paste);
-      const send=document.createElement('button');send.type='button';send.textContent='发送草稿';send.disabled=!tab.target || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null || !focused;
+      const send=document.createElement('button');send.type='button';send.className='tab-send-button';send.textContent='发送草稿';send.disabled=!tab.target || tab.state!=='active' || tab.mode!=='draft' || tab.unknown || tab.inputBusy || tab.inputEpoch==null || !focused;
       send.onclick=()=>void sendDraft(tab);actions.append(send);
       if(tab.recoveryStatus==='pending'){const recover=document.createElement('button');recover.type='button';recover.textContent='已核实原目标结果，恢复输入';recover.disabled=!tab.target || tab.state!=='active' || tab.inputBusy || !focused;recover.onclick=()=>void recoverInput(tab);actions.append(recover);}
-      panel.append(actions);
-      tab.toolbarHost=document.createElement('div');panel.append(tab.toolbarHost);
+      dock.append(actions);text.className='tab-draft-field';dock.append(text);
+      tab.toolbarHost=document.createElement('div');dock.append(tab.toolbarHost);
       if(tab.mode==='direct' && tab.toolbar)tab.toolbarHost.append(tab.toolbar.element);
+      panel.append(dock);
     }
     if(tab.rejectedDrafts.length){const heading=document.createElement('p');heading.textContent='服务器明确拒绝的原文（只读，不会自动发送）：';panel.append(heading);
       tab.rejectedDrafts.forEach((value,index)=>{const saved=document.createElement('textarea');saved.value=value;saved.readOnly=true;saved.setAttribute('aria-label','被拒绝的原文');panel.append(saved);const dismiss=document.createElement('button');dismiss.type='button';dismiss.textContent='移除此找回原文';dismiss.disabled=!focused;dismiss.onclick=()=>{tab.rejectedDrafts.splice(index,1);render();};panel.append(dismiss);});
     }
     if(tab.terminal && tab.target && tab.state==='active') {
-      const selectText=document.createElement('button');selectText.type='button';selectText.disabled=!tab.selectionTextReady || !focused;tab.selectionTextButton=selectText;selectText.textContent='选择终端文本';selectText.onpointerdown=event=>event.preventDefault();
+      const selectText=document.createElement('button');selectText.type='button';selectText.className='terminal-select-button';selectText.disabled=!tab.selectionTextReady || !focused;tab.selectionTextButton=selectText;selectText.textContent='选择终端文本';selectText.onpointerdown=event=>event.preventDefault();
       selectText.onclick=()=>{
         const token=tab.token,generation=tab.nativeGeneration,epoch=tab.epoch,target=tab.target,terminal=tab.terminal;
         const currentSelection=()=>!document.hidden && !switching && tabs.activeId===tab.id && current(tab,token) && tab.nativeGeneration===generation && tab.epoch===epoch && tab.target===target && tab.terminal===terminal && tab.state==='active' && !tab.wantsPause && !tab.closing;
@@ -290,7 +310,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         try {textSelection=createTerminalSelection({terminal,current:currentSelection,label:`${hostName(tab.hostId)} · ${target.paneId} · ${target.terminalId}`});}
         catch(error) {status(tab,String(error).includes('snapshot_too_large')?'可见终端文本超过 64 KiB，无法选择；未复制内容。':'没有可安全测量的可见终端文本，请滚动终端到屏幕内后重试。');}
       };panel.append(selectText);
-      const fontButton=document.createElement('button');fontButton.type='button';fontButton.textContent='字体与字符诊断';fontButton.disabled=!tab.selectionTextReady || !focused;fontButton.onpointerdown=event=>event.preventDefault();
+      const fontButton=document.createElement('button');fontButton.type='button';fontButton.className='terminal-font-button';fontButton.textContent='字体与字符诊断';fontButton.disabled=!tab.selectionTextReady || !focused;fontButton.onpointerdown=event=>event.preventDefault();
       fontButton.onclick=()=>{
         const token=tab.token,generation=tab.nativeGeneration,epoch=tab.epoch,target=tab.target,terminal=tab.terminal;
         const currentDiagnostics=()=>!document.hidden && !switching && tabs.activeId===tab.id && current(tab,token) && tab.nativeGeneration===generation && tab.epoch===epoch && tab.target===target && tab.terminal===terminal && tab.state==='active' && !tab.wantsPause && !tab.closing;

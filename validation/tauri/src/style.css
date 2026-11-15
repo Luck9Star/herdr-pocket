@@ -278,3 +278,141 @@ h1 { font-size:18px; margin:0}
 .host-empty h3 { margin:0 0 8px; }
 .host-empty p { margin:0 0 16px; color:var(--hp-textSecondary); font-size:13px; }
 .remote-key-section > label { display:block; margin:12px 0; }
+/* Mobile herdr controls stay above navigation and the visible keyboard. */
+@media (max-width:599px) {
+  body.keyboard-visible .route-tabs { bottom:var(--hp-visual-inset,0px); }
+  #remote-result { padding-bottom:220px; }
+  #remote-result .term-scroll { height:min(31dvh,260px); }
+  #remote-input-controls {
+    position:fixed;
+    z-index:49;
+    left:0;
+    right:0;
+    bottom:calc(65px + env(safe-area-inset-bottom) + var(--hp-visual-inset,0px));
+    max-height:min(55dvh,calc(var(--hp-visual-height,100dvh) - 90px));
+    overflow-y:auto;
+    padding:8px 10px;
+    border:1px solid var(--hp-border);
+    border-radius:12px 12px 0 0;
+    box-shadow:0 -5px 20px #0f172a18;
+    overscroll-behavior:contain;
+  }
+  body.keyboard-visible #remote-input-controls { bottom:calc(65px + env(safe-area-inset-bottom) + var(--hp-visual-inset,0px)); }
+  #remote-input-controls h3 { display:none; }
+  #remote-input-controls #remote-input-target,
+  #remote-input-controls #remote-input-status { margin:0 0 5px; font-size:12px; line-height:1.35; overflow-wrap:anywhere; }
+  #remote-input-target { font-weight:700; }
+  #remote-input-controls .remote-mode-actions { grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
+  #remote-input-controls .remote-mode-actions button { min-width:0; min-height:44px; padding:6px 2px; font-size:11px; }
+  #remote-input-controls .remote-mode-actions button[aria-pressed=true] { background:var(--hp-brandSoft); border-color:var(--hp-brandBorder); color:var(--hp-brand); }
+  #remote-input-controls .remote-extra-actions { display:flex; gap:6px; margin-top:6px; }
+  #remote-input-controls[data-mode=observe] #remote-read-paste { display:none; }
+  #remote-input-controls[data-mode=observe] #remote-input-keys,
+  #remote-input-controls[data-mode=draft] #remote-input-keys { display:none; }
+  #remote-input-keys { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-top:5px; }
+  #remote-input-keys #remote-modifier-status { order:0; flex-basis:100%; margin:0; font-size:11px; line-height:1.25; }
+  #remote-input-keys .remote-modifier-actions { order:2; display:flex; flex:none; gap:4px; margin:0; }
+  #remote-input-keys .remote-modifier-actions button { min-width:44px; padding:6px; }
+  #remote-input-keys #remote-modifier-cancel:disabled { display:none; }
+  #remote-input-keys .remote-primary-keys { order:1; display:flex; flex:1 1 100%; min-width:0; gap:4px; overflow-x:auto; margin:0; }
+  #remote-input-keys .remote-primary-keys button { flex:none; min-width:44px; padding:6px; }
+  #remote-input-keys .remote-combination-bases,
+  #remote-input-keys .terminal-more-keys { order:4; flex-basis:100%; }
+  #remote-input-keys > button { order:3; min-width:54px; padding:6px; }
+  #remote-input-controls textarea { min-height:64px; margin:4px 0; }
+  #remote-input-preview-text { max-height:100px; }
+}
+@media (max-width:599px) {
+  #tab-workspace { padding-bottom:220px; }
+  #tab-workspace .term-scroll { height:min(31dvh,260px); }
+  .tab-mobile-controls {
+    position:fixed;
+    z-index:49;
+    left:0;
+    right:0;
+    bottom:calc(65px + env(safe-area-inset-bottom) + var(--hp-visual-inset,0px));
+    max-height:min(55dvh,calc(var(--hp-visual-height,100dvh) - 90px));
+    overflow-y:auto;
+    padding:8px 10px;
+    border:1px solid var(--hp-border);
+    border-radius:12px 12px 0 0;
+    background:var(--hp-card);
+    color:var(--hp-textPrimary);
+    box-shadow:0 -5px 20px #0f172a18;
+    overscroll-behavior:contain;
+  }
+  body.keyboard-visible .tab-mobile-controls { bottom:calc(65px + env(safe-area-inset-bottom) + var(--hp-visual-inset,0px)); }
+  .tab-mobile-controls p { margin:0 0 5px; font-size:12px; line-height:1.35; overflow-wrap:anywhere; }
+  .tab-dock-target { font-weight:700; }
+  .tab-mobile-controls .tab-mode-actions { grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
+  .tab-mobile-controls .tab-mode-actions button { min-width:0; padding:6px 2px; font-size:11px; }
+  .tab-mobile-controls .tab-draft-field { display:none; }
+  .tab-mobile-controls[data-mode=draft] .tab-draft-field { display:block; min-height:64px; margin:4px 0; }
+  .tab-input-toolbar .tab-primary-keys { display:flex; overflow-x:auto; gap:4px; }
+  .tab-input-toolbar .tab-primary-keys button { flex:none; min-width:44px; padding:6px; }
+  .tab-input-toolbar .tab-modifier-actions { display:flex; gap:4px; }
+  .tab-input-toolbar .tab-modifier-actions button { min-width:44px; padding:6px; }
+}
+@media (max-width:599px) {
+  .tab-connection-details > summary, .tab-board-details > summary {
+    min-height:44px;
+    padding:12px;
+    color:var(--hp-termText);
+    cursor:pointer;
+    font-size:12px;
+    font-weight:700;
+  }
+  .tab-connection-details > p, .tab-connection-details > label { display:block; margin:8px 12px; }
+  .tab-connection-actions[data-state=active] button:disabled { display:none; }
+}
+@media (max-width:599px) {
+  .tab-mobile-controls .tab-mode-actions button[aria-pressed=true] {
+    background:var(--hp-brandSoft);
+    border-color:var(--hp-brandBorder);
+    color:var(--hp-brand);
+  }
+  .tab-mobile-controls:not([data-mode=draft]) .tab-send-button { display:none; }
+}
+@media (max-width:599px) {
+  .tab-input-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
+  .tab-input-toolbar > p { flex-basis:100%; margin:0; font-size:11px; }
+  .tab-input-toolbar .tab-modifier-actions { flex:none; margin:0; }
+  .tab-input-toolbar .tab-modifier-actions button:last-child:disabled { display:none; }
+  .tab-input-toolbar .tab-primary-keys { flex:1 1 90px; min-width:0; margin:0; }
+  .tab-input-toolbar > button { flex:none; min-width:54px; padding:6px; }
+  .tab-input-toolbar .remote-combination-bases, .tab-input-toolbar .terminal-more-keys { flex-basis:100%; }
+}
+
+.tab-connection-details label { color:var(--hp-termText); }
+
+/* While the keyboard is open, leave room for the terminal's live output. */
+@media (max-width:599px) {
+  body.keyboard-visible:has(#remote-input-controls:not([hidden])) .route-tabs,
+  body.keyboard-visible:has(.tab-mobile-controls) .route-tabs { display:none; }
+  body.keyboard-visible #remote-input-controls,
+  body.keyboard-visible .tab-mobile-controls {
+    bottom:var(--hp-visual-inset,0px);
+    max-height:calc(var(--hp-visual-height,100dvh) - 160px);
+    padding:4px 8px;
+  }
+  body.keyboard-visible #remote-result .remote-result-heading,
+  body.keyboard-visible #remote-font-diagnostics,
+  body.keyboard-visible #remote-result .terminal-select-button,
+  body.keyboard-visible #tab-workspace > .remote-result-heading,
+  body.keyboard-visible #tab-workspace .terminal-select-button,
+  body.keyboard-visible #tab-workspace .terminal-font-button { display:none; }
+  body.keyboard-visible #remote-read-paste,
+  body.keyboard-visible #remote-keyboard-show,
+  body.keyboard-visible #tab-keyboard-show { display:none; }
+  body.keyboard-visible #remote-input-controls .remote-mode-actions { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  body.keyboard-visible #remote-input-keys #remote-modifier-status { display:none; }
+  body.keyboard-visible #remote-input-keys:has(.remote-modifier-actions [aria-pressed=true]) #remote-modifier-status,
+  body.keyboard-visible #remote-input-keys:has(#remote-modifier-ctrl:disabled) #remote-modifier-status { display:block; }
+  body.keyboard-visible #remote-input-keys .remote-primary-keys { flex:1 1 80px; }
+  body.keyboard-visible #remote-input-keys .remote-modifier-actions { order:0; }
+  body.keyboard-visible #remote-input-controls .remote-extra-actions { margin:0; }
+  body.keyboard-visible .tab-mobile-controls .tab-mode-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  body.keyboard-visible .tab-input-toolbar > p { display:none; }
+  body.keyboard-visible .tab-input-toolbar:has(.tab-modifier-actions [aria-pressed=true]) > p,
+  body.keyboard-visible .tab-input-toolbar:has(.tab-modifier-actions button:first-child:disabled) > p { display:block; }
+}

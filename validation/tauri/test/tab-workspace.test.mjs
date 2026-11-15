@@ -1115,3 +1115,19 @@ test('saved-tab diagnostics isolate same-host tabs and only acknowledge the boun
   assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send'||/resize/.test(c.name)).length,0);
  }finally{h.restore();}
 });
+
+test('explicit observe releases focused terminal and never sends pending input',async()=>{
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
+  try {
+    await h.start();h.observation(1,'starting');h.watch(1,1);
+    h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
+    h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
+    h.find('逐键输入').onclick();await flush();await flush();
+    const terminal=h.terminal();assert.equal(document.activeElement,terminal.textarea);
+    h.find('观察').onclick();await flush();await flush();
+    assert.notEqual(document.activeElement,terminal.textarea);
+    assert.equal(terminal.options.disableStdin,true);
+    assert.ok(h.calls.some(c=>c.name==='remote_tab_input_mode' && c.args.mode==='observe'));
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
+  } finally {h.restore();}
+});

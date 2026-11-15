@@ -421,6 +421,7 @@ def main():
     result={'schemaVersion':1,'status':'failed','sourceSHA':os.environ.get('GITHUB_SHA'),
             'nativeSourceSHA':'93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc',
             'apkSourceSHA':'25188771b6d6d07bd608923699b6cd3c5cc45c55',
+            'apkFrontendDifference':'exploratory APK predates S27 mobile compact CSS',
             'scope':'owned API35 x86_64; real UI, synthetic peers, QA-only TS private trust; no physical IME',
             'apkSha256':hashlib.sha256(paths[0].read_bytes()).hexdigest(),'directions':{}}
     from android_dual_overlay_session import AndroidDualOverlaySession

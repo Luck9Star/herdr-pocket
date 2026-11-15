@@ -177,7 +177,10 @@ jobs:
           unzip -q "$RUNNER_TEMP/dual-host.zip" -d "$RUNNER_TEMP/dual-host-fixtures"
       - name: Prepare scoped host and device
         run: |
-          git diff --quiet 25188771b6d6d07bd608923699b6cd3c5cc45c55 HEAD -- validation/tauri validation/transport-rust validation/network-profiles validation/pairing/native/android validation/shared validation/vendor
+          # Exploratory network run deliberately uses the previously verified
+          # APK; the sole permitted later frontend change is S27 mobile CSS.
+          git diff --quiet 25188771b6d6d07bd608923699b6cd3c5cc45c55 HEAD -- validation/tauri validation/transport-rust validation/network-profiles validation/pairing/native/android validation/shared validation/vendor ':(exclude)validation/tauri/src/style.css'
+          git diff --quiet 305018e HEAD -- validation/tauri/src/style.css
           printf '%s  %s\n' 117ee9753ee56da2341c59eb3ac5a8ea6102c9ae1f02617efc9e80f617066e9d "$RUNNER_TEMP/dual-apks/tauri-dual-qa.apk" 14a04136876207bd2b11c93990bd865f1c89bb3e05b2fc2f7547b3ffa96ca32b "$RUNNER_TEMP/dual-apks/dual-auth-receiver.apk" | sha256sum -c -
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends acl libpulse0 iproute2 openssh-server libssl-dev pkg-config

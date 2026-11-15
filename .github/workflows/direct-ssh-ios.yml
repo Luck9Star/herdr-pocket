@@ -33,6 +33,7 @@ jobs:
         run: |
           python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/direct-ssh-sdk"
           export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
+          flutter config --no-enable-swift-package-manager
           flutter precache --ios
       - name: Prepare production application and SDK-only integration tests
         run: |

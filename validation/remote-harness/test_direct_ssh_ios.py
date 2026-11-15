@@ -10,6 +10,7 @@ from unittest.mock import patch
 from pathlib import Path
 
 import flutter_direct_ssh_ios as runner
+import ios_xctest_scaffold
 
 
 class IosDirectSshTests(unittest.TestCase):
@@ -78,6 +79,58 @@ class IosDirectSshTests(unittest.TestCase):
             'exceptionClass': 'TestFailure', 'sourceLine': 73, 'statusCode': 'fingerprint_confirmed'})
         self.assertNotIn('secret', str(actual))
         self.assertNotIn('sourceLine', runner.ui_diagnostic({'sourceLine': True}))
+
+    def test_screenshot_requires_explicit_masked_password_stage(self):
+        stage = {'stage': 'screenshot_wait'}
+        valid = {'passwordMasked': True, 'passwordAuth': True}
+        self.assertTrue(runner.safe_screenshot_request(valid, stage))
+        for value, current in [({'passwordMasked': 1, 'passwordAuth': True}, stage),
+                               ({**valid, 'extra': True}, stage),
+                               (valid, {'stage': 'connect_tap'}), (None, stage)]:
+            self.assertFalse(runner.safe_screenshot_request(value, current))
+
+    def test_generated_xctest_scaffold_is_exact_and_one_shot(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = Path(temp)
+            project = app / 'ios/Runner.xcodeproj/project.pbxproj'
+            project.parent.mkdir(parents=True)
+            project.write_text('lastKnownFileType = sourcecode.swift; path = RunnerTests.swift;\n' +
+                               'RunnerTests.swift\n' * 5)
+            swift = app / 'ios/RunnerTests/RunnerTests.swift'
+            swift.parent.mkdir(parents=True)
+            swift.write_text('placeholder')
+            debug = app / 'ios/Flutter/Debug.xcconfig'
+            debug.parent.mkdir(parents=True)
+            debug.write_text('#include "Generated.xcconfig"\n')
+            ios_xctest_scaffold.prepare(app)
+            self.assertFalse(swift.exists())
+            self.assertIn('INTEGRATION_TEST_IOS_RUNNER(RunnerTests)',
+                          (swift.parent / 'RunnerTests.m').read_text())
+            self.assertIn('sourcecode.c.objc; path = RunnerTests.m;', project.read_text())
+            self.assertIn("target 'RunnerTests'", (app / 'ios/Podfile').read_text())
+            self.assertIn('Pods-Runner.debug.xcconfig', debug.read_text())
+            with self.assertRaisesRegex(ValueError, 'ios_xctest_scaffold_unexpected'):
+                ios_xctest_scaffold.prepare(app)
+
+    def test_existing_generated_podfile_and_debug_include_are_preserved(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = Path(temp)
+            project = app / 'ios/Runner.xcodeproj/project.pbxproj'
+            project.parent.mkdir(parents=True)
+            project.write_text('lastKnownFileType = sourcecode.swift; path = RunnerTests.swift;\n' +
+                               'RunnerTests.swift\n' * 5)
+            swift = app / 'ios/RunnerTests/RunnerTests.swift'
+            swift.parent.mkdir(parents=True)
+            swift.write_text('placeholder')
+            debug = app / 'ios/Flutter/Debug.xcconfig'
+            debug.parent.mkdir(parents=True)
+            original = '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"\n#include "Generated.xcconfig"\n'
+            debug.write_text(original)
+            podfile = app / 'ios/Podfile'
+            podfile.write_text(ios_xctest_scaffold.PODFILE)
+            ios_xctest_scaffold.prepare(app)
+            self.assertEqual(debug.read_text(), original)
+            self.assertEqual(podfile.read_text(), ios_xctest_scaffold.PODFILE)
 
 
 if __name__ == '__main__':

@@ -124,6 +124,7 @@ Future<void> runDirectSshUi(
   await tester.ensureVisible(secret);
   await tester.enterText(secret, config['password'] as String);
   await tester.pump();
+  await capture('preconnect');
   step('connect_tap');
   await tap(
     tester,

@@ -63,6 +63,7 @@ void main() {
         }
 
         Future<void> capture(String name) async {
+          if (name == 'preconnect') return;
           if (name == 'home') {
             await binding.convertFlutterSurfaceToImage();
             await tester.pump();

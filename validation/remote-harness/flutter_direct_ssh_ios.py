@@ -20,7 +20,7 @@ TARGET = 'integration_test/ios_direct_ssh_test.dart'
 FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched', 'explicitTrustRequired',
           'realTerminalView', 'normalTextInputCommit', 'remoteEchoVisible', 'disconnectUiConfirmed',
           'credentialsCleared', 'physicalImeVerified'}
-STAGES = {'home', 'target', 'probe', 'authenticate', 'secret_entry', 'connect_tap', 'connect_preflight',
+STAGES = {'home', 'target', 'probe', 'authenticate', 'secret_entry', 'screenshot_wait', 'connect_tap', 'connect_preflight',
           'await_terminal', 'await_welcome', 'input', 'disconnect'}
 LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
                'buildError': 'Failed to build iOS app',
@@ -30,7 +30,15 @@ LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
                'testFrameworkException': 'EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK',
                'hitTestWarning': 'derived an Offset that would not hit test',
                'hitTestFinder': 'hitTestable',
-               'widgetNotFound': 'Expected: exactly one matching candidate'}
+               'widgetNotFound': 'Expected: exactly one matching candidate',
+               'installationStarted': 'Installing and launching',
+               'observatoryConnecting': 'Connecting to VM Service',
+               'testLoading': 'loading ',
+               'testStarted': 'normal homepage to ordinary SSH'}
+LOG_MARKERS.update({'xctestBuildSucceeded': '** TEST BUILD SUCCEEDED **',
+                    'xctestStarted': 'Test Suite',
+                    'xctestSucceeded': '** TEST EXECUTE SUCCEEDED **',
+                    'xctestFailed': '** TEST EXECUTE FAILED **'})
 
 
 class Failure(ValueError):
@@ -73,6 +81,12 @@ def app_container(device, timeout):
     except subprocess.TimeoutExpired:
         return None, True
     return (Path(result.stdout.decode().strip()) if result.returncode == 0 else None), False
+
+
+def safe_screenshot_request(request, stage):
+    return (isinstance(request, dict) and set(request) == {'passwordMasked', 'passwordAuth'} and
+            request['passwordMasked'] is True and request['passwordAuth'] is True and
+            stage == {'stage': 'screenshot_wait'})
 
 
 def owned_devices(name, timeout=180):
@@ -126,6 +140,7 @@ def run(app, output, env):
             not output.is_relative_to(base) or not app.is_dir() or output.exists()):
         raise Failure('ios_isolated_paths_required')
     verify_prepared(app, env)
+    from ios_xctest_scaffold import prepare as prepare_xctest
     source_root = Path(__file__).resolve().parents[1] / 'flutter'
     for relative in (TARGET, 'integration_test/direct_ssh_ui_steps.dart'):
         if (app / relative).is_symlink() or (app / relative).read_bytes() != (source_root / relative).read_bytes():
@@ -187,13 +202,35 @@ def run(app, output, env):
                 'HERDR_IOS_DIRECT_TARGET': json.dumps({'host': '127.0.0.1', 'port': fixture.port,
                     'username': fixture.username, 'password': fixture.password, 'fingerprint': fixture.fingerprint})}))
             defines.chmod(0o600)
-            phase = 'driver_start'
+            phase = 'xctest_scaffold'
+            prepare_xctest(app)
             with (private / 'flutter-private.log').open('wb') as log:
-                process = subprocess.Popen(['flutter', 'test', '--no-pub', '--reporter', 'expanded', '-d', device,
+                phase = 'flutter_config_only'
+                result = subprocess.run(['flutter', 'build', 'ios', '--config-only', '--debug', '--simulator',
                     '--dart-define-from-file=' + str(defines), TARGET], cwd=app, env=env,
+                    stdout=log, stderr=subprocess.STDOUT, timeout=remaining(600))
+                if result.returncode:
+                    raise Failure('ios_flutter_config_failed')
+                phase = 'pod_install'
+                result = subprocess.run(['pod', 'install'], cwd=app / 'ios', env=env,
+                    stdout=log, stderr=subprocess.STDOUT, timeout=remaining(600))
+                if result.returncode:
+                    raise Failure('ios_pod_install_failed')
+                derived = private / 'derived'
+                build = ['xcodebuild', '-workspace', 'Runner.xcworkspace', '-scheme', 'Runner',
+                         '-configuration', 'Debug', '-sdk', 'iphonesimulator', '-destination', 'id=' + device,
+                         '-derivedDataPath', str(derived), 'CODE_SIGNING_ALLOWED=NO']
+                phase = 'xctest_build'
+                result = subprocess.run([*build, 'build-for-testing'], cwd=app / 'ios', env=env,
+                    stdout=log, stderr=subprocess.STDOUT, timeout=remaining(900))
+                if result.returncode:
+                    raise Failure('ios_xctest_build_failed')
+                phase = 'xctest_launch'
+                process = subprocess.Popen([*build, 'test-without-building'], cwd=app / 'ios', env=env,
                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                 deadline, exchange, confirmed = min(overall_deadline, time.monotonic() + 1200), None, False
                 container_timeouts = 0
+                screenshot_attempted = False
                 while process.poll() is None and time.monotonic() < deadline:
                     phase = 'await_device_result'
                     if exchange is None:
@@ -207,6 +244,22 @@ def run(app, output, env):
                         stage = read_json(exchange / 'stage.json')
                         if stage and stage.get('stage') in STAGES:
                             report['deviceStage'] = stage['stage']
+                        request = read_json(exchange / 'screenshot-request.json')
+                        if (not screenshot_attempted and safe_screenshot_request(request, stage)
+                                and process.poll() is None):
+                            screenshot_attempted = True
+                            try:
+                                screenshot = private / 'preconnect.png'
+                                command('xcrun', 'simctl', 'io', device, 'screenshot', str(screenshot), timeout=45)
+                                image = screenshot.read_bytes()
+                                if not image.startswith(b'\x89PNG\r\n\x1a\n') or len(image) > 8_000_000:
+                                    raise Failure('ios_screenshot_invalid')
+                                (output / 'preconnect.png').write_bytes(image)
+                                report['maskedPreconnectScreenshot'] = True
+                            except (Failure, OSError, subprocess.TimeoutExpired):
+                                report['maskedPreconnectScreenshot'] = False
+                            finally:
+                                (exchange / 'screenshot-done.json').write_text('{}')
                     public = read_json(exchange / 'result.json') if exchange else None
                     if public is not None:
                         check_result(public)

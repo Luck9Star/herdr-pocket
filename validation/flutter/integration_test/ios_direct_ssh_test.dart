@@ -63,7 +63,30 @@ void main() {
           publish('stage.json', {'stage': next});
         }
 
-        Future<void> capture(String name) async {}
+        Future<void> capture(String name) async {
+          if (name != 'preconnect') return;
+          final secret = find.byKey(const ValueKey('direct-secret'));
+          final method = find.byType(SwitchListTile);
+          if (secret.evaluate().length != 1 ||
+              method.evaluate().length != 1 ||
+              !tester.widget<TextField>(secret).obscureText ||
+              tester.widget<SwitchListTile>(method).value)
+            return;
+          // Allow Flutter's brief last-character reveal to expire before any
+          // screenshot; the runner only sees the approved synthetic fixture.
+          await tester.pump(const Duration(seconds: 2));
+          step('screenshot_wait');
+          publish('screenshot-request.json', {
+            'passwordMasked': true,
+            'passwordAuth': true,
+          });
+          final deadline = DateTime.now().add(const Duration(seconds: 60));
+          while (!File('$directory/screenshot-done.json').existsSync() &&
+              DateTime.now().isBefore(deadline)) {
+            await tester.pump(const Duration(milliseconds: 250));
+          }
+        }
+
         await runDirectSshUi(
           tester,
           binding: binding,

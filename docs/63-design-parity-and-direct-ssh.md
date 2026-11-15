@@ -63,6 +63,12 @@ PEM 输入区现固定为两行并在框内滚动：长密钥此前将口令区�
 
 两行布局的 [macOS 原生专项 43714130582](evidence/design-parity-20261115/flutter-macos-secure-candidate-43714130582.json) 实跑四项、三项通过：系统遮罩、密码连接及界面主动断开、返回重开通过；真实“粘贴私钥”按钮已读取一次性剪贴板且 PEM 控制器精确匹配。加密私钥用例仍未通过：系统树中未找到可用的口令原生字段，标签组存在但测试未找到满足可见区域条件的输入区，未输入试探字符；key 对端仅收到主机密钥探测。该次不能证明原生私钥口令输入或认证，也不能单凭测试结果断言原因。
 
+后续 [macOS 专项 43717075816](evidence/design-parity-20261115/flutter-macos-secure-candidate-43717075816.json) 四项中三项通过：系统安全字段遮罩、密码 SSH、加密 OpenSSH 私钥 SSH。加密路径经真实“粘贴私钥”按钮确认一次性 PEM，点击系统可命中的原生 secure 口令字段、用无秘密试探确认焦点并核对口令；独立 key-only 对端确认认证、PTY、shell 及应用仍在时界面断开；密码对端也有对应主动关闭证据。两种 peer 都先独立核对主机指纹。该次返回重开用例未通过，因此整个专项失败；独立测试构建显式启用测试用 embedder 语义，不等同公开下载包或 VoiceOver 全流程验收。
+
+随后 [macOS 专项 43717994137](evidence/design-parity-20261115/flutter-macos-secure-candidate-43717994137.json) 在 `c94dfb645f9363a50141b42c51a6c42243803451` 上四项实际执行并全部通过：系统安全字段遮罩、密码 SSH、加密 OpenSSH Ed25519 私钥 SSH，以及返回并重开空表单。两种认证分别独立核对主机指纹，服务端各确认认证、PTY、shell 和应用仍运行时主动关闭；私钥通过真实粘贴按钮写入，原生 secure 口令字段的焦点以无秘密试探验证。测试显式启用测试用 embedder 语义，不能外推完整 VoiceOver 或物理 IME 验收。
+
+同次成功上传[干净 Mac 调试包工件 14163247960](https://github.com/Luck9Star/herdr-pocket/actions/runs/43717994137/artifacts/14163247960)：外层 ZIP SHA256 `adf729d88fcf8987860abf7611f9e519b448190651673fae56b5d335f324f6f9`；内包 `flutter-macos-debug.tar.gz` SHA256 `846d69b39a240170c1ca5e24552a7ef385953df43eb8e6ec5b3d2049e5b035fa`，与同工件清单一致。该包在测试钩子和临时夹具注入前构建；运行验收使用同源码的测试注入构建，两者不是同一二进制。
+
 普通 SSH 的 RSA 兼容增量也已从原生 macOS 窗口独立复验：纯 RSA2048 Paramiko、核对 SHA256 指纹、密码登录、输入 `hp-check` 后看到绿色 `POCKET-ANDROID-SSH-OK`，点击断开后服务端记录 `sessionClosed`。窗口缩放让服务端实际收到 80×24 → 106×28 → 106×30 → 104×27 → 104×20 → 104×19 → 106×19，包括列数相同而行数改变。该次使用前端 `f29ea6b` 与 Rust 生产文件 blob `a9e9792` / `502548b`，已纳入功能快照 `621b793`；该次 Tauri 原生私钥输入未验证，Android 范围另见下文。
 
 Tauri 的加密私钥入口随后在 Android API 35 x86_64 模拟器实际通过：[Actions 43682217625](https://github.com/Luck9Star/herdr-pocket/actions/runs/43682217625)，源码 `664be556c5572cb9777bd0ffe6e18266a9d2889a`，验收工件 `14149575567`，APK SHA256 为 `41ca5b685b23a6a7244e214fbb8c2636733c891b2f8bf3992bef4dc6983cbf6c`。应用选择私钥认证，核对临时 loopback 对端指纹，使用有口令保护的一次性 OpenSSH Ed25519 用户私钥连接；对端只接受指定公钥，设备上确认 PTY、shell、`hp-check` 输入、终端回显和主动断开，服务端确认会话关闭；应用、转发及临时连接清理均通过。[原始脱敏 manifest](evidence/design-parity-20261115/tauri-encrypted-ssh-android-43682217625.json)只记录布尔结果。另一本地协议反例确认密码认证被拒、无口令或错误口令无法解密。此设备验证通过 CDP 操作 WebView，不证明物理手机或真实 IME 组字；也不代表其他私钥格式均已验证。

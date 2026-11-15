@@ -1,0 +1,373 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "c94dfb645f9363a50141b42c51a6c42243803451",
+  "platform": "macos-xcuitest",
+  "status": "passed",
+  "scope": "native UI security fields and owned SSH loopback; synthetic values; no physical IME",
+  "embedderFallbackRequested": true,
+  "systemTreeAndSecureFieldsVerified": true,
+  "testExecuted": true,
+  "testPassed": true,
+  "cases": {
+    "testSystemMasking": {
+      "executed": true,
+      "passed": true
+    },
+    "testPasswordSSH": {
+      "executed": true,
+      "passed": true
+    },
+    "testEncryptedKeySSH": {
+      "executed": true,
+      "passed": true
+    },
+    "testReturnAndReopen": {
+      "executed": true,
+      "passed": true
+    }
+  },
+  "peerAuthenticationPtyShellAndClose": true,
+  "encryptedKeyPeerAuthenticationPtyShellAndClose": true,
+  "peerCloseObservedDuringDisconnectWindows": true,
+  "passwordPeerCloseObservedDuringDisconnectWindow": true,
+  "encryptedKeyPeerCloseObservedDuringDisconnectWindow": true,
+  "passwordInputProven": true,
+  "passphraseInputProven": true,
+  "buildStarted": true,
+  "testStarted": true,
+  "testCounts": {
+    "totalTestCount": 4,
+    "passedTests": 4,
+    "failedTests": 0,
+    "skippedTests": 0
+  },
+  "failureMethod": null,
+  "failedMethods": [],
+  "buildDiagnostics": [],
+  "failureSourceLines": [],
+  "fixedFailures": [],
+  "failureCategories": [],
+  "xcresultDetailsAvailable": true,
+  "homeMetrics": {},
+  "fallbackHomeMetrics": {},
+  "ordinaryMetrics": [
+    {
+      "nodes": 205,
+      "nonemptyValues": 1,
+      "sentinelObserved": false
+    }
+  ],
+  "backMetrics": [
+    {
+      "buttons": 3,
+      "exact": 1,
+      "hittable": 1
+    }
+  ],
+  "secureMetrics": [],
+  "hitMetrics": [],
+  "keyInputMetrics": [
+    {
+      "visible": true,
+      "key": true,
+      "passphrase": true,
+      "sentinel": false,
+      "empty": false,
+      "lengthMatches": true,
+      "trimmedMatches": true
+    }
+  ],
+  "formMetrics": [],
+  "passphraseFieldMetrics": [
+    {
+      "nativeRoleCount": 1,
+      "labelGroupCount": 2
+    }
+  ],
+  "keyGeometry": [],
+  "nativePassphraseField": [
+    {
+      "count": 1,
+      "hittable": true,
+      "visible": true,
+      "x": 249,
+      "y": 630,
+      "width": 526,
+      "height": 42
+    }
+  ],
+  "confirmationMetrics": [
+    {
+      "phase": "key",
+      "windowClick": true,
+      "hittableSecureOverlapCount": 0
+    },
+    {
+      "phase": "password",
+      "windowClick": true,
+      "hittableSecureOverlapCount": 0
+    }
+  ],
+  "fingerprintMetrics": [
+    {
+      "phase": "encryptedkey",
+      "nodes": 201,
+      "sha256PrefixCount": 1,
+      "expectedExactCount": 1
+    },
+    {
+      "phase": "password",
+      "nodes": 196,
+      "sha256PrefixCount": 1,
+      "expectedExactCount": 1
+    }
+  ],
+  "peerConnectionCounts": {
+    "password": 2,
+    "encryptedKey": 2
+  },
+  "inputMetrics": [
+    {
+      "phase": "keyaddress",
+      "kind": "target",
+      "exactCount": 1
+    },
+    {
+      "phase": "keyport",
+      "kind": "target",
+      "exactCount": 1
+    },
+    {
+      "phase": "keyuser",
+      "kind": "target",
+      "exactCount": 1
+    },
+    {
+      "phase": "passwordaddress",
+      "kind": "target",
+      "exactCount": 1
+    },
+    {
+      "phase": "passwordport",
+      "kind": "target",
+      "exactCount": 1
+    },
+    {
+      "phase": "passworduser",
+      "kind": "target",
+      "exactCount": 1
+    },
+    {
+      "phase": "sentinel",
+      "kind": "target",
+      "exactCount": 1
+    }
+  ],
+  "inputDetails": [],
+  "targetMetrics": [
+    {
+      "phase": "keyfresh",
+      "hostMatches": false,
+      "passwordPortMatches": false,
+      "keyPortMatches": false,
+      "userMatches": false,
+      "valid": false,
+      "busy": false,
+      "foreground": true,
+      "probeFailed": false,
+      "hostEmpty": true,
+      "userEmpty": true,
+      "portDefault22": true,
+      "portEmpty": false,
+      "fingerprintConfirmed": false
+    },
+    {
+      "phase": "keyportcleared",
+      "hostMatches": true,
+      "passwordPortMatches": false,
+      "keyPortMatches": false,
+      "userMatches": false,
+      "valid": false,
+      "busy": false,
+      "foreground": true,
+      "probeFailed": false,
+      "hostEmpty": false,
+      "userEmpty": true,
+      "portDefault22": false,
+      "portEmpty": true,
+      "fingerprintConfirmed": false
+    },
+    {
+      "phase": "keybefore",
+      "hostMatches": true,
+      "passwordPortMatches": false,
+      "keyPortMatches": true,
+      "userMatches": true,
+      "valid": true,
+      "busy": false,
+      "foreground": true,
+      "probeFailed": false,
+      "hostEmpty": false,
+      "userEmpty": false,
+      "portDefault22": false,
+      "portEmpty": false,
+      "fingerprintConfirmed": false
+    },
+    {
+      "phase": "keyafter",
+      "diagnosticMissing": true
+    },
+    {
+      "phase": "keyconfirmed",
+      "hostMatches": true,
+      "passwordPortMatches": false,
+      "keyPortMatches": true,
+      "userMatches": true,
+      "valid": true,
+      "busy": false,
+      "foreground": true,
+      "probeFailed": false,
+      "hostEmpty": false,
+      "userEmpty": false,
+      "portDefault22": false,
+      "portEmpty": false,
+      "fingerprintConfirmed": true
+    },
+    {
+      "phase": "passwordfresh",
+      "hostMatches": false,
+      "passwordPortMatches": false,
+      "keyPortMatches": false,
+      "userMatches": false,
+      "valid": false,
+      "busy": false,
+      "foreground": true,
+      "probeFailed": false,
+      "hostEmpty": true,
+      "userEmpty": true,
+      "portDefault22": true,
+      "portEmpty": false,
+      "fingerprintConfirmed": false
+    },
+    {
+      "phase": "passwordportcleared",
+      "hostMatches": true,
+      "passwordPortMatches": false,
+      "keyPortMatches": false,
+      "userMatches": false,
+      "valid": false,
+      "busy": false,
+      "foreground": true,
+      "probeFailed": false,
+      "hostEmpty": false,
+      "userEmpty": true,
+      "portDefault22": false,
+      "portEmpty": true,
+      "fingerprintConfirmed": false
+    },
+    {
+      "phase": "passwordbefore",
+      "hostMatches": true,
+      "passwordPortMatches": true,
+      "keyPortMatches": false,
+      "userMatches": true,
+      "valid": true,
+      "busy": false,
+      "foreground": true,
+      "probeFailed": false,
+      "hostEmpty": false,
+      "userEmpty": false,
+      "portDefault22": false,
+      "portEmpty": false,
+      "fingerprintConfirmed": false
+    },
+    {
+      "phase": "passwordafter",
+      "diagnosticMissing": true
+    },
+    {
+      "phase": "passwordconfirmed",
+      "hostMatches": true,
+      "passwordPortMatches": true,
+      "keyPortMatches": false,
+      "userMatches": true,
+      "valid": true,
+      "busy": false,
+      "foreground": true,
+      "probeFailed": false,
+      "hostEmpty": false,
+      "userEmpty": false,
+      "portDefault22": false,
+      "portEmpty": false,
+      "fingerprintConfirmed": true
+    }
+  ],
+  "progress": {
+    "homepage": true,
+    "passwordFingerprintDialog": true,
+    "keyMethodSelected": true,
+    "passwordConnectAttempt": true,
+    "passwordConfirmed": true,
+    "passwordHiddenFocused": true,
+    "passwordFreshVerified": true,
+    "returnReopenEntryTapped": true,
+    "passwordCredentialEntered": true,
+    "encryptedKeyProbeTapped": true,
+    "pemControllerConfirmed": true,
+    "keyPassphraseFocusConfirmed": true,
+    "keyFullscreenRequested": true,
+    "maskingHomepage": true,
+    "returnSecureSelected": true,
+    "passwordAddressTyped": true,
+    "fingerprintVerified": true,
+    "encryptedKeyFingerprintDialog": true,
+    "keyAddressTyped": true,
+    "passwordSecureField": true,
+    "passwordValuePresent": true,
+    "keyPortCleared": true,
+    "keyCredentialEntered": true,
+    "returnBackTapped": true,
+    "passwordPortTyped": true,
+    "passwordProbeTapped": true,
+    "pemPasteButtonAttempt": true,
+    "keyFreshVerified": true,
+    "passphraseValuePresent": true,
+    "returnCredentialEntered": true,
+    "returnHomepage": true,
+    "returnAndReopenCleared": true,
+    "appLaunched": true,
+    "passwordHomepage": true,
+    "keyPassphraseConfirmed": true,
+    "disconnectedAndCleared": true,
+    "keyHomepage": true,
+    "keyConfirmAttempt": true,
+    "keyConfirmed": true,
+    "keyUsernameTyped": true,
+    "returnReopenedSecureSelected": true,
+    "passwordHiddenBlurred": true,
+    "pemPasteButtonTapped": true,
+    "returnButtonUsed": true,
+    "ordinaryInputReadable": true,
+    "keyCredentialAttempt": true,
+    "passwordPortCleared": true,
+    "sshConnected": true,
+    "encryptedKeyFingerprintVerified": true,
+    "modeSwitchCleared": true,
+    "passphraseSecureField": true,
+    "encryptedKeyDisconnectedAndCleared": true,
+    "passwordConfirmAttempt": true,
+    "keyPassphraseEntered": true,
+    "keyPortTyped": true,
+    "passwordCredentialAttempt": true,
+    "passwordUsernameTyped": true,
+    "keyConnectAttempt": true,
+    "passphraseHiddenAfterFocusChanges": true,
+    "returnEntryTapped": true,
+    "fixtureReadable": true,
+    "keyPassphraseNativeClicked": true,
+    "maskingScanCompleted": true,
+    "encryptedKeyConnected": true,
+    "ordinarySentinelObserved": true
+  },
+  "rawLogsUploaded": false
+}

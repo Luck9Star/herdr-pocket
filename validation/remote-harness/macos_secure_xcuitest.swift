@@ -185,6 +185,17 @@ final class SecureCredentialUITests: XCTestCase {
         return nil
     }
 
+    private func phraseMatches(_ app: XCUIApplication) throws -> Bool {
+        let deadline = Date().addingTimeInterval(8)
+        repeat {
+            for delta in [CGFloat(0), -200, -200, -200, 200, 200, 200] {
+                if delta != 0 { scrollForm(app, delta) }
+                if try keyInputBits(app)?[1] == true { return true }
+            }
+        } while Date() < deadline
+        return false
+    }
+
     private func diagnoseKeyInputs(_ app: XCUIApplication) throws -> [Bool]? {
         let deadline = Date().addingTimeInterval(10)
         var bits: [Bool]?
@@ -581,10 +592,19 @@ final class SecureCredentialUITests: XCTestCase {
         mark("keyPassphraseFound")
         tap(app, keyPassphrase);app.typeText(phrase)
         mark("keyPassphraseEntered")
-        if let maskedValue = keyPassphrase.value as? String {
-            XCTAssertFalse(maskedValue.isEmpty, "passphrase input state empty")
-        }
         try assertNoSecrets(app, [password, phrase])
+        var phraseConfirmed = try phraseMatches(app)
+        if !phraseConfirmed {
+            mark("keyPassphraseRetry")
+            let field = secureField(app, "direct-passphrase")
+            tap(app, field)
+            XCTAssertTrue(field.hasKeyboardFocus, "passphrase retry focus not confirmed")
+            app.typeKey("a", modifierFlags: .command)
+            app.typeText(phrase)
+            phraseConfirmed = try phraseMatches(app)
+        }
+        XCTAssertTrue(phraseConfirmed, "passphrase controller mismatch")
+        mark("keyPassphraseConfirmed")
         let clipboard = NSPasteboard.general
         clipboard.clearContents()
         defer { clipboard.clearContents() }

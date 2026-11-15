@@ -1,0 +1,91 @@
+name: Android real host session transport smoke
+on:
+  push:
+    branches: ['codex/acceptance-android-dual-session/**']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  session:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
+      HOST_ARTIFACT: '14171011473'
+      HOST_ZIP_SHA256: 4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.HOST_SOURCE }}
+          path: host-source
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify and unpack exact shared host artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$HOST_ARTIFACT" > "$RUNNER_TEMP/host-meta.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$HOST_ARTIFACT/zip" > "$RUNNER_TEMP/host.zip"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,zipfile
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          meta=json.loads((root/'host-meta.json').read_text())
+          expected=os.environ['HOST_ZIP_SHA256']
+          assert meta['expired'] is False and meta['workflow_run']['head_sha']==os.environ['HOST_SOURCE']
+          assert meta['digest']=='sha256:'+expected
+          assert hashlib.sha256((root/'host.zip').read_bytes()).hexdigest()==expected
+          with zipfile.ZipFile(root/'host.zip') as archive:
+            assert set(archive.namelist())=={'herdr','peer','ts-fixture','manifest.json'}
+            archive.extractall(root/'host-bundle')
+          PY
+          python3 host-source/validation/remote-harness/dual_overlay_shared_bundle.py verify \
+            --bundle "$RUNNER_TEMP/host-bundle" --source-sha "$HOST_SOURCE" --restore-executable
+      - name: Prepare isolated host and device tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends acl libpulse0 iproute2 openssh-server
+          python3 -m venv "$RUNNER_TEMP/session-env"
+          "$RUNNER_TEMP/session-env/bin/pip" install -r validation/pairing/requirements.txt
+          "$RUNNER_TEMP/session-env/bin/python" -m unittest discover -s validation/remote-harness -p test_android_dual_overlay_session.py -v
+          "$RUNNER_TEMP/session-env/bin/python" -m unittest discover -s validation/remote-harness -p test_android_dual_overlay_hosts.py -v
+      - name: Exercise actual API35 with two fresh host contexts
+        id: smoke
+        run: |
+          mkdir -p "$RUNNER_TEMP/session-work"
+          AVD_EVIDENCE_DIR="$RUNNER_TEMP/session-avd" bash validation/remote-harness/with-android-emulator.sh \
+            "$RUNNER_TEMP/session-env/bin/python" validation/remote-harness/android_dual_overlay_session.py --smoke \
+              --bundle "$RUNNER_TEMP/host-bundle" --work-root "$RUNNER_TEMP/session-work" \
+              --source-checkout "$GITHUB_WORKSPACE/host-source" --host-source "$HOST_SOURCE" \
+              --output "$RUNNER_TEMP/session-evidence/result.json"
+      - name: Independently inspect final namespace and safe evidence
+        if: always()
+        env:
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess
+          path=pathlib.Path(os.environ['RUNNER_TEMP'])/'session-evidence/result.json'
+          path.parent.mkdir(parents=True,exist_ok=True)
+          result=json.loads(path.read_text()) if path.exists() else {'status':'failed','errorCode':'preflight_not_completed'}
+          process=subprocess.run(['ip','netns','list'],capture_output=True,text=True)
+          name='hp-dual-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']
+          result['finalNamespaceAbsent']=process.returncode==0 and name not in [line.split()[0] for line in process.stdout.splitlines() if line.split()]
+          result['avdWrapperSucceeded']=os.environ['SMOKE_OUTCOME']=='success'
+          result.update(sourceSHA=os.environ['GITHUB_SHA'],hostArtifactId=os.environ['HOST_ARTIFACT'],hostZipSha256=os.environ['HOST_ZIP_SHA256'])
+          if not result['finalNamespaceAbsent'] or not result['avdWrapperSucceeded']:result['status']='failed'
+          path.write_text(json.dumps(result,indent=2)+'\n')
+          raise SystemExit(0 if result['status']=='passed' else 1)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: android-real-host-session-${{ github.sha }}
+          path: ${{ runner.temp }}/session-evidence/result.json
+          if-no-files-found: warn

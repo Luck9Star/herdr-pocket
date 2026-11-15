@@ -179,6 +179,9 @@ class HostHarness:
         # PairingTarget deliberately accepts only owned temporary fixture roots.
         # Keep hosts in /tmp while relay/material files live in RUNNER_TEMP.
         hosts = Path(self.stack.enter_context(tempfile.TemporaryDirectory(prefix='hp-device-hosts-', dir='/tmp')))
+        self.host_directory = hosts.resolve(strict=True)
+        write_private(self.root / 'host-owner.json', {'directory': str(self.host_directory),
+            'inode': self.host_directory.stat().st_ino, 'owner': os.getuid()})
         self.targets, self.host_processes, _ = self.stack.enter_context(prepared_pairing_hosts(self.bundle / 'herdr', hosts))
         self.env = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'HOME': str(self.root),
                     'XDG_CONFIG_HOME': str(self.root / 'config'), 'LANG': 'C.UTF-8',
@@ -296,8 +299,10 @@ class HostHarness:
             self.cleanup['temporaryAuthorizationsCleared'] = all(
                 not (target.root / 'authorized_keys').exists() or not (target.root / 'authorized_keys').read_bytes()
                 for target in getattr(self, 'targets', {}).values())
-            self.cleanup['temporaryHostCredentialsRemoved'] = all(
-                not target.root.exists() for target in getattr(self, 'targets', {}).values())
+            self.cleanup['temporaryHostCredentialsRemoved'] = (not hasattr(self, 'host_directory')
+                or not self.host_directory.exists())
+            if self.cleanup['temporaryHostCredentialsRemoved']:
+                (self.root / 'host-owner.json').unlink(missing_ok=True)
 
     def __exit__(self, *_):
         self.close()

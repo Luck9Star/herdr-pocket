@@ -82,10 +82,24 @@ def report_checked(value):
     return required
 
 
+def diagnostics_checked(value):
+    counts = ('keyRequests','noiseRequests','registerRequests','mapRequests','tlsHandshakeErrors','authCompletions')
+    if (not isinstance(value,dict) or value.get('event') != 'diagnostics' or
+            any(type(value.get(key)) is not int or not 0 <= value[key] <= 1000000 for key in counts) or
+            type(value.get('secondClientRegistered')) is not bool):
+        raise Failure('control_diagnostics_invalid')
+    return {**{key:value[key] for key in counts}, 'secondClientRegistered':value['secondClientRegistered']}
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, newurl):
+        return None
+
+
 def control_reached(url, ca):
     request = urllib.request.Request(url, method='GET')
     try:
-        with urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=ca))).open(request, timeout=5) as response:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=ca))).open(request, timeout=5) as response:
             return 100 <= response.status <= 599
     except urllib.error.HTTPError as response:
         return 100 <= response.code <= 599
@@ -130,6 +144,7 @@ def run(bundle, output):
     helper_dir, worker_dir = root/'fixture',root/'worker'
     for item in (helper_dir,worker_dir): item.mkdir(mode=0o700)
     processes=[]; readers=[]
+    helper = None; events = None
     result={'schemaVersion':1,'status':'failed','stage':'start','controlReached':False,
             'authorizationCompleted':False,'fixtureCleanup':False,'processesStopped':False,'privateRemoved':False}
     env={k:v for k,v in os.environ.items() if not k.startswith('HERDR_') and k not in ('SSH_AUTH_SOCK','SSH_AGENT_PID','BASH_ENV')}
@@ -147,16 +162,22 @@ def run(bundle, output):
         ready=read_event(events,helper,'ready');control,ca,peer,port=ready_checked(ready,helper_dir)
         result['controlReached']=control_reached(control,ca)
         if not result['controlReached']: raise Failure('control_unreachable')
+        def diagnostics():
+            helper.stdin.write(b'{"op":"diagnostics"}\n'); helper.stdin.flush()
+            return diagnostics_checked(read_event(events,helper,'diagnostics',timeout=5))
+        result['controlDiagnostics']={'baseline':diagnostics()}
         request={'library':str(library),'controlUrl':control,'peerIp':peer,'peerPort':port}
         (worker_dir/'request.json').write_text(json.dumps(request)); (worker_dir/'request.json').chmod(0o600)
         result['stage']='authorization_url'
         worker,wevents=launch([sys.executable,str(Path(__file__).with_name('tailscale_cabi_worker.py')),str(worker_dir)],dict(env,SSL_CERT_FILE=ca))
         read_event(wevents,worker,'auth_requested',timeout=50)
+        result['controlDiagnostics']['beforeAuthorization']=diagnostics()
         auth_file=worker_dir/'auth-url';auth=auth_checked(auth_file.read_text(),control)
         helper.stdin.write((json.dumps({'op':'complete_auth','url':auth})+'\n').encode());helper.stdin.flush();auth=''
         event=read_event(events,helper,'auth_completed')
         if event.get('ok') is not True: raise Failure('authorization_not_completed')
         result['authorizationCompleted']=True
+        result['controlDiagnostics']['afterAuthorization']=diagnostics()
         (worker_dir/'auth-complete').touch(mode=0o600)
         result['stage']='running_and_echo'
         evidence=read_event(wevents,worker,'cabi_result',timeout=50)
@@ -170,7 +191,17 @@ def run(bundle, output):
     except (Failure, OSError, subprocess.SubprocessError, ValueError) as error:
         if isinstance(error, WorkerEnded): result['partialCabi'] = error.evidence
         result['errorCode']=str(error) if isinstance(error,Failure) else 'isolated_runner_failed'
+        if helper is not None and events is not None and helper.poll() is None and 'controlDiagnostics' in result:
+            try: result['controlDiagnostics']['failure']=diagnostics()
+            except (Failure, OSError, ValueError): pass
     finally:
+        if helper is not None and events is not None and helper.poll() is None and not result['fixtureCleanup']:
+            try:
+                helper.stdin.write(b'{"op":"stop"}\n'); helper.stdin.flush()
+                cleanup_event = read_event(events,helper,'cleanup',timeout=15)
+                result['fixtureCleanup'] = cleanup_event.get('peerClosed') is True and cleanup_event.get('bridgeConnections') == 0
+            except (Failure, OSError, ValueError):
+                pass
         for proc in processes:
             if proc.poll() is None:
                 try: os.killpg(proc.pid,signal.SIGTERM)

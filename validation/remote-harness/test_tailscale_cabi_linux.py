@@ -18,6 +18,14 @@ class CabiGuards(unittest.TestCase):
             for change in ({'controlUrl':'https://example.com:32123'}, {'peerIp':'127.0.0.1'},
                            {'peerPort':22}, {'caFile':'/etc/hosts'}, {'controlUrl':'http://127.0.0.1:32123'}):
                 with self.subTest(change=change), self.assertRaises(runner.Failure): runner.ready_checked({**good,**change},root)
+    def test_control_diagnostics_allow_only_bounded_counts_and_boolean(self):
+        good={'event':'diagnostics','keyRequests':1,'noiseRequests':2,'registerRequests':3,
+              'mapRequests':4,'tlsHandshakeErrors':0,'authCompletions':1,'secondClientRegistered':True,
+              'secret':'never-export'}
+        self.assertNotIn('secret',runner.diagnostics_checked(good))
+        for key in ('keyRequests','authCompletions','secondClientRegistered'):
+            with self.subTest(key=key), self.assertRaises(runner.Failure): runner.diagnostics_checked({**good,key:'secret'})
+
     def test_partial_evidence_never_exports_untrusted_values(self):
         got=runner.partial_checked({'states':['NeedsLogin','secret-value'], 'authUrlPresent':False,
                                    'beginLoginCode':0, 'private':'secret-value', 'nodeCloseCode':'secret-value'})

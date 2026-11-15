@@ -55,7 +55,9 @@ jobs:
               fi
               sudo ip netns delete "$namespace" || failed=1
             fi
-            rm -rf "$RUNNER_TEMP/ts-cabi-bundle" "$RUNNER_TEMP/ts-cabi-candidate" "$RUNNER_TEMP/ts-cabi-cache"
+            for owned in "$RUNNER_TEMP/ts-cabi-bundle" "$RUNNER_TEMP/ts-cabi-candidate" "$RUNNER_TEMP/ts-cabi-cache"; do
+              if [ -e "$owned" ]; then chmod -R u+w "$owned" || failed=1; rm -rf "$owned" || failed=1; fi
+            done
             return "$failed"
           }
           trap cleanup EXIT
@@ -74,7 +76,9 @@ jobs:
           result['sourceSHA']=os.environ['GITHUB_SHA']
           result['namespaceRemoved']=sys.argv[2] not in [line.split()[0] for line in subprocess.check_output(['ip','netns','list'],text=True).splitlines() if line.split()]
           result['bundleRemoved']=not (pathlib.Path(os.environ['RUNNER_TEMP'])/'ts-cabi-bundle').exists()
-          if not result['namespaceRemoved'] or not result['bundleRemoved']: result['status']='failed'
+          result['candidateRemoved']=not (pathlib.Path(os.environ['RUNNER_TEMP'])/'ts-cabi-candidate').exists()
+          result['cacheRemoved']=not (pathlib.Path(os.environ['RUNNER_TEMP'])/'ts-cabi-cache').exists()
+          if not all(result[key] for key in ('namespaceRemoved','bundleRemoved','candidateRemoved','cacheRemoved')): result['status']='failed'
           path.write_text(json.dumps(result,indent=2)+'\n')
           PY
           exit "$status"

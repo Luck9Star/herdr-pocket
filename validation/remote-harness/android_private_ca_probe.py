@@ -94,6 +94,7 @@ def run(apk,output):
         phase='install'
         _adb('install','-t',str(apk),timeout=90);installed=True
         _adb('shell','run-as',PACKAGE,'mkdir','-p','files/empty-ca')
+        _adb('shell','run-as',PACKAGE,'touch','files/enable-private-ca-probe')
         relay=AndroidDualOverlayRelay(manifest)
         with relay:
             mappings=OwnedReverseMappings(relay)

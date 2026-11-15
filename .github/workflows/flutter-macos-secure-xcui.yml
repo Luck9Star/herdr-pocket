@@ -55,6 +55,31 @@ jobs:
           result=$?
           set -e
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/macos-secure-private.xcresult" --format json > "$RUNNER_TEMP/macos-secure-private-summary.json" 2>/dev/null || true
+          xcrun xcresulttool get test-results tests --path "$RUNNER_TEMP/macos-secure-private.xcresult" --format json > "$RUNNER_TEMP/macos-secure-private-tests.json" 2>/dev/null || true
+          xcrun xcresulttool get test-results insights --path "$RUNNER_TEMP/macos-secure-private.xcresult" --format json > "$RUNNER_TEMP/macos-secure-private-insights.json" 2>/dev/null || true
+          test_id=$(python3 - "$RUNNER_TEMP/macos-secure-private-tests.json" <<'PY'
+          import json,re,sys
+          try: root=json.load(open(sys.argv[1]))
+          except (OSError,ValueError): root={}
+          def find(value):
+              if isinstance(value,dict):
+                  for key in ('nodeIdentifier','testIdentifier','testIdentifierURL','identifier'):
+                      item=value.get(key)
+                      if isinstance(item,str) and 'testPasswordAndPrivateKeyPassphraseAreSecure' in item and re.fullmatch(r'[A-Za-z0-9_./():%+-]+',item): return item
+                  for item in value.values():
+                      found=find(item)
+                      if found:return found
+              elif isinstance(value,list):
+                  for item in value:
+                      found=find(item)
+                      if found:return found
+              return None
+          print(find(root) or '')
+          PY
+          )
+          if test -n "$test_id"; then
+            xcrun xcresulttool get test-results test-details --path "$RUNNER_TEMP/macos-secure-private.xcresult" --test-id "$test_id" --format json > "$RUNNER_TEMP/macos-secure-private-details.json" 2>/dev/null || true
+          fi
           for attempt in {1..100}; do
             if python3 - "$RUNNER_TEMP/macos-secure-fixture/facts.json" <<'PY'
           import json,sys
@@ -100,6 +125,15 @@ jobs:
           try:
               summary=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private-summary.json')))
           except (OSError,ValueError): summary={}
+          structured=[]
+          details_available=False
+          for name in ('tests','insights','details'):
+              try:
+                  value=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private-'+name+'.json')))
+                  structured.append(json.dumps(value).lower())
+                  if name=='details': details_available=True
+              except (OSError,ValueError): pass
+          diagnostic_text='\n'.join([log,*structured])
           counts={k:summary[k] for k in ('totalTestCount','passedTests','failedTests','skippedTests') if type(summary.get(k)) is int}
           fixed=['owned loopback fixture unavailable','owned fixture path missing','owned fixture file unreadable','candidate app did not launch','normal homepage ssh entry missing',
                  'named address group or ordinary input missing','ordinary input is not readable',
@@ -115,7 +149,14 @@ jobs:
           fixed += ['ordinary sentinel not found in system accessibility values']
           fixed += ['private key editor missing','encrypted key session did not authenticate','passphrase not cleared after disconnect']
           fixed += ['form scroll target unavailable','requested control is not hittable','requested control is disabled']
-          fixed_failures=[message for message in fixed if message in log]
+          fixed_failures=[message for message in fixed if message in diagnostic_text]
+          categories=[]
+          for name,patterns in {'timeout':('timed out','timeout','exceeded execution time'),
+                                'interrupted':('test interrupted','test runner exited','lost connection'),
+                                'focus':('neither element nor any descendant has keyboard focus','keyboard focus'),
+                                'interaction':('not hittable','failed to synthesize event','unable to interact'),
+                                'snapshot':('failed to get matching snapshots','snapshot unavailable')}.items():
+              if any(pattern in diagnostic_text for pattern in patterns): categories.append(name)
           ordinary=re.findall(r'hp_xcui_ordinary=nodes:(\d{1,5}),values:(\d{1,5}),sentinel:([01])',log)
           ordinary=[{'nodes':int(n),'nonemptyValues':int(v),'sentinelObserved':s=='1'} for n,v,s in ordinary[:2]]
           secure_metrics=re.findall(r'hp_xcui_secure=phase:(password|passphrase),secure:(\d{1,5}),text:(\d{1,5}),other:(\d{1,5}),id:(\d{1,5}),label:(\d{1,5}),securelabel:(\d{1,5})',log)
@@ -127,6 +168,7 @@ jobs:
           failure_method=method if (summary.get('failedTests',0) and method.lower() in json.dumps(summary).lower()) or (fixed_failures and method.lower() in log) else None
           test_executed=bool(re.search(r'test case[^\n]*testpasswordandprivatekeypassphrasearesecure',log))
           test_passed=bool(re.search(r'testpasswordandprivatekeypassphrasearesecure[^\n]{0,100}\bpassed\b',log))
+          if test_passed: categories=[]
           completed=all(progress.get(k) is True for k in allowed)
           mask_stages={'fixtureReadable','appLaunched','homepage','passwordSecureField',
                        'passwordHiddenFocused','passwordHiddenBlurred','passphraseSecureField',
@@ -143,7 +185,8 @@ jobs:
                   'peerAuthenticationPtyShellAndClose':peer,'encryptedKeyPeerAuthenticationPtyShellAndClose':key_peer,
                   'passwordInputProven':password_proven,'passphraseInputProven':passphrase_proven,'buildStarted':('swiftcompile' in log or 'build target' in log),
                   'testStarted':('test suite' in log or 'test case' in log),'testCounts':counts,
-                  'failureMethod':failure_method,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,'homeMetrics':home_metrics,
+                  'failureMethod':failure_method,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,
+                  'failureCategories':categories,'xcresultDetailsAvailable':details_available,'homeMetrics':home_metrics,
                   'fallbackHomeMetrics':metrics[1] if len(metrics)>1 else {},
                   'ordinaryMetrics':ordinary,'secureMetrics':secure_metrics,
                   'progress':progress,'rawLogsUploaded':False}

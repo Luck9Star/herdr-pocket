@@ -1,12 +1,25 @@
 """Fail-closed checks for the opt-in iOS Simulator SSH evidence runner."""
 import tempfile
 import unittest
+import importlib.util
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import flutter_direct_ssh_ios as runner
 
 
 class IosDirectSshTests(unittest.TestCase):
+    def test_protocol_dependency_is_present_when_required(self):
+        if os.environ.get('HERDR_REQUIRE_PARAMIKO') == '1':
+            self.assertIsNotNone(importlib.util.find_spec('paramiko'), 'Paramiko is required for direct SSH acceptance')
+
+    def test_pure_guards_import_without_optional_site_packages(self):
+        result = subprocess.run([sys.executable, '-S', '-c', 'import flutter_direct_ssh_ios'],
+                                cwd=Path(__file__).resolve().parent, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+
     def test_only_explicit_feature_branch_may_start(self):
         with tempfile.TemporaryDirectory() as temp:
             env = {'GITHUB_ACTIONS': 'true', 'GITHUB_REF': 'refs/heads/main',

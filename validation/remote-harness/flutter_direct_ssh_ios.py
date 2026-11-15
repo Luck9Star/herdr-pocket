@@ -12,7 +12,6 @@ import sys
 import tempfile
 import time
 
-from direct_ssh_fixture import DirectSshFixture
 from flutter_direct_ssh_android import safe_failure, verify_prepared
 
 PACKAGE = 'dev.herdr.herdrFlutterProbe'
@@ -73,6 +72,7 @@ def run(app, output, env):
                'rawLogsUploaded': False}
     report = {'schemaVersion': 1, 'sourceSHA': env['GITHUB_SHA'], 'kind': 'flutter-ios-simulator-ordinary-ssh',
               'status': 'failed', 'cleanup': cleanup, 'physicalImeVerified': False}
+    from direct_ssh_fixture import DirectSshFixture
     fixture, device, process, private, phase, primary = DirectSshFixture(), None, None, None, 'runtime_selection', None
     try:
         runtimes = json.loads(command('xcrun', 'simctl', 'list', 'runtimes', '--json'))['runtimes']

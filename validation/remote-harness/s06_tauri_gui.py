@@ -1,5 +1,6 @@
 """Native GTK S06 driver. Reuses WebDriver and the reviewed two-peer fixture."""
 import base64
+import json
 import re
 import time
 
@@ -34,8 +35,9 @@ def peer_connection_evidence(approval):
 
 
 class SplitDriver:
-    def __init__(self, driver):
+    def __init__(self, driver, output=None):
         self.driver = driver
+        self.output = output
 
     def read(self, script, *args):
         return self.driver.call('POST', self.driver.session + '/execute/sync', {'script': script, 'args': list(args)})
@@ -79,6 +81,40 @@ class SplitDriver:
         wait_for(lambda: self.read('return document.querySelector(arguments[0])?.dataset.focus;', panel) == 'true',
                  's06_tauri_focus_not_selected')
 
+    def layout_evidence(self, panel, side, phase):
+        if self.output is None:
+            return
+        data = self.read('''const panel=document.querySelector(arguments[0]);
+            const host=panel?.querySelector('.terminal-host'), screen=host?.querySelector('.xterm-screen');
+            const tool=panel?.querySelector('.terminal-select-button');
+            const rect=e=>{if(!e)return null;const r=e.getBoundingClientRect();return Object.fromEntries(
+                ['left','top','right','bottom','width','height'].map(k=>[k,Math.round(r[k])]));};
+            const text=panel?.innerText||'';
+            const reason=text.includes('没有可安全测量')?'unmeasurable':text.includes('超过 64 KiB')?'too_large':
+                text.includes('输入仍在处理')?'input_pending':'none';
+            const ancestors=[];for(let e=screen?.parentElement;e&&ancestors.length<8;e=e.parentElement){
+                const s=getComputedStyle(e);ancestors.push({rect:rect(e),clipX:/auto|scroll|hidden|clip/.test(s.overflowX),
+                    clipY:/auto|scroll|hidden|clip/.test(s.overflowY)});}
+            const r=screen?.getBoundingClientRect(), hits=[];
+            if(r)for(const row of [0,22])for(const col of [0,10,29]){
+                const hit=document.elementFromPoint(r.left+(col+.5)*r.width/80,r.top+(row+.5)*r.height/24);
+                hits.push(!!hit&&!!host?.contains(hit));}
+            return {viewportWidth:innerWidth,viewportHeight:innerHeight,scrollY:Math.round(scrollY),
+                panel:rect(panel),terminal:rect(screen),tool:rect(tool),
+                panelFocused:panel?.dataset.focus==='true',toolDisabled:!!tool?.disabled,documentHidden:document.hidden,
+                selectionOpen:!!document.querySelector('.terminal-selection'),reason,cellHitSamples:hits,ancestors};''', panel)
+        (self.output / f's06-tauri-layout-{side}-{phase}.json').write_text(json.dumps(data, sort_keys=True))
+
+    def failure_screenshot(self, side):
+        if self.output is None:
+            return
+        try:
+            png = base64.b64decode(self.driver.call('GET', self.driver.session + '/screenshot'), validate=True)
+            if png.startswith(b'\x89PNG\r\n\x1a\n') and len(png) <= 4_194_304:
+                (self.output / f's06-tauri-visible-failure-{side}.png').write_bytes(png)
+        except (GuiFailure, OSError, ValueError):
+            pass
+
     def snapshot_tick(self, panel, side):
         self.focus(panel)
         for label in ('连接资料与诊断', '会话窗格'):
@@ -86,10 +122,19 @@ class SplitDriver:
                 .some(e=>e.open && e.querySelector('summary')?.textContent===arguments[1]);''', panel, label)
             if opened:
                 self.named(label, panel, 'summary')
-        self.driver.click(panel + ' .terminal-select-button')
+        self.layout_evidence(panel, side, 'before')
+        # The shared click helper centers controls by scrolling. This tool sits
+        # below the terminal: native element-click uses the minimum necessary
+        # scroll, preserving the cells above it for the product's visibility gate.
+        self.named('选择终端文本', panel)
         field = '.terminal-selection textarea[readonly]'
-        wait_for(lambda: self.read('return !!document.querySelector(arguments[0]);', field),
-                 's06_tauri_visible_text_not_opened')
+        try:
+            wait_for(lambda: self.read('return !!document.querySelector(arguments[0]);', field),
+                     's06_tauri_visible_text_not_opened', timeout=4)
+        except GuiFailure:
+            self.layout_evidence(panel, side, 'after')
+            self.failure_screenshot(side)
+            raise
         value = self.driver.read(field, 'value')
         tick = observed_tick(value, side)
         self.named('关闭', '.terminal-selection')
@@ -98,7 +143,7 @@ class SplitDriver:
 
 def exercise(args, root, env, configs, approvals, expected):
     driver, stage = WebDriver(), 'start'
-    ui = SplitDriver(driver)
+    ui = SplitDriver(driver, args.output)
     guarded = bool(args.input_fixture)
     other = root / 's06-peer-b'
 

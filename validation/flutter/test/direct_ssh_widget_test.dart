@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
@@ -14,6 +15,31 @@ Future<void> waitFor(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  testWidgets('private key passphrase remains obscured in Flutter semantics while focused and unfocused', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:DirectSshPage(tokens:tokens)));
+    await tester.ensureVisible(find.byType(SwitchListTile)); await tester.tap(find.byType(SwitchListTile)); await tester.pump();
+    final field = find.byKey(const ValueKey('direct-passphrase'));
+    await tester.ensureVisible(field); await tester.enterText(field,'fixture-secret'); await tester.pump();
+    expect(tester.widget<TextField>(field).obscureText,isTrue);
+    void verify() {
+      final root = tester.getSemantics(find.bySemanticsLabel('私钥口令（可选）'));
+      var fields = 0;
+      void inspect(SemanticsNode node) {
+        final data = node.getSemanticsData();
+        if (data.flagsCollection.isTextField) {
+          fields++; expect(data.flagsCollection.isObscured,isTrue); expect(data.value.contains('fixture-secret'),isFalse);
+        }
+        node.visitChildren((child) { inspect(child); return true; });
+      }
+      inspect(root); expect(fields,1);
+    }
+    verify();
+    final address = find.byKey(const ValueKey('direct-host'));
+    await tester.ensureVisible(address); await tester.tap(address); await tester.pump();
+    verify(); semantics.dispose();
+  });
   testWidgets('ordinary SSH requires explicit fingerprint confirmation', (tester) async {
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));

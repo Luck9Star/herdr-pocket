@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """CI-only disposable iOS Simulator ordinary SSH acceptance; exports no raw logs."""
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -111,7 +112,24 @@ def owned_devices(name, timeout=180):
     return result
 
 
-def xctest_result_markers(path):
+def sanitized_failure(text, private_values):
+    if not isinstance(text, str):
+        return ''
+    text = text.splitlines()[0][:1000]
+    for value in private_values:
+        if value:
+            text = text.replace(value, '[redacted]')
+            text = text.replace(base64.b64encode(value.encode()).decode(), '[redacted]')
+    text = re.sub(r'-----BEGIN.*', '[redacted]', text)
+    text = re.sub(r'(?i)\b(password|passphrase|private.?key|secret|username)\s*[:=]\s*\S+', r'\1=[redacted]', text)
+    text = re.sub(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', '[address]', text)
+    text = re.sub(r'(?<![A-Za-z])/(?:[^\s:]+/?)+', '[path]', text)
+    text = re.sub(r'\b[A-Za-z0-9_+/=-]{24,}\b', '[token]', text)
+    text = re.sub(r'[^A-Za-z0-9 .,;:_()\[\]#=+\-]', ' ', text)
+    return re.sub(r'\s+', ' ', text).strip()[:240]
+
+
+def xctest_result_markers(path, private_values=()):
     if not path.exists():
         return {'resultBundlePresent': False}
     result = subprocess.run(['xcrun', 'xcresulttool', 'get', 'test-results', 'summary',
@@ -133,6 +151,56 @@ def xctest_result_markers(path):
                         'crashed': 'crashed', 'noTests': 'no tests were found',
                         'bundleLoadFailed': 'test bundle could not be loaded'}.items():
         result[key] = marker in raw
+    failures = data.get('testFailures', []) if isinstance(data, dict) else []
+    messages, identifier = [], None
+    if isinstance(failures, list):
+        for item in failures[:3]:
+            if not isinstance(item, dict):
+                continue
+            candidate = next((item.get(key) for key in ('testIdentifierString', 'testIdentifier', 'testName')
+                              if isinstance(item.get(key), str)), None)
+            if isinstance(candidate, str) and len(candidate) <= 300:
+                identifier = candidate
+                if 'RunnerTests/' in candidate:
+                    result['failureTestIdentifier'] = 'RunnerTests.' + sanitized_failure(candidate.split('RunnerTests/', 1)[1], private_values)
+                else:
+                    result['failureTestIdentifier'] = sanitized_failure(candidate, private_values)
+            for field in ('failureText', 'message', 'issueType'):
+                value = sanitized_failure(item.get(field), private_values)
+                if value and value not in messages:
+                    messages.append(value)
+    if identifier:
+        detail = subprocess.run(['xcrun', 'xcresulttool', 'get', 'test-results', 'test-details',
+                                 '--path', str(path), '--test-id', identifier, '--format', 'json'],
+                                capture_output=True, timeout=60)
+        if detail.returncode == 0:
+            try:
+                detail_data = json.loads(detail.stdout)
+            except (ValueError, UnicodeError):
+                detail_data = None
+            def collect(value):
+                if isinstance(value, dict):
+                    for key, child in value.items():
+                        if key in ('failureText', 'message', 'issueType') and isinstance(child, str):
+                            clean = sanitized_failure(child, private_values)
+                            if clean and clean not in messages:
+                                messages.append(clean)
+                        elif key in ('failureMessages', 'issues') and isinstance(child, list):
+                            for issue in child[:10]:
+                                if isinstance(issue, str):
+                                    clean = sanitized_failure(issue, private_values)
+                                    if clean and clean not in messages:
+                                        messages.append(clean)
+                                else:
+                                    collect(issue)
+                        elif isinstance(child, (dict, list)):
+                            collect(child)
+                elif isinstance(value, list):
+                    for child in value[:30]:
+                        collect(child)
+            collect(detail_data)
+    if messages:
+        result['failureReasons'] = messages[:2]
     return result
 
 
@@ -343,7 +411,8 @@ def run(app, output, env):
         if private:
             report['flutterLogMarkers'] = log_diagnostics(private / 'flutter-private.log')
             try:
-                report['xctestResult'] = xctest_result_markers(private / 'test-result.xcresult')
+                report['xctestResult'] = xctest_result_markers(private / 'test-result.xcresult',
+                    (fixture.password, fixture.username, fixture.fingerprint, str(private), str(app), str(base)))
             except (OSError, subprocess.TimeoutExpired):
                 report['xctestResult'] = {'resultBundlePresent': True, 'summaryReadable': False}
         report['protocol'] = fixture.snapshot()

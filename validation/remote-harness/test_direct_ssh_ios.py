@@ -101,6 +101,22 @@ class IosDirectSshTests(unittest.TestCase):
             self.assertTrue(result['launchFailed'])
             self.assertNotIn('secret', str(result))
 
+    def test_xctest_failure_details_are_bounded_and_redacted(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result_path = Path(temp) / 'fixture.xcresult'; result_path.mkdir()
+            summary = {'totalTestCount': 1, 'failedTests': 1, 'testFailures': [{
+                'testIdentifier': 'RunnerTests/testExample',
+                'failureText': 'Expected false but got true; password=secret123 /private/user/path fixture 127.0.0.1'}]}
+            detail = {'failureMessages': ['Failed to launch because secret123 was invalid']}
+            responses = [subprocess.CompletedProcess([], 0, json.dumps(value).encode(), b'')
+                         for value in (summary, detail)]
+            with patch.object(runner.subprocess, 'run', side_effect=responses):
+                result = runner.xctest_result_markers(result_path, ('secret123', 'fixture', '/private/user'))
+            self.assertEqual(len(result['failureReasons']), 2)
+            self.assertIn('Expected false', result['failureReasons'][0])
+            for secret in ('secret123', 'fixture', '/private/user', '127.0.0.1'):
+                self.assertNotIn(secret, str(result))
+
     def test_generated_xctest_scaffold_is_exact_and_one_shot(self):
         with tempfile.TemporaryDirectory() as temp:
             app = Path(temp)

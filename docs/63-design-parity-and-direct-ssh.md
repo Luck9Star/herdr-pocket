@@ -22,7 +22,7 @@
 | 证据层 | 已验证 | 范围限制 |
 | --- | --- | --- |
 | Tauri / macOS 原生 debug UI | 从“添加主机 → 普通 SSH”访问临时 loopback SSH；初次 Ed25519 指纹与夹具一致；确认后密码认证、`xterm-256color` PTY；更换 key 后旧 pin 被拒，重新探测并确认新 pin 后连接；键入 `hp-check` 看见绿色 ANSI `POCKET-SSH-OK`；最终原生复验还确认错误密码显示中文认证失败，正确密码后可输入；服务端记录 `pty xterm-256color (80,24)`、`resize 106 24`、`check_received`、`closed`；进入设置再返回保留同一会话，断开后输入禁用并须重填凭据 | 通过原生窗口无障碍操作；本次原生 UI 用密码，未据此声称私钥 UI 或手机通过。CUA 截图保留在本次聊天，不把下方 Widget 图冒充原生截图 |
-| Flutter / macOS arm64 原生 debug UI | `a5082d0` 云构建归档下载后，改为唯一 bundle ID，保留六项 entitlement 并本机 ad-hoc 重签隔离配置；从生产首页进入普通 SSH，核对 RSA SHA-512 算法与 SHA256 指纹、密码连接，通过实际物理窗口输入 `hp-check` / Return，看见绿色 `POCKET-ANDROID-SSH-OK`，点击断开后凭据清空。独立服务端确认两次连接全部关闭，PTY 从 80×24 改为 95×33 | 实际 Mac 窗口；回显沿用夹具共用标记，不是 Android 运行。修改 bundle ID / 本地重签的 debug 包，不代表原签名发布包、私钥 UI 或系统公证验收 |
+| Flutter / macOS arm64 原生 debug UI | `a5082d0` 云构建归档下载后，改为唯一 bundle ID，保留六项 entitlement 并本机 ad-hoc 重签隔离配置；从生产首页进入普通 SSH，核对 RSA SHA-512 算法与 SHA256 指纹、密码连接，通过实际物理窗口输入 `hp-check` / Return，看见绿色 `POCKET-ANDROID-SSH-OK`，点击断开后凭据清空。独立服务端确认两次连接全部关闭，PTY 从 80×24 改为 95×33 | 实际 Mac 窗口；回显沿用夹具共用标记，不是 Android 运行。修改 bundle ID / 本地重签的 debug 包，该次未测试私钥；不代表原签名发布包或系统公证验收 |
 | Rust 实际 SSH / OS PTY | 7 项常规 shell 测试：临时 Ed25519 和 RSA SHA-256/512 server、密码/私钥、真实 `/bin/sh`、双向 ANSI 字节；真实 `stty size` 从 24×80 改到 37×117；双会话隔离、退出码 7；pin/auth/PTY/shell 失败；握手/认证/活动会话取消；精确输出 ack、排队输入回执超时退休与清理；RSA 用户签名核对与 RSA/SHA1 服务端在认证前拒绝。另显式执行 RSA-only Paramiko 互操作 1 项。完整 Rust 库 103 项与 CLI 1 项通过 | 自建 loopback、临时密钥和隔离 HOME；不访问个人 SSH 凭据或真实主机。其他 key 算法、keyboard-interactive/MFA 未实测；外部 Paramiko 用例默认 ignored，已单独补跑 |
 | Flutter 普通 SSH runner | runner 执行 5 项：显式指纹确认与空凭据门槛；密码认证、实际 PTY/shell 与后台断开；旧 pin 在认证前拒绝；加密私钥认证；正常导航返回与销毁 | [runner](../validation/flutter/tool/direct_ssh_fixture_runner.py) 与[测试夹具](../validation/flutter/test/direct_ssh_fixture.py)；不属于手机真机或原生 Tauri 证据 |
 | Flutter S01–S05 与安全回归冻结批次 | Flutter 3.47.9 临时工程：完整套 **521 passed / 4 skipped / 0 failed**；`flutter analyze --no-pub` 无问题。新增 320/390/1200 宽度的配对步骤、指纹可达和三模切换不发送字节检查；选择文本与字体诊断仍撤销旧输入，关闭后不恢复发送 | 使用合成 adapter 的实际 Flutter Widget 引擎渲染；4 个跳过项不计通过；不覆盖随后独立开发的 S06 |
@@ -31,7 +31,11 @@ Tauri 原生 debug app 使用隔离标识 `dev.herdrpocket.acceptance20261115`�
 
 Flutter macOS 归档来源为 [Actions 43669066267](https://github.com/Luck9Star/herdr-pocket/actions/runs/43669066267)、工件 `14143937188`，`flutter-macos-debug.tar.gz` 的 SHA256 已核对为 `6212b8523c7fcec5b8bbd5a688117791a42f43e046a1902065205051c2bb3561`。本机操作的[服务端脱敏报告](evidence/design-parity-20261115/flutter-macos-native-a5082d0.json)只含认证、PTY、输入标记、关闭布尔与尺寸计数；操作截图保留在聊天，不将 Widget 图冒充原生窗口图。
 
-普通 SSH 的 RSA 兼容增量也已从原生 macOS 窗口独立复验：纯 RSA2048 Paramiko、核对 SHA256 指纹、密码登录、输入 `hp-check` 后看到绿色 `POCKET-ANDROID-SSH-OK`，点击断开后服务端记录 `sessionClosed`。窗口缩放让服务端实际收到 80×24 → 106×28 → 106×30 → 104×27 → 104×20 → 104×19 → 106×19，包括列数相同而行数改变。该次使用前端 `f29ea6b` 与 Rust 生产文件 blob `a9e9792` / `502548b`，已纳入功能快照 `621b793`；原生私钥输入未验证，Android 范围另见下文。
+另以本机隔离 Flutter candidate bundle `dev.herdrpocket.axcandidate` 测试私钥入口：连接只监听 `127.0.0.1` 的[合成 SSH 夹具](../validation/flutter/test/direct_ssh_fixture.py)，界面显示的 RSA `rsa-sha2-512` 主机指纹与独立计算一致；明确确认后，使用有口令保护的临时 OpenSSH Ed25519 用户私钥登录，看到中文 banner 并发送 `key-ui-ok` 与回车。服务端记录公钥认证、PTY 80×24 → 95×33 和预期 10 字节；客户端明确断开后，表单中已无私钥或口令，临时目录已删除。该隔离包的 Dart kernel SHA256 为 `a3fe947ec0b350b66dc561b1a7687bfcec886466a38a10fe5a4ee93a39d17c7f`；其生成工程的 `direct_ssh_page.dart` blob `91fe77a24d9431d964d4c8468ca8efed7f30a1d5` 与分支同文件一致，不能据此声称整个源码或云端包一致。此项为本机 debug UI 和合成服务验证，不包含手机、其他私钥格式或正式发布包。
+
+同一类隔离 Mac AX 检查发现：私钥口令字段获焦时，调查工具从系统可访问性树中的普通文本输入节点读回了合成测试口令；焦点移至其他字段时还观察到值挂在错误输入组。测试值只在内存中使用且已清理，没有使用个人秘密。Flutter Widget 层的口令字段启用 `obscureText`；使用合成值核对获焦与失焦状态，其可编辑语义节点均标记 `isObscured` 且语义值不含原文。固定引擎的 macOS 文本输入源码存在将活动编辑模型原文交给原生 field editor 的路径，与现象相符，但尚不足以单独证明根因或其他辅助技术的行为；系统 AX 层的遮罩与输入节点归属仍待修复和独立复验。多行私钥 PEM 输入本身用于明文编辑，不应与口令遮罩等同。
+
+普通 SSH 的 RSA 兼容增量也已从原生 macOS 窗口独立复验：纯 RSA2048 Paramiko、核对 SHA256 指纹、密码登录、输入 `hp-check` 后看到绿色 `POCKET-ANDROID-SSH-OK`，点击断开后服务端记录 `sessionClosed`。窗口缩放让服务端实际收到 80×24 → 106×28 → 106×30 → 104×27 → 104×20 → 104×19 → 106×19，包括列数相同而行数改变。该次使用前端 `f29ea6b` 与 Rust 生产文件 blob `a9e9792` / `502548b`，已纳入功能快照 `621b793`；该次 Tauri 原生私钥输入未验证，Android 范围另见下文。
 
 Rust 仅新增 russh 的独立 `rsa` feature，仍关闭默认 features 并保留 `ring`；普通 SSH 探测和连接禁止协商旧 RSA/SHA1，RSA 私钥采用服务端支持的 SHA-256/512。公钥 pin 的 `ssh-rsa` 前缀表示公钥编码，并不表示允许 SHA1 签名。三个消费方锁文件同步固定新增依赖，未修改 vendored russh；herdr 配对仍按原 Ed25519 身份验证。测试夹具的子进程由专用线程从创建到回收持有，取消清理继续以 3 秒内连接和子进程计数归零验收。
 
@@ -42,6 +46,10 @@ Rust 仅新增 russh 的独立 `rsa` feature，仍关闭默认 features 并保�
 - S01：看板、终端、网络、设置四个入口；普通 SSH 与 herdr 配对可由正常首页进入。
 - S02–S04：显示实际 pane 标签、观察/逐键/草稿三态、安全提示、终端文本/字体工具和辅助键。切换模式本身不发送字节；草稿优先编辑，发送仍须原目标预览确认，换行不会被删除或额外补回车。
 - S05：将资料导入、目标核验、主机指纹卡、创建设备身份、主机响应审查与独立连接验证组织为步骤；保留取消、撤销边界和稳定测试 key。核验框不会因仅粘贴资料而自动勾选。
+
+Flutter S18 隐藏标签显示最后一次实际终端画面的时间；尚未收到帧时显示“尚无终端画面”。时间与具体 pane/terminal 绑定，返回或主动恢复不会制造新时间，只有接受新画面后更新。390×844 的双标签合成 adapter Widget 回归覆盖隐藏、迟到帧、恢复、新 full 和无帧状态；输入许可仍须等待新 full 并显式选择，未据此声称手机真机或真实 SSH 中的该时间显示已验收。
+
+Tauri `f1d155d` 的 S08/S09/S18 界面回归在当前会话显示待核实的原目标、提交时间和只读内容；改变目标后仅保留只读审查，不自动补发，须返回原目标、取得新 full 并人工确认才可继续。隐藏标签显示实际最后帧时间；本地前端测试 586 项和构建通过。[未知发送](evidence/design-parity-20261115/tauri-s08-unknown-390.png)、[隐藏暂停](evidence/design-parity-20261115/tauri-s18-paused-390.png)与[恢复等待](evidence/design-parity-20261115/tauri-s18-resuming-390.png)是 390 宽合成资料截图，不是设备或真实远端验证。
 
 以下均为 **390×844、DPR 1** 的实际 Widget 渲染，使用真实字体和合成资料；没有个人凭据。S01 来自看板导航测试，S02–S05 来自[本轮可达性与截图测试](../validation/flutter/test/herdr_workflow_visual_test.dart)。它们用于设计与界面对照，不证明真实 SSH 或手机设备。
 

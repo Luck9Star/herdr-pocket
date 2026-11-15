@@ -91,7 +91,14 @@ class RelayTests(unittest.TestCase):
         config['ownerPids']=dict.fromkeys(relay.ROLES,123)
         with patch.object(relay.os,'stat',side_effect=fake_stat), patch.object(relay.subprocess,'run',return_value=subprocess.CompletedProcess([],0,lines,b'')):
             relay._verify_owned_listeners(config)
-        for altered in (lines.replace(b'127.0.0.1:11001',b'0.0.0.0:11001'), lines.replace(b'pid=123',b'pid=124')):
+        scoped = lines.replace(b'127.0.0.1:11003', b'127.0.0.1%lo:11003')
+        with patch.object(relay.os,'stat',side_effect=fake_stat), patch.object(relay.subprocess,'run',return_value=subprocess.CompletedProcess([],0,scoped,b'')):
+            checks = relay._verify_owned_listeners(config)
+            self.assertTrue(checks['easytier']['samePortDeviceBoundLoopback'])
+            self.assertTrue(checks['easytier']['exactListenerOwnedByPid'])
+        for altered in (lines.replace(b'127.0.0.1:11001',b'0.0.0.0:11001'), lines.replace(b'pid=123',b'pid=124'),
+                        lines.replace(b'127.0.0.1:11001',b'127.0.0.1%hp-dummy:11001'),
+                        lines.replace(b'127.0.0.1:11001',b'192.0.2.1%lo:11001')):
             with patch.object(relay.os,'stat',side_effect=fake_stat), patch.object(relay.subprocess,'run',return_value=subprocess.CompletedProcess([],0,altered,b'')):
                 with self.assertRaises(relay.RelayError) as caught: relay._verify_owned_listeners(config)
                 self.assertEqual(set(caught.exception.listener_checks), set(relay.ROLES))

@@ -225,13 +225,14 @@ class AndroidDualOverlaySession:
             self.report['relayFailure'] = str(error) if str(error) in allowed else 'controlled_relay_failed'
             checks = getattr(error, 'listener_checks', None)
             keys = {'exactLoopbackListener', 'expectedPidVisible', 'exactListenerOwnedByPid',
-                    'samePortListener', 'samePortMappedLoopback', 'samePortWildcard', 'samePortIPv6Loopback'}
+                    'samePortDeviceBoundLoopback', 'samePortListener', 'samePortMappedLoopback', 'samePortWildcard', 'samePortIPv6Loopback'}
             if (isinstance(checks, dict) and set(checks) == {'control', 'derp', 'easytier'}
                     and all(isinstance(value, dict) and set(value) == keys
                         and all(type(flag) is bool for flag in value.values()) for value in checks.values())):
                 self.report['listenerChecks'] = checks
             raise
         self.report['relayRoles'] = len(self.relay.ports)
+        self.report['listenerChecks'] = self.relay.listener_checks
         if self.relay_only:
             self.report['stage'] = 'host-relay-only-ready'
             return

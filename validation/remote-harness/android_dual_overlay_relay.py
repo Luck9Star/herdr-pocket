@@ -95,7 +95,7 @@ def _verify_owned_listeners(config):
         lines = result.stdout.decode('utf-8', 'strict').splitlines()
         checks = {}
         for role in ROLES:
-            endpoint = re.compile(r'(?:^|\s)127\.0\.0\.1:' + str(config[role]) + r'(?:\s|$)')
+            endpoint = re.compile(r'(?:^|\s)127\.0\.0\.1(?:%lo)?:' + str(config[role]) + r'(?:\s|$)')
             owner = re.compile(r'\bpid=' + str(config['ownerPids'][role]) + r'(?:,|\))')
             checks[role] = {'exactLoopbackListener': any(endpoint.search(line) is not None for line in lines),
                 'expectedPidVisible': any(owner.search(line) is not None for line in lines),
@@ -103,6 +103,7 @@ def _verify_owned_listeners(config):
             local = [line.split()[3] for line in lines if len(line.split()) >= 4
                      and line.split()[3].endswith(':' + str(config[role]))]
             checks[role].update(samePortListener=bool(local),
+                samePortDeviceBoundLoopback=any(value.startswith('127.0.0.1%lo:') for value in local),
                 samePortMappedLoopback=any(value.startswith('[::ffff:127.0.0.1]:') for value in local),
                 samePortWildcard=any(value.startswith(('0.0.0.0:', '[::]:', '*:')) for value in local),
                 samePortIPv6Loopback=any(value.startswith('[::1]:') for value in local))
@@ -110,6 +111,7 @@ def _verify_owned_listeners(config):
             error = RelayError('owned_listener_required')
             error.listener_checks = checks
             raise error
+        return checks
     except (OSError, UnicodeError, subprocess.TimeoutExpired):
         raise RelayError('listener_check_failed') from None
 
@@ -185,7 +187,7 @@ class AndroidDualOverlayRelay:
         self._started = True
         try:
             self._check(self.config['namespace'])
-            self._check_listeners(self.config)
+            self.listener_checks = self._check_listeners(self.config)
             forbidden = set(self.config['sshPorts']) | {self.config[role] for role in ROLES}
             for role in ROLES:
                 for _ in range(16):
@@ -229,7 +231,7 @@ class AndroidDualOverlayRelay:
         try:
             if self._stop.is_set():
                 return
-            self._check_listeners(self.config)
+            self.listener_checks = self._check_listeners(self.config)
             if self._stop.is_set():
                 return
             process = self._spawn(port)

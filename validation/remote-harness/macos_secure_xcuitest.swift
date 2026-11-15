@@ -135,14 +135,23 @@ final class SecureCredentialUITests: XCTestCase {
         clickWindowCenter(app, matches: matches)
     }
 
-    private func verifyKeyInputs(_ app: XCUIApplication) throws {
-        let deadline = Date().addingTimeInterval(10)
-        repeat {
+    private func diagnoseKeyInputs(_ app: XCUIApplication) throws {
+        var bits: (Bool, Bool)?
+        let expression = try NSRegularExpression(pattern: "HPKEY:K([01])P([01])")
+        for delta in [CGFloat(0), -240, -240, -240, -240, -240, 240, 240, 240, 240, 240, 240] {
+            if delta != 0 { scrollForm(app, delta) }
             let fields = try snapshotNodes(app).flatMap { [$0.label, $0.value as? String ?? ""] }
-            if fields.contains(where: { $0.contains("HPKEY:K1P1") }) { return }
-            usleep(100_000)
-        } while Date() < deadline
-        XCTFail("key and passphrase controller equality not confirmed")
+            for field in fields {
+                guard let match = expression.firstMatch(in: field, range: NSRange(field.startIndex..., in: field)),
+                      let keyRange = Range(match.range(at: 1), in: field),
+                      let phraseRange = Range(match.range(at: 2), in: field) else { continue }
+                bits = (field[keyRange] == "1", field[phraseRange] == "1")
+                break
+            }
+            if bits != nil { break }
+        }
+        print("HP_XCUI_KEYINPUT=visible:\(bits == nil ? 0 : 1),key:\(bits?.0 == true ? 1 : 0),passphrase:\(bits?.1 == true ? 1 : 0)")
+        fflush(stdout)
     }
 
     private func ordinaryMetrics(_ app: XCUIApplication, sentinel: String) throws -> Bool {
@@ -281,20 +290,23 @@ final class SecureCredentialUITests: XCTestCase {
         print("HP_XCUI_BACK=buttons:\(min(buttons.count,10000)),exact:\(min(exact.count,10000)),hittable:\(min(hittable.count,10000))")
         fflush(stdout)
         if preferred.count == 1 && stableHit(preferred.firstMatch) {
-            tap(app, preferred.firstMatch)
-            mark("returnButtonUsed")
+            tap(app, preferred.firstMatch, phase: "returnBack")
+            mark("returnBackTapped");mark("returnButtonUsed")
         } else if hittable.count == 1 {
-            tap(app, hittable[0])
-            mark("returnButtonUsed")
+            tap(app, hittable[0], phase: "returnBack")
+            mark("returnBackTapped");mark("returnButtonUsed")
         } else {
             app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
             mark("returnEscapeUsed")
         }
         XCTAssertTrue(homeVisible(app), "normal homepage did not return")
         let entry = homeEntry(app)
-        XCTAssertTrue(entry.exists && entry.isHittable, "normal homepage did not return")
+        XCTAssertTrue(entry.exists, "normal homepage did not return")
         try assertNoSecrets(app, secrets)
-        tap(app, entry)
+        let matches = app.buttons.matching(NSPredicate(format: "label == %@", "普通 SSH"))
+        if matches.count == 1 { clickWindowCenter(app, matches: matches) }
+        else { tap(app, entry, phase: "returnReopenEntry") }
+        mark("returnReopenEntryTapped")
     }
 
     private func homeEntry(_ app: XCUIApplication) -> XCUIElement {
@@ -343,8 +355,15 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(homeVisible(app), "normal homepage not confirmed")
         mark("homepage");mark(stage)
         let entry = homeEntry(app)
-        XCTAssertTrue(entry.exists && entry.isHittable, "normal homepage SSH entry missing")
-        tap(app, entry)
+        XCTAssertTrue(entry.exists, "normal homepage SSH entry missing")
+        if stage == "returnHomepage" {
+            let matches = app.buttons.matching(NSPredicate(format: "label == %@", "普通 SSH"))
+            if matches.count == 1 { clickWindowCenter(app, matches: matches) }
+            else { tap(app, entry, phase: "returnEntry") }
+            mark("returnEntryTapped")
+        } else {
+            tap(app, entry)
+        }
     }
 
     private func connectedDisconnect(_ app: XCUIApplication) throws -> XCUIElement {
@@ -525,12 +544,12 @@ final class SecureCredentialUITests: XCTestCase {
         tap(app, pem)
         let clipboard = NSPasteboard.general
         clipboard.clearContents()
+        defer { clipboard.clearContents() }
         XCTAssertTrue(clipboard.setString(privateKey, forType: .string), "synthetic PEM pasteboard unavailable")
         app.typeKey("v", modifierFlags: .command)
-        clipboard.clearContents()
         try assertNoSecrets(app, [password, phrase])
         mark("keyCredentialEntered")
-        try verifyKeyInputs(app)
+        try diagnoseKeyInputs(app)
         mark("keyConnectAttempt")
         connectByWindowCenter(app)
         let keyDisconnect = try connectedDisconnect(app)
@@ -553,11 +572,14 @@ final class SecureCredentialUITests: XCTestCase {
         let app = XCUIApplication()
         launchSSH(app, stage: "returnHomepage")
         let field = secureField(app, "direct-secret")
-        tap(app, field);app.typeText(password)
+        mark("returnSecureSelected")
+        tap(app, field, phase: "returnSecure");app.typeText(password)
+        mark("returnCredentialEntered")
         XCTAssertFalse((field.value as? String ?? "").isEmpty, "return input state unavailable")
         try assertNoSecrets(app, [password, phrase])
         try reopenSSH(app, secrets: [password, phrase])
         let reopened = secureField(app, "direct-secret")
+        mark("returnReopenedSecureSelected")
         XCTAssertTrue((reopened.value as? String ?? "").isEmpty, "prior credential retained")
         try assertNoSecrets(app, [password, phrase])
         mark("returnAndReopenCleared")

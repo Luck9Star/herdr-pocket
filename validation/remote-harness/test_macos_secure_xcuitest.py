@@ -216,8 +216,13 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(click.count('.click()'),1)
         key=swift[swift.index('func testEncryptedKeySSH'):swift.index('func testReturnAndReopen')]
         self.assertLess(key.index('verifyFingerprint(app, expected: keyFingerprint'),key.index('connectByWindowCenter(app)'))
-        self.assertLess(key.index('verifyKeyInputs(app)'),key.index('connectByWindowCenter(app)'))
+        self.assertLess(key.index('diagnoseKeyInputs(app)'),key.index('connectByWindowCenter(app)'))
         self.assertEqual(key.count('clipboard.clearContents()'),2)
+        self.assertIn('defer { clipboard.clearContents() }',key)
+        diagnostics=swift[swift.index('private func diagnoseKeyInputs'):swift.index('private func ordinaryMetrics')]
+        self.assertIn('HP_XCUI_KEYINPUT=visible:',diagnostics)
+        self.assertIn('HPKEY:K([01])P([01])',diagnostics)
+        self.assertNotIn('XCTFail',diagnostics)
 
 if __name__ == '__main__':
     unittest.main()

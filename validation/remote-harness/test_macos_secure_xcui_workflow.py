@@ -63,6 +63,12 @@ for name, peer in (('password', 'password'), ('key', 'encryptedKey')):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             env = {**os.environ, 'RUNNER_TEMP': tmp}
+            (root / 'macos-secure-private.log').write_text(
+                'HP_XCUI_KEYINPUT=visible:1,key:1,passphrase:0 secret-data\n'
+                'HP_XCUI_KEYINPUT=visible:0,key:0,passphrase:0\n'
+                'HP_XCUI_KEYINPUT=visible:1,key:secret-data,passphrase:1\n'
+                'HP_XCUI_STAGE=returnCredentialEntered\n'
+                'HP_XCUI_HIT=phase:returnSecure,exists:1,enabled:1,hittable:0,inside:1\n')
             for password, key in ((True, False), (False, True), (True, True)):
                 with self.subTest(password=password, key=key):
                     (root / 'macos-secure-private-live.json').write_text(json.dumps({'password': password, 'key': key}))
@@ -73,6 +79,12 @@ for name, peer in (('password', 'password'), ('key', 'encryptedKey')):
                     self.assertIs(report['encryptedKeyPeerCloseObservedDuringDisconnectWindow'], key)
                     self.assertIs(report['peerCloseObservedDuringDisconnectWindows'], password and key)
                     self.assertEqual(report['status'], 'failed')
+                    self.assertEqual(report['keyInputMetrics'], [
+                        {'visible': True, 'key': True, 'passphrase': False},
+                        {'visible': False, 'key': False, 'passphrase': False}])
+                    self.assertTrue(report['progress']['returnCredentialEntered'])
+                    self.assertEqual(report['hitMetrics'][0]['phase'], 'returnsecure')
+                    self.assertNotIn('secret-data', output.read_text())
 
 
 if __name__ == '__main__':

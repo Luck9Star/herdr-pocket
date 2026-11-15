@@ -240,12 +240,20 @@ class DualOverlayUiSteps {
     await existing.tapStablePointer(tester, find.byKey(const ValueKey('pair-create')));
     final request = find.byKey(const ValueKey('pair-request'));
     await existing.until(tester, () => request.evaluate().length == 1);
-    existing.publish(exchange, '$role-request.json', tester.widget<SelectableText>(request).data!);
+    final requestWire = tester.widget<SelectableText>(request).data!;
+    final requestData = jsonDecode(requestWire) as Map<String, dynamic>;
+    existing.publish(exchange, '$role-request.json', requestWire);
     await stage('${role}_pair_review');
     final response = await awaitFile('$role-response.json');
     await enter('pair-response', response);
     await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
-    expect(find.byKey(const ValueKey('pair-response-preview')), findsOneWidget);
+    final responsePreview = find.byKey(const ValueKey('pair-response-preview'));
+    expect(responsePreview, findsOneWidget);
+    final responseText = tester.widget<Text>(responsePreview).data!;
+    for (final field in [requestData['request_id'], requestData['account'], expectedFingerprint,
+      pairingFingerprint(requestData['public_key'] as String)]) {
+      expect(responseText, contains(field.toString()));
+    }
     final source = await existing.stableReviewCheckbox(tester, 'pair-source-review');
     await tester.tap(source); await tester.pump();
     await existing.tapStablePointer(tester, find.byKey(const ValueKey('pair-accept')));

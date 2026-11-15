@@ -288,7 +288,8 @@ def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout
                 expected = {'status': 'passed', 'firstStop': first_stop, 'twoReviewedTargets': True,
                     'observedBothUpdates': True, 'responseMarkersMatched': True,
                     'explicitTsAuthorization': True, 'newFullAfterResume': True,
-                    'stoppedTabRetired': True, 'initialInputsAccepted': True, 'survivorInputAccepted': True}
+                    'stoppedTabRetired': True, 'survivorStopped': True,
+                    'initialInputsAccepted': True, 'survivorInputAccepted': True}
                 if value != expected:
                     raise DualOverlayDeviceFailure('device_result_invalid')
                 try:
@@ -307,6 +308,22 @@ def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout
             raise DualOverlayDeviceFailure('device_test_exited_early')
         time.sleep(0.25)
     raise DualOverlayDeviceFailure('device_run_timeout')
+
+
+def sample_ts_control(session):
+    """Return only bounded public categories from the fixture's read-only counters."""
+    keys = ('keyRequests', 'noiseRequests', 'registerRequests', 'mapRequests',
+            'tlsHandshakeErrors', 'authCompletions')
+    try:
+        event = session.control.call({'op': 'ts_diagnostics'})
+        if (not isinstance(event, dict) or set(event) != {'event', 'secondClientRegistered', *keys}
+                or event.get('event') != 'ts_diagnostics' or type(event.get('secondClientRegistered')) is not bool
+                or any(type(event.get(key)) is not int or not 0 <= event[key] <= 1000000 for key in keys)):
+            return {'available': False}
+        return {'available': True, **{key: event[key] for key in keys},
+                'secondClientRegistered': event['secondClientRegistered']}
+    except Exception:
+        return {'available': False}
 
 
 def installed_apk_evidence(device, bundle, destination, verify):
@@ -394,6 +411,7 @@ def run_device(args, env):
                     session = AndroidDualOverlaySession(args.host_bundle, work, host_source=args.host_source,
                         source_checkout=args.host_checkout, device='emulator-5554', lifetime=900)
                     with session:
+                        case['tsControlBefore'] = sample_ts_control(session)
                         case['stage'] = 'private_setup'
                         prepare_private_ca('adb', 'emulator-5554', session.read_ca(), run=subprocess.run)
                         material = session.materials
@@ -426,6 +444,7 @@ def run_device(args, env):
                                         try: os.killpg(process.pid, signal.SIGKILL)
                                         except ProcessLookupError: pass
                                         process.wait(timeout=10)
+                                case['tsControlAfter'] = sample_ts_control(session)
                         installed = private / (first_stop + '-installed.apk')
                         installed_evidence = installed_apk_evidence(device, args.qa_bundle, installed, dual_overlay_apk.verify)
                         case['installedApkSha256'] = installed_evidence['apkSha256']

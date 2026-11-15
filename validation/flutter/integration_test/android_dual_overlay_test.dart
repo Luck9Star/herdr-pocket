@@ -84,6 +84,7 @@ void main() {
     await steps.commitCharacter(survivor, survivor == 'et' ? 'e' : 't');
     await steps.stage('final_audit');
     expect(await steps.awaitFile('final-audit.txt'), 'accepted');
+    await steps.stopNetwork(survivor, survivor == 'et' ? etNetwork : tsNetwork);
     final result = {'status': 'passed', 'firstStop': firstStop,
       'twoReviewedTargets': true, 'observedBothUpdates': true, 'responseMarkersMatched': true,
       'explicitTsAuthorization': true,

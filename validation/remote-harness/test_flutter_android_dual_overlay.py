@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from flutter_android_dual_overlay import (
-    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints, installed_apk_evidence, safe_ui_failure,
+    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints, installed_apk_evidence, safe_ui_failure, sample_ts_control,
 )
 
 
@@ -179,6 +179,20 @@ class HostStageTest(unittest.TestCase):
             write.assert_not_called()
 
 
+class SafeTsControlTest(unittest.TestCase):
+    def test_only_bounded_fixed_fields_are_retained(self):
+        fields = {'event': 'ts_diagnostics', 'secondClientRegistered': False,
+                  **{key: 0 for key in ('keyRequests', 'noiseRequests', 'registerRequests', 'mapRequests',
+                                       'tlsHandshakeErrors', 'authCompletions')}}
+        control = type('Control', (), {'call': lambda self, request: fields})()
+        session = type('Session', (), {'control': control})()
+        self.assertTrue(sample_ts_control(session)['available'])
+        fields['unexpected'] = 'secret'
+        self.assertEqual(sample_ts_control(session), {'available': False})
+        fields.pop('unexpected'); fields['keyRequests'] = True
+        self.assertEqual(sample_ts_control(session), {'available': False})
+
+
 class SafeUiFailureTest(unittest.TestCase):
     def test_only_fixed_stage_and_class_are_published(self):
         self.assertEqual(safe_ui_failure(b'{"stage":"et_identity_create","kind":"test_failure"}'),
@@ -206,7 +220,8 @@ class DeviceCheckpointTest(unittest.TestCase):
         result = {'status': 'passed', 'firstStop': 'et', 'twoReviewedTargets': True,
                   'observedBothUpdates': True, 'responseMarkersMatched': True,
                   'explicitTsAuthorization': True, 'newFullAfterResume': True,
-                  'stoppedTabRetired': True, 'initialInputsAccepted': True, 'survivorInputAccepted': True}
+                  'stoppedTabRetired': True, 'survivorStopped': True,
+                  'initialInputsAccepted': True, 'survivorInputAccepted': True}
         process = type('Process', (), {'poll': lambda self: None, 'wait': lambda self, timeout: 1})()
         def read(_adb, _serial, name, **_kwargs):
             return json.dumps(result).encode() if name == 'result.json' else next(stages)

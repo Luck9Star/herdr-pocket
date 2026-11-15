@@ -1,4 +1,4 @@
-//! Experimental in-memory, one-shot SSH reader. No credential discovery or terminal write API.
+//! Experimental in-memory SSH transports. Ordinary PTY shells require an explicit reviewed target.
 use base64ct::{Base64, Encoding};
 use russh::{
     ChannelMsg, Disconnect, client,
@@ -45,6 +45,7 @@ mod controlled;
 pub mod session_watch;
 pub mod dashboard_review;
 pub mod direct_observation;
+pub mod direct_shell;
 pub use controlled::{DashboardTarget, observe_interactive_controlled_target_with_dialer, ControlledInputHooks, ObservationAck, ObservationControl, ObservationPhase, ObservationSnapshot, observe_interactive_controlled_with_dialer};
 
 pub const CONFIG_LIMIT: usize = 32768;
@@ -523,9 +524,15 @@ async fn connect_pinned(
     config: &RemoteConfig, cancel: &Cancellation, audit: Arc<Audit>, expected: PublicKey,
     inactivity_timeout: Option<Duration>, dialer: &dyn transport::Dialer,
 ) -> Result<(client::Handle<Pinned>, Option<transport::OverlayRouteIdentity>)> {
+    connect_pinned_endpoint(&config.host, config.port, cancel, audit, expected, inactivity_timeout, dialer).await
+}
+async fn connect_pinned_endpoint(
+    host: &str, port: u16, cancel: &Cancellation, audit: Arc<Audit>, expected: PublicKey,
+    inactivity_timeout: Option<Duration>, dialer: &dyn transport::Dialer,
+) -> Result<(client::Handle<Pinned>, Option<transport::OverlayRouteIdentity>)> {
     let stream = tokio::select! { biased;
         _ = cancel.wait() => return Err("cancelled"),
-        result = timeout(Duration::from_secs(8), dialer.dial(config.host.clone(), config.port, cancel.clone())) => result.map_err(|_| "timeout")??,
+        result = timeout(Duration::from_secs(8), dialer.dial(host.to_owned(), port, cancel.clone())) => result.map_err(|_| "timeout")??,
     };
     let route = stream.route_identity();
     let settings = client::Config {

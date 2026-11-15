@@ -42,7 +42,21 @@ func getifaddrsInterfaces() ([]rawInterface, error) {
 	var raws []rawInterface
 	slots := map[string]int{}
 	for ifa := head; ifa != nil; ifa = ifa.ifa_next {
+		name := C.GoString(ifa.ifa_name)
+		slot, ok := slots[name]
+		if !ok {
+			slot = len(raws)
+			slots[name] = slot
+			raws = append(raws, rawInterface{
+				Name:  name,
+				Index: int(C.if_nametoindex(ifa.ifa_name)),
+				Flags: convertIfFlags(C.uint(ifa.ifa_flags)),
+			})
+		}
 		if ifa.ifa_addr == nil {
+			// Interface without any address: keep the entry so the state
+			// matches Go's enumeration, which lists address-less interfaces
+			// with an empty address set.
 			continue
 		}
 		var ip net.IP
@@ -64,17 +78,6 @@ func getifaddrsInterfaces() ([]rawInterface, error) {
 			}
 		default:
 			continue
-		}
-		name := C.GoString(ifa.ifa_name)
-		slot, ok := slots[name]
-		if !ok {
-			slot = len(raws)
-			slots[name] = slot
-			raws = append(raws, rawInterface{
-				Name:  name,
-				Index: int(C.if_nametoindex(ifa.ifa_name)),
-				Flags: convertIfFlags(C.uint(ifa.ifa_flags)),
-			})
 		}
 		if mask != nil {
 			raws[slot].Addrs = append(raws[slot].Addrs, &net.IPNet{IP: ip, Mask: mask})
@@ -104,6 +107,11 @@ func convertIfFlags(f C.uint) net.Flags {
 	}
 	if f&C.IFF_MULTICAST != 0 {
 		out |= net.FlagMulticast
+	}
+	// Go's Linux stack reports FlagRunning (go/src/net/interface_linux.go);
+	// keep the Bionic enumeration at parity with it.
+	if f&C.IFF_RUNNING != 0 {
+		out |= net.FlagRunning
 	}
 	return out
 }

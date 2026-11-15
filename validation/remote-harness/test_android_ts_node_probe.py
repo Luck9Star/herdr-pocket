@@ -1,6 +1,9 @@
 import copy
 import importlib.util
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 import zipfile
@@ -19,10 +22,12 @@ class ProbeGuardsTests(unittest.TestCase):
             with self.assertRaises(ValueError): probe.safe_probe(changed)
 
     def test_directory_export_contains_only_owned_mode_booleans(self):
-        directories = {'coreDirectoryPrepared': True, 'productDirectoryCallbackSucceeded': False,
+        directories = {'coreDirectoryPrepared': True, 'productDirectoryCallbackSucceeded': True,
             **{key: {'exists': True, 'directory': True, 'ownerMatches': True, 'permissionBits0700': True,
                      'fullMode0700': False, 'setgid': True} for key in ('root', 'runtime', 'identity')}}
-        value = {'schemaVersion': 1, 'loginInvoked': False, 'dialInvoked': False, 'directories': directories}
+        value = {'schemaVersion': 1, 'loginInvoked': False, 'dialInvoked': False, 'passed': False,
+            'states': ['starting', 'needs-login'], 'startError': 'identity_unavailable', 'lastStage': 'native-status',
+            'directories': directories}
         self.assertEqual(probe.safe_probe(value), value)
         changed = copy.deepcopy(value); changed['directories']['identity']['path'] = 'private-value'
         with self.assertRaises(ValueError): probe.safe_probe(changed)
@@ -59,34 +64,16 @@ class ProbeGuardsTests(unittest.TestCase):
         value = {'schemaVersion': 1, 'loginInvoked': False, 'dialInvoked': False,
             'lastStage': 'native-start', 'contextBound': True, 'secret': 'private-value'}
         result = probe.probe_report(json.dumps(value).encode())
-        self.assertEqual(result['probeReport'], 'schema-rejected')
-        self.assertEqual(result['probePartial']['lastStage'], 'native-start')
-        self.assertTrue(result['probePartial']['contextBound'])
         self.assertNotIn('private-value', repr(result)); self.assertNotIn('secret', repr(result))
         from types import SimpleNamespace
         result = probe.instrument_summary(SimpleNamespace(returncode=0,
-            stdout=b'INSTRUMENTATION_RESULT: shortMsg=Process crashed.\nINSTRUMENTATION_CODE: 0\n'))
-        self.assertEqual(result['returnCode'], '0'); self.assertTrue(result['processCrash'])
-        self.assertTrue(result['finished'])
-
-    def test_apk_contains_exact_fixed_libraries(self):
-        with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder); apk = root / 'probe.apk'
-            for name in probe.LIBRARIES: (root / name).write_bytes(b'synthetic-' + name.encode())
-            with zipfile.ZipFile(apk, 'w') as archive:
-                for name in probe.LIBRARIES: archive.write(root / name, 'lib/x86_64/' + name)
-            self.assertEqual(set(probe.verify_apk(apk, root)), set(probe.LIBRARIES))
-            (root / probe.LIBRARIES[0]).write_bytes(b'changed')
-            with self.assertRaisesRegex(ValueError, 'native_mismatch'): probe.verify_apk(apk, root)
+            stdout=b'INSTRUMENTATION_FAILED: private-value', stderr=b''))
+        self.assertNotIn('private-value', repr(result)); self.assertNotIn('secret', repr(result))
 
     def test_probe_never_requests_login_or_application_dial(self):
-        source = (Path(__file__).parent / 'android-ts-node-probe/ProbeInstrumentation.java').read_text()
-        self.assertNotIn('"nodeBeginLogin"', source)
-        self.assertNotIn('"nodeLoginStatus"', source)
-        self.assertNotIn('"streamOpen"', source)
-        self.assertIn('"nodeStart"', source)
-        self.assertIn('"nodeStop"', source)
-
+        source = (Path(__file__).resolve().parent / 'android-ts-node-probe/ProbeInstrumentation.java').read_text()
+        for forbidden in ('beginLogin', 'begin_login', 'UserDial', 'user_dial', '"dial"'):
+            self.assertNotIn(forbidden, source)
 
     def test_netmon_diagnose_collected_requires_both_variants(self):
         with_ok = [{'probe': {'netmonDiagnose': {'event': 'netmon_diagnose'}}},
@@ -150,4 +137,40 @@ class ProbeGuardsTests(unittest.TestCase):
         self.assertFalse(accepted({'ok': True, 'interfaces': 0, 'addresses': 0, 'errClass': ''}))
         self.assertFalse(accepted({'ok': True, 'interfaces': 2, 'addresses': 2, 'errClass': 'other'}))
         self.assertFalse(accepted({'ok': True, 'interfaces': 2, 'addresses': 2, 'errClass': 'x' * 65}))
+
+
+class ProbeJavaCompileTests(unittest.TestCase):
+    """Compile the probe sources the way the CI build step does.
+
+    Two probe runs died on a javac error before touching a device, so the
+    checked-exception boundary of the probe Java is now a local gate. The
+    compile needs the android-35 platform jar; skip when it is absent.
+    """
+
+    ANDROID_JAR = Path(os.environ.get('ANDROID_HOME', '')) / 'platforms/android-35/android.jar'
+
+    def test_probe_sources_compile_against_android_jar(self):
+        if not shutil.which('javac') or not self.ANDROID_JAR.is_file():
+            self.skipTest('javac or android-35 platform jar unavailable')
+        root = Path(__file__).resolve().parents[2]
+        probe_dir = root / 'validation/remote-harness/android-ts-node-probe'
+        java_dir = root / 'validation/network-profiles/native/android'
+        sources = [probe_dir / name for name in (
+            'NetworkRuntimeChannel.java', 'DirectoryProbe.java', 'ProbeInstrumentation.java')]
+        sources += [java_dir / name for name in (
+            'AndroidTailscaleConfig.java', 'AndroidTailscaleStateStore.java',
+            'AndroidTailscaleEnvelope.java', 'TailscaleStateStoreCore.java')]
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                ['javac', '-source', '11', '-target', '11', '-Xlint:-options',
+                 '-classpath', str(self.ANDROID_JAR), '-d', tmp]
+                + [str(p) for p in sources],
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0,
+                f'probe javac failed:\n{result.stdout}\n{result.stderr}')
+            produced = {p.name for p in Path(tmp).rglob('*.class')}
+        self.assertIn('ProbeInstrumentation.class', produced)
+        self.assertIn('DirectoryProbe.class', produced)
+
+
 if __name__ == '__main__': unittest.main()

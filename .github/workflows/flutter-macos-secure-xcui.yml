@@ -118,7 +118,7 @@ jobs:
               diagnostic={'file':'RunnerTests.swift','line':int(match.group(1)),'message':message}
               if message and diagnostic not in diagnostics: diagnostics.append(diagnostic)
               if len(diagnostics)==3: break
-          allowed={'fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted',
+          allowed={'fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','addressSentinel','portSentinel','usernameSentinel','keyPortSentinel','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted',
                    'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                    'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
           optional={'passwordValuePresent','passwordValueUnavailable','passphraseValuePresent','passphraseValueUnavailable'}
@@ -148,6 +148,7 @@ jobs:
           fixed += ['ordinary target fields are not readable']
           fixed += ['secure password input has no protected value','secure passphrase input has no protected value']
           fixed += ['ordinary sentinel not found in system accessibility values']
+          fixed += ['ordinary field sentinel not read back','ordinary field target not read back']
           fixed += ['private key editor missing','encrypted key session did not authenticate','passphrase not cleared after disconnect']
           fixed += ['form scroll target unavailable','requested control is not hittable','requested control is disabled']
           fixed_failures=[message for message in fixed if message in diagnostic_text]
@@ -164,6 +165,10 @@ jobs:
           secure_metrics=[{'phase':row[0],**dict(zip(('secure','text','other','id','label','secureLabel'),map(int,row[1:])))} for row in secure_metrics[:4]]
           fingerprints=re.findall(r'hp_xcui_fingerprint=phase:(password|encryptedkey),nodes:(\d{1,5}),prefix:(\d{1,5}),exact:(\d{1,5})',log)
           fingerprints=[{'phase':phase,'nodes':int(nodes),'sha256PrefixCount':int(prefix),'expectedExactCount':int(exact)} for phase,nodes,prefix,exact in fingerprints[:2]]
+          inputs=re.findall(r'hp_xcui_input=phase:(address|port|username|keyport),(sentinel|target):(\d{1,5})',log)
+          inputs=[{'phase':phase,'kind':kind,'exactCount':int(count)} for phase,kind,count in inputs[:8]]
+          targets=re.findall(r'hp_xcui_target=phase:(passwordbefore|passwordafter|keybefore|keyafter),bits:([01]{8}|missing)',log)
+          target_metrics=[{'phase':phase,**dict(zip(('hostMatches','passwordPortMatches','keyPortMatches','userMatches','valid','busy','foreground','probeFailed'),[c=='1' for c in bits]))} if bits!='missing' else {'phase':phase,'diagnosticMissing':True} for phase,bits in targets[:4]]
           metrics=re.findall(r'hp_xcui_metric=windows:(\d{1,5}),nodes:(\d{1,5}),buttons:(\d{1,5}),exact:(\d{1,5}),label:(\d{1,5})',log)
           metrics=[dict(zip(('windows','nodes','buttons','exact','label'),map(int,row))) for row in metrics[:2]]
           home_metrics=metrics[0] if metrics else {}
@@ -192,6 +197,7 @@ jobs:
                   'failureCategories':categories,'xcresultDetailsAvailable':details_available,'homeMetrics':home_metrics,
                   'fallbackHomeMetrics':metrics[1] if len(metrics)>1 else {},
                   'ordinaryMetrics':ordinary,'secureMetrics':secure_metrics,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
+                  'inputMetrics':inputs,'targetMetrics':target_metrics,
                   'progress':progress,'rawLogsUploaded':False}
           if not ok:
               report['errorCode']='xcui_accessibility_permission_missing' if permission else ('secure_field_not_identified' if 'native secure field missing from system tree' in log else ('xcui_test_or_environment_failed' if sys.argv[2]!='0' else ('xcui_test_not_executed' if not test_executed or not completed else ('secure_input_unproven' if not masking_verified else 'loopback_peer_evidence_incomplete'))))

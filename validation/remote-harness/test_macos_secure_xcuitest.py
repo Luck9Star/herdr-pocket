@@ -21,6 +21,8 @@ class ScaffoldTests(unittest.TestCase):
         (root / 'macos/Runner.xcodeproj/xcshareddata/xcschemes').mkdir(parents=True)
         (root / 'macos/RunnerTests').mkdir(parents=True)
         (root / 'macos/Runner').mkdir(parents=True)
+        (root / 'lib').mkdir()
+        (root / 'lib/direct_ssh_page.dart').write_text("          OutlinedButton(key: const ValueKey('direct-probe')\n")
         (root / '.herdr-generated-probe.json').write_text(json.dumps({'kind':'herdr-flutter-validation'}))
         (root / 'macos/Runner.xcodeproj/project.pbxproj').write_text(PROJECT)
         (root / 'macos/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme').write_text('<Scheme><TestAction><Testables><Testable parallelizable = "YES"/></Testables></TestAction></Scheme>')
@@ -56,6 +58,8 @@ class ScaffoldTests(unittest.TestCase):
             source=(root / 'macos/RunnerTests/RunnerTests.swift').read_text()
             self.assertNotIn('__HP_FIXTURE_BASE64__',source)
             self.assertNotIn('a'*32,source)
+            dart=(root/'lib/direct_ssh_page.dart').read_text()
+            self.assertIn('HPAX:H',dart);self.assertNotIn('a'*32,dart);self.assertNotIn('b'*32,dart)
 
     def test_unknown_project_or_missing_marker_is_not_modified(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -73,7 +77,7 @@ class ScaffoldTests(unittest.TestCase):
         script=textwrap.dedent(body)
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);fixture=root/'macos-secure-fixture';fixture.mkdir()
-            allowed=['fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted','passwordValuePresent','passphraseValuePresent',
+            allowed=['fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','addressSentinel','portSentinel','usernameSentinel','keyPortSentinel','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted','passwordValuePresent','passphraseValuePresent',
                      'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                      'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
             good_peer={k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}
@@ -102,6 +106,10 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertEqual(report['fingerprintMetrics'][0]['expectedExactCount'],0)
             self.assertNotIn('private fingerprint material',output.read_text())
+            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed\nHP_XCUI_TARGET=phase:passwordBefore,bits:10111010\nprivate target material')
+            self.assertNotEqual(execute().returncode,0)
+            report=json.loads(output.read_text());self.assertTrue(report['targetMetrics'][0]['hostMatches']);self.assertFalse(report['targetMetrics'][0]['passwordPortMatches'])
+            self.assertNotIn('private target material',output.read_text())
             (root/'macos-secure-private-details.json').write_text(json.dumps({'message':'test timed out','private':'synthetic credential'}))
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertIn('timeout',report['failureCategories']);self.assertTrue(report['xcresultDetailsAvailable'])

@@ -108,6 +108,41 @@ final class SecureCredentialUITests: XCTestCase {
         return exact > 0
     }
 
+    private func fillOrdinary(_ app: XCUIApplication, field: XCUIElement, target: String, sentinel: String, phase: String) throws {
+        tap(app, field)
+        app.typeKey("a", modifierFlags: .command);app.typeText(sentinel)
+        var nodes = try snapshotNodes(app)
+        let sentinelCount = nodes.filter { ($0.value as? String ?? "") == sentinel }.count
+        print("HP_XCUI_INPUT=phase:\(phase),sentinel:\(min(sentinelCount,10000))")
+        fflush(stdout)
+        XCTAssertGreaterThan(sentinelCount, 0, "ordinary field sentinel not read back")
+        mark(phase + "Sentinel")
+        app.typeKey("a", modifierFlags: .command);app.typeText(target)
+        nodes = try snapshotNodes(app)
+        let targetCount = nodes.filter { ($0.value as? String ?? "") == target }.count
+        print("HP_XCUI_INPUT=phase:\(phase),target:\(min(targetCount,10000))")
+        fflush(stdout)
+        XCTAssertGreaterThan(targetCount, 0, "ordinary field target not read back")
+    }
+
+    private func targetDiagnostics(_ app: XCUIApplication, phase: String) throws {
+        let fields = try snapshotNodes(app).flatMap { [$0.label, $0.value as? String ?? ""] }
+        let expression = try NSRegularExpression(pattern: "HPAX:H([01])P([01])K([01])U([01])V([01])B([01])F([01])E([01])")
+        for field in fields {
+            let range = NSRange(field.startIndex..., in: field)
+            guard let match = expression.firstMatch(in: field, range: range) else { continue }
+            let bits = (1...8).map { index -> String in
+                guard let span = Range(match.range(at: index), in: field) else { return "0" }
+                return String(field[span])
+            }.joined()
+            print("HP_XCUI_TARGET=phase:\(phase),bits:\(bits)")
+            fflush(stdout)
+            return
+        }
+        print("HP_XCUI_TARGET=phase:\(phase),bits:missing")
+        fflush(stdout)
+    }
+
     private func homeEntry(_ app: XCUIApplication) -> XCUIElement {
         let button = app.buttons["普通 SSH"]
         if button.waitForExistence(timeout: 15) && button.isHittable { return button }
@@ -191,27 +226,27 @@ final class SecureCredentialUITests: XCTestCase {
         try assertNoSecrets(app, [password, phrase])
         mark("maskingScanCompleted")
 
-        let sentinel = "xcui-sentinel-" + UUID().uuidString
-        tap(app, address);app.typeText(sentinel)
-        let seen = try ordinaryMetrics(app, sentinel: sentinel)
-        XCTAssertTrue(seen, "ordinary sentinel not found in system accessibility values")
+        try fillOrdinary(app, field: address, target: host, sentinel: "hp-address-" + UUID().uuidString, phase: "address")
         mark("ordinarySentinelObserved")
-        app.typeKey("a", modifierFlags: .command);app.typeText(host)
         mark("addressTyped")
         let portField = element(app, "端口").descendants(matching: .textField).firstMatch
         let userField = element(app, "用户名").descendants(matching: .textField).firstMatch
         XCTAssertTrue(portField.exists && userField.exists, "ordinary target fields missing")
-        tap(app, portField);app.typeKey("a", modifierFlags: .command);app.typeText(String(port))
+        try fillOrdinary(app, field: portField, target: String(port), sentinel: "84927153", phase: "port")
         mark("portTyped")
-        tap(app, userField);app.typeText(username)
+        try fillOrdinary(app, field: userField, target: username, sentinel: "hp-user-" + UUID().uuidString, phase: "username")
         mark("usernameTyped")
         mark("ordinaryInputReadable")
 
         let probe = app.buttons["探测并核对主机密钥"]
+        reveal(app, probe)
+        try targetDiagnostics(app, phase: "passwordBefore")
         tap(app, probe)
         mark("passwordProbeTapped")
         let confirm = app.buttons["已核对并确认"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: 20), "fingerprint confirmation unavailable")
+        let dialogPresent = confirm.waitForExistence(timeout: 20)
+        try targetDiagnostics(app, phase: "passwordAfter")
+        XCTAssertTrue(dialogPresent, "fingerprint confirmation unavailable")
         mark("passwordFingerprintDialog")
         let fingerprintMatches = try verifyFingerprint(app, expected: fingerprint, phase: "password")
         XCTAssertTrue(fingerprintMatches, "independently expected host fingerprint missing")
@@ -234,12 +269,16 @@ final class SecureCredentialUITests: XCTestCase {
 
         let keyPortField = element(app, "端口").descendants(matching: .textField).firstMatch
         XCTAssertTrue(keyPortField.exists, "ordinary target fields missing")
-        tap(app, keyPortField);app.typeKey("a", modifierFlags: .command);app.typeText(String(keyPort))
+        try fillOrdinary(app, field: keyPortField, target: String(keyPort), sentinel: "59318472", phase: "keyPort")
         let keyProbe = app.buttons["探测并核对主机密钥"]
+        reveal(app, keyProbe)
+        try targetDiagnostics(app, phase: "keyBefore")
         tap(app, keyProbe)
         mark("encryptedKeyProbeTapped")
         let keyConfirm = app.buttons["已核对并确认"]
-        XCTAssertTrue(keyConfirm.waitForExistence(timeout: 20), "fingerprint confirmation unavailable")
+        let keyDialogPresent = keyConfirm.waitForExistence(timeout: 20)
+        try targetDiagnostics(app, phase: "keyAfter")
+        XCTAssertTrue(keyDialogPresent, "fingerprint confirmation unavailable")
         mark("encryptedKeyFingerprintDialog")
         let keyFingerprintMatches = try verifyFingerprint(app, expected: keyFingerprint, phase: "encryptedKey")
         XCTAssertTrue(keyFingerprintMatches, "independently expected host fingerprint missing")

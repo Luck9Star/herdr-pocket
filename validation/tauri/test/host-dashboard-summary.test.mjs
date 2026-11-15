@@ -1,8 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {HostDashboardSummary,hostSummaryText} from '../src/host-dashboard-summary.js';
+import {HostDashboardSummary,hostSummaryText,hostCardSummaryText} from '../src/host-dashboard-summary.js';
 const host=(id,extra={})=>({id,enabled:true,retired:false,deviceFingerprint:`device-${id}`,target:{session:'work',host:`${id}.invalid`,expectedHostKey:`key-${id}`},networkProfileId:null,networkRevision:null,...extra});
 const board=(statuses,phase='fresh',capturedAt=1000)=>({panes:statuses.map(agentStatus=>({agentStatus})),phase,capturedAt});
+test('compact card distinguishes current, stale and unknown without repeating the session',()=>{
+ const store=new HostDashboardSummary(),a=host('a'),token={};store.begin(a,token);
+ store.publish(a,token,board(['blocked',null]));
+ assert.match(hostCardSummaryText(store.get(a)),/当前快照 · 受阻至少 1 · 1 状态未知/);
+ assert.doesNotMatch(hostCardSummaryText(store.get(a)),/会话/);
+ store.invalidateHost(a.id);assert.match(hostCardSummaryText(store.get(a)),/^上次快照/);
+ store.publish(a,token,board(['blocked'],'unavailable'));assert.match(hostCardSummaryText(store.get(a)),/^更新不可用/);
+});
 test('unknown, authoritative zero, and missing agent statuses remain distinct',()=>{
  const store=new HostDashboardSummary(),a=host('a'),token={};assert.match(hostSummaryText(store.get(a)),/未知/);
  store.begin(a,token);assert.equal(store.publish(a,token,board([])),true);assert.match(hostSummaryText(store.get(a)),/受阻 0/);

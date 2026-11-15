@@ -99,3 +99,10 @@ export function hostSummaryText(summary) {
   const blocked=summary.unknown ? `受阻至少 ${summary.count}（${summary.unknown} 个状态未知）` : `受阻 ${summary.count}`;
   return `${summary.current ? (summary.phase==='unavailable'?'本次快照（持续更新不可用）':'当前快照') : '上次快照（状态已陈旧）'} · 会话 ${summary.session} · ${blocked} · 同步 ${time}`;
 }
+
+export function hostCardSummaryText(summary) {
+  const state=summary.current ? (summary.phase==='unavailable'?'更新不可用':'当前快照') : '上次快照';
+  const blocked=summary.unknown ? `受阻至少 ${summary.count} · ${summary.unknown} 状态未知` : `受阻 ${summary.count}`;
+  const time=new Date(summary.capturedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  return `${state} · ${blocked} · ${time}`;
+}

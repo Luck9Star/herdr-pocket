@@ -19,3 +19,17 @@ test('list distinguishes unknown, stale empty, verified empty, and rejects detac
   assert.match(snapshot.children[1].textContent,/重新核查此目标/);snapshot.children[1].onclick();assert.equal(opened.length,2);
  } finally {globalThis.document=old;}
 });
+
+test('compact card keeps exact target action while distinguishing stale and unknown',()=>{
+ const old=globalThis.document;globalThis.document={createElement:()=>new Element()};
+ try {
+  const store=new HostDashboardSummary(),source={},opened=[];store.begin(host,source);
+  store.publish(host,source,{panes:[{paneId:'w1:p1',terminalId:'term_a001',agentStatus:'blocked'}],capturedAt:1000,phase:'fresh'});
+  const render=()=>blockedTargetList({store,host,compact:true,onOpen:target=>opened.push(target)});
+  assert.match(render().children[0].textContent,/当前受阻/);
+  store.invalidateHost(host.id);const stale=render();assert.match(stale.children[0].textContent,/上次受阻.*重新核查/);
+  assert.equal(stale.children[1].dataset.blockedTarget,'w1:p1/term_a001');stale.children[1].onclick();assert.equal(opened.length,1);
+  store.publish(host,source,{panes:[{agentStatus:null}],capturedAt:2000,phase:'fresh'});
+  assert.match(render().children[0].textContent,/部分状态未知/);
+ } finally {globalThis.document=old;}
+});

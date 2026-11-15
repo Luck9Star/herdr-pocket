@@ -4,14 +4,14 @@
 <nav class="route-tabs" aria-label="主导航"><button id="show-remote" aria-pressed="true"><span aria-hidden="true">⌂</span>看板</button><button id="nav-terminal" aria-pressed="false"><span aria-hidden="true">⌨</span>终端</button><button id="nav-network" aria-pressed="false"><span aria-hidden="true">◎</span>网络</button><button id="nav-settings" aria-pressed="false"><span aria-hidden="true">⚙</span>设置</button></nav>
 <div id="remote-unsent-notices" class="remote-status unsent-notices" role="alert" hidden></div>
 <main id="host-home" class="remote-page">
-<div id="home-dashboard"><section class="board-intro"><h2>主机与会话</h2><p>已存资料仅在本机。连接前请核对设备身份和目标。</p></section><p id="host-home-status" class="remote-status" role="status" aria-live="polite">正在读取本机资料…</p>
+<div id="home-dashboard"><section class="board-intro"><h2>主机与会话</h2><button id="home-open-ssh" type="button">普通 SSH</button></section><p id="host-home-status" class="remote-status" role="status" aria-live="polite">正在读取本机资料…</p>
 <section id="host-filters" class="host-filters" aria-label="筛选已存主机" hidden>
   <div class="host-filter-chips" role="group" aria-label="任务状态快捷筛选">
     <button id="host-filter-all" type="button" aria-pressed="true">全部主机</button>
     <button id="host-filter-current" type="button" aria-pressed="false">当前待处理</button>
     <button id="host-filter-history" type="button" aria-pressed="false">上次受阻</button>
   </div>
-  <label for="host-query">查找主机或会话</label>
+  <label for="host-query" class="visually-hidden">查找主机或会话</label>
   <div class="host-query-row">
     <input id="host-query" type="search" placeholder="名称、会话、地址或网络类型" autocomplete="off" spellcheck="false" aria-controls="host-list">
     <button id="host-query-clear" type="button" aria-label="清除搜索" hidden>清除</button>

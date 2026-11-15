@@ -871,7 +871,7 @@ def exercise_blocked_target(browser,approval,config):
 def _restore_paired_form(browser,config,targets):
     """Restore the paired identity form that the revocation review needs."""
     card=_blocked_card(browser,targets)
-    browser.click_named(card['selector']+' .saved-host-actions','打开')
+    browser.click_named(card['selector']+' .saved-host-actions','打开主机')
     wait_for(lambda:browser.evaluate("!document.querySelector('#host-restore-panel').hidden"),'android_blocked_original_form_missing')
     for field,key in [('host','host'),('port','port'),('user','username'),('session','session'),('herdr','herdrPath'),('socket','socketPath'),('pin','expectedHostKey')]:
         if browser.read('#remote-'+field,'value')!=str(config[key]):
@@ -1837,7 +1837,7 @@ def run_android(args, root, env, config, approval):
             if browser.evaluate("document.querySelector('#host-filter-reset') && !document.querySelector('#host-filter-reset').hidden"):
                 browser.click('#host-filter-reset')
             card=_blocked_card(browser,checked_targets(approval.blocked_targets))
-            browser.click_named(card['selector']+' .saved-host-actions','打开')
+            browser.click_named(card['selector']+' .saved-host-actions','打开主机')
             wait_for(lambda: browser.evaluate("!document.querySelector('#host-restore-panel').hidden"),'android_blocked_original_form_missing')
         def close_blocked_view():
             if browser.evaluate("document.querySelector('#tab-workspace') && !document.querySelector('#tab-workspace').hidden"):

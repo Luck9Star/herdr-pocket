@@ -187,6 +187,8 @@ h1 { font-size:18px; margin:0}
 .host-session strong { font-size:13px; }
 .host-session small { color:var(--hp-textSecondary); font-size:11px; }
 .saved-host-card .host-session [data-host-task-summary] { padding:0; border:0; margin:6px 0; }
+.saved-host-card .blocked-target-list { margin:6px 0 0; gap:6px; }
+.saved-host-card .blocked-target-list p { font-size:11px; color:var(--hp-textSecondary); }
 #remote-setup > summary, .remote-key-section > summary {
   cursor:pointer;
   color:var(--hp-brand);
@@ -256,6 +258,11 @@ h1 { font-size:18px; margin:0}
 .host-session strong { display:block; }
 .saved-host-actions { align-items:flex-start; }
 .saved-host-actions > button { flex:1; }
+.board-intro h2 { margin:6px 0; }
+.board-intro { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.board-intro button { min-height:44px; }
+.saved-host-card .host-route { margin:3px 0 6px; }
+.saved-host-card .host-session { margin-bottom:6px; }
 .host-manage { flex:0 0 auto; }
 .host-manage > summary {
   display:grid;

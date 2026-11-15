@@ -23,7 +23,7 @@ import { writePublicRequest } from './public-request-clipboard.js';
 import { invalidatePairReview } from './pairing-lifecycle.js';
 import { dashboardPresentation, paneStatusText } from './dashboard-presentation.js';
 import { initConfigTransfer } from './config-transfer-ui.js';
-import { HostDashboardSummary, hostSummaryIdentity, hostSummaryText } from './host-dashboard-summary.js';
+import { HostDashboardSummary, hostSummaryIdentity, hostSummaryText, hostCardSummaryText } from './host-dashboard-summary.js';
 import {blockedTargetList} from './blocked-target-list.js';
 import {initDesktopWorkbench} from './desktop-workbench.js';
 import { DirectDashboardSummary } from './direct-dashboard-summary.js';
@@ -693,16 +693,16 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       // docs/08:94 禁用给原因——打开/新终端标签/移除的状态性禁用原因写在下方 detail 段，供读屏关联朗读。
       const detailId=`host-card-detail-${host.id}`;
       const detail=document.createElement('p');detail.id=detailId;detail.textContent=`${host.target.username}@${host.target.host}:${host.target.port} · ${host.keyDeletionPending?(host.keyCleanupMode==='identity'?'仅清设备身份待确认，原主机公开资料将保留':'移除主机资料待确认，原引用保留'):host.retired?'已替换并停用，身份保留供删除或撤销':host.enabled?'已启用':'已停用'} · 会话 ${host.target.session} · ${route} · ${runtimeRevokedHosts.has(host.id) && host.pairingStatus!=='revoked'?'本次运行已停用，撤销回执保存未确认':host.pairingStatus==='revoked'?'已登记主机撤销，原设备记录保留待显式清理':host.pairingStatus==='awaiting-host'?'待主机响应':host.pairingStatus==='cancelled'?'配对已取消，需核查授权':host.deviceFingerprint?'设备资料已存':'未保存设备身份'} · ${hostStatuses.get(host.id) || '尚未在本次运行中连接'}`;
-      const path=document.createElement('p');path.className='host-route';path.textContent=`${host.target.username}@${host.target.host}:${host.target.port} · ${route}`;card.append(path);
+      const path=document.createElement('p');path.className='host-route';path.textContent=route;card.append(path);
       const session=document.createElement('section');session.className='host-session';
       const sessionTitle=document.createElement('strong');sessionTitle.textContent=`会话 ${host.target.session}`;session.append(sessionTitle);
-      const taskSummary=document.createElement('p');taskSummary.textContent=hostSummaryText(summary);taskSummary.setAttribute('data-host-task-summary',host.id);taskSummary.hidden=!summary;session.append(taskSummary);
-      if(summary)session.append(blockedTargetList({store:hostSummaries,host,disabled:pairBusy,onOpen:target=>void openBlockedTarget(host.id,target)}));card.append(session);
+      const taskSummary=document.createElement('p');taskSummary.textContent=summary ? hostCardSummaryText(summary) : '';taskSummary.setAttribute('data-host-task-summary',host.id);taskSummary.hidden=!summary;session.append(taskSummary);
+      if(summary)session.append(blockedTargetList({store:hostSummaries,host,disabled:pairBusy,compact:true,onOpen:target=>void openBlockedTarget(host.id,target)}));card.append(session);
       const name=document.createElement('input');name.value=host.name;name.maxLength=96;name.setAttribute('aria-label',`重命名 ${host.name}`);
       const actions=document.createElement('div');actions.className='saved-host-actions';
       let actionContainer=actions;
       const button=(label,callback)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=callback;b.disabled=pairBusy;actionContainer.append(b);return b;};
-      const open=button('打开',()=>void openSavedHost(host.id));open.disabled=pairBusy || !host.enabled;open.setAttribute('aria-describedby',detailId);
+      const open=button('打开主机',()=>void openSavedHost(host.id));open.className='primary';open.disabled=pairBusy || !host.enabled;open.setAttribute('aria-describedby',detailId);
       const manage=document.createElement('details');manage.className='host-manage';
       const manageTitle=document.createElement('summary');manageTitle.textContent='管理';manage.append(manageTitle,detail,name);
       const management=document.createElement('div');management.className='host-management-actions';manage.append(management);
@@ -855,6 +855,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('host-empty-add').onclick=()=>navigateHome('add');
   $('add-herdr').onclick=()=>void openNewHost();
   $('add-ssh').onclick=()=>setHomeSection('ssh');
+  $('home-open-ssh').onclick=()=>setHomeSection('ssh');
   const closeConfigTransfer=initConfigTransfer({native, invoke, getHosts:()=>hostRecords, refreshHosts, onAffected:ids=>{workspace.prepareAffected(ids);if(ids.includes(activeHostId))cancel('配置操作涉及此主机；观察已停止，请重新核对。');}, onSettled:ids=>workspace.affected(ids), onApplied:async result=>{
     const affected=[...result.removedIds,...result.retired.map(h=>h.id)];
     workspace.affected(affected);

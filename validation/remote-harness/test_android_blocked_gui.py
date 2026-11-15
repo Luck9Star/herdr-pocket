@@ -89,7 +89,7 @@ class AndroidBlockedTests(unittest.TestCase):
         self.assertEqual(browser.actions,[('click','#host-return-home'),
             ('click','#host-list > .saved-host-card:nth-child(1) .blocked-target-list button[data-blocked-target="w3:p1/term_bbb"]'),
             ('click','#view-content input[type=checkbox]'),('named','#view-content','连接'),('named','#view-content','关闭此标签'),
-            ('click','#host-return-home'),('named','#host-list > .saved-host-card:nth-child(1) .saved-host-actions','打开'),
+            ('click','#host-return-home'),('named','#host-list > .saved-host-card:nth-child(1) .saved-host-actions','打开主机'),
             ('click','#host-restore-review'),('click','#host-restore')])
         joined='\n'.join(browser.expressions)
         for forbidden in ('.click(','.onclick','__TAURI','remote_tab_observe','dispatchEvent','POCKET-BLOCKED-A frame'):
@@ -100,7 +100,7 @@ class AndroidBlockedTests(unittest.TestCase):
         for browser in (Browser(same_label=False),Browser(review=False),Browser(measurement={**RECEIPT,'terminalId':'term_aaa'}),Browser(measurement={**RECEIPT,'observing':False}),Browser(measurement={**RECEIPT,'otherMarkerAbsent':False})):
             host=approval()
             with self.subTest(browser=browser),self.assertRaises(android.GuiFailure):android.exercise_blocked_target(browser,host,CONFIG)
-            self.assertFalse(any(action[-1]=='打开' for action in browser.actions));host.verify_ssh.assert_not_called()
+            self.assertFalse(any(action[-1]=='打开主机' for action in browser.actions));host.verify_ssh.assert_not_called()
         host=approval();host.verify_blocked_targets.side_effect=[TARGETS,list(reversed(TARGETS))]
         with self.assertRaises(android.GuiFailure):android.exercise_blocked_target(Browser(),host,CONFIG)
         host.verify_ssh.assert_not_called()

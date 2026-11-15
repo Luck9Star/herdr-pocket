@@ -26,6 +26,13 @@ class GuiFailure(Exception):
     """Static phase codes only; never publish driver, host or widget output."""
 
 
+def retained_host_card_matches(detail, card):
+    """Compare the visible stale card with its independently observed summary."""
+    expected = re.search(r'受阻(?:至少)? \d+(?!\d)', detail)
+    actual = re.search(r'受阻(?:至少)? \d+(?!\d)', card)
+    return bool(expected and actual and expected.group() == actual.group() and '上次快照' in card)
+
+
 def fixture_terminal_id(config):
     # Read back the selected pane from the fixture server independently of the
     # app. Different sessions can both contain w1:p1.
@@ -462,7 +469,8 @@ def run_tauri(args, root, env, config, approval):
                 return label[position:] if position >= 0 else None
             retained = wait_for(stopped_summary, 'direct_host_summary_not_retained')
             driver.click('#host-return-home')
-            wait_for(lambda: driver.read('#host-list [data-host-task-summary]') == retained,
+            wait_for(lambda: retained_host_card_matches(retained,
+                driver.read('#host-list [data-host-task-summary]')),
                      'retained_home_summary_missing')
             return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                     'initialHostBoardPhase':initial_board, 'hostBoardPhaseDuringTerminal':terminal_board,

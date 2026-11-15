@@ -674,11 +674,11 @@ test('older catalog response cannot overwrite newer host identity or name', asyn
     n['host-return-home'].click();
     await flush(); await flush();
     assert.equal(n['host-list'].children[0].children[0].children[0].textContent, 'New identity');
-    assert.match(summary(n, false).textContent, /任务状态未知/);
+    assert.equal(summary(n, false).hidden, true);
     release();
     await flush(); await flush();
     assert.equal(n['host-list'].children[0].children[0].children[0].textContent, 'New identity');
-    assert.match(summary(n, false).textContent, /任务状态未知/);
+    assert.equal(summary(n, false).hidden, true);
   } finally { h.finish(); await flush(); h.restore(); }
 });
 
@@ -1211,7 +1211,7 @@ test('fresh pairing viewport returns through saved identity only after new full,
   try {
     await openInput(h);v.scrollLeft=240;v.scrollTop=60;v.dispatch('scroll');
     n['host-return-home'].click();h.finish();await flush();await flush();
-    const open=n['host-list'].all().find(e=>e.tagName==='button' && e.textContent==='打开');assert.ok(open);open.click();await flush();
+    const open=n['host-list'].all().find(e=>e.tagName==='button' && e.textContent==='打开主机');assert.ok(open);open.click();await flush();
     n['host-restore-review'].checked=true;n['host-restore'].click();await flush();await flush();
     n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});
     n['remote-form'].dispatch('submit');await flush();
@@ -1324,7 +1324,7 @@ test('a saved bound overlay host keeps the ordinary reviewed pairing connection 
   await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();n['host-save'].click();await flush();await flush();await flush();
   h.updateHost({provider:'tailscale',requiresNetworkBinding:true,networkProfileId:'net-fixture',deviceFingerprint:'device-fixture'});
   n['host-return-home'].click();await flush();await flush();await flush();
-  const open=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions').children.find(x=>x.textContent==='打开');open.click();await flush();await flush();
+  const open=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions').children.find(x=>x.textContent==='打开主机');open.click();await flush();await flush();
   assert.equal(n['remote-profile-provider'].value,'tailscale');assert.equal(n['remote-connect'].disabled,true);
   n['host-restore-review'].checked=true;n['host-restore'].click();await flush();await flush();
   n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});
@@ -1504,13 +1504,13 @@ test('revocation persistence failure locks runtime routes without claiming durab
  const fixture=pairingCameraFixture(),h=await setup({pairRequest:fixture.request,pairAcceptStored:false}),n=h.nodes;
  try{await createCameraPair(h);await reviewResponse(h,fixture.response,{accept:true});const baseline=h.calls.length;await reviewResponse(h,revokedResponse(fixture),{accept:true});
   assert.match(n['pair-status'].textContent,/本次运行已停用/);assert.match(n['pair-status'].textContent,/保存未确认/);assert.doesNotMatch(n['pair-status'].textContent,/目录已确认撤销/);assert.equal(n['remote-connect'].disabled,true);
-  n['host-return-home'].click();await flush();await flush();await flush();const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');assert.equal(expandedActions(actions).find(x=>x.textContent==='新终端标签').disabled,true);expandedActions(actions).find(x=>x.textContent==='打开').click();await flush();
+  n['host-return-home'].click();await flush();await flush();await flush();const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');assert.equal(expandedActions(actions).find(x=>x.textContent==='新终端标签').disabled,true);expandedActions(actions).find(x=>x.textContent==='打开主机').click();await flush();
   assert.equal(h.calls.slice(baseline).filter(x=>['host_restore','host_select','pair_reset','remote_observe'].includes(x.name)).length,0);assert.match(n['host-home-status'].textContent,/不能恢复旧授权/);
  }finally{h.restore();}
 });
 test('restoring a retained revoked record displays the original but cannot copy, create or connect',async()=>{
  const fixture=pairingCameraFixture(),h=await setup({pairRequest:fixture.request}),n=h.nodes;
- try{await createCameraPair(h);await reviewResponse(h,revokedResponse(fixture),{accept:true});n['host-return-home'].click();await flush();await flush();await flush();const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');expandedActions(actions).find(x=>x.textContent==='打开').click();await flush();await flush();
+ try{await createCameraPair(h);await reviewResponse(h,revokedResponse(fixture),{accept:true});n['host-return-home'].click();await flush();await flush();await flush();const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');expandedActions(actions).find(x=>x.textContent==='打开主机').click();await flush();await flush();
   n['host-restore-review'].checked=true;n['host-restore'].click();await flush();await flush();assert.match(n['pair-status'].textContent,/原设备记录已撤销/);assert.equal(n['pair-request'].value,fixture.request);assert.equal(n['pair-request-copy'].disabled,true);assert.equal(n['pair-create'].disabled,true);assert.equal(n['remote-connect'].disabled,true);
  }finally{h.restore();}
 });
@@ -1539,7 +1539,7 @@ for(const mode of ['identity','host'])test(`pending ${mode} cleanup retains its 
   await createCameraPair(h);h.updateHost({keyDeletionPending:true,keyCleanupMode:mode,enabled:false});n['host-return-home'].click();await flush();await flush();
   const actions=()=>n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');
   assert.ok(n['host-list'].children[0].all().some(x=>x.textContent.includes('待确认')));
-  assert.equal(expandedActions(actions()).find(x=>x.textContent==='打开').disabled,true);assert.equal(expandedActions(actions()).some(x=>x.textContent==='启用'),false);
+  assert.equal(expandedActions(actions()).find(x=>x.textContent==='打开主机').disabled,true);assert.equal(expandedActions(actions()).some(x=>x.textContent==='启用'),false);
   const retryLabel=mode==='identity'?'重试仅清理设备身份':'重试移除主机资料';
   let retry=expandedActions(actions()).find(x=>x.textContent===retryLabel);retry.click();await flush();assert.equal(attempts,0);
   if(mode==='identity')assert.match(retry.textContent,/仅清身份，保留主机资料/);retry.click();await flush();await flush();assert.equal(attempts,1);
@@ -1554,7 +1554,7 @@ for(const error of ['connection_active','host_storage_unavailable'])test(`delete
  const h=await setup({hostRemove:()=>{throw Error(error);}}),n=h.nodes;
  try{await createCameraPair(h);n['host-return-home'].click();await flush();await flush();
   const actions=()=>n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');const remove=expandedActions(actions()).find(x=>x.textContent==='移除');remove.click();remove.click();await flush();await flush();
-  assert.match(n['host-home-status'].textContent,/本机删除未确认/);assert.doesNotMatch(n['host-home-status'].textContent,/连接已停用|原引用保留/);assert.equal(expandedActions(actions()).find(x=>x.textContent==='打开').disabled,false);
+  assert.match(n['host-home-status'].textContent,/本机删除未确认/);assert.doesNotMatch(n['host-home-status'].textContent,/连接已停用|原引用保留/);assert.equal(expandedActions(actions()).find(x=>x.textContent==='打开主机').disabled,false);
  }finally{h.restore();}
 });
 
@@ -1726,7 +1726,7 @@ test('paired normal entry retains staged connection facts after auth failure wit
   assert.equal(row('network').dataset.stageState,'pending');h.emit({kind:'stage',generation:9,stage:'host-key-verified'});assert.equal(row('hostKey').dataset.stageState,'verified');assert.equal(row('network').dataset.stageState,'verified');
   h.fail('authentication_failed');await flush();await flush();assert.equal(row('hostKey').dataset.stageState,'verified');assert.equal(row('authentication').dataset.stageState,'failed');assert.equal(row('dashboard').dataset.stageState,'unknown');assert.equal(row('terminal').dataset.stageState,'unknown');
   h.emit({kind:'stage',generation:9,stage:'authenticated'});assert.equal(row('authentication').dataset.stageState,'failed');
-  n['host-return-home'].click();await flush();await flush();n['host-list'].children[0].all().find(e=>e.textContent==='打开').click();await flush();await flush();assert.equal(box.children[0].hidden,false);assert.equal(row('hostKey').dataset.stageState,'verified');
+  n['host-return-home'].click();await flush();await flush();n['host-list'].children[0].all().find(e=>e.textContent==='打开主机').click();await flush();await flush();assert.equal(box.children[0].hidden,false);assert.equal(row('hostKey').dataset.stageState,'verified');
   assert.equal(h.calls.filter(c=>c.name==='remote_observe').length,1);assert.equal(h.calls.filter(c=>c.name==='remote_input_send'||/resize/.test(c.name)).length,0);
  }finally{h.finish();await flush();h.restore();}
 });
@@ -1812,6 +1812,16 @@ test('primary navigation returns from network and settings without losing the bo
     assert.equal(n['home-dashboard'].hidden,false);
     assert.equal(n['home-settings'].hidden,true);
   } finally { h.finish(); h.restore(); }
+});
+
+test('board direct SSH entry uses the existing setup route without connecting', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    n['home-open-ssh'].click();
+    assert.equal(n['home-ssh'].hidden,false);
+    assert.equal(n['home-dashboard'].hidden,true);
+    assert.equal(h.calls.some(c=>c.name==='ssh_shell_open' || c.name==='ssh_host_key_probe'),false);
+  } finally {h.finish();h.restore();}
 });
 
 test('native catalog error remains visible on board after navigation', async () => {

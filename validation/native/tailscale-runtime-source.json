@@ -16,7 +16,7 @@
   },
   "patch": {
     "path": "patches/0002-tsnet-explicit-auth.patch",
-    "sha256": "29b70583aadd99fa2ba79908be89c77306faffe2eeae979fec83410f4df0569e"
+    "sha256": "cecf821e638bee054b7595de3dac7cb1f7fc60a3e19cc9e8abb74e7707044e36"
   },
   "context7": {
     "library": "/tailscale/tailscale/v1.104.4",
@@ -27,5 +27,17 @@
   "patchTests": {
     "path": "patches/tsnet-explicit-auth-test.go",
     "sha256": "5060bfafca2a4923bf1415a529424c464a79e1d942923cf4b4bd11c516eb2900"
+  },
+  "additionalSources": [
+    {
+      "path": "net/tsdial/tsdial.go",
+      "gitBlobSha": "8c07d11a28be76706deee1cbf4a372fc547a39a5",
+      "sha256": "99607c415cd3659e72d73ccfd18b15f3b89da72a6c4a07b9810c22a27fed7c70",
+      "patchedSha256": "395430ad487b527932b82e3306c9fdeb470448492a9c036827b68134f6dff3fa"
+    }
+  ],
+  "dialPlanTests": {
+    "path": "patches/tsdial-overlay-only-test.go",
+    "sha256": "0ef216313efc45af569e5c5ecc7404cca1deab0a68e429cc0150abdbe250b701"
   }
 }

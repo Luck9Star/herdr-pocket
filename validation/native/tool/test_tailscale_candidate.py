@@ -26,12 +26,15 @@ class CandidateTests(unittest.TestCase):
             (self.module / name).write_text(text)
         (self.native / "patch").write_text("fixed patch")
         (self.native / "tests").write_text("fixed tests")
+        (self.native / "dial-tests").write_text("fixed dial tests")
         self.source = {
             "goModSha256": candidate.digest(self.module / "go.mod"),
             "goSumSha256": candidate.digest(self.module / "go.sum"),
             "patch": {"path": "patch", "sha256": candidate.digest(self.native / "patch")},
             "patchTests": {"path": "tests", "sha256": candidate.digest(self.native / "tests")},
+            "dialPlanTests": {"path": "dial-tests", "sha256": candidate.digest(self.native / "dial-tests")},
             "source": {"path": "tsnet/tsnet.go", "patchedSha256": candidate.digest(self.module / "main.go")},
+            "additionalSources": [{"path": "net/tsdial/tsdial.go", "patchedSha256": candidate.digest(self.module / "main.go")}],
         }
         self.manifest = self.native / "source.json"
         self.manifest.write_text(json.dumps(self.source))
@@ -44,6 +47,9 @@ class CandidateTests(unittest.TestCase):
         (self.work / "candidate-source.json").write_text(json.dumps(self.source))
         (self.work / "upstream/tailscale/tsnet/tsnet.go").write_text("package main\n")
         (self.work / "upstream/tailscale/tsnet/herdr_explicit_auth_test.go").write_text("fixed tests")
+        (self.work / "upstream/tailscale/net/tsdial").mkdir(parents=True)
+        (self.work / "upstream/tailscale/net/tsdial/tsdial.go").write_text("package main\n")
+        (self.work / "upstream/tailscale/net/tsdial/herdr_overlay_only_test.go").write_text("fixed dial tests")
         self.sync()
 
     def sync(self):
@@ -80,6 +86,16 @@ class CandidateTests(unittest.TestCase):
     def test_patch_test_drift_rejected(self):
         (self.work / "upstream/tailscale/tsnet/herdr_explicit_auth_test.go").write_text("bypassed")
         with self.assertRaisesRegex(ValueError, "patch tests changed"):
+            candidate.verify_candidate(self.work, self.source)
+
+    def test_strict_dial_source_and_regression_drift_rejected(self):
+        target = self.work / "upstream/tailscale/net/tsdial/tsdial.go"
+        target.write_text("changed route boundary")
+        with self.assertRaisesRegex(ValueError, "fixed upstream source changed"):
+            candidate.verify_candidate(self.work, self.source)
+        target.write_text("package main\n")
+        (target.parent / "herdr_overlay_only_test.go").write_text("bypassed")
+        with self.assertRaisesRegex(ValueError, "dial plan tests changed"):
             candidate.verify_candidate(self.work, self.source)
 
     def test_unsafe_previous_inventory_rejected_before_mutation(self):

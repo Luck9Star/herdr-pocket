@@ -109,3 +109,26 @@
  	authKey := s.getAuthKey()
  	var err error
  	// Try to use an OAuth secret to generate an auth key if that functionality
+diff --git a/net/tsdial/tsdial.go b/net/tsdial/tsdial.go
+--- a/net/tsdial/tsdial.go
++++ b/net/tsdial/tsdial.go
+@@ -655,6 +655,19 @@
+ 	)
+ }
+ 
++// UserDialPlanWithoutDNSFallback plans an IP or a name in this node's current
++// MagicDNS/ExtraDNS map. Unknown names fail without querying the OS resolver.
++// Callers requiring userspace-only transport must invoke NetstackDialTCP with
++// the returned IPPort; UserDial can still fall back if routes change later.
++func (d *Dialer) UserDialPlanWithoutDNSFallback(ctx context.Context, network, addr string) (netip.AddrPort, bool, error) {
++	ipp, err := d.resolveAddr(ctx, network, addr)
++	if err != nil {
++		return netip.AddrPort{}, false, err
++	}
++	ipp = netip.AddrPortFrom(ipp.Addr().Unmap(), ipp.Port())
++	return d.UserDialPlan(ctx, network, ipp.String())
++}
++
+ // UserDialPlan resolves addr and reports whether the dialer would
+ // handle it via Tailscale. If viaTailscale is false, the resolved
+ // address is not a Tailscale route and the caller may dial it directly.

@@ -49,9 +49,16 @@ fn write_diagnostics(control: &std::path::Path, value: &serde_json::Value) {
 
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
-    if args.len() != 4 {
+    if !matches!(args.len(), 4 | 5) {
         std::process::exit(2);
     }
+    let lifetime = match args.get(4) {
+        None => 240,
+        Some(value) => match value.to_string_lossy().parse::<u64>() {
+            Ok(seconds @ 1..=3600) => seconds,
+            _ => std::process::exit(2),
+        },
+    };
     let config = std::fs::read_to_string(&args[1]).expect("controlled peer config");
     let control = PathBuf::from(&args[2]);
     let stage = |value: &str| {
@@ -138,7 +145,7 @@ fn main() {
         .expect("controlled ready file");
         std::fs::rename(control.join("peer-ready.tmp"), control.join("peer-ready"))
             .expect("controlled atomic ready");
-        let until = Instant::now() + Duration::from_secs(240);
+        let until = Instant::now() + Duration::from_secs(lifetime);
         while !control.join("stop-peer").exists() && Instant::now() < until {
             // Touch this file, wait for its removal, then read the atomically
             // replaced snapshot. No request data is read or echoed.

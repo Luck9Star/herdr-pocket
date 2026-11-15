@@ -96,11 +96,14 @@ class ReverseTests(unittest.TestCase):
         bridge.REVERSE_LIST_DIAGNOSTICS.clear()
         with patch.object(bridge,'_text',return_value='(reverse) tcp:10101 tcp:20101'):
             self.assertEqual(bridge._mapping_list(),{10101:20101})
-        self.assertEqual(bridge.REVERSE_LIST_DIAGNOSTICS[-1],{'lineCount':1,'valid':True,'tags':['reverse']})
+        self.assertEqual(bridge.REVERSE_LIST_DIAGNOSTICS[-1],{'lineCount':1,'valid':True})
+        with patch.object(bridge,'_text',return_value='opaque-transport tcp:10101 tcp:20101'):
+            self.assertEqual(bridge._mapping_list(),{10101:20101})
+        self.assertNotIn('opaque-transport',str(bridge.REVERSE_LIST_DIAGNOSTICS))
         self.assertNotIn('10101',str(bridge.REVERSE_LIST_DIAGNOSTICS))
 
     def test_malformed_reverse_list_fails_closed(self):
-        for value in ('other tcp:1 tcp:2','host tcp:70000 tcp:2','host localabstract:x tcp:2','bad'):
+        for value in ('host tcp:70000 tcp:2','host localabstract:x tcp:2','bad','host tcp:1 tcp:2\nhost tcp:1 tcp:3'):
             with self.subTest(value=value),patch.object(bridge,'_text',return_value=value):
                 with self.assertRaises(bridge.ReverseError):bridge._mapping_list()
 

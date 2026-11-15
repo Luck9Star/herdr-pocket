@@ -72,19 +72,17 @@ def assert_owned_avd():
 def _mapping_list():
     lines=_text('reverse','--list').splitlines()
     mappings={}
-    tags=[]
     for line in lines:
         fields=line.split()
-        tags.append('reverse' if fields and fields[0]=='(reverse)' else 'serial' if fields and fields[0]==SERIAL else 'host' if fields and fields[0]=='host' else 'other')
-        if len(fields)!=3 or fields[0] not in (SERIAL,'host','(reverse)') or not all(re.fullmatch(r'tcp:[1-9][0-9]{0,4}',v) for v in fields[1:]):
-            REVERSE_LIST_DIAGNOSTICS.append({'lineCount':min(len(lines),100),'fieldCount':min(len(fields),9),'tag':tags[-1],'valid':False})
+        if len(fields)!=3 or not fields[0] or not all(re.fullmatch(r'tcp:[1-9][0-9]{0,4}',v) for v in fields[1:]):
+            REVERSE_LIST_DIAGNOSTICS.append({'lineCount':min(len(lines),100),'fieldCount':min(len(fields),9),'valid':False})
             del REVERSE_LIST_DIAGNOSTICS[:-12]
             raise ReverseError('reverse_list_invalid')
         device,host=(int(value[4:]) for value in fields[1:])
         if device>65535 or host>65535 or device in mappings:
             raise ReverseError('reverse_list_invalid')
         mappings[device]=host
-    REVERSE_LIST_DIAGNOSTICS.append({'lineCount':min(len(lines),100),'valid':True,'tags':sorted(set(tags))})
+    REVERSE_LIST_DIAGNOSTICS.append({'lineCount':min(len(lines),100),'valid':True})
     del REVERSE_LIST_DIAGNOSTICS[:-12]
     return mappings
 

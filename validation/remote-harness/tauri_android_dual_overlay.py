@@ -201,6 +201,53 @@ def wait_named(browser, scope, text, timeout=60):
     return wait_for(lambda: browser.evaluate(expr) is True, 'dual_action_unavailable', timeout=timeout)
 
 
+START_OBSERVER = r"""(()=>{
+  const original=window.ipc, internals=window.__TAURI_INTERNALS__;
+  const callbacks=internals?.callbacks;
+  if(!original || typeof original.postMessage!=='function' || !(callbacks instanceof Map) || window.__dualStartObserver) return false;
+  const allowed=new Set(['overlay_provider_unavailable','overlay_identity_unavailable','overlay_stale_revision',
+    'cancelled','mobile_node_busy','mobile_node_capacity','mobile_node_cleanup_pending','overlay_invalid_deadline',
+    'mobile_node_failed','invalid_network_identity','network_profile_disabled','network_identity_unavailable',
+    'network_identity_missing','network_identity_changed','invalid_network_binding','network_catalog_changed',
+    'network_profile_changed','network_affected_changed','state_unavailable']);
+  const state={sent:0,resolved:0,rejected:0,errorCode:null};
+  const wrapped={postMessage(message){
+    let data;try{data=typeof message==='string'?JSON.parse(message):null}catch{}
+    if(data?.cmd==='network_node_start'){
+      state.sent++;
+      for(const [id,rejected] of [[data.callback,false],[data.error,true]]){
+        const callback=callbacks.get(id);
+        if(typeof callback!=='function'){state.callbackMissing=true;continue;}
+        callbacks.set(id,function(value){
+          if(rejected){state.rejected++;state.errorCode=typeof value==='string'&&allowed.has(value)?value:'other';}
+          else state.resolved++;
+          return callback(value);
+        });
+      }
+    }
+    return original.postMessage(message);
+  }};
+  window.ipc=wrapped;
+  if(window.ipc!==wrapped)return false;
+  window.__dualStartObserver={state,original,wrapped};
+  return true;
+})()"""
+
+
+def install_start_observer(browser):
+    if browser.evaluate(START_OBSERVER) is not True:
+        raise GuiFailure('dual_start_observer_unavailable')
+
+
+def start_observer_snapshot(browser):
+    value=browser.evaluate("(()=>{const x=window.__dualStartObserver;return x?x.state:null})()")
+    if (not isinstance(value,dict) or any(type(value.get(key)) is not int or not 0<=value[key]<=9
+            for key in ('sent','resolved','rejected')) or value.get('errorCode') is not None and
+            not re.fullmatch(r'[a-z_]{1,50}',value['errorCode'])):
+        raise GuiFailure('dual_start_observer_invalid')
+    return {key:value.get(key) for key in ('sent','resolved','rejected','errorCode','callbackMissing') if key in value}
+
+
 def public_transport_sample(session):
     value=session.control.call({'op':'ts_diagnostics'})
     keys=('keyRequests','noiseRequests','registerRequests','mapRequests','tlsHandshakeErrors','authCompletions')
@@ -447,6 +494,8 @@ def run_direction(apk, auth_apk, session, stopped, report):
                 not report['ordinaryWebViewHomeVerified']):
             raise GuiFailure('dual_native_ui_tree_incomplete')
         report['stage']='network_setup'
+        install_start_observer(browser)
+        report['startObserverInstalled']=True
         report['transportBeforeNetwork']=public_transport_sample(session)
         browser.click('#nav-network')
         wait_for(lambda:browser.evaluate("!document.querySelector('#network-panel').hidden"),'dual_network_page_missing')
@@ -503,11 +552,20 @@ def run_direction(apk, auth_apk, session, stopped, report):
         audit(control,stopped,initials[stopped],ordinal=prior_ordinal,sessions_count=prior_count,active=False)
         audit(control,surviving,initials[surviving]+second,ordinal=ordinal,sessions_count=count)
         report['stoppedInputUnavailableAndUnchanged']=True
+        report['stage']='stop_survivor'
+        browser.click('#nav-network')
+        survivor_scope=expand_profile(browser,'QA TS · Tailscale' if surviving=='ts' else 'QA ET · EasyTier')
+        confirm_click(browser,survivor_scope,'停止节点','停止 QA ')
+        wait_named(browser,survivor_scope,'启动节点',timeout=120)
+        audit(control,surviving,initials[surviving]+second,ordinal=ordinal,sessions_count=count,active=False)
+        report['survivorExplicitlyStoppedAndClosed']=True
         report['stage']='complete'
     except Exception as error:
         try:report['transportAtFailure']=public_transport_sample(session)
         except Exception:report['transportAtFailureUnavailable']=True
         if browser:
+            try:report['startResultObservation']=start_observer_snapshot(browser)
+            except Exception:report['startResultObservationUnavailable']=True
             diagnostic=getattr(browser,'confirmDiagnostic',None)
             if isinstance(diagnostic,dict):
                 report['confirmationDiagnostic']={key:value for key,value in diagnostic.items() if key in ('dialogEvent','originMatched','expectedTextMatched','hasBrowserHandler','nativeXmlParsed','nativeExpectedVisible','nativeButtonVisible','nativeClicked') and type(value) in (bool,int)}
@@ -536,6 +594,11 @@ def run_direction(apk, auth_apk, session, stopped, report):
         raise
     finally:
         if browser:
+            try:report['startResultObservation']=start_observer_snapshot(browser)
+            except Exception:report['startResultObservationUnavailable']=True
+            try:
+                report['startObserverRestored']=browser.evaluate("(()=>{const x=window.__dualStartObserver;if(!x)return false;window.ipc=x.original;delete window.__dualStartObserver;return window.ipc===x.original})()") is True
+            except Exception:report['startObserverRestored']=False
             report['nativeConfirmations']=getattr(browser,'confirmationHistory',[])
             try:browser.close();report['browserClosed']=True
             except Exception:report['browserClosed']=False
@@ -600,8 +663,8 @@ def main():
                 current['privateDirectoryRemoved']=not private.exists()
                 (output/'result.json').write_text(json.dumps(result,indent=2)+'\n')
             required=('tsExplicitAuthorization','pairingApprovedBoth','bindingBoth','bothInputAndDistinctTargets',
-                      'survivorSameAuthenticatedSession','stoppedInputUnavailableAndUnchanged',
-                      'browserClosed','forwardRemoved','packagesRemoved','privateDirectoryRemoved')
+                      'survivorSameAuthenticatedSession','stoppedInputUnavailableAndUnchanged','survivorExplicitlyStoppedAndClosed',
+                      'browserClosed','forwardRemoved','packagesRemoved','privateDirectoryRemoved','startObserverInstalled','startObserverRestored')
             cleanup=current['environmentCleanup']
             if (current.get('stage')!='complete' or any(current.get(key) is not True for key in required) or
                     current.get('staleInputGuard') not in ('retained_tab_disabled_keyboard_tested','removed_tab_unreachable') or

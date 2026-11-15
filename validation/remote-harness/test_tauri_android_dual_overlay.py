@@ -99,6 +99,20 @@ class DualEvidenceTests(unittest.TestCase):
         session.relay.stats.return_value['control']['upstreamBytes']=-1
         with self.assertRaises(dual.GuiFailure):dual.public_transport_sample(session)
 
+    def test_start_observer_forwards_actual_callback_and_redacts_unknown_error(self):
+        script = r"""const callbacks=new Map(), values=[],sent=[];
+          global.window={__TAURI_INTERNALS__:{callbacks},ipc:{postMessage:x=>{sent.push(x);return 17}}};
+          callbacks.set(11,x=>values.push(x));callbacks.set(12,x=>values.push(x));
+          if(!eval(process.argv[1]))throw Error('install');
+          const message=JSON.stringify({cmd:'network_node_start',callback:11,error:12,payload:{secret:'private'}});
+          if(window.ipc.postMessage(message)!==17 || sent[0]!==message)throw Error('forward');
+          callbacks.get(12)('untrusted private failure');
+          const state=window.__dualStartObserver.state;
+          if(values[0]!=='untrusted private failure'||state.sent!==1||state.rejected!==1||state.errorCode!=='other')throw Error('callback');
+          process.stdout.write('ok');"""
+        result=subprocess.check_output(['node','-e',script,dual.START_OBSERVER],text=True)
+        self.assertEqual(result,'ok')
+
     def test_public_host_control_requires_matching_event(self):
         control = Mock()
         control.call.return_value = {'event':'pairing_review','requestId':'synthetic'}

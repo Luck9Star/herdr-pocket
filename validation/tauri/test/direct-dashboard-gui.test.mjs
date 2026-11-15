@@ -132,6 +132,9 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
 
   const invoke = async (name, args = {}) => {
     calls.push({ name, args });
+    if (name === 'ssh_host_key_probe') return {...args,publicKey:'ssh-ed25519 FIXTURE',fingerprint:'SHA256:fixture'};
+    if (name === 'ssh_shell_open') return 'ssh-fixture';
+    if (name === 'ssh_shell_close') return;
     if (['host_init', 'host_new', 'remote_cancel', 'remote_select', 'remote_ack', 'remote_input_recover'].includes(name)) return;
     if (name === 'pair_scan_response') return scanResponse ? scanResponse() : '';
     if (name === 'remote_input_mode') return inputMode(args);
@@ -1833,6 +1836,33 @@ test('SSH credential input preserves reviewed host key; endpoint and identity ed
     n['ssh-user'].dispatch('input'); assert.equal(n['ssh-review'].checked,false);
     n['ssh-review'].checked=true; n['ssh-host'].dispatch('input'); assert.equal(n['ssh-review'].checked,false);
     assert.match(n['ssh-fingerprint'].textContent,/请先探测/);
+  } finally { h.finish(); h.restore(); }
+});
+
+test('SSH authentication selection clears abandoned secrets and sends only the chosen credential', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    n['ssh-host'].value='fixture.invalid';n['ssh-port'].value='22';n['ssh-user'].value='fixture';
+    await n['ssh-probe'].onclick();n['ssh-review'].checked=true;
+    n['ssh-password'].value='password fixture';
+    n['ssh-auth-method'].value='key';n['ssh-auth-method'].dispatch('change');
+    assert.equal(n['ssh-password'].value,'');assert.equal(n['ssh-password-fields'].hidden,true);
+    assert.equal(n['ssh-key-fields'].hidden,false);assert.equal(n['ssh-review'].checked,true);
+    n['ssh-key'].value='-----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n-----END OPENSSH PRIVATE KEY-----';
+    n['ssh-passphrase'].value='passphrase fixture';
+    await n['ssh-form'].onsubmit({preventDefault(){}});
+    const keyConfig=h.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
+    assert.match(keyConfig.privateKeyPem,/\nfixture\n/);assert.equal(keyConfig.privateKeyPassphrase,'passphrase fixture');assert.equal('password' in keyConfig,false);
+    assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
+    n['ssh-key'].value='unused key';n['ssh-passphrase'].value='unused phrase';
+    n['ssh-auth-method'].value='password';n['ssh-auth-method'].dispatch('change');
+    assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');assert.equal(n['ssh-key-fields'].hidden,true);
+    n['ssh-password'].value='password fixture';await n['ssh-form'].onsubmit({preventDefault(){}});
+    const passwordConfig=h.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
+    assert.equal(passwordConfig.password,'password fixture');assert.equal('privateKeyPem' in passwordConfig,false);
+    n['ssh-password'].value='cancel secret';n['ssh-cancel'].click();assert.equal(n['ssh-password'].value,'');
+    n['ssh-key'].value='disconnect secret';n['ssh-passphrase'].value='disconnect phrase';n['ssh-disconnect'].click();
+    assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
   } finally { h.finish(); h.restore(); }
 });
 

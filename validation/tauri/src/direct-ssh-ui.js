@@ -22,6 +22,13 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   });
   const target = () => ({host: $('ssh-host').value.trim(), port: Number($('ssh-port').value), username: $('ssh-user').value.trim()});
   function clearSecrets() { for (const id of ['ssh-password','ssh-key','ssh-passphrase']) $(id).value = ''; }
+  $('ssh-auth-method').value = 'password';
+  $('ssh-auth-method').addEventListener('change', () => {
+    clearSecrets();
+    const key = $('ssh-auth-method').value === 'key';
+    $('ssh-password-fields').hidden = key;
+    $('ssh-key-fields').hidden = !key;
+  });
   for (const id of ['ssh-host','ssh-port']) $(id).addEventListener('input', () => {
     controller.invalidateReview(); void controller.close(); $('ssh-review').checked = false; $('ssh-fingerprint').textContent = '请先探测并独立核对主机指纹。';
   });
@@ -40,8 +47,9 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     event.preventDefault();
     if (!native) { $('ssh-status').textContent = '浏览器预览不支持原生 SSH。'; return; }
     const password = $('ssh-password').value, privateKeyPem = $('ssh-key').value, passphrase = $('ssh-passphrase').value;
-    const credentials = password ? {password} : privateKeyPem ? {privateKeyPem, ...(passphrase ? {privateKeyPassphrase:passphrase} : {})} : {};
-    if (password && privateKeyPem) { $('ssh-status').textContent = '请选择密码或私钥其中一种。'; return; }
+    const credentials = $('ssh-auth-method').value === 'key'
+      ? (privateKeyPem ? {privateKeyPem, ...(passphrase ? {privateKeyPassphrase:passphrase} : {})} : {})
+      : (password ? {password} : {});
     if (!terminal) {
       terminal = terminalFactory({cols:80, rows:24, fontSize:14, cursorBlink:true, theme:{background:'#0B0F17',foreground:'#E6EDF3'}});
       terminal.open($('ssh-terminal'));

@@ -40,9 +40,11 @@
     <button id="ssh-probe" type="button">探测主机指纹</button>
     <p id="ssh-fingerprint" class="ssh-fingerprint">请先探测并独立核对主机指纹。</p>
     <label class="review-check"><input id="ssh-review" type="checkbox"><span>我已通过可信渠道独立核对以上指纹。</span></label>
-    <label>密码<input id="ssh-password" type="password" autocomplete="new-password"></label>
-    <label>或私钥<textarea id="ssh-key" rows="4" autocomplete="off"></textarea></label>
-    <label>私钥口令（可选）<input id="ssh-passphrase" type="password" autocomplete="new-password"></label>
+    <label for="ssh-auth-method">认证方式</label>
+    <select id="ssh-auth-method"><option value="password">使用密码认证</option><option value="key">使用私钥认证</option></select>
+    <div id="ssh-password-fields"><label>密码<input id="ssh-password" type="password" autocomplete="new-password"></label></div>
+    <div id="ssh-key-fields" hidden><label>私钥<textarea id="ssh-key" rows="4" autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off"></textarea></label>
+    <label>私钥口令（可选）<input id="ssh-passphrase" type="password" autocomplete="new-password"></label></div>
     <div class="ssh-options"><button type="submit" class="primary">连接 / 重新连接</button><button id="ssh-cancel" type="button">取消连接</button></div>
   </form></div>
   <p id="ssh-status" role="status" aria-live="polite">尚未连接。</p>

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
+import 'ios_exchange.dart';
 import 'direct_ssh_ui_steps.dart';
 
 const enabled = String.fromEnvironment('HERDR_IOS_DIRECT_SSH');
@@ -143,10 +144,8 @@ void main() {
           config['fingerprint'] as String,
           directory,
         ];
-        publish('semantics-baseline.json', semanticsBaseline);
         expect(tester.testTextInput.isRegistered, isFalse);
-        if (Directory(directory).existsSync())
-          throw StateError('direct_ssh_ios_exchange_exists');
+        initializeIosExchange(Directory(directory), semanticsBaseline);
         void step(String next) {
           stage = next;
           publish('stage.json', {'stage': next});

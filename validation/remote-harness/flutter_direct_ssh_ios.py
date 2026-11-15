@@ -323,7 +323,7 @@ def run(app, output, env):
     verify_prepared(app, env)
     from ios_xctest_scaffold import prepare as prepare_xctest
     source_root = Path(__file__).resolve().parents[1] / 'flutter'
-    for relative in (TARGET, 'integration_test/direct_ssh_ui_steps.dart'):
+    for relative in (TARGET, 'integration_test/direct_ssh_ui_steps.dart', 'integration_test/ios_exchange.dart'):
         if (app / relative).is_symlink() or (app / relative).read_bytes() != (source_root / relative).read_bytes():
             raise Failure('ios_test_source_mismatch')
     output.mkdir(mode=0o700)

@@ -163,8 +163,8 @@ jobs:
           java-version: '17.0.18+8'
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: tauri-dual-qa-apks-25188771b6d6d07bd608923699b6cd3c5cc45c55
-          run-id: 43737220746
+          name: tauri-dual-qa-apks-bf39bb44e6df54140984a0abbe93d40f992c1f23
+          run-id: 43742966458
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/dual-apks
       - name: Download exact controlled host artifact
@@ -177,11 +177,8 @@ jobs:
           unzip -q "$RUNNER_TEMP/dual-host.zip" -d "$RUNNER_TEMP/dual-host-fixtures"
       - name: Prepare scoped host and device
         run: |
-          # Exploratory network run deliberately uses the previously verified
-          # APK; the sole permitted later frontend change is S27 mobile CSS.
-          git diff --quiet 25188771b6d6d07bd608923699b6cd3c5cc45c55 HEAD -- validation/tauri validation/transport-rust validation/network-profiles validation/pairing/native/android validation/shared validation/vendor ':(exclude)validation/tauri/src/style.css'
-          git diff --quiet 305018e HEAD -- validation/tauri/src/style.css
-          printf '%s  %s\n' 117ee9753ee56da2341c59eb3ac5a8ea6102c9ae1f02617efc9e80f617066e9d "$RUNNER_TEMP/dual-apks/tauri-dual-qa.apk" 14a04136876207bd2b11c93990bd865f1c89bb3e05b2fc2f7547b3ffa96ca32b "$RUNNER_TEMP/dual-apks/dual-auth-receiver.apk" | sha256sum -c -
+          git diff --quiet bf39bb44e6df54140984a0abbe93d40f992c1f23 HEAD -- validation/tauri validation/transport-rust validation/network-profiles validation/pairing/native/android validation/shared validation/vendor
+          printf '%s  %s\n' a25d9f0215724b2dd0babb84fe0b77f55a331e1028eb09e8f695b0d29fcd3ae0 "$RUNNER_TEMP/dual-apks/tauri-dual-qa.apk" 93b37dad7d9f0f7ee0131aee34148734a833d580dc990a044435a0b47ed6dff3 "$RUNNER_TEMP/dual-apks/dual-auth-receiver.apk" | sha256sum -c -
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends acl libpulse0 iproute2 openssh-server libssl-dev pkg-config
           python3 -m venv "$RUNNER_TEMP/dual-venv"

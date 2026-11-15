@@ -1,4 +1,6 @@
 import unittest
+import subprocess
+import json
 from unittest.mock import Mock, patch
 import tauri_android_dual_overlay as dual
 
@@ -34,6 +36,26 @@ class DualEvidenceTests(unittest.TestCase):
             browser.evaluate.return_value = False
             self.assertEqual(dual.guard_stale_target(browser,'ts'), 'retained_tab_disabled_keyboard_tested')
             browser.call.assert_called_once()
+
+    def test_ack_matches_one_rendered_row_with_nonbreaking_spaces(self):
+        expr = dual.rendered_marker_expression('Synthetic TS ACK ONE')
+        script = """const text=JSON.parse(process.argv[1]);
+          global.document={querySelectorAll:()=>text.map(x=>({textContent:x,getClientRects:()=>[{}]}))};
+          process.stdout.write(String(eval(process.argv[2])));"""
+        def matches(rows):
+            return subprocess.check_output(['node','-e',script,json.dumps(rows),expr],text=True)=='true'
+        self.assertTrue(matches(['Synthetic\u00a0TS\u00a0ACK\u00a0ONE']))
+        self.assertFalse(matches(['Synthetic TS ACK', ' ONE']))
+        self.assertFalse(matches(['Synthetic ET ACK ONE']))
+
+    def test_system_confirmation_requires_matching_visible_message_and_button(self):
+        xml = ('<?xml version="1.0"?><hierarchy><node text="创建本机加密设备状态"/>'
+               '<node text="确定" enabled="true" bounds="[10,20][110,80]"/></hierarchy>')
+        diagnostic = {}
+        with patch.object(dual,'adb',side_effect=[xml,'']) as adb:
+            self.assertTrue(dual.native_dialog_click('创建本机加密设备状态',{'确定'},diagnostic=diagnostic))
+            adb.assert_any_call('shell','input','tap','60','50')
+        self.assertTrue(diagnostic['expectedSeen'] and diagnostic['uniqueButton'] and diagnostic['clicked'])
 
     def test_public_host_control_requires_matching_event(self):
         control = Mock()

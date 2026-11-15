@@ -54,20 +54,26 @@ def audit(host, role, expected, *, ordinal, sessions_count, active=True, new_ses
     return wait_for(sample, 'dual_peer_evidence_timeout', timeout=30)
 
 
-def native_dialog_click(expected, button, *, timeout=20, cancelled=None):
+def native_dialog_click(expected, button, *, timeout=20, cancelled=None, diagnostic=None):
     """Read the actual system dialog and click its uniquely labeled visible button."""
     deadline = time.monotonic() + timeout
+    if diagnostic is None: diagnostic = {}
+    diagnostic.update(attempts=0,xmlParsed=False,expectedSeen=False,uniqueButton=False,clicked=False)
     while time.monotonic() < deadline and not (cancelled and cancelled.is_set()):
         try:
+            diagnostic['attempts'] += 1
             xml = adb('shell', 'uiautomator', 'dump', '/dev/tty', timeout=8)
             xml = xml[xml.find('<?xml'):]
             root = ET.fromstring(xml[:xml.rfind('>') + 1])
             nodes = list(root.iter('node'))
+            diagnostic['xmlParsed']=True
             if not any(expected in (n.get('text') or '') for n in nodes):
                 continue
+            diagnostic['expectedSeen']=True
             buttons = [n for n in nodes if n.get('text') in button and n.get('enabled') == 'true']
             if len(buttons) != 1:
                 continue
+            diagnostic['uniqueButton']=True
             match = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', buttons[0].get('bounds', ''))
             if not match:
                 continue
@@ -77,6 +83,7 @@ def native_dialog_click(expected, button, *, timeout=20, cancelled=None):
             if cancelled and cancelled.is_set():
                 return False
             adb('shell', 'input', 'tap', str((x1+x2)//2), str((y1+y2)//2))
+            diagnostic['clicked']=True
             return True
         except (GuiFailure, ET.ParseError, ValueError):
             pass
@@ -87,7 +94,9 @@ def confirm_click(browser, scope, label, expected):
     """Concurrently handle the real native confirmation, never replace confirm()."""
     results = queue.Queue(maxsize=1)
     cancelled = threading.Event()
-    worker = threading.Thread(target=lambda: results.put(native_dialog_click(expected, {'OK','确定'}, cancelled=cancelled)), daemon=True)
+    diagnostic = {}
+    browser.confirmDiagnostic = diagnostic
+    worker = threading.Thread(target=lambda: results.put(native_dialog_click(expected, {'OK','确定'}, cancelled=cancelled, diagnostic=diagnostic)), daemon=True)
     worker.start()
     try:
         browser.click_named(scope, label, 'dual_button_unavailable')
@@ -265,6 +274,17 @@ def open_tab(browser, role):
     return pane
 
 
+def rendered_marker_expression(marker):
+    # Match one rendered row, normalizing xterm's non-breaking spaces. Do not
+    # concatenate adjacent rows into a marker that never appeared on screen.
+    return """(()=>[...document.querySelectorAll('#view-content .xterm-rows > div')]
+      .some(row=>row.getClientRects().length>0 && row.textContent.replace(/\u00a0/g,' ').includes(%s)))()""" % json.dumps(marker)
+
+
+def rendered_marker(browser, marker):
+    return browser.evaluate(rendered_marker_expression(marker)) is True
+
+
 def send_draft(browser, value):
     browser.click_named('#view-content', '启用草稿输入', 'dual_draft_mode_missing')
     wait_for(lambda:browser.evaluate("document.querySelector('#view-content .tab-mobile-controls')?.dataset.mode==='draft'"),
@@ -326,6 +346,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         def connect():
             try:
                 view=AndroidWebView(int(port))
+                view.ws.settimeout(45)
                 if view.evaluate("document.readyState==='complete' && !!document.querySelector('#nav-network') && !!window.__TAURI_INTERNALS__"):
                     return view
                 view.close()
@@ -356,7 +377,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
             targets[role]=open_tab(browser,role)
             send_draft(browser, 'T' if role=='ts' else 'E')
             marker='Synthetic '+role.upper()+' ACK ONE'
-            wait_for(lambda:marker in (browser.read('#view-content .xterm-rows') or ''), 'dual_first_ack_frame_missing',timeout=60)
+            wait_for(lambda:rendered_marker(browser,marker), 'dual_first_ack_frame_missing',timeout=60)
         if targets['ts']==targets['et']:raise GuiFailure('dual_targets_not_distinct')
         initials={'ts':b'T','et':b'E'}
         baseline_values={role:baseline(control,role,initials[role]) for role in ('ts','et')}
@@ -380,7 +401,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         second=b't' if surviving=='ts' else b'e'
         send_draft(browser,second.decode())
         marker='Synthetic '+surviving.upper()+' ACK TWO'
-        wait_for(lambda:marker in (browser.read('#view-content .xterm-rows') or ''), 'dual_second_ack_frame_missing',timeout=60)
+        wait_for(lambda:rendered_marker(browser,marker), 'dual_second_ack_frame_missing',timeout=60)
         audit(control,surviving,initials[surviving]+second,ordinal=ordinal,sessions_count=count)
         report['survivorSameAuthenticatedSession']=True
         report['staleInputGuard']=guard_stale_target(browser,stopped)
@@ -391,6 +412,9 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['stage']='complete'
     except Exception as error:
         if browser:
+            diagnostic=getattr(browser,'confirmDiagnostic',None)
+            if isinstance(diagnostic,dict):
+                report['confirmationDiagnostic']={key:value for key,value in diagnostic.items() if key in ('attempts','xmlParsed','expectedSeen','uniqueButton','clicked') and type(value) in (bool,int)}
             try:
                 report['uiDiagnostic']=browser.evaluate("""(()=>{const p=document.querySelector('#network-panel'),f=p?.querySelector('.network-editor');return {
                   networkVisible:!!p&&!p.hidden,editorVisible:!!f&&!!f.getClientRects().length,
@@ -442,8 +466,8 @@ def main():
     output=paths[3];output.mkdir(parents=True,exist_ok=True)
     result={'schemaVersion':1,'status':'failed','sourceSHA':os.environ.get('GITHUB_SHA'),
             'nativeSourceSHA':'93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc',
-            'apkSourceSHA':'25188771b6d6d07bd608923699b6cd3c5cc45c55',
-            'apkFrontendDifference':'exploratory APK predates S27 mobile compact CSS',
+            'apkSourceSHA':'bf39bb44e6df54140984a0abbe93d40f992c1f23',
+            'apkFrontendDifference':'none from checked application source',
             'scope':'owned API35 x86_64; real UI, synthetic peers, QA-only TS private trust; no physical IME',
             'apkSha256':hashlib.sha256(paths[0].read_bytes()).hexdigest(),'directions':{}}
     from android_dual_overlay_session import AndroidDualOverlaySession

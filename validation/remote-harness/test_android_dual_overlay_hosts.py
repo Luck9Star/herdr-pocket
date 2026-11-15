@@ -39,6 +39,20 @@ class HostControlTests(unittest.TestCase):
         self.pending['et'].accept(response['response'].encode(), now=int(time.time()), source_reviewed=True)
         self.assertEqual(response['event'], 'pairing_approved')
 
+    def test_ts_diagnostics_are_strictly_numeric_and_read_only(self):
+        value = dict(event='diagnostics', keyRequests=0, noiseRequests=1, registerRequests=2,
+            mapRequests=3, tlsHandshakeErrors=4, authCompletions=0, secondClientRegistered=True)
+        self.control.diagnostics = lambda: value
+        self.assertEqual(self.control.dispatch({'op': 'ts_diagnostics'}), dict(value, event='ts_diagnostics'))
+        self.assertEqual(self.authorized, [])
+        for changed in ({**value, 'keyRequests': True}, {**value, 'tlsHandshakeErrors': -1},
+                        {**value, 'url': 'private-value'}, {**value, 'event': 'private-value'}):
+            self.control.diagnostics = lambda: changed
+            with self.assertRaisesRegex(hosts.HostControlError, '^ts_diagnostics_invalid$'):
+                self.control.dispatch({'op': 'ts_diagnostics'})
+        with self.assertRaisesRegex(hosts.HostControlError, '^ts_diagnostics_unavailable$'):
+            self.control.dispatch({'op': 'ts_diagnostics', 'url': 'private-value'})
+
     def test_ts_authorization_requires_explicit_action_and_exact_https_origin(self):
         secret = 'https://127.0.0.1:4321/a/one-time-test-value'
         for authorize, url in [(False, secret), (True, secret.replace('https:', 'http:')),

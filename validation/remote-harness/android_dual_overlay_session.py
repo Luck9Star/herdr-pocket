@@ -46,7 +46,7 @@ def command(args, timeout=30):
 class PrivateHostControl:
     EVENTS = {'review_pairing': 'pairing_review', 'approve_pairing': 'pairing_approved',
               'revoke_pairing': 'pairing_revoked', 'complete_ts_auth': 'ts_authorized',
-              'audit': 'host_audit', 'stop': 'cleanup'}
+              'audit': 'host_audit', 'ts_diagnostics': 'ts_diagnostics', 'stop': 'cleanup'}
 
     def __init__(self, process):
         self.process, self.events, self.lock = process, queue.Queue(), threading.Lock()

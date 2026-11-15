@@ -81,9 +81,10 @@ def live_ssh_ports(port):
 
 class PairingControl:
     """Approve public requests and audit independent host evidence, not app flags."""
-    def __init__(self, targets, complete_auth, control_url, active_ports=live_ssh_ports):
+    def __init__(self, targets, complete_auth, control_url, active_ports=live_ssh_ports, diagnostics=None):
         self.targets = targets
         self.complete_auth = complete_auth
+        self.diagnostics = diagnostics
         self.control_origin = urlsplit(control_url)
         if self.control_origin.scheme != 'https' or self.control_origin.hostname != '127.0.0.1':
             raise HostControlError('isolated_test_control_required')
@@ -92,6 +93,16 @@ class PairingControl:
 
     def dispatch(self, request):
         operation = request.get('op')
+        if operation == 'ts_diagnostics':
+            if set(request) != {'op'} or self.diagnostics is None:
+                raise HostControlError('ts_diagnostics_unavailable')
+            value = self.diagnostics()
+            counters = ('keyRequests', 'noiseRequests', 'registerRequests', 'mapRequests', 'tlsHandshakeErrors', 'authCompletions')
+            if (not isinstance(value, dict) or set(value) != {'event', 'secondClientRegistered', *counters}
+                    or value.get('event') != 'diagnostics' or type(value.get('secondClientRegistered')) is not bool
+                    or any(type(value.get(key)) is not int or not 0 <= value[key] <= 1000000 for key in counters)):
+                raise HostControlError('ts_diagnostics_invalid')
+            return dict(value, event='ts_diagnostics')
         if operation == 'complete_ts_auth':
             url = request.get('url')
             if request.get('authorize') is not True or not isinstance(url, str) or len(url) > 4096:
@@ -263,7 +274,7 @@ class HostHarness:
         control = urlsplit(ready['controlUrl'])
         if control.scheme != 'https' or control.hostname != '127.0.0.1' or ready['peerPort'] != 2222:
             raise HostControlError('controlled_ts_material_invalid')
-        self.control = PairingControl(self.targets, self.complete_auth, ready['controlUrl'])
+        self.control = PairingControl(self.targets, self.complete_auth, ready['controlUrl'], diagnostics=self.ts_diagnostics)
         self.set_phase('materials')
         profiles = {}
         for role, host, port in [('et', '10.126.126.2', virtual_port), ('ts', ready['peerIp'], 2222)]:
@@ -287,6 +298,11 @@ class HostHarness:
                           'ownerPids': {'control': self.ts.pid, 'derp': self.ts.pid, 'easytier': self.peer.pid},
                           'sshPorts': [target.config['port'] for target in self.targets.values()]}
             write_private(self.root / 'relay.json', self.relay)
+
+    def ts_diagnostics(self):
+        self.ts.stdin.write(b'{"op":"diagnostics"}\n')
+        self.ts.stdin.flush()
+        return read_event(self.events, 'diagnostics', self.ts)
 
     def complete_auth(self, url):
         request = (json.dumps({'op': 'complete_auth', 'url': url}) + '\n').encode()

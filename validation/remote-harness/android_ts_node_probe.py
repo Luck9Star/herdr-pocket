@@ -29,10 +29,16 @@ NETMON_PATHS = {'goNet', 'getifaddrs'}
 
 
 def _safe_netmon_diagnose(item):
-    # Mirrors the committed netmon.go JSON schema exactly: fixed keys, the two
-    # real paths, boolean flags, non-negative counts, bounded err classes.
-    # Anything else (nested surprises, extra fields) rejects the whole report.
-    if not isinstance(item, dict) or set(item) != {
+    # Mirrors the committed netmon.go JSON schema exactly. Go marshals zero
+    # values: stateBuilt=true means stateErrClass stays "" (set only on
+    # failure), and a path that never executed keeps ok=false with errClass "".
+    # The Java reader may instead produce the single-key sentinels
+    # fileMissing/parseError; both pass through as-is.
+    if not isinstance(item, dict):
+        return False
+    if set(item) == {'fileMissing'} or set(item) == {'parseError'}:
+        return item.get('fileMissing') is True or item.get('parseError') is True
+    if set(item) != {
             'event', 'getterRegistered', 'getterCalls', 'paths', 'selected',
             'stateBuilt', 'stateErrClass', 'haveV4', 'haveV6', 'anyUp'}:
         return False
@@ -46,7 +52,9 @@ def _safe_netmon_diagnose(item):
         return False
     if item['stateErrClass'] not in NETMON_ERR_CLASSES:
         return False
-    if item['stateBuilt'] and item['stateErrClass'] in ('', ):
+    if item['stateBuilt'] and item['stateErrClass'] != '':
+        return False
+    if not item['stateBuilt'] and item['stateErrClass'] not in ('empty', 'permission', 'other'):
         return False
     paths = item['paths']
     if not isinstance(paths, list) or len(paths) > 2 or [p.get('path') if isinstance(p, dict) else None for p in paths] != ['goNet', 'getifaddrs'][:len(paths)]:
@@ -58,9 +66,9 @@ def _safe_netmon_diagnose(item):
             return False
         if type(p['interfaces']) is not int or p['interfaces'] < 0 or type(p['addresses']) is not int or p['addresses'] < 0:
             return False
-        if p['ok'] and p['errClass'] not in ('none',):
+        if p['ok'] and p['errClass'] != 'none':
             return False
-        if not p['ok'] and p['errClass'] in ('', 'none'):
+        if not p['ok'] and p['errClass'] == 'none':
             return False
     return True
 

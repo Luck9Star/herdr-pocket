@@ -30,17 +30,23 @@ class ProbeGuardsTests(unittest.TestCase):
     def test_netmon_diagnose_and_java_interfaces_are_exportable(self):
         value = {'schemaVersion': 1, 'loginInvoked': False, 'dialInvoked': False, 'passed': False,
             'states': ['starting', 'needs-login'], 'startError': 'identity_unavailable', 'lastStage': 'native-status'}
+        # Real Go marshal shape: stateBuilt=true leaves stateErrClass at the
+        # zero value "" (netmon.go sets it only on failure).
         diagnose = {'event': 'netmon_diagnose', 'getterRegistered': True, 'getterCalls': 1,
-            'paths': [{'path': 'goNet', 'ok': True, 'errClass': 'none', 'interfaces': 3, 'addresses': 5}],
-            'selected': 'goNet', 'stateBuilt': True, 'stateErrClass': 'none',
+            'paths': [{'path': 'goNet', 'ok': True, 'errClass': 'none', 'interfaces': 3, 'addresses': 5},
+                      {'path': 'getifaddrs', 'ok': False, 'errClass': '', 'interfaces': 0, 'addresses': 0}],
+            'selected': 'goNet', 'stateBuilt': True, 'stateErrClass': '',
             'haveV4': True, 'haveV6': False, 'anyUp': True}
         accepted = {**value, 'javaInterfaces': {'ok': True, 'interfaces': 3, 'addresses': 5, 'errClass': ''},
             'netmonDiagnose': diagnose}
         self.assertEqual(probe.safe_probe(accepted), accepted)
+        for sentinel in ({'fileMissing': True}, {'parseError': True}):
+            self.assertEqual(probe.safe_probe({**value, 'netmonDiagnose': sentinel})['netmonDiagnose'], sentinel)
         for rejected in ({**value, 'javaInterfaces': 'private-value'},
                          {**value, 'netmonDiagnose': 'private-value'},
                          {**value, 'javaInterfaces': {'ok': True, 'interfaces': -1, 'addresses': 0, 'errClass': ''}},
                          {**value, 'netmonDiagnose': {'event': 'netmon_diagnose', 'fileMissing': True}},
+                         {**value, 'netmonDiagnose': {'fileMissing': False}},
                          {**value, 'netmonOptIn': 'yes'}):
             with self.assertRaises(ValueError): probe.safe_probe(rejected)
         for accepted in ({**value, 'netmonOptIn': True}, {**value, 'netmonOptIn': False}):
@@ -95,7 +101,7 @@ class ProbeGuardsTests(unittest.TestCase):
             base = {'event': 'netmon_diagnose', 'getterRegistered': True, 'getterCalls': 2,
                 'paths': [{'path': 'goNet', 'ok': False, 'errClass': 'permission', 'interfaces': 0, 'addresses': 0},
                           {'path': 'getifaddrs', 'ok': True, 'errClass': 'none', 'interfaces': 3, 'addresses': 5}],
-                'selected': 'getifaddrs', 'stateBuilt': True, 'stateErrClass': 'none',
+                'selected': 'getifaddrs', 'stateBuilt': True, 'stateErrClass': '',
                 'haveV4': True, 'haveV6': False, 'anyUp': True}
             base.update(over)
             return base
@@ -108,6 +114,15 @@ class ProbeGuardsTests(unittest.TestCase):
         self.assertTrue(accepted(diagnose()))
         self.assertTrue(accepted(diagnose(paths=[{'path': 'goNet', 'ok': True, 'errClass': 'none',
             'interfaces': 2, 'addresses': 4}], selected='goNet')))
+        # A path that never executed is legal: ok=false with errClass "".
+        self.assertTrue(accepted(diagnose(paths=[{'path': 'goNet', 'ok': True, 'errClass': 'none',
+            'interfaces': 2, 'addresses': 4}, {'path': 'getifaddrs', 'ok': False, 'errClass': '',
+            'interfaces': 0, 'addresses': 0}], selected='goNet')))
+        # stateBuilt=true must keep the zero-value "" stateErrClass (Go sets
+        # it only on failure); stateBuilt=false must carry a real class.
+        self.assertFalse(accepted(diagnose(stateErrClass='none')))
+        self.assertTrue(accepted(diagnose(stateBuilt=False, stateErrClass='permission')))
+        self.assertFalse(accepted(diagnose(stateBuilt=False, stateErrClass='')))
         self.assertFalse(accepted(diagnose(event='other_event')))
         self.assertFalse(accepted(diagnose(getterCalls=-1)))
         self.assertFalse(accepted(diagnose(getterCalls='two')))

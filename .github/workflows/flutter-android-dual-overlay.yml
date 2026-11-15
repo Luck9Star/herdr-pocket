@@ -17,7 +17,6 @@ jobs:
     env:
       NATIVE_SOURCE: 93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
-      GH_TOKEN: ${{ github.token }}
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -45,6 +44,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y acl openssh-server iproute2 libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
       - name: Download independently fixed native and host inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14169009804/zip" > "$RUNNER_TEMP/normal.zip"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14169129213/zip" > "$RUNNER_TEMP/qa.zip"

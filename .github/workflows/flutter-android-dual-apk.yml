@@ -21,7 +21,6 @@ jobs:
     env:
       NATIVE_SOURCE: 93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
       NATIVE_RUN: '43732345827'
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -38,6 +37,8 @@ jobs:
       - name: Test APK inventory guards
         run: python3 -m unittest discover -s validation/flutter/tool -p 'test_dual_overlay_apk.py' -v
       - name: Fetch and verify fixed native artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14169009804/zip" > "$RUNNER_TEMP/normal.zip"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14169129213/zip" > "$RUNNER_TEMP/qa.zip"

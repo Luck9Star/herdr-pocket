@@ -2,9 +2,11 @@
 
 > 面向 SSH / herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
+**同源 QA 调试包 · 2026-11-15**　源码 `bc43076`：[Flutter Android APK（多架构）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816/artifacts/14149209387) · [Tauri Android APK（arm64-v8a）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816/artifacts/14149137851)。[本批运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816)已完成：27 项成功、7 项按条件跳过、0 失败；[macOS/Linux 下载、完整包名、架构与 SHA256](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。这些是 CI 调试快照，与公开 Release 分开。
+
 **本分支入口 · 2026-11-15**　首页提供「普通 SSH」和「配对添加」：普通服务器核验指纹后，可用账号密码（仅本次连接在内存使用）或已有私钥打开真实远端 PTY；herdr 路线继续提供配对、会话看板与观察／逐键／草稿。新版看板分行呈现真实会话和受阻目标，并保留搜索与复核；[320/390/桌面界面及验收证据](docs/63-design-parity-and-direct-ssh.md#s01s05-设计与可达性)注明合成截图和设备证据的区别。S06 两条真实 SSH/herdr 的只读与受保护输入，已分别完成 Flutter Widget 回环与 Tauri 原生 Linux GTK 验收；普通 SSH 两壳已在同源 `4db7c49` 通过 API35 Android 模拟器验收。CI 调试 APK 仅供验收，与公开 Release 分开；具体功能须按 artifact 对应源码 SHA 核对，不能外推手机真机或五平台运行验收。
 
-**从这里开始**　[阶段交接：已完成、未完成与恢复顺序](https://github.com/Luck9Star/herdr-pocket/blob/85c150b24dca14412cf01075b832c1014547a3aa/docs/56-project-status-and-handoff.md) · [原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [最新下载、验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)
+**从这里开始**　[阶段交接：已完成、未完成与恢复顺序](https://github.com/Luck9Star/herdr-pocket/blob/85c150b24dca14412cf01075b832c1014547a3aa/docs/56-project-status-and-handoff.md) · [原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [历史下载、验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)
 
 **手机闭环 · 2026-11-07**　Flutter 和 Tauri 已在 Android API 35 x86_64 云模拟器上走通设备配对审查、SSH 认证、看板、选定 pane 的持续观察和停止。主机摘要显示已知受阻数、状态未知数、原会话和最后同步时间；返回列表保留上次快照。[验收结果、两轮失败及复测](docs/34-mobile-host-task-summary.md)
 

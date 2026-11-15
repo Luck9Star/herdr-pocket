@@ -2,6 +2,20 @@
 
 状态：2026-11-15 原型验证交接。此记录覆盖普通 SSH、S01–S06 与 S27 的界面增量，以及 Flutter / Tauri Android 模拟器普通 SSH 验收；CI 调试 APK、公开 Release、手机真机和五平台运行须分别核对。历史 ADR 和此前 APK 的证据范围保持原样。
 
+## 可下载的同源调试快照
+
+以下五件均来自源码 `bc430761b71a470eeba94a01b148f0521343c822` 的 [运行 43683202816](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816)。该批次已完成：27 项成功、7 项按触发条件跳过、0 失败。五件已实际下载核对包体、架构、内包 SHA256 与 GitHub 外层 ZIP digest；表内 SHA256 **对应内包**。下载 GitHub 工件 ZIP 后，取出下列文件使用；它们是 QA 调试快照，与公开 Release 分开。
+
+| 平台 / 路线 | GitHub 下载与内包名 | 实际架构 | 内包 SHA256 |
+| --- | --- | --- | --- |
+| Flutter Android | [工件 14149209387](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816/artifacts/14149209387) · `flutter-android-debug.apk` | `arm64-v8a` / `armeabi-v7a` / `x86_64` | `47964aa62ff3c1ef2be6ab5d4dcc3ce9f4157a96aa8508dc5bcc23a2adbf72f2` |
+| Tauri Android | [工件 14149137851](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816/artifacts/14149137851) · `app-universal-debug.apk` | 仅 `arm64-v8a` | `3f55805740f93066cd232388b5a6266eae9161f688a5ecb06b368dfa1efe3bd5` |
+| Flutter macOS | [工件 14149676638](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816/artifacts/14149676638) · `flutter-macos-debug.tar.gz`，内含 `herdr_flutter_probe.app` | Mach-O `arm64`（Apple Silicon） | `808a1433e54a048d14fbd336815b0f570459f4fe98ac1d8e738170bcedbf801c` |
+| Tauri macOS | [工件 14148813541](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816/artifacts/14148813541) · `herdr-pocket-tauri-probe.app.zip` | Mach-O `arm64`（Apple Silicon） | `86f28a534a87c651d4c8da15331a11a3b2d496540688ce95482d2d9726008061` |
+| Tauri Linux | [工件 14149528125](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816/artifacts/14149528125) · `herdr-pocket-tauri-probe_0.1.0_amd64.deb` | Debian `amd64` | `87082ddbc67212a2c341bf6f836850d1cada8d67ed6afe3fce4ed6c7ab312236` |
+
+云批次的 Flutter Linux 候选 539 项通过、5 项显式跳过，另有 10 项渲染测试通过；原始日志见[工件 14149438094](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816/artifacts/14149438094)，本机仅读回核对。本机独立执行的 Tauri 591 项、helper 15 项、pairing 21 项、remote-harness 196 项均通过。UI 按 320/390 宽度核验。包体核对、源码/渲染测试与具体设备运行分别记账，下文保留各次平台验收的原始 SHA 和范围；这些计数不替代五平台实体设备运行。
+
 ## 从首页选择接入方式
 
 | 入口 | 前提与结果 | 身份和输入边界 |

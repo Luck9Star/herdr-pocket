@@ -51,10 +51,14 @@ def prepare(app, fixture=None):
         if not fixture.is_file():
             raise ValueError('macos_xcui_fixture_invalid')
         config = json.loads(fixture.read_text())
-        if (set(config) != {'port','username','password','fingerprint'} or
+        if (set(config) != {'port','username','password','fingerprint','keyPort','keyFingerprint','privateKey','passphrase'} or
                 type(config['port']) is not int or not 1 <= config['port'] <= 65535 or
+                type(config['keyPort']) is not int or not 1 <= config['keyPort'] <= 65535 or config['keyPort'] == config['port'] or
                 config['username'] != 'fixture' or not re.fullmatch(r'[0-9a-f]{32}',config['password']) or
-                not re.fullmatch(r'SHA256:[A-Za-z0-9+/]{43}',config['fingerprint'])):
+                not re.fullmatch(r'[0-9a-f]{32}',config['passphrase']) or
+                not re.fullmatch(r'SHA256:[A-Za-z0-9+/]{43}',config['fingerprint']) or
+                not re.fullmatch(r'SHA256:[A-Za-z0-9+/]{43}',config['keyFingerprint']) or
+                not re.fullmatch(r'-----BEGIN OPENSSH PRIVATE KEY-----\n[A-Za-z0-9+/=\n]+-----END OPENSSH PRIVATE KEY-----\n?',config['privateKey'])):
             raise ValueError('macos_xcui_fixture_invalid')
     text = text.replace(unit, 'productType = "com.apple.product-type.bundle.ui-testing";')
     text = text.replace(loader, '').replace(host, '\t\t\t\tTEST_TARGET_NAME = Runner;')

@@ -49,7 +49,7 @@ class ScaffoldTests(unittest.TestCase):
     def test_fixture_embedded_only_in_disposable_test_source(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);self.scaffold(root)
-            fixture=root / 'fixture&config.json';fixture.write_text(json.dumps({'port':2222,'username':'fixture','password':'a'*32,'fingerprint':'SHA256:'+'B'*43}))
+            fixture=root / 'fixture&config.json';fixture.write_text(json.dumps({'port':2222,'username':'fixture','password':'a'*32,'fingerprint':'SHA256:'+'B'*43,'keyPort':2223,'keyFingerprint':'SHA256:'+'C'*43,'privateKey':'-----BEGIN OPENSSH PRIVATE KEY-----\nYWJj\n-----END OPENSSH PRIVATE KEY-----\n','passphrase':'b'*32}))
             runner.prepare(root,fixture)
             scheme=ET.parse(root / 'macos/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme')
             self.assertIsNone(scheme.find('.//EnvironmentVariable'))
@@ -74,9 +74,10 @@ class ScaffoldTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);fixture=root/'macos-secure-fixture';fixture.mkdir()
             allowed=['fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted','passwordValuePresent','passphraseValuePresent',
-                     'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField',
+                     'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                      'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
-            (fixture/'facts.json').write_text(json.dumps({k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}))
+            good_peer={k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}
+            (fixture/'facts.json').write_text(json.dumps({'password':good_peer,'encryptedKey':good_peer}))
             progress={k:True for k in allowed}
             good_log='Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed\n'+''.join('HP_XCUI_STAGE='+k+'\n' for k in progress)
             log=root/'macos-secure-private.log';log.write_text(good_log)
@@ -100,12 +101,14 @@ class ScaffoldTests(unittest.TestCase):
             del progress['returnAndReopenCleared'];log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed\n'+''.join('HP_XCUI_STAGE='+k+'\n' for k in progress))
             self.assertNotEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'failed')
             log.write_text(good_log)
-            (fixture/'facts.json').write_text(json.dumps({'authAccepted':False}))
+            (fixture/'facts.json').write_text(json.dumps({'password':{'authAccepted':False},'encryptedKey':good_peer}))
             self.assertNotEqual(execute().returncode,0);self.assertFalse(json.loads(output.read_text())['peerAuthenticationPtyShellAndClose'])
-            (fixture/'facts.json').write_text(json.dumps({k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}))
+            (fixture/'facts.json').write_text(json.dumps({'password':good_peer,'encryptedKey':{'authAccepted':False}}))
             log.write_text(good_log.replace('HP_XCUI_STAGE=passphraseValuePresent','HP_XCUI_STAGE=passphraseValueUnavailable'))
             self.assertNotEqual(execute().returncode,0)
             result=json.loads(output.read_text());self.assertFalse(result['systemTreeAndSecureFieldsVerified']);self.assertEqual(result['errorCode'],'secure_input_unproven')
+            (fixture/'facts.json').write_text(json.dumps({'password':good_peer,'encryptedKey':good_peer}))
+            self.assertEqual(execute().returncode,0)
 
     def test_clean_package_precedes_fixture_and_test_hook_and_is_success_gated(self):
         workflow=(Path(__file__).resolve().parents[2] / '.github/workflows/flutter-macos-secure-xcui.yml').read_text()
@@ -113,6 +116,15 @@ class ScaffoldTests(unittest.TestCase):
         self.assertLess(workflow.index('flutter build macos --debug'),workflow.index('ci.py" package'))
         self.assertLess(workflow.index('ci.py" package'),workflow.index('--install-hook'))
         self.assertIn("if: success() && github.ref == 'refs/heads/codex/acceptance/macos-secure-design-parity'",workflow)
+
+    def test_secure_queries_scroll_with_bounded_real_hits_and_dual_peer_guards(self):
+        swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()
+        self.assertIn('target.scroll(byDeltaX: 0, deltaY: amount)',swift)
+        self.assertIn('first == element.frame && element.isHittable',swift)
+        self.assertIn('element.coordinate(withNormalizedOffset:',swift)
+        self.assertIn('passwordValueUnavailable',swift)
+        self.assertIn('passphraseValueUnavailable',swift)
+        self.assertIn('encryptedKeyConnected',swift)
 
 if __name__ == '__main__':
     unittest.main()

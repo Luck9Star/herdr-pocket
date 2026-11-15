@@ -416,3 +416,32 @@ h1 { font-size:18px; margin:0}
   body.keyboard-visible .tab-input-toolbar:has(.tab-modifier-actions [aria-pressed=true]) > p,
   body.keyboard-visible .tab-input-toolbar:has(.tab-modifier-actions button:first-child:disabled) > p { display:block; }
 }
+
+.network-profile-card h3 { margin:0 0 8px; }
+.network-profile-card > p { margin:5px 0; }
+.network-profile-management { margin-top:10px; }
+.network-profile-management > summary {
+  min-height:44px;
+  padding:12px 0;
+  color:var(--hp-brand);
+  cursor:pointer;
+  font-weight:600;
+}
+.network-profile-management > p { color:var(--hp-textSecondary); font-size:13px; }
+.network-profile-management .saved-host-actions p { flex-basis:100%; margin:4px 0; }
+.network-profile-management .saved-host-actions > button {
+  flex:1 1 110px;
+  white-space:normal;
+}
+@media (max-width:599px) {
+  #home-network:has(#network-panel:not([hidden])) > h2,
+  #home-network:has(#network-panel:not([hidden])) > #network-open { display:none; }
+  #network-panel:not([hidden]) { padding:0; border:0; background:transparent; }
+  #network-panel > h2 { margin:4px 0 8px; }
+  #network-panel > p { margin:6px 0 10px; }
+  .network-profile-card { padding:12px; margin:8px 0; }
+  .network-profile-card h3 { margin-bottom:4px; }
+  .network-profile-card > p { margin:2px 0; line-height:1.4; }
+  .network-profile-management { margin-top:3px; }
+  .network-profile-management > summary { min-height:40px; padding:10px 0; }
+}

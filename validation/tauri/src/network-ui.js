@@ -14,6 +14,7 @@ export async function settleNetworkOperation(work, affected, onAffected, load) {
 export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions, beforeForgetZeroTier}) {
   const panel=document.getElementById('network-panel'), open=document.getElementById('network-open');
   let deviceReviewDialog=null;
+  const expandedProfiles=new Set();
   let catalog=null, editing=null, identityEditor=null, identityStates=new Map(), nodeStates=new Map(), busy=false, pendingStart=false, stopBusy=false, nodeEpoch=0, loadRevision=0;
   const poller=new NetworkLoginPoll(pollOptions);
   const managed=p=>['easytier','tailscale'].includes(p.provider);
@@ -90,11 +91,18 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
     panel.append(button('审查 ZeroTier 共享设备',()=>{deviceReviewDialog=openZeroTierDeviceReview({invoke,beforeForget:beforeForgetZeroTier,onSettled:async ids=>{await onAffected(ids);await load();}});}));
     for(const profile of catalog.profiles) {
       const affected=catalog.bindings.filter(b=>b.profileId===profile.id).map(b=>b.hostId);
-      const card=el('article','','saved-host-card');card.append(el('h3',profile.label),el('p',`${profile.provider} · ${profile.enabled?'已启用':'已停用'} · 受影响主机：${names(affected)}`));
+      const card=el('article','','saved-host-card network-profile-card');
+      const providerName={tailscale:'Tailscale',easytier:'EasyTier',zerotier:'ZeroTier'}[profile.provider] || profile.provider;
+      card.append(el('h3',`${profile.label} · ${providerName}`),el('p',profile.enabled?'配置已启用':'配置已停用'));
+      card.append(el('p',`绑定主机：${affected.length ? names(affected) : '无'}`));
       const identity=identityStates.get(profile.id);
       const identityText=!managed(profile)?'本机身份：待接入':identity===null || identity===undefined?'本机身份状态未知，请核查设备':!identity.supported?'本平台本机身份待接入':!identity.available?'本机身份状态未知，请核查设备':identity.present?`本机身份已保存 · ${identity.mode==='DEVICE_STATE'?'设备状态（本机加密保存）':identity.mode==='PRIVATE'?'私有网络':'公开无秘密'}`:'本机身份尚未创建';
-      card.append(el('p',identityText));
       const node=nodeStates.get(profile.id), nodeView=nodePresentation(profile,identity,node);card.append(el('p',nodeView.text));
+      const management=el('details','','network-profile-management');management.open=expandedProfiles.has(profile.id);
+      management.ontoggle=()=>{if(management.open)expandedProfiles.add(profile.id);else expandedProfiles.delete(profile.id);};
+      const summary=el('summary','管理网络');
+      summary.onclick=()=>{if(management.open)expandedProfiles.delete(profile.id);else expandedProfiles.add(profile.id);};
+      management.append(summary,el('p',identityText));
       const actions=el('div','','saved-host-actions');actions.append(button('编辑',()=>{editing=profile;render();}),button(profile.enabled?'停用':'启用',()=>{if(!confirm(`将${profile.enabled?'停用':'启用'} ${profile.label}。受影响主机：${names(affected)}。继续？`))return;void operation(()=>invoke('network_save',{profile:{...profile,enabled:!profile.enabled},expectedCatalog:catalog.revision,expectedRevision:profile.revision,affected}),affected);}));
       if(nodeView.canStart && identity?.handle)actions.append(button('启动节点',()=>{if(!confirm(`启动 ${profile.label} 的本机节点？启动不代表入网或连接。`))return;void nodeOperation(profile,affected,'start',identity.handle,null);}));
       if(nodeView.canStop && node?.binding)actions.append(button('停止节点',()=>{if(!confirm(`停止 ${profile.label} 的本机节点？受影响主机：${names(affected)}。`))return;void nodeOperation(profile,affected,'stop',null,node.binding);},true));
@@ -105,7 +113,10 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
         if(identity.present && identity.handle)actions.append(button('删除本机身份',()=>{if(!confirm(`删除 ${profile.label} 的本机网络身份？受影响主机：${names(affected)}。此操作不会删除 SSH 配对密钥。`))return;void identityOperation(profile,affected,'delete','','',identity.handle);}));
         else if(!identity.present)actions.append(button('配置本机身份',()=>{if(profile.provider==='tailscale'){if(confirm(`为 ${profile.label} 创建本机加密设备状态？不包含 auth key，也不会自动登录。`))void identityOperation(profile,affected,'create','DEVICE_STATE','');}else{identityEditor=profile;editing=null;render();}}));
       }
-      const del=button('删除',()=>{if(affected.length){status.textContent=`仍被主机引用：${names(affected)}。请先逐一更换或解除绑定。`;return;}if(managed(profile) && (!identity || (identity.supported && (!identity.available || identity.present)))){status.textContent=identity?.present?'请先明确删除此设备上的网络身份。':'本机身份状态未确认，不能删除配置。';return;}if(confirm(`删除 ${profile.label}？`))void operation(()=>invoke('network_delete',{id:profile.id,expectedCatalog:catalog.revision,expectedRevision:profile.revision}),[]);});actions.append(del);card.append(actions);panel.append(card);
+      const deleteReason=affected.length ? `仍被主机引用：${names(affected)}。请先逐一更换或解除绑定。` : managed(profile) && (!identity || (identity.supported && (!identity.available || identity.present))) ? (identity?.present?'请先明确删除此设备上的网络身份。':'本机身份状态未确认，不能删除配置。') : '';
+      const del=button('删除',()=>{if(deleteReason)return;if(confirm(`删除 ${profile.label}？`))void operation(()=>invoke('network_delete',{id:profile.id,expectedCatalog:catalog.revision,expectedRevision:profile.revision}),[]);});
+      if(deleteReason){del.disabled=true;del.title=deleteReason;actions.append(el('p',deleteReason));}
+      actions.append(del);management.append(actions);card.append(management);panel.append(card);
     }
     panel.append(button('新增网络配置',()=>{editing={id:'0'.repeat(32),label:'',provider:'tailscale',enabled:true,revision:1,settings:{controlUrl:'',hostname:''}};render();}));
     if(editing) {

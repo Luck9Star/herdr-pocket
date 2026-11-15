@@ -89,3 +89,33 @@ test('pending start permits reviewed exact stop and ignores late start result',a
     assert.ok(statusCalls>readsBeforeLate);assert.equal(startCalls,1);assert.equal(stopCalls,1);assert.ok(!panel.descendants().some(n=>n.textContent.includes('本机引擎已启动')));assert.ok(panel.descendants().some(n=>n.textContent==='节点已停止'));
   } finally {globalThis.document=previous.document;globalThis.window=previous.window;globalThis.confirm=previous.confirm;}
 });
+
+test('network summary shows real provider, node and bindings; management starts collapsed with blocked deletion',async()=>{
+  const {initNetworkUI}=await import('../src/network-ui.js');
+  const previous={document:globalThis.document,window:globalThis.window,confirm:globalThis.confirm};
+  const panel=new Element('section'),open=new Element('button');panel.hidden=true;
+  globalThis.document={hidden:false,getElementById:id=>id==='network-panel'?panel:open,createElement:tag=>new Element(tag),addEventListener(){}};
+  globalThis.window={addEventListener(){}};globalThis.confirm=()=>true;
+  const profile={id:'a'.repeat(32),label:'工作网络',provider:'easytier',enabled:true,revision:1,settings:{networkName:'team'}};
+  const invoke=async name=>{
+    if(name==='network_list')return {revision:'r',profiles:[profile],bindings:[{hostId:'h1',profileId:profile.id}]};
+    if(name==='network_identity_status')return {supported:true,available:true,present:false};
+    if(name==='network_node_status')return {state:'stopped'};
+    throw Error(name);
+  };
+  try {
+    initNetworkUI({native:true,invoke,getHosts:()=>[{id:'h1',name:'工作站',retired:false}],onAffected:async()=>{}});
+    open.onclick();await new Promise(resolve=>setImmediate(resolve));
+    const card=panel.descendants().find(n=>n.className==='saved-host-card network-profile-card');
+    assert.ok(card.children.some(n=>n.textContent==='工作网络 · EasyTier'));
+    assert.ok(card.children.some(n=>n.textContent==='绑定主机：工作站'));
+    assert.ok(card.children.some(n=>n.textContent==='先配置本机网络身份'));
+    const details=card.children.find(n=>n.tagName==='details');assert.equal(details.open,false);
+    const del=details.descendants().find(n=>n.tagName==='button'&&n.textContent==='删除');
+    assert.equal(del.disabled,true);assert.match(del.title,/仍被主机引用/);
+    details.children.find(n=>n.tagName==='summary').onclick();details.open=true;
+    const edit=details.descendants().find(n=>n.tagName==='button'&&n.textContent==='编辑');edit.onclick();
+    const rerendered=panel.descendants().find(n=>n.tagName==='details'&&n.className==='network-profile-management');
+    assert.equal(rerendered.open,true);
+  } finally {globalThis.document=previous.document;globalThis.window=previous.window;globalThis.confirm=previous.confirm;}
+});

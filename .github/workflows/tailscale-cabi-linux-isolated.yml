@@ -67,6 +67,11 @@ jobs:
           trap cleanup EXIT
           sudo ip netns add "$namespace"
           sudo ip netns exec "$namespace" ip link set lo up
+          idle_status=0
+          sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
+            GITHUB_ACTIONS=true GITHUB_RUN_ID="$GITHUB_RUN_ID" GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+            RUNNER_TEMP="$RUNNER_TEMP" /usr/bin/python3 validation/remote-harness/tailscale_cabi_linux.py \
+              --bundle "$RUNNER_TEMP/ts-cabi-bundle" --output "$output/idle" --network-mode loopback --fixture-only || idle_status=$?
           lo_status=0
           sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
             GITHUB_ACTIONS=true GITHUB_RUN_ID="$GITHUB_RUN_ID" GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
@@ -84,7 +89,7 @@ jobs:
           cleanup_status=0
           cleanup || cleanup_status=$?
           trap - EXIT
-          python3 - "$output" "$namespace" "$lo_status" "$dummy_status" "$cleanup_status" <<'PY'
+          python3 - "$output" "$namespace" "$lo_status" "$dummy_status" "$cleanup_status" "$idle_status" <<'PY'
           import json, os, pathlib, subprocess, sys
           root=pathlib.Path(sys.argv[1])
           def load(mode):
@@ -94,7 +99,9 @@ jobs:
               path.parent.mkdir(parents=True,exist_ok=True)
               path.write_text(json.dumps(result,indent=2)+'\n')
               return result
-          lo,dummy=load('loopback'),load('dummy')
+          idle,lo,dummy=load('idle'),load('loopback'),load('dummy')
+          idle_ok=(int(sys.argv[6]) == 0 and idle.get('status') == 'passed' and
+                   len(idle.get('fixtureIdleSnapshots',[])) == 3 and idle.get('fixtureCleanup') is True)
           partial=lo.get('partialCabi',{})
           negative=(int(sys.argv[3]) != 0 and lo.get('controlReached') is True and
                     partial.get('preLoginNoUrl') is True and partial.get('preLoginDialCode') == 7 and
@@ -107,9 +114,9 @@ jobs:
           removed=sys.argv[2] not in [line.split()[0] for line in subprocess.check_output(['ip','netns','list'],text=True).splitlines() if line.split()]
           temp=pathlib.Path(os.environ['RUNNER_TEMP'])
           cleanup_ok=int(sys.argv[5]) == 0 and removed and all(not (temp/name).exists() for name in ('ts-cabi-bundle','ts-cabi-candidate','ts-cabi-cache'))
-          result={'sourceSHA':os.environ['GITHUB_SHA'],'loopbackNegativeObserved':negative,'dummyPositiveObserved':positive,
+          result={'sourceSHA':os.environ['GITHUB_SHA'],'fixtureIdlePassed':idle_ok,'loopbackNegativeObserved':negative,'dummyPositiveObserved':positive,
                   'namespaceRemoved':removed,'ownedBuildCleanup':cleanup_ok,
-                  'status':'passed' if negative and positive and cleanup_ok else 'failed'}
+                  'status':'passed' if idle_ok and negative and positive and cleanup_ok else 'failed'}
           (root/'comparison.json').write_text(json.dumps(result,indent=2)+'\n')
           sys.exit(0 if result['status']=='passed' else 1)
           PY

@@ -3,6 +3,9 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+import json
+from email.message import Message
+from unittest.mock import patch
 
 HERE=Path(__file__).resolve().parent
 spec=importlib.util.spec_from_file_location('tailscale_cabi_linux',HERE/'tailscale_cabi_linux.py')
@@ -18,6 +21,25 @@ class CabiGuards(unittest.TestCase):
             for change in ({'controlUrl':'https://example.com:32123'}, {'peerIp':'127.0.0.1'},
                            {'peerPort':22}, {'caFile':'/etc/hosts'}, {'controlUrl':'http://127.0.0.1:32123'}):
                 with self.subTest(change=change), self.assertRaises(runner.Failure): runner.ready_checked({**good,**change},root)
+    def test_health_probe_uses_supported_key_and_requires_exact_200_json(self):
+        class Reply:
+            def __init__(self,status,body,content='application/json'):
+                self.status=status; self.body=body; self.headers=Message(); self.headers['Content-Type']=content
+            def __enter__(self): return self
+            def __exit__(self,*args): pass
+            def read(self,limit): return self.body[:limit]
+        class Opener:
+            def __init__(self,reply): self.reply=reply; self.request=None
+            def open(self,request,timeout): self.request=request; return self.reply
+        valid=json.dumps({'publicKey':'mkey:'+'a'*64,'legacyPublicKey':'mkey:'+'0'*64}).encode()
+        for reply,expected in ((Reply(200,valid),True),(Reply(404,valid),False),
+                               (Reply(200,b'{}'),False),(Reply(200,valid,'text/plain'),False)):
+            opener=Opener(reply)
+            with patch.object(runner.ssl,'create_default_context') as context,patch.object(runner.urllib.request,'build_opener',return_value=opener):
+                self.assertIs(runner.control_reached('https://127.0.0.1:1234','/owned/ca'),expected)
+            self.assertEqual(opener.request.full_url,'https://127.0.0.1:1234/key?v=1')
+            context.assert_called_once_with(cafile='/owned/ca')
+
     def test_network_scope_accepts_only_isolated_dummy_and_no_routes(self):
         loop={'ifname':'lo','flags':['UP']}
         dummy={'ifname':'hp-fixture0','flags':['UP'],'linkinfo':{'info_kind':'dummy'}}

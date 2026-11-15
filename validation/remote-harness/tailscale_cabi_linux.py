@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import shutil
 import signal
 import ssl
@@ -17,6 +18,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from go_panic_sanitize import sanitize_go_panic
 
 
 class Failure(ValueError):
@@ -97,13 +100,26 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def control_reached(url, ca):
-    request = urllib.request.Request(url, method='GET')
+    request = urllib.request.Request(url.rstrip('/') + '/key?v=1', method='GET')
     try:
-        with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=ca))).open(request, timeout=5) as response:
-            return 100 <= response.status <= 599
-    except urllib.error.HTTPError as response:
-        return 100 <= response.code <= 599
-    except (OSError, urllib.error.URLError):
+        context = ssl.create_default_context(cafile=ca)
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect(),
+            urllib.request.HTTPSHandler(context=context))
+        with opener.open(request, timeout=5) as response:
+            if response.status != 200 or response.headers.get_content_type() != 'application/json':
+                return False
+            raw = response.read(4097)
+            if len(raw) > 4096:
+                return False
+            value = json.loads(raw)
+            if not isinstance(value,dict):
+                return False
+            key = value.get('publicKey')
+            legacy = value.get('legacyPublicKey')
+            return (isinstance(key,str) and re.fullmatch(r'mkey:[0-9a-f]{64}',key) is not None and
+                    key != 'mkey:' + '0'*64 and isinstance(legacy,str) and
+                    re.fullmatch(r'mkey:[0-9a-f]{64}',legacy) is not None)
+    except (OSError, urllib.error.URLError, ValueError, UnicodeError):
         return False
 
 
@@ -145,7 +161,7 @@ def network_checked(mode, links, addresses, routes4, routes6):
     return True
 
 
-def run(bundle, output, mode):
+def run(bundle, output, mode, fixture_only=False):
     if sys.platform != 'linux' or os.geteuid() == 0 or os.environ.get('GITHUB_ACTIONS') != 'true':
         raise Failure('owned_linux_runner_required')
     run_id, attempt = os.environ.get('GITHUB_RUN_ID',''), os.environ.get('GITHUB_RUN_ATTEMPT','')
@@ -170,7 +186,7 @@ def run(bundle, output, mode):
     for item in (helper_dir,worker_dir): item.mkdir(mode=0o700)
     processes=[]; readers=[]; error_files=[]
     helper = None; events = None
-    result={'schemaVersion':1,'networkMode':mode,'status':'failed','stage':'start','controlReached':False,
+    result={'schemaVersion':1,'networkMode':mode,'fixtureOnly':fixture_only,'status':'failed','stage':'start','controlReached':False,
             'authorizationCompleted':False,'fixtureCleanup':False,'processesStopped':False,'privateRemoved':False}
     env={k:v for k,v in os.environ.items() if not k.startswith('HERDR_') and k not in ('SSH_AUTH_SOCK','SSH_AGENT_PID','BASH_ENV')}
     env.update(SHELL='/bin/sh', LD_LIBRARY_PATH=str(bundle))
@@ -199,28 +215,40 @@ def run(bundle, output, mode):
             helper.stdin.write(b'{"op":"diagnostics"}\n'); helper.stdin.flush()
             return diagnostics_checked(read_event(events,helper,'diagnostics',timeout=5))
         result['controlDiagnostics']={'baseline':diagnostics()}
-        request={'library':str(library),'controlUrl':control,'peerIp':peer,'peerPort':port}
-        (worker_dir/'request.json').write_text(json.dumps(request)); (worker_dir/'request.json').chmod(0o600)
-        result['stage']='authorization_url'
-        worker,wevents=launch([sys.executable,str(Path(__file__).with_name('tailscale_cabi_worker.py')),str(worker_dir)],dict(env,SSL_CERT_FILE=ca))
-        read_event(wevents,worker,'auth_requested',timeout=50)
-        result['controlDiagnostics']['beforeAuthorization']=diagnostics()
-        auth_file=worker_dir/'auth-url';auth=auth_checked(auth_file.read_text(),control)
-        helper.stdin.write((json.dumps({'op':'complete_auth','url':auth})+'\n').encode());helper.stdin.flush();auth=''
-        event=read_event(events,helper,'auth_completed')
-        if event.get('ok') is not True: raise Failure('authorization_not_completed')
-        result['authorizationCompleted']=True
-        result['controlDiagnostics']['afterAuthorization']=diagnostics()
-        (worker_dir/'auth-complete').touch(mode=0o600)
-        result['stage']='running_and_echo'
-        evidence=read_event(wevents,worker,'cabi_result',timeout=50)
-        result['cabi']=report_checked(evidence)
-        if worker.wait(timeout=15) != 0: raise Failure('cabi_worker_failed')
-        result['controlDiagnostics']['afterRun']=diagnostics()
-        helper.stdin.write(b'{"op":"stop"}\n');helper.stdin.flush()
-        event=read_event(events,helper,'cleanup',timeout=30)
-        result['fixtureCleanup']=event.get('peerClosed') is True and event.get('bridgeConnections') == 0
-        if not result['fixtureCleanup'] or helper.wait(timeout=15) != 0: raise Failure('fixture_cleanup_failed')
+        if fixture_only:
+            result['stage']='fixture_idle'
+            result['fixtureIdleSnapshots'] = []
+            for _ in range(3):
+                time.sleep(1)
+                result['fixtureIdleSnapshots'].append(diagnostics())
+        else:
+            request={'library':str(library),'controlUrl':control,'peerIp':peer,'peerPort':port}
+            (worker_dir/'request.json').write_text(json.dumps(request)); (worker_dir/'request.json').chmod(0o600)
+            result['stage']='authorization_url'
+            worker,wevents=launch([sys.executable,str(Path(__file__).with_name('tailscale_cabi_worker.py')),str(worker_dir)],dict(env,SSL_CERT_FILE=ca))
+            read_event(wevents,worker,'auth_requested',timeout=50)
+            result['controlDiagnostics']['beforeAuthorization']=diagnostics()
+            auth_file=worker_dir/'auth-url';auth=auth_checked(auth_file.read_text(),control)
+            helper.stdin.write((json.dumps({'op':'complete_auth','url':auth})+'\n').encode());helper.stdin.flush();auth=''
+            event=read_event(events,helper,'auth_completed')
+            if event.get('ok') is not True: raise Failure('authorization_not_completed')
+            result['authorizationCompleted']=True
+            result['controlDiagnostics']['afterAuthorization']=diagnostics()
+            (worker_dir/'auth-complete').touch(mode=0o600)
+            result['stage']='running_and_echo'
+            evidence=read_event(wevents,worker,'cabi_result',timeout=50)
+            result['cabi']=report_checked(evidence)
+            if worker.wait(timeout=15) != 0: raise Failure('cabi_worker_failed')
+            result['controlDiagnostics']['afterRun']=diagnostics()
+            helper.stdin.write(b'{"op":"stop"}\n');helper.stdin.flush()
+            event=read_event(events,helper,'cleanup',timeout=30)
+            result['fixtureCleanup']=event.get('peerClosed') is True and event.get('bridgeConnections') == 0
+            if not result['fixtureCleanup'] or helper.wait(timeout=15) != 0: raise Failure('fixture_cleanup_failed')
+        if fixture_only:
+            helper.stdin.write(b'{"op":"stop"}\n');helper.stdin.flush()
+            event=read_event(events,helper,'cleanup',timeout=30)
+            result['fixtureCleanup']=event.get('peerClosed') is True and event.get('bridgeConnections') == 0
+            if not result['fixtureCleanup'] or helper.wait(timeout=15) != 0: raise Failure('fixture_cleanup_failed')
         result['stage']='complete';result['status']='passed'
     except (Failure, OSError, subprocess.SubprocessError, ValueError) as error:
         if isinstance(error, WorkerEnded): result['partialCabi'] = error.evidence
@@ -263,7 +291,10 @@ def run(bundle, output, mode):
         if helper_log.exists():
             with helper_log.open('rb') as source:
                 source.seek(max(0, helper_log.stat().st_size - 1048576))
-                safe_text=source.read().lower()
+                raw_stderr=source.read()
+            panic = sanitize_go_panic(raw_stderr)
+            safe_text=raw_stderr.lower()
+            if panic['category'] != 'none': result['fixturePanic'] = panic
             result['fixtureStderrIndicators']={key:token in safe_text for key,token in
                 (('panic',b'panic:'),('testTimeout',b'test timed out'),('tlsError',b'tls handshake error'),('testFailure',b'--- fail:'))}
         result['processesStopped']=all(proc.poll() is not None for proc in processes) and not any(t.is_alive() for t in readers)
@@ -278,5 +309,5 @@ def run(bundle, output, mode):
 
 
 if __name__ == '__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--bundle',required=True);parser.add_argument('--output',required=True);parser.add_argument('--network-mode',choices=('loopback','dummy'),required=True)
-    args=parser.parse_args();sys.exit(0 if run(args.bundle,args.output,args.network_mode) else 1)
+    parser=argparse.ArgumentParser();parser.add_argument('--bundle',required=True);parser.add_argument('--output',required=True);parser.add_argument('--network-mode',choices=('loopback','dummy'),required=True);parser.add_argument('--fixture-only',action='store_true')
+    args=parser.parse_args();sys.exit(0 if run(args.bundle,args.output,args.network_mode,args.fixture_only) else 1)

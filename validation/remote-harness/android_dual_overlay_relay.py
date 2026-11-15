@@ -100,6 +100,12 @@ def _verify_owned_listeners(config):
             checks[role] = {'exactLoopbackListener': any(endpoint.search(line) is not None for line in lines),
                 'expectedPidVisible': any(owner.search(line) is not None for line in lines),
                 'exactListenerOwnedByPid': any(endpoint.search(line) is not None and owner.search(line) is not None for line in lines)}
+            local = [line.split()[3] for line in lines if len(line.split()) >= 4
+                     and line.split()[3].endswith(':' + str(config[role]))]
+            checks[role].update(samePortListener=bool(local),
+                samePortMappedLoopback=any(value.startswith('[::ffff:127.0.0.1]:') for value in local),
+                samePortWildcard=any(value.startswith(('0.0.0.0:', '[::]:', '*:')) for value in local),
+                samePortIPv6Loopback=any(value.startswith('[::1]:') for value in local))
         if not all(value['exactListenerOwnedByPid'] for value in checks.values()):
             error = RelayError('owned_listener_required')
             error.listener_checks = checks

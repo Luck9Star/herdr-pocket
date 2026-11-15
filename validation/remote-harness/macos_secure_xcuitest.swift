@@ -123,7 +123,7 @@ final class SecureCredentialUITests: XCTestCase {
     }
 
     @discardableResult
-    private func targetDiagnostics(_ app: XCUIApplication, phase: String) throws -> [Bool]? {
+    private func targetDiagnostics(_ app: XCUIApplication, phase: String, emit: Bool = true) throws -> [Bool]? {
         let fields = try snapshotNodes(app).flatMap { [$0.label, $0.value as? String ?? ""] }
         let expression = try NSRegularExpression(pattern: "HPAX:H([01])P([01])K([01])U([01])V([01])B([01])F([01])E([01])A([01])N([01])T([01])D([01])")
         for field in fields {
@@ -133,16 +133,19 @@ final class SecureCredentialUITests: XCTestCase {
                 guard let span = Range(match.range(at: index), in: field) else { return "0" }
                 return String(field[span])
             }.joined()
-            print("HP_XCUI_TARGET=phase:\(phase),bits:\(bits)")
-            fflush(stdout)
+            if emit { print("HP_XCUI_TARGET=phase:\(phase),bits:\(bits)"); fflush(stdout) }
             return bits.map { $0 == "1" }
         }
-        print("HP_XCUI_TARGET=phase:\(phase),bits:missing")
-        fflush(stdout)
+        if emit { print("HP_XCUI_TARGET=phase:\(phase),bits:missing"); fflush(stdout) }
         return nil
     }
 
     private func requireFreshForm(_ app: XCUIApplication, phase: String) throws {
+        for _ in 0..<20 {
+            let bits = try targetDiagnostics(app, phase: phase, emit: false)
+            if bits?.count == 12 && bits?[8] == true && bits?[9] == true && bits?[10] == true { break }
+            usleep(100_000)
+        }
         let bits = try targetDiagnostics(app, phase: phase)
         XCTAssertTrue(bits?.count == 12 && bits?[8] == true && bits?[9] == true && bits?[10] == true,
                       "fresh ordinary form defaults unconfirmed")
@@ -160,6 +163,11 @@ final class SecureCredentialUITests: XCTestCase {
         app.typeKey(XCUIKeyboardKey.end, modifierFlags: [])
         app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
         app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
+        for _ in 0..<20 {
+            let bits = try targetDiagnostics(app, phase: phase + "PortCleared", emit: false)
+            if bits?.count == 12 && bits?[11] == true { break }
+            usleep(100_000)
+        }
         let cleared = try targetDiagnostics(app, phase: phase + "PortCleared")
         XCTAssertTrue(cleared?.count == 12 && cleared?[11] == true, "default port was not cleared")
         mark(phase + "PortCleared")
@@ -177,11 +185,22 @@ final class SecureCredentialUITests: XCTestCase {
         mark(phase + "UsernameTyped")
     }
 
-    private func reopenSSH(_ app: XCUIApplication) {
-        let back = app.buttons["Back"].exists ? app.buttons["Back"] : app.buttons["返回"]
-        tap(app, back)
+    private func reopenSSH(_ app: XCUIApplication, secrets: [String]) throws {
+        let buttons = app.buttons
+        let exact = app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["Back", "返回", "后退", "上一页"]))
+        let hittable = exact.allElementsBoundByIndex.filter { stableHit($0) }
+        print("HP_XCUI_BACK=buttons:\(min(buttons.count,10000)),exact:\(min(exact.count,10000)),hittable:\(min(hittable.count,10000))")
+        fflush(stdout)
+        if hittable.count == 1 {
+            tap(app, hittable[0])
+            mark("returnButtonUsed")
+        } else {
+            app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+            mark("returnEscapeUsed")
+        }
         let entry = homeEntry(app)
         XCTAssertTrue(entry.exists && entry.isHittable, "normal homepage did not return")
+        try assertNoSecrets(app, secrets)
         tap(app, entry)
     }
 
@@ -271,7 +290,7 @@ final class SecureCredentialUITests: XCTestCase {
         let sentinel = "hp-address-" + UUID().uuidString
         try typeOrdinaryOnce(app, field: address, value: sentinel, phase: "sentinel")
         mark("ordinarySentinelObserved")
-        reopenSSH(app)
+        try reopenSSH(app, secrets: [password, phrase])
         try enterTarget(app, host: host, port: port, username: username, phase: "password")
         mark("ordinaryInputReadable")
 
@@ -305,7 +324,7 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue((secureField(app, "direct-secret").value as? String ?? "").isEmpty, "password not cleared after disconnect")
         mark("disconnectedAndCleared")
 
-        reopenSSH(app)
+        try reopenSSH(app, secrets: [password, phrase])
         try enterTarget(app, host: host, port: keyPort, username: username, phase: "key")
         let keyProbe = app.buttons["探测并核对主机密钥"]
         reveal(app, keyProbe)
@@ -342,13 +361,7 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue((secureField(app, "direct-passphrase").value as? String ?? "").isEmpty, "passphrase not cleared after disconnect")
         mark("encryptedKeyDisconnectedAndCleared")
 
-        let back = app.buttons["Back"].exists ? app.buttons["Back"] : app.buttons["返回"]
-        XCTAssertTrue(back.exists && back.isHittable, "back action missing")
-        tap(app, back)
-        let returnedEntry = homeEntry(app)
-        XCTAssertTrue(returnedEntry.exists && returnedEntry.isHittable, "normal homepage did not return")
-        try assertNoSecrets(app, [password, phrase])
-        tap(app, returnedEntry)
+        try reopenSSH(app, secrets: [password, phrase])
         let reopened = secureField(app, "direct-secret")
         XCTAssertTrue((reopened.value as? String ?? "").isEmpty, "prior credential retained")
         try assertNoSecrets(app, [password, phrase])

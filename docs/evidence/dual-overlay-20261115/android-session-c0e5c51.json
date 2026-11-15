@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "status": "failed",
+  "hostSource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+  "scope": "owned API35 x86_64 AVD, real host fixtures, three TCP relays/reverse and cleanup; no product provider SSH, peer protocol or userspace reachability claim",
+  "deviceProviderReachabilityVerified": false,
+  "udpStunRelayed": false,
+  "rounds": [
+    {
+      "session": {
+        "hostSource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+        "deviceApi35Verified": true,
+        "hostReady": true,
+        "relayRoles": 0,
+        "reverseMappings": 0,
+        "udpStunRelayed": false,
+        "deviceUserspaceReachabilityVerified": false,
+        "cleanup": {
+          "reverseRemoved": true,
+          "relayStopped": true,
+          "controllerStopped": true,
+          "namespaceRemoved": true,
+          "hostPrivateDirectoryRemoved": true,
+          "controlReaderStopped": true,
+          "privateFilesRemoved": true
+        },
+        "stage": "relay-and-reverse",
+        "controllerProcessExited": true,
+        "controllerExitType": "success"
+      }
+    }
+  ],
+  "errorCode": "controlled_session_smoke_failed",
+  "finalNamespaceAbsent": true,
+  "avdWrapperSucceeded": false,
+  "sourceSHA": "c0e5c51cfc172983a37edf93b0b7e1cea35cc94b",
+  "hostArtifactId": "14171011473",
+  "hostZipSha256": "4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698"
+}

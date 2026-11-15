@@ -101,6 +101,10 @@ done
 
 该通过结果只针对严格无外部路由的测试 namespace，ET 客户端测试配置为 `bind_device=false`，peer 保持默认。[默认 ET 先停 ET](evidence/dual-overlay-20261115/linux-93ca6cd-et.json)、[默认 ET 先停 TS](evidence/dual-overlay-20261115/linux-93ca6cd-ts.json)及[默认 ET 单网](evidence/dual-overlay-20261115/linux-93ca6cd-et-only.json)均未通过正向观察，不应与通过项混同。不同网络的虚拟目标地址并不重叠；同址选择、真实物理网络、GUI 与 Android 应用尚未验证。
 
+## Android 设备首轮前置结果
+
+[Flutter c0e5c51 运行 43740759174](https://github.com/Luck9Star/herdr-pocket/actions/runs/43740759174) 的[脱敏清单](evidence/dual-overlay-20261115/flutter-android-c0e5c51.json)显示两个停网方向均编译并安装了各自 instrumentation APK，但都在 `host_start` 失败，未进入 App 界面、配对、输入或停网；两例各自的共享夹具七项清理、应用卸载与 adb forward 恢复均通过。独立[公共 session 冒烟 43740692045](https://github.com/Luck9Star/herdr-pocket/actions/runs/43740692045)的[脱敏清单](evidence/dual-overlay-20261115/android-session-c0e5c51.json)显示真实主机已就绪，但在 `relay-and-reverse` 阶段停止，尚未建立 relay/reverse；其控制器与七项清理均正常。两者均不证明 Android 双网连接或产品失败；后续须修复并复测。
+
 ## 待补的双网及平台结果
 
 Linux 的 [可选双网 runner](../validation/overlay-runtime/dual-overlay-loopback/README.md)与[工作流](../.github/workflows/dual-overlay-herdr-validation.yml)已实现同一个 `OverlayRuntime` 下两套真实 provider、两台临时 SSH/herdr 主机与受保护输入。验收须同时保留：pre-login 拒绝；两边实际完整帧与准确输入；独立 case 分别停 EasyTier、停 Tailscale，旧输入拒绝且另一网下一次输入仍成功；独立远端字节记录；两个观察任务退出以及节点、流、夹具进程与 namespace 清理。上述 93ca6cd 结果满足这些条件，范围限定于所述 private-loopback 测试配置；其他平台和网络条件仍需分别验证。

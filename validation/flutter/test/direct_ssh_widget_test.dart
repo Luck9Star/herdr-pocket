@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart' show SSHClient, SSHSession;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';

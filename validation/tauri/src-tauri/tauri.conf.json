@@ -42,6 +42,13 @@
     },
     "macOS": {
       "minimumSystemVersion": "11.0"
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "fonts-noto-cjk | fonts-wqy-microhei"
+        ]
+      }
     }
   }
 }

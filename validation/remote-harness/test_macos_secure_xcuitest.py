@@ -217,8 +217,9 @@ class ScaffoldTests(unittest.TestCase):
         key=swift[swift.index('func testEncryptedKeySSH'):swift.index('func testReturnAndReopen')]
         self.assertLess(key.index('verifyFingerprint(app, expected: keyFingerprint'),key.index('connectByWindowCenter(app)'))
         self.assertLess(key.index('diagnoseKeyInputs(app)'),key.index('connectByWindowCenter(app)'))
-        self.assertEqual(key.count('clipboard.clearContents()'),2)
-        self.assertIn('defer { clipboard.clearContents() }',key)
+        self.assertIn('if pasted?[3] == true && pasted?[2] == true',key)
+        self.assertIn('app.typeKey(.return, modifierFlags: [])',key)
+        self.assertLess(key.index('XCTAssertTrue(pemFocused'),key.index('app.typeKey("v", modifierFlags: .command)'))
         diagnostics=swift[swift.index('private func diagnoseKeyInputs'):swift.index('private func ordinaryMetrics')]
         self.assertIn('HP_XCUI_KEYINPUT=visible:',diagnostics)
         self.assertIn('HPKEY:K([01])P([01])F([01])',swift)

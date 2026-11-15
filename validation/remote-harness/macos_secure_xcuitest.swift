@@ -147,7 +147,7 @@ final class SecureCredentialUITests: XCTestCase {
         return nil
     }
 
-    private func diagnoseKeyInputs(_ app: XCUIApplication) throws {
+    private func diagnoseKeyInputs(_ app: XCUIApplication) throws -> [Bool]? {
         let deadline = Date().addingTimeInterval(10)
         var bits: [Bool]?
         repeat {
@@ -158,6 +158,7 @@ final class SecureCredentialUITests: XCTestCase {
         let values = bits ?? Array(repeating: false, count: 6)
         print("HP_XCUI_KEYINPUT=visible:\(bits == nil ? 0 : 1),key:\(values[0] ? 1 : 0),passphrase:\(values[1] ? 1 : 0),focus:\(values[2] ? 1 : 0),empty:\(values[3] ? 1 : 0),length:\(values[4] ? 1 : 0),trimmed:\(values[5] ? 1 : 0)")
         fflush(stdout)
+        return bits
     }
 
     private func ordinaryMetrics(_ app: XCUIApplication, sentinel: String) throws -> Bool {
@@ -562,9 +563,18 @@ final class SecureCredentialUITests: XCTestCase {
         defer { clipboard.clearContents() }
         XCTAssertTrue(clipboard.setString(privateKey, forType: .string), "synthetic PEM pasteboard unavailable")
         app.typeKey("v", modifierFlags: .command)
+        let pasted = try diagnoseKeyInputs(app)
+        if pasted?[3] == true && pasted?[2] == true {
+            mark("pemKeyboardFallback")
+            let lines = privateKey.components(separatedBy: "\n")
+            for (index, line) in lines.enumerated() {
+                if !line.isEmpty { app.typeText(line) }
+                if index < lines.count - 1 { app.typeKey(.return, modifierFlags: []) }
+            }
+            _ = try diagnoseKeyInputs(app)
+        }
         try assertNoSecrets(app, [password, phrase])
         mark("keyCredentialEntered")
-        try diagnoseKeyInputs(app)
         mark("keyConnectAttempt")
         connectByWindowCenter(app)
         let keyDisconnect = try connectedDisconnect(app)

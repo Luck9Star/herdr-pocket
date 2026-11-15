@@ -5,6 +5,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+from unittest.mock import patch
 from pathlib import Path
 
 import flutter_direct_ssh_ios as runner
@@ -42,6 +43,23 @@ class IosDirectSshTests(unittest.TestCase):
             path.write_text('x' * 4097)
             with self.assertRaisesRegex(runner.Failure, 'ios_result_oversize'):
                 runner.read_json(path)
+
+    def test_flutter_log_diagnostics_export_only_fixed_boolean_markers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'private.log'
+            path.write_text('secret-value\nXcode build done.\nFailed to build iOS app\n')
+            result = runner.log_diagnostics(path)
+            self.assertEqual(set(result), set(runner.LOG_MARKERS))
+            self.assertTrue(result['xcodeBuildCompleted'])
+            self.assertTrue(result['buildError'])
+            self.assertNotIn('secret-value', str(result))
+
+    def test_container_timeout_is_pending_and_later_success_is_usable(self):
+        responses = [subprocess.TimeoutExpired('simctl', 15),
+                     subprocess.CompletedProcess([], 0, b'/private/app\n', b'')]
+        with patch.object(runner.subprocess, 'run', side_effect=responses):
+            self.assertEqual(runner.app_container('fixture-id', 15), (None, True))
+            self.assertEqual(runner.app_container('fixture-id', 15), (Path('/private/app'), False))
 
 
 if __name__ == '__main__':

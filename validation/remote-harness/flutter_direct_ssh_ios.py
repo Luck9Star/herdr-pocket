@@ -19,6 +19,12 @@ TARGET = 'integration_test/ios_direct_ssh_test.dart'
 FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched', 'explicitTrustRequired',
           'realTerminalView', 'normalTextInputCommit', 'remoteEchoVisible', 'disconnectUiConfirmed',
           'credentialsCleared', 'physicalImeVerified'}
+STAGES = {'home', 'target', 'probe', 'authenticate', 'input', 'disconnect'}
+LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
+               'buildError': 'Failed to build iOS app',
+               'launchError': 'Error launching application on',
+               'testFailure': 'Some tests failed.',
+               'testPassed': 'All tests passed!'}
 
 
 class Failure(ValueError):
@@ -41,6 +47,26 @@ def read_json(path):
     if not isinstance(value, dict):
         raise Failure('ios_result_invalid')
     return value
+
+
+def log_diagnostics(path):
+    if not path.is_file():
+        return {}
+    with path.open('rb') as log:
+        log.seek(0, os.SEEK_END)
+        size = log.tell()
+        log.seek(max(0, size - 131072))
+        text = log.read().decode('utf-8', errors='replace')
+    return {key: marker in text for key, marker in LOG_MARKERS.items()}
+
+
+def app_container(device, timeout):
+    try:
+        result = subprocess.run(['xcrun', 'simctl', 'get_app_container', device, PACKAGE, 'data'],
+                                capture_output=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None, True
+    return (Path(result.stdout.decode().strip()) if result.returncode == 0 else None), False
 
 
 def check_result(value):
@@ -110,12 +136,20 @@ def run(app, output, env):
                     '--dart-define-from-file=' + str(defines), TARGET], cwd=app, env=env,
                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                 deadline, exchange, confirmed = time.monotonic() + 1200, None, False
+                container_timeouts = 0
                 while process.poll() is None and time.monotonic() < deadline:
                     phase = 'await_device_result'
                     if exchange is None:
-                        result = subprocess.run(['xcrun', 'simctl', 'get_app_container', device, PACKAGE, 'data'], capture_output=True, timeout=15)
-                        if result.returncode == 0:
-                            exchange = Path(result.stdout.decode().strip()) / 'tmp' / ('herdr-direct-ssh-' + env['GITHUB_RUN_ID'])
+                        container, timed_out = app_container(device, min(15, max(1, deadline - time.monotonic())))
+                        if timed_out:
+                            container_timeouts += 1
+                            continue
+                        if container is not None:
+                            exchange = container / 'tmp' / ('herdr-direct-ssh-' + env['GITHUB_RUN_ID'])
+                    if exchange:
+                        stage = read_json(exchange / 'stage.json')
+                        if stage and stage.get('stage') in STAGES:
+                            report['deviceStage'] = stage['stage']
                     public = read_json(exchange / 'result.json') if exchange else None
                     if public is not None:
                         check_result(public)
@@ -150,6 +184,10 @@ def run(app, output, env):
         report['diagnostic'] = safe_failure(error, phase)
     finally:
         report['lastPhase'] = phase
+        if 'container_timeouts' in locals():
+            report['containerQueryTimeouts'] = container_timeouts
+        if private:
+            report['flutterLogMarkers'] = log_diagnostics(private / 'flutter-private.log')
         report['protocol'] = fixture.snapshot()
         if process is not None and process.poll() is None:
             try:

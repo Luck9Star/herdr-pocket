@@ -19,7 +19,7 @@ import (
 )
 
 //export Java_org_herdr_tlsprobe_ProbeInstrumentation_probe
-func Java_org_herdr_tlsprobe_ProbeInstrumentation_probe(_ *C.JNIEnv, _ C.jclass, port C.jint, wrongHost C.jboolean) C.jint {
+func Java_org_herdr_tlsprobe_ProbeInstrumentation_probe(env *C.JNIEnv, clazz C.jclass, port C.jint, wrongHost C.jboolean) C.jint {
 	const root = "/data/user/0/org.herdr.tlsprobe/files/"
 	if os.Getenv("SSL_CERT_FILE") != root+"ca.pem" || os.Getenv("SSL_CERT_DIR") != root+"empty-ca" {
 		return 8

@@ -170,7 +170,13 @@ RSA 功能快照 `621b793349d7e44332d617e76a345086c272e931` 的两壳 API35 Andr
 
 更新的同源码 `bc430761b71a470eeba94a01b148f0521343c822` 两壳普通 SSH 又分别通过 API35 模拟器：Flutter [43684909905](https://github.com/Luck9Star/herdr-pocket/actions/runs/43684909905) 的[原始脱敏记录](evidence/design-parity-20261115/flutter-ordinary-ssh-android-43684909905.json)确认首页、指纹、实际终端输入/回显、断开及服务端提前关闭；Tauri [43684909875](https://github.com/Luck9Star/herdr-pocket/actions/runs/43684909875) 的[原始脱敏记录](evidence/design-parity-20261115/tauri-ordinary-ssh-android-43684909875.json)分别验证了密码与加密私钥的相应流程及清理。两次使用临时 loopback 服务与各自 debug 构建；**同源码不等于同一二进制**，也不证明实体手机或真实 IME 组字。
 
-`a5082d0` 的[完整批次 43669066267](https://github.com/Luck9Star/herdr-pocket/actions/runs/43669066267)已独立分页核对：32 个作业中 27 个启用作业全部通过、5 个跳过不计通过，包含双壳五端构建与 Linux 双壳 stock/guarded。它证明对应源码的构建和明确执行的 Linux 路径，不能扩大成五端设备运行。Flutter macOS 原生窗口的本机实测来源与重签范围见上文。iOS 普通 SSH 应单列其自身模拟器/真机运行和签名来源，不由 Android 成功或 iOS 编译结果代替；本页此时没有登记 iOS 运行通过。
+`a5082d0` 的[完整批次 43669066267](https://github.com/Luck9Star/herdr-pocket/actions/runs/43669066267)已独立分页核对：32 个作业中 27 个启用作业全部通过、5 个跳过不计通过，包含双壳五端构建与 Linux 双壳 stock/guarded。它证明对应源码的构建和明确执行的 Linux 路径，不能扩大成五端设备运行。Flutter macOS 原生窗口的本机实测来源与重签范围见上文；iOS 模拟器证据只限下节单独记录的源码和场景，不由 Android 成功或 iOS 编译结果代替。
+
+## Flutter 普通 SSH iOS Simulator
+
+`5037c40d33dcb3843fe84b54e6c17b6d8294a848` 的 [iOS 运行 43685830291](https://github.com/Luck9Star/herdr-pocket/actions/runs/43685830291)、工件 `14150417906` 在专属 iPhone 11 / iOS 26.2 模拟器上通过原生 XCTest，1 项通过、0 失败。实际从生产首页进入普通 SSH，独立核对临时 RSA 主机指纹并明确确认，以临时密码连接；真实 `TerminalView` 提交 `hp-check` 与 Enter，远端回显可见，主动断开后终端移除、密码字段清空。独立 loopback 服务器确认认证、PTY、shell、输入标记和驱动退出前关闭，两次连接均关闭；记录到的 PTY 为 80×24 → 49×48 → 49×33 → 49×29。夹具只确认标记匹配，没有记录接收总字节数，不将该结果描述为精确字节计数。
+
+[原始脱敏 manifest](evidence/design-parity-20261115/flutter-ordinary-ssh-ios-43685830291.json)记录设备/服务器与清理结果；[连接前截图](evidence/design-parity-20261115/flutter-ordinary-ssh-ios-preconnect-43685830291.png)只使用本次临时 loopback 配置，密码已遮罩，展示的地址、用户名、端口及公钥指纹均为合成夹具，不含用户密钥。模拟器、服务器、临时凭据和生成工程均已清理。该用例在测试基线前固定语义开启并在结束后恢复，保留 Flutter 的句柄泄漏断言；专门的反例确认额外句柄仍会失败。系统语义开关在此次测试中由 false 变为 true，但这不是 VoiceOver 专项验收。输入来自 Flutter 测试接口，不证明真实 IME 组字、实体设备、签名发布包或 iOS 私钥认证。
 
 ## 尚待独立补证
 

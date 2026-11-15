@@ -12,8 +12,14 @@ CHECKS = {'channelRetired', 'clearDoesNotChangeOtherField', 'clearIsEmpty',
     'emptySyncPreservesFocus', 'identifierPreserved', 'labelPreserved',
     'metadataKeepsCurrentValue', 'nativeEditingReachedFlutterWire', 'nativeValueMatchesEdits',
     'rebuiltFieldStartsEmpty', 'reenableStaysEmpty', 'retireReplied',
-    'retiredLateEditCannotRestore', 'roleMatchesAppKitSecureBaseline', 'secureClass',
-    'staleSyncCannotRestore', 'subroleMatchesAppKitSecureBaseline', 'syncReplied'}
+    'retiredLateEditCannotRestore', 'nativeSecureRolePublished', 'secureClass',
+    'staleSyncCannotRestore', 'nativeSecureSubrolePublished', 'nativeSecureElementPublished', 'syncReplied',
+    'inheritedWindowChildPreserved', 'secureWindowChildPresent', 'secureWindowChildUnique',
+    'secureWindowParentCorrect', 'windowQueriesPreserveFocus', 'hiddenFieldExcluded',
+    'clippedFieldExcluded', 'detachedFieldExcluded', 'reattachedFieldExposed',
+    'preexistingSecureChildDeduplicated', 'retiredFieldNotExposed',
+    'rebuiltPasswordIsOnlySecureChild', 'closedWindowNoRegisteredSecureChild',
+    'closedWindowClearsNativeValue', 'closedWindowRetiresChannel'}
 
 
 def main():

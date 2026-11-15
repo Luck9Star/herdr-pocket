@@ -70,7 +70,11 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
         self.assertIn(source, mac)
         self.assertIn('registerHerdrSecureCredentialFields(registrar:', mac)
         self.assertIn('registrar(forPlugin: "HerdrSecureCredentialFields")', mac)
+        self.assertIn('registerHerdrSecureAccessibilityWindow(self)', mac)
+        self.assertIn('herdrSecureAccessibilityChildren(window: self, preserving: super.accessibilityChildren())', mac)
+        self.assertNotIn('flutterView.accessibilityChildren', mac)
         self.assertNotIn('HerdrSecureCredential', ios)
+        self.assertNotIn('herdrSecureAccessibilityChildren', ios)
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='herdr-shared-diagnostic-assets-')
@@ -88,7 +92,7 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
             files = {
                 'macos/Runner/DebugProfile.entitlements': '<plist><dict></dict></plist>',
                 'macos/Runner/Release.entitlements': '<plist><dict></dict></plist>',
-                'macos/Runner/MainFlutterWindow.swift': 'RegisterGeneratedPlugins(registry: flutterViewController)',
+                'macos/Runner/MainFlutterWindow.swift': 'class MainFlutterWindow: NSWindow {\n  override func awakeFromNib() {\n    RegisterGeneratedPlugins(registry: flutterViewController)\n  }\n}\n',
                 'ios/Runner/AppDelegate.swift': 'GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)',
                 'android/app/src/main/AndroidManifest.xml': '<manifest><application /></manifest>',
                 'android/app/build.gradle.kts': 'namespace = "dev.herdr.herdr_flutter_probe"\napplicationId = "dev.herdr.herdr_flutter_probe"\n',

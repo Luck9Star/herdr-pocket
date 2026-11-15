@@ -614,7 +614,6 @@ class AndroidStageRetryTests(unittest.TestCase):
         self.assertIn("retried = progress.data.setdefault('retriedStages', {})",source)
 
 
-if __name__=='__main__':unittest.main()
 
 class StopHitDiagnosticsTests(unittest.TestCase):
     def test_failed_stop_hit_records_bounded_geometry_without_dispatch(self):
@@ -633,3 +632,5 @@ class StopHitDiagnosticsTests(unittest.TestCase):
         self.assertEqual(browser.calls,[])
         self.assertEqual(trace[0]['viewport']['visualH'],400)
         self.assertFalse(trace[0]['centerHit'])
+
+if __name__=='__main__':unittest.main()

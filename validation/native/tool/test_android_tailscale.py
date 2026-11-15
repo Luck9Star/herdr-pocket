@@ -1,4 +1,5 @@
 """Offline provenance/packaging counterexamples. No compiler, library load or network."""
+import base64
 import hashlib
 import io
 import tarfile
@@ -71,9 +72,11 @@ class AndroidTailscaleTests(unittest.TestCase):
             write('tailscale/module/' + item['path'], (candidate.MODULE / item['path']).read_bytes())
         write('tailscale/explicit-auth.patch', (candidate.NATIVE / source['patch']['path']).read_bytes())
         write('tailscale/explicit-auth-test.go', (candidate.NATIVE / source['patchTests']['path']).read_bytes())
+        write('tailscale/dial-plan-test.go', (candidate.NATIVE / source['dialPlanTests']['path']).read_bytes())
         for name in (ts.LIBRARY, 'libhp_tailscale.h', 'tailscale/upstream-source.zip', 'tailscale/upstream-source.tar.gz',
                      'tailscale/logs/android-go-version.log', 'tailscale/logs/android-build.log',
-                     'tailscale/logs/runtime-tests.log', 'tailscale/logs/explicit-auth-test.log'):
+                     'tailscale/logs/runtime-tests.log', 'tailscale/logs/explicit-auth-test.log',
+                     'tailscale/logs/overlay-dial-plan-test.log'):
             write(name, b'synthetic fixture')
         files = {p.relative_to(self.root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                  for p in self.root.rglob('*') if p.is_file() and not p.is_relative_to(self.ndk)}
@@ -87,7 +90,7 @@ class AndroidTailscaleTests(unittest.TestCase):
             inspect = mock.Mock()
             ts.verify(self.root, record, files, 'synthetic-readelf', inspect)
             inspect.assert_called_once_with(self.root / ts.LIBRARY, 'synthetic-readelf', ts.SYMBOLS, abi='arm64-v8a')
-            targets = ['tailscale/explicit-auth.patch', 'tailscale/explicit-auth-test.go']
+            targets = ['tailscale/explicit-auth.patch', 'tailscale/explicit-auth-test.go', 'tailscale/dial-plan-test.go']
             targets += ['tailscale/module/' + x['path'] for x in modules]
             for name in targets:
                 for replacement in (None, '0' * 64):
@@ -109,7 +112,7 @@ class AndroidTailscaleTests(unittest.TestCase):
                     with self.subTest(record=name), self.assertRaisesRegex(ValueError, 'record mismatch'):
                         ts.verify(self.root, record, files, 'synthetic-readelf', mock.Mock())
                 finally: path.write_bytes(original)
-            for name in ('tailscale/upstream-source.zip', 'tailscale/upstream-source.tar.gz'):
+            for name in ('tailscale/upstream-source.zip', 'tailscale/upstream-source.tar.gz', 'tailscale/logs/overlay-dial-plan-test.log'):
                 bad = dict(files); del bad[name]
                 with self.subTest(archive=name), self.assertRaisesRegex(ValueError, 'material missing'):
                     ts.verify(self.root, record, bad, 'synthetic-readelf', mock.Mock())
@@ -119,9 +122,9 @@ class AndroidTailscaleTests(unittest.TestCase):
         zip_path = cache / 'modules/cache/download/tailscale.com/@v/v1.104.1.zip'
         zip_path.parent.mkdir(parents=True); zip_path.write_bytes(b'original module zip fixture')
         native = self.root / 'native'; native.mkdir()
-        (native / 'patch').write_bytes(b'patch'); (native / 'test.go').write_bytes(b'test')
+        (native / 'patch').write_bytes(b'patch'); (native / 'test.go').write_bytes(b'test'); (native / 'dial.go').write_bytes(b'dial')
         manifest = self.root / 'manifest'; manifest.write_text('{}')
-        source = {'tailscaleVersion':'v1.104.1', 'patch':{'path':'patch'}, 'patchTests':{'path':'test.go'}}
+        source = {'tailscaleVersion':'v1.104.1', 'patch':{'path':'patch'}, 'patchTests':{'path':'test.go'}, 'dialPlanTests':{'path':'dial.go'}}
         work = self.root / 'work'; output = self.root / 'bundle'; output.mkdir()
         def prepare(path, _cache):
             path.mkdir(); (path / 'logs').mkdir(); (path / 'upstream/tailscale').mkdir(parents=True)
@@ -146,15 +149,19 @@ class AndroidTailscaleTests(unittest.TestCase):
 
     def test_authenticated_zip_and_patched_tar_reject_all_source_drift(self):
         import warnings
-        original = {'LICENSE': b'license', 'tsnet/tsnet.go': b'upstream'}
+        original = {'LICENSE': b'license', 'tsnet/tsnet.go': b'upstream', 'net/tsdial/tsdial.go': b'original-dial'}
         patched = {'LICENSE': b'license', 'tsnet/tsnet.go': b'patched',
-                   'tsnet/herdr_explicit_auth_test.go': b'test-patch'}
+                   'tsnet/herdr_explicit_auth_test.go': b'test-patch', 'net/tsdial/tsdial.go': b'patched-dial',
+                   'net/tsdial/herdr_overlay_only_test.go': b'test-dial'}
         digest = lambda value: hashlib.sha256(value).hexdigest()
         source = {'tailscaleVersion': 'v1.104.1',
                   'source': {'path': 'tsnet/tsnet.go', 'sha256': digest(b'upstream'), 'patchedSha256': digest(b'patched')},
-                  'patchTests': {'sha256': digest(b'test-patch')}}
+                  'patchTests': {'sha256': digest(b'test-patch')},
+                  'additionalSources': [{'path': 'net/tsdial/tsdial.go', 'sha256': digest(b'original-dial'), 'patchedSha256': digest(b'patched-dial')}],
+                  'dialPlanTests': {'sha256': digest(b'test-dial')}}
         sums = self.root / 'go.sum'
-        sums.write_text('tailscale.com v1.104.1 h1:FSpDPqFJkqB1md3PsjAgO403gq8jLFY5mKbLPKNRfh0=\n')
+        hashed = ''.join(digest(value) + '  tailscale.com@v1.104.1/' + name + '\n' for name, value in sorted(original.items()))
+        sums.write_text('tailscale.com v1.104.1 h1:' + base64.b64encode(hashlib.sha256(hashed.encode()).digest()).decode() + '\n')
         zip_path, tar_path = self.root / 'source.zip', self.root / 'source.tar.gz'
         def write_zip(entries, extra=None):
             with warnings.catch_warnings():
@@ -172,6 +179,19 @@ class AndroidTailscaleTests(unittest.TestCase):
                     out.addfile(info)
         write_zip(original.items()); write_tar(patched.items())
         ts.verify_archives(zip_path, tar_path, source, sums)
+        for key in ('sha256', 'patchedSha256'):
+            forged = dict(source)
+            forged['additionalSources'] = [dict(source['additionalSources'][0], **{key: '0' * 64})]
+            with self.subTest(extra_source_digest=key), self.assertRaises(ValueError):
+                ts.verify_archives(zip_path, tar_path, forged, sums)
+        forged = dict(source)
+        forged['dialPlanTests'] = {'sha256': '0' * 64}
+        with self.assertRaises(ValueError):
+            ts.verify_archives(zip_path, tar_path, forged, sums)
+        forged = dict(source)
+        forged['additionalSources'] = [source['source']]
+        with self.assertRaisesRegex(ValueError, 'duplicate patched source'):
+            ts.verify_archives(zip_path, tar_path, forged, sums)
         for name in patched:
             with self.subTest(kind='missing', path=name):
                 write_tar([(k,v) for k,v in patched.items() if k != name])
@@ -189,7 +209,7 @@ class AndroidTailscaleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ts.verify_archives(zip_path, tar_path, source, sums)
         write_tar(patched.items())
-        write_zip([('LICENSE',b'altered'),('tsnet/tsnet.go',b'upstream')])
+        write_zip([(name, b'altered' if name == 'LICENSE' else value) for name, value in original.items()])
         with self.assertRaisesRegex(ValueError, 'h1 mismatch'):
             ts.verify_archives(zip_path, tar_path, source, sums)
         write_zip(list(original.items()) + [('LICENSE',b'license')])

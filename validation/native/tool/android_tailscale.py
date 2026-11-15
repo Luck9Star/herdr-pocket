@@ -88,13 +88,22 @@ def verify_archives(zip_path, tar_path, source, sum_path):
     got = 'h1:' + base64.b64encode(h.digest()).decode('ascii')
     if got != expected[0]:
         raise ValueError('fixed upstream Go module h1 mismatch')
-    patch = source['source']['path']
-    added = 'tsnet/herdr_explicit_auth_test.go'
-    if patch not in original or original[patch] != source['source']['sha256'] or added in original:
-        raise ValueError('fixed upstream source mismatch')
     expected_files = dict(original)
-    expected_files[patch] = source['source']['patchedSha256']
-    expected_files[added] = source['patchTests']['sha256']
+    patches = [source['source'], *source['additionalSources']]
+    if len({item['path'] for item in patches}) != len(patches):
+        raise ValueError('duplicate patched source')
+    for item in patches:
+        path = item['path']
+        if path not in original or original[path] != item['sha256']:
+            raise ValueError('fixed upstream source mismatch')
+        expected_files[path] = item['patchedSha256']
+    added_tests = {
+        'tsnet/herdr_explicit_auth_test.go': source['patchTests']['sha256'],
+        'net/tsdial/herdr_overlay_only_test.go': source['dialPlanTests']['sha256'],
+    }
+    if any(path in original for path in added_tests):
+        raise ValueError('test path already exists in upstream')
+    expected_files.update(added_tests)
     expected_dirs = {'tailscale'}
     for name in expected_files:
         parts = name.split('/')[:-1]
@@ -166,6 +175,7 @@ def build(bundle, work, cache, ndk, abi=targets.DEFAULT):
         shutil.copy2(candidate.MODULE / item['path'], target)
     shutil.copy2(candidate.NATIVE / source['patch']['path'], source_dir / 'explicit-auth.patch')
     shutil.copy2(candidate.NATIVE / source['patchTests']['path'], source_dir / 'explicit-auth-test.go')
+    shutil.copy2(candidate.NATIVE / source['dialPlanTests']['path'], source_dir / 'dial-plan-test.go')
     # Include the exact Go-authenticated module archive, not just a mutable
     # extracted tarball or a self-authored manifest digest.
     downloaded = json.loads((work / 'logs/module-download.json').read_text())
@@ -199,7 +209,8 @@ def verify(bundle, record, files, readelf, inspect, abi=targets.DEFAULT):
         if path not in files or json.loads((bundle / path).read_text()) != value:
             raise ValueError('Tailscale source record mismatch: ' + path)
     materials = {'tailscale/explicit-auth.patch': source['patch']['sha256'],
-                 'tailscale/explicit-auth-test.go': source['patchTests']['sha256']}
+                 'tailscale/explicit-auth-test.go': source['patchTests']['sha256'],
+                 'tailscale/dial-plan-test.go': source['dialPlanTests']['sha256']}
     materials.update({'tailscale/module/' + item['path']: item['sha256']
                       for item in candidate.module_files()})
     for name, sha in materials.items():
@@ -207,7 +218,8 @@ def verify(bundle, record, files, readelf, inspect, abi=targets.DEFAULT):
             raise ValueError('Tailscale source material mismatch: ' + name)
     for path in (LIBRARY, 'libhp_tailscale.h', 'tailscale/upstream-source.zip', 'tailscale/upstream-source.tar.gz',
                  'tailscale/logs/android-go-version.log', 'tailscale/logs/android-build.log',
-                 'tailscale/logs/runtime-tests.log', 'tailscale/logs/explicit-auth-test.log'):
+                 'tailscale/logs/runtime-tests.log', 'tailscale/logs/explicit-auth-test.log',
+                 'tailscale/logs/overlay-dial-plan-test.log'):
         if path not in files:
             raise ValueError('Tailscale build material missing: ' + path)
     verify_archives(bundle / 'tailscale/upstream-source.zip', bundle / 'tailscale/upstream-source.tar.gz', source, candidate.MODULE / 'go.sum')

@@ -248,7 +248,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
               ? MacosSecureCredentialField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy,
                   label: '密码（仅本次使用）', identifier: 'direct-secret')
               : TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,
-              minLines: 1, maxLines: keyAuth ? 6 : 1, decoration: InputDecoration(label: ExcludeSemantics(child: Text(keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）'))))),
+              minLines: keyAuth ? 2 : 1, maxLines: keyAuth ? 2 : 1, decoration: InputDecoration(label: ExcludeSemantics(child: Text(keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）'))))),
           if (keyAuth) ...[
             TextButton(key: const ValueKey('direct-paste-key'), onPressed: busy || pastingKey || !foreground ? null : pastePrivateKey,
               child: const Text('粘贴私钥')),

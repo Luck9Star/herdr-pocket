@@ -33,4 +33,4 @@ python3 -m unittest discover -s validation/remote-harness -p test_s06_split_gui.
 actionlint .github/workflows/paired-gui-validation.yml
 ```
 
-需安装 `validation/pairing/requirements.txt` 才能实际执行三项证据门槛测试；缺少依赖时会明确跳过。Flutter 用例仅由隔离 runner 设置 `HERDR_S06_*` 环境后运行，常规套会明确跳过。
+需安装 `validation/pairing/requirements.txt` 才能实际执行四项证据与诊断门槛测试；缺少依赖时会明确跳过。Flutter 用例仅由隔离 runner 设置 `HERDR_S06_*` 环境后运行，常规套会明确跳过。

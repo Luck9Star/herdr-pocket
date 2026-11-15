@@ -53,7 +53,7 @@ Rust 仅新增 russh 的独立 `rsa` feature，仍关闭默认 features 并保�
 | S04 草稿 | [本地编辑与预览发送](evidence/design-parity-20261115/s04-draft-390.png) |
 | S05 配对 | [扫码/资料步骤](evidence/design-parity-20261115/s05-pairing-390.png)、[完整指纹卡与独立核验](evidence/design-parity-20261115/s05-fingerprint-390.png) |
 
-## S06 合成双侧验收增量
+## S06 双侧界面与真实回环验收
 
 2026-11-15 冻结提交 `cacae2f` 已在独立临时工程通过完整 Flutter 套 **527 passed / 4 skipped / 0 failed**，analyzer 无问题。此批新增桌面主机树、两侧独立终端，以及与可见性分开的唯一输入资格。
 
@@ -61,9 +61,24 @@ Rust 仅新增 russh 的独立 `rsa` feature，仍关闭默认 features 并保�
 
 [1440 双侧与左侧主机树](evidence/design-parity-20261115/s06-split-1440.png) · [700 单侧收窄状态](evidence/design-parity-20261115/s06-single-700.png)。这些是实际 Flutter Widget 渲染和两个合成适配器，证明界面与输入隔离契约，不代表两条真实 SSH、桌面原生窗口或手机设备验收。
 
+随后 `beee7ca901fb61454f8e0a5df14e0a7b3aa6684f` 补上两条真实 SSH/herdr 连接的独立验证：[专用入口与运行说明](../validation/remote-harness/README-s06-real-ssh.md)、[实际 Widget 用例](../validation/flutter/test/s06_real_ssh_test.dart)。在受控 Linux OpenSSH 上，从正常主机首页完成两次审查和配对，各用一个临时设备身份、一个原样 `RemoteReadOnlyAdapter` 与一个命名 herdr session；两个目标故意有相同 pane ID、不同 terminal ID，分屏后显式恢复第一侧，两侧各收自己的完整帧和持续增量。
+
+| 模式 | 固定运行与真实 manifest | 独立服务端与界面结果 |
+| --- | --- | --- |
+| stock 只读 | [43672254449](https://github.com/Luck9Star/herdr-pocket/actions/runs/43672254449)，工件 `14145046282`；[原始公开 manifest](evidence/design-parity-20261115/flutter-s06-stock-43672254449.json) | 两侧各建立 1 次 SSH，A 总帧/delta 为 8 / 6，B 为 10 / 9；两侧均不可启用输入，远端精确字节计数 `[0,0]` |
+| guarded 输入 | [43672256984](https://github.com/Luck9Star/herdr-pocket/actions/runs/43672256984)，工件 `14145440795`；[原始公开 manifest](evidence/design-parity-20261115/flutter-s06-guarded-43672256984.json) | 两侧各建立 1 次 SSH，A 总帧/delta 为 12 / 10，B 为 14 / 13；B 选中时只收到逐键 `b`，换焦点并明确选择草稿后 A 只收到确认的 `Pocket测`，远端精确字节计数 `[9,1]` |
+
+两轮均通过独立密钥的实际 sshd 认证、原目标绑定、双侧持续画面、唯一输入焦点、旧侧迟到输入拒绝、换焦点不自动恢复发送、双侧停止与授权撤销；两份 PTY 数字采样均保持 119×40，未观察到尺寸变化，进程与临时密钥清理全部通过。guarded 使用另行校验固定来源、补丁、二进制哈希与能力探针的输入夹具，不把 stock 改成可写。
+
+早期用例曾因 Live binding 的逻辑渲染面仍为 800×600，使分屏按窄窗规则收起；已用本地最小复现确认，并显式设置、断言真实 1440×1000 画布及按钮命中、active/split 目标和两侧可见性后完成上述同源重跑。另一次前置失败来自新 iOS 测试的可选 Paramiko 导入，尚未执行 S06；不能把这些测试修正声称为产品或真机故障修复。
+
+此增量证明实际 Flutter Widget 引擎中的两条真实 SSH/herdr 连接；signer、目录和输入 journal 是明确的测试实现，没有帧或适配器替身。它不证明原生桌面窗口、系统密钥/journal 落盘、物理 IME 或跨网络。上面的 S06 PNG 仍属于先前合成适配器批次，不冒充这两轮的截图。
+
 作为另一层独立证据，`e5cdaeb` 的 Linux 原生 Flutter 与 Tauri stock herdr 配对都通过，两个 manifest 均记录输入 0 字节；`bd083d8` 的双壳五端构建通过。它们分别证明对应版本的配对观察路径与构建，不可扩成普通 SSH Android UI 或 S06 真实双连接运行通过。
 
 Flutter 的 `a2ffb4b` [guarded Android 运行 43667868489](https://github.com/Luck9Star/herdr-pocket/actions/runs/43667868489)也已独立回读通过：stock 路径输入 0 字节，guarded 工件 `14143482126` 记录 10 字节，逐键与草稿各自受理；粘贴取消、再次预览和本地追加没有额外 SSH 字节，生命周期与原目标核对通过。这是对应版本单端受保护输入的模拟器证据，不是 S06 真实双连接或物理 IME 验证。旧 `fba4` 运行的 AVD 255 根因仍未查明，诊断或用例依赖修复不构成该故障已根治的证据；专用 TUI 运行另行核对。
+
+专用 TUI 的 Tauri `c9f191d` [运行 43670510076](https://github.com/Luck9Star/herdr-pocket/actions/runs/43670510076)中，`android-device-key` 作业通过；工件 `14145185000` 的真实 curses 主机状态与 10 个输入回执匹配，`manifest.stoppedStale=true`，`progress.postStopInputUnchanged=true`，停止按钮首次命中。另记录 7 个系统 IME 显示/收起检查点，不能扩大为真实中文组字或实体键盘通过。`receivedInputBytes=10` 是 curses 之外的原始捕获阶段，不代表全部 TUI 输入只有 10 字节。该混合工作流另有 Flutter 作业失败，不能写成整条运行全部通过。
 
 ## S27 网络页界面增量
 
@@ -77,17 +92,23 @@ Flutter 的 `a2ffb4b` [guarded Android 运行 43667868489](https://github.com/Lu
 
 修复后 [Flutter API35 Android 模拟器复测 43666350464](https://github.com/Luck9Star/herdr-pocket/actions/runs/43666350464) **通过**，源码 `db91fce84640c4dfdb1c51558ade419f8e5dca39`，Actions 工件 ID `14142083552`。设备报告确认从首页进入、pin 一致且明确确认、真实 `TerminalView` 的正常文本提交、远端回显可见、界面断开与凭据清空；独立服务端确认认证、PTY、shell、标记输入和关闭，且在测试驱动退出前已关闭，全部清理项通过。实际[已连接截图](evidence/design-parity-20261115/flutter-android-ssh-connected-43666350464.png)记录的是 READY 阶段；回显断言与关闭证据见[脱敏报告](evidence/design-parity-20261115/flutter-android-ssh-43666350464.json)。该模拟器使用测试输入接口提交文本，物理 IME 未验证。
 
-最终功能快照 `621b793349d7e44332d617e76a345086c272e931` 的两壳 API35 Android 模拟器普通 SSH 均已通过，并独立回读实际工件：
+RSA 功能快照 `621b793349d7e44332d617e76a345086c272e931` 的两壳 API35 Android 模拟器普通 SSH 均已通过，并独立回读实际工件：
 
 | 路线 | 固定运行与工件 | 实际证据与输入方式 |
 | --- | --- | --- |
 | Flutter | [run 43668558676](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668558676)，工件 `14143074595`；[最终脱敏报告](evidence/design-parity-20261115/flutter-android-ssh-43668558676.json) | 从首页进入、明确指纹确认、真实 TerminalView 正常文本提交、远端回显、界面断开和凭据清空均通过；服务端在驱动退出前确认关闭，清理全部通过。输入来自 Flutter 平台测试接口 |
 | Tauri | [run 43668503928](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668503928)，工件 `14143189049`；[最终脱敏报告](evidence/design-parity-20261115/tauri-android-ssh-43668503928.json) | 真实 Android WebView 的首页与指纹审查、认证、终端输入/回显、界面断开、密码清空及服务端关闭均通过，清理全部通过。输入来自 CDP；x86_64 调试 APK SHA256 为 `4121aa825ac4d6f3913efb4e710f3f7081ed0ddccb52024708ddce6794fd87ae` |
 
-两者均访问 runner 自建的 RSA2048 loopback 夹具，不访问个人主机；没有验证物理 IME 组字或手机真机。上面的 Flutter READY 截图来自前一轮 `db91fce`，保留原 SHA，不将近似画面冒充最终快照截图。[Tauri 首轮](https://github.com/Luck9Star/herdr-pocket/actions/runs/43665538049)保留为 RSA 修复前的历史运行。此时同快照的[五端构建](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668503775)及 [arm64 网络/TUI](https://github.com/Luck9Star/herdr-pocket/actions/runs/43668490261)仍待独立回读，本页未将其计入通过。
+两者均访问 runner 自建的 RSA2048 loopback 夹具，不访问个人主机；没有验证物理 IME 组字或手机真机。上面的 Flutter READY 截图来自前一轮 `db91fce`，保留原 SHA，不将近似画面冒充后续快照截图。[Tauri 首轮](https://github.com/Luck9Star/herdr-pocket/actions/runs/43665538049)保留为 RSA 修复前的历史运行。
 
 本地普通 SSH 真实 Widget 复核已执行 5/5，包含新增空凭据门槛与正常返回销毁回归。只有服务端后验与 UI 身份拒绝断言全部通过，runner 才输出成功摘要；认证未发生但连接未尝试的情况不算身份验证成功。Android 集成源码与普通 SSH 页面 analyzer 无问题，修复后的 CI/目录/设备守卫、结果解析反例与真实 Paramiko loopback 5/5。这些本地检查与上面的实际模拟器结论分层记录。
 
+## 后续安卓与构建来源
+
+生产界面 `4db7c49` 的两壳普通 SSH 又在同源 API35 模拟器通过：Flutter [43671665945](https://github.com/Luck9Star/herdr-pocket/actions/runs/43671665945) 的验收工件 `14144632159`，Tauri [43671665972](https://github.com/Luck9Star/herdr-pocket/actions/runs/43671665972) 的验收工件 `14144802062`；Tauri 的 x86_64 调试 APK 另在工件 `14144653085`，不可把验收 JSON/图片工件当成 APK。该版两壳 APK 已另行下载、解析 ABI 并核对来源与哈希。共享测试改为 `3cbfcb5` 后，Flutter [43671869018](https://github.com/Luck9Star/herdr-pocket/actions/runs/43671869018)、工件 `14144522738` 也通过；各次输入方式与物理 IME 限制仍按上文分开记录。
+
+`a5082d0` 的[完整批次 43669066267](https://github.com/Luck9Star/herdr-pocket/actions/runs/43669066267)已独立分页核对：32 个作业中 27 个启用作业全部通过、5 个跳过不计通过，包含双壳五端构建与 Linux 双壳 stock/guarded。它证明对应源码的构建和明确执行的 Linux 路径，不能扩大成五端设备运行。Flutter macOS 原生窗口的本机实测来源与重签范围见上文。iOS 普通 SSH 应单列其自身模拟器/真机运行和签名来源，不由 Android 成功或 iOS 编译结果代替；本页此时没有登记 iOS 运行通过。
+
 ## 尚待独立补证
 
-S06 的真实双 SSH 与原生设备、手机真机触控/IME/相机/系统密钥存储、其他主机算法与认证组合、三网路由、长时间运行和正式发布均不能由本页证据推出。后续每项新增结论必须对应新的实际运行记录；历史“只允许远端 herdr”作为当时基线保留，现行两类远端接入范围以本页及架构/产品设计的 2026-11-15 增量为准。
+S06 的原生桌面双窗与手机设备、手机真机触控/IME/相机/系统密钥存储、其他主机算法与认证组合、三网路由、长时间运行和正式发布均不能由本页证据推出。后续每项新增结论必须对应新的实际运行记录；历史“只允许远端 herdr”作为当时基线保留，现行两类远端接入范围以本页及架构/产品设计的 2026-11-15 增量为准。

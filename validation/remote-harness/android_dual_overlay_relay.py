@@ -147,6 +147,7 @@ class AndroidDualOverlayRelay:
         self._workers = set()
         self._threads = []
         self.ports = {}
+        self._stats = {role:{'accepted':0,'upstreamBytes':0,'downstreamBytes':0,'workerFailures':0} for role in ROLES}
         self._started = False
         self._cleanup_failed = threading.Event()
 
@@ -178,14 +179,14 @@ class AndroidDualOverlayRelay:
                 listener.listen(16); listener.settimeout(.2)
                 self.ports[role] = listener.getsockname()[1]
             for role, listener in zip(ROLES, self._listeners):
-                thread = threading.Thread(target=self._accept, args=(listener, self.config[role]), daemon=True)
+                thread = threading.Thread(target=self._accept, args=(listener, role, self.config[role]), daemon=True)
                 self._threads.append(thread); thread.start()
             return self
         except BaseException:
             self.close()
             raise
 
-    def _accept(self, listener, port):
+    def _accept(self, listener, role, port):
         while not self._stop.is_set():
             try:
                 client, _ = listener.accept()
@@ -197,10 +198,11 @@ class AndroidDualOverlayRelay:
                 if self._stop.is_set() or len(self._clients) >= 16:
                     client.close(); continue
                 self._clients.add(client)
-                thread = threading.Thread(target=self._bridge, args=(client, port), daemon=True)
+                self._stats[role]['accepted'] += 1
+                thread = threading.Thread(target=self._bridge, args=(client, role, port), daemon=True)
                 self._threads.append(thread); thread.start()
 
-    def _bridge(self, client, port):
+    def _bridge(self, client, role, port):
         process = None
         try:
             if self._stop.is_set():
@@ -216,6 +218,7 @@ class AndroidDualOverlayRelay:
                     while not self._stop.is_set():
                         data = client.recv(65536)
                         if not data: break
+                        with self._lock: self._stats[role]['upstreamBytes'] += len(data)
                         process.stdin.write(data); process.stdin.flush()
                 except (OSError, ValueError, BrokenPipeError):
                     pass
@@ -228,9 +231,10 @@ class AndroidDualOverlayRelay:
             while not self._stop.is_set():
                 data = os.read(process.stdout.fileno(), 65536)
                 if not data: break
+                with self._lock: self._stats[role]['downstreamBytes'] += len(data)
                 client.sendall(data)
         except (OSError, ValueError, subprocess.SubprocessError):
-            pass
+            with self._lock: self._stats[role]['workerFailures'] += 1
         finally:
             try: client.shutdown(socket.SHUT_RDWR)
             except OSError: pass
@@ -246,6 +250,12 @@ class AndroidDualOverlayRelay:
             with self._lock:
                 self._clients.discard(client)
                 if process is not None: self._workers.discard(process)
+
+    def stats(self):
+        """Only bounded byte/connection counts; never retain stream contents."""
+        with self._lock:
+            return {role:{key:min(value,1000000) for key,value in counts.items()}
+                    for role,counts in self._stats.items()}
 
     def close(self):
         self._stop.set()

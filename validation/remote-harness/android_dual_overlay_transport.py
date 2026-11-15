@@ -39,7 +39,7 @@ def run(output):
     root=Path(tempfile.mkdtemp(prefix='hp-avd-relay-',dir=base));root.chmod(0o700)
     peers=[]; relay=None; mappings=None
     result={'schemaVersion':1,'status':'failed','scope':'API35 x86_64 owned AVD shell and three synthetic TCP echoes; no App, SSH or TLS',
-            'deviceEcho':{role:False for role in ROLES},'reverseRemoved':False,'relayClosed':False,
+            'deviceEcho':{role:False for role in ROLES},'deviceEchoBytes':{},'reverseRemoved':False,'relayClosed':False,
             'peerProcessesStopped':False,'privateRemoved':False}
     phase='namespace_check'
     try:
@@ -74,8 +74,10 @@ def run(output):
                     phase='device_echo_'+role
                     marker=('hp-'+role+'-ok').encode('ascii')
                     # A fixed shell program emits only this role's synthetic marker.
-                    script=b"printf '"+marker+b"' | /system/bin/toybox nc -w 5 127.0.0.1 "+str(config[role]).encode()+b"\n"
+                    # Keep stdin open briefly: some nc implementations exit immediately on pipe EOF.
+                    script=b"{ printf '"+marker+b"'; sleep 1; } | /system/bin/toybox nc -w 5 127.0.0.1 "+str(config[role]).encode()+b"\n"
                     reply=_adb('shell','-T','sh',input_data=script,timeout=15)
+                    result['deviceEchoBytes'][role]=min(len(reply),10000)
                     result['deviceEcho'][role]=reply==marker
                     if not result['deviceEcho'][role]: raise ReverseError('device_echo_mismatch')
             phase='reverse_cleanup'
@@ -98,6 +100,7 @@ def run(output):
             if not mappings.cleanup_confirmed and (mappings.created or mappings.uncertain):
                 result['cleanupErrorCode']='reverse_cleanup_unconfirmed'
         if relay is not None:
+            result['relayStats']=relay.stats()
             result['relayClosed']=not any(t.is_alive() for t in relay._threads) and not relay._workers
         stopped=True
         for peer in peers:

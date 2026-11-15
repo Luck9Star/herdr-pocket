@@ -103,6 +103,10 @@ class RelayTests(unittest.TestCase):
             finally:
                 for sock in clients: sock.close()
         self.assertTrue(workers); self.assertTrue(all(p.poll() is not None for p in workers))
+        for role in relay.ROLES:
+            self.assertEqual(instance.stats()[role]['accepted'],1)
+            self.assertEqual(instance.stats()[role]['upstreamBytes'],8192)
+            self.assertEqual(instance.stats()[role]['downstreamBytes'],8192)
         self.assertFalse(any(t.is_alive() for t in instance._threads))
         for port in instance.ports.values():
             with self.assertRaises(OSError): socket.create_connection(('127.0.0.1',port),timeout=.2)

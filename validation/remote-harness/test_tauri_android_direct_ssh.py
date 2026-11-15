@@ -23,6 +23,7 @@ class Browser:
     def __init__(self): self.actions=[];self.expressions=[];self.review=True;self.echo=True
     def click(self,selector): self.actions.append(('click',selector))
     def fill(self,selector,value): self.actions.append(('fill',selector,value))
+    def select_option(self,selector,value): self.actions.append(('select',selector,value))
     def read(self,selector):
         return {'#ssh-fingerprint':Fixture.fingerprint,'#ssh-status':'已连接，已断开'}.get(selector,'')
     def evaluate(self,expression):
@@ -55,6 +56,15 @@ class DirectSshAndroidTests(unittest.TestCase):
         with self.assertRaisesRegex(driver.GuiFailure,'direct_credential_invalidated_host_review'):
             driver.exercise_ui(browser,Fixture())
         self.assertNotIn(('click','#ssh-form button[type=submit]'),browser.actions)
+
+    def test_encrypted_key_ui_uses_selection_and_exports_no_secrets(self):
+        fixture=Fixture();fixture.private_key='synthetic encrypted key';fixture.passphrase='synthetic passphrase'
+        browser=Browser();result=driver.exercise_ui(browser,fixture,encrypted_key=True)
+        self.assertIn(('select','#ssh-auth-method','key'),browser.actions)
+        self.assertIn(('fill','#ssh-key',fixture.private_key),browser.actions)
+        self.assertIn(('fill','#ssh-passphrase',fixture.passphrase),browser.actions)
+        self.assertNotIn(('fill','#ssh-password',fixture.password),browser.actions)
+        self.assertNotIn(fixture.private_key,str(result));self.assertNotIn(fixture.passphrase,str(result))
 
     def test_missing_peer_evidence_does_not_pass(self):
         class Missing(Fixture):

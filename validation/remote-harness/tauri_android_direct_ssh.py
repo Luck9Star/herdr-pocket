@@ -16,7 +16,7 @@ from android_gui import AndroidWebView, PACKAGE, SERIAL, adb
 from paired_gui import GuiFailure, wait_for
 
 
-def exercise_ui(browser, fixture):
+def exercise_ui(browser, fixture, *, encrypted_key=False):
     """Use actual CDP click/keyboard events and independently check the peer."""
     browser.click('#host-open-remote')
     browser.click('#add-ssh')
@@ -27,14 +27,19 @@ def exercise_ui(browser, fixture):
     wait_for(lambda: fixture.fingerprint in (browser.read('#ssh-fingerprint') or ''),
              'direct_fingerprint_missing', timeout=60)
     browser.click('#ssh-review')
-    browser.fill('#ssh-password', fixture.password)
+    if encrypted_key:
+        browser.select_option('#ssh-auth-method', 'key')
+        browser.fill('#ssh-key', fixture.private_key)
+        browser.fill('#ssh-passphrase', fixture.passphrase)
+    else:
+        browser.fill('#ssh-password', fixture.password)
     if browser.evaluate("document.querySelector('#ssh-review').checked") is not True:
         raise GuiFailure('direct_credential_invalidated_host_review')
     browser.click('#ssh-form button[type=submit]')
     wait_for(lambda: browser.evaluate("!document.querySelector('#ssh-live').hidden") and
              '已连接' in (browser.read('#ssh-status') or ''), 'direct_ready_missing', timeout=60)
-    if browser.evaluate("document.querySelector('#ssh-password').value"):
-        raise GuiFailure('direct_password_retained')
+    if browser.evaluate("!!document.querySelector('#ssh-password').value || !!document.querySelector('#ssh-key').value || !!document.querySelector('#ssh-passphrase').value"):
+        raise GuiFailure('direct_credentials_retained')
     browser.click('#ssh-focus')
     wait_for(lambda: browser.evaluate("document.activeElement === document.querySelector('#ssh-terminal .xterm-helper-textarea')"),
              'direct_terminal_focus_missing')
@@ -60,7 +65,7 @@ def exercise_ui(browser, fixture):
             'passwordCleared':True,'peer':{k:True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')}}
 
 
-def run_device(apk, fixture):
+def run_device(apk, fixture, *, encrypted_key=False):
     if (os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('ANDROID_SERIAL') != SERIAL or
             not os.environ.get('GITHUB_REF','').startswith('refs/heads/codex/') or not apk.is_file()):
         raise GuiFailure('direct_unsafe_fixture')
@@ -93,7 +98,7 @@ def run_device(apk, fixture):
             except GuiFailure: pass
             return False
         browser=wait_for(connect,'direct_webview_not_ready',timeout=60)
-        result=exercise_ui(browser,fixture)
+        result=exercise_ui(browser,fixture,encrypted_key=encrypted_key)
     finally:
         if browser:
             try: browser.close()
@@ -149,6 +154,19 @@ def main():
         if fixture.snapshot().get('connectionsClosed') is not True:
             raise GuiFailure('direct_fixture_cleanup_failed')
         report['cleanup']['fixtureConnections']=True
+        from tauri_encrypted_key_fixture import EncryptedKeyFixture
+        report['phase']='encrypted_key'
+        with EncryptedKeyFixture() as key_fixture:
+            try:
+                key_result=run_device(args.apk,key_fixture,encrypted_key=True)
+            except GuiFailure:
+                report['probeEvidence'] = probe_evidence(key_fixture)
+                raise
+        if key_fixture.snapshot().get('connectionsClosed') is not True:
+            raise GuiFailure('direct_fixture_cleanup_failed')
+        key_result['cleanup']['fixtureConnections']=True
+        report['encryptedKey']=key_result
+        report['phase']='complete'
         report['status']='passed'
     except GuiFailure as error:
         code=str(error)

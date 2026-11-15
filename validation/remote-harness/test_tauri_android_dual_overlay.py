@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import tauri_android_dual_overlay as dual
 
 
@@ -21,6 +21,19 @@ class DualEvidenceTests(unittest.TestCase):
                        {'ordinal':2,'approvedDevice':True,'active':True}]}
         self.assertTrue(dual.checked_audit(history, 5, ordinal=2, sessions_count=2, active=True))
         self.assertFalse(dual.checked_audit(history, 5, ordinal=1, sessions_count=2, active=True))
+
+    def test_removed_tab_never_types_into_surviving_session(self):
+        browser = Mock()
+        with patch.object(dual,'find_tab',return_value=None):
+            self.assertEqual(dual.guard_stale_target(browser,'ts'), 'removed_tab_unreachable')
+        browser.call.assert_not_called()
+        with patch.object(dual,'find_tab',return_value='#old'), patch.object(dual,'select_tab'):
+            browser.evaluate.return_value = True
+            with self.assertRaises(dual.GuiFailure): dual.guard_stale_target(browser,'ts')
+            browser.call.assert_not_called()
+            browser.evaluate.return_value = False
+            self.assertEqual(dual.guard_stale_target(browser,'ts'), 'retained_tab_disabled_keyboard_tested')
+            browser.call.assert_called_once()
 
     def test_public_host_control_requires_matching_event(self):
         control = Mock()

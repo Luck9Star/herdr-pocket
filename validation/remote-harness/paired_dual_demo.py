@@ -126,6 +126,9 @@ def prepared_pairing_hosts(binary, base, stage_callback=None):
     SetEnv HOME={root} XDG_CONFIG_HOME={root}/config PYTHONDONTWRITEBYTECODE=1
     ''')
                 sshd = (['sudo', '-n'] if sys.platform == 'linux' else []) + ['/usr/sbin/sshd']
+                if sys.platform == 'linux':
+                    stage(role, 'privsep_prepare')
+                    command(['sudo', '-n', 'mkdir', '-p', '/run/sshd'], env)
                 stage(role, 'sshd_check')
                 command(sshd + ['-t', '-f', root / 'sshd_config'], env)
                 stage(role, 'sshd_start')

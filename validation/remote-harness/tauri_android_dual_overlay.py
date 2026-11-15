@@ -215,14 +215,30 @@ def host_card(browser, role):
     return wait_for(lambda:browser.evaluate(expression), 'dual_host_card_missing')
 
 
-def select_tab(browser, role):
-    expression = '''(()=>{const all=[...document.querySelectorAll('#view-tabs > button')];
+def find_tab(browser, role):
+    expression = """(()=>{const all=[...document.querySelectorAll('#view-tabs > button')];
       const found=all.map((e,i)=>({e,i})).filter(x=>x.e.textContent.startsWith(%s));
-      return found.length===1?'#view-tabs > button:nth-of-type('+(found[0].i+1)+')':null})()''' % json.dumps('QA host '+role.upper()+' ·')
-    selector = wait_for(lambda:browser.evaluate(expression), 'dual_tab_missing')
+      return found.length===1?'#view-tabs > button:nth-of-type('+(found[0].i+1)+')':null})()""" % json.dumps('QA host '+role.upper()+' ·')
+    return browser.evaluate(expression)
+
+
+def select_tab(browser, role):
+    selector = wait_for(lambda:find_tab(browser, role), 'dual_tab_missing')
     browser.click(selector)
     wait_for(lambda:browser.evaluate('document.querySelector(%s)?.getAttribute("aria-pressed")==="true"' % json.dumps(selector)),
              'dual_tab_selection_unconfirmed')
+
+
+def guard_stale_target(browser, role):
+    if not find_tab(browser,role):
+        # Never type into the surviving tab when the old tab is gone.
+        return 'removed_tab_unreachable'
+    select_tab(browser,role)
+    enabled = browser.evaluate("[...document.querySelectorAll('#view-content .tab-mobile-controls button')].some(b=>!b.disabled&&['逐键输入','启用草稿输入','发送草稿'].includes(b.textContent.trim()))")
+    if enabled is not False:
+        raise GuiFailure('dual_stopped_input_still_enabled')
+    browser.call('Input.insertText', {'text':'STALE'})
+    return 'retained_tab_disabled_keyboard_tested'
 
 
 def open_tab(browser, role):
@@ -358,13 +374,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         send_draft(browser,second.decode())
         audit(control,surviving,initials[surviving]+second,ordinal=ordinal,sessions_count=count)
         report['survivorSameAuthenticatedSession']=True
-        select_tab(browser,stopped)
-        if browser.evaluate("[...document.querySelectorAll('#view-content .tab-mobile-controls button')].some(b=>!b.disabled&&['逐键输入','启用草稿输入','发送草稿'].includes(b.textContent.trim()))"):
-            raise GuiFailure('dual_stopped_input_still_enabled')
-        # Exercise real keyboard input after returning to the stopped target.
-        # The target has no enabled input action; this must not reach either peer.
-        browser.call('Input.insertText', {'text':'STALE'})
-        report['staleTypingAttempted']=True
+        report['staleInputGuard']=guard_stale_target(browser,stopped)
         prior_ordinal,prior_count=baseline_values[stopped]
         audit(control,stopped,initials[stopped],ordinal=prior_ordinal,sessions_count=prior_count,active=False)
         audit(control,surviving,initials[surviving]+second,ordinal=ordinal,sessions_count=count)
@@ -421,21 +431,34 @@ def main():
                 with session:
                     run_direction(paths[0],paths[1],session,role,current)
             finally:
-                current['environmentCleanup']=session.report.get('cleanup', {})
+                state=session.report
+                stage=state.get('stage')
+                if stage in ('device-and-bundle','namespace','host-controller','relay-and-reverse','ready'):
+                    current['environmentStage']=stage
+                for key in ('deviceApi35Verified','hostReady','deviceUserspaceReachabilityVerified'):
+                    if type(state.get(key)) is bool:current[key]=state[key]
+                for key in ('relayRoles','reverseMappings'):
+                    if type(state.get(key)) is int and 0<=state[key]<=3:current[key]=state[key]
+                current['environmentCleanup']=state.get('cleanup', {})
                 shutil.rmtree(private)
                 current['privateDirectoryRemoved']=not private.exists()
                 (output/'result.json').write_text(json.dumps(result,indent=2)+'\n')
             required=('tsExplicitAuthorization','pairingApprovedBoth','bindingBoth','bothInputAndDistinctTargets',
-                      'survivorSameAuthenticatedSession','staleTypingAttempted','stoppedInputUnavailableAndUnchanged',
+                      'survivorSameAuthenticatedSession','stoppedInputUnavailableAndUnchanged',
                       'browserClosed','forwardRemoved','packagesRemoved','privateDirectoryRemoved')
             cleanup=current['environmentCleanup']
             if (current.get('stage')!='complete' or any(current.get(key) is not True for key in required) or
+                    current.get('staleInputGuard') not in ('retained_tab_disabled_keyboard_tested','removed_tab_unreachable') or
                     not isinstance(cleanup,dict) or not cleanup or any(value is not True for value in cleanup.values())):
                 raise GuiFailure('dual_evidence_incomplete')
         result['status']='passed'
     except Exception as error:
         text=str(error)
-        result['errorCode']=text if re.fullmatch(r'dual_[a-z0-9_]{1,80}',text) else 'dual_driver_failed'
+        from android_dual_overlay_session import SessionError
+        known={'host_control_unavailable','host_controller_readiness_invalid','host_material_reachability_claim_invalid',
+               'owned_namespace_collision','controlled_session_command_failed','owned_private_material_required',
+               'bounded_private_material_required','shared_overlay_session_cleanup_incomplete'}
+        result['errorCode']=text if re.fullmatch(r'dual_[a-z0-9_]{1,80}',text) or isinstance(error,SessionError) and text in known else 'dual_driver_failed'
     finally:
         (output/'result.json').write_text(json.dumps(result,indent=2)+'\n')
     if result['status']!='passed':raise SystemExit(1)

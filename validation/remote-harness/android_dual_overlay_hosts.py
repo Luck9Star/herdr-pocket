@@ -39,7 +39,7 @@ class HostControlError(RuntimeError):
 STARTUP_STAGES = {'initialization', 'work_validation', 'bundle_validation', 'host_directory', 'et_peer_start', 'et_peer_ready',
     'ts_peer_start', 'ts_peer_ready', 'materials', 'unknown'} | {
     role + '_' + step for role in ('et', 'ts') for step in
-    ('version', 'host_key', 'sshd_check', 'sshd_start', 'herdr_start', 'workspace_create', 'capture_start', 'profile')}
+    ('version', 'host_key', 'privsep_prepare', 'sshd_check', 'sshd_start', 'herdr_start', 'workspace_create', 'capture_start', 'profile')}
 STARTUP_ERRORS = {'fixture_startup_failed', 'paired_fixture_command_failed', 'sshd_privsep_directory_missing',
     'fixture_shell_unavailable', 'fixture_permission_denied', 'fixture_dynamic_dependency_missing',
     'fixture_command_failed', 'fixture_herdr_version_mismatch', 'fixture_command_timeout',

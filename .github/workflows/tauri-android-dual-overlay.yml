@@ -123,12 +123,14 @@ jobs:
           run-id: 43737220746
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/dual-apks
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: dual-overlay-shared-fixtures-5404adfb3c86f5174edda38f1d0c63c8d81996c5
-          run-id: 43736430859
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/dual-host-fixtures
+      - name: Download exact controlled host artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14171011473/zip" > "$RUNNER_TEMP/dual-host.zip"
+          printf '%s  %s\n' 4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698 "$RUNNER_TEMP/dual-host.zip" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/dual-host-fixtures"
+          unzip -q "$RUNNER_TEMP/dual-host.zip" -d "$RUNNER_TEMP/dual-host-fixtures"
       - name: Prepare scoped host and device
         run: |
           git diff --quiet 25188771b6d6d07bd608923699b6cd3c5cc45c55 HEAD -- validation/tauri validation/transport-rust validation/network-profiles validation/pairing/native/android validation/shared validation/vendor

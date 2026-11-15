@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
+import 'remote_workflow_widgets.dart';
 import 'connection_diagnostics.dart';
 import 'remote_adapter.dart';
 import 'remote_input.dart';
@@ -965,14 +966,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       Semantics(liveRegion:true,child:Text(message,key:const ValueKey('remote-input-status'))),
       if (receipt != null) Text(receipt.label,key:const ValueKey('remote-input-receipt')),
       Wrap(spacing:8,runSpacing:8,children:[
-        for (final entry in const {
-          RemoteInputMode.observe:'观察',RemoteInputMode.direct:'逐键输入',RemoteInputMode.draft:'草稿编辑',
-        }.entries) ChoiceChip(key:ValueKey('remote-mode-${entry.key.name}'),label:Text(entry.value),
-          selected:inputGate.mode == entry.key,
-          onSelected:entry.key == RemoteInputMode.observe || enabled
-            ? (_) { if (panelCurrent()) setInputMode(entry.key); } : null),
-      ]),
-      Wrap(spacing:8,runSpacing:8,children:[
         OutlinedButton.icon(key:const ValueKey('remote-keyboard-show'),
           onPressed:keyboardControlsEnabled ? () {
             if (panelCurrent()) unawaited(showInputKeyboard(panelTarget,panelMode,panelInputEpoch,panelObservationEpoch,panelKeyboardActionTicket));
@@ -1003,6 +996,33 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             }
             setState(() { acknowledgingInput = false; });
           } : null,child:const Text('我已核实新画面，解除未知结果锁定')),
+      ],
+      if (inputGate.mode == RemoteInputMode.draft) ...[
+        Actions(actions:<Type,Action<Intent>>{
+          PasteTextIntent:CallbackAction<PasteTextIntent>(onInvoke:(_) {
+            if (panelCurrent()) unawaited(pasteInput()); return null;
+          }),
+        },child:KeyedSubtree(key:ValueKey('remote-draft-input-epoch-${inputGate.epoch}'),child:TextField(key:const ValueKey('remote-input-draft'),controller:draft,focusNode:draftFocus,minLines:2,maxLines:5,
+          maxLength:4096,
+          enabled:enabled && !inputGate.sending && !previewOpen,autocorrect:false,enableSuggestions:false,
+          contextMenuBuilder:(context,editable) => AdaptiveTextSelectionToolbar.buttonItems(
+            anchors:editable.contextMenuAnchors,buttonItems:[
+              for (final item in editable.contextMenuButtonItems)
+                if (item.type != ContextMenuButtonType.paste) item,
+              ContextMenuButtonItem(type:ContextMenuButtonType.paste,label:'审查粘贴',onPressed:() {
+                ContextMenuController.removeAny(); if (panelCurrent()) unawaited(pasteInput());
+              }),
+            ]),
+          enableIMEPersonalizedLearning:false,decoration:const InputDecoration(labelText:'此目标的本地草稿',
+            helperText:'发送最多 4096 UTF-8 bytes；中文等字符可能占多个 byte')))),
+        Wrap(spacing:8,children:[
+          OutlinedButton(key:const ValueKey('remote-input-draft-paste'),onPressed:enabled && !inputGate.sending && !previewOpen && !readingPaste ? () { if (panelCurrent()) unawaited(pasteInput()); } : null,child:const Text('粘贴并审查')),
+          FilledButton(key:const ValueKey('remote-input-draft-send'),
+            onPressed:enabled && !inputGate.sending && !previewOpen && !readingPaste ? () {
+              if (!panelCurrent()) return;
+              final lease = inputGate.capture(); if (lease != null) unawaited(previewInput(draft.text,lease,fromDraft:true));
+            } : null,child:const Text('预览并发送文本')),
+        ]),
       ],
       Semantics(liveRegion:true,child:Text(auxiliaryModifiers.held
           ? '${auxiliaryModifiers.ctrl ? 'Ctrl ' : ''}${auxiliaryModifiers.alt ? 'Alt ' : ''}保持 · 选择一个辅助基础键后释放；终端输入法文字不受影响'
@@ -1059,33 +1079,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           ? () { if (panelCurrent()) unawaited(pasteInput()); } : null,
           icon:const Icon(Icons.content_paste),label:const Text('粘贴并预览')),
       ],
-      if (inputGate.mode == RemoteInputMode.draft) ...[
-        Actions(actions:<Type,Action<Intent>>{
-          PasteTextIntent:CallbackAction<PasteTextIntent>(onInvoke:(_) {
-            if (panelCurrent()) unawaited(pasteInput()); return null;
-          }),
-        },child:KeyedSubtree(key:ValueKey('remote-draft-input-epoch-${inputGate.epoch}'),child:TextField(key:const ValueKey('remote-input-draft'),controller:draft,focusNode:draftFocus,minLines:2,maxLines:5,
-          maxLength:4096,
-          enabled:enabled && !inputGate.sending && !previewOpen,autocorrect:false,enableSuggestions:false,
-          contextMenuBuilder:(context,editable) => AdaptiveTextSelectionToolbar.buttonItems(
-            anchors:editable.contextMenuAnchors,buttonItems:[
-              for (final item in editable.contextMenuButtonItems)
-                if (item.type != ContextMenuButtonType.paste) item,
-              ContextMenuButtonItem(type:ContextMenuButtonType.paste,label:'审查粘贴',onPressed:() {
-                ContextMenuController.removeAny(); if (panelCurrent()) unawaited(pasteInput());
-              }),
-            ]),
-          enableIMEPersonalizedLearning:false,decoration:const InputDecoration(labelText:'此目标的本地草稿',
-            helperText:'发送最多 4096 UTF-8 bytes；中文等字符可能占多个 byte')))),
-        Wrap(spacing:8,children:[
-          OutlinedButton(key:const ValueKey('remote-input-draft-paste'),onPressed:enabled && !inputGate.sending && !previewOpen && !readingPaste ? () { if (panelCurrent()) unawaited(pasteInput()); } : null,child:const Text('粘贴并审查')),
-          FilledButton(key:const ValueKey('remote-input-draft-send'),
-            onPressed:enabled && !inputGate.sending && !previewOpen && !readingPaste ? () {
-              if (!panelCurrent()) return;
-              final lease = inputGate.capture(); if (lease != null) unawaited(previewInput(draft.text,lease,fromDraft:true));
-            } : null,child:const Text('预览并发送文本')),
-        ]),
-      ],
+
       for (var i = 0; i < rejectedDrafts.length; i++)
         if (rejectedDrafts[i].target == draftTarget) ExpansionTile(key:ValueKey('remote-rejected-draft-$i'),
           title:const Text('旧阶段明确未发送的草稿 · 可查看并手动复制'),
@@ -1198,6 +1192,54 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       onChanged:(_) { request++; if (reviewed) setState(() { reviewed = false; }); },
     ));
 
+  Widget modeSelector() {
+    final observation = observationEpoch,epoch = inputGate.epoch,target = inputGate.target;
+    final enabled = live && inputGate.capability != null && inputGate.fresh && inputGate.unknown == null && !selectingScreen && !showingFontDiagnostics;
+    bool current() => observationEpoch == observation && inputGate.epoch == epoch &&
+      identical(inputGate.target,target) && widget.visibility?.value != false && !viewPaused;
+    return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Container(padding:const EdgeInsets.all(4),decoration:BoxDecoration(color:widget.tokens.color('cardSubtle'),borderRadius:BorderRadius.circular(12)),
+        child:Row(children:[for (final entry in const {
+          RemoteInputMode.observe:'观察',RemoteInputMode.direct:'逐键输入',RemoteInputMode.draft:'草稿编辑',
+        }.entries) Expanded(child:Padding(padding:const EdgeInsets.symmetric(horizontal:2),
+          child:ChoiceChip(key:ValueKey('remote-mode-${entry.key.name}'),label:Text(entry.value),
+            labelPadding:const EdgeInsets.symmetric(horizontal:3),
+            selected:inputGate.mode == entry.key,
+            selectedColor:widget.tokens.color('card'),backgroundColor:widget.tokens.color('cardSubtle'),
+            side:BorderSide.none,
+            onSelected:entry.key == RemoteInputMode.observe || enabled
+              ? (_) {if (current()) setInputMode(entry.key);} : null)))])),
+      const SizedBox(height:10),
+      RemoteWorkflowNotice(tokens:widget.tokens,warning:inputGate.mode == RemoteInputMode.direct,
+        child:Text(switch (inputGate.mode) {
+          RemoteInputMode.observe => '观察模式 · 不发送远端按键',
+          RemoteInputMode.direct => '逐键输入已启用 · 每次提交都会发送到当前目标',
+          RemoteInputMode.draft => '草稿编辑 · 仅编辑本地，预览确认后才发送',
+        },key:const ValueKey('remote-mode-guidance'))),
+    ]);
+  }
+  void openReviewedPane(RemotePane pane) {
+    final current = dashboard;
+    if (!busy || !dashboardFresh || viewPaused || widget.visibility?.value == false || current == null ||
+        current.generation != adapter.generation || current.freshness != DashboardFreshness.fresh ||
+        current.panes.where((p) => p.paneId == pane.paneId && p.terminalId == pane.terminalId).length != 1) return;
+    widget.onOpenPane?.call(pane);
+  }
+  Widget sessionTabs() => SingleChildScrollView(scrollDirection:Axis.horizontal,
+    child:Row(children:[for (final pane in displayPanes) Padding(padding:const EdgeInsets.only(right:8,bottom:12),
+      child:OutlinedButton.icon(key:ValueKey('remote-tab-${pane.paneId}'),
+        style:OutlinedButton.styleFrom(backgroundColor:widget.tokens.color(selectedPane == pane.paneId ? 'brandSoft' : 'card'),
+          side:BorderSide(color:widget.tokens.color(selectedPane == pane.paneId ? 'brandBorder' : 'border')),
+          disabledForegroundColor:widget.tokens.color(selectedPane == pane.paneId ? 'brand' : 'textMutedReadable'),
+          padding:const EdgeInsets.symmetric(horizontal:14,vertical:12)),
+        onPressed:busy && !viewPaused && dashboard!.selectable && widget.visibility?.value != false
+          ? selectedPane == null ? () => selectPane(pane)
+            : selectedPane != pane.paneId && widget.onOpenPane != null ? () => openReviewedPane(pane) : null
+          : null,
+        icon:Icon(selectedPane == pane.paneId ? Icons.terminal : Icons.tab_outlined,size:16),
+        label:Text('${pane.label ?? pane.paneId} · 观察'))),
+    ]));
+
   @override
   Widget build(BuildContext context) {
     final terminalObservationEpoch = observationEpoch,terminalInputEpoch = inputGate.epoch;
@@ -1206,101 +1248,23 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final selectionSource = terminal,selectionSnapshot = snapshot,selectionRequest = request;
     final diagnosticSource = terminal,diagnosticTarget = inputGate.target;
     final diagnosticRequest = request,diagnosticObservationEpoch = observationEpoch,diagnosticInputEpoch = inputGate.epoch;
-    return PopScope(
-    onPopInvokedWithResult:(didPop,result) { if (didPop) stop(); },
-    child:Scaffold(appBar:AppBar(title:const Text('远端接入 · 只读'),
-      leading:IconButton(tooltip:'返回离线验证',icon:const Icon(Icons.arrow_back),
-        onPressed:() { stop(); Navigator.pop(context); })),
-      body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
-        child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-          Text('手机看板 · 默认观察',style:Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height:8),
-          const Text('仅用于隔离测试主机。审查接入后查看当前命名会话，选择明确 pane 观察。支持保护扩展与持久锁时可显式输入；布局不调整共享 PTY。'),
-          const SizedBox(height:12),
-          DropdownButtonFormField<int>(key:const ValueKey('remote-canvas-size'),initialValue:observationCanvas,
-            decoration:const InputDecoration(labelText:'本次只读观察画布'),
-            items:[for (var i = 0; i < remoteObservationCanvases.length; i++)
-              DropdownMenuItem(value:i,key:ValueKey('remote-canvas-${remoteObservationCanvases[i].cols}x${remoteObservationCanvases[i].rows}'),
-                child:Text('${remoteObservationCanvases[i].cols}×${remoteObservationCanvases[i].rows}'))],
-            onChanged:busy || networkBindingInvalidated ? null : (value) {
-              if (value != null) setState(() { observationCanvas = value; reviewed = false; });
-            }),
-          const Padding(padding:EdgeInsets.symmetric(vertical:8),
-            child:Text('只改变观察者画布，不代表源 PTY 尺寸。连接与恢复沿用本次选择；更改前先停止并断开，再审查连接。字号、键盘与旋转不会调整远端尺寸。')),
-          if (widget.networkBinding != null) Text('冻结网络：${widget.networkBinding!.label}',key:const ValueKey('remote-network-binding')),
-          Semantics(liveRegion:true,child:Text(displayStatus,key:const ValueKey('remote-status'),
-            style:TextStyle(color:widget.tokens.color('textSecondary')))),
-          if (connectionDiagnostics != null) connectionDiagnosticsPanel(connectionDiagnostics!),
-          Text(dashboardSyncedAt == null ? '会话看板：尚无已确认的同步时间' :
-            '上次已核验会话看板：$dashboardSyncSource\n同步于 ${dashboardSyncedAt!.toLocal().toIso8601String()} · 此时间不代表终端画面已更新',
-            key:const ValueKey('remote-dashboard-sync')),
-          if (widget.summaryLease != null) Builder(builder:(context) {
-            final summary = widget.summaryLease!.registry.forHost(widget.summaryLease!.hostId);
-            return Text('当前主机摘要 · ${summary?.label ?? '任务状态未知 · 尚无有效会话快照'}${summary == null ? '' : '\n${summary.detail}'}',
-              key:const ValueKey('remote-host-task-summary'));
-          }),
-          if (viewPaused && widget.visibility?.value != false) FilledButton(key:const ValueKey('remote-resume'),
-            onPressed:resumeObservation,child:const Text('恢复原目标观察')),
-          if (busy) TextButton.icon(key:const ValueKey('remote-cancel'),onPressed:stop,
-            icon:const Icon(Icons.stop_circle_outlined),label:const Text('停止并断开')),
-          if (dashboard != null) ...[
-            const SizedBox(height:12),
-            Text('会话 ${dashboard!.session}',style:Theme.of(context).textTheme.titleMedium),
-            Text('仅来自已核验 socket 的 snapshot · ${dashboard!.panes.length} 个 pane\n${busy && dashboardFresh ? '持续更新已核验' : dashboard!.freshness == DashboardFreshness.unavailable && busy ? '持续更新不可用 · 仅为单次快照' : dashboard!.freshness == DashboardFreshness.refreshing && busy ? '正在重新核验' : '看板已陈旧，等待重新核验'}'),
-            if (blockedPaneCount > 0) Semantics(key:const ValueKey('remote-blocked-summary'),
-              liveRegion:true,excludeSemantics:true,
-              label:'主机报告 $blockedPaneCount 个受阻窗格。待处理优先，同级保持原顺序。',
-              child:Text('待处理优先 · $blockedPaneCount 个受阻窗格（主机报告）')),
-            if (dashboard!.panes.isEmpty) const Padding(padding:EdgeInsets.symmetric(vertical:16),
-              child:Text('没有 pane · 不会回退到其他会话')),
-            for (final pane in displayPanes) Card(child:Padding(padding:const EdgeInsets.all(12),
-              child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-                Text(pane.label ?? pane.paneId,style:Theme.of(context).textTheme.titleMedium),
-                Text('${pane.agent ?? '窗格状态'} · ${busy && dashboardFresh ? pane.statusLabel : '上次${pane.statusLabel}（待确认）'}'),
-                if (pane.workspace != null || pane.tab != null) Text([pane.workspace,pane.tab].whereType<String>().join(' / ')),
-                Text('${pane.paneId} · ${pane.terminalId}',softWrap:true),
-                const SizedBox(height:8),
-                FilledButton(key:ValueKey('remote-pane-${pane.paneId}'),
-                  onPressed:busy && !viewPaused && selectedPane == null &&
-                    dashboard!.selectable ? () => selectPane(pane) : null,
-                  child:Text(selectedPane == pane.paneId ? '已选目标 · 只读' : '选择此 pane 观察')),
-                if (widget.onOpenPane != null) TextButton(key:ValueKey('remote-pane-new-tab-${pane.paneId}'),
-                  onPressed:busy && dashboardFresh && !viewPaused && widget.visibility?.value != false ? () {
-                    final current = dashboard;
-                    if (current != null && current.generation == adapter.generation && current.freshness == DashboardFreshness.fresh &&
-                        current.panes.where((p) => p.paneId == pane.paneId && p.terminalId == pane.terminalId).length == 1) widget.onOpenPane!(pane);
-                  } : null,
-                  child:const Text('在新标签打开此目标')),
-              ]))),
+    return PopScope(onPopInvokedWithResult:(didPop,result) {if (didPop) stop();},
+      child:Scaffold(appBar:AppBar(title:Text(snapshot == null ? '连接 herdr 会话' : '${snapshot!.session} · 远端终端'),
+        leading:IconButton(tooltip:'返回离线验证',icon:const Icon(Icons.arrow_back),onPressed:() {stop();Navigator.pop(context);}),
+        actions:[if (busy) IconButton(tooltip:'停止并断开',onPressed:stop,icon:const Icon(Icons.stop_circle_outlined))]),
+        body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
+          child:Center(child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:960),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          if (snapshot == null && dashboard == null) ...[
+            const Text('安全接入，默认观察',style:TextStyle(fontSize:25,fontWeight:FontWeight.w700,letterSpacing:-0.5)),
+            const SizedBox(height:8),
+            Text('审查主机身份与目标后，打开真实远端会话。',style:TextStyle(color:widget.tokens.color('textSecondary'))),
+            RemoteWorkflowSteps(tokens:widget.tokens,labels:const ['连接目标','身份核验','只读观察'],current:0),
           ],
-          if (dashboard == null || !busy) ...[
-          const SizedBox(height:16),
-          Text('1 · 连接目标',style:Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height:12),
-          input('host','SSH 主机 / IP'),input('port','SSH 端口'),input('username','SSH 用户'),
-          input('session','herdr 会话名（非 default）'),
-          input('socketPath','远端命名会话 socket 绝对路径',hint:'/.../herdr/sessions/会话/herdr.sock'),
-          input('herdrPath','远端 herdr 可执行文件绝对路径'),
-          Text('2 · 主机身份核验',style:Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height:12),
-          input('expectedHostKey','预期主机 Ed25519 公钥',hint:'ssh-ed25519 BASE64（无注释）'),
-          if (widget.pairedTarget == null) ...[
-          Text('3 · 内存临时凭据',style:Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height:12),
-          input('privateKeyPem','临时 Ed25519 私钥',secret:true),
-          ] else const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('设备独立身份 · 私钥不进入表单；密钥不可用时停止')),
-          CheckboxListTile(key:const ValueKey('remote-review'),contentPadding:EdgeInsets.zero,
-            value:reviewed,onChanged:busy || networkBindingInvalidated ? null : (value) => setState(() { reviewed = value ?? false; }),
-            title:const Text('我已通过可信渠道核验主机公钥、账号与目标资料'),
-            subtitle:const Text('输入或保存资料不等于信任；任何编辑都会清除此确认。')),
-          const SizedBox(height:8),
-          if (networkBindingInvalidated) const Text('网络绑定已改变 · 请关闭本页并重新打开，审查后才能连接。',key:ValueKey('remote-network-invalidated')),
-          FilledButton.icon(key:const ValueKey('remote-connect'),onPressed:reviewed && !busy && !networkBindingInvalidated ? connect : null,
-            icon:const Icon(Icons.lock_outline),label:Text(dashboard == null ? '核验并读取会话看板' : '重新审查并连接')),
-          ],
-          if (snapshot != null && terminal != null) ...[
-            const SizedBox(height:12),
-            Text('${snapshot!.session} / ${snapshot!.paneId}\n${live ? inputGate.mode == RemoteInputMode.observe ? '只读观察中' : '实时终端 · 显式输入模式' : '旧画面 · 已停止'} · seq $sequence\n更新于 ${capturedAt!.toLocal().toIso8601String()} · 观察画布 ${terminal!.viewWidth}×${terminal!.viewHeight}'),
+          if (dashboard != null) sessionTabs(),
+          if (snapshot != null || inputGate.unknown != null) modeSelector(),
+          if ((snapshot != null || inputGate.unknown != null) && inputGate.mode == RemoteInputMode.draft) inputPanel(),
+          if (snapshot != null) Wrap(spacing:8,runSpacing:4,children:[
             OutlinedButton.icon(key:const ValueKey('remote-screen-select'),
               onPressed:live && !viewPaused && widget.visibility?.value != false && !selectingScreen &&
                 !showingFontDiagnostics && !previewOpen && !readingPaste && !inputGate.sending ? () {
@@ -1314,7 +1278,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                     inputGate.epoch == diagnosticInputEpoch) openFontDiagnostics();
               } : null,
               icon:const Icon(Icons.font_download_outlined),label:const Text('字体与字符诊断')),
-            const SizedBox(height:8),
+          ]),
+          if (snapshot != null && terminal != null) ...[
+            const SizedBox(height:12),
+            Container(padding:const EdgeInsets.symmetric(horizontal:14,vertical:11),
+              decoration:BoxDecoration(color:widget.tokens.color('termBg'),borderRadius:const BorderRadius.vertical(top:Radius.circular(12))),
+              child:Row(children:[Icon(Icons.terminal,size:16,color:widget.tokens.color('termText')),const SizedBox(width:8),
+                Expanded(child:Text('${snapshot!.session} / ${snapshot!.paneId}',style:TextStyle(fontFamily:'ProbeNerd',fontSize:12,color:widget.tokens.color('termText')))),
+                Text('${terminal!.viewWidth}×${terminal!.viewHeight}',style:TextStyle(fontSize:11,color:widget.tokens.color('termText')))])),
             if (showingFontDiagnostics)
               TerminalFontDiagnostics(tokens:widget.tokens,registeredFontFamily:'ProbeNerd',
                 fontSize:(widget.networkBinding?.terminalFontSize ?? 14).toDouble(),onClose:closeFontDiagnostics)
@@ -1346,8 +1317,98 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                   return KeyEventResult.ignored;
                 }))))),
           ],
-          if (snapshot != null || inputGate.unknown != null) inputPanel(),
+          if ((snapshot != null || inputGate.unknown != null) && inputGate.mode != RemoteInputMode.draft) inputPanel(),
+          if (dashboard == null || !busy) ...[
+          const SizedBox(height:16),
+          RemoteWorkflowCard(tokens:widget.tokens,title:'01 · 连接目标',subtitle:'明确账号与命名会话，只观察已审查的目标',icon:Icons.dns_outlined,
+            child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          input('host','SSH 主机 / IP'),input('port','SSH 端口'),input('username','SSH 用户'),
+          input('session','herdr 会话名（非 default）'),
+          input('socketPath','远端命名会话 socket 绝对路径',hint:'/.../herdr/sessions/会话/herdr.sock'),
+          input('herdrPath','远端 herdr 可执行文件绝对路径'),
+          ])),
+          RemoteWorkflowCard(tokens:widget.tokens,title:'02 · 主机身份核验',subtitle:'通过可信渠道核对公钥；填入资料本身不建立信任',
+            child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          input('expectedHostKey','预期主机 Ed25519 公钥',hint:'ssh-ed25519 BASE64（无注释）'),
+          if (widget.pairedTarget == null) ...[
+          const SizedBox(height:12),
+          Text('临时身份凭据',style:Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height:12),
+          input('privateKeyPem','临时 Ed25519 私钥',secret:true),
+          ] else const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('设备独立身份 · 私钥不进入表单；密钥不可用时停止')),
+          CheckboxListTile(key:const ValueKey('remote-review'),contentPadding:EdgeInsets.zero,
+            value:reviewed,onChanged:busy || networkBindingInvalidated ? null : (value) => setState(() { reviewed = value ?? false; }),
+            title:const Text('我已通过可信渠道核验主机公钥、账号与目标资料'),
+            subtitle:const Text('输入或保存资料不等于信任；任何编辑都会清除此确认。')),
+          const SizedBox(height:8),
+          if (networkBindingInvalidated) const Text('网络绑定已改变 · 请关闭本页并重新打开，审查后才能连接。',key:ValueKey('remote-network-invalidated')),
+          FilledButton.icon(key:const ValueKey('remote-connect'),onPressed:reviewed && !busy && !networkBindingInvalidated ? connect : null,
+            icon:const Icon(Icons.lock_outline),label:Text(dashboard == null ? '核验并读取会话看板' : '重新审查并连接')),
+          ])),
+          ],
+          if (snapshot != null) ...[
+            Text('${snapshot!.session} / ${snapshot!.paneId}\n${live ? inputGate.mode == RemoteInputMode.observe ? '只读观察中' : '实时终端 · 显式输入模式' : '旧画面 · 已停止'} · seq $sequence\n更新于 ${capturedAt!.toLocal().toIso8601String()} · 观察画布 ${terminal!.viewWidth}×${terminal!.viewHeight}'),
+          ],
+          RemoteWorkflowCard(key:const ValueKey('remote-connection-settings'),tokens:widget.tokens,title:'连接状态与观察设置',icon:Icons.settings_outlined,
+            child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          DropdownButtonFormField<int>(key:const ValueKey('remote-canvas-size'),initialValue:observationCanvas,
+            decoration:const InputDecoration(labelText:'本次只读观察画布'),
+            items:[for (var i = 0; i < remoteObservationCanvases.length; i++)
+              DropdownMenuItem(value:i,key:ValueKey('remote-canvas-${remoteObservationCanvases[i].cols}x${remoteObservationCanvases[i].rows}'),
+                child:Text('${remoteObservationCanvases[i].cols}×${remoteObservationCanvases[i].rows}'))],
+            onChanged:busy || networkBindingInvalidated ? null : (value) {
+              if (value != null) setState(() { observationCanvas = value; reviewed = false; });
+            }),
+          const Padding(padding:EdgeInsets.symmetric(vertical:8),
+            child:Text('只改变观察者画布，不代表源 PTY 尺寸。连接与恢复沿用本次选择；更改前先停止并断开，再审查连接。字号、键盘与旋转不会调整远端尺寸。')),
+          if (widget.networkBinding != null) Text('冻结网络：${widget.networkBinding!.label}',key:const ValueKey('remote-network-binding')),
+          Semantics(liveRegion:true,child:Text(displayStatus,key:const ValueKey('remote-status'),
+            style:TextStyle(color:widget.tokens.color('textSecondary')))),
+          if (connectionDiagnostics != null) connectionDiagnosticsPanel(connectionDiagnostics!),
+          Text(dashboardSyncedAt == null ? '会话看板：尚无已确认的同步时间' :
+            '上次已核验会话看板：$dashboardSyncSource\n同步于 ${dashboardSyncedAt!.toLocal().toIso8601String()} · 此时间不代表终端画面已更新',
+            key:const ValueKey('remote-dashboard-sync')),
+          if (widget.summaryLease != null) Builder(builder:(context) {
+            final summary = widget.summaryLease!.registry.forHost(widget.summaryLease!.hostId);
+            return Text('当前主机摘要 · ${summary?.label ?? '任务状态未知 · 尚无有效会话快照'}${summary == null ? '' : '\n${summary.detail}'}',
+              key:const ValueKey('remote-host-task-summary'));
+          }),
+          if (viewPaused && widget.visibility?.value != false) FilledButton(key:const ValueKey('remote-resume'),
+            onPressed:resumeObservation,child:const Text('恢复原目标观察')),
+          if (busy) TextButton.icon(key:const ValueKey('remote-cancel'),onPressed:stop,
+            icon:const Icon(Icons.stop_circle_outlined),label:const Text('停止并断开')),
+          ])),
+          if (dashboard != null) ...[
+            const SizedBox(height:12),
+            Text('会话 ${dashboard!.session}',style:Theme.of(context).textTheme.titleMedium),
+            Text('仅来自已核验 socket 的 snapshot · ${dashboard!.panes.length} 个 pane\n${busy && dashboardFresh ? '持续更新已核验' : dashboard!.freshness == DashboardFreshness.unavailable && busy ? '持续更新不可用 · 仅为单次快照' : dashboard!.freshness == DashboardFreshness.refreshing && busy ? '正在重新核验' : '看板已陈旧，等待重新核验'}'),
+            if (blockedPaneCount > 0) Semantics(key:const ValueKey('remote-blocked-summary'),
+              liveRegion:true,excludeSemantics:true,
+              label:'主机报告 $blockedPaneCount 个受阻窗格。待处理优先，同级保持原顺序。',
+              child:Text('待处理优先 · $blockedPaneCount 个受阻窗格（主机报告）')),
+            if (dashboard!.panes.isEmpty) const Padding(padding:EdgeInsets.symmetric(vertical:16),
+              child:Text('没有 pane · 不会回退到其他会话')),
+            for (final pane in displayPanes) Card(child:Padding(padding:const EdgeInsets.all(12),
+              child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                Text(pane.label ?? pane.paneId,style:Theme.of(context).textTheme.titleMedium),
+                Text('${pane.agent ?? '窗格状态'} · ${busy && dashboardFresh ? pane.statusLabel : '上次${pane.statusLabel}（待确认）'}'),
+                if (pane.workspace != null || pane.tab != null) Text([pane.workspace,pane.tab].whereType<String>().join(' / ')),
+                Text('${pane.paneId} · ${pane.terminalId}',softWrap:true),
+                const SizedBox(height:8),
+                FilledButton(key:ValueKey('remote-pane-${pane.paneId}'),
+                  onPressed:busy && !viewPaused && selectedPane == null &&
+                    dashboard!.selectable ? () => selectPane(pane) : null,
+                  child:Text(selectedPane == pane.paneId ? '已选目标 · 只读' : '选择此 pane 观察')),
+                if (widget.onOpenPane != null) TextButton(key:ValueKey('remote-pane-new-tab-${pane.paneId}'),
+                  onPressed:busy && dashboardFresh && !viewPaused && widget.visibility?.value != false ? () {
+                    final current = dashboard;
+                    if (current != null && current.generation == adapter.generation && current.freshness == DashboardFreshness.fresh &&
+                        current.panes.where((p) => p.paneId == pane.paneId && p.terminalId == pane.terminalId).length == 1) widget.onOpenPane!(pane);
+                  } : null,
+                  child:const Text('在新标签打开此目标')),
+              ]))),
+          ],
           unsentDraftPanel(),
-        ])))));
+        ])))))));
   }
 }

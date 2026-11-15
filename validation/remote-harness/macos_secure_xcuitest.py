@@ -93,6 +93,12 @@ def prepare(app, fixture=None):
         dart_text = dart_text.replace('    secret.addListener(credentialsChanged);', '    qaPemFocus.addListener(credentialsChanged);\n    secret.addListener(credentialsChanged);', 1)
         dart_text = dart_text.replace('    secret.removeListener(credentialsChanged);', '    qaPemFocus.removeListener(credentialsChanged); qaPemFocus.dispose();\n    secret.removeListener(credentialsChanged);', 1)
         dart_text = dart_text.replace(field_point, field_point.replace('controller: secret,', 'controller: secret, focusNode: qaPemFocus,'), 1)
+        connect_point = '  Future<void> connect() async {'
+        parse_point = '      final localSocket = await SSHSocket.connect('
+        if dart_text.count(connect_point) != 1 or dart_text.count(parse_point) != 1:
+            raise ValueError('macos_xcui_dart_unexpected')
+        dart_text = dart_text.replace(connect_point, connect_point + "\n    if (keyAuth) debugPrint('HP_XCUI_STAGE=keyConnectHandlerEntered');", 1)
+        dart_text = dart_text.replace(parse_point, "      if (keyAuth) debugPrint('HP_XCUI_STAGE=keyPemParsed');\n" + parse_point, 1)
         dart.write_text(dart_text.replace(point, diagnostic + point, 1).replace(address_point, diagnostic + address_point, 1).replace(pem_point, key_diagnostic + pem_point, 1))
     source.write_text(test_source)
 

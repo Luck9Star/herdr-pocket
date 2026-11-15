@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
+import 'package:flutter/services.dart' show Clipboard;
 import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
 import 'macos_secure_credential_field.dart';
@@ -19,12 +20,15 @@ class DirectSshPage extends StatefulWidget {
 class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserver {
   final host = TextEditingController(), port = TextEditingController(text: '22'), user = TextEditingController();
   final secret = TextEditingController(), passphrase = TextEditingController();
-  final terminal = Terminal(maxLines: 2000);
+  Terminal? terminal;
   SSHSocket? socket;
   SSHClient? client;
   SSHSession? shell;
   StreamSubscription<String>? stdout, stderr;
   int epoch = 0;
+  int pasteRevision = 0;
+  bool pastingKey = false;
+  String? pasteStatus;
   String? fingerprint, algorithm, checkedTarget;
   String status = '填写连接信息后先探测主机密钥。';
   bool busy = false, connected = false, keyAuth = false, foreground = true;
@@ -33,27 +37,61 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       (int.tryParse(port.text.trim()) ?? 0) > 0 && (int.tryParse(port.text.trim()) ?? 65536) <= 65535;
 
   bool get canConnect => valid && !busy && fingerprint != null && checkedTarget == target && secret.text.isNotEmpty;
-  void credentialsChanged() { if (mounted) setState(() {}); }
+  void cancelKeyPaste() { pasteRevision++; pastingKey = false; pasteStatus = null; }
+  void credentialsChanged() { cancelKeyPaste(); if (mounted) setState(() {}); }
+
+  Future<void> pastePrivateKey() async {
+    if (!keyAuth || busy || connected || pastingKey || !foreground) return;
+    final revision = ++pasteRevision, generation = epoch;
+    bool current() => mounted && revision == pasteRevision && generation == epoch &&
+      keyAuth && !busy && !connected && foreground && (ModalRoute.of(context)?.isCurrent ?? true);
+    setState(() { pastingKey = true; pasteStatus = null; });
+    String? value;
+    try { value = (await Clipboard.getData(Clipboard.kTextPlain))?.text; }
+    catch (_) {
+      if (current()) setState(() { pastingKey = false; pasteStatus = '无法读取剪贴板，请重试或手动输入私钥。'; });
+      return;
+    }
+    if (!current()) return;
+    if (value == null || value.trim().isEmpty) {
+      setState(() { pastingKey = false; pasteStatus = '剪贴板中没有可粘贴的文本。'; });
+      return;
+    }
+    secret.value = TextEditingValue(text: value, selection: TextSelection.collapsed(offset: value.length));
+    setState(() { pastingKey = false; pasteStatus = '私钥已粘贴，仅本次使用。'; });
+  }
 
   @override
   void initState() {
     super.initState(); WidgetsBinding.instance.addObserver(this);
     for (final field in [host, port, user]) { field.addListener(changed); }
     secret.addListener(credentialsChanged); passphrase.addListener(credentialsChanged);
-    terminal.onOutput = (data) {
+  }
+  Terminal createTerminal(int generation) {
+    final value = Terminal(maxLines: 2000);
+    value.onOutput = (data) {
       final current = shell;
-      if (foreground && connected && current != null) current.write(Uint8List.fromList(utf8.encode(data)));
+      if (generation == epoch && identical(value, terminal) && foreground && connected && current != null) current.write(Uint8List.fromList(utf8.encode(data)));
     };
-    terminal.onResize = (cols, rows, px, py) {
-      if (foreground && connected) shell?.resizeTerminal(cols, rows, px, py);
+    value.onResize = (cols, rows, px, py) {
+      if (generation == epoch && identical(value, terminal) && foreground && connected) shell?.resizeTerminal(cols, rows, px, py);
     };
+    return value;
+  }
+  void retireTerminal() {
+    final current = terminal; terminal = null;
+    if (current == null) return;
+    current.onOutput = null; current.onResize = null; current.dispose();
   }
   void changed() {
+    cancelKeyPaste();
     if (checkedTarget != target) { fingerprint = null; algorithm = null; checkedTarget = null; secret.clear(); passphrase.clear(); }
     if (mounted) setState(() {});
   }
   void stop({String? message, bool notify = true}) {
+    cancelKeyPaste();
     epoch++; connected = false; busy = false;
+    retireTerminal();
     secret.clear(); passphrase.clear();
     unawaited(stdout?.cancel()); unawaited(stderr?.cancel()); stdout = null; stderr = null;
     shell?.close(); shell = null; client?.close(); client = null; socket?.destroy(); socket = null;
@@ -63,13 +101,22 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
-    if (!foreground && (connected || busy)) stop(message: '应用进入后台，连接已关闭；返回后需重新连接，不会重放输入。');
+    if (!foreground) {
+      cancelKeyPaste();
+      if (connected || busy) stop(message: '应用进入后台，连接已关闭；返回后需重新连接，不会重放输入。');
+      else if (mounted) setState(() {});
+    }
+  }
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (pastingKey && !(ModalRoute.of(context)?.isCurrent ?? true)) cancelKeyPaste();
   }
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     secret.removeListener(credentialsChanged); passphrase.removeListener(credentialsChanged);
-    stop(notify: false); terminal.dispose();
+    stop(notify: false);
     for (final field in [host, port, user, secret, passphrase]) { field.dispose(); }
     super.dispose();
   }
@@ -111,15 +158,18 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   }
   Future<void> connect() async {
     if (!valid || busy || !foreground || fingerprint == null || checkedTarget != target || secret.text.isEmpty) return;
+    cancelKeyPaste();
     final generation = ++epoch, expected = fingerprint!, expectedAlgorithm = algorithm!;
     final password = keyAuth ? null : secret.text;
     final keyText = keyAuth ? secret.text : null, phrase = passphrase.text;
     secret.clear(); passphrase.clear();
-    terminal.fullReset();
+    retireTerminal(); final sessionTerminal = createTerminal(generation); terminal = sessionTerminal;
     setState(() { busy = true; status = '正在重新核对主机密钥并连接…'; });
     var keyMismatch = false;
+    var parsingKey = keyText != null;
     try {
       final identities = keyText == null ? null : SSHKeyPair.fromPem(keyText, phrase.isEmpty ? null : phrase);
+      parsingKey = false;
       final localSocket = await SSHSocket.connect(host.text.trim(), int.parse(port.text.trim()), timeout: const Duration(seconds: 8));
       if (generation != epoch) { localSocket.destroy(); return; }
       socket = localSocket; bool verified = false;
@@ -135,17 +185,25 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       unawaited(localClient.done.then<void>((_) {}, onError: (Object _, StackTrace __) {}));
       await localClient.authenticated.timeout(const Duration(seconds: 12));
       if (generation != epoch || !verified) return;
-      final pendingShell = localClient.shell(pty: SSHPtyConfig(width: terminal.viewWidth, height: terminal.viewHeight));
+      final pendingShell = localClient.shell(pty: SSHPtyConfig(width: sessionTerminal.viewWidth, height: sessionTerminal.viewHeight));
       unawaited(pendingShell.then<void>((value) { if (generation != epoch) value.close(); }, onError: (Object _, StackTrace __) {}));
       final localShell = await pendingShell.timeout(const Duration(seconds: 12));
       if (generation != epoch) { localShell.close(); return; }
       shell = localShell;
-      stdout = localShell.stdout.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch) terminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
-      stderr = localShell.stderr.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch) terminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
+      stdout = localShell.stdout.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch && identical(sessionTerminal, terminal)) sessionTerminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
+      stderr = localShell.stderr.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch && identical(sessionTerminal, terminal)) sessionTerminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
       unawaited(localShell.done.then((_) { if (generation == epoch) stop(message: '远端 shell 已结束（退出码 ${localShell.exitCode ?? '未知'}）。'); }, onError: (Object _, StackTrace __) { if (generation == epoch) stop(message: '连接中断，输入已停止。'); }));
       setState(() { busy = false; connected = true; status = '已连接 · 输入直接发送到远端 shell'; });
-    } catch (error) { if (generation == epoch) stop(message: keyMismatch ? '主机密钥不符，已阻止认证；请重新核对。' : error is SSHAuthFailError ? '认证失败，请检查凭据。' : '连接失败或超时，请检查网络、密钥与目标。'); }
+    } catch (error) { if (generation == epoch) stop(message: parsingKey ? '私钥无法解析或解密；请检查完整 PEM 和私钥口令。尚未连接远端。' : keyMismatch ? '主机密钥不符，已阻止认证；请重新核对。' : error is SSHAuthFailError ? '认证失败，请检查凭据。' : '连接失败或超时，请检查网络、密钥与目标。'); }
   }
+  Widget terminalKeys(Terminal current) => SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+    for (final item in {'Esc':'\u001b', 'Tab':'\t'}.entries)
+      TextButton(onPressed: () => current.textInput(item.value), child: Text(item.key)),
+    for (final item in {'↑':TerminalKey.arrowUp, '↓':TerminalKey.arrowDown, '←':TerminalKey.arrowLeft, '→':TerminalKey.arrowRight}.entries)
+      TextButton(onPressed: () => current.keyInput(item.value), child: Text(item.key)),
+    for (final item in {'Ctrl-C':'\u0003', 'Ctrl-D':'\u0004', 'Enter':'\r'}.entries)
+      TextButton(onPressed: () => current.textInput(item.value), child: Text(item.key)),
+  ]));
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('普通 SSH'),
@@ -154,12 +212,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       actions: [if (busy || connected) TextButton(onPressed: () => stop(message: '已断开；未重放输入。'), child: const Text('断开'))]),
     body: SafeArea(child: connected ? Column(children: [
       Padding(padding: const EdgeInsets.all(8), child: Text(status)),
-      Expanded(child: TerminalView(terminal, theme: widget.tokens.terminalTheme, autoResize: true,
+      Expanded(child: TerminalView(terminal!, theme: widget.tokens.terminalTheme, autoResize: true,
         textStyle: const TerminalStyle(fontFamily: 'ProbeNerd', fontSize: 14))),
-      SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
-        for (final item in {'Esc':'\u001b', 'Tab':'\t', '↑':'\u001b[A', '↓':'\u001b[B', '←':'\u001b[D', '→':'\u001b[C', 'Ctrl-C':'\u0003', 'Ctrl-D':'\u0004', 'Enter':'\r'}.entries)
-          TextButton(onPressed: () { if (foreground && connected) shell?.write(Uint8List.fromList(utf8.encode(item.value))); }, child: Text(item.key)),
-      ])),
+      terminalKeys(terminal!),
     ]) : ListView(key: const ValueKey('direct-form'), padding: const EdgeInsets.all(16), children: [
       Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560), child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -186,7 +241,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
           ],
           const SizedBox(height: 16),
           SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('使用私钥认证'), value: keyAuth,
-            onChanged: busy ? null : (value) => setState(() { keyAuth = value; secret.clear(); passphrase.clear(); })),
+            onChanged: busy ? null : (value) => setState(() { cancelKeyPaste(); keyAuth = value; secret.clear(); passphrase.clear(); })),
           const SizedBox(height: 12),
           Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）',
             child: !keyAuth && !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS
@@ -195,6 +250,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
               : TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,
               minLines: 1, maxLines: keyAuth ? 6 : 1, decoration: InputDecoration(label: ExcludeSemantics(child: Text(keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）'))))),
           if (keyAuth) ...[
+            TextButton(key: const ValueKey('direct-paste-key'), onPressed: busy || pastingKey || !foreground ? null : pastePrivateKey,
+              child: const Text('粘贴私钥')),
+            if (pasteStatus != null) Semantics(liveRegion: true, child: Text(pasteStatus!, key: const ValueKey('direct-paste-status'))),
             const SizedBox(height: 16),
             Semantics(container: true, explicitChildNodes: true, label: '私钥口令（可选）',
               child: !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS

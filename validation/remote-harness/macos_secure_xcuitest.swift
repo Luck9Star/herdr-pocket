@@ -121,18 +121,38 @@ final class SecureCredentialUITests: XCTestCase {
         origin.withOffset(CGVector(dx: center.x - windowFrame.minX, dy: center.y - windowFrame.minY)).click()
     }
 
-    private func connectByWindowCenter(_ app: XCUIApplication) {
-        let matches = app.buttons.matching(NSPredicate(format: "label == %@", "连接 SSH"))
-        XCTAssertEqual(matches.count, 1, "connect action is not unique")
+    private func clickFormButton(_ app: XCUIApplication, label: String) {
+        let matches = app.buttons.matching(NSPredicate(format: "label == %@", label))
+        XCTAssertEqual(matches.count, 1, "form action is not unique")
         let button = matches.firstMatch
-        // Scroll the real form until the center is inside the window, even if AX says not hittable.
-        for delta in [CGFloat(-240), -240, -240, -240, -240, 240, 240, 240, 240, 240] {
-            scrollForm(app, delta)
-            let window = app.windows.firstMatch
+        let window = app.windows.firstMatch
+        for delta in [CGFloat(0), -240, -240, -240, -240, -240, 240, 240, 240, 240, 240] {
+            if delta != 0 { scrollForm(app, delta) }
+            guard button.exists && button.isEnabled && window.exists else { continue }
             let frame = button.frame
-            if button.exists && window.exists && !frame.isEmpty && window.frame.contains(CGPoint(x: frame.midX, y: frame.midY)) { break }
+            let scroll = app.scrollViews.firstMatch
+            let viewport = scroll.exists && !scroll.frame.isEmpty ? window.frame.intersection(scroll.frame) : window.frame
+            let center = CGPoint(x: frame.midX, y: frame.midY)
+            guard !frame.isEmpty && viewport.contains(center) else { continue }
+            usleep(100_000)
+            let currentViewport = scroll.exists && !scroll.frame.isEmpty ? window.frame.intersection(scroll.frame) : window.frame
+            guard frame == button.frame && viewport == currentViewport && viewport.contains(center) else { continue }
+            let blocked = app.secureTextFields.allElementsBoundByIndex.contains {
+                $0.exists && !$0.frame.intersection(viewport).isEmpty && $0.frame.contains(center)
+            }
+            XCTAssertFalse(blocked, "secure credential overlay obstructs form action")
+            if stableHit(button) {
+                button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+            } else {
+                clickWindowCenter(app, matches: matches)
+            }
+            return
         }
-        clickWindowCenter(app, matches: matches)
+        XCTFail("form action center not visible and stable")
+    }
+
+    private func connectByWindowCenter(_ app: XCUIApplication) {
+        clickFormButton(app, label: "连接 SSH")
     }
 
     private func keyInputBits(_ app: XCUIApplication) throws -> [Bool]? {
@@ -544,35 +564,14 @@ final class SecureCredentialUITests: XCTestCase {
             XCTAssertFalse(maskedValue.isEmpty, "passphrase input state empty")
         }
         try assertNoSecrets(app, [password, phrase])
-        let pemGroup = element(app, "私钥 PEM（仅本次使用）")
-        reveal(app, pemGroup)
-        let pemView = pemGroup.descendants(matching: .textView).firstMatch
-        let pem = pemView.exists ? pemView : pemGroup.descendants(matching: .textField).firstMatch
-        tap(app, pem)
-        let focusDeadline = Date().addingTimeInterval(5)
-        var pemFocused = false
-        repeat {
-            pemFocused = try keyInputBits(app)?[2] == true
-            if pemFocused { break }
-            usleep(100_000)
-        } while Date() < focusDeadline
-        XCTAssertTrue(pemFocused, "PEM input focus not confirmed")
-        mark("pemFocused")
         let clipboard = NSPasteboard.general
         clipboard.clearContents()
         defer { clipboard.clearContents() }
         XCTAssertTrue(clipboard.setString(privateKey, forType: .string), "synthetic PEM pasteboard unavailable")
-        app.typeKey("v", modifierFlags: .command)
+        clickFormButton(app, label: "粘贴私钥")
+        mark("pemPasteButtonTapped")
         let pasted = try diagnoseKeyInputs(app)
-        if pasted?[3] == true && pasted?[2] == true {
-            mark("pemKeyboardFallback")
-            let lines = privateKey.components(separatedBy: "\n")
-            for (index, line) in lines.enumerated() {
-                if !line.isEmpty { app.typeText(line) }
-                if index < lines.count - 1 { app.typeKey(.return, modifierFlags: []) }
-            }
-            _ = try diagnoseKeyInputs(app)
-        }
+        XCTAssertTrue(pasted?[0] == true && pasted?[1] == true, "pasted key and passphrase not confirmed")
         try assertNoSecrets(app, [password, phrase])
         mark("keyCredentialEntered")
         mark("keyConnectAttempt")

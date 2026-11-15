@@ -24,7 +24,7 @@ class ScaffoldTests(unittest.TestCase):
         (root / 'macos/RunnerTests').mkdir(parents=True)
         (root / 'macos/Runner').mkdir(parents=True)
         (root / 'lib').mkdir()
-        (root / 'lib/direct_ssh_page.dart').write_text("          Semantics(container: true, explicitChildNodes: true, label: '地址'\n          Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）'\nTextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,\n          OutlinedButton(key: const ValueKey('direct-probe')\n")
+        (root / 'lib/direct_ssh_page.dart').write_text("  Future<void> connect() async {\n      final localSocket = await SSHSocket.connect(\n          Semantics(container: true, explicitChildNodes: true, label: '地址'\n          Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）'\nTextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,\n          OutlinedButton(key: const ValueKey('direct-probe')\n")
         (root / '.herdr-generated-probe.json').write_text(json.dumps({'kind':'herdr-flutter-validation'}))
         (root / 'macos/Runner.xcodeproj/project.pbxproj').write_text(PROJECT)
         (root / 'macos/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme').write_text('<Scheme><TestAction><Testables><Testable parallelizable = "YES"/></Testables></TestAction></Scheme>')
@@ -83,7 +83,7 @@ class ScaffoldTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);fixture=root/'macos-secure-fixture';fixture.mkdir()
             allowed=['fixtureReadable','appLaunched','homepage','maskingHomepage','passwordHomepage','keyHomepage','returnHomepage','passwordFreshVerified','passwordAddressTyped','passwordPortCleared','passwordPortTyped','passwordUsernameTyped','keyFreshVerified','keyAddressTyped','keyPortCleared','keyPortTyped','keyUsernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted','passwordValuePresent','passphraseValuePresent',
-                     'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','passwordConfirmAttempt','passwordConfirmed','passwordCredentialAttempt','passwordCredentialEntered','passwordConnectAttempt','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','keyConfirmAttempt','keyConfirmed','keyCredentialAttempt','keyCredentialEntered','keyConnectAttempt','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
+                     'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','passwordConfirmAttempt','passwordConfirmed','passwordCredentialAttempt','passwordCredentialEntered','passwordConnectAttempt','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','keyConfirmAttempt','keyConfirmed','keyCredentialAttempt','pemPasteButtonTapped','keyCredentialEntered','keyConnectAttempt','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                      'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
             good_peer={k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}
             (fixture/'facts.json').write_text(json.dumps({'password':good_peer,'encryptedKey':good_peer}))
@@ -172,7 +172,7 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('passwordValueUnavailable',swift)
         self.assertIn('passphraseValueUnavailable',swift)
         self.assertIn('encryptedKeyConnected',swift)
-        self.assertEqual(swift.count('app.typeKey("v", modifierFlags: .command)'),1)
+        self.assertIn('clickFormButton(app, label: "粘贴私钥")',swift)
         self.assertIn('XCUIKeyboardKey.end',swift)
         self.assertEqual(swift.count('app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])'),2)
         self.assertIn('cleared?[11] == true',swift)
@@ -197,8 +197,8 @@ class ScaffoldTests(unittest.TestCase):
             self.assertLess(case.index('tap(app, '+button+')'),case.index('peerObservationWindow("'+phase+'")'))
             self.assertLess(case.index('peerObservationWindow("'+phase+'")'),case.index('app.terminate()'))
         key=swift[swift.index('func testEncryptedKeySSH'):swift.index('func testReturnAndReopen')]
-        self.assertLess(key.index('app.typeText(phrase)'),key.index('app.typeKey("v", modifierFlags: .command)'))
-        self.assertLess(key.index('try assertNoSecrets(app, [password, phrase])'),key.index('app.typeKey("v", modifierFlags: .command)'))
+        self.assertLess(key.index('app.typeText(phrase)'),key.index('clickFormButton(app, label: "粘贴私钥")'))
+        self.assertLess(key.index('try assertNoSecrets(app, [password, phrase])'),key.index('clickFormButton(app, label: "粘贴私钥")'))
 
     def test_fingerprint_mouse_fallback_requires_unique_visible_target_and_actual_confirmation(self):
         swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()
@@ -209,21 +209,22 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('button.waitForNonExistence',helper)
         self.assertIn('target?[12] == true',helper)
         self.assertIn('clickWindowCenter(app, matches: matches)',helper)
-        click=swift[swift.index('private func clickWindowCenter'):swift.index('private func connectByWindowCenter')]
+        click=swift[swift.index('private func clickWindowCenter'):swift.index('private func clickFormButton')]
         self.assertIn('XCTAssertEqual(matches.count, 1',click)
         self.assertIn('frame.intersection(windowFrame).contains(center)',click)
         self.assertIn('XCTAssertEqual(overlapping, 0',click)
         self.assertEqual(click.count('.click()'),1)
+        form=swift[swift.index('private func clickFormButton'):swift.index('private func keyInputBits')]
+        for condition in ('viewport.contains(center)', 'viewport == currentViewport', 'secure credential overlay', 'stableHit(button)', 'clickWindowCenter(app, matches: matches)'):
+            self.assertIn(condition,form)
         key=swift[swift.index('func testEncryptedKeySSH'):swift.index('func testReturnAndReopen')]
         self.assertLess(key.index('verifyFingerprint(app, expected: keyFingerprint'),key.index('connectByWindowCenter(app)'))
         self.assertLess(key.index('diagnoseKeyInputs(app)'),key.index('connectByWindowCenter(app)'))
-        self.assertIn('if pasted?[3] == true && pasted?[2] == true',key)
-        self.assertIn('app.typeKey(.return, modifierFlags: [])',key)
-        self.assertLess(key.index('XCTAssertTrue(pemFocused'),key.index('app.typeKey("v", modifierFlags: .command)'))
+        self.assertIn('XCTAssertTrue(pasted?[0] == true && pasted?[1] == true',key)
+        self.assertNotIn('pemKeyboardFallback',key)
         diagnostics=swift[swift.index('private func diagnoseKeyInputs'):swift.index('private func ordinaryMetrics')]
         self.assertIn('HP_XCUI_KEYINPUT=visible:',diagnostics)
         self.assertIn('HPKEY:K([01])P([01])F([01])',swift)
-        self.assertIn('XCTAssertTrue(pemFocused',key)
         self.assertIn('Date().addingTimeInterval(10)',diagnostics)
         self.assertNotIn('XCTFail',diagnostics)
 

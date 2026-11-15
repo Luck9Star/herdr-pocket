@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
-import 'package:dartssh2/dartssh2.dart' show SSHClient;
+import 'dart:typed_data';
+import 'package:dartssh2/dartssh2.dart' show SSHClient, SSHSession;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
@@ -25,7 +28,196 @@ Future<void> pumpOrdinaryHome(WidgetTester tester, DesignTokens tokens) => teste
     body: FilledButton(onPressed: () => Navigator.push<void>(context, MaterialPageRoute<void>(
       builder: (_) => DirectSshPage(tokens: tokens))), child: const Text('Open ordinary SSH'))))));
 
+void mockSecureFields(WidgetTester tester) {
+  final messenger = tester.binding.defaultBinaryMessenger;
+  final nativeIds = <int>[];
+  messenger.setMockMethodCallHandler(SystemChannels.platform_views, (call) async {
+    if (call.method == 'create') {
+      final id = (call.arguments as Map)['id'] as int;
+      nativeIds.add(id);
+      messenger.setMockMethodCallHandler(MethodChannel('herdr.pocket/secure-field/$id'), (_) async => null);
+    }
+    return null;
+  });
+  addTearDown(() {
+    messenger.setMockMethodCallHandler(SystemChannels.platform_views, null);
+    for (final id in nativeIds) messenger.setMockMethodCallHandler(MethodChannel('herdr.pocket/secure-field/$id'), null);
+  });
+}
+
+void mockClipboard(WidgetTester tester, Future<Object?> Function() read) {
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+    if (call.method == 'Clipboard.getData') { expect(call.arguments, 'text/plain'); return read(); }
+    return null;
+  });
+  addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+}
+
+Future<void> enableKeyMode(WidgetTester tester) async {
+  await tester.ensureVisible(find.byType(SwitchListTile));
+  await tester.tap(find.byType(SwitchListTile)); await tester.pumpAndSettle();
+}
+
+Future<void> tapPasteKey(WidgetTester tester) async {
+  final button = find.byKey(const ValueKey('direct-paste-key'));
+  await tester.ensureVisible(button); await tester.pumpAndSettle(); await tester.tap(button); await tester.pump();
+}
+
+class CapturingShell extends Fake implements SSHSession {
+  final writes = <String>[];
+  int resizes = 0;
+  @override void write(Uint8List bytes) { writes.add(utf8.decode(bytes)); }
+  @override void resizeTerminal(int cols, int rows, [int width = 0, int height = 0]) { resizes++; }
+  @override void close() {}
+}
+
 void main() {
+  const clipboardPem = '-----BEGIN OPENSSH PRIVATE KEY-----\nsynthetic-body\n-----END OPENSSH PRIVATE KEY-----\n';
+  testWidgets('explicit private key paste preserves multiline text and exposes an accessible button', (tester) async {
+    mockSecureFields(tester);
+    final semantics = tester.ensureSemantics();
+    var reads = 0;
+    mockClipboard(tester, () async { reads++; return {'text': clipboardPem}; });
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+    expect(find.text('粘贴私钥'), findsNothing); expect(reads, 0);
+    await enableKeyMode(tester);
+    expect(reads, 0);
+    final data = tester.getSemantics(find.bySemanticsLabel('粘贴私钥')).getSemanticsData();
+    expect(data.flagsCollection.isButton, isTrue); expect(data.hasAction(SemanticsAction.tap), isTrue);
+    await tapPasteKey(tester); await tester.pump();
+    expect(reads, 1);
+    final field = tester.widget<TextField>(find.byKey(const ValueKey('direct-secret')));
+    expect(field.controller!.text, clipboardPem);
+    expect(field.controller!.selection.baseOffset, clipboardPem.length);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('direct-paste-status'))).data, '私钥已粘贴，仅本次使用。');
+    expect(tester.takeException(), isNull); semantics.dispose();
+  }, variant: TargetPlatformVariant({TargetPlatform.android, TargetPlatform.macOS}));
+
+  for (final outcome in ['empty', 'denied']) {
+    portableTestWidgets('private key paste $outcome preserves manual input without exposing errors', (tester) async {
+      mockClipboard(tester, () async {
+        if (outcome == 'denied') throw PlatformException(code: 'denied', message: clipboardPem);
+        return {'text': ' \n'};
+      });
+      final tokens = (await tester.runAsync(DesignTokens.load))!;
+      await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+      await enableKeyMode(tester);
+      await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'manual-key');
+      await tapPasteKey(tester); await tester.pump();
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-secret'))).controller!.text, 'manual-key');
+      final message = tester.widget<Text>(find.byKey(const ValueKey('direct-paste-status'))).data!;
+      expect(message, outcome == 'empty' ? '剪贴板中没有可粘贴的文本。' : '无法读取剪贴板，请重试或手动输入私钥。');
+      expect(message.contains(clipboardPem), isFalse); expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final change in ['target', 'mode', 'manual', 'background', 'route', 'dispose']) {
+    portableTestWidgets('late private key paste is cancelled by $change', (tester) async {
+      final pending = Completer<Object?>();
+      mockClipboard(tester, () => pending.future);
+      final tokens = (await tester.runAsync(DesignTokens.load))!;
+      await pumpOrdinaryHome(tester, tokens);
+      await tester.tap(find.text('Open ordinary SSH')); await tester.pumpAndSettle();
+      await enableKeyMode(tester);
+      final key = find.byKey(const ValueKey('direct-secret'));
+      await tester.enterText(key, 'existing-key');
+      await tapPasteKey(tester);
+      expect(tester.widget<TextButton>(find.byKey(const ValueKey('direct-paste-key'))).onPressed, isNull);
+      var expected = 'existing-key';
+      switch (change) {
+        case 'target': await tester.enterText(find.byKey(const ValueKey('direct-host')), 'changed.invalid'); expected = ''; break;
+        case 'mode': await enableKeyMode(tester); expected = ''; break;
+        case 'manual': await tester.enterText(key, 'typed-after-paste'); expected = 'typed-after-paste'; break;
+        case 'background':
+          tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+          tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+          break;
+        case 'route':
+          unawaited(Navigator.of(tester.element(find.byType(DirectSshPage))).push<void>(MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('covered')))));
+          await tester.pumpAndSettle();
+          Navigator.of(tester.element(find.text('covered'))).pop(); await tester.pumpAndSettle();
+          break;
+        case 'dispose':
+          await tester.tap(find.byType(BackButton)); await tester.pumpAndSettle();
+          await tester.tap(find.text('Open ordinary SSH')); await tester.pumpAndSettle(); expected = '';
+          break;
+      }
+      pending.complete({'text': clipboardPem}); await tester.pump(); await tester.pump();
+      expect(tester.widget<TextField>(key).controller!.text, expected);
+      expect(find.byKey(const ValueKey('direct-paste-status')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  portableTestWidgets('ordinary SSH replaces parser state and rejects retired output and resize callbacks', (tester) async {
+    tester.view.physicalSize = const Size(800, 1000); tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
+    final server = (await tester.runAsync(() => ServerSocket.bind(InternetAddress.loopbackIPv4, 0)))!;
+    final sockets = <Socket>[];
+    final listener = server.listen(sockets.add);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    try {
+      state.terminal ??= state.createTerminal(state.epoch);
+      await tester.enterText(find.byKey(const ValueKey('direct-host')), '127.0.0.1');
+      await tester.enterText(find.byKey(const ValueKey('direct-port')), '${server.port}');
+      await tester.enterText(find.byKey(const ValueKey('direct-user')), 'fixture');
+      // Seed only the already-reviewed pin; the real connect button starts a
+      // new attempt against a temporary TCP listener that never authenticates.
+      state.fingerprint = 'SHA256:synthetic'; state.algorithm = 'ssh-ed25519'; state.checkedTarget = state.target;
+      await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'synthetic-password'); await tester.pump();
+      final Terminal previous = state.terminal;
+      previous.write('\x1b[31');
+      final previousOutput = previous.onOutput!, previousResize = previous.onResize!;
+      await tester.ensureVisible(find.byKey(const ValueKey('direct-connect'))); await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
+      final Terminal current = state.terminal;
+      current.write('mZ'); expect(current.buffer.getText().trimRight(), 'mZ');
+      expect(identical(previous, current), isFalse);
+      expect(previous.onOutput, isNull); expect(previous.onResize, isNull);
+      current.write('\x1b[31'); current.write('mC');
+      expect(current.buffer.getText().trimRight(), 'mZC', reason: 'same-session CSI chunks still continue');
+      final nextShell = CapturingShell(); state.shell = nextShell; state.connected = true;
+      previousOutput('retired'); previousResize(100, 30, 0, 0);
+      expect(nextShell.writes, isEmpty); expect(nextShell.resizes, 0);
+      current.textInput('current'); current.onResize!(100, 30, 0, 0);
+      expect(nextShell.writes, ['current']); expect(nextShell.resizes, 1);
+    } finally {
+      state.stop(); await tester.pump();
+      expect(state.terminal, isNull);
+      for (final socket in sockets) { socket.destroy(); }
+      await tester.runAsync(() async { await listener.cancel(); await server.close(); });
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  portableTestWidgets('ordinary SSH arrow buttons follow remote cursor-key mode', (tester) async {
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    final shell = CapturingShell();
+    state.setState(() { state.terminal = state.createTerminal(state.epoch); state.shell = shell; state.connected = true; }); await tester.pump();
+    final Terminal terminal = state.terminal;
+    final oldButtons = [for (final label in ['Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', 'Ctrl-D', 'Enter'])
+      tester.widget<TextButton>(find.widgetWithText(TextButton, label)).onPressed!];
+    for (final mode in [false, true, false]) {
+      terminal.write(mode ? '\x1b[?1h' : '\x1b[?1l');
+      for (final label in ['↑', '↓', '←', '→']) { await tester.tap(find.text(label)); }
+      expect(shell.writes.sublist(shell.writes.length - 4),
+        mode ? ['\x1bOA', '\x1bOB', '\x1bOD', '\x1bOC'] : ['\x1b[A', '\x1b[B', '\x1b[D', '\x1b[C']);
+    }
+    await tester.tap(find.text('Ctrl-C')); expect(shell.writes.last, '\x03');
+    state.stop(); expect(state.terminal, isNull);
+    final nextShell = CapturingShell();
+    state.setState(() { state.terminal = state.createTerminal(state.epoch); state.shell = nextShell; state.connected = true; }); await tester.pump();
+    for (final pressed in oldButtons) { pressed(); }
+    expect(nextShell.writes, isEmpty, reason: 'retired helper buttons cannot address a new session');
+    await tester.tap(find.text('↑')); expect(nextShell.writes, ['\x1b[A']);
+    state.stop(); await tester.pump(); expect(tester.takeException(), isNull);
+  });
   // Portable EditableText path; native macOS has separate view/channel and AX tests.
   portableTestWidgets('portable passphrase remains obscured in Flutter semantics while focused and unfocused', (tester) async {
     final semantics = tester.ensureSemantics();
@@ -49,7 +241,7 @@ void main() {
     }
     verify();
     final address = find.byKey(const ValueKey('direct-host'));
-    await tester.ensureVisible(address); await tester.tap(address); await tester.pump();
+    await tester.ensureVisible(address); await tester.pumpAndSettle(); await tester.tap(address); await tester.pump();
     verify(); semantics.dispose();
   });
   portableTestWidgets('ordinary SSH requires explicit fingerprint confirmation', (tester) async {
@@ -67,20 +259,7 @@ void main() {
 
   testWidgets('returning from ordinary SSH with unsubmitted credentials disposes its listeners safely', (tester) async {
     final semantics = tester.ensureSemantics();
-    final messenger = tester.binding.defaultBinaryMessenger;
-    final nativeIds = <int>[];
-    messenger.setMockMethodCallHandler(SystemChannels.platform_views, (call) async {
-      if (call.method == 'create') {
-        final id = (call.arguments as Map)['id'] as int;
-        nativeIds.add(id);
-        messenger.setMockMethodCallHandler(MethodChannel('herdr.pocket/secure-field/$id'), (_) async => null);
-      }
-      return null;
-    });
-    addTearDown(() {
-      messenger.setMockMethodCallHandler(SystemChannels.platform_views, null);
-      for (final id in nativeIds) messenger.setMockMethodCallHandler(MethodChannel('herdr.pocket/secure-field/$id'), null);
-    });
+    mockSecureFields(tester);
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await pumpOrdinaryHome(tester, tokens);
     await tester.tap(find.text('Open ordinary SSH')); await tester.pumpAndSettle();
@@ -186,14 +365,26 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('direct-trust-key'))); await tester.pumpAndSettle();
     await tester.ensureVisible(find.byType(SwitchListTile)); await tester.pumpAndSettle();
     await tester.tap(find.byType(SwitchListTile)); await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'invalid-pem'); await tester.pump();
+    await tester.ensureVisible(find.byKey(const ValueKey('direct-connect'))); await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
+    expect(find.text('私钥无法解析或解密；请检查完整 PEM 和私钥口令。尚未连接远端。'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-secret'))).controller!.text.isEmpty, isTrue);
     await tester.enterText(find.byKey(const ValueKey('direct-secret')), key!);
     await tester.enterText(find.byKey(const ValueKey('direct-passphrase')), 'fixture-passphrase'); await tester.pump();
     await tester.ensureVisible(find.byKey(const ValueKey('direct-connect')));
     await tester.pump();
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNotNull);
+    final pendingPaste = Completer<Object?>();
+    mockClipboard(tester, () => pendingPaste.future);
+    await tapPasteKey(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('direct-connect'))); await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
     await waitFor(tester, find.byType(TerminalView));
-    final client = (tester.state(find.byType(DirectSshPage)) as dynamic).client as SSHClient;
+    pendingPaste.complete({'text': clipboardPem}); await tester.pump(); await tester.pump();
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    expect((state.secret as TextEditingController).text.isEmpty, isTrue, reason: 'late paste cannot refill credentials after connect');
+    final client = state.client as SSHClient;
     await tester.tap(find.bySemanticsIdentifier('direct-back')); await tester.pumpAndSettle();
     await tester.runAsync(() => client.done);
     expect(client.isClosed, isTrue);

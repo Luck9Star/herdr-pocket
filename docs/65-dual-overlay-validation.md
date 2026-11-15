@@ -105,6 +105,17 @@ done
 
 [Flutter c0e5c51 运行 43740759174](https://github.com/Luck9Star/herdr-pocket/actions/runs/43740759174) 的[脱敏清单](evidence/dual-overlay-20261115/flutter-android-c0e5c51.json)显示两个停网方向均编译并安装了各自 instrumentation APK，但都在 `host_start` 失败，未进入 App 界面、配对、输入或停网；两例各自的共享夹具七项清理、应用卸载与 adb forward 恢复均通过。独立[公共 session 冒烟 43740692045](https://github.com/Luck9Star/herdr-pocket/actions/runs/43740692045)的[脱敏清单](evidence/dual-overlay-20261115/android-session-c0e5c51.json)显示真实主机已就绪，但在 `relay-and-reverse` 阶段停止，尚未建立 relay/reverse；其控制器与七项清理均正常。两者均不证明 Android 双网连接或产品失败；后续须修复并复测。
 
+## Android 中继、设备 UI 与 JNI 分层基线
+
+Linux 真实双网双方向仍以上述 `93ca6cd` / 运行 43732347031 为准。下列运行分别验证 Android 中继、设备 UI 和原生 start，层级不同，不能相互替代，也不能把前置成功写成 Android 双网通过。
+
+- [ca6b745 运行 43742910139](https://github.com/Luck9Star/herdr-pocket/actions/runs/43742910139)：API35 x86_64 AVD 上两轮真实主机夹具、三路 TCP relay/reverse 均通过，control 每轮上行 42、下行 76 字节，DERP 每轮上行 35、下行 76 字节，relay 角色和 reverse 映射均为 3，最终 namespace 清理通过。`deviceProviderReachabilityVerified=false`、`udpStunRelayed=false`，EasyTier 中继字节为 0；该轮没有产品 provider SSH、peer 协议或 userspace 可达性证据。
+- [3f6ea1b 运行 43745658958](https://github.com/Luck9Star/herdr-pocket/actions/runs/43745658958)：Flutter 使用原生 `93ca6cd`，先停 ET、先停 TS 两例均到达真实 `device_ui`，但停在 `ts_node_wait`，`nodeState=unknown`、`errorCode=device_test_exited_early`；未进入双方输入、停网或另一网续传。两例共享环境均到 ready，relay/reverse 均为 3，应用与共享夹具清理通过。
+- [fc583bc 运行 43746891366](https://github.com/Luck9Star/herdr-pocket/actions/runs/43746891366)：Tauri 使用原生 `93ca6cd`，只记录了首个 `ts` 方向。真实 WebView 首页、身份保存和可见的启用 start 已确认，但在 `network_ts_start` 被拒绝；start observer 为 sent 1、resolved 0、rejected 1、`errorCode=mobile_node_failed`，最终为 `dual_action_unavailable`。第二个 `et` 方向及双网输入/停网未执行，不能写成两方向均已验证；已记录的环境与应用清理通过。
+- [17cc641 运行 43747426417](https://github.com/Luck9Star/herdr-pocket/actions/runs/43747426417)：固定原生 `93ca6cd` 的 normal/QA JNI 探针均完成库加载、Context 绑定、真实 AndroidKeyStore 身份创建/回读、目录权限及产品目录回调，provider 可用；两者均 `startOk=false`、`startError=other_product_error`，未到 NeedsLogin，未登录或拨号，控制面 key/noise/register/map/auth 增量均为 0。normal 停在 stopped，stop 成功并删除身份；QA 停在 closing，`stopOk=false`、`stopError=mobile_node_busy`，不能把该 stop 错误写成 startError。normal 的 mapRequests 前后均为 1、QA 均为 0；该全局计数包含夹具 peer，不能据此归因 Android 请求。
+
+对上述 JNI 基线，源码审查只把 `netmon.GetInterfaceList` 列为候选：固定上游 `tsnet/tsnet.go:879-883` 进入 `netmon.New`，`net/netmon/state.go:591-609,824-846` 可到系统接口枚举，但尚无同一设备 UID 的直接调用结果。`93ca6cd` 的信息折叠位置为 `core.go:210-229` 将保存的 `startErr` 统一变成 `ioError`，随后经 `overlay-runtime/src/tailscale.rs:470-475` 的 `NativeRejected`、`transport-rust/src/mobile_nodes.rs:259-270` 的通配映射及探针白名单变成 `other_product_error`。最小对照应在同一 instrumentation app 进程、同一 UID 下，于 `Server.Start` 前直接测量 `GetInterfaceList`，并分别对照 Bionic `getifaddrs` 与 Java `NetworkInterface` 的成功、数量、errno 类别和耗时，再与 Start 结果比对；这些仍是待执行的诊断，不是已经通过的修复。
+
 ## 待补的双网及平台结果
 
 Linux 的 [可选双网 runner](../validation/overlay-runtime/dual-overlay-loopback/README.md)与[工作流](../.github/workflows/dual-overlay-herdr-validation.yml)已实现同一个 `OverlayRuntime` 下两套真实 provider、两台临时 SSH/herdr 主机与受保护输入。验收须同时保留：pre-login 拒绝；两边实际完整帧与准确输入；独立 case 分别停 EasyTier、停 Tailscale，旧输入拒绝且另一网下一次输入仍成功；独立远端字节记录；两个观察任务退出以及节点、流、夹具进程与 namespace 清理。上述 93ca6cd 结果满足这些条件，范围限定于所述 private-loopback 测试配置；其他平台和网络条件仍需分别验证。

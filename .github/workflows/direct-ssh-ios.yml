@@ -54,6 +54,21 @@ jobs:
           export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
           "$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/flutter_direct_ssh_ios.py \
             --project "$RUNNER_TEMP/direct-ssh-app" --output "$RUNNER_TEMP/direct-ssh-public"
+      - name: Remove isolated app even if preparation or the runner failed
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, shutil
+          from pathlib import Path
+          base = Path(os.environ['RUNNER_TEMP']).resolve()
+          app = base / 'direct-ssh-app'
+          if app.is_symlink():
+              app.unlink()
+          elif app.exists():
+              shutil.rmtree(app)
+          if app.exists() or app.is_symlink():
+              raise SystemExit('isolated app cleanup failed')
+          PY
       - name: Upload sanitized evidence only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

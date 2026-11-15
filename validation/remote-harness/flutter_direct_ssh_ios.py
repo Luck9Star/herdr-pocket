@@ -147,7 +147,7 @@ def run(app, output, env):
             raise Failure('ios_test_source_mismatch')
     output.mkdir(mode=0o700)
     cleanup = {'simulatorDeleted': False, 'fixtureClosed': False, 'flutterToolStopped': False,
-               'rawLogsUploaded': False}
+               'appRemoved': False, 'privateRemoved': False, 'rawLogsUploaded': False}
     report = {'schemaVersion': 1, 'sourceSHA': env['GITHUB_SHA'], 'kind': 'flutter-ios-simulator-ordinary-ssh',
               'status': 'failed', 'cleanup': cleanup, 'physicalImeVerified': False}
     from direct_ssh_fixture import DirectSshFixture
@@ -337,8 +337,19 @@ def run(app, output, env):
                     'create_timed_out_no_device_found' if create_timed_out else 'no_owned_device_found')
             except (Failure, OSError, ValueError, subprocess.TimeoutExpired):
                 report['simulatorCleanup'] = 'unconfirmed'
-        if private:
-            shutil.rmtree(private)
+        try:
+            if private:
+                shutil.rmtree(private)
+            cleanup['privateRemoved'] = private is None or not private.exists()
+        except OSError:
+            report['privateCleanupCode'] = 'ios_private_cleanup_failed'
+        try:
+            # Generated Flutter/Xcode files can contain encoded fixture defines.
+            # The app path was verified as an owned RUNNER_TEMP child above.
+            shutil.rmtree(app)
+            cleanup['appRemoved'] = not app.exists()
+        except OSError:
+            report['appCleanupCode'] = 'ios_app_cleanup_failed'
         if not all(cleanup[k] for k in cleanup if k != 'rawLogsUploaded'):
             report['status'] = 'failed'
             report['cleanupCode'] = 'ios_cleanup_incomplete'

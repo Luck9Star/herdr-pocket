@@ -81,7 +81,7 @@ def prepare(app, fixture=None):
         phrase_encoded = base64.b64encode(config['passphrase'].encode()).decode()
         key_diagnostic = ("          Text('HPKEY:K${secret.text == utf8.decode(base64.decode(\"" + key_encoded +
                        "\")) ? 1 : 0}P${passphrase.text == utf8.decode(base64.decode(\"" + phrase_encoded +
-                       "\")) ? 1 : 0}F${qaPemFocus.hasFocus ? 1 : 0}E${secret.text.isEmpty ? 1 : 0}L${secret.text.length == utf8.decode(base64.decode(\"" + key_encoded + "\")).length ? 1 : 0}T${secret.text.trimRight() == utf8.decode(base64.decode(\"" + key_encoded + "\")).trimRight() ? 1 : 0}', style: const TextStyle(fontSize: 1)),\n")
+                       "\")) ? 1 : 0}E${secret.text.isEmpty ? 1 : 0}L${secret.text.length == utf8.decode(base64.decode(\"" + key_encoded + "\")).length ? 1 : 0}T${secret.text.trimRight() == utf8.decode(base64.decode(\"" + key_encoded + "\")).trimRight() ? 1 : 0}', style: const TextStyle(fontSize: 1)),\n")
         address_point = "          Semantics(container: true, explicitChildNodes: true, label: '地址'"
         if dart_text.count(address_point) != 1:
             raise ValueError('macos_xcui_dart_unexpected')
@@ -89,10 +89,6 @@ def prepare(app, fixture=None):
         field_point = "TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,"
         if dart_text.count(pem_point) != 1 or dart_text.count(field_point) != 1:
             raise ValueError('macos_xcui_dart_unexpected')
-        dart_text = dart_text.replace('  final terminal = Terminal(maxLines: 2000);', '  final qaPemFocus = FocusNode();\n  final terminal = Terminal(maxLines: 2000);', 1)
-        dart_text = dart_text.replace('    secret.addListener(credentialsChanged);', '    qaPemFocus.addListener(credentialsChanged);\n    secret.addListener(credentialsChanged);', 1)
-        dart_text = dart_text.replace('    secret.removeListener(credentialsChanged);', '    qaPemFocus.removeListener(credentialsChanged); qaPemFocus.dispose();\n    secret.removeListener(credentialsChanged);', 1)
-        dart_text = dart_text.replace(field_point, field_point.replace('controller: secret,', 'controller: secret, focusNode: qaPemFocus,'), 1)
         connect_point = '  Future<void> connect() async {'
         parse_point = '      final localSocket = await SSHSocket.connect('
         if dart_text.count(connect_point) != 1 or dart_text.count(parse_point) != 1:

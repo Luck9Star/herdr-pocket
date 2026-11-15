@@ -156,10 +156,10 @@ final class SecureCredentialUITests: XCTestCase {
     }
 
     private func keyInputBits(_ app: XCUIApplication) throws -> [Bool]? {
-        let expression = try NSRegularExpression(pattern: "HPKEY:K([01])P([01])F([01])E([01])L([01])T([01])")
+        let expression = try NSRegularExpression(pattern: "HPKEY:K([01])P([01])E([01])L([01])T([01])")
         for field in try snapshotNodes(app).flatMap({ [$0.label, $0.value as? String ?? ""] }) {
             guard let match = expression.firstMatch(in: field, range: NSRange(field.startIndex..., in: field)) else { continue }
-            return (1...6).map { index in
+            return (1...5).map { index in
                 guard let range = Range(match.range(at: index), in: field) else { return false }
                 return field[range] == "1"
             }
@@ -175,8 +175,8 @@ final class SecureCredentialUITests: XCTestCase {
             if bits?[0] == true && bits?[1] == true { break }
             usleep(200_000)
         } while Date() < deadline
-        let values = bits ?? Array(repeating: false, count: 6)
-        print("HP_XCUI_KEYINPUT=visible:\(bits == nil ? 0 : 1),key:\(values[0] ? 1 : 0),passphrase:\(values[1] ? 1 : 0),focus:\(values[2] ? 1 : 0),empty:\(values[3] ? 1 : 0),length:\(values[4] ? 1 : 0),trimmed:\(values[5] ? 1 : 0)")
+        let values = bits ?? Array(repeating: false, count: 5)
+        print("HP_XCUI_KEYINPUT=visible:\(bits == nil ? 0 : 1),key:\(values[0] ? 1 : 0),passphrase:\(values[1] ? 1 : 0),empty:\(values[2] ? 1 : 0),length:\(values[3] ? 1 : 0),trimmed:\(values[4] ? 1 : 0)")
         fflush(stdout)
         return bits
     }

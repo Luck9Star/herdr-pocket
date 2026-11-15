@@ -61,10 +61,24 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotIn('__HP_FIXTURE_BASE64__',source)
             self.assertNotIn('a'*32,source)
             dart=(root/'lib/direct_ssh_page.dart').read_text()
+            self.assertNotIn('qaPemFocus', dart)
             self.assertIn('HPAX:H',dart);self.assertNotIn('a'*32,dart);self.assertNotIn('b'*32,dart)
             self.assertIn('HPKEY:K${secret.text == utf8.decode(base64.decode(',dart)
             self.assertIn(base64.b64encode(b'b'*32).decode(),dart)
             self.assertIn(base64.b64encode(json.loads(fixture.read_text())['privateKey'].encode()).decode(),dart)
+
+    def test_current_product_template_accepts_disposable_injection(self):
+        product = Path(__file__).resolve().parents[1] / 'flutter/lib/direct_ssh_page.dart'
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp); self.scaffold(root)
+            (root/'lib/direct_ssh_page.dart').write_text(product.read_text())
+            fixture=root/'fixture.json'
+            fixture.write_text(json.dumps({'port':2222,'username':'fixture','password':'a'*32,'fingerprint':'SHA256:'+'B'*43,'keyPort':2223,'keyFingerprint':'SHA256:'+'C'*43,'privateKey':'-----BEGIN OPENSSH PRIVATE KEY-----\nYWJj\n-----END OPENSSH PRIVATE KEY-----\n','passphrase':'b'*32}))
+            runner.prepare(root,fixture)
+            dart=(root/'lib/direct_ssh_page.dart').read_text()
+            self.assertNotIn('qaPemFocus',dart)
+            self.assertIn('HP_XCUI_STAGE=keyPemParsed',dart)
+            self.assertIn("ValueKey('direct-paste-key')",dart)
 
     def test_unknown_project_or_missing_marker_is_not_modified(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -224,7 +238,7 @@ class ScaffoldTests(unittest.TestCase):
         self.assertNotIn('pemKeyboardFallback',key)
         diagnostics=swift[swift.index('private func diagnoseKeyInputs'):swift.index('private func ordinaryMetrics')]
         self.assertIn('HP_XCUI_KEYINPUT=visible:',diagnostics)
-        self.assertIn('HPKEY:K([01])P([01])F([01])',swift)
+        self.assertIn('HPKEY:K([01])P([01])E([01])',swift)
         self.assertIn('Date().addingTimeInterval(10)',diagnostics)
         self.assertNotIn('XCTFail',diagnostics)
 

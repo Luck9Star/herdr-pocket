@@ -79,6 +79,10 @@ void main() {
     expect(find.textContaining('受阻窗格'), findsOneWidget);
     expect(find.textContaining('w1:p0'), findsOneWidget);
     expect(find.text('待处理 1'), findsOneWidget);
+    final card = find.byKey(ValueKey('host-card-${profile.id}'));
+    expect(find.descendant(of:card, matching:find.text('会话 build-session')), findsOneWidget);
+    expect(find.descendant(of:card, matching:find.text(
+      '最后同步 ${DateTime.utc(2026,11,7,10).toLocal().toIso8601String()}')), findsOneWidget);
     await capture('populated');
     attempt.publish(summaryBoard(profile, revision: 2, freshness: DashboardFreshness.unavailable));
     await tester.pump(); await tester.pump();

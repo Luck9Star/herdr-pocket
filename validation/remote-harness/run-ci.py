@@ -301,8 +301,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     require_runner(os.environ)
-    if args.s06_split and args.paired_gui != 'flutter':
-        parser.error('--s06-split requires --paired-gui flutter')
+    if args.s06_split and args.paired_gui not in ('flutter', 'tauri'):
+        parser.error('--s06-split requires a desktop --paired-gui route')
     try:
         validate_mode(args.paired_gui, bool(args.input_fixture), args.android_guarded_input, args.android_tui)
     except EvidenceError as exc:

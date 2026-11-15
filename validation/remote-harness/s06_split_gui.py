@@ -1,4 +1,4 @@
-"""Opt-in S06 widget/real-SSH acceptance on run-ci.py's disposable Linux host."""
+"""Opt-in desktop S06 acceptance on run-ci.py's disposable two-session host."""
 import json
 import os
 from pathlib import Path
@@ -88,7 +88,7 @@ def checked_widget_result(raw, guarded):
 def run_gui(args, root, env, config, command, final_pty_evidence):
     # run-ci.py owns this host, empty authorization file, server processes and
     # exact two sessions. This module never touches an operator's SSH state.
-    if (args.paired_gui != 'flutter' or root.parent != Path('/tmp') or
+    if (args.paired_gui not in ('flutter', 'tauri') or root.parent != Path('/tmp') or
             not root.name.startswith('hp-mobile-' + os.environ['GITHUB_RUN_ID'] + '-') or
             config['host'] != '127.0.0.1' or (root / 'authorized_keys').stat().st_size):
         raise GuiFailure('s06_unsafe_fixture')
@@ -98,10 +98,12 @@ def run_gui(args, root, env, config, command, final_pty_evidence):
     exchange = root / 's06-exchange'
     exchange.mkdir(mode=0o700)
     approvals = []
-    result = {'adapter': 'flutter', 'testId': 'S06-two-real-ssh-herdr-targets', 'status': 'failed'}
+    result = {'adapter': args.paired_gui, 'testId': 'S06-two-real-ssh-herdr-targets', 'status': 'failed'}
     expected = (DRAFT if guarded else b'', b'b' if guarded else b'')
     try:
         shutil.copy2(root / 'capture_input.py', other / 'capture_input.py')
+        capture = other / 'capture_input.py'
+        capture.write_text(capture.read_text().replace('Synthetic observe tick', 'S06 B tick'))
         pixels = json.loads((root / 'terminal-fixture.json').read_text())
         pixels['frames'][0]['data'] = pixels['frames'][0]['data'].replace(
             'herdr-pocket / same fixture v1', 'herdr-pocket / S06 peer B')
@@ -127,26 +129,30 @@ def run_gui(args, root, env, config, command, final_pty_evidence):
             scratch.mkdir(mode=0o700)
             approvals.append(FixtureApproval(root, target,
                 Host(scratch, target['username'], target['expectedHostKey'])))
-        argv = ['flutter', 'test', '--no-pub', '--reporter', 'expanded', 'test/s06_real_ssh_test.dart']
-        with owned_process(argv, cwd=args.flutter_app, env=widget_env, log=root / 's06-widget.log') as proc:
-            for index, approval in enumerate(approvals):
-                request = exchange / f'request-{index}.json'
-                def ready():
-                    if proc.poll() is not None:
-                        raise widget_failure(exchange, 's06_widget_exited_before_pairing')
-                    return request.is_file()
-                wait_for(ready, 's06_pairing_request_timeout', timeout=100)
-                response = approval.approve(bounded_wire(request))
-                pending = exchange / f'response-{index}.new'
-                pending.write_bytes(response)
-                pending.rename(exchange / f'response-{index}.json')
-            try:
-                code = proc.wait(timeout=160)
-            except subprocess.TimeoutExpired:
-                raise widget_failure(exchange, 's06_widget_completion_timeout') from None
-            if code or not (exchange / 'result.json').is_file():
-                raise widget_failure(exchange, 's06_widget_failed')
-            result.update(checked_widget_result(json.loads(bounded_wire(exchange / 'result.json', 4096)), guarded))
+        if args.paired_gui == 'tauri':
+            from s06_tauri_gui import exercise
+            result.update(exercise(args, root, env, (config, second), approvals, expected))
+        else:
+            argv = ['flutter', 'test', '--no-pub', '--reporter', 'expanded', 'test/s06_real_ssh_test.dart']
+            with owned_process(argv, cwd=args.flutter_app, env=widget_env, log=root / 's06-widget.log') as proc:
+                for index, approval in enumerate(approvals):
+                    request = exchange / f'request-{index}.json'
+                    def ready():
+                        if proc.poll() is not None:
+                            raise widget_failure(exchange, 's06_widget_exited_before_pairing')
+                        return request.is_file()
+                    wait_for(ready, 's06_pairing_request_timeout', timeout=100)
+                    response = approval.approve(bounded_wire(request))
+                    pending = exchange / f'response-{index}.new'
+                    pending.write_bytes(response)
+                    pending.rename(exchange / f'response-{index}.json')
+                try:
+                    code = proc.wait(timeout=160)
+                except subprocess.TimeoutExpired:
+                    raise widget_failure(exchange, 's06_widget_completion_timeout') from None
+                if code or not (exchange / 'result.json').is_file():
+                    raise widget_failure(exchange, 's06_widget_failed')
+                result.update(checked_widget_result(json.loads(bounded_wire(exchange / 'result.json', 4096)), guarded))
         # Independent server-side attestations, never accepted from widgets.
         if approvals[0].fingerprint == approvals[1].fingerprint:
             raise GuiFailure('s06_distinct_device_keys_missing')
@@ -162,7 +168,9 @@ def run_gui(args, root, env, config, command, final_pty_evidence):
                       receivedInputBytes=len(expected[0]), peerInputBytes=[len(data) for data in expected],
                       exactRemoteBytes=True, distinctAuthenticatedDeviceKeys=True,
                       targetBindingsPreserved=True, physicalImeVerified=False,
-                      scope='real Flutter widget, two real SSH/herdr sessions; explicit test signers and memory journals')
+                      scope=('native Linux GTK WebView and two real SSH/herdr sessions; process-memory test identities'
+                             if args.paired_gui == 'tauri' else
+                             'real Flutter widget, two real SSH/herdr sessions; explicit test signers and memory journals'))
     except GuiFailure as error:
         result['errorCode'] = str(error)
         result['widgetFailure'] = failure_diagnostics(exchange)

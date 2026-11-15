@@ -12,3 +12,8 @@ python3 validation/remote-harness/dual_overlay_shared_bundle.py verify \
 验证会核对 checkout HEAD、manifest 固定来源、相关材料和三个 ELF 的 SHA256、架构及精确文件集合；成功后才恢复执行位。Flutter/Tauri 的 `nativeSource`（例如当前网络修复 `93ca6cd`）与各自 `uiSource`、`runnerSource` 应分别记录；它们无需与 `hostSource` 字面相同，但必须各自有来源与兼容性证据。不要把该包的 hash 当作 GitHub 外层 artifact digest，或把同源当成同二进制。
 
 本机快速检查 `python3 -m unittest discover -s validation/remote-harness -p test_dual_overlay_shared_bundle.py -v` 使用合成小 ELF 头，只验证来源与损坏反例。它不运行真实 fixture、Android App 或 overlay。正式设备流程仍须逐次创建和销毁自己的临时 SSH 身份、两个 herdr 目标、TS 控制面与网络节点；共享包不得包含这些运行资料。双方向 Linux 验收通过前，不应把该构建工件描述为产品接壳或设备通过。
+
+The Linux builder checks the original EasyTier peer against its preparation
+provenance before applying `strip --strip-debug` to a separate published copy.
+The manifest retains `sourcePeerSha256` and the delivered peer hash separately;
+the downloaded copy still has to pass the executable and inventory checks.

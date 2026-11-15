@@ -57,6 +57,10 @@ jobs:
           GOENV=off GOTOOLCHAIN=local CGO_ENABLED=1 GOFLAGS=-mod=readonly \
             GOMODCACHE="$RUNNER_TEMP/shared-ts-cache/modules" GOCACHE="$RUNNER_TEMP/shared-ts-cache/build" \
             GOPATH="$RUNNER_TEMP/shared-ts-cache/gopath" go test -c -o "$RUNNER_TEMP/shared-ts-fixture" ./fixture
+      - name: Report build-only executable sizes
+        run: |
+          stat --printf='peerBytes=%s\n' "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID/peer"
+          stat --printf='tsFixtureBytes=%s\n' "$RUNNER_TEMP/shared-ts-fixture"
       - name: Record fixed sources and executable hashes
         run: |
           python3 validation/remote-harness/dual_overlay_shared_bundle.py record-peers \

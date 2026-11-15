@@ -23,7 +23,7 @@ class SharedBundleTests(unittest.TestCase):
         for name in ('peer', 'ts-fixture'):
             (self.peers / name).write_bytes(self.elf + name.encode())
         self.record = {'schemaVersion': 1, 'sourceSHA': self.source, 'platform': 'linux-x86_64',
-            'toolchains': shared.TOOLCHAINS,
+            'toolchains': shared.TOOLCHAINS, 'sourcePeerSha256': 'f' * 64,
             'heelerCommit': '6a2817fc02aeb552df251d9478753c22fd4738bb',
             'easytierCommit': '728ba94b5029240add6204eed591f22e4e039e6b',
             'tailscaleCommit': '9a522a9786c97eb7910c01ccb7bd66557b04c910',
@@ -79,6 +79,31 @@ class SharedBundleTests(unittest.TestCase):
         command[command.index(self.source)] = 'c' * 40
         self.assertNotEqual(subprocess.run(command, cwd=shared.ROOT, env=env,
                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode, 0)
+
+    def test_original_peer_hash_is_checked_before_strip_and_both_hashes_recorded(self):
+        bundle = self.root / 'build'; bundle.mkdir()
+        evidence = self.root / 'evidence'; evidence.mkdir()
+        original = bundle / 'peer'; original.write_bytes(self.elf + b'original')
+        fixture = self.root / 'ts-fixture'; fixture.write_bytes(self.elf + b'ts')
+        provenance = {'peerBinarySha256': shared.digest(original),
+            'heelerCommit': self.record['heelerCommit'], 'easytierCommit': self.record['easytierCommit']}
+        (evidence / 'manifest.json').write_text(json.dumps(
+            {'status': 'prepared', 'sourceSHA': self.source, 'provenance': provenance}))
+        def strip_copy(command, **_):
+            Path(command[3]).write_bytes(self.elf + b'stripped')
+        target = self.root / 'recorded'
+        with patch.object(shared.ts_candidate, 'verify_sources', return_value={'tailscaleCommit': self.record['tailscaleCommit']}), \
+             patch.object(shared.ts_candidate, 'verify_candidate'), patch.object(shared.subprocess, 'run', side_effect=strip_copy):
+            shared.record_peers(bundle, evidence, self.root, fixture, target, self.source)
+        recorded = shared.verify_peer_bundle(target, self.source)
+        self.assertEqual(recorded['sourcePeerSha256'], shared.digest(original))
+        self.assertEqual(recorded['files']['peer'], shared.digest(target / 'peer'))
+        self.assertNotEqual(recorded['sourcePeerSha256'], recorded['files']['peer'])
+        provenance['peerBinarySha256'] = '0' * 64
+        (evidence / 'manifest.json').write_text(json.dumps(
+            {'status': 'prepared', 'sourceSHA': self.source, 'provenance': provenance}))
+        with self.assertRaisesRegex(ValueError, 'easytier_peer_provenance_invalid'):
+            shared.record_peers(bundle, evidence, self.root, fixture, self.root / 'bad', self.source)
 
     def test_peer_bundle_rejects_extra_file_and_symlink(self):
         (self.peers / 'credentials').write_text('fixture')

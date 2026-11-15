@@ -43,7 +43,11 @@ MATERIALS = (
 
 
 def digest(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    result = hashlib.sha256()
+    with path.open('rb') as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b''):
+            result.update(block)
+    return result.hexdigest()
 
 
 def materials():
@@ -53,14 +57,14 @@ def materials():
     return {name: digest(ROOT / name) for name in files}
 
 
-def checked_file(path):
-    if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size <= 200 * 1024 * 1024:
+def checked_file(path, max_bytes=200 * 1024 * 1024):
+    if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size <= max_bytes:
         raise ValueError('bundle_file_invalid')
     return path
 
 
-def checked_elf(path):
-    checked_file(path)
+def checked_elf(path, max_bytes=200 * 1024 * 1024):
+    checked_file(path, max_bytes)
     with path.open('rb') as source:
         header = source.read(20)
     if (len(header) < 20 or header[:6] != b'\x7fELF\x02\x01'
@@ -87,7 +91,9 @@ def sha_source(expected):
 def record_peers(et_bundle, et_evidence, ts_work, fixture, output, source_sha):
     report = json.loads(checked_file(et_evidence / 'manifest.json').read_text())
     provenance = report.get('provenance', {})
-    peer = checked_elf(et_bundle / 'peer')
+    # Debug Rust output can exceed the publish limit. Verify its original hash
+    # first, then strip debug info from a separate copy before packaging.
+    peer = checked_elf(et_bundle / 'peer', max_bytes=2 * 1024 * 1024 * 1024)
     if (report.get('status') != 'prepared' or report.get('sourceSHA') != source_sha
             or provenance.get('peerBinarySha256') != digest(peer)
             or provenance.get('heelerCommit') != '6a2817fc02aeb552df251d9478753c22fd4738bb'
@@ -97,10 +103,12 @@ def record_peers(et_bundle, et_evidence, ts_work, fixture, output, source_sha):
     ts_candidate.verify_candidate(ts_work, fixed)
     fixture = checked_elf(fixture)
     output.mkdir(mode=0o700)
-    shutil.copyfile(peer, output / 'peer')
+    subprocess.run(['strip', '--strip-debug', '-o', str(output / 'peer'), str(peer)],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+    checked_elf(output / 'peer')
     shutil.copyfile(fixture, output / 'ts-fixture')
     record = {'schemaVersion': 1, 'sourceSHA': source_sha, 'platform': 'linux-x86_64',
-              'toolchains': TOOLCHAINS,
+              'toolchains': TOOLCHAINS, 'sourcePeerSha256': digest(peer),
               'heelerCommit': provenance['heelerCommit'], 'easytierCommit': provenance['easytierCommit'],
               'tailscaleCommit': fixed['tailscaleCommit'], 'materials': materials(),
               'files': {name: digest(output / name) for name in ('peer', 'ts-fixture')}}
@@ -111,11 +119,12 @@ def verify_peer_bundle(root, source_sha):
     exact_inventory(root, ('peer', 'ts-fixture', 'peer-manifest.json'))
     record = json.loads(checked_file(root / 'peer-manifest.json').read_text())
     expected_keys = {'schemaVersion', 'sourceSHA', 'platform', 'toolchains', 'heelerCommit',
-                     'easytierCommit', 'tailscaleCommit', 'materials', 'files'}
+                     'easytierCommit', 'tailscaleCommit', 'sourcePeerSha256', 'materials', 'files'}
     if (not isinstance(record, dict) or set(record) != expected_keys
             or not isinstance(record.get('files'), dict)
             or record.get('schemaVersion') != 1 or record.get('sourceSHA') != source_sha
             or record.get('platform') != 'linux-x86_64' or record.get('toolchains') != TOOLCHAINS
+            or not re.fullmatch(r'[a-f0-9]{64}', record.get('sourcePeerSha256', ''))
             or record.get('materials') != materials()
             or record.get('heelerCommit') != '6a2817fc02aeb552df251d9478753c22fd4738bb'
             or record.get('easytierCommit') != '728ba94b5029240add6204eed591f22e4e039e6b'
@@ -140,7 +149,7 @@ def assemble(peers, input_dir, output, source_sha):
         (output / name).chmod(0o700)
     manifest = {'schemaVersion': 1, 'sourceSHA': source_sha, 'platform': 'linux-x86_64',
                 'scope': 'Linux build-only fixture executables; no identities, runtime state or device validation',
-                'toolchains': TOOLCHAINS,
+                'toolchains': TOOLCHAINS, 'sourcePeerSha256': record['sourcePeerSha256'],
                 'heelerCommit': record['heelerCommit'], 'easytierCommit': record['easytierCommit'],
                 'tailscaleCommit': record['tailscaleCommit'], 'herdrUpstreamSHA': fixture['upstreamSHA'],
                 'materials': record['materials'], 'files': {name: digest(output / name) for name in NAMES}}
@@ -152,12 +161,13 @@ def verify(root, source_sha):
     exact_inventory(root, (*NAMES, 'manifest.json'))
     manifest = json.loads(checked_file(root / 'manifest.json').read_text())
     expected_keys = {'schemaVersion', 'sourceSHA', 'platform', 'scope', 'toolchains', 'heelerCommit',
-                     'easytierCommit', 'tailscaleCommit', 'herdrUpstreamSHA', 'materials', 'files'}
+                     'easytierCommit', 'tailscaleCommit', 'sourcePeerSha256', 'herdrUpstreamSHA', 'materials', 'files'}
     if (not isinstance(manifest, dict) or set(manifest) != expected_keys
             or not isinstance(manifest.get('files'), dict)
             or manifest.get('scope') != 'Linux build-only fixture executables; no identities, runtime state or device validation'
             or manifest.get('schemaVersion') != 1 or manifest.get('sourceSHA') != source_sha
             or manifest.get('platform') != 'linux-x86_64' or manifest.get('toolchains') != TOOLCHAINS
+            or not re.fullmatch(r'[a-f0-9]{64}', manifest.get('sourcePeerSha256', ''))
             or manifest.get('materials') != materials() or set(manifest.get('files', {})) != set(NAMES)
             or manifest.get('herdrUpstreamSHA') != bootstrap.HERDR_COMMIT
             or manifest.get('heelerCommit') != '6a2817fc02aeb552df251d9478753c22fd4738bb'
@@ -198,8 +208,13 @@ def main():
                     (args.bundle / name).chmod(0o700)
         print(json.dumps({'status': 'passed', 'sourceSHA': source, 'command': args.command}))
         return 0
-    except (OSError, ValueError, KeyError, json.JSONDecodeError, bootstrap.ProbeFailure):
-        print(json.dumps({'status': 'failed', 'command': args.command}))
+    except (OSError, ValueError, KeyError, json.JSONDecodeError, bootstrap.ProbeFailure, subprocess.SubprocessError) as error:
+        codes = {'bundle_file_invalid', 'bundle_directory_invalid', 'bundle_inventory_invalid',
+                 'checked_out_source_mismatch', 'linux_x86_64_executable_required',
+                 'easytier_peer_provenance_invalid', 'peer_manifest_invalid', 'peer_digest_mismatch',
+                 'bundle_manifest_invalid', 'bundle_digest_mismatch'}
+        code = str(error) if type(error) is ValueError and str(error) in codes else 'internal_error'
+        print(json.dumps({'status': 'failed', 'command': args.command, 'errorCode': code}))
         return 1
 
 

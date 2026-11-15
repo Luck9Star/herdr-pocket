@@ -111,12 +111,32 @@ class PtySizeRecorder:
         self.closed = True
 
 
-def run_fixture(root=None, timeout=900):
+class SyntheticInputAck:
+    """Only fixed synthetic input prefixes produce fixed, non-echo responses."""
+    def __init__(self, role):
+        if role not in ('et', 'ts'):
+            raise ValueError('invalid_synthetic_ack_role')
+        self.role = role.upper()
+        key = b'E' if role == 'et' else b'T'
+        self.prefixes = (key, key + key.lower())
+        self.emitted = set()
+
+    def response(self, received):
+        for index, prefix in enumerate(self.prefixes, 1):
+            if received == prefix and index not in self.emitted:
+                self.emitted.add(index)
+                stage = 'ONE' if index == 1 else 'TWO'
+                return f'\x1b7\x1b[22;1HSynthetic {self.role} ACK {stage}\x1b[K\x1b8'.encode('ascii')
+        return b''
+
+
+def run_fixture(root=None, timeout=900, ack_role=None):
     root = Path(__file__).resolve().parent if root is None else Path(root)
     fd = sys.stdin.fileno()
     recorder = PtySizeRecorder(root, fd)
     saved, handlers = None, {}
     received = bytearray()
+    ack = SyntheticInputAck(ack_role) if ack_role is not None else None
     ending_signal, reason, capture_errors = 0, 5, 0
     tui_started = False
 
@@ -213,6 +233,10 @@ def run_fixture(root=None, timeout=900):
                 (root / 'received.bin').write_bytes(received)
                 if len(received) > 4096:
                     reason = 3; break
+                if ack is not None:
+                    response = ack.response(bytes(received))
+                    if response:
+                        os.write(1, response)
     except BaseException:
         capture_errors += 1
         raise
@@ -233,7 +257,10 @@ def run_fixture(root=None, timeout=900):
 
 if __name__ == '__main__':
     try:
-        raise SystemExit(run_fixture())
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--ack-role', choices=('et', 'ts'))
+        raise SystemExit(run_fixture(ack_role=parser.parse_args().ack_role))
     except Exception:
         # Failure is numeric in pty-size.json; no exception text/history is
         # copied into this public evidence or a terminal diagnostic stream.

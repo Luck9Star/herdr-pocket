@@ -219,7 +219,7 @@ class HostHarness:
         write_private(self.root / 'host-owner.json', {'directory': str(self.host_directory),
             'inode': self.host_directory.stat().st_ino, 'owner': os.getuid()})
         self.targets, self.host_processes, _ = self.stack.enter_context(prepared_pairing_hosts(
-            self.bundle / 'herdr', hosts, self.set_phase))
+            self.bundle / 'herdr', hosts, self.set_phase, input_ack=True))
         self.env = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'HOME': str(self.root),
                     'XDG_CONFIG_HOME': str(self.root / 'config'), 'LANG': 'C.UTF-8',
                     'PYTHONDONTWRITEBYTECODE': '1'}

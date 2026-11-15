@@ -78,7 +78,7 @@ def receive(root, role):
 
 
 @contextmanager
-def prepared_pairing_hosts(binary, base, stage_callback=None):
+def prepared_pairing_hosts(binary, base, stage_callback=None, input_ack=False):
     """Own two empty-authorization OpenSSH/herdr fixtures until context exit."""
     processes, targets, metadata = [], {}, {}
     def stage(role, value):
@@ -154,8 +154,11 @@ def prepared_pairing_hosts(binary, base, stage_callback=None):
                 shutil.copy2(HERE / 'capture_input.py', root / 'capture_input.py')
                 shutil.copy2(HERE.parent / 'shared/fixture.json', root / 'terminal-fixture.json')
                 stage(role, 'capture_start')
+                capture = [sys.executable, str(root / 'capture_input.py')]
+                if input_ack:
+                    capture += ['--ack-role', role]
                 command([root / 'herdr', '--session', 'qa-pair', 'pane', 'run', pane,
-                    shlex.join([sys.executable, str(root / 'capture_input.py')])], env)
+                    shlex.join(capture)], env)
                 wait_for((root / 'capture-ready').exists, 'fixture_capture_not_ready', timeout=10)
                 config = dict(host='127.0.0.1', port=port, username=username, session='qa-pair',
                     socketPath=str(sock), herdrPath=str(root / 'herdr'), expectedHostKey=public, paneId=pane)

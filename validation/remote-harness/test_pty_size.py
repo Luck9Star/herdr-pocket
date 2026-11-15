@@ -47,7 +47,7 @@ def record(root):
 
 
 @contextmanager
-def owned_capture(timeout=6, rows=24, columns=80):
+def owned_capture(timeout=6, rows=24, columns=80, ack_role=None):
     with tempfile.TemporaryDirectory(prefix='herdr-owned-pty-') as folder, new_pty(rows, columns) as (master, slave):
         root = Path(folder)
         shutil.copy2(Path(__file__).with_name('capture_input.py'), root / 'capture_input.py')
@@ -58,8 +58,8 @@ def owned_capture(timeout=6, rows=24, columns=80):
         # its session teardown. SIGWINCH delivery is tested explicitly below.
         bootstrap = ("import runpy,sys; "
             "module=runpy.run_path(sys.argv[1],run_name='fixture_import'); "
-            "raise SystemExit(module['run_fixture'](timeout=float(sys.argv[2])))")
-        proc = subprocess.Popen([sys.executable, '-c', bootstrap, str(root / 'capture_input.py'), str(timeout)],
+            "raise SystemExit(module['run_fixture'](timeout=float(sys.argv[2]), ack_role=sys.argv[3] or None))")
+        proc = subprocess.Popen([sys.executable, '-c', bootstrap, str(root / 'capture_input.py'), str(timeout), ack_role or ''],
             stdin=slave, stdout=slave, stderr=subprocess.DEVNULL, start_new_session=True)
         try:
             def ready():

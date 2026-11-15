@@ -46,6 +46,8 @@ jobs:
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/direct-ssh-app"
           flutter analyze lib integration_test
+          cp integration_test/direct_ssh_tap_test.dart test/direct_ssh_tap_test.dart
+          flutter test test/direct_ssh_tap_test.dart --reporter expanded
       - name: Drive real UI with loopback SSH on a disposable iOS Simulator
         run: |
           export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"

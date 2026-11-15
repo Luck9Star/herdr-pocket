@@ -16,11 +16,37 @@ Future<void> until(WidgetTester tester, bool Function() ready) async {
   }
 }
 
-Future<void> tap(WidgetTester tester, String key) async {
+Future<void> tap(
+  WidgetTester tester,
+  String key, {
+  void Function()? beforeTap,
+  bool requireEnabled = false,
+  Duration timeout = const Duration(seconds: 45),
+}) async {
   final finder = find.byKey(ValueKey(key));
-  await until(tester, () => finder.evaluate().length == 1);
-  await tester.ensureVisible(finder);
-  await tester.pump(const Duration(milliseconds: 200));
+  final deadline = DateTime.now().add(timeout);
+  Rect? lastRect;
+  var stable = 0;
+  while (DateTime.now().isBefore(deadline)) {
+    if (finder.evaluate().length == 1) {
+      await tester.ensureVisible(finder);
+      await tester.pump(const Duration(milliseconds: 100));
+      final enabled =
+          !requireEnabled ||
+          tester.widget<FilledButton>(finder).onPressed != null;
+      final hit = finder.hitTestable().evaluate().length == 1;
+      final rect = tester.getRect(finder);
+      stable = enabled && hit ? (lastRect == rect ? stable + 1 : 1) : 0;
+      lastRect = rect;
+      if (stable >= 2) break;
+    } else {
+      stable = 0;
+      lastRect = null;
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+  beforeTap?.call();
+  if (stable < 2) fail('direct_ssh_control_not_ready_$key');
   expect(finder.hitTestable(), findsOneWidget);
   await tester.tap(finder);
   await tester.pump(const Duration(milliseconds: 200));
@@ -99,7 +125,50 @@ Future<void> runDirectSshUi(
   await tester.enterText(secret, config['password'] as String);
   await tester.pump();
   step('connect_tap');
-  await tap(tester, 'direct-connect');
+  await tap(
+    tester,
+    'direct-connect',
+    requireEnabled: true,
+    beforeTap: () {
+      final connect = find.byKey(const ValueKey('direct-connect'));
+      final exists = connect.evaluate().length == 1;
+      final status = find.byKey(const ValueKey('direct-status'));
+      final statusText = status.evaluate().length == 1
+          ? tester.widget<Text>(status).data
+          : null;
+      publish('connect-diagnostic.json', {
+        'connectExists': exists,
+        'connectEnabled': exists
+            ? tester.widget<FilledButton>(connect).onPressed != null
+            : null,
+        'connectHitTestable': exists
+            ? connect.hitTestable().evaluate().length == 1
+            : null,
+        'statusCode': statusText == '已确认本次主机密钥；连接时将重新核对。'
+            ? 'fingerprint_confirmed'
+            : statusText == '应用进入后台，连接已关闭；返回后需重新连接，不会重放输入。'
+            ? 'background_closed'
+            : 'other',
+      });
+      step('connect_preflight');
+    },
+  );
+  final afterStatus = find.byKey(const ValueKey('direct-status'));
+  final afterText = afterStatus.evaluate().length == 1
+      ? tester.widget<Text>(afterStatus).data
+      : null;
+  publish('connect-post.json', {
+    'terminalVisible': find.byType(TerminalView).evaluate().length == 1,
+    'statusCode': afterText == '正在重新核对主机密钥并连接…'
+        ? 'connecting'
+        : afterText == '已确认本次主机密钥；连接时将重新核对。'
+        ? 'fingerprint_confirmed'
+        : afterText == '应用进入后台，连接已关闭；返回后需重新连接，不会重放输入。'
+        ? 'background_closed'
+        : afterText == '连接失败或超时，请检查网络、密钥与目标。'
+        ? 'connect_failed'
+        : 'other',
+  });
   step('await_terminal');
   await until(tester, () => find.byType(TerminalView).evaluate().length == 1);
   final terminalView = find.byType(TerminalView);

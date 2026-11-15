@@ -20,13 +20,17 @@ TARGET = 'integration_test/ios_direct_ssh_test.dart'
 FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched', 'explicitTrustRequired',
           'realTerminalView', 'normalTextInputCommit', 'remoteEchoVisible', 'disconnectUiConfirmed',
           'credentialsCleared', 'physicalImeVerified'}
-STAGES = {'home', 'target', 'probe', 'authenticate', 'secret_entry', 'connect_tap',
+STAGES = {'home', 'target', 'probe', 'authenticate', 'secret_entry', 'connect_tap', 'connect_preflight',
           'await_terminal', 'await_welcome', 'input', 'disconnect'}
 LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
                'buildError': 'Failed to build iOS app',
                'launchError': 'Error launching application on',
                'testFailure': 'Some tests failed.',
-               'testPassed': 'All tests passed!'}
+               'testPassed': 'All tests passed!',
+               'testFrameworkException': 'EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK',
+               'hitTestWarning': 'derived an Offset that would not hit test',
+               'hitTestFinder': 'hitTestable',
+               'widgetNotFound': 'Expected: exactly one matching candidate'}
 
 
 class Failure(ValueError):
@@ -94,8 +98,8 @@ def check_result(value):
 
 def ui_diagnostic(failure):
     diagnostic = {}
-    for field in ('connectExists', 'connectEnabled', 'connectHitTestable'):
-        if failure.get(field) is None or isinstance(failure.get(field), bool):
+    for field in ('connectExists', 'connectEnabled', 'connectHitTestable', 'terminalVisible'):
+        if field in failure and (failure[field] is None or isinstance(failure[field], bool)):
             diagnostic[field] = failure.get(field)
     for field, allowed in {
         'exceptionClass': {'TestFailure', 'StateError', 'FlutterError', 'other'},
@@ -222,10 +226,16 @@ def run(app, output, env):
                 except subprocess.TimeoutExpired:
                     raise Failure('ios_flutter_timeout') from None
                 if code or not confirmed:
+                    preflight = read_json(exchange / 'connect-diagnostic.json') if exchange else None
+                    if preflight:
+                        report['connectDiagnostic'] = ui_diagnostic(preflight)
+                    post = read_json(exchange / 'connect-post.json') if exchange else None
+                    if post:
+                        report['connectPostDiagnostic'] = ui_diagnostic(post)
                     failure = read_json(exchange / 'failure.json') if exchange else None
                     if failure and re.fullmatch(r'[a-z_]{1,40}', failure.get('stage', '')):
                         report['failureStage'] = failure['stage']
-                        if failure.get('kind') in {'timeout', 'not_hit_testable', 'other'}:
+                        if failure.get('kind') in {'timeout', 'not_hit_testable', 'control_not_ready', 'other'}:
                             report['failureKind'] = failure['kind']
                         report['uiDiagnostic'] = ui_diagnostic(failure)
                     raise Failure('ios_device_test_failed' if code else 'ios_peer_confirmation_missing')

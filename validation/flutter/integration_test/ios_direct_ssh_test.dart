@@ -111,7 +111,9 @@ void main() {
           publish('failure.json', {
             'stage': stage,
             'code': 'direct_ssh_ios_ui_failed',
-            'kind': detail.contains('ui_timeout')
+            'kind': detail.contains('control_not_ready')
+                ? 'control_not_ready'
+                : detail.contains('ui_timeout')
                 ? 'timeout'
                 : detail.contains('hitTestable')
                 ? 'not_hit_testable'

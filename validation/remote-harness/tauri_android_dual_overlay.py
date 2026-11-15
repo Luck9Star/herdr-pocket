@@ -39,12 +39,19 @@ def checked_audit(value, expected_length, *, ordinal, sessions_count, active, ne
 
 
 def audit(host, role, expected, *, ordinal, sessions_count, active=True, new_sessions=0):
-    value = host_request(host, {'op':'audit', 'role':role,
-        'expectedBase64':base64.b64encode(expected).decode('ascii')}, 'host_audit')
-    if not checked_audit(value, len(expected), ordinal=ordinal, sessions_count=sessions_count,
-                         active=active, new_sessions=new_sessions):
-        raise GuiFailure('dual_peer_evidence_mismatch')
-    return value
+    def sample():
+        value = host_request(host, {'op':'audit', 'role':role,
+            'expectedBase64':base64.b64encode(expected).decode('ascii')}, 'host_audit')
+        # Count and ordinal are checked on every poll, so a reconnect cannot be
+        # hidden by a later newSessions=0 after the controller advances its cursor.
+        if (value.get('acceptedSessions') != sessions_count or value.get('newSessions') != new_sessions or
+                not isinstance(value.get('capturedBytes'), int) or value['capturedBytes'] > len(expected)):
+            raise GuiFailure('dual_peer_evidence_mismatch')
+        if value['capturedBytes'] == len(expected) and value.get('exactBytes') is not True:
+            raise GuiFailure('dual_peer_evidence_mismatch')
+        return value if checked_audit(value, len(expected), ordinal=ordinal, sessions_count=sessions_count,
+                                      active=active, new_sessions=new_sessions) else None
+    return wait_for(sample, 'dual_peer_evidence_timeout', timeout=30)
 
 
 def native_dialog_click(expected, button, *, timeout=20, cancelled=None):
@@ -249,15 +256,22 @@ def send_draft(browser, value):
 
 
 def baseline(host, role, expected):
-    value = host_request(host, {'op':'audit', 'role':role,
-        'expectedBase64':base64.b64encode(expected).decode('ascii')}, 'host_audit')
-    sessions=value.get('sessions')
-    if value.get('exactBytes') is not True or value.get('capturedBytes') != len(expected) or not isinstance(sessions,list):
-        raise GuiFailure('dual_baseline_invalid')
-    live=[item for item in sessions if item.get('active') is True and item.get('approvedDevice') is True]
-    if len(live)!=1 or sum(item.get('active') is True for item in sessions)!=1 or value.get('acceptedSessions')!=len(sessions):
-        raise GuiFailure('dual_baseline_session_invalid')
-    return (live[0]['ordinal'],len(sessions))
+    def sample():
+        value = host_request(host, {'op':'audit', 'role':role,
+            'expectedBase64':base64.b64encode(expected).decode('ascii')}, 'host_audit')
+        sessions=value.get('sessions')
+        count=value.get('capturedBytes')
+        if not isinstance(count,int) or count > len(expected) or not isinstance(sessions,list):
+            raise GuiFailure('dual_baseline_invalid')
+        if count != len(expected):
+            return None
+        if value.get('exactBytes') is not True:
+            raise GuiFailure('dual_baseline_invalid')
+        live=[item for item in sessions if item.get('active') is True and item.get('approvedDevice') is True]
+        if len(live)!=1 or sum(item.get('active') is True for item in sessions)!=1 or value.get('acceptedSessions')!=len(sessions):
+            raise GuiFailure('dual_baseline_session_invalid')
+        return (live[0]['ordinal'],len(sessions))
+    return wait_for(sample,'dual_baseline_timeout',timeout=30)
 
 
 def run_direction(apk, auth_apk, session, stopped, report):
@@ -279,6 +293,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         adb('shell','run-as',PACKAGE,'mkdir','-p','files/empty-dual-overlay-ca')
         adb('shell','run-as',PACKAGE,'touch','files/enable-dual-overlay-private-ca')
         _adb('shell','-T','run-as',PACKAGE,'tee','files/dual-overlay-ca.pem',input_data=session.read_ca())
+        adb('shell','run-as',AUTH_PACKAGE,'mkdir','-p','files')
         _adb('shell','-T','run-as',AUTH_PACKAGE,'tee','files/port',input_data=str(parsed.port).encode())
         adb('shell','monkey','-p',PACKAGE,'-c','android.intent.category.LAUNCHER','1')
         pid=wait_for(lambda:adb('shell','pidof',PACKAGE,check=False), 'dual_app_missing',timeout=60)
@@ -352,6 +367,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['staleTypingAttempted']=True
         prior_ordinal,prior_count=baseline_values[stopped]
         audit(control,stopped,initials[stopped],ordinal=prior_ordinal,sessions_count=prior_count,active=False)
+        audit(control,surviving,initials[surviving]+second,ordinal=ordinal,sessions_count=count)
         report['stoppedInputUnavailableAndUnchanged']=True
         report['stage']='complete'
     finally:
@@ -390,6 +406,7 @@ def main():
     output=paths[3];output.mkdir(parents=True,exist_ok=True)
     result={'schemaVersion':1,'status':'failed','sourceSHA':os.environ.get('GITHUB_SHA'),
             'nativeSourceSHA':'93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc',
+            'apkSourceSHA':'25188771b6d6d07bd608923699b6cd3c5cc45c55',
             'scope':'owned API35 x86_64; real UI, synthetic peers, QA-only TS private trust; no physical IME',
             'apkSha256':hashlib.sha256(paths[0].read_bytes()).hexdigest(),'directions':{}}
     from android_dual_overlay_session import AndroidDualOverlaySession

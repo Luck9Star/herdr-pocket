@@ -95,6 +95,31 @@ def app_container(device, timeout):
     return (Path(result.stdout.decode().strip()) if result.returncode == 0 else None), False
 
 
+class ContainerLocator:
+    """Throttle CoreSimulator lookups and retain the first successful path."""
+    def __init__(self, device, *, clock=time.monotonic, lookup=app_container, interval=10):
+        self.device = device
+        self.clock = clock
+        self.lookup = lookup
+        self.interval = interval
+        self.next_attempt = 0
+        self.path = None
+        self.attempts = 0
+        self.timeouts = 0
+
+    def get(self, timeout):
+        if self.path is not None or self.clock() < self.next_attempt:
+            return self.path
+        self.attempts += 1
+        path, timed_out = self.lookup(self.device, timeout)
+        self.next_attempt = self.clock() + self.interval
+        if timed_out:
+            self.timeouts += 1
+        elif path is not None:
+            self.path = path
+        return self.path
+
+
 def safe_screenshot_request(request, stage):
     return (isinstance(request, dict) and set(request) == {'passwordMasked', 'passwordAuth'} and
             request['passwordMasked'] is True and request['passwordAuth'] is True and
@@ -262,13 +287,15 @@ def check_result(value):
 
 def ui_diagnostic(failure):
     diagnostic = {}
-    for field in ('connectExists', 'connectEnabled', 'connectHitTestable', 'terminalVisible'):
+    for field in ('connectExists', 'connectEnabled', 'connectHitTestable', 'terminalVisible',
+                  'probeEnabled', 'trustDialogVisible'):
         if field in failure and (failure[field] is None or isinstance(failure[field], bool)):
             diagnostic[field] = failure.get(field)
     for field, allowed in {
         'exceptionClass': {'TestFailure', 'StateError', 'FlutterError', 'other'},
-        'statusCode': {'fingerprint_confirmed', 'connecting', 'auth_failed', 'key_mismatch', 'connect_failed',
+        'statusCode': {'probe_in_progress', 'probe_failed', 'probe_idle', 'fingerprint_confirmed', 'connecting', 'auth_failed', 'key_mismatch', 'connect_failed',
                        'background_closed', 'disconnected', 'shell_ended', 'connected', 'page_absent', 'other'},
+        'appLifecycle': {'resumed', 'inactive', 'hidden', 'paused', 'detached', 'unknown'},
     }.items():
         if isinstance(failure.get(field), str) and failure[field] in allowed:
             diagnostic[field] = failure[field]
@@ -411,15 +438,12 @@ def run(app, output, env):
                 process = subprocess.Popen(xctest_execution(build, result_bundle), cwd=app / 'ios', env=env,
                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                 deadline, exchange, confirmed = min(overall_deadline, time.monotonic() + 1200), None, False
-                container_timeouts = 0
+                locator = ContainerLocator(device)
                 screenshot_attempted = False
                 while process.poll() is None and time.monotonic() < deadline:
                     phase = 'await_device_result'
                     if exchange is None:
-                        container, timed_out = app_container(device, min(15, max(1, deadline - time.monotonic())))
-                        if timed_out:
-                            container_timeouts += 1
-                            continue
+                        container = locator.get(min(15, max(1, deadline - time.monotonic())))
                         if container is not None:
                             exchange = container / 'tmp' / ('herdr-direct-ssh-' + env['GITHUB_RUN_ID'])
                     if exchange:
@@ -502,8 +526,9 @@ def run(app, output, env):
         report['diagnostic'] = safe_failure(error, phase)
     finally:
         report['lastPhase'] = phase
-        if 'container_timeouts' in locals():
-            report['containerQueryTimeouts'] = container_timeouts
+        if 'locator' in locals():
+            report['containerQueryTimeouts'] = locator.timeouts
+            report['containerQueryAttempts'] = locator.attempts
         if private:
             report['flutterLogMarkers'] = log_diagnostics(private / 'flutter-private.log')
             try:

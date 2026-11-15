@@ -195,7 +195,13 @@ void main() {
           final status = statusFinder.evaluate().length == 1
               ? tester.widget<Text>(statusFinder).data
               : null;
-          final statusCode = status == '已确认本次主机密钥；连接时将重新核对。'
+          final statusCode = status == '正在探测主机密钥，尚未发送认证信息。'
+              ? 'probe_in_progress'
+              : status == '探测失败或超时；未发送认证，请检查目标后重试。'
+              ? 'probe_failed'
+              : status == '填写连接信息后先探测主机密钥。'
+              ? 'probe_idle'
+              : status == '已确认本次主机密钥；连接时将重新核对。'
               ? 'fingerprint_confirmed'
               : status == '正在重新核对主机密钥并连接…'
               ? 'connecting'
@@ -218,6 +224,7 @@ void main() {
               : 'other';
           final connect = find.byKey(const ValueKey('direct-connect'));
           final exists = connect.evaluate().length == 1;
+          final probe = find.byKey(const ValueKey('direct-probe'));
           final type = error.runtimeType.toString();
           final line = RegExp(
             r'direct_ssh_ui_steps\.dart:(\d+)',
@@ -238,6 +245,11 @@ void main() {
                 : 'other',
             'sourceLine': line == null ? null : int.tryParse(line.group(1)!),
             'statusCode': statusCode,
+            'appLifecycle': binding.lifecycleState?.name ?? 'unknown',
+            'probeEnabled': probe.evaluate().length == 1
+                ? tester.widget<OutlinedButton>(probe).onPressed != null
+                : null,
+            'trustDialogVisible': find.byKey(const ValueKey('direct-trust-key')).evaluate().isNotEmpty,
             'connectExists': exists,
             'connectEnabled': exists
                 ? tester.widget<FilledButton>(connect).onPressed != null

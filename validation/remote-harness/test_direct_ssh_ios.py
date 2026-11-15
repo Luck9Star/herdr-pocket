@@ -63,6 +63,25 @@ class IosDirectSshTests(unittest.TestCase):
             self.assertEqual(runner.app_container('fixture-id', 15), (None, True))
             self.assertEqual(runner.app_container('fixture-id', 15), (Path('/private/app'), False))
 
+    def test_container_lookup_is_throttled_and_success_is_cached(self):
+        now = [0.0]
+        calls = []
+
+        def lookup(device, timeout):
+            calls.append((device, timeout))
+            return (None, True) if len(calls) == 1 else (Path('/private/app'), False)
+
+        locator = runner.ContainerLocator('fixture-id', clock=lambda: now[0], lookup=lookup, interval=10)
+        self.assertIsNone(locator.get(5))
+        now[0] = 9.9
+        self.assertIsNone(locator.get(5))
+        self.assertEqual(len(calls), 1)
+        now[0] = 10
+        self.assertEqual(locator.get(5), Path('/private/app'))
+        now[0] = 100
+        self.assertEqual(locator.get(5), Path('/private/app'))
+        self.assertEqual((locator.attempts, locator.timeouts, len(calls)), (2, 1, 2))
+
     def test_xctest_execution_disables_clones_and_preserves_the_owned_destination(self):
         command = runner.xctest_execution(['xcodebuild', '-destination', 'id=owned-fixture'], '/private/result')
         self.assertEqual(command.count('-destination'), 1)
@@ -87,6 +106,11 @@ class IosDirectSshTests(unittest.TestCase):
             'exceptionClass': 'TestFailure', 'sourceLine': 73, 'statusCode': 'fingerprint_confirmed'})
         self.assertNotIn('secret', str(actual))
         self.assertNotIn('sourceLine', runner.ui_diagnostic({'sourceLine': True}))
+        self.assertEqual(runner.ui_diagnostic({'statusCode': 'probe_failed', 'appLifecycle': 'resumed',
+            'probeEnabled': True, 'trustDialogVisible': False, 'raw': 'secret'}),
+            {'statusCode': 'probe_failed', 'appLifecycle': 'resumed',
+             'probeEnabled': True, 'trustDialogVisible': False})
+        self.assertEqual(runner.ui_diagnostic({'statusCode': 'secret', 'appLifecycle': 'secret'}), {})
 
     def test_screenshot_requires_explicit_masked_password_stage(self):
         stage = {'stage': 'screenshot_wait'}

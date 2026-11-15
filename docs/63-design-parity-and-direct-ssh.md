@@ -4,21 +4,21 @@
 
 ## 可下载的同源调试快照
 
-以下五件来自源码 `a9afe9cdbb1f3809f7bb975f41b83705a4825510` 的 [运行 43708650075](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075)：27 项成功、7 项按条件跳过。五件均已下载并核对 GitHub 外层 ZIP digest、CI 清单及内包 SHA256；下表哈希对应内包。这是 QA 调试快照，不等同公开 Release 或设备验收。
+以下五件来自源码 `d925bd02f2b47f30a2207da8e4d5eea45909bbb1` 的 [运行 43715215398](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398)：27 项成功、7 项按条件跳过。五件已独立下载核对；下表哈希对应内包。这是 QA 调试快照，不等同公开 Release 或设备验收。
 
 | 平台 / 路线 | GitHub 下载与内包名 | 实际架构 | 内包 SHA256 |
 | --- | --- | --- | --- |
-| Flutter Android | [工件 14159866197](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159866197) · `flutter-android-debug.apk` | `arm64-v8a` / `armeabi-v7a` / `x86_64` | `80e8d93bf3d90f3a3ce0cf8458ef900ac11a2b8c84a6b8a7366015ca3461f904` |
-| Tauri Android | [工件 14159224253](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159224253) · `app-universal-debug.apk` | 仅 `arm64-v8a` | `f563370e34459f113bf8a7bc0b3869eb30e48df536dbd469e31e17cd520c81aa` |
-| Flutter macOS | [工件 14159817543](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159817543) · `flutter-macos-debug.tar.gz` | Mach-O `arm64` | `ee24e490dfbf9f6442d0a858904e04daf031c1ec4e26ec0dea105a89b2f6284a` |
-| Tauri macOS | [工件 14160085140](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14160085140) · `herdr-pocket-tauri-probe.app.zip` | Mach-O `arm64` | `183b2d0eaee22209119734c5b230c16746e492170e9f6395411550735d477cc5` |
-| Tauri Linux | [工件 14159857019](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159857019) · `herdr-pocket-tauri-probe_0.1.0_amd64.deb` | Debian `amd64` | `24e421ef584ea0ca21414eca94473b1c1a9c8c0646766d4fa6fccb07818b4859` |
+| Flutter Android | [工件 14162282781](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162282781) · `flutter-android-debug.apk` | `arm64-v8a` / `armeabi-v7a` / `x86_64` | `1eec8d113b24afc1a0f4a3dbaf8cb49d15d00be93005699cca1419d81ea51f0e` |
+| Tauri Android | [工件 14162296306](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162296306) · `app-universal-debug.apk` | 仅 `arm64-v8a` | `c9204735a9ec2c6f3088b3f1b14cf321ff3f78842d91cb0c3414b957b4994df1` |
+| Flutter macOS | [工件 14162562180](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162562180) · `flutter-macos-debug.tar.gz` | Mach-O `arm64` | `821a311aa7fd9eb03fca6cbda2eb8cb2e9c4b38e75dae82d43b762f4ecd12d8c` |
+| Tauri macOS | [工件 14162046540](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162046540) · `herdr-pocket-tauri-probe.app.zip` | Mach-O `arm64` | `9e482c730f131b0757aef96419efdea4aaf2acbf77fe463710f5ec73412da899` |
+| Tauri Linux | [工件 14162437171](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162437171) · `herdr-pocket-tauri-probe_0.1.0_amd64.deb` | Debian `amd64` | `afc8d8aa31c113b616cafaa27eea54e65c6a16667c0087a2192c714abc93b9b8` |
 
-Tauri Android 文件名虽含 `universal`，包内仅有 `arm64-v8a`；下文的 API35 模拟器验收使用另行构建的 x86_64 应用，不是上表 APK。Flutter Android 的 manifest 主哈希对应工件内另一份 ZIP，APK 自身通过同工件 `SHA256SUMS` 核对。五件与清单保存在本地 `build/verification/a9afe9c/`。
+Tauri Android 文件名虽含 `universal`，包内仅有 `arm64-v8a`；下文 API35 模拟器使用另行构建的 x86_64 应用，不是上表 APK。Flutter Android 的 APK 自身通过同工件 `SHA256SUMS` 核对。
 
-云端 Linux Flutter 候选 [工件 14159955842](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075/artifacts/14159955842) 为 556 项通过、5 项条件跳过，另有渲染 10 项通过。macOS 本机隔离候选 `d38aff4` 为 543 项通过、5 项跳过与渲染 10 项通过，另以合成 loopback 补跑普通 SSH 10 项；两批分开记账。此前 `d5ec372` 的 Tauri 在 Node 22.22.2 上 `npm test` 为 594 项通过、0 失败，`npm run build` 通过；helper 测试 15/15 通过；测试不替代设备运行。
+本批 Flutter 候选的 [验证工件 14162491645](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162491645) 记录 analyzer 无问题、560 项通过与 5 项跳过，另有渲染 10 项通过；跳过不计通过。测试不代替设备运行。
 
-历史下载：[d5ec372 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869) · [20ef361 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43696926797) · [d38aff4 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43688956564) · [bc43076 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816) · [79d2d00 Flutter macOS 独立包](https://github.com/Luck9Star/herdr-pocket/actions/runs/43692804010/artifacts/14153820575)。历史包的已核验文件保留于本地相应 `build/verification/` 目录；各次系统 AX 和设备结果见下文。
+历史下载：[a9afe9c 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708650075) · [d5ec372 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869) · [20ef361 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43696926797) · [d38aff4 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43688956564) · [bc43076 同源五件](https://github.com/Luck9Star/herdr-pocket/actions/runs/43683202816) · [79d2d00 Flutter macOS 独立包](https://github.com/Luck9Star/herdr-pocket/actions/runs/43692804010/artifacts/14153820575)。各次系统 AX 和设备结果见下文。
 
 ## 从首页选择接入方式
 
@@ -58,6 +58,16 @@ Flutter macOS 归档来源为 [Actions 43669066267](https://github.com/Luck9Star
 修复版验收源码为 `32cd6066a0deb07527540bd955dd1e6b8c14bcb5`；其 Flutter 产品页面、Apple 原生代码和工程生成器与历史下载包 `79d2d00` 一致，但测试应用是独立构建。整个 XCTest 仍为失败：后续未找到独立期望的主机指纹，密码和加密私钥的 SSH 认证、PTY 与关闭步骤均未到达。上述系统 AX 遮罩结论不能扩展为该修复版原生双认证通过，先前 Android/iOS 模拟器结果仍按各自源码和范围单列。
 
 后续 macOS 原生专项 [43704701932](evidence/design-parity-20261115/flutter-macos-secure-candidate-43704701932.json) 和 [43705618468](evidence/design-parity-20261115/flutter-macos-secure-candidate-43705618468.json) 均为四项实跑、三项通过：系统遮罩、密码认证与界面主动断开、返回重开通过，密码服务端分别确认认证、PTY、shell 和应用存活期间关闭。前者中 PEM 字段的 Flutter 焦点已确认，系统快捷粘贴后控制器仍为空；后者仅在确认仍为空后以真实键盘逐行输入，PEM 和口令控制器均与一次性夹具精确相等，且已尝试连接，但 key 服务端只观察到探测，未确认认证或关闭。实际未判定粘贴失效原因，也不能据此声称原生加密私钥登录通过。测试应用使用显式测试用 embedder 语义；两次均为独立构建。与之互补的本地 Dart 加密私钥真实回环认证证据见下文，不能代替该原生 UI 结果。
+
+PEM 输入区现固定为两行并在框内滚动：长密钥此前将口令区向下推移，影响窗口内可达性。新增 Widget 回归覆盖 macOS 与 Android 两个平台各 980×780、390×844（共四组），检查完整合成 PEM、框内拖动、编辑、切换清空、口令占位区域及连接按钮中心可达；连接按钮边缘不保证完全可见。[桌面图](evidence/design-parity-20261115/flutter-direct-ssh-pem-two-lines-980x780.png)和[手机图](evidence/design-parity-20261115/flutter-direct-ssh-pem-two-lines-390x844.png)均为 macOS variant 的实际 Flutter Widget、模拟剪贴板与 AppKit 占位，展示不可用于认证的合成文本和空口令；不是系统 AX、真实 AppKit 绘制或原生认证证据。
+
+两行布局的 [macOS 原生专项 43714130582](evidence/design-parity-20261115/flutter-macos-secure-candidate-43714130582.json) 实跑四项、三项通过：系统遮罩、密码连接及界面主动断开、返回重开通过；真实“粘贴私钥”按钮已读取一次性剪贴板且 PEM 控制器精确匹配。加密私钥用例仍未通过：系统树中未找到可用的口令原生字段，标签组存在但测试未找到满足可见区域条件的输入区，未输入试探字符；key 对端仅收到主机密钥探测。该次不能证明原生私钥口令输入或认证，也不能单凭测试结果断言原因。
+
+后续 [macOS 专项 43717075816](evidence/design-parity-20261115/flutter-macos-secure-candidate-43717075816.json) 四项中三项通过：系统安全字段遮罩、密码 SSH、加密 OpenSSH 私钥 SSH。加密路径经真实“粘贴私钥”按钮确认一次性 PEM，点击系统可命中的原生 secure 口令字段、用无秘密试探确认焦点并核对口令；独立 key-only 对端确认认证、PTY、shell 及应用仍在时界面断开；密码对端也有对应主动关闭证据。两种 peer 都先独立核对主机指纹。该次返回重开用例未通过，因此整个专项失败；独立测试构建显式启用测试用 embedder 语义，不等同公开下载包或 VoiceOver 全流程验收。
+
+随后 [macOS 专项 43717994137](evidence/design-parity-20261115/flutter-macos-secure-candidate-43717994137.json) 在 `c94dfb645f9363a50141b42c51a6c42243803451` 上四项实际执行并全部通过：系统安全字段遮罩、密码 SSH、加密 OpenSSH Ed25519 私钥 SSH，以及返回并重开空表单。两种认证分别独立核对主机指纹，服务端各确认认证、PTY、shell 和应用仍运行时主动关闭；私钥通过真实粘贴按钮写入，原生 secure 口令字段的焦点以无秘密试探验证。测试显式启用测试用 embedder 语义，不能外推完整 VoiceOver 或物理 IME 验收。
+
+同次成功上传[干净 Mac 调试包工件 14163247960](https://github.com/Luck9Star/herdr-pocket/actions/runs/43717994137/artifacts/14163247960)：外层 ZIP SHA256 `adf729d88fcf8987860abf7611f9e519b448190651673fae56b5d335f324f6f9`；内包 `flutter-macos-debug.tar.gz` SHA256 `846d69b39a240170c1ca5e24552a7ef385953df43eb8e6ec5b3d2049e5b035fa`，与同工件清单一致。该包在测试钩子和临时夹具注入前构建；运行验收使用同源码的测试注入构建，两者不是同一二进制。
 
 普通 SSH 的 RSA 兼容增量也已从原生 macOS 窗口独立复验：纯 RSA2048 Paramiko、核对 SHA256 指纹、密码登录、输入 `hp-check` 后看到绿色 `POCKET-ANDROID-SSH-OK`，点击断开后服务端记录 `sessionClosed`。窗口缩放让服务端实际收到 80×24 → 106×28 → 106×30 → 104×27 → 104×20 → 104×19 → 106×19，包括列数相同而行数改变。该次使用前端 `f29ea6b` 与 Rust 生产文件 blob `a9e9792` / `502548b`，已纳入功能快照 `621b793`；该次 Tauri 原生私钥输入未验证，Android 范围另见下文。
 
@@ -205,6 +215,10 @@ RSA 功能快照 `621b793349d7e44332d617e76a345086c272e931` 的两壳 API35 Andr
 产品代码与 `a9afe9c` 下载批次一致、验收 harness 不同的 `316a9bf812bb543462927621b6e2449894b5f2b7`，在 [运行 43710878101](https://github.com/Luck9Star/herdr-pocket/actions/runs/43710878101) 的 iPhone 11 / iOS 26.2 模拟器通过 XCTest 1/1；[脱敏原始记录](evidence/design-parity-20261115/flutter-ordinary-ssh-ios-43710878101.json)确认从首页核对指纹、临时密码登录、终端输入与远端回显、主动断开和凭据清空，独立服务端确认认证、PTY、shell、输入标记以及两连接关闭，模拟器和临时资料已清理。容器查询共 5 次、2 次超时；这不能确定下述首轮失败的原因。测试语义固定开启，输入来自测试接口，不证明 VoiceOver、真实 IME、实体设备或 iOS 私钥认证；这是独立 debug 构建，与下载包不是同一二进制。
 
 `a9afe9c` 的 [运行 43708649945](https://github.com/Luck9Star/herdr-pocket/actions/runs/43708649945)及[脱敏失败记录](evidence/design-parity-20261115/flutter-ordinary-ssh-ios-43708649945.json)在 iPhone 11 / iOS 26.2 模拟器进入主机密钥探测后等待确认对话框超时，XCTest 0/1；服务端记录一次连接并已关闭，认证、PTY、shell 和输入标记均未到达，模拟器与临时资料已清理。当前证据不足以确定握手或界面未显示的根因，不记为该源码 iOS 验收通过；下方成功结果属于各自历史源码。
+
+Flutter Android 普通 SSH 的 d925 [首轮 43715213819](evidence/design-parity-20261115/flutter-ordinary-ssh-android-43715213819-failed.json) 在设备结果等待时包查询非零退出，对端连接数为 0，reverse、package、forward 清理未确认；缺少 stderr，原因不能确定。仅调整只读包查询失败处理后的 [b19adb2 复测 43716049236](evidence/design-parity-20261115/flutter-ordinary-ssh-android-43716049236.json) 通过首页、独立指纹、密码认证、PTY/shell、输入回显、界面断开及驱动退出前对端关闭，设备与夹具清理均通过。报告未记录发生重试；该次是 d925 产品基础上的独立 QA 构建，不是上表 APK 二进制，也不证明物理 IME。
+
+同源码 `d925bd02f2b47f30a2207da8e4d5eea45909bbb1` 的独立设备测试：Flutter [iOS Simulator 43715213778](evidence/design-parity-20261115/flutter-ordinary-ssh-ios-43715213778.json) 在 iPhone 11、iOS 26.2 模拟器上完成密码连接、指纹确认、终端输入回显、界面断开和清理，服务端确认认证、PTY、shell 与驱动退出前关闭；XCTest 1/1。Tauri [Android 43715213794](evidence/design-parity-20261115/tauri-ordinary-ssh-android-43715213794.json) 在 API35 模拟器上分别完成密码与加密私钥连接、回显与关闭，密码会话的 Esc、Tab、左方向和 Ctrl-C 字节及顺序由对端确认。两项使用独立调试构建与临时 loopback，并非上表安装包二进制；自动化输入不证明物理设备或真实 IME。
 
 最新同源码 `d5ec372d50060f4824401755e213c826f0c4ab01` 的 [运行 43699319130](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699319130)与[原始脱敏记录](evidence/design-parity-20261115/flutter-ordinary-ssh-ios-43699319130.json)显示，专属 iPhone 11 / iOS 26.2 模拟器 XCTest 1 项通过、0 失败。首页、主机指纹确认、临时密码、真实终端输入回显和主动断开清空均已验证；独立服务端确认认证、PTY、shell、输入标记和两连接关闭，模拟器及临时资料已清理。测试未记录输入总字节数，语义固定开启，不证明 VoiceOver、真实 IME、实体设备或 iOS 私钥认证；它是独立 debug 构建，与下载包同源码但非同一二进制。
 

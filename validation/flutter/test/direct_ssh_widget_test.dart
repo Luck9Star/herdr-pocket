@@ -93,6 +93,54 @@ void main() {
     expect(tester.takeException(), isNull); semantics.dispose();
   }, variant: TargetPlatformVariant({TargetPlatform.android, TargetPlatform.macOS}));
 
+  for (final size in [const Size(980, 780), const Size(390, 844)]) {
+    testWidgets('multiline private key stays within a scrollable two-line editor at $size', (tester) async {
+      tester.view.physicalSize = size; tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
+      mockSecureFields(tester);
+      final pem = '-----BEGIN SYNTHETIC EXAMPLE ONLY-----\n${List.filled(16, 'not-a-private-key').join('\n')}\n-----END SYNTHETIC EXAMPLE ONLY-----\n';
+      mockClipboard(tester, () async => {'text': pem});
+      final tokens = (await tester.runAsync(DesignTokens.load))!;
+      await pumpOrdinaryHome(tester, tokens);
+      await tester.tap(find.text('Open ordinary SSH')); await tester.pumpAndSettle();
+      final dynamic state = tester.state(find.byType(DirectSshPage));
+      // Include the normal pin/status layout without opening a network connection.
+      state.setState(() {
+        state.algorithm = 'ssh-ed25519'; state.fingerprint = 'SHA256:${List.filled(43, 'A').join()}';
+        state.checkedTarget = state.target; state.status = '已确认本次主机密钥；连接时将重新核对。';
+      });
+      await tester.pumpAndSettle(); await enableKeyMode(tester);
+      final key = find.byKey(const ValueKey('direct-secret'));
+      final phrase = find.byKey(const ValueKey('direct-passphrase')).last;
+      await tester.ensureVisible(find.byKey(const ValueKey('direct-paste-key'))); await tester.pumpAndSettle();
+      final height = tester.getSize(key).height;
+      await tapPasteKey(tester); await tester.pumpAndSettle();
+      final field = tester.widget<TextField>(key);
+      expect(field.minLines, 2); expect(field.maxLines, 2);
+      expect(field.controller!.text, pem); expect(tester.getSize(key).height, height);
+      expect(phrase.hitTestable(), findsOneWidget);
+      expect(tester.getRect(phrase).bottom, lessThanOrEqualTo(size.height));
+      final connect = find.byKey(const ValueKey('direct-connect'));
+      expect(connect.hitTestable(), findsOneWidget);
+      expect(tester.getRect(connect).center.dy, lessThan(size.height));
+
+      await tester.ensureVisible(key); await tester.pumpAndSettle();
+      final editor = find.descendant(of: key, matching: find.byType(EditableText));
+      final scrollable = find.descendant(of: editor, matching: find.byType(Scrollable));
+      final position = tester.state<ScrollableState>(scrollable).position;
+      expect(position.maxScrollExtent, greaterThan(0));
+      position.jumpTo(0); await tester.pump();
+      await tester.drag(key, const Offset(0, -60)); await tester.pumpAndSettle();
+      expect(position.pixels, greaterThan(0)); expect(field.controller!.text, pem);
+      await tester.enterText(key, '${pem}manual edit'); await tester.pumpAndSettle();
+      expect(field.controller!.text, '${pem}manual edit'); expect(tester.getSize(key).height, height);
+      await enableKeyMode(tester); await enableKeyMode(tester);
+      expect(tester.widget<TextField>(key).controller!.text, isEmpty);
+      expect(tester.getSize(key).height, height); expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox()); await tester.pumpAndSettle();
+    }, variant: TargetPlatformVariant({TargetPlatform.android, TargetPlatform.macOS}));
+  }
+
   for (final outcome in ['empty', 'denied']) {
     portableTestWidgets('private key paste $outcome preserves manual input without exposing errors', (tester) async {
       mockClipboard(tester, () async {

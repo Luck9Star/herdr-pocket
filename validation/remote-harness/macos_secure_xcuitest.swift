@@ -88,32 +88,48 @@ final class SecureCredentialUITests: XCTestCase {
         return exact.firstMatch
     }
 
-    private func focusKeyPassphrase(_ app: XCUIApplication) {
-        let native = app.secureTextFields.matching(NSPredicate(format: "identifier == %@", "direct-passphrase"))
-        let groups = app.descendants(matching: .any).matching(identifier: "私钥口令（可选）")
+    private func scrollKeyGutter(_ app: XCUIApplication, _ amount: CGFloat) {
         let window = app.windows.firstMatch
-        for delta in [CGFloat(0), -240, -240, -240, -240, -240, 240, 240, 240, 240, 240] {
-            if delta != 0 { scrollForm(app, delta) }
-            if native.count == 1 && stableHit(native.firstMatch) {
-                mark("keyPassphraseNativeRole")
-                native.firstMatch.click()
-                return
-            }
-            guard groups.count == 1 && window.exists else { continue }
-            let group = groups.firstMatch, frame = group.frame
-            let viewport = formScroll(app).map { window.frame.intersection($0.frame) } ?? window.frame
+        XCTAssertTrue(window.exists && window.isHittable, "form scroll target unavailable")
+        let viewport = formScroll(app).map { window.frame.intersection($0.frame) } ?? window.frame
+        XCTAssertTrue(viewport.width >= 600 && viewport.height >= 300, "key form viewport too small")
+        let label = app.descendants(matching: .any).matching(identifier: "私钥口令（可选）")
+        let before = label.count == 1 ? label.firstMatch.frame : .zero
+        let gutter = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0)).withOffset(
+            CGVector(dx: viewport.minX - window.frame.minX + 12, dy: viewport.midY - window.frame.minY))
+        gutter.scroll(byDeltaX: 0, deltaY: amount)
+        let after = label.count == 1 ? label.firstMatch.frame : .zero
+        func bounded(_ value: CGFloat) -> Int { max(-10000, min(10000, Int(value.rounded()))) }
+        print("HP_XCUI_KEYGEOM=windoww:\(bounded(window.frame.width)),windowh:\(bounded(window.frame.height)),vieww:\(bounded(viewport.width)),viewh:\(bounded(viewport.height)),labels:\(min(label.count,9)),beforey:\(bounded(before.minY - window.frame.minY)),aftery:\(bounded(after.minY - window.frame.minY)),labelw:\(bounded(after.width)),labelh:\(bounded(after.height))")
+        fflush(stdout)
+    }
+
+    private func clickNativeKeyPassphrase(_ app: XCUIApplication) {
+        let native = app.secureTextFields.matching(NSPredicate(format: "identifier == %@", "direct-passphrase"))
+        let window = app.windows.firstMatch
+        for delta in [CGFloat(0), -200, -200, -200, 200, 200, 200] {
+            if delta != 0 { scrollKeyGutter(app, delta) }
+            guard native.count == 1 && window.exists else { continue }
+            let field = native.firstMatch, frame = field.frame
             let center = CGPoint(x: frame.midX, y: frame.midY)
-            guard frame.width >= 100 && frame.height >= 32 && viewport.contains(center) else { continue }
+            let visible = !frame.isEmpty && window.frame.contains(center)
+            func bounded(_ v: CGFloat) -> Int { max(-10000, min(10000, Int(v.rounded()))) }
+            print("HP_XCUI_NATIVEFIELD=count:1,hittable:\(field.isHittable ? 1 : 0),visible:\(visible ? 1 : 0),x:\(bounded(frame.minX-window.frame.minX)),y:\(bounded(frame.minY-window.frame.minY)),w:\(bounded(frame.width)),h:\(bounded(frame.height))")
+            fflush(stdout)
+            guard visible else { continue }
+            let windowFrame = window.frame
             usleep(100_000)
-            guard frame == group.frame && viewport.contains(center) else { continue }
-            let origin = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
-            origin.withOffset(CGVector(dx: center.x - window.frame.minX, dy: center.y - window.frame.minY)).click()
-            mark("keyPassphraseVisibleFallback")
+            guard frame == field.frame && windowFrame == window.frame else { continue }
+            if field.isHittable {
+                field.click()
+            } else {
+                let origin = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+                origin.withOffset(CGVector(dx: center.x-windowFrame.minX, dy: center.y-windowFrame.minY)).click()
+            }
+            mark("keyPassphraseNativeClicked")
             return
         }
-        print("HP_XCUI_PASSFIELD=native:\(min(native.count,9)),groups:\(min(groups.count,9))")
-        fflush(stdout)
-        XCTFail("passphrase input region unavailable")
+        XCTFail("native passphrase field not visibly clickable")
     }
 
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement, phase: String = "control") {
@@ -154,7 +170,7 @@ final class SecureCredentialUITests: XCTestCase {
         let center = CGPoint(x: frame.midX, y: frame.midY)
         usleep(100_000)
         XCTAssertTrue(!frame.isEmpty && frame == button.frame && windowFrame == window.frame && frame.intersection(windowFrame).contains(center), "requested control center not stable and visible")
-        let overlapping = app.secureTextFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.contains(center) }.count
+        let overlapping = app.secureTextFields.allElementsBoundByIndex.filter { $0.exists && $0.isHittable && $0.frame.contains(center) }.count
         XCTAssertEqual(overlapping, 0, "secure credential overlay obstructs requested control")
         let origin = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
         origin.withOffset(CGVector(dx: center.x - windowFrame.minX, dy: center.y - windowFrame.minY)).click()
@@ -217,7 +233,7 @@ final class SecureCredentialUITests: XCTestCase {
         let deadline = Date().addingTimeInterval(8)
         repeat {
             for delta in [CGFloat(0), -200, -200, -200, 200, 200, 200] {
-                if delta != 0 { scrollForm(app, delta) }
+                if delta != 0 { scrollKeyGutter(app, delta) }
                 if try keyInputBits(app)?[index] == true { return true }
             }
         } while Date() < deadline
@@ -613,6 +629,19 @@ final class SecureCredentialUITests: XCTestCase {
         mark("keyConfirmAttempt")
         try confirmFingerprint(app, phase: "key")
         mark("keyConfirmed")
+        let keyWindow = app.windows.firstMatch
+        if keyWindow.frame.width < 700 || keyWindow.frame.height < 700 {
+            app.typeKey("f", modifierFlags: [.control, .command])
+            let deadline = Date().addingTimeInterval(10)
+            var stable = false
+            repeat {
+                let frame = keyWindow.frame
+                usleep(200_000)
+                stable = frame == keyWindow.frame && frame.width >= 700 && frame.height >= 700
+            } while !stable && Date() < deadline
+            XCTAssertTrue(stable, "key fullscreen window not stable")
+            mark("keyFullscreenRequested")
+        }
         mark("keyCredentialAttempt")
         tap(app, element(app, "使用私钥认证"))
         mark("keyMethodSelected")
@@ -625,7 +654,10 @@ final class SecureCredentialUITests: XCTestCase {
         mark("pemPasteButtonTapped")
         XCTAssertTrue(try inputMatches(app, index: 0), "pasted key controller mismatch")
         mark("pemControllerConfirmed")
-        focusKeyPassphrase(app)
+        let nativeCount = app.secureTextFields.matching(NSPredicate(format: "identifier == %@", "direct-passphrase")).count
+        print("HP_XCUI_PASSFIELD=native:\(min(nativeCount,9)),groups:\(min(app.descendants(matching: .any).matching(identifier: "私钥口令（可选）").count,9))")
+        fflush(stdout)
+        clickNativeKeyPassphrase(app)
         app.typeText("q")
         let sentinelConfirmed = try inputMatches(app, index: 2)
         XCTAssertTrue(sentinelConfirmed, "passphrase focus sentinel mismatch")
@@ -663,7 +695,7 @@ final class SecureCredentialUITests: XCTestCase {
         launchSSH(app, stage: "returnHomepage")
         let field = secureField(app, "direct-secret")
         mark("returnSecureSelected")
-        tap(app, field, phase: "returnSecure");app.typeText(password)
+        field.click();app.typeText(password)
         mark("returnCredentialEntered")
         XCTAssertFalse((field.value as? String ?? "").isEmpty, "return input state unavailable")
         try assertNoSecrets(app, [password, phrase])

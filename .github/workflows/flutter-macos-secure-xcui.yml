@@ -167,7 +167,7 @@ jobs:
           allowed={'fixtureReadable','appLaunched','homepage','maskingHomepage','passwordHomepage','keyHomepage','returnHomepage','passwordFreshVerified','passwordAddressTyped','passwordPortCleared','passwordPortTyped','passwordUsernameTyped','keyFreshVerified','keyAddressTyped','keyPortCleared','keyPortTyped','keyUsernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted',
                    'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','passwordConfirmAttempt','passwordConfirmed','passwordCredentialAttempt','passwordCredentialEntered','passwordConnectAttempt','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','keyConfirmAttempt','keyConfirmed','keyCredentialAttempt','pemPasteButtonTapped','keyCredentialEntered','keyConnectAttempt','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                    'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
-          optional={'keyMethodSelected','keyPassphraseNativeRole','keyPassphraseVisibleFallback','keyPassphraseEntered','keyPassphraseFocusConfirmed','keyPassphraseConfirmed','pemControllerConfirmed','pemPasteButtonAttempt','keyConnectHandlerEntered','keyPemParsed','passwordValuePresent','passwordValueUnavailable','passphraseValuePresent','passphraseValueUnavailable','returnButtonUsed','returnEscapeUsed','returnEntryTapped','returnSecureSelected','returnCredentialEntered','returnBackTapped','returnReopenEntryTapped','returnReopenedSecureSelected'}
+          optional={'keyFullscreenRequested','keyMethodSelected','keyPassphraseNativeClicked','keyPassphraseEntered','keyPassphraseFocusConfirmed','keyPassphraseConfirmed','pemControllerConfirmed','pemPasteButtonAttempt','keyConnectHandlerEntered','keyPemParsed','passwordValuePresent','passwordValueUnavailable','passphraseValuePresent','passphraseValueUnavailable','returnButtonUsed','returnEscapeUsed','returnEntryTapped','returnSecureSelected','returnCredentialEntered','returnBackTapped','returnReopenEntryTapped','returnReopenedSecureSelected'}
           progress={key:True for key in allowed | optional if 'hp_xcui_stage='+key.lower() in log}
           try:
               summary=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private-summary.json')))
@@ -201,7 +201,7 @@ jobs:
           fixed += ['secure credential overlay obstructs fingerprint confirmation']
           fixed += ['normal homepage not confirmed','return input state unavailable']
           fixed += ['private key editor missing','encrypted key session did not authenticate','passphrase not cleared after disconnect']
-          fixed += ['form scroll target unavailable','requested control is not hittable','requested control is disabled', 'form action is not unique','form action center not visible and stable','secure credential overlay obstructs form action','requested control unavailable','pasted key and passphrase not confirmed','passphrase input state empty','passphrase focus sentinel mismatch','passphrase controller mismatch','pasted key controller mismatch','passphrase input region unavailable']
+          fixed += ['form scroll target unavailable','requested control is not hittable','requested control is disabled', 'form action is not unique','form action center not visible and stable','secure credential overlay obstructs form action','requested control unavailable','pasted key and passphrase not confirmed','passphrase input state empty','passphrase focus sentinel mismatch','passphrase controller mismatch','pasted key controller mismatch','passphrase input region unavailable','native passphrase field not visibly clickable']
           failure_lines=sorted({int(n) for n in re.findall(r'runnertests\.swift:(\d{1,5}):(?:\d+:)?\s*error:',diagnostic_text) if 1 <= int(n) <= 10000})[:12]
           fixed_failures=[message for message in fixed if message in diagnostic_text]
           categories=[]
@@ -225,6 +225,10 @@ jobs:
           form_metrics=[{'phase':phase,'count':int(count),**dict(zip(('enabled','hittable','insideViewport','scrollView'),(v=='1' for v in bits)))} for phase,count,*bits in form_metrics[:4]]
           pass_fields=re.findall(r'hp_xcui_passfield=native:([0-9]),groups:([0-9])',log)
           pass_fields=[{'nativeRoleCount':int(n),'labelGroupCount':int(g)} for n,g in pass_fields[:2]]
+          key_geometry=re.findall(r'hp_xcui_keygeom=windoww:(-?\d{1,5}),windowh:(-?\d{1,5}),vieww:(-?\d{1,5}),viewh:(-?\d{1,5}),labels:([0-9]),beforey:(-?\d{1,5}),aftery:(-?\d{1,5}),labelw:(-?\d{1,5}),labelh:(-?\d{1,5})',log)
+          key_geometry=[dict(zip(('windowWidth','windowHeight','viewportWidth','viewportHeight','labelCount','beforeY','afterY','labelWidth','labelHeight'),map(int,row))) for row in key_geometry[:24]]
+          native_field=re.findall(r'hp_xcui_nativefield=count:([0-9]),hittable:([01]),visible:([01]),x:(-?\d{1,5}),y:(-?\d{1,5}),w:(-?\d{1,5}),h:(-?\d{1,5})',log)
+          native_field=[{'count':int(count),'hittable':hit=='1','visible':visible=='1',**dict(zip(('x','y','width','height'),map(int,coords)))} for count,hit,visible,*coords in native_field[:8]]
           confirmations=re.findall(r'hp_xcui_confirm=phase:(password|key),windowclick:([01]),secureoverlap:(\d{1,5})',log)
           confirmations=[{'phase':phase,'windowClick':window=='1','hittableSecureOverlapCount':int(overlap)} for phase,window,overlap in confirmations[:2]]
           fingerprints=re.findall(r'hp_xcui_fingerprint=phase:(password|encryptedkey),nodes:(\d{1,5}),prefix:(\d{1,5}),exact:(\d{1,5})',log)
@@ -269,7 +273,7 @@ jobs:
                   'failureMethod':failure_method,'failedMethods':failed_methods,'buildDiagnostics':diagnostics,'failureSourceLines':failure_lines,'fixedFailures':fixed_failures,
                   'failureCategories':categories,'xcresultDetailsAvailable':details_available,'homeMetrics':home_metrics,
                   'fallbackHomeMetrics':metrics[1] if len(metrics)>1 else {},
-                  'ordinaryMetrics':ordinary,'backMetrics':back_metrics,'secureMetrics':secure_metrics,'hitMetrics':hit_metrics,'keyInputMetrics':key_input,'formMetrics':form_metrics,'passphraseFieldMetrics':pass_fields,'confirmationMetrics':confirmations,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
+                  'ordinaryMetrics':ordinary,'backMetrics':back_metrics,'secureMetrics':secure_metrics,'hitMetrics':hit_metrics,'keyInputMetrics':key_input,'formMetrics':form_metrics,'passphraseFieldMetrics':pass_fields,'keyGeometry':key_geometry,'nativePassphraseField':native_field,'confirmationMetrics':confirmations,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
                   'inputMetrics':inputs,'inputDetails':input_details,'targetMetrics':target_metrics,
                   'progress':progress,'rawLogsUploaded':False}
           if not ok:

@@ -214,8 +214,12 @@ class ScaffoldTests(unittest.TestCase):
         self.assertLess(key.index('clickFormButton(app, label: "粘贴私钥")'),key.index('app.typeText("q")'))
         self.assertLess(key.index('XCTAssertTrue(sentinelConfirmed'),key.index('app.typeText(phrase)'))
         self.assertIn('try inputMatches(app, index: 0)',key)
-        self.assertIn('keyPassphraseVisibleFallback',swift)
-        self.assertIn('keyPassphraseNativeRole',swift)
+        self.assertIn('clickNativeKeyPassphrase(app)',key)
+        self.assertIn('keyPassphraseNativeClicked',swift)
+        return_case=swift[swift.index('func testReturnAndReopen'): ]
+        self.assertIn('field.click();app.typeText(password)',return_case)
+        self.assertNotIn('tap(app, field, phase: "returnSecure")',return_case)
+        self.assertIn('gutter.scroll(byDeltaX: 0, deltaY: amount)',swift)
         self.assertIn('try inputMatches(app, index: 1)',key)
         self.assertNotIn('maskedValue.isEmpty',key)
 
@@ -231,6 +235,7 @@ class ScaffoldTests(unittest.TestCase):
         click=swift[swift.index('private func clickWindowCenter'):swift.index('private func clickFormButton')]
         self.assertIn('XCTAssertEqual(matches.count, 1',click)
         self.assertIn('frame.intersection(windowFrame).contains(center)',click)
+        self.assertIn('$0.exists && $0.isHittable && $0.frame.contains(center)',click)
         self.assertIn('XCTAssertEqual(overlapping, 0',click)
         self.assertEqual(click.count('.click()'),1)
         form=swift[swift.index('private func clickFormButton'):swift.index('private func keyInputBits')]

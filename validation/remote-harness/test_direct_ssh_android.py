@@ -46,6 +46,25 @@ class GuardTests(unittest.TestCase):
             with self.subTest(change=tuple(change)), self.assertRaises(runner.Failure):
                 runner.safe_result(json.dumps({**result, **change}))
 
+    def test_package_query_retries_only_known_transient_and_fails_closed(self):
+        runner.PACKAGE_QUERY_RETRIES.clear()
+        offline=CompletedProcess([],1,b'',b'error: device offline')
+        present=CompletedProcess([],0,('package:'+runner.PACKAGE+'\n').encode(),b'')
+        with patch.object(runner,'adb',side_effect=[offline,present]) as adb, patch.object(runner.time,'sleep'):
+            self.assertTrue(runner.package_present()); self.assertEqual(adb.call_count,2)
+            self.assertTrue(all(call.kwargs == {'check':False} for call in adb.call_args_list))
+        self.assertEqual(runner.PACKAGE_QUERY_RETRIES[-1]['attempts'],2)
+        self.assertTrue(runner.PACKAGE_QUERY_RETRIES[-1]['recovered'])
+        for failure in (CompletedProcess([],255,b'partial',b''), CompletedProcess([],1,b'',b'unknown'), CompletedProcess([],0,b'broken output',b'')):
+            with self.subTest(code=failure.returncode), patch.object(runner,'adb',return_value=failure) as adb, patch.object(runner.time,'sleep'):
+                with self.assertRaises(runner.Failure): runner.package_present()
+                self.assertEqual(adb.call_count,1)
+        with patch.object(runner,'adb',return_value=offline) as adb, patch.object(runner.time,'sleep'):
+            with self.assertRaises(runner.Failure): runner.package_present()
+            self.assertEqual(adb.call_count,3)
+            self.assertFalse(runner.PACKAGE_QUERY_RETRIES[-1]['recovered'])
+        runner.PACKAGE_QUERY_RETRIES.clear()
+
     def test_pending_diagnostics_and_non_json_never_become_device_success(self):
         relative = 'cache/herdr-direct-ssh-123/result.json'
         for status, stdout, stderr in [

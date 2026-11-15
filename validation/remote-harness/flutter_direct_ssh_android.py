@@ -68,8 +68,32 @@ def text(*args):
     return adb(*args).stdout.decode().strip()
 
 
+# Fixed, read-only package query only; never replay installation, input or cleanup.
+PACKAGE_QUERY_RETRIES = []
 def package_present():
-    return text('shell', 'pm', 'list', 'packages', PACKAGE) == 'package:' + PACKAGE
+    from flutter_android_gui import ADB_TRANSIENT_STDERR, ADB_TRANSIENT_RETRY_DELAYS
+    first = None
+    for attempt in range(3):
+        result = adb('shell', 'pm', 'list', 'packages', PACKAGE, check=False)
+        if result.returncode == 0:
+            try:
+                lines = result.stdout.decode('utf-8', errors='strict').splitlines()
+            except UnicodeError:
+                raise Failure('direct_android_package_query_invalid') from None
+            if result.stderr or any(not re.fullmatch(r'package:[A-Za-z0-9_.]+', line) for line in lines):
+                raise Failure('direct_android_package_query_invalid')
+            if first is not None:
+                PACKAGE_QUERY_RETRIES.append({'first':first, 'attempts':attempt+1, 'recovered':True})
+            return 'package:' + PACKAGE in lines
+        reason = result.stderr.decode('utf-8', errors='replace').strip()
+        known = reason in ADB_TRANSIENT_STDERR and not result.stdout
+        if first is None:
+            first = {'exitCode':int(result.returncode), 'knownTransient':known,
+                     'stdoutBytes':len(result.stdout), 'stderrBytes':len(result.stderr)}
+        if not known or attempt == 2:
+            PACKAGE_QUERY_RETRIES.append({'first':first, 'attempts':attempt+1, 'recovered':False})
+            raise Failure('direct_android_adb_failed')
+        time.sleep(ADB_TRANSIENT_RETRY_DELAYS[attempt])
 
 
 def forward_set():
@@ -283,6 +307,8 @@ def run(args, env):
             report['cleanupCode'] = 'direct_android_cleanup_incomplete'
         if private is not None:
             shutil.rmtree(private)
+        if PACKAGE_QUERY_RETRIES:
+            report['packageQueryRetries'] = PACKAGE_QUERY_RETRIES[-8:]
         (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
     if report['status'] != 'passed':
         raise Failure(primary or 'direct_android_cleanup_incomplete')

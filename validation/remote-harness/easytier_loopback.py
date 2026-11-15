@@ -34,16 +34,19 @@ spec.loader.exec_module(controlled)
 CASES = ('positive', 'wrong-pin', 'no-route', 'peer-gone')
 OVERLAY_HOST = '10.126.126.2'
 BOOLS = ('passed', 'nodeStarted', 'candidateAbi', 'sshBannerViaOverlay',
-         'peerStoppedBeforeAttempt', 'frameMarkerPresent', 'nativeStopCompleted')
+         'peerStoppedBeforeAttempt', 'attemptCheckpointReached', 'frameMarkerPresent', 'nativeStopCompleted')
 COUNTS = {'bannerConnections': 64, 'frameColumns': 65535, 'frameRows': 65535,
           'reservedNodesAfterCleanup': 8, 'reservedStreamsAfterCleanup': 32}
 ERRORS = {None, 'overlay_provider_unavailable', 'overlay_stale_revision',
           'overlay_wrong_owner', 'overlay_unknown_write', 'overlay_transport_failed',
-          'host_key_mismatch', 'cancelled'}
+          'host_key_mismatch', 'cancelled', 'handshake_failed', 'timeout', 'invalid_config',
+          'invalid_private_key', 'authentication_failed', 'socket_unavailable', 'snapshot_failed',
+          'snapshot_rejected', 'observe_failed', 'invalid_full_frame', 'observe_ended'}
 CLIENT_ERRORS = {None, 'real_candidate_feature_required', 'test_executor_failed',
     'invalid_native_config', 'native_node_start_failed', 'product_dialer_create_failed',
     'overlay_banner_missing', 'banner_stream_cleanup_failed', 'peer_stop_request_failed',
-    'peer_stop_not_confirmed', 'real_herdr_frame_missing', 'unexpected_transport_failure',
+    'peer_stop_not_confirmed', 'client_checkpoint_failed', 'client_permission_missing',
+    'real_herdr_frame_missing', 'unexpected_transport_failure',
     'negative_case_did_not_reject', 'ssh_stream_cleanup_failed', 'native_cleanup_failed'}
 
 
@@ -101,28 +104,30 @@ def safe_client_result(raw, case):
     return result
 
 
-def validate_case(result, connections, requests, accepted):
+def validate_case(result, connections, requests, accepted, target_connections):
     case, audit = result['case'], result['audit']
     if not (result['passed'] and result['nodeStarted'] and result['candidateAbi']
             and result['sshBannerViaOverlay'] and result['bannerConnections'] >= 1
+            and result['attemptCheckpointReached'] and connections >= 1
             and result['nativeStopCompleted'] and result['reservedNodesAfterCleanup'] == 0
             and result['reservedStreamsAfterCleanup'] == 0):
         raise Failure('client_case_or_cleanup_failed')
     if case == 'positive':
         if not (all(audit.values()) and result['frameMarkerPresent']
                 and result['frameRows'] > 0 and result['frameColumns'] > 0
-                and requests >= 1 and accepted == 1):
+                and requests >= 1 and accepted == 1 and target_connections == 1):
             raise Failure('real_overlay_frame_not_proven')
     elif case == 'wrong-pin':
         if not (audit['hostKeyChecked'] and not audit['hostKeyMatched']
                 and not any(audit[field] for field in ('authStarted', 'snapshotReceived', 'fullFrameReceived'))
                 and not result['frameMarkerPresent'] and requests == accepted == 0
+                and target_connections == 1
                 and result['transportErrorCode'] == 'host_key_mismatch'):
             raise Failure('wrong_pin_zero_auth_not_proven')
     else:
         if (any(audit.values()) or requests or accepted
-                or connections != result['bannerConnections']
-                or result['transportErrorCode'] != 'overlay_transport_failed'):
+                or target_connections != 0
+                or result['transportErrorCode'] not in ('overlay_transport_failed', 'handshake_failed', 'timeout')):
             raise Failure('no_system_tcp_fallback_not_proven')
         if case == 'peer-gone' and not result['peerStoppedBeforeAttempt']:
             raise Failure('peer_disappearance_not_proven')
@@ -371,16 +376,26 @@ LogLevel DEBUG3
                 'overlayPort': virtual_port,
                 'peerControl': str(root), 'remote': request}); case_input.chmod(0o600)
             case_output.unlink(missing_ok=True)
+            (root / 'client-ready').unlink(missing_ok=True)
+            (root / 'continue-client').unlink(missing_ok=True)
             time.sleep(0.1); before = log_counts(root / 'sshd.log')
             process = spawn([bundle / 'probe', case_input, case_output], 'client.log')
-            process.wait(timeout=65)
+            wait_file(root / 'client-ready', process, seconds=45)
+            if (root / 'client-ready').read_text() != case:
+                raise Failure('client_checkpoint_case_mismatch')
+            checkpoint = log_counts(root / 'sshd.log')
+            (root / 'continue-client').write_text(case)
+            process.wait(timeout=40)
             if not case_output.is_file(): raise Failure('client_report_missing')
             result = safe_client_result(json.loads(case_output.read_text()), case)
             time.sleep(0.1); after = log_counts(root / 'sshd.log')
             counts = [end - start for start, end in zip(before, after)]
+            target_counts = [end - start for start, end in zip(checkpoint, after)]
             result.update(sshConnections=counts[0], serverAuthRequests=counts[1], serverAuthAccepted=counts[2])
+            result.update(targetAttemptSshConnections=target_counts[0],
+                          targetAttemptAuthRequests=target_counts[1], targetAttemptAuthAccepted=target_counts[2])
             report['cases'].append(result); write_json(output / 'manifest.json', report)
-            validate_case(result, *counts)
+            validate_case(result, *counts, target_counts[0])
             if process.returncode: raise Failure('client_exit_nonzero')
         peer.wait(timeout=8)
         report['peerStoppedCleanly'] = peer.returncode == 0 and (root / 'peer-stopped').is_file()

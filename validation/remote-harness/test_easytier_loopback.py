@@ -16,6 +16,7 @@ def result(case):
                                    if case == 'wrong-pin' else 'overlay_transport_failed'),
             'nodeStarted': True, 'candidateAbi': True, 'sshBannerViaOverlay': True,
             'bannerConnections': 1, 'peerStoppedBeforeAttempt': case == 'peer-gone',
+            'attemptCheckpointReached': True,
             'frameMarkerPresent': positive, 'frameColumns': 80 if positive else 0,
             'frameRows': 24 if positive else 0, 'nativeStopCompleted': True,
             'reservedNodesAfterCleanup': 0, 'reservedStreamsAfterCleanup': 0,
@@ -57,7 +58,8 @@ class EvidenceTests(unittest.TestCase):
         for case in probe.CASES:
             safe = probe.safe_client_result(result(case), case)
             probe.validate_case(safe, 2 if case in ('positive', 'wrong-pin') else 1,
-                                2 if case == 'positive' else 0, 1 if case == 'positive' else 0)
+                                2 if case == 'positive' else 0, 1 if case == 'positive' else 0,
+                                1 if case in ('positive', 'wrong-pin') else 0)
 
     def test_unknown_payloads_and_credentials_are_never_copied(self):
         raw = result('positive')
@@ -79,22 +81,34 @@ class EvidenceTests(unittest.TestCase):
 
     def test_wrong_pin_requires_server_side_zero_authentication(self):
         with self.assertRaises(probe.Failure):
-            probe.validate_case(result('wrong-pin'), 2, 1, 0)
+            probe.validate_case(result('wrong-pin'), 2, 1, 0, 1)
         raw = result('wrong-pin'); raw['audit']['authStarted'] = True
-        with self.assertRaises(probe.Failure): probe.validate_case(raw, 2, 0, 0)
+        with self.assertRaises(probe.Failure): probe.validate_case(raw, 2, 0, 0, 1)
 
     def test_real_frame_and_complete_native_cleanup_are_mandatory(self):
         for field, value in [('frameMarkerPresent', False), ('nativeStopCompleted', False),
+                             ('attemptCheckpointReached', False),
                              ('reservedNodesAfterCleanup', 1), ('reservedStreamsAfterCleanup', 1)]:
             raw = result('positive'); raw[field] = value
             with self.subTest(field=field), self.assertRaises(probe.Failure):
-                probe.validate_case(raw, 2, 2, 1)
+                probe.validate_case(raw, 2, 2, 1, 1)
 
     def test_plain_tcp_attempt_or_unconfirmed_peer_stop_fails(self):
         for case in ('no-route', 'peer-gone'):
-            with self.assertRaises(probe.Failure): probe.validate_case(result(case), 2, 0, 0)
+            with self.assertRaises(probe.Failure): probe.validate_case(result(case), 2, 0, 0, 1)
         raw = result('peer-gone'); raw['peerStoppedBeforeAttempt'] = False
-        with self.assertRaises(probe.Failure): probe.validate_case(raw, 1, 0, 0)
+        with self.assertRaises(probe.Failure): probe.validate_case(raw, 1, 0, 0, 0)
+
+    def test_deferred_stream_failure_still_requires_zero_actual_target_connections(self):
+        for case in ('no-route', 'peer-gone'):
+            for code in ('handshake_failed', 'timeout'):
+                raw = result(case); raw['transportErrorCode'] = code
+                # A native open can succeed before a later read fails. It is
+                # deliberately not subtracted from the actual sshd baseline.
+                raw['bannerConnections'] = 2
+                safe = probe.safe_client_result(raw, case)
+                probe.validate_case(safe, 1, 0, 0, 0)
+                with self.assertRaises(probe.Failure): probe.validate_case(safe, 2, 0, 0, 1)
 
     def test_only_loopback_up_is_accepted(self):
         loopback = {'ifname': 'lo', 'flags': ['LOOPBACK', 'UP', 'LOWER_UP']}

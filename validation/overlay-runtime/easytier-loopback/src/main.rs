@@ -25,6 +25,16 @@ enum Case {
     NoRoute,
     PeerGone,
 }
+impl Case {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Positive => "positive",
+            Self::WrongPin => "wrong-pin",
+            Self::NoRoute => "no-route",
+            Self::PeerGone => "peer-gone",
+        }
+    }
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -51,6 +61,7 @@ struct Report {
     ssh_banner_via_overlay: bool,
     banner_connections: usize,
     peer_stopped_before_attempt: bool,
+    attempt_checkpoint_reached: bool,
     audit: AuditSnapshot,
     frame_marker_present: bool,
     frame_columns: u16,
@@ -124,6 +135,35 @@ async fn run_case(
     if !drained(runtime).await {
         return Err("banner_stream_cleanup_failed");
     }
+    // The independent runner samples sshd after readiness, then permits exactly
+    // this target attempt. Native successful opens are not server accept counts.
+    std::fs::write(
+        input.peer_control.join("client-ready.tmp"),
+        input.case.label(),
+    )
+    .map_err(|_| "client_checkpoint_failed")?;
+    std::fs::rename(
+        input.peer_control.join("client-ready.tmp"),
+        input.peer_control.join("client-ready"),
+    )
+    .map_err(|_| "client_checkpoint_failed")?;
+    report.attempt_checkpoint_reached = true;
+    let until = Instant::now() + Duration::from_secs(8);
+    while std::fs::read_to_string(input.peer_control.join("continue-client"))
+        .ok()
+        .as_deref()
+        != Some(input.case.label())
+        && Instant::now() < until
+    {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    if std::fs::read_to_string(input.peer_control.join("continue-client"))
+        .ok()
+        .as_deref()
+        != Some(input.case.label())
+    {
+        return Err("client_permission_missing");
+    }
     if matches!(input.case, Case::PeerGone) {
         std::fs::write(input.peer_control.join("stop-peer"), b"stop")
             .map_err(|_| "peer_stop_request_failed")?;
@@ -164,8 +204,10 @@ async fn run_case(
                 && !report.audit.host_key_matched
                 && !report.audit.auth_started => {}
         (Case::NoRoute | Case::PeerGone, Err(code))
-            if code.starts_with("overlay_")
-                && !report.audit.host_key_checked
+            if matches!(
+                code,
+                "overlay_transport_failed" | "handshake_failed" | "timeout"
+            ) && !report.audit.host_key_checked
                 && !report.audit.auth_started => {}
         (_, Err(_)) => return Err("unexpected_transport_failure"),
         _ => return Err("negative_case_did_not_reject"),
@@ -258,6 +300,7 @@ fn main() {
         ssh_banner_via_overlay: false,
         banner_connections: 0,
         peer_stopped_before_attempt: false,
+        attempt_checkpoint_reached: false,
         audit: Audit::default().snapshot(),
         frame_marker_present: false,
         frame_columns: 0,

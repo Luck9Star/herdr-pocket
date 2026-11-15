@@ -20,10 +20,21 @@ class ScaffoldTests(unittest.TestCase):
     def scaffold(self, root):
         (root / 'macos/Runner.xcodeproj/xcshareddata/xcschemes').mkdir(parents=True)
         (root / 'macos/RunnerTests').mkdir(parents=True)
+        (root / 'macos/Runner').mkdir(parents=True)
         (root / '.herdr-generated-probe.json').write_text(json.dumps({'kind':'herdr-flutter-validation'}))
         (root / 'macos/Runner.xcodeproj/project.pbxproj').write_text(PROJECT)
         (root / 'macos/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme').write_text('<Scheme><TestAction><Testables><Testable parallelizable = "YES"/></Testables></TestAction></Scheme>')
         (root / 'macos/RunnerTests/RunnerTests.swift').write_text('unit test')
+        (root / 'macos/Runner/MainFlutterWindow.swift').write_text('class Window {\n    super.awakeFromNib()\n}\n')
+
+    def test_embedder_notification_hook_is_disposable_and_opt_in(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);self.scaffold(root);runner.install_test_semantics_hook(root)
+            text=(root/'macos/Runner/MainFlutterWindow.swift').read_text()
+            self.assertIn('CommandLine.arguments.contains("--herdr-xcui-embedder-semantics")',text)
+            self.assertIn('NSApplicationDidChangeAccessibilityEnhancedUserInterfaceNotification',text)
+            self.assertIn('"AXEnhancedUserInterface": true',text)
+            with self.assertRaises(ValueError):runner.install_test_semantics_hook(root)
 
     def test_only_expected_disposable_scaffold_is_converted(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -77,6 +88,10 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotEqual(execute().returncode,0);self.assertFalse(json.loads(output.read_text())['testExecuted'])
             log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed')
             self.assertNotEqual(execute().returncode,0);self.assertTrue(json.loads(output.read_text())['testExecuted']);self.assertFalse(json.loads(output.read_text())['testPassed'])
+            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed\nHP_XCUI_METRIC=windows:1,nodes:10,buttons:2,exact:1,label:1\nprivate fixture material')
+            self.assertNotEqual(execute().returncode,0)
+            report=json.loads(output.read_text());self.assertEqual(report['homeMetrics']['nodes'],10)
+            self.assertNotIn('private fixture material',output.read_text())
             del progress['returnAndReopenCleared'];log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure passed\n'+''.join('HP_XCUI_STAGE='+k+'\n' for k in progress))
             self.assertNotEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'failed')
             log.write_text(good_log)

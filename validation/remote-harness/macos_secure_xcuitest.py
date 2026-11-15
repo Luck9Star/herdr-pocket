@@ -8,6 +8,27 @@ import re
 HERE = Path(__file__).resolve().parent
 
 
+def install_test_semantics_hook(app):
+    app = Path(app).resolve()
+    marker = app / '.herdr-generated-probe.json'
+    if not marker.is_file() or json.loads(marker.read_text()).get('kind') != 'herdr-flutter-validation':
+        raise ValueError('macos_xcui_scaffold_invalid')
+    window = app / 'macos/Runner/MainFlutterWindow.swift'
+    text = window.read_text()
+    point = '    super.awakeFromNib()\n'
+    if text.count(point) != 1 or '--herdr-xcui-embedder-semantics' in text:
+        raise ValueError('macos_xcui_window_unexpected')
+    hook = '''    if CommandLine.arguments.contains("--herdr-xcui-embedder-semantics") {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        NotificationCenter.default.post(
+          name: NSNotification.Name("NSApplicationDidChangeAccessibilityEnhancedUserInterfaceNotification"),
+          object: nil, userInfo: ["AXEnhancedUserInterface": true])
+      }
+    }
+'''
+    window.write_text(text.replace(point, point + hook, 1))
+
+
 def prepare(app, fixture=None):
     app = Path(app).resolve()
     marker = app / '.herdr-generated-probe.json'
@@ -52,5 +73,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--app', type=Path, required=True)
     parser.add_argument('--fixture', type=Path)
+    parser.add_argument('--install-hook', action='store_true')
     args = parser.parse_args()
-    prepare(args.app, args.fixture)
+    if args.install_hook:
+        install_test_semantics_hook(args.app)
+    else:
+        prepare(args.app, args.fixture)

@@ -31,6 +31,16 @@ final class SecureCredentialUITests: XCTestCase {
         return field
     }
 
+    private func homeEntry(_ app: XCUIApplication) -> XCUIElement {
+        let button = app.buttons["普通 SSH"]
+        if button.waitForExistence(timeout: 15) && button.isHittable { return button }
+        let matches = app.descendants(matching: .any).matching(identifier: "普通 SSH")
+        let labels = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "普通 SSH"))
+        print("HP_XCUI_METRIC=windows:\(min(app.windows.count,10000)),nodes:\(min(app.descendants(matching: .any).count,10000)),buttons:\(min(app.buttons.count,10000)),exact:\(min(matches.count,10000)),label:\(min(labels.count,10000))")
+        fflush(stdout)
+        return matches.allElementsBoundByIndex.first(where: { $0.isHittable }) ?? button
+    }
+
     func testPasswordAndPrivateKeyPassphraseAreSecure() throws {
         continueAfterFailure = false
         guard let data = Data(base64Encoded: "__HP_FIXTURE_BASE64__"),
@@ -49,8 +59,16 @@ final class SecureCredentialUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "candidate app did not launch")
         mark("appLaunched")
-        let entry = app.buttons["普通 SSH"]
-        XCTAssertTrue(entry.waitForExistence(timeout: 30), "normal homepage SSH entry missing")
+        var entry = homeEntry(app)
+        if !entry.exists || !entry.isHittable {
+            app.terminate()
+            app.launchArguments = ["--herdr-xcui-embedder-semantics"]
+            mark("embedderFallbackRequested")
+            app.launch()
+            XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "candidate app did not launch")
+            entry = homeEntry(app)
+        }
+        XCTAssertTrue(entry.exists && entry.isHittable, "normal homepage SSH entry missing")
         mark("homepage")
         entry.click()
         let address = element(app, "地址").descendants(matching: .textField).firstMatch
@@ -122,9 +140,10 @@ final class SecureCredentialUITests: XCTestCase {
         let back = app.buttons["Back"].exists ? app.buttons["Back"] : app.buttons["返回"]
         XCTAssertTrue(back.exists && back.isHittable, "back action missing")
         back.click()
-        XCTAssertTrue(entry.waitForExistence(timeout: 10), "normal homepage did not return")
+        let returnedEntry = homeEntry(app)
+        XCTAssertTrue(returnedEntry.exists && returnedEntry.isHittable, "normal homepage did not return")
         assertNoSecrets(app, [password, phrase])
-        entry.click()
+        returnedEntry.click()
         let reopened = secureField(app, "direct-secret")
         XCTAssertTrue((reopened.value as? String ?? "").isEmpty, "prior credential retained")
         assertNoSecrets(app, [password, phrase])

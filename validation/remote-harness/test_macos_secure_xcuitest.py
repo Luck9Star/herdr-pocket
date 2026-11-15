@@ -74,7 +74,7 @@ class ScaffoldTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);fixture=root/'macos-secure-fixture';fixture.mkdir()
             allowed=['fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted','passwordValuePresent','passphraseValuePresent',
-                     'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
+                     'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                      'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
             good_peer={k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}
             (fixture/'facts.json').write_text(json.dumps({'password':good_peer,'encryptedKey':good_peer}))
@@ -98,6 +98,10 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertEqual(report['homeMetrics']['nodes'],10)
             self.assertNotIn('private fixture material',output.read_text())
+            log.write_text('Test Case testPasswordAndPrivateKeyPassphraseAreSecure failed\nHP_XCUI_FINGERPRINT=phase:password,nodes:12,prefix:1,exact:0\nprivate fingerprint material')
+            self.assertNotEqual(execute().returncode,0)
+            report=json.loads(output.read_text());self.assertEqual(report['fingerprintMetrics'][0]['expectedExactCount'],0)
+            self.assertNotIn('private fingerprint material',output.read_text())
             (root/'macos-secure-private-details.json').write_text(json.dumps({'message':'test timed out','private':'synthetic credential'}))
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertIn('timeout',report['failureCategories']);self.assertTrue(report['xcresultDetailsAvailable'])

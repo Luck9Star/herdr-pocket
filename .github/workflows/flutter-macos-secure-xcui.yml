@@ -99,7 +99,8 @@ jobs:
               facts=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-fixture','facts.json')))
               valid=lambda value: all(value.get(k) is True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed'))
               peer=valid(facts['password']); key_peer=valid(facts['encryptedKey'])
-          except (OSError,ValueError,KeyError,TypeError,AttributeError): peer=key_peer=False
+              peer_connections={name:min(facts[name]['connections'],100) for name in ('password','encryptedKey') if type(facts[name].get('connections')) is int and facts[name]['connections']>=0}
+          except (OSError,ValueError,KeyError,TypeError,AttributeError): peer=key_peer=False;peer_connections={}
           try:
               log=open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private.log'),errors='replace').read().lower()
           except OSError: log=''
@@ -118,7 +119,7 @@ jobs:
               if message and diagnostic not in diagnostics: diagnostics.append(diagnostic)
               if len(diagnostics)==3: break
           allowed={'fixtureReadable','appLaunched','homepage','addressTyped','portTyped','usernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted',
-                   'fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
+                   'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                    'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared'}
           optional={'passwordValuePresent','passwordValueUnavailable','passphraseValuePresent','passphraseValueUnavailable'}
           progress={key:True for key in allowed | optional if 'hp_xcui_stage='+key.lower() in log}
@@ -161,6 +162,8 @@ jobs:
           ordinary=[{'nodes':int(n),'nonemptyValues':int(v),'sentinelObserved':s=='1'} for n,v,s in ordinary[:2]]
           secure_metrics=re.findall(r'hp_xcui_secure=phase:(password|passphrase),secure:(\d{1,5}),text:(\d{1,5}),other:(\d{1,5}),id:(\d{1,5}),label:(\d{1,5}),securelabel:(\d{1,5})',log)
           secure_metrics=[{'phase':row[0],**dict(zip(('secure','text','other','id','label','secureLabel'),map(int,row[1:])))} for row in secure_metrics[:4]]
+          fingerprints=re.findall(r'hp_xcui_fingerprint=phase:(password|encryptedkey),nodes:(\d{1,5}),prefix:(\d{1,5}),exact:(\d{1,5})',log)
+          fingerprints=[{'phase':phase,'nodes':int(nodes),'sha256PrefixCount':int(prefix),'expectedExactCount':int(exact)} for phase,nodes,prefix,exact in fingerprints[:2]]
           metrics=re.findall(r'hp_xcui_metric=windows:(\d{1,5}),nodes:(\d{1,5}),buttons:(\d{1,5}),exact:(\d{1,5}),label:(\d{1,5})',log)
           metrics=[dict(zip(('windows','nodes','buttons','exact','label'),map(int,row))) for row in metrics[:2]]
           home_metrics=metrics[0] if metrics else {}
@@ -188,7 +191,7 @@ jobs:
                   'failureMethod':failure_method,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,
                   'failureCategories':categories,'xcresultDetailsAvailable':details_available,'homeMetrics':home_metrics,
                   'fallbackHomeMetrics':metrics[1] if len(metrics)>1 else {},
-                  'ordinaryMetrics':ordinary,'secureMetrics':secure_metrics,
+                  'ordinaryMetrics':ordinary,'secureMetrics':secure_metrics,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
                   'progress':progress,'rawLogsUploaded':False}
           if not ok:
               report['errorCode']='xcui_accessibility_permission_missing' if permission else ('secure_field_not_identified' if 'native secure field missing from system tree' in log else ('xcui_test_or_environment_failed' if sys.argv[2]!='0' else ('xcui_test_not_executed' if not test_executed or not completed else ('secure_input_unproven' if not masking_verified else 'loopback_peer_evidence_incomplete'))))

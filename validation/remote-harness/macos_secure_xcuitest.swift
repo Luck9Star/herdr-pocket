@@ -97,6 +97,17 @@ final class SecureCredentialUITests: XCTestCase {
         return seen
     }
 
+    private func verifyFingerprint(_ app: XCUIApplication, expected: String, phase: String) throws -> Bool {
+        let nodes = try snapshotNodes(app)
+        let fields = nodes.flatMap { [$0.label, $0.value as? String ?? ""] }
+        let normalized = fields.map { $0.components(separatedBy: .whitespacesAndNewlines).joined() }
+        let prefixes = normalized.filter { $0.contains("SHA256:") }.count
+        let exact = normalized.filter { $0.contains(expected) }.count
+        print("HP_XCUI_FINGERPRINT=phase:\(phase),nodes:\(min(nodes.count,10000)),prefix:\(min(prefixes,10000)),exact:\(min(exact,10000))")
+        fflush(stdout)
+        return exact > 0
+    }
+
     private func homeEntry(_ app: XCUIApplication) -> XCUIElement {
         let button = app.buttons["普通 SSH"]
         if button.waitForExistence(timeout: 15) && button.isHittable { return button }
@@ -198,11 +209,13 @@ final class SecureCredentialUITests: XCTestCase {
 
         let probe = app.buttons["探测并核对主机密钥"]
         tap(app, probe)
-        let keyText = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", fingerprint)).firstMatch
-        XCTAssertTrue(keyText.waitForExistence(timeout: 20), "independently expected host fingerprint missing")
-        mark("fingerprintVerified")
+        mark("passwordProbeTapped")
         let confirm = app.buttons["已核对并确认"]
-        XCTAssertTrue(confirm.exists && confirm.isHittable, "fingerprint confirmation unavailable")
+        XCTAssertTrue(confirm.waitForExistence(timeout: 20), "fingerprint confirmation unavailable")
+        mark("passwordFingerprintDialog")
+        let fingerprintMatches = try verifyFingerprint(app, expected: fingerprint, phase: "password")
+        XCTAssertTrue(fingerprintMatches, "independently expected host fingerprint missing")
+        mark("fingerprintVerified")
         tap(app, confirm)
         let loginPassword = secureField(app, "direct-secret")
         tap(app, loginPassword);app.typeText(password)
@@ -224,11 +237,13 @@ final class SecureCredentialUITests: XCTestCase {
         tap(app, keyPortField);app.typeKey("a", modifierFlags: .command);app.typeText(String(keyPort))
         let keyProbe = app.buttons["探测并核对主机密钥"]
         tap(app, keyProbe)
-        let keyFingerprintText = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", keyFingerprint)).firstMatch
-        XCTAssertTrue(keyFingerprintText.waitForExistence(timeout: 20), "independently expected host fingerprint missing")
-        mark("encryptedKeyFingerprintVerified")
+        mark("encryptedKeyProbeTapped")
         let keyConfirm = app.buttons["已核对并确认"]
-        XCTAssertTrue(keyConfirm.exists && keyConfirm.isHittable, "fingerprint confirmation unavailable")
+        XCTAssertTrue(keyConfirm.waitForExistence(timeout: 20), "fingerprint confirmation unavailable")
+        mark("encryptedKeyFingerprintDialog")
+        let keyFingerprintMatches = try verifyFingerprint(app, expected: keyFingerprint, phase: "encryptedKey")
+        XCTAssertTrue(keyFingerprintMatches, "independently expected host fingerprint missing")
+        mark("encryptedKeyFingerprintVerified")
         tap(app, keyConfirm)
         tap(app, element(app, "使用私钥认证"))
         let pemGroup = element(app, "私钥 PEM（仅本次使用）")

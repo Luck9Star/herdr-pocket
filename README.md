@@ -1,6 +1,8 @@
 # herdr-pocket
 
-> 面向 herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
+> 面向 SSH / herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
+
+**本分支入口 · 2026-11-15**　首页提供「普通 SSH」和「配对添加」：普通服务器核验指纹后，可用账号密码（仅本次连接在内存使用）或已有私钥打开真实远端 PTY；herdr 路线继续提供配对、会话看板与观察／逐键／草稿。S01–S06 与 S27 已落实本轮界面与可达性检查；Flutter 普通 SSH 已通过 API35 Android 模拟器验收。[设计对照、验收证据与限制](docs/63-design-parity-and-direct-ssh.md)分别记录原生 macOS、Android 模拟器、隔离协议和合成界面截图。CI 调试 APK 仅供验收，与公开 Release 分开；具体包含的功能须按 artifact 对应源码 SHA 核对，不能外推手机真机或五平台运行验收。
 
 **从这里开始**　[阶段交接：已完成、未完成与恢复顺序](https://github.com/Luck9Star/herdr-pocket/blob/85c150b24dca14412cf01075b832c1014547a3aa/docs/56-project-status-and-handoff.md) · [原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [最新下载、验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)
 
@@ -46,7 +48,7 @@ Flutter 与 Tauri 继续并行验证，物理手机的输入正确性、字形�
 
 ## 首版做什么
 
-五端首版都连接**远端 herdr 主机**：手机扫码配对（手动配置兜底）→ 审查连接配置与主机身份 → 主动连接 → 查看 agent 和终端 → 显式输入 → 断线后核实状态。扫码不要求先安装本项目桌面 GUI。桌面本机 herdr 接入后续再做，首版不管理本地进程或 WSL 服务；后台通知、文件 / diff 后置，不承诺后台常连。
+herdr 路线连接**远端 herdr 主机**（普通 SSH 路线见[本轮增量](docs/63-design-parity-and-direct-ssh.md)）：手机扫码配对（手动配置兜底）→ 审查连接配置与主机身份 → 主动连接 → 查看 agent 和终端 → 显式输入 → 断线后核实状态。扫码不要求先安装本项目桌面 GUI。桌面本机 herdr 接入后续再做，首版不管理本地进程或 WSL 服务；后台通知、文件 / diff 后置，不承诺后台常连。
 
 配对采用按需运行并退出的一次性主机辅助命令：主机用户明确确认后添加手机专属 SSH 公钥，并提供撤销入口；不静默修改授权或留下常驻服务。
 

@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "networkMode": "loopback",
+  "fixtureOnly": false,
+  "status": "failed",
+  "stage": "authorization_url",
+  "controlReached": true,
+  "authorizationCompleted": false,
+  "fixtureCleanup": true,
+  "processesStopped": true,
+  "privateRemoved": true,
+  "proxyEnvironment": {
+    "HTTP_PROXY": false,
+    "HTTPS_PROXY": false,
+    "ALL_PROXY": false,
+    "NO_PROXY": false,
+    "http_proxy": false,
+    "https_proxy": false,
+    "all_proxy": false,
+    "no_proxy": false
+  },
+  "sslCertDirInherited": false,
+  "netmon": {
+    "anyInterfaceUp": false,
+    "haveV4": false,
+    "haveV6": false
+  },
+  "controlDiagnostics": {
+    "baseline": {
+      "keyRequests": 1,
+      "noiseRequests": 0,
+      "registerRequests": 0,
+      "mapRequests": 0,
+      "tlsHandshakeErrors": 0,
+      "authCompletions": 0,
+      "secondClientRegistered": false
+    },
+    "failure": {
+      "keyRequests": 1,
+      "noiseRequests": 0,
+      "registerRequests": 0,
+      "mapRequests": 1,
+      "tlsHandshakeErrors": 0,
+      "authCompletions": 0,
+      "secondClientRegistered": false
+    }
+  },
+  "partialCabi": {
+    "states": [
+      "NeedsLogin"
+    ],
+    "preLoginNoUrl": true,
+    "authUrlPresent": false,
+    "startCode": 0,
+    "preLoginDialCode": 7,
+    "beginLoginCode": 0,
+    "nodeCloseCode": 0,
+    "nodeReleaseCode": 0,
+    "outstandingReadBuffers": 0
+  },
+  "errorCode": "authorization_url_not_received",
+  "fixtureAliveAtFailure": true,
+  "failureDiagnosticsOutcome": "received",
+  "fixtureStopOutcome": "confirmed",
+  "fixtureStderrIndicators": {
+    "panic": false,
+    "testTimeout": false,
+    "tlsError": false,
+    "testFailure": false
+  },
+  "sourceSHA": "019935152378a2b4889a4e99a840bdcb4a542916"
+}

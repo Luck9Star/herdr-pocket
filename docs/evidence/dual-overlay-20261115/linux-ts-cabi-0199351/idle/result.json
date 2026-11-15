@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "networkMode": "loopback",
+  "fixtureOnly": true,
+  "status": "passed",
+  "stage": "complete",
+  "controlReached": true,
+  "authorizationCompleted": false,
+  "fixtureCleanup": true,
+  "processesStopped": true,
+  "privateRemoved": true,
+  "proxyEnvironment": {
+    "HTTP_PROXY": false,
+    "HTTPS_PROXY": false,
+    "ALL_PROXY": false,
+    "NO_PROXY": false,
+    "http_proxy": false,
+    "https_proxy": false,
+    "all_proxy": false,
+    "no_proxy": false
+  },
+  "sslCertDirInherited": false,
+  "netmon": {
+    "anyInterfaceUp": false,
+    "haveV4": false,
+    "haveV6": false
+  },
+  "controlDiagnostics": {
+    "baseline": {
+      "keyRequests": 1,
+      "noiseRequests": 0,
+      "registerRequests": 0,
+      "mapRequests": 1,
+      "tlsHandshakeErrors": 0,
+      "authCompletions": 0,
+      "secondClientRegistered": false
+    }
+  },
+  "fixtureIdleSnapshots": [
+    {
+      "keyRequests": 1,
+      "noiseRequests": 0,
+      "registerRequests": 0,
+      "mapRequests": 1,
+      "tlsHandshakeErrors": 0,
+      "authCompletions": 0,
+      "secondClientRegistered": false
+    },
+    {
+      "keyRequests": 1,
+      "noiseRequests": 0,
+      "registerRequests": 0,
+      "mapRequests": 1,
+      "tlsHandshakeErrors": 0,
+      "authCompletions": 0,
+      "secondClientRegistered": false
+    },
+    {
+      "keyRequests": 1,
+      "noiseRequests": 0,
+      "registerRequests": 0,
+      "mapRequests": 1,
+      "tlsHandshakeErrors": 0,
+      "authCompletions": 0,
+      "secondClientRegistered": false
+    }
+  ],
+  "fixtureStderrIndicators": {
+    "panic": false,
+    "testTimeout": false,
+    "tlsError": false,
+    "testFailure": false
+  },
+  "sourceSHA": "019935152378a2b4889a4e99a840bdcb4a542916"
+}

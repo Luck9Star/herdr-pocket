@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "9b9f781d1292951f68f01b54d681e4bb7343f99e",
+  "status": "failed",
+  "stage": "explicit-auth-and-observe",
+  "stopFirst": "et",
+  "loopbackOnlyNamespace": true,
+  "temporaryCredentialsRemoved": true,
+  "ownedProcessesStopped": true,
+  "tsPeerCleanup": false,
+  "binarySha256": {
+    "peer": "0ee4f23dd1bffbf8f246b10238271a722eb6379a0a41fadd6d9aaca50bbb92a2",
+    "ts-fixture": "b17dcfab53a97b0a6947bb7e5a44873229e29dc62b7bd4292c9f6867c0a8ba7f",
+    "probe": "9ce3697c9acf4fd65674eb7475513e247788feeac04994dcc49861e7156a26bb",
+    "herdr": "8cb39663b4e466006ffb0d68b5efe5be61701446b6c9877bf84cce2c0f762dbc",
+    "lib/libheeler_easytier.so": "0cbf42f62790950187bf9263d3ef2bb91323a59c5f02798b239f576609c76382",
+    "lib/libhp_tailscale.so": "1678a13fb07d1ff24eafe5ed4d02fa98bf261c1ce83b63363aa6a9fa014f6713"
+  },
+  "client": {
+    "passed": false,
+    "preloginUrlAbsent": true,
+    "preloginDialRejected": true,
+    "etFull": false,
+    "tsFull": false,
+    "etFirst": false,
+    "tsFirst": false,
+    "etStopped": false,
+    "etStaleRejected": false,
+    "tsAfterStop": false,
+    "tsStopped": false,
+    "tsStaleRejected": false,
+    "etAfterStop": false,
+    "etObserverJoined": false,
+    "tsObserverJoined": false,
+    "localFallbackRejected": false,
+    "crossRouteRejected": false,
+    "cleanup": true
+  },
+  "clientError": "login_url_missing",
+  "error": "fixture_exited_early",
+  "namespaceProcessesBeforeTeardown": 0,
+  "namespaceRemoved": true
+}

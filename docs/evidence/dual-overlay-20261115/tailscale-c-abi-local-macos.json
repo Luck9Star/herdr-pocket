@@ -1,0 +1,23 @@
+{
+  "event": "cabi_result",
+  "states": [
+    "NeedsLogin",
+    "Starting",
+    "Running"
+  ],
+  "startCode": 0,
+  "preLoginNoUrl": true,
+  "preLoginDialCode": 7,
+  "beginLoginCode": 0,
+  "authUrlPresent": true,
+  "running": true,
+  "dialCode": 0,
+  "payloadEqual": true,
+  "streamCloseCode": 0,
+  "streamReleaseCode": 0,
+  "nodeCloseCode": 0,
+  "nodeReleaseCode": 0,
+  "outstandingReadBuffers": 0,
+  "exitCode": 0,
+  "scope": "macOS arm64 Go1.27.3 real c-shared C ABI, fresh process, SSL_CERT_FILE only; no inherited fixture globals"
+}

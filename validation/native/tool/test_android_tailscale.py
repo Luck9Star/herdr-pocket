@@ -86,7 +86,7 @@ class AndroidTailscaleTests(unittest.TestCase):
         with mock.patch.object(ts.candidate, 'verify_sources', return_value=source), mock.patch.object(ts, 'verify_archives'):
             inspect = mock.Mock()
             ts.verify(self.root, record, files, 'synthetic-readelf', inspect)
-            inspect.assert_called_once_with(self.root / ts.LIBRARY, 'synthetic-readelf', ts.SYMBOLS)
+            inspect.assert_called_once_with(self.root / ts.LIBRARY, 'synthetic-readelf', ts.SYMBOLS, abi='arm64-v8a')
             targets = ['tailscale/explicit-auth.patch', 'tailscale/explicit-auth-test.go']
             targets += ['tailscale/module/' + x['path'] for x in modules]
             for name in targets:

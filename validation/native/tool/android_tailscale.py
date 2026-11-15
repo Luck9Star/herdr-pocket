@@ -9,6 +9,7 @@ import tarfile
 import zipfile
 
 import tailscale_candidate as candidate
+import android_targets as targets
 
 GO_VERSION = '1.27.3'
 NDK_VERSION = '28.2.13676358'
@@ -130,27 +131,18 @@ def verify_archives(zip_path, tar_path, source, sum_path):
         raise ValueError('patched source tar missing entries')
 
 
-def cross_environment(cache, ndk):
-    ndk = Path(ndk).resolve()
-    if ndk.name != NDK_VERSION:
-        raise ValueError('wrong pinned Android NDK')
-    tools = ndk / 'toolchains/llvm/prebuilt/linux-x86_64/bin'
-    paths = {name: tools / binary for name, binary in {
-        'CC': 'aarch64-linux-android35-clang',
-        'CXX': 'aarch64-linux-android35-clang++', 'AR': 'llvm-ar',
-    }.items()}
-    if any(not path.is_file() for path in paths.values()):
-        raise ValueError('existing pinned Linux Android toolchain required')
+def cross_environment(cache, ndk, abi=targets.DEFAULT):
+    directory, compiler = targets.tools(ndk, abi)
     go, env = candidate.environment(cache)
-    env.update({name: str(path) for name, path in paths.items()})
-    env.update(GOOS='android', GOARCH='arm64', CGO_ENABLED='1')
+    env.update(CC=str(compiler), CXX=str(compiler) + '++', AR=str(directory / 'llvm-ar'))
+    env.update(GOOS='android', GOARCH=targets.target(abi)[1], CGO_ENABLED='1')
     return go, env
 
 
-def build(bundle, work, cache, ndk):
+def build(bundle, work, cache, ndk, abi=targets.DEFAULT):
     if os.environ.get('GITHUB_ACTIONS') != 'true':
         raise ValueError('Android native candidate build is CI-only')
-    go, env = cross_environment(cache, ndk)
+    go, env = cross_environment(cache, ndk, abi)
     candidate.prepare(work, cache)
     # Run synthetic host tests with the sanitized host environment. Android
     # output below is inspected only, never executed by the Linux runner.
@@ -186,16 +178,17 @@ def build(bundle, work, cache, ndk):
     with tarfile.open(source_dir / 'upstream-source.tar.gz', 'w:gz') as archive:
         archive.add(work / 'upstream/tailscale', arcname='tailscale')
     shutil.copytree(work / 'logs', source_dir / 'logs')
-    return {'library': LIBRARY, 'go': GO_VERSION, 'ndk': NDK_VERSION,
+    return {'library': LIBRARY, 'go': GO_VERSION, 'ndk': NDK_VERSION, 'abi': abi,
             'sourceManifestSha256': candidate.digest(candidate.MANIFEST),
             'moduleSources': candidate.module_files(),
             'hostTests': 'passed', 'androidBuild': 'passed',
             'androidLoad': 'not run', 'node': 'not run'}
 
 
-def verify(bundle, record, files, readelf, inspect):
+def verify(bundle, record, files, readelf, inspect, abi=targets.DEFAULT):
     source = candidate.verify_sources()
     if (record.get('library') != LIBRARY or record.get('go') != GO_VERSION
+            or record.get('abi', targets.DEFAULT) != abi
             or record.get('ndk') != NDK_VERSION
             or record.get('sourceManifestSha256') != candidate.digest(candidate.MANIFEST)
             or record.get('moduleSources') != candidate.module_files()):
@@ -218,4 +211,4 @@ def verify(bundle, record, files, readelf, inspect):
         if path not in files:
             raise ValueError('Tailscale build material missing: ' + path)
     verify_archives(bundle / 'tailscale/upstream-source.zip', bundle / 'tailscale/upstream-source.tar.gz', source, candidate.MODULE / 'go.sum')
-    inspect(bundle / LIBRARY, readelf, SYMBOLS)
+    inspect(bundle / LIBRARY, readelf, SYMBOLS, abi=abi)

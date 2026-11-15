@@ -13,6 +13,7 @@ import sys
 import zipfile
 import android_tailscale
 import android_zerotier
+import android_targets as targets
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'validation/network-profiles'))
@@ -35,14 +36,58 @@ ZERO_TIER_JNI = ['Java_org_herdr_network_AndroidZeroTierNative_bindNative'] + ZE
 SYSTEM = {'libc.so', 'libm.so', 'libdl.so', 'liblog.so', 'libandroid.so', 'libz.so',
           'libjnigraphics.so', 'libEGL.so', 'libGLESv2.so', 'libOpenSLES.so', 'libvulkan.so', 'libstdc++.so',
           'libnativewindow.so'}  # Public NDK library since API 26; this verifier requires API 35.
+BRIDGE = 'libherdr_flutter_network_runtime.so'
+BRIDGE_FEATURES = ['network-easytier', 'network-tailscale']
+
+
+def bridge_sources():
+    root = ROOT / 'validation/flutter-network-runtime'
+    return {str(path.relative_to(ROOT)): sha(path) for path in
+            [root / 'Cargo.toml', root / 'Cargo.lock', *sorted((root / 'src').glob('*.rs'))]}
+
+
+def build_bridge(out, work, release, abi, environment):
+    """Compile the existing JNI crate independently; no shell, APK or device."""
+    import portable_candidate as candidate
+    source = ROOT / 'validation/flutter-network-runtime'
+    destination = work / 'bridge-target'
+    env = dict(environment, CARGO_TARGET_DIR=str(destination),
+               HEELER_ET_LIB_DIR=str(out.resolve()), HP_TS_LIB_DIR=str(out.resolve()))
+    env.update(targets.rust_environment(Path(os.environ['ANDROID_HOME']) / 'ndk' / targets.NDK, abi))
+    triple = targets.target(abi)[0]
+    args = ['cargo', '+1.96.0', 'build', '--locked', '--manifest-path', str(source / 'Cargo.toml'),
+            '--lib', '--target', triple, '--features', ','.join(BRIDGE_FEATURES)]
+    if release:
+        args.append('--release')
+    candidate.base.run('android-' + abi + '-bridge', args, cwd=ROOT, env=env, timeout=3600)
+    shutil.copy2(destination / triple / ('release' if release else 'debug') / BRIDGE, out / BRIDGE)
+    sources = bridge_sources()
+    for name in sources:
+        target = out / 'bridge-source' / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / name, target)
+    return {'library': BRIDGE, 'rust': '1.96.0', 'abi': abi,
+            'features': BRIDGE_FEATURES, 'sources': sources, 'androidLoad': 'not run'}
+
+
+def verify_bridge(bundle, record, files, readelf, abi):
+    if (record.get('library') != BRIDGE or record.get('rust') != '1.96.0'
+            or record.get('abi') != abi or record.get('features') != BRIDGE_FEATURES
+            or record.get('sources') != bridge_sources() or BRIDGE not in files):
+        raise ValueError('native JNI bridge provenance mismatch')
+    for name, digest in bridge_sources().items():
+        if files.get('bridge-source/' + name) != digest:
+            raise ValueError('native JNI bridge source material mismatch')
+    elf(bundle / BRIDGE, readelf, required=FLUTTER_JNI + [android_tailscale.JNI_BIND],
+        needed=['libheeler_easytier.so', android_tailscale.LIBRARY], abi=abi)
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
-def elf(path, readelf, required=(), needed=(), allowed=()):
+def elf(path, readelf, required=(), needed=(), allowed=(), abi=targets.DEFAULT):
     header = path.read_bytes()[:20]
-    if len(header) < 20 or header[:6] != b'\x7fELF\x02\x01' or struct.unpack_from('<HH', header, 16) != (3, 183):
-        raise ValueError('expected little-endian AArch64 ELF shared library')
+    if len(header) < 20 or header[:6] != b'\x7fELF\x02\x01' or struct.unpack_from('<HH', header, 16) != (3, targets.target(abi)[2]):
+        raise ValueError('expected little-endian ' + abi + ' ELF shared library')
     dynamic = subprocess.check_output([readelf, '-d', str(path)], text=True)
     dependencies = set(re.findall(r'\(NEEDED\).*?\[([^]]+)\]', dynamic))
     if not set(needed) <= dependencies or dependencies - SYSTEM - set(needed) - set(allowed):
@@ -56,13 +101,16 @@ def elf(path, readelf, required=(), needed=(), allowed=()):
             raise ValueError('required exported symbols missing')
     return sorted(dependencies)
 
-def verify(bundle, commit, readelf):
+def verify(bundle, commit, readelf, abi=targets.DEFAULT):
+    targets.target(abi)
     manifest = json.loads((bundle / 'manifest.json').read_text())
     if manifest.get('provider') == 'zerotier':
+        if abi != targets.DEFAULT:
+            raise ValueError('ZeroTier Android ABI not validated')
         return verify_zerotier(bundle, manifest, commit, readelf)
     if manifest['sourceCommit'] != commit or not re.fullmatch('[0-9a-f]{40}', commit):
         raise ValueError('source commit mismatch')
-    if manifest['abi'] != 'arm64-v8a' or manifest['api'] != 35:
+    if manifest['abi'] != abi or manifest['api'] != targets.API:
         raise ValueError('ABI/API mismatch')
     if manifest['sourcesSha256'] != sha(ROOT / 'validation/native/sources.json') or manifest['patchManifestSha256'] != sha(ROOT / 'validation/native/patches/portable-manifest.json'):
         raise ValueError('native sources or patch manifest mismatch')
@@ -109,11 +157,15 @@ def verify(bundle, commit, readelf):
             raise ValueError('missing or mismatched source material: ' + name)
     if json.loads((bundle / 'candidate-provenance.json').read_text()) != portable:
         raise ValueError('candidate provenance mismatch')
-    elf(bundle / 'libheeler_easytier.so', readelf, SYMBOLS)
+    elf(bundle / 'libheeler_easytier.so', readelf, SYMBOLS, abi=abi)
     if 'tailscale' in manifest:
-        android_tailscale.verify(bundle, manifest['tailscale'], files, readelf, elf)
+        android_tailscale.verify(bundle, manifest['tailscale'], files, readelf, elf, abi)
     if 'zerotier' in manifest:
+        if abi != targets.DEFAULT:
+            raise ValueError('ZeroTier Android ABI not validated')
         android_zerotier.verify(bundle, manifest['zerotier'], files, readelf, elf)
+    if 'bridge' in manifest:
+        verify_bridge(bundle, manifest['bridge'], files, readelf, abi)
     return manifest
 
 def verify_zerotier(bundle, manifest, commit, readelf):
@@ -137,11 +189,16 @@ def verify_zerotier(bundle, manifest, commit, readelf):
     android_zerotier.verify(bundle, manifest['zerotier'], files, readelf, elf)
     return manifest
 
-def build(out, tailscale=False, zerotier=False, release=False):
+def build(out, tailscale=False, zerotier=False, release=False, abi=targets.DEFAULT, bridge=False):
     import portable_candidate as candidate
     base = candidate.base
     if os.environ.get('GITHUB_ACTIONS') != 'true':
         raise ValueError('Android native candidate build is CI-only')
+    triple = targets.target(abi)[0]
+    if zerotier and abi != targets.DEFAULT:
+        raise ValueError('ZeroTier Android ABI not validated')
+    if bridge and not tailscale:
+        raise ValueError('dual-provider bridge requires Tailscale and EasyTier')
     out.mkdir(parents=True, exist_ok=False)
     base.OUT = out.resolve()
     base.WORK = Path(os.environ['RUNNER_TEMP']) / ('herdr-android-candidate-' + os.environ['GITHUB_RUN_ID'])
@@ -153,21 +210,18 @@ def build(out, tailscale=False, zerotier=False, release=False):
     env = base.easytier(reference, lock, check=False)
     candidate.apply(reference)
     ndk = Path(os.environ['ANDROID_HOME']) / 'ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin'
-    cc = ndk / 'aarch64-linux-android35-clang'
-    env.update({'CC_aarch64_linux_android': str(cc), 'CXX_aarch64_linux_android': str(cc) + '++',
-                'AR_aarch64_linux_android': str(ndk / 'llvm-ar'),
-                'CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER': str(cc)})
+    env.update(targets.rust_environment(Path(os.environ['ANDROID_HOME']) / 'ndk' / targets.NDK, abi))
     source = reference / 'native/easytier'
-    cargo = ['cargo', '+1.95.0', 'build', '--locked', '--lib', '--target', 'aarch64-linux-android']
+    cargo = ['cargo', '+1.95.0', 'build', '--locked', '--lib', '--target', triple]
     if release:
         # The reference crate is upstream source; our workspace profile cannot
         # reach it, so strip rides on RUSTFLAGS for the release artifact.
         cargo.append('--release')
         env['RUSTFLAGS'] = '-C strip=symbols'
-    base.run('android-arm64-build', cargo, cwd=source, env=env, timeout=3600)
-    library = source / ('target/aarch64-linux-android/' + ('release' if release else 'debug') + '/libheeler_easytier.so')
+    base.run('android-' + abi + '-build', cargo, cwd=source, env=env, timeout=3600)
+    library = source / ('target/' + triple + '/' + ('release' if release else 'debug') + '/libheeler_easytier.so')
     shutil.copy2(library, out / library.name)
-    elf(out / library.name, str(ndk / 'llvm-readelf'), SYMBOLS)
+    elf(out / library.name, str(ndk / 'llvm-readelf'), SYMBOLS, abi=abi)
     for tree, name in [(reference, 'reference-source.tar'),
                        (reference / 'native/easytier/vendor/easytier', 'easytier-source.tar')]:
         with (out / name).open('wb') as archive:
@@ -181,13 +235,16 @@ def build(out, tailscale=False, zerotier=False, release=False):
     ts_record = None
     if tailscale:
         ts_record = android_tailscale.build(out.resolve(), base.WORK / 'tailscale',
-            base.WORK / 'go-cache', Path(os.environ['ANDROID_HOME']) / 'ndk/28.2.13676358')
+            base.WORK / 'go-cache', Path(os.environ['ANDROID_HOME']) / 'ndk/28.2.13676358', abi)
     zt_record = None
     if zerotier:
         zt_record = android_zerotier.build(out.resolve(), base.WORK / 'zerotier',
             base.WORK / 'zerotier-cache', Path(os.environ['ANDROID_HOME']) / 'ndk/28.2.13676358')
+    bridge_record = build_bridge(out, base.WORK, release, abi, env) if bridge else None
+    if bridge:
+        (out / 'build-details.json').write_text(json.dumps(base.CURRENT, indent=2) + '\n')
     files = {p.relative_to(out).as_posix(): sha(p) for p in sorted(out.rglob('*')) if p.is_file()}
-    manifest = {'schemaVersion': 1, 'sourceCommit': os.environ['GITHUB_SHA'], 'abi': 'arm64-v8a', 'api': 35,
+    manifest = {'schemaVersion': 1, 'sourceCommit': os.environ['GITHUB_SHA'], 'abi': abi, 'api': 35,
                 'ndk': '28.2.13676358', 'rust': '1.95.0', 'profile': 'release' if release else 'debug',
                 'sourcesSha256': sha(ROOT / 'validation/native/sources.json'),
                 'patchManifestSha256': sha(ROOT / 'validation/native/patches/portable-manifest.json'), 'files': files,
@@ -196,9 +253,11 @@ def build(out, tailscale=False, zerotier=False, release=False):
         manifest.update(schemaVersion=2, tailscale=ts_record)
     if zt_record:
         manifest.update(schemaVersion=3, zerotier=zt_record)
+    if bridge_record:
+        manifest['bridge'] = bridge_record
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     (out / 'SHA256SUMS').write_text(''.join(f'{v}  {k}\n' for k, v in files.items()))
-    verify(out, os.environ['GITHUB_SHA'], str(ndk / 'llvm-readelf'))
+    verify(out, os.environ['GITHUB_SHA'], str(ndk / 'llvm-readelf'), abi)
 
 def zerotier(out, ndk, work=None, cache=None):
     """Build and verify the standalone ZeroTier provider artifact."""
@@ -261,17 +320,17 @@ def apk(path, bundle, commit, readelf, app):
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest='command', required=True)
-    p = sub.add_parser('build'); p.add_argument('bundle', type=Path); p.add_argument('--tailscale', action='store_true'); p.add_argument('--zerotier', action='store_true'); p.add_argument('--release', action='store_true')
+    p = sub.add_parser('build'); p.add_argument('bundle', type=Path); p.add_argument('--tailscale', action='store_true'); p.add_argument('--zerotier', action='store_true'); p.add_argument('--release', action='store_true'); p.add_argument('--abi', choices=targets.TARGETS, default=targets.DEFAULT); p.add_argument('--bridge', action='store_true')
     p = sub.add_parser('zerotier'); p.add_argument('bundle', type=Path); p.add_argument('--ndk', required=True); p.add_argument('--work', type=Path); p.add_argument('--cache', type=Path)
-    p = sub.add_parser('verify'); p.add_argument('bundle', type=Path); p.add_argument('--commit', required=True); p.add_argument('--readelf', required=True)
+    p = sub.add_parser('verify'); p.add_argument('bundle', type=Path); p.add_argument('--commit', required=True); p.add_argument('--readelf', required=True); p.add_argument('--abi', choices=targets.TARGETS, default=targets.DEFAULT)
     p = sub.add_parser('report'); p.add_argument('output', type=Path); p.add_argument('--commit', required=True); p.add_argument('--app', choices=['flutter', 'tauri'], required=True)
     p.add_argument('--checks', choices=['success', 'failure', 'cancelled', 'skipped', 'not_run'], default='not_run')
     p.add_argument('--transport-checks', choices=['success', 'failure', 'cancelled', 'skipped', 'not_run'], default='not_run')
     p = sub.add_parser('apk'); p.add_argument('apk', type=Path); p.add_argument('bundle', type=Path); p.add_argument('--commit', required=True); p.add_argument('--readelf', required=True); p.add_argument('--app', choices=['flutter', 'tauri'], required=True)
     a = parser.parse_args()
-    if a.command == 'build': build(a.bundle, a.tailscale, a.zerotier, a.release)
+    if a.command == 'build': build(a.bundle, a.tailscale, a.zerotier, a.release, a.abi, a.bridge)
     elif a.command == 'zerotier': zerotier(a.bundle, a.ndk, a.work, a.cache)
-    elif a.command == 'verify': verify(a.bundle, a.commit, a.readelf)
+    elif a.command == 'verify': verify(a.bundle, a.commit, a.readelf, a.abi)
     elif a.command == 'report':
         report = {'sourceCommit': a.commit, 'app': a.app, 'abi': 'arm64-v8a', 'api': 35,
                   'sourceChecks': a.checks,

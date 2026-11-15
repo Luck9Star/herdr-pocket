@@ -65,7 +65,7 @@ Rust 仅新增 russh 的独立 `rsa` feature，仍关闭默认 features 并保�
 
 `d5ec372` 的本机固定 SDK、隔离 Flutter 工程与临时 SSH loopback 定向用例 11/11 通过，覆盖 macOS/Android Widget 语义，以及连接中返回后 `SSHClient.done`、`isClosed` 和重新打开的空表单；这是 Widget 与传输回环证据，云端 544/5 与渲染 10 项另行统计。
 
-`d5ec372` 的 [macOS 系统专项记录](evidence/design-parity-20261115/flutter-macos-secure-candidate-43699318795.json)共 4 项中遮罩、实际返回及重开两项通过；测试使用专用 embedder 语义通知。密码和私钥两项均探测并精确核对独立指纹，但确认控件不可命中，尚未到认证，整个专项为失败；不得将其描述为原生 SSH 认证通过。
+`d5ec372` 的 [macOS 系统专项记录](evidence/design-parity-20261115/flutter-macos-secure-candidate-43699318795.json)共 4 项中遮罩、实际返回及重开两项通过；测试使用专用 embedder 语义通知。密码和私钥两项均探测并精确核对独立指纹，但确认控件不可命中，尚未到认证，整个专项为失败；不得将其描述为原生 SSH 认证通过。 后续 `2c92641` 的 [运行 43701658581 原始记录](evidence/design-parity-20261115/flutter-macos-secure-candidate-43701658581.json)四项中三项通过：系统遮罩、返回重开及密码 SSH 登录后界面主动断开，密码服务端确认 auth/PTY/shell/close；两种认证的硬性 live 时间窗只导出合值，不能分项倒推，私钥已独立核验并确认指纹、输入 PEM 和口令，但连接按钮测试未命中、key 服务端仅探测；该次测试独立构建，其产品代码与 `d5ec372` 标准包一致。
 
 ## S01–S05 设计与可达性
 

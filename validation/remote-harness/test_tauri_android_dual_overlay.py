@@ -1,8 +1,11 @@
 import unittest
 import subprocess
 import json
+import os
+import tempfile
 import xml.etree.ElementTree as ET
-from unittest.mock import Mock, patch
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
 import tauri_android_dual_overlay as dual
 
 
@@ -120,6 +123,85 @@ class DualEvidenceTests(unittest.TestCase):
         control.call.return_value = {'event':'rejected'}
         with self.assertRaises(dual.GuiFailure):
             dual.host_request(control, {'op':'review_pairing'}, 'pairing_review')
+
+
+class DualDirectionIsolationTests(unittest.TestCase):
+    SHA='a'*40
+    CLEANUP={'reverseRemoved':True,'relayStopped':True,'controllerStopped':True,
+             'namespaceRemoved':True,'hostPrivateDirectoryRemoved':True,'controlReaderStopped':True,'privateFilesRemoved':True}
+
+    def drive_main(self, ts_packages_removed, cleanup=None):
+        calls=[]
+        def fake_run_direction(apk, auth_apk, session, stopped, report):
+            calls.append(stopped)
+            report.update(startObserverInstalled=True,startObserverRestored=True,browserClosed=True,
+                forwardRemoved=True,packagesRemoved=ts_packages_removed if stopped=='ts' else True)
+            raise dual.GuiFailure('dual_action_unavailable' if stopped=='ts' else 'dual_second_probe_failure')
+        session=MagicMock();session.report={'stage':'ready','cleanup':dict(self.CLEANUP if cleanup is None else cleanup)}
+        code=None
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ('app.apk','auth.apk','bundle.zip'):(Path(tmp)/name).write_bytes(b'payload')
+            checkout=Path(tmp)/'checkout';checkout.mkdir()
+            argv=['tauri_android_dual_overlay.py','--apk',str(Path(tmp)/'app.apk'),'--auth-apk',str(Path(tmp)/'auth.apk'),
+                  '--bundle',str(Path(tmp)/'bundle.zip'),'--output',str(Path(tmp)/'out'),
+                  '--host-source-checkout',str(checkout),'--host-source-sha',self.SHA]
+            with patch('sys.argv',argv),patch.dict(os.environ,{'RUNNER_TEMP':tmp,'GITHUB_SHA':self.SHA}),\
+                 patch('android_dual_overlay_session.AndroidDualOverlaySession',return_value=session),\
+                 patch.object(dual,'run_direction',side_effect=fake_run_direction):
+                try:dual.main()
+                except SystemExit as exit:code=exit.code
+            result=json.loads((Path(tmp)/'out'/'result.json').read_text())
+        return calls,result,code
+
+    def test_clean_direction_failure_still_runs_second_direction(self):
+        calls,result,code=self.drive_main(True)
+        self.assertEqual(calls,['ts','et'])
+        self.assertEqual(sorted(result['directions']),['et','ts'])
+        self.assertEqual(result['directions']['ts']['directionErrorCode'],'dual_action_unavailable')
+        self.assertEqual(result['directions']['et']['directionErrorCode'],'dual_second_probe_failure')
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['errorCode'],'dual_action_unavailable')
+        self.assertEqual(code,1)
+
+    def test_dirty_cleanup_keeps_fail_fast(self):
+        calls,result,code=self.drive_main(False)
+        self.assertEqual(calls,['ts'])
+        self.assertNotIn('et',result['directions'])
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['errorCode'],'dual_action_unavailable')
+        self.assertEqual(code,1)
+
+    def test_partial_environment_cleanup_keeps_fail_fast(self):
+        calls,result,code=self.drive_main(True,cleanup={'reverseRemoved':True,'relayStopped':True,'controllerStopped':True})
+        self.assertEqual(calls,['ts'])
+        self.assertNotIn('et',result['directions'])
+        self.assertEqual(result['directions']['ts']['directionErrorCode'],'dual_action_unavailable')
+        self.assertEqual(result['errorCode'],'dual_action_unavailable')
+        self.assertEqual(code,1)
+
+    def test_direction_cleanup_proven_matches_run_43746891366_shape(self):
+        current={'environmentCleanup':{'reverseRemoved':True,'relayStopped':True,'controllerStopped':True,
+                    'namespaceRemoved':True,'hostPrivateDirectoryRemoved':True,'controlReaderStopped':True,'privateFilesRemoved':True},
+                 'browserClosed':True,'forwardRemoved':True,'packagesRemoved':True,'privateDirectoryRemoved':True}
+        self.assertTrue(dual.direction_cleanup_proven(current))
+        partial={**current,'environmentCleanup':{'reverseRemoved':True,'relayStopped':True,'controllerStopped':True}}
+        self.assertFalse(dual.direction_cleanup_proven(partial))
+        for key in dual.DUAL_ENVIRONMENT_CLEANUP_KEYS:
+            with self.subTest(cleanupKey=key):
+                self.assertFalse(dual.direction_cleanup_proven(
+                    {**current,'environmentCleanup':{**current['environmentCleanup'],key:False}}))
+        missing_packages={**current};del missing_packages['packagesRemoved']
+        missing_private={**current};del missing_private['privateDirectoryRemoved']
+        for mutation in ({'environmentCleanup':{}},{'packagesRemoved':False},{'browserClosed':False}):
+            with self.subTest(mutation=mutation):
+                self.assertFalse(dual.direction_cleanup_proven({**current,**mutation}))
+        for mutation in (missing_packages,missing_private):
+            with self.subTest(mutation='missing '+next(iter(set(mutation)^set(current)))):
+                self.assertFalse(dual.direction_cleanup_proven(mutation))
+
+    def test_failure_code_reuses_known_taxonomy(self):
+        self.assertEqual(dual.failure_code(dual.GuiFailure('dual_action_unavailable')),'dual_action_unavailable')
+        self.assertEqual(dual.failure_code(RuntimeError('unexpected')),'dual_driver_failed')
 
 
 if __name__ == '__main__': unittest.main()

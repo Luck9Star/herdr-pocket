@@ -24,7 +24,7 @@ class ScaffoldTests(unittest.TestCase):
         (root / 'macos/RunnerTests').mkdir(parents=True)
         (root / 'macos/Runner').mkdir(parents=True)
         (root / 'lib').mkdir()
-        (root / 'lib/direct_ssh_page.dart').write_text("          Semantics(container: true, explicitChildNodes: true, label: '地址'\n          OutlinedButton(key: const ValueKey('direct-probe')\n")
+        (root / 'lib/direct_ssh_page.dart').write_text("          Semantics(container: true, explicitChildNodes: true, label: '地址'\n          Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）'\nTextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,\n          OutlinedButton(key: const ValueKey('direct-probe')\n")
         (root / '.herdr-generated-probe.json').write_text(json.dumps({'kind':'herdr-flutter-validation'}))
         (root / 'macos/Runner.xcodeproj/project.pbxproj').write_text(PROJECT)
         (root / 'macos/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme').write_text('<Scheme><TestAction><Testables><Testable parallelizable = "YES"/></Testables></TestAction></Scheme>')
@@ -221,7 +221,9 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('defer { clipboard.clearContents() }',key)
         diagnostics=swift[swift.index('private func diagnoseKeyInputs'):swift.index('private func ordinaryMetrics')]
         self.assertIn('HP_XCUI_KEYINPUT=visible:',diagnostics)
-        self.assertIn('HPKEY:K([01])P([01])',diagnostics)
+        self.assertIn('HPKEY:K([01])P([01])F([01])',swift)
+        self.assertIn('XCTAssertTrue(pemFocused',key)
+        self.assertIn('Date().addingTimeInterval(10)',diagnostics)
         self.assertNotIn('XCTFail',diagnostics)
 
 if __name__ == '__main__':

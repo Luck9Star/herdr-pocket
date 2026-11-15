@@ -220,8 +220,8 @@ jobs:
           secure_metrics=[{'phase':row[0],**dict(zip(('secure','text','other','id','label','secureLabel'),map(int,row[1:])))} for row in secure_metrics[:4]]
           hits=re.findall(r'hp_xcui_hit=phase:(control|passwordconfirm|passwordconnect|keyconfirm|keyconnect|returnentry|returnsecure|returnback|returnreopenentry),exists:([01]),enabled:([01]),hittable:([01]),inside:([01])',log)
           hit_metrics=[{'phase':phase,**dict(zip(('exists','enabled','hittable','insideWindow'),[v=='1' for v in bits]))} for phase,*bits in hits[:12]]
-          key_input=re.findall(r'hp_xcui_keyinput=visible:([01]),key:([01]),passphrase:([01])(?=\s|$)',log)
-          key_input=[{'visible':visible=='1','key':key=='1','passphrase':phrase=='1'} for visible,key,phrase in key_input[:4]]
+          key_input=re.findall(r'hp_xcui_keyinput=visible:([01]),key:([01]),passphrase:([01]),focus:([01]),empty:([01]),length:([01]),trimmed:([01])(?=\s|$)',log)
+          key_input=[dict(zip(('visible','key','passphrase','focus','empty','lengthMatches','trimmedMatches'),(v=='1' for v in row))) for row in key_input[:4]]
           confirmations=re.findall(r'hp_xcui_confirm=phase:(password|key),windowclick:([01]),secureoverlap:(\d{1,5})',log)
           confirmations=[{'phase':phase,'windowClick':window=='1','hittableSecureOverlapCount':int(overlap)} for phase,window,overlap in confirmations[:2]]
           fingerprints=re.findall(r'hp_xcui_fingerprint=phase:(password|encryptedkey),nodes:(\d{1,5}),prefix:(\d{1,5}),exact:(\d{1,5})',log)

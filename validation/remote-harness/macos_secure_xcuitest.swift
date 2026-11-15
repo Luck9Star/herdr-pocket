@@ -135,22 +135,28 @@ final class SecureCredentialUITests: XCTestCase {
         clickWindowCenter(app, matches: matches)
     }
 
-    private func diagnoseKeyInputs(_ app: XCUIApplication) throws {
-        var bits: (Bool, Bool)?
-        let expression = try NSRegularExpression(pattern: "HPKEY:K([01])P([01])")
-        for delta in [CGFloat(0), -240, -240, -240, -240, -240, 240, 240, 240, 240, 240, 240] {
-            if delta != 0 { scrollForm(app, delta) }
-            let fields = try snapshotNodes(app).flatMap { [$0.label, $0.value as? String ?? ""] }
-            for field in fields {
-                guard let match = expression.firstMatch(in: field, range: NSRange(field.startIndex..., in: field)),
-                      let keyRange = Range(match.range(at: 1), in: field),
-                      let phraseRange = Range(match.range(at: 2), in: field) else { continue }
-                bits = (field[keyRange] == "1", field[phraseRange] == "1")
-                break
+    private func keyInputBits(_ app: XCUIApplication) throws -> [Bool]? {
+        let expression = try NSRegularExpression(pattern: "HPKEY:K([01])P([01])F([01])E([01])L([01])T([01])")
+        for field in try snapshotNodes(app).flatMap({ [$0.label, $0.value as? String ?? ""] }) {
+            guard let match = expression.firstMatch(in: field, range: NSRange(field.startIndex..., in: field)) else { continue }
+            return (1...6).map { index in
+                guard let range = Range(match.range(at: index), in: field) else { return false }
+                return field[range] == "1"
             }
-            if bits != nil { break }
         }
-        print("HP_XCUI_KEYINPUT=visible:\(bits == nil ? 0 : 1),key:\(bits?.0 == true ? 1 : 0),passphrase:\(bits?.1 == true ? 1 : 0)")
+        return nil
+    }
+
+    private func diagnoseKeyInputs(_ app: XCUIApplication) throws {
+        let deadline = Date().addingTimeInterval(10)
+        var bits: [Bool]?
+        repeat {
+            bits = try keyInputBits(app)
+            if bits?[0] == true && bits?[1] == true { break }
+            usleep(200_000)
+        } while Date() < deadline
+        let values = bits ?? Array(repeating: false, count: 6)
+        print("HP_XCUI_KEYINPUT=visible:\(bits == nil ? 0 : 1),key:\(values[0] ? 1 : 0),passphrase:\(values[1] ? 1 : 0),focus:\(values[2] ? 1 : 0),empty:\(values[3] ? 1 : 0),length:\(values[4] ? 1 : 0),trimmed:\(values[5] ? 1 : 0)")
         fflush(stdout)
     }
 
@@ -542,6 +548,15 @@ final class SecureCredentialUITests: XCTestCase {
         let pemView = pemGroup.descendants(matching: .textView).firstMatch
         let pem = pemView.exists ? pemView : pemGroup.descendants(matching: .textField).firstMatch
         tap(app, pem)
+        let focusDeadline = Date().addingTimeInterval(5)
+        var pemFocused = false
+        repeat {
+            pemFocused = try keyInputBits(app)?[2] == true
+            if pemFocused { break }
+            usleep(100_000)
+        } while Date() < focusDeadline
+        XCTAssertTrue(pemFocused, "PEM input focus not confirmed")
+        mark("pemFocused")
         let clipboard = NSPasteboard.general
         clipboard.clearContents()
         defer { clipboard.clearContents() }

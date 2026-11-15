@@ -111,5 +111,47 @@ class LoopbackTests(unittest.TestCase):
         self.assertEqual(fixture.password, '')
 
 
+    def test_helper_sequence_requires_exact_order_and_is_opt_in(self):
+        import paramiko
+        from direct_ssh_fixture import DirectSshFixture
+        with DirectSshFixture(observe_helper_keys=True) as fixture:
+            transport = paramiko.Transport(('127.0.0.1', fixture.port))
+            try:
+                transport.start_client(timeout=5)
+                transport.auth_password(fixture.username, fixture.password)
+                channel = transport.open_session(timeout=5)
+                channel.get_pty(); channel.invoke_shell(); channel.settimeout(5)
+                channel.sendall((fixture.marker + '\r').encode())
+                self.assertTrue(fixture.wait_for('markerReceived'))
+                channel.sendall(b'\x1b\t\x1b[D')
+                self.assertFalse(fixture.snapshot()['helperKeysExact'])
+                channel.sendall(b'\x03')
+                self.assertTrue(fixture.wait_for('helperKeysExact'))
+                channel.sendall(b'x')
+                import time
+                deadline = time.monotonic() + 3
+                while fixture.snapshot()['helperKeysExact'] and time.monotonic() < deadline:
+                    time.sleep(.01)
+                self.assertFalse(fixture.snapshot()['helperKeysExact'])
+                channel.close()
+            finally:
+                transport.close()
+        with DirectSshFixture(observe_helper_keys=True) as fixture:
+            transport = paramiko.Transport(('127.0.0.1', fixture.port))
+            try:
+                transport.start_client(timeout=5); transport.auth_password(fixture.username, fixture.password)
+                channel = transport.open_session(timeout=5); channel.get_pty(); channel.invoke_shell()
+                channel.sendall((fixture.marker + '\r').encode()); self.assertTrue(fixture.wait_for('markerReceived'))
+                channel.sendall(b'\t\x1b\x1b[D\x03')
+                import time
+                time.sleep(.1)
+                self.assertFalse(fixture.snapshot()['helperKeysExact'])
+                channel.close()
+            finally:
+                transport.close()
+        with DirectSshFixture() as fixture:
+            self.assertNotIn('helperKeysExact', fixture.snapshot())
+
+
 if __name__ == '__main__':
     unittest.main()

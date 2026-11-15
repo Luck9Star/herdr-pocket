@@ -27,7 +27,9 @@ class DirectSshFixture:
     echo_marker = 'POCKET-ANDROID-SSH-OK'
     username = 'fixture'
 
-    def __init__(self):
+    def __init__(self, *, observe_helper_keys=False):
+        self._observe_helper_keys = observe_helper_keys
+        self._helper_bytes = b''
         self.password = secrets.token_hex(16)
         self._key = paramiko.RSAKey.generate(2048)
         self.public_key = f'{self._key.get_name()} {self._key.get_base64()}'
@@ -38,6 +40,8 @@ class DirectSshFixture:
         self._threads = []
         self._transports = set()
         self._facts = {name: False for name in ('authAccepted', 'ptyRequested', 'shellRequested', 'markerReceived', 'sessionClosed')}
+        if observe_helper_keys:
+            self._facts['helperKeysExact'] = False
         self._connections = 0
         self._dimensions = []
 
@@ -137,6 +141,11 @@ class DirectSshFixture:
                     continue
                 if not data:
                     break
+                if self._observe_helper_keys and self.snapshot()['markerReceived']:
+                    with self._lock:
+                        self._helper_bytes = (self._helper_bytes + data)[:32]
+                        self._facts['helperKeysExact'] = self._helper_bytes == b'\x1b\t\x1b[D\x03'
+                    continue
                 pending += data
                 if len(pending) > 4096:
                     break

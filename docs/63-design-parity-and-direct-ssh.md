@@ -140,6 +140,8 @@ Tauri 主连接与终端标签均只在原生回复的 request ID、pane、termi
 
 普通 SSH 表单采用 560 逻辑像素最大阅读宽度、分组状态与间隔字段。[390 宽截图](evidence/design-parity-20261115/flutter-direct-ssh-form-390.png)和[桌面截图](evidence/design-parity-20261115/flutter-direct-ssh-form-desktop.png)是从真实首页控件入栈、使用合成地址与用户名及空密码的 Flutter Widget 渲染；截图测试为中文加载本机字体，不冒充原生窗口像素。另以固定 SDK 编译 Dart kernel，替换 4db debug app 的隔离副本、独立 bundle ID 重签后检查 macOS 系统 AX：地址、端口、用户名、密码及私钥/口令分别是**有名容器，内含 text field**；text field 自身并非有名节点。随后对云端 `38630b3` macOS arm64 工件 `14145048657` 独立复核：压缩包 SHA256 `2ccb6b6c49561a3bf2d7fb48e54c3d74b75111ef77e2c44b7f564b144f8183f6`；为隔离测试更换 bundle ID、保留原六项 entitlement 后临时重签，Dart kernel 原样。首页进入普通 SSH 后，系统 AX 的密码模式四组以及切换后的私钥 PEM 和可选口令分组均包含相应 text field。此项为系统 AX 分组证据，不把 Widget 语义等同系统 AX，也不声称输入框自身具名。
 
+Tauri 普通 SSH 会话新增 Esc、Tab、方向键与 Ctrl-C；方向键按实际 xterm 光标模式输出普通或应用模式序列，隐藏、断开和切换后不重放旧输入。[320×844](evidence/design-parity-20261115/tauri-ordinary-ssh-keys-320.png) 和 [390×844](evidence/design-parity-20261115/tauri-ordinary-ssh-keys-390.png) 使用真实首页与 `initRemote` 路由、真实 xterm 和合成主机目录/SSH 对端：从看板进入、探测并确认后主动连接；另在 320×500 缩小视口滚动并逐一点击七键，控件均至少 44×44，页面无横向溢出。这些是浏览器与合成对端证据，不能替代真实 Android 软键盘或服务端字节验收。
+
 ## S27 网络页界面增量
 
 `4be102e` 冻结了手机 S03、普通 SSH 凭据门槛和 S27 网络页；独立归档源码完整验证为 **533 passed / 4 skipped / 0 failed**，analyzer 无问题。S27 使用紧凑配置与节点状态、实际绑定主机名和按需展开管理；40 项定向回归包含停用影响以及撤销、删除保护。[320 宽度](evidence/design-parity-20261115/s27-networks-320.png)与[390 宽度](evidence/design-parity-20261115/s27-networks-390.png)是使用合成节点数据的实际 Widget 渲染，证明界面与交互，不替代真实组网或设备路由证据。

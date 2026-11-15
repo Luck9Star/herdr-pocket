@@ -35,6 +35,7 @@ class Element {
   append(...items) { this.children.push(...items); }
   setAttribute() {}
   querySelector() { return null; }
+  querySelectorAll() { return this.children; }
   addEventListener() {}
   focus() { globalThis.document.activeElement = this; }
 }
@@ -45,7 +46,7 @@ class Element {
 // real, headless. write() is wrapped only to record the raw bytes handed over.
 function uiHarness({ Terminal, createUnicodeTerminal }) {
   const nodes = Object.create(null);
-  const ids = ['ssh-host', 'ssh-port', 'ssh-user', 'ssh-password', 'ssh-key', 'ssh-passphrase', 'ssh-auth-method', 'ssh-review', 'ssh-probe', 'ssh-form', 'ssh-connect', 'ssh-status', 'ssh-focus', 'ssh-setup', 'ssh-live', 'ssh-review-row', 'ssh-fingerprint', 'ssh-target', 'ssh-disconnect', 'ssh-cancel', 'ssh-terminal'];
+  const ids = ['ssh-host', 'ssh-port', 'ssh-user', 'ssh-password', 'ssh-key', 'ssh-passphrase', 'ssh-auth-method', 'ssh-review', 'ssh-probe', 'ssh-form', 'ssh-connect', 'ssh-status', 'ssh-focus', 'ssh-setup', 'ssh-live', 'ssh-review-row', 'ssh-fingerprint', 'ssh-target', 'ssh-disconnect', 'ssh-cancel', 'ssh-terminal', 'ssh-helper-keys'];
   for (const id of ids) nodes[id] = new Element('div');
   nodes['ssh-host'].value = target.host;
   nodes['ssh-port'].value = String(target.port);
@@ -91,11 +92,12 @@ function uiHarness({ Terminal, createUnicodeTerminal }) {
   // many terminal instances the UI created: a reused terminal must still get
   // the second session's events, or the defect would hide behind dropped data.
   let openCount = 0;
-  const closedSessions = [];
+  const closedSessions = [], sent = [];
   const invoke = async (command, args) => {
     if (command === 'ssh_host_key_probe') return key;
     if (command === 'ssh_shell_open') return `s${++openCount}`;
     if (command === 'ssh_shell_close') closedSessions.push(args.sessionId);
+    if (command === 'ssh_shell_write') sent.push(args.bytes);
     return {};
   };
   const ui = initDirectSshUI({ native: true, invoke, channelFactory: () => (channel = {}), terminalFactory });
@@ -138,7 +140,7 @@ function uiHarness({ Terminal, createUnicodeTerminal }) {
       globalThis.ResizeObserver = oldObserver;
     }
   };
-  return { nodes, terminals, disposals, observers, closedSessions, dataWrites, submit, emit, readLine, written, cleanup, pendingFrames: () => animationFrames.size };
+  return { nodes, terminals, disposals, observers, closedSessions, sent, dataWrites, submit, emit, readLine, written, cleanup, pendingFrames: () => animationFrames.size };
 }
 
 async function realXtermHarness() {
@@ -146,6 +148,20 @@ async function realXtermHarness() {
   const { createUnicodeTerminal } = await importBrowserUnicodeTerminal();
   return uiHarness({ Terminal: pkg.Terminal, createUnicodeTerminal });
 }
+
+test('ordinary SSH arrows follow actual xterm DECCKM across enable and disable', async () => {
+  const ui = await realXtermHarness();
+  try {
+    await ui.submit(); ui.emit('s1', [{seq:1,kind:'ready'}]);
+    const clickUp = () => ui.nodes['ssh-helper-keys'].onclick({target:{closest:()=>({dataset:{sshKey:'up'}})}});
+    clickUp(); await flush();
+    ui.emit('s1', [{seq:2,kind:'data',data:[27,91,63,49,104]}]); await ui.written(ui.terminals[0]);
+    clickUp(); await flush();
+    ui.emit('s1', [{seq:3,kind:'data',data:[27,91,63,49,108]}]); await ui.written(ui.terminals[0]);
+    clickUp(); await flush();
+    assert.deepEqual(ui.sent, [[27,91,65],[27,79,65],[27,91,65]]);
+  } finally { await ui.cleanup(); }
+});
 
 test('same connection: SSH chunks split mid-UTF-8 render CJK/emoji without replacement chars (real xterm)', async () => {
   const ui = await realXtermHarness();

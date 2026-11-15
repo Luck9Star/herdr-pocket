@@ -48,7 +48,20 @@
     <div class="ssh-options"><button type="submit" class="primary">连接 / 重新连接</button><button id="ssh-cancel" type="button">取消连接</button></div>
   </form></div>
   <p id="ssh-status" role="status" aria-live="polite">尚未连接。</p>
-  <section id="ssh-live" hidden aria-label="普通 SSH 会话"><p id="ssh-target" class="ssh-target"></p><div class="term-scroll ssh-scroll"><div id="ssh-terminal" class="terminal-host"></div></div><div class="ssh-options"><button id="ssh-focus" type="button" disabled>打开键盘</button><button id="ssh-disconnect" type="button">断开连接</button></div></section>
+  <section id="ssh-live" hidden aria-label="普通 SSH 会话">
+    <p id="ssh-target" class="ssh-target"></p>
+    <div class="term-scroll ssh-scroll"><div id="ssh-terminal" class="terminal-host"></div></div>
+    <div id="ssh-helper-keys" class="ssh-helper-keys" role="group" aria-label="终端辅助键">
+      <button type="button" data-ssh-key="esc" disabled>Esc</button>
+      <button type="button" data-ssh-key="tab" disabled>Tab</button>
+      <button type="button" data-ssh-key="up" aria-label="上方向键" disabled>↑</button>
+      <button type="button" data-ssh-key="down" aria-label="下方向键" disabled>↓</button>
+      <button type="button" data-ssh-key="left" aria-label="左方向键" disabled>←</button>
+      <button type="button" data-ssh-key="right" aria-label="右方向键" disabled>→</button>
+      <button type="button" data-ssh-key="ctrl-c" disabled>Ctrl-C</button>
+    </div>
+    <div class="ssh-options"><button id="ssh-focus" type="button" disabled>打开键盘</button><button id="ssh-disconnect" type="button">断开连接</button></div>
+  </section>
 </section>
 <section id="home-terminal" hidden><h2>终端</h2><p>选择主机并连接后，可在终端标签中观察会话。</p><button id="terminal-to-board" type="button">选择主机</button></section>
 <section id="home-network" hidden><h2>网络</h2><p id="network-preview-note" hidden>浏览器预览无法读取或管理本机网络配置，请使用测试安装包。</p><button id="network-open" type="button">打开网络配置</button><section id="network-panel" class="config-transfer" aria-label="网络配置" hidden></section></section>

@@ -4,6 +4,37 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   const $ = id => document.getElementById(id);
   let terminal = null;
   let resizeWatch = null;
+  let outputSubscription = null;
+  let visibilityEpoch = 0;
+  const helperKeys = {
+    esc: '\u001b',
+    tab: '\t',
+    'ctrl-c': '\u0003',
+  };
+  const arrows = { up: 'A', down: 'B', left: 'D', right: 'C' };
+  const eligible = (source, epoch) => source === terminal && epoch === visibilityEpoch &&
+    !document.hidden && !$('home-ssh')?.hidden && !$('host-home')?.hidden && controller.isReady();
+  function renderKeys(ready) {
+    for (const button of $('ssh-helper-keys')?.querySelectorAll('button') || []) button.disabled = !ready;
+  }
+  function bindTerminal(source) {
+    outputSubscription?.dispose();
+    const epoch = visibilityEpoch;
+    outputSubscription = source.onData(data => {
+      if (eligible(source, epoch)) controller.write(new TextEncoder().encode(data), () => eligible(source, epoch));
+    });
+    const keys = $('ssh-helper-keys');
+    if (keys) {
+      keys.onpointerdown = event => {
+        if (eligible(source, epoch) && document.activeElement === source.textarea) event.preventDefault();
+      };
+      keys.onclick = event => {
+        const key = event.target.closest('button[data-ssh-key]')?.dataset.sshKey;
+        const value = arrows[key] ? `\u001b${source.modes?.applicationCursorKeysMode ? 'O' : '['}${arrows[key]}` : helperKeys[key];
+        if (value && eligible(source, epoch)) controller.write(new TextEncoder().encode(value), () => eligible(source, epoch));
+      };
+    }
+  }
   const resizer = createDirectSshResizer({
     measure: () => measureDirectSshViewport($('ssh-terminal').parentElement, terminal),
     send: (cols, rows) => controller.resize(cols, rows),
@@ -15,6 +46,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       $('ssh-focus').disabled = !ready;
       $('ssh-setup').hidden = ready;
       $('ssh-live').hidden = !ready;
+      renderKeys(ready);
       if (reason === 'host_key_mismatch') $('ssh-review').checked = false;
       if (ready) { const t = target(); $('ssh-target').textContent = `${t.username}@${t.host}:${t.port} · SSH 已连接`; resizer.start(); requestAnimationFrame(resizer.request); }
       else resizer.stop();
@@ -33,7 +65,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   for (const id of ['ssh-host','ssh-port']) $(id).addEventListener('input', () => {
     controller.invalidateReview(); void controller.close(); $('ssh-review').checked = false; $('ssh-fingerprint').textContent = '请先探测并独立核对主机指纹。';
   });
-  $('ssh-user').addEventListener('input', () => { $('ssh-review').checked = false; });
+  $('ssh-user').addEventListener('input', () => { controller.invalidateReview(); void controller.close(); $('ssh-review').checked = false; });
   $('ssh-probe').disabled = !native;
   if (!native) $('ssh-status').textContent = '浏览器预览无法使用原生 SSH，请使用测试安装包。';
   $('ssh-probe').onclick = async () => {
@@ -55,10 +87,11 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     // dangling partial UTF-8 sequence from the previous session, which would
     // corrupt the first characters of the next session. Disposing also drops
     // the old instance's subscriptions and renderer.
+    outputSubscription?.dispose(); outputSubscription = null;
     terminal?.dispose();
     terminal = terminalFactory({cols:80, rows:24, fontSize:14, cursorBlink:true, theme:{background:'#0B0F17',foreground:'#E6EDF3'}});
     terminal.open($('ssh-terminal'));
-    terminal.onData(data => controller.write(new TextEncoder().encode(data)));
+    bindTerminal(terminal);
     // observe() returns void; keep the observer itself so reconnections don't
     // stack a new watcher on the same container.
     if (typeof ResizeObserver === 'function' && !resizeWatch) {
@@ -74,7 +107,8 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   $('ssh-cancel').onclick = disconnect;
   $('ssh-focus').onclick = () => terminal?.focus();
   document.addEventListener('visibilitychange', () => { if (document.hidden) { clearSecrets(); void controller.close(); } });
-  return {close: () => {clearSecrets(); void controller.close();}, isReady:controller.isReady, isActive:controller.isActive, show:()=>{ if(controller.isReady()) requestAnimationFrame(resizer.request); }};
+  return {close: () => {clearSecrets(); void controller.close();}, isReady:controller.isReady, isActive:controller.isActive,
+    hide: () => { visibilityEpoch++; }, show:()=>{ if(terminal) bindTerminal(terminal); if(controller.isReady()) requestAnimationFrame(resizer.request); }};
 }
 
 // Serialize PTY updates and remeasure after each completion. A new session gets

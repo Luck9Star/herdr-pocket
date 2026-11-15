@@ -16,7 +16,7 @@ class Fixture:
     def __init__(self): self.reads=0
     def snapshot(self):
         self.reads+=1
-        return {**{key:True for key in ('authAccepted','ptyRequested','shellRequested','markerReceived')}, 'sessionClosed':self.reads>2}
+        return {**{key:True for key in ('authAccepted','ptyRequested','shellRequested','markerReceived')}, 'helperKeysExact':True, 'sessionClosed':self.reads>3}
 
 
 class Browser:
@@ -44,6 +44,8 @@ class DirectSshAndroidTests(unittest.TestCase):
             ('fill','#ssh-host','127.0.0.1'),('fill','#ssh-port','2222'),('fill','#ssh-user','fixture'),
             ('click','#ssh-probe'),('click','#ssh-review')])
         self.assertIn(('Input.insertText',{'text':'hp-check'}),browser.actions)
+        self.assertEqual([action[1] for action in browser.actions if action[0]=='click' and 'data-ssh-key' in action[1]], [f'#ssh-helper-keys button[data-ssh-key="{key}"]' for key in ('esc','tab','left','ctrl-c')])
+        self.assertTrue(result['helperKeysExact'])
         self.assertEqual(sum(action[0]=='Input.dispatchKeyEvent' for action in browser.actions),2)
         self.assertTrue(all(result[k] for k in ('fingerprintReviewed','connected','terminalInputReceived','terminalEchoRendered','disconnected','passwordCleared')))
         self.assertNotIn(Fixture.password,str(result))

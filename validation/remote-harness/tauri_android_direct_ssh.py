@@ -50,6 +50,11 @@ def exercise_ui(browser, fixture, *, encrypted_key=False):
              'direct_peer_input_missing', timeout=60)
     wait_for(lambda: browser.evaluate("[...document.querySelectorAll('#ssh-terminal .xterm-rows > div')].some(e=>e.textContent.includes(%s))" % json.dumps(fixture.echo_marker)),
              'direct_terminal_echo_missing', timeout=60)
+    if not encrypted_key:
+        for key in ('esc', 'tab', 'left', 'ctrl-c'):
+            browser.click(f'#ssh-helper-keys button[data-ssh-key="{key}"]')
+        wait_for(lambda: fixture.snapshot().get('helperKeysExact') is True,
+                 'direct_helper_keys_mismatch', timeout=30)
     if fixture.snapshot().get('sessionClosed') is not False:
         raise GuiFailure('direct_session_ended_before_disconnect')
     browser.click('#ssh-disconnect')
@@ -58,11 +63,11 @@ def exercise_ui(browser, fixture, *, encrypted_key=False):
     wait_for(lambda: fixture.snapshot().get('sessionClosed') is True,
              'direct_peer_close_missing', timeout=60)
     peer = fixture.snapshot()
-    if any(peer.get(k) is not True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')):
+    if (not encrypted_key and peer.get('helperKeysExact') is not True) or any(peer.get(k) is not True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')):
         raise GuiFailure('direct_peer_evidence_incomplete')
     return {'fingerprintReviewed':True,'credentialReviewPreserved':True,'connected':True,
             'terminalInputReceived':True,'terminalEchoRendered':True,'disconnected':True,
-            'passwordCleared':True,'peer':{k:True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')}}
+            'passwordCleared':True, **({'helperKeysExact':True} if not encrypted_key else {}), 'peer':{k:True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')}}
 
 
 def run_device(apk, fixture, *, encrypted_key=False):
@@ -145,7 +150,7 @@ def main():
     try:
         from direct_ssh_fixture import DirectSshFixture
         report['apkSha256']=hashlib.sha256(args.apk.read_bytes()).hexdigest()
-        with DirectSshFixture() as fixture:
+        with DirectSshFixture(observe_helper_keys=True) as fixture:
             try:
                 report.update(run_device(args.apk,fixture))
             except GuiFailure:

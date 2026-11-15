@@ -835,7 +835,10 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     }});
   const ssh = initDirectSshUI({native, invoke, channelFactory:()=>new Channel(), terminalFactory:options=>createUnicodeTerminal(Terminal,options)});
   function setHomeSection(section) {
+    const wasHidden = $('home-ssh').hidden;
+    if (section !== 'ssh' && !$('home-ssh').hidden) ssh.hide();
     for (const name of ['dashboard','terminal','network','settings','add','ssh']) $('home-'+name).hidden=name!==section;
+    if (section === 'ssh' && wasHidden) ssh.show();
     for (const [id,name] of [['show-remote','dashboard'],['nav-terminal','terminal'],['nav-network','network'],['nav-settings','settings']]) $(id).setAttribute('aria-pressed',String(name===section || name==='terminal' && section==='ssh'));
   }
   function navigateHome(section) {
@@ -845,7 +848,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     setHomeSection(section);
     if(section==='network' && $('network-panel').hidden && !$('network-open').disabled) $('network-open').click();
   }
-  $('nav-terminal').onclick=()=>{ if(ssh.isActive()) {if ($('host-home').hidden) $('show-remote').click();setHomeSection('ssh');ssh.show();return;} if (!$('remote-page').hidden) {setHomeSection('terminal');return;} if(workspace.hasTabs()) {onLeaveFixture();showRemotePage();return;} navigateHome('terminal'); };
+  $('nav-terminal').onclick=()=>{ if(ssh.isActive()) {if ($('host-home').hidden) $('show-remote').click();setHomeSection('ssh');return;} if (!$('remote-page').hidden) {setHomeSection('terminal');return;} if(workspace.hasTabs()) {onLeaveFixture();showRemotePage();return;} navigateHome('terminal'); };
   $('nav-network').onclick=()=>navigateHome('network');
   $('nav-settings').onclick=()=>navigateHome('settings');
   $('terminal-to-board').onclick=()=>navigateHome('dashboard');

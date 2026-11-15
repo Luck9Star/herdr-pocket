@@ -76,14 +76,14 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     for (const event of early) deliver(event);
     return true;
   }
-  function write(bytes) {
+  function write(bytes, stillCurrent = () => true) {
     const id = sessionId, current = generation;
     if (!ready || !id || !bytes.length) return;
     // Serialize chunks; a failed/unknown write stops the queue and is never retried.
     for (let offset = 0; offset < bytes.length; offset += 4096) {
       const chunk = Array.from(bytes.slice(offset, offset + 4096));
       writes = writes.then(async () => {
-        if (current !== generation || !ready || sessionId !== id) return;
+        if (current !== generation || !ready || sessionId !== id || !stillCurrent()) return;
         try { await invoke('ssh_shell_write', {sessionId: id, bytes: chunk}); }
         catch { ready = false; onStatus('输入结果未知；已停止发送，请核查远端状态。', false); }
       });

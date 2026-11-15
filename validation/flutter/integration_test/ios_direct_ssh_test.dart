@@ -47,6 +47,68 @@ void publish(String name, Object value) {
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  var activeFixture = false;
+  var privateValues = <String>[];
+  final previousReporter = reportTestException;
+  reportTestException = (details, description) {
+    try {
+      if (activeFixture) {
+        String safe(String line) {
+          for (final value in privateValues) {
+            if (value.isNotEmpty) {
+              line = line.replaceAll(value, '[redacted]');
+              line = line.replaceAll(
+                base64Encode(utf8.encode(value)),
+                '[redacted]',
+              );
+            }
+          }
+          line = line.replaceAll(RegExp(r'-----BEGIN.*'), '[redacted]');
+          line = line.replaceAll(
+            RegExp(r'(?<![A-Za-z])/(?:[^\s:]+/?)+'),
+            '[path]',
+          );
+          line = line.replaceAll(
+            RegExp(r'\b[A-Za-z0-9_+/=-]{24,}\b'),
+            '[token]',
+          );
+          line = line.replaceAll(RegExp(r'[^A-Za-z0-9 .,;:_()\[\]#=+\-]'), ' ');
+          line = line.replaceAll(RegExp(r'\s+'), ' ').trim();
+          return line.length > 200 ? line.substring(0, 200) : line;
+        }
+
+        final type = details.exception.runtimeType.toString();
+        final source = RegExp(
+          r'direct_ssh_ui_steps\.dart:(\d+)',
+        ).firstMatch(details.stack?.toString() ?? '');
+        final excerpt = details
+            .exceptionAsString()
+            .split('\n')
+            .take(3)
+            .map(safe)
+            .where((line) => line.isNotEmpty)
+            .toList();
+        publish('framework-error.json', {
+          'exceptionClass':
+              {
+                'TestFailure',
+                'AssertionError',
+                'FlutterError',
+                'StateError',
+                'TimeoutException',
+              }.contains(type)
+              ? type
+              : 'other',
+          'sourceLine': source == null ? null : int.tryParse(source.group(1)!),
+          'excerpt': excerpt,
+        });
+      }
+    } catch (_) {
+      // Reporting must never replace or suppress Flutter's original failure.
+    } finally {
+      previousReporter(details, description);
+    }
+  };
   testWidgets(
     'iOS Simulator normal homepage to ordinary SSH fingerprint, actual input, echo and disconnect',
     (tester) async {
@@ -55,6 +117,14 @@ void main() {
       try {
         final config = target();
         fixtureValidated = true;
+        activeFixture = true;
+        privateValues = [
+          config['password'] as String,
+          config['username'] as String,
+          config['host'] as String,
+          config['fingerprint'] as String,
+          directory,
+        ];
         expect(tester.testTextInput.isRegistered, isFalse);
         if (Directory(directory).existsSync())
           throw StateError('direct_ssh_ios_exchange_exists');

@@ -234,5 +234,7 @@ Future<void> runDirectSshUi(
     'protocolAccepted': true,
     'peerClosedBeforeDriverExit': true,
   });
+  step('peer_confirmed');
   binding.reportData = report;
+  step('report_data_set');
 }

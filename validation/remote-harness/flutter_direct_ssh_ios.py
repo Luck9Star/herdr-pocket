@@ -23,7 +23,8 @@ FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched', 'e
           'credentialsCleared', 'physicalImeVerified'}
 STAGES = {'home', 'target', 'probe', 'authenticate', 'secret_entry', 'screenshot_wait', 'connect_tap', 'connect_preflight',
           'await_terminal', 'await_welcome', 'input', 'disconnect', 'disconnect_tap', 'disconnect_wait',
-          'disconnect_secret', 'disconnect_status', 'disconnect_exception', 'disconnect_complete'}
+          'disconnect_secret', 'disconnect_status', 'disconnect_exception', 'disconnect_complete',
+          'peer_confirmed', 'report_data_set'}
 LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
                'buildError': 'Failed to build iOS app',
                'launchError': 'Error launching application on',
@@ -141,8 +142,22 @@ def failure_facts(text, private_values):
     if not isinstance(text, str):
         return {}
     facts = {}
-    for line in text.splitlines()[:200]:
+    lines = text.splitlines()[:200]
+    for index, line in enumerate(lines):
         stripped = line.strip()
+        if 'EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK' in line and 'frameworkExcerpt' not in facts:
+            excerpt = []
+            for following in lines[index + 1:index + 9]:
+                candidate = following.strip()
+                if not candidate or candidate.startswith(('══', '#', 'When the exception was thrown')):
+                    continue
+                safe = sanitized_failure(candidate, private_values)
+                if safe:
+                    excerpt.append(safe)
+                if len(excerpt) == 3:
+                    break
+            if excerpt:
+                facts['frameworkExcerpt'] = excerpt
         for prefix, field in (('Expected:', 'expected'), ('Actual:', 'actual'), ('Which:', 'which')):
             if stripped.startswith(prefix) and field not in facts:
                 facts[field] = sanitized_failure(stripped, private_values)
@@ -261,6 +276,23 @@ def ui_diagnostic(failure):
     if isinstance(line, int) and not isinstance(line, bool) and 1 <= line <= 1000:
         diagnostic['sourceLine'] = line
     return diagnostic
+
+
+def framework_diagnostic(value, private_values):
+    if not isinstance(value, dict):
+        return None
+    result = {}
+    allowed = {'TestFailure', 'AssertionError', 'FlutterError', 'StateError', 'TimeoutException', 'other'}
+    if isinstance(value.get('exceptionClass'), str) and value['exceptionClass'] in allowed:
+        result['exceptionClass'] = value['exceptionClass']
+    line = value.get('sourceLine')
+    if isinstance(line, int) and not isinstance(line, bool) and 1 <= line <= 1000:
+        result['sourceLine'] = line
+    excerpt = value.get('excerpt')
+    if isinstance(excerpt, list):
+        result['excerpt'] = [safe for item in excerpt[:3]
+                             if (safe := sanitized_failure(item, private_values))]
+    return result
 
 
 def run(app, output, env):
@@ -398,7 +430,7 @@ def run(app, output, env):
                                 (exchange / 'screenshot-done.json').write_text('{}')
                     public = read_json(exchange / 'result.json') if exchange else None
                     if public is not None:
-                        check_result(public)
+                        report['device'] = check_result(public)
                         phase = 'peer_close_confirmation'
                         if not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed') or process.poll() is not None:
                             raise Failure('ios_peer_input_or_ui_close_missing')
@@ -414,6 +446,14 @@ def run(app, output, env):
                     code = process.wait(timeout=max(1, deadline - time.monotonic()))
                 except subprocess.TimeoutExpired:
                     raise Failure('ios_flutter_timeout') from None
+                if exchange:
+                    final_stage = read_json(exchange / 'stage.json')
+                    if final_stage and final_stage.get('stage') in STAGES:
+                        report['deviceStage'] = final_stage['stage']
+                    framework = read_json(exchange / 'framework-error.json')
+                    if framework:
+                        report['frameworkDiagnostic'] = framework_diagnostic(framework,
+                            (fixture.password, fixture.username, fixture.fingerprint, str(private), str(app), str(base)))
                 if code or not confirmed:
                     preflight = read_json(exchange / 'connect-diagnostic.json') if exchange else None
                     if preflight:
@@ -428,6 +468,8 @@ def run(app, output, env):
                             report['failureKind'] = failure['kind']
                         report['uiDiagnostic'] = ui_diagnostic(failure)
                     raise Failure('ios_device_test_failed' if code else 'ios_peer_confirmation_missing')
+                if report.get('deviceStage') != 'report_data_set' or report.get('frameworkDiagnostic') is not None:
+                    raise Failure('ios_final_test_state_incomplete')
                 report['device'] = check_result(read_json(exchange / 'result.json'))
                 report['protocol'] = fixture.snapshot()
                 if not all(report['protocol'][name] for name in ('authAccepted', 'ptyRequested', 'shellRequested', 'markerReceived', 'sessionClosed')):

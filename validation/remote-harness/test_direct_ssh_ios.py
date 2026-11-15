@@ -126,13 +126,24 @@ class IosDirectSshTests(unittest.TestCase):
                 self.assertNotIn(secret, str(result))
 
     def test_multiline_test_failure_extracts_only_sanitized_assertion_and_source_line(self):
-        text = ('EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK\nExpected: exactly one matching candidate\n'
+        text = ('EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK\nThe following assertion was thrown during a test:\n'
+                'A timer was still pending for fixture with password=secret123\nExpected: exactly one matching candidate\n'
                 '  Actual: password=secret123 /private/user/path\n'
                 '#4 package direct_ssh_ui_steps.dart:137:9\n')
         result = runner.failure_facts(text, ('secret123', '/private/user'))
         self.assertEqual(result['expected'], 'Expected: exactly one matching candidate')
+        self.assertEqual(len(result['frameworkExcerpt']), 3)
         self.assertEqual(result['sourceLine'], 137)
         self.assertNotIn('secret123', str(result)); self.assertNotIn('/private/user', str(result))
+
+    def test_framework_diagnostic_never_exports_raw_or_extra_fields(self):
+        value = {'exceptionClass':'AssertionError', 'sourceLine':123,
+                 'excerpt':['Timer pending secret123 /private/user/path'], 'password':'secret123'}
+        result = runner.framework_diagnostic(value, ('secret123', '/private/user'))
+        self.assertEqual(result['exceptionClass'], 'AssertionError')
+        self.assertEqual(result['sourceLine'], 123)
+        self.assertNotIn('secret123', str(result)); self.assertNotIn('/private/user', str(result))
+        self.assertNotIn('password', result)
 
     def test_generated_xctest_scaffold_is_exact_and_one_shot(self):
         with tempfile.TemporaryDirectory() as temp:

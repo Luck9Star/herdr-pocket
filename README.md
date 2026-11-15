@@ -4,6 +4,8 @@
 
 **同源 QA 调试包 · 2026-11-15**　源码 `d5ec372`：[Flutter Android APK（多架构）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869/artifacts/14155748178) · [Tauri Android APK（仅 arm64-v8a）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869/artifacts/14155712798)。[本批运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/43699318869)完成：27 项成功、7 项按条件跳过；[macOS/Linux 下载、包名、架构与 SHA256](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。这是 CI 调试快照，与公开 Release 和设备验收分开。
 
+**终端内核评估**　[libghostty-vt 两壳适配与风险](docs/64-libghostty-terminal-core-evaluation.md)：建议先做受控原型，暂不替换生产终端。
+
 **本分支入口 · 2026-11-15**　首页提供「普通 SSH」和「配对添加」：普通服务器核验指纹后，可用账号密码（仅本次连接在内存使用）或已有私钥打开真实远端 PTY；herdr 路线继续提供配对、会话看板与观察／逐键／草稿。新版看板分行呈现真实会话和受阻目标，并保留搜索与复核；[320/390/桌面界面及验收证据](docs/63-design-parity-and-direct-ssh.md#s01s05-设计与可达性)注明合成截图和设备证据的区别。S06 两条真实 SSH/herdr 的只读与受保护输入，已分别完成 Flutter Widget 回环与 Tauri 原生 Linux GTK 验收；普通 SSH 两壳在同源码 `d5ec372` 的各自 debug 构建中通过 API35 Android 模拟器验收，Flutter 另有同源码的 [iOS Simulator 密码连接实测](docs/63-design-parity-and-direct-ssh.md#flutter-普通-ssh-ios-simulator)。同源码不等于同一二进制；CI 调试包与公开 Release 分开，具体功能须按 artifact 对应源码 SHA 核对，不能外推手机真机或五平台运行验收。
 
 **从这里开始**　[阶段交接：已完成、未完成与恢复顺序](https://github.com/Luck9Star/herdr-pocket/blob/85c150b24dca14412cf01075b832c1014547a3aa/docs/56-project-status-and-handoff.md) · [原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [历史下载、验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)

@@ -109,6 +109,20 @@ void main() {
     }
     expect(tester.getRect(secondSession).bottom,lessThan(tester.getRect(find.byType(NavigationBar)).top));
     await capture('multi-320');
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpAndSettle();
+    for (final name in ['all','current','history']) {
+      final chip=find.byKey(ValueKey('hosts-filter-$name'));
+      expect(tester.getRect(chip).right,lessThanOrEqualTo(304));
+      expect(tester.getSize(chip).height,greaterThanOrEqualTo(44));
+      expect(chip.hitTestable(),findsOneWidget);
+    }
+    await capture('multi-320-large');
+    await tester.tap(find.byKey(const ValueKey('hosts-filter-history'))); await tester.pumpAndSettle();
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-history'))).selected,isTrue);
+    await tester.tap(find.byKey(const ValueKey('hosts-filter-all'))); await tester.pumpAndSettle();
+    tester.platformDispatcher.clearTextScaleFactorTestValue(); await tester.pumpAndSettle();
     tester.view.physicalSize = const Size(1200,844); await tester.pumpAndSettle(); await capture('multi-1200');
     tester.view.physicalSize = const Size(390,844); await tester.pumpAndSettle();
     attempt.publish(summaryBoard(profile, revision: 3, freshness: DashboardFreshness.unavailable));

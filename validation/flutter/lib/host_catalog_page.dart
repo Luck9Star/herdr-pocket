@@ -441,19 +441,19 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             ),
           ),
           const SizedBox(height: 8),
-          SingleChildScrollView(
+          Wrap(
             key: const ValueKey('hosts-task-filter'),
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
+            spacing:8,
+            children: [
               for (final item in <(HostTaskFilter, String)>[
                 (HostTaskFilter.all, '全部 ${ordered.length}'),
                 (HostTaskFilter.current, '待处理 ${pendingIds.length}'),
                 (HostTaskFilter.history, '历史待核查 ${historicalIds.length}'),
-              ]) Padding(padding: const EdgeInsets.only(right: 8), child: SizedBox(height: 48,
+              ]) ConstrainedBox(constraints:const BoxConstraints(minHeight:48),
                 child: ChoiceChip(key: ValueKey('hosts-filter-${item.$1.name}'),
                   label: Text(item.$2), labelPadding:const EdgeInsets.symmetric(horizontal:2), selected: taskFilter == item.$1,
-                  onSelected: (_) => setState(() => taskFilter = item.$1)))),
-            ]),
+                  onSelected: (_) => setState(() => taskFilter = item.$1))),
+            ],
           ),
           if (taskFilter != HostTaskFilter.all || hostSearch.text.isNotEmpty) Text(
             '显示 ${shown.length} / ${ordered.length} 台主机',

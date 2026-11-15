@@ -78,11 +78,16 @@ jobs:
           namespace="hp-dual-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           sudo ip netns add "$namespace"
           sudo ip netns exec "$namespace" ip link set lo up
-          sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
-            GITHUB_SHA="$GITHUB_SHA" RUNNER_TEMP="$RUNNER_TEMP" \
-            /usr/bin/python3 "$GITHUB_WORKSPACE/validation/remote-harness/dual_overlay_loopback.py" \
-              --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
-              --output "$RUNNER_TEMP/dual-overlay-evidence"
+          status=0
+          for first in et ts; do
+            sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
+              GITHUB_SHA="$GITHUB_SHA" RUNNER_TEMP="$RUNNER_TEMP" \
+              /usr/bin/python3 "$GITHUB_WORKSPACE/validation/remote-harness/dual_overlay_loopback.py" \
+                --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
+                --stop-first "$first" \
+                --output "$RUNNER_TEMP/dual-overlay-evidence/$first" || status=1
+          done
+          exit "$status"
       - name: Tear down the uniquely owned namespace and bundle
         if: always()
         run: |
@@ -103,20 +108,24 @@ jobs:
           from pathlib import Path
           output = Path(os.environ['RUNNER_TEMP']) / 'dual-overlay-evidence'
           output.mkdir(parents=True, exist_ok=True)
-          path = output / 'manifest.json'
-          result = json.loads(path.read_text()) if path.exists() else {'status': 'failed', 'stage': 'build'}
-          result['namespaceProcessesBeforeTeardown'] = int(os.environ['HP_DUAL_STRAGGLERS'])
-          result['namespaceRemoved'] = True
-          if result['namespaceProcessesBeforeTeardown']:
-              result.update(status='failed', error='namespace_process_leak')
-          path.write_text(json.dumps(result, indent=2) + '\n')
-          if result['status'] != 'passed':
+          failed = False
+          for case in ('et', 'ts'):
+              path = output / case / 'manifest.json'
+              path.parent.mkdir(parents=True, exist_ok=True)
+              result = json.loads(path.read_text()) if path.exists() else {'status': 'failed', 'stage': 'build', 'stopFirst': case}
+              result['namespaceProcessesBeforeTeardown'] = int(os.environ['HP_DUAL_STRAGGLERS'])
+              result['namespaceRemoved'] = True
+              if result['namespaceProcessesBeforeTeardown']:
+                  result.update(status='failed', error='namespace_process_leak')
+              path.write_text(json.dumps(result, indent=2) + '\n')
+              failed |= result['status'] != 'passed'
+          if failed:
               raise SystemExit(1)
           PYEND
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: dual-overlay-herdr-${{ github.sha }}
-          path: ${{ runner.temp }}/dual-overlay-evidence/manifest.json
+          path: ${{ runner.temp }}/dual-overlay-evidence/
           if-no-files-found: error
           retention-days: 14

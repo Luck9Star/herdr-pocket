@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 import Darwin
 
 @available(macOS 15.0, *)
@@ -103,6 +104,47 @@ final class SecureCredentialUITests: XCTestCase {
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
     }
 
+    // Use the same guarded real window-center click for controls obscured in AX hit testing.
+    private func clickWindowCenter(_ app: XCUIApplication, matches: XCUIElementQuery) {
+        XCTAssertEqual(matches.count, 1, "requested control is not unique")
+        let button = matches.firstMatch
+        let window = app.windows.firstMatch
+        XCTAssertTrue(button.exists && button.isEnabled && window.exists && app.state == .runningForeground, "requested control unavailable")
+        let frame = button.frame
+        let windowFrame = window.frame
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        usleep(100_000)
+        XCTAssertTrue(!frame.isEmpty && frame == button.frame && windowFrame == window.frame && frame.intersection(windowFrame).contains(center), "requested control center not stable and visible")
+        let overlapping = app.secureTextFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.contains(center) }.count
+        XCTAssertEqual(overlapping, 0, "secure credential overlay obstructs requested control")
+        let origin = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+        origin.withOffset(CGVector(dx: center.x - windowFrame.minX, dy: center.y - windowFrame.minY)).click()
+    }
+
+    private func connectByWindowCenter(_ app: XCUIApplication) {
+        let matches = app.buttons.matching(NSPredicate(format: "label == %@", "连接 SSH"))
+        XCTAssertEqual(matches.count, 1, "connect action is not unique")
+        let button = matches.firstMatch
+        // Scroll the real form until the center is inside the window, even if AX says not hittable.
+        for delta in [CGFloat(-240), -240, -240, -240, -240, 240, 240, 240, 240, 240] {
+            scrollForm(app, delta)
+            let window = app.windows.firstMatch
+            let frame = button.frame
+            if button.exists && window.exists && !frame.isEmpty && window.frame.contains(CGPoint(x: frame.midX, y: frame.midY)) { break }
+        }
+        clickWindowCenter(app, matches: matches)
+    }
+
+    private func verifyKeyInputs(_ app: XCUIApplication) throws {
+        let deadline = Date().addingTimeInterval(10)
+        repeat {
+            let fields = try snapshotNodes(app).flatMap { [$0.label, $0.value as? String ?? ""] }
+            if fields.contains(where: { $0.contains("HPKEY:K1P1") }) { return }
+            usleep(100_000)
+        } while Date() < deadline
+        XCTFail("key and passphrase controller equality not confirmed")
+    }
+
     private func ordinaryMetrics(_ app: XCUIApplication, sentinel: String) throws -> Bool {
         let nodes = try snapshotNodes(app)
         let values = nodes.compactMap { $0.value as? String }.filter { !$0.isEmpty }
@@ -140,8 +182,7 @@ final class SecureCredentialUITests: XCTestCase {
         fflush(stdout)
         XCTAssertEqual(overlapping, 0, "secure credential overlay obstructs fingerprint confirmation")
         if windowClick {
-            let origin = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
-            origin.withOffset(CGVector(dx: center.x - windowFrame.minX, dy: center.y - windowFrame.minY)).click()
+            clickWindowCenter(app, matches: matches)
         } else {
             tap(app, button, phase: phase + "Confirm")
         }
@@ -481,12 +522,17 @@ final class SecureCredentialUITests: XCTestCase {
         reveal(app, pemGroup)
         let pemView = pemGroup.descendants(matching: .textView).firstMatch
         let pem = pemView.exists ? pemView : pemGroup.descendants(matching: .textField).firstMatch
-        tap(app, pem);app.typeText(privateKey)
+        tap(app, pem)
+        let clipboard = NSPasteboard.general
+        clipboard.clearContents()
+        XCTAssertTrue(clipboard.setString(privateKey, forType: .string), "synthetic PEM pasteboard unavailable")
+        app.typeKey("v", modifierFlags: .command)
+        clipboard.clearContents()
         try assertNoSecrets(app, [password, phrase])
         mark("keyCredentialEntered")
-        let keyConnect = app.buttons["连接 SSH"]
+        try verifyKeyInputs(app)
         mark("keyConnectAttempt")
-        tap(app, keyConnect, phase: "keyConnect")
+        connectByWindowCenter(app)
         let keyDisconnect = try connectedDisconnect(app)
         mark("encryptedKeyConnected")
         mark("keyDisconnectAttempt")

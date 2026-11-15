@@ -139,8 +139,10 @@ jobs:
           sha=os.environ.get('GITHUB_SHA','')
           try:
               with open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private-live.json')) as source: live=json.load(source)
-              live_peer=live.get('password') is True and live.get('key') is True
-          except (OSError,ValueError,TypeError,AttributeError): live_peer=False
+              password_live_peer=live.get('password') is True
+              key_live_peer=live.get('key') is True
+          except (OSError,ValueError,TypeError,AttributeError): password_live_peer=key_live_peer=False
+          live_peer=password_live_peer and key_live_peer
           try:
               facts=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-fixture','facts.json')))
               valid=lambda value: all(value.get(k) is True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed'))
@@ -255,6 +257,8 @@ jobs:
                   'systemTreeAndSecureFieldsVerified':masking_verified,'testExecuted':test_executed,'testPassed':test_passed,'cases':cases,
                   'peerAuthenticationPtyShellAndClose':peer,'encryptedKeyPeerAuthenticationPtyShellAndClose':key_peer,
                   'peerCloseObservedDuringDisconnectWindows':live_peer,
+                  'passwordPeerCloseObservedDuringDisconnectWindow':password_live_peer,
+                  'encryptedKeyPeerCloseObservedDuringDisconnectWindow':key_live_peer,
                   'passwordInputProven':password_proven,'passphraseInputProven':passphrase_proven,'buildStarted':('swiftcompile' in log or 'build target' in log),
                   'testStarted':('test suite' in log or 'test case' in log),'testCounts':counts,
                   'failureMethod':failure_method,'failedMethods':failed_methods,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,

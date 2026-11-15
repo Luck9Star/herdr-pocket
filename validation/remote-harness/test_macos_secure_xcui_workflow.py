@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 
 
@@ -54,7 +55,24 @@ for name, peer in (('password', 'password'), ('key', 'encryptedKey')):
                 self.assertNotEqual(self.run_monitor(scenario), {'password': True, 'key': True})
 
     def test_report_requires_live_evidence(self):
-        self.assertIn("and peer and key_peer and live_peer and test_passed", WORKFLOW.read_text())
+        workflow = WORKFLOW.read_text()
+        self.assertIn("and peer and key_peer and live_peer and test_passed", workflow)
+        marker = "          python3 - \"$RUNNER_TEMP/macos-secure-evidence/result.json\" \"$result\" <<'PY'\n"
+        body = workflow.split(marker, 1)[1].split("\n          PY\n", 1)[0]
+        script = textwrap.dedent(body)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = {**os.environ, 'RUNNER_TEMP': tmp}
+            for password, key in ((True, False), (False, True), (True, True)):
+                with self.subTest(password=password, key=key):
+                    (root / 'macos-secure-private-live.json').write_text(json.dumps({'password': password, 'key': key}))
+                    output = root / 'result.json'
+                    subprocess.run([sys.executable, '-', str(output), '1'], input=script, text=True, env=env, capture_output=True, check=False)
+                    report = json.loads(output.read_text())
+                    self.assertIs(report['passwordPeerCloseObservedDuringDisconnectWindow'], password)
+                    self.assertIs(report['encryptedKeyPeerCloseObservedDuringDisconnectWindow'], key)
+                    self.assertIs(report['peerCloseObservedDuringDisconnectWindows'], password and key)
+                    self.assertEqual(report['status'], 'failed')
 
 
 if __name__ == '__main__':

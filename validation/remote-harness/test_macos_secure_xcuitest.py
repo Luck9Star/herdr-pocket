@@ -1,5 +1,6 @@
 """Safety and scaffold contract; actual XCUITest requires macOS and Xcode."""
 import json
+import base64
 import ast
 import os
 from pathlib import Path
@@ -61,6 +62,9 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotIn('a'*32,source)
             dart=(root/'lib/direct_ssh_page.dart').read_text()
             self.assertIn('HPAX:H',dart);self.assertNotIn('a'*32,dart);self.assertNotIn('b'*32,dart)
+            self.assertIn('HPKEY:K${secret.text == utf8.decode(base64.decode(',dart)
+            self.assertIn(base64.b64encode(b'b'*32).decode(),dart)
+            self.assertIn(base64.b64encode(json.loads(fixture.read_text())['privateKey'].encode()).decode(),dart)
 
     def test_unknown_project_or_missing_marker_is_not_modified(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -168,7 +172,7 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('passwordValueUnavailable',swift)
         self.assertIn('passphraseValueUnavailable',swift)
         self.assertIn('encryptedKeyConnected',swift)
-        self.assertNotIn('modifierFlags: .command',swift)
+        self.assertEqual(swift.count('app.typeKey("v", modifierFlags: .command)'),1)
         self.assertIn('XCUIKeyboardKey.end',swift)
         self.assertEqual(swift.count('app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])'),2)
         self.assertIn('cleared?[11] == true',swift)
@@ -193,8 +197,8 @@ class ScaffoldTests(unittest.TestCase):
             self.assertLess(case.index('tap(app, '+button+')'),case.index('peerObservationWindow("'+phase+'")'))
             self.assertLess(case.index('peerObservationWindow("'+phase+'")'),case.index('app.terminate()'))
         key=swift[swift.index('func testEncryptedKeySSH'):swift.index('func testReturnAndReopen')]
-        self.assertLess(key.index('app.typeText(phrase)'),key.index('app.typeText(privateKey)'))
-        self.assertLess(key.index('try assertNoSecrets(app, [password, phrase])'),key.index('app.typeText(privateKey)'))
+        self.assertLess(key.index('app.typeText(phrase)'),key.index('app.typeKey("v", modifierFlags: .command)'))
+        self.assertLess(key.index('try assertNoSecrets(app, [password, phrase])'),key.index('app.typeKey("v", modifierFlags: .command)'))
 
     def test_fingerprint_mouse_fallback_requires_unique_visible_target_and_actual_confirmation(self):
         swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()
@@ -204,6 +208,16 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('XCTAssertEqual(overlapping, 0',helper)
         self.assertIn('button.waitForNonExistence',helper)
         self.assertIn('target?[12] == true',helper)
+        self.assertIn('clickWindowCenter(app, matches: matches)',helper)
+        click=swift[swift.index('private func clickWindowCenter'):swift.index('private func connectByWindowCenter')]
+        self.assertIn('XCTAssertEqual(matches.count, 1',click)
+        self.assertIn('frame.intersection(windowFrame).contains(center)',click)
+        self.assertIn('XCTAssertEqual(overlapping, 0',click)
+        self.assertEqual(click.count('.click()'),1)
+        key=swift[swift.index('func testEncryptedKeySSH'):swift.index('func testReturnAndReopen')]
+        self.assertLess(key.index('verifyFingerprint(app, expected: keyFingerprint'),key.index('connectByWindowCenter(app)'))
+        self.assertLess(key.index('verifyKeyInputs(app)'),key.index('connectByWindowCenter(app)'))
+        self.assertEqual(key.count('clipboard.clearContents()'),2)
 
 if __name__ == '__main__':
     unittest.main()

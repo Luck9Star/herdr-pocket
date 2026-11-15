@@ -77,6 +77,11 @@ def prepare(app, fixture=None):
             raise ValueError('macos_xcui_dart_unexpected')
         diagnostic = '''          Text('HPAX:H${host.text.trim() == "127.0.0.1" ? 1 : 0}P${port.text.trim() == "PASSWORD_PORT" ? 1 : 0}K${port.text.trim() == "KEY_PORT" ? 1 : 0}U${user.text.trim() == "fixture" ? 1 : 0}V${valid ? 1 : 0}B${busy ? 1 : 0}F${foreground ? 1 : 0}E${status.startsWith("探测失败") ? 1 : 0}A${host.text.isEmpty ? 1 : 0}N${user.text.isEmpty ? 1 : 0}T${port.text == "22" ? 1 : 0}D${port.text.isEmpty ? 1 : 0}C${fingerprint != null && checkedTarget == target ? 1 : 0}', style: const TextStyle(fontSize: 1)),
 '''.replace('PASSWORD_PORT',str(config['port'])).replace('KEY_PORT',str(config['keyPort']))
+        key_encoded = base64.b64encode(config['privateKey'].encode()).decode()
+        phrase_encoded = base64.b64encode(config['passphrase'].encode()).decode()
+        diagnostic += ("          Text('HPKEY:K${secret.text == utf8.decode(base64.decode(\"" + key_encoded +
+                       "\")) ? 1 : 0}P${passphrase.text == utf8.decode(base64.decode(\"" + phrase_encoded +
+                       "\")) ? 1 : 0}', style: const TextStyle(fontSize: 1)),\n")
         address_point = "          Semantics(container: true, explicitChildNodes: true, label: '地址'"
         if dart_text.count(address_point) != 1:
             raise ValueError('macos_xcui_dart_unexpected')

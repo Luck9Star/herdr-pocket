@@ -131,7 +131,12 @@ void main() {
     for (final item in {'direct-host':'地址', 'direct-port':'端口', 'direct-user':'用户名', 'direct-secret':'密码（仅本次使用）'}.entries) {
       final semanticField=find.bySemanticsLabel(item.value);
       expect(semanticField, findsOneWidget);
-      expect(tester.getSemantics(semanticField).flagsCollection.isTextField, isTrue);
+      var containsEditable=false;
+      tester.getSemantics(semanticField).visitChildren((node) {
+        containsEditable=containsEditable || node.flagsCollection.isTextField;
+        return true;
+      });
+      expect(containsEditable, isTrue);
       expect(tester.getSize(find.byKey(ValueKey(item.key))).width, lessThanOrEqualTo(560));
     }
     await tester.enterText(find.byKey(const ValueKey('direct-host')), 'fixture.example');

@@ -213,6 +213,9 @@ class ScaffoldTests(unittest.TestCase):
         key=swift[swift.index('func testEncryptedKeySSH'):swift.index('func testReturnAndReopen')]
         self.assertLess(key.index('clickFormButton(app, label: "粘贴私钥")'),key.index('app.typeText("q")'))
         self.assertLess(key.index('XCTAssertTrue(sentinelConfirmed'),key.index('app.typeText(phrase)'))
+        self.assertIn('try inputMatches(app, index: 0)',key)
+        self.assertIn('keyPassphraseVisibleFallback',swift)
+        self.assertIn('keyPassphraseNativeRole',swift)
         self.assertIn('try inputMatches(app, index: 1)',key)
         self.assertNotIn('maskedValue.isEmpty',key)
 

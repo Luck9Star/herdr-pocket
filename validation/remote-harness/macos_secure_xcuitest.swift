@@ -88,6 +88,34 @@ final class SecureCredentialUITests: XCTestCase {
         return exact.firstMatch
     }
 
+    private func focusKeyPassphrase(_ app: XCUIApplication) {
+        let native = app.secureTextFields.matching(NSPredicate(format: "identifier == %@", "direct-passphrase"))
+        let groups = app.descendants(matching: .any).matching(identifier: "私钥口令（可选）")
+        let window = app.windows.firstMatch
+        for delta in [CGFloat(0), -240, -240, -240, -240, -240, 240, 240, 240, 240, 240] {
+            if delta != 0 { scrollForm(app, delta) }
+            if native.count == 1 && stableHit(native.firstMatch) {
+                mark("keyPassphraseNativeRole")
+                native.firstMatch.click()
+                return
+            }
+            guard groups.count == 1 && window.exists else { continue }
+            let group = groups.firstMatch, frame = group.frame
+            let viewport = formScroll(app).map { window.frame.intersection($0.frame) } ?? window.frame
+            let center = CGPoint(x: frame.midX, y: frame.midY)
+            guard frame.width >= 100 && frame.height >= 32 && viewport.contains(center) else { continue }
+            usleep(100_000)
+            guard frame == group.frame && viewport.contains(center) else { continue }
+            let origin = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            origin.withOffset(CGVector(dx: center.x - window.frame.minX, dy: center.y - window.frame.minY)).click()
+            mark("keyPassphraseVisibleFallback")
+            return
+        }
+        print("HP_XCUI_PASSFIELD=native:\(min(native.count,9)),groups:\(min(groups.count,9))")
+        fflush(stdout)
+        XCTFail("passphrase input region unavailable")
+    }
+
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement, phase: String = "control") {
         for _ in 0..<10 {
             if stableHit(element) { break }
@@ -597,12 +625,11 @@ final class SecureCredentialUITests: XCTestCase {
         mark("pemPasteButtonTapped")
         XCTAssertTrue(try inputMatches(app, index: 0), "pasted key controller mismatch")
         mark("pemControllerConfirmed")
-        let keyPassphrase = secureField(app, "direct-passphrase")
-        mark("keyPassphraseFound")
-        keyPassphrase.click()
+        focusKeyPassphrase(app)
         app.typeText("q")
         let sentinelConfirmed = try inputMatches(app, index: 2)
         XCTAssertTrue(sentinelConfirmed, "passphrase focus sentinel mismatch")
+        XCTAssertTrue(try inputMatches(app, index: 0), "pasted key controller mismatch")
         mark("keyPassphraseFocusConfirmed")
         app.typeKey("a", modifierFlags: .command)
         app.typeText(phrase)

@@ -87,6 +87,18 @@ class DualEvidenceTests(unittest.TestCase):
         self.assertFalse(dual.ordinary_native_tree([root[0]])['ownedWebView'])
         self.assertFalse(dual.ordinary_native_tree([])['ownedWebView'])
 
+    def test_transport_diagnostics_are_fixed_nonsecret_counts(self):
+        session=Mock()
+        session.control.call.return_value={'event':'ts_diagnostics','keyRequests':1,'noiseRequests':0,
+            'registerRequests':0,'mapRequests':0,'tlsHandshakeErrors':0,'authCompletions':0,
+            'secondClientRegistered':False,'unexpectedPrivateField':'must not escape'}
+        counters={'accepted':1,'upstreamBytes':2,'downstreamBytes':3,'workerFailures':0}
+        session.relay.stats.return_value={role:dict(counters) for role in ('control','derp','easytier')}
+        result=dual.public_transport_sample(session)
+        self.assertNotIn('unexpectedPrivateField',result['host'])
+        session.relay.stats.return_value['control']['upstreamBytes']=-1
+        with self.assertRaises(dual.GuiFailure):dual.public_transport_sample(session)
+
     def test_public_host_control_requires_matching_event(self):
         control = Mock()
         control.call.return_value = {'event':'pairing_review','requestId':'synthetic'}

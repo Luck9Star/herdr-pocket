@@ -201,6 +201,21 @@ def wait_named(browser, scope, text, timeout=60):
     return wait_for(lambda: browser.evaluate(expr) is True, 'dual_action_unavailable', timeout=timeout)
 
 
+def public_transport_sample(session):
+    value=session.control.call({'op':'ts_diagnostics'})
+    keys=('keyRequests','noiseRequests','registerRequests','mapRequests','tlsHandshakeErrors','authCompletions')
+    if (not isinstance(value,dict) or value.get('event')!='ts_diagnostics' or
+            any(type(value.get(key)) is not int or not 0<=value[key]<=1000000 for key in keys) or
+            type(value.get('secondClientRegistered')) is not bool):
+        raise GuiFailure('dual_host_diagnostics_invalid')
+    stats=session.relay.stats()
+    expected={'accepted','upstreamBytes','downstreamBytes','workerFailures'}
+    if (set(stats)!={'control','derp','easytier'} or any(set(row)!=expected or
+            any(type(n) is not int or not 0<=n<=1000000 for n in row.values()) for row in stats.values())):
+        raise GuiFailure('dual_relay_diagnostics_invalid')
+    return {'host':{key:value[key] for key in (*keys,'secondClientRegistered')},'relay':stats}
+
+
 def create_network(browser, role, material, report):
     report['stage']='network_'+role+'_form'
     browser.click_named('#network-panel', '新增网络配置', 'dual_add_network_missing')
@@ -432,6 +447,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
                 not report['ordinaryWebViewHomeVerified']):
             raise GuiFailure('dual_native_ui_tree_incomplete')
         report['stage']='network_setup'
+        report['transportBeforeNetwork']=public_transport_sample(session)
         browser.click('#nav-network')
         wait_for(lambda:browser.evaluate("!document.querySelector('#network-panel').hidden"),'dual_network_page_missing')
         ts_scope=create_network(browser,'ts',material,report)
@@ -489,16 +505,26 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['stoppedInputUnavailableAndUnchanged']=True
         report['stage']='complete'
     except Exception as error:
+        try:report['transportAtFailure']=public_transport_sample(session)
+        except Exception:report['transportAtFailureUnavailable']=True
         if browser:
             diagnostic=getattr(browser,'confirmDiagnostic',None)
             if isinstance(diagnostic,dict):
                 report['confirmationDiagnostic']={key:value for key,value in diagnostic.items() if key in ('dialogEvent','originMatched','expectedTextMatched','hasBrowserHandler','nativeXmlParsed','nativeExpectedVisible','nativeButtonVisible','nativeClicked') and type(value) in (bool,int)}
             try:
-                report['uiDiagnostic']=browser.evaluate("""(()=>{const p=document.querySelector('#network-panel'),f=p?.querySelector('.network-editor');return {
-                  networkVisible:!!p&&!p.hidden,editorVisible:!!f&&!!f.getClientRects().length,
-                  profileCount:Math.min(9,p?.querySelectorAll('.network-profile-card').length||0),
-                  editorInputs:Math.min(9,f?.querySelectorAll('input,select,textarea').length||0),
-                  applicationVisible:!document.hidden}})()""")
+                report['uiDiagnostic']=browser.evaluate("""(()=>{const p=document.querySelector('#network-panel'),f=p?.querySelector('.network-editor');
+                  const c=p?.querySelector('.network-profile-card'),text=c?.textContent||'',status=p?.querySelector('[role=status]')?.textContent||'';
+                  const labels=['节点启动中','节点正在停止','Tailscale 需要显式登录','Tailscale 等待管理员批准','Tailscale 报告 Running',
+                    '先配置本机网络身份','本机身份服务不可用','本机身份状态未知','节点状态未确认','节点服务待接入','节点已停止'];
+                  const matches=labels.map((label,i)=>text.includes(label)?i:-1).filter(i=>i>=0);
+                  const buttons=[...c?.querySelectorAll('button')||[]],action=label=>{const x=buttons.filter(b=>b.textContent.trim()===label);
+                    return {count:Math.min(x.length,9),enabled:x.length===1&&!x[0].disabled,visible:x.length===1&&!!x[0].getClientRects().length}};
+                  return {networkVisible:!!p&&!p.hidden,editorVisible:!!f&&!!f.getClientRects().length,
+                    profileCount:Math.min(9,p?.querySelectorAll('.network-profile-card').length||0),
+                    editorInputs:Math.min(9,f?.querySelectorAll('input,select,textarea').length||0),applicationVisible:!document.hidden,
+                    nodeStatusCodes:matches,detailsOpen:!!c?.querySelector('details')?.open,
+                    identitySaved:text.includes('本机身份已保存'),start:action('启动节点'),stop:action('停止节点'),login:action('登录 Tailscale'),
+                    operationConfirmed:status.includes('节点操作已确认'),operationUnconfirmed:status.includes('节点操作结果未确认')}})()""")
             except Exception:pass
         code=str(error)
         if isinstance(error,GuiFailure):

@@ -34,7 +34,7 @@ void main() {
     final active = HostCatalog(storage:storage,clock:() => 1000); await active.load();
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:active,offlineBuilder:(_) => const SizedBox())));
-    await tester.pumpAndSettle(); await tapVisible(tester,'hosts-terminal-preferences'); await tester.pumpAndSettle();
+    await tester.pumpAndSettle(); await tester.tap(find.text('设置').last); await tester.pumpAndSettle(); await tapVisible(tester,'hosts-terminal-preferences'); await tester.pumpAndSettle();
     final slider = tester.widget<Slider>(find.byKey(const ValueKey('terminal-font-slider'))); slider.onChanged!(20);
     await tester.pump(); await tapVisible(tester,'terminal-font-save'); await tester.pumpAndSettle();
     expect(active.terminalFontSize,20); expect(find.textContaining('20 px'),findsOneWidget);

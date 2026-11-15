@@ -614,8 +614,9 @@ Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
 
 /// The production selector label, which carries its own host count.
 String taskFilterLabel(WidgetTester tester,HostTaskFilter value) {
-  final items=tester.widget<DropdownButton<HostTaskFilter>>(find.byKey(const ValueKey('hosts-task-filter'))).items!;
-  return (items.singleWhere((item) => item.value == value).child as Text).data ?? '';
+  final chip=tester.widget<ChoiceChip>(find.byKey(ValueKey('hosts-filter-${value.name}')));
+  return (chip.label as Text).data ?? '';
+
 }
 int taskFilterCount(String label) {
   final match=RegExp(r'（([0-9]+)）$').firstMatch(label);
@@ -674,9 +675,10 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   final historyLabel=taskFilterLabel(tester,HostTaskFilter.history);
   final historyCount=taskFilterCount(historyLabel);
   if (historyCount < 1) throw StateError('board_search_history_empty');
-  await tapStablePointer(tester,filter);
-  await tapPopupOption(tester,find.text(historyLabel));
-  await until(tester,() => tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.history);
+  final historyChip=find.byKey(const ValueKey('hosts-filter-history'));
+  await tester.ensureVisible(historyChip); await tester.pump();
+  await tapStablePointer(tester,historyChip);
+  await until(tester,() => tester.widget<ChoiceChip>(historyChip).selected);
   stage('board_search_count');
   final counts=boardCounts(tester);
   if (counts.shown < 1 || counts.shown > counts.total) throw StateError('board_search_count_invalid');
@@ -731,7 +733,7 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   // re-resolves a hit-testable target on every poll and taps once.
   await tapStablePointer(tester,clearButton);
   final cleared=boardCounts(tester);
-  final clearedKeptState=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.history &&
+  final clearedKeptState=tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-history'))).selected &&
     cleared.shown == historyCount;
   boardSearchFailureProbe = <String,Object>{
     'textMatched':textMatched,'dualConditionCount':counts.shown,'totalHosts':counts.total,
@@ -754,7 +756,7 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   stage('board_search_clear_reset_tap');
   await tapStablePointer(tester,resetControl);
   final restored=boardCounts(tester);
-  final resetRestoredList=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.all &&
+  final resetRestoredList=tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-all'))).selected &&
     (tester.widget<TextField>(search).controller?.text ?? '') == '' && restored.shown == restored.total;
   boardSearchFailureProbe = <String,Object>{
     'textMatched':textMatched,'dualConditionCount':counts.shown,'totalHosts':counts.total,
@@ -807,14 +809,8 @@ int enabledIdentityActions(WidgetTester tester) {
 /// identity is created, changed or removed.
 Future<Map<String,Object>> exerciseDeviceImpact(WidgetTester tester,void Function(String) stage) async {
   stage('device_impact_enter');
-  // The board search group scrolled the host card to the top, evicting the
-  // header controls (hosts-networks included) from the lazy list viewport.
-  // Scroll back up until they are mounted again, matching the search-phase
-  // scrollUntilVisible pattern (proven by test_deep_scroll_device_delete).
+  // The network destination remains available while the board is scrolled.
   final board=find.byKey(const ValueKey('host-catalog-list'));
-  await tester.scrollUntilVisible(find.byKey(const ValueKey('hosts-networks')),-300,
-    scrollable:find.descendant(of:board,matching:find.byType(Scrollable)).first);
-  await until(tester,() => find.byKey(const ValueKey('hosts-networks')).evaluate().length == 1);
   await tapKey(tester,'hosts-networks');
   final entry=find.byKey(const ValueKey('networks-zerotier-device'));
   await until(tester,() => entry.evaluate().length == 1 &&
@@ -858,7 +854,7 @@ Future<Map<String,Object>> exerciseDeviceImpact(WidgetTester tester,void Functio
   if (enabledIdentityActions(tester) != actions) throw StateError('device_impact_reentry_changed_actions');
   await tapKey(tester,'zt-device-close');
   await until(tester,() => find.byKey(const ValueKey('zt-device-list')).evaluate().isEmpty);
-  await tester.pageBack(); await tester.pump(const Duration(milliseconds:400));
+  await tap(tester,find.text('看板').last); await tester.pump(const Duration(milliseconds:400));
   // The board stays scrolled where the search group left it, so hosts-add is
   // still recycled out of the lazy viewport; bring it back before waiting.
   await tester.scrollUntilVisible(find.byKey(const ValueKey('hosts-add')),-300,
@@ -1482,6 +1478,9 @@ void main() {
     // the lazy viewport (proven by test_deep_scroll_device_delete).
     final deleteBoard=find.byKey(const ValueKey('host-catalog-list'));
     final deleteScrollable=find.descendant(of:deleteBoard,matching:find.byType(Scrollable)).first;
+    final management=find.byKey(ValueKey('host-management-$id'));
+    await tester.scrollUntilVisible(management,300,scrollable:deleteScrollable);
+    await tapStablePointer(tester,management);
     await tester.scrollUntilVisible(find.byKey(ValueKey('host-delete-$id')),300,scrollable:deleteScrollable);
     await until(tester,() => find.byKey(ValueKey('host-delete-$id')).evaluate().length == 1);
     await tapKey(tester,'host-delete-$id');

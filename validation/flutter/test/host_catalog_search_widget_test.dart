@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
-import 'package:herdr_flutter_probe/host_catalog_search.dart';
 import 'package:herdr_flutter_probe/host_task_summary.dart';
 import 'package:herdr_flutter_probe/host_tabs.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
@@ -39,8 +38,7 @@ HostTaskSummaries pageSummaries(WidgetTester tester) {
 }
 String count(WidgetTester tester) => tester.widget<Text>(find.byKey(const ValueKey('hosts-filter-count'))).data!;
 Future<void> chooseStatus(WidgetTester tester,String label) async {
-  await tapVisible(tester,'hosts-task-filter'); await tester.pumpAndSettle();
-  await tester.tap(find.text(label).last); await tester.pumpAndSettle();
+  final item=find.text(label); await tester.ensureVisible(item); await tester.tap(item); await tester.pumpAndSettle();
 }
 
 void main() {
@@ -91,7 +89,7 @@ void main() {
     await query(tester,'Other'); expect(count(tester),'显示 0 / 2 台主机');
     expect(find.text('当前待处理（1）'),findsWidgets);
     await tapVisible(tester,'hosts-search-clear'); await tester.pump();
-    expect(tester.widget<DropdownButton<HostTaskFilter>>(find.byKey(const ValueKey('hosts-task-filter'))).value,HostTaskFilter.current);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-current'))).selected,true);
     expect(count(tester),'显示 1 / 2 台主机');
     attempt.publish(summaryBoard(a,revision:2,freshness:DashboardFreshness.unavailable));
     await tester.pump(); await tester.pump();
@@ -100,7 +98,7 @@ void main() {
     expect(count(tester),'显示 1 / 2 台主机');
     await query(tester,'no-match'); expect(count(tester),'显示 0 / 2 台主机');
     await tapVisible(tester,'hosts-search-clear'); await tester.pump();
-    expect(tester.widget<DropdownButton<HostTaskFilter>>(find.byKey(const ValueKey('hosts-task-filter'))).value,HostTaskFilter.history);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-history'))).selected,true);
     expect(count(tester),'显示 1 / 2 台主机');
     await chooseStatus(tester,'当前待处理（0）');
     attempt.publish(summaryBoard(a,revision:3)); await tester.pump(); await tester.pump();
@@ -110,7 +108,7 @@ void main() {
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('hosts-add'))).onPressed,isNotNull);
     await tapVisible(tester,'hosts-filters-reset'); await tester.pump();
     expect(count(tester),'显示 2 / 2 台主机');
-    expect(tester.widget<DropdownButton<HostTaskFilter>>(find.byKey(const ValueKey('hosts-task-filter'))).value,HostTaskFilter.all);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-all'))).selected,true);
     expect(tabs.tabs,isEmpty); expect(keys.signCalls,0); expect(keys.creates,0);
     await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
   });
@@ -136,7 +134,7 @@ void main() {
     expect(adapter.pauses,1);
     await chooseStatus(tester,'上次受阻，待核查（1）');
     await query(tester,'review-work'); expect(count(tester),'显示 1 / 1 台主机');
-    expect(tester.widget<DropdownButton<HostTaskFilter>>(find.byKey(const ValueKey('hosts-task-filter'))).value,HostTaskFilter.history);
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-history'))).selected,true);
     await tapVisible(tester,blockedSummaryGroupKey(profile.id)); await tester.pumpAndSettle();
     expect(find.text('上次报告 · 点击后重新核查此目标'),findsOneWidget);
     const pane=RemotePane('w1:p1','term_abcd',agentStatus:'blocked');

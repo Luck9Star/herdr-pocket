@@ -33,9 +33,9 @@ void main() {
     await tester.pumpAndSettle();
     final boardSelected = find.semantics.byPredicate((node) {
       final data = node.getSemanticsData();
-      return data.label.contains('主机列表') && data.flagsCollection.isSelected == Tristate.isTrue;
+      return data.label.contains('看板') && data.flagsCollection.isSelected == Tristate.isTrue;
     });
-    expect(boardSelected,findsOneWidget,reason:'看板 ChoiceChip 激活态需带 selected 语义');
+    expect(boardSelected,findsOneWidget,reason:'看板导航激活态需带 selected 语义');
     await tapVisible(tester,'host-open-${host.id}'); await tester.pumpAndSettle();
     // The nested tab navigator's modal barrier must not drop the tab strip.
     expect(find.semantics.byLabel('主机列表'),findsOneWidget,

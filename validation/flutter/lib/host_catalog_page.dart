@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'design_tokens.dart';
+import 'direct_ssh_page.dart';
 import 'device_keys.dart';
 import 'host_catalog.dart';
 import 'pairing_page.dart';
@@ -33,6 +34,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   late final summaries = HostTaskSummaries(catalog);
   String? notice;
   bool busy = false;
+  int destination = 0;
   final hostSearch = TextEditingController();
   HostTaskFilter taskFilter = HostTaskFilter.all;
   @override
@@ -44,7 +46,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   }
   @override void didChangeAppLifecycleState(AppLifecycleState state) => summaries.setForeground(state == AppLifecycleState.resumed);
   void changed() { tabs.reconcile(catalog.ready ? catalog.profiles : const [],catalog.networkProfiles); if (mounted) setState(() {}); }
-  void tabChanged() { if (mounted) setState(() {}); }
+  void tabChanged() { if (mounted) setState(() { if (destination == 1 && tabs.active == null && tabs.tabs.isEmpty) destination = 0; }); }
   @override
   void dispose() { hostSearch.dispose(); WidgetsBinding.instance.removeObserver(this); summaries.removeListener(tabChanged); summaries.dispose(); catalog.removeListener(changed); tabs.removeListener(tabChanged); if (widget.tabs == null) tabs.dispose(); if (widget.catalog == null) catalog.dispose(); super.dispose(); }
   Future<void> action(Future<void> Function() work) async {
@@ -57,7 +59,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     if (busy || !catalog.ready || catalog.writing || profile?.enabled == false) return;
     if (profile != null && profile.hasIdentity) {
       if (profile.requiresNetworkBinding) { setState(() { notice = '请先通过主机的“选择／解除网络绑定”选择相同 provider 的本机网络，再新建视图；不会使用系统直连。'; }); return; }
-      tabs.open(profile,networks:catalog.networkProfiles,adapter:widget.adapterFactory?.call(profile)); return; }
+      tabs.open(profile,networks:catalog.networkProfiles,adapter:widget.adapterFactory?.call(profile));
+      if (tabs.active != null) setState(() => destination = 1); return; }
     tabs.select(null);
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,
       catalog:catalog,profileId:profile?.id,summaryLeaseFactory:(profile) => summaries.open(profile))));
@@ -85,6 +88,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     }
     tabs.open(matches.single,networks:catalog.networkProfiles,requestedTarget:target,
       adapter:widget.adapterFactory?.call(matches.single));
+    if (tabs.active != null) setState(() => destination = 1);
   }
   Future<void> transfer() async {
     if (busy || !catalog.ready || catalog.writing || catalog.pendingCreation != null) return;
@@ -240,84 +244,380 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       ]))]);
   }
   Widget board() {
-    final ordered=orderedHosts;
+    final ordered = orderedHosts;
     // Derived only from existing reports; filtering never opens or retires a lease.
-    final categories={for (final host in ordered) host.id:searchTargetCategory(host)};
-    final pendingIds={for (final entry in categories.entries) if (entry.value==HostTaskFilter.current) entry.key};
-    final historicalIds={for (final entry in categories.entries) if (entry.value==HostTaskFilter.history) entry.key};
-    final shown=searchHostCatalog(ordered,query:hostSearch.text,filter:taskFilter,
-      fields:searchFields,
-      current:(host) => pendingIds.contains(host.id),history:(host) => historicalIds.contains(host.id));
-    return ListView(key:const ValueKey('host-catalog-list'),padding:const EdgeInsets.all(16),children:[
-    Text(catalog.status,key:const ValueKey('hosts-status')),
-    if (notice != null) Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(notice!)),
-    const SizedBox(height:12),
-    FilledButton.icon(key:const ValueKey('hosts-add'),onPressed:catalog.ready && !busy && !catalog.writing && catalog.profiles.length < maxHostProfiles && catalog.pendingCreation == null ? () => open() : null,
-      icon:const Icon(Icons.add),label:const Text('新增主机与设备配对')),
-    OutlinedButton.icon(key:const ValueKey('hosts-terminal-preferences'),onPressed:catalog.ready && !busy && !catalog.writing ? terminalPreferences : null,
-      icon:const Icon(Icons.text_fields),label:Text('终端字号 · ${catalog.terminalFontSize} px')),
-    OutlinedButton.icon(key:const ValueKey('hosts-networks'),onPressed:catalog.ready && !busy && !catalog.writing ? networks : null,
-      icon:const Icon(Icons.hub_outlined),label:const Text('网络管理 · Tailscale / EasyTier / ZeroTier')),
-    OutlinedButton.icon(key:const ValueKey('hosts-transfer'),onPressed:catalog.ready && !busy && !catalog.writing && catalog.pendingCreation == null ? transfer : null,
-      icon:const Icon(Icons.import_export),label:const Text('加密导出／导入公开主机资料')),
-    if (catalog.ready && catalog.profiles.length >= maxHostProfiles) Padding(padding:const EdgeInsets.symmetric(vertical:12),
-      child:Text('本机主机资料已达 $maxHostProfiles 个上限 · 上方新增按钮已禁用；需先删除或整理既有资料',key:const ValueKey('hosts-add-limit-notice'))),
-    if (catalog.pendingCreation != null) ...[
-      const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('上次设备身份创建未完成或结果未知 · 已禁止再次创建，不会自动重放。已返回句柄可明确删除；无句柄时需人工核验本机身份，不能按空记录处理。')),
-      if ((catalog.pendingCreation!['handle'] as String).isNotEmpty) TextButton(key:const ValueKey('hosts-delete-pending'),
-        onPressed:busy || !catalog.ready ? null : () => action(() async {
-          final handle = catalog.pendingCreation!['handle'] as String;
-          await (widget.keys ?? NativeDeviceKeys()).delete(handle); await catalog.clearDeletedCreation(handle);
-        }),child:const Text('明确删除未完成的本机身份（不撤销主机）')),
-    ],
-    if (catalog.ready && ordered.isNotEmpty) ...[
-      const SizedBox(height:12),
-      TextField(key:const ValueKey('hosts-search'),controller:hostSearch,
-        // Read the raw text only. Do not rewrite case, selection or IME composing.
-        onChanged:(_) => setState(() {}),
-        decoration:InputDecoration(labelText:'查找主机或会话',prefixIcon:const Icon(Icons.search),
-          suffixIcon:hostSearch.text.isEmpty ? null : IconButton(key:const ValueKey('hosts-search-clear'),
-            tooltip:'清除搜索',onPressed:() => setState(hostSearch.clear),icon:const Icon(Icons.clear)))),
-      const SizedBox(height:8),
-      InputDecorator(decoration:const InputDecoration(labelText:'任务状态'),child:DropdownButtonHideUnderline(
-        child:DropdownButton<HostTaskFilter>(key:const ValueKey('hosts-task-filter'),value:taskFilter,isExpanded:true,
-          items:[const DropdownMenuItem(value:HostTaskFilter.all,child:Text('全部任务状态')),
-            DropdownMenuItem(value:HostTaskFilter.current,child:Text('当前待处理（${pendingIds.length}）')),
-            DropdownMenuItem(value:HostTaskFilter.history,child:Text('上次受阻，待核查（${historicalIds.length}）'))],
-          onChanged:(value) { if (value != null) setState(() => taskFilter=value); }))),
-      Text('显示 ${shown.length} / ${ordered.length} 台主机',key:const ValueKey('hosts-filter-count')),
-      if (taskFilter==HostTaskFilter.current) const Text('仅列出当前报告中可定位的受阻目标；历史报告与状态未知不计入。'),
-      if (taskFilter==HostTaskFilter.history) const Text('上次明确受阻的目标，当前状态待核查；打开后仍需重新审查连接与原目标。'),
-      if (shown.isEmpty) ...[
-        const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('没有匹配的主机',key:ValueKey('hosts-search-empty'))),
-        TextButton(key:const ValueKey('hosts-filters-reset'),onPressed:() => setState(() {
-          hostSearch.clear(); taskFilter=HostTaskFilter.all;
-        }),child:const Text('清除全部筛选')),
+    final categories = {
+      for (final host in ordered) host.id: searchTargetCategory(host),
+    };
+    final pendingIds = {
+      for (final entry in categories.entries)
+        if (entry.value == HostTaskFilter.current) entry.key,
+    };
+    final historicalIds = {
+      for (final entry in categories.entries)
+        if (entry.value == HostTaskFilter.history) entry.key,
+    };
+    final shown = searchHostCatalog(
+      ordered,
+      query: hostSearch.text,
+      filter: taskFilter,
+      fields: searchFields,
+      current: (host) => pendingIds.contains(host.id),
+      history: (host) => historicalIds.contains(host.id),
+    );
+    return ListView(
+      key: const ValueKey('host-catalog-list'),
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: widget.tokens.color('brand'),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Text(
+                'HP',
+                style: TextStyle(
+                  color: widget.tokens.color('textInverse'),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Herdr Pocket',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    '${ordered.length} 台已保存主机 · ${tabs.tabs.length} 个本地视图',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            FilledButton.icon(
+              key: const ValueKey('hosts-add'),
+              onPressed:
+                  catalog.ready &&
+                      !busy &&
+                      !catalog.writing &&
+                      catalog.profiles.length < maxHostProfiles &&
+                      catalog.pendingCreation == null
+                  ? () => open()
+                  : null,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('配对添加'),
+            ),
+          ],
+        ),
+        Align(alignment: Alignment.centerRight, child: TextButton.icon(
+          key: const ValueKey('hosts-direct-ssh'), onPressed: () { tabs.select(null); Navigator.push<void>(context, MaterialPageRoute(builder: (_) => DirectSshPage(tokens: widget.tokens))); },
+          icon: const Icon(Icons.terminal), label: const Text('普通 SSH'))),
+        const SizedBox(height: 4),
+        Text(
+          catalog.status,
+          key: const ValueKey('hosts-status'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        if (notice != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(notice!),
+          ),
+        if (catalog.ready && ordered.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Text('暂无已保存主机 · 使用“配对添加”开始'),
+          ),
+        if (catalog.ready && catalog.profiles.length >= maxHostProfiles)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              '本机主机资料已达 $maxHostProfiles 个上限 · 上方新增按钮已禁用；需先删除或整理既有资料',
+              key: const ValueKey('hosts-add-limit-notice'),
+            ),
+          ),
+        if (catalog.pendingCreation != null) ...[
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              '上次设备身份创建未完成或结果未知 · 已禁止再次创建，不会自动重放。已返回句柄可明确删除；无句柄时需人工核验本机身份，不能按空记录处理。',
+            ),
+          ),
+          if ((catalog.pendingCreation!['handle'] as String).isNotEmpty)
+            TextButton(
+              key: const ValueKey('hosts-delete-pending'),
+              onPressed: busy || !catalog.ready
+                  ? null
+                  : () => action(() async {
+                      final handle =
+                          catalog.pendingCreation!['handle'] as String;
+                      await (widget.keys ?? NativeDeviceKeys()).delete(handle);
+                      await catalog.clearDeletedCreation(handle);
+                    }),
+              child: const Text('明确删除未完成的本机身份（不撤销主机）'),
+            ),
+        ],
+        if (catalog.ready && ordered.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          TextField(
+            key: const ValueKey('hosts-search'),
+            controller: hostSearch,
+            // Read the raw text only. Do not rewrite case, selection or IME composing.
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: '查找主机或会话',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: hostSearch.text.isEmpty
+                  ? null
+                  : IconButton(
+                      key: const ValueKey('hosts-search-clear'),
+                      tooltip: '清除搜索',
+                      onPressed: () => setState(hostSearch.clear),
+                      icon: const Icon(Icons.clear),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            key: const ValueKey('hosts-task-filter'),
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (final item in <(HostTaskFilter, String)>[
+                (HostTaskFilter.all, '全部主机 ${ordered.length}'),
+                (HostTaskFilter.current, '当前待处理（${pendingIds.length}）'),
+                (HostTaskFilter.history, '上次受阻，待核查（${historicalIds.length}）'),
+              ]) Padding(padding: const EdgeInsets.only(right: 8), child: SizedBox(height: 48,
+                child: ChoiceChip(key: ValueKey('hosts-filter-${item.$1.name}'),
+                  label: Text(item.$2), selected: taskFilter == item.$1,
+                  onSelected: (_) => setState(() => taskFilter = item.$1)))),
+            ]),
+          ),
+          Text(
+            '显示 ${shown.length} / ${ordered.length} 台主机',
+            key: const ValueKey('hosts-filter-count'),
+          ),
+          if (taskFilter == HostTaskFilter.current)
+            const Text('仅列出当前报告中可定位的受阻目标；历史报告与状态未知不计入。'),
+          if (taskFilter == HostTaskFilter.history)
+            const Text('上次明确受阻的目标，当前状态待核查；打开后仍需重新审查连接与原目标。'),
+          if (shown.isEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('没有匹配的主机', key: ValueKey('hosts-search-empty')),
+            ),
+            TextButton(
+              key: const ValueKey('hosts-filters-reset'),
+              onPressed: () => setState(() {
+                hostSearch.clear();
+                taskFilter = HostTaskFilter.all;
+              }),
+              child: const Text('清除全部筛选'),
+            ),
+          ],
+        ],
+        for (final profile in shown)
+          Card(
+            key: ValueKey('host-card-${profile.id}'),
+            color: widget.tokens.color('card'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: widget.tokens.color('border'))),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    profile.label,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  Text(networkDescription(profile), style: Theme.of(context).textTheme.bodySmall),
+                  const Divider(),
+                  Text('会话 ${profile.target['session']}', style: Theme.of(context).textTheme.titleSmall),
+                  hostSummary(profile),
+                  if (!profile.hasIdentity) const Text('导入未配对 · 无本机身份'),
+                  FilledButton(
+                    key: ValueKey('host-open-${profile.id}'),
+                    onPressed: !busy && catalog.ready && profile.enabled
+                        ? () => open(profile)
+                        : null,
+                    child: Text(
+                      profile.hasIdentity ? '新建视图并审查连接' : '审查导入目标并在此设备配对',
+                    ),
+                  ),
+                  ExpansionTile(
+                    key: ValueKey('host-management-${profile.id}'),
+                    title: const Text('主机资料与管理'),
+                    tilePadding: EdgeInsets.zero,
+                    children: [
+                      Text(
+                        '资料 provider：${hostProviderLabel(profile.provider)} · 入网状态未知\n${profile.target['username']}@${profile.target['host']}:${profile.target['port']}\n会话 ${profile.target['session']} · ${profile.retired
+                            ? '已替换停用，保留原身份待撤销'
+                            : profile.enabled
+                            ? '本机启用'
+                            : '本机停用'}\n${profile.hasIdentity ? profile.restore(catalog.clock()).state : '导入未配对 · 无本机身份'} · 在线与主机授权需重新核验',
+                      ),
+                      if (profile.retired && profile.hasIdentity)
+                        ExpansionTile(
+                          title: const Text('原配对公开请求（供主机核验撤销）'),
+                          children: [
+                            SelectableText(
+                              profile.restore(catalog.clock()).wire,
+                            ),
+                          ],
+                        ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          TextButton(
+                            key: ValueKey('host-rename-${profile.id}'),
+                            onPressed: busy || !catalog.ready
+                                ? null
+                                : () => rename(profile),
+                            child: const Text('重命名'),
+                          ),
+                          TextButton(
+                            key: ValueKey('host-network-${profile.id}'),
+                            onPressed: busy || !catalog.ready || profile.retired
+                                ? null
+                                : () => configureNetwork(profile),
+                            child: const Text('选择／解除网络绑定'),
+                          ),
+                          TextButton(
+                            key: ValueKey('host-provider-${profile.id}'),
+                            onPressed:
+                                busy ||
+                                    !catalog.ready ||
+                                    profile.requiresNetworkBinding
+                                ? null
+                                : () => configureProvider(profile),
+                            child: const Text('旧 provider 标签（仅资料）'),
+                          ),
+                          TextButton(
+                            key: ValueKey('host-disable-${profile.id}'),
+                            onPressed: busy || !catalog.ready || profile.retired
+                                ? null
+                                : () => action(
+                                    () => catalog.update(
+                                      profile.change(
+                                        enabled: !profile.enabled,
+                                        now: catalog.clock(),
+                                      ),
+                                      beforeCommit: () =>
+                                          tabs.closeHost(profile.id),
+                                    ),
+                                  ),
+                            child: Text(
+                              profile.enabled ? '本机停用（不撤销主机）' : '本机启用（仍需审查）',
+                            ),
+                          ),
+                          TextButton(
+                            key: ValueKey('host-delete-${profile.id}'),
+                            onPressed: busy || !catalog.ready
+                                ? null
+                                : () => remove(profile),
+                            child: const Text('删除本机资料与身份'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        const SizedBox(height: 12),
+        if (ordered.isNotEmpty) Text(
+          '资料不会自动连接、替换主机公钥或重放未知操作。',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
       ],
-    ],
-    for (final profile in shown) Card(key:ValueKey('host-card-${profile.id}'),child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      Text(profile.label,style:Theme.of(context).textTheme.titleMedium),
-      hostSummary(profile),
-      Text(networkDescription(profile)),
-      Text('资料 provider：${hostProviderLabel(profile.provider)} · 入网状态未知\n${profile.target['username']}@${profile.target['host']}:${profile.target['port']}\n会话 ${profile.target['session']} · ${profile.retired ? '已替换停用，保留原身份待撤销' : profile.enabled ? '本机启用' : '本机停用'}\n${profile.hasIdentity ? profile.restore(catalog.clock()).state : '导入未配对 · 无本机身份'} · 在线与主机授权需重新核验'),
-      if (profile.retired && profile.hasIdentity) ExpansionTile(title:const Text('原配对公开请求（供主机核验撤销）'),
-        children:[SelectableText(profile.restore(catalog.clock()).wire)]),
-      const SizedBox(height:8),
-      FilledButton(key:ValueKey('host-open-${profile.id}'),onPressed:!busy && catalog.ready && profile.enabled ? () => open(profile) : null,
-        child:Text(profile.hasIdentity ? '新建视图并审查连接' : '审查导入目标并在此设备配对')),
-      Wrap(spacing:8,children:[
-        TextButton(key:ValueKey('host-rename-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => rename(profile),child:const Text('重命名')),
-        TextButton(key:ValueKey('host-network-${profile.id}'),onPressed:busy || !catalog.ready || profile.retired ? null : () => configureNetwork(profile),child:const Text('选择／解除网络绑定')),
-        TextButton(key:ValueKey('host-provider-${profile.id}'),onPressed:busy || !catalog.ready || profile.requiresNetworkBinding ? null : () => configureProvider(profile),child:const Text('旧 provider 标签（仅资料）')),
-        TextButton(key:ValueKey('host-disable-${profile.id}'),onPressed:busy || !catalog.ready || profile.retired ? null : () => action(() => catalog.update(profile.change(enabled:!profile.enabled,now:catalog.clock()),beforeCommit:() => tabs.closeHost(profile.id))),
-          child:Text(profile.enabled ? '本机停用（不撤销主机）' : '本机启用（仍需审查）')),
-        TextButton(key:ValueKey('host-delete-${profile.id}'),onPressed:busy || !catalog.ready ? null : () => remove(profile),child:const Text('删除本机资料与身份')),
-      ]),
-    ]))),
-    const SizedBox(height:12),TextButton(key:const ValueKey('hosts-offline'),onPressed:() { tabs.select(null); Navigator.push<void>(context,MaterialPageRoute(builder:widget.offlineBuilder)); },child:const Text('进入离线终端实验室')),
-    const Text('资料只含公开目标、设备公钥与本机句柄。不会自动连接、替换主机公钥、重建密钥或重放未知操作。'),
-  ]);
+    );
   }
+
+  Widget settings() => ListView(
+    padding: const EdgeInsets.all(16),
+    children: [
+      Text('设置', style: Theme.of(context).textTheme.headlineSmall),
+      const SizedBox(height: 12),
+      ListTile(
+        key: const ValueKey('hosts-terminal-preferences'),
+        leading: const Icon(Icons.text_fields),
+        title: const Text('终端字号'),
+        subtitle: Text('${catalog.terminalFontSize} px · 仅本机显示'),
+        onTap: catalog.ready && !busy && !catalog.writing
+            ? terminalPreferences
+            : null,
+      ),
+      ListTile(
+        key: const ValueKey('hosts-transfer'),
+        leading: const Icon(Icons.import_export),
+        title: const Text('加密导出／导入公开主机资料'),
+        onTap:
+            catalog.ready &&
+                !busy &&
+                !catalog.writing &&
+                catalog.pendingCreation == null
+            ? transfer
+            : null,
+      ),
+      ListTile(
+        key: const ValueKey('hosts-reload'),
+        leading: const Icon(Icons.refresh),
+        title: const Text('重新读取本机资料'),
+        onTap: busy || catalog.writing ? null : catalog.load,
+      ),
+      ListTile(
+        key: const ValueKey('hosts-offline'),
+        leading: const Icon(Icons.science_outlined),
+        title: const Text('离线终端实验室'),
+        onTap: () {
+          tabs.select(null);
+          Navigator.push<void>(
+            context,
+            MaterialPageRoute(builder: widget.offlineBuilder),
+          );
+        },
+      ),
+    ],
+  );
+  Widget terminalList() => ListView(
+    padding: const EdgeInsets.all(16),
+    children: [
+      Text('终端', style: Theme.of(context).textTheme.headlineSmall),
+      if (tabs.tabs.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Text('暂无打开的本地视图 · 请先在看板选择主机'),
+        ),
+      for (final tab in tabs.tabs)
+        ValueListenableBuilder<HostTabView>(
+          valueListenable: tab.view,
+          builder: (context, view, _) => ListTile(
+            key: ValueKey('terminal-list-${tab.id}'),
+            leading: const Icon(Icons.terminal),
+            title: Text(tab.label),
+            subtitle: Text('${view.target} · ${view.label}'),
+            trailing: IconButton(
+              tooltip: '关闭本地标签，不终止远端任务',
+              onPressed: () => tabs.close(tab.id),
+              icon: const Icon(Icons.close),
+            ),
+            onTap: () => tabs.select(tab.id),
+          ),
+        ),
+    ],
+  );
   Widget tabNavigator(HostTab tab) => ValueListenableBuilder<bool>(valueListenable:tab.visible,
     builder:(context,visible,child) => IgnorePointer(ignoring:!visible,child:ExcludeSemantics(excluding:!visible,
       child:FocusScope(canRequestFocus:visible,child:child!))),
@@ -330,33 +630,187 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           tab.summaryLease = lease; return lease;
         },
         onOpenPane:(pane) => openPane(tab,pane)))));
-  Widget tabBar() => SingleChildScrollView(scrollDirection:Axis.horizontal,padding:const EdgeInsets.symmetric(horizontal:12,vertical:6),
-    child:Row(children:[
-      Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(key:const ValueKey('hosts-board-tab'),label:const Text('主机列表'),selected:tabs.activeId == null,onSelected:(_) => tabs.select(null))),
-      for (final tab in tabs.tabs) Padding(padding:const EdgeInsets.only(right:8),child:Container(
-        decoration:BoxDecoration(border:Border.all(color:tabs.activeId == tab.id ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor),borderRadius:BorderRadius.circular(12)),
-        child:Row(mainAxisSize:MainAxisSize.min,children:[
-          ValueListenableBuilder<HostTabView>(valueListenable:tab.view,builder:(context,view,_) =>
-            MergeSemantics(child:Semantics(selected:tabs.activeId == tab.id,child:TextButton(key:ValueKey('host-tab-${tab.id}'),onPressed:() => tabs.select(tab.id),child:ConstrainedBox(
-              constraints:const BoxConstraints(maxWidth:260),child:Text('${tab.label} · ${tab.networkLabel}\n${view.target} · ${view.label}',maxLines:2,overflow:TextOverflow.ellipsis)))))),
-          IconButton(key:ValueKey('host-tab-close-${tab.id}'),tooltip:'关闭本地标签，不终止远端任务',onPressed:() => tabs.close(tab.id),icon:const Icon(Icons.close,size:18)),
-        ]))),
-    ]));
+  Widget tabBar() => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    child: Row(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: ChoiceChip(
+            key: const ValueKey('hosts-board-tab'),
+            label: const Text('主机列表'),
+            selected: tabs.activeId == null,
+            onSelected: (_) { tabs.select(null); setState(() => destination = 0); },
+          ),
+        ),
+        for (final tab in tabs.tabs)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: tabs.activeId == tab.id
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).dividerColor,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ValueListenableBuilder<HostTabView>(
+                    valueListenable: tab.view,
+                    builder: (context, view, _) => MergeSemantics(
+                      child: Semantics(
+                        selected: tabs.activeId == tab.id,
+                        child: TextButton(
+                          key: ValueKey('host-tab-${tab.id}'),
+                          onPressed: () { tabs.select(tab.id); setState(() => destination = 1); },
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 260),
+                            child: Text(
+                              '${tab.label} · ${tab.networkLabel}\n${view.target} · ${view.label}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    key: ValueKey('host-tab-close-${tab.id}'),
+                    tooltip: '关闭本地标签，不终止远端任务',
+                    onPressed: () => tabs.close(tab.id),
+                    icon: const Icon(Icons.close, size: 18),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
   @override
-  Widget build(BuildContext context) => PopScope(canPop:tabs.activeId == null,onPopInvokedWithResult:(didPop,result) {
-    if (didPop) return;
-    final navigator = tabs.active?.navigator.currentState;
-    if (navigator?.canPop() == true) { unawaited(navigator!.maybePop()); } else { tabs.select(null); }
-  },child:Scaffold(appBar:AppBar(title:const Text('herdr pocket · 主机与标签'),actions:[
-    IconButton(key:const ValueKey('hosts-reload'),tooltip:'重新读取本机资料',onPressed:busy || catalog.writing ? null : catalog.load,icon:const Icon(Icons.refresh)),
-  ]),body:SafeArea(child:LayoutBuilder(builder:(context,constraints) => Column(children:[
-    ConstrainedBox(constraints:BoxConstraints(maxHeight:constraints.maxHeight*.18),child:SingleChildScrollView(child:tabBar())),
-    if (tabs.active != null) ConstrainedBox(constraints:BoxConstraints(maxHeight:constraints.maxHeight*.28),child:SingleChildScrollView(child:workspaceSummary())),
-    if (tabs.notice != null) ConstrainedBox(constraints:BoxConstraints(maxHeight:constraints.maxHeight*.12),child:SingleChildScrollView(child:Padding(padding:const EdgeInsets.symmetric(horizontal:16),child:Text(tabs.notice!)))),
-    if (tabs.active != null) ConstrainedBox(constraints:BoxConstraints(maxHeight:constraints.maxHeight*.12),child:SingleChildScrollView(child:Padding(padding:const EdgeInsets.symmetric(horizontal:16,vertical:4),child:Text('隐藏标签暂停观察与输入；连接可保留，返回后需主动恢复并等待原目标新画面。',style:Theme.of(context).textTheme.bodySmall)))),
-    // The nested tab Navigator installs a modal barrier whose BlockSemantics
-    // climbs to the nearest semantic boundary and would otherwise drop the tab
-    // strip, workspace summary and notices from the semantics tree. Contain it.
-    Expanded(child:Semantics(container:true,child:IndexedStack(index:tabs.activeIndex+1,children:[board(),for (final tab in tabs.tabs) KeyedSubtree(key:ValueKey('host-tab-view-${tab.id}'),child:tabNavigator(tab))]))),
-  ])))));
+  Widget build(BuildContext context) => PopScope(
+    canPop: tabs.activeId == null,
+    onPopInvokedWithResult: (didPop, result) {
+      if (didPop) return;
+      final navigator = tabs.active?.navigator.currentState;
+      if (navigator?.canPop() == true) {
+        unawaited(navigator!.maybePop());
+      } else {
+        tabs.select(null);
+      }
+    },
+    child: Scaffold(
+      bottomNavigationBar: NavigationBar(
+        backgroundColor: widget.tokens.color('card'),
+        indicatorColor: widget.tokens.color('brandSoft'),
+        selectedIndex: destination,
+        onDestinationSelected: (index) {
+          setState(() {
+            destination = index;
+          });
+          if (index != 1) tabs.select(null);
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            label: '看板',
+          ),
+          NavigationDestination(icon: Icon(Icons.terminal), label: '终端'),
+          NavigationDestination(key: ValueKey('hosts-networks'), icon: Icon(Icons.language), label: '网络'),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            label: '设置',
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            children: [
+              if (tabs.tabs.isNotEmpty && (destination == 0 || destination == 1))
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * .18,
+                  ),
+                  child: SingleChildScrollView(child: tabBar()),
+                ),
+              if (tabs.active != null)
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * .28,
+                  ),
+                  child: SingleChildScrollView(child: workspaceSummary()),
+                ),
+              if (tabs.notice != null)
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * .12,
+                  ),
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(tabs.notice!),
+                    ),
+                  ),
+                ),
+              if (tabs.active != null)
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * .12,
+                  ),
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      child: Text(
+                        '隐藏标签暂停观察与输入；连接可保留，返回后需主动恢复并等待原目标新画面。',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ),
+                ),
+              // The nested tab Navigator installs a modal barrier whose BlockSemantics
+              // climbs to the nearest semantic boundary and would otherwise drop the tab
+              // strip, workspace summary and notices from the semantics tree. Contain it.
+              Expanded(
+                child: Semantics(
+                  container: true,
+                  child: IndexedStack(
+                    index: destination == 1 && tabs.active != null
+                        ? tabs.activeIndex + 4
+                        : destination,
+                    children: [
+                      board(),
+                      terminalList(),
+                      NetworkProfilesPage(
+                        catalog: catalog,
+                        closeTabs: (ids) {
+                          for (final id in ids) {
+                            tabs.closeHost(id);
+                          }
+                        },
+                      ),
+                      settings(),
+                      for (final tab in tabs.tabs)
+                        KeyedSubtree(
+                          key: ValueKey('host-tab-view-${tab.id}'),
+                          child: tabNavigator(tab),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }

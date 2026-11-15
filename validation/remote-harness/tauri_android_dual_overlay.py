@@ -119,7 +119,8 @@ def wait_named(browser, scope, text, timeout=60):
     return wait_for(lambda: browser.evaluate(expr) is True, 'dual_action_unavailable', timeout=timeout)
 
 
-def create_network(browser, role, material):
+def create_network(browser, role, material, report):
+    report['stage']='network_'+role+'_form'
     browser.click_named('#network-panel', '新增网络配置', 'dual_add_network_missing')
     browser.fill('.network-editor > label:first-of-type input', 'QA TS' if role == 'ts' else 'QA ET')
     browser.select_option('.network-editor > label:nth-of-type(2) select', 'tailscale' if role == 'ts' else 'easytier')
@@ -129,10 +130,12 @@ def create_network(browser, role, material):
         browser.fill('.network-editor > div > label:first-of-type input', material['etNetwork']['networkName'])
         browser.fill('.network-editor > div > label:nth-of-type(2) textarea', material['etNetwork']['peerUrl'])
     browser.click('.network-editor button[type=submit]')
+    report['stage']='network_'+role+'_save'
     title = 'QA TS · Tailscale' if role == 'ts' else 'QA ET · EasyTier'
     scope = wait_for(lambda: profile_scope(browser, title), 'dual_profile_create_failed', timeout=60)
     expand_profile(browser, title)
     wait_named(browser, scope, '配置本机身份')
+    report['stage']='network_'+role+'_identity'
     if role == 'ts':
         confirm_click(browser, scope, '配置本机身份', '创建本机加密设备状态')
     else:
@@ -140,6 +143,7 @@ def create_network(browser, role, material):
         browser.fill('.network-editor input[type=password]', material['etNetwork']['networkSecret'])
         confirm_click(browser, '.network-editor', '保存本机身份', '保存本机网络身份')
     wait_named(browser, scope, '启动节点', timeout=90)
+    report['stage']='network_'+role+'_start'
     confirm_click(browser, scope, '启动节点', '启动 QA ')
     wait_named(browser, scope, '停止节点', timeout=90)
     return scope
@@ -331,8 +335,9 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['stage']='network_setup'
         browser.click('#nav-network')
         wait_for(lambda:browser.evaluate("!document.querySelector('#network-panel').hidden"),'dual_network_page_missing')
-        ts_scope=create_network(browser,'ts',material)
-        create_network(browser,'et',material)
+        ts_scope=create_network(browser,'ts',material,report)
+        create_network(browser,'et',material,report)
+        report['stage']='network_ts_authorize'
         authorize_ts(browser,control,ts_scope)
         wait_for(lambda:'Tailscale 报告 Running' in (browser.read(ts_scope) or ''), 'dual_ts_running_missing',timeout=120)
         report['tsExplicitAuthorization']=True
@@ -384,6 +389,23 @@ def run_direction(apk, auth_apk, session, stopped, report):
         audit(control,surviving,initials[surviving]+second,ordinal=ordinal,sessions_count=count)
         report['stoppedInputUnavailableAndUnchanged']=True
         report['stage']='complete'
+    except Exception as error:
+        if browser:
+            try:
+                report['uiDiagnostic']=browser.evaluate("""(()=>{const p=document.querySelector('#network-panel'),f=p?.querySelector('.network-editor');return {
+                  networkVisible:!!p&&!p.hidden,editorVisible:!!f&&!!f.getClientRects().length,
+                  profileCount:Math.min(9,p?.querySelectorAll('.network-profile-card').length||0),
+                  editorInputs:Math.min(9,f?.querySelectorAll('input,select,textarea').length||0),
+                  applicationVisible:!document.hidden}})()""")
+            except Exception:pass
+        code=str(error)
+        if isinstance(error,GuiFailure):
+            if code.startswith('android_control_missing_'):report['uiFailure']='control_missing'
+            elif code.startswith('android_text_control_missing_'):report['uiFailure']='text_control_missing'
+            elif code in {'android_text_input_mismatch','android_select_option_missing','android_select_option_failed',
+                          'android_cdp_transport_failed','android_cdp_command_failed','android_control_operation_failed'}:
+                report['uiFailure']=code
+        raise
     finally:
         if browser:
             try:browser.close();report['browserClosed']=True

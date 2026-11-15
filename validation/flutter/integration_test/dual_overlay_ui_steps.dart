@@ -54,6 +54,31 @@ class DualOverlayUiSteps {
     await existing.tapPopupOption(tester, option);
   }
 
+  String readVisibleNotice() {
+    final notice = find.byKey(const ValueKey('networks-notice'));
+    if (notice.evaluate().length != 1) return 'not_visible';
+    final message = tester.widget<Text>(notice).data ?? '';
+    return message.contains('节点启动未确认') ? 'start_unconfirmed'
+      : message.contains('不支持无密码模式') ? 'public_unsupported' : 'other';
+  }
+
+  Future<void> captureFailureNotice() async {
+    if (nodeDiagnostic == null ||
+        !(currentStage.endsWith('_node_wait') || currentStage == 'ts_node_ready_refresh')) return;
+    try {
+      final add = find.byKey(const ValueKey('networks-add'));
+      if (add.evaluate().isEmpty) {
+        await tester.scrollUntilVisible(add, -300, scrollable: find.byType(Scrollable).last, maxScrolls: 12);
+      } else {
+        await tester.ensureVisible(add);
+      }
+      await tester.pump();
+      nodeDiagnostic!['notice'] = readVisibleNotice();
+    } catch (_) {
+      // Keep the previous fixed diagnostic and always preserve the original failure.
+    }
+  }
+
   Map<String, Object> readNodeDiagnostic(String id) {
     final status = find.byKey(ValueKey('network-node-status-$id'));
     final text = status.evaluate().length == 1 ? (tester.widget<Text>(status).data ?? '') : '';
@@ -64,20 +89,16 @@ class DualOverlayUiSteps {
       : text.contains('正在启动') ? 'starting'
       : text.contains('正在停止') ? 'closing'
       : text.contains('已停止') ? 'stopped'
-      : text.contains('状态未知') ? 'unknown' : 'other';
+      : text.contains('状态未知') ? 'unknown'
+      : text.contains('运行时不可用') ? 'unavailable' : 'other';
     final edit = find.byKey(ValueKey('network-edit-$id'));
     final add = find.byKey(const ValueKey('networks-add'));
-    final notice = find.byKey(const ValueKey('networks-notice'));
-    final message = notice.evaluate().length == 1 ? (tester.widget<Text>(notice).data ?? '') : '';
-    final noticeKind = message.isEmpty ? 'none'
-      : message.contains('节点启动未确认') ? 'start_unconfirmed'
-      : message.contains('不支持无密码模式') ? 'public_unsupported' : 'other';
-    return {'nodeState': state,
+    return {'nodeState': state, 'statusPresent': status.evaluate().length == 1,
       'editPresent': edit.evaluate().length == 1,
       'editEnabled': edit.evaluate().length == 1 && tester.widget<TextButton>(edit).onPressed != null,
       'addPresent': add.evaluate().length == 1,
       'addEnabled': add.evaluate().length == 1 && tester.widget<FilledButton>(add).onPressed != null,
-      'notice': noticeKind};
+      'notice': readVisibleNotice()};
   }
 
   Future<String> createNetwork({required String role, required String label,

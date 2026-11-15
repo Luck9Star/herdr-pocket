@@ -197,9 +197,9 @@ class SafeUiFailureTest(unittest.TestCase):
     def test_only_fixed_stage_and_class_are_published(self):
         self.assertEqual(safe_ui_failure(b'{"stage":"et_identity_create","kind":"test_failure"}'),
                          {'stage': 'et_identity_create', 'kind': 'test_failure'})
-        diagnostic = b'{"stage":"ts_node_wait","kind":"state_error","nodeState":"starting","editPresent":true,"editEnabled":false,"addPresent":false,"addEnabled":false,"notice":"none"}'
+        diagnostic = b'{"stage":"ts_node_wait","kind":"state_error","nodeState":"starting","statusPresent":true,"editPresent":true,"editEnabled":false,"addPresent":false,"addEnabled":false,"notice":"not_visible"}'
         self.assertEqual(safe_ui_failure(diagnostic)['nodeState'], 'starting')
-        self.assertIsNone(safe_ui_failure(diagnostic.replace(b'"notice":"none"', b'"notice":"secret"')))
+        self.assertIsNone(safe_ui_failure(diagnostic.replace(b'"notice":"not_visible"', b'"notice":"secret"')))
         for raw in (b'{"stage":"secret","kind":"test_failure"}',
                     b'{"stage":"et_identity_create","kind":"secret"}',
                     b'{"stage":"et_identity_create","kind":"test_failure","message":"secret"}', b'not-json'):

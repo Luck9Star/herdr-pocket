@@ -234,7 +234,7 @@ def safe_ui_failure(raw):
     try:
         detail = json.loads(raw)
         basic = {'stage', 'kind'}
-        diagnostic = {'nodeState', 'editPresent', 'editEnabled', 'addPresent', 'addEnabled', 'notice'}
+        diagnostic = {'nodeState', 'statusPresent', 'editPresent', 'editEnabled', 'addPresent', 'addEnabled', 'notice'}
         if (isinstance(detail, dict) and set(detail) in (basic, basic | diagnostic)
                 and isinstance(detail['stage'], str) and detail['stage'] in UI_STAGES
                 and isinstance(detail['kind'], str)
@@ -242,9 +242,9 @@ def safe_ui_failure(raw):
             if set(detail) == basic:
                 return detail
             if (detail['nodeState'] in {'engine_started', 'needs_login', 'needs_machine_auth', 'running',
-                                        'starting', 'closing', 'stopped', 'unknown', 'other'}
-                    and all(type(detail[key]) is bool for key in ('editPresent', 'editEnabled', 'addPresent', 'addEnabled'))
-                    and detail['notice'] in {'none', 'start_unconfirmed', 'public_unsupported', 'other'}):
+                                        'starting', 'closing', 'stopped', 'unknown', 'unavailable', 'other'}
+                    and all(type(detail[key]) is bool for key in ('statusPresent', 'editPresent', 'editEnabled', 'addPresent', 'addEnabled'))
+                    and detail['notice'] in {'not_visible', 'start_unconfirmed', 'public_unsupported', 'other'}):
                 return detail
     except (ValueError, UnicodeDecodeError, TypeError):
         pass

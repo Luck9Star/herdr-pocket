@@ -61,9 +61,10 @@ def case_passed(result, stop_first):
         result[field] is False for field in inactive)
 
 
-def wait_file(path, process, timeout=25):
+def wait_file(path, process, timeout=25, *, socket_expected=False):
     deadline = time.monotonic() + timeout
-    while not path.is_file():
+    ready = path.is_socket if socket_expected else path.is_file
+    while not ready():
         if process.poll() is not None:
             raise et.Failure('fixture_exited_early')
         if time.monotonic() >= deadline:
@@ -132,6 +133,7 @@ def run(bundle, output, stop_first):
         et.command(['sudo', 'mkdir', '-p', '/run/sshd'])
         hosts = []
         for side in ('ET', 'TS'):
+            report['stage'] = side.lower() + '-ssh'
             d = root / side; d.mkdir(mode=0o700)
             host_env = dict(env, XDG_CONFIG_HOME=str(d / 'config'), XDG_STATE_HOME=str(d / 'state'),
                             XDG_DATA_HOME=str(d / 'data'), XDG_CACHE_HOME=str(d / 'cache'))
@@ -178,8 +180,9 @@ LogLevel ERROR
             shutil.copy2(bundle / 'herdr', d / 'herdr')
             conf = d / 'config/herdr'; conf.mkdir(parents=True)
             (conf / 'config.toml').write_text('[update]\nversion_check = false\nmanifest_check = false\n')
+            report['stage'] = side.lower() + '-herdr'
             server = spawn([d / 'herdr', '--session', 'pocket-probe', 'server'], side + '-herdr', host_env)
-            sock = conf / 'sessions/pocket-probe/herdr.sock'; wait_file(sock, server)
+            sock = conf / 'sessions/pocket-probe/herdr.sock'; wait_file(sock, server, socket_expected=True)
             deadline = time.monotonic() + 15
             while True:
                 try:
@@ -203,6 +206,7 @@ LogLevel ERROR
             pane = created['result']['root_pane']['pane_id']
             if not isinstance(pane, str) or not pane or len(pane) > 128:
                 raise et.Failure('pane_invalid')
+            report['stage'] = side.lower() + '-pane'
             echo = et.HARNESS / 'dual_overlay_echo.py'
             et.command([d / 'herdr', '--session', 'pocket-probe', 'pane', 'run', pane,
                         shlex.join(['/usr/bin/python3', str(echo), str(d), side])], env=host_env)
@@ -218,11 +222,13 @@ LogLevel ERROR
         peer_port = free_port()
         peer_config = root / 'peer.toml'
         peer_config.write_text(et.native_config(network, secret, peer_port, server=True)); peer_config.chmod(0o600)
+        report['stage'] = 'easytier-peer'
         peer = spawn([bundle / 'peer', peer_config, root, hosts[0][1]], 'et-peer')
         wait_file(root / 'peer-ready', peer)
         virtual_port = json.loads((root / 'peer-ready').read_text())['virtualTcpPort']
         hosts[0][2].update(host=et.OVERLAY_HOST, port=virtual_port)
         ts_dir = root / 'ts-fixture'; ts_dir.mkdir(mode=0o700)
+        report['stage'] = 'tailscale-peer'
         ts_peer = spawn([bundle / 'ts-fixture', '-test.run=^TestServeFixture$', '-test.timeout=180s'],
                         'ts-peer', {'HP_TS_FIXTURE_WORK_DIR': str(ts_dir),
                                     'HP_TS_FIXTURE_BRIDGE': f'127.0.0.1:{hosts[1][1]}'}, pipe=True)

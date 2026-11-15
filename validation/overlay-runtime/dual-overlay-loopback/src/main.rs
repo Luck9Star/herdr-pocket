@@ -233,16 +233,19 @@ async fn send(input: &LiveInput, data: &[u8]) -> Result<(), &'static str> {
         Err("input_send_failed")
     }
 }
+fn explicit_dial_error<T, E>(outcome: Result<Result<T, E>, tokio::time::error::Elapsed>) -> bool {
+    matches!(outcome, Ok(Err(_)))
+}
 async fn reject(dialer: &OverlayDialer, host: &str, port: u16) -> bool {
-    !matches!(
+    explicit_dial_error(
         tokio::time::timeout(
             Duration::from_secs(5),
-            dialer.dial(host.into(), port, Cancellation::default())
+            dialer.dial(host.into(), port, Cancellation::default()),
         )
         .await,
-        Ok(Ok(_))
     )
 }
+
 async fn run(
     input: &Input,
     runtime: Arc<OverlayRuntime>,
@@ -521,6 +524,24 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn harness_timeout_is_not_a_product_rejection() {
+        let exec = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        exec.block_on(async {
+            let elapsed = tokio::time::timeout(
+                Duration::from_millis(1),
+                std::future::pending::<Result<(), ()>>(),
+            )
+            .await;
+            assert!(!explicit_dial_error(elapsed));
+            assert!(explicit_dial_error::<(), ()>(Ok(Err(()))));
+            assert!(!explicit_dial_error::<(), ()>(Ok(Ok(()))));
+        });
+    }
 
     #[test]
     fn rejected_unknown_and_stale_are_never_counted_as_accepted() {

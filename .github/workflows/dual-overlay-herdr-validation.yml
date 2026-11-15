@@ -102,6 +102,10 @@ jobs:
             if [ -n "$pids" ]; then sudo kill -KILL $pids || true; fi
             sudo ip netns delete "$namespace"
           fi
+          cache="$RUNNER_TEMP/hp-ts-cache"
+          if [ -d "$cache" ] && [ ! -L "$cache" ]; then
+            find -P "$cache" -type d -user "$(id -u)" -exec chmod u+w {} +
+          fi
           rm -rf -- "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" "$RUNNER_TEMP/hp-ts-candidate" "$RUNNER_TEMP/hp-ts-cache"
           export HP_DUAL_STRAGGLERS="$remaining"
           python3 - <<'PYEND'

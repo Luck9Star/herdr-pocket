@@ -6,6 +6,7 @@ from pathlib import Path
 import pty
 import queue
 import select
+import socket
 import subprocess
 import sys
 import tempfile
@@ -76,6 +77,51 @@ class EventTests(unittest.TestCase):
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((bundle / 'herdr').read_bytes(), binary)
+
+    def test_owned_readonly_go_cache_can_be_removed(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / '.github/workflows/dual-overlay-herdr-validation.yml').read_text()
+        self.assertIn('find -P "$cache" -type d -user "$(id -u)" -exec chmod u+w {} +', workflow)
+        with tempfile.TemporaryDirectory() as temp:
+            cache = Path(temp) / 'hp-ts-cache'
+            module = cache / 'modules' / 'pinned-module'
+            module.mkdir(parents=True)
+            (module / 'go.mod').write_text('module fixture\n')
+            module.chmod(0o555)
+            outside = Path(temp) / 'outside'
+            outside.mkdir(mode=0o555)
+            (cache / 'external-link').symlink_to(outside, target_is_directory=True)
+            subprocess.run(['find', '-P', str(cache), '-type', 'd', '-user', str(os.getuid()),
+                            '-exec', 'chmod', 'u+w', '{}', '+'], check=True)
+            self.assertEqual(outside.stat().st_mode & 0o777, 0o555)
+            shutil.rmtree(cache)
+            self.assertFalse(cache.exists())
+
+    def test_wait_file_accepts_a_real_unix_socket(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'fixture.sock'
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(path))
+                self.assertFalse(path.is_file())
+                process = subprocess.Popen([sys.executable, '-c', 'pass'])
+                try:
+                    dual.wait_file(path, process, timeout=1, socket_expected=True)
+                finally:
+                    process.wait()
+
+    def test_socket_wait_rejects_file_and_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            regular = root / 'regular'; regular.write_text('not a socket')
+            directory = root / 'directory'; directory.mkdir()
+            process = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(2)'])
+            try:
+                for path in (regular, directory):
+                    with self.subTest(path=path.name):
+                        with self.assertRaisesRegex(dual.et.Failure, 'fixture_ready_timeout'):
+                            dual.wait_file(path, process, timeout=.02, socket_expected=True)
+            finally:
+                process.terminate(); process.wait()
 
     def test_redacts_unrecognized_client_error(self):
         payload = {key: False for key in dual.BOOL_FIELDS}

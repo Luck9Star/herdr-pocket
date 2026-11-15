@@ -97,7 +97,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   tauri-device:
-    if: '!startsWith(github.ref, "refs/heads/codex/acceptance/tauri-android-dual-overlay-build-")'
+    if: ${{ !startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-build-') }}
     needs: tauri-build
     runs-on: ubuntu-24.04
     timeout-minutes: 60

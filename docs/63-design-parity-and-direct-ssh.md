@@ -74,11 +74,19 @@ Rust 仅新增 russh 的独立 `rsa` feature，仍关闭默认 features 并保�
 
 此增量证明实际 Flutter Widget 引擎中的两条真实 SSH/herdr 连接；signer、目录和输入 journal 是明确的测试实现，没有帧或适配器替身。它不证明原生桌面窗口、系统密钥/journal 落盘、物理 IME 或跨网络。上面的 S06 PNG 仍属于先前合成适配器批次，不冒充这两轮的截图。
 
+Tauri 的 `042c80f` 已在原生 Linux GTK WebView 以两条真实隔离 SSH/herdr 连接复验 S06：[stock 运行 43676588247](https://github.com/Luck9Star/herdr-pocket/actions/runs/43676588247) 工件 `14146414384` 和 [guarded 运行 43676590579](https://github.com/Luck9Star/herdr-pocket/actions/runs/43676590579) 工件 `14146323622` 的 manifest 均为 passed；已保留 [stock 摘要](evidence/design-parity-20261115/tauri-s06-stock-43676588247.json)与 [guarded 摘要](evidence/design-parity-20261115/tauri-s06-guarded-43676590579.json)。两侧对应不同 terminal、真实可见文本帧各自递增，两个连接在驱动退出前关闭；stock 两端输入均为 0，guarded 两端收到的字节分别为 9 与 1 且与预期完全匹配，焦点切换不自动恢复输入、迟到输入被拒。第二共享 PTY 分别采样 463 / 402 次，均无 resize；使用的是进程内临时测试身份，不证明系统密钥存储或物理 IME。
+
+这次同时修正了桌面分屏说明占据网格单格、未选标签在暗底对比度不足，以及折叠表单的未绘制矩形被误判为终端遮挡的问题；实际 GTK 可见文本选择在两侧均成功。[stock 原始截图](evidence/design-parity-20261115/tauri-s06-stock-43676588247.png)显示两侧同顶、标签可读与 CJK 字形；[runner 字体记录](evidence/design-parity-20261115/tauri-s06-gtk-fonts-042c80f.txt)显示安装了 Noto CJK，它不是未安装字体环境的证据。Linux Tauri 的 `042c80f` 成品 .deb 工件 `14146599628` 独立读回 `Depends: fonts-noto-cjk | fonts-wqy-microhei, libwebkit2gtk-4.1-0, libgtk-3-0`，并由 Linux 构建中的 `dpkg-deb -f` 检查；字体作为 Debian 系统依赖，不改变其他平台或随包嵌入大型字体。图形字形可读和终端网格/所有字符组合的完整正确性仍需分别验证。
+
 作为另一层独立证据，`e5cdaeb` 的 Linux 原生 Flutter 与 Tauri stock herdr 配对都通过，两个 manifest 均记录输入 0 字节；`bd083d8` 的双壳五端构建通过。它们分别证明对应版本的配对观察路径与构建，不可扩成普通 SSH Android UI 或 S06 真实双连接运行通过。
 
 Flutter 的 `a2ffb4b` [guarded Android 运行 43667868489](https://github.com/Luck9Star/herdr-pocket/actions/runs/43667868489)也已独立回读通过：stock 路径输入 0 字节，guarded 工件 `14143482126` 记录 10 字节，逐键与草稿各自受理；粘贴取消、再次预览和本地追加没有额外 SSH 字节，生命周期与原目标核对通过。这是对应版本单端受保护输入的模拟器证据，不是 S06 真实双连接或物理 IME 验证。旧 `fba4` 运行的 AVD 255 根因仍未查明，诊断或用例依赖修复不构成该故障已根治的证据；专用 TUI 运行另行核对。
 
 专用 TUI 的 Tauri `c9f191d` [运行 43670510076](https://github.com/Luck9Star/herdr-pocket/actions/runs/43670510076)中，`android-device-key` 作业通过；工件 `14145185000` 的真实 curses 主机状态与 10 个输入回执匹配，`manifest.stoppedStale=true`，`progress.postStopInputUnchanged=true`，停止按钮首次命中。另记录 7 个系统 IME 显示/收起检查点，不能扩大为真实中文组字或实体键盘通过。`receivedInputBytes=10` 是 curses 之外的原始捕获阶段，不代表全部 TUI 输入只有 10 字节。该混合工作流另有 Flutter 作业失败，不能写成整条运行全部通过。
+
+## S19 macOS 配置文件往返
+
+Tauri `f64717b` 的 macOS 原生 debug 包工件 `14146348398` 经隔离 bundle ID 本机验收，内层 app.zip SHA256 `e706c3dfe4179a67e38bb224d38dc224464db13342315a4d0a6f3e55f537a496`。在无主机资料的临时配置中，将字号设为 19，经系统文件对话框导出 126 字节 HPKT，再改为 13；错误口令被拒且不改变设置，正确口令导入预览中 19 默认未选，手动勾选并确认后字号恢复为 19，主机仍为 0。该证据只覆盖字号偏好及系统文件交互，不扩大为主机、身份或其他配置迁移验证；不保存测试口令和密文。
 
 ## S17 受理回执与 Android 停止观察
 
@@ -123,4 +131,4 @@ RSA 功能快照 `621b793349d7e44332d617e76a345086c272e931` 的两壳 API35 Andr
 
 ## 尚待独立补证
 
-S06 的原生桌面双窗与手机设备、手机真机触控/IME/相机/系统密钥存储、其他主机算法与认证组合、三网路由、长时间运行和正式发布均不能由本页证据推出。后续每项新增结论必须对应新的实际运行记录；历史“只允许远端 herdr”作为当时基线保留，现行两类远端接入范围以本页及架构/产品设计的 2026-11-15 增量为准。
+S06 在 macOS/Windows 原生桌面及手机设备的双窗、手机真机触控/IME/相机/系统密钥存储、其他主机算法与认证组合、三网路由、长时间运行和正式发布均不能由本页证据推出。后续每项新增结论必须对应新的实际运行记录；历史“只允许远端 herdr”作为当时基线保留，现行两类远端接入范围以本页及架构/产品设计的 2026-11-15 增量为准。

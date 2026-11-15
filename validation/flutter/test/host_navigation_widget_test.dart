@@ -107,10 +107,17 @@ void main() {
       expect(tester.getRect(chip).right,lessThanOrEqualTo(304));
       expect(chip.hitTestable(),findsOneWidget);
     }
-    expect(tester.getRect(secondSession).bottom,lessThan(tester.getRect(find.byType(NavigationBar)).top));
     await capture('multi-320');
-    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    final secondOpen=find.byKey(ValueKey('host-open-${other.id}'));
+    await tester.ensureVisible(secondOpen); await tester.pumpAndSettle();
+    expect(secondOpen.hitTestable(),findsOneWidget);
+    expect(tester.widget<FilledButton>(secondOpen).onPressed,isNotNull);
+    await tester.ensureVisible(find.byKey(const ValueKey('hosts-search'))); await tester.pumpAndSettle();
+    tester.platformDispatcher.textScaleFactorTestValue = 1.1;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpAndSettle();
+    expect(secondSession,findsOneWidget);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
     await tester.pumpAndSettle();
     for (final name in ['all','current','history']) {
       final chip=find.byKey(ValueKey('hosts-filter-$name'));

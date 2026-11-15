@@ -240,7 +240,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         if (sync != null) Tooltip(message:value!.detail,child:Text('同步 $sync${value.current ? '' : ' · 待核查'}',
           style:Theme.of(context).textTheme.bodySmall?.copyWith(color:widget.tokens.color('textSecondary')))),
         if (value != null && distinct.isNotEmpty) ...[
-          for (final pane in distinct.values) Padding(padding:const EdgeInsets.only(top:8),child:Row(children:[
+          for (final pane in distinct.values) Padding(padding:const EdgeInsets.only(top:4),child:Row(children:[
             Expanded(child:Text('${pane.label == null ? pane.paneId : '${pane.label} · ${pane.paneId}'}${pane.agent == null ? '' : ' / ${pane.agent}'}',
               style:Theme.of(context).textTheme.labelLarge)),
             Text(value.current ? '待处理' : '待核查',style:Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -485,7 +485,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             elevation: 0,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: widget.tokens.color('border'))),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -494,9 +494,9 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                     statusBadge(profile),
                   ]),
                   Text(networkDescription(profile), style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   Material(color: widget.tokens.color('cardSubtle'), borderRadius: BorderRadius.circular(10),
-                    child: Padding(padding: const EdgeInsets.all(10), child: Column(
+                    child: Padding(padding: const EdgeInsets.all(8), child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                         hostSummary(profile),
                       ]))),

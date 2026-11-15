@@ -158,7 +158,7 @@ Flutter 普通 SSH 新增显式“粘贴私钥”入口：只在私钥模式主�
 
 `4be102e` 冻结了手机 S03、普通 SSH 凭据门槛和 S27 网络页；独立归档源码完整验证为 **533 passed / 4 skipped / 0 failed**，analyzer 无问题。S27 使用紧凑配置与节点状态、实际绑定主机名和按需展开管理；40 项定向回归包含停用影响以及撤销、删除保护。[320 宽度](evidence/design-parity-20261115/s27-networks-320.png)与[390 宽度](evidence/design-parity-20261115/s27-networks-390.png)是使用合成节点数据的实际 Widget 渲染，证明界面与交互，不替代真实组网或设备路由证据。
 
-后续 Flutter 网络页将内部错误码提示改为面向用户的说明：入网身份保存在本机，网络组件不可用时已绑定主机保持断开，恢复后可重新审查连接。固定 SDK 的网络页 Widget 测试在 320 与 390 宽度检查新文案，并保留节点停用、删除与禁回退断言；本文件上述两张 S27 截图为文案调整前的历史图。
+后续 Flutter 网络页将内部错误码提示改为面向用户的说明：入网身份保存在本机，网络组件不可用时已绑定主机保持断开，恢复后可重新审查连接。固定 SDK 的网络页 Widget 测试在 320 与 390 宽度检查新文案，并保留节点停用、删除与禁回退断言；[更新后 320×844](evidence/design-parity-20261115/s27-networks-guidance-320.png)和[390×844](evidence/design-parity-20261115/s27-networks-guidance-390.png)为 macOS 上合成资料的实际 Widget 渲染，上述原图保留为文案调整前的历史图。
 
 ## EasyTier Linux 真实 overlay 链路（2026-11-15）
 

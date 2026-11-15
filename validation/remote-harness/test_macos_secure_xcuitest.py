@@ -168,6 +168,25 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('pending.append(contentsOf: node.children)',scanner)
         self.assertNotIn('allElementsBoundByIndex',scanner)
 
+    def test_disconnect_observation_window_and_key_order(self):
+        swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()
+        connected=swift[swift.index('private func connectedDisconnect'):swift.index('private func peerObservationWindow')]
+        self.assertIn('node.value as? String',connected)
+        self.assertIn('["Esc", "Ctrl-C", "Enter"]',connected)
+        self.assertIn('!element(app, "地址").exists',connected)
+        self.assertIn('Date().addingTimeInterval(30)',connected)
+        window=swift[swift.index('private func peerObservationWindow'):swift.index('func testSystemMasking')]
+        self.assertLess(window.index('DisconnectTapped'),window.index('usleep(15_000_000)'))
+        self.assertLess(window.index('usleep(15_000_000)'),window.index('DisconnectWindowEnded'))
+        for name, phase, button in (('testPasswordSSH', 'password', 'disconnect'), ('testEncryptedKeySSH', 'key', 'keyDisconnect')):
+            case=swift[swift.index('func '+name):].split('\n    func ',1)[0]
+            self.assertLess(case.index('mark("'+phase+'DisconnectAttempt")'),case.index('tap(app, '+button+')'))
+            self.assertLess(case.index('tap(app, '+button+')'),case.index('peerObservationWindow("'+phase+'")'))
+            self.assertLess(case.index('peerObservationWindow("'+phase+'")'),case.index('app.terminate()'))
+        key=swift[swift.index('func testEncryptedKeySSH'):swift.index('func testReturnAndReopen')]
+        self.assertLess(key.index('app.typeText(phrase)'),key.index('app.typeText(privateKey)'))
+        self.assertLess(key.index('try assertNoSecrets(app, [password, phrase])'),key.index('app.typeText(privateKey)'))
+
     def test_fingerprint_mouse_fallback_requires_unique_visible_target_and_actual_confirmation(self):
         swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()
         helper=swift[swift.index('private func confirmFingerprint'):swift.index('private func typeOrdinaryOnce')]

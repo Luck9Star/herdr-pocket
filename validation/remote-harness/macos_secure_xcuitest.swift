@@ -306,6 +306,37 @@ final class SecureCredentialUITests: XCTestCase {
         tap(app, entry)
     }
 
+    private func connectedDisconnect(_ app: XCUIApplication) throws -> XCUIElement {
+        let disconnect = app.buttons.matching(NSPredicate(format: "label == %@", "断开"))
+        let deadline = Date().addingTimeInterval(30)
+        repeat {
+            let nodes = try snapshotNodes(app)
+            let statusSeen = nodes.contains { node in
+                [node.label, node.value as? String ?? ""].contains {
+                    $0.contains("已连接 · 输入直接发送到远端 shell")
+                }
+            }
+            let keysSeen = ["Esc", "Ctrl-C", "Enter"].allSatisfy { name in
+                let button = app.buttons.matching(NSPredicate(format: "label == %@", name))
+                return button.count == 1 && stableHit(button.firstMatch) && button.firstMatch.isEnabled
+            }
+            let connectedPage = statusSeen || (keysSeen && !element(app, "地址").exists)
+            if connectedPage && disconnect.count == 1 && stableHit(disconnect.firstMatch) && disconnect.firstMatch.isEnabled {
+                return disconnect.firstMatch
+            }
+            usleep(100_000)
+        } while Date() < deadline
+        XCTFail("connected page and usable disconnect action not confirmed")
+        return disconnect.firstMatch
+    }
+
+    // The parent observes the independently owned peer while the app and driver remain alive.
+    private func peerObservationWindow(_ phase: String) {
+        mark(phase + "DisconnectTapped")
+        usleep(15_000_000)
+        mark(phase + "DisconnectWindowEnded")
+    }
+
     func testSystemMasking() throws {
         continueAfterFailure = false
         let config = try fixture()
@@ -396,13 +427,13 @@ final class SecureCredentialUITests: XCTestCase {
         let connect = app.buttons["连接 SSH"]
         mark("passwordConnectAttempt")
         tap(app, connect, phase: "passwordConnect")
-        let connected = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "已连接 · 输入直接发送到远端 shell")).firstMatch
-        XCTAssertTrue(connected.waitForExistence(timeout: 30), "native SSH session did not authenticate")
+        let disconnect = try connectedDisconnect(app)
         mark("sshConnected")
-        let disconnect = app.buttons["断开"]
-        XCTAssertTrue(disconnect.waitForExistence(timeout: 10), "disconnect action missing")
         try assertNoSecrets(app, [password, phrase])
+        mark("passwordDisconnectAttempt")
+        usleep(3_000_000)
         tap(app, disconnect)
+        peerObservationWindow("password")
         XCTAssertTrue((secureField(app, "direct-secret").value as? String ?? "").isEmpty, "password not cleared after disconnect")
         mark("disconnectedAndCleared")
 
@@ -440,24 +471,28 @@ final class SecureCredentialUITests: XCTestCase {
         mark("keyConfirmed")
         mark("keyCredentialAttempt")
         tap(app, element(app, "使用私钥认证"))
+        let keyPassphrase = secureField(app, "direct-passphrase")
+        tap(app, keyPassphrase);app.typeText(phrase)
+        if let maskedValue = keyPassphrase.value as? String {
+            XCTAssertFalse(maskedValue.isEmpty, "passphrase input state empty")
+        }
+        try assertNoSecrets(app, [password, phrase])
         let pemGroup = element(app, "私钥 PEM（仅本次使用）")
         reveal(app, pemGroup)
         let pemView = pemGroup.descendants(matching: .textView).firstMatch
         let pem = pemView.exists ? pemView : pemGroup.descendants(matching: .textField).firstMatch
         tap(app, pem);app.typeText(privateKey)
-        let keyPassphrase = secureField(app, "direct-passphrase")
-        tap(app, keyPassphrase);app.typeText(phrase)
         try assertNoSecrets(app, [password, phrase])
         mark("keyCredentialEntered")
         let keyConnect = app.buttons["连接 SSH"]
         mark("keyConnectAttempt")
         tap(app, keyConnect, phase: "keyConnect")
-        let keyConnected = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "已连接 · 输入直接发送到远端 shell")).firstMatch
-        XCTAssertTrue(keyConnected.waitForExistence(timeout: 30), "encrypted key session did not authenticate")
+        let keyDisconnect = try connectedDisconnect(app)
         mark("encryptedKeyConnected")
-        let keyDisconnect = app.buttons["断开"]
-        XCTAssertTrue(keyDisconnect.exists && keyDisconnect.isHittable, "disconnect action missing")
+        mark("keyDisconnectAttempt")
+        usleep(3_000_000)
         tap(app, keyDisconnect)
+        peerObservationWindow("key")
         XCTAssertTrue((secureField(app, "direct-passphrase").value as? String ?? "").isEmpty, "passphrase not cleared after disconnect")
         mark("encryptedKeyDisconnectedAndCleared")
 

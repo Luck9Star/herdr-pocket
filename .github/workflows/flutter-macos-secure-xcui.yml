@@ -47,11 +47,53 @@ jobs:
           python3 validation/remote-harness/macos_secure_xcuitest.py --app "$RUNNER_TEMP/flutter-probe" --install-hook
           python3 validation/remote-harness/macos_secure_xcuitest.py --app "$RUNNER_TEMP/flutter-probe" --fixture "$RUNNER_TEMP/macos-secure-fixture/fixture.json"
           set +e
-          xcodebuild test -workspace "$RUNNER_TEMP/flutter-probe/macos/Runner.xcworkspace" \
+          python3 - "$RUNNER_TEMP/macos-secure-private.log" "$RUNNER_TEMP/macos-secure-fixture/facts.json" "$RUNNER_TEMP/macos-secure-private-live.json" \
+            xcodebuild test -workspace "$RUNNER_TEMP/flutter-probe/macos/Runner.xcworkspace" \
             -scheme Runner -configuration Debug -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/macos-secure-derived" \
-            -resultBundlePath "$RUNNER_TEMP/macos-secure-private.xcresult" \
-            > "$RUNNER_TEMP/macos-secure-private.log" 2>&1
+            -resultBundlePath "$RUNNER_TEMP/macos-secure-private.xcresult" <<'PY'
+          import json, subprocess, sys, time
+          log_path, facts_path, live_path = sys.argv[1:4]
+          fields = ('authAccepted', 'ptyRequested', 'shellRequested', 'sessionClosed', 'connectionsClosed')
+          names = {'password': 'password', 'key': 'encryptedKey'}
+          active = {name: False for name in names}
+          attempting = {name: False for name in names}
+          before = {name: False for name in names}
+          verified = {name: False for name in names}
+          ended = {name: False for name in names}
+          with open(log_path, 'wb') as output:
+              process = subprocess.Popen(sys.argv[4:], stdout=output, stderr=subprocess.STDOUT)
+              with open(log_path, 'rb') as source:
+                  pending = b''
+                  while process.poll() is None:
+                      pending += source.read()
+                      lines = pending.split(b'\n')
+                      pending = lines.pop()
+                      chunk = b'\n'.join(lines).decode('utf-8', errors='replace').lower()
+                      for name in names:
+                          if 'hp_xcui_stage=' + name + 'disconnectattempt' in chunk and not ended[name]:
+                              attempting[name] = True
+                          if 'hp_xcui_stage=' + name + 'disconnecttapped' in chunk and not ended[name]:
+                              attempting[name] = False
+                              active[name] = True
+                          if 'hp_xcui_stage=' + name + 'disconnectwindowended' in chunk:
+                              active[name] = False
+                              ended[name] = True
+                      if any(active.values()) or any(attempting.values()):
+                          try:
+                              with open(facts_path) as facts_file: facts = json.load(facts_file)
+                              for name, peer in names.items():
+                                  if attempting[name] and process.poll() is None and all(facts[peer].get(field) is True for field in fields[:3]) and all(facts[peer].get(field) is False for field in fields[3:]):
+                                      before[name] = True
+                                  if active[name] and before[name] and process.poll() is None and all(facts[peer].get(field) is True for field in fields):
+                                      verified[name] = True
+                          except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                              pass
+                      time.sleep(0.05)
+              result = process.wait()
+          with open(live_path, 'w') as live_file: json.dump({name: verified[name] and ended[name] for name in names}, live_file)
+          sys.exit(result)
+          PY
           result=$?
           set -e
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/macos-secure-private.xcresult" --format json > "$RUNNER_TEMP/macos-secure-private-summary.json" 2>/dev/null || true
@@ -95,6 +137,10 @@ jobs:
           python3 - "$RUNNER_TEMP/macos-secure-evidence/result.json" "$result" <<'PY'
           import json, os, re, sys
           sha=os.environ.get('GITHUB_SHA','')
+          try:
+              with open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-private-live.json')) as source: live=json.load(source)
+              live_peer=live.get('password') is True and live.get('key') is True
+          except (OSError,ValueError,TypeError,AttributeError): live_peer=False
           try:
               facts=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'macos-secure-fixture','facts.json')))
               valid=lambda value: all(value.get(k) is True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed'))
@@ -201,13 +247,14 @@ jobs:
           passphrase_proven=progress.get('passphraseValuePresent') is True or key_peer
           masking_verified=cases['testSystemMasking']['passed'] and all(progress.get(k) is True for k in mask_stages) and password_proven and passphrase_proven
           exact_counts=counts.get('totalTestCount')==4 and counts.get('passedTests')==4 and counts.get('failedTests')==0 and counts.get('skippedTests')==0
-          ok=sys.argv[2]=='0' and peer and key_peer and test_passed and completed and masking_verified and exact_counts
+          ok=sys.argv[2]=='0' and peer and key_peer and live_peer and test_passed and completed and masking_verified and exact_counts
           report={'schemaVersion':1,'sourceSHA':sha if re.fullmatch(r'[0-9a-f]{40}',sha) else None,
                   'platform':'macos-xcuitest','status':'passed' if ok else 'failed',
                   'scope':'native UI security fields and owned SSH loopback; synthetic values; no physical IME',
                   'embedderFallbackRequested':'hp_xcui_stage=embedderfallbackrequested' in log,
                   'systemTreeAndSecureFieldsVerified':masking_verified,'testExecuted':test_executed,'testPassed':test_passed,'cases':cases,
                   'peerAuthenticationPtyShellAndClose':peer,'encryptedKeyPeerAuthenticationPtyShellAndClose':key_peer,
+                  'peerCloseObservedDuringDisconnectWindows':live_peer,
                   'passwordInputProven':password_proven,'passphraseInputProven':passphrase_proven,'buildStarted':('swiftcompile' in log or 'build target' in log),
                   'testStarted':('test suite' in log or 'test case' in log),'testCounts':counts,
                   'failureMethod':failure_method,'failedMethods':failed_methods,'buildDiagnostics':diagnostics,'fixedFailures':fixed_failures,

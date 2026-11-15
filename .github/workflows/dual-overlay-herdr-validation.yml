@@ -11,8 +11,29 @@ concurrency:
 jobs:
   input-fixture:
     uses: ./.github/workflows/input-extension-validation.yml
+  namespace-preflight:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Validate actual dummy and route shape before native builds
+        run: |
+          namespace="hp-dual-pre-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          trap 'sudo ip netns delete "$namespace"' EXIT
+          sudo ip netns add "$namespace"
+          sudo ip netns exec "$namespace" ip link set lo up
+          sudo ip netns exec "$namespace" ip link add hp-dummy type dummy
+          sudo ip netns exec "$namespace" sysctl -q -w net.ipv6.conf.hp-dummy.disable_ipv6=1
+          sudo ip netns exec "$namespace" ip address add 192.0.2.1/32 dev hp-dummy
+          sudo ip netns exec "$namespace" ip link set hp-dummy up
+          sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
+            PYTHONPATH="$GITHUB_WORKSPACE/validation/remote-harness" \
+            /usr/bin/python3 -c 'import dual_overlay_loopback as d; d.check_current_namespace(); print("isolated dummy and local-only routes verified")'
   dual-overlay:
-    needs: input-fixture
+    needs: [input-fixture, namespace-preflight]
     if: startsWith(github.ref, 'refs/heads/codex/')
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -74,11 +95,15 @@ jobs:
             cargo +1.96.0 build --locked --features real \
               --manifest-path validation/overlay-runtime/dual-overlay-loopback/Cargo.toml
           cp "$bundle/target/debug/herdr-dual-overlay-loopback" "$bundle/probe"
-      - name: Exercise both providers in a loopback-only namespace
+      - name: Exercise both providers in an isolated namespace
         run: |
           namespace="hp-dual-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           sudo ip netns add "$namespace"
           sudo ip netns exec "$namespace" ip link set lo up
+          sudo ip netns exec "$namespace" ip link add hp-dummy type dummy
+          sudo ip netns exec "$namespace" sysctl -q -w net.ipv6.conf.hp-dummy.disable_ipv6=1
+          sudo ip netns exec "$namespace" ip address add 192.0.2.1/32 dev hp-dummy
+          sudo ip netns exec "$namespace" ip link set hp-dummy up
           status=0
           for first in et ts; do
             sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \

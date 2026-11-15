@@ -8,6 +8,7 @@ input-extension binary). No real account or credential is used. Only a sanitized
 manifest is emitted; raw process output stays in the temporary directory.
 """
 import argparse
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -105,10 +106,60 @@ def read_event(events, expected, process, timeout=45):
     raise et.Failure('ts_fixture_event_timeout')
 
 
+def checked_isolated_namespace(links, addresses, routes):
+    """Permit only loopback and one unconnected TEST-NET /32 dummy interface."""
+    if not isinstance(links, list) or {item.get('ifname') for item in links} != {'lo', 'hp-dummy'} or len(links) != 2:
+        raise et.Failure('isolated_links_invalid')
+    by_name = {item['ifname']: item for item in links}
+    if ('UP' not in by_name['lo'].get('flags', []) or
+            'UP' not in by_name['hp-dummy'].get('flags', []) or
+            by_name['hp-dummy'].get('linkinfo', {}).get('info_kind') != 'dummy'):
+        raise et.Failure('isolated_dummy_invalid')
+    if not isinstance(addresses, list) or {item.get('ifname') for item in addresses} != {'lo', 'hp-dummy'} or len(addresses) != 2:
+        raise et.Failure('isolated_addresses_invalid')
+    expected = {
+        'lo': {('inet', '127.0.0.1', 8), ('inet6', '::1', 128)},
+        'hp-dummy': {('inet', '192.0.2.1', 32)},
+    }
+    for item in addresses:
+        found = {(addr.get('family'), addr.get('local'), addr.get('prefixlen')) for addr in item.get('addr_info', [])}
+        allowed = expected[item['ifname']]
+        required = {('inet', '127.0.0.1', 8)} if item['ifname'] == 'lo' else allowed
+        if not required <= found <= allowed:
+            raise et.Failure('isolated_addresses_invalid')
+    if not isinstance(routes, list) or not routes:
+        raise et.Failure('isolated_routes_invalid')
+    for route in routes:
+        if (route.get('table') != 'local' or route.get('type') not in ('local', 'broadcast')
+                or route.get('gateway') is not None or route.get('via') is not None
+                or route.get('nexthops') is not None):
+            raise et.Failure('isolated_routes_invalid')
+        try:
+            destination = ipaddress.ip_network(route.get('dst', ''), strict=False)
+        except ValueError:
+            raise et.Failure('isolated_routes_invalid') from None
+        if route.get('dev') == 'lo':
+            allowed = (destination.version == 4 and destination.subnet_of(ipaddress.ip_network('127.0.0.0/8'))
+                       or destination == ipaddress.ip_network('::1/128'))
+        else:
+            allowed = (route.get('dev') == 'hp-dummy'
+                       and destination == ipaddress.ip_network('192.0.2.1/32'))
+        if not allowed:
+            raise et.Failure('isolated_routes_invalid')
+
+
+def check_current_namespace():
+    links = json.loads(et.command(['ip', '-j', '-d', 'link', 'show']))
+    addresses = json.loads(et.command(['ip', '-j', 'address', 'show']))
+    routes = (json.loads(et.command(['ip', '-j', '-4', 'route', 'show', 'table', 'all'])) +
+              json.loads(et.command(['ip', '-j', '-6', 'route', 'show', 'table', 'all'])))
+    checked_isolated_namespace(links, addresses, routes)
+
+
 def run(bundle, output, stop_first):
     if sys.platform != 'linux' or os.geteuid() == 0:
         raise et.Failure('linux_unprivileged_runner_required')
-    et.checked_namespace(json.loads(et.command(['ip', '-j', 'link', 'show'])))
+    check_current_namespace()
     for name in ('peer', 'ts-fixture', 'probe', 'herdr', 'lib/libheeler_easytier.so', 'lib/libhp_tailscale.so'):
         if not (bundle / name).is_file():
             raise et.Failure('prepared_bundle_incomplete')
@@ -117,7 +168,8 @@ def run(bundle, output, stop_first):
     processes, handles = [], []
     report = {'schemaVersion': 1, 'sourceSHA': os.environ.get('GITHUB_SHA', ''),
               'status': 'failed', 'stage': 'fixture', 'stopFirst': stop_first,
-              'loopbackOnlyNamespace': True, 'temporaryCredentialsRemoved': False,
+              'isolatedNamespace': True, 'testOnlyDummy': True, 'noExternalRoutes': True,
+              'temporaryCredentialsRemoved': False,
               'ownedProcessesStopped': False, 'tsPeerCleanup': False}
     report['binarySha256'] = {name: et.digest(bundle / name) for name in
                               ('peer', 'ts-fixture', 'probe', 'herdr',

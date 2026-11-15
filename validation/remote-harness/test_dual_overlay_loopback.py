@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import json
 import shutil
@@ -132,6 +133,37 @@ class EventTests(unittest.TestCase):
         self.assertEqual(dual.safe_state(['not', 'a', 'state']), 'other')
         self.assertEqual(dual.safe_state('needs_login'), 'needs_login')
         self.assertEqual(set(fields), set(dual.BOOL_FIELDS))
+
+    def test_namespace_allows_only_isolated_dummy_and_host_routes(self):
+        links = [{'ifname': 'lo', 'flags': ['UP']},
+                 {'ifname': 'hp-dummy', 'flags': ['UP'], 'linkinfo': {'info_kind': 'dummy'}}]
+        addresses = [{'ifname': 'lo', 'addr_info': [
+                          {'family': 'inet', 'local': '127.0.0.1', 'prefixlen': 8},
+                          {'family': 'inet6', 'local': '::1', 'prefixlen': 128}]},
+                     {'ifname': 'hp-dummy', 'addr_info': [
+                          {'family': 'inet', 'local': '192.0.2.1', 'prefixlen': 32}]}]
+        routes = [{'type': 'local', 'table': 'local', 'dst': '127.0.0.0/8', 'dev': 'lo'},
+                  {'type': 'local', 'table': 'local', 'dst': '::1', 'dev': 'lo'},
+                  {'type': 'local', 'table': 'local', 'dst': '192.0.2.1', 'dev': 'hp-dummy'}]
+        dual.checked_isolated_namespace(links, addresses, routes)
+        bad_cases = []
+        changed = copy.deepcopy(links); changed[1]['linkinfo']['info_kind'] = 'veth'
+        bad_cases.append((changed, addresses, routes))
+        changed = copy.deepcopy(links); changed.append({'ifname': 'eth0', 'flags': ['UP']})
+        bad_cases.append((changed, addresses, routes))
+        changed = copy.deepcopy(addresses); changed[1]['addr_info'][0]['prefixlen'] = 24
+        bad_cases.append((links, changed, routes))
+        changed = copy.deepcopy(addresses); changed[1]['addr_info'].append(
+            {'family': 'inet', 'local': '198.51.100.2', 'prefixlen': 32})
+        bad_cases.append((links, changed, routes))
+        changed = copy.deepcopy(routes); changed.append({'dst': 'default', 'dev': 'hp-dummy', 'table': 'main'})
+        bad_cases.append((links, addresses, changed))
+        changed = copy.deepcopy(routes); changed[2]['gateway'] = '192.0.2.2'
+        bad_cases.append((links, addresses, changed))
+        for candidate in bad_cases:
+            with self.subTest(candidate=candidate):
+                with self.assertRaises(dual.et.Failure):
+                    dual.checked_isolated_namespace(*candidate)
 
     def test_both_stop_orders_require_their_own_evidence(self):
         common = {field: True for field in dual.BOOL_FIELDS}

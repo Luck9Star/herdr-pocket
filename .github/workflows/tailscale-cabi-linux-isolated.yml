@@ -1,0 +1,87 @@
+name: Tailscale Linux isolated C ABI
+on:
+  push:
+    branches: ['codex/acceptance/ts-cabi-linux']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-cabi:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - name: Check guards and build pinned candidate
+        run: |
+          python3 -m unittest discover -s validation/remote-harness -p test_tailscale_cabi_linux.py -v
+          python3 validation/native/tool/tailscale_candidate.py prepare "$RUNNER_TEMP/ts-cabi-candidate" --cache "$RUNNER_TEMP/ts-cabi-cache"
+          python3 validation/native/tool/tailscale_candidate.py build "$RUNNER_TEMP/ts-cabi-candidate" --cache "$RUNNER_TEMP/ts-cabi-cache"
+          mkdir -m 700 "$RUNNER_TEMP/ts-cabi-bundle"
+          cp "$RUNNER_TEMP/ts-cabi-candidate/libhp_tailscale.so" "$RUNNER_TEMP/ts-cabi-bundle/"
+          cd "$RUNNER_TEMP/ts-cabi-candidate"
+          GOENV=off GOTOOLCHAIN=local CGO_ENABLED=1 GOFLAGS=-mod=readonly \
+            GOMODCACHE="$RUNNER_TEMP/ts-cabi-cache/modules" GOCACHE="$RUNNER_TEMP/ts-cabi-cache/build" \
+            GOPATH="$RUNNER_TEMP/ts-cabi-cache/gopath" go test -c -o "$RUNNER_TEMP/ts-cabi-bundle/ts-fixture" ./fixture
+      - name: Run production C ABI against private loopback fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          namespace="hp-ts-cabi-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          output="$RUNNER_TEMP/ts-cabi-evidence"
+          mkdir -m 700 "$output"
+          cleanup() {
+            failed=0
+            if sudo ip netns list | awk '{print $1}' | grep -Fxq "$namespace"; then
+              pids=$(sudo ip netns pids "$namespace")
+              if [ -n "$pids" ]; then
+                failed=1
+                if [[ "$pids" =~ ^[[:space:]0-9]+$ ]]; then
+                  sudo kill -TERM $pids || true
+                  for attempt in 1 2 3 4 5; do
+                    pids=$(sudo ip netns pids "$namespace")
+                    [ -z "$pids" ] && break
+                    sleep 1
+                  done
+                  if [ -n "$pids" ]; then sudo kill -KILL $pids || true; fi
+                fi
+              fi
+              sudo ip netns delete "$namespace" || failed=1
+            fi
+            rm -rf "$RUNNER_TEMP/ts-cabi-bundle" "$RUNNER_TEMP/ts-cabi-candidate" "$RUNNER_TEMP/ts-cabi-cache"
+            return "$failed"
+          }
+          trap cleanup EXIT
+          sudo ip netns add "$namespace"
+          sudo ip netns exec "$namespace" ip link set lo up
+          status=0
+          sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
+            GITHUB_ACTIONS=true GITHUB_RUN_ID="$GITHUB_RUN_ID" GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+            RUNNER_TEMP="$RUNNER_TEMP" /usr/bin/python3 validation/remote-harness/tailscale_cabi_linux.py \
+              --bundle "$RUNNER_TEMP/ts-cabi-bundle" --output "$output" || status=$?
+          cleanup || status=1
+          trap - EXIT
+          python3 - "$output/result.json" "$namespace" <<'PY'
+          import json, os, pathlib, subprocess, sys
+          path=pathlib.Path(sys.argv[1]); result=json.loads(path.read_text()) if path.exists() else {'schemaVersion':1,'status':'failed','stage':'runner_preflight'}
+          result['sourceSHA']=os.environ['GITHUB_SHA']
+          result['namespaceRemoved']=sys.argv[2] not in [line.split()[0] for line in subprocess.check_output(['ip','netns','list'],text=True).splitlines() if line.split()]
+          result['bundleRemoved']=not (pathlib.Path(os.environ['RUNNER_TEMP'])/'ts-cabi-bundle').exists()
+          if not result['namespaceRemoved'] or not result['bundleRemoved']: result['status']='failed'
+          path.write_text(json.dumps(result,indent=2)+'\n')
+          PY
+          exit "$status"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: tailscale-cabi-linux-${{ github.sha }}
+          path: ${{ runner.temp }}/ts-cabi-evidence/result.json
+          if-no-files-found: warn
+          retention-days: 14

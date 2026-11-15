@@ -44,7 +44,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   function inputModeMessage(tab) {
     if(tab.unknown)return '输入结果待核实；输入已锁定。';
     if(tab.state!=='active')return '观察未运行；输入已关闭。';
-    if(!tab.selectionTextReady || !tab.inputReady)return '正在取得当前完整画面；输入保持关闭。';
+    if(!tab.selectionTextReady)return '正在取得当前完整画面；输入保持关闭。';
     if(tab.inputEpoch!==null && tab.mode==='direct')return '逐键输入已启用；每次输入单独发送。';
     if(tab.inputEpoch!==null && tab.mode==='draft')return '草稿输入已启用；仅在核对并确认后发送。';
     return '观察模式；输入已关闭。';
@@ -678,7 +678,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
           if(firstBlockedFull){tab.blockedVerified=true;tab.element.hidden=false;}
           if(frame.full){tab.localViewport.fullRendered();tab.diagnostics.full(tab.target);tab.diagnosticView?.update(tab.diagnostics);}
           tab.selectionTextReady=true;tab.lastFrameAt=Date.now();if(tab.frameStatusElement)tab.frameStatusElement.textContent=frameStatusText(tab);
-          if(frame.full && tab.inputReady && !hadVisibleFull)render();
+          if(frame.full && !hadVisibleFull)render();
           const focusedPane=tabs.activeId===tab.id;if(tab.selectionTextButton)tab.selectionTextButton.disabled=!focusedPane;if(tab.fontDiagnosticsButton)tab.fontDiagnosticsButton.disabled=!focusedPane;
           if(firstBlockedFull)render();
           void invoke('remote_tab_ack',{tabId:tab.id,clientGeneration:token.generation,generation,epoch:event.epoch,seq:frame.seq}).catch(()=>void cancel(tab));

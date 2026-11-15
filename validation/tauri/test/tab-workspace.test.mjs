@@ -1198,3 +1198,17 @@ test('hidden tab labels stale time and cannot reopen input before resumed full',
     assert.ok(h.all().some(n=>n.className==='tab-frame-status' && n.textContent.includes('当前观察画面')));
   } finally {h.restore();}
 });
+
+test('stock observation shows a completed full frame without enabling input capability',async()=>{
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
+  try {
+    await h.start();h.observation(1,'active');
+    assert.ok(h.find('正在取得当前完整画面；输入保持关闭。'));
+    h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();
+    assert.ok(h.find('观察模式；输入已关闭。'));
+    assert.ok(h.all().some(n=>n.className==='tab-frame-status' && n.textContent.includes('当前观察画面')));
+    assert.equal(h.find('逐键输入'),undefined);assert.equal(h.find('启用草稿输入'),undefined);
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_mode' && c.args.mode!=='observe').length,0);
+    assert.equal(h.terminal().options.disableStdin,true);
+  } finally {h.restore();}
+});

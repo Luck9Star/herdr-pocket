@@ -727,6 +727,9 @@ def adb(*args, check=True, data=None, timeout=30, transient_retry=False):
                                        'exitCode': int(result.returncode),
                                        'stdoutBytes': len(result.stdout),
                                        'stderrBytes': len(result.stderr)}
+            operation = _adb_read_operation(args)
+            if operation is not None:
+                failure.adb_diagnostic['operation'] = operation
             raise failure
         return result
 
@@ -742,6 +745,17 @@ def _adb_command_class(args):
         if name.startswith('shell'):
             return 'shell'
     return 'other'
+
+
+def _adb_read_operation(args):
+    """Fixed public labels only; never return arbitrary command arguments."""
+    words = tuple(map(str, args))
+    known = {
+        ('shell', 'dumpsys', 'input_method'): 'ime-state',
+        ('shell', 'dumpsys', 'window', 'displays'): 'window-displays',
+        ('shell', 'pm', 'list', 'packages', PACKAGE): 'package-presence',
+    }
+    return known.get(words)
 
 
 def text(*args, **kwargs):
@@ -927,6 +941,7 @@ class ClipboardCheckpoints:
         self.relative = relative_directory
         self.approval = approval
         self.completed = []
+        self.current = None
         self.expected = ((KEYBOARD_CHECKPOINTS + CLIPBOARD_CHECKPOINTS if guarded else
                           (KEYBOARD_OBSERVE_CHECKPOINT,)) if keyboard else CLIPBOARD_CHECKPOINTS)
         if tui and (not guarded or config is None):
@@ -973,6 +988,7 @@ class ClipboardCheckpoints:
             return  # The same atomic request may remain visible while Dart resumes.
         if len(self.completed) >= len(self.expected) or label != self.expected[len(self.completed)]:
             raise DeviceFailure('flutter_android_clipboard_checkpoint_order_invalid')
+        self.current = label
         system = None
         if label == TUI_CHECKPOINT:
             if self.tui_attempted:
@@ -1140,6 +1156,7 @@ def _run(args, root, env, config, approval, owned_process):
                'ownedForwardsRemoved': False, 'flutterToolStopped': False, 'rawLogsUploaded': False}
     primary_failure = None
     adb_diagnostic = None
+    checkpoints = None
     try:
         adb('reverse', reverse, reverse); reverse_added = True
         with owned_process(command, cwd=app, env=env, log=root / 'flutter-android-private.log') as process:
@@ -1191,6 +1208,10 @@ def _run(args, root, env, config, approval, owned_process):
         report = {'sourceSHA': env['GITHUB_SHA'], 'failure': failure}
         if isinstance(adb_diagnostic, dict):
             report['adbDiagnostic'] = adb_diagnostic
+        if primary_failure is not None and checkpoints is not None:
+            report['checkpointProgress'] = {
+                'current': checkpoints.current, 'completed': list(checkpoints.completed),
+            }
         (output / 'flutter-android-test-failure.json').write_text(
             json.dumps(report, indent=2) + '\n', encoding='utf-8')
         if signer_evidence['stage'] != 'complete':

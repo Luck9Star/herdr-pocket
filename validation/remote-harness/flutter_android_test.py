@@ -864,7 +864,8 @@ class CleanupGuards(PreparedFixture):
         with patch.object(gui,'read_public',return_value=json.dumps(record).encode()):
             self.exercise(fail_checkpoint='receiver')
         output=json.loads((self.runner/'output/flutter-android-test-failure.json').read_text())
-        self.assertEqual(output,{'sourceSHA':self.env['GITHUB_SHA'],'failure':record})
+        self.assertEqual(output,{'sourceSHA':self.env['GITHUB_SHA'],'failure':record,
+            'checkpointProgress':{'current':gui.KEYBOARD_OBSERVE_CHECKPOINT,'completed':[]}})
 
     def test_finally_rejects_a_resume_failure_with_unapproved_payload(self):
         payload={'stage':'tui_resume_full','errorClass':'TestFailure','line':68,
@@ -872,7 +873,8 @@ class CleanupGuards(PreparedFixture):
         with patch.object(gui,'read_public',return_value=json.dumps(payload).encode()):
             self.exercise(fail_checkpoint='receiver')
         output=json.loads((self.runner/'output/flutter-android-test-failure.json').read_text())
-        self.assertEqual(output,{'sourceSHA':self.env['GITHUB_SHA'],'failure':None})
+        self.assertEqual(output,{'sourceSHA':self.env['GITHUB_SHA'],'failure':None,
+            'checkpointProgress':{'current':gui.KEYBOARD_OBSERVE_CHECKPOINT,'completed':[]}})
         self.assertNotIn('PRIVATE',json.dumps(output))
 
     def test_a_failing_adb_call_reports_only_its_class_and_sizes(self):
@@ -902,7 +904,7 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(str(caught.exception), 'flutter_android_adb_failed')
         self.assertEqual(run.call_count, 3)
         self.assertEqual(caught.exception.adb_diagnostic,
-                         {'command': 'shell', 'exitCode': 1, 'stdoutBytes': 0, 'stderrBytes': 22})
+                         {'command': 'shell', 'exitCode': 1, 'stdoutBytes': 0, 'stderrBytes': 22, 'operation': 'ime-state'})
 
     def test_non_transient_stderr_and_unmarked_calls_never_retry(self):
         with patch.object(gui.subprocess, 'run',
@@ -942,6 +944,10 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(gui._adb_command_class(('shell', '-T', 'run-as', 'pkg', 'head')), 'shell')
         self.assertEqual(gui._adb_command_class(('exec-out', 'cat', 'file')), 'exec-out')
         self.assertEqual(gui._adb_command_class(('unknown-verb', 'secret-value')), 'other')
+        self.assertEqual(gui._adb_read_operation(('shell','dumpsys','input_method')), 'ime-state')
+        self.assertEqual(gui._adb_read_operation(('shell','dumpsys','window','displays')), 'window-displays')
+        self.assertIsNone(gui._adb_read_operation(('shell','dumpsys','PRIVATE')))
+        self.assertIsNone(gui._adb_read_operation(('shell','dumpsys','input_method','PRIVATE')))
 
     def test_an_adb_failure_is_written_into_the_published_failure_report(self):
         diagnostic={'command':'shell','exitCode':1,'stdoutBytes':0,'stderrBytes':14}
@@ -1189,6 +1195,7 @@ class ClipboardCheckpointGuards(unittest.TestCase):
                     patch.object(gui, 'adb', side_effect=gui.DeviceFailure('flutter_android_adb_failed') if bad == 'ack' else None) as adb:
                 with self.assertRaises(gui.DeviceFailure): state.poll()
                 self.assertEqual(state.completed, [])
+                self.assertEqual(state.current, gui.CLIPBOARD_CHECKPOINTS[0])
                 if bad == 'receiver': adb.assert_not_called()
 
     def test_legacy_wait_can_omit_checkpoints_but_explicit_new_checks_cannot_be_bypassed(self):

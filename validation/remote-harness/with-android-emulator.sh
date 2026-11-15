@@ -59,16 +59,23 @@ printf 'no\n' | avdmanager create avd --name "$name" --package "$image" --device
 emulator -avd "$name" -port 5554 -accel on -no-window -no-audio -no-boot-anim -no-snapshot -gpu software > "$RUNNER_TEMP/avd.log" 2>&1 &
 avd_pid=$!
 evidence_event 'startup: launched owned emulator on emulator-5554'
+resource_snapshot() {
+  python3 "$(dirname "${BASH_SOURCE[0]}")/android_emulator_resources.py" "$avd_pid" "$RUNNER_TEMP" > "$evidence_real/resources-$1.json" || true
+}
+resource_snapshot start
 cleanup() {
-  local original_status=$? cleanup_status=0 devices attempt
+  local original_status=$? cleanup_status=0 devices attempt avd_exit=0 alive_on_entry=false
   trap - EXIT INT TERM
   evidence_event "cleanup: beginning; original status $original_status"
+  resource_snapshot end
   if kill -0 "$avd_pid" 2>/dev/null; then
+    alive_on_entry=true
     timeout 10 adb -s "$ANDROID_SERIAL" emu kill >/dev/null 2>&1 || kill "$avd_pid" 2>/dev/null || true
     for _ in {1..15}; do kill -0 "$avd_pid" 2>/dev/null || break; sleep 1; done
     kill -KILL "$avd_pid" 2>/dev/null || true
   fi
-  wait "$avd_pid" 2>/dev/null || true
+  wait "$avd_pid" 2>/dev/null || avd_exit=$?
+  evidence_event "cleanup: owned process alive_on_entry=$alive_on_entry exit_status=$avd_exit"
   # The process can exit before the adb server removes its transport. Never
   # kill an unowned device or restart the shared adb server while waiting.
   for attempt in {1..15}; do

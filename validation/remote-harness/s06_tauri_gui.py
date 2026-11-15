@@ -17,6 +17,16 @@ def observed_tick(text, side):
     return int(matches[0])
 
 
+def require_side_by_side(rectangles):
+    if (not isinstance(rectangles, list) or len(rectangles) != 2 or
+            any(not isinstance(r, dict) or any(type(r.get(k)) is not int for k in ('left', 'right', 'top', 'width', 'height'))
+                or r['width'] <= 0 or r['height'] <= 0 for r in rectangles)):
+        raise GuiFailure('s06_tauri_panel_geometry_invalid')
+    left, right = sorted(rectangles, key=lambda r: r['left'])
+    if abs(left['top'] - right['top']) > 1 or left['right'] > right['left'] + 1:
+        raise GuiFailure('s06_tauri_panels_not_side_by_side')
+
+
 def peer_connection_evidence(approval):
     """Match only this reviewed key's loopback SSH connection and peer close."""
     text = bounded_wire(approval.root / 'sshd.log', 2_097_152).decode(errors='replace')
@@ -117,11 +127,7 @@ class SplitDriver:
 
     def snapshot_tick(self, panel, side):
         self.focus(panel)
-        for label in ('连接资料与诊断', '会话窗格'):
-            opened = self.read('''return [...document.querySelector(arguments[0]).querySelectorAll('details')]
-                .some(e=>e.open && e.querySelector('summary')?.textContent===arguments[1]);''', panel, label)
-            if opened:
-                self.named(label, panel, 'summary')
+        self.collapse_details(panel)
         self.layout_evidence(panel, side, 'before')
         # The shared click helper centers controls by scrolling. This tool sits
         # below the terminal: native element-click uses the minimum necessary
@@ -139,6 +145,25 @@ class SplitDriver:
         tick = observed_tick(value, side)
         self.named('关闭', '.terminal-selection')
         return tick
+
+    def collapse_details(self, panel):
+        for label in ('连接资料与诊断', '会话窗格'):
+            if self.read('''return [...document.querySelector(arguments[0]).querySelectorAll('details')]
+                .some(e=>e.open && e.querySelector('summary')?.textContent===arguments[1]);''', panel, label):
+                self.named(label, panel, 'summary')
+
+    def visible_frames(self, panels):
+        # Normal local scrolling only. Both real terminal canvases must have
+        # visible, hit-testable tick cells before a native screenshot is evidence.
+        for panel in panels:
+            self.collapse_details(panel)
+        self.driver.wait_control(panels[0] + ' .term-scroll')
+        return self.read('''return arguments[0].every(selector=>{
+            const host=document.querySelector(selector+' .terminal-host'), screen=host?.querySelector('.xterm-screen');
+            if(!screen)return false;const r=screen.getBoundingClientRect();
+            return [0,10,29].every(col=>{const x=r.left+(col+.5)*r.width/80,y=r.top+22.5*r.height/24;
+                const hit=document.elementFromPoint(x,y);return x>=0&&x<innerWidth&&y>=0&&y<innerHeight&&!!hit&&host.contains(hit);});
+        });''', panels) is True
 
 
 def exercise(args, root, env, configs, approvals, expected):
@@ -208,6 +233,10 @@ def exercise(args, root, env, configs, approvals, expected):
                 wait_for(lambda: ui.read('return document.querySelector("#view-content").dataset.split;') == '2',
                          's06_tauri_split_not_opened')
                 panels = ['[data-role="workbench-panel"][data-tab-id="' + tab + '"]' for tab in tab_ids]
+                geometry = ui.read('''return arguments[0].map(selector=>{const r=document.querySelector(selector).getBoundingClientRect();
+                    return Object.fromEntries(['left','right','top','width','height'].map(k=>[k,Math.round(r[k])]));});''', panels)
+                (args.output / 's06-tauri-panel-geometry.json').write_text(json.dumps(geometry))
+                require_side_by_side(geometry)
                 for index, panel in enumerate(panels):
                     stage = 'connect_' + str(index)
                     ui.focus(panel)
@@ -234,7 +263,9 @@ def exercise(args, root, env, configs, approvals, expected):
                                        for panel in panels):
                     raise GuiFailure('s06_tauri_stock_input_controls_unexpected')
                 # Screenshot only the controlled, credential-free paired workspace.
-                driver.wait_control('#workbench-split')
+                if not ui.visible_frames(panels):
+                    ui.failure_screenshot('both')
+                    raise GuiFailure('s06_tauri_both_frames_not_visible')
                 png = base64.b64decode(driver.call('GET', driver.session + '/screenshot'), validate=True)
                 if not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png) > 4_194_304:
                     raise GuiFailure('s06_tauri_screenshot_invalid')

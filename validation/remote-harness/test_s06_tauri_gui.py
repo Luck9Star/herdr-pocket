@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import unittest
 
 try:
-    from s06_tauri_gui import SplitDriver, observed_tick, peer_connection_evidence, GuiFailure
+    from s06_tauri_gui import SplitDriver, observed_tick, peer_connection_evidence, require_side_by_side, GuiFailure
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
         raise
@@ -13,6 +13,15 @@ except ModuleNotFoundError as missing:
 
 @unittest.skipIf(observed_tick is None, 'pairing requirements are installed in the native GUI workflow')
 class TauriSplitEvidenceTests(unittest.TestCase):
+    def test_two_dom_panels_must_actually_share_a_row_without_overlap(self):
+        a = dict(left=0, right=100, top=20, width=100, height=400)
+        b = dict(left=114, right=214, top=20, width=100, height=500)
+        require_side_by_side([a, b]); require_side_by_side([b, a])
+        for rectangles in [[a, {**b, 'top': 420}], [a, {**b, 'left': 80}],
+                           [a], [a, {**b, 'width': 0}]]:
+            with self.assertRaises(GuiFailure):
+                require_side_by_side(rectangles)
+
     def test_stale_read_relocates_before_the_only_native_click(self):
         for read in ('textContent', 'displayed', 'enabled'):
             calls, lookups = [], []

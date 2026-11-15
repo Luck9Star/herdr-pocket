@@ -114,6 +114,21 @@ Tauri 主连接与终端标签均只在原生回复的 request ID、pane、termi
 
 `4be102e` 冻结了手机 S03、普通 SSH 凭据门槛和 S27 网络页；独立归档源码完整验证为 **533 passed / 4 skipped / 0 failed**，analyzer 无问题。S27 使用紧凑配置与节点状态、实际绑定主机名和按需展开管理；40 项定向回归包含停用影响以及撤销、删除保护。[320 宽度](evidence/design-parity-20261115/s27-networks-320.png)与[390 宽度](evidence/design-parity-20261115/s27-networks-390.png)是使用合成节点数据的实际 Widget 渲染，证明界面与交互，不替代真实组网或设备路由证据。
 
+## EasyTier Linux 真实 overlay 链路（2026-11-15）
+
+`a11a357f63ca4040d4e200c4db6f2ee57cdd6440` 的 [运行 43682653413](https://github.com/Luck9Star/herdr-pocket/actions/runs/43682653413)、工件 `14149790312` 已完成真实 EasyTier 验收；[原始脱敏 manifest](evidence/design-parity-20261115/easytier-real-overlay-ssh-43682653413.json)保留固定源码与二进制哈希。一侧使用现有产品 `OverlayRuntime`、`OverlayDialer`、`read_once_with_dialer` 和真实候选 ABI；另一侧使用固定上游的临时节点，在用户态虚拟 TCP 端口监听并仅桥接至临时 loopback OpenSSH/herdr。两节点位于只有 `lo` 的 Linux network namespace，网络名、秘密和 SSH 身份均临时生成，STUN/公共 peer/打洞关闭，没有接入个人或公共网络。
+
+每个场景先经真实 overlay 收到 SSH banner，再由独立 runner 采样服务端基线并放行目标尝试；下表只统计该次目标尝试，不把 native open 次数当成服务端连接数。
+
+| 场景 | 目标 TCP 连接 | 服务端认证受理 | 实际结果 |
+| --- | --- | --- | --- |
+| 正确 pin | 1 | 1 | 主机密钥匹配，收到真实 herdr `80×24` 完整帧与夹具标记 |
+| 错误 pin | 1 | 0 | `host_key_mismatch`，认证请求为 0，未发布帧 |
+| 无 overlay 路由 | 0 | 0 | 本机 SSH 仍可用，目标尝试以 `handshake_failed` 结束，全部 SSH 审计为 false |
+| 已连 peer 停止 | 0 | 0 | 确认真实 peer 停止后再尝试，同样拒绝；本机 SSH 仍可用 |
+
+两个负例的目标认证请求均为 0，证明本轮没有改走可用的系统 TCP。peer 的 6 条实际桥接连接与 sshd 总计数相符；停止后桥接任务为 0，每场景的 runtime node/stream 保留数均为 0，namespace 删除前残留进程为 0，临时凭据与测试 bundle 已删除。远端输入共 0 字节。该结果补足的是 **Linux 产品 Rust 的 herdr 只读链路**；使用测试内存配置源，不能扩大成 GUI 路由、平台 vault、Android/实体设备、物理网络或 Tailscale/ZeroTier 及三网并发通过，也不改变普通 SSH GUI 当前使用系统 TCP/DNS 的范围。
+
 ## 普通 SSH Android 设备验收入口
 
 已新增[独立工作流](../.github/workflows/direct-ssh-android.yml)、[设备测试与共享夹具说明](../validation/remote-harness/README-direct-ssh-android.md)。它从正常首页进入普通 SSH，在 runner 自建 API35 AVD 中经 `adb reverse` 访问临时 loopback Paramiko，断开必须在测试 driver 仍存活时由服务端独立确认；仅上传安全 JSON 和认证字段清空后的截图。工作流支持约定验收分支 push，不要求先合并默认分支。
@@ -143,4 +158,4 @@ RSA 功能快照 `621b793349d7e44332d617e76a345086c272e931` 的两壳 API35 Andr
 
 ## 尚待独立补证
 
-S06 在 macOS/Windows 原生桌面及手机设备的双窗、手机真机触控/IME/相机/系统密钥存储、其他主机算法与认证组合、三网路由、长时间运行和正式发布均不能由本页证据推出。后续每项新增结论必须对应新的实际运行记录；历史“只允许远端 herdr”作为当时基线保留，现行两类远端接入范围以本页及架构/产品设计的 2026-11-15 增量为准。
+S06 在 macOS/Windows 原生桌面及手机设备的双窗、手机真机触控/IME/相机/系统密钥存储、其他主机算法与认证组合、EasyTier 的其他平台与 GUI/vault 接入、Tailscale/ZeroTier 真实路由及三网并发、长时间运行和正式发布均不能由本页证据推出。后续每项新增结论必须对应新的实际运行记录；历史“只允许远端 herdr”作为当时基线保留，现行两类远端接入范围以本页及架构/产品设计的 2026-11-15 增量为准。

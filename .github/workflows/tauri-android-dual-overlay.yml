@@ -58,7 +58,7 @@ jobs:
           python3 validation/native/tool/android_dual_qa_bundle.py verify --normal "$RUNNER_TEMP/dual-normal-native" --qa "$RUNNER_TEMP/dual-qa-native" --commit "$NATIVE_SOURCE" --readelf "$readelf"
       - name: Build isolated authorization receiver
         run: bash validation/remote-harness/tauri-dual-auth-receiver/build.sh "$RUNNER_TEMP/dual-auth-receiver.apk"
-      - name: Build Tauri QA x86_64 APK
+      - name: Build same-source Tauri normal and QA x86_64 APKs
         working-directory: validation/tauri
         run: |
           export NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
@@ -84,15 +84,59 @@ jobs:
           if len(candidates)!=1: raise SystemExit('expected one owned x86_64 QA APK')
           shutil.copyfile(candidates[0],sys.argv[1])
           PY
+          # Same frontend/source and ABI; relink and replace only the native TS
+          # library with the independently verified normal provider.
+          export HEELER_ET_LIB_DIR="$RUNNER_TEMP/dual-normal-native"
+          export HP_TS_LIB_DIR="$RUNNER_TEMP/dual-normal-native"
+          cp "$HEELER_ET_LIB_DIR/libheeler_easytier.so" "$HP_TS_LIB_DIR/libhp_tailscale.so" src-tauri/gen/android/app/src/main/jniLibs/x86_64/
+          npm run tauri -- android build --debug --target x86_64 --features network-easytier,network-tailscale --apk --ci
+          python3 - "$RUNNER_TEMP/tauri-dual-normal.apk" <<'PY'
+          from pathlib import Path
+          import shutil,sys,zipfile
+          candidates=[]
+          for path in Path('src-tauri/gen/android/app/build/outputs/apk').rglob('*.apk'):
+              with zipfile.ZipFile(path) as archive:
+                  if 'lib/x86_64/libherdr_pocket_tauri_probe_lib.so' in archive.namelist(): candidates.append(path)
+          if len(candidates)!=1: raise SystemExit('expected one owned x86_64 normal APK')
+          shutil.copyfile(candidates[0],sys.argv[1])
+          PY
       - name: Independently verify embedded native libraries
         run: |
           python3 validation/remote-harness/tauri_android_dual_apk.py --apk "$RUNNER_TEMP/tauri-dual-qa.apk" --qa "$RUNNER_TEMP/dual-qa-native" \
             --readelf "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          python3 validation/remote-harness/tauri_android_dual_apk.py --apk "$RUNNER_TEMP/tauri-dual-normal.apk" --qa "$RUNNER_TEMP/dual-normal-native" \
+            --readelf "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+      - name: Compare normal and QA application assets
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,zipfile
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          normal=root/'tauri-dual-normal.apk'; qa=root/'tauri-dual-qa.apk'
+          sha=lambda data: hashlib.sha256(data).hexdigest()
+          with zipfile.ZipFile(normal) as a, zipfile.ZipFile(qa) as b:
+              names=lambda z: {name for name in z.namelist() if name.startswith('assets/') and not name.endswith('/')}
+              keys=names(a)
+              if not keys or keys!=names(b) or any(sha(a.read(name))!=sha(b.read(name)) for name in keys):
+                  raise SystemExit('normal/QA frontend assets differ')
+              if a.read('lib/x86_64/libheeler_easytier.so')!=b.read('lib/x86_64/libheeler_easytier.so'):
+                  raise SystemExit('normal/QA EasyTier differs')
+              if a.read('lib/x86_64/libhp_tailscale.so')==b.read('lib/x86_64/libhp_tailscale.so'):
+                  raise SystemExit('normal/QA TS variants identical')
+          report={'sourceSHA':os.environ['GITHUB_SHA'],'nativeSourceSHA':os.environ['NATIVE_SOURCE'],
+                  'scope':'same-source x86_64 APKs; static checks only; QA TS test-only',
+                  'frontendAssetsEqual':True,'easytierEqual':True,'tailscaleVariantsDiffer':True,
+                  'normalApkSha256':sha(normal.read_bytes()),'qaApkSha256':sha(qa.read_bytes()),
+                  'androidLoad':'not run','node':'not run'}
+          (root/'tauri-dual-build-summary.json').write_text(json.dumps(report,indent=2)+'\n')
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: tauri-dual-qa-apks-${{ github.sha }}
           path: |
             ${{ runner.temp }}/tauri-dual-qa.apk
+            ${{ runner.temp }}/tauri-dual-normal.apk
+            ${{ runner.temp }}/tauri-dual-build-summary.json
             ${{ runner.temp }}/dual-auth-receiver.apk
           if-no-files-found: error
           retention-days: 7

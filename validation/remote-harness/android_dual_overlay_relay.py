@@ -93,11 +93,17 @@ def _verify_owned_listeners(config):
         if result.returncode:
             raise RelayError('listener_check_failed')
         lines = result.stdout.decode('utf-8', 'strict').splitlines()
+        checks = {}
         for role in ROLES:
             endpoint = re.compile(r'(?:^|\s)127\.0\.0\.1:' + str(config[role]) + r'(?:\s|$)')
             owner = re.compile(r'\bpid=' + str(config['ownerPids'][role]) + r'(?:,|\))')
-            if not any(endpoint.search(line) and owner.search(line) for line in lines):
-                raise RelayError('owned_listener_required')
+            checks[role] = {'exactLoopbackListener': any(endpoint.search(line) is not None for line in lines),
+                'expectedPidVisible': any(owner.search(line) is not None for line in lines),
+                'exactListenerOwnedByPid': any(endpoint.search(line) is not None and owner.search(line) is not None for line in lines)}
+        if not all(value['exactListenerOwnedByPid'] for value in checks.values()):
+            error = RelayError('owned_listener_required')
+            error.listener_checks = checks
+            raise error
     except (OSError, UnicodeError, subprocess.TimeoutExpired):
         raise RelayError('listener_check_failed') from None
 

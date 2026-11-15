@@ -93,7 +93,9 @@ class RelayTests(unittest.TestCase):
             relay._verify_owned_listeners(config)
         for altered in (lines.replace(b'127.0.0.1:11001',b'0.0.0.0:11001'), lines.replace(b'pid=123',b'pid=124')):
             with patch.object(relay.os,'stat',side_effect=fake_stat), patch.object(relay.subprocess,'run',return_value=subprocess.CompletedProcess([],0,altered,b'')):
-                with self.assertRaises(relay.RelayError): relay._verify_owned_listeners(config)
+                with self.assertRaises(relay.RelayError) as caught: relay._verify_owned_listeners(config)
+                self.assertEqual(set(caught.exception.listener_checks), set(relay.ROLES))
+                self.assertTrue(all(type(flag) is bool for checks in caught.exception.listener_checks.values() for flag in checks.values()))
         def foreign(path):
             return SimpleNamespace(st_ino=99 if str(path).endswith('/ns/net') else 42, st_uid=os.getuid())
         with patch.object(relay.os,'stat',side_effect=foreign):

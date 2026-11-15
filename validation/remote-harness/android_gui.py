@@ -48,6 +48,15 @@ def system_keyboard(visible):
         raise failure from None
 
 
+def public_blocked_render_diagnostic(value):
+    """Keep only fixed boolean predicates, never terminal output or identifiers."""
+    allowed=('viewVisible','terminalPresent','terminalVisible','targetMatched','terminalVerified',
+             'modeObserve','readOnly','inputModeNone','notFocused','markerMatched','otherMarkerAbsent')
+    if isinstance(value,dict) and set(value)==set(allowed) and all(type(value[key]) is bool for key in allowed):
+        return {key:value[key] for key in allowed}
+    return None
+
+
 class AndroidProgress:
     """Bounded per-stage evidence survives a later failure; no raw dumps/text."""
     PHASES = {'setup','pairing','canvas_selection','dashboard','board_search','observe_full','observe_delta','canvas_marker','font_diagnostics',
@@ -142,12 +151,8 @@ class AndroidProgress:
         if isinstance(click,dict) and all(isinstance(click.get(part),dict) for part in ('before','after')):
             self.data['counterClickContext']={part:_public_counter_context(click[part])
                                               for part in ('before','after')}
-        blocked=getattr(error,'blocked_render_diagnostic',None)
-        if isinstance(blocked,dict):
-            allowed=('viewVisible','terminalPresent','terminalVisible','targetMatched','terminalVerified',
-                     'modeObserve','readOnly','inputModeNone','notFocused','markerMatched','otherMarkerAbsent')
-            if set(blocked)==set(allowed) and all(type(blocked[key]) is bool for key in allowed):
-                self.data['blockedRenderDiagnostic']={key:blocked[key] for key in allowed}
+        blocked=public_blocked_render_diagnostic(getattr(error,'blocked_render_diagnostic',None))
+        if blocked:self.data['blockedRenderDiagnostic']=blocked
         home_status=getattr(error,'home_status',None)
         if isinstance(home_status,str):self.data['homeStatus']=' '.join(home_status.split())[:120]
         self.publish()
@@ -199,7 +204,18 @@ def retry_stage(progress, stage, action, recover=None):
         try:
             return action()
         except GuiFailure as error:
-            if not retryable_failure(error) or attempt == 2:
+            code = str(error)
+            retryable = retryable_failure(error)
+            # Keep the original failure as well as later recovery failures, but
+            # publish only bounded static codes, never exception contents.
+            if retryable and (code in RETRYABLE_ERROR_CODES or
+                    re.fullmatch(r'android_(?:control|text_control)_missing_[a-z0-9_-]{1,80}', code)):
+                progress.data.setdefault('retryFailureCodes', {}).setdefault(stage, []).append(code)
+                diagnostic=public_blocked_render_diagnostic(getattr(error,'blocked_render_diagnostic',None))
+                if diagnostic:
+                    progress.data.setdefault('blockedRenderAttempts', []).append(diagnostic)
+                progress.publish()
+            if not retryable or attempt == 2:
                 raise
         if recover is not None:
             try:
@@ -1102,16 +1118,25 @@ def _settled_device_review(browser):
     return snapshot if snapshot and _device_class(snapshot) else None
 
 
+def open_network_page(browser):
+    """Use visible navigation and keep an already open network panel open."""
+    if not browser.evaluate("!document.querySelector('#host-home').hidden"):
+        browser.click('#host-return-home')
+        wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
+    if not browser.evaluate("!document.querySelector('#home-network').hidden"):
+        browser.click('#nav-network')
+    panel_open = lambda: browser.evaluate(
+        "(()=>{const p=document.querySelector('#network-panel');return !!p&&!p.hidden})()")
+    if not panel_open():
+        browser.click('#network-open')
+    wait_for(panel_open, 'android_device_impact_entry_missing')
+
+
 def exercise_device_impact_review(browser):
     """Review the shared device impact without creating identities or joining a network."""
     browser.install_invoke_counter()
     try:
-        browser.click('#host-return-home')
-        wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
-        browser.click('#network-open')
-        wait_for(lambda: browser.evaluate(
-            "(()=>{const p=document.querySelector('#network-panel');return !!p&&!p.hidden})()"),
-            'android_device_impact_entry_missing')
+        open_network_page(browser)
         browser.click_named('#network-panel','审查 ZeroTier 共享设备','android_device_impact_entry_missing')
         snapshot = wait_for(lambda: _settled_device_review(browser), 'android_device_impact_status_invalid', timeout=60)
         state = _device_class(snapshot)
@@ -1759,11 +1784,8 @@ def run_android(args, root, env, config, approval):
         blocked_evidence=None
         board_evidence=None
         device_evidence=None
-        # recover 必须恢复到该阶段第一条交互可执行的状态。blocked_target_entry、
-        # board_search 与 device_impact_review 的第一条交互都是在远端页点击
-        # #host-return-home，所以每个 recover 都必须终于远端页——r5/r6 双模拟器的
-        # 确定性重试失败正是旧的 return_home 把 app 导去了主机看板：重放的第一步
-        # 在看板上点不到该按钮（android_control_missing_host-return-home）。
+        # Blocked-target and board-search replay from the remote page. Device
+        # review also accepts the dashboard/network page, including after revoke.
         def reopen_remote_page():
             # 若失败停在主机看板：先清残留过滤让受阻卡重新可见，再从卡片「打开」
             # 回到远端页。打开只恢复本地表单草稿，不建立连接，无设备副作用。
@@ -1785,7 +1807,6 @@ def run_android(args, root, env, config, approval):
             if browser.evaluate("!!document.querySelector(%s)" % json.dumps(DEVICE_REVIEW_SELECTOR)):
                 browser.click_named(DEVICE_REVIEW_SELECTOR,'关闭','android_device_impact_entry_lost')
                 wait_for(lambda: browser.evaluate("!document.querySelector(%s)" % json.dumps(DEVICE_REVIEW_SELECTOR)),'android_device_impact_entry_lost')
-            reopen_remote_page()
         if not guarded:
             progress.phase('blocked_target_entry')
             blocked_evidence=retry_stage(progress,'blocked_target_entry',

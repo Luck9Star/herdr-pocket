@@ -450,6 +450,28 @@ process.stdout.write(JSON.stringify({sync,asyncError,unknown,removed,reinstalled
                      'android_stale_marker_missing','android_tui_observe_return_missing'):
             self.assertIn(code,android.AndroidProgress.ERROR_CODES)
 
+    def test_device_review_navigation_uses_visible_network_tab_and_safe_reentry(self):
+        class Nav:
+            def __init__(self, home, network, panel):
+                self.home,self.network,self.panel=home,network,panel;self.clicks=[]
+            def evaluate(self,expression):
+                if "#host-home" in expression:return self.home
+                if "#home-network" in expression:return self.network
+                if "#network-panel" in expression:return self.panel
+                raise AssertionError(expression)
+            def click(self,selector):
+                self.clicks.append(selector)
+                if selector=='#host-return-home':self.home=True
+                elif selector=='#nav-network':self.network=True;self.panel=True
+                elif selector=='#network-open':self.panel=True
+                else:raise AssertionError(selector)
+        for initial,expected in [((False,False,False),['#host-return-home','#nav-network']),
+                                 ((True,False,False),['#nav-network']),
+                                 ((True,True,True),[]),
+                                 ((True,True,False),['#network-open'])]:
+            with self.subTest(initial=initial):
+                browser=Nav(*initial);android.open_network_page(browser);self.assertEqual(browser.clicks,expected)
+
     def test_the_review_only_reads_and_never_writes_a_device_identity(self):
         self.assertIn('zerotier_device_write',android.DEVICE_WRITE_COMMANDS)
         self.assertIn('network_identity_write',android.DEVICE_WRITE_COMMANDS)
@@ -498,6 +520,28 @@ class AndroidStageRetryTests(unittest.TestCase):
         self.assertEqual(len(calls),3)
         self.assertEqual(progress.data['retriedStages'],{'stop_observation':2})
         progress.publish.assert_called()
+
+    def test_retry_records_original_and_later_static_failures_without_sensitive_text(self):
+        errors=iter(['android_control_missing_network-open','android_control_missing_host-return-home'])
+        progress=self.progress()
+        def action():raise android.GuiFailure(next(errors))
+        with self.assertRaises(StopIteration):android.retry_stage(progress,'device_impact_review',action)
+        self.assertEqual(progress.data['retryFailureCodes']['device_impact_review'],
+                         ['android_control_missing_network-open','android_control_missing_host-return-home'])
+        progress=self.progress()
+        with self.assertRaises(android.GuiFailure):
+            android.retry_stage(progress,'board_search',lambda: (_ for _ in ()).throw(android.GuiFailure('secret value')))
+        self.assertNotIn('retryFailureCodes',progress.data)
+
+    def test_recovered_blocked_failure_retains_only_boolean_diagnostic(self):
+        keys=('viewVisible','terminalPresent','terminalVisible','targetMatched','terminalVerified',
+              'modeObserve','readOnly','inputModeNone','notFocused','markerMatched','otherMarkerAbsent')
+        diagnostic={key:key!='markerMatched' for key in keys}
+        failure=android.GuiFailure('android_blocked_render_missing');failure.blocked_render_diagnostic=diagnostic
+        action=Mock(side_effect=[failure,'ok']);progress=self.progress()
+        self.assertEqual(android.retry_stage(progress,'blocked_target_entry',action),'ok')
+        self.assertEqual(progress.data['blockedRenderAttempts'],[diagnostic])
+        self.assertEqual(progress.data['retryFailureCodes']['blocked_target_entry'],['android_blocked_render_missing'])
 
     def test_non_whitelisted_codes_never_replay(self):
         for code in ('android_board_search_count_mismatch','android_device_impact_action_enabled',

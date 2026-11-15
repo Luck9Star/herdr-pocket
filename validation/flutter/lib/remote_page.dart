@@ -46,7 +46,7 @@ class RemotePage extends StatefulWidget {
   final ValueListenable<bool>? visibility;
   final ValueListenable<bool>? inputEligible;
   bool get ownsInput => inputEligible?.value ?? true;
-  final void Function(String,String?,String?)? onViewState;
+  final void Function(String,String?,String?,DateTime?)? onViewState;
   final RemotePane? requestedTarget;
   final void Function(RemotePane)? onOpenPane;
   final HostDashboardLease? summaryLease;
@@ -89,6 +89,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   int? sequence;
   RemoteSnapshot? snapshot;
   DateTime? capturedAt;
+  String? capturedTerminalId;
   DateTime? dashboardSyncedAt;
   String? dashboardSyncSource;
   Terminal? terminal;
@@ -142,7 +143,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void reportView() {
     widget.onViewState?.call(inputGate.unknown != null || adapter.pendingInput != null ? 'unknown' :
       viewPaused ? 'paused' : live ? 'live' : 'stale',selectedPane ?? widget.requestedTarget?.paneId,
-      selectedTarget?.terminalId ?? widget.requestedTarget?.terminalId);
+      selectedTarget?.terminalId ?? widget.requestedTarget?.terminalId,
+      snapshot != null && capturedTerminalId != null && selectedPane == snapshot!.paneId && selectedTarget?.terminalId == capturedTerminalId ? capturedAt : null);
   }
   String get displayStatus => !live ? status : status.isEmpty ? liveInputStatus : '$liveInputStatus\n$status';
   String get liveInputStatus {
@@ -418,7 +420,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     terminalFocus.removeListener(terminalFocusChanged); terminalFocus.dispose(); draftFocus.dispose(); draft.removeListener(draftChanged); draft.dispose();
     unawaited(adapter.cancel()); terminal?.dispose();
     widget.onViewState?.call(inputGate.unknown != null || adapter.pendingInput != null ? 'unknown' : 'stale',
-      selectedPane ?? widget.requestedTarget?.paneId,widget.requestedTarget?.terminalId);
+      selectedPane ?? widget.requestedTarget?.paneId,selectedTarget?.terminalId ?? widget.requestedTarget?.terminalId,
+      snapshot != null && capturedTerminalId != null && selectedPane == snapshot!.paneId && selectedTarget?.terminalId == capturedTerminalId ? capturedAt : null);
     for (final c in fields.values) { c.clear(); c.dispose(); }
     super.dispose();
   }
@@ -462,7 +465,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       fields['privateKeyPem']!.clear();
       FocusScope.of(context).unfocus();
       inputGate.invalidate();
-      setState(() { busy = true; live = false; dashboardFresh = false; dashboard = null; selectedPane = null; selectedTarget = null; sequence = null; snapshot = null; capturedAt = null; terminal?.dispose(); terminal = null; status = '正在连接并核验主机身份'; });
+      setState(() { busy = true; live = false; dashboardFresh = false; dashboard = null; selectedPane = null; selectedTarget = null; sequence = null; snapshot = null; capturedAt = null; capturedTerminalId = null; terminal?.dispose(); terminal = null; status = '正在连接并核验主机身份'; });
       var blockedEntryRejected = false, blockedEntryConfirmed = false;
       await adapter.observe(config,onDashboard:(value) {
         if (!mounted || ticket != request || value.generation != adapter.generation ||
@@ -546,7 +549,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           // subsequent frames; live mode comes from the gate, not delta text.
           if (!live) status = '';
           snapshot = RemoteSnapshot(generation,config.session,paneId,frame.ansi);
-          capturedAt = DateTime.now(); sequence = frame.seq; live = true;
+          capturedAt = DateTime.now(); capturedTerminalId = selectedTarget?.terminalId; sequence = frame.seq; live = true;
           if (frame.full) connectionDiagnostics?.frameAccepted();
         });
         if (frame.full && widget.requestedTarget is BlockedSummaryTarget) blockedEntryConfirmed = true;

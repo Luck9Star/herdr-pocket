@@ -34,10 +34,10 @@ class HostTab {
     final found = networks.where((n) => n.id == p.networkProfileId).toList();
     return found.length == 1 ? '${found.single.label} · ${found.single.provider}' : '网络未知';
   }
-  void report(String state,String? paneId,String? terminalId) {
+  void report(String state,String? paneId,String? terminalId,DateTime? frameAt) {
     final revision = ++_viewRevision;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_disposed && revision == _viewRevision) view.value = HostTabView(state,paneId,terminalId);
+      if (!_disposed && revision == _viewRevision) view.value = HostTabView(state,paneId,terminalId,frameAt);
     });
   }
   static String bindingFor(HostProfile p,[List<NetworkProfile> networks=const []]) => jsonEncode({'id':p.id,'target':p.target,
@@ -47,11 +47,13 @@ class HostTab {
 }
 
 class HostTabView {
-  const HostTabView(this.state,this.paneId,this.terminalId);
+  const HostTabView(this.state,this.paneId,this.terminalId,[this.frameAt]);
   final String state;
   final String? paneId,terminalId;
+  final DateTime? frameAt;
   String get label => switch (state) { 'live' => '观察中', 'paused' => '已暂停', 'unknown' => '结果未知', _ => '陈旧' };
   String get target => paneId == null ? '尚未选目标' : '$paneId · ${terminalId ?? '未知终端'}';
+  String get frameLabel => frameAt == null ? '尚无终端画面' : '画面更新于 ${frameAt!.toLocal().toIso8601String().substring(0,16).replaceAll('T',' ')}';
 }
 
 /// Selecting a tab revokes the previous visibility lease before granting the

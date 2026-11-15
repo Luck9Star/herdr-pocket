@@ -628,7 +628,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             key: ValueKey('terminal-list-${tab.id}'),
             leading: const Icon(Icons.terminal),
             title: Text(tab.label),
-            subtitle: Text('${view.target} · ${view.label}'),
+            subtitle: Text('${view.target} · ${view.label}${tab.visible.value ? '' : '\n${view.frameLabel}'}'),
             trailing: IconButton(
               tooltip: '关闭本地标签，不终止远端任务',
               onPressed: () => tabs.close(tab.id),
@@ -691,8 +691,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 260),
                             child: Text(
-                              '${tab.label} · ${tab.networkLabel}\n${view.target} · ${view.label}',
-                              maxLines: 2,
+                              '${tab.label} · ${tab.networkLabel}\n${view.target} · ${view.label}${tab.visible.value ? '' : '\n${view.frameLabel}'}',
+                              maxLines: 3,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -738,7 +738,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                   ListTile(key: ValueKey('host-tab-${tab.id}'), dense: true,
                     selected: tabs.activeId == tab.id, selectedTileColor: widget.tokens.color('brandSoft'),
                     title: Text(view.target, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(view.label),
+                    subtitle: Text('${view.label}${tab.visible.value ? '' : '\n${view.frameLabel}'}'),
                     onTap: () { tabs.select(tab.id); setState(() => destination = 1); },
                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                       if (tabs.active != null && tabs.activeId != tab.id)

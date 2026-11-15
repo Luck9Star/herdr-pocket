@@ -23,7 +23,7 @@ class PairingPage extends StatefulWidget {
   final String? profileId;
   final ValueListenable<bool>? visibility;
   final ValueListenable<bool>? inputEligible;
-  final void Function(String,String?,String?)? onViewState;
+  final void Function(String,String?,String?,DateTime?)? onViewState;
   final RemotePane? requestedTarget;
   final void Function(RemotePane)? onOpenPane;
   final HostDashboardLease Function(HostProfile)? summaryLeaseFactory;

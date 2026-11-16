@@ -16,7 +16,7 @@
 
 ## 修复后启动控制点
 
-原生源码固定于 [`a9be92d`](https://github.com/Luck9Star/herdr-pocket/commit/a9be92d98b8c26b15ccbc7f6faa240ed3d674929)。原生构建 [run 43877918495](https://github.com/Luck9Star/herdr-pocket/actions/runs/43877918495) 的 normal 和 QA 两个 job 成功；独立重下载的 x86_64 bundle 校验成功。重下载校验本身未运行 Android 加载或节点启动。
+原生源码固定于 [`a9be92d`](https://github.com/Luck9Star/herdr-pocket/commit/a9be92d98b8c26b15ccbc7f6faa240ed3d674929)。原生构建 [run 43877918495](https://github.com/Luck9Star/herdr-pocket/actions/runs/43877918495) 的 `native-x86` job 构建 normal 和 QA 两类工件，`download-replay` job 重新下载并验证两类工件；两个 job 均成功。重下载校验本身未运行 Android 加载或节点启动。
 
 [run 43880234995](https://github.com/Luck9Star/herdr-pocket/actions/runs/43880234995) 的 plain normal、QA 两包均在 API 35 x86_64 模拟器达到 `startOk=true`、`needsLoginReached=true`、`states=[needs-login]`、`stopOk=true`、`passed=true`；两包均未调用 login 或 dial，同 UID 私有 stderr 摘要为空。两包 scope、identity、安装包及会话清理成功，AVD 包装器和 namespace 清理检查通过。仅保留[脱敏字段摘要](evidence/android-dual-startup-20261116/startup-probe-43880234995.json)；该摘要对应验证工件 14230924293。
 

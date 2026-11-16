@@ -93,6 +93,11 @@ public final class ProbeInstrumentation extends Instrumentation {
             catch (Exception ignored) { }
             checkpoint(app, "private-config");
             JSONObject config = new JSONObject(new String(Files.readAllBytes(new File(app.getFilesDir(), "ts-node-probe-config.json").toPath()), StandardCharsets.UTF_8));
+            // A/B leg switch: the host runs each variant twice, once with the
+            // diagnostics opt-in marker and once without; the config bit is
+            // the single variable that differs between the legs.
+            boolean diagnosticsEnabled = config.optBoolean("netmonDiagnose", false);
+            report.put("diagnosticsLeg", diagnosticsEnabled ? "optin" : "plain");
             String control = config.getString("controlUrl"), hostname = "android-synthetic-probe";
             if (!control.matches("https://127\\.0\\.0\\.1:[0-9]+")) throw new IllegalStateException();
             checkpoint(app, "load-libraries");
@@ -137,7 +142,7 @@ public final class ProbeInstrumentation extends Instrumentation {
                 report.put("javaInterfaces", new JSONObject().put("ok", false).put("interfaces", 0)
                     .put("addresses", 0).put("errClass", error.getClass().getSimpleName()));
             }
-            try { report.put("netmonOptIn", DirectoryProbe.enableNetmonDiagnose(app, profile, identity.handle)); }
+            try { report.put("netmonOptIn", diagnosticsEnabled ? DirectoryProbe.enableNetmonDiagnose(app, profile, identity.handle) : false); }
             catch (Exception ignored) { }
             checkpoint(app, "native-start");
             long startAt = android.os.SystemClock.elapsedRealtime();

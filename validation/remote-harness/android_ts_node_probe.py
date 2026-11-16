@@ -90,6 +90,8 @@ def safe_probe(value):
             valid = item in STATES
         elif key in {'lastStage', 'failureStage'}:
             valid = item in STAGES
+        elif key == 'diagnosticsLeg':
+            valid = item in {'optin', 'plain'}
         elif key == 'failureClass':
             valid = item in {'linkage', 'security', 'controlled_failure'}
         elif key == 'states':
@@ -271,10 +273,16 @@ def _thread_names(record):
     names = []
     for match in re.finditer(rb'>>> ([^\n\r]+) <<<', record):
         name = match.group(1).decode('ascii', 'replace').strip()
-        if name and name not in names:
+        # The >>> header is the process name, not a thread; the pid/tid/name
+        # line below carries the thread identity.
+        if name and PACKAGE not in name and name not in names:
             names.append(name)
     for match in re.finditer(rb'\bpid: (\d+), tid: (\d+), name: ([^\n\r]+)', record):
         name = match.group(3).decode('ascii', 'replace').strip()
+        if name and name not in names:
+            names.append(name)
+    for match in re.finditer(rb'Fatal signal \d+ \([A-Z]+\).*?\(tid (\d+), ([^)]*)\)', record):
+        name = match.group(2).decode('ascii', 'replace').strip()
         if name and name not in names:
             names.append(name)
     return names[:6]
@@ -362,8 +370,9 @@ def run(args):
     def adb(*parts, data=None, timeout=30):
         return subprocess.run(['adb', '-s', SERIAL, *parts], input=data, capture_output=True, timeout=timeout, check=False)
     try:
+        diagnostics_leg = os.environ.get('PROBE_DIAGNOSTICS', 'optin') == 'optin'
         for variant in ('normal', 'qa'):
-            row = {'variant': variant, 'status': 'failed'}
+            row = {'variant': variant, 'diagnosticsLeg': 'optin' if diagnostics_leg else 'plain', 'status': 'failed'}
             output['variants'].append(row)
             apk, libraries = args.apk_root / (variant + '.apk'), getattr(args, variant)
             row['librariesSha256'] = verify_apk(apk, libraries)
@@ -393,7 +402,9 @@ def run(args):
                     del installed_apk
                     prepare_private_ca('adb', SERIAL, session.read_ca(), run=subprocess.run)
                     prefix = ('shell', '-T', 'run-as', PACKAGE)
-                    config = json.dumps({'controlUrl': session.materials['controlUrl']}).encode()
+                    diagnostics_leg = os.environ.get('PROBE_DIAGNOSTICS', 'optin') == 'optin'
+                    config = json.dumps({'controlUrl': session.materials['controlUrl'],
+                                         'netmonDiagnose': diagnostics_leg}).encode()
                     if adb(*prefix, 'tee', 'files/ts-node-probe-config.json', data=config).returncode:
                         raise ValueError('probe_config_failed')
                     if adb(*prefix, 'chmod', '600', 'files/ts-node-probe-config.json').returncode:

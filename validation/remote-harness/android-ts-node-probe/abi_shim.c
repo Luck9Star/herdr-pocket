@@ -17,6 +17,7 @@
  */
 #include <dlfcn.h>
 #include <jni.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,11 +91,15 @@ static void write_status(const char *directory, const uint8_t *buffer,
 }
 
 /* Evidence of which mapped object provided hp_ts_node_new: the canonical
- * path of the library, not the path the caller believed it loaded. */
-static void write_library_path(const char *directory, const char *mapped) {
+ * path of the library, not the path the caller believed it loaded.
+ *
+ * The evidence directory is a fixed app-private path, not the node's
+ * runtime directory: if the getter aborts, nothing else gets written, and
+ * the host must still find the proof. */
+static void write_library_path(const char *evidence_dir, const char *mapped) {
     char path[4200];
     int written = snprintf(path, sizeof(path), "%s/hp-probe-abi-library.txt",
-                           directory);
+                           evidence_dir);
     if (written <= 0 || written >= (int)sizeof(path)) return;
     FILE *file = fopen(path, "wb");
     if (!file) return;
@@ -102,36 +107,38 @@ static void write_library_path(const char *directory, const char *mapped) {
     fclose(file);
 }
 
-static void write_mapped_path(const char *directory, void *symbol) {
+static void write_mapped_path(const char *evidence_dir, void *symbol) {
     Dl_info info;
     memset(&info, 0, sizeof(info));
     if (dladdr(symbol, &info) == 0 || !info.dli_fname) {
-        write_library_path(directory, "");
+        write_library_path(evidence_dir, "");
         return;
     }
-    char resolved[4096];
+    char resolved[PATH_MAX];
     const char *name = info.dli_fname;
     if (realpath(name, resolved) != NULL) name = resolved;
-    write_library_path(directory, name);
+    write_library_path(evidence_dir, name);
 }
 
 JNIEXPORT jint JNICALL
 Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
         JNIEnv *env, jclass cls, jstring library_path, jstring directory,
-        jstring hostname, jstring control_url) {
+        jstring hostname, jstring control_url, jstring evidence_dir) {
     (void)cls;
-    if (!library_path || !directory || !hostname || !control_url)
+    if (!library_path || !directory || !hostname || !control_url || !evidence_dir)
         return SHIM_ERR_CONFIG;
 
     const char *lib = (*env)->GetStringUTFChars(env, library_path, NULL);
     const char *dir = (*env)->GetStringUTFChars(env, directory, NULL);
     const char *host = (*env)->GetStringUTFChars(env, hostname, NULL);
     const char *control = (*env)->GetStringUTFChars(env, control_url, NULL);
-    if (!lib || !dir || !host || !control) {
+    const char *evidence = (*env)->GetStringUTFChars(env, evidence_dir, NULL);
+    if (!lib || !dir || !host || !control || !evidence) {
         if (lib) (*env)->ReleaseStringUTFChars(env, library_path, lib);
         if (dir) (*env)->ReleaseStringUTFChars(env, directory, dir);
         if (host) (*env)->ReleaseStringUTFChars(env, hostname, host);
         if (control) (*env)->ReleaseStringUTFChars(env, control_url, control);
+        if (evidence) (*env)->ReleaseStringUTFChars(env, evidence_dir, evidence);
         return SHIM_ERR_CONFIG;
     }
 
@@ -152,9 +159,9 @@ Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
         goto done;
     }
     /* Record which mapped object actually provides hp_ts_node_new before
-     * any call, so the host can prove the ABI came from the packaged
-     * library and not from another loaded object. */
-    write_mapped_path(dir, (void *)node_new);
+     * any Go call, into the fixed evidence directory: if the getter aborts,
+     * this file is the only proof that survives. */
+    write_mapped_path(evidence, (void *)node_new);
     if (abi_version() != 1) {
         result = SHIM_ERR_ABI;
         goto done;
@@ -198,5 +205,6 @@ done:
     (*env)->ReleaseStringUTFChars(env, directory, dir);
     (*env)->ReleaseStringUTFChars(env, hostname, host);
     (*env)->ReleaseStringUTFChars(env, control_url, control);
+    (*env)->ReleaseStringUTFChars(env, evidence_dir, evidence);
     return result;
 }

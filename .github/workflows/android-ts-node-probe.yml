@@ -42,8 +42,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends acl libpulse0 iproute2 openssh-server binutils
           python3 -m venv "$RUNNER_TEMP/probe-python"
           "$RUNNER_TEMP/probe-python/bin/pip" install -r validation/pairing/requirements.txt
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.1.12297006'
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
           "$RUNNER_TEMP/probe-python/bin/python" -m unittest discover -s validation/remote-harness -p test_android_ts_node_probe.py -v
       - name: Download exact fixed normal QA and host binaries
         env:

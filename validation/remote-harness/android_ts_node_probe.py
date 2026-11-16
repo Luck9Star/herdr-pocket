@@ -177,7 +177,7 @@ PANIC_CLASSES = (
 
 ABI_BOOLS = {'abiShimOk', 'librariesLoaded', 'identityCreated', 'identityReadBack',
     'netmonOptIn', 'abiStatusFilePresent', 'completed', 'uidMatches',
-    'mappedLibraryPresent', 'libraryDigestMatches'}
+    'mappedLibraryPresent', 'libraryDigestMatches', 'mappedLibraryPathMatches'}
 
 
 def safe_abi_probe(value):
@@ -206,6 +206,39 @@ def safe_abi_probe(value):
         if not valid:
             raise ValueError('abi_probe_invalid')
     return value
+
+
+def collect_abi_evidence(adb, expected_digest):
+    """Read fixed-path ABI evidence even when the ABI process aborted."""
+    evidence = {}
+    response = adb('exec-out', 'run-as', PACKAGE, 'cat',
+                   'files/hp-probe-abi/node/netmon-diagnose.json')
+    if response.returncode == 0:
+        try:
+            value = json.loads(response.stdout)
+            evidence['diagnose'] = value if _safe_netmon_diagnose(value) else 'schema-rejected'
+        except (ValueError, TypeError, UnicodeError):
+            evidence['diagnose'] = 'not-json'
+    else:
+        evidence['diagnose'] = 'file-missing'
+
+    library = {'pathAvailable': False, 'digestAvailable': False, 'digestMatches': False}
+    response = adb('exec-out', 'run-as', PACKAGE, 'cat',
+                   'files/hp-probe-abi/hp-probe-abi-library.txt')
+    if response.returncode == 0:
+        try:
+            path = response.stdout.decode('ascii').strip()
+        except UnicodeError:
+            path = ''
+        if path.startswith('/') and len(path) <= 4096 and '\n' not in path:
+            library['pathAvailable'] = True
+            mapped = adb('exec-out', 'run-as', PACKAGE, 'cat', path)
+            if mapped.returncode == 0:
+                digest = hashlib.sha256(mapped.stdout).hexdigest()
+                library.update(digestAvailable=True, sha256=digest,
+                               digestMatches=digest == expected_digest)
+    evidence['library'] = library
+    return evidence
 
 
 def _panic_class(line):
@@ -457,6 +490,7 @@ def run(args):
                         adb('shell', 'logcat', '-c', '-b', 'crash', timeout=15)
                         adb('shell', 'run-as', PACKAGE, 'rm', '-f',
                             'files/ts-abi-probe-result.json', 'files/ts-abi-probe-pid.txt', timeout=15)
+                        adb('shell', 'run-as', PACKAGE, 'rm', '-rf', 'files/hp-probe-abi', timeout=15)
                         result = adb('shell', 'am', 'instrument', '-w', '-r',
                             PACKAGE + '/org.herdr.network.AbiProbeInstrumentation', timeout=120)
                         row['abiInstrumentation'] = instrument_summary(result)
@@ -471,6 +505,8 @@ def run(args):
                                 row['abiProbe'] = 'schema-rejected'
                         else:
                             row['abiProbe'] = 'cat-failed'
+                        row['abiEvidence'] = collect_abi_evidence(
+                            adb, row['librariesSha256']['libhp_tailscale.so'])
                         # Crash attribution for the ABI process uses its own
                         # pid file; the main probe writes its own later.
                         if abi_pid:

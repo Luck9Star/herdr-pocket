@@ -9,6 +9,7 @@ import unittest
 import zipfile
 
 import android_ts_node_probe as probe
+from android_ts_node_probe import PACKAGE
 
 
 class ProbeGuardsTests(unittest.TestCase):
@@ -267,15 +268,13 @@ class AbiProbeGuardTests(unittest.TestCase):
         self.assertNotIn('herdr_flutter_network_runtime', source)
 
     def test_abi_probe_schema_accepts_real_report_shapes(self):
-        # The real report carries the Java sentinel when no diagnose file
-        # exists, and the full Go schema when it does.
-        sentinel = {'schemaVersion': 1, 'abiShimOk': False, 'librariesLoaded': True,
-            'identityCreated': True, 'identityReadBack': True, 'netmonOptIn': True,
-            'abiStatusFilePresent': False, 'completed': True, 'abiShimCode': 3,
+        sentinel = {'schemaVersion': 1, 'abiShimOk': False, 'targetPackage': PACKAGE,
+            'uidMatches': True, 'netmonOptIn': True, 'abiStatusFilePresent': False,
+            'mappedLibraryPresent': False, 'mappedLibraryPathMatches': False,
+            'libraryDigestMatches': False, 'completed': True, 'abiShimCode': 3,
             'netmonDiagnose': {'fileMissing': True}}
         self.assertEqual(probe.safe_abi_probe(sentinel), sentinel)
-        crash = {**sentinel, 'abiShimOk': False, 'completed': False,
-            'errClass': 'IllegalStateException'}
+        crash = {**sentinel, 'completed': False, 'errClass': 'IllegalStateException'}
         self.assertEqual(probe.safe_abi_probe(crash), crash)
 
     def test_each_variant_clears_crash_buffer_before_each_instrument(self):
@@ -301,9 +300,10 @@ class AbiProbeGuardTests(unittest.TestCase):
         self.assertIn('assets/hp-tailscale.sha256', source)
         self.assertNotIn('"$tmp/base.apk" hp-tailscale.sha256)', source)
     def test_abi_probe_schema_accepts_bounded_result(self):
-        value = {'schemaVersion': 1, 'abiShimOk': True, 'librariesLoaded': True,
-            'identityCreated': True, 'identityReadBack': True, 'netmonOptIn': True,
-            'abiStatusFilePresent': True, 'completed': True, 'abiShimCode': 0,
+        value = {'schemaVersion': 1, 'abiShimOk': True, 'targetPackage': PACKAGE,
+            'uidMatches': True, 'netmonOptIn': True, 'abiStatusFilePresent': True,
+            'mappedLibraryPresent': True, 'mappedLibraryPathMatches': True,
+            'libraryDigestMatches': True, 'completed': True, 'abiShimCode': 0,
             'netmonDiagnose': {'event': 'netmon_diagnose', 'getterRegistered': True,
                 'getterCalls': 1, 'selected': 'goNet', 'stateBuilt': True,
                 'stateErrClass': '', 'haveV4': True, 'haveV6': False, 'anyUp': True,

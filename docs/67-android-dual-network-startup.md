@@ -1,10 +1,70 @@
-# Android 双网启动诊断与验收边界
+# Android 双网启动与会话阶段证据
 
-截至 2026-11-17，Android API 35 x86_64 启动控制点已通过；**Flutter 已同时认证两台隔离主机，ET / TS 各有一个活动的已批准会话，断网及存活会话续传仍待验证**。Tauri 已修复授权预检与接收器 API35 兼容性，正在设备复验；不能写成两壳、两个停网方向全部通过。本页补充 [第 66 页](66-iteration-handoff-2026-11-16.md)之后的分层证据，以下保留历史。
+截至 2026-11-17，**Flutter 已在 API 35 x86_64 AVD 上取得两个停网顺序的功能证据及双方最终关闭审计，但工作流仍失败**：最后结果校验报 `device_result_invalid`。Tauri 已证明先停 TS 后 ET 原认证会话继续输入 `Ee`；反向的 TS 后续 `t` 与最后收尾仍未证明。本页按已校验结果记账，不把功能检查点、本机修复或新运行预写为整轮通过。此前交接见[第 66 页](66-iteration-handoff-2026-11-16.md)。
 
-## 当前已完成证据与验收缺口
+范围限于独占 Android 模拟器、临时隔离控制面和两个真实 SSH 服务。它们不是用户真实主机或生产网络；不能外推到物理手机、Android arm64、真实中文 IME、三网或五平台。
 
-最新两壳对照均来自 `f65ac16`、API 35 x86_64 模拟器，原生仍为 `a9be92d`；公开字段见[阶段摘要](evidence/android-dual-startup-20261116/stage-boundary-20261117.json)。表中的“两方向”是两个独立案例，实际停网尚未执行。
+## 当前设备证据：功能与工作流分别判断
+
+以下来自 GitHub 官方结果工件；重新下载后核验官方 ZIP SHA-256，解包报告与本地 JSON 逐字节一致。来源、两种摘要及最小审计字段见[合并脱敏证据](evidence/android-dual-startup-20261116/dual-session-stage-20261117.json)。ZIP 摘要和 JSON 文件摘要标识不同字节，不能互换。
+
+| 客户端与顺序 | 已观察到的请求功能 | 最后收尾与本轮结论 |
+| --- | --- | --- |
+| Flutter，先停 TS；[43923493989](https://github.com/Luck9Star/herdr-pocket/actions/runs/43923493989)，UI `16792660f` | 两端各一次批准认证；TS 停后无新增输入，ET 保持原 `ordinal=1`，精确收到 `Ee`；没有新增认证会话 | 最后两端均 `inactive`，精确字节及原序号仍匹配；但在 `both_stopped_audit` 后结果校验报 `device_result_invalid`，`device` job 为 failure，不能写成流程绿灯 |
+| Flutter，先停 ET；同一运行、独立案例 | 两端各一次批准认证；ET 停后无新增输入，TS 保持原 `ordinal=1`，精确收到 `Tt`；没有新增认证会话 | 同样取得两端最终 `inactive`，同样因 `device_result_invalid` 失败；功能与关闭事实成立，结果交接/判定仍须修复验证 |
+| Tauri，先停 TS；[43914151903](https://github.com/Luck9Star/herdr-pocket/actions/runs/43914151903)，驱动 `2ba07d0`、APK `372430f` | 显式系统授权、双端配对/绑定、不同目标输入均已证；TS 累计 1 字节后活动会话为 0，ET 在原认证会话累计精确 2 字节；`survivorSameAuthenticatedSession=true`，停止侧输入不可用且无新增 | 到附加 `stop_survivor`，报 `dual_confirmation_not_observed`；没有最后 ET 关闭证据。运行及修复 APK 驱动回放 job 均失败 |
+| Tauri，先停 ET；同一运行、独立案例 | 双端配对/绑定及不同目标输入已证；两侧各一次批准认证、各 1 字节 | 在首次停网确认处报 `dual_confirmation_not_observed`，阶段仍为 `connect_and_input`；失败采样时两侧各 1 条活动会话。未证明 ET 停止及幸存 TS 原会话后续 `t` |
+
+Flutter 两方向的 `auditProgress` 均为 `interimClosePending=false`、`stoppedCloseConfirmed=true`、`survivorSecondInputConfirmed=true`；最终审计两侧各只保留原批准认证序号、`newSessions=0`、无错误端新增字节且活动会话均为 0。`capturedBytes` 是终端输入审计，不是 SSH 协议总流量。未知、未到达的检查点不能填成 0 或通过。
+
+两份当前报告各自记录受检安装包、forward/反向映射、私有目录、relay、控制服务和 namespace 清理成功。**实验环境清理成功不替代产品连接关闭证据**；Flutter 的最终关闭由前面的宿主审计另行证明，Tauri 的不足仍保留。当前设备结果不包含下面最新 EOF 回执竞态小修的独立设备验收。
+
+## 启动 panic 与正确能力判断
+
+[43873881946](https://github.com/Luck9Star/herdr-pocket/actions/runs/43873881946) 的 normal/QA 包均捕获到同一 panic 消息摘要 `7ccfbfe94828331c4bc8b556780ccf9f78afb3ad9c9228f4c7b80ed43c880758`，与 Tailscale v1.104.1 [`logpolicy.go:282`](https://github.com/tailscale/tailscale/blob/v1.104.1/logpolicy/logpolicy.go#L282) 的固定字面量一致；两条摘要均为 `origin=null`、`frames=[]`、`truncated=true`、`currentExit.available=false`，不能据此写成完整调用链或退出原因已取证。
+
+固定上游 [`NewLocalBackend`](https://github.com/tailscale/tailscale/blob/v1.104.1/ipn/ipnlocal/local.go#L656) 在调用 `sockstatlog.NewLogger` 前先求值 `logpolicy.LogsDir`。正确修复把**相同能力条件 `sockstats.IsAvailable && buildfeatures.HasLogTail` 前移**：无能力的构建不探测日志目录；有能力分支保持原 logger 调用和错误处理。局部隔离 A/B 已证明旧顺序会探测目录并触发同摘要 panic，新顺序零探测正常返回；这不是 Android 文件系统或真实身份验证。
+
+原生修复固定为 [`a9be92d`](https://github.com/Luck9Star/herdr-pocket/commit/a9be92d98b8c26b15ccbc7f6faa240ed3d674929)，normal/QA 构建及重下载校验见 [43877918495](https://github.com/Luck9Star/herdr-pocket/actions/runs/43877918495)。启动控制点 [43880234995](https://github.com/Luck9Star/herdr-pocket/actions/runs/43880234995) 两包均 `startOk=true`、`needsLoginReached=true`、`stopOk=true`、`passed=true`，状态为 `needs-login`，未 login 或 dial；同 UID 私有 stderr 摘要为空，受检 scope、identity、安装包、会话及 AVD/namespace 清理通过，见[启动短摘要](evidence/android-dual-startup-20261116/startup-probe-43880234995.json)。预登录控制点与上表授权、SSH、双网会话是不同证据层。
+
+## Flutter 关闭顺序、真实 EasyTier EOF 与修复边界
+
+修复前 [43917953870](https://github.com/Luck9Star/herdr-pocket/actions/runs/43917953870)（UI `624359c`）已证明先停 TS 后 ET 原会话收到 `Ee`，但附加停止 ET 的 **10 秒**等待以 `host_audit_close_timeout` 结束。该案例共 82 条两端审计，其中关闭等待 38 轮、76 条；ET 始终 `ESTABLISHED`，原序号和累计 2 字节不变。反向案例也完成两端初始输入，但首次 ET 停止审计发现仍活动即退出，未执行 TS 后续 `t`。这是当时的真实失败；不是配对失败，也不能推成远端永不关闭。
+
+两处产品缺口有独立反例：真实 `HostCatalogPage → PairingPage → RemotePage` Widget 链路旧顺序为 `[provider.stop, A.cancel.started]`，因为页面销毁在下一帧才启动异步取消；另一个缺口是虚拟流强制退役不等于远端 FIN。固定 EasyTier 的 [smoltcp handle Drop](https://github.com/EasyTier/EasyTier/blob/728ba94b5029240add6204eed591f22e4e039e6b/easytier-core/src/gateway/smoltcp/tokio_smoltcp/socket_allocator.rs#L118-L122) 直接移除 socket，而[显式 shutdown](https://github.com/EasyTier/EasyTier/blob/728ba94b5029240add6204eed591f22e4e039e6b/easytier-core/src/gateway/smoltcp/tokio_smoltcp/socket.rs#L199-L214) 请求 FIN。真实 smoltcp 0.14.0 回环 A/B 分别得到对端 `Established / EOF=false` 与 `CloseWait / EOF=true`。
+
+更直接的**真实 EasyTier C ABI** A/B 使用 macOS arm64 原生库、两个自有节点和用户态 TCP 转发到自有回环 echo：两组精确字节均匹配；旧 `stream_close` 没有 peer/return EOF，`shutdown_write` 则两向 EOF 均成立。库 SHA-256 已与结果独立核对，载于合并摘要。它不是 SSH、Android 或该 Android 原生库的验收；不能以本机 native A/B 替代上表设备结果。
+
+产品修复立即封住受影响标签的输入，只等待这些标签的本地清退，外层最多 5 秒；显式用户停网还在 `dartssh2 4.1.0` 取消原读订阅前，排空原队列、复用已有 `streamShutdown`，最多 1 秒等待原读泵 EOF，随后完成本地退役。超时/失败仍允许停节点并保留“SSH 清退未确认”，不重放写或停止；另一网与原会话不变，硬取消/标准直连合同保持。原生二进制无需变更。`closed:true` 只确认本地退役；远端关闭仍必须看宿主审计。新一行修复另覆盖“原读 EOF 比 shutdown 回执早”的误判，预算外晚完成仍不能翻转未知结果。
+
+## Tauri：真实页面触摸对照，不预填 Android 修复通过
+
+旧产品 `4215dcf` 的真实 Chrome 157 对照中，正常 mouse 点击为 1 次原生确认 / 1 次准确 ET stop；按住后完成一次相同状态刷新再释放，按钮 DOM 已替换，确认 / stop 均为 0。新产品 `9c774137`（工作提交 `3fe0862`）在**真实 touch 和 mouse** 下，相同刷新保留同一受审查按钮，各为 1 次确认 / 1 次准确 ET stop；绑定改变则必须生成不同节点，旧手势保持 0 / 0。已独立回放同一产品模块与原生浏览器确认，后端是隔离替身，不是 Android WebView/设备证据，也不保证上述每个旧设备错误只有同一原因。
+
+本机 Flutter 完整 `test/`：`624359c` 为 **576 通过 / 7 跳过 / 0 失败**；设备源码 `16792660f` 为 **587 / 7 / 0**；含 EOF 回执竞态小修的 `8cd02a0` 为 **589 / 7 / 0**，三份 JSON 事件均 `done.success=true`。7 项是另行运行的真实 GUI/SSH、双会话或旋转用例，不能计作通过。Tauri 前端为 **628/628** 且 Vite 构建通过；这些本机测试不补写 Android 缺失方向或工作流绿灯。
+
+## 固定来源与历史参考
+
+Android 两壳的 `HOST_SOURCE=5404adf` 与已校验 ZIP 继续固定：工件 `14171011473`，ZIP SHA-256 为 `4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698`。它们标识 herdr / peer / ts-fixture 二进制与对应 bundle verifier 的来源，不代表运行期所有 Python 都来自旧 host checkout。
+
+[android_dual_overlay_session.py](../validation/remote-harness/android_dual_overlay_session.py) 的 bundle 校验调用旧固定 `source_checkout`，随后实际启动的是当前 `HERE/android_dual_overlay_hosts.py`；[当前 controller](../validation/remote-harness/android_dual_overlay_hosts.py) 再导入当前 `paired_dual_demo.prepared_pairing_hosts`。所以本次权限修复随新的客户端 / 驱动源码进入两壳设备执行，无须更换固定 host ZIP 或重复编译 native。应分别记录运行期客户端源码 SHA 与固定 host 二进制来源；旧结果中的 `hostSourceSHA=5404adf` 不能被解读为全部运行期 Python 的源码 SHA。
+
+两壳共用的隔离 sshd 原先设置 `AllowTcpForwarding no`。Flutter 产品通过 `direct-streamlocal` 读取 herdr Unix socket；固定 OpenSSH **9.6p1** 的 [`session.c:320–333`](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/session.c#L320-L333) 显示，该设置会关闭共同的本地 channel 权限；[`channels.c:4591–4618`](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/channels.c#L4591-L4618) 对 Unix path 也检查该权限。因此这是已确认的夹具权限缺陷，可解释“SSH 公钥认证成功但无法打开 herdr socket”的链路；它不单独证明每轮设备失败只有这一原因。
+
+夹具原始修复提交 `bb24534` 将策略收窄为 `AllowTcpForwarding local`、`AllowStreamLocalForwarding local` 和 `PermitOpen [本次唯一 herdr Unix socket 完整路径]:*`。方括号是配置解析所需语法；并未开放任意 TCP 目标。实现与可选真实回归见 [paired_dual_demo.py](../validation/remote-harness/paired_dual_demo.py) 和 [test_paired_dual_streamlocal.py](../validation/remote-harness/test_paired_dual_streamlocal.py)。
+
+完全自有的临时密钥、授权文件、known_hosts、Unix echo 与仅监听 `127.0.0.1` 的 sshd 冷启动 A/B 已通过，见[脱敏摘要](evidence/android-dual-startup-20261116/shared-host-streamlocal-20261117.json)：旧配置目标 Unix socket 接受数 0；新配置唯一目标接受数 1 且回显字节相等；另一个真实存在的 Unix socket 与真实 TCP 监听目标在两轮均接受 0，TCP 明确返回 `administratively prohibited`。两轮分别完成 3 次临时公钥认证，避免将未认证误当作权限拒绝。**实测版本是本机 OpenSSH 10.5p1，不是 Linux OpenSSH 9.6p1 实测**；9.6p1 结论来自上面的固定源码。该实验没有使用用户 `.ssh`，也不是 herdr `session.snapshot` 或 Android 设备通过证据。
+
+这里的双端输入证据来自隔离验收链路，不扩展为 stock herdr 所有版本的输入能力。独立源码/逻辑反例核查确认：原会话判据拒绝新认证、序号变化和错字节；它支持判据，不替代实际设备检查点。
+
+<details>
+<summary>历史前置证据与早期 UI 诊断（不替代当前结果）</summary>
+
+以下段落保留当时检查点、局部实验与未完成范围；其中“尚未取得”只描述各自历史运行，不回退本页顶部的新设备证据。
+
+### f65ac16 阶段与授权接收器前置检查
+
+较早两壳对照均来自 `f65ac16`、API 35 x86_64 模拟器，原生仍为 `a9be92d`；公开字段见[阶段摘要](evidence/android-dual-startup-20261116/stage-boundary-20261117.json)。表中的“两方向”是两个独立案例，实际停网尚未执行。
 
 | 已完成运行 | 确实取得的证据 | 尚未取得的证据 |
 | --- | --- | --- |
@@ -13,29 +73,9 @@
 
 Flutter 本机真实双标签 A/B 已校验按新主机标签限定观察对象的测试修复（`b38e366`）；这不回填设备 `T` 输入或停网结果。Tauri 单次诊断 [43905996068](https://github.com/Luck9Star/herdr-pocket/actions/runs/43905996068)（`9093dcb`）仅观察到窗口由产品转为系统桌面，activity 为歧义 `null`、窗口不稳定、未见本次回环端口；**不能据此确证退出原因或把桌面当接收器**，该次没有点击 chooser / 同意按钮。
 
-接收器修复 `1a02edf` 已在真实 Android35 `android.jar` boot API 下通过 4 项本机 API / DEX smoke：旧代码使用的 `Files.readString/writeString` 在编译负例中被拒绝，新代码的受限文件流、同意监听器和 DEX 引用通过检查。此项不等于设备运行成功。修复后候选 `165a0476` 正在设备复验；实际 native 打开计数及清理前白名单失败诊断已接入，结果待返回。
+接收器修复 `1a02edf` 已在真实 Android35 `android.jar` boot API 下通过 4 项本机 API / DEX smoke：旧代码使用的 `Files.readString/writeString` 在编译负例中被拒绝，新代码的受限文件流、同意监听器和 DEX 引用通过检查。此项不等于设备运行成功。当时修复后候选 `165a0476` 尚待设备复验，已接入实际 native 打开计数及清理前白名单失败诊断；后续已取得的结果以本页当前表为准。
 
-## 设备诊断
-
-基线诊断 [run 43873881946](https://github.com/Luck9Star/herdr-pocket/actions/runs/43873881946) 的 plain normal 与 QA 两个包均捕获到 `panic`，消息 SHA-256 同为 `7ccfbfe94828331c4bc8b556780ccf9f78afb3ad9c9228f4c7b80ed43c880758`。摘要显示两条均为 `origin=null`、`frames=[]`、`truncated=true`；设备输出没有保留可用于定位调用链的栈帧，也不能据此证明完整调用路径。两条的 `currentExit.available=false`，不将退出原因当作已查明。
-
-该摘要与 Tailscale v1.104.1 [`logpolicy.go:282`](https://github.com/tailscale/tailscale/blob/v1.104.1/logpolicy/logpolicy.go#L282) 的固定 panic 字面量经 UTF-8 编码计算的 SHA-256 精确一致。这是**消息一致**的证据，并非设备栈帧直接证明该调用点。摘要不包含原始 stderr、地址、私有路径或凭据。
-
-## 源码解释与隔离实验
-
-固定上游源码中，[`ipnlocal.NewLocalBackend` 的 local.go:656](https://github.com/tailscale/tailscale/blob/v1.104.1/ipn/ipnlocal/local.go#L656) 将 `logpolicy.LogsDir(logf)` 作为 `sockstatlog.NewLogger` 的参数。Go 在调用函数前求值参数，因此即使 `NewLogger` 内部随后依据能力条件选择不创建 logger，也不能避免此前的目录探测。目录探测路径在无法找到安全位置时会触发上面的固定 panic。
-
-本机隔离 A/B 实验分别执行一次：原顺序调用目录探测一次并 panic；将 sockstats 与 logtail 能力条件前移后，目录探测零次且正常返回。该实验是针对调用顺序和构建能力的局部观察，不是 Android 产品二进制、Android 文件系统或真实网络的验证，也不能单独证明设备完整调用链。
-
-## 修复后启动控制点
-
-原生源码固定于 [`a9be92d`](https://github.com/Luck9Star/herdr-pocket/commit/a9be92d98b8c26b15ccbc7f6faa240ed3d674929)。原生构建 [run 43877918495](https://github.com/Luck9Star/herdr-pocket/actions/runs/43877918495) 的 `native-x86` job 构建 normal 和 QA 两类工件，`download-replay` job 重新下载并验证两类工件；两个 job 均成功。重下载校验本身未运行 Android 加载或节点启动。
-
-[run 43880234995](https://github.com/Luck9Star/herdr-pocket/actions/runs/43880234995) 的 plain normal、QA 两包均在 API 35 x86_64 模拟器达到 `startOk=true`、`needsLoginReached=true`、`states=[needs-login]`、`stopOk=true`、`passed=true`；两包均未调用 login 或 dial，同 UID 私有 stderr 摘要为空。两包 scope、identity、安装包及会话清理成功，AVD 包装器和 namespace 清理检查通过。仅保留[脱敏字段摘要](evidence/android-dual-startup-20261116/startup-probe-43880234995.json)；该摘要对应验证工件 14230924293。
-
-这一控制点证明两个包到达预登录并完成受检关闭流程，不证明授权、SSH 会话、双网并发或停网后存活。两种 UI 的双会话和两个停网方向仍须分别以设备结果验收。
-
-## 首轮双网 UI 设备结果
+### 首轮双网 UI 设备结果（历史）
 
 首轮两壳均使用 API 35 x86_64 自有模拟器及隔离端点，源码 `04800eb`、原生源码 `a9be92d`；两次运行都失败，尚未证明双会话或停网方向通过。
 
@@ -46,7 +86,7 @@ Flutter 本机真实双标签 A/B 已校验按新主机标签限定观察对象�
 
 Tauri 另有可独立复现的产品缺陷：同源码真实 Chromium 中，`needs-login` 触发 `NetworkLoginPoll` 默认定时器时出现 `Illegal invocation`。完整真实产品面板对照使用**模拟节点读数**：旧版 `cards=0`、`loginVisible=false`、`readFailed=true`；修复后 `cards=1`、`loginVisible=true`、`readFailed=false`；两版均 `statusReads=1`。这是浏览器产品面板对照，不是 Android 设备验收；后续设备复验见下节。
 
-## 后续 UI 设备复验与本机修复
+### 后续 UI 设备复验与本机修复（历史）
 
 下列运行均使用修复后的原生 `a9be92d`，保留[脱敏短摘要](evidence/android-dual-startup-20261116/ui-followup-20261116.json)。这些运行仍未到达双会话、停网与另一网续传验收点。
 
@@ -55,7 +95,7 @@ Tauri 另有可独立复现的产品缺陷：同源码真实 Chromium 中，`nee
 
 后续本机真实 Chromium 使用隔离后端，独立重现 Tauri 状态轮询重建面板、摧毁 EasyTier 未保存草稿，以及后台身份读取与人工启动并发竞争。修复后继续读取状态，草稿输入框保持同一个 DOM 节点，人工启动只发出一次写操作；本机前端全套 **614/614 通过**。这是本机产品界面与隔离后端证据，不是 Android 双会话证据。发布候选固定于 [`372430f`](https://github.com/Luck9Star/herdr-pocket/commit/372430fe94459ad2cd7fd1e04eb61c2c45d9d99c)，其设备验收须以独立结果为准。
 
-## 第四轮与后续已完成设备结果
+### 第四轮与后续已完成设备结果（历史）
 
 下表均为 API 35 x86_64 模拟器上**已完成且失败**的运行，原生固定为 `a9be92d`，短摘要见 [ui-progress-20261117.json](evidence/android-dual-startup-20261116/ui-progress-20261117.json)。每轮均独立执行先停 ET、先停 TS 两个案例；到达某个测试阶段不代表实际停网步骤已经执行。
 
@@ -68,20 +108,10 @@ Tauri 另有可独立复现的产品缺陷：同源码真实 Chromium 中，`nee
 
 Flutter 的 0 字节来自主机端**终端输入审计**，不是 SSH 协议传输总字节。Tauri 缺少的 SSH 审计不能补写为 0；它的控制面授权计数也不能替代 SSH 认证计数。第四轮 Flutter 的响应检查没有证明设备时钟是失败原因；后续 Flutter 已确实走到一次 SSH 认证，仍未取得面板。
 
-## 共同主机夹具的 Unix socket 转发缺陷
+</details>
 
-两壳共用的隔离 sshd 原先设置 `AllowTcpForwarding no`。Flutter 产品通过 `direct-streamlocal` 读取 herdr Unix socket；固定 OpenSSH **9.6p1** 的 [`session.c:320–333`](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/session.c#L320-L333) 显示，该设置会关闭共同的本地 channel 权限；[`channels.c:4591–4618`](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/channels.c#L4591-L4618) 对 Unix path 也检查该权限。因此这是已确认的夹具权限缺陷，可解释“SSH 公钥认证成功但无法打开 herdr socket”的链路；它不单独证明每轮设备失败只有这一原因。
+为保留追溯而不重复整轮时间线，早期失败的来源与边界保留在以下链接：
 
-夹具原始修复提交 `bb24534` 将策略收窄为 `AllowTcpForwarding local`、`AllowStreamLocalForwarding local` 和 `PermitOpen [本次唯一 herdr Unix socket 完整路径]:*`。方括号是配置解析所需语法；并未开放任意 TCP 目标。实现与可选真实回归见 [paired_dual_demo.py](../validation/remote-harness/paired_dual_demo.py) 和 [test_paired_dual_streamlocal.py](../validation/remote-harness/test_paired_dual_streamlocal.py)。
-
-完全自有的临时密钥、授权文件、known_hosts、Unix echo 与仅监听 `127.0.0.1` 的 sshd 冷启动 A/B 已通过，见[脱敏摘要](evidence/android-dual-startup-20261116/shared-host-streamlocal-20261117.json)：旧配置目标 Unix socket 接受数 0；新配置唯一目标接受数 1 且回显字节相等；另一个真实存在的 Unix socket 与真实 TCP 监听目标在两轮均接受 0，TCP 明确返回 `administratively prohibited`。两轮分别完成 3 次临时公钥认证，避免将未认证误当作权限拒绝。**实测版本是本机 OpenSSH 10.5p1，不是 Linux OpenSSH 9.6p1 实测**；9.6p1 结论来自上面的固定源码。该实验没有使用用户 `.ssh`，也不是 herdr `session.snapshot` 或 Android 设备通过证据。
-
-## 主机运行期来源与二进制复用
-
-Android 两壳的 `HOST_SOURCE=5404adf` 与已校验 ZIP 继续固定：工件 `14171011473`，ZIP SHA-256 为 `4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698`。它们标识 herdr / peer / ts-fixture 二进制与对应 bundle verifier 的来源，不代表运行期所有 Python 都来自旧 host checkout。
-
-[android_dual_overlay_session.py](../validation/remote-harness/android_dual_overlay_session.py) 的 bundle 校验调用旧固定 `source_checkout`，随后实际启动的是当前 `HERE/android_dual_overlay_hosts.py`；[当前 controller](../validation/remote-harness/android_dual_overlay_hosts.py) 再导入当前 `paired_dual_demo.prepared_pairing_hosts`。所以本次权限修复随新的客户端 / 驱动源码进入两壳设备执行，无须更换固定 host ZIP 或重复编译 native。应分别记录运行期客户端源码 SHA 与固定 host 二进制来源；旧结果中的 `hostSourceSHA=5404adf` 不能被解读为全部运行期 Python 的源码 SHA。
-
-## 后续验收范围
-
-下一步须补齐 Flutter 的 TS 输入、停一网后原存活会话继续输入及最终清理，并完成 Tauri 的真实授权与双会话验收。模拟器结果不等同于实体设备、其他架构或五平台验证。本页不预填双网端到端通过结果。
+- 首轮 UI：[Flutter 43880235321](https://github.com/Luck9Star/herdr-pocket/actions/runs/43880235321)、[Tauri 43880235735](https://github.com/Luck9Star/herdr-pocket/actions/runs/43880235735)。
+- 后续 UI：[Flutter 43884776566](https://github.com/Luck9Star/herdr-pocket/actions/runs/43884776566)、[43887559248](https://github.com/Luck9Star/herdr-pocket/actions/runs/43887559248)、[Tauri 43884776658](https://github.com/Luck9Star/herdr-pocket/actions/runs/43884776658)，见[后续短摘要](evidence/android-dual-startup-20261116/ui-followup-20261116.json)。旧前端候选 [`372430f`](https://github.com/Luck9Star/herdr-pocket/commit/372430fe94459ad2cd7fd1e04eb61c2c45d9d99c) 的本机浏览器结果不等于设备通过。
+- 授权/SSH 前置阶段：[Flutter 43891123475](https://github.com/Luck9Star/herdr-pocket/actions/runs/43891123475)、[43898262011](https://github.com/Luck9Star/herdr-pocket/actions/runs/43898262011)、[Tauri 43891123962](https://github.com/Luck9Star/herdr-pocket/actions/runs/43891123962)、[43897860683](https://github.com/Luck9Star/herdr-pocket/actions/runs/43897860683)，见[阶段短摘要](evidence/android-dual-startup-20261116/ui-progress-20261117.json)。

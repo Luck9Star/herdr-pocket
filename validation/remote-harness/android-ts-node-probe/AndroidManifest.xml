@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.herdr.herdr_flutter_probe" android:versionCode="1" android:versionName="1.0">
   <uses-permission android:name="android.permission.INTERNET"/>
   <instrumentation android:name="dev.herdr.tsnodeprobe.ProbeInstrumentation" android:targetPackage="dev.herdr.herdr_flutter_probe"/>
+  <instrumentation android:name="org.herdr.network.AbiProbeInstrumentation" android:targetPackage="dev.herdr.herdr_flutter_probe"/>
   <application android:label="Isolated product TS node probe" android:debuggable="true" android:extractNativeLibs="true"/>
 </manifest>

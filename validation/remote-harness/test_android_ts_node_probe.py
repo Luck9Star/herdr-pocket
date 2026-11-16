@@ -249,6 +249,64 @@ class ProbeGuardsTests(unittest.TestCase):
         self.assertFalse(accepted({'ok': True, 'interfaces': 2, 'addresses': 2, 'errClass': 'x' * 65}))
 
 
+class AbiProbeGuardTests(unittest.TestCase):
+    """The ABI leg must stay pure Java + C ABI: no Rust runtime, no bindNative.
+
+    javac cannot catch the missing native implementation, so the constraint is
+    asserted against the source text.
+    """
+
+    def test_abi_leg_does_not_bind_native(self):
+        source = Path(__file__).parent.joinpath(
+            'android-ts-node-probe', 'AbiProbeInstrumentation.java').read_text()
+        # The constraint is about calls, not about the word in a comment.
+        calls = [line for line in source.splitlines()
+                 if 'bindNative' in line and not line.strip().startswith('//')
+                 and not line.strip().startswith('*')]
+        self.assertEqual(calls, [])
+        self.assertNotIn('herdr_flutter_network_runtime', source)
+
+    def test_abi_probe_schema_accepts_real_report_shapes(self):
+        # The real report carries the Java sentinel when no diagnose file
+        # exists, and the full Go schema when it does.
+        sentinel = {'schemaVersion': 1, 'abiShimOk': False, 'librariesLoaded': True,
+            'identityCreated': True, 'identityReadBack': True, 'netmonOptIn': True,
+            'abiStatusFilePresent': False, 'completed': True, 'abiShimCode': 3,
+            'netmonDiagnose': {'fileMissing': True}}
+        self.assertEqual(probe.safe_abi_probe(sentinel), sentinel)
+        crash = {**sentinel, 'abiShimOk': False, 'completed': False,
+            'errClass': 'IllegalStateException'}
+        self.assertEqual(probe.safe_abi_probe(crash), crash)
+
+    def test_each_variant_clears_crash_buffer_before_each_instrument(self):
+        source = Path(__file__).parent.joinpath('android_ts_node_probe.py').read_text()
+        lines = source.splitlines()
+        clears = [i for i, line in enumerate(lines) if "'logcat', '-c', '-b', 'crash'" in line]
+        abi = [i for i, line in enumerate(lines) if 'org.herdr.network.AbiProbeInstrumentation' in line]
+        main = [i for i, line in enumerate(lines) if 'dev.herdr.tsnodeprobe.ProbeInstrumentation' in line and 'instrument' in line]
+        self.assertEqual(len(clears), 2, 'each variant needs one clear before the ABI leg and one before the main probe')
+        self.assertEqual(len(abi), 1, 'one ABI instrumentation call')
+        self.assertEqual(len(main), 1, 'one main instrumentation call')
+        self.assertLess(clears[0], abi[0], 'the ABI leg needs a cleared crash buffer')
+        self.assertLess(abi[0], main[0], 'the ABI leg runs before the main probe')
+        self.assertLess(clears[1], main[0], 'the main probe needs a cleared crash buffer')
+
+    def test_abi_probe_schema_accepts_bounded_result(self):
+        value = {'schemaVersion': 1, 'abiShimOk': True, 'librariesLoaded': True,
+            'identityCreated': True, 'identityReadBack': True, 'netmonOptIn': True,
+            'abiStatusFilePresent': True, 'completed': True, 'abiShimCode': 0,
+            'netmonDiagnose': {'event': 'netmon_diagnose', 'getterRegistered': True,
+                'getterCalls': 1, 'selected': 'goNet', 'stateBuilt': True,
+                'stateErrClass': '', 'haveV4': True, 'haveV6': False, 'anyUp': True,
+                'paths': [
+                    {'path': 'goNet', 'ok': True, 'errClass': 'none', 'interfaces': 1, 'addresses': 1},
+                    {'path': 'getifaddrs', 'ok': False, 'errClass': '', 'interfaces': 0, 'addresses': 0}]}}
+        self.assertEqual(probe.safe_abi_probe(value), value)
+        for changed in ({**value, 'abiShimCode': 9}, {**value, 'extra': 1},
+                        {**value, 'errClass': 'x' * 65}):
+            with self.assertRaises(ValueError): probe.safe_abi_probe(changed)
+
+
 class ProbeJavaCompileTests(unittest.TestCase):
     """Compile the probe sources the way the CI build step does.
 
@@ -266,7 +324,8 @@ class ProbeJavaCompileTests(unittest.TestCase):
         probe_dir = root / 'validation/remote-harness/android-ts-node-probe'
         java_dir = root / 'validation/network-profiles/native/android'
         sources = [probe_dir / name for name in (
-            'NetworkRuntimeChannel.java', 'DirectoryProbe.java', 'ProbeInstrumentation.java')]
+            'NetworkRuntimeChannel.java', 'DirectoryProbe.java', 'ProbeInstrumentation.java',
+            'AbiProbeInstrumentation.java')]
         sources += [java_dir / name for name in (
             'AndroidTailscaleConfig.java', 'AndroidTailscaleStateStore.java',
             'AndroidTailscaleEnvelope.java', 'TailscaleStateStoreCore.java')]

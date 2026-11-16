@@ -31,6 +31,7 @@ NETMON_ERR_CLASSES = {'', 'none', 'permission', 'empty', 'other'}
 NETMON_PATHS = {'goNet', 'getifaddrs'}
 
 
+
 def _safe_netmon_diagnose(item):
     # Mirrors the committed netmon.go JSON schema exactly. Go marshals zero
     # values: stateBuilt=true means stateErrClass stays "" (set only on
@@ -172,6 +173,39 @@ PANIC_CLASSES = (
     (b'all goroutines are asleep', 'deadlock'),
     (b'concurrent map', 'concurrent-map'),
 )
+
+
+ABI_BOOLS = {'abiShimOk', 'librariesLoaded', 'identityCreated', 'identityReadBack',
+    'netmonOptIn', 'abiStatusFilePresent', 'completed', 'uidMatches',
+    'mappedLibraryPresent', 'libraryDigestMatches'}
+
+
+def safe_abi_probe(value):
+    """Bounded schema for the ABI leg's result file.
+
+    The ABI leg is a separate process, so its report is validated
+    independently of the main probe's schema.
+    """
+    if not isinstance(value, dict) or value.get('schemaVersion') != 1:
+        raise ValueError('abi_probe_invalid')
+    for key, item in value.items():
+        if key == 'schemaVersion':
+            continue
+        if key in ABI_BOOLS:
+            valid = type(item) is bool
+        elif key == 'abiShimCode':
+            valid = type(item) is int and 0 <= item <= 7
+        elif key == 'errClass':
+            valid = isinstance(item, str) and (item == '' or item.isidentifier()) and len(item) <= 64
+        elif key == 'targetPackage':
+            valid = isinstance(item, str) and item == 'dev.herdr.herdr_flutter_probe'
+        elif key == 'netmonDiagnose':
+            valid = _safe_netmon_diagnose(item)
+        else:
+            valid = False
+        if not valid:
+            raise ValueError('abi_probe_invalid')
+    return value
 
 
 def _panic_class(line):
@@ -410,6 +444,59 @@ def run(args):
                     if adb(*prefix, 'chmod', '600', 'files/ts-node-probe-config.json').returncode:
                         raise ValueError('probe_config_failed')
                     try:
+                        # ABI leg first, in its own process: it drives the
+                        # same libhp_tailscale.so through the plain C ABI
+                        # with an in-memory store, so its result isolates the
+                        # Go getter path from the Rust/JNI bridge. If it
+                        # aborts, this process dies but the bounded result
+                        # file survives for the row below.
+                        # Clear the crash buffer before the ABI leg as well:
+                        # both variants share one package, so a stale
+                        # tombstone from the previous variant would be
+                        # misattributed to this leg.
+                        adb('shell', 'logcat', '-c', '-b', 'crash', timeout=15)
+                        adb('shell', 'run-as', PACKAGE, 'rm', '-f',
+                            'files/ts-abi-probe-result.json', 'files/ts-abi-probe-pid.txt', timeout=15)
+                        result = adb('shell', 'am', 'instrument', '-w', '-r',
+                            PACKAGE + '/org.herdr.network.AbiProbeInstrumentation', timeout=120)
+                        row['abiInstrumentation'] = instrument_summary(result)
+                        abi_pid_response = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-abi-probe-pid.txt')
+                        abi_pid = int(abi_pid_response.stdout.decode('ascii', 'replace').strip()) \
+                            if abi_pid_response.returncode == 0 and abi_pid_response.stdout.decode('ascii', 'replace').strip().isdigit() else 0
+                        abi_report = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-abi-probe-result.json')
+                        if abi_report.returncode == 0:
+                            try:
+                                row['abiProbe'] = safe_abi_probe(json.loads(abi_report.stdout))
+                            except (ValueError, TypeError, UnicodeError):
+                                row['abiProbe'] = 'schema-rejected'
+                        else:
+                            row['abiProbe'] = 'cat-failed'
+                        # Crash attribution for the ABI process uses its own
+                        # pid file; the main probe writes its own later.
+                        if abi_pid:
+                            abi_crash = adb('shell', 'logcat', '-d', '-b', 'crash', timeout=30)
+                            if abi_crash.returncode == 0:
+                                for record in re.split(rb'\*\*\* \*\*\* \*\*\*', abi_crash.stdout):
+                                    if not re.search(rb'\bpid: %d\b' % abi_pid, record):
+                                        continue
+                                    merged = _redacted_forensics(record)
+                                    for key in ('crashSignals', 'panicTypes', 'goFrames', 'upstreamFrames'):
+                                        combined = sorted(set(
+                                            row['abiInstrumentation'].get(key, []) + merged[key]))
+                                        row['abiInstrumentation'][key] = combined[:8]
+                                    if merged['crashSignals'] or merged['panicTypes']:
+                                        row['abiInstrumentation']['signalEvidence'] = True
+                                    for thread in _thread_names(record):
+                                        threads = row['abiInstrumentation'].setdefault('abortThreads', [])
+                                        if thread not in threads and len(threads) < 6:
+                                            threads.append(thread)
+                                    abort = _abort_class(record)
+                                    if abort != 'other':
+                                        row['abiInstrumentation'].setdefault('abortClass', abort)
+                                    for module in _module_basenames(record):
+                                        mods = row['abiInstrumentation'].setdefault('abortModules', [])
+                                        if module not in mods and len(mods) < 8:
+                                            mods.append(module)
                         # Clear the crash buffer before instrumenting: both
                         # variants share one package, so without this the
                         # second variant would re-read the first one's

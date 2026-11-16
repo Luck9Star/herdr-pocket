@@ -16,9 +16,14 @@
     "flutterBothDirectionsFunctionalEvidence": true,
     "flutterWorkflowPassed": true,
     "tauriStopTsContinuationObserved": true,
-    "tauriStopEtContinuationProven": false,
-    "tauriWorkflowPassed": false,
-    "futureRunResultsPredeclared": false
+    "tauriStopEtContinuationProven": true,
+    "tauriWorkflowPassed": true,
+    "futureRunResultsPredeclared": false,
+    "tauriStopTsComplete": true,
+    "tauriBothDirectionsFunctionalEvidence": true,
+    "passedDirectionCases": 4,
+    "totalDirectionCases": 4,
+    "sameNativeSourceSHA": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8"
   },
   "startup": {
     "upstreamVersion": "tailscale.com@v1.104.1",
@@ -33,16 +38,16 @@
   },
   "deviceEvidence": {
     "flutter": {
-      "runId": 43926204997,
-      "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43926204997",
+      "runId": 43942704918,
+      "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43942704918",
       "jobConclusion": "success",
       "reportStatus": "passed",
-      "uiSourceSHA": "14ecb4f9903db04119282e4b79d8db64ba38c32c",
-      "nativeSourceSHA": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+      "uiSourceSHA": "23a6bd9816681cec6ba7292a3e080d0a8acf9d81",
+      "nativeSourceSHA": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
       "hostSourceSHA": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
-      "artifactId": 14257552054,
-      "archiveSha256": "85faff50ce4f11a5df14d91a56ff2bbd3367e6c9d53d8c460ae8be6afe9c75d6",
-      "reportJsonSha256": "b986b9a952167a58370139408f8fd1045fa29eafe365d493e285ae273769bdf8",
+      "artifactId": 14265290882,
+      "archiveSha256": "1c63b5ce567567055b1274b2447d93856376afdc45a566abf6159059e69f9d5b",
+      "reportJsonSha256": "0fd9ad32be91751def36db43f8a861165cf54a46e186ba46d7a634bbb8b17b17",
       "archiveMatchesOfficialDigest": true,
       "localReportMatchesOfficialArchive": true,
       "cases": [
@@ -130,28 +135,31 @@
           "explicitTsAuthorization": true,
           "tsAuthCompletions": 1
         }
-      ]
+      ],
+      "jobId": 133564123563
     },
     "tauri": {
-      "runId": 43914151903,
-      "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43914151903",
-      "jobConclusion": "failure",
-      "reportStatus": "failed",
-      "driverSourceSHA": "2ba07d0b914818f848120bc04c1916e4e91a19fc",
-      "apkSourceSHA": "372430fe94459ad2cd7fd1e04eb61c2c45d9d99c",
-      "nativeSourceSHA": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+      "runId": 43941511775,
+      "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43941511775",
+      "buildJobId": 133559945585,
+      "buildConclusion": "success",
+      "jobConclusion": "success",
+      "reportStatus": "passed",
+      "driverSourceSHA": "b0f1df672fb304a86e3bb56dc2cf11c64856576a",
+      "apkSourceSHA": "b0f1df672fb304a86e3bb56dc2cf11c64856576a",
+      "apkSha256": "f087784b773187636131b87f864a089657a202e31d895b7b1fb612f42cb1e76e",
+      "nativeSourceSHA": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
       "hostSourceSHA": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
-      "artifactId": 14248764461,
-      "archiveSha256": "99430be0f6ab5fc6522f4f88a3c25f77ae09008ef68adc8c37d433c7a44144d1",
-      "reportJsonSha256": "11f5f6746ee1290736fe315ef5101ba516662ddbd49bceb70ff751c05ac0c3cb",
+      "artifactId": 14263169661,
+      "archiveSha256": "b29b165a2b6f3c1dca13ceecf5a8144de255847385540ddbbf1644c0deef6333",
+      "reportJsonSha256": "12a6cb1fe37d1cff3081d81998949eee9830d59b1c457c256760bb5887d89d24",
       "archiveMatchesOfficialDigest": true,
       "localReportMatchesOfficialArchive": true,
       "cases": [
         {
           "firstStop": "ts",
-          "caseStatus": "failed",
-          "stage": "stop_survivor",
-          "errorCode": "dual_confirmation_not_observed",
+          "caseStatus": "complete",
+          "stage": "complete",
           "requestedContinuation": "observed",
           "tsExplicitAuthorization": true,
           "pairingApprovedBoth": true,
@@ -159,52 +167,163 @@
           "bothInputAndDistinctTargets": true,
           "survivorSameAuthenticatedSession": true,
           "stoppedInputUnavailableAndUnchanged": true,
-          "hostCountsAtFailure": {
-            "ts": {
-              "available": true,
-              "acceptedSessions": 1,
-              "capturedBytes": 1,
-              "approvedSessionObserved": true,
-              "activeSessions": 0
-            },
-            "et": {
-              "available": true,
-              "acceptedSessions": 1,
-              "capturedBytes": 2,
-              "approvedSessionObserved": true,
-              "activeSessions": 1
-            }
+          "survivorExplicitlyStoppedAndClosed": true,
+          "expectedExactFinalInput": {
+            "ts": "T",
+            "et": "Ee"
           },
+          "afterSecondAckAudit": {
+            "phase": "after_second_ack",
+            "elapsedMilliseconds": 12137,
+            "secondInputAttempted": true,
+            "secondAckSeen": true,
+            "roles": {
+              "ts": {
+                "available": true,
+                "originalOrdinal": 1,
+                "originalSessionCount": 1,
+                "expectedBytes": 1,
+                "acceptedSessions": 1,
+                "newSessions": 0,
+                "capturedBytes": 1,
+                "exactBytes": true,
+                "sessionCountUnchanged": true,
+                "originalSessionFound": true,
+                "originalActive": false,
+                "originalApproved": true,
+                "activeSessions": 0
+              },
+              "et": {
+                "available": true,
+                "originalOrdinal": 1,
+                "originalSessionCount": 1,
+                "expectedBytes": 2,
+                "acceptedSessions": 1,
+                "newSessions": 0,
+                "capturedBytes": 2,
+                "exactBytes": true,
+                "sessionCountUnchanged": true,
+                "originalSessionFound": true,
+                "originalActive": true,
+                "originalApproved": true,
+                "activeSessions": 1
+              }
+            },
+            "completedElapsedMilliseconds": 12162
+          },
+          "stopAttempts": [
+            {
+              "stage": "stop_first",
+              "role": "ts",
+              "acquires": 2,
+              "readbacks": 2,
+              "activation": "cdp-enter",
+              "confirmObserved": true,
+              "roleMatch": true,
+              "sentDelta": 1,
+              "resolvedDelta": 1,
+              "rejectedDelta": 0,
+              "errorCode": null
+            },
+            {
+              "stage": "stop_survivor",
+              "role": "et",
+              "acquires": 2,
+              "readbacks": 2,
+              "activation": "cdp-enter",
+              "confirmObserved": true,
+              "roleMatch": true,
+              "sentDelta": 1,
+              "resolvedDelta": 1,
+              "rejectedDelta": 0,
+              "errorCode": null
+            }
+          ],
           "environmentCleanupComplete": true
         },
         {
           "firstStop": "et",
-          "caseStatus": "failed",
-          "stage": "connect_and_input",
-          "errorCode": "dual_confirmation_not_observed",
-          "requestedContinuation": "not_proven",
+          "caseStatus": "complete",
+          "stage": "complete",
+          "requestedContinuation": "observed",
           "tsExplicitAuthorization": true,
           "pairingApprovedBoth": true,
           "bindingBoth": true,
           "bothInputAndDistinctTargets": true,
-          "survivorSameAuthenticatedSession": null,
-          "stoppedInputUnavailableAndUnchanged": null,
-          "hostCountsAtFailure": {
-            "ts": {
-              "available": true,
-              "acceptedSessions": 1,
-              "capturedBytes": 1,
-              "approvedSessionObserved": true,
-              "activeSessions": 1
-            },
-            "et": {
-              "available": true,
-              "acceptedSessions": 1,
-              "capturedBytes": 1,
-              "approvedSessionObserved": true,
-              "activeSessions": 1
-            }
+          "survivorSameAuthenticatedSession": true,
+          "stoppedInputUnavailableAndUnchanged": true,
+          "survivorExplicitlyStoppedAndClosed": true,
+          "expectedExactFinalInput": {
+            "ts": "Tt",
+            "et": "E"
           },
+          "afterSecondAckAudit": {
+            "phase": "after_second_ack",
+            "elapsedMilliseconds": 12406,
+            "secondInputAttempted": true,
+            "secondAckSeen": true,
+            "roles": {
+              "ts": {
+                "available": true,
+                "originalOrdinal": 1,
+                "originalSessionCount": 1,
+                "expectedBytes": 2,
+                "acceptedSessions": 1,
+                "newSessions": 0,
+                "capturedBytes": 2,
+                "exactBytes": true,
+                "sessionCountUnchanged": true,
+                "originalSessionFound": true,
+                "originalActive": true,
+                "originalApproved": true,
+                "activeSessions": 1
+              },
+              "et": {
+                "available": true,
+                "originalOrdinal": 1,
+                "originalSessionCount": 1,
+                "expectedBytes": 1,
+                "acceptedSessions": 1,
+                "newSessions": 0,
+                "capturedBytes": 1,
+                "exactBytes": true,
+                "sessionCountUnchanged": true,
+                "originalSessionFound": true,
+                "originalActive": false,
+                "originalApproved": true,
+                "activeSessions": 0
+              }
+            },
+            "completedElapsedMilliseconds": 12426
+          },
+          "stopAttempts": [
+            {
+              "stage": "stop_first",
+              "role": "et",
+              "acquires": 1,
+              "readbacks": 2,
+              "activation": "cdp-enter",
+              "confirmObserved": true,
+              "roleMatch": true,
+              "sentDelta": 1,
+              "resolvedDelta": 1,
+              "rejectedDelta": 0,
+              "errorCode": null
+            },
+            {
+              "stage": "stop_survivor",
+              "role": "ts",
+              "acquires": 2,
+              "readbacks": 2,
+              "activation": "cdp-enter",
+              "confirmObserved": true,
+              "roleMatch": true,
+              "sentDelta": 1,
+              "resolvedDelta": 1,
+              "rejectedDelta": 0,
+              "errorCode": null
+            }
+          ],
           "environmentCleanupComplete": true
         }
       ]
@@ -444,6 +563,45 @@
       "failed": 0,
       "helperTestsPassed": 15,
       "provenance": "Coordinator independently ran full remote-harness and helper suites; not device acceptance"
+    },
+    "pairingExplicitReviewTimeBoundary": {
+      "scope": "Real Chrome and product preview button with controlled same response; not Android failure causality",
+      "beforeIssuanceExplicitPreview": "invalid",
+      "pollingAfterIssuanceChangesPreview": false,
+      "newExplicitPreviewAfterIssuanceShowsFiveLines": true,
+      "nativeAuthorizationWrites": 0,
+      "provenCauseOfPreviousDeviceFailure": false
+    },
+    "sharedHarnessTestsAtFd9f0d0": {
+      "sourceSHA": "fd9f0d052b580709ab6d927eb5f9ab0fc65bde94",
+      "testsRun": 423,
+      "passed": 418,
+      "skipped": 5,
+      "failed": 0,
+      "provenance": "Coordinator full shared-script regression"
+    },
+    "latestSharedHarnessAndTargetedTests": {
+      "sourceSHA": "b0f1df672fb304a86e3bb56dc2cf11c64856576a",
+      "shared": {
+        "testsRun": 431,
+        "passed": 426,
+        "skipped": 5,
+        "failed": 0
+      },
+      "targeted": {
+        "passed": 92,
+        "failed": 0
+      },
+      "provenance": "Coordinator full local regression",
+      "deviceAcceptance": false
+    },
+    "finalSharedHarnessTests": {
+      "testsRun": 435,
+      "passed": 430,
+      "skipped": 5,
+      "failed": 0,
+      "provenance": "Coordinator final integrated full shared-script regression",
+      "deviceAcceptance": false
     }
   },
   "fixedHostBundle": {
@@ -456,9 +614,16 @@
     "JSON report digests and downloaded ZIP digests identify different byte sequences.",
     "Local retire acknowledgement is not remote TCP FIN; remote closure is established only by host audits.",
     "Exact input checks and unchanged public SSH ordinal forbid claiming continuity after reconnect.",
-    "Current Flutter success is limited to the reported owned API35 x86_64 AVD and two isolated SSH services.",
-    "Historical Flutter receipt failure and current incomplete Tauri cases remain separate from current Flutter success.",
-    "Tauri run 43928408381 was still building at this documentation update; no device outcome is declared."
+    "Tauri run 43933099218 reused the same APK and timed out at pairing source-review prerequisites in both directions.",
+    "Pairing receipt fields do not establish clock skew or IME as the cause of either device failure.",
+    "Tauri run 43936402002 completes only the stop-TS direction; reverse pairing and initial input succeed but both SSH sessions are inactive before the second input.",
+    "The isolated idle-read deadline defect is reproduced independently; the prior device report does not prove it is the unique cause of both closures.",
+    "Historical failed runs retain their original conclusions; current Flutter and Tauri passes use the separately recorded client and native commits.",
+    "Tauri 547106e device acceptance is established by run 43941511775; its native build-only report remains a distinct historical layer.",
+    "Baseline-to-second-ACK elapsed milliseconds do not prove absence of all underlying packets.",
+    "Four device direction cases pass: Flutter run 43942704918 and Tauri run 43941511775 share native source 547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8.",
+    "These are owned API35 x86_64 emulator and two actual controlled SSH services, not physical-phone or production-network acceptance.",
+    "Flutter run 43941511771 remains an admission failure with zero device cases; the corrected driver was separately run and passed."
   ],
   "previousFlutterReceiptFailure": {
     "runId": 43923493989,
@@ -556,11 +721,913 @@
       }
     ]
   },
-  "inProgressTauriValidation": {
+  "previousTauriStopConfirmationFailure": {
+    "runId": 43914151903,
+    "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43914151903",
+    "jobConclusion": "failure",
+    "reportStatus": "failed",
+    "driverSourceSHA": "2ba07d0b914818f848120bc04c1916e4e91a19fc",
+    "apkSourceSHA": "372430fe94459ad2cd7fd1e04eb61c2c45d9d99c",
+    "nativeSourceSHA": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+    "hostSourceSHA": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+    "artifactId": 14248764461,
+    "archiveSha256": "99430be0f6ab5fc6522f4f88a3c25f77ae09008ef68adc8c37d433c7a44144d1",
+    "reportJsonSha256": "11f5f6746ee1290736fe315ef5101ba516662ddbd49bceb70ff751c05ac0c3cb",
+    "archiveMatchesOfficialDigest": true,
+    "localReportMatchesOfficialArchive": true,
+    "cases": [
+      {
+        "firstStop": "ts",
+        "caseStatus": "failed",
+        "stage": "stop_survivor",
+        "errorCode": "dual_confirmation_not_observed",
+        "requestedContinuation": "observed",
+        "tsExplicitAuthorization": true,
+        "pairingApprovedBoth": true,
+        "bindingBoth": true,
+        "bothInputAndDistinctTargets": true,
+        "survivorSameAuthenticatedSession": true,
+        "stoppedInputUnavailableAndUnchanged": true,
+        "hostCountsAtFailure": {
+          "ts": {
+            "available": true,
+            "acceptedSessions": 1,
+            "capturedBytes": 1,
+            "approvedSessionObserved": true,
+            "activeSessions": 0
+          },
+          "et": {
+            "available": true,
+            "acceptedSessions": 1,
+            "capturedBytes": 2,
+            "approvedSessionObserved": true,
+            "activeSessions": 1
+          }
+        },
+        "environmentCleanupComplete": true
+      },
+      {
+        "firstStop": "et",
+        "caseStatus": "failed",
+        "stage": "connect_and_input",
+        "errorCode": "dual_confirmation_not_observed",
+        "requestedContinuation": "not_proven",
+        "tsExplicitAuthorization": true,
+        "pairingApprovedBoth": true,
+        "bindingBoth": true,
+        "bothInputAndDistinctTargets": true,
+        "survivorSameAuthenticatedSession": null,
+        "stoppedInputUnavailableAndUnchanged": null,
+        "hostCountsAtFailure": {
+          "ts": {
+            "available": true,
+            "acceptedSessions": 1,
+            "capturedBytes": 1,
+            "approvedSessionObserved": true,
+            "activeSessions": 1
+          },
+          "et": {
+            "available": true,
+            "acceptedSessions": 1,
+            "capturedBytes": 1,
+            "approvedSessionObserved": true,
+            "activeSessions": 1
+          }
+        },
+        "environmentCleanupComplete": true
+      }
+    ]
+  },
+  "fixedTauriApk": {
+    "buildRunId": 43941511775,
+    "buildJobId": 133559945585,
+    "sourceSHA": "b0f1df672fb304a86e3bb56dc2cf11c64856576a",
+    "nativeSourceSHA": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
+    "artifactId": 14263595863,
+    "archiveSha256": "a68e1653c009634b61a712dff6f6d8638f3f022395c7c4c8e40289cd3909c694",
+    "manifestSha256": "7d859066aedd9b416c6899815ae455dd9e65010e121bd6205d782fd58e61877f",
+    "normalApkSha256": "2dc7624f6d7bedcee8eebfc55dd670fff753634b66de583ea6eafc26d15f86a7",
+    "qaApkSha256": "f087784b773187636131b87f864a089657a202e31d895b7b1fb612f42cb1e76e",
+    "authApkSha256": "dc319e253397c099056011a60e97102fabc556013b6c88f85f4d5257a193c122",
+    "downloadAndHashesIndependentlyVerifiedByCoordinator": true,
+    "largeArchiveRedownloadedForDocumentation": false,
+    "exactApkReplayConfigurationCommitSHA": "afac8f21a4a1e2114ed591a7a42c2c8f5f935eaa"
+  },
+  "previousTauriPairedBuildAttempt": {
     "runId": 43928408381,
     "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43928408381",
+    "jobConclusion": "failure",
+    "reportStatus": "failed",
+    "driverSourceSHA": "ca8637cc29a429b1bab78a35746dae9bc6858679",
+    "apkSourceSHA": "ca8637cc29a429b1bab78a35746dae9bc6858679",
+    "apkSha256": "7cd284ae5aa6969f033acee29cc82f7ba1b3b5d394c1337289c49a887a7efb72",
+    "nativeSourceSHA": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+    "hostSourceSHA": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+    "artifactId": 14257894041,
+    "archiveSha256": "f5931f79b3ddb9253dfa9610a63868b1bfff80d9aea99a38e8ed2f65b6050ecd",
+    "reportJsonSha256": "f78bac32150ddecd7b0ec74691163a5fbe93033e7a44cace6aad2a954356e3bd",
+    "archiveMatchesOfficialDigest": true,
+    "localReportMatchesOfficialArchive": true,
+    "cases": [
+      {
+        "firstStop": "ts",
+        "caseStatus": "complete",
+        "stage": "complete",
+        "requestedContinuation": "observed",
+        "tsExplicitAuthorization": true,
+        "pairingApprovedBoth": true,
+        "bindingBoth": true,
+        "bothInputAndDistinctTargets": true,
+        "survivorSameAuthenticatedSession": true,
+        "stoppedInputUnavailableAndUnchanged": true,
+        "survivorExplicitlyStoppedAndClosed": true,
+        "environmentCleanupComplete": true,
+        "expectedExactFinalInput": {
+          "ts": "T",
+          "et": "Ee"
+        },
+        "stopAttempts": [
+          {
+            "stage": "stop_first",
+            "role": "ts",
+            "acquires": 2,
+            "readbacks": 2,
+            "activation": "cdp-enter",
+            "confirmObserved": true,
+            "roleMatch": true,
+            "sentDelta": 1,
+            "resolvedDelta": 1,
+            "rejectedDelta": 0,
+            "errorCode": null
+          },
+          {
+            "stage": "stop_survivor",
+            "role": "et",
+            "acquires": 2,
+            "readbacks": 2,
+            "activation": "cdp-enter",
+            "confirmObserved": true,
+            "roleMatch": true,
+            "sentDelta": 1,
+            "resolvedDelta": 1,
+            "rejectedDelta": 0,
+            "errorCode": null
+          }
+        ]
+      },
+      {
+        "firstStop": "et",
+        "caseStatus": "failed",
+        "stage": "pairing",
+        "requestedContinuation": "not_executed",
+        "tsExplicitAuthorization": true,
+        "pairingApprovedBoth": null,
+        "bindingBoth": null,
+        "bothInputAndDistinctTargets": null,
+        "survivorSameAuthenticatedSession": null,
+        "stoppedInputUnavailableAndUnchanged": null,
+        "survivorExplicitlyStoppedAndClosed": null,
+        "environmentCleanupComplete": true,
+        "errorCode": "dual_driver_failed",
+        "hostCountsAtFailure": {
+          "ts": {
+            "available": true,
+            "acceptedSessions": 0,
+            "capturedBytes": 0,
+            "approvedSessionObserved": false,
+            "activeSessions": 0
+          },
+          "et": {
+            "available": true,
+            "acceptedSessions": 0,
+            "capturedBytes": 0,
+            "approvedSessionObserved": false,
+            "activeSessions": 0
+          }
+        },
+        "uiFailure": "control_missing"
+      }
+    ]
+  },
+  "previousTauriPairingReceiptAttempt": {
+    "runId": 43933099218,
+    "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43933099218",
+    "jobConclusion": "failure",
+    "reportStatus": "failed",
+    "driverSourceSHA": "4603e30489c812af1cd62a0d8df5450a30341ea7",
+    "apkSourceSHA": "ca8637cc29a429b1bab78a35746dae9bc6858679",
+    "apkSha256": "7cd284ae5aa6969f033acee29cc82f7ba1b3b5d394c1337289c49a887a7efb72",
+    "nativeSourceSHA": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+    "hostSourceSHA": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+    "artifactId": 14259867977,
+    "archiveSha256": "a04b138d6a67126329e475cb7b7b1a47ab494aaa9142376e376d1e304d9c8e92",
+    "reportJsonSha256": "172dbedfef20f3d36bc8973c3c00a4f8bed202efd3340c9f1fecca494e7b3341",
+    "archiveMatchesOfficialDigest": true,
+    "localReportMatchesOfficialArchive": true,
+    "cases": [
+      {
+        "firstStop": "ts",
+        "caseStatus": "failed",
+        "stage": "pairing",
+        "requestedContinuation": "not_executed",
+        "tsExplicitAuthorization": true,
+        "pairingApprovedBoth": null,
+        "bindingBoth": null,
+        "bothInputAndDistinctTargets": null,
+        "survivorSameAuthenticatedSession": null,
+        "stoppedInputUnavailableAndUnchanged": null,
+        "survivorExplicitlyStoppedAndClosed": null,
+        "environmentCleanupComplete": true,
+        "errorCode": "dual_pair_step_timeout",
+        "hostCountsAtFailure": {
+          "ts": {
+            "available": true,
+            "acceptedSessions": 0,
+            "capturedBytes": 0,
+            "approvedSessionObserved": false,
+            "activeSessions": 0
+          },
+          "et": {
+            "available": true,
+            "acceptedSessions": 0,
+            "capturedBytes": 0,
+            "approvedSessionObserved": false,
+            "activeSessions": 0
+          }
+        },
+        "uiFailure": null,
+        "pairingAttempts": [
+          {
+            "role": "ts",
+            "step": "returned",
+            "action": "read",
+            "control": "host_open_remote",
+            "state": "complete",
+            "completed": [
+              "open",
+              "add",
+              "import",
+              "profile_preview",
+              "apply",
+              "target_review",
+              "create",
+              "response",
+              "response_preview",
+              "source_review",
+              "accept",
+              "save_name",
+              "save",
+              "return"
+            ],
+            "facts": {
+              "present": true,
+              "visible": true,
+              "enabled": true,
+              "foreground": true,
+              "targetMatched": true,
+              "checked": false,
+              "centerHit": true,
+              "asyncReady": true,
+              "ready": true
+            }
+          },
+          {
+            "role": "et",
+            "step": "response_reviewed",
+            "action": "read",
+            "control": "pair_source_review",
+            "state": "timeout",
+            "completed": [
+              "open",
+              "add",
+              "import",
+              "profile_preview",
+              "apply",
+              "target_review",
+              "create",
+              "response",
+              "response_preview"
+            ],
+            "facts": {
+              "present": true,
+              "visible": true,
+              "enabled": true,
+              "foreground": true,
+              "targetMatched": true,
+              "checked": false,
+              "centerHit": true,
+              "asyncReady": false,
+              "ready": false
+            }
+          }
+        ]
+      },
+      {
+        "firstStop": "et",
+        "caseStatus": "failed",
+        "stage": "pairing",
+        "requestedContinuation": "not_executed",
+        "tsExplicitAuthorization": true,
+        "pairingApprovedBoth": null,
+        "bindingBoth": null,
+        "bothInputAndDistinctTargets": null,
+        "survivorSameAuthenticatedSession": null,
+        "stoppedInputUnavailableAndUnchanged": null,
+        "survivorExplicitlyStoppedAndClosed": null,
+        "environmentCleanupComplete": true,
+        "errorCode": "dual_pair_step_timeout",
+        "hostCountsAtFailure": {
+          "ts": {
+            "available": true,
+            "acceptedSessions": 0,
+            "capturedBytes": 0,
+            "approvedSessionObserved": false,
+            "activeSessions": 0
+          },
+          "et": {
+            "available": true,
+            "acceptedSessions": 0,
+            "capturedBytes": 0,
+            "approvedSessionObserved": false,
+            "activeSessions": 0
+          }
+        },
+        "uiFailure": null,
+        "pairingAttempts": [
+          {
+            "role": "ts",
+            "step": "response_reviewed",
+            "action": "read",
+            "control": "pair_source_review",
+            "state": "timeout",
+            "completed": [
+              "open",
+              "add",
+              "import",
+              "profile_preview",
+              "apply",
+              "target_review",
+              "create",
+              "response",
+              "response_preview"
+            ],
+            "facts": {
+              "present": true,
+              "visible": true,
+              "enabled": true,
+              "foreground": true,
+              "targetMatched": true,
+              "checked": false,
+              "centerHit": true,
+              "asyncReady": false,
+              "ready": false
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "nativeIdleReadFix": {
+    "sourceSHA": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
+    "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43939326685",
+    "buildRunId": 43939326685,
+    "buildConclusion": "success",
+    "downloadReplayConclusion": "success",
+    "normalArtifactId": 14261768985,
+    "normalArchiveSha256": "23bdd1d79ded537d64fec25e9926f56a75c7ac3bf0f6f1b71e517bf67e8e0f3d",
+    "qaArtifactId": 14261004231,
+    "qaArchiveSha256": "ac4fbf7c5c5de8d6aa1c0f695fdf0e5f43a1e7a9afa98a1b3a57e47695f1c769",
+    "downloadReplayArtifactId": 14262003901,
+    "downloadReplayArchiveSha256": "d0411ad55dfdbfd7295cc6111b21508f5f48bdfa3e3bb8cbd98495345664ee89",
+    "nativeManifestSha256": "c8925548dd8dbde75d5653638c3d8734df607dab1be04c57359012d7162b2fa5",
+    "androidLoad": "not run",
+    "node": "not run",
+    "newClientDeviceAcceptance": true,
+    "originalReadTimeoutMilliseconds": 10000,
+    "maxReadSettlementMarginMilliseconds": 100,
+    "onlyAlreadySettledResultAcceptedAtHardDeadline": true,
+    "unknownWritesReplayed": false,
+    "isolatedRegression": {
+      "oldIdleReadCaseFailed": true,
+      "fixedConsecutiveIdleReadWindows": 3,
+      "laterBytesStayOnOriginalConnection": true,
+      "realTcpCovered": true,
+      "hungReadBoundCovered": true,
+      "unknownWriteCovered": true,
+      "goRacePassed": true,
+      "provenance": "Coordinator isolated regression and pinned source review"
+    },
+    "uniqueCauseOfPriorDeviceClosureProven": false,
+    "deviceAcceptanceByClient": {
+      "tauri": {
+        "runId": 43941511775,
+        "passed": true
+      },
+      "flutter": {
+        "runId": 43942704918,
+        "passed": true
+      }
+    },
+    "newClientDeviceAcceptanceScope": "Both rebuilt clients on owned API35 x86_64 AVD and two real controlled SSH services"
+  },
+  "artifactRetention": {
+    "apkRetentionDays": 7,
+    "githubArtifactsAreTemporary": true,
+    "reproductionRequiresPinnedSourcesAndBuildConfiguration": true
+  },
+  "previousTauriIdleReadDeviceAttempt": {
+    "runId": 43936402002,
+    "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43936402002",
+    "jobConclusion": "failure",
+    "reportStatus": "failed",
+    "driverSourceSHA": "fd9f0d052b580709ab6d927eb5f9ab0fc65bde94",
+    "apkSourceSHA": "ca8637cc29a429b1bab78a35746dae9bc6858679",
+    "apkSha256": "7cd284ae5aa6969f033acee29cc82f7ba1b3b5d394c1337289c49a887a7efb72",
+    "nativeSourceSHA": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+    "hostSourceSHA": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+    "artifactId": 14262236647,
+    "archiveSha256": "a04dbc120bec37cd99554b90fa1bf72bdd0019b0e73fb9b8b1b4b42e4bdaf2f2",
+    "reportJsonSha256": "4ec5116d4d99c6f82064d226dbaf928bcf8e9af7c47b646af73941ce8ad60950",
+    "archiveMatchesOfficialDigest": true,
+    "localReportMatchesOfficialArchive": true,
+    "cases": [
+      {
+        "firstStop": "ts",
+        "caseStatus": "complete",
+        "stage": "complete",
+        "requestedContinuation": "observed",
+        "tsExplicitAuthorization": true,
+        "pairingApprovedBoth": true,
+        "bindingBoth": true,
+        "bothInputAndDistinctTargets": true,
+        "survivorSameAuthenticatedSession": true,
+        "stoppedInputUnavailableAndUnchanged": true,
+        "survivorExplicitlyStoppedAndClosed": true,
+        "pairingAttempts": [
+          {
+            "role": "ts",
+            "step": "returned",
+            "action": "read",
+            "control": "host_open_remote",
+            "state": "complete",
+            "completed": [
+              "open",
+              "add",
+              "import",
+              "profile_preview",
+              "apply",
+              "target_review",
+              "create",
+              "response",
+              "response_preview",
+              "source_review",
+              "accept",
+              "save_name",
+              "save",
+              "return"
+            ],
+            "facts": {
+              "present": true,
+              "visible": true,
+              "enabled": true,
+              "foreground": true,
+              "targetMatched": true,
+              "checked": false,
+              "centerHit": true,
+              "asyncReady": true,
+              "ready": true
+            },
+            "sawFutureIssuance": false,
+            "responseFacts": {
+              "exactInput": true,
+              "wireMatches": true,
+              "requestWithinDeviceTime": true,
+              "responseWithinDeviceTime": true,
+              "requestUnexpired": true,
+              "responseUnexpired": true,
+              "expiryOrdering": true,
+              "withinTtl": true,
+              "productValid": true,
+              "previewVisible": true,
+              "fiveLinesMatched": true,
+              "productShowsInvalid": false,
+              "pairMode": true,
+              "sourceChecked": false,
+              "busy": false,
+              "waitingIdentity": true,
+              "targetMatched": true,
+              "ready": true
+            }
+          },
+          {
+            "role": "et",
+            "step": "returned",
+            "action": "read",
+            "control": "host_open_remote",
+            "state": "complete",
+            "completed": [
+              "open",
+              "add",
+              "import",
+              "profile_preview",
+              "apply",
+              "target_review",
+              "create",
+              "response",
+              "response_preview",
+              "source_review",
+              "accept",
+              "save_name",
+              "save",
+              "return"
+            ],
+            "facts": {
+              "present": true,
+              "visible": true,
+              "enabled": true,
+              "foreground": true,
+              "targetMatched": true,
+              "checked": false,
+              "centerHit": true,
+              "asyncReady": true,
+              "ready": true
+            },
+            "sawFutureIssuance": false,
+            "responseFacts": {
+              "exactInput": true,
+              "wireMatches": true,
+              "requestWithinDeviceTime": true,
+              "responseWithinDeviceTime": true,
+              "requestUnexpired": true,
+              "responseUnexpired": true,
+              "expiryOrdering": true,
+              "withinTtl": true,
+              "productValid": true,
+              "previewVisible": true,
+              "fiveLinesMatched": true,
+              "productShowsInvalid": false,
+              "pairMode": true,
+              "sourceChecked": false,
+              "busy": false,
+              "waitingIdentity": true,
+              "targetMatched": true,
+              "ready": true
+            }
+          }
+        ],
+        "stopAttempts": [
+          {
+            "stage": "stop_first",
+            "role": "ts",
+            "acquires": 2,
+            "readbacks": 2,
+            "activation": "cdp-enter",
+            "confirmObserved": true,
+            "roleMatch": true,
+            "sentDelta": 1,
+            "resolvedDelta": 1,
+            "rejectedDelta": 0,
+            "errorCode": null
+          },
+          {
+            "stage": "stop_survivor",
+            "role": "et",
+            "acquires": 2,
+            "readbacks": 2,
+            "activation": "cdp-enter",
+            "confirmObserved": true,
+            "roleMatch": true,
+            "sentDelta": 1,
+            "resolvedDelta": 1,
+            "rejectedDelta": 0,
+            "errorCode": null
+          }
+        ],
+        "environmentCleanupComplete": true,
+        "expectedExactFinalInput": {
+          "ts": "T",
+          "et": "Ee"
+        }
+      },
+      {
+        "firstStop": "et",
+        "caseStatus": "failed",
+        "stage": "post_stop",
+        "requestedContinuation": "not_executed",
+        "tsExplicitAuthorization": true,
+        "pairingApprovedBoth": true,
+        "bindingBoth": true,
+        "bothInputAndDistinctTargets": true,
+        "survivorSameAuthenticatedSession": null,
+        "stoppedInputUnavailableAndUnchanged": null,
+        "survivorExplicitlyStoppedAndClosed": null,
+        "pairingAttempts": [
+          {
+            "role": "ts",
+            "step": "returned",
+            "action": "read",
+            "control": "host_open_remote",
+            "state": "complete",
+            "completed": [
+              "open",
+              "add",
+              "import",
+              "profile_preview",
+              "apply",
+              "target_review",
+              "create",
+              "response",
+              "response_preview",
+              "source_review",
+              "accept",
+              "save_name",
+              "save",
+              "return"
+            ],
+            "facts": {
+              "present": true,
+              "visible": true,
+              "enabled": true,
+              "foreground": true,
+              "targetMatched": true,
+              "checked": false,
+              "centerHit": true,
+              "asyncReady": true,
+              "ready": true
+            },
+            "sawFutureIssuance": false,
+            "responseFacts": {
+              "exactInput": true,
+              "wireMatches": true,
+              "requestWithinDeviceTime": true,
+              "responseWithinDeviceTime": true,
+              "requestUnexpired": true,
+              "responseUnexpired": true,
+              "expiryOrdering": true,
+              "withinTtl": true,
+              "productValid": true,
+              "previewVisible": true,
+              "fiveLinesMatched": true,
+              "productShowsInvalid": false,
+              "pairMode": true,
+              "sourceChecked": false,
+              "busy": false,
+              "waitingIdentity": true,
+              "targetMatched": true,
+              "ready": true
+            }
+          },
+          {
+            "role": "et",
+            "step": "returned",
+            "action": "read",
+            "control": "host_open_remote",
+            "state": "complete",
+            "completed": [
+              "open",
+              "add",
+              "import",
+              "profile_preview",
+              "apply",
+              "target_review",
+              "create",
+              "response",
+              "response_preview",
+              "source_review",
+              "accept",
+              "save_name",
+              "save",
+              "return"
+            ],
+            "facts": {
+              "present": true,
+              "visible": true,
+              "enabled": true,
+              "foreground": true,
+              "targetMatched": true,
+              "checked": false,
+              "centerHit": true,
+              "asyncReady": true,
+              "ready": true
+            },
+            "sawFutureIssuance": false,
+            "responseFacts": {
+              "exactInput": true,
+              "wireMatches": true,
+              "requestWithinDeviceTime": true,
+              "responseWithinDeviceTime": true,
+              "requestUnexpired": true,
+              "responseUnexpired": true,
+              "expiryOrdering": true,
+              "withinTtl": true,
+              "productValid": true,
+              "previewVisible": true,
+              "fiveLinesMatched": true,
+              "productShowsInvalid": false,
+              "pairMode": true,
+              "sourceChecked": false,
+              "busy": false,
+              "waitingIdentity": true,
+              "targetMatched": true,
+              "ready": true
+            }
+          }
+        ],
+        "stopAttempts": [
+          {
+            "stage": "stop_first",
+            "role": "et",
+            "acquires": 2,
+            "readbacks": 2,
+            "activation": "cdp-enter",
+            "confirmObserved": true,
+            "roleMatch": true,
+            "sentDelta": 1,
+            "resolvedDelta": 1,
+            "rejectedDelta": 0,
+            "errorCode": null
+          }
+        ],
+        "environmentCleanupComplete": true,
+        "errorCode": "dual_peer_evidence_timeout",
+        "hostCountsAtFailure": {
+          "ts": {
+            "available": true,
+            "acceptedSessions": 1,
+            "capturedBytes": 1,
+            "approvedSessionObserved": true,
+            "activeSessions": 0
+          },
+          "et": {
+            "available": true,
+            "acceptedSessions": 1,
+            "capturedBytes": 1,
+            "approvedSessionObserved": true,
+            "activeSessions": 0
+          }
+        },
+        "networkPageVisibleAtFailure": true,
+        "secondInputSent": false,
+        "uniqueClosureCauseEstablished": false
+      }
+    ]
+  },
+  "previousTauriApk": {
+    "buildRunId": 43928408381,
     "sourceSHA": "ca8637cc29a429b1bab78a35746dae9bc6858679",
-    "statusAtDocumentationUpdate": "build_in_progress",
-    "deviceResultAvailable": false
+    "artifactId": 14258256260,
+    "archiveSha256": "d811fa432ee26033081095413b7267254079053b7ab273c2d182e5b47dd75b6b",
+    "qaApkSha256": "7cd284ae5aa6969f033acee29cc82f7ba1b3b5d394c1337289c49a887a7efb72",
+    "sourceDifferenceReported": "none from checked application source",
+    "largeArchiveRedownloadedForDocumentation": false
+  },
+  "flutterNewNativeAdmissionFailure": {
+    "runId": 43941511771,
+    "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43941511771",
+    "sourceSHA": "b0f1df672fb304a86e3bb56dc2cf11c64856576a",
+    "jobConclusion": "failure",
+    "reportStatus": "failed",
+    "errorCode": "native_source_invalid",
+    "deviceCasesExecuted": 0,
+    "artifactId": 14263520559,
+    "archiveSha256": "a1be96371ae4ff3d48b3b8dceec34f0f18ec086000af031d13c6ae7ae1df1e1b",
+    "reportJsonSha256": "ab861ec40b747a9ea8d49b0b8935b55dea7f1765c3d5993715add88ad6cfd5b7",
+    "archiveMatchesOfficialDigest": true,
+    "localReportMatchesOfficialArchive": true,
+    "reason": "Workflow installed reviewed new native source but driver still admitted only old native SHA"
+  },
+  "firstNewNativeClientValidation": {
+    "sourceSHA": "b0f1df672fb304a86e3bb56dc2cf11c64856576a",
+    "nativeSourceSHA": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
+    "flutterRunId": 43941511771,
+    "flutterCiURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43941511771",
+    "tauriRunId": 43941511775,
+    "tauriCiURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43941511775",
+    "deviceResultsRecorded": true,
+    "sourceComparison": {
+      "baselineSHA": "ca8637cc29a429b1bab78a35746dae9bc6858679",
+      "flutterLibProductDifference": false,
+      "tauriProductDifference": false,
+      "transportRustProductDifference": false,
+      "productChange": "shared Go core",
+      "provenance": "Coordinator pinned-source comparison"
+    },
+    "tauriDeviceResultRecorded": true,
+    "flutterResultRecordedAsAdmissionFailure": true,
+    "historicalCandidatePair": true
+  },
+  "previousFlutterPassedNativeA9be92d": {
+    "runId": 43926204997,
+    "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43926204997",
+    "jobConclusion": "success",
+    "reportStatus": "passed",
+    "uiSourceSHA": "14ecb4f9903db04119282e4b79d8db64ba38c32c",
+    "nativeSourceSHA": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+    "hostSourceSHA": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+    "artifactId": 14257552054,
+    "archiveSha256": "85faff50ce4f11a5df14d91a56ff2bbd3367e6c9d53d8c460ae8be6afe9c75d6",
+    "reportJsonSha256": "b986b9a952167a58370139408f8fd1045fa29eafe365d493e285ae273769bdf8",
+    "archiveMatchesOfficialDigest": true,
+    "localReportMatchesOfficialArchive": true,
+    "cases": [
+      {
+        "firstStop": "et",
+        "caseStatus": "passed",
+        "stage": "complete",
+        "requestedContinuation": "observed",
+        "bothFinalHostsInactive": true,
+        "auditProgress": {
+          "interimClosePending": false,
+          "stoppedCloseConfirmed": true,
+          "survivorSecondInputConfirmed": true
+        },
+        "hostAudits": {
+          "et": {
+            "acceptedSessions": 1,
+            "newSessionsAfterBaseline": 0,
+            "ordinal": 1,
+            "approvedDevice": true,
+            "capturedBytes": 1,
+            "exactBytes": true,
+            "activeAtBothStoppedAudit": false
+          },
+          "ts": {
+            "acceptedSessions": 1,
+            "newSessionsAfterBaseline": 0,
+            "ordinal": 1,
+            "approvedDevice": true,
+            "capturedBytes": 2,
+            "exactBytes": true,
+            "activeAtBothStoppedAudit": false
+          }
+        },
+        "survivorStillSameAuthenticatedSession": true,
+        "stoppedBytesUnchangedAfterFirstStop": true,
+        "expectedExactFinalInput": {
+          "et": "E",
+          "ts": "Tt"
+        },
+        "cleanupComplete": true,
+        "uiStage": "both_stopped_audit",
+        "explicitTsAuthorization": true,
+        "tsAuthCompletions": 1
+      },
+      {
+        "firstStop": "ts",
+        "caseStatus": "passed",
+        "stage": "complete",
+        "requestedContinuation": "observed",
+        "bothFinalHostsInactive": true,
+        "auditProgress": {
+          "interimClosePending": false,
+          "stoppedCloseConfirmed": true,
+          "survivorSecondInputConfirmed": true
+        },
+        "hostAudits": {
+          "et": {
+            "acceptedSessions": 1,
+            "newSessionsAfterBaseline": 0,
+            "ordinal": 1,
+            "approvedDevice": true,
+            "capturedBytes": 2,
+            "exactBytes": true,
+            "activeAtBothStoppedAudit": false
+          },
+          "ts": {
+            "acceptedSessions": 1,
+            "newSessionsAfterBaseline": 0,
+            "ordinal": 1,
+            "approvedDevice": true,
+            "capturedBytes": 1,
+            "exactBytes": true,
+            "activeAtBothStoppedAudit": false
+          }
+        },
+        "survivorStillSameAuthenticatedSession": true,
+        "stoppedBytesUnchangedAfterFirstStop": true,
+        "expectedExactFinalInput": {
+          "et": "Ee",
+          "ts": "T"
+        },
+        "cleanupComplete": true,
+        "uiStage": "both_stopped_audit",
+        "explicitTsAuthorization": true,
+        "tsAuthCompletions": 1
+      }
+    ]
+  },
+  "flutterNativeAdmissionCorrection": {
+    "sourceSHA": "23a6bd9816681cec6ba7292a3e080d0a8acf9d81",
+    "nativeSourceSHA": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
+    "runId": 43942704918,
+    "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43942704918",
+    "deviceResultRecorded": true,
+    "changeScope": "Driver native-source admission and regression tests only",
+    "targetedTestsPassed": 35,
+    "targetedTestsFailed": 0,
+    "newCounterexamples": 4,
+    "reportStatus": "passed",
+    "caseCount": 2,
+    "allCasesComplete": true
   }
 }

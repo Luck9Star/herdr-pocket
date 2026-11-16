@@ -2,11 +2,11 @@
 
 > 面向 SSH / herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
-**2026-11-16 迭代收口**　[本轮交接、三个会话交付、两壳普通 SSH 与 macOS 原生窗口验收、Linux 双网与 Android 双网结果](docs/66-iteration-handoff-2026-11-16.md)（[PR #1](https://github.com/Luck9Star/herdr-pocket/pull/1)）。本轮状态：**普通 SSH 通过**（Flutter / Tauri Android 与 macOS 真 XCUITest）；[Android 启动控制点与 Flutter 双向双网设备验收通过；Tauri 已证先停 TS 续输，反向及最终收尾待验收](docs/67-android-dual-network-startup.md)。历史验收与下载入口见下文。
+**2026-11-16 迭代收口**　[本轮交接、三个会话交付、两壳普通 SSH 与 macOS 原生窗口验收、Linux 双网与 Android 双网结果](docs/66-iteration-handoff-2026-11-16.md)（[PR #1](https://github.com/Luck9Star/herdr-pocket/pull/1)）。上轮状态：**普通 SSH 通过**（Flutter / Tauri Android 与 macOS 真 XCUITest）。**2026-11-17 Android 双网**：[两壳 × 两种停网顺序 4/4 实测通过（API 35 模拟器、双受控 SSH 服务）](docs/67-android-dual-network-startup.md)。历史验收与下载入口见下文。
 
 **同源 QA 调试包 · 2026-11-15**　源码 `d925bd0`：[Flutter Android APK（多架构）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162282781) · [Tauri Android APK（仅 arm64-v8a）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162296306)。[本批运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398)完成：27 项成功、7 项按条件跳过；[macOS/Linux 下载、包名、架构与 SHA256](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。这是 CI 调试快照，与公开 Release 和设备验收分开。
 
-**双网隔离验收**　[Linux 双向受保护会话与清理记录](docs/65-dual-overlay-validation.md)：`93ca6cd` 在封闭测试网络、EasyTier 客户端指定测试配置下，分别验证停一网后另一网继续输入；默认配置对照未通过，Android、真实物理网络及五平台尚待验证。
+**双网隔离验收**　[Linux 双向受保护会话与清理记录](docs/65-dual-overlay-validation.md)：`93ca6cd` 在封闭测试网络、EasyTier 客户端指定测试配置下，分别验证停一网后另一网继续输入；默认配置对照未通过；该 Linux 轮次未测 Android，当前 Android 模拟器已有[独立验收](docs/67-android-dual-network-startup.md)，物理真机、真实物理网络及五平台仍未验证。
 
 **终端内核评估**　[libghostty-vt 两壳适配与风险](docs/64-libghostty-terminal-core-evaluation.md)：建议先做受控原型，暂不替换生产终端。
 

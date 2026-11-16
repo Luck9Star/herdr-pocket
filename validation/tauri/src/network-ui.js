@@ -20,6 +20,15 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
   const managed=p=>['easytier','tailscale'].includes(p.provider);
   function retirePublication(){poller.stop();nodeEpoch++;loadRevision++;for(const node of nodeStates.values()){if(node){node.authUrl=null;node.reviewToken=null;}}}
   function clearSecrets() {panel.querySelectorAll('input[type=password]').forEach(input=>{input.value='';});}
+  const identityReads=new Set();
+  async function readIdentity(id) {
+    const pending=Promise.resolve().then(()=>invoke('network_identity_status',{id}));identityReads.add(pending);
+    try{return await pending;}finally{identityReads.delete(pending);}
+  }
+  async function beforeIdentityWrite(epoch) {
+    while(identityReads.size)await Promise.allSettled([...identityReads]);
+    if(epoch!==nodeEpoch || panel.hidden || document.hidden)throw Error('network_review_stale');
+  }
   const el=(tag,text='',className='')=>{const n=document.createElement(tag);n.textContent=text;if(className)n.className=className;return n;};
   const button=(text,fn,allowDuringStart=false)=>{const b=el('button',text);b.type='button';b.disabled=stopBusy || (busy && !(allowDuringStart && pendingStart));b.onclick=fn;return b;};
   const label=(text,input)=>{const l=el('label',text);l.append(input);return l;};
@@ -27,10 +36,13 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
   const names=ids=>ids.map(id=>getHosts().find(h=>h.id===id)?.name || id).join('、') || '无';
   async function load(message='',polling=false,permit=()=>true) {const revision=++loadRevision;const current=()=>revision===loadRevision && !panel.hidden && !document.hidden && permit();try {
     const fresh=await invoke('network_list');const states=new Map(), nodes=new Map();
-    for(const profile of fresh.profiles) {if(!current())return false;if(managed(profile)) {try {const value=await invoke('network_identity_status',{id:profile.id});states.set(profile.id,value && typeof value.supported==='boolean' ? value : null);}catch {states.set(profile.id,null);}}}
+    for(const profile of fresh.profiles) {if(!current())return false;if(managed(profile)) {
+      if(busy || stopBusy)states.set(profile.id,identityStates.get(profile.id) ?? null);
+      else try {const value=await readIdentity(profile.id);states.set(profile.id,value && typeof value.supported==='boolean' ? value : null);}catch {states.set(profile.id,null);}
+    }}
     for(const profile of fresh.profiles) {if(!current())return false;if(managed(profile)) {try {
       let node=await invoke('network_node_status',{id:profile.id});
-      if(profile.provider==='tailscale' && node?.binding && ['needs-login','needs-machine-auth','running'].includes(node.state)) {
+      if(!busy && !stopBusy && profile.provider==='tailscale' && node?.binding && ['needs-login','needs-machine-auth','running'].includes(node.state)) {
         const affected=fresh.bindings.filter(b=>b.profileId===profile.id).map(b=>b.hostId);
         if(!current())return false;try {node=await invoke('network_node_login_status',{id:profile.id,expectedCatalog:fresh.revision,expectedRevision:profile.revision,affected,binding:node.binding});} catch {node={...node,authUrl:null,reviewToken:null};}
       }
@@ -39,18 +51,22 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
       nodes.set(profile.id,node);
     }catch {nodes.set(profile.id,null);}}}
     if(!current())return false;
-    if(catalog && JSON.stringify(catalog)!==JSON.stringify(fresh))deviceReviewDialog?.invalidate();
-    catalog=fresh;identityStates=states;nodeStates=nodes;render(message);
     const pending=fresh.profiles.some(p=>p.provider==='tailscale' && ['starting','needs-login','needs-machine-auth'].includes(nodes.get(p.id)?.state));
+    // Keep the active form and its reviewed catalog revision; polling still reads.
+    if(editing || identityEditor) {const status=panel.querySelector('[role=status]');if(message && status)status.textContent=message;}
+    else {
+      if(catalog && JSON.stringify(catalog)!==JSON.stringify(fresh))deviceReviewDialog?.invalidate();
+      catalog=fresh;identityStates=states;nodeStates=nodes;render(message);
+    }
     if(!polling && pending)poller.start(live=>load('',true,live));
     return pending;
-  }catch {if(!current())return false;catalog=null;identityStates.clear();nodeStates.clear();clearSecrets();panel.replaceChildren(el('p','网络配置读取失败，当前状态未知；请稍后核对。'));return false;}}
-  async function operation(work,affected) {if(busy||stopBusy)return;retirePublication();busy=true;try {await settleNetworkOperation(async()=>{await work();editing=null;},affected,onAffected,async message=>{busy=false;await load(message);});}finally{busy=false;}}
+  }catch {if(!current())return false;if(editing || identityEditor){const status=panel.querySelector('[role=status]');if(status)status.textContent='网络配置读取失败，草稿仍保留；保存前请先核对当前状态。';return false;}catalog=null;identityStates.clear();nodeStates.clear();clearSecrets();panel.replaceChildren(el('p','网络配置读取失败，当前状态未知；请稍后核对。'));return false;}}
+  async function operation(work,affected) {if(busy||stopBusy)return;retirePublication();const epoch=nodeEpoch;busy=true;try {await settleNetworkOperation(async()=>{await beforeIdentityWrite(epoch);await work();editing=null;},affected,onAffected,async message=>{busy=false;await load(message);});}finally{busy=false;}}
   async function identityOperation(profile,affected,action,mode,secret,expectedHandle=null) {
-    if(busy||stopBusy)return;retirePublication();busy=true;
+    if(busy||stopBusy)return;retirePublication();const epoch=nodeEpoch;busy=true;
     const args={id:profile.id,expectedCatalog:catalog.revision,expectedRevision:profile.revision,affected,action,mode,secret,expectedHandle};
     try {
-      await settleNetworkOperation(async()=>{try {return await invoke('network_identity_write',args);} finally {args.secret='';secret='';}},affected,onAffected,async message=>{busy=false;await load(message);});
+      await settleNetworkOperation(async()=>{try {await beforeIdentityWrite(epoch);return await invoke('network_identity_write',args);} finally {args.secret='';secret='';}},affected,onAffected,async message=>{busy=false;await load(message);});
     } finally {busy=false;}
   }
   async function nodeOperation(profile,affected,action,expectedHandle,binding) {
@@ -64,6 +80,7 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
     try {
       // Revoke the reviewed view before starting or stopping the native node.
       await onAffected(affected);
+      if(!stopping)await beforeIdentityWrite(operationEpoch);
       const pending=invoke(`network_node_${action}`,args);
       if(!stopping)void load('节点请求已发送；可刷新状态并停止原节点。');
       await pending;completed=true;
@@ -81,7 +98,7 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
     const args={id:profile.id,expectedCatalog:catalog.revision,expectedRevision:profile.revision,affected,binding:node.binding,expectedAuthUrl:node.authUrl,reviewToken:node.reviewToken};
     if(!confirm(`通过系统打开 ${profile.label} 的 Tailscale 授权页面？请核对浏览器或应用显示的设备和控制服务。`))return;
     busy=true;
-    try {await invoke('network_node_open_auth',args);}
+    try {await beforeIdentityWrite(epoch);await invoke('network_node_open_auth',args);}
     catch {if(epoch===nodeEpoch)await load('授权入口已失效或打开结果未知；请核对当前节点状态，不会自动重试。');}
     finally {busy=false;}
   }
@@ -130,14 +147,14 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
         if(provider.value==='easytier'){add('networkName','网络名称');const area=document.createElement('textarea');area.rows=3;area.value=(initial.peers || []).join('\n');area.placeholder='每行一个 tcp://、udp://、ws:// 或 wss:// 地址';inputs.peers=area;settings.append(label('公开节点地址',area));}
         if(provider.value==='zerotier')add('networkId','网络 ID（16 位小写十六进制）');
       }provider.onchange=drawSettings;drawSettings();
-      const save=el('button','保存配置');save.type='submit';form.append(save,button('取消',()=>{editing=null;render();}));
+      const save=el('button','保存配置');save.type='submit';form.append(save,button('取消',()=>{editing=null;void load();}));
       form.onsubmit=e=>{e.preventDefault();const profile={...editing,label:name.value,provider:provider.value,settings:Object.fromEntries(Object.entries(inputs).map(([k,v])=>[k,k==='peers'?v.value.split('\n').map(s=>s.trim()).filter(Boolean):v.value]))};const exists=catalog.profiles.some(p=>p.id===editing.id);const affected=catalog.bindings.filter(b=>b.profileId===editing.id).map(b=>b.hostId);if(exists && !confirm(`保存将停止受影响连接：${names(affected)}。继续？`))return;void operation(()=>invoke('network_save',{profile,expectedCatalog:catalog.revision,expectedRevision:exists?editing.revision:null,affected}),affected);};panel.append(form);
     }
     if(identityEditor) {
       const p=identityEditor, affected=catalog.bindings.filter(b=>b.profileId===p.id).map(b=>b.hostId);const form=el('form','','network-editor');form.append(el('h3',`配置本机身份 · ${p.label}`),el('p',`本机保存不代表入网或连接；受影响主机：${names(affected)}。`));
       const select=document.createElement('select');for(const [value,title] of [['PRIVATE','私有网络（需要秘密）'],['PUBLIC_NO_SECRET','公开网络（无秘密）']]) {const option=el('option',title);option.value=value;select.append(option);}select.value='PRIVATE';form.append(label('网络模式',select));
       const secret=field('','输入本机网络秘密');secret.type='password';secret.autocomplete='off';secret.maxLength=1024;const secretLabel=label('网络秘密',secret);form.append(secretLabel);select.onchange=()=>{secret.value='';secret.disabled=select.value==='PUBLIC_NO_SECRET';};
-      const save=el('button','保存本机身份');save.type='submit';form.append(save,button('取消',()=>{secret.value='';identityEditor=null;render();}));
+      const save=el('button','保存本机身份');save.type='submit';form.append(save,button('取消',()=>{secret.value='';identityEditor=null;void load();}));
       form.onsubmit=e=>{e.preventDefault();if(busy||stopBusy)return;const mode=select.value, value=secret.value;const bytes=new TextEncoder().encode(value);const valid=bytes.length<=1024 && !value.includes('\0') && (mode==='PRIVATE'?bytes.length>0:mode==='PUBLIC_NO_SECRET'&&bytes.length===0);bytes.fill(0);if(!valid){secret.value='';status.textContent='私有网络需输入 1–1024 字节秘密；公开网络必须为空，不能包含 NUL。';return;}if(!confirm(`为 ${p.label} 保存本机网络身份？受影响主机：${names(affected)}。`)){secret.value='';return;}secret.value='';identityEditor=null;void identityOperation(p,affected,'create',mode,value);};panel.append(form);
     }
     const hostSection=el('section');hostSection.append(el('h3','主机网络绑定'));for(const host of getHosts().filter(h=>!h.retired)) {

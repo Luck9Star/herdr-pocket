@@ -160,6 +160,38 @@ class DualEvidenceTests(unittest.TestCase):
         result=subprocess.check_output(['node','-e',script,dual.START_OBSERVER],text=True)
         self.assertEqual(result,'ok')
 
+    def test_start_observer_preserves_verified_bounded_native_guard_errors(self):
+        script=r"""const callbacks=new Map();
+          global.window={__TAURI_INTERNALS__:{callbacks},ipc:{postMessage:()=>{}}};
+          callbacks.set(11,()=>{});callbacks.set(12,()=>{});
+          if(!eval(process.argv[1]))throw Error('install');
+          window.ipc.postMessage(JSON.stringify({cmd:'network_node_start',callback:11,error:12}));
+          for(const code of ['network_identity_busy','network_changed','network_profile_missing',
+                             'network_identity_mode_unsupported','network_identity_provider_unavailable','network_identity_unsupported']){
+            callbacks.get(12)(code);if(window.__dualStartObserver.state.errorCode!==code)throw Error('bounded code lost');
+          }
+          process.stdout.write('ok');"""
+        self.assertEqual(subprocess.check_output(['node','-e',script,dual.START_OBSERVER],text=True),'ok')
+
+    def test_stop_button_alone_does_not_claim_start_completion(self):
+        before={'sent':0,'resolved':0,'rejected':0}
+        states=[{'sent':1,'resolved':0,'rejected':0},{'sent':1,'resolved':1,'rejected':0}]
+        def poll(probe,code,**kwargs):
+            self.assertFalse(probe())
+            return probe()
+        with patch.object(dual,'start_observer_snapshot',side_effect=states),patch.object(dual,'wait_for',side_effect=poll), \
+                patch.object(dual,'named_action_available',return_value=True):
+            self.assertTrue(dual.wait_node_start(Mock(),'owned-profile',before))
+
+    def test_rejected_start_is_reported_without_a_second_write_or_button_wait(self):
+        before={'sent':0,'resolved':0,'rejected':0};browser=Mock()
+        with patch.object(dual,'start_observer_snapshot',return_value={'sent':1,'resolved':0,'rejected':1,'errorCode':'network_identity_busy'}), \
+                patch.object(dual,'wait_for',side_effect=lambda probe,*args,**kwargs:probe()), \
+                patch.object(dual,'named_action_available') as available:
+            with self.assertRaisesRegex(dual.GuiFailure,'^dual_node_start_rejected$'):
+                dual.wait_node_start(browser,'owned-profile',before)
+        available.assert_not_called();browser.click.assert_not_called();browser.click_named.assert_not_called()
+
     def test_public_host_control_requires_matching_event(self):
         control = Mock()
         control.call.return_value = {'event':'pairing_review','requestId':'synthetic'}

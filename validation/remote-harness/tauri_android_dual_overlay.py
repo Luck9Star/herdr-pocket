@@ -220,10 +220,23 @@ def expand_profile(browser, title):
     return scope
 
 
-def wait_named(browser, scope, text, timeout=60):
+def named_action_available(browser, scope, text):
     expr = '''(()=>{const e=document.querySelector(%s);if(!e)return false;
       return [...e.querySelectorAll('button')].some(b=>b.textContent.trim()===%s&&!b.disabled&&b.getClientRects().length)})()''' % (json.dumps(scope), json.dumps(text))
-    return wait_for(lambda: browser.evaluate(expr) is True, 'dual_action_unavailable', timeout=timeout)
+    return browser.evaluate(expr) is True
+
+
+def wait_named(browser, scope, text, timeout=60):
+    return wait_for(lambda: named_action_available(browser,scope,text), 'dual_action_unavailable', timeout=timeout)
+
+
+def wait_node_start(browser, scope, before, timeout=90):
+    def settled():
+        current=start_observer_snapshot(browser)
+        if current['rejected']>before['rejected']:
+            raise GuiFailure('dual_node_start_rejected')
+        return current['resolved']>before['resolved'] and named_action_available(browser,scope,'停止节点')
+    return wait_for(settled,'dual_node_start_unconfirmed',timeout=timeout)
 
 
 START_OBSERVER = r"""(()=>{
@@ -234,7 +247,9 @@ START_OBSERVER = r"""(()=>{
     'cancelled','mobile_node_busy','mobile_node_capacity','mobile_node_cleanup_pending','overlay_invalid_deadline',
     'mobile_node_failed','invalid_network_identity','network_profile_disabled','network_identity_unavailable',
     'network_identity_missing','network_identity_changed','invalid_network_binding','network_catalog_changed',
-    'network_profile_changed','network_affected_changed','state_unavailable']);
+    'network_profile_changed','network_affected_changed','state_unavailable','network_identity_busy',
+    'network_changed','network_profile_missing','network_identity_mode_unsupported',
+    'network_identity_provider_unavailable','network_identity_unsupported']);
   const state={sent:0,resolved:0,rejected:0,errorCode:null};
   const wrapped={postMessage(message){
     let data;try{data=typeof message==='string'?JSON.parse(message):null}catch{}
@@ -313,8 +328,9 @@ def create_network(browser, role, material, report):
         confirm_click(browser, '.network-editor', '保存本机身份', '保存本机网络身份')
     wait_named(browser, scope, '启动节点', timeout=90)
     report['stage']='network_'+role+'_start'
+    before=start_observer_snapshot(browser)
     confirm_click(browser, scope, '启动节点', '启动 QA ')
-    wait_named(browser, scope, '停止节点', timeout=90)
+    wait_node_start(browser, scope, before)
     return scope
 
 

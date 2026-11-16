@@ -155,7 +155,7 @@ class ProbeGuardsTests(unittest.TestCase):
         self.assertEqual(probe._abort_class(b'thread panicked at src/lib.rs:12\n'), 'rust-panic')
         # fd ownership abort is the probe's own stderr redirection showing up.
         self.assertEqual(probe._abort_class(
-            b'Abort message: \x27failed to check ownership of fd 2\x27\n'), 'fd-ownership')
+            b'Abort message: \x27failed to check ownership of fd 2\x27\n'), 'capture-self-fdsan')
         # Unknown panic text falls back to a fixed class, never raw text.
         unknown = probe._redacted_forensics(b'Abort message: \x27panic: segmentation fault\x27')
         self.assertEqual(unknown['panicTypes'], ['other'])

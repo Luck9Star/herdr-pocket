@@ -230,8 +230,8 @@ ABORT_CLASSES = (
     (b'panic: ', 'go-panic'),
     (b'fatal error:', 'go-fatal'),
     (b'runtime error:', 'go-runtime-error'),
-    (b'ownership of fd', 'fd-ownership'),
-    (b'fdsan', 'fd-ownership'),
+    (b'ownership of fd', 'capture-self-fdsan'),
+    (b'fdsan', 'capture-self-fdsan'),
     (b'assertion failed', 'libc-assert'),
     (b'__pthread', 'pthread'),
 )
@@ -239,6 +239,8 @@ ABORT_CLASSES = (
 def _abort_class(record):
     # Prefer the Abort message line; fall back to a whole-record scan so a
     # standalone "JNI DETECTED ERROR IN APPLICATION" line still classifies.
+    # android_set_abort_message truncates near 128 bytes, so match on the
+    # leading part of the message as well.
     abort_lines = [l for l in record.splitlines() if b'Abort message:' in l]
     for line in abort_lines + record.splitlines():
         for needle, name in ABORT_CLASSES:
@@ -256,6 +258,26 @@ def _module_basenames(record):
         if name not in names:
             names.append(name)
     return names[:8]
+
+
+def _thread_names(record):
+    """Thread identity from the tombstone header and the fatal-signal line.
+
+    The Rust node thread is named overlay-node-st (15-char truncation), a
+    JNI-attached Java thread shows as Thread-N, and a plain Go scheduler
+    thread has no pthread name. This classifies the aborting thread even
+    when the backtrace stays empty.
+    """
+    names = []
+    for match in re.finditer(rb'>>> ([^\n\r]+) <<<', record):
+        name = match.group(1).decode('ascii', 'replace').strip()
+        if name and name not in names:
+            names.append(name)
+    for match in re.finditer(rb'\bpid: (\d+), tid: (\d+), name: ([^\n\r]+)', record):
+        name = match.group(3).decode('ascii', 'replace').strip()
+        if name and name not in names:
+            names.append(name)
+    return names[:6]
 
 
 def _stderr_evidence():
@@ -393,8 +415,27 @@ def run(args):
                         # finish the full tombstone. Re-read until the record
                         # carries hard evidence or the window closes.
                         def mine_record(block):
+                            # Both variants share one package, so a record is
+                            # only ours when it names this package, this
+                            # variant's process header, or our library; the
+                            # per-variant pid guards against taking the
+                            # other variant's tombstone in the same window.
+                            if PID:
+                                if not re.search(rb'\bpid: %d\b' % PID, block):
+                                    return False
                             return (PACKAGE.encode() in block or b'>>> dev.herdr' in block
                                     or b'>>> ' in block or b'libhp_tailscale' in block)
+                        def variant_pid():
+                            try:
+                                listing = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-pid.txt')
+                                text = listing.stdout.decode('ascii', 'replace').strip()
+                                # Remove it: the next variant writes its own;
+                                # a stale pid would misattribute its record.
+                                adb('shell', 'run-as', PACKAGE, 'rm', '-f', 'files/ts-node-probe-pid.txt', timeout=15)
+                                return int(text) if text.isdigit() else 0
+                            except Exception:
+                                return 0
+                        PID = variant_pid()
                         deadline = time.monotonic() + 45
                         while True:
                             crash_log = adb('shell', 'logcat', '-d', '-b', 'crash', timeout=30)
@@ -407,6 +448,10 @@ def run(args):
                                         combined = sorted(set(
                                             row['instrumentation'].get(key, []) + merged[key]))
                                         row['instrumentation'][key] = combined[:8]
+                                    for thread in _thread_names(record):
+                                        threads = row['instrumentation'].setdefault('abortThreads', [])
+                                        if thread not in threads and len(threads) < 6:
+                                            threads.append(thread)
                                     if merged['crashSignals'] or merged['panicTypes']:
                                         row['instrumentation']['signalEvidence'] = True
                                     abort = _abort_class(record)

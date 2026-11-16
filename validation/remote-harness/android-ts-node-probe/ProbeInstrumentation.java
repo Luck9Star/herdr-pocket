@@ -81,6 +81,13 @@ public final class ProbeInstrumentation extends Instrumentation {
         try {
             captureStderr(app);
             report.put("schemaVersion", 1).put("loginInvoked", false).put("dialInvoked", false);
+            // Record this process' pid before anything can die: after the
+            // crash the process is gone, so the host can only attribute a
+            // tombstone to this variant through this file.
+            try {
+                java.nio.file.Files.write(new File(app.getFilesDir(), "ts-node-probe-pid.txt").toPath(),
+                    String.valueOf(android.os.Process.myPid()).getBytes(StandardCharsets.UTF_8));
+            } catch (Exception ignored) { }
             // Previous process crash: visible only from this later process.
             try { report.put("previousExit", DirectoryProbe.exitInfo(app)); }
             catch (Exception ignored) { }

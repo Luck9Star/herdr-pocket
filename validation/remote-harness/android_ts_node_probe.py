@@ -4,8 +4,9 @@ import hashlib
 import json
 import os
 import re
-from pathlib import Path
 import subprocess
+import time
+from pathlib import Path
 import zipfile
 
 from android_dual_overlay_session import AndroidDualOverlaySession
@@ -232,11 +233,11 @@ ABORT_CLASSES = (
     (b'__pthread', 'pthread'),
 )
 
-
 def _abort_class(record):
-    for line in record.splitlines():
-        if b'Abort message:' not in line:
-            continue
+    # Prefer the Abort message line; fall back to a whole-record scan so a
+    # standalone "JNI DETECTED ERROR IN APPLICATION" line still classifies.
+    abort_lines = [l for l in record.splitlines() if b'Abort message:' in l]
+    for line in abort_lines + record.splitlines():
         for needle, name in ABORT_CLASSES:
             if needle in line:
                 return name
@@ -244,11 +245,11 @@ def _abort_class(record):
 
 
 def _module_basenames(record):
-    # Tombstone frame lines: '#00 pc <addr> /path/to/libX.so (off)'.
-    # Only the .so basename of each frame is kept, capped and deduped.
+    # Tombstone frame lines: '#00 pc <addr> /path/to/libX.so (off)' and the
+    # AOSP 'APK !libX.so' form. Only the bare module name is kept.
     names = []
-    for match in re.finditer(rb'#[0-9]+ pc [0-9a-f]+ \S*/([\w.\-]+\.so)', record):
-        name = match.group(1).decode('ascii', 'replace')
+    for match in re.finditer(rb'(?:#[0-9]+ pc [0-9a-f]+ \S*/([\w.\-]+\.so))|(?:!\(?([\w.\-]+\.so)\)?)', record):
+        name = (match.group(1) or match.group(2)).decode('ascii', 'replace')
         if name not in names:
             names.append(name)
     return names[:8]
@@ -382,28 +383,64 @@ def run(args):
                         # binds the record to this run's package while
                         # signal/frame lines carry debuggerd's own PID, so
                         # line filtering shreds the record.
-                        crash_log = adb('shell', 'logcat', '-d', '-b', 'crash', timeout=30)
-                        if crash_log.returncode == 0:
-                            for record in re.split(rb'\*\*\* \*\*\* \*\*\*', crash_log.stdout):
-                                if PACKAGE.encode() not in record and b'>>> dev.herdr' not in record:
-                                    continue
-                                merged = _redacted_forensics(record)
-                                for key in ('crashSignals', 'panicTypes', 'goFrames', 'upstreamFrames'):
-                                    combined = sorted(set(
-                                        row['instrumentation'].get(key, []) + merged[key]))
-                                    row['instrumentation'][key] = combined[:8]
-                                if merged['crashSignals'] or merged['panicTypes']:
-                                    row['instrumentation']['signalEvidence'] = True
-                                abort = _abort_class(record)
-                                if abort != 'other':
-                                    row['instrumentation'].setdefault('abortClass', abort)
-                                for module in _module_basenames(record):
-                                    mods = row['instrumentation'].setdefault('abortModules', [])
-                                    if module not in mods and len(mods) < 8:
-                                        mods.append(module)
-                        # Current run's own exit record (below, outside the
-                        # try): taken after instrument, before uninstall,
-                        # whether it returned or timed out.
+                        # am instrument may return with only the earliest
+                        # "F libc" line; debuggerd needs a bounded window to
+                        # finish the full tombstone. Re-read until the record
+                        # carries hard evidence or the window closes.
+                        def mine_record(block):
+                            return (PACKAGE.encode() in block or b'>>> dev.herdr' in block
+                                    or b'>>> ' in block or b'libhp_tailscale' in block)
+                        deadline = time.monotonic() + 45
+                        while True:
+                            crash_log = adb('shell', 'logcat', '-d', '-b', 'crash', timeout=30)
+                            if crash_log.returncode == 0:
+                                for record in re.split(rb'\*\*\* \*\*\* \*\*\*', crash_log.stdout):
+                                    if not mine_record(record):
+                                        continue
+                                    merged = _redacted_forensics(record)
+                                    for key in ('crashSignals', 'panicTypes', 'goFrames', 'upstreamFrames'):
+                                        combined = sorted(set(
+                                            row['instrumentation'].get(key, []) + merged[key]))
+                                        row['instrumentation'][key] = combined[:8]
+                                    if merged['crashSignals'] or merged['panicTypes']:
+                                        row['instrumentation']['signalEvidence'] = True
+                                    abort = _abort_class(record)
+                                    if abort != 'other':
+                                        row['instrumentation'].setdefault('abortClass', abort)
+                                    for module in _module_basenames(record):
+                                        mods = row['instrumentation'].setdefault('abortModules', [])
+                                        if module not in mods and len(mods) < 8:
+                                            mods.append(module)
+                            # Full record with hard evidence, or window closed.
+                            if row['instrumentation'].get('abortClass') or \
+                                    row['instrumentation'].get('abortModules') or \
+                                    time.monotonic() >= deadline:
+                                break
+                            time.sleep(3)
+                        # ART reports JNI misuse and libc fatal errors in the
+                        # main/system buffers, not in the crash tombstone:
+                        # read them too, attributed to this package.
+                        for buffer in ('main', 'system'):
+                            text_log = adb('shell', 'logcat', '-d', '-b', buffer, timeout=30)
+                            if text_log.returncode != 0:
+                                continue
+                            mine = b'\n'.join(line for line in text_log.stdout.splitlines(keepends=True)
+                                if PACKAGE.encode() in line or b'libhp_tailscale' in line
+                                or b'JNI DETECTED ERROR' in line or b'Fatal signal' in line)
+                            if not mine:
+                                continue
+                            merged = _redacted_forensics(mine)
+                            for key in ('crashSignals', 'panicTypes', 'goFrames', 'upstreamFrames'):
+                                combined = sorted(set(
+                                    row['instrumentation'].get(key, []) + merged[key]))
+                                row['instrumentation'][key] = combined[:8]
+                            if merged['crashSignals'] or merged['panicTypes']:
+                                row['instrumentation']['signalEvidence'] = True
+                            for marker, name in ((b'JNI DETECTED ERROR', 'jni-checkjni'),
+                                                 (b'art::', 'art-abort'),
+                                                 (b'Fatal signal', 'libc-fatal')):
+                                if marker in mine:
+                                    row['instrumentation'].setdefault('abortClass', name)
                     except subprocess.TimeoutExpired:
                         row['instrumentation'] = {'commandSucceeded': False, 'timedOut': True}
                     row['currentExit'] = _current_exit_info()

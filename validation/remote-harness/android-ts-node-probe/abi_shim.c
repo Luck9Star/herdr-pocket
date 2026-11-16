@@ -282,8 +282,14 @@ Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
                 }
             }
         }
+        /* Post-start stages are separate markers: the last marker present
+         * is the call that was reached before the process died. */
+        write_stage(evidence, "node-close-entered", "yes");
         if (node_close(node, 2000) != 0 && result == SHIM_OK) result = SHIM_ERR_CLOSE;
+        write_stage(evidence, "node-close-returned", "yes");
+        write_stage(evidence, "node-release-entered", "yes");
         if (node_release(node) != 0 && result == SHIM_OK) result = SHIM_ERR_RELEASE;
+        write_stage(evidence, "node-release-returned", "yes");
     }
 
 done:

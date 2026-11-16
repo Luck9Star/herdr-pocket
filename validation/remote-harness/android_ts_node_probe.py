@@ -12,6 +12,7 @@ import zipfile
 from android_dual_overlay_session import AndroidDualOverlaySession
 from android_dual_overlay_reverse import SERIAL, assert_owned_avd
 import android_crash_symbolize as symbolize
+import android_go_log as golog
 from flutter_android_dual_overlay import prepare_private_ca
 
 
@@ -280,7 +281,9 @@ def collect_abi_evidence(adb, expected_digest):
     stages = {}
     for name in ('library-mapped', 'abi-version', 'node-new', 'node-status',
                  'node-start-entered', 'node-start-returned',
-                 'node-status-after-start'):
+                 'node-status-after-start', 'node-close-entered',
+                 'node-close-returned', 'node-release-entered',
+                 'node-release-returned'):
         response = adb('exec-out', 'run-as', PACKAGE, 'cat',
                        'files/hp-probe-abi/hp-probe-abi-stage-%s.txt' % name)
         stages[name] = response.returncode == 0
@@ -457,6 +460,63 @@ def _stderr_evidence():
         return {'available': False}
 
 
+def _go_log_evidence(adb, pid):
+    """Classify this process's own `Go` log lines.
+
+    `logcat -s Go:E` is the Go runtime's panic channel. The tag carries no
+    package name, so the lines are selected by this leg's pid. The shared
+    stderr file is not read here: it belongs to whichever process last
+    redirected descriptor 2, not necessarily this pid.
+    """
+    if not pid:
+        return {'available': False}
+    try:
+        result = adb('shell', 'logcat', '-d', '-b', 'main', '--pid', str(pid),
+                     '-s', 'Go:E', timeout=30)
+    except Exception:
+        return {'available': False}
+    if result.returncode != 0:
+        return {'available': False}
+    return safe_go_log(golog.classify(result.stdout[:131072]))
+
+
+GO_PANIC_CLASSES = {'go-panic', 'go-fatal', 'go-throw', 'other'}
+GO_REASONS = {'nil-pointer', 'index-out-of-range', 'slice-bounds', 'makeslice',
+    'send-on-closed-channel', 'close-closed-channel', 'close-nil-channel',
+    'concurrent-map', 'deadlock', 'unexpected-signal', 'interface-conversion',
+    'divide-by-zero', 'negative-shift', 'nil-map', 'unlock-unlocked-mutex',
+    'negative-waitgroup', 'runtime-error', 'unspecified'}
+
+
+def safe_go_log(value):
+    """Keep only the whitelisted enums and bounded symbols."""
+    if not isinstance(value, dict) or value.get('available') is not True:
+        return {'available': False}
+    panic_class = value.get('panicClass')
+    reason = value.get('reason')
+    app = value.get('appFunction') or 'none'
+    first = value.get('firstFrame') or 'none'
+    upstream = value.get('upstreamFrames') or []
+    if panic_class not in GO_PANIC_CLASSES or reason not in GO_REASONS:
+        return {'available': False}
+    if not _safe_symbol(app) or not _safe_symbol(first):
+        return {'available': False}
+    if len(upstream) > 3 or not all(_safe_symbol(name) and name.startswith('tailscale.com/')
+                                    for name in upstream):
+        return {'available': False}
+    return {'available': True, 'panicClass': panic_class, 'reason': reason,
+            'appFunction': app, 'firstFrame': first, 'upstreamFrames': upstream}
+
+
+SYMBOL_OK = re.compile(r'[A-Za-z_][A-Za-z0-9_-]*(?:[./][A-Za-z0-9_][A-Za-z0-9_-]*)+')
+
+
+def _safe_symbol(name):
+    """A symbol is 'none' or ASCII package/function syntax, bounded."""
+    if name == 'none':
+        return True
+    return isinstance(name, str) and len(name) <= 160 and bool(SYMBOL_OK.fullmatch(name))
+
 def instrument_summary(result):
     raw = result.stdout[:65536]
     codes = re.findall(rb'^INSTRUMENTATION_CODE: (-?[0-9]+)\r?$', raw, re.MULTILINE)
@@ -600,6 +660,11 @@ def run(args):
                                         symbolize.extract_frames(record), library_dir)
                                     if frames:
                                         row['abiInstrumentation']['frames'] = frames
+                        # The Go runtime writes its panic to logd under the
+                        # tag "Go", which carries no package name: read this
+                        # process's own lines by pid before the main leg
+                        # clears the buffers.
+                        row['abiGoLog'] = _go_log_evidence(adb, abi_pid)
                         # Clear the crash buffer before instrumenting: both
                         # variants share one package, so without this the
                         # second variant would re-read the first one's
@@ -697,6 +762,10 @@ def run(args):
                                                  (b'Fatal signal', 'libc-fatal')):
                                 if marker in mine:
                                     row['instrumentation'].setdefault('abortClass', name)
+                        # The Go runtime writes its panic to logd under the
+                        # tag "Go", which carries no package name: read this
+                        # process's own lines by pid.
+                        row['goLog'] = _go_log_evidence(adb, PID)
                     except subprocess.TimeoutExpired:
                         row['instrumentation'] = {'commandSucceeded': False, 'timedOut': True}
                     row['currentExit'] = _current_exit_info()

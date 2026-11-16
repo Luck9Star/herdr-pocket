@@ -1,6 +1,19 @@
 # Android 双网启动诊断与验收边界
 
-截至 2026-11-17，Android API 35 x86_64 启动控制点已通过；已完成的两壳 UI 复验仍未证明双会话及停网后续传。共同主机夹具的 Unix socket 转发限制已通过本机冷启动 A/B 定位并修复，设备结果仍须单独验收。本页补充 [第 66 页](66-iteration-handoff-2026-11-16.md)之后的诊断和分层证据，以下保留各轮历史。
+截至 2026-11-17，Android API 35 x86_64 启动控制点已通过；**Flutter 已同时认证两台隔离主机，ET / TS 各有一个活动的已批准会话，断网及存活会话续传仍待验证**。Tauri 已修复授权预检与接收器 API35 兼容性，正在设备复验；不能写成两壳、两个停网方向全部通过。本页补充 [第 66 页](66-iteration-handoff-2026-11-16.md)之后的分层证据，以下保留历史。
+
+## 当前已完成证据与验收缺口
+
+最新两壳对照均来自 `f65ac16`、API 35 x86_64 模拟器，原生仍为 `a9be92d`；公开字段见[阶段摘要](evidence/android-dual-startup-20261116/stage-boundary-20261117.json)。表中的“两方向”是两个独立案例，实际停网尚未执行。
+
+| 已完成运行 | 确实取得的证据 | 尚未取得的证据 |
+| --- | --- | --- |
+| Flutter [43907454734](https://github.com/Luck9Star/herdr-pocket/actions/runs/43907454734)，两个案例均失败于 `ts_remote_marker` | 每例 ET / TS 各 1 次批准认证、各 1 个活动会话；ET 精确输入 `E` 已由原会话序号 1 审计；TS 真实终端、首帧及 marker 均已出现 | 栈停在 `dual_overlay_ui_steps.dart:427` 的单标签数量断言；TS 尚未发送 `T`，两网均未停。不能把双机同时认证写成完整双网输入或断网通过 |
+| Tauri [43907454400](https://github.com/Luck9Star/herdr-pocket/actions/runs/43907454400)，两个案例均停于 `device_auth_handler` | `onlyLoopbackApproved=true`、`linkHandlingAllowed=true`；查询为系统 `resolver`；候选 2 含自有 receiver，其他域仅 browser 且不含 receiver | 产品尚未启动。旧预检要求 handler 必须直接等于 receiver，误拒了该 resolver；后续仅允许确切自有 receiver 或经系统包验证的已知 ResolverActivity，真实前台 / 端口 / 单次同意仍须另验 |
+
+Flutter 本机真实双标签 A/B 已校验按新主机标签限定观察对象的测试修复（`b38e366`）；这不回填设备 `T` 输入或停网结果。Tauri 单次诊断 [43905996068](https://github.com/Luck9Star/herdr-pocket/actions/runs/43905996068)（`9093dcb`）仅观察到窗口由产品转为系统桌面，activity 为歧义 `null`、窗口不稳定、未见本次回环端口；**不能据此确证退出原因或把桌面当接收器**，该次没有点击 chooser / 同意按钮。
+
+接收器修复 `1a02edf` 已在真实 Android35 `android.jar` boot API 下通过 4 项本机 API / DEX smoke：旧代码使用的 `Files.readString/writeString` 在编译负例中被拒绝，新代码的受限文件流、同意监听器和 DEX 引用通过检查。此项不等于设备运行成功。修复后候选 `165a0476` 正在设备复验；实际 native 打开计数及清理前白名单失败诊断已接入，结果待返回。
 
 ## 设备诊断
 
@@ -71,4 +84,4 @@ Android 两壳的 `HOST_SOURCE=5404adf` 与已校验 ZIP 继续固定：工件 `
 
 ## 后续验收范围
 
-后续以实际运行结果为准：在 API 35 x86_64 Android 模拟器上验证产品双网行为，并对两台隔离 SSH 端点分别验证连接和交互；还应明确网络切换及清理结果。模拟器结果不等同于实体设备、其他架构或五平台验证。本页不预填双网端到端通过结果。
+下一步须补齐 Flutter 的 TS 输入、停一网后原存活会话继续输入及最终清理，并完成 Tauri 的真实授权与双会话验收。模拟器结果不等同于实体设备、其他架构或五平台验证。本页不预填双网端到端通过结果。

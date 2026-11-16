@@ -1,0 +1,52 @@
+{
+  "scope": "completed API35 x86_64 evidence only; no full dual-network or stop-direction acceptance",
+  "source": "f65ac16cea7c781c44a8748e930ff922baf1f66b",
+  "nativeSource": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+  "flutter": {
+    "run": 43907454734,
+    "status": "failed",
+    "firstStopDirections": ["et", "ts"],
+    "failureStageForBoth": "ts_remote_marker",
+    "firstFailureFrameForBoth": {"file": "dual_overlay_ui_steps.dart", "line": 427},
+    "failureCountsForBoth": {
+      "et": {"approvedSessions": 1, "activeSessions": 1, "acceptedSessions": 1, "capturedBytes": 1},
+      "ts": {"approvedSessions": 1, "activeSessions": 1, "acceptedSessions": 1, "capturedBytes": 0}
+    },
+    "etBaselineForBoth": {"exactBytes": true, "capturedBytes": 1, "sessionOrdinal": 1, "approvedDevice": true, "active": true},
+    "tsTerminalForBoth": {"firstFrame": "passed", "terminalPresent": true, "markerObserved": true, "snapshotReceived": true},
+    "tsTInputAttempted": false,
+    "stopOperationReached": false,
+    "localTwoTabAB": {"scope": "local real Flutter two-tab check; not Android device acceptance", "testFixSource": "b38e366c8515c99960fdacbca2ba24b731ca91ab"}
+  },
+  "tauri": {
+    "run": 43907454400,
+    "status": "failed",
+    "appSource": "372430fe94459ad2cd7fd1e04eb61c2c45d9d99c",
+    "firstStopDirections": ["ts", "et"],
+    "failureStageForBoth": "device_auth_handler",
+    "preflightForBoth": {"onlyLoopbackApproved": true, "linkHandlingAllowed": true, "afterHandler": "resolver", "candidateCount": 2, "receiverCandidate": true, "unrelatedHandler": "browser", "unrelatedCandidateCount": 1, "unrelatedReceiverCandidate": false},
+    "productLaunchReached": false
+  },
+  "tauriDiagnostic": {
+    "run": 43905996068,
+    "source": "9093dcb0f117a6337661d4a44af952e8b5186190",
+    "executedDirections": ["ts"],
+    "activityComponent": null,
+    "windowBeforeKind": "product",
+    "windowAfterKind": "verified-system-launcher",
+    "windowStableAcrossTree": false,
+    "loopbackHostPortSeen": false,
+    "chooserOrConsentClicked": false,
+    "causalityEstablished": false
+  },
+  "receiverApi35Smoke": {
+    "repairSource": "1a02edf84515a1507b4f87db5e8fd3f768652363",
+    "receiverTree": "cc8235c636960624f85957f65dea20ef4edf64ac",
+    "testsPassed": 4,
+    "compileNegativeMethods": ["java.nio.file.Files.readString", "java.nio.file.Files.writeString"],
+    "productionBoundedIoPassed": true,
+    "dexSupportedStreamsAndListenerPassed": true,
+    "deviceAcceptanceEstablished": false
+  },
+  "replayCandidate": {"source": "165a0476b368b7288f7ef4bfbba26f12940ba1ff", "deviceResult": "pending"}
+}

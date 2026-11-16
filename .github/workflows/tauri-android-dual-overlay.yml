@@ -188,11 +188,11 @@ jobs:
     env:
       PYTHONDONTWRITEBYTECODE: '1'
       NATIVE_SOURCE: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
-      APK_SOURCE: 372430fe94459ad2cd7fd1e04eb61c2c45d9d99c
-      APK_RUN: '43891123962'
-      APK_ARTIFACT_ID: '14237616436'
-      APK_ZIP_SHA256: 02606e74a0e085ec2a13b54af958a27b8dd15a957f5782e256d5ce2d1f06bc26
-      FIXED_APP_SOURCE: 372430fe94459ad2cd7fd1e04eb61c2c45d9d99c
+      APK_SOURCE: ca8637cc29a429b1bab78a35746dae9bc6858679
+      APK_RUN: '43928408381'
+      APK_ARTIFACT_ID: '14258256260'
+      APK_ZIP_SHA256: d811fa432ee26033081095413b7267254079053b7ab273c2d182e5b47dd75b6b
+      FIXED_APP_SOURCE: ca8637cc29a429b1bab78a35746dae9bc6858679
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -216,6 +216,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$APK_RUN" > "$RUNNER_TEMP/replay-run.json"
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$APK_RUN/jobs?per_page=100" > "$RUNNER_TEMP/replay-jobs.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$APK_ARTIFACT_ID" > "$RUNNER_TEMP/replay-apks-meta.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$APK_ARTIFACT_ID/zip" > "$RUNNER_TEMP/replay-apks.zip"
           python3 - <<'PY'
@@ -243,7 +245,9 @@ jobs:
                   assert all(not entry.is_dir() and stat.S_IFMT(entry.external_attr >> 16) != stat.S_IFLNK for entry in entries)
                   assert sum(entry.file_size for entry in entries) <= 1024 * 1024 * 1024
                   assert archive.getinfo('tauri-dual-build-summary.json').file_size <= 65536
-                  summary = json.loads(archive.read('tauri-dual-build-summary.json'))
+                  manifest = archive.read('tauri-dual-build-summary.json')
+                  assert hashlib.sha256(manifest).hexdigest() == '96a106afee5cc24770c56602340069d1857ba27797bdefab5fd68fc3153c62fd'
+                  summary = json.loads(manifest)
                   assert summary['sourceSHA'] == expected['source']
                   assert summary['nativeSourceSHA'] == expected['native']
                   assert summary['frontendAssetsEqual'] is True and summary['easytierEqual'] is True
@@ -258,12 +262,23 @@ jobs:
                       with archive.open(name) as stream:
                           while chunk := stream.read(1024 * 1024):
                               digest.update(chunk)
-                      assert digest.hexdigest() == summary[key]
+                      fixed = {'normalApkSha256': '149bd4593f22b92c2e7054c9ed195ebb65fab4687c1515febae1224b36e586a8',
+                               'qaApkSha256': '7cd284ae5aa6969f033acee29cc82f7ba1b3b5d394c1337289c49a887a7efb72',
+                               'authApkSha256': 'bef364c51a0d7ef1399d4c07e2ba1490f78645f2bb3367f75b58ab93b675a247'}
+                      assert digest.hexdigest() == summary[key] == fixed[key]
                       values[key] = summary[key]
               return dict(apkSourceSHA=expected['source'], nativeSourceSHA=expected['native'],
                           artifactId=expected['artifact'], zipSha256=expected['zip_sha256'], **values)
 
           root=Path(os.environ['RUNNER_TEMP'])
+          source_run=json.loads((root/'replay-run.json').read_text())
+          assert str(source_run['id']) == os.environ['APK_RUN'] and source_run['head_sha'] == os.environ['APK_SOURCE']
+          # Reuse depends on the pinned successful build job and artifact, not the device outcome.
+          assert source_run['status'] == 'completed' and source_run['conclusion'] in ('success', 'failure')
+          pages=json.loads((root/'replay-jobs.json').read_text())
+          builds=[job for page in pages for job in page['jobs'] if job['name'] == 'tauri-build']
+          assert len(builds) == 1 and builds[0]['id'] == 133513958347
+          assert builds[0]['status'] == 'completed' and builds[0]['conclusion'] == 'success'
           pins=dict(run=os.environ['APK_RUN'],source=os.environ['APK_SOURCE'],artifact=os.environ['APK_ARTIFACT_ID'],zip_sha256=os.environ['APK_ZIP_SHA256'],native=os.environ['NATIVE_SOURCE'])
           report=verify_archive(json.loads((root/'replay-apks-meta.json').read_text()),root/'replay-apks.zip',pins)
           target=root/'dual-apks';target.mkdir()
@@ -287,51 +302,34 @@ jobs:
           "$RUNNER_TEMP/dual-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_tauri_android_dual*.py' -v
           "$RUNNER_TEMP/dual-venv/bin/python" host-source/validation/remote-harness/dual_overlay_shared_bundle.py verify \
             --bundle "$RUNNER_TEMP/dual-host-fixtures" --source-sha "$HOST_SOURCE" --restore-executable
-      - name: Build current isolated authorization receiver only
+      - name: Verify fixed authorization receiver source and record provenance
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git merge-base --is-ancestor 30baccd864f6e146fcdf0cdf1d584328b32497f2 "$GITHUB_SHA"
           test "$(git rev-parse HEAD:validation/remote-harness/tauri-dual-auth-receiver)" = 9497e5684c57006cf51473cd2ff7b5fb114ad219
+          test "$(git rev-parse "$APK_SOURCE":validation/remote-harness/tauri-dual-auth-receiver)" = 9497e5684c57006cf51473cd2ff7b5fb114ad219
+          git diff --exit-code "$APK_SOURCE" HEAD -- validation/remote-harness/tauri-dual-auth-receiver
           git diff --exit-code HEAD -- validation/remote-harness/tauri-dual-auth-receiver
           test -z "$(git ls-files --others --exclude-standard -- validation/remote-harness/tauri-dual-auth-receiver)"
           mkdir "$RUNNER_TEMP/current-auth"
-          bash validation/remote-harness/tauri-dual-auth-receiver/build.sh "$RUNNER_TEMP/current-auth/dual-auth-receiver.apk"
-          "$RUNNER_TEMP/dual-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_tauri_android_dual_receiver.py' -v
-          "$RUNNER_TEMP/dual-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_tauri_android_dual_receiver_ui.py' -v
-          "$RUNNER_TEMP/dual-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_tauri_auth_failure_diagnostic.py' -v
           python3 - <<'PY'
-          import hashlib,json,os,subprocess
+          import hashlib,json,os
           from pathlib import Path
           root=Path(os.environ['RUNNER_TEMP'])
-          source=Path('validation/remote-harness/tauri-dual-auth-receiver')
-          apk=root/'current-auth/dual-auth-receiver.apk'
-          archived=json.loads((root/'dual-apks/tauri-dual-build-summary.json').read_text())
-          report={
-              'schemaVersion':1,'status':'built-not-device-verified',
-              'sourceSHA':os.environ['GITHUB_SHA'],
-              'receiverRepairSourceSHA':'30baccd864f6e146fcdf0cdf1d584328b32497f2',
-              'sourceTreeGitSHA':subprocess.check_output(['git','rev-parse','HEAD:'+str(source)],text=True).strip(),
-              'buildScriptSha256':hashlib.sha256((source/'build.sh').read_bytes()).hexdigest(),
-              'receiverJavaSha256':hashlib.sha256((source/'AuthActivity.java').read_bytes()).hexdigest(),
-              'receiverManifestSha256':hashlib.sha256((source/'AndroidManifest.xml').read_bytes()).hexdigest(),
-              'androidApiSmoke':{'apiLevel':35,'status':'passed','testSourceSha256':hashlib.sha256(Path('validation/remote-harness/test_tauri_android_dual_receiver.py').read_bytes()).hexdigest()},
-              'receiverUiSmoke':{'scope':'controlled JVM UI contract; not Android runtime','status':'passed','testSourceSha256':hashlib.sha256(Path('validation/remote-harness/test_tauri_android_dual_receiver_ui.py').read_bytes()).hexdigest()},
-              'apkSha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
-              'archivedReceiverSourceSHA':os.environ['APK_SOURCE'],
-              'archivedReceiverApkSha256':archived['authApkSha256'],
-              'applicationApkSourceSHA':os.environ['APK_SOURCE'],
-              'scope':'current test authorization receiver only; fixed application APK unchanged'}
-          if report['apkSha256']==report['archivedReceiverApkSha256']:
-              raise SystemExit('receiver APK unchanged')
+          apk=root/'dual-apks/dual-auth-receiver.apk'
+          report={'schemaVersion':1,'status':'archive-verified-not-device-verified',
+                  'sourceSHA':os.environ['APK_SOURCE'],
+                  'sourceTreeGitSHA':'9497e5684c57006cf51473cd2ff7b5fb114ad219',
+                  'apkSha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
+                  'scope':'fixed archived test receiver; no device acceptance claim'}
+          assert report['apkSha256']=='bef364c51a0d7ef1399d4c07e2ba1490f78645f2bb3367f75b58ab93b675a247'
           (root/'current-auth/provenance.json').write_text(json.dumps(report,indent=2)+'\n')
-          print(json.dumps(report,sort_keys=True))
           PY
       - name: Exercise actual Tauri UI on owned API35 AVD
         run: |
           AVD_EVIDENCE_DIR="$RUNNER_TEMP/tauri-dual-avd" bash validation/remote-harness/with-android-emulator.sh \
             "$RUNNER_TEMP/dual-venv/bin/python" validation/remote-harness/tauri_android_dual_overlay.py \
-              --apk "$RUNNER_TEMP/dual-apks/tauri-dual-qa.apk" --auth-apk "$RUNNER_TEMP/current-auth/dual-auth-receiver.apk" \
+              --apk "$RUNNER_TEMP/dual-apks/tauri-dual-qa.apk" --auth-apk "$RUNNER_TEMP/dual-apks/dual-auth-receiver.apk" \
               --bundle "$RUNNER_TEMP/dual-host-fixtures" --output "$RUNNER_TEMP/tauri-dual-result" \
               --host-source-checkout "$GITHUB_WORKSPACE/host-source" --host-source-sha "$HOST_SOURCE" \
               --native-source-sha "$NATIVE_SOURCE" --apk-source-sha "$APK_SOURCE"

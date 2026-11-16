@@ -5,6 +5,7 @@ The caller supplies only an owned helper process and synthetic expected input.
 No request, authorization URL, or raw bytes are written to public evidence.
 """
 import subprocess
+import shlex
 
 
 class DualOverlayDeviceFailure(RuntimeError):
@@ -192,17 +193,29 @@ def read_exchange(adb, serial, name, *, run):
     if (name not in READABLE_EXCHANGE or not isinstance(serial, str) or not serial or any(c not in
             'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_:.' for c in serial)):
         raise DualOverlayDeviceFailure('private_exchange_input_invalid')
-    command = [str(adb), '-s', serial, 'exec-out', 'run-as', 'dev.herdr.herdr_flutter_probe',
-               'cat', 'files/dual-overlay-exchange/' + name]
+    # Shell v2 carries the remote exit status; exec-out's raw service does not.
+    # The allowlisted name is the only variable interpolated into this script.
+    directory = 'files/dual-overlay-exchange'
+    path = directory + '/' + name
+    script = (f'if [ ! -d {directory} ] || [ ! -r {directory} ] || '
+              f'[ ! -x {directory} ]; then exit 73; fi; '
+              f'if [ -e {path} ]; then printf "PRESENT\\n"; cat {path} || exit 74; '
+              'else printf "MISSING\\n"; fi')
+    command = [str(adb), '-s', serial, 'shell', '-T', 'run-as',
+               'dev.herdr.herdr_flutter_probe', 'sh', '-c', shlex.quote(script)]
     try:
         result = run(command, stdout=-1, stderr=-1, timeout=20, check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise DualOverlayDeviceFailure('private_exchange_read_failed') from None
-    if result.returncode != 0:
-        return None
-    if not isinstance(result.stdout, bytes) or len(result.stdout) > 65536:
+    if (result.returncode != 0 or not isinstance(result.stdout, bytes)
+            or len(result.stdout) > 65544):
         raise DualOverlayDeviceFailure('private_exchange_read_failed')
-    return result.stdout
+    if result.stdout == b'MISSING\n':
+        return None
+    if result.stdout.startswith(b'PRESENT\n'):
+        return result.stdout[len(b'PRESENT\n'):]
+    raise DualOverlayDeviceFailure('private_exchange_read_failed')
+
 
 
 def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, audit_records=None, audit_progress=None):
@@ -416,6 +429,7 @@ def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout
     deadline = time.monotonic() + timeout
     index = 0
     baselines = {}
+    exit_seen = False
     while time.monotonic() < deadline:
         raw = read_exchange(adb, serial, 'stage', run=run)
         if raw is not None:
@@ -453,6 +467,10 @@ def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout
                     raise DualOverlayDeviceFailure('device_test_failed')
                 return expected
         if process.poll() is not None:
+            # A result may be atomically published between the read and exit.
+            if index == len(checkpoints) and not exit_seen:
+                exit_seen = True
+                continue
             failure = read_exchange(adb, serial, 'failure.json', run=run)
             if failure is not None and report_failure is not None:
                 detail = safe_ui_failure(failure)

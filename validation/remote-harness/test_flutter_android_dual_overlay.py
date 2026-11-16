@@ -103,15 +103,39 @@ class PrivateExchangeTest(unittest.TestCase):
 
 
 class PrivateExchangeReadTest(unittest.TestCase):
-    def test_fixed_name_and_no_output_leak(self):
+    def test_atomic_read_distinguishes_missing_empty_and_failures(self):
+        import subprocess
+        import tempfile
+        from pathlib import Path
         calls = []
-        def run(command, **kwargs):
-            calls.append(command)
-            return type('Result', (), {'returncode': 0, 'stdout': b'private'})()
-        self.assertEqual(read_exchange('adb', 'emulator-5554', 'stage', run=run), b'private')
-        self.assertNotIn('private', repr(calls))
-        with self.assertRaises(DualOverlayDeviceFailure):
-            read_exchange('adb', 'emulator-5554', '../bad', run=run)
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / 'files/dual-overlay-exchange'
+            directory.mkdir(parents=True)
+            def run(command, **kwargs):
+                calls.append(command)
+                self.assertEqual(command[:7], ['adb', '-s', 'emulator-5554', 'shell', '-T',
+                                                'run-as', 'dev.herdr.herdr_flutter_probe'])
+                self.assertEqual(command[7:9], ['sh', '-c'])
+                return subprocess.run(['sh', '-c', ' '.join(command[7:])], cwd=tmp, **kwargs)
+            self.assertIsNone(read_exchange('adb', 'emulator-5554', 'result.json', run=run))
+            result = directory / 'result.json'
+            result.write_bytes(b'')
+            self.assertEqual(read_exchange('adb', 'emulator-5554', 'result.json', run=run), b'')
+            result.write_bytes(b'private')
+            self.assertEqual(read_exchange('adb', 'emulator-5554', 'result.json', run=run), b'private')
+            self.assertNotIn('private', repr(calls))
+            result.unlink()
+            directory.rmdir()
+            with self.assertRaisesRegex(DualOverlayDeviceFailure, 'private_exchange_read_failed'):
+                read_exchange('adb', 'emulator-5554', 'result.json', run=run)
+            with self.assertRaises(DualOverlayDeviceFailure):
+                read_exchange('adb', 'emulator-5554', '../bad', run=run)
+        for returncode, stdout in ((1, b'MISSING\n'), (0, b''), (0, b'cat: missing'),
+                                   (0, b'PRESENT\n' + b'x' * 65537)):
+            def bad_run(*args, **kwargs):
+                return type('Result', (), {'returncode': returncode, 'stdout': stdout})()
+            with self.assertRaisesRegex(DualOverlayDeviceFailure, 'private_exchange_read_failed'):
+                read_exchange('adb', 'emulator-5554', 'result.json', run=bad_run)
 
 
 class HostStageTest(unittest.TestCase):
@@ -475,6 +499,27 @@ class DeviceCheckpointTest(unittest.TestCase):
                 else:
                     with self.assertRaisesRegex(DualOverlayDeviceFailure, 'device_result_invalid'):
                         drive_checkpoints(None, process, 'adb', 'emulator-5554', 'et', run=None)
+
+    def test_result_published_after_missing_read_is_rechecked_after_exit(self):
+        import json
+        expected = {'status': 'passed', 'firstStop': 'et', 'twoReviewedTargets': True,
+                    'observedBothUpdates': True, 'responseMarkersMatched': True,
+                    'explicitTsAuthorization': True, 'newFullAfterResume': True,
+                    'stoppedTabRetired': True, 'survivorStopped': True,
+                    'initialInputsAccepted': True, 'survivorInputAccepted': True}
+        stages = iter([b'ts_wait_authorization', b'et_pair_review', b'ts_pair_review',
+                       b'et_baseline', b'ts_baseline', b'stopped_audit', b'final_audit',
+                       b'both_stopped_audit', b'both_stopped_audit'])
+        reads = iter([None, json.dumps(expected).encode()])
+        polls = iter([None] * 7 + [0])
+        process = type('Process', (), {'poll': lambda self: next(polls),
+                                       'wait': lambda self, timeout: 0})()
+        def read(_adb, _serial, name, **_kwargs):
+            return next(reads) if name == 'result.json' else next(stages)
+        with patch('flutter_android_dual_overlay.read_exchange', side_effect=read), \
+             patch('flutter_android_dual_overlay.handle_stage', return_value=True), \
+             patch('time.sleep'):
+            self.assertEqual(drive_checkpoints(None, process, 'adb', 'emulator-5554', 'et', run=None), expected)
 
     def test_all_checkpoint_replies_and_test_process_are_required(self):
         import json

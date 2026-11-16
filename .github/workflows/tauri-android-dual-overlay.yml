@@ -187,12 +187,12 @@ jobs:
     timeout-minutes: 60
     env:
       PYTHONDONTWRITEBYTECODE: '1'
-      NATIVE_SOURCE: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
-      APK_SOURCE: ca8637cc29a429b1bab78a35746dae9bc6858679
-      APK_RUN: '43928408381'
-      APK_ARTIFACT_ID: '14258256260'
-      APK_ZIP_SHA256: d811fa432ee26033081095413b7267254079053b7ab273c2d182e5b47dd75b6b
-      FIXED_APP_SOURCE: ca8637cc29a429b1bab78a35746dae9bc6858679
+      NATIVE_SOURCE: 547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8
+      APK_SOURCE: b0f1df672fb304a86e3bb56dc2cf11c64856576a
+      APK_RUN: '43941511775'
+      APK_ARTIFACT_ID: '14263595863'
+      APK_ZIP_SHA256: a68e1653c009634b61a712dff6f6d8638f3f022395c7c4c8e40289cd3909c694
+      FIXED_APP_SOURCE: b0f1df672fb304a86e3bb56dc2cf11c64856576a
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -248,7 +248,7 @@ jobs:
                   assert sum(entry.file_size for entry in entries) <= 1024 * 1024 * 1024
                   assert archive.getinfo('tauri-dual-build-summary.json').file_size <= 65536
                   manifest = archive.read('tauri-dual-build-summary.json')
-                  assert hashlib.sha256(manifest).hexdigest() == '96a106afee5cc24770c56602340069d1857ba27797bdefab5fd68fc3153c62fd'
+                  assert hashlib.sha256(manifest).hexdigest() == '7d859066aedd9b416c6899815ae455dd9e65010e121bd6205d782fd58e61877f'
                   summary = json.loads(manifest)
                   assert summary['sourceSHA'] == expected['source']
                   assert summary['nativeSourceSHA'] == expected['native']
@@ -264,9 +264,9 @@ jobs:
                       with archive.open(name) as stream:
                           while chunk := stream.read(1024 * 1024):
                               digest.update(chunk)
-                      fixed = {'normalApkSha256': '149bd4593f22b92c2e7054c9ed195ebb65fab4687c1515febae1224b36e586a8',
-                               'qaApkSha256': '7cd284ae5aa6969f033acee29cc82f7ba1b3b5d394c1337289c49a887a7efb72',
-                               'authApkSha256': 'bef364c51a0d7ef1399d4c07e2ba1490f78645f2bb3367f75b58ab93b675a247'}
+                      fixed = {'normalApkSha256': '2dc7624f6d7bedcee8eebfc55dd670fff753634b66de583ea6eafc26d15f86a7',
+                               'qaApkSha256': 'f087784b773187636131b87f864a089657a202e31d895b7b1fb612f42cb1e76e',
+                               'authApkSha256': 'dc319e253397c099056011a60e97102fabc556013b6c88f85f4d5257a193c122'}
                       assert digest.hexdigest() == summary[key] == fixed[key]
                       values[key] = summary[key]
               return dict(apkSourceSHA=expected['source'], nativeSourceSHA=expected['native'],
@@ -279,7 +279,7 @@ jobs:
           assert source_run['status'] == 'completed' and source_run['conclusion'] in ('success', 'failure')
           pages=json.loads((root/'replay-jobs.json').read_text())
           builds=[job for page in pages for job in page['jobs'] if job['name'] == 'tauri-build']
-          assert len(builds) == 1 and builds[0]['id'] == 133513958347
+          assert len(builds) == 1 and builds[0]['id'] == 133559945585
           assert builds[0]['status'] == 'completed' and builds[0]['conclusion'] == 'success'
           pins=dict(run=os.environ['APK_RUN'],source=os.environ['APK_SOURCE'],artifact=os.environ['APK_ARTIFACT_ID'],zip_sha256=os.environ['APK_ZIP_SHA256'],native=os.environ['NATIVE_SOURCE'])
           report=verify_archive(json.loads((root/'replay-apks-meta.json').read_text()),root/'replay-apks.zip',pins)

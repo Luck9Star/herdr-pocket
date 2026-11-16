@@ -222,6 +222,8 @@ def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, aud
 
 UI_STAGES = frozenset({'host_board', 'et_network_create', 'ts_network_create', 'ts_login_open',
     'ts_wait_authorization', 'et_pair_profile', 'ts_pair_profile', 'et_pair_review', 'ts_pair_review',
+    'et_remote_review', 'ts_remote_review', 'et_remote_connect', 'ts_remote_connect',
+    'et_remote_pane', 'ts_remote_pane',
     'et_open_host', 'ts_open_host', 'et_input', 'ts_input', 'et_baseline', 'ts_baseline',
     'et_resume', 'ts_resume', 'et_stop_network', 'ts_stop_network', 'stopped_audit', 'final_audit', 'both_stopped_audit',
     'et_network_save', 'ts_network_save', 'et_identity_open', 'ts_identity_open',
@@ -246,13 +248,26 @@ def safe_ui_failure(raw):
         detail = json.loads(raw)
         basic = {'stage', 'kind'}
         diagnostic = {'nodeState', 'statusPresent', 'editPresent', 'editEnabled', 'addPresent', 'addEnabled', 'notice'}
-        optional = {'responseReceived', 'stackFrames', 'responseCheck', 'bindingCheck', 'bindingSelectionMatches'}
+        optional = {'responseReceived', 'stackFrames', 'responseCheck', 'bindingCheck', 'bindingSelectionMatches', 'remoteCheck'}
         if (isinstance(detail, dict) and set(detail) - optional in (basic, basic | diagnostic)
                 and isinstance(detail['stage'], str) and detail['stage'] in UI_STAGES
                 and isinstance(detail['kind'], str)
                 and detail['kind'] in {'test_failure', 'flutter_error', 'state_error', 'assertion_error', 'other'}):
             if 'responseReceived' in detail and type(detail['responseReceived']) is not bool:
                 return None
+            if 'remoteCheck' in detail:
+                remote = detail['remoteCheck']
+                bools = {'pagePresent', 'reviewPresent', 'reviewChecked', 'connectPresent', 'connectEnabled', 'busy', 'live', 'dashboardPresent'}
+                phases = {'network', 'hostKey', 'authentication', 'dashboard', 'firstFrame'}
+                if (not isinstance(remote, dict) or set(remote) != bools | phases | {'paneCount', 'paneControlCount', 'statusClass'}
+                        or any(type(remote[key]) is not bool for key in bools)
+                        or any(type(remote[key]) is not int or not 0 <= remote[key] <= 64 for key in ('paneCount', 'paneControlCount'))
+                        or any(remote[key] not in {'waiting', 'active', 'passed', 'failed', 'unknown'} for key in phases)
+                        or remote['statusClass'] not in {'unavailable', 'provider_unavailable', 'network_node_not_started',
+                            'network_identity_unavailable', 'network_runtime_unavailable', 'network_binding_changed',
+                            'device_key_unavailable', 'host_key_mismatch', 'authentication_failed', 'session_or_target_mismatch',
+                            'timeout', 'connection_failed', 'connecting', 'empty', 'other'}):
+                    return None
             if 'bindingSelectionMatches' in detail and type(detail['bindingSelectionMatches']) is not bool:
                 return None
             if 'bindingCheck' in detail:
@@ -360,6 +375,28 @@ def sample_ts_control(session):
                 'secondClientRegistered': event['secondClientRegistered']}
     except Exception:
         return {'available': False}
+
+
+def sample_failed_host_audits(session):
+    """Read bounded host counters only after UI failure, before session teardown."""
+    result = {}
+    for role in ('et', 'ts'):
+        try:
+            event = session.control.call({'op': 'audit', 'role': role, 'expectedBase64': ''})
+            keys = ('acceptedSessions', 'newSessions', 'capturedBytes', 'newInputBytes')
+            sessions = event.get('sessions')
+            if (event.get('event') != 'host_audit' or event.get('role') != role
+                    or any(type(event.get(key)) is not int or not 0 <= event[key] <= 1000000 for key in keys)
+                    or not isinstance(sessions, list) or len(sessions) > 64
+                    or any(not isinstance(item, dict) or type(item.get('active')) is not bool
+                           or type(item.get('approvedDevice')) is not bool for item in sessions)):
+                raise ValueError('invalid host audit')
+            result[role] = {'available': True, **{key: event[key] for key in keys},
+                            'activeSessions': sum(item['active'] for item in sessions),
+                            'approvedSessions': sum(item['approvedDevice'] for item in sessions)}
+        except Exception:
+            result[role] = {'available': False}
+    return result
 
 
 def installed_apk_evidence(device, bundle, destination, verify):
@@ -471,6 +508,9 @@ def run_device(args, env):
                                                                report_stage=lambda stage: case.update(uiStage=stage),
                                                                report_failure=lambda failure: case.update(uiFailure=failure),
                                                                audit_records=case['hostAudits'])
+                            except Exception:
+                                case['failureHostAudits'] = sample_failed_host_audits(session)
+                                raise
                             finally:
                                 if process.poll() is None:
                                     try: os.killpg(process.pid, signal.SIGTERM)

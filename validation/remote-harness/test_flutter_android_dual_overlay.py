@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from flutter_android_dual_overlay import (
-    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints, installed_apk_evidence, safe_ui_failure, sample_ts_control,
+    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints, installed_apk_evidence, safe_ui_failure, sample_ts_control, sample_failed_host_audits,
 )
 
 
@@ -214,6 +214,27 @@ class BothStoppedAuditTests(unittest.TestCase):
                     write.assert_not_called()
 
 
+class FailedHostAuditTests(unittest.TestCase):
+    def test_failure_snapshot_only_keeps_bounded_counters(self):
+        class Control:
+            def __init__(self): self.requests = []
+            def call(self, request):
+                self.requests.append(request)
+                return {'event': 'host_audit', 'role': request['role'], 'acceptedSessions': 1,
+                        'newSessions': 1, 'capturedBytes': 0, 'newInputBytes': 0,
+                        'sessions': [{'active': True, 'approvedDevice': True, 'private': 'secret'}],
+                        'extra': 'secret'}
+        control = Control(); session = type('Session', (), {'control': control})()
+        result = sample_failed_host_audits(session)
+        self.assertEqual(result['et'], {'available': True, 'acceptedSessions': 1, 'newSessions': 1,
+            'capturedBytes': 0, 'newInputBytes': 0, 'activeSessions': 1, 'approvedSessions': 1})
+        self.assertNotIn('secret', repr(result))
+        self.assertEqual([req['role'] for req in control.requests], ['et', 'ts'])
+        self.assertTrue(all(req['expectedBase64'] == '' for req in control.requests))
+        control.call = lambda request: {'event': 'host_audit', 'role': request['role'], 'acceptedSessions': True}
+        self.assertEqual(sample_failed_host_audits(session), {'et': {'available': False}, 'ts': {'available': False}})
+
+
 class SafeTsControlTest(unittest.TestCase):
     def test_only_bounded_fixed_fields_are_retained(self):
         fields = {'event': 'ts_diagnostics', 'secondClientRegistered': False,
@@ -229,6 +250,18 @@ class SafeTsControlTest(unittest.TestCase):
 
 
 class SafeUiFailureTest(unittest.TestCase):
+    def test_remote_diagnostic_rejects_untrusted_content(self):
+        import json
+        remote = {**{key: False for key in ('pagePresent', 'reviewPresent', 'reviewChecked', 'connectPresent',
+                    'connectEnabled', 'busy', 'live', 'dashboardPresent')},
+                  **{key: 'unknown' for key in ('network', 'hostKey', 'authentication', 'dashboard', 'firstFrame')},
+                  'paneCount': 0, 'paneControlCount': 0, 'statusClass': 'unavailable'}
+        payload = {'stage': 'et_remote_pane', 'kind': 'test_failure', 'remoteCheck': remote}
+        self.assertEqual(safe_ui_failure(json.dumps(payload).encode()), payload)
+        for altered in ({**remote, 'raw': 'secret'}, {**remote, 'statusClass': 'secret'},
+                        {**remote, 'paneCount': True}, {**remote, 'network': 'secret'}):
+            self.assertIsNone(safe_ui_failure(json.dumps(dict(payload, remoteCheck=altered)).encode()))
+
     def test_binding_diagnostic_contains_only_boolean_fields(self):
         import json
         values = {'hostPresent': True, 'hostEnabled': True, 'bindingMatches': True, 'catalogReady': True,

@@ -9,10 +9,15 @@ import 'package:herdr_flutter_probe/network_profiles_page.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/pairing_public_key.dart';
 import 'package:herdr_flutter_probe/pairing.dart' show decodePairing;
+import 'package:herdr_flutter_probe/remote_page.dart';
+import 'package:herdr_flutter_probe/connection_diagnostics.dart';
 import 'dart:typed_data';
 import 'package:terminal_view/terminal_view.dart';
 
 import 'android_pairing_observe_test.dart' as existing;
+
+Finder remotePaneChoices() => find.byWidgetPredicate((widget) => widget is FilledButton &&
+    widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('remote-pane-'));
 
 bool hostBindingReady(HostCatalog catalog, String hostId, String networkId) =>
     catalog.ready && !catalog.writing &&
@@ -30,6 +35,7 @@ class DualOverlayUiSteps {
   Map<String, Object>? responseCheck;
   Map<String, Object>? bindingCheck;
   bool? bindingSelectionMatches;
+  Map<String, Object>? remoteCheck;
 
   Future<void> stage(String value) async {
     if (!RegExp(r'^[a-z][a-z0-9_]{0,50}$').hasMatch(value)) {
@@ -38,6 +44,7 @@ class DualOverlayUiSteps {
     currentStage = value;
     if (!value.contains('_response_')) responseCheck = null;
     if (!value.contains('_bind_')) { bindingCheck = null; bindingSelectionMatches = null; }
+    if (!value.contains('_remote_')) remoteCheck = null;
     if (!(value.endsWith('_node_wait') || value == 'ts_node_ready_refresh')) {
       nodeDiagnostic = null;
     }
@@ -80,6 +87,9 @@ class DualOverlayUiSteps {
   }
 
   Future<void> captureFailureNotice() async {
+    if (currentStage.contains('_remote_')) {
+      try { remoteCheck = inspectRemote(); } catch (_) { /* Keep the original failure. */ }
+    }
     if (nodeDiagnostic == null ||
         !(currentStage.endsWith('_node_wait') || currentStage == 'ts_node_ready_refresh')) return;
     try {
@@ -268,6 +278,51 @@ class DualOverlayUiSteps {
     });
   }
 
+  Map<String, Object> inspectRemote() {
+    final page = find.byType(RemotePage);
+    final review = find.byKey(const ValueKey('remote-review'));
+    final connect = find.byKey(const ValueKey('remote-connect'));
+    final panes = remotePaneChoices();
+    final present = page.evaluate().length == 1;
+    var busy = false, live = false, dashboardPresent = false, paneCount = 0;
+    var statusClass = 'unavailable';
+    var network = 'unknown', hostKey = 'unknown', authentication = 'unknown', dashboard = 'unknown', firstFrame = 'unknown';
+    if (present) {
+      final dynamic state = tester.state(page);
+      busy = state.busy as bool; live = state.live as bool;
+      final dynamic board = state.dashboard;
+      dashboardPresent = board != null;
+      if (dashboardPresent) { final int count = board.panes.length as int; paneCount = count > 64 ? 64 : count; }
+      final ConnectionDiagnostics? diagnostic = state.connectionDiagnostics as ConnectionDiagnostics?;
+      if (diagnostic != null) {
+        network = diagnostic.network.name; hostKey = diagnostic.hostKey.name;
+        authentication = diagnostic.authentication.name; dashboard = diagnostic.dashboard.name;
+        firstFrame = diagnostic.firstFrame.name;
+      }
+      final String status = state.status as String;
+      statusClass = status.contains('provider_unavailable') ? 'provider_unavailable'
+        : status.contains('节点未确认') ? 'network_node_not_started'
+        : status.contains('本机网络身份不可用') ? 'network_identity_unavailable'
+        : status.contains('节点状态或连接桥不可确认') ? 'network_runtime_unavailable'
+        : status.contains('网络绑定已改变') ? 'network_binding_changed'
+        : status.contains('设备密钥') ? 'device_key_unavailable'
+        : status.contains('主机指纹不符') ? 'host_key_mismatch'
+        : status.contains('SSH 认证未通过') ? 'authentication_failed'
+        : status.contains('指定会话或目标不匹配') ? 'session_or_target_mismatch'
+        : status.contains('超时') ? 'timeout'
+        : status.contains('连接或读取失败') ? 'connection_failed'
+        : status.contains('正在连接') ? 'connecting' : status.isEmpty ? 'empty' : 'other';
+    }
+    final rp = review.evaluate().length == 1, cp = connect.evaluate().length == 1;
+    return {'pagePresent': present, 'reviewPresent': rp,
+      'reviewChecked': rp && tester.widget<CheckboxListTile>(review).value == true,
+      'connectPresent': cp, 'connectEnabled': cp && tester.widget<FilledButton>(connect).onPressed != null,
+      'busy': busy, 'live': live, 'dashboardPresent': dashboardPresent, 'paneCount': paneCount,
+      'paneControlCount': panes.evaluate().length.clamp(0, 64), 'statusClass': statusClass,
+      'network': network, 'hostKey': hostKey, 'authentication': authentication,
+      'dashboard': dashboard, 'firstFrame': firstFrame};
+  }
+
   Future<String> openAndObserve(String role, String hostId) async {
     await stage('${role}_open_host');
     await showHostControl('host-open-$hostId');
@@ -275,11 +330,17 @@ class DualOverlayUiSteps {
     await existing.until(tester, () => find.byKey(const ValueKey('pair-connect')).evaluate().length == 1);
     await existing.tapKey(tester, 'pair-connect');
     await existing.until(tester, () => find.byKey(const ValueKey('remote-review')).evaluate().length == 1);
+    await stage('${role}_remote_review');
     await existing.tapKey(tester, 'remote-review');
-    await existing.tapKey(tester, 'remote-connect');
-    final pane = find.byWidgetPredicate((widget) => widget.key is ValueKey<String> &&
-      (widget.key! as ValueKey<String>).value.startsWith('remote-pane-'));
-    await existing.until(tester, () => pane.evaluate().length == 1);
+    await stage('${role}_remote_connect');
+    final connect = find.byKey(const ValueKey('remote-connect'));
+    await existing.until(tester, () => connect.evaluate().length == 1 &&
+      tester.widget<FilledButton>(connect).onPressed != null, onTimeout: () { remoteCheck = inspectRemote(); return {}; });
+    await existing.tapStablePointer(tester, connect);
+    await stage('${role}_remote_pane');
+    final pane = remotePaneChoices();
+    await existing.until(tester, () => pane.evaluate().length == 1,
+      onTimeout: () { remoteCheck = inspectRemote(); return {}; });
     await existing.tap(tester, pane);
     await existing.until(tester, () => find.byType(TerminalView).evaluate().length == 1 &&
       find.textContaining('只读观察中').evaluate().isNotEmpty && existing.displayedSequence(tester) != null);

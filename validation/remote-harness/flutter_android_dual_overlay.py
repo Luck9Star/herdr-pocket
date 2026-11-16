@@ -224,7 +224,7 @@ UI_STAGES = frozenset({'host_board', 'et_network_create', 'ts_network_create', '
     'ts_wait_authorization', 'et_pair_profile', 'ts_pair_profile', 'et_pair_review', 'ts_pair_review',
     'et_remote_review', 'ts_remote_review', 'et_remote_connect', 'ts_remote_connect',
     'et_remote_pane', 'ts_remote_pane', 'et_remote_first_frame', 'ts_remote_first_frame',
-    'et_remote_marker', 'ts_remote_marker',
+    'et_remote_marker', 'ts_remote_marker', 'et_remote_tab', 'ts_remote_tab',
     'et_open_host', 'ts_open_host', 'et_input', 'ts_input', 'et_baseline', 'ts_baseline',
     'et_resume', 'ts_resume', 'et_stop_network', 'ts_stop_network', 'stopped_audit', 'final_audit', 'both_stopped_audit',
     'et_network_save', 'ts_network_save', 'et_identity_open', 'ts_identity_open',

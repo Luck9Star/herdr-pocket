@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
+import 'package:herdr_flutter_probe/host_tabs.dart';
 import 'package:herdr_flutter_probe/network_profiles_page.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/pairing_public_key.dart';
@@ -394,12 +395,56 @@ class DualOverlayUiSteps {
     }, onTimeout: () { remoteCheck = inspectRemote(); return {}; });
   }
 
+  HostTabs currentHostTabs() {
+    final home = find.byType(HostCatalogPage);
+    if (home.evaluate().length != 1) throw StateError('dual_host_page_ambiguous');
+    final dynamic state = tester.state(home);
+    return state.tabs as HostTabs;
+  }
+
+  Set<String> hostTabIds() {
+    final tabs = currentHostTabs().tabs;
+    final ids = tabs.map((tab) => tab.id).toSet();
+    if (ids.length != tabs.length) throw StateError('dual_host_tabs_ambiguous');
+    return ids;
+  }
+
+  String requireNewActiveHostTab(Set<String> before, String hostId, {bool requireRemote = false}) {
+    final tabs = currentHostTabs();
+    final current = hostTabIds();
+    final added = current.difference(before);
+    if (!current.containsAll(before) || added.length != 1) throw StateError('dual_host_tab_change_invalid');
+    final id = added.single;
+    final matches = tabs.tabs.where((tab) => tab.id == id && tab.hostId == hostId).toList();
+    if (matches.length != 1 || tabs.activeId != id || !matches.single.visible.value) {
+      throw StateError('dual_host_tab_target_invalid');
+    }
+    if (requireRemote) {
+      final view = find.byKey(ValueKey('host-tab-view-$id'));
+      final remote = find.descendant(of: view, matching: find.byType(RemotePage));
+      if (view.evaluate().length != 1 || remote.evaluate().length != 1 || find.byType(RemotePage).evaluate().length != 1) {
+        throw StateError('dual_host_tab_view_invalid');
+      }
+      final dynamic home = tester.state(find.byType(HostCatalogPage));
+      final catalog = home.catalog as HostCatalog;
+      final hosts = catalog.profiles.where((host) => host.id == hostId).toList();
+      final target = tester.widget<RemotePage>(remote).pairedTarget;
+      if (hosts.length != 1 || target == null ||
+          ['host','port','username','session','socketPath','herdrPath','expectedHostKey'].any((key) => target[key] != hosts.single.target[key])) {
+        throw StateError('dual_host_tab_target_invalid');
+      }
+    }
+    return id;
+  }
+
   Future<String> openAndObserve(String role, String hostId) async {
     selectionAttempted = false; expectedPane = null; expectedTerminal = null; currentRemoteRole = role;
     await stage('${role}_open_host');
+    final previousTabs = hostTabIds();
     await showHostControl('host-open-$hostId');
     await existing.tapStablePointer(tester, find.byKey(ValueKey('host-open-$hostId')));
     await existing.until(tester, () => find.byKey(const ValueKey('pair-connect')).evaluate().length == 1);
+    requireNewActiveHostTab(previousTabs, hostId);
     await existing.tapKey(tester, 'pair-connect');
     await existing.until(tester, () => find.byKey(const ValueKey('remote-review')).evaluate().length == 1);
     await stage('${role}_remote_review');
@@ -423,9 +468,9 @@ class DualOverlayUiSteps {
       identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal, terminal) &&
       (existing.displayedSequence(tester) ?? -1) > firstSequence &&
       existing.screenHasMarker(terminal, 'Synthetic observe tick'));
-    final tab = existing.hostTab();
-    expect(tab, findsOneWidget);
-    return (tester.widget<TextButton>(tab).key! as ValueKey<String>).value;
+    await stage('${role}_remote_tab');
+    final tabId = requireNewActiveHostTab(previousTabs, hostId, requireRemote: true);
+    return 'host-tab-$tabId';
   }
 
   Future<void> resumeTab(String role, String tabKey, Terminal previous) async {

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dual_overlay_ui_steps.dart';
+import 'android_pairing_observe_test.dart' as existing;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -46,17 +47,26 @@ void main() {
       keys:TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String),tabs:tabs,
       adapterFactory:(host) => adapters[host.id] = InputTabAdapter(),offlineBuilder:(_) => const SizedBox())));
     await tester.pumpAndSettle();
+    final beforeA = steps.hostTabIds();
     await tapVisible(tester,'host-open-${a.id}'); await tester.pumpAndSettle();
     final aTab = tabs.active!.id, aa = adapters[a.id]!;
     await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle(); await connectTab(tester,aa);
+    expect(steps.requireNewActiveHostTab(beforeA, a.id, requireRemote:true), aTab);
     await mode(tester,'direct');
     await steps.tapVisibleTerminal();
     expect(tester.state<TerminalViewState>(find.byType(TerminalView)).hasInputConnection, isTrue);
     tester.testTextInput.enterText('E'); await tester.pumpAndSettle();
     expect(aa.received.single,[69]);
-    await tapVisible(tester,'hosts-board-tab'); await tapVisible(tester,'host-open-${b.id}'); await tester.pumpAndSettle();
+    await tapVisible(tester,'hosts-board-tab');
+    final beforeB = steps.hostTabIds();
+    await tapVisible(tester,'host-open-${b.id}'); await tester.pumpAndSettle();
     final bTab = tabs.active!.id, bb = adapters[b.id]!;
     await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle(); await connectTab(tester,bb);
+    expect(existing.hostTab().evaluate().length, 2); // Old unique-widget check failed for the second tab.
+    expect(steps.requireNewActiveHostTab(beforeB, b.id, requireRemote:true), bTab);
+    expect(steps.hostTabIds().contains(aTab), isTrue);
+    expect(() => steps.requireNewActiveHostTab(beforeB, a.id, requireRemote:true), throwsStateError);
+    expect(() => steps.requireNewActiveHostTab(<String>{}, b.id, requireRemote:true), throwsStateError);
     await mode(tester,'direct');
     await steps.tapVisibleTerminal();
     expect(tester.state<TerminalViewState>(find.byType(TerminalView)).hasInputConnection, isTrue);

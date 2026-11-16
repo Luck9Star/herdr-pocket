@@ -76,7 +76,7 @@ public class IoProbe {
         methods=dex_methods((dex/'classes.dex').read_bytes())
         self.assertIn(('Ljava/io/FileInputStream;','read'),methods)
         self.assertIn(('Ljava/io/FileOutputStream;','write'),methods)
-        self.assertTrue(any(owner.endswith('AuthActivity$1;') and name=='onClick' for owner,name in methods))
+        self.assertTrue(any(owner.startswith('Ldev/herdrpocket/dualtestauth/AuthActivity$') and name=='onClick' for owner,name in methods))
         self.assertFalse(any(owner=='Ljava/nio/file/Files;' and name in {'readString','writeString'} for owner,name in methods))
         self.assertFalse(any(owner=='Ljava/lang/invoke/LambdaMetafactory;' for owner,name in methods))
 

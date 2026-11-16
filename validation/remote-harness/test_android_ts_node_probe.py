@@ -148,6 +148,8 @@ class ProbeGuardsTests(unittest.TestCase):
         self.assertNotIn('deadbeef', dumped)
         self.assertNotIn('0x00000000004a1b2c', dumped)
         self.assertNotIn('other_app', dumped)
+        self.assertEqual(probe._abort_class(ours[0]), 'go-panic')
+        self.assertEqual(probe._module_basenames(ours[0]), ['libhp_tailscale.so'])
         # Unknown panic text falls back to a fixed class, never raw text.
         unknown = probe._redacted_forensics(b'Abort message: \x27panic: segmentation fault\x27')
         self.assertEqual(unknown['panicTypes'], ['other'])

@@ -264,9 +264,12 @@ def _stderr_evidence():
     """
     try:
         result = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-stderr.txt')
+        # Remove it either way: both variants share one package, so the next
+        # variant must not read this one's leftovers.
+        adb('shell', 'run-as', PACKAGE, 'rm', '-f', 'files/ts-node-probe-stderr.txt', timeout=15)
         if result.returncode != 0 or not result.stdout:
             return {'available': False}
-        text = result.stdout[:262144]
+        text = result.stdout[:65536]
         kinds = []
         for needle, name in (
                 (b'fatal error:', 'go-fatal-error'),
@@ -396,7 +399,7 @@ def run(args):
                                     row['instrumentation'].setdefault('abortClass', abort)
                                 for module in _module_basenames(record):
                                     mods = row['instrumentation'].setdefault('abortModules', [])
-                                    if module not in mods:
+                                    if module not in mods and len(mods) < 8:
                                         mods.append(module)
                         # Current run's own exit record (below, outside the
                         # try): taken after instrument, before uninstall,

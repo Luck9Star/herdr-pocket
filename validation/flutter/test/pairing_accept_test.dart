@@ -74,6 +74,22 @@ void main() {
     expect(fixture.keys.signCalls,0); expect(disk.writes,writes+1);
     await tester.pumpWidget(const SizedBox()); catalog.dispose(); visibility.dispose();
   });
+  testWidgets('valid controller text without an edit callback can be rechecked explicitly', (tester) async {
+    final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+    final fixture = await openPending(tester,catalog);
+    final response = jsonEncode(authorizedResponse(fixture.request));
+    final field = find.byKey(const ValueKey('pair-response'));
+    tester.widget<TextField>(field).controller!.text = response;
+    await tester.pump();
+    expect(find.byKey(const ValueKey('pair-response-preview')),findsNothing);
+    expect(tester.widget<TextButton>(find.byKey(const ValueKey('pair-response-recheck'))).onPressed,isNotNull);
+    await tapVisible(tester,'pair-response-recheck');
+    expect(find.byKey(const ValueKey('pair-response-preview')),findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('pair-source-review'))).value,isFalse);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('pair-accept'))).onPressed,isNull);
+    expect(catalog.profiles.single.restore(1000).state,'awaiting-host');
+    await tester.pumpWidget(const SizedBox()); catalog.dispose();
+  });
   for (final offset in [1,2,3]) {
   testWidgets('future response $offset seconds remains unreviewable until explicit recheck', (tester) async {
     var clock = 1000;

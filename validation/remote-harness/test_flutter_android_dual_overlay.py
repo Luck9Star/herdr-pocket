@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from flutter_android_dual_overlay import (
-    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints, installed_apk_evidence, safe_ui_failure, sample_ts_control, sample_failed_host_audits,
+    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints, installed_apk_evidence, safe_ui_failure, sample_ts_control, sample_failed_host_audits, wait_for_both_stopped,
 )
 
 
@@ -180,6 +180,48 @@ class HostStageTest(unittest.TestCase):
 
 
 class BothStoppedAuditTests(unittest.TestCase):
+    def test_delayed_closure_is_only_waitable_state_and_timeout_is_distinct(self):
+        for first in ('et', 'ts'):
+            survivor = 'ts' if first == 'et' else 'et'
+            current = [0.0]
+            calls = {'et': 0, 'ts': 0}
+            def now(): return current[0]
+            def sleep(delay): current[0] += delay
+            def audit(role, expected):
+                calls[role] += 1
+                value = evidence(); value['capturedBytes'] = len(expected)
+                value['sessions'][1]['active'] = role == survivor and calls[role] < 3
+                return value
+            wait_for_both_stopped(audit, {'et': (2, 2), 'ts': (2, 2)}, first,
+                                  timeout=1, interval=.2, monotonic=now, sleep=sleep)
+            self.assertEqual(calls, {'et': 3, 'ts': 3})
+            def never(role, expected):
+                value = evidence(); value['capturedBytes'] = len(expected)
+                value['sessions'][1]['active'] = role == survivor
+                return value
+            with self.assertRaisesRegex(DualOverlayDeviceFailure, 'host_audit_close_timeout'):
+                wait_for_both_stopped(never, {'et': (2, 2), 'ts': (2, 2)}, first,
+                                      timeout=.5, interval=.25, monotonic=now, sleep=sleep)
+
+    def test_polling_rejects_any_session_or_input_drift_immediately(self):
+        for error in ('reconnect', 'bytes', 'ordinal', 'reactivation'):
+            current = [0.0]; calls = {'et': 0, 'ts': 0}
+            def sleep(delay): current[0] += delay
+            def audit(role, expected):
+                calls[role] += 1
+                value = evidence(); value['capturedBytes'] = len(expected)
+                value['sessions'][1]['active'] = role == 'et'
+                if error == 'reconnect': value['newSessions'] = 1
+                if error == 'bytes': value['exactBytes'] = False
+                if error == 'ordinal': value['sessions'][1]['ordinal'] = 3
+                if error == 'reactivation':
+                    value['sessions'][1]['active'] = (role == 'ts' and calls[role] > 1) or (role == 'et' and calls[role] < 3)
+                return value
+            with self.assertRaisesRegex(DualOverlayDeviceFailure, 'host_audit_session_changed'):
+                wait_for_both_stopped(audit, {'et': (2, 2), 'ts': (2, 2)}, 'ts',
+                                      timeout=2, interval=.1, monotonic=lambda:current[0], sleep=sleep)
+            if error != 'reactivation': self.assertEqual(current[0], 0)
+
     def test_final_audit_checks_original_sessions_bytes_and_closure(self):
         import base64
         for first_stop in ('et', 'ts'):
@@ -205,7 +247,7 @@ class BothStoppedAuditTests(unittest.TestCase):
                 self.assertTrue(handle_stage('both_stopped_audit', session=session, adb='adb', serial='emulator-5554',
                                              run=None, first_stop=first_stop, baselines=baseline))
                 self.assertEqual(write.call_args.args[2:4], ('both-stopped-audit.txt', b'accepted'))
-            for failure in ('active', 'reconnect', 'bytes'):
+            for failure in ('reconnect', 'bytes'):
                 control.failure = failure
                 with patch('flutter_android_dual_overlay.write_exchange') as write:
                     with self.assertRaises(DualOverlayDeviceFailure):
@@ -280,9 +322,12 @@ class SafeUiFailureTest(unittest.TestCase):
     def test_response_diagnostic_is_bounded_and_redacted(self):
         import json
         check = {'inputMatches': True, 'fieldPresent': True, 'pagePresent': True,
-                 'foreground': True, 'category': 'future', 'futureSeconds': 3}
+                 'foreground': True, 'category': 'future', 'futureSeconds': 3, 'recheckPresent': True,
+                 'recheckEnabled': True, 'previewPresent': False, 'sourceChecked': False}
         payload = {'stage': 'et_response_preview', 'kind': 'test_failure', 'responseCheck': check}
         self.assertEqual(safe_ui_failure(json.dumps(payload).encode()), payload)
+        old = {k:v for k,v in check.items() if k not in {'recheckPresent','recheckEnabled','previewPresent','sourceChecked'}}
+        self.assertEqual(safe_ui_failure(json.dumps(dict(payload, responseCheck=old)).encode())['responseCheck'], old)
         for changed in ({**check, 'futureSeconds': 601}, {**check, 'category': 'secret'},
                         {**check, 'raw': 'secret'}, {**check, 'inputMatches': 'secret'},
                         {**check, 'category': 'valid'}):

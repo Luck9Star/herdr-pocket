@@ -28,9 +28,10 @@ bool hostBindingReady(HostCatalog catalog, String hostId, String networkId) =>
 /// Real UI actions shared by the two independently paired overlay targets.
 /// Requests, responses and credentials stay in the app's private exchange.
 class DualOverlayUiSteps {
-  DualOverlayUiSteps(this.tester, this.exchange);
+  DualOverlayUiSteps(this.tester, this.exchange, {this.diagnosticClock});
   final WidgetTester tester;
   final Directory exchange;
+  final int Function()? diagnosticClock;
   String currentStage = 'fixture_validation';
   Map<String, Object>? nodeDiagnostic;
   bool responseReceived = false;
@@ -560,7 +561,7 @@ class DualOverlayUiSteps {
     var category = bytes.length > 2048 ? 'oversize' : 'invalid';
     var skew = 0;
     if (bytes.length <= 2048) {
-      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final now = diagnosticClock?.call() ?? DateTime.now().millisecondsSinceEpoch ~/ 1000;
       try {
         if (decodePairing(bytes, now)['type'] == 'pairing-binding-response') category = 'valid';
       } catch (_) {
@@ -579,7 +580,13 @@ class DualOverlayUiSteps {
         } catch (_) { /* Never publish untrusted input or parser errors. */ }
       }
     }
+    final recheck = find.byKey(const ValueKey('pair-response-recheck'));
+    final source = find.byKey(const ValueKey('pair-source-review'));
     return {'inputMatches': present && tester.widget<TextField>(field).controller?.text == response,
+      'recheckPresent': recheck.evaluate().length == 1,
+      'recheckEnabled': recheck.evaluate().length == 1 && tester.widget<TextButton>(recheck).onPressed != null,
+      'previewPresent': find.byKey(const ValueKey('pair-response-preview')).evaluate().length == 1,
+      'sourceChecked': source.evaluate().length == 1 && tester.widget<CheckboxListTile>(source).value == true,
       'fieldPresent': present, 'pagePresent': find.byType(PairingPage).evaluate().length == 1,
       'foreground': WidgetsBinding.instance.lifecycleState == null || WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
       'category': category, 'futureSeconds': skew};
@@ -595,8 +602,12 @@ class DualOverlayUiSteps {
     responseCheck = inspectResponse(response);
     expect(responseCheck!['inputMatches'], isTrue);
     final deadline = DateTime.now().add(const Duration(seconds: 6));
-    while (responsePreview.evaluate().isEmpty && responseCheck!['category'] == 'future' &&
-        (responseCheck!['futureSeconds'] as int) <= 5 && DateTime.now().isBefore(deadline)) {
+    var polls = 0;
+    while (responsePreview.evaluate().isEmpty && polls < 6 &&
+        (responseCheck!['category'] == 'valid' ||
+         (responseCheck!['category'] == 'future' && (responseCheck!['futureSeconds'] as int) <= 5)) &&
+        DateTime.now().isBefore(deadline)) {
+      polls++;
       await tester.pump(const Duration(milliseconds: 500));
       final retry = find.byKey(const ValueKey('pair-response-recheck'));
       if (retry.evaluate().length == 1 && tester.widget<TextButton>(retry).onPressed != null) {

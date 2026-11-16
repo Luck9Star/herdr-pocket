@@ -37,6 +37,22 @@ void main() {
     expect(DualOverlayUiSteps(tester, root).inspectResponse('$raw ')['inputMatches'], isFalse);
     await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
+  testWidgets('driver reviews an unchanged valid response only after read-only recheck', (tester) async {
+    final root = Directory.systemTemp.createTempSync('response-readonly-');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final catalog = HostCatalog(storage: MemoryCatalogStorage(), clock: () => 1000); await catalog.load();
+    final fixture = await openPending(tester,catalog);
+    final response = jsonEncode(authorizedResponse(fixture.request));
+    final field = find.byKey(const ValueKey('pair-response'));
+    tester.widget<TextField>(field).controller!.text = response; await tester.pump();
+    expect(find.byKey(const ValueKey('pair-response-preview')),findsNothing);
+    final steps = DualOverlayUiSteps(tester,root,diagnosticClock: () => 1000);
+    await steps.acceptPairResponse('et', response, fixture.request,
+      pairingFingerprint(fixtureConfig()['expectedHostKey'] as String));
+    expect(catalog.profiles.single.restore(1000).state,'authorized-unverified');
+    expect(fixture.keys.signCalls,0);
+    await tester.pumpWidget(const SizedBox()); catalog.dispose();
+  });
   for (final width in [320.0, 390.0]) {
     testWidgets('host-produced response is reviewed and persisted at $width', (tester) async {
       tester.view.devicePixelRatio = 1;

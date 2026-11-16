@@ -48,6 +48,42 @@ def audit_unchanged_session(result, baseline, expected_length, *, active=True):
         raise DualOverlayDeviceFailure('host_audit_session_changed')
 
 
+def wait_for_both_stopped(audit, baselines, first_stop, *, timeout=10.0, interval=0.25,
+                          monotonic=None, sleep=None):
+    """Read-only wait for original sessions to close; all other drift fails immediately."""
+    import time
+    monotonic = monotonic or time.monotonic
+    sleep = sleep or time.sleep
+    if set(baselines) != {'et', 'ts'} or first_stop not in ('et', 'ts') or timeout <= 0 or interval <= 0:
+        raise DualOverlayDeviceFailure('host_audit_baseline_missing')
+    survivor = 'ts' if first_stop == 'et' else 'et'
+    deadline = monotonic() + timeout
+    previously_closed = set()
+    while True:
+        pending = set()
+        for role in ('et', 'ts'):
+            expected = (b'E' if role == 'et' else b'T')
+            if role == survivor:
+                expected += b'e' if role == 'et' else b't'
+            result = audit(role, expected)
+            try:
+                audit_unchanged_session(result, baselines[role], len(expected), active=False)
+                previously_closed.add(role)
+            except DualOverlayDeviceFailure:
+                # Only the original session remaining active is a waitable state.
+                # Every count, identity, byte or other active session still fails.
+                audit_unchanged_session(result, baselines[role], len(expected), active=True)
+                if role in previously_closed:
+                    raise DualOverlayDeviceFailure('host_audit_session_changed')
+                pending.add(role)
+        if not pending:
+            return
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise DualOverlayDeviceFailure('host_audit_close_timeout')
+        sleep(min(interval, remaining))
+
+
 def prepare_private_ca(adb, serial, certificate, *, run):
     """Install QA trust before the app's TS native library can be loaded.
 
@@ -204,17 +240,21 @@ def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, aud
         baselines[role] = audit_baseline(audit(role, expected), len(expected))
         write_exchange(adb, serial, role + '-audit.txt', b'accepted', run=run)
         return True
-    if stage in ('stopped_audit', 'final_audit', 'both_stopped_audit'):
+    if stage == 'both_stopped_audit':
+        wait_for_both_stopped(audit, baselines, first_stop)
+        write_exchange(adb, serial, 'both-stopped-audit.txt', b'accepted', run=run)
+        return True
+    if stage in ('stopped_audit', 'final_audit'):
         if set(baselines) != {'et', 'ts'} or first_stop not in ('et', 'ts'):
             raise DualOverlayDeviceFailure('host_audit_baseline_missing')
         survivor = 'ts' if first_stop == 'et' else 'et'
         for role in ('et', 'ts'):
             expected = b'E' if role == 'et' else b'T'
-            if stage in ('final_audit', 'both_stopped_audit') and role == survivor:
+            if stage == 'final_audit' and role == survivor:
                 expected += b'e' if role == 'et' else b't'
-            audit_unchanged_session(audit(role, expected), baselines[role], len(expected), active=stage != 'both_stopped_audit' and role == survivor)
+            audit_unchanged_session(audit(role, expected), baselines[role], len(expected), active=role == survivor)
         filename = {'stopped_audit': 'stopped-audit.txt', 'final_audit': 'final-audit.txt',
-                    'both_stopped_audit': 'both-stopped-audit.txt'}[stage]
+                    }[stage]
         write_exchange(adb, serial, filename, b'accepted', run=run)
         return True
     return False
@@ -289,8 +329,10 @@ def safe_ui_failure(raw):
                     return None
             if 'responseCheck' in detail:
                 check = detail['responseCheck']
-                if (not isinstance(check, dict) or set(check) != {'inputMatches', 'fieldPresent', 'pagePresent', 'foreground', 'category', 'futureSeconds'}
-                        or any(type(check[k]) is not bool for k in ('inputMatches', 'fieldPresent', 'pagePresent', 'foreground'))
+                core = {'inputMatches', 'fieldPresent', 'pagePresent', 'foreground', 'category', 'futureSeconds'}
+                controls = {'recheckPresent', 'recheckEnabled', 'previewPresent', 'sourceChecked'}
+                if (not isinstance(check, dict) or set(check) not in (core, core | controls)
+                        or any(type(check[k]) is not bool for k in set(check) - {'category', 'futureSeconds'})
                         or check['category'] not in {'valid', 'future', 'expired', 'invalid', 'oversize'}
                         or type(check['futureSeconds']) is not int or not 0 <= check['futureSeconds'] <= 600
                         or ((check['category'] == 'future') != (check['futureSeconds'] > 0))):

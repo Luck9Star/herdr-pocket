@@ -567,10 +567,11 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
           if (scanAvailable) TextButton.icon(key:const ValueKey('pair-scan'),onPressed:busy || scanning || profileBlocked || !pageVisible || !appResumed || p.state == 'revoked' ? null : scanResponse,icon:const Icon(Icons.qr_code_scanner),label:const Text('扫描主机响应')),
           TextField(key:const ValueKey('pair-response'),controller:response,enabled:!busy,maxLength:2048,minLines:3,maxLines:6,
             decoration:const InputDecoration(labelText:'公开授权／撤销响应 JSON'),onChanged:(_) => previewResponse()),
-          if (responsePreview == null && response.text.isNotEmpty) TextButton(
-            key:const ValueKey('pair-response-recheck'),
-            onPressed:busy || scanning || !pageVisible || !appResumed || profileBlocked ? null : () => previewResponse(edited:false),
-            child:const Text('重新核验响应')),
+          ValueListenableBuilder<TextEditingValue>(valueListenable:response, builder:(context,value,_) =>
+            value.text.isEmpty ? const SizedBox.shrink() : TextButton(key:const ValueKey('pair-response-recheck'),
+              onPressed:busy || scanning || !pageVisible || !appResumed || profileBlocked
+                ? null : () => previewResponse(edited:false),
+              child:const Text('重新核验响应'))),
           if (responsePreview != null) Text('待审查响应\n请求编号 ${responsePreview!['request_id']}\n账号 ${responsePreview!['account']}\n主机 ${responsePreview!['host_key']}\n设备 ${responsePreview!['fingerprint']}\n状态 ${responsePreview!['status']} · 新增授权 ${responsePreview!['authorization_added']}\n期限 ${responsePreview!['issued_at']} → ${responsePreview!['expires_at']}',key:const ValueKey('pair-response-preview')),
           CheckboxListTile(key:const ValueKey('pair-source-review'),value:sourceReviewed,
             onChanged:busy || scanning || !appResumed ? null : (v) => setState(() { sourceReviewed = v == true; }),title:const Text('我已独立核验响应来源、账号与两端指纹')),

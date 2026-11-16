@@ -14,13 +14,14 @@ export async function settleNetworkOperation(work, affected, onAffected, load) {
 export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions, beforeForgetZeroTier}) {
   const panel=document.getElementById('network-panel'), open=document.getElementById('network-open');
   let deviceReviewDialog=null;
+  let renderedReview=null, renderEpoch=0;
   const expandedProfiles=new Set();
   let bindingRows=new Map();
   const bindingChanged='主机或网络配置已变化，未应用的网络绑定已丢弃；请重新选择并核对。';
   let catalog=null, editing=null, identityEditor=null, identityStates=new Map(), nodeStates=new Map(), busy=false, pendingStart=false, stopBusy=false, nodeEpoch=0, loadRevision=0;
   const poller=new NetworkLoginPoll(pollOptions);
   const managed=p=>['easytier','tailscale'].includes(p.provider);
-  function retirePublication(){poller.stop();nodeEpoch++;loadRevision++;for(const node of nodeStates.values()){if(node){node.authUrl=null;node.reviewToken=null;}}}
+  function retirePublication(){renderedReview=null;poller.stop();nodeEpoch++;loadRevision++;for(const node of nodeStates.values()){if(node){node.authUrl=null;node.reviewToken=null;}}}
   function clearSecrets() {panel.querySelectorAll('input[type=password]').forEach(input=>{input.value='';});}
   const identityReads=new Set();
   async function readIdentity(id) {
@@ -33,6 +34,13 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
   }
   const el=(tag,text='',className='')=>{const n=document.createElement(tag);n.textContent=text;if(className)n.className=className;return n;};
   const button=(text,fn,allowDuringStart=false)=>{const b=el('button',text);b.type='button';b.disabled=stopBusy || (busy && !(allowDuringStart && pendingStart));b.onclick=fn;return b;};
+  function stopButton(fn) {
+    // A touch click can retarget after a rebuild; only its pressed review may stop.
+    const b=button('停止节点',fn,true),frame=renderEpoch;let pressed=false,epoch;
+    b.onpointerdown=()=>{pressed=true;epoch=nodeEpoch;};
+    b.onclick=event=>{const current=!event?.detail || (pressed && renderedReview!==null && frame===renderEpoch && epoch===nodeEpoch);pressed=false;if(current)fn(event);};
+    return b;
+  }
   const label=(text,input)=>{const l=el('label',text);l.append(input);return l;};
   const field=(value='',placeholder='')=>{const n=document.createElement('input');n.value=value;n.placeholder=placeholder;n.autocomplete='off';return n;};
   const names=ids=>ids.map(id=>getHosts().find(h=>h.id===id)?.name || id).join('、') || '无';
@@ -53,6 +61,7 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
     }
     return discarded;
   }
+  const viewReview=(fresh,states,nodes)=>JSON.stringify([fresh,[...states],[...nodes],getHosts(),editing,identityEditor,busy,pendingStart,stopBusy,nodeEpoch]);
   async function load(message='',polling=false,permit=()=>true) {const revision=++loadRevision;const current=()=>revision===loadRevision && !panel.hidden && !document.hidden && permit();try {
     const fresh=await invoke('network_list');const states=new Map(), nodes=new Map();
     for(const profile of fresh.profiles) {if(!current())return false;if(managed(profile)) {
@@ -75,11 +84,15 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
     if(editing || identityEditor) {const discarded=discardChangedBindings(fresh),status=panel.querySelector('[role=status]');if((message || discarded) && status)status.textContent=discarded?bindingChanged:message;}
     else {
       if(catalog && JSON.stringify(catalog)!==JSON.stringify(fresh))deviceReviewDialog?.invalidate();
-      catalog=fresh;identityStates=states;nodeStates=nodes;render(message);
+      const status=panel.querySelector('[role=status]');
+      const bindingsCurrent=[...bindingRows].every(([id,row])=>(row.select.value || null)===row.saved || bindingReview(id,row.select.value || null,fresh)===row.review);
+      // Preserve both live nodes and their reviewed object references on identical reads.
+      if(status && bindingsCurrent && renderedReview===viewReview(fresh,states,nodes)) {if(message)status.textContent=message;}
+      else {catalog=fresh;identityStates=states;nodeStates=nodes;render(message);}
     }
     if(!polling && pending)poller.start(live=>load('',true,live));
     return pending;
-  }catch {if(!current())return false;const discarded=discardChangedBindings(null);if(editing || identityEditor){const status=panel.querySelector('[role=status]');if(status)status.textContent=discarded?'网络配置读取失败，未应用的主机绑定已丢弃；请核对当前状态。':'网络配置读取失败，草稿仍保留；保存前请先核对当前状态。';return false;}catalog=null;identityStates.clear();nodeStates.clear();clearSecrets();panel.replaceChildren(el('p','网络配置读取失败，当前状态未知；请稍后核对。'));return false;}}
+  }catch {if(!current())return false;renderedReview=null;const discarded=discardChangedBindings(null);if(editing || identityEditor){const status=panel.querySelector('[role=status]');if(status)status.textContent=discarded?'网络配置读取失败，未应用的主机绑定已丢弃；请核对当前状态。':'网络配置读取失败，草稿仍保留；保存前请先核对当前状态。';return false;}catalog=null;identityStates.clear();nodeStates.clear();clearSecrets();panel.replaceChildren(el('p','网络配置读取失败，当前状态未知；请稍后核对。'));return false;}}
   async function operation(work,affected) {if(busy||stopBusy)return;retirePublication();const epoch=nodeEpoch;busy=true;try {await settleNetworkOperation(async()=>{await beforeIdentityWrite(epoch);await work();editing=null;},affected,onAffected,async message=>{busy=false;await load(message);});}finally{busy=false;}}
   async function identityOperation(profile,affected,action,mode,secret,expectedHandle=null) {
     if(busy||stopBusy)return;retirePublication();const epoch=nodeEpoch;busy=true;
@@ -124,7 +137,7 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
   function render(message='') {
     if(discardChangedBindings())message=bindingChanged;
     const previousBindings=bindingRows;bindingRows=new Map();
-    if(!catalog)return;clearSecrets();panel.replaceChildren();panel.append(el('h2','网络配置'),el('p','公开配置和本机网络身份分开保存；身份不随配置导出。节点状态不代表已入网。'));
+    if(!catalog){renderedReview=null;return;}renderedReview=viewReview(catalog,identityStates,nodeStates);renderEpoch++;clearSecrets();panel.replaceChildren();panel.append(el('h2','网络配置'),el('p','公开配置和本机网络身份分开保存；身份不随配置导出。节点状态不代表已入网。'));
     const status=el('p',message);status.setAttribute('role','status');panel.append(status);
     panel.append(button('审查 ZeroTier 共享设备',()=>{deviceReviewDialog=openZeroTierDeviceReview({invoke,beforeForget:beforeForgetZeroTier,onSettled:async ids=>{await onAffected(ids);await load();}});}));
     for(const profile of catalog.profiles) {
@@ -143,7 +156,7 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
       management.append(summary,el('p',identityText));
       const actions=el('div','','saved-host-actions');actions.append(button('编辑',()=>{editing=profile;render();}),button(profile.enabled?'停用':'启用',()=>{if(!confirm(`将${profile.enabled?'停用':'启用'} ${profile.label}。受影响主机：${names(affected)}。继续？`))return;void operation(()=>invoke('network_save',{profile:{...profile,enabled:!profile.enabled},expectedCatalog:catalog.revision,expectedRevision:profile.revision,affected}),affected);}));
       if(nodeView.canStart && identity?.handle)actions.append(button('启动节点',()=>{if(!confirm(`启动 ${profile.label} 的本机节点？启动不代表入网或连接。`))return;void nodeOperation(profile,affected,'start',identity.handle,null);}));
-      if(nodeView.canStop && node?.binding)actions.append(button('停止节点',()=>{if(!confirm(`停止 ${profile.label} 的本机节点？受影响主机：${names(affected)}。`))return;void nodeOperation(profile,affected,'stop',null,node.binding);},true));
+      if(nodeView.canStop && node?.binding)actions.append(stopButton(()=>{if(!confirm(`停止 ${profile.label} 的本机节点？受影响主机：${names(affected)}。`))return;void nodeOperation(profile,affected,'stop',null,node.binding);}));
       if(nodeView.canLogin && node?.binding)actions.append(button('登录 Tailscale',()=>{if(confirm(`为 ${profile.label} 显式发起登录？不会自动打开网页。`))void nodeOperation(profile,affected,'login',identity.handle,node.binding);}));
       if(profile.provider==='tailscale' && ['needs-login','needs-machine-auth'].includes(node?.state) && node.authUrl && node.reviewToken)actions.append(button('打开授权页面',()=>void openAuthorization(profile,affected,node)));
       if(managed(profile))actions.append(button('刷新节点状态',()=>void load('已请求读取当前节点状态。'),true));
@@ -190,12 +203,12 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
         if(busy || stopBusy || bindingRows.get(host.id)!==record)return;
         const profileId=select.value || null;
         const current=()=>bindingRows.get(host.id)===record && (select.value || null)===profileId && bindingReview(host.id,profileId)===record.review;
-        if(!current()){bindingRows.delete(host.id);void load(bindingChanged);return;}
+        if(!current()){bindingRows.delete(host.id);renderedReview=null;void load(bindingChanged);return;}
         if(profileId===record.saved)return;
         const isDirect=!!record.saved && !profileId;
         const args={hostId:host.id,profileId,expectedCatalog:catalog.revision,confirmedDirect:isDirect};
         if(!confirm(isDirect?`解除 ${host.name} 的网络绑定并改为系统直连？这会停止该主机连接。`:`更改 ${host.name} 的网络绑定并停止其连接？`))return;
-        if(!current()){bindingRows.delete(host.id);void load(bindingChanged);return;}
+        if(!current()){bindingRows.delete(host.id);renderedReview=null;void load(bindingChanged);return;}
         void operation(()=>{if(!current())throw Error('network_bind_review_stale');bindingRows.delete(host.id);return invoke('network_bind',args);},[host.id]);
       });record.apply=apply;bindingRows.set(host.id,record);row.append(select,apply);hostSection.append(row);
     }panel.append(hostSection);

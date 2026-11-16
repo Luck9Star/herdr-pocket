@@ -153,6 +153,25 @@ class ProbeGuardsTests(unittest.TestCase):
         self.assertEqual(unknown['panicTypes'], ['other'])
         self.assertNotIn('segmentation', repr(unknown))
 
+    def test_abort_class_and_module_basenames(self):
+        record = (b'Cmdline: dev.herdr.herdr_flutter_probe\n'
+                  b'signal 6 (SIGABRT), code -1 (SI_QUEUE)\n'
+                  b'Abort message: \x27art::Thread::AssertNoPendingException CheckJNI\x27\n'
+                  b'#00 pc 0000000000617b48 /apex/com.android.art/lib64/libart.so (offset)\n'
+                  b'#01 pc 00000000004a1b2c /data/app/libhp_tailscale.so\n'
+                  b'#02 pc 00000000000bcd8e /system/lib64/libc.so\n')
+        self.assertEqual(probe._abort_class(record), 'jni-checkjni')
+        self.assertEqual(probe._module_basenames(record),
+                         ['libart.so', 'libhp_tailscale.so', 'libc.so'])
+        go_abort = (b'Abort message: \x27panic: runtime error: nil pointer dereference\x27\n')
+        self.assertEqual(probe._abort_class(go_abort), 'go-panic')
+        unknown = b'Abort message: \x27something entirely novel\x27\n'
+        self.assertEqual(probe._abort_class(unknown), 'other')
+        dumped = repr(probe._module_basenames(record))
+        self.assertNotIn('/apex', dumped)
+        self.assertNotIn('/data/app', dumped)
+        self.assertNotIn('0x0000000000617b48', dumped)
+
     def test_probe_never_requests_login_or_application_dial(self):
         source = (Path(__file__).resolve().parent / 'android-ts-node-probe/ProbeInstrumentation.java').read_text()
         for forbidden in ('beginLogin', 'begin_login', 'UserDial', 'user_dial', '"dial"'):

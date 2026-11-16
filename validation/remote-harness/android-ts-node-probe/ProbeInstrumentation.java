@@ -59,6 +59,19 @@ public final class ProbeInstrumentation extends Instrumentation {
             java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     }
 
+    /** Redirect this process's stderr into the app-private file so a fatal
+     * error that exits without a signal still leaves evidence behind. */
+    private static void captureStderr(Context app) {
+        try {
+            File target = new File(app.getFilesDir(), "ts-node-probe-stderr.txt");
+            java.io.FileDescriptor fd = android.system.Os.open(target.getAbsolutePath(),
+                android.system.OsConstants.O_CREAT | android.system.OsConstants.O_WRONLY
+                | android.system.OsConstants.O_TRUNC | android.system.OsConstants.O_APPEND,
+                0600);
+            android.system.Os.dup2(fd, 2);
+        } catch (Throwable ignored) { }
+    }
+
     @Override public void onStart() {
         Context app = getTargetContext().getApplicationContext();
         long scope = 0;
@@ -66,6 +79,7 @@ public final class ProbeInstrumentation extends Instrumentation {
         AndroidTailscaleStateStore store = null;
         AndroidTailscaleStateStore.Result identity = null;
         try {
+            captureStderr(app);
             report.put("schemaVersion", 1).put("loginInvoked", false).put("dialInvoked", false);
             // Previous process crash: visible only from this later process.
             try { report.put("previousExit", DirectoryProbe.exitInfo(app)); }

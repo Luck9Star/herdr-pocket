@@ -213,13 +213,82 @@ def _current_exit_info():
         text = result.stdout.decode('ascii', 'replace')
         reasons = re.findall(r'reason=(\d+)', text)
         statuses = re.findall(r'status=(\d+)', text)
-        if not reasons:
-            return {'available': False}
         latest_reason = int(reasons[0])
         if latest_reason not in EXIT_REASONS:
             latest_reason = 15
         return {'available': True, 'reason': latest_reason,
                 'status': int(statuses[0]) if statuses else -1}
+    except Exception:
+        return {'available': False}
+
+
+ABORT_CLASSES = (
+    (b'CheckJNI', 'jni-checkjni'),
+    (b'JNI DETECTED', 'jni-checkjni'),
+    (b'panic: ', 'go-panic'),
+    (b'fatal error:', 'go-fatal'),
+    (b'runtime error:', 'go-runtime-error'),
+    (b'assertion failed', 'libc-assert'),
+    (b'__pthread', 'pthread'),
+)
+
+
+def _abort_class(record):
+    for line in record.splitlines():
+        if b'Abort message:' not in line:
+            continue
+        for needle, name in ABORT_CLASSES:
+            if needle in line:
+                return name
+    return 'other'
+
+
+def _module_basenames(record):
+    # Tombstone frame lines: '#00 pc <addr> /path/to/libX.so (off)'.
+    # Only the .so basename of each frame is kept, capped and deduped.
+    names = []
+    for match in re.finditer(rb'#[0-9]+ pc [0-9a-f]+ \S*/([\w.\-]+\.so)', record):
+        name = match.group(1).decode('ascii', 'replace')
+        if name not in names:
+            names.append(name)
+    return names[:8]
+
+
+def _stderr_evidence():
+    """Redacted evidence from the probe's own stderr file.
+
+    A fatal error that exits without a signal (Go runtime fatal, direct
+    exit) writes only to stderr; the file survives the dead process. Only
+    classified panic/fatal kinds and function names are reported, never the
+    original text, addresses or paths.
+    """
+    try:
+        result = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-stderr.txt')
+        if result.returncode != 0 or not result.stdout:
+            return {'available': False}
+        text = result.stdout[:262144]
+        kinds = []
+        for needle, name in (
+                (b'fatal error:', 'go-fatal-error'),
+                (b'panic: ', 'go-panic'),
+                (b'runtime error:', 'runtime-error'),
+                (b'concurrent map', 'concurrent-map'),
+                (b'goroutine ', 'goroutine-dump'),
+                (b'JNI DETECTED ERROR', 'jni-error'),
+                (b'SIGSEGV', 'sigsegv-text'),
+                (b'SIGABRT', 'sigabrt-text')):
+            if needle in text and name not in kinds:
+                kinds.append(name)
+        frames = sorted({f.decode('ascii', 'replace') for f in
+            re.findall(rb'herdr\.local/tailscale-runtime\.(\w+)', text)})[:8]
+        upstream = sorted({f.decode('ascii', 'replace') for f in
+            re.findall(rb'tailscale\.com/([\w/.]+(?=\.\(\*?[\w.]+\))|[\w/.]+(?=\.))', text)})[:8]
+        panic_classes = sorted({_panic_class(l) for l in text.splitlines()
+            if b'panic: ' in l})[:3]
+        if not kinds and not frames and not upstream and not panic_classes:
+            return {'available': False}
+        return {'available': True, 'kinds': kinds[:6], 'panicTypes': panic_classes,
+                'goFrames': frames, 'upstreamFrames': upstream}
     except Exception:
         return {'available': False}
 
@@ -322,12 +391,20 @@ def run(args):
                                     row['instrumentation'][key] = combined[:8]
                                 if merged['crashSignals'] or merged['panicTypes']:
                                     row['instrumentation']['signalEvidence'] = True
+                                abort = _abort_class(record)
+                                if abort != 'other':
+                                    row['instrumentation'].setdefault('abortClass', abort)
+                                for module in _module_basenames(record):
+                                    mods = row['instrumentation'].setdefault('abortModules', [])
+                                    if module not in mods:
+                                        mods.append(module)
                         # Current run's own exit record (below, outside the
                         # try): taken after instrument, before uninstall,
                         # whether it returned or timed out.
                     except subprocess.TimeoutExpired:
                         row['instrumentation'] = {'commandSucceeded': False, 'timedOut': True}
                     row['currentExit'] = _current_exit_info()
+                    row['stderrEvidence'] = _stderr_evidence()
                     response = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-result.json')
                     if response.returncode == 0:
                         row.update(probe_report(response.stdout))

@@ -1,0 +1,31 @@
+{
+  "scope": "owned temporary loopback sshd and Unix echo; no Android or herdr snapshot acceptance",
+  "fixtureRepairSource": "bb24534f7514c2daa3a0478dd4784f83bf779c87",
+  "testedSshdVersion": "OpenSSH_10.5p1, LibreSSL 3.3.6",
+  "linuxOpenSsh96RuntimeTested": false,
+  "upstreamSourceVersion": "V_9_6_P1",
+  "upstreamReferences": ["session.c:320-333", "channels.c:4591-4618"],
+  "coldStartPerConfiguration": true,
+  "policy": {
+    "old": ["AllowTcpForwarding no"],
+    "new": ["AllowTcpForwarding local", "AllowStreamLocalForwarding local", "PermitOpen [<unique-owned-herdr-socket-absolute-path>]:*"]
+  },
+  "cases": [
+    {"configuration": "old", "authenticatedConnections": 3, "approvedUnixAccepts": 0, "approvedUnixEchoEqual": false, "otherUnixAccepts": 0, "tcpAccepts": 0, "tcpAdministrativelyProhibited": true},
+    {"configuration": "new", "authenticatedConnections": 3, "approvedUnixAccepts": 1, "approvedUnixEchoEqual": true, "otherUnixAccepts": 0, "tcpAccepts": 0, "tcpAdministrativelyProhibited": true}
+  ],
+  "identities": "new temporary keys, authorized_keys and known_hosts only; user .ssh untouched",
+  "hostBinaryBundle": {
+    "source": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+    "artifact": 14171011473,
+    "zipSha256": "4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698",
+    "rebuiltForPermissionRepair": false
+  },
+  "runtimePython": {
+    "bundleVerifierCheckout": "fixed host source checkout",
+    "controllerCheckout": "current client/driver checkout",
+    "entrypoint": "validation/remote-harness/android_dual_overlay_session.py",
+    "controller": "validation/remote-harness/android_dual_overlay_hosts.py",
+    "fixture": "validation/remote-harness/paired_dual_demo.py"
+  }
+}

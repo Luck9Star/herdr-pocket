@@ -1,0 +1,58 @@
+{
+  "scope": "completed API 35 x86_64 emulator runs only; no dual-session acceptance",
+  "nativeSource": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+  "hostBinarySource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+  "runs": [
+    {
+      "run": 43891123475,
+      "client": "flutter",
+      "driverAndAppSource": "372430fe94459ad2cd7fd1e04eb61c2c45d9d99c",
+      "status": "failed",
+      "firstStopDirections": ["et", "ts"],
+      "failureStageForBoth": "et_response_saved",
+      "responseReceivedForBoth": true,
+      "responseCheckForBoth": {"inputMatches": true, "fieldPresent": true, "pagePresent": true, "foreground": true, "category": "valid", "futureSeconds": 0},
+      "hostAuditsForBoth": []
+    },
+    {
+      "run": 43891123962,
+      "client": "tauri",
+      "driverAndAppSource": "372430fe94459ad2cd7fd1e04eb61c2c45d9d99c",
+      "status": "failed",
+      "firstStopDirections": ["ts", "et"],
+      "failureStageForBoth": "network_ts_authorize",
+      "errorCodeForBoth": "dual_authorization_receiver_missing",
+      "profileCountForBoth": 2,
+      "startObservationForBoth": {"sent": 2, "resolved": 2, "rejected": 0, "errorCode": null},
+      "controlAuthCompletionsForBoth": 0,
+      "sshAudits": "not collected"
+    },
+    {
+      "run": 43898262011,
+      "client": "flutter",
+      "driverAndAppSource": "f8aa7ff12146942d965b5e884b91d32e4edc4402",
+      "status": "failed",
+      "firstStopDirections": ["et", "ts"],
+      "failureStageForBoth": "et_remote_pane",
+      "remoteCheckForBoth": {"network": "passed", "hostKey": "passed", "authentication": "passed", "statusClass": "connection_failed", "paneCount": 0, "dashboardPresent": false, "firstFrame": "waiting"},
+      "failureHostAuditsForBoth": {
+        "et": {"available": true, "acceptedSessions": 1, "newSessions": 1, "capturedBytes": 0, "newInputBytes": 0, "activeSessions": 0, "approvedSessions": 1},
+        "ts": {"available": true, "acceptedSessions": 0, "newSessions": 0, "capturedBytes": 0, "newInputBytes": 0, "activeSessions": 0, "approvedSessions": 0}
+      },
+      "byteScope": "terminal input audit, not all SSH protocol bytes"
+    },
+    {
+      "run": 43897860683,
+      "client": "tauri",
+      "driverSource": "3936905ce968a27a16e58df335af9a6abb25cac0",
+      "appSource": "372430fe94459ad2cd7fd1e04eb61c2c45d9d99c",
+      "status": "failed",
+      "firstStopDirections": ["ts", "et"],
+      "failureStageForBoth": "device_auth_handler",
+      "errorCodeForBoth": "dual_auth_handler_scope_mismatch",
+      "authHandlerForBoth": {"scope": "owned_avd_receiver_loopback_only", "beforeHandler": "resolver", "linkHandlingAllowed": true, "onlyLoopbackSelected": true, "afterHandler": "resolver", "unrelatedHandler": "browser"},
+      "controlAuthCompletionsForBoth": 0,
+      "sshAudits": "not collected"
+    }
+  ]
+}

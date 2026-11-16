@@ -13,6 +13,16 @@ class DualOverlayDeviceFailure(RuntimeError):
 
 
 
+NATIVE_SOURCE_SHA='547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8'
+HOST_SOURCE_SHA='5404adfb3c86f5174edda38f1d0c63c8d81996c5'
+
+
+def validate_source_pins(native_source,host_source):
+    """Offline admission only: exactly the reviewed native and host commits."""
+    if native_source!=NATIVE_SOURCE_SHA:raise DualOverlayDeviceFailure('native_source_invalid')
+    if host_source!=HOST_SOURCE_SHA:raise DualOverlayDeviceFailure('host_source_invalid')
+
+
 def audit_baseline(result, expected_length):
     """Capture the one approved active session, permitting earlier closed sessions."""
     sessions = result.get('sessions')
@@ -718,10 +728,7 @@ def main():
     parser.add_argument('--native-source', required=True)
     args = parser.parse_args()
     try:
-        if args.native_source != 'a9be92d98b8c26b15ccbc7f6faa240ed3d674929':
-            raise DualOverlayDeviceFailure('native_source_invalid')
-        if args.host_source != '5404adfb3c86f5174edda38f1d0c63c8d81996c5':
-            raise DualOverlayDeviceFailure('host_source_invalid')
+        validate_source_pins(args.native_source,args.host_source)
         result = run_device(args, os.environ)
     except Exception as error:
         code = str(error) if isinstance(error, DualOverlayDeviceFailure) else 'device_precondition_failed'

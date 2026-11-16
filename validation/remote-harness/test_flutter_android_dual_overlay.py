@@ -597,5 +597,52 @@ class WorkflowFallbackTest(unittest.TestCase):
             self.assertEqual(json.loads(path.read_text()), {'status': 'actual-device-result'})
 
 
+class SourcePinTest(unittest.TestCase):
+    def test_workflow_environment_independent_checkout_and_cli_use_same_only_allowed_sha(self):
+        import re
+        from pathlib import Path
+        import flutter_android_dual_overlay as driver
+        workflow=(Path(__file__).resolve().parents[2]/'.github/workflows/flutter-android-dual-overlay.yml').read_text()
+        self.assertEqual(re.findall(r'(?m)^[ \t]+NATIVE_SOURCE:[ \t]+([0-9a-f]{40})[ \t]*$',workflow),[driver.NATIVE_SOURCE_SHA])
+        self.assertEqual(re.findall(r'(?m)^[ \t]+ref:[ \t]+([0-9a-f]{40})[ \t]*\n[ \t]+path:[ \t]+native-source[ \t]*$',workflow),[driver.NATIVE_SOURCE_SHA])
+        self.assertIn('--native-source "$NATIVE_SOURCE"',workflow)
+        driver.validate_source_pins(driver.NATIVE_SOURCE_SHA,driver.HOST_SOURCE_SHA)
+
+    def entry(self,native_source,host_source=None):
+        import contextlib
+        import io
+        import json
+        import os
+        import sys
+        import tempfile
+        import flutter_android_dual_overlay as driver
+        with tempfile.TemporaryDirectory() as root:
+            args=['driver']
+            for key in ('project','qa-bundle','host-bundle','host-checkout','output'):
+                args+=['--'+key,root+'/owned-'+key]
+            args+=['--native-source',native_source,'--host-source',host_source or driver.HOST_SOURCE_SHA]
+            output=io.StringIO()
+            with patch.object(sys,'argv',args),patch.dict(os.environ,{'RUNNER_TEMP':root}), \
+                    patch.object(driver,'run_device',return_value={'status':'passed'}) as run,contextlib.redirect_stdout(output):
+                code=driver.main()
+            return code,json.loads(output.getvalue()),run.call_count
+
+    def test_fixed_native_entry_reaches_only_stubbed_device_path_without_network(self):
+        from flutter_android_dual_overlay import NATIVE_SOURCE_SHA
+        self.assertEqual(self.entry(NATIVE_SOURCE_SHA),(0,{'status':'passed'},1))
+
+    def test_old_unknown_or_noncanonical_native_sha_fail_before_device_or_network(self):
+        for source in ('a9be92d98b8c26b15ccbc7f6faa240ed3d674929','0'*40,'f'*40,
+                       '547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8 '):
+            with self.subTest(source=source):
+                code,result,calls=self.entry(source)
+                self.assertEqual((code,calls),(1,0));self.assertEqual(result['errorCode'],'native_source_invalid')
+
+    def test_unknown_host_stays_strict_before_device_or_network(self):
+        from flutter_android_dual_overlay import NATIVE_SOURCE_SHA
+        code,result,calls=self.entry(NATIVE_SOURCE_SHA,'0'*40)
+        self.assertEqual((code,calls),(1,0));self.assertEqual(result['errorCode'],'host_source_invalid')
+
+
 if __name__ == '__main__':
     unittest.main()

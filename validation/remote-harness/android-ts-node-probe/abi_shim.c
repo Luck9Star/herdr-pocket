@@ -62,6 +62,21 @@ static void mirror_store_counts(void) {
     fclose(file);
 }
 
+/* Stage markers are separate files, never overwritten: if the process
+ * aborts, the last marker present is the stage that was reached. */
+static void write_stage(const char *evidence_dir, const char *name,
+                         const char *value) {
+    if (evidence_dir == NULL || evidence_dir[0] == '\0') return;
+    char path[4200];
+    int written = snprintf(path, sizeof(path), "%s/hp-probe-abi-stage-%s.txt",
+                           evidence_dir, name);
+    if (written <= 0 || written >= (int)sizeof(path)) return;
+    FILE *file = fopen(path, "wb");
+    if (!file) return;
+    fprintf(file, "%s\n", value);
+    fclose(file);
+}
+
 /* In-memory store: every key is absent, writes are discarded. The Go side
  * must cope with a missing state key, which is exactly the pre-login case. */
 static int32_t shim_read(uint64_t context, const uint8_t *key,
@@ -196,6 +211,10 @@ Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
     /* Record which mapped object actually provides hp_ts_node_new before
      * any Go call, into the fixed evidence directory: if the getter aborts,
      * this file is the only proof that survives. */
+    /* Stage markers are written before the first Go call and after each
+     * ABI call, so the last marker present is the stage that was reached
+     * when the process died. */
+    write_stage(evidence, "library-mapped", "yes");
     write_mapped_path(evidence, (void *)node_new);
     /* The store counters are mirrored into the same fixed directory, so the
      * first and last store access before an abort stays readable. */
@@ -205,6 +224,7 @@ Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
         result = SHIM_ERR_ABI;
         goto done;
     }
+    write_stage(evidence, "abi-version", "1");
 
     {
         char config[8192];
@@ -223,6 +243,7 @@ Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
         uint64_t node = 0;
         int32_t code = node_new((uint8_t *)config, (uint32_t)written, &store, 1,
                                 &node);
+        write_stage(evidence, "node-new", "returned");
         if (code != 0 || node == 0) {
             result = SHIM_ERR_NEW;
             goto done;
@@ -230,6 +251,7 @@ Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
         uint8_t buffer[8192];
         uint32_t length = 0;
         code = node_status(node, 5000, buffer, sizeof(buffer), &length);
+        write_stage(evidence, "node-status", "returned");
         if (code != 0) {
             result = SHIM_ERR_STATUS;
         } else {
@@ -240,8 +262,13 @@ Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
          * A crash here localises the fault to the engine start rather than
          * to the cross-language store callback. */
         if (shim_start_engine) {
+            write_stage(evidence, "node-start-entered", "yes");
             code = node_start(node, 20000);
             shim_start_code = code;
+            /* A separate file per outcome: a returned marker must never
+             * overwrite the entered marker, otherwise the two are
+             * indistinguishable after an abort. */
+            write_stage(evidence, "node-start-returned", "yes");
             mirror_store_counts();
             if (code != 0) {
                 result = SHIM_ERR_START;
@@ -249,8 +276,10 @@ Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
                 uint8_t started[8192];
                 uint32_t started_length = 0;
                 if (node_status(node, 5000, started, sizeof(started),
-                                &started_length) == 0)
+                                &started_length) == 0) {
                     write_status(dir, started, started_length);
+                    write_stage(evidence, "node-status-after-start", "returned");
+                }
             }
         }
         if (node_close(node, 2000) != 0 && result == SHIM_OK) result = SHIM_ERR_CLOSE;

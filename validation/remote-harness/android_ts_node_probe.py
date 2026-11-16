@@ -11,7 +11,7 @@ import zipfile
 
 from android_dual_overlay_session import AndroidDualOverlaySession
 from android_dual_overlay_reverse import SERIAL, assert_owned_avd
-from flutter_android_dual_overlay import prepare_private_ca
+import android_crash_symbolize as symbolize
 
 PACKAGE = 'dev.herdr.herdr_flutter_probe'
 LIBRARIES = ('libheeler_easytier.so', 'libhp_tailscale.so', 'libherdr_flutter_network_runtime.so')
@@ -255,6 +255,28 @@ def collect_abi_evidence(adb, expected_digest):
             elif parts[0] == 'start':
                 store['startCode'] = value
     evidence['store'] = store
+
+    # Stage markers: separate files, never overwritten, so the last marker
+    # present is the stage that was reached before the process died.
+    stages = {}
+    for name in ('library-mapped', 'abi-version', 'node-new', 'node-status',
+                 'node-start-entered', 'node-start-returned',
+                 'node-status-after-start'):
+        response = adb('exec-out', 'run-as', PACKAGE, 'cat',
+                       'files/hp-probe-abi/hp-probe-abi-stage-%s.txt' % name)
+        stages[name] = response.returncode == 0
+    evidence['stages'] = stages
+
+    expected = {'present': False, 'digestMatches': False}
+    response = adb('exec-out', 'run-as', PACKAGE, 'cat',
+                   'files/hp-probe-abi/hp-probe-abi-expected-digest.txt')
+    if response.returncode == 0:
+        digest = response.stdout.decode('ascii', 'replace').strip()
+        expected['present'] = len(digest) == 64
+        if expected['present']:
+            expected['sha256'] = digest
+            expected['digestMatches'] = digest == expected_digest
+    evidence['expectedLibrary'] = expected
     return evidence
 
 
@@ -459,6 +481,7 @@ def run(args):
             row = {'variant': variant, 'diagnosticsLeg': 'optin' if diagnostics_leg else 'plain', 'status': 'failed'}
             output['variants'].append(row)
             apk, libraries = args.apk_root / (variant + '.apk'), getattr(args, variant)
+            library_dir = str(libraries)
             row['librariesSha256'] = verify_apk(apk, libraries)
             row['apkSha256'] = hashlib.sha256(apk.read_bytes()).hexdigest()
             if adb('shell', 'pm', 'path', PACKAGE).stdout.strip():
@@ -550,6 +573,10 @@ def run(args):
                                         mods = row['abiInstrumentation'].setdefault('abortModules', [])
                                         if module not in mods and len(mods) < 8:
                                             mods.append(module)
+                                    frames = symbolize.bounded_report(
+                                        symbolize.extract_frames(record), library_dir)
+                                    if frames:
+                                        row['abiInstrumentation']['frames'] = frames
                         # Clear the crash buffer before instrumenting: both
                         # variants share one package, so without this the
                         # second variant would re-read the first one's
@@ -612,6 +639,10 @@ def run(args):
                                         mods = row['instrumentation'].setdefault('abortModules', [])
                                         if module not in mods and len(mods) < 8:
                                             mods.append(module)
+                                    frames = symbolize.bounded_report(
+                                        symbolize.extract_frames(record), library_dir)
+                                    if frames:
+                                        row['instrumentation']['frames'] = frames
                             # Full record with hard evidence, or window closed.
                             if row['instrumentation'].get('abortClass') or \
                                     row['instrumentation'].get('abortModules') or \

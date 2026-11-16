@@ -89,8 +89,21 @@ public final class AbiProbeInstrumentation extends Instrumentation {
                     "herdr-tailscale-config-v1".getBytes(StandardCharsets.UTF_8)))
                 hostname.append(String.format(Locale.ROOT, "%02x", value & 255));
 
+            // Before any Go call: record the digest of the library this
+            // process will load, so the mapping evidence has a counterpart
+            // that survives an abort.
             String expectedLibrary = app.getApplicationInfo().nativeLibraryDir
                 + "/libhp_tailscale.so";
+            try {
+                byte[] digest = MessageDigest.getInstance("SHA-256").digest(
+                    Files.readAllBytes(new File(expectedLibrary).toPath()));
+                StringBuilder hex = new StringBuilder();
+                for (byte value : digest) hex.append(String.format(Locale.ROOT, "%02x", value & 255));
+                Files.write(new File(evidenceDir, "hp-probe-abi-expected-digest.txt").toPath(),
+                    hex.toString().getBytes(StandardCharsets.UTF_8));
+            } catch (Exception error) {
+                report.put("expectedDigestError", error.getClass().getSimpleName());
+            }
             int code = nativeRun(expectedLibrary, nodeDir.getAbsolutePath(),
                 hostname.toString(), "https://controlplane.invalid",
                 evidenceDir.getAbsolutePath(), true);

@@ -22,9 +22,10 @@ LINKS=f'''{dual.AUTH_PACKAGE}:
 
 def consent_nodes(package=dual.AUTH_PACKAGE,port=PORT):
     return [ET.Element('node',{'package':package,'class':'android.widget.TextView',
-                              'text':'隔离测试控制面：127.0.0.1:'+str(port)}),
+                              'text':'隔离测试控制面：127.0.0.1:'+str(port),'content-desc':'dual_auth_origin'}),
             ET.Element('node',{'package':package,'class':'android.widget.Button','text':'批准本次测试授权',
-                              'enabled':'true','bounds':'[10,20][30,40]'})]
+                              'content-desc':'dual_auth_approve','enabled':'true','focused':'true','clickable':'true','bounds':'[10,20][30,40]'}),
+            ET.Element('node',{'package':package,'class':'android.widget.TextView','content-desc':'ready'})]
 
 def once(probe,code,**kwargs):
     value=probe()
@@ -96,32 +97,34 @@ class AuthConsentTests(unittest.TestCase):
                 self.assertIsNone(dual.auth_consent_candidate(nodes,foreground,port)[0])
         self.assertNotIn('127.0.0.1',json.dumps(state));self.assertNotIn(dual.AUTH_PACKAGE,json.dumps(state))
 
-    def test_visible_consent_is_clicked_once_and_unknown_tap_is_never_replayed(self):
+    def test_stable_focused_consent_gets_one_enter_and_unknown_activation_never_replays(self):
         for failed in (False,True):
             report={}
-            with patch.object(dual,'native_ui_nodes',return_value=consent_nodes()), \
-                    patch.object(dual,'foreground_component',return_value=COMPONENT),patch.object(dual,'wait_for',side_effect=once), \
-                    patch.object(dual,'adb',side_effect=dual.GuiFailure('unknown tap') if failed else None) as adb:
+            with patch.object(dual,'auth_receiver_screen',return_value=((20,30),{'status':'ready','buttonFocused':True})), \
+                    patch.object(dual,'wait_for',side_effect=bounded), \
+                    patch.object(dual,'adb',side_effect=dual.GuiFailure('unknown key') if failed else None) as adb:
                 if failed:
-                    with self.assertRaisesRegex(dual.GuiFailure,'^dual_authorization_tap_unconfirmed$'):
+                    with self.assertRaisesRegex(dual.GuiFailure,'^dual_authorization_activation_unconfirmed$'):
                         dual.approve_auth_receiver(PORT,report)
                 else:dual.approve_auth_receiver(PORT,report)
-            self.assertEqual(adb.call_count,1);self.assertEqual(adb.call_args.args,('shell','input','tap','20','30'))
-            self.assertTrue(report['authorization']['tapSent'])
-            self.assertEqual(report['authorization'].get('tapCompleted',False),not failed)
+                with self.assertRaisesRegex(dual.GuiFailure,'^dual_authorization_activation_already_attempted$'):
+                    dual.approve_auth_receiver(PORT,report)
+            self.assertEqual(adb.call_count,1);self.assertEqual(adb.call_args.args,('shell','input','keyevent','KEYCODE_ENTER'))
+            self.assertTrue(report['authorization']['activationAttempted'])
+            self.assertEqual(report['authorization']['stableReads'],2)
+            self.assertEqual(report['authorization'].get('activationCompleted',False),not failed)
 
     def test_product_system_open_and_visible_consent_precede_private_handoff(self):
         order=[];report={};browser=Mock();browser.evaluate.return_value=True
         url='https://127.0.0.1:'+str(PORT)+'/auth/synthetic-token'
         def confirm(_browser,_scope,label,_expected):order.append('product-open' if label=='打开授权页面' else 'explicit-login')
         def approve(*args):order.append('visible-consent')
-        def adb(*args,**kwargs):
-            if 'cat' in args:order.append('read-private-handoff');return url
-            order.append('return-product');return ''
+        def adb(*args,**kwargs):order.append('return-product');return ''
         def host(*args):order.append('host-authorize');return {'ok':True}
         with patch.object(dual,'wait_named'),patch.object(dual,'confirm_click',side_effect=confirm), \
                 patch.object(dual,'choose_auth_receiver',side_effect=lambda *args:order.append('system-choice')), \
                 patch.object(dual,'approve_auth_receiver',side_effect=approve),patch.object(dual,'adb',side_effect=adb), \
+                patch.object(dual,'confirmed_private_handoff',side_effect=lambda *args:order.append('read-private-handoff') or url), \
                 patch.object(dual,'host_request',side_effect=host),patch.object(dual,'wait_for',side_effect=once):
             dual.authorize_ts(browser,Mock(),'owned-scope',PORT,report)
         self.assertEqual(order,['explicit-login','product-open','system-choice','visible-consent','read-private-handoff','host-authorize','return-product'])

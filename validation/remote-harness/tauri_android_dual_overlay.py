@@ -561,36 +561,114 @@ def foreground_component():
 
 def auth_consent_candidate(nodes, foreground, port):
     source='隔离测试控制面：127.0.0.1:'+str(port)
-    sources=[node for node in nodes if node.get('package')==AUTH_PACKAGE and node.get('text')==source]
+    sources=[node for node in nodes if node.get('package')==AUTH_PACKAGE and node.get('text')==source
+             and node.get('content-desc')=='dual_auth_origin']
     buttons=[node for node in nodes if node.get('class')=='android.widget.Button' and
-             node.get('text')=='批准本次测试授权' and node.get('enabled')=='true']
-    owned=len(buttons)==1 and buttons[0].get('package')==AUTH_PACKAGE
+             node.get('text')=='批准本次测试授权']
+    owned=len(buttons)==1 and buttons[0].get('package')==AUTH_PACKAGE and buttons[0].get('content-desc')=='dual_auth_approve'
+    statuses=[node.get('content-desc') for node in nodes if node.get('package')==AUTH_PACKAGE and
+              node.get('class')=='android.widget.TextView' and node.get('content-desc') in
+              {'ready','click_received','delivered','delivery_failed','source_mismatch'}]
+    status=statuses[0] if len(statuses)==1 else 'unknown'
+    boolean=lambda key:buttons[0].get(key)=='true' if owned and buttons[0].get(key) in {'true','false'} else None
     state={'xmlParsed':True,'foreground':component_kind(foreground),'sourceMatched':len(sources)==1,
            'rootPackageMatched':bool(nodes) and nodes[0].get('package')==AUTH_PACKAGE,
-           'candidateButtons':min(len(buttons),9),'uniqueReceiverButton':owned,'boundsValid':False}
+           'candidateButtons':min(len(buttons),9),'uniqueReceiverButton':owned,'boundsValid':False,
+           'buttonEnabled':boolean('enabled'),'buttonFocused':boolean('focused'),'buttonClickable':boolean('clickable'),'status':status}
     if state['foreground']!='test_receiver' or not state['sourceMatched'] or not state['rootPackageMatched'] or not owned:return None,state
     match=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',buttons[0].get('bounds',''))
     if not match:return None,state
     x1,y1,x2,y2=map(int,match.groups())
     if x2<=x1 or y2<=y1:return None,state
     state['boundsValid']=True
+    if any(state[key] is not True for key in ('buttonEnabled','buttonFocused','buttonClickable')) or status!='ready':return None,state
     return ((x1+x2)//2,(y1+y2)//2),state
 
 
+def auth_receiver_screen(port):
+    from tauri_auth_failure_diagnostic import window_component
+    before=foreground_component()
+    window_before=window_component(adb('shell','dumpsys','window',timeout=5))
+    nodes=native_ui_nodes()
+    window_after=window_component(adb('shell','dumpsys','window',timeout=5))
+    after=foreground_component()
+    receiver=AUTH_PACKAGE+'/'+AUTH_PACKAGE+'.AuthActivity'
+    point,state=auth_consent_candidate(nodes,before,port)
+    state['foregroundStable']=before==after==window_before==window_after==receiver
+    return point if state['foregroundStable'] else None,state
+
+
 def approve_auth_receiver(port, report, timeout=45):
-    state=report.setdefault('authorization',{});state['stage']='receiver_consent';state['tapSent']=False
+    state=report.setdefault('authorization',{})
+    if state.get('activationAttempted') is True:raise GuiFailure('dual_authorization_activation_already_attempted')
+    state['stage']='receiver_consent';state['activationMethod']='KEYCODE_ENTER';state['stableReads']=0
+    previous=None
     def candidate():
-        try:point,screen=auth_consent_candidate(native_ui_nodes(),foreground_component(),port)
+        nonlocal previous
+        try:point,screen=auth_receiver_screen(port)
         except GuiFailure:
             state['screenReadUnavailable']=True
+            previous=None;state['stableReads']=0
             return False
         state['screen']=screen
-        return point
-    point=wait_for(candidate,'dual_authorization_receiver_missing',timeout=timeout)
-    state['tapSent']=True
-    try:adb('shell','input','tap',str(point[0]),str(point[1]))
-    except GuiFailure:raise GuiFailure('dual_authorization_tap_unconfirmed') from None
-    state['tapCompleted']=True
+        if point is None:previous=None;state['stableReads']=0;return False
+        state['stableReads']=min(state['stableReads']+1,2) if previous==point else 1
+        previous=point
+        return state['stableReads']>=2
+    wait_for(candidate,'dual_authorization_receiver_missing',timeout=timeout)
+    state['activationAttempted']=True
+    try:adb('shell','input','keyevent','KEYCODE_ENTER')
+    except GuiFailure:raise GuiFailure('dual_authorization_activation_unconfirmed') from None
+    state['activationCompleted']=True
+
+
+def private_handoff_file_state():
+    import shlex
+    script=('if [ ! -d files ] || [ ! -r files ] || [ ! -x files ]; then printf unavailable; '
+            'elif [ -L files/approved-url ]; then printf not_regular; '
+            'elif [ ! -e files/approved-url ]; then printf missing; '
+            'elif [ ! -f files/approved-url ]; then printf not_regular; '
+            'elif [ ! -r files/approved-url ]; then printf unreadable; else printf readable; fi')
+    try:value=adb('shell','run-as',AUTH_PACKAGE,'sh','-c',shlex.quote(script),timeout=5)
+    except GuiFailure:return 'unavailable'
+    return value if value in {'missing','not_regular','unreadable','readable'} else 'unavailable'
+
+
+def confirmed_private_handoff(port, report, timeout=30):
+    state=report.setdefault('authorization',{});state['stage']='private_handoff'
+    if state.get('activationAttempted') is not True or state.get('activationCompleted') is not True:
+        raise GuiFailure('dual_authorization_activation_unconfirmed')
+    def observe():
+        try:_,screen=auth_receiver_screen(port)
+        except GuiFailure:screen={'status':'unknown','readUnavailable':True}
+        screen['fileState']=private_handoff_file_state();state['postConsent']=screen
+        status_scope=all(screen.get(key) is True for key in ('foregroundStable','rootPackageMatched','uniqueReceiverButton'))
+        if screen['status'] in {'delivery_failed','source_mismatch'} and status_scope:
+            raise GuiFailure('dual_authorization_'+screen['status'])
+        scoped=status_scope and screen.get('sourceMatched') is True
+        if screen['status']!='delivered' or not scoped:return False
+        if screen['fileState'] in {'not_regular','unreadable'}:raise GuiFailure('dual_authorization_handoff_unreadable')
+        if screen['fileState']!='readable':return False
+        try:url=adb('shell','run-as',AUTH_PACKAGE,'cat','files/approved-url',timeout=5)
+        except GuiFailure:
+            screen['fileRead']='failed';raise GuiFailure('dual_authorization_handoff_read_failed') from None
+        screen['fileRead']='read' if url else 'empty'
+        try:
+            parsed=urlsplit(url)
+            valid=(0<len(url)<=4096 and parsed.scheme=='https' and parsed.hostname=='127.0.0.1' and parsed.port==port and
+                   parsed.username is None and parsed.password is None and '#' not in url)
+        except ValueError:valid=False
+        screen['originValid']=valid
+        if not valid:raise GuiFailure('dual_authorization_handoff_invalid')
+        return url
+    try:return wait_for(observe,'dual_authorization_handoff_missing',timeout=timeout)
+    except GuiFailure as error:
+        if str(error)!='dual_authorization_handoff_missing':raise
+        last=state.get('postConsent',{})
+        code={'ready':'confirmation_not_effective','click_received':'delivery_pending'}.get(last.get('status'),'handoff_missing')
+        if last.get('status')=='delivered':
+            code={'missing':'delivered_file_missing','unavailable':'handoff_file_unavailable'}.get(last.get('fileState'),'handoff_missing')
+        raise GuiFailure('dual_authorization_'+code) from None
 
 
 def authorize_ts(browser, host, scope, port, report):
@@ -604,15 +682,7 @@ def authorize_ts(browser, host, scope, port, report):
     authorization['stage']='system_choice'
     choose_auth_receiver(report)
     approve_auth_receiver(port,report)
-    authorization['stage']='private_handoff'
-    url = wait_for(lambda: adb('shell','run-as',AUTH_PACKAGE,'cat','files/approved-url',check=False),
-                   'dual_authorization_handoff_missing', timeout=30)
-    try:
-        parsed=urlsplit(url)
-        valid=(len(url)<=4096 and parsed.scheme=='https' and parsed.hostname=='127.0.0.1' and parsed.port==port and
-               parsed.username is None and parsed.password is None and not parsed.fragment)
-    except ValueError:valid=False
-    if not valid:raise GuiFailure('dual_authorization_handoff_invalid')
+    url=confirmed_private_handoff(port,report)
     authorization['privateHandoffReceived']=True
     if host_request(host, {'op':'complete_ts_auth','authorize':True,'url':url}, 'ts_authorized').get('ok') is not True:
         raise GuiFailure('dual_authorization_unconfirmed')

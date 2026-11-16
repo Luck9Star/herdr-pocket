@@ -253,11 +253,15 @@ class SafeUiFailureTest(unittest.TestCase):
     def test_remote_diagnostic_rejects_untrusted_content(self):
         import json
         remote = {**{key: False for key in ('pagePresent', 'reviewPresent', 'reviewChecked', 'connectPresent',
-                    'connectEnabled', 'busy', 'live', 'dashboardPresent')},
+                    'connectEnabled', 'busy', 'live', 'dashboardPresent', 'snapshotReceived')},
                   **{key: 'unknown' for key in ('network', 'hostKey', 'authentication', 'dashboard', 'firstFrame')},
-                  'paneCount': 0, 'paneControlCount': 0, 'statusClass': 'unavailable'}
+                  'paneCount': 0, 'paneControlCount': 0, 'statusClass': 'unavailable',
+                  'adapterPhase': 'before_auth', 'adapterError': 'none', 'adapterKind': 'none', 'channelOpenCode': 0}
         payload = {'stage': 'et_remote_pane', 'kind': 'test_failure', 'remoteCheck': remote}
         self.assertEqual(safe_ui_failure(json.dumps(payload).encode()), payload)
+        denied = {**remote, 'statusClass': 'snapshot_forward_denied', 'adapterPhase': 'snapshot_forward_open',
+                  'adapterKind': 'ssh_channel_open', 'adapterError': 'snapshot_forward_denied', 'channelOpenCode': 1}
+        self.assertEqual(safe_ui_failure(json.dumps(dict(payload, remoteCheck=denied)).encode())['remoteCheck'], denied)
         for altered in ({**remote, 'raw': 'secret'}, {**remote, 'statusClass': 'secret'},
                         {**remote, 'paneCount': True}, {**remote, 'network': 'secret'}):
             self.assertIsNone(safe_ui_failure(json.dumps(dict(payload, remoteCheck=altered)).encode()))

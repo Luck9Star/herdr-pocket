@@ -581,6 +581,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       setState(() { busy = false; live = false; reviewed = false; viewPaused = false; dashboardFresh = false;
         status = switch (code) {
           'provider_unavailable' => 'provider_unavailable · 此平台或网络的连接桥不可用，已停止；不会改走系统 TCP 或 DNS',
+          'snapshot_forward_denied' => '主机拒绝会话套接字转发 · SSH 已认证，请检查主机转发配置；不会自动重试',
           'network_node_not_started' => '节点未确认以此配置与身份启动 · 请先在网络管理中刷新并明确启动，不代表入网成功',
           'network_identity_unavailable' => '本机网络身份不可用或当前无密码模式不受支持 · 已停止，请核对本机资料',
           'network_runtime_unavailable' => '节点状态或连接桥不可确认 · 已停止，请刷新状态后重新审查',

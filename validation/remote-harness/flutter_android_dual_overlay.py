@@ -257,15 +257,24 @@ def safe_ui_failure(raw):
                 return None
             if 'remoteCheck' in detail:
                 remote = detail['remoteCheck']
-                bools = {'pagePresent', 'reviewPresent', 'reviewChecked', 'connectPresent', 'connectEnabled', 'busy', 'live', 'dashboardPresent'}
+                bools = {'pagePresent', 'reviewPresent', 'reviewChecked', 'connectPresent', 'connectEnabled', 'busy', 'live', 'dashboardPresent', 'snapshotReceived'}
                 phases = {'network', 'hostKey', 'authentication', 'dashboard', 'firstFrame'}
-                if (not isinstance(remote, dict) or set(remote) != bools | phases | {'paneCount', 'paneControlCount', 'statusClass'}
+                if (not isinstance(remote, dict) or set(remote) != bools | phases | {'paneCount', 'paneControlCount', 'statusClass', 'adapterPhase', 'adapterError', 'adapterKind', 'channelOpenCode'}
                         or any(type(remote[key]) is not bool for key in bools)
                         or any(type(remote[key]) is not int or not 0 <= remote[key] <= 64 for key in ('paneCount', 'paneControlCount'))
                         or any(remote[key] not in {'waiting', 'active', 'passed', 'failed', 'unknown'} for key in phases)
+                        or remote['adapterPhase'] not in {'unavailable', 'before_auth', 'authenticated', 'snapshot_forward_open',
+                            'snapshot_write', 'snapshot_read', 'snapshot_decode', 'snapshot_retire', 'capabilities_forward_open',
+                            'capabilities_read', 'capabilities_decode', 'dashboard_ready'}
+                        or remote['adapterKind'] not in {'none', 'ssh_channel_open', 'ssh_socket', 'timeout', 'remote_failure', 'state_error', 'format_error', 'other'}
+                        or remote['adapterError'] not in {'none', 'other', 'host_key_mismatch', 'authentication_failed', 'authentication_aborted', 'timeout',
+                            'connection_failed', 'snapshot_rejected', 'session_mismatch', 'pane_missing', 'invalid_response', 'invalid_snapshot',
+                            'truncated_response', 'output_limit', 'channel_cleanup_timeout', 'channel_capacity', 'channel_identity',
+                            'invalid_terminal_id', 'unsupported_protocol', 'network_binding_changed', 'snapshot_forward_denied'}
+                        or type(remote['channelOpenCode']) is not int or not 0 <= remote['channelOpenCode'] <= 4
                         or remote['statusClass'] not in {'unavailable', 'provider_unavailable', 'network_node_not_started',
                             'network_identity_unavailable', 'network_runtime_unavailable', 'network_binding_changed',
-                            'device_key_unavailable', 'host_key_mismatch', 'authentication_failed', 'session_or_target_mismatch',
+                            'device_key_unavailable', 'host_key_mismatch', 'authentication_failed', 'session_or_target_mismatch', 'snapshot_forward_denied',
                             'timeout', 'connection_failed', 'connecting', 'empty', 'other'}):
                     return None
             if 'bindingSelectionMatches' in detail and type(detail['bindingSelectionMatches']) is not bool:

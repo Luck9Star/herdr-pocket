@@ -11,6 +11,7 @@ import 'package:herdr_flutter_probe/pairing_public_key.dart';
 import 'package:herdr_flutter_probe/pairing.dart' show decodePairing;
 import 'package:herdr_flutter_probe/remote_page.dart';
 import 'package:herdr_flutter_probe/connection_diagnostics.dart';
+import 'package:herdr_flutter_probe/remote_adapter.dart' show RemoteReadOnlyAdapter;
 import 'dart:typed_data';
 import 'package:terminal_view/terminal_view.dart';
 
@@ -286,6 +287,8 @@ class DualOverlayUiSteps {
     final present = page.evaluate().length == 1;
     var busy = false, live = false, dashboardPresent = false, paneCount = 0;
     var statusClass = 'unavailable';
+    var adapterPhase = 'unavailable', adapterError = 'none', adapterKind = 'none';
+    var channelOpenCode = 0; var snapshotReceived = false;
     var network = 'unknown', hostKey = 'unknown', authentication = 'unknown', dashboard = 'unknown', firstFrame = 'unknown';
     if (present) {
       final dynamic state = tester.state(page);
@@ -299,8 +302,17 @@ class DualOverlayUiSteps {
         authentication = diagnostic.authentication.name; dashboard = diagnostic.dashboard.name;
         firstFrame = diagnostic.firstFrame.name;
       }
+      final evidence = (state.adapter as RemoteReadOnlyAdapter).evidence;
+      adapterPhase = evidence.diagnosticPhase; adapterKind = evidence.diagnosticErrorKind;
+      const errors = {'host_key_mismatch','authentication_failed','authentication_aborted','timeout',
+        'connection_failed','snapshot_rejected','session_mismatch','pane_missing','invalid_response',
+        'invalid_snapshot','truncated_response','output_limit','channel_cleanup_timeout','channel_capacity',
+        'channel_identity','invalid_terminal_id','unsupported_protocol','network_binding_changed','snapshot_forward_denied'};
+      adapterError = evidence.errorCode == null ? 'none' : errors.contains(evidence.errorCode) ? evidence.errorCode! : 'other';
+      channelOpenCode = evidence.channelOpenCode; snapshotReceived = evidence.snapshotReceived;
       final String status = state.status as String;
-      statusClass = status.contains('provider_unavailable') ? 'provider_unavailable'
+      statusClass = status.contains('主机拒绝会话套接字转发') ? 'snapshot_forward_denied'
+        : status.contains('provider_unavailable') ? 'provider_unavailable'
         : status.contains('节点未确认') ? 'network_node_not_started'
         : status.contains('本机网络身份不可用') ? 'network_identity_unavailable'
         : status.contains('节点状态或连接桥不可确认') ? 'network_runtime_unavailable'
@@ -320,7 +332,9 @@ class DualOverlayUiSteps {
       'busy': busy, 'live': live, 'dashboardPresent': dashboardPresent, 'paneCount': paneCount,
       'paneControlCount': panes.evaluate().length.clamp(0, 64), 'statusClass': statusClass,
       'network': network, 'hostKey': hostKey, 'authentication': authentication,
-      'dashboard': dashboard, 'firstFrame': firstFrame};
+      'dashboard': dashboard, 'firstFrame': firstFrame, 'adapterPhase': adapterPhase,
+      'adapterError': adapterError, 'adapterKind': adapterKind, 'channelOpenCode': channelOpenCode,
+      'snapshotReceived': snapshotReceived};
   }
 
   Future<String> openAndObserve(String role, String hostId) async {

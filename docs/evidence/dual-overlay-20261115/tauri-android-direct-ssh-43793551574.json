@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "718b44f492c78f91e4a07277e3998519815b293d",
+  "status": "passed",
+  "scope": "synthetic loopback SSH and owned API35 Android WebView; CDP input is not real IME composition",
+  "apkSha256": "0472b84421f0705f93c95b0d5c530c72b7430619b568a6b3716cb071dc086a07",
+  "fingerprintReviewed": true,
+  "credentialReviewPreserved": true,
+  "connected": true,
+  "terminalInputReceived": true,
+  "terminalEchoRendered": true,
+  "disconnected": true,
+  "passwordCleared": true,
+  "helperKeysExact": true,
+  "peer": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true
+  },
+  "cleanup": {
+    "browser": true,
+    "application": true,
+    "forward": true,
+    "reverse": true,
+    "fixtureConnections": true
+  },
+  "phase": "complete",
+  "encryptedKey": {
+    "fingerprintReviewed": true,
+    "credentialReviewPreserved": true,
+    "connected": true,
+    "terminalInputReceived": true,
+    "terminalEchoRendered": true,
+    "disconnected": true,
+    "passwordCleared": true,
+    "peer": {
+      "authAccepted": true,
+      "ptyRequested": true,
+      "shellRequested": true,
+      "markerReceived": true,
+      "sessionClosed": true
+    },
+    "cleanup": {
+      "browser": true,
+      "application": true,
+      "forward": true,
+      "reverse": true,
+      "fixtureConnections": true
+    }
+  }
+}

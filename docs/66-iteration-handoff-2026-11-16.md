@@ -24,6 +24,12 @@ S10 设计目标为「主机指纹发生变化」时阻断连接与输入，给�
 
 **Android 设备验收（Flutter，API 35 x86_64 云模拟器）**：run [43792464010](https://github.com/Luck9Star/herdr-pocket/actions/runs/43792464010)（最终产品 `e415f6a`，结论 success）通过首页入口、独立指纹比对与显式确认、真实终端视图提交与远端回显、UI 断开、凭据清除；协议侧 auth / PTY / shell / marker / 会话关闭均为真，连接 2 次并全部关闭，PTY 尺寸序列记录完整；反向端口、APK 包、自有端口转发、夹具与 Flutter 工具六项清理符合预期。脱敏结果见 [android-ordinary-ssh-43792464010.json](evidence/dual-overlay-20261115/android-ordinary-ssh-43792464010.json)。`physicalImeVerified=false`，且本轮**未执行 S10 设备换钥**。
 
+**Tauri Android 真实设备步骤（run [43793551574](https://github.com/Luck9Star/herdr-pocket/actions/runs/43793551574)，`718b44f`，结论 success）**：密码与加密私钥两条流程均通过——指纹核对、凭据确认状态保持、认证 / PTY / shell、终端输入与回显、主动断开与密码清除，辅助键字节精确；browser、应用、转发、反向与夹具连接五项清理为真。脱敏清单见 [tauri-android-direct-ssh-43793551574.json](evidence/dual-overlay-20261115/tauri-android-direct-ssh-43793551574.json)，调试 APK 下载工件 `14193507937`（x86_64 模拟器，APK SHA256 `0472b844…6a07`）。范围为合成回环 SSH 与自有 API35 WebView，CDP 输入**不等于真实 IME 组字**。
+
+**macOS 真 XCUITest（run [43793582196](https://github.com/Luck9Star/herdr-pocket/actions/runs/43793582196)，`718b44f`，结论 success）**：4/4 全通过——系统安全字段遮罩、密码 SSH、加密私钥 SSH、返回后重开；服务端两次独立认证 / PTY / shell 与各自主动断开窗口均为真，密码与口令输入均被证明。脱敏结果见 [flutter-macos-secure-xcui-43793582196.json](evidence/dual-overlay-20261115/flutter-macos-secure-xcui-43793582196.json)。范围为原生 UI 安全字段与自有 SSH 回环，使用合成值，**不含物理 IME**。
+
+**Flutter Android 复跑（run [43793551546](https://github.com/Luck9Star/herdr-pocket/actions/runs/43793551546)，`718b44f`，结论 success）**：与 `e415f6a` 同口径再次通过首页入口、指纹比对、显式确认、真实终端提交与远端回显、UI 断开与凭据清除；协议侧 auth / PTY / shell / marker / 会话关闭为真，连接 2 次全部关闭；六项清理为真。脱敏结果见 [android-ordinary-ssh-43793551546.json](evidence/dual-overlay-20261115/android-ordinary-ssh-43793551546.json)。`physicalImeVerified=false`，未执行 S10 设备换钥。
+
 **macOS 实窗验收（主控在 `e415f6a` 上执行）**：普通 SSH 入口连一次性回环 peer，警示页只显示对应标题，新旧完整 SHA256 均与 peer 的两把真实公钥独立比对相同；取消后实际回到原目标配置并保留旧指纹，复核框、认证方式、密码与连接均锁定；重探同目标获得第二指纹，手动确认前密码与连接仍锁；确认后连接成功、打开键盘、输入 `round-closed-ok` 加 CR，服务端唯一 AUTH 与 PTY、逐字节组合与预期一致，最后断开。该结论来自真实 WKWebView + Rust + SSH；仓库内两张 PNG 另标注为 mock transport。
 
 范围边界：两壳图都不是 Android 真机触控证据，Flutter 图不是 Tauri UI，Tauri 图不是真 Mac 实窗。
@@ -52,7 +58,7 @@ run [43791265216](https://github.com/Luck9Star/herdr-pocket/actions/runs/4379126
 
 ## 未终结与复跑入口
 
-- Flutter 普通 SSH 的设备侧结果已补入（run 43792464010，success）；Android **双网产品启动** SIGABRT 根因未确证（已排除“崩溃在 start 返回前”）；S10 换钥未在设备执行；物理 IME、物理网络、后台常连与五平台分发均未验证。
+- 普通 SSH 三端结果已补入：Flutter Android run 43792464010 / 43793551546 均 success，Tauri Android run 43793551574 success，macOS 真 XCUITest run 43793582196 为 4/4；Android **双网产品启动** SIGABRT 根因未确证（已排除“崩溃在 start 返回前”）；S10 换钥未在设备执行；物理 IME、物理网络、后台常连与五平台分发均未验证。
 - Flutter 复跑入口：固定 Flutter 3.47.9、准备隔离项目后运行 `python3 validation/flutter/tool/direct_ssh_fixture_runner.py --project <prepared-project>`。
 - Tauri 前端复跑入口：`cd validation/tauri && npm ci && npm test`（Node 604 项）；Rust 指定夹具 103 + 1 按 `validation/tauri/README.md` 的 cargo 命令执行。
 - Linux 双网与 Android ABI 证据按对应 GitHub 固定 run 与仓库 JSON 核对；不要从 Widget 图、mock 桥图或 fixture 通过外推产品启动成功。

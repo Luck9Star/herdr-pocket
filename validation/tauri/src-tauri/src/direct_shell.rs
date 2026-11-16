@@ -88,6 +88,7 @@ pub fn ssh_shell_open(
                         kind: "error",
                         data: None,
                         exit_status: None,
+                        presented_fingerprint: None,
                     },
                     error: Some(error),
                 });

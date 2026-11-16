@@ -520,6 +520,44 @@ def public_host_failure_counts(host):
     return result
 
 
+def record_stop_checkpoint(host,timeline,phase,baselines,expected,started):
+    """One passive snapshot per host; never wait for success or change verdicts.
+
+    Audit advances its delta cursor, so all comparisons retain the original
+    absolute count and ordinal. A later strict audit still rejects any reconnect.
+    """
+    if phase not in ('before_navigation','before_stop','after_stop_return','after_stopped_ui','after_second_ack','failure'):
+        raise GuiFailure('dual_stop_checkpoint_invalid')
+    entry={'phase':phase,'elapsedMilliseconds':min(3600000,max(0,round((time.monotonic()-started)*1000))),
+           'secondInputAttempted':timeline.get('secondInputAttempted') is True,
+           'secondAckSeen':timeline.get('secondAckSeen') is True,'roles':{}}
+    for role in ('ts','et'):
+        ordinal,count=baselines[role]
+        public={'available':False,'originalOrdinal':ordinal,'originalSessionCount':count,'expectedBytes':len(expected[role])}
+        try:
+            value=host_request(host,{'op':'audit','role':role,
+                'expectedBase64':base64.b64encode(expected[role]).decode('ascii')},'host_audit')
+            if any(type(value.get(key)) is not int or not 0<=value[key]<=1000000
+                   for key in ('acceptedSessions','newSessions','capturedBytes')) or type(value.get('exactBytes')) is not bool:
+                raise GuiFailure('dual_stop_snapshot_invalid')
+            sessions=value.get('sessions')
+            if not isinstance(sessions,list) or len(sessions)>32 or any(not isinstance(item,dict) or
+                    type(item.get('ordinal')) is not int or not 1<=item['ordinal']<=1000000 or
+                    type(item.get('approvedDevice')) is not bool or type(item.get('active')) is not bool for item in sessions):
+                raise GuiFailure('dual_stop_snapshot_invalid')
+            original=[item for item in sessions if item['ordinal']==ordinal]
+            public.update(available=True,acceptedSessions=value['acceptedSessions'],newSessions=value['newSessions'],
+                capturedBytes=value['capturedBytes'],exactBytes=value['exactBytes'],
+                sessionCountUnchanged=value['acceptedSessions']==count and len(sessions)==count,
+                originalSessionFound=len(original)==1,originalActive=original[0]['active'] if len(original)==1 else None,
+                originalApproved=original[0]['approvedDevice'] if len(original)==1 else None,
+                activeSessions=sum(item['active'] for item in sessions))
+        except Exception:pass  # Diagnostic failure never replaces the original first failure.
+        entry['roles'][role]=public
+    entry['completedElapsedMilliseconds']=min(3600000,max(entry['elapsedMilliseconds'],round((time.monotonic()-started)*1000)))
+    timeline.setdefault('samples',[]).append(entry)
+
+
 def create_network(browser, role, material, report):
     report['stage']='network_'+role+'_form'
     browser.click_named('#network-panel', '新增网络配置', 'dual_add_network_missing')
@@ -1239,7 +1277,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
     parsed = urlsplit(material['controlUrl'])
     if parsed.scheme!='https' or parsed.hostname!='127.0.0.1' or parsed.port is None:
         raise GuiFailure('dual_control_origin_invalid')
-    installed=[];forward=None;browser=None
+    installed=[];forward=None;browser=None;stop_context=None
     try:
         report['stage']='device_setup'
         for path,package in ((apk,PACKAGE),(auth_apk,AUTH_PACKAGE)):
@@ -1310,6 +1348,11 @@ def run_direction(apk, auth_apk, session, stopped, report):
         initials={'ts':b'T','et':b'E'}
         baseline_values={role:baseline(control,role,initials[role]) for role in ('ts','et')}
         report['bothInputAndDistinctTargets']=True
+        timeline=report['stopTimeline']={'scope':'sequential-read-only-host-audit','secondInputAttempted':False,'secondAckSeen':False,'samples':[]}
+        stop_context=(timeline,baseline_values,dict(initials),time.monotonic())
+        def checkpoint(phase):
+            record_stop_checkpoint(control,stop_context[0],phase,*stop_context[1:])
+        checkpoint('before_navigation')
         surviving='et' if stopped=='ts' else 'ts'
         # Visit the survivor immediately before stopping the other node.
         select_tab(browser,surviving)
@@ -1317,12 +1360,15 @@ def run_direction(apk, auth_apk, session, stopped, report):
         scope=expand_profile(browser,'QA TS · Tailscale' if stopped=='ts' else 'QA ET · EasyTier')
         install_stop_observer(browser)
         report['stage']='stop_first'
+        checkpoint('before_stop')
         first_profile=stop_node_once(browser,scope,stopped,
                                      'QA TS · Tailscale' if stopped=='ts' else 'QA ET · EasyTier',
                                      'QA host TS' if stopped=='ts' else 'QA host ET',
                                      bindings[stopped],
                                      stage='stop_first',attempts=report.setdefault('stopAttempts',[]))
+        checkpoint('after_stop_return')
         wait_named(browser,scope,'启动节点',timeout=120)
+        checkpoint('after_stopped_ui')
         report['stage']='post_stop'
         ordinal,count=baseline_values[surviving]
         audit(control,surviving,initials[surviving],ordinal=ordinal,sessions_count=count)
@@ -1333,9 +1379,13 @@ def run_direction(apk, auth_apk, session, stopped, report):
         wait_for(lambda:'当前观察画面' in (browser.read('#view-content .tab-frame-status') or ''),
                  'dual_resumed_full_missing',timeout=90)
         second=b't' if surviving=='ts' else b'e'
+        timeline['secondInputAttempted']=True
+        stop_context[2][surviving]=initials[surviving]+second
         send_draft(browser,second.decode())
         marker='Synthetic '+surviving.upper()+' ACK TWO'
         wait_for(lambda:rendered_marker(browser,marker), 'dual_second_ack_frame_missing',timeout=60)
+        timeline['secondAckSeen']=True
+        checkpoint('after_second_ack')
         audit(control,surviving,initials[surviving]+second,ordinal=ordinal,sessions_count=count)
         report['survivorSameAuthenticatedSession']=True
         report['staleInputGuard']=guard_stale_target(browser,stopped)
@@ -1358,6 +1408,8 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['survivorExplicitlyStoppedAndClosed']=True
         report['stage']='complete'
     except Exception as error:
+        if stop_context is not None:
+            checkpoint('failure')
         try:
             from tauri_auth_failure_diagnostic import capture
             report['androidFailureDiagnostic']=capture(adb,native_ui_nodes,foreground_component,{PACKAGE,AUTH_PACKAGE},parsed.port)

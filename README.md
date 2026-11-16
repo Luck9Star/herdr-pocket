@@ -2,6 +2,8 @@
 
 > 面向 SSH / herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
+**2026-11-16 迭代收口**　[本轮交接、三个会话交付、Flutter S10 / Linux 双网 / Android 已知结果与未终结项](docs/66-iteration-handoff-2026-11-16.md)；Tauri 最终 SHA 与 Android 产品启动结论待主控更新。历史验收与下载入口见下文。
+
 **同源 QA 调试包 · 2026-11-15**　源码 `d925bd0`：[Flutter Android APK（多架构）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162282781) · [Tauri Android APK（仅 arm64-v8a）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162296306)。[本批运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398)完成：27 项成功、7 项按条件跳过；[macOS/Linux 下载、包名、架构与 SHA256](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。这是 CI 调试快照，与公开 Release 和设备验收分开。
 
 **双网隔离验收**　[Linux 双向受保护会话与清理记录](docs/65-dual-overlay-validation.md)：`93ca6cd` 在封闭测试网络、EasyTier 客户端指定测试配置下，分别验证停一网后另一网继续输入；默认配置对照未通过，Android、真实物理网络及五平台尚待验证。

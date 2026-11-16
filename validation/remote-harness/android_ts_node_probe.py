@@ -12,6 +12,25 @@ import zipfile
 from android_dual_overlay_session import AndroidDualOverlaySession
 from android_dual_overlay_reverse import SERIAL, assert_owned_avd
 import android_crash_symbolize as symbolize
+from flutter_android_dual_overlay import prepare_private_ca
+
+
+class Stage:
+    """Records the last completed step of a variant run.
+
+    A harness regression must never be reported as a device result, so the
+    first failing step is kept next to the error category.
+    """
+
+    def __init__(self, name='variant-start'):
+        self.name = name
+
+    def reach(self, name):
+        self.name = name
+        return self
+
+    def report(self, failure):
+        return {'failureClass': type(failure).__name__, 'failureStage': self.name}
 
 PACKAGE = 'dev.herdr.herdr_flutter_probe'
 LIBRARIES = ('libheeler_easytier.so', 'libhp_tailscale.so', 'libherdr_flutter_network_runtime.so')
@@ -479,6 +498,7 @@ def run(args):
         diagnostics_leg = os.environ.get('PROBE_DIAGNOSTICS', 'optin') == 'optin'
         for variant in ('normal', 'qa'):
             row = {'variant': variant, 'diagnosticsLeg': 'optin' if diagnostics_leg else 'plain', 'status': 'failed'}
+            stage = Stage()
             output['variants'].append(row)
             apk, libraries = args.apk_root / (variant + '.apk'), getattr(args, variant)
             library_dir = str(libraries)
@@ -491,6 +511,7 @@ def run(args):
                 source_checkout=args.source_checkout, lifetime=600)
             try:
                 with session:
+                    stage.reach('control-before')
                     row['controlBefore'] = session.control.call({'op': 'ts_diagnostics'})
                     result = adb('install', '-t', str(apk), timeout=60)
                     if result.returncode != 0 or b'Success' not in result.stdout:
@@ -507,6 +528,7 @@ def run(args):
                         raise ValueError('probe_installed_apk_mismatch')
                     row['installedApkSha256'] = hashlib.sha256(installed_apk.stdout).hexdigest()
                     del installed_apk
+                    stage.reach('private-ca')
                     prepare_private_ca('adb', SERIAL, session.read_ca(), run=subprocess.run)
                     prefix = ('shell', '-T', 'run-as', PACKAGE)
                     diagnostics_leg = os.environ.get('PROBE_DIAGNOSTICS', 'optin') == 'optin'
@@ -517,6 +539,7 @@ def run(args):
                     if adb(*prefix, 'chmod', '600', 'files/ts-node-probe-config.json').returncode:
                         raise ValueError('probe_config_failed')
                     try:
+                        stage.reach('abi-leg')
                         # ABI leg first, in its own process: it drives the
                         # same libhp_tailscale.so through the plain C ABI
                         # with an in-memory store, so its result isolates the
@@ -582,6 +605,7 @@ def run(args):
                         # second variant would re-read the first one's
                         # tombstone. Clearing after would destroy evidence.
                         adb('shell', 'logcat', '-c', '-b', 'crash', timeout=15)
+                        stage.reach('main-probe')
                         result = adb('shell', 'am', 'instrument', '-w', '-r', PACKAGE + '/dev.herdr.tsnodeprobe.ProbeInstrumentation', timeout=100)
                         row['instrumentation'] = instrument_summary(result)
                         # Tombstone records are attributed whole: Cmdline
@@ -694,8 +718,11 @@ def run(args):
                     if installed:
                         row['packageRemoved'] = adb('uninstall', PACKAGE).returncode == 0 and not adb('shell', 'pm', 'path', PACKAGE).stdout.strip()
                         installed = False
-            except Exception:
+            except Exception as failure:
+                # Record the error category and the step that failed, so a
+                # harness regression can never look like a device result.
                 row['errorCode'] = 'controlled_variant_probe_failed'
+                row.update(stage.report(failure))
             finally:
                 if installed:
                     row['packageRemoved'] = adb('uninstall', PACKAGE).returncode == 0 and not adb('shell', 'pm', 'path', PACKAGE).stdout.strip()
@@ -710,8 +737,9 @@ def run(args):
         output['netmonDiagnoseCollected'] = netmon_diagnose_collected(output['variants'])
         if len(output['variants']) == 2 and all(row['status'] == 'passed' for row in output['variants']):
             output['status'] = 'passed'
-    except Exception:
+    except Exception as failure:
         output['errorCode'] = 'controlled_node_probe_failed'
+        output['failureClass'] = type(failure).__name__
     finally:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(output, indent=2) + '\n')

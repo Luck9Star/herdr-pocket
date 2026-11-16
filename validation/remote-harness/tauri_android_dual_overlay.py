@@ -873,6 +873,55 @@ def authorize_ts(browser, host, scope, port, report):
     return True
 
 
+PAIR_RESPONSE_FACTS=('exactInput','wireMatches','requestWithinDeviceTime','responseWithinDeviceTime',
+    'requestUnexpired','responseUnexpired','expiryOrdering','withinTtl','productValid','previewVisible',
+    'fiveLinesMatched','productShowsInvalid','pairMode','sourceChecked','busy','waitingIdentity','targetMatched','ready')
+
+
+def pairing_response_probe(request,response,account,device_fingerprint,host_fingerprint,fields):
+    # Execute the checked product's pure validators with the device's read-only
+    # Date.now(), never a host clock, time override, native call or DOM write.
+    source=Path(__file__).resolve().parents[1]/'tauri'/'src'
+    functions='\n'.join(line.replace('export function ','function ') for name in ('pairing-view.js','pairing-camera.js')
+                        for line in (source/name).read_text().splitlines() if not line.startswith('import '))
+    spec={'step':'response_material','request':request,'response':response,'account':account,
+          'deviceFingerprint':device_fingerprint,'hostFingerprint':host_fingerprint,'fields':fields,'selector':'#pair-preview','target':True}
+    return """(()=>{%s
+      const spec=%s,$=id=>document.getElementById(id),now=Math.floor(Date.now()/1000);
+      const visible=e=>!!e&&!e.hidden&&!!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';
+      const req=JSON.parse(spec.request),res=JSON.parse(spec.response),ints=x=>Number.isSafeInteger(x.issued_at)&&Number.isSafeInteger(x.expires_at);
+      const sameKeys=(x,keys)=>Object.keys(x).sort().join('|')===keys.sort().join('|');
+      const requestKeys=['version','type','request_id','device','public_key','account','host_key','issued_at','expires_at'];
+      const responseKeys=['version','type','request_id','account','host_key','fingerprint','issued_at','expires_at','status','authorization_added'];
+      const wireMatches=sameKeys(req,requestKeys)&&sameKeys(res,responseKeys)&&ints(req)&&ints(res)&&
+        req.version===2&&req.type==='pairing-public-key-request'&&res.version===2&&res.type==='pairing-binding-response'&&
+        /^[0-9a-f]{32}$/.test(req.request_id)&&res.request_id===req.request_id&&req.account===spec.account&&res.account===req.account&&
+        req.host_key===spec.hostFingerprint&&res.host_key===req.host_key&&res.fingerprint===spec.deviceFingerprint&&
+        res.status==='authorized'&&typeof res.authorization_added==='boolean';
+      const targetMatched=Object.entries(spec.fields).every(([id,value])=>$(id)?.value===value);
+      const exactInput=$('pair-request')?.value===spec.request&&$('pair-response')?.value===spec.response&&
+        $('pair-device')?.value===req.device&&[...Object.keys(spec.fields).filter(id=>id!=='remote-profile-provider'),'pair-device'].every(id=>$(id)?.readOnly===true);
+      const requestWithinDeviceTime=ints(req)&&req.issued_at<=now,responseWithinDeviceTime=ints(res)&&res.issued_at<=now;
+      const requestUnexpired=ints(req)&&now<req.expires_at,responseUnexpired=ints(res)&&now<res.expires_at;
+      const expiryOrdering=ints(req)&&ints(res)&&res.expires_at<=req.expires_at;
+      const withinTtl=[req,res].every(x=>ints(x)&&x.issued_at>=0&&x.expires_at>x.issued_at&&x.expires_at-x.issued_at<=600);
+      let productValid=false;try {const current=pairingCameraRequest(spec.request,spec.account,now);
+        validatePairingCameraResponse(spec.response,current,spec.deviceFingerprint,now);productValid=true;}catch{}
+      const preview=$('pair-response-preview'),lines=['账号：'+spec.account,'主机指纹：'+spec.hostFingerprint,
+        '设备指纹：'+spec.deviceFingerprint,'状态：授权 (authorized)','请求 ID：'+req.request_id];
+      const previewVisible=visible(preview),fiveLinesMatched=!!preview&&lines.every(line=>preview.textContent.split(String.fromCharCode(10)).includes(line));
+      const productShowsInvalid=!!preview&&preview.textContent==='响应无效、不匹配或已过期；此原记录当前仅可接受的新鲜回执类型也须一致。';
+      const pairMode=$('pair-mode')?.checked===true,sourceChecked=$('pair-source-review')?.checked===true;
+      const busy=!!$('remote-fields')?.matches(':disabled')||!!$('pair-preview')?.matches(':disabled');
+      const waitingIdentity=$('pair-status')?.textContent==='等待主机响应 · 设备指纹 '+spec.deviceFingerprint+' · 授权未知'&&
+        $('pair-request-summary')?.textContent.includes('仍待主机操作者确认')&&!$('pair-revocation-mode')?.checked&&
+        $('pair-preview')?.textContent==='查看响应内容'&&$('pair-status')?.dataset.createPhase==='ready';
+      const ready=wireMatches&&targetMatched&&exactInput&&requestWithinDeviceTime&&responseWithinDeviceTime&&requestUnexpired&&responseUnexpired&&
+        expiryOrdering&&withinTtl&&productValid&&pairMode&&!sourceChecked&&!busy&&waitingIdentity&&!document.hidden;
+      return {exactInput,wireMatches,requestWithinDeviceTime,responseWithinDeviceTime,requestUnexpired,responseUnexpired,expiryOrdering,withinTtl,
+        productValid,previewVisible,fiveLinesMatched,productShowsInvalid,pairMode,sourceChecked,busy,waitingIdentity,targetMatched,ready};})()"""%(functions,json.dumps(spec))
+
+
 def pair_host(browser, host, role, profile, report=None):
     from flutter_android_gui import public_host_fingerprint, DeviceFailure
     if role not in ('ts','et'):raise GuiFailure('dual_pair_role_mismatch')
@@ -887,6 +936,21 @@ def pair_host(browser, host, role, profile, report=None):
     fields={"remote-"+field:str(profile[key]) for field,key in
             (('host','host'),('port','port'),('user','username'),('session','session'),
              ('herdr','herdrPath'),('socket','socketPath'),('pin','expectedHostKey'),('profile-provider','provider'))}
+    def wire(raw,keys):
+        def unique(pairs):
+            result={}
+            for key,value in pairs:
+                if key in result:raise ValueError()
+                result[key]=value
+            return result
+        try:
+            if not isinstance(raw,str) or len(raw.encode('utf-8'))>2048:raise ValueError()
+            value=json.loads(raw,object_pairs_hook=unique)
+            if not isinstance(value,dict) or set(value)!=set(keys):raise ValueError()
+            if any(type(value[key]) is not int for key in ('version','issued_at','expires_at')):raise ValueError()
+            if any(not isinstance(value[key],str) or not value[key] for key in set(keys)-{'version','issued_at','expires_at','authorization_added'}):raise ValueError()
+            return value
+        except (ValueError,TypeError):raise GuiFailure('dual_pair_review_mismatch') from None
     request=response=None
     def probe(step,selector,condition,target):
         spec={'step':step,'selector':selector,'fields':fields,'target':target}
@@ -942,14 +1006,14 @@ def pair_host(browser, host, role, profile, report=None):
         # alone proves pairOperation finished. Wait for its real controls too.
         done('request_ready','#pair-preview',frozen+"&&$('pair-status')?.dataset.createPhase==='ready'&&!!$('pair-request')?.value&&visible($('pair-request-summary'))&&"+quiet)
         request=browser.read('#pair-request','value')
-        try:public=json.loads(request)
-        except (ValueError,TypeError):raise GuiFailure('dual_pair_review_mismatch') from None
+        public=wire(request,('version','type','request_id','device','public_key','account','host_key','issued_at','expires_at'))
         if (not isinstance(public,dict) or public.get('device')!=browser.read('#pair-device','value') or public.get('type')!='pairing-public-key-request' or public.get('version')!=2 or
                 public.get('account')!=profile['username'] or public.get('host_key')!=fingerprint):
             raise GuiFailure('dual_pair_review_mismatch')
         review=host_request(host,{'op':'review_pairing','role':role,'request':request},'pairing_review')
         if (review.get('role')!=role or review.get('hostFingerprint')!=fingerprint or
-                review.get('requestId')!=public.get('request_id') or not isinstance(review.get('deviceFingerprint'),str)):
+                review.get('requestId')!=public.get('request_id') or
+                public_host_fingerprint(public['public_key'])!=review.get('deviceFingerprint')):
             raise GuiFailure('dual_pair_review_mismatch')
         request_current="$('pair-request')?.value==="+json.dumps(request)
         summary="&&".join("$('pair-request-summary')?.textContent.includes(%s)"%json.dumps(value) for value in
@@ -960,18 +1024,77 @@ def pair_host(browser, host, role, profile, report=None):
             'requestId':review['requestId'],'deviceFingerprint':review['deviceFingerprint'],'reviewed':True},'pairing_approved')
         if approved.get('role')!=role:raise GuiFailure('dual_pair_review_mismatch')
         response=approved.get('response')
-        try:reply=json.loads(response)
-        except (ValueError,TypeError):raise GuiFailure('dual_pair_review_mismatch') from None
-        if not isinstance(reply,dict) or any(reply.get(key)!=value for key,value in {'request_id':review['requestId'],'account':profile['username'],
-               'host_key':fingerprint,'fingerprint':review['deviceFingerprint'],'status':'authorized'}.items()):
+        reply=wire(response,('version','type','request_id','account','host_key','fingerprint','issued_at','expires_at','status','authorization_added'))
+        if not isinstance(reply,dict) or any(reply.get(key)!=value for key,value in {'version':2,'type':'pairing-binding-response','request_id':review['requestId'],'account':profile['username'],
+               'host_key':fingerprint,'fingerprint':review['deviceFingerprint'],'status':'authorized'}.items()) or type(reply['authorization_added']) is not bool:
             raise GuiFailure('dual_pair_review_mismatch')
         fill('response','#pair-response',response,request_current+'&&'+quiet,True)
         response_current=request_current+"&&$('pair-response')?.value==="+json.dumps(response)
-        click('response_preview','#pair-preview',response_current+'&&'+frozen+'&&'+quiet,True)
+        material_expression=pairing_response_probe(request,response,profile['username'],review['deviceFingerprint'],fingerprint,fields)
+        diagnostic['sawFutureIssuance']=False
+        def material():
+            value=browser.evaluate(material_expression)
+            if not isinstance(value,dict) or any(type(value.get(key)) is not bool for key in PAIR_RESPONSE_FACTS):
+                raise GuiFailure('dual_pair_response_probe_invalid')
+            facts={key:value[key] for key in PAIR_RESPONSE_FACTS}
+            diagnostic['responseFacts']=facts
+            if facts['wireMatches'] and (not facts['requestWithinDeviceTime'] or not facts['responseWithinDeviceTime']):
+                diagnostic['sawFutureIssuance']=True
+            if (any(not facts[key] for key in ('exactInput','wireMatches','requestUnexpired','responseUnexpired','expiryOrdering','withinTtl','pairMode','waitingIdentity','targetMatched')) or facts['sourceChecked']):
+                raise GuiFailure('dual_pair_response_invalid')
+            if facts['requestWithinDeviceTime'] and facts['responseWithinDeviceTime'] and not facts['productValid']:
+                raise GuiFailure('dual_pair_response_invalid')
+            return facts
+        stable=0
+        def material_ready():
+            nonlocal stable
+            facts=material();stable=stable+1 if facts['ready'] else 0
+            return stable>=2
+        diagnostic.update(step='response_time',action='read',control='pair_response',state='waiting')
+        wait_for(material_ready,'dual_pair_device_window_timeout',timeout=30)
         lines=['账号：'+profile['username'],'主机指纹：'+fingerprint,'设备指纹：'+review['deviceFingerprint'],
                '状态：授权 (authorized)','请求 ID：'+review['requestId']]
         preview="visible($('pair-response-preview'))&&"+json.dumps(lines)+".every(line=>$('pair-response-preview')?.textContent.split(String.fromCharCode(10)).includes(line))"
-        done('response_reviewed','#pair-source-review',response_current+'&&'+preview+"&&!$('pair-source-review')?.checked&&"+quiet)
+        button=None
+        try:
+            for attempt in range(2):
+                step='response_preview' if attempt==0 else 'response_reinspect'
+                diagnostic.update(step=step,action='enter',control='pair_preview',state='waiting')
+                stable=0;wait_for(material_ready,'dual_pair_device_window_timeout',timeout=30)
+                if button is None:
+                    value=browser.call('Runtime.evaluate',{'expression':"document.querySelector('#pair-preview')",'returnByValue':False})
+                    button=value.get('result',{}).get('objectId')
+                    if not isinstance(button,str):raise GuiFailure('dual_pair_preview_node_missing')
+                verify="""function(focus){if(focus)this.focus();return this.isConnected&&this===document.querySelector('#pair-preview')&&
+                  document.activeElement===this&&!document.hidden&&!this.matches(':disabled')&&!!this.getClientRects().length&&
+                  this.textContent==='查看响应内容'&&!document.querySelector('#pair-source-review')?.checked;}"""
+                for focus in (True,False):
+                    value=browser.call('Runtime.callFunctionOn',{'objectId':button,'functionDeclaration':verify,
+                        'arguments':[{'value':focus}],'returnByValue':True})
+                    if value.get('result',{}).get('value') is not True:raise GuiFailure('dual_pair_preview_focus_changed')
+                    if material()['ready'] is not True:raise GuiFailure('dual_pair_response_changed')
+                # Standard keyboard activation of the same verified button. This
+                # only re-runs the product's read-only preview, never acceptance.
+                for kind in ('keyDown','keyUp'):
+                    params={'type':kind,'key':'Enter','code':'Enter','windowsVirtualKeyCode':13,'nativeVirtualKeyCode':13}
+                    if kind=='keyDown':params['text']='\r'
+                    browser.call('Input.dispatchKeyEvent',params)
+                diagnostic['completed'].append(step);diagnostic['state']='dispatched'
+                diagnostic.update(step='response_reviewed',action='read',control='pair_source_review')
+                def published():
+                    facts=material()
+                    return facts['ready'] and facts['previewVisible'] and facts['fiveLinesMatched'] and not facts['productShowsInvalid']
+                try:
+                    wait_for(published,'dual_pair_preview_unpublished',timeout=4)
+                    break
+                except GuiFailure as error:
+                    if str(error)!='dual_pair_preview_unpublished' or attempt==1:raise
+                    # At most one read-only reinspection, only for exactly the
+                    # same full material, identity and DOM button before review.
+                    if material()['ready'] is not True:raise GuiFailure('dual_pair_response_changed')
+            done('response_reviewed','#pair-source-review',response_current+'&&'+preview+"&&!$('pair-source-review')?.checked&&"+quiet)
+        finally:
+            if button is not None:browser.call('Runtime.releaseObject',{'objectId':button})
         click('source_review','#pair-source-review',response_current+'&&'+preview+"&&!$('pair-source-review')?.checked&&"+quiet,True)
         done('source_checked','#pair-accept',response_current+'&&'+preview+'&&'+checked('pair-source-review')+'&&'+quiet)
         click('accept','#pair-accept',response_current+'&&'+preview+'&&'+checked('pair-source-review')+'&&'+quiet,True)

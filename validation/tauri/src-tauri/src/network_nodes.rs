@@ -21,21 +21,22 @@ pub struct Nodes {
     #[cfg(any(test, target_os = "android"))]
     reviews: Mutex<Reviews<NodeAttempt>>,
     #[cfg(any(test, target_os = "android"))]
-    starts: Mutex<HashMap<String, Cancellation>>,
+    starts: Mutex<HashMap<String, (Cancellation, Option<Binding>)>>,
 }
 // Cancelled admission retains its host slot until the original future drops.
 // The shared runtime independently retains native resources until real close.
 #[cfg(any(test, target_os = "android"))]
 struct StartSlot<'a> {
-    slots: &'a Mutex<HashMap<String, Cancellation>>,
+    slots: &'a Mutex<HashMap<String, (Cancellation, Option<Binding>)>>,
     id: String,
 }
 #[cfg(any(test, target_os = "android"))]
 impl<'a> StartSlot<'a> {
     fn reserve(
-        slots: &'a Mutex<HashMap<String, Cancellation>>,
+        slots: &'a Mutex<HashMap<String, (Cancellation, Option<Binding>)>>,
         id: &str,
         cancel: Cancellation,
+        binding: Option<Binding>,
     ) -> Result<Self, String> {
         let mut entries = slots.lock().map_err(|_| "state_unavailable")?;
         if entries.contains_key(id) {
@@ -44,7 +45,7 @@ impl<'a> StartSlot<'a> {
         if entries.len() >= 32 {
             return Err("mobile_node_history_capacity".into());
         }
-        entries.insert(id.into(), cancel);
+        entries.insert(id.into(), (cancel,binding));
         Ok(Self {
             slots,
             id: id.into(),
@@ -55,7 +56,7 @@ impl<'a> StartSlot<'a> {
 impl Drop for StartSlot<'_> {
     fn drop(&mut self) {
         if let Ok(mut entries) = self.slots.lock() {
-            if let Some(cancel) = entries.remove(&self.id) {
+            if let Some((cancel,_)) = entries.remove(&self.id) {
                 cancel.cancel();
             }
         }
@@ -373,7 +374,7 @@ impl Nodes {
         // every provider's in-flight start for that catalog id. Keys are
         // "{provider}:{id}" and profile ids cannot contain ':'.
         let suffix = format!(":{id}");
-        for (key, cancel) in self
+        for (key, (cancel,_)) in self
             .starts
             .lock()
             .map_err(|_| "state_unavailable")?
@@ -384,6 +385,35 @@ impl Nodes {
             }
         }
         Ok(())
+    }
+    pub fn prepare_stop(&self,binding:&Binding)->Result<Option<herdr_readonly_transport::mobile_nodes::NodeAttempt>,String> {
+        #[cfg(any(test,target_os="android"))]
+        {
+            // Reject a foreign live binding or start token before revocation.
+            self.service.capture_attempt(binding).map_err(str::to_string)?;
+            if let Some((cancel,actual))=self.starts.lock().map_err(|_|"state_unavailable")?.get(&binding.registry_key()) {
+                if actual.as_ref()!=Some(binding) {return Err("mobile_node_binding_mismatch".into());}
+                cancel.cancel();
+            }
+            self.reviews.lock().map_err(|_|"state_unavailable")?.items.retain(|_,review|review.binding!=*binding);
+            self.service.capture_attempt(binding).map_err(str::to_string)
+        }
+        #[cfg(not(any(test,target_os="android")))]
+        {let _=binding;Err("overlay_provider_unavailable".into())}
+    }
+    pub async fn stop_prepared(&self,binding:&Binding,attempt:Option<herdr_readonly_transport::mobile_nodes::NodeAttempt>)->Result<(),String> {
+        #[cfg(any(test,target_os="android"))]
+        {
+            let Some(attempt)=attempt else {
+                if self.service.capture_attempt(binding).map_err(str::to_string)?.is_some() {return Err("overlay_stale_revision".into());}
+                return Ok(());
+            };
+            let stopped=self.service.stop_attempt(&attempt,Duration::from_secs(10)).await.map_err(str::to_string)?;
+            if stopped.binding!=*binding || stopped.state!=State::Stopped {return Err("mobile_node_cleanup_pending".into());}
+            Ok(())
+        }
+        #[cfg(not(any(test,target_os="android")))]
+        {let _=(binding,attempt);Err("overlay_provider_unavailable".into())}
     }
     pub async fn stop_exact(&self, id: &str, binding: Binding) -> Result<(), String> {
         if binding.profile_id() != id {
@@ -419,7 +449,7 @@ impl Nodes {
         self.retire(&profile.id)?;
         let binding = binding_for(profile, handle.clone())?;
         let cancel = Cancellation::default();
-        let _slot = StartSlot::reserve(&self.starts, &binding.registry_key(), cancel.clone())?;
+        let _slot = StartSlot::reserve(&self.starts, &binding.registry_key(), cancel.clone(), Some(binding.clone()))?;
         let result = async {
             match (&profile.provider, &profile.settings) {
                 (
@@ -834,14 +864,14 @@ mod tests {
     fn cancelled_start_slot_stays_owned_until_its_future_drops() {
         let slots = Mutex::default();
         let a = Cancellation::default();
-        let first = StartSlot::reserve(&slots, "a", a.clone()).unwrap();
+        let first = StartSlot::reserve(&slots, "a", a.clone(), None).unwrap();
         a.cancel();
-        assert!(StartSlot::reserve(&slots, "a", Cancellation::default()).is_err());
+        assert!(StartSlot::reserve(&slots, "a", Cancellation::default(), None).is_err());
         let b = Cancellation::default();
-        let other = StartSlot::reserve(&slots, "b", b.clone()).unwrap();
+        let other = StartSlot::reserve(&slots, "b", b.clone(), None).unwrap();
         assert!(!b.is_cancelled());
         drop(first);
-        let replacement = StartSlot::reserve(&slots, "a", Cancellation::default()).unwrap();
+        let replacement = StartSlot::reserve(&slots, "a", Cancellation::default(), None).unwrap();
         assert!(!b.is_cancelled());
         drop(replacement);
         drop(other);
@@ -866,9 +896,9 @@ mod tests {
         assert_eq!(book.get(&ts).unwrap().attempt, 2);
         let slots = Mutex::default();
         let et_slot =
-            StartSlot::reserve(&slots, &et.registry_key(), Cancellation::default()).unwrap();
+            StartSlot::reserve(&slots, &et.registry_key(), Cancellation::default(), Some(et.clone())).unwrap();
         let ts_slot =
-            StartSlot::reserve(&slots, &ts.registry_key(), Cancellation::default()).unwrap();
+            StartSlot::reserve(&slots, &ts.registry_key(), Cancellation::default(), Some(ts.clone())).unwrap();
         drop((et_slot, ts_slot));
         book.retire(ts.profile_id());
         assert!(book.get(&et).is_err());
@@ -1043,4 +1073,16 @@ mod tests {
         .unwrap();
         assert!(committed);
     }
+}
+
+#[cfg(test)]
+mod stop_preparation_tests {
+ use super::*;
+ #[test]
+ fn exact_stop_never_cancels_foreign_identity_start_and_matching_start_is_retired() {
+  let nodes=Nodes::default();let a=Binding::new("p".into(),1,"qa".into(),"a".into()).unwrap();let b=Binding::new("p".into(),1,"qa".into(),"b".into()).unwrap();
+  let cancel=Cancellation::default();let slot=StartSlot::reserve(&nodes.starts,&b.registry_key(),cancel.clone(),Some(b.clone())).unwrap();
+  assert!(matches!(nodes.prepare_stop(&a),Err(e) if e=="mobile_node_binding_mismatch"));assert!(!cancel.is_cancelled());
+  assert!(nodes.prepare_stop(&b).unwrap().is_none());assert!(cancel.is_cancelled());drop(slot);
+ }
 }

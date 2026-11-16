@@ -18,6 +18,7 @@ impl Drop for Temp {
 #[derive(Default)]
 struct Stats {
     connections: AtomicUsize,
+    retired: AtomicUsize,
     auths: AtomicUsize,
     device_key: Mutex<Option<PublicKey>>,
     execs: AtomicUsize,
@@ -418,10 +419,12 @@ impl Harness {
                     stats: server_stats.clone(),
                 };
                 let config = server_config.clone();
+                let retired = server_stats.clone();
                 locked(&child_tasks).push(tokio::spawn(async move {
                     if let Ok(session) = server::run_stream(config, stream, peer).await {
                         let _ = session.await;
                     }
+                    retired.retired.fetch_add(1, Ordering::SeqCst);
                 }));
             }
         });
@@ -1976,4 +1979,68 @@ async fn target_recovery_real_ssh_same_identity_alias_cannot_write_or_resolve_ac
         view.cancel.cancel();
         assert!(view.task.await.unwrap().is_err());
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn explicit_node_stop_retires_real_ssh_without_redial_or_other_connection_cancel() {
+    let a=Harness::new().await;
+    let b=Harness::new().await;
+    let mut first=View::launch(a.config.clone(),Some(a.recovery("stop-a")));
+    let mut other=View::launch(b.config.clone(),Some(b.recovery("stop-b")));
+    first.accept().await;other.accept().await;
+    let (_,old)=first.input().await;let old_mode=old.set_mode("direct",true).unwrap();
+    let (_,live)=other.input().await;let mode=live.set_mode("direct",true).unwrap();
+    first.control.stop_gracefully();
+    assert!(!first.cancel.is_cancelled(), "graceful request must permit SSH disconnect and FIN");
+    assert_eq!(timeout(Duration::from_secs(8),first.task).await.unwrap().unwrap(),Err("cancelled"));
+    until(||a.stats.retired.load(Ordering::SeqCst)==1).await;
+    assert_eq!(first.dials.dials.load(Ordering::SeqCst),1);
+    assert_eq!(a.stats.auths.load(Ordering::SeqCst),1);
+    assert_eq!(other.control.snapshot().phase,ObservationPhase::Active);
+    assert!(!other.cancel.is_cancelled());
+    assert_eq!(b.stats.retired.load(Ordering::SeqCst),0);
+    assert_eq!(old.send(old_mode,b"must-not-send".to_vec(),false).await,Err("input_stale"));
+    assert!(matches!(live.send(mode,b"other-still-live".to_vec(),false).await.unwrap(),SendOutcome::Accepted(_)));
+    assert!(locked(&a.stats.writes).is_empty());assert_eq!(*locked(&b.stats.writes),vec![b"other-still-live".to_vec()]);
+    other.cancel.cancel();assert!(other.task.await.unwrap().is_err());
+}
+
+#[tokio::test]
+async fn explicit_shutdown_waits_for_peer_eof_but_stalled_peer_is_bounded() {
+    struct Pipe(tokio::io::DuplexStream);
+    impl transport::ByteStream for Pipe {}
+    impl AsyncRead for Pipe {fn poll_read(self:Pin<&mut Self>,cx:&mut Context<'_>,buf:&mut ReadBuf<'_>)->Poll<io::Result<()>> {Pin::new(&mut self.get_mut().0).poll_read(cx,buf)}}
+    impl AsyncWrite for Pipe {
+        fn poll_write(self:Pin<&mut Self>,cx:&mut Context<'_>,buf:&[u8])->Poll<io::Result<usize>> {Pin::new(&mut self.get_mut().0).poll_write(cx,buf)}
+        fn poll_flush(self:Pin<&mut Self>,cx:&mut Context<'_>)->Poll<io::Result<()>> {Pin::new(&mut self.get_mut().0).poll_flush(cx)}
+        fn poll_shutdown(self:Pin<&mut Self>,cx:&mut Context<'_>)->Poll<io::Result<()>> {Pin::new(&mut self.get_mut().0).poll_shutdown(cx)}
+    }
+    for (explicit,stalled) in [(false,true),(true,false),(true,true)] {
+        let (client,mut peer)=tokio::io::duplex(64);
+        let io=Arc::new(OwnedIo::default());
+        let mut stream=OwnedStream {inner:Some(Box::new(Pipe(client))),_reservation:io.reserve(),shutdown:None,write_closed:false,graceful:Arc::new(AtomicBool::new(explicit))};
+        let received=Arc::new(AtomicBool::new(false));let receipt=received.clone();
+        let task=tokio::spawn(async move {let mut data=Vec::new();peer.read_to_end(&mut data).await.unwrap();assert_eq!(data,b"exact");receipt.store(true,Ordering::SeqCst);if stalled {std::future::pending::<()>().await;}else {peer.shutdown().await.unwrap();}});
+        stream.write_all(b"exact").await.unwrap();
+        let start=Instant::now();let result=stream.shutdown().await;
+        if !explicit {result.unwrap();assert!(start.elapsed()<Duration::from_millis(100));drop(stream);task.abort();continue;}
+        assert!(received.load(Ordering::SeqCst));
+        if stalled {assert_eq!(result.unwrap_err().kind(),io::ErrorKind::TimedOut);assert!(start.elapsed()<Duration::from_secs(6));}else {result.unwrap();}
+        assert_eq!(io.count.load(Ordering::SeqCst),1);
+        drop(stream);io.settled().await;task.abort();
+    }
+}
+
+#[tokio::test]
+async fn explicit_stop_with_submitted_unknown_input_keeps_hard_abort_and_no_replay() {
+    let h=Harness::new().await;h.stats.hold_receipt.store(true,Ordering::SeqCst);
+    let recovery=h.recovery("unknown-stop");
+    let mut view=View::launch(h.config.clone(),Some(recovery.clone()));view.accept().await;
+    let (_,input)=view.input().await;let mode=input.set_mode("direct",true).unwrap();
+    let sending=tokio::spawn(async move {input.send(mode,b"submitted-once".to_vec(),false).await});
+    until(||locked(&h.stats.writes).len()==1).await;
+    view.control.stop_gracefully();assert!(view.cancel.is_cancelled());
+    assert_eq!(sending.await.unwrap().unwrap(),SendOutcome::Unknown);
+    assert!(view.task.await.unwrap().is_err());assert_eq!(recovery.status(),"pending");
+    assert_eq!(locked(&h.stats.writes).len(),1);assert_eq!(view.dials.dials.load(Ordering::SeqCst),1);
 }

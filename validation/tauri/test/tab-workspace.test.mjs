@@ -248,6 +248,8 @@ function watchWorkspace(fixedTarget=null,options={}) {
       observed.push(args);
       return options.observe?options.observe(args):new Promise(()=>{});
     }
+    if(name==='remote_tab_ack' && options.ack)return options.ack(args);
+    if(name==='remote_tab_control' && options.control)return options.control(args);
     if(name==='remote_tab_select' && options.select)return options.select(args);
     if(name==='remote_tab_input_mode')return options.mode?options.mode(args):Promise.resolve(5);
     if(name==='remote_tab_input_send' && options.send)return options.send(args);
@@ -1211,4 +1213,23 @@ test('stock observation shows a completed full frame without enabling input capa
     assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_mode' && c.args.mode!=='observe').length,0);
     assert.equal(h.terminal().options.disableStdin,true);
   } finally {h.restore();}
+});
+
+for(const pending of ['ack','pause'])test(`explicit stop retires UI input without a late ${pending} hard cancelling its SSH`,async()=>{
+ let reject;const wait=()=>new Promise((_resolve,deny)=>{reject=deny;});
+ const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},pending==='ack'?{ack:wait}:{control:wait});
+ try {
+  await h.start();h.observation(1,'active');
+  let hiding;
+  if(pending==='ack'){h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();}
+  else {hiding=h.ui.hide();await flush();}
+  assert.equal(typeof reject,'function');
+  h.ui.prepareAffected(['fixture']);
+  assert.equal(h.calls.filter(c=>c.name==='remote_tab_cancel').length,0);
+  reject('stale');await hiding;await flush();await flush();
+  assert.equal(h.calls.filter(c=>c.name==='remote_tab_cancel').length,0);
+  assert.equal(h.terminal()?.options.disableStdin ?? true,true);
+  h.ui.background();await flush();
+  assert.equal(h.calls.filter(c=>c.name==='remote_tab_cancel').length,1,'ordinary background revocation stays hard');
+ }finally{h.restore();}
 });

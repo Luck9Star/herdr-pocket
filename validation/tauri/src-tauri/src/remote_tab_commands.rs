@@ -115,7 +115,7 @@ pub fn remote_tab_ack(tab_id:String,client_generation:u64,generation:u64,epoch:u
 
 #[tauri::command]
 pub async fn remote_tab_control(tab_id:String,client_generation:u64,generation:u64,action:String,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<ObservationSnapshot,String> {
-    let control={let f=flow.lock().map_err(|_|"state_unavailable")?;if action=="resume" && !f.tabs.is_visible(&tab_id,client_generation,generation){return Err("tab_stale".into());}f.tabs.get(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation).and_then(|s|s.control.clone()).ok_or("tab_stale")?};
+    let control={let f=flow.lock().map_err(|_|"state_unavailable")?;if f.tabs.get(&tab_id).and_then(|s|s.node_binding.as_ref()).is_some_and(|b|f.tabs.is_stopping(b)) {return Err("mobile_node_stop_pending".into());}if action=="resume" && !f.tabs.is_visible(&tab_id,client_generation,generation){return Err("tab_stale".into());}f.tabs.get(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation).and_then(|s|s.control.clone()).ok_or("tab_stale")?};
     // Pause retires the input inside the shared control before local handles are dropped.
     let ack=match action.as_str() {"pause"=>control.pause(),"resume"=>control.resume(),_=>return Err("invalid_control".into())};
     let ack=match ack {Ok(ack)=>ack,Err(error)=>{flow.lock().map_err(|_|"state_unavailable")?.tabs.cancel(&tab_id,client_generation,generation);return Err(error.into());}};

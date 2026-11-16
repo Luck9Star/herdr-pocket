@@ -312,6 +312,18 @@ impl LiveInput {
         s.epoch = next;
         Ok(())
     }
+    pub(crate) fn retire_for_stop(&self) -> bool {
+        let safe = self.state.lock().map(|mut state| {
+            let safe = !state.inflight && !self.unknown();
+            state.valid = false;
+            state.focused = false;
+            state.epoch = state.epoch.saturating_add(1);
+            safe
+        }).unwrap_or(false);
+        self.cancel.cancel();
+        if !safe {self.connection_cancel.cancel();}
+        safe
+    }
     pub fn invalidate(&self) {
         if let Ok(mut s) = self.state.lock() {
             if s.inflight {

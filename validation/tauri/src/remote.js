@@ -145,7 +145,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   }
   function clearSnapshot() { delete $('remote-captured').dataset.cols;delete $('remote-captured').dataset.rows;$('remote-captured').dataset.state='empty';localViewport.detach(); invalidateInput(); selectTextButton?.remove?.(); selectTextButton=null; terminal?.dispose(); terminal=null; $('remote-terminal').replaceChildren(); $('remote-result').hidden=true; $('remote-dashboard').hidden=true; $('remote-board-container').hidden=true; $('remote-board-container').open=true; $('remote-panes').replaceChildren(); }
   function discardKey() { $('remote-private-key').value=''; }
-  function cancel(reason='本次读取已取消。迟到结果不会显示。',nativeCameraBackground=false) {
+  function cancel(reason='本次读取已取消。迟到结果不会显示。',nativeCameraBackground=false,gracefulStop=false) {
     if(inputBusy?.record)rememberUnknown(inputBusy.record);
     clearReceipt();
     // Each camera purpose owns a bounded return lease for public bytes only.
@@ -158,7 +158,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     directSummary.finish(clientGeneration);
     previewResponse=invalidatePairReview($('pair-source-review'),$('pair-response-preview')); if(pairState==='none') $('pair-target-review').checked=false; const discarded=invalidateInput(); recordUnsent(discarded.count); gate.invalidate(); discardKey(); if ($('pair-mode').checked && gate.pending && pairState!=='paired') { pairState='cancelled'; pairStatus('已取消；主机授权状态可能未知，请核查清理。'); } $('remote-dashboard').hidden=true; if(terminal) {$('remote-captured').textContent='观察已停止 · 画面陈旧';$('remote-captured').dataset.state='stale';} status(reason+(discarded.count?` ${discarded.count} 笔待发送输入已丢弃。`:'')); render();
     // Invalidating precedes asynchronous cleanup. Keep busy until the old invoke settles.
-    if (gate.pending && native) void invoke('remote_cancel',{clientGeneration}).catch(()=>{if(gate.pendingGeneration===clientGeneration)status('正在结束旧连接；结束前不可开始新读取。','warning');});
+    if (gate.pending && native && !gracefulStop) void invoke('remote_cancel',{clientGeneration}).catch(()=>{if(gate.pendingGeneration===clientGeneration)status('正在结束旧连接；结束前不可开始新读取。','warning');});
   }
   $('remote-form').addEventListener('input', event => {
     if(event.target.id==='remote-canvas')return;
@@ -804,7 +804,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     if(changed)renderSummaryChanges();
   }
   const workspace=initTabWorkspace({native,invoke,theme,channelFactory:()=>new Channel(),terminalFactory:options=>createUnicodeTerminal(Terminal,options),onDashboard:onWorkspaceDashboard,getFontSize:()=>terminalFontSize,hostInfo:id=>{const host=hostRecords.find(h=>h.id===id);if(!host || host.pairingStatus==='revoked' || runtimeRevokedHosts.has(id))return null;const networkRevision=host.networkProfileId ? networkRevisions.get(host.networkProfileId) : null;return networkRevision===undefined ? null : {...host,networkRevision};},hostName:id=>hostRecords.find(h=>h.id===id)?.name || '主机'});
-  const networks=initNetworkUI({native,invoke,getHosts:()=>hostRecords,onAffected:async ids=>{workspace.affected(ids);if(ids.includes(activeHostId))cancel('网络操作涉及此主机；观察已停止，请重新核对当前配置。');await refreshHosts(false);}});
+  const networks=initNetworkUI({native,invoke,getHosts:()=>hostRecords,prepareStop:async ids=>{workspace.prepareAffected(ids);if(ids.includes(activeHostId))cancel('正在停止此网络；输入已锁定，等待原连接结束。',false,true);},onAffected:async ids=>{workspace.affected(ids);if(ids.includes(activeHostId))cancel('网络操作涉及此主机；观察已停止，请重新核对当前配置。');await refreshHosts(false);}});
   // 桌面工作台侧栏（切片 1）：与主机看板共用 hostRecords/hostSummaries，渲染挂在 renderHosts/renderSummaryChanges。
   // 只读展示与既有回调转发；不做键盘导航/分屏，也不改任何 PTY 或画布尺寸。
   const workbench=initDesktopWorkbench({

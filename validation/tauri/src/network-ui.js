@@ -11,7 +11,7 @@ export async function settleNetworkOperation(work, affected, onAffected, load) {
   return completed;
 }
 // Network configuration is public metadata; provider identities remain native.
-export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions, beforeForgetZeroTier}) {
+export function initNetworkUI({native, invoke, getHosts, onAffected, prepareStop=async()=>{}, pollOptions, beforeForgetZeroTier}) {
   const panel=document.getElementById('network-panel'), open=document.getElementById('network-open');
   let deviceReviewDialog=null;
   let renderedReview=null, renderEpoch=0;
@@ -110,8 +110,8 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, pollOptions
     const status=panel.querySelector('[role=status]');if(status)status.textContent=stopping?'正在停止本机节点；请等待结果。':action==='login'?'正在请求显式登录；不会自动打开网页。':'正在启动本机节点；尚未确认入网。';
     let completed=false;
     try {
-      // Revoke the reviewed view before starting or stopping the native node.
-      await onAffected(affected);
+      // Retire input without aborting the original SSH before native stop.
+      if(stopping)await prepareStop(affected);else await onAffected(affected);
       if(!stopping)await beforeIdentityWrite(operationEpoch);
       const pending=invoke(`network_node_${action}`,args);
       if(!stopping)void load('节点请求已发送；可刷新状态并停止原节点。');

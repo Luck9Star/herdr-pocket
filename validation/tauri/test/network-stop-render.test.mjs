@@ -35,7 +35,7 @@ async function harness(run,{login=false}={}) {
     if(name==='network_node_open_auth')return;
     throw Error('unexpected fixture command '+name);
   };
-  const ui=initNetworkUI({native:true,invoke,getHosts:()=>hosts,onAffected:async()=>{},pollOptions:{delay:0,limit:20,timeout:60000,
+  const ui=initNetworkUI({native:true,invoke,getHosts:()=>hosts,prepareStop:async()=>{calls.push({name:'prepare-input'});},onAffected:async()=>{calls.push({name:'hard-revoke'});},pollOptions:{delay:0,limit:20,timeout:60000,
     schedule:fn=>{jobs.set(++next,fn);return next;},cancel:id=>jobs.delete(id)}});
   const card=label=>panel.descendants().find(node=>node.tagName==='article'&&node.children[0]?.textContent===label);
   const button=(label,text)=>card(label)?.descendants().find(node=>node.tagName==='button'&&node.textContent===text);
@@ -52,6 +52,9 @@ test('identical reads preserve the pressed stop node and one confirmation stops 
     assert.equal(h.button('QA ET · EasyTier','停止节点'),stop);
     stop.onclick({detail:1});await flush();assert.equal(h.confirmations.length,1);assert.equal(h.stops().length,1);
     assert.equal(h.stops()[0].args.binding.profileId,h.et.id);
+    assert.equal(h.calls.filter(c=>c.name==='hard-revoke').length,0);
+    assert.equal(h.calls.filter(c=>c.name==='prepare-input').length,1);
+    assert.ok(h.calls.findIndex(c=>c.name==='prepare-input')<h.calls.findIndex(c=>c.name==='network_node_stop'));
   });
 });
 test('login polling preserves the same stop and authorization closures when all reviewed data is identical',async()=>{

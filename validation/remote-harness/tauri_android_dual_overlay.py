@@ -873,37 +873,121 @@ def authorize_ts(browser, host, scope, port, report):
     return True
 
 
-def pair_host(browser, host, role, profile):
-    browser.click('#host-open-remote')
-    browser.click('#add-herdr')
-    browser.fill('#connection-profile-raw', json.dumps(profile, ensure_ascii=False, separators=(',', ':')))
-    browser.click('#connection-profile-preview')
-    fingerprint = wait_for(lambda: browser.read('#connection-profile-fingerprint'), 'dual_profile_review_missing')
-    browser.click('#connection-profile-apply')
-    browser.click('#pair-target-review')
-    browser.click('#pair-create')
-    request = wait_for(lambda: browser.read('#pair-request','value'), 'dual_pair_request_missing', timeout=90)
-    review = host_request(host, {'op':'review_pairing','role':role,'request':request}, 'pairing_review')
-    if review.get('hostFingerprint') not in fingerprint:
-        raise GuiFailure('dual_pair_review_mismatch')
-    wait_for(lambda: all(value in (browser.read('#pair-request-summary') or '')
-             for value in (review['deviceFingerprint'],review['requestId'])),
-             'dual_pair_review_mismatch',timeout=60)
-    approved = host_request(host, {'op':'approve_pairing','role':role,'request':request,
-        'requestId':review['requestId'],'deviceFingerprint':review['deviceFingerprint'],
-        'reviewed':True}, 'pairing_approved')
-    browser.fill('#pair-response', approved['response'])
-    browser.click('#pair-preview')
-    browser.click('#pair-source-review')
-    browser.click('#pair-accept')
-    wait_for(lambda:'授权响应已审查' in (browser.read('#pair-status') or ''), 'dual_pair_accept_missing', timeout=90)
-    browser.fill('#host-save-name', 'QA host '+role.upper())
-    browser.click('#host-save')
-    wait_for(lambda:'已保存' in (browser.read('#host-save-status') or ''), 'dual_host_save_missing', timeout=90)
-    host_card(browser,role)  # Exact renamed catalog readback, not an earlier save status.
-    browser.click('#host-return-home')
-    wait_for(lambda:browser.evaluate("!document.querySelector('#host-home').hidden && document.querySelector('#remote-page').hidden") is True,
-             'dual_host_return_missing',timeout=60)
+def pair_host(browser, host, role, profile, report=None):
+    from flutter_android_gui import public_host_fingerprint, DeviceFailure
+    if role not in ('ts','et'):raise GuiFailure('dual_pair_role_mismatch')
+    diagnostic={'role':role,'step':'profile','action':'read','control':'public_profile','state':'waiting','completed':[]}
+    if report is not None:report.setdefault('pairingAttempts',[]).append(diagnostic)
+    if profile.get('provider') != {'ts':'tailscale','et':'easytier'}[role]:
+        diagnostic['state']='mismatch';raise GuiFailure('dual_pair_role_mismatch')
+    try:fingerprint=public_host_fingerprint(profile['expectedHostKey'])
+    except (KeyError,DeviceFailure):
+        diagnostic['state']='mismatch';raise GuiFailure('dual_pair_profile_invalid') from None
+    raw=json.dumps(profile,ensure_ascii=False,separators=(',',':'))
+    fields={"remote-"+field:str(profile[key]) for field,key in
+            (('host','host'),('port','port'),('user','username'),('session','session'),
+             ('herdr','herdrPath'),('socket','socketPath'),('pin','expectedHostKey'),('profile-provider','provider'))}
+    request=response=None
+    def probe(step,selector,condition,target):
+        spec={'step':step,'selector':selector,'fields':fields,'target':target}
+        # Read-only public UI predicates. Reports receive booleans, never field,
+        # request, response, fingerprint, account, URL or exception text.
+        value=browser.evaluate("""(()=>{const spec=%s,$=id=>document.getElementById(id),e=document.querySelector(spec.selector);
+          const visible=x=>!!x&&!x.hidden&&!!x.getClientRects().length&&getComputedStyle(x).visibility!=='hidden';
+          const targetMatched=Object.entries(spec.fields).every(([id,value])=>$(id)?.value===value);
+          const r=e?.getBoundingClientRect(),x=r?r.left+r.width/2:0,y=r?r.top+r.height/2:0;
+          const facts={present:!!e,visible:visible(e),enabled:!!e&&!e.matches(':disabled'),foreground:!document.hidden,
+            targetMatched,checked:e?.checked===true,centerHit:!!e&&e.contains(document.elementFromPoint(x,y)),asyncReady:(%s)===true};
+          return {...facts,ready:facts.present&&facts.visible&&facts.enabled&&facts.foreground&&facts.asyncReady&&(!spec.target||targetMatched)};})()""" % (json.dumps(spec),condition))
+        if not isinstance(value,dict):return False
+        facts={key:value.get(key) is True for key in ('present','visible','enabled','foreground','targetMatched','checked','centerHit','asyncReady','ready')}
+        diagnostic['facts']=facts
+        return facts['ready']
+    def ready(step,selector,condition='true',target=False,action='read',timeout=60):
+        diagnostic.update(step=step,action=action,control=selector.lstrip('#').replace('-','_'),state='waiting')
+        wait_for(lambda:probe(step,selector,condition,target),'dual_pair_step_timeout',timeout=timeout)
+        diagnostic['state']='ready'
+    def click(step,selector,condition='true',target=False):
+        ready(step,selector,condition,target,'click')
+        # Exactly one actual UI activation. Failed dispatch/unknown postcondition
+        # is never replayed, including create, accept, save and review checkboxes.
+        browser.click(selector)
+        diagnostic['state']='dispatched';diagnostic['completed'].append(step)
+    def fill(step,selector,value,condition='true',target=False):
+        ready(step,selector,condition,target,'fill')
+        browser.fill(selector,value)
+        if browser.read(selector,'value')!=value:raise GuiFailure('dual_pair_value_mismatch')
+        diagnostic['completed'].append(step)
+    def done(step,selector,condition,target=True,timeout=90):
+        ready(step,selector,condition,target,timeout=timeout)
+        diagnostic['state']='confirmed'
+    def checked(selector):return "$(%s)?.checked===true" % json.dumps(selector)
+    frozen="[...Object.keys(spec.fields).filter(id=>id!=='remote-profile-provider'),'pair-device'].every(id=>$(id)?.readOnly===true)"
+    quiet="!$('remote-fields')?.matches(':disabled')"
+    target_ready="$('pair-mode')?.checked===true&&$('pair-status')?.textContent==='公开连接资料已填入；请独立核对用户名和主机公钥，再创建设备公开请求。'&&!$('pair-request')?.value"
+    try:
+        click('open','#host-open-remote')
+        done('add_ready','#add-herdr',"visible($('home-add'))",False)
+        click('add','#add-herdr')
+        done('new_form','#connection-profile-raw',"visible($('remote-page'))&&!$('pair-request')?.value&&!$('host-save-name')?.value&&!$('pair-mode')?.checked&&$('remote-status')?.textContent==='填写并审查新目标；不会自动连接。'",False)
+        fill('import','#connection-profile-raw',raw)
+        click('profile_preview','#connection-profile-preview',"$('connection-profile-raw')?.value==="+json.dumps(raw))
+        done('profile_ready','#connection-profile-apply',"visible($('connection-profile-fingerprint'))&&$('connection-profile-fingerprint')?.textContent==="+json.dumps('主机公钥指纹（本地计算）：'+fingerprint),False)
+        click('apply','#connection-profile-apply',"$('connection-profile-fingerprint')?.textContent==="+json.dumps('主机公钥指纹（本地计算）：'+fingerprint))
+        done('target_ready','#pair-target-review',target_ready+"&&!$('pair-target-review')?.checked")
+        click('target_review','#pair-target-review',target_ready+"&&!$('pair-target-review')?.checked",True)
+        done('target_checked','#pair-create',target_ready+'&&'+checked('pair-target-review'))
+        click('create','#pair-create',target_ready+'&&'+checked('pair-target-review'),True)
+        # Product publishes request/summary before awaiting refreshHosts; neither
+        # alone proves pairOperation finished. Wait for its real controls too.
+        done('request_ready','#pair-preview',frozen+"&&$('pair-status')?.dataset.createPhase==='ready'&&!!$('pair-request')?.value&&visible($('pair-request-summary'))&&"+quiet)
+        request=browser.read('#pair-request','value')
+        try:public=json.loads(request)
+        except (ValueError,TypeError):raise GuiFailure('dual_pair_review_mismatch') from None
+        if (not isinstance(public,dict) or public.get('device')!=browser.read('#pair-device','value') or public.get('type')!='pairing-public-key-request' or public.get('version')!=2 or
+                public.get('account')!=profile['username'] or public.get('host_key')!=fingerprint):
+            raise GuiFailure('dual_pair_review_mismatch')
+        review=host_request(host,{'op':'review_pairing','role':role,'request':request},'pairing_review')
+        if (review.get('role')!=role or review.get('hostFingerprint')!=fingerprint or
+                review.get('requestId')!=public.get('request_id') or not isinstance(review.get('deviceFingerprint'),str)):
+            raise GuiFailure('dual_pair_review_mismatch')
+        request_current="$('pair-request')?.value==="+json.dumps(request)
+        summary="&&".join("$('pair-request-summary')?.textContent.includes(%s)"%json.dumps(value) for value in
+                          (review['deviceFingerprint'],review['requestId'],fingerprint,profile['username']))
+        done('request_reviewed','#pair-preview',request_current+'&&'+summary+'&&'+frozen+'&&'+quiet)
+        diagnostic.update(step='approve',action='host_review',control='owned_host',state='dispatched')
+        approved=host_request(host,{'op':'approve_pairing','role':role,'request':request,
+            'requestId':review['requestId'],'deviceFingerprint':review['deviceFingerprint'],'reviewed':True},'pairing_approved')
+        if approved.get('role')!=role:raise GuiFailure('dual_pair_review_mismatch')
+        response=approved.get('response')
+        try:reply=json.loads(response)
+        except (ValueError,TypeError):raise GuiFailure('dual_pair_review_mismatch') from None
+        if not isinstance(reply,dict) or any(reply.get(key)!=value for key,value in {'request_id':review['requestId'],'account':profile['username'],
+               'host_key':fingerprint,'fingerprint':review['deviceFingerprint'],'status':'authorized'}.items()):
+            raise GuiFailure('dual_pair_review_mismatch')
+        fill('response','#pair-response',response,request_current+'&&'+quiet,True)
+        response_current=request_current+"&&$('pair-response')?.value==="+json.dumps(response)
+        click('response_preview','#pair-preview',response_current+'&&'+frozen+'&&'+quiet,True)
+        lines=['账号：'+profile['username'],'主机指纹：'+fingerprint,'设备指纹：'+review['deviceFingerprint'],
+               '状态：授权 (authorized)','请求 ID：'+review['requestId']]
+        preview="visible($('pair-response-preview'))&&"+json.dumps(lines)+".every(line=>$('pair-response-preview')?.textContent.split(String.fromCharCode(10)).includes(line))"
+        done('response_reviewed','#pair-source-review',response_current+'&&'+preview+"&&!$('pair-source-review')?.checked&&"+quiet)
+        click('source_review','#pair-source-review',response_current+'&&'+preview+"&&!$('pair-source-review')?.checked&&"+quiet,True)
+        done('source_checked','#pair-accept',response_current+'&&'+preview+'&&'+checked('pair-source-review')+'&&'+quiet)
+        click('accept','#pair-accept',response_current+'&&'+preview+'&&'+checked('pair-source-review')+'&&'+quiet,True)
+        accepted="$('pair-status')?.textContent==="+json.dumps('授权响应已审查，尚未验证 SSH · '+review['deviceFingerprint'])+'&&'+quiet
+        done('accepted','#host-save-name',accepted+'&&'+request_current)
+        name='QA host '+role.upper()
+        fill('save_name','#host-save-name',name,accepted,True)
+        click('save','#host-save',accepted+"&&$('host-save-name')?.value==="+json.dumps(name),True)
+        done('saved','#host-return-home',"$('host-save-status')?.textContent==='已保存本机公开资料；不代表主机已验证或仍授权。'&&$('host-save-name')?.value==="+json.dumps(name))
+        host_card(browser,role)  # Renamed catalog readback, not an earlier save status.
+        click('return','#host-return-home',accepted,True)
+        done('returned','#host-open-remote',"visible($('host-home'))&&!visible($('remote-page'))",False)
+        diagnostic['state']='complete'
+    except Exception as error:
+        diagnostic['state']='timeout' if str(error)=='dual_pair_step_timeout' else 'mismatch' if str(error) in ('dual_pair_review_mismatch','dual_pair_value_mismatch') else 'failed'
+        raise
 
 
 def bind_host(browser, role):
@@ -1083,7 +1167,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['stage']='pairing'
         browser.click('#show-remote')
         for role in ('ts','et'):
-            pair_host(browser,control,role,session.read_host_profile(role))
+            pair_host(browser,control,role,session.read_host_profile(role),report)
         report['pairingApprovedBoth']=True
         browser.click('#nav-network')
         bindings={role: bind_host(browser,role) for role in ('ts','et')}

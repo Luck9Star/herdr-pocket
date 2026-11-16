@@ -226,9 +226,12 @@ def _current_exit_info():
 ABORT_CLASSES = (
     (b'CheckJNI', 'jni-checkjni'),
     (b'JNI DETECTED', 'jni-checkjni'),
+    (b'panicked at', 'rust-panic'),
     (b'panic: ', 'go-panic'),
     (b'fatal error:', 'go-fatal'),
     (b'runtime error:', 'go-runtime-error'),
+    (b'ownership of fd', 'fd-ownership'),
+    (b'fdsan', 'fd-ownership'),
     (b'assertion failed', 'libc-assert'),
     (b'__pthread', 'pthread'),
 )
@@ -273,12 +276,14 @@ def _stderr_evidence():
         text = result.stdout[:65536]
         kinds = []
         for needle, name in (
+                (b'panicked at', 'rust-panic'),
                 (b'fatal error:', 'go-fatal-error'),
                 (b'panic: ', 'go-panic'),
                 (b'runtime error:', 'runtime-error'),
                 (b'concurrent map', 'concurrent-map'),
                 (b'goroutine ', 'goroutine-dump'),
                 (b'JNI DETECTED ERROR', 'jni-error'),
+                (b'ownership of fd', 'fd-ownership'),
                 (b'SIGSEGV', 'sigsegv-text'),
                 (b'SIGABRT', 'sigabrt-text')):
             if needle in text and name not in kinds:
@@ -288,7 +293,7 @@ def _stderr_evidence():
         upstream = sorted({f.decode('ascii', 'replace') for f in
             re.findall(rb'tailscale\.com/([\w/.]+(?=\.\(\*?[\w.]+\))|[\w/.]+(?=\.))', text)})[:8]
         panic_classes = sorted({_panic_class(l) for l in text.splitlines()
-            if b'panic: ' in l})[:3]
+            if b'panic: ' in l or b'panicked at' in l})[:3]
         if not kinds and not frames and not upstream and not panic_classes:
             return {'available': False}
         return {'available': True, 'kinds': kinds[:6], 'panicTypes': panic_classes,

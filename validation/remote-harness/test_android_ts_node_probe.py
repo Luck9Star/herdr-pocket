@@ -150,6 +150,12 @@ class ProbeGuardsTests(unittest.TestCase):
         self.assertNotIn('other_app', dumped)
         self.assertEqual(probe._abort_class(ours[0]), 'go-panic')
         self.assertEqual(probe._module_basenames(ours[0]), ['libhp_tailscale.so'])
+        # Rust panic abort: empty tombstone abort message, "panicked at" on stderr.
+        self.assertEqual(probe._abort_class(b'Abort message: \x27\x27\n'), 'other')
+        self.assertEqual(probe._abort_class(b'thread panicked at src/lib.rs:12\n'), 'rust-panic')
+        # fd ownership abort is the probe's own stderr redirection showing up.
+        self.assertEqual(probe._abort_class(
+            b'Abort message: \x27failed to check ownership of fd 2\x27\n'), 'fd-ownership')
         # Unknown panic text falls back to a fixed class, never raw text.
         unknown = probe._redacted_forensics(b'Abort message: \x27panic: segmentation fault\x27')
         self.assertEqual(unknown['panicTypes'], ['other'])

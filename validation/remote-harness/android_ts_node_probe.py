@@ -147,13 +147,30 @@ def probe_report(raw):
         return {'probeReport': 'schema-rejected', 'probePartial': partial, 'rejectedFields': sorted(set(rejected))}
 
 
+
 def instrument_summary(result):
     raw = result.stdout[:65536]
     codes = re.findall(rb'^INSTRUMENTATION_CODE: (-?[0-9]+)\r?$', raw, re.MULTILINE)
     code = codes[-1].decode() if len(codes) == 1 and codes[0] in (b'-1', b'0', b'1') else 'other'
-    return {'commandSucceeded': result.returncode == 0, 'finished': len(codes) == 1,
+    summary = {'commandSucceeded': result.returncode == 0, 'finished': len(codes) == 1,
         'returnCode': code, 'processCrash': b'Process crashed' in raw or b'Process crash' in raw,
         'instrumentationFailed': b'INSTRUMENTATION_FAILED' in raw}
+    # Crash lines can come from debuggerd/crash_dump64 with their own PID, so
+    # this works on the merged am-instrument output rather than filtered
+    # logcat. Keep "reported by am" separate from hard signal evidence.
+    signals = re.findall(rb'Fatal signal (\d+)', raw)
+    panics = re.findall(rb'panic: ([a-zA-Z0-9_.:\- ]+)', raw)
+    frames = re.findall(rb'herdr\.local/tailscale-runtime\.(\w+)', raw)
+    upstream_frames = re.findall(rb'tailscale\.com/([\w/.]+)\.', raw)
+    if signals or panics or summary['processCrash'] or summary['instrumentationFailed']:
+        # Bounded, redacted crash forensics: signal number, panic type and Go
+        # frame names only. Never addresses, paths, keys or full logs.
+        summary['crashSignals'] = sorted({int(s) for s in signals})[:4]
+        summary['panicTypes'] = sorted({p.decode('ascii', 'replace') for p in panics})[:3]
+        summary['goFrames'] = sorted({f.decode('ascii', 'replace') for f in frames})[:8]
+        summary['upstreamFrames'] = sorted({f.decode('ascii', 'replace') for f in upstream_frames})[:8]
+        summary['signalEvidence'] = bool(signals or panics)
+    return summary
 
 
 def verify_apk(apk, libraries):
@@ -218,6 +235,21 @@ def run(args):
                     try:
                         result = adb('shell', 'am', 'instrument', '-w', '-r', PACKAGE + '/dev.herdr.tsnodeprobe.ProbeInstrumentation', timeout=100)
                         row['instrumentation'] = instrument_summary(result)
+                        # debuggerd/crash_dump64 lines carry their own PID, so
+                        # merge the crash buffer attributed by process name
+                        # into the same redacted forensics.
+                        crash_log = adb('shell', 'logcat', '-d', '-b', 'crash', timeout=30)
+                        if crash_log.returncode == 0:
+                            attributed = b''.join(line for line in crash_log.stdout.splitlines(keepends=True)
+                                if PACKAGE.encode() in line or b'libhp_tailscale' in line
+                                or b'>>> dev.herdr' in line)
+                            merged = instrument_summary(type('R', (), {'returncode': 0, 'stdout': attributed})())
+                            for key in ('crashSignals', 'panicTypes', 'goFrames', 'upstreamFrames', 'signalEvidence'):
+                                if key in merged and merged[key]:
+                                    combined = row['instrumentation'].get(key)
+                                    if isinstance(merged[key], list):
+                                        combined = sorted(set((combined or []) + merged[key]))[:8]
+                                    row['instrumentation'][key] = combined if isinstance(merged[key], list) else merged[key]
                     except subprocess.TimeoutExpired:
                         row['instrumentation'] = {'commandSucceeded': False, 'timedOut': True}
                     response = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-result.json')

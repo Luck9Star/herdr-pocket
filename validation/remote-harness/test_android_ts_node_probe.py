@@ -70,6 +70,32 @@ class ProbeGuardsTests(unittest.TestCase):
             stdout=b'INSTRUMENTATION_FAILED: private-value', stderr=b''))
         self.assertNotIn('private-value', repr(result)); self.assertNotIn('secret', repr(result))
 
+    def test_crash_forensics_redacted_and_bounded(self):
+        from types import SimpleNamespace
+        raw = (b'INSTRUMENTATION_STATUS: Error\n'
+               b'Process crashed.\n'
+               b'Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0xdeadbeef\n'
+               b'panic: runtime error: invalid memory address\n'
+               b'# pc 00000000004a1b2c /data/app/libhp_tailscale.so\n'
+               b'herdr.local/tailscale-runtime.netmonInterfaceGetter(...)\n'
+               b'herdr.local/tailscale-runtime.toNetmonInterfaces(...)\n'
+               b'INSTRUMENTATION_CODE: 0\n')
+        summary = probe.instrument_summary(SimpleNamespace(returncode=0, stdout=raw))
+        self.assertTrue(summary['processCrash'])
+        self.assertEqual(summary['crashSignals'], [11])
+        self.assertIn('runtime error: invalid memory address', summary['panicTypes'])
+        self.assertEqual(sorted(summary['goFrames']),
+                         ['netmonInterfaceGetter', 'toNetmonInterfaces'])
+        dumped = repr(summary)
+        self.assertNotIn('deadbeef', dumped)
+        self.assertNotIn('hp_tailscale.so', dumped)
+        # Quiet run: no crash markers, no forensics block at all.
+        quiet = probe.instrument_summary(SimpleNamespace(returncode=0,
+            stdout=b'INSTRUMENTATION_CODE: -1\n'))
+        self.assertNotIn('crashSignals', quiet)
+        self.assertNotIn('panicTypes', quiet)
+        self.assertNotIn('goFrames', quiet)
+
     def test_probe_never_requests_login_or_application_dial(self):
         source = (Path(__file__).resolve().parent / 'android-ts-node-probe/ProbeInstrumentation.java').read_text()
         for forbidden in ('beginLogin', 'begin_login', 'UserDial', 'user_dial', '"dial"'):

@@ -173,6 +173,27 @@ class DualEvidenceTests(unittest.TestCase):
           process.stdout.write('ok');"""
         self.assertEqual(subprocess.check_output(['node','-e',script,dual.START_OBSERVER],text=True),'ok')
 
+    def test_open_auth_observer_counts_actual_native_call_without_publishing_url_or_errors(self):
+        script=r"""for(const [url,valid,reject] of [
+          ['https://127.0.0.1:43123/private?token=secret',true,false],
+          ['https://127.0.0.1:43124/private',false,false],
+          ['https://user:secret@127.0.0.1:43123/private',false,false],
+          ['https://127.0.0.1:43123/private#secret',false,false],
+          ['http://127.0.0.1:43123/private',false,false],
+          ['https://example.invalid:43123/private',false,true]]) {
+          const callbacks=new Map(),sent=[];callbacks.set(11,()=>{});callbacks.set(12,()=>{});
+          global.window={__TAURI_INTERNALS__:{callbacks},ipc:{postMessage:x=>{sent.push(x);return 17}}};
+          if(!eval(process.argv[1].replace('const expectedAuthPort=0;','const expectedAuthPort=43123;')))throw Error('install');
+          const message=JSON.stringify({cmd:'network_node_open_auth',callback:11,error:12,payload:{args:{expectedAuthUrl:url}}});
+          if(window.ipc.postMessage(message)!==17||sent[0]!==message)throw Error('forward');
+          callbacks.get(reject?12:11)('untrusted-private-error');
+          const state=window.__dualStartObserver.state;
+          if(state.sent!==0||state.openAuth.sent!==1||state.openAuth.expectedAuthUrlValid!==valid||
+             state.openAuth.resolved!==(reject?0:1)||state.openAuth.rejected!==(reject?1:0))throw Error('counts');
+          if(/private|secret|https|43123|untrusted/.test(JSON.stringify(state)))throw Error('leak');
+        }process.stdout.write('ok');"""
+        self.assertEqual(subprocess.check_output(['node','-e',script,dual.START_OBSERVER],text=True),'ok')
+
     def test_stop_button_alone_does_not_claim_start_completion(self):
         before={'sent':0,'resolved':0,'rejected':0}
         states=[{'sent':1,'resolved':0,'rejected':0},{'sent':1,'resolved':1,'rejected':0}]

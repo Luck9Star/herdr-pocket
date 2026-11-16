@@ -250,17 +250,26 @@ START_OBSERVER = r"""(()=>{
     'network_profile_changed','network_affected_changed','state_unavailable','network_identity_busy',
     'network_changed','network_profile_missing','network_identity_mode_unsupported',
     'network_identity_provider_unavailable','network_identity_unsupported']);
-  const state={sent:0,resolved:0,rejected:0,errorCode:null};
+  const expectedAuthPort=0;
+  const state={sent:0,resolved:0,rejected:0,errorCode:null,openAuth:{sent:0,resolved:0,rejected:0,expectedAuthUrlValid:false}};
   const wrapped={postMessage(message){
     let data;try{data=typeof message==='string'?JSON.parse(message):null}catch{}
-    if(data?.cmd==='network_node_start'){
-      state.sent++;
+    const target=data?.cmd==='network_node_start'?state:data?.cmd==='network_node_open_auth'?state.openAuth:null;
+    if(target){
+      target.sent++;
+      if(target===state.openAuth){
+        const raw=data.payload?.args?.expectedAuthUrl??data.payload?.expectedAuthUrl;
+        try{const u=typeof raw==='string'&&raw.length<=4096?new URL(raw):null;
+          target.expectedAuthUrlValid=!!u&&u.protocol==='https:'&&u.hostname==='127.0.0.1'&&
+            Number(u.port||443)===expectedAuthPort&&!u.username&&!u.password&&!u.hash;
+        }catch{target.expectedAuthUrlValid=false;}
+      }
       for(const [id,rejected] of [[data.callback,false],[data.error,true]]){
         const callback=callbacks.get(id);
-        if(typeof callback!=='function'){state.callbackMissing=true;continue;}
+        if(typeof callback!=='function'){target.callbackMissing=true;continue;}
         callbacks.set(id,function(value){
-          if(rejected){state.rejected++;state.errorCode=typeof value==='string'&&allowed.has(value)?value:'other';}
-          else state.resolved++;
+          if(rejected){target.rejected++;if(target===state)state.errorCode=typeof value==='string'&&allowed.has(value)?value:'other';}
+          else target.resolved++;
           return callback(value);
         });
       }
@@ -274,8 +283,11 @@ START_OBSERVER = r"""(()=>{
 })()"""
 
 
-def install_start_observer(browser):
-    if browser.evaluate(START_OBSERVER) is not True:
+def install_start_observer(browser, auth_port=None):
+    if auth_port is not None and (type(auth_port) is not int or not 1<=auth_port<=65535):
+        raise GuiFailure('dual_auth_port_invalid')
+    script=START_OBSERVER.replace('const expectedAuthPort=0;','const expectedAuthPort='+str(auth_port or 0)+';')
+    if browser.evaluate(script) is not True:
         raise GuiFailure('dual_start_observer_unavailable')
 
 
@@ -285,7 +297,14 @@ def start_observer_snapshot(browser):
             for key in ('sent','resolved','rejected')) or value.get('errorCode') is not None and
             not re.fullmatch(r'[a-z_]{1,50}',value['errorCode'])):
         raise GuiFailure('dual_start_observer_invalid')
-    return {key:value.get(key) for key in ('sent','resolved','rejected','errorCode','callbackMissing') if key in value}
+    result={key:value.get(key) for key in ('sent','resolved','rejected','errorCode','callbackMissing') if key in value}
+    if 'openAuth' in value:
+        opened=value['openAuth']
+        if (not isinstance(opened,dict) or any(type(opened.get(key)) is not int or not 0<=opened[key]<=9
+                for key in ('sent','resolved','rejected')) or type(opened.get('expectedAuthUrlValid')) is not bool):
+            raise GuiFailure('dual_start_observer_invalid')
+        result['openAuth']={key:opened[key] for key in ('sent','resolved','rejected','expectedAuthUrlValid')}
+    return result
 
 
 def public_transport_sample(session):
@@ -408,6 +427,14 @@ TRUSTED_RESOLVERS={
 }
 
 
+def verified_system_resolver(component):
+    package=TRUSTED_RESOLVERS.get(component)
+    if not package:return False
+    try:packages=adb('shell','pm','list','packages','-s',package,timeout=10).splitlines()
+    except GuiFailure:return False
+    return 'package:'+package in packages
+
+
 def query_view_components(url):
     raw=adb('shell','cmd','package','query-activities','--brief','--user','0',
             '-a','android.intent.action.VIEW','-d',url,check=False)
@@ -432,7 +459,7 @@ def resolver_receiver_action(nodes, foreground, row_tapped=False):
     state={'foreground':component_kind(foreground),'trustedResolver':bool(package),'receiverLabels':0,
            'receiverRows':0,'receiverSelected':False,'otherSelected':False,'defaultReceiverTitle':False,
            'onceButtons':0,'onceEnabled':False,'alwaysButtons':0}
-    if not package:return None,None,state
+    if not package or not nodes or nodes[0].get('package')!=package:return None,None,state
     owned=[node for node in nodes if node.get('package')==package]
     parents={child:parent for parent in nodes for child in parent}
     lists={node for node in owned if resolver_resource(node,'resolver_list')}
@@ -465,7 +492,7 @@ def resolver_receiver_action(nodes, foreground, row_tapped=False):
     if (selected or row_tapped or state['defaultReceiverTitle']) and not state['otherSelected'] and state['onceEnabled']:
         if (len(rows)==1 and len(labels)==1) or state['defaultReceiverTitle']:
             return 'once',native_point(once[0]),state
-    if not row_tapped and len(rows)==1 and len(labels)==1 and rows[0][1].get('enabled')=='true':
+    if not row_tapped and not state['otherSelected'] and len(rows)==1 and len(labels)==1 and rows[0][1].get('enabled')=='true':
         return 'row',native_point(rows[0][1]),state
     return None,None,state
 
@@ -510,14 +537,17 @@ def prepare_auth_receiver(port, report):
     state.update(loopback_user_selection(links),onlyLoopbackApproved=loopback_app_link_approved(links))
     if not state['linkHandlingAllowed'] or not state['onlyLoopbackApproved']:
         raise GuiFailure('dual_auth_app_link_unconfirmed')
-    state['afterHandler']=component_kind(resolve_view_component(probe))
+    after=resolve_view_component(probe);state['afterHandler']=component_kind(after)
+    state['systemResolverVerified']=verified_system_resolver(after)
     state['unrelatedHandler']=component_kind(resolve_view_component('https://example.invalid/'))
     candidates=query_view_components(probe);unrelated=query_view_components('https://example.invalid/')
     receiver=AUTH_PACKAGE+'/'+AUTH_PACKAGE+'.AuthActivity'
     state.update(candidateCount=min(len(candidates),9),receiverCandidate=receiver in candidates,
                  unrelatedCandidateCount=min(len(unrelated),9),unrelatedReceiverCandidate=receiver in unrelated)
     # Pre-query ranking can differ from the app's launch; actual foreground decides next.
-    if state['afterHandler']!='test_receiver' or not state['receiverCandidate'] or state['unrelatedReceiverCandidate'] or state['unrelatedHandler']=='test_receiver':
+    if ((after!=receiver and not state['systemResolverVerified']) or not state['receiverCandidate'] or
+            state['unrelatedReceiverCandidate'] or state['unrelatedHandler']!='browser' or not unrelated or
+            any(component_kind(value)!='browser' for value in unrelated)):
         raise GuiFailure('dual_auth_handler_scope_mismatch')
 
 
@@ -536,8 +566,9 @@ def auth_consent_candidate(nodes, foreground, port):
              node.get('text')=='批准本次测试授权' and node.get('enabled')=='true']
     owned=len(buttons)==1 and buttons[0].get('package')==AUTH_PACKAGE
     state={'xmlParsed':True,'foreground':component_kind(foreground),'sourceMatched':len(sources)==1,
+           'rootPackageMatched':bool(nodes) and nodes[0].get('package')==AUTH_PACKAGE,
            'candidateButtons':min(len(buttons),9),'uniqueReceiverButton':owned,'boundsValid':False}
-    if state['foreground']!='test_receiver' or not state['sourceMatched'] or not owned:return None,state
+    if state['foreground']!='test_receiver' or not state['sourceMatched'] or not state['rootPackageMatched'] or not owned:return None,state
     match=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',buttons[0].get('bounds',''))
     if not match:return None,state
     x1,y1,x2,y2=map(int,match.groups())
@@ -787,7 +818,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['stage']='device_native_tree'
         report['ordinaryNativeTree']=wait_for_ordinary_tree(report)
         report['stage']='network_setup'
-        install_start_observer(browser)
+        install_start_observer(browser,parsed.port)
         report['startObserverInstalled']=True
         report['transportBeforeNetwork']=public_transport_sample(session)
         browser.click('#nav-network')
@@ -854,6 +885,10 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['survivorExplicitlyStoppedAndClosed']=True
         report['stage']='complete'
     except Exception as error:
+        try:
+            from tauri_auth_failure_diagnostic import capture
+            report['androidFailureDiagnostic']=capture(adb,native_ui_nodes,foreground_component,{PACKAGE,AUTH_PACKAGE},parsed.port)
+        except Exception:report['androidFailureDiagnostic']={'scope':'read-only-failure-facts','readUnavailable':True}
         try:report['foregroundAtFailure']=component_kind(foreground_component())
         except Exception:report['foregroundAtFailure']='unavailable'
         if report.get('stage') in {'pairing','connect_and_input','post_stop','stop_survivor','complete'}:

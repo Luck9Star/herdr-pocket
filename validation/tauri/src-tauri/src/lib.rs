@@ -224,8 +224,8 @@ async fn network_node_start(id:String,expected_catalog:String,expected_revision:
     #[cfg(not(target_os="android"))]
     {let _=(nodes,app,profile,flow,gate);Err("overlay_provider_unavailable".into())}
 }
-struct NodeStopAdmission {flow:Arc<Mutex<RemoteFlow>>,binding:herdr_readonly_transport::mobile_nodes::Binding}
-impl Drop for NodeStopAdmission {fn drop(&mut self) {if let Ok(mut f)=self.flow.lock() {f.tabs.defer_stop(&self.binding);}}}
+struct NodeStopAdmission {flow:Arc<Mutex<RemoteFlow>>,binding:herdr_readonly_transport::mobile_nodes::Binding,armed:bool}
+impl Drop for NodeStopAdmission {fn drop(&mut self) {if self.armed {if let Ok(mut f)=self.flow.lock() {f.tabs.defer_stop(&self.binding);}}}}
 #[tauri::command]
 async fn network_node_stop(id:String,expected_catalog:String,expected_revision:u32,affected:Vec<String>,binding:herdr_readonly_transport::mobile_nodes::Binding,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>)->Result<(),String>{
     reviewed_identity_profile(&hosts,&id,expected_revision,&expected_catalog,&affected)?;
@@ -238,7 +238,7 @@ async fn network_node_stop(id:String,expected_catalog:String,expected_revision:u
         let legacy=if f.node_binding.as_ref()==Some(&binding) {f.owner.zip(f.attempt)} else {None};
         f.tabs.stop_binding(&binding,node,legacy).map_err(str::to_string)?
     };
-    let _admission=NodeStopAdmission {flow:flow.inner().clone(),binding:binding.clone()};
+    let mut admission=NodeStopAdmission {flow:flow.inner().clone(),binding:binding.clone(),armed:true};
     let targets=plan.targets;let legacy=plan.legacy;
     let direct={let f=flow.lock().map_err(|_|"state_unavailable")?;if legacy.is_some() && f.owner.zip(f.attempt)==legacy {f.direct.clone()} else {None}};
     // State listeners may re-enter flow; never notify while holding its lock.
@@ -257,11 +257,12 @@ async fn network_node_stop(id:String,expected_catalog:String,expected_revision:u
         let deadline=std::time::Instant::now()+std::time::Duration::from_secs(2);
         while !settled()? && std::time::Instant::now()<deadline {tokio::time::sleep(std::time::Duration::from_millis(20)).await;}
         // Keep the binding fenced if actual I/O has not retired.
-        if !settled()? {flow.lock().map_err(|_|"state_unavailable")?.tabs.defer_stop(&binding);return Err("mobile_node_ssh_retirement_pending".into());}
+        if !settled()? {return Err("mobile_node_ssh_retirement_pending".into());}
     }
     let result=nodes.stop_prepared(&binding,plan.node).await;
     let mut f=flow.lock().map_err(|_|"state_unavailable")?;
-    if result.is_ok() {f.tabs.finish_stop(&binding);} else {f.tabs.defer_stop(&binding);}
+    if result.is_ok() {f.tabs.finish_stop(&binding);admission.armed=false;}
+    // Errors are deferred once by the guard, after this lock is released.
     result
 }
 fn reviewed_login_binding(hosts:&Hosts,id:&str,revision:u32,catalog:&str,affected:&[String],binding:&herdr_readonly_transport::mobile_nodes::Binding)->Result<networks::NetworkProfile,String>{
@@ -656,5 +657,25 @@ mod stop_slot_tests {
   let (new,cancel)=f.begin(1,&mut gate).unwrap();assert_ne!(old,new);
   assert!(!f.finish(1,old,&mut gate));assert_eq!(f.attempt,Some(new));assert!(!cancel.is_cancelled());
   assert!(f.finish(1,new,&mut gate));
+ }
+}
+
+#[cfg(test)]
+mod stop_admission_tests {
+ use super::*;
+ #[test]
+ fn completed_old_guard_cannot_release_a_new_same_binding_stop() {
+  let binding=herdr_readonly_transport::mobile_nodes::Binding::new("p".into(),1,"qa".into(),"identity".into()).unwrap();
+  let flow=Arc::new(Mutex::new(RemoteFlow::default()));
+  flow.lock().unwrap().tabs.stop_binding(&binding,None,None).unwrap();
+  let mut old=NodeStopAdmission {flow:flow.clone(),binding:binding.clone(),armed:true};
+  {let mut f=flow.lock().unwrap();f.tabs.finish_stop(&binding);old.armed=false;}
+  flow.lock().unwrap().tabs.stop_binding(&binding,None,None).unwrap();
+  drop(old);
+  assert!(matches!(flow.lock().unwrap().tabs.stop_binding(&binding,None,None),Err("mobile_node_stop_pending")));
+  let failed=NodeStopAdmission {flow:flow.clone(),binding:binding.clone(),armed:true};
+  drop(failed); // One error defer permits exactly the next explicit admission.
+  flow.lock().unwrap().tabs.stop_binding(&binding,None,None).unwrap();
+  assert!(flow.lock().unwrap().tabs.stop_binding(&binding,None,None).is_err());
  }
 }

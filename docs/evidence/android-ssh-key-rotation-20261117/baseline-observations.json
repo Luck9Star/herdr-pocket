@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-17",
+  "sourceCommit": "f9d5595b45ca8db54d0dde867e082273ff4ace6c",
+  "androidDeviceVerified": false,
+  "flutterPushedBack": {
+    "sourceCommit": "f9d5595b45ca8db54d0dde867e082273ff4ace6c",
+    "runtime": "Flutter Android-platform widget test with real loopback SSH peer",
+    "routePushedFromHome": true,
+    "rotationReviewVisibleBeforeBack": true,
+    "credentialCleared": true,
+    "authenticationNotObserved": true,
+    "interaction": "tap actual AppBar BackButton",
+    "directSshPageRemovedAfterBack": true,
+    "homeVisibleAfterBack": true,
+    "pageSourceSha256": "04acf41c4c43907d1837e3da9497632aef076a3273196b24afc20868b58b99ee",
+    "pageCopyMatchesSourceCommit": true,
+    "flutterVersion": "3.47.9",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "tests": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "androidDeviceVerified": false,
+    "systemBackVerified": false
+  },
+  "tauriBrowserNavigation": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 844
+      },
+      "interaction": "touch",
+      "observations": {
+        "before": {
+          "review": true,
+          "add": false,
+          "marked": false,
+          "passwordLocked": true,
+          "sameTarget": true,
+          "old": true,
+          "newKey": true,
+          "probes": 1,
+          "opens": 1,
+          "writes": 0
+        },
+        "away": {
+          "review": false,
+          "add": true,
+          "marked": false,
+          "passwordLocked": true,
+          "sameTarget": true,
+          "old": true,
+          "newKey": true,
+          "probes": 1,
+          "opens": 1,
+          "writes": 0
+        },
+        "back": {
+          "review": true,
+          "add": false,
+          "marked": false,
+          "passwordLocked": true,
+          "sameTarget": true,
+          "old": true,
+          "newKey": true,
+          "probes": 1,
+          "opens": 1,
+          "writes": 0
+        }
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "interaction": "mouse",
+      "observations": {
+        "before": {
+          "review": true,
+          "add": false,
+          "marked": false,
+          "passwordLocked": true,
+          "sameTarget": true,
+          "old": true,
+          "newKey": true,
+          "probes": 1,
+          "opens": 1,
+          "writes": 0
+        },
+        "away": {
+          "review": false,
+          "add": true,
+          "marked": false,
+          "passwordLocked": true,
+          "sameTarget": true,
+          "old": true,
+          "newKey": true,
+          "probes": 1,
+          "opens": 1,
+          "writes": 0
+        },
+        "back": {
+          "review": true,
+          "add": false,
+          "marked": false,
+          "passwordLocked": true,
+          "sameTarget": true,
+          "old": true,
+          "newKey": true,
+          "probes": 1,
+          "opens": 1,
+          "writes": 0
+        }
+      }
+    }
+  ],
+  "tauriFailedReprobeController": {
+    "runtime": "direct controller test",
+    "observations": {
+      "before": "fp-a",
+      "afterFailedReprobe": null,
+      "blocked": true
+    }
+  }
+}

@@ -2,6 +2,8 @@
 
 > 面向 SSH / herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
+**普通 SSH 换钥专项 · 2026-11-17**　[两壳 S10 基线复现、同目标 A→B 验收约定与设备证据](docs/68-android-ssh-host-key-rotation.md)：统一源码 `7705241` 的 Flutter／Tauri Android API 35 模拟器验收均通过，完整 ABBB、取消保留旧信任、新指纹确认后输入回显及清理已核验；与下方历史普通 SSH 验收分开。
+
 **2026-11-16 迭代收口**　[本轮交接、三个会话交付、两壳普通 SSH 与 macOS 原生窗口验收、Linux 双网与 Android 双网结果](docs/66-iteration-handoff-2026-11-16.md)（[PR #1](https://github.com/Luck9Star/herdr-pocket/pull/1)）。上轮状态：**普通 SSH 通过**（Flutter / Tauri Android 与 macOS 真 XCUITest）。**2026-11-17 Android 双网**：[两壳 × 两种停网顺序 4/4 实测通过（API 35 模拟器、双受控 SSH 服务）](docs/67-android-dual-network-startup.md)。历史验收与下载入口见下文。
 
 **同源 QA 调试包 · 2026-11-15**　源码 `d925bd0`：[Flutter Android APK（多架构）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162282781) · [Tauri Android APK（仅 arm64-v8a）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162296306)。[本批运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398)完成：27 项成功、7 项按条件跳过；[macOS/Linux 下载、包名、架构与 SHA256](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。这是 CI 调试快照，与公开 Release 和设备验收分开。

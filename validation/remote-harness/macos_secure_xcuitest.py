@@ -86,7 +86,7 @@ def prepare(app, fixture=None):
         if dart_text.count(address_point) != 1:
             raise ValueError('macos_xcui_dart_unexpected')
         pem_point = "          Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）'"
-        field_point = "TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,"
+        field_point = "TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy && !hostKeyReviewRequired, obscureText: !keyAuth,"
         if dart_text.count(pem_point) != 1 or dart_text.count(field_point) != 1:
             raise ValueError('macos_xcui_dart_unexpected')
         connect_point = '  Future<void> connect() async {'

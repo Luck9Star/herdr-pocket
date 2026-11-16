@@ -22,7 +22,9 @@ ERRORS = {'overlay_provider_unavailable', 'mobile_node_binding_mismatch', 'mobil
     'network_scope_unavailable', 'identity_unavailable', 'invalid_network_request', 'network_failed',
     'cancelled', 'timeout', 'timed_out', 'close_pending', 'state_store_unavailable', 'other_product_error'}
 STAGES = {'initialization', 'private-config', 'load-libraries', 'bind-java-context', 'create-identity', 'directory-callback',
-    'create-native-scope', 'native-available', 'native-start', 'native-status', 'netmon-diagnose'}
+    'create-native-scope', 'native-available', 'native-start', 'native-start-returned', 'native-status', 'netmon-diagnose'}
+NUMS = {'startReturnedAfterMs'}
+EXIT_REASONS = set(range(15))
 
 NETMON_ERR_CLASSES = {'', 'none', 'permission', 'empty', 'other'}
 NETMON_PATHS = {'goNet', 'getifaddrs'}
@@ -110,6 +112,17 @@ def safe_probe(value):
                 valid = False
         elif key == 'netmonDiagnose':
             valid = _safe_netmon_diagnose(item)
+        elif key == 'previousExit':
+            valid = (isinstance(item, dict) and set(item) <= {'available', 'reason', 'status', 'timestamp', 'importance', 'errClass'}
+                and type(item.get('available')) is bool)
+            if valid and item.get('available'):
+                valid = (set(item) == {'available', 'reason', 'status', 'timestamp', 'importance'}
+                    and item['reason'] in EXIT_REASONS
+                    and all(type(item[name]) is int and item[name] >= 0 for name in ('status', 'timestamp', 'importance')))
+            elif valid and 'errClass' in item:
+                valid = (item['errClass'] == '' or item['errClass'].isidentifier()) and len(item['errClass']) <= 64
+        elif key in NUMS:
+            valid = type(item) is int and item >= 0
         else:
             valid = False
         if not valid:
@@ -147,6 +160,45 @@ def probe_report(raw):
         return {'probeReport': 'schema-rejected', 'probePartial': partial, 'rejectedFields': sorted(set(rejected))}
 
 
+PANIC_CLASSES = (
+    (b'nil pointer dereference', 'nil-dereference'),
+    (b'index out of range', 'index-out-of-range'),
+    (b'slice bounds out of range', 'slice-out-of-range'),
+    (b'invalid memory address', 'invalid-memory-address'),
+    (b'divide by zero', 'divide-by-zero'),
+    (b'all goroutines are asleep', 'deadlock'),
+    (b'concurrent map', 'concurrent-map'),
+)
+
+
+def _panic_class(line):
+    for needle, name in PANIC_CLASSES:
+        if needle in line:
+            return name
+    return 'other'
+
+
+def _redacted_forensics(text):
+    """Extract bounded crash evidence from am output or one crash record.
+
+    A tombstone record is attributed as a whole (*** *** *** header through
+    the next separator): the Cmdline line binds it to this run's package,
+    while signal/frame lines carry debuggerd's own PID, so line-level
+    filtering would shred the record. Output is counts and whitelisted names
+    only - never raw panic text, addresses, paths or keys.
+    """
+    tombstone = sorted({int(s) for s in re.findall(rb'signal (\d+) \(', text)})[:4]
+    fatal = sorted({int(s) for s in re.findall(rb'Fatal signal (\d+)', text)})[:4]
+    signals = sorted(set(tombstone) | set(fatal))[:4]
+    panics = sorted({_panic_class(l) for l in text.splitlines()
+        if b'panic: ' in l})[:3]
+    frames = sorted({f.decode('ascii', 'replace') for f in
+        re.findall(rb'herdr\.local/tailscale-runtime\.(\w+)', text)})[:8]
+    upstream = sorted({f.decode('ascii', 'replace') for f in
+        re.findall(rb'tailscale\.com/([\w/.]+(?=\.\(\*?[\w.]+\))|[\w/.]+(?=\.))', text)})[:8]
+    return {'crashSignals': signals, 'panicTypes': panics,
+        'goFrames': frames, 'upstreamFrames': upstream}
+
 
 def instrument_summary(result):
     raw = result.stdout[:65536]
@@ -155,21 +207,11 @@ def instrument_summary(result):
     summary = {'commandSucceeded': result.returncode == 0, 'finished': len(codes) == 1,
         'returnCode': code, 'processCrash': b'Process crashed' in raw or b'Process crash' in raw,
         'instrumentationFailed': b'INSTRUMENTATION_FAILED' in raw}
-    # Crash lines can come from debuggerd/crash_dump64 with their own PID, so
-    # this works on the merged am-instrument output rather than filtered
-    # logcat. Keep "reported by am" separate from hard signal evidence.
-    signals = re.findall(rb'Fatal signal (\d+)', raw)
-    panics = re.findall(rb'panic: ([a-zA-Z0-9_.:\- ]+)', raw)
-    frames = re.findall(rb'herdr\.local/tailscale-runtime\.(\w+)', raw)
-    upstream_frames = re.findall(rb'tailscale\.com/([\w/.]+)\.', raw)
-    if signals or panics or summary['processCrash'] or summary['instrumentationFailed']:
-        # Bounded, redacted crash forensics: signal number, panic type and Go
-        # frame names only. Never addresses, paths, keys or full logs.
-        summary['crashSignals'] = sorted({int(s) for s in signals})[:4]
-        summary['panicTypes'] = sorted({p.decode('ascii', 'replace') for p in panics})[:3]
-        summary['goFrames'] = sorted({f.decode('ascii', 'replace') for f in frames})[:8]
-        summary['upstreamFrames'] = sorted({f.decode('ascii', 'replace') for f in upstream_frames})[:8]
-        summary['signalEvidence'] = bool(signals or panics)
+    forensics = _redacted_forensics(raw)
+    if any(forensics.values()) or summary['processCrash'] or summary['instrumentationFailed']:
+        # am-reported "Process crashed" stays separate from hard evidence.
+        summary.update(forensics)
+        summary['signalEvidence'] = bool(forensics['crashSignals'] or forensics['panicTypes'])
     return summary
 
 
@@ -233,23 +275,29 @@ def run(args):
                     if adb(*prefix, 'chmod', '600', 'files/ts-node-probe-config.json').returncode:
                         raise ValueError('probe_config_failed')
                     try:
+                        # Clear the crash buffer before instrumenting: both
+                        # variants share one package, so without this the
+                        # second variant would re-read the first one's
+                        # tombstone. Clearing after would destroy evidence.
+                        adb('shell', 'logcat', '-c', '-b', 'crash', timeout=15)
                         result = adb('shell', 'am', 'instrument', '-w', '-r', PACKAGE + '/dev.herdr.tsnodeprobe.ProbeInstrumentation', timeout=100)
                         row['instrumentation'] = instrument_summary(result)
-                        # debuggerd/crash_dump64 lines carry their own PID, so
-                        # merge the crash buffer attributed by process name
-                        # into the same redacted forensics.
+                        # Tombstone records are attributed whole: Cmdline
+                        # binds the record to this run's package while
+                        # signal/frame lines carry debuggerd's own PID, so
+                        # line filtering shreds the record.
                         crash_log = adb('shell', 'logcat', '-d', '-b', 'crash', timeout=30)
                         if crash_log.returncode == 0:
-                            attributed = b''.join(line for line in crash_log.stdout.splitlines(keepends=True)
-                                if PACKAGE.encode() in line or b'libhp_tailscale' in line
-                                or b'>>> dev.herdr' in line)
-                            merged = instrument_summary(type('R', (), {'returncode': 0, 'stdout': attributed})())
-                            for key in ('crashSignals', 'panicTypes', 'goFrames', 'upstreamFrames', 'signalEvidence'):
-                                if key in merged and merged[key]:
-                                    combined = row['instrumentation'].get(key)
-                                    if isinstance(merged[key], list):
-                                        combined = sorted(set((combined or []) + merged[key]))[:8]
-                                    row['instrumentation'][key] = combined if isinstance(merged[key], list) else merged[key]
+                            for record in re.split(rb'\*\*\* \*\*\* \*\*\*', crash_log.stdout):
+                                if PACKAGE.encode() not in record and b'>>> dev.herdr' not in record:
+                                    continue
+                                merged = _redacted_forensics(record)
+                                for key in ('crashSignals', 'panicTypes', 'goFrames', 'upstreamFrames'):
+                                    combined = sorted(set(
+                                        row['instrumentation'].get(key, []) + merged[key]))
+                                    row['instrumentation'][key] = combined[:8]
+                                if merged['crashSignals'] or merged['panicTypes']:
+                                    row['instrumentation']['signalEvidence'] = True
                     except subprocess.TimeoutExpired:
                         row['instrumentation'] = {'commandSucceeded': False, 'timedOut': True}
                     response = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-result.json')

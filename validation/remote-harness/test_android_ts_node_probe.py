@@ -57,6 +57,28 @@ class ProbeGuardsTests(unittest.TestCase):
         for accepted in ({**value, 'netmonOptIn': True}, {**value, 'netmonOptIn': False}):
             self.assertEqual(probe.safe_probe(accepted), accepted)
 
+    def test_start_returned_and_previous_exit_shapes(self):
+        base = {'schemaVersion': 1, 'loginInvoked': False, 'dialInvoked': False, 'passed': False,
+            'states': ['starting', 'needs-login'], 'startError': 'identity_unavailable', 'lastStage': 'native-start-returned'}
+        def accepted(extra):
+            try:
+                probe.safe_probe({**base, **extra})
+                return True
+            except ValueError:
+                return False
+        self.assertTrue(accepted({'startReturnedAfterMs': 1200}))
+        self.assertFalse(accepted({'startReturnedAfterMs': -1}))
+        self.assertFalse(accepted({'startReturnedAfterMs': 'fast'}))
+        self.assertTrue(accepted({'previousExit': {'available': True, 'reason': 2,
+            'status': 6, 'timestamp': 1760000000000, 'importance': 100}}))
+        self.assertTrue(accepted({'previousExit': {'available': False}}))
+        self.assertTrue(accepted({'previousExit': {'available': False, 'errClass': 'SecurityException'}}))
+        self.assertFalse(accepted({'previousExit': {'available': True, 'reason': 99,
+            'status': 6, 'timestamp': 1, 'importance': 1}}))
+        self.assertFalse(accepted({'previousExit': {'available': True, 'reason': 2,
+            'status': 6, 'timestamp': 1, 'importance': 1, 'trace': 'raw-text'}}))
+        self.assertFalse(accepted({'previousExit': {'available': False, 'errClass': 'x' * 65}}))
+
     def test_missing_or_rejected_report_preserves_only_safe_metadata(self):
         self.assertEqual(probe.probe_report(b'cat: private-path: No such file or directory'),
             {'probeReport': 'not-json', 'reportFileMissing': True})
@@ -83,18 +105,53 @@ class ProbeGuardsTests(unittest.TestCase):
         summary = probe.instrument_summary(SimpleNamespace(returncode=0, stdout=raw))
         self.assertTrue(summary['processCrash'])
         self.assertEqual(summary['crashSignals'], [11])
-        self.assertIn('runtime error: invalid memory address', summary['panicTypes'])
+        # Panic lines are classified, never stored as raw text.
+        self.assertEqual(summary['panicTypes'], ['invalid-memory-address'])
         self.assertEqual(sorted(summary['goFrames']),
                          ['netmonInterfaceGetter', 'toNetmonInterfaces'])
         dumped = repr(summary)
         self.assertNotIn('deadbeef', dumped)
         self.assertNotIn('hp_tailscale.so', dumped)
+        self.assertNotIn('invalid memory address', dumped)
         # Quiet run: no crash markers, no forensics block at all.
         quiet = probe.instrument_summary(SimpleNamespace(returncode=0,
             stdout=b'INSTRUMENTATION_CODE: -1\n'))
         self.assertNotIn('crashSignals', quiet)
         self.assertNotIn('panicTypes', quiet)
         self.assertNotIn('goFrames', quiet)
+
+    def test_tombstone_record_attributed_whole(self):
+        # A standard crash-buffer tombstone: debuggerd PID on the header,
+        # package bound by the Cmdline line, signal and Go frames inside.
+        blob = (b'09-16 00:04:35.123  1234  1235 E crash_dump64: \n'
+                b'*** *** *** \n'
+                b'Build fingerprint: \x27generic\x27\n'
+                b'Cmdline: dev.herdr.herdr_flutter_probe\n'
+                b'signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------\n'
+                b'Abort message: \x27panic: runtime error: nil pointer dereference\x27\n'
+                b'#00 pc 00000000004a1b2c /data/app/libhp_tailscale.so\n'
+                b'    at herdr.local/tailscale-runtime.netmonInterfaceGetter(...)\n'
+                b'    at tailscale.com/net/netmon.(*Monitor).pump(...)\n'
+                b'*** *** *** \n'
+                b'Cmdline: com.android.other_app\n'
+                b'signal 5 (SIGTRAP)\n')
+        parts = __import__('re').split(rb'\*\*\* \*\*\* \*\*\*', blob)
+        ours = [r for r in parts
+                if b'dev.herdr.herdr_flutter_probe' in r or b'>>> dev.herdr' in r]
+        self.assertEqual(len(ours), 1)
+        merged = probe._redacted_forensics(ours[0])
+        self.assertEqual(merged['crashSignals'], [6])
+        self.assertEqual(merged['panicTypes'], ['nil-dereference'])
+        self.assertEqual(merged['goFrames'], ['netmonInterfaceGetter'])
+        self.assertEqual(merged['upstreamFrames'], ['net/netmon'])
+        dumped = repr(merged)
+        self.assertNotIn('deadbeef', dumped)
+        self.assertNotIn('0x00000000004a1b2c', dumped)
+        self.assertNotIn('other_app', dumped)
+        # Unknown panic text falls back to a fixed class, never raw text.
+        unknown = probe._redacted_forensics(b'Abort message: \x27panic: segmentation fault\x27')
+        self.assertEqual(unknown['panicTypes'], ['other'])
+        self.assertNotIn('segmentation', repr(unknown))
 
     def test_probe_never_requests_login_or_application_dial(self):
         source = (Path(__file__).resolve().parent / 'android-ts-node-probe/ProbeInstrumentation.java').read_text()

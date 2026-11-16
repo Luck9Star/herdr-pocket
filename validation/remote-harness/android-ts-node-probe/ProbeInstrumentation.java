@@ -67,6 +67,9 @@ public final class ProbeInstrumentation extends Instrumentation {
         AndroidTailscaleStateStore.Result identity = null;
         try {
             report.put("schemaVersion", 1).put("loginInvoked", false).put("dialInvoked", false);
+            // Previous process crash: visible only from this later process.
+            try { report.put("previousExit", DirectoryProbe.exitInfo(app)); }
+            catch (Exception ignored) { }
             checkpoint(app, "private-config");
             JSONObject config = new JSONObject(new String(Files.readAllBytes(new File(app.getFilesDir(), "ts-node-probe-config.json").toPath()), StandardCharsets.UTF_8));
             String control = config.getString("controlUrl"), hostname = "android-synthetic-probe";
@@ -116,8 +119,13 @@ public final class ProbeInstrumentation extends Instrumentation {
             try { report.put("netmonOptIn", DirectoryProbe.enableNetmonDiagnose(app, profile, identity.handle)); }
             catch (Exception ignored) { }
             checkpoint(app, "native-start");
+            long startAt = android.os.SystemClock.elapsedRealtime();
             call(scope, "nodeStart", new JSONObject().put("binding", binding).put("settings",
                 new JSONObject().put("controlUrl", control).put("hostname", hostname)), "start");
+            // A crash inside nodeStart never reaches this checkpoint; a crash
+            // after it does. The elapsed time bounds the window.
+            report.put("startReturnedAfterMs", android.os.SystemClock.elapsedRealtime() - startAt);
+            checkpoint(app, "native-start-returned");
             checkpoint(app, "native-status");
             JSONArray states = new JSONArray();
             boolean needsLogin = false;

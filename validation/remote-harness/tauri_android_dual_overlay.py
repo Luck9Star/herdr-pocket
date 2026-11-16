@@ -647,15 +647,20 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--host-source-checkout', type=Path, required=True)
     parser.add_argument('--host-source-sha', required=True)
+    parser.add_argument('--native-source-sha', required=True)
+    parser.add_argument('--apk-source-sha', required=True)
     args=parser.parse_args()
+    for name,value in (('native-source-sha',args.native_source_sha),('apk-source-sha',args.apk_source_sha),
+                       ('host-source-sha',args.host_source_sha)):
+        if not re.fullmatch(r'[0-9a-f]{40}',value or ''):raise SystemExit('dual_'+name.replace('-','_')+'_invalid')
     root=Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
     paths=[args.apk.resolve(strict=True),args.auth_apk.resolve(strict=True),args.bundle.resolve(strict=True),args.output.resolve()]
     if any(path==root or not path.is_relative_to(root) for path in paths):
         raise SystemExit('dual_owned_paths_required')
     output=paths[3];output.mkdir(parents=True,exist_ok=True)
     result={'schemaVersion':1,'status':'failed','sourceSHA':os.environ.get('GITHUB_SHA'),
-            'nativeSourceSHA':'93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc',
-            'apkSourceSHA':'bf39bb44e6df54140984a0abbe93d40f992c1f23',
+            'nativeSourceSHA':args.native_source_sha,
+            'apkSourceSHA':args.apk_source_sha,
             'apkFrontendDifference':'none from checked application source',
             'scope':'owned API35 x86_64; real UI, synthetic peers, QA-only TS private trust; no physical IME',
             'apkSha256':hashlib.sha256(paths[0].read_bytes()).hexdigest(),'directions':{}}

@@ -144,7 +144,8 @@ class DualDirectionIsolationTests(unittest.TestCase):
             checkout=Path(tmp)/'checkout';checkout.mkdir()
             argv=['tauri_android_dual_overlay.py','--apk',str(Path(tmp)/'app.apk'),'--auth-apk',str(Path(tmp)/'auth.apk'),
                   '--bundle',str(Path(tmp)/'bundle.zip'),'--output',str(Path(tmp)/'out'),
-                  '--host-source-checkout',str(checkout),'--host-source-sha',self.SHA]
+                  '--host-source-checkout',str(checkout),'--host-source-sha',self.SHA,
+                  '--native-source-sha',self.SHA,'--apk-source-sha',self.SHA]
             with patch('sys.argv',argv),patch.dict(os.environ,{'RUNNER_TEMP':tmp,'GITHUB_SHA':self.SHA}),\
                  patch('android_dual_overlay_session.AndroidDualOverlaySession',return_value=session),\
                  patch.object(dual,'run_direction',side_effect=fake_run_direction):
@@ -202,6 +203,36 @@ class DualDirectionIsolationTests(unittest.TestCase):
     def test_failure_code_reuses_known_taxonomy(self):
         self.assertEqual(dual.failure_code(dual.GuiFailure('dual_action_unavailable')),'dual_action_unavailable')
         self.assertEqual(dual.failure_code(RuntimeError('unexpected')),'dual_driver_failed')
+
+    def test_reported_source_shas_come_from_verified_inputs(self):
+        calls,result,code=self.drive_main(True)
+        self.assertEqual(result['nativeSourceSHA'],self.SHA)
+        self.assertEqual(result['apkSourceSHA'],self.SHA)
+        self.assertEqual(result['hostSourceSHA'],self.SHA)
+        self.assertNotEqual(result['nativeSourceSHA'],'93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc')
+        self.assertNotEqual(result['apkSourceSHA'],'bf39bb44e6df54140984a0abbe93d40f992c1f23')
+
+    def test_source_shas_required_and_shape_checked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ('app.apk','auth.apk','bundle.zip'):(Path(tmp)/name).write_bytes(b'payload')
+            checkout=Path(tmp)/'checkout';checkout.mkdir()
+            base=['tauri_android_dual_overlay.py','--apk',str(Path(tmp)/'app.apk'),'--auth-apk',str(Path(tmp)/'auth.apk'),
+                  '--bundle',str(Path(tmp)/'bundle.zip'),'--output',str(Path(tmp)/'out'),
+                  '--host-source-checkout',str(checkout)]
+            good={'--host-source-sha':self.SHA,'--native-source-sha':self.SHA,'--apk-source-sha':self.SHA}
+            for flag in ('--native-source-sha','--apk-source-sha','--host-source-sha'):
+                for bad in (None,'',self.SHA.upper(),'short','x'*41,'not-a-sha'):
+                    with self.subTest(flag=flag,bad=bad):
+                        argv=[*base]
+                        for key,value in good.items():
+                            if key!=flag:argv+= [key,value]
+                        if bad is not None:argv+= [flag,bad]
+                        with patch('sys.argv',argv),patch.dict(os.environ,{'RUNNER_TEMP':tmp,'GITHUB_SHA':self.SHA}):
+                            with self.assertRaises(SystemExit) as caught:dual.main()
+                        # missing flag: argparse rejects with its own code 2 before shape checks
+                        expected=2 if bad is None else 'dual_'+flag.lstrip('-').replace('-','_')+'_invalid'
+                        self.assertEqual(caught.exception.code,expected)
+                        self.assertFalse((Path(tmp)/'out'/'result.json').exists())
 
 
 if __name__ == '__main__': unittest.main()

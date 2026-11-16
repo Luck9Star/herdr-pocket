@@ -291,6 +291,15 @@ class AbiProbeGuardTests(unittest.TestCase):
         self.assertLess(abi[0], main[0], 'the ABI leg runs before the main probe')
         self.assertLess(clears[1], main[0], 'the main probe needs a cleared crash buffer')
 
+
+    def test_packaged_digest_is_an_assets_entry(self):
+        # getAssets() only reads entries under the assets/ prefix; a root
+        # entry would make the digest check throw before the diagnose is
+        # recorded, so the getter evidence would be lost.
+        source = Path(__file__).parent.joinpath(
+            'android-ts-node-probe', 'build.sh').read_text()
+        self.assertIn('assets/hp-tailscale.sha256', source)
+        self.assertNotIn('"$tmp/base.apk" hp-tailscale.sha256)', source)
     def test_abi_probe_schema_accepts_bounded_result(self):
         value = {'schemaVersion': 1, 'abiShimOk': True, 'librariesLoaded': True,
             'identityCreated': True, 'identityReadBack': True, 'netmonOptIn': True,

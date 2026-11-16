@@ -1,6 +1,6 @@
 # Android 双网启动与会话阶段证据
 
-截至 2026-11-17，**Flutter 已在 API 35 x86_64 AVD 上取得两个停网顺序的功能证据及双方最终关闭审计，但工作流仍失败**：最后结果校验报 `device_result_invalid`。Tauri 已证明先停 TS 后 ET 原认证会话继续输入 `Ee`；反向的 TS 后续 `t` 与最后收尾仍未证明。本页按已校验结果记账，不把功能检查点、本机修复或新运行预写为整轮通过。此前交接见[第 66 页](66-iteration-handoff-2026-11-16.md)。
+截至 2026-11-17，**Flutter 已在 API 35 x86_64 AVD 上通过两个停网顺序的完整设备验收**：最新 [43926204997](https://github.com/Luck9Star/herdr-pocket/actions/runs/43926204997) 两案例均 `status=passed`、`stage=complete`，设备作业成功，双方最终关闭及环境清理均通过。Tauri 已证明先停 TS 后 ET 原认证会话继续输入 `Ee`；反向的 TS 后续 `t` 与最后收尾仍未证明。新的 Tauri 同源构建及设备工作流仍在运行中，不能预填结果。此前交接见[第 66 页](66-iteration-handoff-2026-11-16.md)。
 
 范围限于独占 Android 模拟器、临时隔离控制面和两个真实 SSH 服务。它们不是用户真实主机或生产网络；不能外推到物理手机、Android arm64、真实中文 IME、三网或五平台。
 
@@ -10,14 +10,16 @@
 
 | 客户端与顺序 | 已观察到的请求功能 | 最后收尾与本轮结论 |
 | --- | --- | --- |
-| Flutter，先停 TS；[43923493989](https://github.com/Luck9Star/herdr-pocket/actions/runs/43923493989)，UI `16792660f` | 两端各一次批准认证；TS 停后无新增输入，ET 保持原 `ordinal=1`，精确收到 `Ee`；没有新增认证会话 | 最后两端均 `inactive`，精确字节及原序号仍匹配；但在 `both_stopped_audit` 后结果校验报 `device_result_invalid`，`device` job 为 failure，不能写成流程绿灯 |
-| Flutter，先停 ET；同一运行、独立案例 | 两端各一次批准认证；ET 停后无新增输入，TS 保持原 `ordinal=1`，精确收到 `Tt`；没有新增认证会话 | 同样取得两端最终 `inactive`，同样因 `device_result_invalid` 失败；功能与关闭事实成立，结果交接/判定仍须修复验证 |
+| Flutter，先停 TS；[43926204997](https://github.com/Luck9Star/herdr-pocket/actions/runs/43926204997)，源码 `14ecb4f` | 就地显式批准 TS 授权，两端各一次批准认证；TS 停后输入不变且 `inactive`，ET 保持原 `ordinal=1`，精确收到 `Ee`；没有新增认证会话 | 最后两端均 `inactive`，精确字节及原序号仍匹配；案例 `passed / complete`，设备作业 success，受检清理全部通过 |
+| Flutter，先停 ET；同一运行、独立案例 | 就地显式批准 TS 授权，两端各一次批准认证；ET 停后输入不变且 `inactive`，TS 保持原 `ordinal=1`，精确收到 `Tt`；没有新增认证会话 | 最后两端均 `inactive`；案例同为 `passed / complete`，设备作业及受检清理均通过 |
 | Tauri，先停 TS；[43914151903](https://github.com/Luck9Star/herdr-pocket/actions/runs/43914151903)，驱动 `2ba07d0`、APK `372430f` | 显式系统授权、双端配对/绑定、不同目标输入均已证；TS 累计 1 字节后活动会话为 0，ET 在原认证会话累计精确 2 字节；`survivorSameAuthenticatedSession=true`，停止侧输入不可用且无新增 | 到附加 `stop_survivor`，报 `dual_confirmation_not_observed`；没有最后 ET 关闭证据。运行及修复 APK 驱动回放 job 均失败 |
 | Tauri，先停 ET；同一运行、独立案例 | 双端配对/绑定及不同目标输入已证；两侧各一次批准认证、各 1 字节 | 在首次停网确认处报 `dual_confirmation_not_observed`，阶段仍为 `connect_and_input`；失败采样时两侧各 1 条活动会话。未证明 ET 停止及幸存 TS 原会话后续 `t` |
 
 Flutter 两方向的 `auditProgress` 均为 `interimClosePending=false`、`stoppedCloseConfirmed=true`、`survivorSecondInputConfirmed=true`；最终审计两侧各只保留原批准认证序号、`newSessions=0`、无错误端新增字节且活动会话均为 0。`capturedBytes` 是终端输入审计，不是 SSH 协议总流量。未知、未到达的检查点不能填成 0 或通过。
 
-两份当前报告各自记录受检安装包、forward/反向映射、私有目录、relay、控制服务和 namespace 清理成功。**实验环境清理成功不替代产品连接关闭证据**；Flutter 的最终关闭由前面的宿主审计另行证明，Tauri 的不足仍保留。当前设备结果不包含下面最新 EOF 回执竞态小修的独立设备验收。
+两份当前报告各自记录受检安装包、forward/反向映射、私有目录、relay、控制服务和 namespace 清理成功。**实验环境清理成功不替代产品连接关闭证据**；Flutter 的最终关闭由前面的宿主审计另行证明，Tauri 的不足仍保留。Flutter 本次源码已包含下面的 EOF 回执竞态小修。
+
+最新 Flutter 工件为 `14257552054`，ZIP SHA-256 `85faff50ce4f11a5df14d91a56ff2bbd3367e6c9d53d8c460ae8be6afe9c75d6`；解包报告 SHA-256 `b986b9a952167a58370139408f8fd1045fa29eafe365d493e285ae273769bdf8`。客户端 / 驱动源码为 `14ecb4f9903db04119282e4b79d8db64ba38c32c`，native 和 host 继续采用下文固定来源。
 
 ## 启动 panic 与正确能力判断
 
@@ -41,7 +43,11 @@ Flutter 两方向的 `auditProgress` 均为 `interimClosePending=false`、`stopp
 
 旧产品 `4215dcf` 的真实 Chrome 157 对照中，正常 mouse 点击为 1 次原生确认 / 1 次准确 ET stop；按住后完成一次相同状态刷新再释放，按钮 DOM 已替换，确认 / stop 均为 0。新产品 `9c774137`（工作提交 `3fe0862`）在**真实 touch 和 mouse** 下，相同刷新保留同一受审查按钮，各为 1 次确认 / 1 次准确 ET stop；绑定改变则必须生成不同节点，旧手势保持 0 / 0。已独立回放同一产品模块与原生浏览器确认，后端是隔离替身，不是 Android WebView/设备证据，也不保证上述每个旧设备错误只有同一原因。
 
-本机 Flutter 完整 `test/`：`624359c` 为 **576 通过 / 7 跳过 / 0 失败**；设备源码 `16792660f` 为 **587 / 7 / 0**；含 EOF 回执竞态小修的 `8cd02a0` 为 **589 / 7 / 0**，三份 JSON 事件均 `done.success=true`。7 项是另行运行的真实 GUI/SSH、双会话或旋转用例，不能计作通过。Tauri 前端为 **628/628** 且 Vite 构建通过；这些本机测试不补写 Android 缺失方向或工作流绿灯。
+本机 Flutter 完整 `test/`：`624359c` 为 **576 通过 / 7 跳过 / 0 失败**；设备源码 `16792660f` 为 **587 / 7 / 0**；含 EOF 回执竞态小修的 `8cd02a0` 为 **589 / 7 / 0**，三份 JSON 事件均 `done.success=true`。7 项是另行运行的真实 GUI/SSH、双会话或旋转用例，不能计作通过。Tauri 最新本机测试为 transport **125 通过 / 1 既有忽略 / 0 失败**、后端 **81 通过 / 0 失败**、前端 **630/630**，Vite 构建通过。transport 的忽略项是另需隔离 Paramiko 环境的 RSA SSH 用例，不能计作通过。对应候选为 `0b4b665`、`ca8637c`（工作提交 `81097f4`、`ffb2d7e`）；这些本机测试不补写 Android 缺失方向或工作流绿灯。
+
+主控另独立运行 `ca8637c` 的共享 remote-harness 全量 414 项（5 跳过、0 失败）与 helper 15 项全部通过；它们是本机回归，不替代设备结果。
+
+Tauri 新的显式 stop 先封住完整绑定的新尝试，只退休本次捕获的 owner / generation；最多 12 秒优雅退出，再对相同目标有界强制清退 2 秒。实际 I/O 未退休时保留停止围栏并报未确认，只有用户再次显式操作才重试；不自动重连或重放。成功完成的旧 stop 准入在同一锁内解除，不能释放下一代同绑定 stop。该源码 `ca8637cc29a429b1bab78a35746dae9bc6858679` 正由 [43928408381](https://github.com/Luck9Star/herdr-pocket/actions/runs/43928408381) 执行同源 normal / QA APK 构建及配套设备流程；截至本次更新仍在构建中，尚无该轮 Android 结论。
 
 ## 固定来源与历史参考
 
@@ -61,6 +67,12 @@ Android 两壳的 `HOST_SOURCE=5404adf` 与已校验 ZIP 继续固定：工件 `
 <summary>历史前置证据与早期 UI 诊断（不替代当前结果）</summary>
 
 以下段落保留当时检查点、局部实验与未完成范围；其中“尚未取得”只描述各自历史运行，不回退本页顶部的新设备证据。
+
+### Flutter 上一轮：功能及关闭已证，严格回执失败
+
+[43923493989](https://github.com/Luck9Star/herdr-pocket/actions/runs/43923493989)，源码 `16792660f`，两个案例均已取得原认证序号 1 的精确 `Tt` / `Ee`、被停端不增字节和双方最终 `inactive`；但案例停在 `both_stopped_audit / device_result_invalid`，设备作业 failure，历史失败结论不改写。工件 `14255930995` 的 ZIP SHA-256 为 `9a236434e67c9b1fc868eda80a399028cec12ae5294c124cf73dbba41f32abae`，报告 SHA-256 为 `325d9806a047bd51be3d765aaf79c745cca4fd2b0cb29f85a45d4e3fa79ed402`。
+
+后续 `14ecb4f` 修正的是 ADB 私有结果读取：使用携带远端退出状态的 shell 通道，先核对固定 `PRESENT / MISSING` 分帧，再读取内容，失败或非预期帧仍拒绝；全部检查点完成后，针对进程退出与原子发布结果之间的竞态，仅补一次只读读取。没有放宽授权、原认证序号、精确字节或双方关闭门槛；顶部最新结果来自重新实际运行。
 
 ### f65ac16 阶段与授权接收器前置检查
 

@@ -14,7 +14,7 @@
   },
   "overall": {
     "flutterBothDirectionsFunctionalEvidence": true,
-    "flutterWorkflowPassed": false,
+    "flutterWorkflowPassed": true,
     "tauriStopTsContinuationObserved": true,
     "tauriStopEtContinuationProven": false,
     "tauriWorkflowPassed": false,
@@ -33,24 +33,23 @@
   },
   "deviceEvidence": {
     "flutter": {
-      "runId": 43923493989,
-      "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43923493989",
-      "jobConclusion": "failure",
-      "reportStatus": "failed",
-      "uiSourceSHA": "16792660f31b5de4198de16773252005fa42419a",
+      "runId": 43926204997,
+      "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43926204997",
+      "jobConclusion": "success",
+      "reportStatus": "passed",
+      "uiSourceSHA": "14ecb4f9903db04119282e4b79d8db64ba38c32c",
       "nativeSourceSHA": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
       "hostSourceSHA": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
-      "artifactId": 14255930995,
-      "archiveSha256": "9a236434e67c9b1fc868eda80a399028cec12ae5294c124cf73dbba41f32abae",
-      "reportJsonSha256": "325d9806a047bd51be3d765aaf79c745cca4fd2b0cb29f85a45d4e3fa79ed402",
+      "artifactId": 14257552054,
+      "archiveSha256": "85faff50ce4f11a5df14d91a56ff2bbd3367e6c9d53d8c460ae8be6afe9c75d6",
+      "reportJsonSha256": "b986b9a952167a58370139408f8fd1045fa29eafe365d493e285ae273769bdf8",
       "archiveMatchesOfficialDigest": true,
       "localReportMatchesOfficialArchive": true,
       "cases": [
         {
           "firstStop": "et",
-          "caseStatus": "failed",
-          "stage": "both_stopped_audit",
-          "errorCode": "device_result_invalid",
+          "caseStatus": "passed",
+          "stage": "complete",
           "requestedContinuation": "observed",
           "bothFinalHostsInactive": true,
           "auditProgress": {
@@ -84,13 +83,15 @@
             "et": "E",
             "ts": "Tt"
           },
-          "cleanupComplete": true
+          "cleanupComplete": true,
+          "uiStage": "both_stopped_audit",
+          "explicitTsAuthorization": true,
+          "tsAuthCompletions": 1
         },
         {
           "firstStop": "ts",
-          "caseStatus": "failed",
-          "stage": "both_stopped_audit",
-          "errorCode": "device_result_invalid",
+          "caseStatus": "passed",
+          "stage": "complete",
           "requestedContinuation": "observed",
           "bothFinalHostsInactive": true,
           "auditProgress": {
@@ -124,7 +125,10 @@
             "et": "Ee",
             "ts": "T"
           },
-          "cleanupComplete": true
+          "cleanupComplete": true,
+          "uiStage": "both_stopped_audit",
+          "explicitTsAuthorization": true,
+          "tsAuthCompletions": 1
         }
       ]
     },
@@ -394,7 +398,52 @@
       "sourceSHA": "9c774137646b17efd6245f02790cfc542cd11875",
       "passed": 628,
       "viteBuildPassed": true,
+      "androidAcceptance": false,
+      "latestResult": {
+        "sourceSHA": "0b4b66595b92bc18144aa007f2398a77d670481b",
+        "passed": 630,
+        "failed": 0,
+        "viteBuildPassed": true,
+        "androidAcceptance": false
+      }
+    },
+    "tauriStopRetirementTests": {
+      "sourceSHA": "ca8637cc29a429b1bab78a35746dae9bc6858679",
+      "initialCandidateSHA": "0b4b66595b92bc18144aa007f2398a77d670481b",
+      "workerSHAs": [
+        "81097f4b5525f1c0c57d7f81ef725b27acd66524",
+        "ffb2d7e8923e714d1b36c83f1df14976687c39ba"
+      ],
+      "transport": {
+        "passed": 125,
+        "failed": 0,
+        "ignored": 1,
+        "ignoredReason": "Requires isolated Paramiko RSA SSH fixture"
+      },
+      "tauriBackend": {
+        "passed": 81,
+        "failed": 0,
+        "ignored": 0
+      },
+      "frontend": {
+        "passed": 630,
+        "failed": 0,
+        "viteBuildPassed": true
+      },
+      "exactOwnerGenerationOnly": true,
+      "gracefulRetirementBoundSeconds": 12,
+      "forcedRetirementBoundSeconds": 2,
+      "retryRequiresNewExplicitUserAction": true,
+      "completedOldAdmissionCannotReleaseNewStop": true,
       "androidAcceptance": false
+    },
+    "sharedHarnessTests": {
+      "sourceSHA": "ca8637cc29a429b1bab78a35746dae9bc6858679",
+      "testsRun": 414,
+      "skipped": 5,
+      "failed": 0,
+      "helperTestsPassed": 15,
+      "provenance": "Coordinator independently ran full remote-harness and helper suites; not device acceptance"
     }
   },
   "fixedHostBundle": {
@@ -407,7 +456,111 @@
     "JSON report digests and downloaded ZIP digests identify different byte sequences.",
     "Local retire acknowledgement is not remote TCP FIN; remote closure is established only by host audits.",
     "Exact input checks and unchanged public SSH ordinal forbid claiming continuity after reconnect.",
-    "The new local EOF-before-ACK regression fix is not separately device-accepted by this snapshot.",
-    "All workflow and case failures remain failures despite completed functional checkpoints."
-  ]
+    "Current Flutter success is limited to the reported owned API35 x86_64 AVD and two isolated SSH services.",
+    "Historical Flutter receipt failure and current incomplete Tauri cases remain separate from current Flutter success.",
+    "Tauri run 43928408381 was still building at this documentation update; no device outcome is declared."
+  ],
+  "previousFlutterReceiptFailure": {
+    "runId": 43923493989,
+    "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43923493989",
+    "jobConclusion": "failure",
+    "reportStatus": "failed",
+    "uiSourceSHA": "16792660f31b5de4198de16773252005fa42419a",
+    "nativeSourceSHA": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+    "hostSourceSHA": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+    "artifactId": 14255930995,
+    "archiveSha256": "9a236434e67c9b1fc868eda80a399028cec12ae5294c124cf73dbba41f32abae",
+    "reportJsonSha256": "325d9806a047bd51be3d765aaf79c745cca4fd2b0cb29f85a45d4e3fa79ed402",
+    "archiveMatchesOfficialDigest": true,
+    "localReportMatchesOfficialArchive": true,
+    "cases": [
+      {
+        "firstStop": "et",
+        "caseStatus": "failed",
+        "stage": "both_stopped_audit",
+        "errorCode": "device_result_invalid",
+        "requestedContinuation": "observed",
+        "bothFinalHostsInactive": true,
+        "auditProgress": {
+          "interimClosePending": false,
+          "stoppedCloseConfirmed": true,
+          "survivorSecondInputConfirmed": true
+        },
+        "hostAudits": {
+          "et": {
+            "acceptedSessions": 1,
+            "newSessionsAfterBaseline": 0,
+            "ordinal": 1,
+            "approvedDevice": true,
+            "capturedBytes": 1,
+            "exactBytes": true,
+            "activeAtBothStoppedAudit": false
+          },
+          "ts": {
+            "acceptedSessions": 1,
+            "newSessionsAfterBaseline": 0,
+            "ordinal": 1,
+            "approvedDevice": true,
+            "capturedBytes": 2,
+            "exactBytes": true,
+            "activeAtBothStoppedAudit": false
+          }
+        },
+        "survivorStillSameAuthenticatedSession": true,
+        "stoppedBytesUnchangedAfterFirstStop": true,
+        "expectedExactFinalInput": {
+          "et": "E",
+          "ts": "Tt"
+        },
+        "cleanupComplete": true
+      },
+      {
+        "firstStop": "ts",
+        "caseStatus": "failed",
+        "stage": "both_stopped_audit",
+        "errorCode": "device_result_invalid",
+        "requestedContinuation": "observed",
+        "bothFinalHostsInactive": true,
+        "auditProgress": {
+          "interimClosePending": false,
+          "stoppedCloseConfirmed": true,
+          "survivorSecondInputConfirmed": true
+        },
+        "hostAudits": {
+          "et": {
+            "acceptedSessions": 1,
+            "newSessionsAfterBaseline": 0,
+            "ordinal": 1,
+            "approvedDevice": true,
+            "capturedBytes": 2,
+            "exactBytes": true,
+            "activeAtBothStoppedAudit": false
+          },
+          "ts": {
+            "acceptedSessions": 1,
+            "newSessionsAfterBaseline": 0,
+            "ordinal": 1,
+            "approvedDevice": true,
+            "capturedBytes": 1,
+            "exactBytes": true,
+            "activeAtBothStoppedAudit": false
+          }
+        },
+        "survivorStillSameAuthenticatedSession": true,
+        "stoppedBytesUnchangedAfterFirstStop": true,
+        "expectedExactFinalInput": {
+          "et": "Ee",
+          "ts": "T"
+        },
+        "cleanupComplete": true
+      }
+    ]
+  },
+  "inProgressTauriValidation": {
+    "runId": 43928408381,
+    "ciURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43928408381",
+    "sourceSHA": "ca8637cc29a429b1bab78a35746dae9bc6858679",
+    "statusAtDocumentationUpdate": "build_in_progress",
+    "deviceResultAvailable": false
+  }
 }

@@ -210,8 +210,8 @@ jobs:
           java-version: '17.0.18+8'
       - name: Verify unchanged repaired application source
         run: |
-          git diff --exit-code "$FIXED_APP_SOURCE" "$APK_SOURCE" -- validation/tauri validation/transport-rust validation/network-profiles validation/pairing/native/android validation/shared validation/vendor validation/remote-harness/tauri-dual-auth-receiver
-          git diff --exit-code "$APK_SOURCE" HEAD -- validation/tauri validation/transport-rust validation/network-profiles validation/pairing/native/android validation/shared validation/vendor validation/remote-harness/tauri-dual-auth-receiver
+          git diff --exit-code "$FIXED_APP_SOURCE" "$APK_SOURCE" -- validation/tauri validation/transport-rust validation/network-profiles validation/pairing/native/android validation/shared validation/vendor
+          git diff --exit-code "$APK_SOURCE" HEAD -- validation/tauri validation/transport-rust validation/network-profiles validation/pairing/native/android validation/shared validation/vendor
       - name: Download and verify exact repaired APK artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -287,11 +287,43 @@ jobs:
           "$RUNNER_TEMP/dual-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_tauri_android_dual*.py' -v
           "$RUNNER_TEMP/dual-venv/bin/python" host-source/validation/remote-harness/dual_overlay_shared_bundle.py verify \
             --bundle "$RUNNER_TEMP/dual-host-fixtures" --source-sha "$HOST_SOURCE" --restore-executable
+      - name: Build current isolated authorization receiver only
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor b7b683acadf809f98f05c261813c560898062a44 "$GITHUB_SHA"
+          test "$(git rev-parse HEAD:validation/remote-harness/tauri-dual-auth-receiver)" = ec094e6983fd9bd3c42d1985f6e96820c245c80c
+          git diff --exit-code HEAD -- validation/remote-harness/tauri-dual-auth-receiver
+          test -z "$(git ls-files --others --exclude-standard -- validation/remote-harness/tauri-dual-auth-receiver)"
+          mkdir "$RUNNER_TEMP/current-auth"
+          bash validation/remote-harness/tauri-dual-auth-receiver/build.sh "$RUNNER_TEMP/current-auth/dual-auth-receiver.apk"
+          python3 - <<'PY'
+          import hashlib,json,os,subprocess
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          source=Path('validation/remote-harness/tauri-dual-auth-receiver')
+          apk=root/'current-auth/dual-auth-receiver.apk'
+          archived=json.loads((root/'dual-apks/tauri-dual-build-summary.json').read_text())
+          report={
+              'schemaVersion':1,'status':'built-not-device-verified',
+              'sourceSHA':os.environ['GITHUB_SHA'],
+              'sourceTreeGitSHA':subprocess.check_output(['git','rev-parse','HEAD:'+str(source)],text=True).strip(),
+              'buildScriptSha256':hashlib.sha256((source/'build.sh').read_bytes()).hexdigest(),
+              'apkSha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
+              'archivedReceiverSourceSHA':os.environ['APK_SOURCE'],
+              'archivedReceiverApkSha256':archived['authApkSha256'],
+              'applicationApkSourceSHA':os.environ['APK_SOURCE'],
+              'scope':'current test authorization receiver only; fixed application APK unchanged'}
+          if report['apkSha256']==report['archivedReceiverApkSha256']:
+              raise SystemExit('receiver APK unchanged')
+          (root/'current-auth/provenance.json').write_text(json.dumps(report,indent=2)+'\n')
+          print(json.dumps(report,sort_keys=True))
+          PY
       - name: Exercise actual Tauri UI on owned API35 AVD
         run: |
           AVD_EVIDENCE_DIR="$RUNNER_TEMP/tauri-dual-avd" bash validation/remote-harness/with-android-emulator.sh \
             "$RUNNER_TEMP/dual-venv/bin/python" validation/remote-harness/tauri_android_dual_overlay.py \
-              --apk "$RUNNER_TEMP/dual-apks/tauri-dual-qa.apk" --auth-apk "$RUNNER_TEMP/dual-apks/dual-auth-receiver.apk" \
+              --apk "$RUNNER_TEMP/dual-apks/tauri-dual-qa.apk" --auth-apk "$RUNNER_TEMP/current-auth/dual-auth-receiver.apk" \
               --bundle "$RUNNER_TEMP/dual-host-fixtures" --output "$RUNNER_TEMP/tauri-dual-result" \
               --host-source-checkout "$GITHUB_WORKSPACE/host-source" --host-source-sha "$HOST_SOURCE" \
               --native-source-sha "$NATIVE_SOURCE" --apk-source-sha "$APK_SOURCE"
@@ -311,12 +343,27 @@ jobs:
               target.write_text(json.dumps(report,indent=2)+'\n')
               raise SystemExit(1)
           PY
+      - name: Attach independent authorization receiver provenance
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          target=root/'tauri-dual-result/result.json'
+          provenance=root/'current-auth/provenance.json'
+          if target.exists():
+              report=json.loads(target.read_text())
+              report['authorizationReceiver']=json.loads(provenance.read_text()) if provenance.exists() else {'status':'unavailable','scope':'current receiver build incomplete; no receiver acceptance claim'}
+              target.write_text(json.dumps(report,indent=2)+'\n')
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: tauri-android-dual-overlay-result-${{ github.sha }}
           path: |
             ${{ runner.temp }}/tauri-dual-result/result.json
+            ${{ runner.temp }}/current-auth/provenance.json
             ${{ runner.temp }}/tauri-dual-avd/lifecycle.txt
           if-no-files-found: error
           retention-days: 14

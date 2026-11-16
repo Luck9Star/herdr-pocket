@@ -1,32 +1,47 @@
 {
   "schemaVersion": 1,
   "status": "passed",
-  "scope": "Real product entry (validation/tauri/index.html + src/main.js) served by the project dev server and driven in headless Chrome with a local mock Tauri bridge; no real host was contacted and no native build was used.",
+  "scope": "Real product entry (validation/tauri/index.html + src/main.js) served by the project dev server and driven in headless Chrome with a local mock Tauri bridge. The ordinary SSH page was reached through the real home navigation (home-open-ssh -> setHomeSection('ssh')); no real host was contacted and no native build was used.",
   "source": "mock-bridge",
+  "transport": "mock",
+  "viewport": {
+    "cssWidths": [320, 390],
+    "cssHeight": 844,
+    "deviceScaleFactor": 2,
+    "note": "CSS width 320 / 390 at DPR 2; the PNG pixel width is twice the CSS width."
+  },
   "mockBridge": {
     "kind": "injected local mock of the Tauri invoke/Channel bridge",
-    "probedFingerprint": "SHA256:mockProbedLocalOnly",
-    "presentedFingerprint": "SHA256:mockPresentedLocalOnly",
-    "note": "Both fingerprints are local-only literals. The refused handshake presented the fingerprint the mock reported, which is what the review page displays.",
+    "hostList": "host_init / host_list / network_list return empty local lists, so the home board shows '0 台已存主机' and no unreachable-host banner",
+    "fingerprintSource": "crypto.getRandomValues over 32 bytes, base64 encoded, so both old and new fingerprints have the real SHA256 length and wrap on narrow widths",
     "realHostContacted": false,
     "nativeBuildUsed": false
   },
+  "navigation": {
+    "entry": "home board -> 普通 SSH -> probe -> confirm -> connect -> refused handshake -> review view",
+    "finalRoute": "ordinary SSH section (nav-terminal pressed); the home board and the host panel are not visible",
+    "bottomNav": "终端 highlighted"
+  },
   "captures": [
-    {"file": "tauri-320-refusal.png", "width": 320, "height": 844},
-    {"file": "tauri-390-refusal.png", "width": 390, "height": 844}
+    {"file": "tauri-320-refusal.png", "cssWidth": 320, "cssHeight": 844, "deviceScaleFactor": 2},
+    {"file": "tauri-390-refusal.png", "cssWidth": 390, "cssHeight": 844, "deviceScaleFactor": 2}
   ],
   "observed": {
     "reviewHeadingIsFirstHeading": true,
     "genericPageHeadingHidden": true,
     "genericStatusHidden": true,
     "oldAndNewFingerprintShown": true,
+    "fingerprintHasRealSha256Length": true,
     "primaryActionIsBrand": "重新核对主机指纹",
     "secondaryActionHasWhiteBackground": "取消连接，保留旧信任",
-    "actionsStackVertically": true
+    "actionsStackVertically": true,
+    "noHomeBoardPanel": true,
+    "noUnreachableHostBanner": true
   },
   "notCovered": [
     "Real macOS window rendering of the same review view",
     "Real SSH handshake against a live host",
     "The Rust bridge that emits the host_key_change event"
-  ]
+  ],
+  "note": "These two PNGs are mock transport captures of the real product entry. The macOS live-window acceptance (real WKWebView + Rust + SSH against a one-off loopback peer) was executed by the coordinator on commit e415f6a and is recorded in docs/66-iteration-handoff-2026-11-16.md; it is not represented by these images."
 }

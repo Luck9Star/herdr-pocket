@@ -334,22 +334,125 @@ def create_network(browser, role, material, report):
     return scope
 
 
-def authorize_ts(browser, host, scope):
+def canonical_component(value):
+    match=re.fullmatch(r'([A-Za-z0-9_.]+)/([A-Za-z0-9_.$]+)',value.strip())
+    if not match:return None
+    package,activity=match.groups()
+    return package+'/'+(package+activity if activity.startswith('.') else activity)
+
+
+def component_kind(component):
+    if component==AUTH_PACKAGE+'/'+AUTH_PACKAGE+'.AuthActivity':return 'test_receiver'
+    if component and component.split('/')[0]==PACKAGE:return 'product'
+    if component and component.split('/')[0] in {'com.android.chrome','com.android.browser','org.chromium.chrome'}:return 'browser'
+    if component and component.split('/')[0] in {'android','com.android.intentresolver'} and component.endswith(('ResolverActivity','ChooserActivity')):return 'resolver'
+    return 'other' if component else 'unresolved'
+
+
+def resolve_view_component(url):
+    raw=adb('shell','cmd','package','resolve-activity','--brief','--user','0',
+            '-a','android.intent.action.VIEW','-d',url,check=False)
+    values={canonical_component(line.strip()) for line in raw.splitlines()}
+    values.discard(None)
+    return next(iter(values)) if len(values)==1 else None
+
+
+def loopback_user_selection(raw):
+    lines=raw.splitlines();user=False;enabled=False;hosts=set();allowed=False
+    for line in lines:
+        text=line.strip()
+        if re.fullmatch(r'User [0-9]+:',text):user=text=='User 0:';enabled=False;continue
+        if not user:continue
+        if text=='Verification link handling allowed: true':allowed=True
+        if text in {'Enabled:','Disabled:'}:enabled=text=='Enabled:';continue
+        if enabled and text:hosts.add(text)
+    return {'linkHandlingAllowed':allowed,'onlyLoopbackSelected':hosts=={'127.0.0.1'}}
+
+
+def prepare_auth_receiver(port, report):
+    # Only a freshly installed fixture on the disposable owned AVD is selected.
+    assert_owned_avd()
+    if type(port) is not int or not 1<=port<=65535:raise GuiFailure('dual_auth_port_invalid')
+    state={'scope':'owned_avd_receiver_loopback_only'};report['authHandler']=state
+    if adb('shell','am','get-current-user')!='0':raise GuiFailure('dual_auth_test_user_required')
+    probe='https://127.0.0.1:'+str(port)+'/'
+    state['beforeHandler']=component_kind(resolve_view_component(probe))
+    adb('shell','pm','set-app-links-user-selection','--user','0','--package',AUTH_PACKAGE,'true','127.0.0.1')
+    state.update(loopback_user_selection(adb('shell','pm','get-app-links','--user','0',AUTH_PACKAGE)))
+    if not state['linkHandlingAllowed'] or not state['onlyLoopbackSelected']:
+        raise GuiFailure('dual_auth_selection_unconfirmed')
+    state['afterHandler']=component_kind(resolve_view_component(probe))
+    state['unrelatedHandler']=component_kind(resolve_view_component('https://example.invalid/'))
+    if state['afterHandler']!='test_receiver' or state['unrelatedHandler']=='test_receiver':
+        raise GuiFailure('dual_auth_handler_scope_mismatch')
+
+
+def foreground_component():
+    raw=adb('shell','dumpsys','activity','activities',timeout=10)
+    values={canonical_component(value) for value in re.findall(
+        r'(?:topResumedActivity|mResumedActivity)\s*[:=]\s*ActivityRecord\{[^\n]*?\su0\s+([A-Za-z0-9_.]+/[A-Za-z0-9_.$]+)',raw)}
+    values.discard(None)
+    return next(iter(values)) if len(values)==1 else None
+
+
+def auth_consent_candidate(nodes, foreground, port):
+    source='隔离测试控制面：127.0.0.1:'+str(port)
+    sources=[node for node in nodes if node.get('package')==AUTH_PACKAGE and node.get('text')==source]
+    buttons=[node for node in nodes if node.get('class')=='android.widget.Button' and
+             node.get('text')=='批准本次测试授权' and node.get('enabled')=='true']
+    owned=len(buttons)==1 and buttons[0].get('package')==AUTH_PACKAGE
+    state={'xmlParsed':True,'foreground':component_kind(foreground),'sourceMatched':len(sources)==1,
+           'candidateButtons':min(len(buttons),9),'uniqueReceiverButton':owned,'boundsValid':False}
+    if state['foreground']!='test_receiver' or not state['sourceMatched'] or not owned:return None,state
+    match=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',buttons[0].get('bounds',''))
+    if not match:return None,state
+    x1,y1,x2,y2=map(int,match.groups())
+    if x2<=x1 or y2<=y1:return None,state
+    state['boundsValid']=True
+    return ((x1+x2)//2,(y1+y2)//2),state
+
+
+def approve_auth_receiver(port, report, timeout=45):
+    state=report.setdefault('authorization',{});state['stage']='receiver_consent';state['tapSent']=False
+    def candidate():
+        try:point,screen=auth_consent_candidate(native_ui_nodes(),foreground_component(),port)
+        except GuiFailure:
+            state['screenReadUnavailable']=True
+            return False
+        state['screen']=screen
+        return point
+    point=wait_for(candidate,'dual_authorization_receiver_missing',timeout=timeout)
+    state['tapSent']=True
+    try:adb('shell','input','tap',str(point[0]),str(point[1]))
+    except GuiFailure:raise GuiFailure('dual_authorization_tap_unconfirmed') from None
+    state['tapCompleted']=True
+
+
+def authorize_ts(browser, host, scope, port, report):
+    authorization=report.setdefault('authorization',{});authorization['stage']='explicit_login'
     wait_named(browser, scope, '登录 Tailscale', timeout=120)
     confirm_click(browser, scope, '登录 Tailscale', '显式发起登录')
     wait_named(browser, scope, '打开授权页面', timeout=120)
+    authorization['stage']='product_system_open'
     confirm_click(browser, scope, '打开授权页面', '通过系统打开')
-    # The optional resolver and this purpose-built activity are visible system UI.
-    chosen = native_dialog_click('双网测试授权', {'双网测试授权'}, timeout=5)
-    if chosen:
-        native_dialog_click('双网测试授权', {'仅此一次','Just once'}, timeout=5)
-    if not native_dialog_click('隔离测试控制面', {'批准本次测试授权'}, timeout=30):
-        raise GuiFailure('dual_authorization_receiver_missing')
+    authorization['productOpenConfirmed']=True
+    approve_auth_receiver(port,report)
+    authorization['stage']='private_handoff'
     url = wait_for(lambda: adb('shell','run-as',AUTH_PACKAGE,'cat','files/approved-url',check=False),
                    'dual_authorization_handoff_missing', timeout=30)
+    try:
+        parsed=urlsplit(url)
+        valid=(len(url)<=4096 and parsed.scheme=='https' and parsed.hostname=='127.0.0.1' and parsed.port==port and
+               parsed.username is None and parsed.password is None and not parsed.fragment)
+    except ValueError:valid=False
+    if not valid:raise GuiFailure('dual_authorization_handoff_invalid')
+    authorization['privateHandoffReceived']=True
     if host_request(host, {'op':'complete_ts_auth','authorize':True,'url':url}, 'ts_authorized').get('ok') is not True:
         raise GuiFailure('dual_authorization_unconfirmed')
+    authorization['hostAuthorizationConfirmed']=True
     adb('shell','monkey','-p',PACKAGE,'-c','android.intent.category.LAUNCHER','1')
+    wait_for(lambda:browser.evaluate('!document.hidden') is True,'dual_authorization_return_missing',timeout=45)
+    authorization['stage']='product_resumed'
     return True
 
 
@@ -364,10 +467,11 @@ def pair_host(browser, host, role, profile):
     browser.click('#pair-create')
     request = wait_for(lambda: browser.read('#pair-request','value'), 'dual_pair_request_missing', timeout=90)
     review = host_request(host, {'op':'review_pairing','role':role,'request':request}, 'pairing_review')
-    summary = browser.read('#pair-request-summary') or ''
-    if (review.get('hostFingerprint') not in fingerprint or
-            review.get('deviceFingerprint') not in summary or review.get('requestId') not in summary):
+    if review.get('hostFingerprint') not in fingerprint:
         raise GuiFailure('dual_pair_review_mismatch')
+    wait_for(lambda: all(value in (browser.read('#pair-request-summary') or '')
+             for value in (review['deviceFingerprint'],review['requestId'])),
+             'dual_pair_review_mismatch',timeout=60)
     approved = host_request(host, {'op':'approve_pairing','role':role,'request':request,
         'requestId':review['requestId'],'deviceFingerprint':review['deviceFingerprint'],
         'reviewed':True}, 'pairing_approved')
@@ -379,10 +483,18 @@ def pair_host(browser, host, role, profile):
     browser.fill('#host-save-name', 'QA host '+role.upper())
     browser.click('#host-save')
     wait_for(lambda:'已保存' in (browser.read('#host-save-status') or ''), 'dual_host_save_missing', timeout=90)
+    host_card(browser,role)  # Exact renamed catalog readback, not an earlier save status.
     browser.click('#host-return-home')
+    wait_for(lambda:browser.evaluate("!document.querySelector('#host-home').hidden && document.querySelector('#remote-page').hidden") is True,
+             'dual_host_return_missing',timeout=60)
 
 
 def bind_host(browser, role):
+    title='QA TS · Tailscale' if role=='ts' else 'QA ET · EasyTier'
+    profile=expand_profile(browser,title)
+    browser.click_named(profile,'刷新节点状态')
+    wait_for(lambda:browser.read('#network-panel > [role=status]')=='已请求读取当前节点状态。',
+             'dual_binding_readback_not_ready',timeout=60)
     name = 'QA host '+role.upper()
     expression = '''(()=>{const rows=[...document.querySelectorAll('#network-panel .network-binding')];
       const found=rows.map((e,i)=>({e,i})).filter(x=>x.e.querySelector('strong')?.textContent===%s);
@@ -394,7 +506,8 @@ def bind_host(browser, role):
       'dual_binding_option_missing')
     browser.select_option(scope+' select', option)
     confirm_click(browser, scope, '应用', '更改 '+name+' 的网络绑定')
-    wait_for(lambda:browser.read(scope+' select','value') == option, 'dual_binding_save_missing', timeout=60)
+    wait_for(lambda:browser.read('#network-panel > [role=status]')=='操作已确认；请查看节点及连接状态。' and
+             browser.read(scope+' select','value') == option, 'dual_binding_save_missing', timeout=60)
 
 
 def host_card(browser, role):
@@ -511,6 +624,9 @@ def run_direction(apk, auth_apk, session, stopped, report):
         _adb('shell','-T','run-as',PACKAGE,'tee','files/dual-overlay-ca.pem',input_data=session.read_ca())
         adb('shell','run-as',AUTH_PACKAGE,'mkdir','-p','files')
         _adb('shell','-T','run-as',AUTH_PACKAGE,'tee','files/port',input_data=str(parsed.port).encode())
+        report['stage']='device_auth_handler'
+        prepare_auth_receiver(parsed.port,report)
+        report['stage']='device_setup'
         adb('shell','monkey','-p',PACKAGE,'-c','android.intent.category.LAUNCHER','1')
         pid=wait_for(lambda:adb('shell','pidof',PACKAGE,check=False), 'dual_app_missing',timeout=60)
         if not re.fullmatch(r'\d+',pid):raise GuiFailure('dual_app_pid_invalid')
@@ -543,7 +659,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         ts_scope=create_network(browser,'ts',material,report)
         create_network(browser,'et',material,report)
         report['stage']='network_ts_authorize'
-        authorize_ts(browser,control,ts_scope)
+        authorize_ts(browser,control,ts_scope,parsed.port,report)
         wait_for(lambda:'Tailscale 报告 Running' in (browser.read(ts_scope) or ''), 'dual_ts_running_missing',timeout=120)
         report['tsExplicitAuthorization']=True
         report['stage']='pairing'

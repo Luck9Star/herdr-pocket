@@ -132,3 +132,30 @@ diff --git a/net/tsdial/tsdial.go b/net/tsdial/tsdial.go
  // UserDialPlan resolves addr and reports whether the dialer would
  // handle it via Tailscale. If viaTailscale is false, the resolved
  // address is not a Tailscale route and the caller may dial it directly.
+--- a/ipn/ipnlocal/local.go
++++ b/ipn/ipnlocal/local.go
+@@ -65,6 +65,7 @@
+ 	"tailscale.com/net/netutil"
+ 	"tailscale.com/net/packet"
+ 	"tailscale.com/net/routemanager"
++	"tailscale.com/net/sockstats"
+ 	"tailscale.com/net/traffic"
+ 	"tailscale.com/net/tsaddr"
+ 	"tailscale.com/net/tsdial"
+@@ -653,9 +654,13 @@
+ 	}()
+ 
+ 	netMon := sys.NetMon.Get()
+-	b.sockstatLogger, err = sockstatlog.NewLogger(logpolicy.LogsDir(logf), logf, logID, netMon, sys.HealthTracker.Get(), sys.Bus.Get())
+-	if err != nil {
+-		logf("error setting up sockstat logger: %v", err)
++	// Resolve the log directory only when sockstat logging is available.
++	// Android app processes may have no writable default log directory.
++	if sockstats.IsAvailable && buildfeatures.HasLogTail {
++		b.sockstatLogger, err = sockstatlog.NewLogger(logpolicy.LogsDir(logf), logf, logID, netMon, sys.HealthTracker.Get(), sys.Bus.Get())
++		if err != nil {
++			logf("error setting up sockstat logger: %v", err)
++		}
+ 	}
+ 	// Enable sockstats logs only on non-mobile unstable builds
+ 	if version.IsUnstableBuild() && !version.IsMobile() && b.sockstatLogger != nil {

@@ -10,8 +10,8 @@ trap 'rm -rf "$tmp"' EXIT
 sdk="$ANDROID_HOME/build-tools/35.0.0"
 jar="$ANDROID_HOME/platforms/android-35/android.jar"
 mkdir -p "$tmp/classes" "$tmp/dex"
-javac -source 11 -target 11 -Xlint:-options -classpath "$jar" -d "$tmp/classes" "$here/AuthActivity.java"
-java -cp "$sdk/lib/d8.jar" com.android.tools.r8.D8 --lib "$jar" --min-api 35 --output "$tmp/dex" "$tmp/classes/dev/herdrpocket/dualtestauth/AuthActivity.class"
+javac -source 8 -target 8 -Xlint:-options -bootclasspath "$jar" -d "$tmp/classes" "$here/AuthActivity.java"
+java -cp "$sdk/lib/d8.jar" com.android.tools.r8.D8 --lib "$jar" --min-api 35 --output "$tmp/dex" "$tmp/classes/dev/herdrpocket/dualtestauth/"*.class
 "$sdk/aapt2" link -o "$tmp/base.apk" -I "$jar" --manifest "$here/AndroidManifest.xml" --min-sdk-version 35 --target-sdk-version 35
 (cd "$tmp/dex" && zip -q -X "$tmp/base.apk" classes.dex)
 "$sdk/zipalign" -f 4 "$tmp/base.apk" "$tmp/aligned.apk"

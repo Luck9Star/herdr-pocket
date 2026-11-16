@@ -382,7 +382,7 @@ class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket, RetiringSSHSocket,
         if (_closed) throw const RemoteFailure('network_transport_failed');
         final reply = await _call('streamShutdown');
         if (reply is! Map || reply.length != 1 || reply['shutdown'] != true) throw const RemoteFailure('network_write_unknown');
-        if (_closed) throw const RemoteFailure('network_transport_failed');
+        if (_closed && !_peerEof.isCompleted) throw const RemoteFailure('network_transport_failed');
         await _peerEof.future;
         peerClosed = true;
       })().timeout(budget);

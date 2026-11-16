@@ -85,6 +85,21 @@ void main() {
     expect(runtime.calls.where((x)=>x=='A:streamClose').length,1);
     await subscription.cancel();
   });
+  for(final peerEof in [true,false]) {
+    test('shutdown ACK after local close requires original peer EOF: $peerEof',() async {
+      final runtime=GraceRuntime()..holdShutdown=true;
+      final socket=NetworkSSHSocket(runtime,'A','easy-tier:fixture');final subscription=socket.stream.listen((_) {});
+      final closing=socket.finishGracefully();await tick();
+      if(peerEof)runtime.reads.single.complete({'bytes':Uint8List(0),'eof':true});else socket.destroy();
+      await tick();expect(await socket.retired,isTrue);
+      runtime.shutting.complete({'shutdown':true});
+      expect(await closing,peerEof);
+      expect(runtime.calls.where((x)=>x=='A:streamShutdown').length,1);
+      expect(runtime.calls.where((x)=>x=='A:streamClose').length,1);
+      if(!peerEof)runtime.reads.single.complete({'bytes':Uint8List(0),'eof':true});
+      await subscription.cancel();
+    });
+  }
   test('hard destroy never starts graceful flush or shutdown',() async {
     final runtime=GraceRuntime(),socket=NetworkSSHSocket(runtime,'A','easy-tier:fixture');
     socket.destroy();socket.destroy();expect(await socket.retired,isTrue);

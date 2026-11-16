@@ -177,7 +177,8 @@ PANIC_CLASSES = (
 
 ABI_BOOLS = {'abiShimOk', 'librariesLoaded', 'identityCreated', 'identityReadBack',
     'netmonOptIn', 'abiStatusFilePresent', 'completed', 'uidMatches',
-    'mappedLibraryPresent', 'libraryDigestMatches', 'mappedLibraryPathMatches'}
+    'mappedLibraryPresent', 'libraryDigestMatches', 'mappedLibraryPathMatches',
+    'storeCountsPresent'}
 
 
 def safe_abi_probe(value):
@@ -194,7 +195,9 @@ def safe_abi_probe(value):
         if key in ABI_BOOLS:
             valid = type(item) is bool
         elif key == 'abiShimCode':
-            valid = type(item) is int and 0 <= item <= 7
+            valid = type(item) is int and 0 <= item <= 8
+        elif key in ('storeReads', 'storeWrites', 'engineStartCode'):
+            valid = type(item) is int and 0 <= item <= 100000
         elif key == 'errClass':
             valid = isinstance(item, str) and (item == '' or item.isidentifier()) and len(item) <= 64
         elif key == 'targetPackage':
@@ -233,11 +236,25 @@ def collect_abi_evidence(adb, expected_digest):
         if path.startswith('/') and len(path) <= 4096 and '\n' not in path:
             library['pathAvailable'] = True
             mapped = adb('exec-out', 'run-as', PACKAGE, 'cat', path)
-            if mapped.returncode == 0:
-                digest = hashlib.sha256(mapped.stdout).hexdigest()
-                library.update(digestAvailable=True, sha256=digest,
-                               digestMatches=digest == expected_digest)
     evidence['library'] = library
+
+    store = {'present': False, 'reads': 0, 'writes': 0, 'startCode': 0}
+    response = adb('exec-out', 'run-as', PACKAGE, 'cat',
+                   'files/hp-probe-abi/hp-probe-abi-store.txt')
+    if response.returncode == 0:
+        store['present'] = True
+        for line in response.stdout.decode('ascii', 'replace').splitlines():
+            parts = line.strip().split('=')
+            if len(parts) != 2 or not parts[1].isdigit():
+                continue
+            value = int(parts[1])
+            if parts[0] == 'read':
+                store['reads'] = value
+            elif parts[0] == 'write':
+                store['writes'] = value
+            elif parts[0] == 'start':
+                store['startCode'] = value
+    evidence['store'] = store
     return evidence
 
 

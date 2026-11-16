@@ -26,9 +26,7 @@ public final class AbiProbeInstrumentation extends Instrumentation {
 
     private static native int nativeRun(String libraryPath, String directory,
                                         String hostname, String controlUrl,
-                                        String evidenceDirectory);
-
-    @Override
+                                        String evidenceDirectory, boolean startEngine);
     public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
         start();
@@ -95,9 +93,28 @@ public final class AbiProbeInstrumentation extends Instrumentation {
                 + "/libhp_tailscale.so";
             int code = nativeRun(expectedLibrary, nodeDir.getAbsolutePath(),
                 hostname.toString(), "https://controlplane.invalid",
-                evidenceDir.getAbsolutePath());
+                evidenceDir.getAbsolutePath(), true);
             report.put("abiShimCode", code);
             report.put("abiShimOk", code == 0);
+
+            // Store callback counters, mirrored into the fixed evidence
+            // directory before the abort: they show whether the engine
+            // reached the state store at all.
+            File storeFile = new File(evidenceDir, "hp-probe-abi-store.txt");
+            report.put("storeCountsPresent", storeFile.isFile());
+            if (storeFile.isFile()) {
+                for (String line : new String(Files.readAllBytes(storeFile.toPath()),
+                        StandardCharsets.UTF_8).split("\n")) {
+                    String[] parts = line.trim().split("=");
+                    if (parts.length != 2) continue;
+                    try {
+                        int value = Integer.parseInt(parts[1]);
+                        if (parts[0].equals("read")) report.put("storeReads", value);
+                        else if (parts[0].equals("write")) report.put("storeWrites", value);
+                        else if (parts[0].equals("start")) report.put("engineStartCode", value);
+                    } catch (NumberFormatException ignored) { }
+                }
+            }
 
             File statusFile = new File(nodeDir, "hp-probe-abi-status.json");
             report.put("abiStatusFilePresent", statusFile.isFile());

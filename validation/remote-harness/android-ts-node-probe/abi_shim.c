@@ -31,9 +31,36 @@
 
 typedef __typeof__(&hp_ts_abi_version) abi_version_fn;
 typedef __typeof__(&hp_ts_node_new) node_new_fn;
+typedef __typeof__(&hp_ts_node_start) node_start_fn;
 typedef __typeof__(&hp_ts_node_status) node_status_fn;
 typedef __typeof__(&hp_ts_node_close) node_close_fn;
 typedef __typeof__(&hp_ts_node_release) node_release_fn;
+
+/* Store callback counters. The Go side calls these while the engine starts,
+ * so the counters tell whether the crash happened before or after the first
+ * store access. They are kept in this process' memory and mirrored into the
+ * fixed evidence directory, so a later abort still leaves the count. */
+static volatile unsigned shim_read_count;
+static volatile unsigned shim_write_count;
+static char shim_evidence[4096];
+
+/* The engine start is opt-in per call: the status-only leg proves the
+ * getter, the start leg proves the engine. */
+static int shim_start_engine;
+static int32_t shim_start_code;
+
+static void mirror_store_counts(void) {
+    if (shim_evidence[0] == '\0') return;
+    char path[4200];
+    int written = snprintf(path, sizeof(path), "%s/hp-probe-abi-store.txt",
+                           shim_evidence);
+    if (written <= 0 || written >= (int)sizeof(path)) return;
+    FILE *file = fopen(path, "wb");
+    if (!file) return;
+    fprintf(file, "read=%u\nwrite=%u\nstart=%d\n", shim_read_count,
+            shim_write_count, (int)shim_start_code);
+    fclose(file);
+}
 
 /* In-memory store: every key is absent, writes are discarded. The Go side
  * must cope with a missing state key, which is exactly the pre-login case. */
@@ -46,6 +73,8 @@ static int32_t shim_read(uint64_t context, const uint8_t *key,
     if (data) *data = NULL;
     if (len) *len = 0;
     if (found) *found = 0;
+    shim_read_count++;
+    mirror_store_counts();
     return 0;
 }
 
@@ -58,6 +87,8 @@ static int32_t shim_write(uint64_t context, const uint8_t *key,
     (void)data;
     (void)len;
     (void)delete_value;
+    shim_write_count++;
+    mirror_store_counts();
     return 0;
 }
 
@@ -67,7 +98,6 @@ static void shim_release(uint64_t context, uint8_t *data, uint32_t len) {
     (void)len;
 }
 
-/* Result codes handed to Java. 0 means every ABI call succeeded. */
 #define SHIM_OK 0
 #define SHIM_ERR_LOAD 1
 #define SHIM_ERR_ABI 2
@@ -76,6 +106,7 @@ static void shim_release(uint64_t context, uint8_t *data, uint32_t len) {
 #define SHIM_ERR_CLOSE 5
 #define SHIM_ERR_RELEASE 6
 #define SHIM_ERR_CONFIG 7
+#define SHIM_ERR_START 8
 /* The status JSON is written beside the diagnose snapshot so the host can
  * read both even if the process dies afterwards. */
 static void write_status(const char *directory, const uint8_t *buffer,
@@ -123,11 +154,13 @@ static void write_mapped_path(const char *evidence_dir, void *symbol) {
 JNIEXPORT jint JNICALL
 Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
         JNIEnv *env, jclass cls, jstring library_path, jstring directory,
-        jstring hostname, jstring control_url, jstring evidence_dir) {
+        jstring hostname, jstring control_url, jstring evidence_dir,
+        jboolean start_engine) {
     (void)cls;
     if (!library_path || !directory || !hostname || !control_url || !evidence_dir)
         return SHIM_ERR_CONFIG;
-
+    shim_start_engine = start_engine == JNI_TRUE;
+    shim_start_code = 0;
     const char *lib = (*env)->GetStringUTFChars(env, library_path, NULL);
     const char *dir = (*env)->GetStringUTFChars(env, directory, NULL);
     const char *host = (*env)->GetStringUTFChars(env, hostname, NULL);
@@ -151,10 +184,12 @@ Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
 
     abi_version_fn abi_version = (abi_version_fn)dlsym(handle, "hp_ts_abi_version");
     node_new_fn node_new = (node_new_fn)dlsym(handle, "hp_ts_node_new");
+    node_start_fn node_start = (node_start_fn)dlsym(handle, "hp_ts_node_start");
     node_status_fn node_status = (node_status_fn)dlsym(handle, "hp_ts_node_status");
     node_close_fn node_close = (node_close_fn)dlsym(handle, "hp_ts_node_close");
     node_release_fn node_release = (node_release_fn)dlsym(handle, "hp_ts_node_release");
-    if (!abi_version || !node_new || !node_status || !node_close || !node_release) {
+    if (!abi_version || !node_new || !node_start || !node_status || !node_close
+        || !node_release) {
         result = SHIM_ERR_LOAD;
         goto done;
     }
@@ -162,6 +197,10 @@ Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
      * any Go call, into the fixed evidence directory: if the getter aborts,
      * this file is the only proof that survives. */
     write_mapped_path(evidence, (void *)node_new);
+    /* The store counters are mirrored into the same fixed directory, so the
+     * first and last store access before an abort stays readable. */
+    strncpy(shim_evidence, evidence, sizeof(shim_evidence) - 1);
+    shim_evidence[sizeof(shim_evidence) - 1] = '\0';
     if (abi_version() != 1) {
         result = SHIM_ERR_ABI;
         goto done;
@@ -195,6 +234,24 @@ Java_org_herdr_network_AbiProbeInstrumentation_nativeRun(
             result = SHIM_ERR_STATUS;
         } else {
             write_status(dir, buffer, length);
+        }
+        /* Same library, same Go engine, same C ABI as the product path: the
+         * only difference is the in-memory store instead of the Java one.
+         * A crash here localises the fault to the engine start rather than
+         * to the cross-language store callback. */
+        if (shim_start_engine) {
+            code = node_start(node, 20000);
+            shim_start_code = code;
+            mirror_store_counts();
+            if (code != 0) {
+                result = SHIM_ERR_START;
+            } else {
+                uint8_t started[8192];
+                uint32_t started_length = 0;
+                if (node_status(node, 5000, started, sizeof(started),
+                                &started_length) == 0)
+                    write_status(dir, started, started_length);
+            }
         }
         if (node_close(node, 2000) != 0 && result == SHIM_OK) result = SHIM_ERR_CLOSE;
         if (node_release(node) != 0 && result == SHIM_OK) result = SHIM_ERR_RELEASE;

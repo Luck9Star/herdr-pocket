@@ -299,6 +299,18 @@ class AbiProbeGuardTests(unittest.TestCase):
             'android-ts-node-probe', 'build.sh').read_text()
         self.assertIn('assets/hp-tailscale.sha256', source)
         self.assertNotIn('"$tmp/base.apk" hp-tailscale.sha256)', source)
+
+    def test_abi_probe_schema_accepts_store_counts(self):
+        value = {'schemaVersion': 1, 'abiShimOk': True, 'targetPackage': PACKAGE,
+            'uidMatches': True, 'netmonOptIn': True, 'abiStatusFilePresent': True,
+            'mappedLibraryPresent': True, 'mappedLibraryPathMatches': True,
+            'libraryDigestMatches': True, 'storeCountsPresent': True,
+            'storeReads': 3, 'storeWrites': 1, 'engineStartCode': 8,
+            'completed': True, 'abiShimCode': 8,
+            'netmonDiagnose': {'fileMissing': True}}
+        self.assertEqual(probe.safe_abi_probe(value), value)
+        for changed in ({**value, 'storeReads': -1}, {**value, 'engineStartCode': 999999}):
+            with self.assertRaises(ValueError): probe.safe_abi_probe(changed)
     def test_abi_probe_schema_accepts_bounded_result(self):
         value = {'schemaVersion': 1, 'abiShimOk': True, 'targetPackage': PACKAGE,
             'uidMatches': True, 'netmonOptIn': True, 'abiStatusFilePresent': True,

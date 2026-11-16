@@ -194,6 +194,18 @@ class SafeTsControlTest(unittest.TestCase):
 
 
 class SafeUiFailureTest(unittest.TestCase):
+    def test_safe_source_frames_reject_paths_and_invalid_values(self):
+        import json
+        payload = {'stage': 'et_response_preview', 'kind': 'test_failure',
+                   'responseReceived': True,
+                   'stackFrames': [{'file': 'dual_overlay_ui_steps.dart', 'line': 123}]}
+        self.assertEqual(safe_ui_failure(json.dumps(payload).encode()), payload)
+        for frame in ({'file': '/private/dual_overlay_ui_steps.dart', 'line': 123},
+                      {'file': 'dual_overlay_ui_steps.dart', 'line': True},
+                      {'file': 'secret.dart', 'line': 1}):
+            self.assertIsNone(safe_ui_failure(json.dumps(dict(payload, stackFrames=[frame])).encode()))
+        self.assertIsNone(safe_ui_failure(json.dumps(dict(payload, responseReceived='secret')).encode()))
+
     def test_new_specific_stages_are_allowlisted_without_accepting_raw_details(self):
         import json
         for stage in ('ts_identity_load', 'ts_pair_page', 'ts_pair_input', 'ts_pair_preview',

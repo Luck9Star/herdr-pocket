@@ -24,6 +24,7 @@ class DualOverlayUiSteps {
   final Directory exchange;
   String currentStage = 'fixture_validation';
   Map<String, Object>? nodeDiagnostic;
+  bool responseReceived = false;
 
   Future<void> stage(String value) async {
     if (!RegExp(r'^[a-z][a-z0-9_]{0,50}$').hasMatch(value)) {
@@ -313,8 +314,31 @@ class DualOverlayUiSteps {
       existing.screenHasMarker(activeTerminal, expectedAck));
   }
 
+  Future<void> acceptPairResponse(String role, String response, Map<String, dynamic> requestData, String expectedFingerprint) async {
+    await stage('${role}_response_enter');
+    await enter('pair-response', response);
+    await stage('${role}_response_finish_edit');
+    await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
+    await stage('${role}_response_preview');
+    final responsePreview = find.byKey(const ValueKey('pair-response-preview'));
+    expect(responsePreview, findsOneWidget);
+    final responseText = tester.widget<Text>(responsePreview).data!;
+    for (final field in [requestData['request_id'], requestData['account'], expectedFingerprint,
+      pairingFingerprint(requestData['public_key'] as String)]) {
+      expect(responseText, contains(field.toString()));
+    }
+    await stage('${role}_response_source');
+    final source = await existing.stableReviewCheckbox(tester, 'pair-source-review');
+    await tester.tap(source); await tester.pump();
+    await stage('${role}_response_accept');
+    await existing.tapStablePointer(tester, find.byKey(const ValueKey('pair-accept')));
+    await stage('${role}_response_saved');
+    await existing.until(tester, () => find.textContaining('authorized-unverified').evaluate().isNotEmpty);
+  }
+
   Future<String> pairHost(String role, String profileJson) async {
     if (!{'et', 'ts'}.contains(role)) throw StateError('dual_role_invalid');
+    responseReceived = false;
     await stage('${role}_pair_profile');
     final add = find.byKey(const ValueKey('hosts-add'));
     await existing.until(tester, () => add.evaluate().length == 1 &&
@@ -354,19 +378,8 @@ class DualOverlayUiSteps {
     existing.publish(exchange, '$role-request.json', requestWire);
     await stage('${role}_pair_review');
     final response = await awaitFile('$role-response.json');
-    await enter('pair-response', response);
-    await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
-    final responsePreview = find.byKey(const ValueKey('pair-response-preview'));
-    expect(responsePreview, findsOneWidget);
-    final responseText = tester.widget<Text>(responsePreview).data!;
-    for (final field in [requestData['request_id'], requestData['account'], expectedFingerprint,
-      pairingFingerprint(requestData['public_key'] as String)]) {
-      expect(responseText, contains(field.toString()));
-    }
-    final source = await existing.stableReviewCheckbox(tester, 'pair-source-review');
-    await tester.tap(source); await tester.pump();
-    await existing.tapStablePointer(tester, find.byKey(const ValueKey('pair-accept')));
-    await existing.until(tester, () => find.textContaining('authorized-unverified').evaluate().isNotEmpty);
+    responseReceived = true;
+    await acceptPairResponse(role, response, requestData, expectedFingerprint);
     final added = page.catalog!.profiles.where((profile) => !before.contains(profile.id)).toList();
     expect(added.length, 1);
     expect(added.single.requiresNetworkBinding, isTrue);

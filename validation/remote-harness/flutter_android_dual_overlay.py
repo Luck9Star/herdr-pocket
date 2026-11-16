@@ -229,6 +229,9 @@ UI_STAGES = frozenset({'host_board', 'et_network_create', 'ts_network_create', '
     'et_pair_preview', 'ts_pair_preview', 'et_pair_fill', 'ts_pair_fill',
     'et_pair_target_review', 'ts_pair_target_review', 'et_pair_create', 'ts_pair_create',
     'et_pair_request', 'ts_pair_request',
+    'et_response_enter', 'ts_response_enter', 'et_response_finish_edit', 'ts_response_finish_edit',
+    'et_response_preview', 'ts_response_preview', 'et_response_source', 'ts_response_source',
+    'et_response_accept', 'ts_response_accept', 'et_response_saved', 'ts_response_saved',
     'et_identity_review', 'ts_identity_review', 'et_identity_create', 'ts_identity_create',
     'et_node_refresh', 'ts_node_refresh', 'et_node_start', 'ts_node_start',
     'et_node_wait', 'ts_node_wait', 'ts_node_ready_refresh'})
@@ -240,11 +243,21 @@ def safe_ui_failure(raw):
         detail = json.loads(raw)
         basic = {'stage', 'kind'}
         diagnostic = {'nodeState', 'statusPresent', 'editPresent', 'editEnabled', 'addPresent', 'addEnabled', 'notice'}
-        if (isinstance(detail, dict) and set(detail) in (basic, basic | diagnostic)
+        optional = {'responseReceived', 'stackFrames'}
+        if (isinstance(detail, dict) and set(detail) - optional in (basic, basic | diagnostic)
                 and isinstance(detail['stage'], str) and detail['stage'] in UI_STAGES
                 and isinstance(detail['kind'], str)
                 and detail['kind'] in {'test_failure', 'flutter_error', 'state_error', 'assertion_error', 'other'}):
-            if set(detail) == basic:
+            if 'responseReceived' in detail and type(detail['responseReceived']) is not bool:
+                return None
+            if 'stackFrames' in detail:
+                frames = detail['stackFrames']
+                if (not isinstance(frames, list) or len(frames) > 6 or any(
+                        not isinstance(frame, dict) or set(frame) != {'file', 'line'}
+                        or frame['file'] not in {'dual_overlay_ui_steps.dart', 'android_dual_overlay_test.dart', 'android_pairing_observe_test.dart'}
+                        or type(frame['line']) is not int or not 1 <= frame['line'] <= 999999 for frame in frames)):
+                    return None
+            if set(detail) - optional == basic:
                 return detail
             if (detail['nodeState'] in {'engine_started', 'needs_login', 'needs_machine_auth', 'running',
                                         'starting', 'closing', 'stopped', 'unknown', 'unavailable', 'other'}

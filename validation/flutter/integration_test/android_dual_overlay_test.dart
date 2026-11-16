@@ -17,6 +17,21 @@ const runId = String.fromEnvironment('HERDR_ANDROID_DUAL_RUN_ID');
 const firstStop = String.fromEnvironment('HERDR_ANDROID_DUAL_FIRST_STOP');
 const exchangePath = '/data/user/0/dev.herdr.herdr_flutter_probe/files/dual-overlay-exchange';
 
+List<Map<String, Object>> safeFailureFrames(StackTrace stack) {
+  final frames = <Map<String, Object>>[];
+  final pattern = RegExp(r'(?:^|[/\\( ])(dual_overlay_ui_steps\.dart|android_dual_overlay_test\.dart|android_pairing_observe_test\.dart):(\d{1,6})(?::\d+)?');
+  for (final line in stack.toString().split('\n')) {
+    final match = pattern.firstMatch(line);
+    if (match == null) continue;
+    final number = int.parse(match.group(2)!);
+    if (number < 1) continue;
+    final frame = <String, Object>{'file': match.group(1)!, 'line': number};
+    if (!frames.any((item) => item['file'] == frame['file'] && item['line'] == number)) frames.add(frame);
+    if (frames.length == 6) break;
+  }
+  return frames;
+}
+
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('two reviewed herdr targets retain provider boundaries on Android', (tester) async {
@@ -92,13 +107,14 @@ void main() {
       'initialInputsAccepted': true, 'survivorInputAccepted': true};
     existing.publish(exchange, 'result.json', jsonEncode(result));
     binding.reportData = result;
-    } catch (error) {
+    } catch (error, stack) {
       final kind = error is TestFailure ? 'test_failure'
         : error is FlutterError ? 'flutter_error'
         : error is StateError ? 'state_error'
         : error is AssertionError ? 'assertion_error' : 'other';
       await steps.captureFailureNotice();
       existing.publish(exchange, 'failure.json', jsonEncode({'stage': steps.currentStage, 'kind': kind,
+        'responseReceived': steps.responseReceived, 'stackFrames': safeFailureFrames(stack),
         if (steps.nodeDiagnostic != null) ...steps.nodeDiagnostic!}));
       rethrow;
     }

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:terminal_view/terminal_view.dart';
@@ -35,10 +35,12 @@ String pemFromSingleLineInput(String text) {
 }
 
 class RemotePage extends StatefulWidget {
-  const RemotePage({super.key,required this.tokens,this.adapter,this.pairedTarget,this.deviceKeys,this.keyHandle,this.devicePublicKey,this.onConnecting,this.onAuthenticated,this.onStopped,this.visibility,this.inputEligible,this.networkBinding,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLease});
+  const RemotePage({super.key,required this.tokens,this.adapter,this.pairedTarget,this.deviceKeys,this.keyHandle,this.devicePublicKey,this.onConnecting,this.onAuthenticated,this.onStopped,this.visibility,this.inputEligible,this.networkBinding,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLease,this.registerTransport,this.overlayAdapterFactory});
   final DesignTokens tokens;
   final NetworkConnectionBinding? networkBinding;
   final RemoteReadOnlyAdapter? adapter;
+  final VoidCallback Function(Future<void> Function())? registerTransport;
+  @visibleForTesting final RemoteReadOnlyAdapter Function(SocketConnector)? overlayAdapterFactory;
   final Map<String,dynamic>? pairedTarget;
   final DeviceKeys? deviceKeys;
   final String? keyHandle, devicePublicKey;
@@ -59,8 +61,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   late final NetworkConnectionBinding? originalNetworkBinding;
   bool networkBindingInvalidated = false;
   NetworkNodeBinding? frozenNode;
-  late final adapter = widget.networkBinding?.profile != null
-    ? RemoteReadOnlyAdapter(inputJournal:const PlatformRemoteInputJournal(),connector:(host,port) async {
+  late final SocketConnector overlayConnector = (host,port) async {
         final node = frozenNode;
         if (node == null || widget.networkBinding?.stillCurrent() != true) throw const RemoteFailure('network_binding_changed');
         final socket = await runtime.open(node,host,port);
@@ -68,8 +69,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           socket.destroy(); throw const RemoteFailure('network_binding_changed');
         }
         return socket;
-      })
+      };
+  late final adapter = widget.networkBinding?.profile != null
+    ? widget.overlayAdapterFactory?.call(overlayConnector) ?? RemoteReadOnlyAdapter(inputJournal:const PlatformRemoteInputJournal(),connector:overlayConnector)
     : widget.adapter ?? RemoteReadOnlyAdapter(inputJournal:const PlatformRemoteInputJournal());
+  VoidCallback? releaseTransport;
+  Future<void>? tabClosing;
+  Future<void> closeForTab() => tabClosing ??= stop('对应网络正在停止 · 已封住输入，正在清退连接');
   final fields = <String,TextEditingController>{
     for (final name in ['host','port','username','expectedHostKey','privateKeyPem','socketPath','herdrPath','session','paneId'])
       name:TextEditingController(text:name == 'port' ? '22' : ''),
@@ -206,6 +212,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     widget.summaryLease?.registry.addListener(summaryChanged);
     originalNetworkBinding = widget.networkBinding;
     adapter.captureInputJournalReview = inputGate.captureJournalRefresh;
+    releaseTransport = widget.registerTransport?.call(closeForTab);
     draft.addListener(draftChanged);
     terminalFocus.addListener(terminalFocusChanged);
     widget.visibility?.addListener(visibilityChanged);
@@ -354,6 +361,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     } else if (mounted) { setState(() {}); }
   }
   void visibilityChanged() {
+    if (tabClosing != null) return;
     if (widget.visibility?.value == false) {
       showingFontDiagnostics = false;
       resetKeyboardControls();
@@ -392,21 +400,25 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       stop('应用已暂停，连接已取消；请重新核验后主动连接');
     }
   }
-  void stop([String message = '已取消；不会重连或发送输入']) {
+  Future<void> stop([String message = '已取消；不会重连或发送输入']) {
     showingFontDiagnostics = false;
     resetKeyboardControls();
     dismissPasteReview(); clearScreenSelection(); retirePendingPasteRead();
     widget.summaryLease?.invalidate(); summaryAttempt = null;
     inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
-    request++; frozenNode = null; identityLease?.cancel(); unawaited(adapter.cancel());
+    request++; frozenNode = null; identityLease?.cancel();
+    final cancelling = adapter.cancel();
+    unawaited(cancelling.then<void>((_) {},onError:(Object _,StackTrace __) {}));
     connectionDiagnostics?.stopped();
     widget.onStopped?.call();
     fields['privateKeyPem']!.clear();
     if (mounted) setState(() { busy = false; live = false; reviewed = false; viewPaused = false; dashboardFresh = false; showingFontDiagnostics = false; status = message; });
     reportView();
+    return cancelling;
   }
   @override
   void dispose() {
+    releaseTransport?.call();
     dismissInputReview(); dismissPasteReview();
     widget.inputEligible?.removeListener(inputEligibilityChanged);
     widget.summaryLease?.registry.removeListener(summaryChanged);
@@ -418,7 +430,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     inputGate.onChanged = null; inputGate.invalidate();
     clearScreenSelection(); screenText.dispose(); screenTextFocus.dispose();
     terminalFocus.removeListener(terminalFocusChanged); terminalFocus.dispose(); draftFocus.dispose(); draft.removeListener(draftChanged); draft.dispose();
-    unawaited(adapter.cancel()); terminal?.dispose();
+    unawaited((tabClosing ?? adapter.cancel()).then<void>((_) {},onError:(Object _,StackTrace __) {})); terminal?.dispose();
     widget.onViewState?.call(inputGate.unknown != null || adapter.pendingInput != null ? 'unknown' : 'stale',
       selectedPane ?? widget.requestedTarget?.paneId,selectedTarget?.terminalId ?? widget.requestedTarget?.terminalId,
       snapshot != null && capturedTerminalId != null && selectedPane == snapshot!.paneId && selectedTarget?.terminalId == capturedTerminalId ? capturedAt : null);

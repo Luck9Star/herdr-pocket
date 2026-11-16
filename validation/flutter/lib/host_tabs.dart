@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/widgets.dart';
@@ -26,6 +27,12 @@ class HostTab {
   final inputEligible = ValueNotifier<bool>(false);
   final ValueNotifier<HostTabView> view;
   HostDashboardLease? summaryLease;
+  Future<void> Function()? _closeTransport;
+  VoidCallback registerTransport(Future<void> Function() close) {
+    _closeTransport = close;
+    return () { if (identical(_closeTransport,close)) _closeTransport = null; };
+  }
+  Future<void> closeTransport() => _closeTransport?.call() ?? Future<void>.value();
   bool _disposed = false;
   int _viewRevision = 0;
   static String networkFor(HostProfile p,List<NetworkProfile> networks) {
@@ -124,6 +131,15 @@ class HostTabs extends ChangeNotifier {
     _tabs.remove(tab); tab.dispose(); notifyListeners();
   }
   void closeHost(String hostId) { for (final tab in List<HostTab>.of(forHost(hostId))) { close(tab.id); } }
+  /// Start cancellation before removing widgets; a frame is not a cleanup ack.
+  Future<bool> closeHostsAndWait(Set<String> hostIds,{Duration budget = const Duration(seconds:5)}) async {
+    final affected = _tabs.where((tab) => hostIds.contains(tab.hostId)).toList();
+    final closing = [for (final tab in affected) Future<void>.sync(tab.closeTransport)];
+    for (final tab in affected) { close(tab.id); }
+    try { await Future.wait(closing).timeout(budget); return true; }
+    catch (_) { return false; } // User stop remains available after bounded cleanup.
+  }
+
   void reconcile(List<HostProfile> profiles,[List<NetworkProfile> networks=const []]) {
     var changed = false;
     for (final tab in List<HostTab>.of(_tabs)) {

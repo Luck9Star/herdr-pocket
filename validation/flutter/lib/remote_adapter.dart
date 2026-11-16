@@ -8,7 +8,7 @@ import 'remote_failure.dart';
 export 'remote_failure.dart';
 import 'remote_input.dart';
 import 'remote_frame_geometry.dart';
-import 'routed_ssh_socket.dart' show RoutedSSHSocket;
+import 'routed_ssh_socket.dart' show RoutedSSHSocket, RetiringSSHSocket;
 
 String shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 
@@ -472,6 +472,7 @@ class _Attempt {
   SSHSocket? socket;
   SSHClient? client;
   Future<void>? clientClosing;
+  bool nativeRetired = true;
   SSHForwardChannel? forward;
   SSHForwardChannel? inputForward;
   SSHSession? observe;
@@ -716,7 +717,11 @@ class RemoteReadOnlyAdapter {
       final closing = a.client?.close(); a.clientClosing = closing;
       await closing?.timeout(const Duration(seconds:2));
     } catch (_) { /* socket cleanup below; slot still waits for original future */ }
-    finally { a.socket?.destroy(); }
+    finally {
+      final socket = a.socket;
+      socket?.destroy();
+      if (socket is RetiringSSHSocket) a.nativeRetired = await (socket as RetiringSSHSocket).retired;
+    }
   }
   Future<void> cancel() async {
     generation++;
@@ -726,6 +731,7 @@ class RemoteReadOnlyAdapter {
     if (!a.cancelled.isCompleted) a.cancelled.complete();
     a.waits.interrupt(const RemoteFailure('cancelled')); a.wakeWatch?.call();
     await _close(a);
+    if (!a.nativeRetired) throw const RemoteFailure('network_transport_failed');
   }
 
   /// Revoke input immediately and retire only the observing channel. The SSH
@@ -1410,7 +1416,7 @@ class RemoteReadOnlyAdapter {
       throw failure;
     } finally {
       var closed = false;
-      try { await _close(a); closed = true; }
+      try { await _close(a); closed = a.nativeRetired; }
       finally {
         _activeRead = false;
         final pending = ownedDial;

@@ -12,9 +12,10 @@ import 'zerotier_device_dialog.dart';
 
 class NetworkProfilesPage extends StatefulWidget {
   const NetworkProfilesPage({super.key,required this.catalog,required this.closeTabs,this.identityStore,this.runtime,
-    this.zeroTierDeviceStore,this.beforeZeroTierForget});
+    this.zeroTierDeviceStore,this.beforeZeroTierForget,this.closeTabsAndWait});
   final HostCatalog catalog;
   final void Function(Set<String>) closeTabs;
+  final Future<bool> Function(Set<String>)? closeTabsAndWait;
   final NetworkIdentityStore? identityStore;
   final NativeNetworkRuntime? runtime;
   final ZeroTierDeviceStore? zeroTierDeviceStore;
@@ -110,15 +111,23 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> with WidgetsB
     if (binding == null || pendingStops.contains(profile.id)) return;
     if (pendingStarts.contains(profile.id)) cancelledStarts.add(profile.id);
     pendingStops.add(profile.id); final epoch = nextEpoch(profile.id);
-    closeAffected(profile);
-    setState(() { nodes[profile.id] = NetworkNodeSnapshot('closing',binding); });
+    setState(() { nodes[profile.id] = NetworkNodeSnapshot('closing',binding); notice = null; });
     try {
+      var transportClosed = true;
+      try {
+        final close = widget.closeTabsAndWait;
+        if (close == null) { closeAffected(profile); }
+        else { transportClosed = await close(catalog.networkImpact(profile.id).map((p) => p.id).toSet()); }
+      } catch (_) { transportClosed = false; }
       final result = await runtime.stop(binding);
       if (result.state == 'stopped') {
         if (pendingStarts.contains(profile.id)) stoppedStarts.add(profile.id);
         uncertainStarts.remove(profile.id);
       }
-      if (currentEpoch(profile.id,epoch)) setState(() { nodes[profile.id] = result; });
+      if (currentEpoch(profile.id,epoch)) setState(() {
+        nodes[profile.id] = result;
+        if (!transportClosed) notice = '原节点停止结果已返回；对应 SSH 清退尚未确认，不能视为连接已关闭。';
+      });
     } catch (_) {
       if (currentEpoch(profile.id,epoch)) setState(() { nodes[profile.id] = NetworkNodeSnapshot('closing',binding);
         notice = '停止尚未确认 · 可刷新状态或对原绑定再次明确停止；不自动重试。'; });

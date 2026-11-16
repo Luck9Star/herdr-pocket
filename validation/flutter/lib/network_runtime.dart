@@ -12,7 +12,7 @@ import 'remote_adapter.dart';
 import 'remote_input.dart';
 import 'routed_ssh_socket.dart';
 
-export 'routed_ssh_socket.dart' show RoutedSSHSocket;
+export 'routed_ssh_socket.dart' show RoutedSSHSocket, RetiringSSHSocket;
 
 /// Public binding only; identity material remains in the native vault.
 class NetworkNodeBinding {
@@ -276,7 +276,7 @@ class NativeNetworkRuntime {
 }
 
 /// Actual route accompanies the stream; callers must not fabricate it from GUI state.
-class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket {
+class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket, RetiringSSHSocket {
   NetworkSSHSocket(this.runtime,this.id,this.actualRoute) {
     _incoming = StreamController<Uint8List>(sync:true,onListen:_read,onResume:_read,onCancel:destroy);
     _output = _NetworkSink(this);
@@ -288,6 +288,8 @@ class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket {
   late final StreamController<Uint8List> _incoming;
   late final _NetworkSink _output;
   final _done = Completer<void>();
+  final _retired = Completer<bool>();
+  @override Future<bool> get retired => _retired.future;
   final Queue<Uint8List> _writes = Queue();
   int _queued = 0;
   bool _closed = false,_reading = false,_writing = false,_flushing = false;
@@ -357,7 +359,11 @@ class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket {
     final drain = _drained; _drained = null;
     if (drain != null && !drain.isCompleted) drain.completeError(const RemoteFailure('network_write_unknown'));
     if (!_incoming.isClosed) unawaited(_incoming.close());
-    unawaited(_call('streamClose').then<void>((_) {},onError:(Object _,StackTrace __) {}));
+    final closing = Future<Object?>.sync(() => _call('streamClose')).then<void>((reply) {
+      if (reply is! Map || reply.length != 1 || reply['closed'] != true) throw const RemoteFailure('network_transport_failed');
+    });
+    unawaited(closing.then<void>((_) { _retired.complete(true); },
+      onError:(Object _,StackTrace __) { _retired.complete(false); }));
     if (!_done.isCompleted) { if (error) { _done.completeError(const RemoteFailure('network_transport_failed')); } else { _done.complete(); } }
   }
   @override void destroy() => _finish();

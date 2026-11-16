@@ -16,7 +16,7 @@ import 'host_task_summary.dart';
 /// Public request/response review. Native identity creation is always explicit;
 /// missing/locked storage has no fallback, and responses never establish SSH trust.
 class PairingPage extends StatefulWidget {
-  const PairingPage({super.key,required this.tokens,this.keys,this.adapter,this.onRequest,this.clock,this.catalog,this.profileId,this.visibility,this.inputEligible,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLeaseFactory});
+  const PairingPage({super.key,required this.tokens,this.keys,this.adapter,this.onRequest,this.clock,this.catalog,this.profileId,this.visibility,this.inputEligible,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLeaseFactory,this.registerTransport,this.overlayAdapterFactory});
   final DesignTokens tokens;
   final DeviceKeys? keys;
   final HostCatalog? catalog;
@@ -28,6 +28,8 @@ class PairingPage extends StatefulWidget {
   final void Function(RemotePane)? onOpenPane;
   final HostDashboardLease Function(HostProfile)? summaryLeaseFactory;
   final RemoteReadOnlyAdapter? adapter;
+  final VoidCallback Function(Future<void> Function())? registerTransport;
+  @visibleForTesting final RemoteReadOnlyAdapter Function(SocketConnector)? overlayAdapterFactory;
   final void Function(Map<String,dynamic>)? onRequest;
   static PendingDevicePairing? retainedPairing;
   static Map<String,dynamic>? retainedTarget;
@@ -295,7 +297,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => RemotePage(tokens:widget.tokens,
       adapter:widget.adapter,visibility:widget.visibility,inputEligible:widget.inputEligible,networkBinding:networkBinding,pairedTarget:target,deviceKeys:keys,keyHandle:p.handle,onViewState:widget.onViewState,
       requestedTarget:widget.requestedTarget,onOpenPane:widget.onOpenPane,
-      summaryLease:summaryLease,
+      summaryLease:summaryLease,registerTransport:widget.registerTransport,overlayAdapterFactory:widget.overlayAdapterFactory,
       devicePublicKey:p.request['public_key'] as String,onConnecting:() { ticket = p.connect(); },onAuthenticated:() { p.connectionResult(ticket,true); if (mounted) setState(() {}); },
       onStopped:() { if (['connecting','paired'].contains(p.state)) { p.generation++; p.state = 'waiting-connectivity'; } })));
     if (!mounted) return;

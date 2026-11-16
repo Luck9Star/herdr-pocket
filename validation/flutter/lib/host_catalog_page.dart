@@ -18,13 +18,14 @@ String blockedSummaryTargetKey(String hostId,RemotePane pane,{bool compact=false
   '${compact ? 'workspace' : 'host'}-blocked-target-${jsonEncode([hostId,pane.paneId,pane.terminalId])}';
 
 class HostCatalogPage extends StatefulWidget {
-  const HostCatalogPage({super.key,required this.tokens,required this.offlineBuilder,this.catalog,this.keys,this.tabs,this.adapterFactory});
+  const HostCatalogPage({super.key,required this.tokens,required this.offlineBuilder,this.catalog,this.keys,this.tabs,this.adapterFactory,this.overlayAdapterFactory});
   final DesignTokens tokens;
   final WidgetBuilder offlineBuilder;
   final HostCatalog? catalog;
   final DeviceKeys? keys;
   final HostTabs? tabs;
   final RemoteReadOnlyAdapter Function(HostProfile)? adapterFactory;
+  @visibleForTesting final RemoteReadOnlyAdapter Function(HostProfile,SocketConnector)? overlayAdapterFactory;
   @override
   State<HostCatalogPage> createState() => _HostCatalogPageState();
 }
@@ -119,7 +120,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     if (busy || !catalog.ready || catalog.writing) return;
     tabs.select(null);
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => NetworkProfilesPage(catalog:catalog,
-      closeTabs:(ids) { for (final id in ids) { tabs.closeHost(id); } })));
+      closeTabsAndWait:tabs.closeHostsAndWait,closeTabs:(ids) { for (final id in ids) { tabs.closeHost(id); } })));
     if (mounted) setState(() {});
   }
   Future<void> configureNetwork(HostProfile profile) async {
@@ -686,6 +687,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       child:FocusScope(canRequestFocus:visible,child:child!))),
     child:Navigator(key:tab.navigator,onGenerateRoute:(settings) => MaterialPageRoute<void>(settings:settings,
       builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,catalog:catalog,profileId:tab.hostId,
+        registerTransport:tab.registerTransport,
+        overlayAdapterFactory:widget.overlayAdapterFactory == null ? null : (connector) => widget.overlayAdapterFactory!(catalog.profiles.singleWhere((p) => p.id == tab.hostId),connector),
         adapter:tab.adapter,visibility:tab.visible,inputEligible:tab.inputEligible,onViewState:tab.report,requestedTarget:tab.requestedTarget,
         summaryLeaseFactory:(profile) {
           tab.summaryLease?.close();
@@ -900,7 +903,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                 return Semantics(container: true, child: Stack(children: [
                   Positioned.fill(child: Offstage(offstage: showingTab, child: IndexedStack(
                     index: destination, children: [board(), terminalList(),
-                      NetworkProfilesPage(catalog: catalog, closeTabs: (ids) {
+                      NetworkProfilesPage(catalog: catalog, closeTabsAndWait:tabs.closeHostsAndWait,closeTabs: (ids) {
                         for (final id in ids) { tabs.closeHost(id); }
                       }), settings()]))),
                   for (final tab in tabs.tabs)

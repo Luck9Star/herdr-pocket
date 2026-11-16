@@ -81,7 +81,7 @@ def prepare_private_ca(adb, serial, certificate, *, run):
 
 
 EXCHANGE_FILES = frozenset({'config.json', 'et-response.json', 'ts-response.json',
-                            'ts-authorized.txt', 'et-audit.txt', 'ts-audit.txt', 'stopped-audit.txt', 'final-audit.txt'})
+                            'ts-authorized.txt', 'et-audit.txt', 'ts-audit.txt', 'stopped-audit.txt', 'final-audit.txt', 'both-stopped-audit.txt'})
 
 
 def write_exchange(adb, serial, name, data, *, run):
@@ -204,17 +204,18 @@ def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, aud
         baselines[role] = audit_baseline(audit(role, expected), len(expected))
         write_exchange(adb, serial, role + '-audit.txt', b'accepted', run=run)
         return True
-    if stage in ('stopped_audit', 'final_audit'):
+    if stage in ('stopped_audit', 'final_audit', 'both_stopped_audit'):
         if set(baselines) != {'et', 'ts'} or first_stop not in ('et', 'ts'):
             raise DualOverlayDeviceFailure('host_audit_baseline_missing')
         survivor = 'ts' if first_stop == 'et' else 'et'
         for role in ('et', 'ts'):
             expected = b'E' if role == 'et' else b'T'
-            if stage == 'final_audit' and role == survivor:
+            if stage in ('final_audit', 'both_stopped_audit') and role == survivor:
                 expected += b'e' if role == 'et' else b't'
-            audit_unchanged_session(audit(role, expected), baselines[role], len(expected), active=role == survivor)
-        write_exchange(adb, serial, 'stopped-audit.txt' if stage == 'stopped_audit' else 'final-audit.txt',
-                       b'accepted', run=run)
+            audit_unchanged_session(audit(role, expected), baselines[role], len(expected), active=stage != 'both_stopped_audit' and role == survivor)
+        filename = {'stopped_audit': 'stopped-audit.txt', 'final_audit': 'final-audit.txt',
+                    'both_stopped_audit': 'both-stopped-audit.txt'}[stage]
+        write_exchange(adb, serial, filename, b'accepted', run=run)
         return True
     return False
 
@@ -222,7 +223,7 @@ def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, aud
 UI_STAGES = frozenset({'host_board', 'et_network_create', 'ts_network_create', 'ts_login_open',
     'ts_wait_authorization', 'et_pair_profile', 'ts_pair_profile', 'et_pair_review', 'ts_pair_review',
     'et_open_host', 'ts_open_host', 'et_input', 'ts_input', 'et_baseline', 'ts_baseline',
-    'et_resume', 'ts_resume', 'et_stop_network', 'ts_stop_network', 'stopped_audit', 'final_audit',
+    'et_resume', 'ts_resume', 'et_stop_network', 'ts_stop_network', 'stopped_audit', 'final_audit', 'both_stopped_audit',
     'et_network_save', 'ts_network_save', 'et_identity_open', 'ts_identity_open',
     'et_identity_load', 'ts_identity_load',
     'et_bind_open', 'ts_bind_open', 'et_bind_preview', 'ts_bind_preview',
@@ -294,7 +295,7 @@ def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout
     if first_stop not in ('et', 'ts') or timeout <= 0 or timeout > 1200:
         raise DualOverlayDeviceFailure('device_run_invalid')
     checkpoints = ('ts_wait_authorization', 'et_pair_review', 'ts_pair_review',
-                   'et_baseline', 'ts_baseline', 'stopped_audit', 'final_audit')
+                   'et_baseline', 'ts_baseline', 'stopped_audit', 'final_audit', 'both_stopped_audit')
     deadline = time.monotonic() + timeout
     index = 0
     baselines = {}

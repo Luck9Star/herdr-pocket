@@ -100,11 +100,13 @@ void main() {
     await steps.stage('final_audit');
     expect(await steps.awaitFile('final-audit.txt'), 'accepted');
     await steps.stopNetwork(survivor, survivor == 'et' ? etNetwork : tsNetwork);
+    await steps.stage('both_stopped_audit');
+    expect(await steps.awaitFile('both-stopped-audit.txt'), 'accepted');
     final result = {'status': 'passed', 'firstStop': firstStop,
       'twoReviewedTargets': true, 'observedBothUpdates': true, 'responseMarkersMatched': true,
       'explicitTsAuthorization': true,
       'newFullAfterResume': true, 'stoppedTabRetired': true,
-      'initialInputsAccepted': true, 'survivorInputAccepted': true};
+      'initialInputsAccepted': true, 'survivorInputAccepted': true, 'survivorStopped': true};
     existing.publish(exchange, 'result.json', jsonEncode(result));
     binding.reportData = result;
     } catch (error, stack) {

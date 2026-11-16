@@ -179,6 +179,41 @@ class HostStageTest(unittest.TestCase):
             write.assert_not_called()
 
 
+class BothStoppedAuditTests(unittest.TestCase):
+    def test_final_audit_checks_original_sessions_bytes_and_closure(self):
+        import base64
+        for first_stop in ('et', 'ts'):
+            survivor = 'ts' if first_stop == 'et' else 'et'
+            class Control:
+                def __init__(self): self.calls = []; self.failure = None
+                def call(self, request):
+                    self.calls.append(request)
+                    role = request['role']
+                    expected = (b'E' if role == 'et' else b'T') + ((b'e' if role == 'et' else b't') if role == survivor else b'')
+                    self_expected = base64.b64encode(expected).decode('ascii')
+                    if request['expectedBase64'] != self_expected: raise AssertionError('wrong audit bytes')
+                    value = evidence()
+                    value.update(event='host_audit', role=role, capturedBytes=len(expected))
+                    value['sessions'][1]['active'] = self.failure == 'active'
+                    if self.failure == 'reconnect': value['newSessions'] = 1
+                    if self.failure == 'bytes': value['exactBytes'] = False
+                    return value
+            control = Control()
+            session = type('Session', (), {'control': control})()
+            baseline = {'et': (2, 2), 'ts': (2, 2)}
+            with patch('flutter_android_dual_overlay.write_exchange') as write:
+                self.assertTrue(handle_stage('both_stopped_audit', session=session, adb='adb', serial='emulator-5554',
+                                             run=None, first_stop=first_stop, baselines=baseline))
+                self.assertEqual(write.call_args.args[2:4], ('both-stopped-audit.txt', b'accepted'))
+            for failure in ('active', 'reconnect', 'bytes'):
+                control.failure = failure
+                with patch('flutter_android_dual_overlay.write_exchange') as write:
+                    with self.assertRaises(DualOverlayDeviceFailure):
+                        handle_stage('both_stopped_audit', session=session, adb='adb', serial='emulator-5554',
+                                     run=None, first_stop=first_stop, baselines=baseline)
+                    write.assert_not_called()
+
+
 class SafeTsControlTest(unittest.TestCase):
     def test_only_bounded_fixed_fields_are_retained(self):
         fields = {'event': 'ts_diagnostics', 'secondClientRegistered': False,
@@ -254,10 +289,35 @@ class DeviceCheckpointTest(unittest.TestCase):
             with self.assertRaisesRegex(DualOverlayDeviceFailure, 'device_stage_out_of_order'):
                 drive_checkpoints(None, process, 'adb', 'emulator-5554', 'et', run=None)
 
+    def test_completed_contract_requires_survivor_stop_and_both_host_audits(self):
+        import json
+        expected = {'status': 'passed', 'firstStop': 'et', 'twoReviewedTargets': True,
+                    'observedBothUpdates': True, 'responseMarkersMatched': True,
+                    'explicitTsAuthorization': True, 'newFullAfterResume': True,
+                    'stoppedTabRetired': True, 'survivorStopped': True,
+                    'initialInputsAccepted': True, 'survivorInputAccepted': True}
+        for valid in (True, False):
+            result = dict(expected)
+            if not valid: result.pop('survivorStopped')
+            stages = iter([b'ts_wait_authorization', b'et_pair_review', b'ts_pair_review',
+                           b'et_baseline', b'ts_baseline', b'stopped_audit', b'final_audit', b'both_stopped_audit'])
+            process = type('Process', (), {'poll': lambda self: None, 'wait': lambda self, timeout: 0})()
+            def read(_adb, _serial, name, **_kwargs):
+                return json.dumps(result).encode() if name == 'result.json' else next(stages)
+            with patch('flutter_android_dual_overlay.read_exchange', side_effect=read), \
+                 patch('flutter_android_dual_overlay.handle_stage', return_value=True) as checked, \
+                 patch('time.sleep'):
+                if valid:
+                    self.assertEqual(drive_checkpoints(None, process, 'adb', 'emulator-5554', 'et', run=None), expected)
+                    self.assertEqual(checked.call_count, 8)
+                else:
+                    with self.assertRaisesRegex(DualOverlayDeviceFailure, 'device_result_invalid'):
+                        drive_checkpoints(None, process, 'adb', 'emulator-5554', 'et', run=None)
+
     def test_all_checkpoint_replies_and_test_process_are_required(self):
         import json
         stages = iter([b'ts_wait_authorization', b'et_pair_review', b'ts_pair_review',
-                       b'et_baseline', b'ts_baseline', b'stopped_audit', b'final_audit'])
+                       b'et_baseline', b'ts_baseline', b'stopped_audit', b'final_audit', b'both_stopped_audit'])
         result = {'status': 'passed', 'firstStop': 'et', 'twoReviewedTargets': True,
                   'observedBothUpdates': True, 'responseMarkersMatched': True,
                   'explicitTsAuthorization': True, 'newFullAfterResume': True,

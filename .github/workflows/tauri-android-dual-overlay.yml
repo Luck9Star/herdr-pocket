@@ -11,17 +11,29 @@ concurrency:
   cancel-in-progress: false
 jobs:
   tauri-build:
-    if: startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-build-')
+    if: startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-build-') || startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-paired-')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    outputs:
+      source_sha: ${{ steps.build-manifest.outputs.source_sha }}
+      native_source_sha: ${{ steps.build-manifest.outputs.native_source_sha }}
+      normal_apk_sha256: ${{ steps.build-manifest.outputs.normal_apk_sha256 }}
+      qa_apk_sha256: ${{ steps.build-manifest.outputs.qa_apk_sha256 }}
+      auth_apk_sha256: ${{ steps.build-manifest.outputs.auth_apk_sha256 }}
+      manifest_sha256: ${{ steps.build-manifest.outputs.manifest_sha256 }}
     env:
       PYTHONDONTWRITEBYTECODE: '1'
-      NATIVE_SOURCE: 93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
+      NATIVE_SOURCE: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
+      NATIVE_RUN: '43877918495'
+      NATIVE_NORMAL_ARTIFACT: '14231686859'
+      NATIVE_NORMAL_ZIP_SHA256: 39aca341528806fbc7948d8a5cb02c00096afb4102a87d10ff0cde0d6370807a
+      NATIVE_QA_ARTIFACT: '14232500264'
+      NATIVE_QA_ZIP_SHA256: 78a0a4457c5209e67507cc32121ba8377120caaab4d4edbe9c3115307f7eefcb
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
-      HOST_RUN: '43736430859'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -37,18 +49,32 @@ jobs:
           ref: ${{ env.NATIVE_SOURCE }}
           path: native-source
           persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: android-dual-native-x86_64-93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
-          run-id: 43732345827
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/dual-normal-native
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: android-dual-native-QA-ONLY-x86_64-93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
-          run-id: 43732345827
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/dual-qa-native
+      - name: Download exact normal and QA native inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for role in normal qa; do
+            if [[ "$role" == normal ]]; then artifact="$NATIVE_NORMAL_ARTIFACT"; else artifact="$NATIVE_QA_ARTIFACT"; fi
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact" > "$RUNNER_TEMP/native-$role-meta.json"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact/zip" > "$RUNNER_TEMP/native-$role.zip"
+          done
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          for role,expected_name in [('normal','android-dual-native-x86_64-'),('qa','android-dual-native-QA-ONLY-x86_64-')]:
+              meta=json.loads((root/f'native-{role}-meta.json').read_text())
+              expected=os.environ[f'NATIVE_{role.upper()}_ZIP_SHA256']
+              assert meta['expired'] is False
+              assert str(meta['workflow_run']['id'])==os.environ['NATIVE_RUN']
+              assert meta['workflow_run']['head_sha']==os.environ['NATIVE_SOURCE']
+              assert meta['name']==expected_name+os.environ['NATIVE_SOURCE']
+              assert meta['digest']=='sha256:'+expected
+              assert hashlib.sha256((root/f'native-{role}.zip').read_bytes()).hexdigest()==expected
+          PY
+          mkdir "$RUNNER_TEMP/dual-normal-native" "$RUNNER_TEMP/dual-qa-native"
+          unzip -q "$RUNNER_TEMP/native-normal.zip" -d "$RUNNER_TEMP/dual-normal-native"
+          unzip -q "$RUNNER_TEMP/native-qa.zip" -d "$RUNNER_TEMP/dual-qa-native"
       - name: Verify fixed Android native inputs
         run: |
           python3 -m venv "$RUNNER_TEMP/dual-venv"
@@ -112,12 +138,13 @@ jobs:
           python3 validation/remote-harness/tauri_android_dual_apk.py --apk "$RUNNER_TEMP/tauri-dual-normal.apk" --qa "$RUNNER_TEMP/dual-normal-native" \
             --readelf "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
       - name: Compare normal and QA application assets
+        id: build-manifest
         run: |
           python3 - <<'PY'
           import hashlib,json,os,zipfile
           from pathlib import Path
           root=Path(os.environ['RUNNER_TEMP'])
-          normal=root/'tauri-dual-normal.apk'; qa=root/'tauri-dual-qa.apk'
+          normal=root/'tauri-dual-normal.apk'; qa=root/'tauri-dual-qa.apk'; auth=root/'dual-auth-receiver.apk'
           sha=lambda data: hashlib.sha256(data).hexdigest()
           with zipfile.ZipFile(normal) as a, zipfile.ZipFile(qa) as b:
               names=lambda z: {name for name in z.namelist() if name.startswith('assets/') and not name.endswith('/')}
@@ -132,8 +159,15 @@ jobs:
                   'scope':'same-source x86_64 APKs; static checks only; QA TS test-only',
                   'frontendAssetsEqual':True,'easytierEqual':True,'tailscaleVariantsDiffer':True,
                   'normalApkSha256':sha(normal.read_bytes()),'qaApkSha256':sha(qa.read_bytes()),
+                  'authApkSha256':sha(auth.read_bytes()),
                   'androidLoad':'not run','node':'not run'}
-          (root/'tauri-dual-build-summary.json').write_text(json.dumps(report,indent=2)+'\n')
+          summary=root/'tauri-dual-build-summary.json'
+          summary.write_text(json.dumps(report,indent=2)+'\n')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              for key,value in [('source_sha',report['sourceSHA']),('native_source_sha',report['nativeSourceSHA']),
+                                ('normal_apk_sha256',report['normalApkSha256']),('qa_apk_sha256',report['qaApkSha256']),
+                                ('auth_apk_sha256',report['authApkSha256']),('manifest_sha256',sha(summary.read_bytes()))]:
+                  output.write(f'{key}={value}\n')
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -145,12 +179,16 @@ jobs:
             ${{ runner.temp }}/dual-auth-receiver.apk
           if-no-files-found: error
           retention-days: 7
+  # Historical replay uses the original fixed APKs; paired-* never enters this job.
   tauri-device:
+    name: Historical fixed APK device replay
     if: startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-device-')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       PYTHONDONTWRITEBYTECODE: '1'
+      NATIVE_SOURCE: 93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
+      APK_SOURCE: bf39bb44e6df54140984a0abbe93d40f992c1f23
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -197,7 +235,8 @@ jobs:
             "$RUNNER_TEMP/dual-venv/bin/python" validation/remote-harness/tauri_android_dual_overlay.py \
               --apk "$RUNNER_TEMP/dual-apks/tauri-dual-qa.apk" --auth-apk "$RUNNER_TEMP/dual-apks/dual-auth-receiver.apk" \
               --bundle "$RUNNER_TEMP/dual-host-fixtures" --output "$RUNNER_TEMP/tauri-dual-result" \
-              --host-source-checkout "$GITHUB_WORKSPACE/host-source" --host-source-sha "$HOST_SOURCE"
+              --host-source-checkout "$GITHUB_WORKSPACE/host-source" --host-source-sha "$HOST_SOURCE" \
+              --native-source-sha "$NATIVE_SOURCE" --apk-source-sha "$APK_SOURCE"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -206,4 +245,114 @@ jobs:
             ${{ runner.temp }}/tauri-dual-result/result.json
             ${{ runner.temp }}/tauri-dual-avd/lifecycle.txt
           if-no-files-found: warn
+          retention-days: 14
+
+  tauri-paired-device:
+    if: startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-paired-')
+    needs: tauri-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      NATIVE_SOURCE: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
+      APK_SOURCE: ${{ github.sha }}
+      HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.HOST_SOURCE }}
+          path: host-source
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17.0.18+8'
+      - name: Download APKs built by this workflow run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: tauri-dual-qa-apks-${{ github.sha }}
+          path: ${{ runner.temp }}/dual-apks
+      - name: Verify same-run APK digests and source provenance
+        env:
+          BUILD_SOURCE: ${{ needs.tauri-build.outputs.source_sha }}
+          BUILD_NATIVE_SOURCE: ${{ needs.tauri-build.outputs.native_source_sha }}
+          NORMAL_SHA256: ${{ needs.tauri-build.outputs.normal_apk_sha256 }}
+          QA_SHA256: ${{ needs.tauri-build.outputs.qa_apk_sha256 }}
+          AUTH_SHA256: ${{ needs.tauri-build.outputs.auth_apk_sha256 }}
+          MANIFEST_SHA256: ${{ needs.tauri-build.outputs.manifest_sha256 }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,re
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'dual-apks'
+          expected_files={'tauri-dual-normal.apk','tauri-dual-qa.apk','dual-auth-receiver.apk','tauri-dual-build-summary.json'}
+          assert {path.name for path in root.iterdir()}==expected_files
+          sha=lambda path:hashlib.sha256(path.read_bytes()).hexdigest()
+          summary=root/'tauri-dual-build-summary.json'
+          assert re.fullmatch(r'[0-9a-f]{64}',os.environ['MANIFEST_SHA256'])
+          assert sha(summary)==os.environ['MANIFEST_SHA256']
+          report=json.loads(summary.read_text())
+          assert report['sourceSHA']==os.environ['APK_SOURCE']==os.environ['GITHUB_SHA']==os.environ['BUILD_SOURCE']
+          assert report['nativeSourceSHA']==os.environ['NATIVE_SOURCE']==os.environ['BUILD_NATIVE_SOURCE']
+          assert report['frontendAssetsEqual'] is True and report['easytierEqual'] is True
+          assert report['tailscaleVariantsDiffer'] is True
+          for filename,key,env in [('tauri-dual-normal.apk','normalApkSha256','NORMAL_SHA256'),
+                                   ('tauri-dual-qa.apk','qaApkSha256','QA_SHA256'),
+                                   ('dual-auth-receiver.apk','authApkSha256','AUTH_SHA256')]:
+              assert re.fullmatch(r'[0-9a-f]{64}',os.environ[env])
+              assert sha(root/filename)==report[key]==os.environ[env]
+          PY
+      - name: Download exact controlled host artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14171011473/zip" > "$RUNNER_TEMP/dual-host.zip"
+          printf '%s  %s\n' 4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698 "$RUNNER_TEMP/dual-host.zip" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/dual-host-fixtures"
+          unzip -q "$RUNNER_TEMP/dual-host.zip" -d "$RUNNER_TEMP/dual-host-fixtures"
+      - name: Prepare scoped host and device
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends acl libpulse0 iproute2 openssh-server libssl-dev pkg-config
+          python3 -m venv "$RUNNER_TEMP/dual-venv"
+          "$RUNNER_TEMP/dual-venv/bin/pip" install -r validation/pairing/requirements.txt websocket-client==1.8.0
+          "$RUNNER_TEMP/dual-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_tauri_android_dual*.py' -v
+          "$RUNNER_TEMP/dual-venv/bin/python" host-source/validation/remote-harness/dual_overlay_shared_bundle.py verify \
+            --bundle "$RUNNER_TEMP/dual-host-fixtures" --source-sha "$HOST_SOURCE" --restore-executable
+      - name: Exercise same-run Tauri UI on owned API35 AVD
+        run: |
+          AVD_EVIDENCE_DIR="$RUNNER_TEMP/tauri-dual-avd" bash validation/remote-harness/with-android-emulator.sh \
+            "$RUNNER_TEMP/dual-venv/bin/python" validation/remote-harness/tauri_android_dual_overlay.py \
+              --apk "$RUNNER_TEMP/dual-apks/tauri-dual-qa.apk" --auth-apk "$RUNNER_TEMP/dual-apks/dual-auth-receiver.apk" \
+              --bundle "$RUNNER_TEMP/dual-host-fixtures" --output "$RUNNER_TEMP/tauri-dual-result" \
+              --host-source-checkout "$GITHUB_WORKSPACE/host-source" --host-source-sha "$HOST_SOURCE" \
+              --native-source-sha "$NATIVE_SOURCE" --apk-source-sha "$APK_SOURCE"
+      - name: Record missing device report as failed preparation
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          target=Path(os.environ['RUNNER_TEMP'])/'tauri-dual-result/result.json'
+          if not target.exists():
+              target.parent.mkdir(parents=True,exist_ok=True)
+              report={'schemaVersion':1,'status':'failed','sourceSHA':os.environ['GITHUB_SHA'],
+                      'nativeSourceSHA':os.environ['NATIVE_SOURCE'],'apkSourceSHA':os.environ['APK_SOURCE'],
+                      'hostSourceSHA':os.environ['HOST_SOURCE'],'errorCode':'tauri_device_preparation_failed',
+                      'scope':'device preparation incomplete; no device acceptance claim','directions':{}}
+              target.write_text(json.dumps(report,indent=2)+'\n')
+              raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: tauri-android-dual-overlay-paired-result-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/tauri-dual-result/result.json
+            ${{ runner.temp }}/tauri-dual-avd/lifecycle.txt
+          if-no-files-found: error
           retention-days: 14

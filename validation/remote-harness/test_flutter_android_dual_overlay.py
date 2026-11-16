@@ -253,7 +253,9 @@ class SafeUiFailureTest(unittest.TestCase):
     def test_remote_diagnostic_rejects_untrusted_content(self):
         import json
         remote = {**{key: False for key in ('pagePresent', 'reviewPresent', 'reviewChecked', 'connectPresent',
-                    'connectEnabled', 'busy', 'live', 'dashboardPresent', 'snapshotReceived')},
+                    'connectEnabled', 'busy', 'live', 'dashboardPresent', 'snapshotReceived',
+                    'boardSelectable', 'paneEnabled', 'paneHit', 'selectionAttempted', 'selected',
+                    'selectedMatches', 'terminalPresent', 'sequencePresent', 'markerObserved')},
                   **{key: 'unknown' for key in ('network', 'hostKey', 'authentication', 'dashboard', 'firstFrame')},
                   'paneCount': 0, 'paneControlCount': 0, 'statusClass': 'unavailable',
                   'adapterPhase': 'before_auth', 'adapterError': 'none', 'adapterKind': 'none', 'channelOpenCode': 0}

@@ -223,7 +223,8 @@ def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, aud
 UI_STAGES = frozenset({'host_board', 'et_network_create', 'ts_network_create', 'ts_login_open',
     'ts_wait_authorization', 'et_pair_profile', 'ts_pair_profile', 'et_pair_review', 'ts_pair_review',
     'et_remote_review', 'ts_remote_review', 'et_remote_connect', 'ts_remote_connect',
-    'et_remote_pane', 'ts_remote_pane',
+    'et_remote_pane', 'ts_remote_pane', 'et_remote_first_frame', 'ts_remote_first_frame',
+    'et_remote_marker', 'ts_remote_marker',
     'et_open_host', 'ts_open_host', 'et_input', 'ts_input', 'et_baseline', 'ts_baseline',
     'et_resume', 'ts_resume', 'et_stop_network', 'ts_stop_network', 'stopped_audit', 'final_audit', 'both_stopped_audit',
     'et_network_save', 'ts_network_save', 'et_identity_open', 'ts_identity_open',
@@ -257,7 +258,9 @@ def safe_ui_failure(raw):
                 return None
             if 'remoteCheck' in detail:
                 remote = detail['remoteCheck']
-                bools = {'pagePresent', 'reviewPresent', 'reviewChecked', 'connectPresent', 'connectEnabled', 'busy', 'live', 'dashboardPresent', 'snapshotReceived'}
+                bools = {'pagePresent', 'reviewPresent', 'reviewChecked', 'connectPresent', 'connectEnabled', 'busy', 'live', 'dashboardPresent', 'snapshotReceived',
+                         'boardSelectable', 'paneEnabled', 'paneHit', 'selectionAttempted', 'selected',
+                         'selectedMatches', 'terminalPresent', 'sequencePresent', 'markerObserved'}
                 phases = {'network', 'hostKey', 'authentication', 'dashboard', 'firstFrame'}
                 if (not isinstance(remote, dict) or set(remote) != bools | phases | {'paneCount', 'paneControlCount', 'statusClass', 'adapterPhase', 'adapterError', 'adapterKind', 'channelOpenCode'}
                         or any(type(remote[key]) is not bool for key in bools)

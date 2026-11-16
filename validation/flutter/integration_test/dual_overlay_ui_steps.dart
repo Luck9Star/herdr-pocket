@@ -37,6 +37,9 @@ class DualOverlayUiSteps {
   Map<String, Object>? bindingCheck;
   bool? bindingSelectionMatches;
   Map<String, Object>? remoteCheck;
+  bool selectionAttempted = false;
+  String? expectedPane, expectedTerminal;
+  String? currentRemoteRole;
 
   Future<void> stage(String value) async {
     if (!RegExp(r'^[a-z][a-z0-9_]{0,50}$').hasMatch(value)) {
@@ -286,6 +289,7 @@ class DualOverlayUiSteps {
     final panes = remotePaneChoices();
     final present = page.evaluate().length == 1;
     var busy = false, live = false, dashboardPresent = false, paneCount = 0;
+    var boardSelectable = false, paneEnabled = false, paneHit = false, selected = false, selectedMatches = false;
     var statusClass = 'unavailable';
     var adapterPhase = 'unavailable', adapterError = 'none', adapterKind = 'none';
     var channelOpenCode = 0; var snapshotReceived = false;
@@ -295,7 +299,17 @@ class DualOverlayUiSteps {
       busy = state.busy as bool; live = state.live as bool;
       final dynamic board = state.dashboard;
       dashboardPresent = board != null;
-      if (dashboardPresent) { final int count = board.panes.length as int; paneCount = count > 64 ? 64 : count; }
+      if (dashboardPresent) {
+        final int count = board.panes.length as int; paneCount = count > 64 ? 64 : count;
+        boardSelectable = board.selectable as bool;
+      }
+      selected = state.selectedPane != null;
+      selectedMatches = selected && expectedPane != null && state.selectedPane == expectedPane &&
+        state.selectedTarget?.terminalId == expectedTerminal;
+      if (panes.evaluate().length == 1) {
+        paneEnabled = tester.widget<FilledButton>(panes).onPressed != null;
+        paneHit = panes.hitTestable().evaluate().length == 1;
+      }
       final ConnectionDiagnostics? diagnostic = state.connectionDiagnostics as ConnectionDiagnostics?;
       if (diagnostic != null) {
         network = diagnostic.network.name; hostKey = diagnostic.hostKey.name;
@@ -334,10 +348,54 @@ class DualOverlayUiSteps {
       'network': network, 'hostKey': hostKey, 'authentication': authentication,
       'dashboard': dashboard, 'firstFrame': firstFrame, 'adapterPhase': adapterPhase,
       'adapterError': adapterError, 'adapterKind': adapterKind, 'channelOpenCode': channelOpenCode,
-      'snapshotReceived': snapshotReceived};
+      'snapshotReceived': snapshotReceived, 'boardSelectable': boardSelectable, 'paneEnabled': paneEnabled,
+      'paneHit': paneHit, 'selectionAttempted': selectionAttempted, 'selected': selected, 'selectedMatches': selectedMatches,
+      'terminalPresent': find.byType(TerminalView).evaluate().length == 1,
+      'sequencePresent': existing.displayedSequence(tester) != null,
+      'markerObserved': currentRemoteRole != null && find.byType(TerminalView).evaluate().length == 1 &&
+        existing.screenHasMarker(tester.widget<TerminalView>(find.byType(TerminalView)).terminal, 'Synthetic observe tick')};
+  }
+
+  Future<void> selectUniquePane() async {
+    final page = find.byType(RemotePage);
+    final panes = remotePaneChoices();
+    bool ready() {
+      if (page.evaluate().length != 1 || panes.evaluate().length != 1) return false;
+      final dynamic state = tester.state(page);
+      final dynamic board = state.dashboard;
+      final adapter = state.adapter as RemoteReadOnlyAdapter;
+      if (board == null || !state.busy || !board.selectable || board.generation != adapter.generation ||
+          board.panes.length != 1 || state.selectedPane != null || tester.widget<FilledButton>(panes).onPressed == null) return false;
+      final pane = board.panes.single;
+      return (tester.widget<FilledButton>(panes).key as ValueKey<String>).value == 'remote-pane-${pane.paneId}';
+    }
+    await existing.until(tester, ready, onTimeout: () { remoteCheck = inspectRemote(); return {}; });
+    await tester.ensureVisible(panes); await tester.pump();
+    Rect? previous; String? target, terminal; int? generation; var stable = 0;
+    await existing.until(tester, () {
+      if (!ready() || panes.hitTestable().evaluate().length != 1) { stable = 0; previous = null; return false; }
+      final dynamic state = tester.state(page);
+      final dynamic board = state.dashboard;
+      final String nextTarget = board.panes.single.paneId as String;
+      final String nextTerminal = board.panes.single.terminalId as String;
+      final int nextGeneration = board.generation as int;
+      final bounds = tester.getRect(panes.hitTestable());
+      stable = bounds == previous && target == nextTarget && terminal == nextTerminal && generation == nextGeneration ? stable + 1 : 0;
+      previous = bounds; target = nextTarget; terminal = nextTerminal; generation = nextGeneration;
+      return stable >= 3;
+    }, onTimeout: () { remoteCheck = inspectRemote(); return {}; });
+    expectedPane = target; expectedTerminal = terminal; selectionAttempted = true;
+    await tester.tap(panes.hitTestable()); await tester.pump();
+    await existing.until(tester, () {
+      if (page.evaluate().length != 1) return false;
+      final dynamic state = tester.state(page);
+      return state.selectedPane == expectedPane && state.selectedTarget?.terminalId == expectedTerminal &&
+        (state.adapter as RemoteReadOnlyAdapter).generation == generation;
+    }, onTimeout: () { remoteCheck = inspectRemote(); return {}; });
   }
 
   Future<String> openAndObserve(String role, String hostId) async {
+    selectionAttempted = false; expectedPane = null; expectedTerminal = null; currentRemoteRole = role;
     await stage('${role}_open_host');
     await showHostControl('host-open-$hostId');
     await existing.tapStablePointer(tester, find.byKey(ValueKey('host-open-$hostId')));
@@ -352,14 +410,15 @@ class DualOverlayUiSteps {
       tester.widget<FilledButton>(connect).onPressed != null, onTimeout: () { remoteCheck = inspectRemote(); return {}; });
     await existing.tapStablePointer(tester, connect);
     await stage('${role}_remote_pane');
-    final pane = remotePaneChoices();
-    await existing.until(tester, () => pane.evaluate().length == 1,
-      onTimeout: () { remoteCheck = inspectRemote(); return {}; });
-    await existing.tap(tester, pane);
+    selectionAttempted = false; expectedPane = null; expectedTerminal = null; currentRemoteRole = role;
+    await selectUniquePane();
+    await stage('${role}_remote_first_frame');
     await existing.until(tester, () => find.byType(TerminalView).evaluate().length == 1 &&
-      find.textContaining('只读观察中').evaluate().isNotEmpty && existing.displayedSequence(tester) != null);
+      find.textContaining('只读观察中').evaluate().isNotEmpty && existing.displayedSequence(tester) != null,
+      onTimeout: () { remoteCheck = inspectRemote(); return {}; });
     final firstSequence = existing.displayedSequence(tester)!;
     final terminal = tester.widget<TerminalView>(find.byType(TerminalView)).terminal;
+    await stage('${role}_remote_marker');
     await existing.until(tester, () => find.byType(TerminalView).evaluate().length == 1 &&
       identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal, terminal) &&
       (existing.displayedSequence(tester) ?? -1) > firstSequence &&
@@ -385,6 +444,17 @@ class DualOverlayUiSteps {
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected, isTrue);
   }
 
+  Future<void> tapVisibleTerminal() async {
+    final terminal = find.byType(TerminalView);
+    await existing.until(tester, () => terminal.evaluate().length == 1);
+    await tester.ensureVisible(terminal); await tester.pump();
+    final media = MediaQuery.of(tester.element(terminal));
+    final viewport = Rect.fromLTWH(0, 0, media.size.width, media.size.height - media.viewInsets.bottom);
+    final visible = tester.getRect(terminal).intersect(viewport);
+    if (visible.width <= 0 || visible.height <= 0) throw StateError('dual_terminal_not_visible');
+    await tester.tapAt(visible.center); await tester.pump();
+  }
+
   Future<void> commitCharacter(String role, String character) async {
     if (!{'et': {'E', 'e'}, 'ts': {'T', 't'}}[role]!.contains(character)) {
       throw StateError('dual_input_invalid');
@@ -393,7 +463,7 @@ class DualOverlayUiSteps {
     await stage('${role}_input');
     await existing.tapKey(tester, 'remote-mode-direct');
     final terminal = find.byType(TerminalView);
-    await existing.tap(tester, terminal);
+    await tapVisibleTerminal();
     await existing.until(tester, () => tester.widget<TerminalView>(terminal).focusNode!.hasFocus &&
       tester.state<TerminalViewState>(terminal).hasInputConnection);
     final activeTerminal = tester.widget<TerminalView>(terminal).terminal;

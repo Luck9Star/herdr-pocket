@@ -253,5 +253,41 @@ class InstalledApkTest(unittest.TestCase):
                     installed_apk_evidence(device, 'qa', target, lambda *_: {})
 
 
+
+class WorkflowFallbackTest(unittest.TestCase):
+    def test_missing_report_records_failure_and_existing_report_is_preserved(self):
+        import json
+        import os
+        import subprocess
+        import sys
+        import tempfile
+        import textwrap
+        from pathlib import Path
+        workflow = Path(__file__).resolve().parents[2] / '.github/workflows/flutter-android-dual-overlay.yml'
+        text = workflow.read_text()
+        step = text.split('      - name: Preserve a failed report when device evidence is missing\n', 1)[1]
+        script = step.split("          python3 - <<'PYCODE'\n", 1)[1].split('          PYCODE\n', 1)[0]
+        script = textwrap.dedent(script)
+        with tempfile.TemporaryDirectory() as tmp:
+            env = dict(os.environ, RUNNER_TEMP=tmp, DEVICE_OUTCOME='skipped',
+                       GITHUB_SHA='a' * 40, NATIVE_SOURCE='b' * 40, HOST_SOURCE='c' * 40)
+            result = subprocess.run([sys.executable, '-c', script], env=env, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            path = Path(tmp) / 'dual-evidence/manifest.json'
+            report = json.loads(path.read_text())
+            self.assertEqual(report['status'], 'failed')
+            self.assertEqual(report['errorCode'], 'device_manifest_missing')
+            self.assertEqual(report['deviceStepOutcome'], 'skipped')
+            self.assertNotIn('cases', report)
+            path.unlink()
+            env['DEVICE_OUTCOME'] = 'success'
+            result = subprocess.run([sys.executable, '-c', script], env=env, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(json.loads(path.read_text())['deviceStepOutcome'], 'success')
+            path.write_text('{"status":"actual-device-result"}')
+            subprocess.run([sys.executable, '-c', script], env=env, check=True)
+            self.assertEqual(json.loads(path.read_text()), {'status': 'actual-device-result'})
+
+
 if __name__ == '__main__':
     unittest.main()

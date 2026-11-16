@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
-      NATIVE_SOURCE: 93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
+      NATIVE_SOURCE: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
+          ref: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
           path: native-source
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -47,11 +47,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14169009804/zip" > "$RUNNER_TEMP/normal.zip"
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14169129213/zip" > "$RUNNER_TEMP/qa.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14231686859/zip" > "$RUNNER_TEMP/normal.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14232500264/zip" > "$RUNNER_TEMP/qa.zip"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14171011473/zip" > "$RUNNER_TEMP/host.zip"
-          echo 'dce6f35956ce1b7d9325a60c27bcf528e8e9e413677c4a550f54f521a50aeb6b  '"$RUNNER_TEMP/normal.zip" | sha256sum -c -
-          echo '5e2e657056dd397882ac2d6b58ca24ef383929672fde9fb96f1ef2d7b5f7d94a  '"$RUNNER_TEMP/qa.zip" | sha256sum -c -
+          echo '39aca341528806fbc7948d8a5cb02c00096afb4102a87d10ff0cde0d6370807a  '"$RUNNER_TEMP/normal.zip" | sha256sum -c -
+          echo '78a0a4457c5209e67507cc32121ba8377120caaab4d4edbe9c3115307f7eefcb  '"$RUNNER_TEMP/qa.zip" | sha256sum -c -
           echo '4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698  '"$RUNNER_TEMP/host.zip" | sha256sum -c -
           mkdir "$RUNNER_TEMP/normal" "$RUNNER_TEMP/qa" "$RUNNER_TEMP/host"
           unzip -q "$RUNNER_TEMP/normal.zip" -d "$RUNNER_TEMP/normal"
@@ -101,6 +101,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Exercise both directions on the owned API35 emulator
+        id: device
         if: startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/')
         run: |
           AVD_EVIDENCE_DIR="$RUNNER_TEMP/dual-avd" bash validation/remote-harness/with-android-emulator.sh \
@@ -108,6 +109,27 @@ jobs:
               --project "$RUNNER_TEMP/flutter-dual-app" --qa-bundle "$RUNNER_TEMP/qa" \
               --host-bundle "$RUNNER_TEMP/host" --host-checkout "$GITHUB_WORKSPACE/host-source" \
               --host-source "$HOST_SOURCE" --native-source "$NATIVE_SOURCE" --output "$RUNNER_TEMP/dual-evidence"
+      - name: Preserve a failed report when device evidence is missing
+        if: always() && startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/')
+        env:
+          DEVICE_OUTCOME: ${{ steps.device.outcome }}
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, pathlib
+          output = pathlib.Path(os.environ['RUNNER_TEMP']) / 'dual-evidence'
+          output.mkdir(mode=0o700, exist_ok=True)
+          manifest = output / 'manifest.json'
+          if not manifest.exists():
+              outcome = os.environ.get('DEVICE_OUTCOME', '')
+              if outcome not in ('success', 'failure', 'cancelled', 'skipped'):
+                  outcome = 'unknown'
+              report = {'schemaVersion': 1, 'kind': 'flutter-android-dual-overlay',
+                        'status': 'failed', 'errorCode': 'device_manifest_missing',
+                        'deviceStepOutcome': outcome, 'uiSource': os.environ['GITHUB_SHA'],
+                        'nativeSource': os.environ['NATIVE_SOURCE'], 'hostSource': os.environ['HOST_SOURCE']}
+              manifest.write_text(json.dumps(report, indent=2) + '\n')
+              raise SystemExit(1)
+          PYCODE
       - name: Upload only sanitized device manifest
         if: always() && startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

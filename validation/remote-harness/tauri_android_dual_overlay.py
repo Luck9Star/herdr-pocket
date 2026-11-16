@@ -307,6 +307,170 @@ def start_observer_snapshot(browser):
     return result
 
 
+STOP_OBSERVER = r"""(()=>{
+  const original=window.ipc, internals=window.__TAURI_INTERNALS__;
+  const callbacks=internals?.callbacks;
+  if(!original || typeof original.postMessage!=='function' || !(callbacks instanceof Map) || window.__dualStopObserver) return false;
+  const state={sent:0,resolved:0,rejected:0,cmdId:null,profileId:null};
+  const wrapped={postMessage(message){
+    let data;try{data=typeof message==='string'?JSON.parse(message):null}catch{}
+    if(data?.cmd==='network_node_stop'){
+      state.sent++;
+      const args=data.payload?.args??data.payload??{};
+      state.cmdId=typeof args.id==='string'&&args.id.length<=128?args.id:null;
+      state.profileId=typeof args.binding?.profileId==='string'&&args.binding.profileId.length<=128?args.binding.profileId:null;
+      for(const [id,rejected] of [[data.callback,false],[data.error,true]]){
+        const callback=callbacks.get(id);
+        if(typeof callback!=='function')continue;
+        callbacks.set(id,function(value){ if(rejected)state.rejected++; else state.resolved++; return callback(value); });
+      }
+    }
+    return original.postMessage(message);
+  }};
+  window.ipc=wrapped;
+  if(window.ipc!==wrapped)return false;
+  window.__dualStopObserver={state,original,wrapped};
+  return true;
+})()"""
+
+
+def install_stop_observer(browser):
+    if browser.evaluate(STOP_OBSERVER) is not True:
+        raise GuiFailure('dual_stop_observer_unavailable')
+
+
+def uninstall_stop_observer(browser):
+    value=browser.evaluate("(()=>{const x=window.__dualStopObserver;if(!x)return false;window.ipc=x.original;"
+                           "const restored=window.ipc===x.original;if(restored)delete window.__dualStopObserver;return restored;})()")
+    if value is not True:
+        raise GuiFailure('dual_stop_observer_uninstall_failed')
+    return True
+
+
+def stop_observer_snapshot(browser):
+    value=browser.evaluate("(()=>{const x=window.__dualStopObserver;return x?x.state:null})()")
+    if (not isinstance(value,dict) or any(type(value.get(key)) is not int or not 0<=value[key]<=9
+            for key in ('sent','resolved','rejected')) or
+            any(value.get(key) is not None and not (isinstance(value.get(key),str) and len(value[key])<=128)
+                for key in ('cmdId','profileId'))):
+        raise GuiFailure('dual_stop_observer_invalid')
+    return {key:value.get(key) for key in ('sent','resolved','rejected','cmdId','profileId')}
+
+
+STOP_READBACK_SETTLE=0.4
+STOP_ACQUIRE_TIMEOUT=30
+
+
+def stop_button_probe(scope, mode, epoch=None):
+    """acquire: stamp a fresh nonce on the uniquely enabled 停止节点 and focus it;
+    verify: the SAME DOM node still carries that nonce and keeps focus. Never clicks."""
+    acquire=("const b=buttons[0];window.__dualStopEpoch=(window.__dualStopEpoch||0)+1;"
+             "b.__dualStopEpoch=window.__dualStopEpoch;b.focus();"
+             "return {epoch:window.__dualStopEpoch,focused:document.activeElement===b};")
+    verify=("const b=buttons[0];return {same:b.__dualStopEpoch===%d,focused:document.activeElement===b};"
+            % (epoch if isinstance(epoch,int) and epoch>0 else -1))
+    return """(()=>{const root=document.querySelector(%s);if(!root)return {error:'scope'};
+      const buttons=[...root.querySelectorAll('button')].filter(b=>b.textContent.trim()==='停止节点' &&
+        !b.matches(':disabled') && !b.closest('[hidden]') && b.getClientRects().length);
+      if(buttons.length!==1)return {error:'unique',count:buttons.length};
+      %s})()""" % (json.dumps(scope), acquire if mode=='acquire' else verify)
+
+
+def stop_node_once(browser, scope, role, profile_title, host_name, expected_profile_id,
+                   *, stage, attempts, distinct_ids=(), confirm_timeout=45):
+    """Stop one overlay node by one real CDP hardware Enter on a twice-verified stable button.
+
+    The pointer press/release path loses the click when the panel re-renders between the two
+    pointer events, so activation is keyboard-only and never replayed. The card may be replaced
+    right before the probe, so the candidate is re-acquired (read-only + focus) until the SAME
+    DOM node is stable across two readbacks. The native stop resolves asynchronously, so the
+    wait polls read-only for the exact resolved increment and fails fast on replay, rejection,
+    or a target mismatch. The public attempt record carries only the role, booleans, bounded
+    counters, and whitelisted error codes - never raw ids, command args, or exception text."""
+    label=profile_title.split(' · ')[0]
+    expected_dialog='停止 '+label+' 的本机节点？受影响主机：'+host_name+'。'
+    if browser.expectedConfirmation is not None:
+        raise GuiFailure('dual_confirmation_already_pending')
+    if not (isinstance(expected_profile_id,str) and expected_profile_id):
+        raise GuiFailure('dual_stop_expected_target_invalid')
+    before=stop_observer_snapshot(browser)
+    sent_before=int(before.get('sent') or 0); resolved_before=int(before.get('resolved') or 0)
+    rejected_before=int(before.get('rejected') or 0)
+    attempt={'stage':stage,'role':role,'acquires':0,'readbacks':0,'activation':'cdp-enter',
+             'confirmObserved':False,'roleMatch':None,'sentDelta':None,'resolvedDelta':None,
+             'rejectedDelta':None,'errorCode':None}
+    attempts.append(attempt)
+    try:
+        deadline=time.monotonic()+STOP_ACQUIRE_TIMEOUT
+        stable=False
+        while time.monotonic()<deadline:
+            first=browser.evaluate(stop_button_probe(scope,'acquire'))
+            if (isinstance(first,dict) and 'error' not in first and isinstance(first.get('epoch'),int)
+                    and first.get('focused') is True):
+                attempt['acquires']+=1
+                time.sleep(STOP_READBACK_SETTLE)
+                second=browser.evaluate(stop_button_probe(scope,'verify',first['epoch']))
+                if (isinstance(second,dict) and 'error' not in second and second.get('same') is True
+                        and second.get('focused') is True):
+                    stable=True; attempt['readbacks']=2; break
+            time.sleep(0.2)
+        if not stable:
+            raise GuiFailure('dual_stop_button_unstable')
+        browser.expectedConfirmation=expected_dialog
+        browser.confirmationObserved=False
+        browser.confirmDiagnostic=None
+        try:
+            for kind in ('keyDown','keyUp'):
+                params={'type':kind,'key':'Enter','code':'Enter','windowsVirtualKeyCode':13,'nativeVirtualKeyCode':13}
+                if kind=='keyDown':params['text']='\r'
+                browser.call('Input.dispatchKeyEvent',params)
+            # No background CDP reader: pump events with side-effect-free evaluates, never re-press.
+            observed=False
+            confirm_deadline=time.monotonic()+confirm_timeout
+            while time.monotonic()<confirm_deadline:
+                browser.call('Runtime.evaluate',{'expression':'true','returnByValue':True})
+                if browser.confirmationObserved is True:
+                    observed=True; break
+                time.sleep(0.1)
+            if not observed:
+                raise GuiFailure('dual_stop_confirmation_not_observed')
+            attempt['confirmObserved']=True
+        finally:
+            browser.expectedConfirmation=None
+        verified=False; profile_id=None
+        stop_deadline=time.monotonic()+60
+        while time.monotonic()<stop_deadline:
+            current=stop_observer_snapshot(browser)
+            sent=int(current.get('sent') or 0)-sent_before
+            resolved=int(current.get('resolved') or 0)-resolved_before
+            rejected=int(current.get('rejected') or 0)-rejected_before
+            attempt['sentDelta']=sent; attempt['resolvedDelta']=resolved; attempt['rejectedDelta']=rejected
+            if rejected>0:
+                raise GuiFailure('dual_stop_rejected')
+            if sent>1:
+                raise GuiFailure('dual_stop_replayed')
+            cmd_id=current.get('cmdId'); profile_id=current.get('profileId')
+            if sent==1 and (cmd_id is not None and cmd_id!=expected_profile_id or
+                            profile_id is not None and profile_id!=expected_profile_id):
+                attempt['roleMatch']=False
+                raise GuiFailure('dual_stop_target_mismatch')
+            if sent==1 and resolved==1:
+                attempt['roleMatch']=(cmd_id==expected_profile_id and profile_id==expected_profile_id)
+                if attempt['roleMatch'] is not True:
+                    raise GuiFailure('dual_stop_target_mismatch')
+                if distinct_ids and profile_id in distinct_ids:
+                    raise GuiFailure('dual_stop_target_not_distinct')
+                verified=True; break
+            time.sleep(0.1)
+        if not verified:
+            raise GuiFailure('dual_stop_invocation_unverified')
+        return profile_id
+    except Exception as error:
+        code=str(error)
+        attempt['errorCode']=code if re.fullmatch(r'[a-z_]{1,50}',code) else 'unexpected_error'
+        raise
+
+
 def public_transport_sample(session):
     value=session.control.call({'op':'ts_diagnostics'})
     keys=('keyRequests','noiseRequests','registerRequests','mapRequests','tlsHandshakeErrors','authCompletions')
@@ -745,6 +909,7 @@ def bind_host(browser, role):
     confirm_click(browser, scope, '应用', '更改 '+name+' 的网络绑定')
     wait_for(lambda:browser.read('#network-panel > [role=status]')=='操作已确认；请查看节点及连接状态。' and
              browser.read(scope+' select','value') == option, 'dual_binding_save_missing', timeout=60)
+    return option
 
 
 def host_card(browser, role):
@@ -905,8 +1070,11 @@ def run_direction(apk, auth_apk, session, stopped, report):
             pair_host(browser,control,role,session.read_host_profile(role))
         report['pairingApprovedBoth']=True
         browser.click('#nav-network')
-        for role in ('ts','et'):
-            bind_host(browser,role)
+        bindings={role: bind_host(browser,role) for role in ('ts','et')}
+        if not all(isinstance(value,str) and value for value in bindings.values()):
+            raise GuiFailure('dual_binding_targets_invalid')
+        if bindings['ts']==bindings['et']:
+            raise GuiFailure('dual_binding_targets_not_distinct')
         report['bindingBoth']=True
         report['stage']='connect_and_input'
         targets={}
@@ -924,7 +1092,13 @@ def run_direction(apk, auth_apk, session, stopped, report):
         select_tab(browser,surviving)
         browser.click('#nav-network')
         scope=expand_profile(browser,'QA TS · Tailscale' if stopped=='ts' else 'QA ET · EasyTier')
-        confirm_click(browser,scope,'停止节点','停止 QA ')
+        install_stop_observer(browser)
+        report['stage']='stop_first'
+        first_profile=stop_node_once(browser,scope,stopped,
+                                     'QA TS · Tailscale' if stopped=='ts' else 'QA ET · EasyTier',
+                                     'QA host TS' if stopped=='ts' else 'QA host ET',
+                                     bindings[stopped],
+                                     stage='stop_first',attempts=report.setdefault('stopAttempts',[]))
         wait_named(browser,scope,'启动节点',timeout=120)
         report['stage']='post_stop'
         ordinal,count=baseline_values[surviving]
@@ -949,8 +1123,14 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['stage']='stop_survivor'
         browser.click('#nav-network')
         survivor_scope=expand_profile(browser,'QA TS · Tailscale' if surviving=='ts' else 'QA ET · EasyTier')
-        confirm_click(browser,survivor_scope,'停止节点','停止 QA ')
+        stop_node_once(browser,survivor_scope,surviving,
+                       'QA TS · Tailscale' if surviving=='ts' else 'QA ET · EasyTier',
+                       'QA host TS' if surviving=='ts' else 'QA host ET',
+                       bindings[surviving],
+                       stage='stop_survivor',attempts=report.setdefault('stopAttempts',[]),
+                       distinct_ids=(first_profile,))
         wait_named(browser,survivor_scope,'启动节点',timeout=120)
+        uninstall_stop_observer(browser)
         audit(control,surviving,initials[surviving]+second,ordinal=ordinal,sessions_count=count,active=False)
         report['survivorExplicitlyStoppedAndClosed']=True
         report['stage']='complete'
@@ -961,7 +1141,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         except Exception:report['androidFailureDiagnostic']={'scope':'read-only-failure-facts','readUnavailable':True}
         try:report['foregroundAtFailure']=component_kind(foreground_component())
         except Exception:report['foregroundAtFailure']='unavailable'
-        if report.get('stage') in {'pairing','connect_and_input','post_stop','stop_survivor','complete'}:
+        if report.get('stage') in {'pairing','connect_and_input','stop_first','post_stop','stop_survivor','complete'}:
             report['hostCountsAtFailure']=public_host_failure_counts(control)
         try:report['transportAtFailure']=public_transport_sample(session)
         except Exception:report['transportAtFailureUnavailable']=True

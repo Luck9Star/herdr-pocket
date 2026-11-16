@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from flutter_android_dual_overlay import (
-    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints, installed_apk_evidence, safe_ui_failure, sample_ts_control, sample_failed_host_audits, wait_for_both_stopped,
+    DualOverlayDeviceFailure, audit_baseline, audit_unchanged_session, prepare_private_ca, write_exchange, read_exchange, handle_stage, drive_checkpoints, installed_apk_evidence, safe_ui_failure, sample_ts_control, sample_failed_host_audits, wait_for_both_stopped, wait_for_stopped_with_survivor,
 )
 
 
@@ -179,6 +179,76 @@ class HostStageTest(unittest.TestCase):
             write.assert_not_called()
 
 
+class InterimAndFinalAuditTests(unittest.TestCase):
+    def test_pending_stop_permits_survivor_input_then_confirms_closure(self):
+        for first in ('et', 'ts'):
+            survivor = 'ts' if first == 'et' else 'et'
+            class Control:
+                def __init__(self): self.count = {'et': 0, 'ts': 0}; self.expected = []
+                def call(self, request):
+                    import base64
+                    role = request['role']; self.count[role] += 1
+                    expected = base64.b64decode(request['expectedBase64']); self.expected.append((role, expected))
+                    value = evidence(); value.update(event='host_audit', role=role, capturedBytes=len(expected))
+                    value['sessions'][1]['active'] = role == survivor or self.count[role] < 3
+                    return value
+            control = Control(); session = type('Session', (), {'control': control})()
+            progress = {'interimClosePending': None, 'stoppedCloseConfirmed': None, 'survivorSecondInputConfirmed': None}
+            baseline = {'et': (2, 2), 'ts': (2, 2)}
+            with patch('flutter_android_dual_overlay.write_exchange') as write, patch('time.sleep'):
+                self.assertTrue(handle_stage('stopped_audit', session=session, adb='adb', serial='emulator-5554',
+                                            run=None, first_stop=first, baselines=baseline, audit_progress=progress))
+                self.assertEqual(write.call_args.args[2:4], ('stopped-audit.txt', b'accepted'))
+                self.assertEqual(progress, {'interimClosePending': True, 'stoppedCloseConfirmed': False,
+                                            'survivorSecondInputConfirmed': None})
+                self.assertTrue(handle_stage('final_audit', session=session, adb='adb', serial='emulator-5554',
+                                            run=None, first_stop=first, baselines=baseline, audit_progress=progress))
+                self.assertEqual(write.call_args.args[2:4], ('final-audit.txt', b'accepted'))
+                self.assertEqual(progress, {'interimClosePending': True, 'stoppedCloseConfirmed': True,
+                                            'survivorSecondInputConfirmed': True})
+                self.assertIn((first, b'E' if first == 'et' else b'T'), control.expected)
+                self.assertIn((survivor, b'Ee' if survivor == 'et' else b'Tt'), control.expected)
+
+    def test_never_closed_preserves_input_evidence_but_fails(self):
+        current = [0.0]
+        progress = {'interimClosePending': True, 'stoppedCloseConfirmed': False, 'survivorSecondInputConfirmed': None}
+        def audit(role, expected):
+            value = evidence(); value['capturedBytes'] = len(expected)
+            return value
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'host_audit_close_timeout'):
+            wait_for_stopped_with_survivor(audit, {'et': (2, 2), 'ts': (2, 2)}, 'et', progress,
+                timeout=.5, interval=.25, monotonic=lambda:current[0], sleep=lambda t:current.__setitem__(0,current[0]+t))
+        self.assertTrue(progress['survivorSecondInputConfirmed'])
+        self.assertFalse(progress['stoppedCloseConfirmed'])
+
+    def test_drift_and_reactivation_never_receive_interim_or_final_token(self):
+        for failure in ('reconnect', 'wrong_bytes', 'ordinal', 'reactivated'):
+            progress = {'interimClosePending': False, 'stoppedCloseConfirmed': failure == 'reactivated',
+                        'survivorSecondInputConfirmed': None}
+            class Control:
+                def call(self, request):
+                    value = evidence(); value.update(event='host_audit', role=request['role'], capturedBytes=1)
+                    if failure == 'reconnect': value['newSessions'] = 1
+                    if failure == 'wrong_bytes': value['exactBytes'] = False
+                    if failure == 'ordinal': value['sessions'][1]['ordinal'] = 3
+                    return value
+            session = type('Session', (), {'control': Control()})()
+            with patch('flutter_android_dual_overlay.write_exchange') as write:
+                with self.assertRaisesRegex(DualOverlayDeviceFailure, 'host_audit_session_changed'):
+                    handle_stage('stopped_audit', session=session, adb='adb', serial='emulator-5554', run=None,
+                                 first_stop='et', baselines={'et': (2, 2), 'ts': (2, 2)}, audit_progress=progress)
+                write.assert_not_called()
+
+    def test_final_audit_rejects_survivor_input_drift_before_claiming_proof(self):
+        progress = {'interimClosePending': True, 'stoppedCloseConfirmed': False, 'survivorSecondInputConfirmed': None}
+        def audit(role, expected):
+            value = evidence(); value['capturedBytes'] = len(expected); value['exactBytes'] = False
+            return value
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'host_audit_session_changed'):
+            wait_for_stopped_with_survivor(audit, {'et': (2, 2), 'ts': (2, 2)}, 'et', progress)
+        self.assertIsNone(progress['survivorSecondInputConfirmed'])
+
+
 class BothStoppedAuditTests(unittest.TestCase):
     def test_delayed_closure_is_only_waitable_state_and_timeout_is_distinct(self):
         for first in ('et', 'ts'):
@@ -221,6 +291,14 @@ class BothStoppedAuditTests(unittest.TestCase):
                 wait_for_both_stopped(audit, {'et': (2, 2), 'ts': (2, 2)}, 'ts',
                                       timeout=2, interval=.1, monotonic=lambda:current[0], sleep=sleep)
             if error != 'reactivation': self.assertEqual(current[0], 0)
+
+    def test_final_stage_rejects_previously_closed_session_reappearing(self):
+        def audit(role, expected):
+            value = evidence(); value['capturedBytes'] = len(expected)
+            value['sessions'][1]['active'] = role == 'et'
+            return value
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'host_audit_session_changed'):
+            wait_for_both_stopped(audit, {'et': (2, 2), 'ts': (2, 2)}, 'et', initially_closed=('et',))
 
     def test_final_audit_checks_original_sessions_bytes_and_closure(self):
         import base64

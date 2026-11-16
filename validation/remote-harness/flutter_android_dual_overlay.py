@@ -48,8 +48,50 @@ def audit_unchanged_session(result, baseline, expected_length, *, active=True):
         raise DualOverlayDeviceFailure('host_audit_session_changed')
 
 
+def stopped_session_pending(result, baseline, expected_length, *, already_closed=False):
+    """Allow only the original session to remain active; all other drift fails."""
+    try:
+        audit_unchanged_session(result, baseline, expected_length, active=False)
+        return False
+    except DualOverlayDeviceFailure:
+        audit_unchanged_session(result, baseline, expected_length, active=True)
+        if already_closed:
+            raise DualOverlayDeviceFailure('host_audit_session_changed')
+        return True
+
+
+def wait_for_stopped_with_survivor(audit, baselines, first_stop, progress, *, timeout=10.0,
+                                   interval=0.25, monotonic=None, sleep=None):
+    """First retain proof of the survivor input, then wait only for original closure."""
+    import time
+    monotonic = monotonic or time.monotonic
+    sleep = sleep or time.sleep
+    if set(baselines) != {'et', 'ts'} or first_stop not in ('et', 'ts') or timeout <= 0 or interval <= 0:
+        raise DualOverlayDeviceFailure('host_audit_baseline_missing')
+    survivor = 'ts' if first_stop == 'et' else 'et'
+    single = {'et': b'E', 'ts': b'T'}
+    second = {'et': b'Ee', 'ts': b'Tt'}
+    # Save this separately even if the other side later times out.
+    audit_unchanged_session(audit(survivor, second[survivor]), baselines[survivor], 2, active=True)
+    progress['survivorSecondInputConfirmed'] = True
+    deadline = monotonic() + timeout
+    while True:
+        pending = stopped_session_pending(audit(first_stop, single[first_stop]), baselines[first_stop], 1,
+                                          already_closed=progress.get('stoppedCloseConfirmed') is True)
+        if not pending:
+            progress['stoppedCloseConfirmed'] = True
+        # Never infer the survivor stayed live while waiting.
+        audit_unchanged_session(audit(survivor, second[survivor]), baselines[survivor], 2, active=True)
+        if not pending:
+            return
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise DualOverlayDeviceFailure('host_audit_close_timeout')
+        sleep(min(interval, remaining))
+
+
 def wait_for_both_stopped(audit, baselines, first_stop, *, timeout=10.0, interval=0.25,
-                          monotonic=None, sleep=None):
+                          monotonic=None, sleep=None, initially_closed=()):
     """Read-only wait for original sessions to close; all other drift fails immediately."""
     import time
     monotonic = monotonic or time.monotonic
@@ -58,7 +100,7 @@ def wait_for_both_stopped(audit, baselines, first_stop, *, timeout=10.0, interva
         raise DualOverlayDeviceFailure('host_audit_baseline_missing')
     survivor = 'ts' if first_stop == 'et' else 'et'
     deadline = monotonic() + timeout
-    previously_closed = set()
+    previously_closed = set(initially_closed)
     while True:
         pending = set()
         for role in ('et', 'ts'):
@@ -163,7 +205,7 @@ def read_exchange(adb, serial, name, *, run):
     return result.stdout
 
 
-def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, audit_records=None):
+def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, audit_records=None, audit_progress=None):
     """Answer one blocked GUI checkpoint using independent host facts."""
     import base64
     import json
@@ -240,22 +282,28 @@ def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, aud
         baselines[role] = audit_baseline(audit(role, expected), len(expected))
         write_exchange(adb, serial, role + '-audit.txt', b'accepted', run=run)
         return True
+    if audit_progress is None:
+        audit_progress = {}
     if stage == 'both_stopped_audit':
-        wait_for_both_stopped(audit, baselines, first_stop)
+        wait_for_both_stopped(audit, baselines, first_stop, initially_closed=(first_stop,) if audit_progress.get('stoppedCloseConfirmed') is True else ())
         write_exchange(adb, serial, 'both-stopped-audit.txt', b'accepted', run=run)
         return True
-    if stage in ('stopped_audit', 'final_audit'):
+    if stage == 'stopped_audit':
         if set(baselines) != {'et', 'ts'} or first_stop not in ('et', 'ts'):
             raise DualOverlayDeviceFailure('host_audit_baseline_missing')
         survivor = 'ts' if first_stop == 'et' else 'et'
-        for role in ('et', 'ts'):
-            expected = b'E' if role == 'et' else b'T'
-            if stage == 'final_audit' and role == survivor:
-                expected += b'e' if role == 'et' else b't'
-            audit_unchanged_session(audit(role, expected), baselines[role], len(expected), active=role == survivor)
-        filename = {'stopped_audit': 'stopped-audit.txt', 'final_audit': 'final-audit.txt',
-                    }[stage]
-        write_exchange(adb, serial, filename, b'accepted', run=run)
+        single = {'et': b'E', 'ts': b'T'}
+        # This token only permits the survivor-input test; it does not certify closure.
+        pending = stopped_session_pending(audit(first_stop, single[first_stop]), baselines[first_stop], 1,
+                                          already_closed=audit_progress.get('stoppedCloseConfirmed') is True)
+        audit_unchanged_session(audit(survivor, single[survivor]), baselines[survivor], 1, active=True)
+        audit_progress['interimClosePending'] = pending
+        audit_progress['stoppedCloseConfirmed'] = not pending
+        write_exchange(adb, serial, 'stopped-audit.txt', b'accepted', run=run)
+        return True
+    if stage == 'final_audit':
+        wait_for_stopped_with_survivor(audit, baselines, first_stop, audit_progress)
+        write_exchange(adb, serial, 'final-audit.txt', b'accepted', run=run)
         return True
     return False
 
@@ -356,7 +404,7 @@ def safe_ui_failure(raw):
     return None
 
 
-def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout=900, report_stage=None, report_failure=None, audit_records=None):
+def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout=900, report_stage=None, report_failure=None, audit_records=None, audit_progress=None):
     """Drive bounded, ordered UI checkpoints; the host facts gate each reply."""
     import json
     import time
@@ -379,7 +427,7 @@ def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout
                 report_stage(stage if stage in UI_STAGES else 'other')
             if index < len(checkpoints) and stage == checkpoints[index]:
                 if handle_stage(stage, session=session, adb=adb, serial=serial, run=run,
-                                first_stop=first_stop, baselines=baselines, audit_records=audit_records):
+                                first_stop=first_stop, baselines=baselines, audit_records=audit_records, audit_progress=audit_progress):
                     index += 1
             elif stage in checkpoints[index + 1:]:
                 raise DualOverlayDeviceFailure('device_stage_out_of_order')
@@ -551,6 +599,8 @@ def run_device(args, env):
                         write_exchange('adb', 'emulator-5554', 'config.json', json.dumps(config).encode(), run=subprocess.run)
                         case['stage'] = 'device_ui'
                         case['hostAudits'] = []
+                        case['auditProgress'] = {'interimClosePending': None, 'stoppedCloseConfirmed': None,
+                                                 'survivorSecondInputConfirmed': None}
                         with (private / (first_stop + '-flutter.log')).open('wb') as log:
                             process = subprocess.Popen(['flutter', 'test', '--no-pub', '--no-uninstall',
                                 '--reporter', 'expanded', '-d', 'emulator-5554',
@@ -561,7 +611,8 @@ def run_device(args, env):
                                                                first_stop, run=subprocess.run,
                                                                report_stage=lambda stage: case.update(uiStage=stage),
                                                                report_failure=lambda failure: case.update(uiFailure=failure),
-                                                               audit_records=case['hostAudits'])
+                                                               audit_records=case['hostAudits'],
+                                                               audit_progress=case['auditProgress'])
                             except Exception:
                                 case['failureHostAudits'] = sample_failed_host_audits(session)
                                 raise

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "scope": "Real product entry (validation/tauri/index.html + src/main.js) served by the project dev server and driven in headless Chrome with a local mock Tauri bridge; no real host was contacted and no native build was used.",
+  "source": "mock-bridge",
+  "mockBridge": {
+    "kind": "injected local mock of the Tauri invoke/Channel bridge",
+    "probedFingerprint": "SHA256:mockProbedLocalOnly",
+    "presentedFingerprint": "SHA256:mockPresentedLocalOnly",
+    "note": "Both fingerprints are local-only literals. The refused handshake presented the fingerprint the mock reported, which is what the review page displays.",
+    "realHostContacted": false,
+    "nativeBuildUsed": false
+  },
+  "captures": [
+    {"file": "tauri-320-refusal.png", "width": 320, "height": 844},
+    {"file": "tauri-390-refusal.png", "width": 390, "height": 844}
+  ],
+  "observed": {
+    "reviewHeadingIsFirstHeading": true,
+    "genericPageHeadingHidden": true,
+    "genericStatusHidden": true,
+    "oldAndNewFingerprintShown": true,
+    "primaryActionIsBrand": "重新核对主机指纹",
+    "secondaryActionHasWhiteBackground": "取消连接，保留旧信任",
+    "actionsStackVertically": true
+  },
+  "notCovered": [
+    "Real macOS window rendering of the same review view",
+    "Real SSH handshake against a live host",
+    "The Rust bridge that emits the host_key_change event"
+  ]
+}

@@ -6,6 +6,12 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
   let connecting = false;
   let sequence = 0;
   let reviewed = null;
+  // What the refused handshake actually presented, and the pin that was in effect.
+  let presentedFingerprint = null;
+  let pinnedFingerprint = null;
+  // A refused handshake blocks the target until the same target is probed and
+  // confirmed again; the pin in effect survives the refusal.
+  let blocked = false;
   let probeGeneration = 0;
   let writes = Promise.resolve();
 
@@ -14,9 +20,13 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
   async function probe(target) {
     const current = ++probeGeneration;
     reviewed = null;
+    presentedFingerprint = null;
+    pinnedFingerprint = null;
     const key = await invoke('ssh_host_key_probe', {host: target.host, port: Number(target.port)});
     if (current !== probeGeneration || !sameTarget(target, key) || !key.publicKey || !key.fingerprint) return null;
     reviewed = key;
+    // The same target was probed again; the user still has to confirm it.
+    blocked = false;
     return key;
   }
   async function close() {
@@ -56,11 +66,22 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
           });
         });
       }
+      else if (event.kind === 'host_key_change') {
+        // Only the fingerprint the refused handshake presented is kept.
+        presentedFingerprint = event.presentedFingerprint || null;
+        pinnedFingerprint = (reviewed && reviewed.fingerprint) || pinnedFingerprint;
+        blocked = true;
+      }
       else if (event.kind === 'exit' || event.kind === 'error') {
         connecting = false; ready = false;
         const messages = {host_key_mismatch:'主机公钥与已核对的指纹不一致，连接已拒绝。请重新探测并核对。', authentication_failed:'认证失败，请检查用户名和认证方式后重试。', rsa_sha2_required:'服务器未提供 RSA SHA-2 用户认证，当前 RSA 私钥无法登录。'};
-        if (event.error === 'host_key_mismatch') invalidateReview();
-        onStatus(event.kind === 'exit' ? '远端会话已结束。' : messages[event.error] || '连接失败或已中断，请核查连接资料。', false, event.error || event.kind);
+        if (event.error === 'host_key_mismatch') {
+          pinnedFingerprint = pinnedFingerprint || (reviewed && reviewed.fingerprint) || null;
+          invalidateReview();
+          blocked = true;
+        }
+        onStatus(event.kind === 'exit' ? '远端会话已结束。' : messages[event.error] || '连接失败或已中断，请核查连接资料。', false, event.error || event.kind,
+          event.error === 'host_key_mismatch' ? {presentedFingerprint, pinnedFingerprint, blocked: true} : undefined);
       }
     }
     channel.onmessage = event => { if (!assigned) early.push(event); else deliver(event); };
@@ -95,5 +116,7 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     try { await invoke('ssh_shell_resize', {sessionId:id, cols, rows}); return current === generation && id === sessionId && ready; }
     catch { if (current === generation && id === sessionId) { ready = false; onStatus('终端尺寸更新失败；请检查连接。', false); } return false; }
   }
-  return {probe, invalidateReview, open, close, write, resize, isReady: () => ready, isActive: () => ready || connecting};
+  return {probe, invalidateReview, open, close, write, resize, isReady: () => ready, isActive: () => ready || connecting,
+    isBlocked: () => blocked, pinnedFingerprint: () => pinnedFingerprint,
+    resetTargetBlock: () => { blocked = false; presentedFingerprint = null; pinnedFingerprint = null; }};
 }

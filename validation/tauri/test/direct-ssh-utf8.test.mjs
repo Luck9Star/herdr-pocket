@@ -46,7 +46,7 @@ class Element {
 // real, headless. write() is wrapped only to record the raw bytes handed over.
 function uiHarness({ Terminal, createUnicodeTerminal }) {
   const nodes = Object.create(null);
-  const ids = ['ssh-host', 'ssh-port', 'ssh-user', 'ssh-password', 'ssh-key', 'ssh-passphrase', 'ssh-auth-method', 'ssh-review', 'ssh-probe', 'ssh-form', 'ssh-connect', 'ssh-status', 'ssh-focus', 'ssh-setup', 'ssh-live', 'ssh-review-row', 'ssh-fingerprint', 'ssh-target', 'ssh-disconnect', 'ssh-cancel', 'ssh-terminal', 'ssh-helper-keys'];
+  const ids = ['ssh-host', 'ssh-port', 'ssh-user', 'ssh-password', 'ssh-key', 'ssh-passphrase', 'ssh-auth-method', 'ssh-review', 'ssh-probe', 'ssh-form', 'ssh-connect', 'ssh-status', 'ssh-focus', 'ssh-setup', 'ssh-live', 'ssh-review-row', 'ssh-fingerprint', 'ssh-key-change', 'ssh-key-change-old', 'ssh-key-change-new', 'ssh-key-change-target', 'ssh-key-change-note', 'ssh-key-recheck', 'ssh-key-cancel', 'ssh-target', 'ssh-disconnect', 'ssh-cancel', 'ssh-terminal', 'ssh-page-heading', 'ssh-helper-keys'];
   for (const id of ids) nodes[id] = new Element('div');
   nodes['ssh-host'].value = target.host;
   nodes['ssh-port'].value = String(target.port);

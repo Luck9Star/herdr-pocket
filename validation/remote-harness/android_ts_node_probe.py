@@ -13,6 +13,7 @@ from android_dual_overlay_session import AndroidDualOverlaySession
 from android_dual_overlay_reverse import SERIAL, assert_owned_avd
 import android_crash_symbolize as symbolize
 import android_go_log as golog
+from android_private_go_crash import summarize as go_crash_summarize
 from flutter_android_dual_overlay import prepare_private_ca
 
 
@@ -330,7 +331,7 @@ def _redacted_forensics(text):
     return {'crashSignals': signals, 'panicTypes': panics,
         'goFrames': frames, 'upstreamFrames': upstream}
 
-def _current_exit_info():
+def _current_exit_info(adb):
     """This run's own exit record via package-scoped dumpsys exit-info.
 
     Redacted to reason class and status only; never the trace blob. Runs
@@ -416,48 +417,40 @@ def _thread_names(record):
     return names[:6]
 
 
-def _stderr_evidence():
-    """Redacted evidence from the probe's own stderr file.
-
-    A fatal error that exits without a signal (Go runtime fatal, direct
-    exit) writes only to stderr; the file survives the dead process. Only
-    classified panic/fatal kinds and function names are reported, never the
-    original text, addresses or paths.
-    """
+def _stderr_evidence(adb):
+    """Read private fd2 once; return the legacy evidence and bounded Go summary."""
+    legacy = {'available': False}
     try:
         result = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-stderr.txt')
-        # Remove it either way: both variants share one package, so the next
-        # variant must not read this one's leftovers.
-        adb('shell', 'run-as', PACKAGE, 'rm', '-f', 'files/ts-node-probe-stderr.txt', timeout=15)
-        if result.returncode != 0 or not result.stdout:
-            return {'available': False}
+        if result.returncode != 0:
+            return legacy, {'status': 'unavailable'}
         text = result.stdout[:65536]
         kinds = []
         for needle, name in (
-                (b'panicked at', 'rust-panic'),
-                (b'fatal error:', 'go-fatal-error'),
-                (b'panic: ', 'go-panic'),
-                (b'runtime error:', 'runtime-error'),
-                (b'concurrent map', 'concurrent-map'),
-                (b'goroutine ', 'goroutine-dump'),
-                (b'JNI DETECTED ERROR', 'jni-error'),
-                (b'ownership of fd', 'fd-ownership'),
-                (b'SIGSEGV', 'sigsegv-text'),
-                (b'SIGABRT', 'sigabrt-text')):
+                (b'panicked at', 'rust-panic'), (b'fatal error:', 'go-fatal-error'),
+                (b'panic: ', 'go-panic'), (b'runtime error:', 'runtime-error'),
+                (b'concurrent map', 'concurrent-map'), (b'goroutine ', 'goroutine-dump'),
+                (b'JNI DETECTED ERROR', 'jni-error'), (b'ownership of fd', 'fd-ownership'),
+                (b'SIGSEGV', 'sigsegv-text'), (b'SIGABRT', 'sigabrt-text')):
             if needle in text and name not in kinds:
                 kinds.append(name)
         frames = sorted({f.decode('ascii', 'replace') for f in
             re.findall(rb'herdr\.local/tailscale-runtime\.(\w+)', text)})[:8]
         upstream = sorted({f.decode('ascii', 'replace') for f in
             re.findall(rb'tailscale\.com/([\w/.]+(?=\.\(\*?[\w.]+\))|[\w/.]+(?=\.))', text)})[:8]
-        panic_classes = sorted({_panic_class(l) for l in text.splitlines()
-            if b'panic: ' in l or b'panicked at' in l})[:3]
-        if not kinds and not frames and not upstream and not panic_classes:
-            return {'available': False}
-        return {'available': True, 'kinds': kinds[:6], 'panicTypes': panic_classes,
-                'goFrames': frames, 'upstreamFrames': upstream}
+        panic_classes = sorted({_panic_class(line) for line in text.splitlines()
+            if b'panic: ' in line or b'panicked at' in line})[:3]
+        if kinds or frames or upstream or panic_classes:
+            legacy = {'available': True, 'kinds': kinds[:6], 'panicTypes': panic_classes,
+                      'goFrames': frames, 'upstreamFrames': upstream}
+        return legacy, go_crash_summarize(result.stdout)
     except Exception:
-        return {'available': False}
+        return legacy, {'status': 'unreadable'}
+    finally:
+        try:
+            adb('shell', 'run-as', PACKAGE, 'rm', '-f', 'files/ts-node-probe-stderr.txt', timeout=15)
+        except Exception:
+            pass
 
 
 def _go_log_evidence(adb, pid):
@@ -772,8 +765,8 @@ def run(args):
                                     row['instrumentation'].setdefault('abortClass', name)
                     except subprocess.TimeoutExpired:
                         row['instrumentation'] = {'commandSucceeded': False, 'timedOut': True}
-                    row['currentExit'] = _current_exit_info()
-                    row['stderrEvidence'] = _stderr_evidence()
+                    row['currentExit'] = _current_exit_info(adb)
+                    row['stderrEvidence'], row['privateGoCrash'] = _stderr_evidence(adb)
                     response = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-result.json')
                     if response.returncode == 0:
                         row.update(probe_report(response.stdout))

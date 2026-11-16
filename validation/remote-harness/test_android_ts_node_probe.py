@@ -1,10 +1,12 @@
 import copy
 import importlib.util
+import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+from types import SimpleNamespace
 import unittest
 import zipfile
 
@@ -249,6 +251,96 @@ class ProbeGuardsTests(unittest.TestCase):
         self.assertFalse(accepted({'ok': True, 'interfaces': 2, 'addresses': 2, 'errClass': 'other'}))
         self.assertFalse(accepted({'ok': True, 'interfaces': 2, 'addresses': 2, 'errClass': 'x' * 65}))
 
+
+class PrivateGoCrashEvidenceTests(unittest.TestCase):
+    """The private fd2 capture must reach the committed summarizer.
+
+    Regression: _stderr_evidence once resolved a module-level `adb` that only
+    existed inside run(); the NameError was swallowed and four device runs
+    reported {'available': False} while the captured traceback sat unread.
+    """
+
+    RAW = (b'panic: runtime error: invalid memory address or nil pointer dereference\n'
+           b'[signal SIGSEGV: code=0x1 addr=0x0 pc=0x1234]\n\n'
+           b'goroutine 17 [running]:\n'
+           b'herdr.local/tailscale-runtime.(*manager).start.func1()\n'
+           b'\t/build/tailscale-runtime/core.go:222 +0x1f\n'
+           b'tailscale.com/tsnet.(*Server).Start(...)\n'
+           b'\t/go/pkg/mod/tailscale.com@v1.104.1/tsnet/tsnet.go:300\n')
+
+    @staticmethod
+    def _adb(stdout=b'', returncode=0):
+        calls = []
+        def adb(*parts, timeout=30, data=None):
+            calls.append(parts)
+            return SimpleNamespace(returncode=returncode if parts[0] == 'exec-out' else 0,
+                stdout=stdout if parts[0] == 'exec-out' else b'')
+        return adb, calls
+
+    def test_captured_traceback_is_summarized_and_redacted(self):
+        adb, calls = self._adb(stdout=self.RAW)
+        legacy, result = probe._stderr_evidence(adb)
+        self.assertTrue(legacy['available'])
+        self.assertEqual(result['status'], 'panic')
+        self.assertEqual(result['panic']['category'], 'nil_pointer')
+        self.assertEqual(result['origin']['function'], 'herdr.local/tailscale-runtime.(*manager).start.func1')
+        self.assertEqual(result['origin']['file'], 'core.go')
+        self.assertEqual(result['origin']['line'], 222)
+        self.assertEqual(result['frames'][1]['function'], 'tailscale.com/tsnet.(*Server).Start')
+        self.assertNotIn('0x', json.dumps(result))
+        self.assertNotIn('/build/', json.dumps(result))
+        self.assertTrue(any('rm' in parts for parts in calls), 'the capture must be removed for the next variant')
+
+    def test_empty_failure_and_cleanup(self):
+        for stdout, code, status in ((b'', 0, 'empty'), (b'x', 1, 'unavailable'),
+                                     (b'ordinary log\n', 0, 'no_panic')):
+            with self.subTest(status=status):
+                adb, calls = self._adb(stdout, code)
+                legacy, result = probe._stderr_evidence(adb)
+                self.assertEqual(result['status'], status)
+                self.assertFalse(legacy['available'])
+                self.assertEqual([call[0] for call in calls], ['exec-out', 'shell'])
+                self.assertIn('rm', calls[1])
+
+    def test_exception_still_cleans_capture(self):
+        calls = []
+        def adb(*parts, **kwargs):
+            calls.append(parts)
+            if parts[0] == 'exec-out':
+                raise TimeoutError()
+            return SimpleNamespace(returncode=0, stdout=b'')
+        legacy, result = probe._stderr_evidence(adb)
+        self.assertFalse(legacy['available'])
+        self.assertEqual(result['status'], 'unreadable')
+        self.assertEqual([call[0] for call in calls], ['exec-out', 'shell'])
+
+    def test_scoped_exit_info_and_order_before_uninstall(self):
+        calls = []
+        def adb(*parts, **kwargs):
+            calls.append(parts)
+            if parts[:3] == ('shell', 'dumpsys', 'activity'):
+                return SimpleNamespace(returncode=0, stdout=b'reason=5 status=11')
+            return SimpleNamespace(returncode=0, stdout=self.RAW if parts[0] == 'exec-out' else b'')
+        self.assertEqual(probe._current_exit_info(adb), {'available': True, 'reason': 5, 'status': 11})
+        legacy, summary = probe._stderr_evidence(adb)
+        adb('uninstall', probe.PACKAGE)
+        self.assertEqual([call[0] for call in calls], ['shell', 'exec-out', 'shell', 'uninstall'])
+        self.assertEqual(calls[0], ('shell', 'dumpsys', 'activity', 'exit-info', probe.PACKAGE))
+        self.assertTrue(legacy['available'])
+        self.assertEqual(summary['status'], 'panic')
+        source = Path(__file__).parent.joinpath('android_ts_node_probe.py').read_text()
+        self.assertLess(source.index("row['currentExit'] = _current_exit_info(adb)"),
+                        source.index("row['stderrEvidence'], row['privateGoCrash'] = _stderr_evidence(adb)"))
+        self.assertLess(source.index("row['stderrEvidence'], row['privateGoCrash'] = _stderr_evidence(adb)"),
+                        source.index("row['packageRemoved'] = adb('uninstall'"))
+
+    def test_dynamic_panic_is_not_exposed(self):
+        adb, _ = self._adb(b'panic: secret-token-123\n\ngoroutine 1 [running]:\nmain.main()\n\t/tmp/main.go:2\n')
+        legacy, summary = probe._stderr_evidence(adb)
+        self.assertTrue(legacy['available'])
+        self.assertEqual(summary['status'], 'panic')
+        self.assertNotIn('secret-token-123', json.dumps((legacy, summary)))
+        self.assertNotIn('/tmp/', json.dumps((legacy, summary)))
 
 class AbiProbeGuardTests(unittest.TestCase):
     """The ABI leg must stay pure Java + C ABI: no Rust runtime, no bindNative.

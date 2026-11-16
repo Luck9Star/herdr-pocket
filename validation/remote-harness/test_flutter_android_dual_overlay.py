@@ -194,6 +194,15 @@ class SafeTsControlTest(unittest.TestCase):
 
 
 class SafeUiFailureTest(unittest.TestCase):
+    def test_binding_diagnostic_contains_only_boolean_fields(self):
+        import json
+        values = {'hostPresent': True, 'hostEnabled': True, 'bindingMatches': True, 'catalogReady': True,
+                  'catalogWriting': False, 'addPresent': False, 'addEnabled': False}
+        payload = {'stage': 'et_bind_save', 'kind': 'test_failure', 'bindingCheck': values, 'bindingSelectionMatches': True}
+        self.assertEqual(safe_ui_failure(json.dumps(payload).encode()), payload)
+        self.assertIsNone(safe_ui_failure(json.dumps(dict(payload, bindingCheck={**values, 'id': 'secret'})).encode()))
+        self.assertIsNone(safe_ui_failure(json.dumps(dict(payload, bindingCheck={**values, 'bindingMatches': 'secret'})).encode()))
+
     def test_response_diagnostic_is_bounded_and_redacted(self):
         import json
         check = {'inputMatches': True, 'fieldPresent': True, 'pagePresent': True,

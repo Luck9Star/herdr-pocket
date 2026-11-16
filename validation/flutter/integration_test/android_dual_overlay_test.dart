@@ -116,6 +116,8 @@ void main() {
       existing.publish(exchange, 'failure.json', jsonEncode({'stage': steps.currentStage, 'kind': kind,
         'responseReceived': steps.responseReceived, 'stackFrames': safeFailureFrames(stack),
         if (steps.responseCheck != null) 'responseCheck': steps.responseCheck!,
+        if (steps.bindingCheck != null) 'bindingCheck': steps.bindingCheck!,
+        if (steps.bindingSelectionMatches != null) 'bindingSelectionMatches': steps.bindingSelectionMatches!,
         if (steps.nodeDiagnostic != null) ...steps.nodeDiagnostic!}));
       rethrow;
     }

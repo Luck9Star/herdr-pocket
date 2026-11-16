@@ -14,8 +14,8 @@ import 'package:terminal_view/terminal_view.dart';
 
 import 'android_pairing_observe_test.dart' as existing;
 
-bool hostBindingReady(HostCatalog catalog, String hostId, String networkId, bool addEnabled) =>
-    catalog.ready && !catalog.writing && addEnabled &&
+bool hostBindingReady(HostCatalog catalog, String hostId, String networkId) =>
+    catalog.ready && !catalog.writing &&
     catalog.profiles.any((host) => host.id == hostId && host.networkProfileId == networkId);
 
 /// Real UI actions shared by the two independently paired overlay targets.
@@ -28,6 +28,8 @@ class DualOverlayUiSteps {
   Map<String, Object>? nodeDiagnostic;
   bool responseReceived = false;
   Map<String, Object>? responseCheck;
+  Map<String, Object>? bindingCheck;
+  bool? bindingSelectionMatches;
 
   Future<void> stage(String value) async {
     if (!RegExp(r'^[a-z][a-z0-9_]{0,50}$').hasMatch(value)) {
@@ -35,6 +37,7 @@ class DualOverlayUiSteps {
     }
     currentStage = value;
     if (!value.contains('_response_')) responseCheck = null;
+    if (!value.contains('_bind_')) { bindingCheck = null; bindingSelectionMatches = null; }
     if (!(value.endsWith('_node_wait') || value == 'ts_node_ready_refresh')) {
       nodeDiagnostic = null;
     }
@@ -235,26 +238,40 @@ class DualOverlayUiSteps {
   }
 
   Future<void> bindHost(String hostId, String networkId, String label, String provider) async {
-    await existing.tapKey(tester, 'host-management-$hostId');
+    final role = provider == 'easytier' ? 'et' : 'ts';
+    await stage('${role}_bind_open');
+    await showHostControl('host-management-$hostId');
+    await existing.tapStablePointer(tester, find.byKey(ValueKey('host-management-$hostId')));
     await existing.tapKey(tester, 'host-network-$hostId');
     await choose('host-network-choice', '$label · $provider');
-    expect(tester.state<FormFieldState<String>>(find.byKey(const ValueKey('host-network-choice'))).value, networkId);
+    bindingSelectionMatches = tester.state<FormFieldState<String>>(find.byKey(const ValueKey('host-network-choice'))).value == networkId;
+    expect(bindingSelectionMatches, isTrue);
+    await stage('${role}_bind_preview');
     await existing.tapKey(tester, 'host-network-preview');
+    await stage('${role}_bind_confirm');
     await existing.tapKey(tester, 'host-network-confirm');
+    await stage('${role}_bind_save');
     await existing.until(tester, () {
       final home = find.byType(HostCatalogPage);
       if (home.evaluate().length != 1) return false;
       final dynamic state = tester.state(home);
       final catalog = state.catalog as HostCatalog;
       final add = find.byKey(const ValueKey('hosts-add'));
-      final addEnabled = add.evaluate().length == 1 && tester.widget<FilledButton>(add).onPressed != null;
-      return hostBindingReady(catalog, hostId, networkId, addEnabled);
+      final addPresent = add.evaluate().length == 1;
+      final matches = catalog.profiles.where((host) => host.id == hostId).toList();
+      bindingCheck = {'hostPresent': matches.length == 1,
+        'hostEnabled': matches.length == 1 && matches.single.enabled,
+        'bindingMatches': matches.length == 1 && matches.single.networkProfileId == networkId,
+        'catalogReady': catalog.ready, 'catalogWriting': catalog.writing,
+        'addPresent': addPresent, 'addEnabled': addPresent && tester.widget<FilledButton>(add).onPressed != null};
+      return hostBindingReady(catalog, hostId, networkId);
     });
   }
 
   Future<String> openAndObserve(String role, String hostId) async {
     await stage('${role}_open_host');
-    await existing.tapKey(tester, 'host-open-$hostId');
+    await showHostControl('host-open-$hostId');
+    await existing.tapStablePointer(tester, find.byKey(ValueKey('host-open-$hostId')));
     await existing.until(tester, () => find.byKey(const ValueKey('pair-connect')).evaluate().length == 1);
     await existing.tapKey(tester, 'pair-connect');
     await existing.until(tester, () => find.byKey(const ValueKey('remote-review')).evaluate().length == 1);
@@ -384,15 +401,38 @@ class DualOverlayUiSteps {
     await existing.until(tester, () => find.textContaining('authorized-unverified').evaluate().isNotEmpty);
   }
 
+  Future<void> showCatalogAdd() async {
+    final add = find.byKey(const ValueKey('hosts-add'));
+    if (add.evaluate().isEmpty) {
+      final list = find.byKey(const ValueKey('host-catalog-list'));
+      final scrollable = find.descendant(of: list, matching: find.byType(Scrollable)).first;
+      await tester.scrollUntilVisible(add, -400, scrollable: scrollable, maxScrolls: 30);
+      await tester.pump();
+    }
+    await existing.until(tester, () => add.evaluate().length == 1 &&
+      tester.widget<FilledButton>(add).onPressed != null);
+    await tester.ensureVisible(add);
+    await tester.pump();
+  }
+
+  Future<void> showHostControl(String key) async {
+    await showCatalogAdd();
+    final target = find.byKey(ValueKey(key));
+    if (target.evaluate().isEmpty) {
+      final list = find.byKey(const ValueKey('host-catalog-list'));
+      final scrollable = find.descendant(of: list, matching: find.byType(Scrollable)).first;
+      await tester.scrollUntilVisible(target, 400, scrollable: scrollable, maxScrolls: 30);
+      await tester.pump();
+    }
+  }
+
   Future<String> pairHost(String role, String profileJson) async {
     if (!{'et', 'ts'}.contains(role)) throw StateError('dual_role_invalid');
     responseReceived = false;
     responseCheck = null;
     await stage('${role}_pair_profile');
-    final add = find.byKey(const ValueKey('hosts-add'));
-    await existing.until(tester, () => add.evaluate().length == 1 &&
-      tester.widget<FilledButton>(add).onPressed != null);
-    await existing.tapStablePointer(tester, add);
+    await showCatalogAdd();
+    await existing.tapStablePointer(tester, find.byKey(const ValueKey('hosts-add')));
     await stage('${role}_pair_page');
     await existing.until(tester, () => find.byType(PairingPage).evaluate().length == 1);
     final page = tester.widget<PairingPage>(find.byType(PairingPage));

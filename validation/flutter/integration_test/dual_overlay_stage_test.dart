@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'dual_overlay_ui_steps.dart';
 
 void main() {
-  test('binding is not ready until delayed persistence and add control are ready', () async {
+  test('binding is not ready until delayed persistence completes', () async {
     final storage = MemoryCatalogStorage();
     final catalog = HostCatalog(storage: storage, clock: () => 1000);
     await catalog.load();
@@ -21,12 +21,11 @@ void main() {
     storage.beforeWrite = Completer<void>();
     final pending = catalog.update(host.change(networkProfileId: network.id, replaceNetwork: true, now: 1000));
     await Future<void>.delayed(Duration.zero);
-    expect(hostBindingReady(catalog, host.id, network.id, true), isFalse);
+    expect(hostBindingReady(catalog, host.id, network.id), isFalse);
     storage.beforeWrite!.complete();
     await pending;
-    expect(hostBindingReady(catalog, host.id, network.id, false), isFalse);
-    expect(hostBindingReady(catalog, host.id, network.id, true), isTrue);
-    expect(hostBindingReady(catalog, host.id, 'different', true), isFalse);
+    expect(hostBindingReady(catalog, host.id, network.id), isTrue);
+    expect(hostBindingReady(catalog, host.id, 'different'), isFalse);
     catalog.dispose();
   });
   testWidgets('node diagnostic is discarded when later UI stages start', (tester) async {

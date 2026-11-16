@@ -225,6 +225,8 @@ UI_STAGES = frozenset({'host_board', 'et_network_create', 'ts_network_create', '
     'et_resume', 'ts_resume', 'et_stop_network', 'ts_stop_network', 'stopped_audit', 'final_audit',
     'et_network_save', 'ts_network_save', 'et_identity_open', 'ts_identity_open',
     'et_identity_load', 'ts_identity_load',
+    'et_bind_open', 'ts_bind_open', 'et_bind_preview', 'ts_bind_preview',
+    'et_bind_confirm', 'ts_bind_confirm', 'et_bind_save', 'ts_bind_save',
     'et_pair_page', 'ts_pair_page', 'et_pair_input', 'ts_pair_input',
     'et_pair_preview', 'ts_pair_preview', 'et_pair_fill', 'ts_pair_fill',
     'et_pair_target_review', 'ts_pair_target_review', 'et_pair_create', 'ts_pair_create',
@@ -243,13 +245,20 @@ def safe_ui_failure(raw):
         detail = json.loads(raw)
         basic = {'stage', 'kind'}
         diagnostic = {'nodeState', 'statusPresent', 'editPresent', 'editEnabled', 'addPresent', 'addEnabled', 'notice'}
-        optional = {'responseReceived', 'stackFrames', 'responseCheck'}
+        optional = {'responseReceived', 'stackFrames', 'responseCheck', 'bindingCheck', 'bindingSelectionMatches'}
         if (isinstance(detail, dict) and set(detail) - optional in (basic, basic | diagnostic)
                 and isinstance(detail['stage'], str) and detail['stage'] in UI_STAGES
                 and isinstance(detail['kind'], str)
                 and detail['kind'] in {'test_failure', 'flutter_error', 'state_error', 'assertion_error', 'other'}):
             if 'responseReceived' in detail and type(detail['responseReceived']) is not bool:
                 return None
+            if 'bindingSelectionMatches' in detail and type(detail['bindingSelectionMatches']) is not bool:
+                return None
+            if 'bindingCheck' in detail:
+                binding = detail['bindingCheck']
+                fields = {'hostPresent', 'hostEnabled', 'bindingMatches', 'catalogReady', 'catalogWriting', 'addPresent', 'addEnabled'}
+                if not isinstance(binding, dict) or set(binding) != fields or any(type(binding[k]) is not bool for k in fields):
+                    return None
             if 'responseCheck' in detail:
                 check = detail['responseCheck']
                 if (not isinstance(check, dict) or set(check) != {'inputMatches', 'fieldPresent', 'pagePresent', 'foreground', 'category', 'futureSeconds'}

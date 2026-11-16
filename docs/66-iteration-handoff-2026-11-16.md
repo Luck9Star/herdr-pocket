@@ -24,7 +24,7 @@ S10 设计目标为「主机指纹发生变化」时阻断连接与输入，给�
 
 **Android 设备验收（Flutter，API 35 x86_64 云模拟器）**：run [43792464010](https://github.com/Luck9Star/herdr-pocket/actions/runs/43792464010)（最终产品 `e415f6a`，结论 success）通过首页入口、独立指纹比对与显式确认、真实终端视图提交与远端回显、UI 断开、凭据清除；协议侧 auth / PTY / shell / marker / 会话关闭均为真，连接 2 次并全部关闭，PTY 尺寸序列记录完整；反向端口、APK 包、自有端口转发、夹具与 Flutter 工具六项清理符合预期。脱敏结果见 [android-ordinary-ssh-43792464010.json](evidence/dual-overlay-20261115/android-ordinary-ssh-43792464010.json)。`physicalImeVerified=false`，且本轮**未执行 S10 设备换钥**。
 
-**Tauri Android 真实设备步骤（run [43793551574](https://github.com/Luck9Star/herdr-pocket/actions/runs/43793551574)，`718b44f`，结论 success）**：密码与加密私钥两条流程均通过——指纹核对、凭据确认状态保持、认证 / PTY / shell、终端输入与回显、主动断开与密码清除，辅助键字节精确；browser、应用、转发、反向与夹具连接五项清理为真。脱敏清单见 [tauri-android-direct-ssh-43793551574.json](evidence/dual-overlay-20261115/tauri-android-direct-ssh-43793551574.json)，调试 APK 下载工件 `14193507937`（x86_64 模拟器，APK SHA256 `0472b844…6a07`）。范围为合成回环 SSH 与自有 API35 WebView，CDP 输入**不等于真实 IME 组字**。
+**Tauri Android 真实设备步骤（run [43793551574](https://github.com/Luck9Star/herdr-pocket/actions/runs/43793551574)，`718b44f`，结论 success）**：密码与加密私钥两条流程均通过——指纹核对、凭据确认状态保持、认证 / PTY / shell、终端输入与回显、主动断开与密码清除，辅助键字节精确；browser、应用、转发、反向与夹具连接五项清理为真。脱敏清单见 [tauri-android-direct-ssh-43793551574.json](evidence/dual-overlay-20261115/tauri-android-direct-ssh-43793551574.json)，调试 APK 下载工件 `14193507937`（x86_64 模拟器，APK SHA256 `0472b844…6a07`）。范围为合成回环 SSH 与自有 API35 WebView，CDP 输入**不等于真实 IME 组字**。 本轮 Android 模拟器**未驱动换钥**；macOS 侧的 S10 换钥有主控实窗验收（见上）。
 
 **macOS 真 XCUITest（run [43793582196](https://github.com/Luck9Star/herdr-pocket/actions/runs/43793582196)，`718b44f`，结论 success）**：4/4 全通过——系统安全字段遮罩、密码 SSH、加密私钥 SSH、返回后重开；服务端两次独立认证 / PTY / shell 与各自主动断开窗口均为真，密码与口令输入均被证明。脱敏结果见 [flutter-macos-secure-xcui-43793582196.json](evidence/dual-overlay-20261115/flutter-macos-secure-xcui-43793582196.json)。范围为原生 UI 安全字段与自有 SSH 回环，使用合成值，**不含物理 IME**。
 
@@ -54,11 +54,15 @@ run [43787376865](https://github.com/Luck9Star/herdr-pocket/actions/runs/4378737
 
 run [43791265216](https://github.com/Luck9Star/herdr-pocket/actions/runs/43791265216)（`7800f44`）补齐了分阶段标记，四条 ABI 腿（plain normal / plain QA / optin normal / optin QA）的 `abiEvidence.stages` 均为 `library-mapped → abi-version → node-new → node-status → node-start-entered → node-start-returned → node-status-after-start` 全部为真，`store` 为 `reads=3, writes=0, startCode=0`。
 
-因此可以确定：**C ABI 的 `node_start` 已经返回（返回码 0），随后的 `node_status` 也执行完成，SIGABRT 发生在 start 返回之后**，不是发生在 start 调用内部。崩溃根因**仍未确证**，不得写成“崩溃在 start 返回前”，也不得写成已定位到具体函数。最终崩溃归因及修复 SHA 待主控结论。
+因此可以确定：**C ABI 的 `node_start` 已经返回（返回码 0），随后的 `node_status` 也执行完成，SIGABRT 发生在 start 返回之后**，不是发生在 start 调用内部。
+
+run [43794525988](https://github.com/Luck9Star/herdr-pocket/actions/runs/43794525988)（诊断 `0d78f015`，固定 native `45ea7dc`）两腿均为 completed/failure：plain 与 optin × normal 与 qa 共四组的**产品同 UID 日志与独立 C ABI 两侧都读到 `go-panic`**，产品 instrumentation 为 SIGABRT 且均无授权。四组 ABI 的 `stages` 全部走到 `node-start-returned`、`node-status-after-start`、`node-close-entered/returned` 与 `node-release-entered/returned`；`store` 为 `reads=3, writes=0, startCode=0`。但 `reason=unspecified`、`firstFrame=none`、`appFunction=none`、`upstreamFrames=[]`，`panicTypes`/`goFrames` 为空、`stderrEvidence.available=false`，因此**不能断言两个崩溃同源，也不能断言产品在 close 阶段崩溃**。控制面上 QA 各有 1 次 mapRequest，register / key / noise / authCompletion 全为 0；两组独立 namespace 清理为真。脱敏结果见 [plain](evidence/dual-overlay-20261115/android-m2-ui-43794525988-plain.json) 与 [optin](evidence/dual-overlay-20261115/android-m2-ui-43794525988-optin.json)。
+
+**本轮交付状态**：普通 SSH **通过**；Android 双网 **未通过**。Android 双网剩余路线为先定位首个具体 Go panic，再验证授权与两壳双向停网。诊断用源码在实验分支 `codex/ts-easytier-concurrency` 的 `c199b08`（本地 remote-harness 360 项、2 项跳过），**不是本次设备运行所用源码**。
 
 ## 未终结与复跑入口
 
-- 普通 SSH 三端结果已补入：Flutter Android run 43792464010 / 43793551546 均 success，Tauri Android run 43793551574 success，macOS 真 XCUITest run 43793582196 为 4/4；Android **双网产品启动** SIGABRT 根因未确证（已排除“崩溃在 start 返回前”）；S10 换钥未在设备执行；物理 IME、物理网络、后台常连与五平台分发均未验证。
+- 本轮结论：普通 SSH 通过（Flutter / Tauri Android 与 macOS 真 XCUITest 均 success）；Android 双网未通过（见上，根因未确证）。S10 换钥仅在 macOS 实窗验证，Android 模拟器未驱动换钥；物理 IME、物理网络、后台常连与五平台分发未验证。
 - Flutter 复跑入口：固定 Flutter 3.47.9、准备隔离项目后运行 `python3 validation/flutter/tool/direct_ssh_fixture_runner.py --project <prepared-project>`。
 - Tauri 前端复跑入口：`cd validation/tauri && npm ci && npm test`（Node 604 项）；Rust 指定夹具 103 + 1 按 `validation/tauri/README.md` 的 cargo 命令执行。
 - Linux 双网与 Android ABI 证据按对应 GitHub 固定 run 与仓库 JSON 核对；不要从 Widget 图、mock 桥图或 fixture 通过外推产品启动成功。

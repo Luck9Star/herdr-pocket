@@ -199,6 +199,30 @@ def _redacted_forensics(text):
     return {'crashSignals': signals, 'panicTypes': panics,
         'goFrames': frames, 'upstreamFrames': upstream}
 
+def _current_exit_info():
+    """This run's own exit record via package-scoped dumpsys exit-info.
+
+    Redacted to reason class and status only; never the trace blob. Runs
+    after am instrument (return or timeout) and before uninstall, so the
+    record belongs to the process that just died or finished.
+    """
+    try:
+        result = adb('shell', 'dumpsys', 'activity', 'exit-info', PACKAGE, timeout=30)
+        if result.returncode != 0:
+            return {'available': False}
+        text = result.stdout.decode('ascii', 'replace')
+        reasons = re.findall(r'reason=(\d+)', text)
+        statuses = re.findall(r'status=(\d+)', text)
+        if not reasons:
+            return {'available': False}
+        latest_reason = int(reasons[0])
+        if latest_reason not in EXIT_REASONS:
+            latest_reason = 15
+        return {'available': True, 'reason': latest_reason,
+                'status': int(statuses[0]) if statuses else -1}
+    except Exception:
+        return {'available': False}
+
 
 def instrument_summary(result):
     raw = result.stdout[:65536]
@@ -298,8 +322,12 @@ def run(args):
                                     row['instrumentation'][key] = combined[:8]
                                 if merged['crashSignals'] or merged['panicTypes']:
                                     row['instrumentation']['signalEvidence'] = True
+                        # Current run's own exit record (below, outside the
+                        # try): taken after instrument, before uninstall,
+                        # whether it returned or timed out.
                     except subprocess.TimeoutExpired:
                         row['instrumentation'] = {'commandSucceeded': False, 'timedOut': True}
+                    row['currentExit'] = _current_exit_info()
                     response = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-result.json')
                     if response.returncode == 0:
                         row.update(probe_report(response.stdout))

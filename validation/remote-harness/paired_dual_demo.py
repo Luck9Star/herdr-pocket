@@ -46,6 +46,36 @@ def command(args, env, timeout=10):
     return value.stdout
 
 
+def fixture_sshd_config(root, port, username):
+    # OpenSSH shares the local-channel permission with TCP forwarding. PermitOpen
+    # then restricts both channel types to this fixture's single Unix socket.
+    sock = root / 'config/herdr/sessions/qa-pair/herdr.sock'
+    pam = 'yes' if sys.platform == 'linux' else 'no'
+    return f'''Port {port}
+ListenAddress 127.0.0.1
+HostKey {root}/host
+PidFile {root}/sshd.pid
+AuthorizedKeysFile {root}/authorized_keys
+StrictModes no
+UsePAM {pam}
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+PermitRootLogin no
+AllowUsers {username}
+PermitUserRC no
+AllowAgentForwarding no
+AllowTcpForwarding local
+AllowStreamLocalForwarding local
+PermitOpen [{sock}]:*
+X11Forwarding no
+PrintMotd no
+LogLevel VERBOSE
+SetEnv HOME={root} XDG_CONFIG_HOME={root}/config PYTHONDONTWRITEBYTECODE=1
+'''
+
+
 def line(process):
     selector = selectors.DefaultSelector(); selector.register(process.stdout, selectors.EVENT_READ)
     try:
@@ -103,28 +133,7 @@ def prepared_pairing_hosts(binary, base, stage_callback=None, input_ack=False):
                 with socket.socket() as reserve:
                     reserve.bind(('127.0.0.1', 0)); port = reserve.getsockname()[1]
                 username = pwd.getpwuid(os.getuid()).pw_name
-                pam = 'yes' if sys.platform == 'linux' else 'no'
-                (root / 'sshd_config').write_text(f'''Port {port}
-    ListenAddress 127.0.0.1
-    HostKey {root}/host
-    PidFile {root}/sshd.pid
-    AuthorizedKeysFile {root}/authorized_keys
-    StrictModes no
-    UsePAM {pam}
-    PasswordAuthentication no
-    KbdInteractiveAuthentication no
-    PubkeyAuthentication yes
-    AuthenticationMethods publickey
-    PermitRootLogin no
-    AllowUsers {username}
-    PermitUserRC no
-    AllowAgentForwarding no
-    AllowTcpForwarding no
-    X11Forwarding no
-    PrintMotd no
-    LogLevel VERBOSE
-    SetEnv HOME={root} XDG_CONFIG_HOME={root}/config PYTHONDONTWRITEBYTECODE=1
-    ''')
+                (root / 'sshd_config').write_text(fixture_sshd_config(root, port, username))
                 sshd = (['sudo', '-n'] if sys.platform == 'linux' else []) + ['/usr/sbin/sshd']
                 if sys.platform == 'linux':
                     stage(role, 'privsep_prepare')

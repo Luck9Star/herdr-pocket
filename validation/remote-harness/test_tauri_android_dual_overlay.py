@@ -90,6 +90,50 @@ class DualEvidenceTests(unittest.TestCase):
         self.assertFalse(dual.ordinary_native_tree([root[0]])['ownedWebView'])
         self.assertFalse(dual.ordinary_native_tree([])['ownedWebView'])
 
+    def test_native_tree_failures_are_fixed_codes_and_always_clean_dump(self):
+        for xml,code in [('private text','dual_native_ui_xml_missing'),
+                         ('<?xml version="1.0"?><hierarchy><node></hierarchy>','dual_native_ui_xml_invalid')]:
+            with self.subTest(code=code),patch.object(dual,'adb',side_effect=['dumped',xml,'']) as adb:
+                with self.assertRaisesRegex(dual.GuiFailure,'^'+code+'$'):dual.native_ui_nodes()
+                self.assertEqual(adb.call_args.args,('shell','rm','-f','/data/local/tmp/herdr-dual-ui.xml'))
+        for outputs,code in [([dual.GuiFailure('private dump error'),''],'dual_native_ui_dump_failed'),
+                             (['dumped',dual.GuiFailure('private read error'),''],'dual_native_ui_read_failed')]:
+            with self.subTest(code=code),patch.object(dual,'adb',side_effect=outputs):
+                with self.assertRaisesRegex(dual.GuiFailure,'^'+code+'$'):dual.native_ui_nodes()
+
+    def test_ordinary_tree_readiness_retries_reads_without_relaxing_owned_tree(self):
+        nodes=[ET.Element('node',{'package':dual.PACKAGE,'class':'android.webkit.WebView'})]
+        nodes += [ET.Element('node'),ET.Element('node')]
+        report={}
+        def poll(probe,code,**kwargs):
+            for _ in range(3):
+                value=probe()
+                if value:return value
+            raise dual.GuiFailure(code)
+        with patch.object(dual,'wait_for',side_effect=poll),patch.object(dual,'native_ui_nodes',
+                side_effect=[dual.GuiFailure('dual_native_ui_xml_invalid'),nodes[:1],nodes]) as read:
+            tree=dual.wait_for_ordinary_tree(report)
+        self.assertEqual(read.call_count,3)
+        self.assertTrue(tree['ownedWebView']);self.assertEqual(tree['nodeCount'],3)
+        self.assertEqual(report['nativeTreeObservation'],{'attempts':3,'lastError':None})
+
+    def test_unowned_tree_and_dump_cleanup_failure_remain_failures(self):
+        nodes=[ET.Element('node',{'package':'unrelated','class':'android.webkit.WebView'}) for _ in range(3)]
+        def once(probe,code,**kwargs):
+            value=probe()
+            if value:return value
+            raise dual.GuiFailure(code)
+        report={}
+        with patch.object(dual,'wait_for',side_effect=once),patch.object(dual,'native_ui_nodes',return_value=nodes):
+            with self.assertRaisesRegex(dual.GuiFailure,'^dual_native_ui_tree_not_ready$'):
+                dual.wait_for_ordinary_tree(report)
+        self.assertFalse(report['ordinaryNativeTree']['ownedWebView'])
+        self.assertEqual(report['nativeTreeObservation']['lastError'],'dual_native_ui_tree_incomplete')
+        with patch.object(dual,'wait_for',side_effect=once),patch.object(dual,'native_ui_nodes',
+                side_effect=dual.GuiFailure('dual_native_ui_cleanup_failed')):
+            with self.assertRaisesRegex(dual.GuiFailure,'^dual_native_ui_cleanup_failed$'):
+                dual.wait_for_ordinary_tree({})
+
     def test_transport_diagnostics_are_fixed_nonsecret_counts(self):
         session=Mock()
         session.control.call.return_value={'event':'ts_diagnostics','keyRequests':1,'noiseRequests':0,

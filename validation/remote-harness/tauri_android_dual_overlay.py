@@ -112,24 +112,49 @@ def audit(host, role, expected, *, ordinal, sessions_count, active=True, new_ses
 
 
 def native_ui_nodes():
-    # The AVD is owned and disposable. Dump only to one fixed shell-private
-    # path; never publish XML, and remove it even when parsing fails.
+    # Dump only to the owned AVD's fixed private path; never publish its XML.
     dump_path='/data/local/tmp/herdr-dual-ui.xml'
     try:
-        adb('shell','uiautomator','dump',dump_path,timeout=15)
-        xml=adb('shell','cat',dump_path,timeout=5)
+        try:adb('shell','uiautomator','dump',dump_path,timeout=15)
+        except GuiFailure:raise GuiFailure('dual_native_ui_dump_failed') from None
+        try:xml=adb('shell','cat',dump_path,timeout=5)
+        except GuiFailure:raise GuiFailure('dual_native_ui_read_failed') from None
         start=xml.find('<?xml')
         if start < 0:raise GuiFailure('dual_native_ui_xml_missing')
-        root=ET.fromstring(xml[start:xml.rfind('>')+1])
+        try:root=ET.fromstring(xml[start:xml.rfind('>')+1])
+        except ET.ParseError:raise GuiFailure('dual_native_ui_xml_invalid') from None
         return list(root.iter('node'))
     finally:
-        adb('shell','rm','-f',dump_path,check=False,timeout=5)
+        try:adb('shell','rm','-f',dump_path,check=False,timeout=5)
+        except GuiFailure:raise GuiFailure('dual_native_ui_cleanup_failed') from None
 
 
 def ordinary_native_tree(nodes):
     return {'xmlParsed':True,'nodeCount':min(len(nodes),999),
             'ownedWebView':any(node.get('package')==PACKAGE and
                 node.get('class','').endswith('WebView') for node in nodes)}
+
+
+def wait_for_ordinary_tree(report, timeout=45):
+    retryable={'dual_native_ui_dump_failed','dual_native_ui_read_failed',
+               'dual_native_ui_xml_missing','dual_native_ui_xml_invalid'}
+    observation={'attempts':0,'lastError':None}
+    report['nativeTreeObservation']=observation
+    def inspect():
+        observation['attempts']=min(observation['attempts']+1,999)
+        try:nodes=native_ui_nodes()
+        except GuiFailure as error:
+            if str(error) not in retryable:raise
+            observation['lastError']=str(error)
+            return False
+        tree=ordinary_native_tree(nodes)
+        report['ordinaryNativeTree']=tree
+        if len(nodes)<3 or not tree['ownedWebView']:
+            observation['lastError']='dual_native_ui_tree_incomplete'
+            return False
+        observation['lastError']=None
+        return tree
+    return wait_for(inspect,'dual_native_ui_tree_not_ready',timeout=timeout)
 
 
 def native_dialog_click(expected, button, *, timeout=20, cancelled=None, diagnostic=None):
@@ -487,12 +512,12 @@ def run_direction(apk, auth_apk, session, stopped, report):
             except GuiFailure:pass
             return False
         browser=wait_for(connect,'dual_webview_not_ready',timeout=90)
-        nodes=native_ui_nodes()
-        report['ordinaryNativeTree']=ordinary_native_tree(nodes)
-        report['ordinaryWebViewHomeVerified']=browser.read('.app-header h1')=='Herdr Pocket'
-        if (len(nodes)<3 or not report['ordinaryNativeTree']['ownedWebView'] or
-                not report['ordinaryWebViewHomeVerified']):
-            raise GuiFailure('dual_native_ui_tree_incomplete')
+        report['stage']='device_home'
+        report['ordinaryWebViewHomeVerified']=wait_for(lambda:browser.evaluate(
+            "document.querySelector('.app-header h1')?.textContent.trim()==='Herdr Pocket'") is True,
+            'dual_ordinary_home_not_ready',timeout=45) is True
+        report['stage']='device_native_tree'
+        report['ordinaryNativeTree']=wait_for_ordinary_tree(report)
         report['stage']='network_setup'
         install_start_observer(browser)
         report['startObserverInstalled']=True

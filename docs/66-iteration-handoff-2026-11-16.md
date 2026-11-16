@@ -1,6 +1,6 @@
 # 2026-11-16 迭代收口与交接
 
-本页汇总本轮普通 SSH / UI、终端内核评估、Linux 双网与 Android 设备分层结果。它只记录已固定源码、已验证工件及可复跑入口；**未终结的 Tauri / Android 产品启动不写为通过**，也不把桌面 Widget 截图写成 Android 真机证据。
+本页汇总本轮普通 SSH / UI、终端内核评估、Linux 双网与 Android 设备分层结果。它只记录已固定源码、已验证工件及可复跑入口；**普通 SSH 两壳（Flutter / Tauri Android 与 macOS 真 XCUITest）均通过；Android 双网原生启动未通过（SIGABRT，根因未确证）**，也不把桌面 Widget 截图写成 Android 真机证据。
 
 ## 三个会话的交付
 
@@ -62,7 +62,8 @@ run [43794525988](https://github.com/Luck9Star/herdr-pocket/actions/runs/4379452
 
 ## 未终结与复跑入口
 
-- 本轮结论：普通 SSH 通过（Flutter / Tauri Android 与 macOS 真 XCUITest 均 success）；Android 双网未通过（见上，根因未确证）。S10 换钥仅在 macOS 实窗验证，Android 模拟器未驱动换钥；物理 IME、物理网络、后台常连与五平台分发未验证。
+- 本轮结论：普通 SSH 通过（Flutter / Tauri Android 与 macOS 真 XCUITest 均 success）；Android 双网未通过（见上，根因未确证）。S10 换钥：macOS 有真实 WKWebView + Rust + SSH 实窗验证与 `e415f6a` 的换钥；Flutter 的 320×844 / 390×844 桌面 Widget 跑了真实回环 SSH peer 的指纹变化、拒绝与再探测。**Android 模拟器未驱动换钥（不在 S10 设备验收范围内）；物理 IME、物理网络、后台常连与五平台分发未验证。**
 - Flutter 复跑入口：固定 Flutter 3.47.9、准备隔离项目后运行 `python3 validation/flutter/tool/direct_ssh_fixture_runner.py --project <prepared-project>`。
 - Tauri 前端复跑入口：`cd validation/tauri && npm ci && npm test`（Node 604 项）；Rust 指定夹具 103 + 1 按 `validation/tauri/README.md` 的 cargo 命令执行。
 - Linux 双网与 Android ABI 证据按对应 GitHub 固定 run 与仓库 JSON 核对；不要从 Widget 图、mock 桥图或 fixture 通过外推产品启动成功。
+- Rust 复跑入口：仓库根运行 `cargo test --locked --manifest-path validation/transport-rust/Cargo.toml --lib` 默认通过；含 `HERDR_RSA_FIXTURE_PYTHON` 指向一次性 Paramiko 4 venv Python 运行 `cargo test --locked --manifest-path validation/transport-rust/Cargo.toml --lib rsa_only_paramiko_peer_runs_actual_rust_shell -- --ignored`（正常 `cargo test` 会跳过这 1 项）。

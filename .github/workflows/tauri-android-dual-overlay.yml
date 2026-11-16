@@ -291,12 +291,14 @@ jobs:
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git merge-base --is-ancestor b7b683acadf809f98f05c261813c560898062a44 "$GITHUB_SHA"
-          test "$(git rev-parse HEAD:validation/remote-harness/tauri-dual-auth-receiver)" = ec094e6983fd9bd3c42d1985f6e96820c245c80c
+          git merge-base --is-ancestor 1a02edf84515a1507b4f87db5e8fd3f768652363 "$GITHUB_SHA"
+          test "$(git rev-parse HEAD:validation/remote-harness/tauri-dual-auth-receiver)" = cc8235c636960624f85957f65dea20ef4edf64ac
           git diff --exit-code HEAD -- validation/remote-harness/tauri-dual-auth-receiver
           test -z "$(git ls-files --others --exclude-standard -- validation/remote-harness/tauri-dual-auth-receiver)"
           mkdir "$RUNNER_TEMP/current-auth"
           bash validation/remote-harness/tauri-dual-auth-receiver/build.sh "$RUNNER_TEMP/current-auth/dual-auth-receiver.apk"
+          "$RUNNER_TEMP/dual-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_tauri_android_dual_receiver.py' -v
+          "$RUNNER_TEMP/dual-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_tauri_auth_failure_diagnostic.py' -v
           python3 - <<'PY'
           import hashlib,json,os,subprocess
           from pathlib import Path
@@ -307,8 +309,12 @@ jobs:
           report={
               'schemaVersion':1,'status':'built-not-device-verified',
               'sourceSHA':os.environ['GITHUB_SHA'],
+              'receiverRepairSourceSHA':'1a02edf84515a1507b4f87db5e8fd3f768652363',
               'sourceTreeGitSHA':subprocess.check_output(['git','rev-parse','HEAD:'+str(source)],text=True).strip(),
               'buildScriptSha256':hashlib.sha256((source/'build.sh').read_bytes()).hexdigest(),
+              'receiverJavaSha256':hashlib.sha256((source/'AuthActivity.java').read_bytes()).hexdigest(),
+              'receiverManifestSha256':hashlib.sha256((source/'AndroidManifest.xml').read_bytes()).hexdigest(),
+              'androidApiSmoke':{'apiLevel':35,'status':'passed','testSourceSha256':hashlib.sha256(Path('validation/remote-harness/test_tauri_android_dual_receiver.py').read_bytes()).hexdigest()},
               'apkSha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
               'archivedReceiverSourceSHA':os.environ['APK_SOURCE'],
               'archivedReceiverApkSha256':archived['authApkSha256'],

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -237,4 +238,204 @@ Future<void> runDirectSshUi(
   step('peer_confirmed');
   binding.reportData = report;
   step('report_data_set');
+}
+
+Future<void> runDirectSshRotationUi(
+  WidgetTester tester, {
+  required Map<String, dynamic> config,
+  required String directory,
+  required void Function(String) step,
+  required void Function(String, Object) publish,
+  required Future<void> Function(String) capture,
+}) async {
+  Future<void> checkpoint(String phase, int stage) async {
+    publish('rotation-stage.json', {'phase': phase, 'stage': stage});
+    final reply = File('$directory/rotation-$phase-confirmed.json');
+    await until(tester, reply.existsSync);
+    expect(jsonDecode(reply.readAsStringSync()), {
+      'phase': phase,
+      'stage': stage,
+      'serverEvidenceAccepted': true,
+    });
+  }
+
+  step('rotation_home');
+  await app.main();
+  await until(
+    tester,
+    () => find.byKey(const ValueKey('hosts-direct-ssh')).evaluate().length == 1,
+  );
+  await tap(tester, 'hosts-direct-ssh');
+  expect(find.byType(DirectSshPage), findsOneWidget);
+  final dynamic state = tester.state(find.byType(DirectSshPage));
+  for (final entry in {
+    'direct-host': '127.0.0.1',
+    'direct-port': '${config['port']}',
+    'direct-user': 'fixture',
+  }.entries) {
+    final field = find.byKey(ValueKey(entry.key));
+    await tester.ensureVisible(field);
+    await tester.enterText(field, entry.value);
+    await tester.pump();
+  }
+  step('rotation_initial_probe');
+  await tap(tester, 'direct-probe');
+  await until(
+    tester,
+    () => find.byKey(const ValueKey('direct-trust-key')).evaluate().length == 1,
+  );
+  expect(find.textContaining(config['fingerprint'] as String), findsOneWidget);
+  await tap(tester, 'direct-trust-key');
+  final secret = find.byKey(const ValueKey('direct-secret'));
+  await tester.ensureVisible(secret);
+  await tester.enterText(secret, config['password'] as String);
+  await tester.pump();
+  await tap(tester, 'direct-connect', requireEnabled: true);
+  await until(
+    tester,
+    () =>
+        find
+            .byKey(const ValueKey('direct-host-key-change'))
+            .evaluate()
+            .length ==
+        1,
+  );
+  step('rotation_rejected');
+  expect(
+    tester
+        .widget<SelectableText>(
+          find.byKey(const ValueKey('direct-host-key-old')),
+        )
+        .data,
+    contains(config['fingerprint']),
+  );
+  expect(
+    tester
+        .widget<SelectableText>(
+          find.byKey(const ValueKey('direct-host-key-new')),
+        )
+        .data,
+    contains(config['rotatedFingerprint']),
+  );
+  expect(find.text('目标：fixture@127.0.0.1:${config['port']}'), findsOneWidget);
+  expect(state.fingerprint, config['fingerprint']);
+  expect(state.hostKeyReviewRequired, isTrue);
+  expect(state.secret.text, isEmpty);
+  expect(find.byType(TerminalView), findsNothing);
+  // S10 removes the ordinary back affordance and blocks the framework's
+  // platform-back route. This does not verify physical navigation hardware.
+  expect(find.byType(BackButton), findsNothing);
+  await tester.binding.handlePopRoute();
+  await tester.pump(const Duration(milliseconds: 300));
+  expect(find.byType(DirectSshPage), findsOneWidget);
+  expect(find.byKey(const ValueKey('direct-host-key-change')), findsOneWidget);
+  await capture('rotation-rejected');
+  await checkpoint('rejected', 2);
+
+  step('rotation_cancelled');
+  await tap(tester, 'direct-host-key-cancel');
+  expect(find.byKey(const ValueKey('direct-form')), findsOneWidget);
+  expect(state.fingerprint, config['fingerprint']);
+  expect(state.hostKeyReviewRequired, isTrue);
+  expect(tester.widget<TextField>(secret).controller!.text, isEmpty);
+  expect(tester.widget<TextField>(secret).enabled, isFalse);
+  expect(
+    tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged,
+    isNull,
+  );
+  expect(
+    tester
+        .widget<FilledButton>(find.byKey(const ValueKey('direct-connect')))
+        .onPressed,
+    isNull,
+  );
+  expect(find.byType(TerminalView), findsNothing);
+  expect(find.byType(BackButton), findsOneWidget);
+  expect(state.fingerprint, config['fingerprint']);
+  await checkpoint('cancelled', 2);
+
+  step('rotation_fresh_probe');
+  await tap(tester, 'direct-probe');
+  await until(
+    tester,
+    () => find.byKey(const ValueKey('direct-trust-key')).evaluate().length == 1,
+  );
+  expect(
+    find.textContaining(config['rotatedFingerprint'] as String),
+    findsOneWidget,
+  );
+  expect(state.fingerprint, config['fingerprint']);
+  expect(state.hostKeyReviewRequired, isTrue);
+  expect(find.byType(TerminalView), findsNothing);
+  await checkpoint('reprobed', 3);
+  await tap(tester, 'direct-trust-key');
+  expect(state.fingerprint, config['rotatedFingerprint']);
+  expect(state.hostKeyReviewRequired, isFalse);
+  expect(tester.widget<TextField>(secret).enabled, isTrue);
+  expect(tester.widget<TextField>(secret).controller!.text, isEmpty);
+  expect(
+    tester
+        .widget<FilledButton>(find.byKey(const ValueKey('direct-connect')))
+        .onPressed,
+    isNull,
+  );
+  expect(find.byType(TerminalView), findsNothing);
+
+  step('rotation_authenticate');
+  await tester.ensureVisible(secret);
+  await tester.enterText(secret, config['password'] as String);
+  await tester.pump();
+  await tap(tester, 'direct-connect', requireEnabled: true);
+  await until(tester, () => find.byType(TerminalView).evaluate().length == 1);
+  final terminalView = find.byType(TerminalView);
+  final terminal = tester.widget<TerminalView>(terminalView).terminal;
+  await until(tester, () => hasMarker(terminal, 'POCKET-ANDROID-READY'));
+  step('rotation_input');
+  await tester.tap(terminalView);
+  await tester.pump(const Duration(milliseconds: 300));
+  tester.testTextInput.enterText('hp-check');
+  await tester.pump();
+  final enter = find.widgetWithText(TextButton, 'Enter');
+  await tester.ensureVisible(enter);
+  await tester.tap(enter);
+  await tester.pump();
+  await until(tester, () => hasMarker(terminal, 'POCKET-ANDROID-SSH-OK'));
+  await capture('rotation-connected');
+  step('rotation_disconnect');
+  await tester.tap(find.widgetWithText(TextButton, '断开'));
+  await until(tester, () => find.byType(TerminalView).evaluate().isEmpty);
+  expect(state.secret.text, isEmpty);
+  expect(state.fingerprint, config['rotatedFingerprint']);
+  expect(state.hostKeyReviewRequired, isFalse);
+  expect(tester.takeException(), isNull);
+  publish('rotation-result.json', {
+    'schemaVersion': 1,
+    'platform': 'android-api35-emulator',
+    'homepageEntry': true,
+    'sameTarget': true,
+    'oldFingerprintMatchedIndependentA': true,
+    'changedFingerprintMatchedIndependentB': true,
+    'rejectedBeforeAuthentication': true,
+    'reviewNavigationBlocked': true,
+    'cancelKeepsOldTrust': true,
+    'credentialsLockedBeforeApproval': true,
+    'noAutomaticConnection': true,
+    'freshProbeMatchedIndependentB': true,
+    'explicitRotatedTrustRequired': true,
+    'realTerminalView': true,
+    'normalTextInputCommit': true,
+    'remoteEchoVisible': true,
+    'disconnectUiConfirmed': true,
+    'credentialsCleared': true,
+    'physicalImeVerified': false,
+  });
+  await checkpoint('complete', 4);
+  // Return only after independent approval has released the review lock, so
+  // the unchanged ordinary-SSH scenario starts from the real homepage again.
+  await tester.tap(find.byType(BackButton));
+  await until(
+    tester,
+    () => find.byKey(const ValueKey('hosts-direct-ssh')).evaluate().length == 1,
+  );
+  step('rotation_complete');
 }

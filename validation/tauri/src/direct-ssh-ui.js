@@ -66,6 +66,14 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     // generic status line would repeat the same failure.
     $('ssh-page-heading').hidden = blocked;
     $('ssh-status').hidden = blocked;
+    // The change review has exactly two visible ways forward; while it is open
+    // the header and the route tabs are removed entirely (mouse, keyboard and
+    // assistive tech) instead of layering a disabled state over their own.
+    // Narrow hosts that lack the groups are left alone.
+    const header = document.querySelector && document.querySelector('.app-header');
+    const routeTabs = document.querySelector && document.querySelector('.route-tabs');
+    if (header) header.hidden = blocked;
+    if (routeTabs) routeTabs.hidden = blocked;
   }
   // While a refused handshake is unresolved every credential entry stays locked.
   // After the same target is probed again, the user's own confirmation of the

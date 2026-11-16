@@ -20,13 +20,14 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
   async function probe(target) {
     const current = ++probeGeneration;
     reviewed = null;
-    presentedFingerprint = null;
-    pinnedFingerprint = null;
     const key = await invoke('ssh_host_key_probe', {host: target.host, port: Number(target.port)});
     if (current !== probeGeneration || !sameTarget(target, key) || !key.publicKey || !key.fingerprint) return null;
+    // Seeing the freshly probed key is not approving it: the pin that was in
+    // effect survives a failed probe and survives a successful one until a
+    // reviewed connection actually succeeds. Only a different target clears it.
     reviewed = key;
-    // The same target was probed again; the user still has to confirm it.
     blocked = false;
+    presentedFingerprint = null;
     return key;
   }
   async function close() {
@@ -54,7 +55,13 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     function deliver(event) {
       if (current !== generation || !assigned || event?.sessionId !== assigned || !Number.isSafeInteger(event.seq) || event.seq <= sequence) return;
       sequence = event.seq;
-      if (event.kind === 'ready') { connecting = false; ready = true; onStatus('已连接，可以输入。', true); }
+      if (event.kind === 'ready') {
+        connecting = false; ready = true;
+        // A reviewed connection that actually succeeds is the only thing that
+        // replaces the trust in effect; seeing a probed key never is.
+        pinnedFingerprint = (reviewed && reviewed.fingerprint) || pinnedFingerprint;
+        onStatus('已连接，可以输入。', true);
+      }
       else if (event.kind === 'data' && Array.isArray(event.data)) {
         const seq = event.seq;
         let acknowledged = false;

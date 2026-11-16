@@ -24,6 +24,13 @@ TARGET = 'integration_test/android_direct_ssh_test.dart'
 PUBLIC_FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched', 'explicitTrustRequired',
                  'realTerminalView', 'normalTextInputCommit', 'remoteEchoVisible', 'disconnectUiConfirmed',
                  'credentialsCleared', 'physicalImeVerified'}
+ROTATION_PUBLIC_FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'sameTarget',
+    'oldFingerprintMatchedIndependentA', 'changedFingerprintMatchedIndependentB',
+    'rejectedBeforeAuthentication', 'reviewNavigationBlocked', 'cancelKeepsOldTrust',
+    'credentialsLockedBeforeApproval', 'noAutomaticConnection', 'freshProbeMatchedIndependentB',
+    'explicitRotatedTrustRequired', 'realTerminalView', 'normalTextInputCommit',
+    'remoteEchoVisible', 'disconnectUiConfirmed', 'credentialsCleared', 'physicalImeVerified'}
+ROTATION_PHASES = {'rejected': 2, 'cancelled': 2, 'reprobed': 3, 'complete': 4}
 
 
 class Failure(ValueError):
@@ -55,6 +62,46 @@ def safe_result(raw):
     if result['physicalImeVerified'] is not False or any(result[key] is not True for key in PUBLIC_FIELDS - {'schemaVersion', 'platform', 'physicalImeVerified'}):
         raise Failure('direct_android_incomplete_device_result')
     return result
+
+
+def safe_rotation_result(raw):
+    try:
+        result = json.loads(raw)
+    except (ValueError, UnicodeError):
+        raise Failure('direct_android_rotation_result_not_json') from None
+    if (not isinstance(result, dict) or set(result) != ROTATION_PUBLIC_FIELDS
+            or type(result['schemaVersion']) is not int or result['schemaVersion'] != 1
+            or result['platform'] != 'android-api35-emulator'):
+        raise Failure('direct_android_rotation_result_invalid')
+    if (result['physicalImeVerified'] is not False or any(result[key] is not True
+            for key in ROTATION_PUBLIC_FIELDS - {'schemaVersion', 'platform', 'physicalImeVerified'})):
+        raise Failure('direct_android_rotation_result_incomplete')
+    return result
+
+
+def checked_rotation_stage(value, completed):
+    if (not isinstance(value, dict) or set(value) != {'phase', 'stage'}
+            or type(value['phase']) is not str or value['phase'] not in ROTATION_PHASES
+            or type(value['stage']) is not int
+            or value['stage'] != ROTATION_PHASES[value['phase']]):
+        raise Failure('direct_android_rotation_stage_invalid')
+    phase = value['phase']
+    if phase not in completed and (len(completed) >= len(ROTATION_PHASES)
+            or phase != list(ROTATION_PHASES)[len(completed)]):
+        raise Failure('direct_android_rotation_stage_out_of_order')
+    return phase, value['stage']
+
+
+def rotation_checkpoint(fixture, value, completed):
+    phase, stage = checked_rotation_stage(value, completed)
+    if phase in completed:
+        return None
+    if not fixture.wait_for_connections_closed(stage):
+        raise Failure('direct_android_rotation_connection_not_closed')
+    try:
+        return fixture.rotation_evidence(stage)
+    except ValueError:
+        raise Failure('direct_android_rotation_server_evidence_invalid') from None
 
 
 def adb(*args, check=True, data=None):
@@ -122,7 +169,7 @@ def checked_public_reply(reply, relative, limit):
 
 
 def read_public_json(relative, limit=4096):
-    if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:result|stage|failure)\.json', relative):
+    if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:(?:rotation-)?(?:result|stage)|failure)\.json', relative):
         raise Failure('direct_android_public_path_invalid')
     if not package_present():
         return None
@@ -187,23 +234,31 @@ def run(args, env):
     phase = 'fixture_start'
     from direct_ssh_fixture import DirectSshFixture
     fixture = DirectSshFixture()
-    reverse_added = False
+    rotation_fixture = DirectSshFixture(rotate_after_probe=True)
+    rotation = {'checkpoints': {}}
+    report['rotation'] = rotation
+    reverses = []
     process = None
     private = None
     try:
-        with fixture:
+        with fixture, rotation_fixture:
             phase = 'reverse_setup'
-            reverse = 'tcp:' + str(fixture.port)
-            if any(reverse in line.split()[1:2] for line in text('reverse', '--list').splitlines()):
-                raise Failure('direct_android_reverse_already_present')
-            adb('reverse', reverse, reverse)
-            reverse_added = True
+            for peer in (fixture, rotation_fixture):
+                reverse = 'tcp:' + str(peer.port)
+                if any(reverse in line.split()[1:2] for line in text('reverse', '--list').splitlines()):
+                    raise Failure('direct_android_reverse_already_present')
+                adb('reverse', reverse, reverse)
+                reverses.append(reverse)
             phase = 'private_defines'
             private = Path(tempfile.mkdtemp(prefix='herdr-direct-android-private-', dir=env['RUNNER_TEMP']))
             defines = private / 'defines.json'
             defines.write_text(json.dumps({'HERDR_ANDROID_DIRECT_SSH': '1', 'HERDR_ANDROID_RUN_ID': env['GITHUB_RUN_ID'],
                 'HERDR_ANDROID_DIRECT_TARGET': json.dumps({'host': '127.0.0.1', 'port': fixture.port,
-                    'username': fixture.username, 'password': fixture.password, 'fingerprint': fixture.fingerprint})}))
+                    'username': fixture.username, 'password': fixture.password, 'fingerprint': fixture.fingerprint}),
+                'HERDR_ANDROID_ROTATION_TARGET': json.dumps({'host': '127.0.0.1', 'port': rotation_fixture.port,
+                    'username': rotation_fixture.username, 'password': rotation_fixture.password,
+                    'fingerprint': rotation_fixture.fingerprint,
+                    'rotatedFingerprint': rotation_fixture.rotated_fingerprint})}))
             defines.chmod(0o600)
             relative = 'cache/herdr-direct-ssh-' + env['GITHUB_RUN_ID']
             command = ['flutter', 'test', '--no-pub', '--no-uninstall', '--reporter', 'expanded', '-d', SERIAL,
@@ -215,9 +270,34 @@ def run(args, env):
                 peer_confirmed = False
                 while process.poll() is None and time.monotonic() < deadline:
                     phase = 'await_device_result'
+                    checkpoint = read_public_json(relative + '/rotation-stage.json')
+                    if checkpoint is not None:
+                        evidence = rotation_checkpoint(rotation_fixture, checkpoint, rotation['checkpoints'])
+                        if evidence is not None:
+                            phase_name, stage = checked_rotation_stage(checkpoint, rotation['checkpoints'])
+                            phase = 'rotation_' + phase_name
+                            if fixture.snapshot()['connections'] != 0:
+                                raise Failure('direct_android_rotation_touched_ordinary_peer')
+                            if process.poll() is not None:
+                                raise Failure('direct_android_driver_exited_before_rotation_confirmation')
+                            if phase_name == 'complete':
+                                device = read_public_json(relative + '/rotation-result.json')
+                                if device is None:
+                                    raise Failure('direct_android_rotation_result_missing')
+                                rotation['device'] = safe_rotation_result(json.dumps(device))
+                                rotation['peerClosedBeforeDriverExit'] = True
+                            rotation['checkpoints'][phase_name] = evidence
+                            reply = json.dumps({'phase': phase_name, 'stage': stage,
+                                                'serverEvidenceAccepted': True}).encode()
+                            pending = relative + '/rotation-' + phase_name + '-confirmed.new'
+                            adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=reply)
+                            adb('shell', 'run-as', PACKAGE, 'mv', pending,
+                                relative + '/rotation-' + phase_name + '-confirmed.json')
                     public = read_public_json(relative + '/result.json')
                     if public is not None:
                         safe_result(json.dumps(public))
+                        if 'device' not in rotation or set(rotation['checkpoints']) != set(ROTATION_PHASES):
+                            raise Failure('direct_android_rotation_confirmation_missing')
                         phase = 'peer_close_confirmation'
                         if not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed'):
                             raise Failure('direct_android_remote_input_or_close_missing')
@@ -254,6 +334,12 @@ def run(args, env):
             if public is None:
                 raise Failure('direct_android_device_result_missing')
             report['device'] = safe_result(json.dumps(public))
+            if 'device' not in rotation or set(rotation['checkpoints']) != set(ROTATION_PHASES):
+                raise Failure('direct_android_rotation_confirmation_missing')
+            try:
+                rotation['protocol'] = rotation_fixture.rotation_evidence(4)
+            except ValueError:
+                raise Failure('direct_android_rotation_server_evidence_invalid') from None
             if not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed'):
                 raise Failure('direct_android_remote_input_or_close_missing')
             evidence = fixture.snapshot()
@@ -261,7 +347,7 @@ def run(args, env):
                 raise Failure('direct_android_protocol_evidence_incomplete')
             report['protocol'] = evidence
             phase = 'read_screenshots'
-            for name in ('home', 'connected', 'disconnected'):
+            for name in ('home', 'connected', 'disconnected', 'rotation-rejected', 'rotation-connected'):
                 png = adb('exec-out', 'run-as', PACKAGE, 'cat', relative + '/' + name + '.png').stdout
                 if not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png) > 8_000_000:
                     raise Failure('direct_android_screenshot_invalid')
@@ -274,6 +360,7 @@ def run(args, env):
     finally:
         report['lastPhase'] = phase
         report['protocol'] = fixture.snapshot()
+        rotation['finalSnapshot'] = rotation_fixture.snapshot()
         if process is not None and process.poll() is None:
             try:
                 os.killpg(process.pid, signal.SIGTERM)
@@ -286,9 +373,11 @@ def run(args, env):
                 process.wait(timeout=10)
         cleanup['flutterToolStopped'] = process is None or process.poll() is not None
         try:
-            if reverse_added:
+            for reverse in reverses:
                 adb('reverse', '--remove', reverse)
-            cleanup['reverseRemoved'] = not reverse_added or not any(reverse in line.split()[1:2] for line in text('reverse', '--list').splitlines())
+            remaining = text('reverse', '--list').splitlines()
+            cleanup['reverseRemoved'] = not any(reverse in line.split()[1:2]
+                for reverse in reverses for line in remaining)
             if package_present():
                 adb('shell', 'am', 'force-stop', PACKAGE)
                 adb('uninstall', PACKAGE)
@@ -301,7 +390,9 @@ def run(args, env):
         except Failure:
             report['cleanupCode'] = 'direct_android_adb_cleanup_failed'
         fixture.close()
-        cleanup['fixtureClosed'] = fixture.snapshot()['connectionsClosed']
+        rotation_fixture.close()
+        cleanup['fixtureClosed'] = (fixture.snapshot()['connectionsClosed']
+                                    and rotation_fixture.snapshot()['connectionsClosed'])
         if not all(cleanup[key] for key in cleanup if key != 'rawLogsUploaded'):
             report['status'] = 'failed'
             report['cleanupCode'] = 'direct_android_cleanup_incomplete'

@@ -33,6 +33,7 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/direct-ssh-python"
           "$RUNNER_TEMP/direct-ssh-python/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0'
           HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_android.py' -v
+          HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_rotation_fixture.py' -v
       - name: Prepare pinned Flutter and Android build tools
         run: |
           python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/direct-ssh-sdk"
@@ -53,7 +54,7 @@ jobs:
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/direct-ssh-app"
           flutter analyze lib integration_test
-      - name: Drive homepage, fingerprint confirmation, input, echo and disconnect on an owned API35 AVD
+      - name: Drive homepage, host key rotation, ordinary SSH input and disconnect on an owned API35 AVD
         run: |
           export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
           AVD_EVIDENCE_DIR="$RUNNER_TEMP/direct-ssh-avd" bash validation/remote-harness/with-android-emulator.sh \

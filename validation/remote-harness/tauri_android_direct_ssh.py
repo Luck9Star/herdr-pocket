@@ -5,6 +5,7 @@ The fixture is local and synthetic. No IPC implementation is replaced and only
 bounded boolean evidence is written; credentials and terminal output stay local.
 """
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -70,7 +71,121 @@ def exercise_ui(browser, fixture, *, encrypted_key=False):
             'passwordCleared':True, **({'helperKeysExact':True} if not encrypted_key else {}), 'peer':{k:True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')}}
 
 
-def run_device(apk, fixture, *, encrypted_key=False):
+def exercise_key_change_ui(browser, fixture, *, evidence_dir=None):
+    """Same host:port A→B: refuse, review with no exits, cancel, re-probe, approve."""
+    browser.click('#host-open-remote')
+    browser.click('#add-ssh')
+    browser.fill('#ssh-host', '127.0.0.1')
+    browser.fill('#ssh-port', str(fixture.port))
+    browser.fill('#ssh-user', fixture.username)
+    browser.click('#ssh-probe')
+    wait_for(lambda: fixture.fingerprint in (browser.read('#ssh-fingerprint') or ''),
+             'direct_rotation_probe_missing', timeout=60)
+    browser.click('#ssh-review')
+    browser.fill('#ssh-password', fixture.password)
+    if browser.evaluate("document.querySelector('#ssh-review').checked") is not True:
+        raise GuiFailure('direct_rotation_review_invalidated')
+    browser.click('#ssh-form button[type=submit]')
+    wait_for(lambda: browser.evaluate("!document.querySelector('#ssh-key-change').hidden"),
+             'direct_rotation_review_missing', timeout=60)
+    review_text = (browser.read('#ssh-key-change') or '')
+    if (fixture.fingerprint not in review_text or fixture.rotated_fingerprint not in review_text):
+        raise GuiFailure('direct_rotation_review_content_missing')
+    if f'{fixture.username}@127.0.0.1:{fixture.port}' not in (browser.read('#ssh-key-change-target') or ''):
+        raise GuiFailure('direct_rotation_review_target_missing')
+    actions = browser.evaluate("[...document.querySelectorAll('#ssh-key-change button')].filter(b=>!b.hidden).map(b=>b.id)")
+    if sorted(actions or []) != ['ssh-key-cancel', 'ssh-key-recheck']:
+        raise GuiFailure('direct_rotation_actions_invalid')
+    # While the review is open every other navigation exit is removed entirely;
+    # a disabled leftover would still be an escape hatch for mouse and keyboard.
+    if browser.evaluate("!document.querySelector('.app-header').hidden || !document.querySelector('.route-tabs').hidden"):
+        raise GuiFailure('direct_rotation_navigation_available')
+    if evidence_dir is not None:
+        _save_review_screenshot(browser, evidence_dir)
+    fixture.wait_for_connections_closed(minimum=2, timeout=30)
+    evidence_2 = _rotation_stage(fixture, 2)
+    # Cancelling keeps the old trust: the review closes, navigation returns and
+    # no new connection is attempted.
+    browser.click('#ssh-key-cancel')
+    wait_for(lambda: browser.evaluate("document.querySelector('#ssh-key-change').hidden && !document.querySelector('.app-header').hidden && !document.querySelector('.route-tabs').hidden"),
+             'direct_rotation_cancel_navigation_missing', timeout=60)
+    cancelled = (browser.read('#ssh-fingerprint') or '')
+    if fixture.fingerprint not in cancelled or fixture.rotated_fingerprint in cancelled:
+        raise GuiFailure('direct_rotation_cancel_old_key_missing')
+    if browser.evaluate("document.querySelector('#ssh-review').checked") is not False:
+        raise GuiFailure('direct_rotation_cancel_review_stale')
+    if browser.evaluate("!document.querySelector('#ssh-review').disabled") is not False:
+        raise GuiFailure('direct_rotation_cancel_entries_live')
+    if browser.evaluate("!!document.querySelector('#ssh-password').value || !document.querySelector('#ssh-password').disabled"):
+        raise GuiFailure('direct_rotation_cancel_credentials_live')
+    if browser.evaluate("!document.querySelector('#ssh-form button[type=submit]').disabled") is not False:
+        raise GuiFailure('direct_rotation_cancel_submit_live')
+    if fixture.snapshot().get('connections') != 2:
+        raise GuiFailure('direct_rotation_cancel_reconnected')
+    # The explicit re-probe from the visible form presents the changed key for
+    # fresh human review; the hidden review buttons are never driven.
+    browser.click('#ssh-probe')
+    wait_for(lambda: fixture.rotated_fingerprint in (browser.read('#ssh-fingerprint') or ''),
+             'direct_rotation_reprobe_missing', timeout=60)
+    if fixture.fingerprint in (browser.read('#ssh-fingerprint') or ''):
+        raise GuiFailure('direct_rotation_reprobe_old_key_stale')
+    # Nothing is pre-approved: the confirmation box and credentials start
+    # unlocked-but-empty at best, and no stale review may survive the probe.
+    if browser.evaluate("document.querySelector('#ssh-review').checked") is not False:
+        raise GuiFailure('direct_rotation_reprobe_review_stale')
+    if browser.evaluate("!!document.querySelector('#ssh-password').value"):
+        raise GuiFailure('direct_rotation_reprobe_credentials_stale')
+    fixture.wait_for_connections_closed(minimum=3, timeout=30)
+    evidence_3 = _rotation_stage(fixture, 3)
+    browser.click('#ssh-review')
+    browser.fill('#ssh-password', fixture.password)
+    if browser.evaluate("document.querySelector('#ssh-review').checked") is not True:
+        raise GuiFailure('direct_rotation_review_invalidated')
+    browser.click('#ssh-form button[type=submit]')
+    wait_for(lambda: browser.evaluate("!document.querySelector('#ssh-live').hidden") and
+             '已连接' in (browser.read('#ssh-status') or ''), 'direct_rotation_ready_missing', timeout=60)
+    if browser.evaluate("!!document.querySelector('#ssh-password').value"):
+        raise GuiFailure('direct_rotation_credentials_retained')
+    browser.click('#ssh-focus')
+    wait_for(lambda: browser.evaluate("document.activeElement === document.querySelector('#ssh-terminal .xterm-helper-textarea')"),
+             'direct_rotation_terminal_focus_missing')
+    browser.call('Input.insertText', {'text': fixture.marker})
+    for kind in ('keyDown', 'keyUp'):
+        browser.call('Input.dispatchKeyEvent', {'type':kind,'key':'Enter','code':'Enter','windowsVirtualKeyCode':13})
+    wait_for(lambda: fixture.snapshot().get('markerReceived') is True,
+             'direct_rotation_peer_input_missing', timeout=60)
+    wait_for(lambda: browser.evaluate("[...document.querySelectorAll('#ssh-terminal .xterm-rows > div')].some(e=>e.textContent.includes(%s))" % json.dumps(fixture.echo_marker)),
+             'direct_rotation_terminal_echo_missing', timeout=60)
+    browser.click('#ssh-disconnect')
+    wait_for(lambda: '已断开' in (browser.read('#ssh-status') or ''), 'direct_rotation_disconnect_ui_missing', timeout=60)
+    fixture.wait_for_connections_closed(minimum=4, timeout=30)
+    evidence_4 = _rotation_stage(fixture, 4)
+    return {'probeReviewed':True,'refusalBlocked':True,'reviewNoExits':True,'cancelKeptTrust':True,
+            'reprobePresented':True,'connected':True,'terminalInputReceived':True,'terminalEchoRendered':True,
+            'disconnected':True,'passwordCleared':True,
+            'rotationEvidence':[evidence_2,evidence_3,evidence_4]}
+
+
+def _save_review_screenshot(browser, evidence_dir):
+    """Best-effort PNG of the refused review page; public fingerprints only."""
+    try:
+        shot = browser.call('Page.captureScreenshot', {'format': 'png'})
+        data = (shot or {}).get('data')
+        if data:
+            (Path(evidence_dir) / 's10-host-key-change-android.png').write_bytes(base64.b64decode(data))
+    except Exception:
+        pass
+
+
+def _rotation_stage(fixture, stage):
+    """The shared peer owns the sequence judgement; the driver only demands it."""
+    try:
+        return fixture.rotation_evidence(stage)
+    except ValueError:
+        raise GuiFailure('direct_rotation_evidence_invalid')
+
+
+def run_device(apk, fixture, *, encrypted_key=False, key_change=False, evidence_dir=None):
     if (os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('ANDROID_SERIAL') != SERIAL or
             not os.environ.get('GITHUB_REF','').startswith('refs/heads/codex/') or not apk.is_file()):
         raise GuiFailure('direct_unsafe_fixture')
@@ -103,7 +218,8 @@ def run_device(apk, fixture, *, encrypted_key=False):
             except GuiFailure: pass
             return False
         browser=wait_for(connect,'direct_webview_not_ready',timeout=60)
-        result=exercise_ui(browser,fixture,encrypted_key=encrypted_key)
+        result=(exercise_key_change_ui(browser,fixture,evidence_dir=evidence_dir) if key_change
+                else exercise_ui(browser,fixture,encrypted_key=encrypted_key))
     finally:
         if browser:
             try: browser.close()
@@ -159,6 +275,18 @@ def main():
         if fixture.snapshot().get('connectionsClosed') is not True:
             raise GuiFailure('direct_fixture_cleanup_failed')
         report['cleanup']['fixtureConnections']=True
+        with DirectSshFixture(rotate_after_probe=True, observe_helper_keys=True) as rotation:
+            report['phase']='host_key_rotation'
+            try:
+                rotation_result=run_device(args.apk,rotation,key_change=True,evidence_dir=output)
+                rotation_result['s10Screenshot']=(output/'s10-host-key-change-android.png').exists()
+            except GuiFailure:
+                report['probeEvidence'] = probe_evidence(rotation)
+                raise
+        if rotation.snapshot().get('connectionsClosed') is not True:
+            raise GuiFailure('direct_fixture_cleanup_failed')
+        rotation_result['cleanup']['fixtureConnections']=True
+        report['rotation']=rotation_result
         from tauri_encrypted_key_fixture import EncryptedKeyFixture
         report['phase']='encrypted_key'
         with EncryptedKeyFixture() as key_fixture:

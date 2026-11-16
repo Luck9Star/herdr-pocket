@@ -63,3 +63,41 @@ test('a late resize failure cannot invalidate a newly connected session',async()
   rejectResize(Error('late'));assert.equal(await pending,false);assert.equal(ssh.isReady(),true);
   assert.doesNotMatch(statuses.at(-1)[0],/尺寸更新失败/);
 });
+
+test('the pin survives failed and unconfirmed re-probes; only a reviewed session replaces it',async()=>{
+  let probed=key, probeError=null, channel, nextId=0; const statuses=[];
+  const invoke=async cmd=>{
+    if(cmd==='ssh_host_key_probe'){ if(probeError) throw probeError; return probed; }
+    if(cmd==='ssh_shell_open') return `s${++nextId}`;
+    return {};
+  };
+  const ssh=createDirectSsh({invoke,channelFactory:()=>channel={},onStatus:(...a)=>statuses.push(a),onData:()=>{}});
+  // The reviewed connection to A establishes the trust in effect.
+  await ssh.probe(target);
+  await ssh.open(target,{password:'x'},true);
+  channel.onmessage({sessionId:'s1',seq:1,kind:'ready'});
+  assert.equal(ssh.pinnedFingerprint(),'SHA256:test');
+  // The peer presents a changed key: the refusal blocks the target with A pinned.
+  channel.onmessage({sessionId:'s1',seq:2,kind:'host_key_change',presentedFingerprint:'SHA256:changed'});
+  assert.equal(ssh.isBlocked(),true);
+  assert.equal(ssh.pinnedFingerprint(),'SHA256:test');
+  // A failed re-probe keeps the old pin and the block.
+  probeError=Error('unreachable');
+  await assert.rejects(ssh.probe(target),/unreachable/);
+  assert.equal(ssh.isBlocked(),true);
+  assert.equal(ssh.pinnedFingerprint(),'SHA256:test');
+  // Seeing the re-probed key is not approving it: the pin survives the window
+  // between a successful probe and the user's own reviewed connection.
+  probeError=null; probed={...key,fingerprint:'SHA256:changed',publicKey:'ssh-ed25519 changed'};
+  assert.equal((await ssh.probe(target)).fingerprint,'SHA256:changed');
+  assert.equal(ssh.isBlocked(),false);
+  assert.equal(ssh.pinnedFingerprint(),'SHA256:test');
+  // A reviewed connection that actually succeeds is the only replacement.
+  await ssh.open(target,{password:'x'},true);
+  channel.onmessage({sessionId:'s2',seq:1,kind:'ready'});
+  assert.equal(ssh.pinnedFingerprint(),'SHA256:changed');
+  // Leaving the target clears the pin and the block entirely.
+  ssh.resetTargetBlock();
+  assert.equal(ssh.pinnedFingerprint(),null);
+  assert.equal(ssh.isBlocked(),false);
+});

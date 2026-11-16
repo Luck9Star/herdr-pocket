@@ -270,9 +270,12 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       TextButton(onPressed: () => current.textInput(item.value), child: Text(item.key)),
   ]));
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('普通 SSH'),
-      leading: (ModalRoute.of(context)?.impliesAppBarDismissal ?? false)
+  Widget build(BuildContext context) => PopScope<void>(
+    canPop: hostKeyChange == null,
+    child: Scaffold(
+      appBar: AppBar(title: const Text('普通 SSH'),
+      automaticallyImplyLeading: hostKeyChange == null,
+      leading: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false)
         ? MergeSemantics(child: Semantics(identifier: 'direct-back', label: '返回主机列表', child: const BackButton())) : null,
       actions: [if (busy || connected) TextButton(onPressed: () => stop(message: '已断开；未重放输入。'), child: const Text('断开'))]),
     body: SafeArea(child: hostKeyChange != null ? hostKeyChangeView() : connected ? Column(children: [
@@ -332,5 +335,6 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
         ],
       ))),
     ])),
+    ),
   );
 }

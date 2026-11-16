@@ -64,6 +64,11 @@ function setup() {
     "ssh-page-heading",
     "home-ssh",
     "host-home",
+    "host-open-remote",
+    "show-remote",
+    "nav-terminal",
+    "nav-network",
+    "nav-settings",
   ];
   const nodes = Object.fromEntries(ids.map((id) => [id, new Element()]));
   nodes["ssh-host"].value = "127.0.0.1";
@@ -84,6 +89,8 @@ function setup() {
       this[type] = fn;
     },
   };
+  const navGroups = { ".app-header": new Element(), ".route-tabs": new Element() };
+  document.querySelector = (selector) => navGroups[selector] || null;
   globalThis.document = document;
   globalThis.requestAnimationFrame = () => 1;
   globalThis.cancelAnimationFrame = () => {};
@@ -92,11 +99,15 @@ function setup() {
   let probed = REVIEWED;
   let presented = "SHA256:presentedLocalOnly";
   let accept = false;
+  let probeError = null;
   let session = 0;
   const calls = [];
   const invoke = async (cmd, args) => {
     calls.push({ cmd, args });
-    if (cmd === "ssh_host_key_probe") return { host: args.host, port: Number(args.port), ...probed };
+    if (cmd === "ssh_host_key_probe") {
+      if (probeError) throw probeError;
+      return { host: args.host, port: Number(args.port), ...probed };
+    }
     if (cmd === "ssh_shell_open") {
       const id = `s${++session}`;
       // The refused handshake reports the key it presented, then the refusal follows.
@@ -141,6 +152,7 @@ function setup() {
     nodes,
     calls,
     document,
+    navGroups,
     probe,
     connect,
     openCalls,
@@ -152,6 +164,9 @@ function setup() {
     },
     setAccept: (value) => {
       accept = value;
+    },
+    setProbeError: (error) => {
+      probeError = error;
     },
     restore: () => {
       globalThis.document = original.document;
@@ -338,6 +353,116 @@ test("re-probing after a refusal shows the changed key and allows a reviewed con
     await h.connect();
     assert.equal(h.openCalls().length, 2);
     assert.ok(h.openCalls()[1].args.config.expectedHostKey);
+  } finally {
+    h.restore();
+  }
+});
+
+test("the open change review removes every navigation exit and both exits restore it", async () => {
+  const h = setup();
+  try {
+    // An unrelated reason keeps a nav button disabled; the review must not
+    // overwrite that state, it removes the groups instead.
+    h.nodes["host-open-remote"].disabled = true;
+    h.nodes["nav-network"].disabled = true;
+    await h.probe();
+    await h.connect();
+    // While the review is open the header and the route tabs are gone entirely:
+    // only the two review actions remain reachable by mouse or keyboard.
+    assert.equal(h.nodes["ssh-key-change"].hidden, false);
+    assert.equal(h.navGroups[".app-header"].hidden, true);
+    assert.equal(h.navGroups[".route-tabs"].hidden, true);
+    // Cancelling is the first exit and restores the navigation groups as they were.
+    await h.nodes["ssh-key-cancel"].onclick();
+    assert.equal(h.nodes["ssh-key-change"].hidden, true);
+    assert.equal(h.navGroups[".app-header"].hidden, false);
+    assert.equal(h.navGroups[".route-tabs"].hidden, false);
+    assert.equal(h.nodes["host-open-remote"].disabled, true);
+    assert.equal(h.nodes["nav-network"].disabled, true);
+    // Back on the setup form a retry is refused before any session.
+    h.nodes["ssh-review"].checked = true;
+    h.nodes["ssh-password"].value = "temporary-local-secret";
+    await h.nodes["ssh-form"].onsubmit({ preventDefault() {} });
+    await flush();
+    assert.equal(h.openCalls().length, 1);
+    assert.match(h.nodes["ssh-status"].textContent, /主机指纹变化尚未重新核对/);
+    assert.equal(h.navGroups[".app-header"].hidden, false);
+    assert.equal(h.navGroups[".route-tabs"].hidden, false);
+    // A successful re-probe releases the target; the next refusal removes the
+    // groups again, and the explicit re-probe is the other exit that restores them.
+    await h.probe();
+    h.setProbed(CHANGED);
+    await h.connect();
+    assert.equal(h.openCalls().length, 2);
+    assert.equal(h.nodes["ssh-key-change"].hidden, false);
+    assert.equal(h.navGroups[".app-header"].hidden, true);
+    assert.equal(h.navGroups[".route-tabs"].hidden, true);
+    h.setProbed(CHANGED);
+    await h.nodes["ssh-key-recheck"].onclick();
+    await flush();
+    assert.equal(h.nodes["ssh-key-change"].hidden, true);
+    assert.equal(h.navGroups[".app-header"].hidden, false);
+    assert.equal(h.navGroups[".route-tabs"].hidden, false);
+  } finally {
+    h.restore();
+  }
+});
+
+test("navigation stays available on ordinary pages without a refusal", async () => {
+  const h = setup();
+  try {
+    h.setAccept(true);
+    await h.probe();
+    assert.equal(h.navGroups[".app-header"].hidden, false);
+    assert.equal(h.navGroups[".route-tabs"].hidden, false);
+    await h.connect();
+    assert.equal(h.nodes["ssh-live"].hidden, false);
+    assert.equal(h.navGroups[".app-header"].hidden, false);
+    assert.equal(h.navGroups[".route-tabs"].hidden, false);
+    await h.nodes["ssh-disconnect"].onclick();
+    await flush();
+    assert.equal(h.nodes["ssh-live"].hidden, true);
+    assert.equal(h.navGroups[".app-header"].hidden, false);
+    assert.equal(h.navGroups[".route-tabs"].hidden, false);
+  } finally {
+    h.restore();
+  }
+});
+
+test("a failed re-probe of the same target keeps the pin that was in effect", async () => {
+  const h = setup();
+  try {
+    await h.probe();
+    await h.connect();
+    assert.equal(h.nodes["ssh-key-change"].hidden, false);
+    assert.ok(h.nodes["ssh-key-change-old"].textContent.includes(REVIEWED.fingerprint));
+    // The re-probe itself fails (peer unreachable); the old trust must survive it.
+    h.setProbeError(new Error("probe_unreachable"));
+    await h.nodes["ssh-key-recheck"].onclick();
+    await flush();
+    assert.match(h.nodes["ssh-fingerprint"].textContent, /探测失败/);
+    assert.equal(h.nodes["ssh-key-change"].hidden, true);
+    // The target stays blocked on the old pin: a retry is refused before any
+    // session and the setup form keeps the navigation groups visible.
+    h.nodes["ssh-review"].checked = true;
+    h.nodes["ssh-password"].value = "temporary-local-secret";
+    await h.nodes["ssh-form"].onsubmit({ preventDefault() {} });
+    await flush();
+    assert.equal(h.openCalls().length, 1);
+    assert.match(h.nodes["ssh-status"].textContent, /主机指纹变化尚未重新核对/);
+    // The next successful re-probe of the same key releases the entries, and a
+    // reviewed connection that runs into the changed key again still presents
+    // the original reviewed fingerprint as the old trust.
+    h.setProbeError(null);
+    h.setProbed(REVIEWED);
+    await h.probe();
+    await h.connect();
+    assert.equal(h.openCalls().length, 2);
+    assert.equal(h.nodes["ssh-key-change"].hidden, false);
+    assert.ok(h.nodes["ssh-key-change-old"].textContent.includes(REVIEWED.fingerprint));
+    assert.ok(h.nodes["ssh-key-change-new"].textContent.includes("SHA256:presentedLocalOnly"));
+    assert.equal(h.navGroups[".app-header"].hidden, true);
+    assert.equal(h.navGroups[".route-tabs"].hidden, true);
   } finally {
     h.restore();
   }

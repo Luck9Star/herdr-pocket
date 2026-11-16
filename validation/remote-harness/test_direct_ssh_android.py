@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 from subprocess import CompletedProcess
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import unittest
 
 HERE = Path(__file__).resolve().parent
@@ -45,6 +45,58 @@ class GuardTests(unittest.TestCase):
         for change in ({'remoteEchoVisible': False}, {'physicalImeVerified': True}, {'password': 'must-not-export'}):
             with self.subTest(change=tuple(change)), self.assertRaises(runner.Failure):
                 runner.safe_result(json.dumps({**result, **change}))
+
+    def test_rotation_public_result_requires_every_boolean_and_rejects_extra_data(self):
+        result = {key: True for key in runner.ROTATION_PUBLIC_FIELDS}
+        result.update(schemaVersion=1, platform='android-api35-emulator', physicalImeVerified=False)
+        self.assertEqual(runner.safe_rotation_result(json.dumps(result)), result)
+        for change in ({'schemaVersion': True}, {'cancelKeepsOldTrust': False},
+                       {'remoteEchoVisible': 1}, {'physicalImeVerified': True},
+                       {'password': 'must-never-be-exported'}):
+            with self.subTest(change=tuple(change)), self.assertRaises(runner.Failure):
+                runner.safe_rotation_result(json.dumps({**result, **change}))
+        for raw in ('[]', '{', json.dumps({key: value for key, value in result.items()
+                                         if key != 'freshProbeMatchedIndependentB'})):
+            with self.subTest(raw_length=len(raw)), self.assertRaises(runner.Failure):
+                runner.safe_rotation_result(raw)
+
+    def test_rotation_stages_are_strict_ordered_and_use_independent_peer_evidence(self):
+        completed = {}
+        fixture = Mock()
+        fixture.wait_for_connections_closed.return_value = True
+        for phase, stage in runner.ROTATION_PHASES.items():
+            evidence = {'stage': stage, 'serverObserved': True}
+            fixture.rotation_evidence.return_value = evidence
+            value = {'phase': phase, 'stage': stage}
+            self.assertEqual(runner.rotation_checkpoint(fixture, value, completed), evidence)
+            fixture.wait_for_connections_closed.assert_called_with(stage)
+            fixture.rotation_evidence.assert_called_with(stage)
+            completed[phase] = evidence
+            fixture.reset_mock()
+            self.assertIsNone(runner.rotation_checkpoint(fixture, value, completed))
+            fixture.wait_for_connections_closed.assert_not_called()
+            fixture.rotation_evidence.assert_not_called()
+        for value in ({'phase': 'cancelled', 'stage': 2}, {'phase': 'complete', 'stage': 4},
+                      {'phase': 'rejected', 'stage': True}, {'phase': 'rejected', 'stage': 3},
+                      {'phase': 'rejected', 'stage': 2, 'password': 'secret'},
+                      {'phase': 'unknown', 'stage': 2}, []):
+            with self.subTest(value_type=type(value).__name__), self.assertRaises(runner.Failure):
+                runner.rotation_checkpoint(fixture, value, {})
+        fixture.wait_for_connections_closed.return_value = False
+        with self.assertRaisesRegex(runner.Failure, '^direct_android_rotation_connection_not_closed$'):
+            runner.rotation_checkpoint(fixture, {'phase': 'rejected', 'stage': 2}, {})
+        fixture.wait_for_connections_closed.return_value = True
+        fixture.rotation_evidence.side_effect = ValueError('must-never-be-exported')
+        with self.assertRaisesRegex(runner.Failure, '^direct_android_rotation_server_evidence_invalid$'):
+            runner.rotation_checkpoint(fixture, {'phase': 'rejected', 'stage': 2}, {})
+
+    def test_rotation_exchange_allows_only_fixed_public_filenames(self):
+        with patch.object(runner, 'package_present', return_value=False):
+            for name in ('rotation-stage.json', 'rotation-result.json'):
+                self.assertIsNone(runner.read_public_json('cache/herdr-direct-ssh-123/' + name))
+            for name in ('../defines.json', 'rotation-rejected-confirmed.json', 'rotation-secret.json'):
+                with self.subTest(name=name), self.assertRaises(runner.Failure):
+                    runner.read_public_json('cache/herdr-direct-ssh-123/' + name)
 
     def test_package_query_retries_only_known_transient_and_fails_closed(self):
         runner.PACKAGE_QUERY_RETRIES.clear()

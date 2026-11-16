@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'package:terminal_view/terminal_view.dart';
+import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'direct_ssh_widget_test.dart' show waitFor;
 import 'herdr_workflow_visual_test.dart' show loadVisualTokens, visualApp, save, size;
 
@@ -72,6 +73,14 @@ void expectReviewLocked(WidgetTester tester, {required bool locked}) {
   expect(tester.widget<OutlinedButton>(find.byKey(const ValueKey('direct-probe'))).onPressed, isNotNull);
 }
 
+Future<void> pushDirectSsh(WidgetTester tester, DesignTokens tokens) async {
+  await tester.pumpWidget(visualApp(tokens, Builder(builder: (context) => Scaffold(
+    body: Center(child: FilledButton(key: const ValueKey('s10-push-target'),
+      onPressed: () => Navigator.push<void>(context, MaterialPageRoute(builder: (_) => DirectSshPage(tokens: tokens))),
+      child: const Text('打开普通 SSH')))))));
+  await tester.tap(find.byKey(const ValueKey('s10-push-target')));
+  await tester.pumpAndSettle();
+}
 void main() {
   for (final width in [320.0, 390.0]) {
     testWidgets('S10 real rotation flow at $width', (tester) async {
@@ -79,7 +88,8 @@ void main() {
       addTearDown(() => tester.runAsync(peer1.stop));
       size(tester, Size(width, 844));
       final tokens = await loadVisualTokens(tester);
-      await tester.pumpWidget(visualApp(tokens, DirectSshPage(tokens: tokens)));
+      await pushDirectSsh(tester, tokens);
+      expect(find.bySemanticsIdentifier('direct-back'), findsOneWidget);
       await fillTarget(tester, peer1.port);
       await probeAndTrust(tester);
       final dynamic state = tester.state(find.byType(DirectSshPage));
@@ -105,6 +115,16 @@ void main() {
         await tester.ensureVisible(find.byKey(ValueKey(key))); await tester.pumpAndSettle();
         expect(find.byKey(ValueKey(key)).hitTestable(), findsOneWidget);
       }
+      // Pushed-route regression: the refusal page exposes no back exit at all.
+      if (find.bySemanticsIdentifier('direct-back').evaluate().isNotEmpty) {
+        debugPrint(find.bySemanticsIdentifier('direct-back').evaluate().single.toStringDeep());
+      }
+      expect(find.bySemanticsIdentifier('direct-back'), findsNothing);
+      expect(find.byType(BackButton), findsNothing);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(DirectSshPage), findsOneWidget);
+      expect(find.byKey(const ValueKey('direct-host-key-change')), findsOneWidget);
       await tester.pumpAndSettle();
       await save(tester, 'flutter-s10-${width.toInt()}');
       final evidence = <String, Object?>{
@@ -177,6 +197,13 @@ void main() {
       evidence['cancelAfterSecondChangeKeepsOldTrust'] = true;
       expect(peer2.sawAuthentication, isFalse);
       evidence['secondChangeSentNoAuthentication'] = true;
+      // Cancel restores the normal pushed-route back exit and navigation.
+      final back = find.bySemanticsIdentifier('direct-back');
+      expect(back, findsOneWidget);
+      expect(find.byType(BackButton), findsOneWidget);
+      await tester.tap(back); await tester.pumpAndSettle();
+      expect(find.byType(DirectSshPage), findsNothing);
+      expect(find.byKey(const ValueKey('s10-push-target')), findsOneWidget);
 
       final directory = Platform.environment['HERDR_WORKFLOW_CAPTURE'];
       if (directory != null) {

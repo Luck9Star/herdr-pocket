@@ -303,6 +303,24 @@ def public_transport_sample(session):
     return {'host':{key:value[key] for key in (*keys,'secondClientRegistered')},'relay':stats}
 
 
+def public_host_failure_counts(host):
+    result={}
+    for role in ('ts','et'):
+        try:
+            value=host_request(host,{'op':'audit','role':role,'expectedBase64':''},'host_audit')
+            if any(type(value.get(key)) is not int or not 0<=value[key]<=1000000 for key in ('acceptedSessions','capturedBytes')):
+                raise GuiFailure('dual_host_diagnostics_invalid')
+            sessions=value.get('sessions')
+            if not isinstance(sessions,list) or any(not isinstance(item,dict) or
+                    type(item.get('approvedDevice')) is not bool or type(item.get('active')) is not bool for item in sessions):
+                raise GuiFailure('dual_host_diagnostics_invalid')
+            result[role]={'available':True,'acceptedSessions':value['acceptedSessions'],'capturedBytes':value['capturedBytes'],
+                          'approvedSessionObserved':any(item['approvedDevice'] for item in sessions),
+                          'activeSessions':min(sum(item['active'] for item in sessions),1000000)}
+        except Exception:result[role]={'available':False}
+    return result
+
+
 def create_network(browser, role, material, report):
     report['stage']='network_'+role+'_form'
     browser.click_named('#network-panel', '新增网络配置', 'dual_add_network_missing')
@@ -369,6 +387,100 @@ def loopback_user_selection(raw):
     return {'linkHandlingAllowed':allowed,'onlyLoopbackSelected':hosts=={'127.0.0.1'}}
 
 
+TRUSTED_RESOLVERS={
+    'android/com.android.internal.app.ResolverActivity':'android',
+    'com.android.intentresolver/com.android.intentresolver.ResolverActivity':'com.android.intentresolver',
+}
+
+
+def query_view_components(url):
+    raw=adb('shell','cmd','package','query-activities','--brief','--user','0',
+            '-a','android.intent.action.VIEW','-d',url,check=False)
+    values={canonical_component(line.strip()) for line in raw.splitlines()}
+    values.discard(None)
+    return values
+
+
+def resolver_resource(node, name):
+    return node.get('resource-id') in {'android:id/'+name,'com.android.intentresolver:id/'+name}
+
+
+def native_point(node):
+    match=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',node.get('bounds',''))
+    if not match:return None
+    x1,y1,x2,y2=map(int,match.groups())
+    return ((x1+x2)//2,(y1+y2)//2) if x2>x1 and y2>y1 else None
+
+
+def resolver_receiver_action(nodes, foreground, row_tapped=False):
+    package=TRUSTED_RESOLVERS.get(foreground)
+    state={'foreground':component_kind(foreground),'trustedResolver':bool(package),'receiverLabels':0,
+           'receiverRows':0,'receiverSelected':False,'otherSelected':False,'defaultReceiverTitle':False,
+           'onceButtons':0,'onceEnabled':False,'alwaysButtons':0}
+    if not package:return None,None,state
+    owned=[node for node in nodes if node.get('package')==package]
+    parents={child:parent for parent in nodes for child in parent}
+    lists={node for node in owned if resolver_resource(node,'resolver_list')}
+    labels=[node for node in owned if resolver_resource(node,'text1') and node.get('text')=='双网测试授权']
+    state['receiverLabels']=min(len(labels),9)
+    rows=[]
+    for label in labels:
+        child=label
+        while child in parents:
+            if parents[child] in lists:
+                rows.append((child,label));break
+            child=parents[child]
+    state['receiverRows']=min(len(rows),9)
+    marked=lambda node:any(value.get('selected')=='true' or value.get('checked')=='true' for value in node.iter('node'))
+    selected=len(rows)==1 and marked(rows[0][0]);state['receiverSelected']=selected
+    row=rows[0][0] if len(rows)==1 else None
+    state['otherSelected']=any(marked(child) for group in lists for child in group if child is not row)
+    def in_list(node):
+        while node in parents:
+            node=parents[node]
+            if node in lists:return True
+        return False
+    titles=[node for node in owned if resolver_resource(node,'title') and not in_list(node) and '双网测试授权' in node.get('text','')]
+    state['defaultReceiverTitle']=len(titles)==1 and not labels
+    once=[node for node in owned if resolver_resource(node,'button_once') and node.get('class')=='android.widget.Button']
+    state['onceButtons']=min(len(once),9)
+    state['alwaysButtons']=min(sum(resolver_resource(node,'button_always') for node in owned),9)
+    allowed_once=lambda node:''.join(node.get('text','').split()).casefold() in {'justonce','仅此一次'}
+    state['onceEnabled']=len(once)==1 and once[0].get('enabled')=='true' and allowed_once(once[0])
+    if (selected or row_tapped or state['defaultReceiverTitle']) and not state['otherSelected'] and state['onceEnabled']:
+        if (len(rows)==1 and len(labels)==1) or state['defaultReceiverTitle']:
+            return 'once',native_point(once[0]),state
+    if not row_tapped and len(rows)==1 and len(labels)==1 and rows[0][1].get('enabled')=='true':
+        return 'row',native_point(rows[0][1]),state
+    return None,None,state
+
+
+def choose_auth_receiver(report, timeout=45):
+    handler=report.get('authHandler',{})
+    if handler.get('receiverCandidate') is not True or handler.get('unrelatedReceiverCandidate') is not False:
+        raise GuiFailure('dual_auth_candidate_scope_missing')
+    state={'rowTapSent':False,'onceTapSent':False};report.setdefault('authorization',{})['chooser']=state
+    def select():
+        try:
+            foreground=foreground_component();state['foreground']=component_kind(foreground)
+            if state['foreground']=='test_receiver':
+                state['receiverForeground']=True
+                return True
+            action,point,screen=resolver_receiver_action(native_ui_nodes(),foreground,state['rowTapSent'])
+        except GuiFailure:
+            state['readUnavailable']=True
+            return False
+        state['screen']=screen
+        key='rowTapSent' if action=='row' else 'onceTapSent'
+        if action is None or point is None or state[key]:return False
+        state[key]=True
+        try:adb('shell','input','tap',str(point[0]),str(point[1]))
+        except GuiFailure:raise GuiFailure('dual_authorization_resolver_tap_unconfirmed') from None
+        state['rowTapCompleted' if action=='row' else 'onceTapCompleted']=True
+        return False
+    wait_for(select,'dual_authorization_resolver_missing',timeout=timeout)
+
+
 def prepare_auth_receiver(port, report):
     # Only a freshly installed fixture on the disposable owned AVD is selected.
     assert_owned_avd()
@@ -383,7 +495,12 @@ def prepare_auth_receiver(port, report):
         raise GuiFailure('dual_auth_selection_unconfirmed')
     state['afterHandler']=component_kind(resolve_view_component(probe))
     state['unrelatedHandler']=component_kind(resolve_view_component('https://example.invalid/'))
-    if state['afterHandler']!='test_receiver' or state['unrelatedHandler']=='test_receiver':
+    candidates=query_view_components(probe);unrelated=query_view_components('https://example.invalid/')
+    receiver=AUTH_PACKAGE+'/'+AUTH_PACKAGE+'.AuthActivity'
+    state.update(candidateCount=min(len(candidates),9),receiverCandidate=receiver in candidates,
+                 unrelatedCandidateCount=min(len(unrelated),9),unrelatedReceiverCandidate=receiver in unrelated)
+    # Pre-query ranking can differ from the app's launch; actual foreground decides next.
+    if not state['receiverCandidate'] or state['unrelatedReceiverCandidate'] or state['unrelatedHandler']=='test_receiver':
         raise GuiFailure('dual_auth_handler_scope_mismatch')
 
 
@@ -436,6 +553,8 @@ def authorize_ts(browser, host, scope, port, report):
     authorization['stage']='product_system_open'
     confirm_click(browser, scope, '打开授权页面', '通过系统打开')
     authorization['productOpenConfirmed']=True
+    authorization['stage']='system_choice'
+    choose_auth_receiver(report)
     approve_auth_receiver(port,report)
     authorization['stage']='private_handoff'
     url = wait_for(lambda: adb('shell','run-as',AUTH_PACKAGE,'cat','files/approved-url',check=False),
@@ -718,9 +837,20 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['survivorExplicitlyStoppedAndClosed']=True
         report['stage']='complete'
     except Exception as error:
+        try:report['foregroundAtFailure']=component_kind(foreground_component())
+        except Exception:report['foregroundAtFailure']='unavailable'
+        if report.get('stage') in {'pairing','connect_and_input','post_stop','stop_survivor','complete'}:
+            report['hostCountsAtFailure']=public_host_failure_counts(control)
         try:report['transportAtFailure']=public_transport_sample(session)
         except Exception:report['transportAtFailureUnavailable']=True
         if browser:
+            try:report['controlCountsAtFailure']=browser.evaluate("""(()=>{const enabled=id=>{const e=document.getElementById(id);return !!e&&!e.matches(':disabled');};
+              const tabs=[...document.querySelectorAll('#view-tabs > button')];return {
+                tabButtons:Math.min(tabs.length,9),visibleTabButtons:Math.min(tabs.filter(e=>e.getClientRects().length).length,9),
+                pairCreateEnabled:enabled('pair-create'),pairAcceptEnabled:enabled('pair-accept'),connectEnabled:enabled('remote-connect'),
+                remotePageVisible:!!document.querySelector('#remote-page')&&!document.querySelector('#remote-page').hidden,
+                hostHomeVisible:!!document.querySelector('#host-home')&&!document.querySelector('#host-home').hidden}})()""")
+            except Exception:report['controlCountsAtFailureUnavailable']=True
             try:report['startResultObservation']=start_observer_snapshot(browser)
             except Exception:report['startResultObservationUnavailable']=True
             diagnostic=getattr(browser,'confirmDiagnostic',None)

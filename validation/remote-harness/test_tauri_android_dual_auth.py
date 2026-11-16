@@ -49,6 +49,8 @@ class AuthRoutingTests(unittest.TestCase):
                 if args[-1]=='https://example.invalid/':return 'com.android.chrome/com.google.android.apps.chrome.Main'
                 positive_queries+=1
                 return 'com.android.chrome/com.google.android.apps.chrome.Main' if positive_queries==1 else dual.AUTH_PACKAGE+'/.AuthActivity'
+            if args[:4]==('shell','cmd','package','query-activities'):
+                return 'com.android.chrome/com.google.android.apps.chrome.Main'+('\n'+COMPONENT if args[-1]!='https://example.invalid/' else '')
             if args[:3]==('shell','pm','get-app-links'):return LINKS
             if args[:3]==('shell','pm','set-app-links-user-selection'):return ''
             raise AssertionError(args)
@@ -118,11 +120,106 @@ class AuthConsentTests(unittest.TestCase):
             order.append('return-product');return ''
         def host(*args):order.append('host-authorize');return {'ok':True}
         with patch.object(dual,'wait_named'),patch.object(dual,'confirm_click',side_effect=confirm), \
+                patch.object(dual,'choose_auth_receiver',side_effect=lambda *args:order.append('system-choice')), \
                 patch.object(dual,'approve_auth_receiver',side_effect=approve),patch.object(dual,'adb',side_effect=adb), \
                 patch.object(dual,'host_request',side_effect=host),patch.object(dual,'wait_for',side_effect=once):
             dual.authorize_ts(browser,Mock(),'owned-scope',PORT,report)
-        self.assertEqual(order,['explicit-login','product-open','visible-consent','read-private-handoff','host-authorize','return-product'])
+        self.assertEqual(order,['explicit-login','product-open','system-choice','visible-consent','read-private-handoff','host-authorize','return-product'])
         self.assertNotIn('synthetic-token',json.dumps(report));self.assertNotIn(str(PORT),json.dumps(report))
         self.assertTrue(report['authorization']['hostAuthorizationConfirmed'])
+
+
+RESOLVER='android/com.android.internal.app.ResolverActivity'
+def resolver_nodes(selected=False,enabled=False,caption='Just once',package='android',default=False):
+    root=ET.Element('node',{'package':package})
+    def node(parent,resource,**extra):
+        attrs={'package':package,'resource-id':'android:id/'+resource,'enabled':'true','bounds':'[10,20][30,40]'}
+        attrs.update(extra);return ET.SubElement(parent,'node',attrs)
+    listing=node(root,'resolver_list')
+    if default:node(root,'title',text='Open with 双网测试授权')
+    else:
+        row=node(listing,'row',selected=str(selected).lower())
+        node(row,'text1',text='双网测试授权')
+    other=node(listing,'row');node(other,'text1',text='Chrome')
+    node(root,'button_once',text=caption,enabled=str(enabled).lower(),**{'class':'android.widget.Button'})
+    node(root,'button_always',text='Always',**{'class':'android.widget.Button'})
+    return list(root.iter('node'))
+def bounded(probe,code,**kwargs):
+    for _ in range(5):
+        if probe():return True
+    raise dual.GuiFailure(code)
+class ResolverTests(unittest.TestCase):
+    def test_api35_direct_and_resolver_queries_both_preserve_candidate_scope(self):
+        for resolved in (COMPONENT,RESOLVER):
+            report={}
+            with patch.object(dual,'assert_owned_avd'),patch.object(dual,'resolve_view_component',side_effect=[resolved,resolved,'com.android.chrome/.Main']), \
+                    patch.object(dual,'adb',side_effect=['0','',LINKS]), \
+                    patch.object(dual,'query_view_components',side_effect=[{COMPONENT,'com.android.chrome/.Main'}, {'com.android.chrome/.Main'}]):
+                dual.prepare_auth_receiver(PORT,report)
+            self.assertTrue(report['authHandler']['receiverCandidate'])
+            self.assertFalse(report['authHandler']['unrelatedReceiverCandidate'])
+        for candidates in ((set(),set()),({COMPONENT},{COMPONENT})):
+            with patch.object(dual,'assert_owned_avd'),patch.object(dual,'resolve_view_component',return_value=RESOLVER), \
+                    patch.object(dual,'adb',side_effect=['0','',LINKS]),patch.object(dual,'query_view_components',side_effect=candidates):
+                with self.assertRaisesRegex(dual.GuiFailure,'^dual_auth_handler_scope_mismatch$'):dual.prepare_auth_receiver(PORT,{})
+    def test_exact_resolver_rows_then_once_and_already_selected_default(self):
+        self.assertEqual(dual.resolver_receiver_action(resolver_nodes(),RESOLVER)[0],'row')
+        for caption in ('Just once','JUST ONCE','仅此一次'):
+            self.assertEqual(dual.resolver_receiver_action(resolver_nodes(True,True,caption),RESOLVER)[0],'once')
+        self.assertEqual(dual.resolver_receiver_action(resolver_nodes(enabled=True),RESOLVER,True)[0],'once')
+        self.assertEqual(dual.resolver_receiver_action(resolver_nodes(enabled=True,default=True),RESOLVER)[0],'once')
+        nodes=resolver_nodes(True,True);action,point,state=dual.resolver_receiver_action(nodes,RESOLVER)
+        self.assertEqual(point,(20,30));self.assertEqual(state['alwaysButtons'],1)
+        self.assertNotIn('双网',json.dumps(state));self.assertNotIn('android',json.dumps(state))
+    def test_foreign_duplicate_wrong_resource_and_always_are_not_clicked(self):
+        cases=[(resolver_nodes(True,True),'other.app/.ResolverActivity',False),
+               (resolver_nodes(True,True,package='other.app'),RESOLVER,False)]
+        nodes=resolver_nodes(True,True);label=next(n for n in nodes if n.get('text')=='双网测试授权')
+        label.set('resource-id','android:id/wrong');cases.append((nodes,RESOLVER,True))
+        nodes=resolver_nodes(True,True);row=next(n for n in nodes if n.get('resource-id')=='android:id/row')
+        row.append(copy.deepcopy(next(n for n in nodes if n.get('text')=='双网测试授权')))
+        nodes=list(nodes[0].iter('node'));cases.append((nodes,RESOLVER,True))
+        nodes=resolver_nodes(True,True)
+        for n in nodes:
+            if n.get('resource-id')=='android:id/button_once':n.set('resource-id','android:id/button_always')
+        cases.append((nodes,RESOLVER,True))
+        nodes=resolver_nodes(True,True);rows=[n for n in nodes if n.get('resource-id')=='android:id/row'];rows[1].set('selected','true')
+        cases.append((nodes,RESOLVER,True))
+        for nodes,foreground,tapped in cases:
+            with self.subTest(foreground=foreground):self.assertIsNone(dual.resolver_receiver_action(nodes,foreground,tapped)[0])
+    def test_actual_foreground_supports_two_step_direct_row_and_no_chooser(self):
+        for fore,frames,taps in (([RESOLVER,RESOLVER,COMPONENT],[resolver_nodes(),resolver_nodes(True,True)],2),
+                                ([RESOLVER,COMPONENT],[resolver_nodes()],1),([COMPONENT],[],0),
+                                ([RESOLVER,COMPONENT],[resolver_nodes(True,True)],1)):
+            report={'authHandler':{'receiverCandidate':True,'unrelatedReceiverCandidate':False}}
+            with patch.object(dual,'foreground_component',side_effect=fore),patch.object(dual,'native_ui_nodes',side_effect=frames), \
+                    patch.object(dual,'wait_for',side_effect=bounded),patch.object(dual,'adb') as adb:
+                dual.choose_auth_receiver(report)
+            self.assertEqual(adb.call_count,taps)
+            self.assertTrue(report['authorization']['chooser']['receiverForeground'])
+    def test_unknown_tap_or_still_visible_chooser_never_replays(self):
+        for failed in (False,True):
+            report={'authHandler':{'receiverCandidate':True,'unrelatedReceiverCandidate':False}}
+            with patch.object(dual,'foreground_component',return_value=RESOLVER),patch.object(dual,'native_ui_nodes',return_value=resolver_nodes()), \
+                    patch.object(dual,'wait_for',side_effect=bounded),patch.object(dual,'adb',side_effect=dual.GuiFailure('private') if failed else None) as adb:
+                expected='dual_authorization_resolver_tap_unconfirmed' if failed else 'dual_authorization_resolver_missing'
+                with self.assertRaisesRegex(dual.GuiFailure,'^'+expected+'$'):dual.choose_auth_receiver(report)
+            self.assertEqual(adb.call_count,1)
+            self.assertNotIn('private',json.dumps(report))
+    def test_default_title_must_be_outside_list_and_scope_is_required(self):
+        nodes=resolver_nodes(enabled=True,default=True);title=next(n for n in nodes if n.get('resource-id')=='android:id/title')
+        nodes[0].remove(title);next(n for n in nodes if n.get('resource-id')=='android:id/resolver_list').append(title)
+        self.assertIsNone(dual.resolver_receiver_action(list(nodes[0].iter('node')),RESOLVER)[0])
+        with patch.object(dual,'adb') as adb:
+            with self.assertRaisesRegex(dual.GuiFailure,'^dual_auth_candidate_scope_missing$'):dual.choose_auth_receiver({})
+        adb.assert_not_called()
+    def test_failure_host_counts_exclude_private_session_data_and_unknown_is_not_zero(self):
+        value={'acceptedSessions':1,'capturedBytes':12,'private':'secret',
+               'sessions':[{'approvedDevice':True,'active':True,'fingerprint':'private-key'}]}
+        with patch.object(dual,'host_request',return_value=value):result=dual.public_host_failure_counts(Mock())
+        self.assertEqual(result['ts'],{'available':True,'acceptedSessions':1,'capturedBytes':12,'approvedSessionObserved':True,'activeSessions':1})
+        self.assertNotIn('private',json.dumps(result));self.assertNotIn('secret',json.dumps(result))
+        with patch.object(dual,'host_request',return_value={'acceptedSessions':True}):result=dual.public_host_failure_counts(Mock())
+        self.assertEqual(result,{'ts':{'available':False},'et':{'available':False}})
 
 if __name__=='__main__':unittest.main()

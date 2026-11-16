@@ -236,17 +236,45 @@ class DualOverlayUiSteps {
     await existing.tap(tester, destinations.at(index));
   }
 
+  Future<void> showNetworkControls(String networkId) async {
+    final page = find.byType(NetworkProfilesPage);
+    await existing.until(tester, () => page.evaluate().length == 1);
+    final list = find.descendant(of: page, matching: find.byType(ListView)).first;
+    final scrollable = find.descendant(of: list, matching: find.byType(Scrollable)).first;
+    final tile = find.byKey(PageStorageKey('network-details-$networkId'));
+    if (tile.evaluate().isEmpty) {
+      for (var i = 0; i < 30 && tester.state<ScrollableState>(scrollable).position.pixels > 0; i++) {
+        await tester.drag(scrollable, const Offset(0, 500)); await tester.pump();
+      }
+      if (tile.evaluate().isEmpty) {
+        await tester.scrollUntilVisible(tile, 300, scrollable: scrollable, maxScrolls: 30);
+        await tester.pump();
+      }
+    }
+    await existing.until(tester, () => tile.evaluate().length == 1);
+    final header = find.descendant(of: tile, matching: find.byType(ListTile)).first;
+    await existing.until(tester, () => header.evaluate().length == 1);
+    await tester.ensureVisible(header); await tester.pump();
+    final controller = ExpansibleController.of(tester.element(header));
+    if (!controller.isExpanded) {
+      await existing.tapStablePointer(tester, header);
+    }
+    await existing.until(tester, () => controller.isExpanded &&
+      find.byKey(ValueKey('network-node-refresh-$networkId')).evaluate().length == 1);
+    await tester.pump(const Duration(milliseconds: 350));
+  }
+
   Future<void> stopNetwork(String role, String networkId) async {
     await stage('${role}_stop_network');
     await navigation(2);
     await existing.until(tester, () => find.byType(NetworkProfilesPage).evaluate().length == 1);
-    if (find.byKey(ValueKey('network-node-refresh-$networkId')).evaluate().isEmpty) {
-      await existing.tap(tester, find.byKey(PageStorageKey('network-details-$networkId')));
-    }
-    await existing.tapKey(tester, 'network-node-refresh-$networkId');
+    await showNetworkControls(networkId);
+    final refresh = find.byKey(ValueKey('network-node-refresh-$networkId'));
+    await existing.until(tester, () => refresh.evaluate().length == 1 && tester.widget<TextButton>(refresh).onPressed != null);
+    await existing.tapStablePointer(tester, refresh);
     final stop = find.byKey(ValueKey('network-node-stop-$networkId'));
     await existing.until(tester, () => stop.evaluate().length == 1 && tester.widget<TextButton>(stop).onPressed != null);
-    await existing.tap(tester, stop);
+    await existing.tapStablePointer(tester, stop);
     final status = find.byKey(ValueKey('network-node-status-$networkId'));
     await existing.until(tester, () => status.evaluate().length == 1 &&
       (tester.widget<Text>(status).data ?? '').contains('已停止'));

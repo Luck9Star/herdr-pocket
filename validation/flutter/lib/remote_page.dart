@@ -75,7 +75,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     : widget.adapter ?? RemoteReadOnlyAdapter(inputJournal:const PlatformRemoteInputJournal());
   VoidCallback? releaseTransport;
   Future<void>? tabClosing;
-  Future<void> closeForTab() => tabClosing ??= stop('对应网络正在停止 · 已封住输入，正在清退连接');
+  Future<void> closeForTab() {
+    if (tabClosing != null) return tabClosing!;
+    adapter.requestGracefulClose();
+    return tabClosing = stop('对应网络正在停止 · 已封住输入，正在清退连接');
+  }
   final fields = <String,TextEditingController>{
     for (final name in ['host','port','username','expectedHostKey','privateKeyPem','socketPath','herdrPath','session','paneId'])
       name:TextEditingController(text:name == 'port' ? '22' : ''),

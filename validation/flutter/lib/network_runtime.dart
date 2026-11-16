@@ -12,7 +12,7 @@ import 'remote_adapter.dart';
 import 'remote_input.dart';
 import 'routed_ssh_socket.dart';
 
-export 'routed_ssh_socket.dart' show RoutedSSHSocket, RetiringSSHSocket;
+export 'routed_ssh_socket.dart' show RoutedSSHSocket, RetiringSSHSocket, GracefulSSHSocket;
 
 /// Public binding only; identity material remains in the native vault.
 class NetworkNodeBinding {
@@ -276,7 +276,7 @@ class NativeNetworkRuntime {
 }
 
 /// Actual route accompanies the stream; callers must not fabricate it from GUI state.
-class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket, RetiringSSHSocket {
+class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket, RetiringSSHSocket, GracefulSSHSocket {
   NetworkSSHSocket(this.runtime,this.id,this.actualRoute) {
     _incoming = StreamController<Uint8List>(sync:true,onListen:_read,onResume:_read,onCancel:destroy);
     _output = _NetworkSink(this);
@@ -289,6 +289,9 @@ class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket, RetiringSSHSocket 
   late final _NetworkSink _output;
   final _done = Completer<void>();
   final _retired = Completer<bool>();
+  final _peerEof = Completer<void>();
+  Future<bool>? _gracefulClosing;
+  bool _sealed = false;
   @override Future<bool> get retired => _retired.future;
   final Queue<Uint8List> _writes = Queue();
   int _queued = 0;
@@ -313,7 +316,7 @@ class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket, RetiringSSHSocket 
           }
           final bytes = reply['bytes'] as Uint8List;
           if (bytes.isNotEmpty) _incoming.add(bytes);
-          if (reply['eof'] == true) { destroy(); break; }
+          if (reply['eof'] == true) { if (!_peerEof.isCompleted) _peerEof.complete(); destroy(); break; }
           if (bytes.isEmpty) await Future<void>.delayed(const Duration(milliseconds:25));
         }
       } catch (_) { _fail(); }
@@ -321,6 +324,7 @@ class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket, RetiringSSHSocket 
     }());
   }
   void _add(List<int> bytes) {
+    if (_sealed) throw const RemoteFailure('network_write_unavailable');
     if (_closed || _output.closed || bytes.length > 65536 - _queued) { _fail(); throw const RemoteFailure('network_write_unavailable'); }
     if (bytes.isEmpty) return;
     final copy = Uint8List.fromList(bytes); _writes.add(copy); _queued += copy.length;
@@ -365,6 +369,26 @@ class NetworkSSHSocket implements SSHSocket, RoutedSSHSocket, RetiringSSHSocket 
     unawaited(closing.then<void>((_) { _retired.complete(true); },
       onError:(Object _,StackTrace __) { _retired.complete(false); }));
     if (!_done.isCompleted) { if (error) { _done.completeError(const RemoteFailure('network_transport_failed')); } else { _done.complete(); } }
+  }
+  @override Future<bool> finishGracefully({Duration budget = const Duration(seconds:1)}) =>
+    _gracefulClosing ??= _finishGracefully(budget);
+  Future<bool> _finishGracefully(Duration budget) async {
+    if (_closed) return _peerEof.isCompleted;
+    _sealed = true; // New writes cannot join the bytes already being retired.
+    var peerClosed = false;
+    try {
+      await (() async {
+        await flush();
+        if (_closed) throw const RemoteFailure('network_transport_failed');
+        final reply = await _call('streamShutdown');
+        if (reply is! Map || reply.length != 1 || reply['shutdown'] != true) throw const RemoteFailure('network_write_unknown');
+        if (_closed) throw const RemoteFailure('network_transport_failed');
+        await _peerEof.future;
+        peerClosed = true;
+      })().timeout(budget);
+    } catch (_) { /* Unknown close is never retried; force retirement below. */ }
+    finally { _finish(); }
+    return peerClosed;
   }
   @override void destroy() => _finish();
   @override Future<void> close() async { _finish(); return done; }

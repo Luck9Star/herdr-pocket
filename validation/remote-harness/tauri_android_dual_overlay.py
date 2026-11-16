@@ -376,6 +376,19 @@ def stop_button_probe(scope, mode, epoch=None):
       %s})()""" % (json.dumps(scope), acquire if mode=='acquire' else verify)
 
 
+STOP_ERROR_CODES=frozenset({
+    'dual_confirmation_already_pending','dual_stop_expected_target_invalid','dual_stop_button_unstable',
+    'dual_stop_confirmation_not_observed','dual_stop_rejected','dual_stop_replayed','dual_stop_target_mismatch',
+    'dual_stop_target_not_distinct','dual_stop_invocation_unverified','dual_stop_observer_unavailable',
+    'dual_stop_observer_invalid','dual_stop_observer_uninstall_failed','dual_stop_observer_regressed',
+    'dual_stop_callback_duplication'})
+
+
+def stop_public_error_code(code):
+    """Only known stop error codes are publishable; any other string, however shaped, is unexpected."""
+    return code if isinstance(code,str) and code in STOP_ERROR_CODES else 'unexpected_error'
+
+
 def stop_node_once(browser, scope, role, profile_title, host_name, expected_profile_id,
                    *, stage, attempts, distinct_ids=(), confirm_timeout=45):
     """Stop one overlay node by one real CDP hardware Enter on a twice-verified stable button.
@@ -445,6 +458,10 @@ def stop_node_once(browser, scope, role, profile_title, host_name, expected_prof
             resolved=int(current.get('resolved') or 0)-resolved_before
             rejected=int(current.get('rejected') or 0)-rejected_before
             attempt['sentDelta']=sent; attempt['resolvedDelta']=resolved; attempt['rejectedDelta']=rejected
+            if sent<0 or resolved<0 or rejected<0:
+                raise GuiFailure('dual_stop_observer_regressed')
+            if resolved+rejected>sent:
+                raise GuiFailure('dual_stop_callback_duplication')
             if rejected>0:
                 raise GuiFailure('dual_stop_rejected')
             if sent>1:
@@ -466,8 +483,7 @@ def stop_node_once(browser, scope, role, profile_title, host_name, expected_prof
             raise GuiFailure('dual_stop_invocation_unverified')
         return profile_id
     except Exception as error:
-        code=str(error)
-        attempt['errorCode']=code if re.fullmatch(r'[a-z_]{1,50}',code) else 'unexpected_error'
+        attempt['errorCode']=stop_public_error_code(str(error))
         raise
 
 

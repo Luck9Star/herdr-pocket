@@ -1,5 +1,6 @@
 import json
 import unittest
+import unittest.mock
 
 import tauri_android_dual_overlay as dual
 from paired_gui import GuiFailure
@@ -190,7 +191,49 @@ class StopNodeOnceTests(unittest.TestCase):
                     self.assertTrue(value is None or value.replace('_', 'a').isalpha() and value.replace('_', '').islower())
 
 
-class StopObserverTests(unittest.TestCase):
+    def test_unknown_error_code_is_never_published(self):
+        browser = FakeBrowser([ACQUIRE, VERIFY], [dict(BEFORE)])
+        attempts = []
+        with unittest.mock.patch.object(dual, 'stop_observer_snapshot',
+                                        side_effect=[dict(BEFORE), GuiFailure('private_host_token')]):
+            with self.assertRaises(GuiFailure):
+                self.stop(browser, attempts=attempts)
+        self.assertEqual(attempts[0]['errorCode'], 'unexpected_error',
+                         'unknown lowercase strings must never reach the public report')
+
+    def test_negative_counter_regression_fails_closed(self):
+        previous = {'sent': 1, 'resolved': 1, 'rejected': 0, 'cmdId': 'a' * 32, 'profileId': 'a' * 32}
+        regressed = {'sent': 0, 'resolved': 1, 'rejected': 0, 'cmdId': None, 'profileId': None}
+        browser = FakeBrowser([ACQUIRE, VERIFY], [previous, regressed])
+        attempts = []
+        with self.assertRaises(GuiFailure) as caught:
+            self.stop(browser, attempts=attempts)
+        self.assertEqual(str(caught.exception), 'dual_stop_observer_regressed')
+        self.assertEqual(attempts[0]['errorCode'], 'dual_stop_observer_regressed')
+        self.assertEqual(attempts[0]['sentDelta'], -1)
+
+    def test_duplicate_callback_fails_closed(self):
+        duplicated = {'sent': 1, 'resolved': 1, 'rejected': 1, 'cmdId': 'a' * 32, 'profileId': 'a' * 32}
+        browser = FakeBrowser([ACQUIRE, VERIFY], [dict(BEFORE), duplicated])
+        with self.assertRaises(GuiFailure) as caught:
+            self.stop(browser)
+        self.assertEqual(str(caught.exception), 'dual_stop_callback_duplication')
+
+
+class StopErrorCodeTests(unittest.TestCase):
+    def test_enum_contains_exactly_the_stop_path_codes(self):
+        self.assertEqual(dual.STOP_ERROR_CODES, frozenset({
+            'dual_confirmation_already_pending', 'dual_stop_expected_target_invalid', 'dual_stop_button_unstable',
+            'dual_stop_confirmation_not_observed', 'dual_stop_rejected', 'dual_stop_replayed',
+            'dual_stop_target_mismatch', 'dual_stop_target_not_distinct', 'dual_stop_invocation_unverified',
+            'dual_stop_observer_unavailable', 'dual_stop_observer_invalid', 'dual_stop_observer_uninstall_failed',
+            'dual_stop_observer_regressed', 'dual_stop_callback_duplication'}))
+
+    def test_mapping_keeps_known_and_rejects_everything_else(self):
+        for code in dual.STOP_ERROR_CODES:
+            self.assertEqual(dual.stop_public_error_code(code), code)
+        for code in ('private_host_token', 'dual_stop_new_unknown', 'Error: boom', '', None, 7, 'DUAL_STOP_REJECTED'):
+            self.assertEqual(dual.stop_public_error_code(code), 'unexpected_error')
     def test_snapshot_rejects_invalid_shapes(self):
         class Browser:
             def __init__(self, value):

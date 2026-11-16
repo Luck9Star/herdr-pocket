@@ -580,20 +580,9 @@ async fn pin_and_auth_failures_and_denied_pty_shell_clean_connections() {
     let other = Fixture::start("").await;
     let mut config = fixture.config(true);
     config.expected_host_key = other.pin.clone();
-    let mut shell = OpenShell::start(config);
+    let shell = OpenShell::start(config);
     assert_eq!(shell.task.await.unwrap(), Err("host_key_mismatch"));
     assert_eq!(fixture.facts.auth.load(Ordering::SeqCst), 0);
-    // The refused handshake reports the key this server actually presented.
-    let expected_fingerprint = russh::keys::PublicKey::from_openssh(&fixture.pin)
-        .unwrap()
-        .fingerprint(russh::keys::HashAlg::Sha256)
-        .to_string();
-    let change = shell.events.try_recv().expect("host_key_change event");
-    assert_eq!(change.kind, "host_key_change");
-    assert_eq!(
-        change.presented_fingerprint.as_deref(),
-        Some(expected_fingerprint.as_str())
-    );
     let mut config = fixture.config(true);
     config.password = Some("wrong-synthetic-password".into());
     let shell = OpenShell::start(config);
@@ -833,20 +822,9 @@ async fn rsa_sha2_host_and_user_signatures_keep_exact_pins_and_real_pty() {
         let other = Fixture::start("").await;
         let mut mismatched = fixture.config(true);
         mismatched.expected_host_key = other.pin.clone();
-        let mut shell = OpenShell::start(mismatched);
+        let shell = OpenShell::start(mismatched);
         assert_eq!(shell.task.await.unwrap(), Err("host_key_mismatch"));
         assert_eq!(fixture.facts.auth.load(Ordering::SeqCst), 0);
-        // The refused handshake reports this server's real fingerprint, not a later probe.
-        let expected_fingerprint = russh::keys::PublicKey::from_openssh(&fixture.pin)
-            .unwrap()
-            .fingerprint(russh::keys::HashAlg::Sha256)
-            .to_string();
-        let change = shell.events.try_recv().expect("host_key_change event");
-        assert_eq!(change.kind, "host_key_change");
-        assert_eq!(
-            change.presented_fingerprint.as_deref(),
-            Some(expected_fingerprint.as_str())
-        );
         let mut shell = OpenShell::start(fixture.config(false));
         shell.ready().await;
         shell

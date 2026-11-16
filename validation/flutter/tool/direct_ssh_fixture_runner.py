@@ -40,9 +40,6 @@ def main():
                 'HERDR_DIRECT_SSH_KEY_PATH': str(key)}
             subprocess.run(['flutter', 'test', 'test/direct_ssh_widget_test.dart', '--reporter', 'expanded'],
                 cwd=args.project, env=env, check=True)
-            # S10 spawns an independent rotation peer per case; it never shares these ports.
-            subprocess.run(['flutter', 'test', 'test/direct_ssh_host_key_change_widget_test.dart', '--reporter', 'expanded'],
-                cwd=args.project, env=dict(env, HERDR_FIXTURE_PYTHON=str(temp / 'venv/bin/python')), check=True)
             flutter_passed = True
         finally:
             logs = []

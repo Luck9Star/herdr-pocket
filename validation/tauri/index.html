@@ -29,7 +29,7 @@
 <div id="host-list" class="host-list" aria-label="已存主机"></div><section id="host-empty" class="host-empty" hidden><h3>还没有主机</h3><p>添加主机后，在这里查看会话和任务状态。</p><button id="host-empty-add" type="button" class="primary">添加主机</button></section></div>
 <section id="home-add" hidden><h2>添加连接</h2><p>选择连接方式。</p><div class="ssh-options"><button id="add-herdr" type="button">herdr 配对 / 手动连接</button><button id="add-ssh" type="button">普通 SSH 终端</button></div></section>
 <section id="home-ssh" hidden>
-  <h2 id="ssh-page-heading">普通 SSH 终端</h2>
+  <h2>普通 SSH 终端</h2>
   <div id="ssh-setup"><p>连接普通远程 shell；无需 herdr。先探测指纹并通过可信渠道独立核对，再填写认证方式。</p>
   <form id="ssh-form" autocomplete="off">
     <div class="remote-fields-grid">
@@ -48,24 +48,6 @@
     <div class="ssh-options"><button type="submit" class="primary">连接 / 重新连接</button><button id="ssh-cancel" type="button">取消连接</button></div>
   </form></div>
   <p id="ssh-status" role="status" aria-live="polite">尚未连接。</p>
-  <section id="ssh-key-change" hidden aria-label="主机指纹变化审查">
-    <h2 class="ssh-key-change-heading">主机指纹发生变化</h2>
-    <div class="ssh-key-change-warning">
-      <p class="ssh-key-change-warning-title">已阻止连接与输入</p>
-      <p class="ssh-key-change-warning-detail">实际 SSH host key 与本次已核对的指纹不同。不会自动接受新指纹，也不会继续认证或发送输入。</p>
-    </div>
-    <div class="ssh-key-change-card">
-      <p class="ssh-key-change-title">通过独立可信渠道核验</p>
-      <p id="ssh-key-change-old"></p>
-      <p id="ssh-key-change-new"></p>
-      <p id="ssh-key-change-target"></p>
-      <p id="ssh-key-change-note">请联系主机操作者确认变更原因。</p>
-    </div>
-    <div class="ssh-key-change-actions">
-      <button id="ssh-key-recheck" type="button" class="primary">重新核对主机指纹</button>
-      <button id="ssh-key-cancel" type="button" class="secondary">取消连接，保留旧信任</button>
-    </div>
-  </section>
   <section id="ssh-live" hidden aria-label="普通 SSH 会话">
     <p id="ssh-target" class="ssh-target"></p>
     <div class="term-scroll ssh-scroll"><div id="ssh-terminal" class="terminal-host"></div></div>

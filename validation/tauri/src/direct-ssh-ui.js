@@ -41,15 +41,13 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     apply: (cols, rows) => terminal.resize(cols, rows),
   });
   const controller = createDirectSsh({invoke, channelFactory,
-    onStatus: (message, ready, reason, details) => {
+    onStatus: (message, ready, reason) => {
       $('ssh-status').textContent = message;
       $('ssh-focus').disabled = !ready;
+      $('ssh-setup').hidden = ready;
+      $('ssh-live').hidden = !ready;
       renderKeys(ready);
-      const freshRefusal = reason === 'host_key_mismatch' || details?.blocked === true;
-      if (freshRefusal) { $('ssh-review').checked = false; renderKeyChange(details); }
-      else renderKeyChange(null);
-      applyView(ready, freshRefusal);
-      applyLock(ready, freshRefusal);
+      if (reason === 'host_key_mismatch') $('ssh-review').checked = false;
       if (ready) { const t = target(); $('ssh-target').textContent = `${t.username}@${t.host}:${t.port} · SSH 已连接`; resizer.start(); requestAnimationFrame(resizer.request); }
       else resizer.stop();
     },
@@ -57,44 +55,6 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   });
   const target = () => ({host: $('ssh-host').value.trim(), port: Number($('ssh-port').value), username: $('ssh-user').value.trim()});
   function clearSecrets() { for (const id of ['ssh-password','ssh-key','ssh-passphrase']) $(id).value = ''; }
-  // One place decides what the user sees: the terminal, the blocked review or the setup form.
-  function applyView(ready, blocked) {
-    $('ssh-setup').hidden = ready || blocked;
-    $('ssh-live').hidden = !ready;
-    $('ssh-key-change').hidden = !blocked;
-    // While the change review is open, its own heading is the first heading and the
-    // generic status line would repeat the same failure.
-    $('ssh-page-heading').hidden = blocked;
-    $('ssh-status').hidden = blocked;
-  }
-  // While a refused handshake is unresolved every credential entry stays locked.
-  // After the same target is probed again, the user's own confirmation of the
-  // probed fingerprint releases them; nothing else does.
-  function applyLock(ready, blockedView) {
-    setEntryLock(ready || blockedView || controller.isBlocked() || !$('ssh-review').checked);
-    $('ssh-review').disabled = ready || controller.isBlocked();
-  }
-  function setEntryLock(locked) {
-    for (const id of ['ssh-password','ssh-key','ssh-passphrase','ssh-auth-method']) $(id).disabled = locked;
-    $('ssh-form').querySelectorAll('button[type=submit]').forEach(button => { button.disabled = locked; });
-  }
-  // The review checkbox is the user's own confirmation of the probed fingerprint;
-  // only then may the credential entries be used again.
-  $('ssh-review').addEventListener('change', () => {
-    if (controller.isReady() || controller.isBlocked()) return;
-    setEntryLock(!$('ssh-review').checked);
-  });
-  // The blocked view keeps the pin that was in effect and, only when the refused handshake
-  // carried one, the public key fingerprint that handshake actually presented.
-  function renderKeyChange(details) {
-    if (!details) return;
-    const t = target();
-    $('ssh-key-change-old').textContent = `旧：${details.pinnedFingerprint || '见上方指纹显示'}`;
-    $('ssh-key-change-new').textContent = details.presentedFingerprint
-      ? `新：${details.presentedFingerprint}`
-      : '新：待重新探测';
-    $('ssh-key-change-target').textContent = `目标：${t.username}@${t.host}:${t.port}`;
-  }
   $('ssh-auth-method').value = 'password';
   $('ssh-auth-method').addEventListener('change', () => {
     clearSecrets();
@@ -103,28 +63,22 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     $('ssh-key-fields').hidden = !key;
   });
   for (const id of ['ssh-host','ssh-port']) $(id).addEventListener('input', () => {
-    controller.resetTargetBlock(); void controller.close(); $('ssh-review').checked = false; $('ssh-fingerprint').textContent = '请先探测并独立核对主机指纹。';
+    controller.invalidateReview(); void controller.close(); $('ssh-review').checked = false; $('ssh-fingerprint').textContent = '请先探测并独立核对主机指纹。';
   });
   $('ssh-user').addEventListener('input', () => { controller.invalidateReview(); void controller.close(); $('ssh-review').checked = false; });
   $('ssh-probe').disabled = !native;
   if (!native) $('ssh-status').textContent = '浏览器预览无法使用原生 SSH，请使用测试安装包。';
   $('ssh-probe').onclick = async () => {
     $('ssh-review').checked = false;
-    renderKeyChange(null);
-    applyView(controller.isReady(), false);
     const selected = target();
     try {
       const key = await controller.probe(selected);
       if (key) $('ssh-fingerprint').textContent = `主机 ${key.host}:${key.port} · ${key.fingerprint} · ${key.publicKey}`;
     } catch { $('ssh-fingerprint').textContent = '探测失败；请检查地址和端口后重试。'; }
-    // The same target was probed again; the user must confirm the fingerprint
-    // before any credential entry is usable again.
-    applyLock(false, controller.isBlocked());
   };
   $('ssh-form').onsubmit = async event => {
     event.preventDefault();
     if (!native) { $('ssh-status').textContent = '浏览器预览不支持原生 SSH。'; return; }
-    if (controller.isBlocked()) { $('ssh-status').textContent = '主机指纹变化尚未重新核对；请先探测并独立核对本目标的主机指纹。'; return; }
     const password = $('ssh-password').value, privateKeyPem = $('ssh-key').value, passphrase = $('ssh-passphrase').value;
     const credentials = $('ssh-auth-method').value === 'key'
       ? (privateKeyPem ? {privateKeyPem, ...(passphrase ? {privateKeyPassphrase:passphrase} : {})} : {})
@@ -148,25 +102,9 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     try { await controller.open(target(), credentials, $('ssh-review').checked); }
     catch { $('ssh-status').textContent = '请先核对指纹并选择一种认证方式。'; }
   };
-  // Cancelling keeps the pin that was in effect and leaves the target blocked:
-  // the same target must be probed and confirmed again before anything is used.
   const disconnect = () => { clearSecrets(); void controller.close(); };
   $('ssh-disconnect').onclick = disconnect;
   $('ssh-cancel').onclick = disconnect;
-  $('ssh-key-recheck').onclick = () => { $('ssh-probe').onclick(); };
-  $('ssh-key-cancel').onclick = () => {
-    clearSecrets();
-    const pinned = controller.pinnedFingerprint();
-    if (pinned) $('ssh-fingerprint').textContent = `主机 ${target().host}:${target().port} · ${pinned} · 已保留的旧信任`;
-    renderKeyChange(null);
-    // Back to the setup form for the same target with the old trust on display;
-    // review, authentication and connect stay locked until the next re-probe and
-    // the user's own confirmation of that fingerprint.
-    applyView(false, false);
-    applyLock(false, false);
-    $('ssh-status').hidden = false;
-    $('ssh-status').textContent = '已保留旧信任；请重新探测并独立核对本目标的主机指纹后再连接。';
-  };
   $('ssh-focus').onclick = () => terminal?.focus();
   document.addEventListener('visibilitychange', () => { if (document.hidden) { clearSecrets(); void controller.close(); } });
   return {close: () => {clearSecrets(); void controller.close();}, isReady:controller.isReady, isActive:controller.isActive,

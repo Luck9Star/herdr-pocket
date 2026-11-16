@@ -71,8 +71,7 @@ def main():
     rotate = os.environ.get('HERDR_FIXTURE_ROTATE_KEY') == '1'
     connections = 0
     with socket.socket() as listener:
-        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        listener.bind(('127.0.0.1', int(os.environ.get('HERDR_FIXTURE_PORT', '0'))))
+        listener.bind(('127.0.0.1', 0))
         listener.listen(10)
         print('PORT', listener.getsockname()[1], flush=True)
         while True:

@@ -4,10 +4,13 @@ import android.app.Instrumentation;
 import android.content.Context;
 import android.os.Bundle;
 import java.io.File;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
 import org.json.JSONArray;
@@ -56,6 +59,19 @@ public final class ProbeInstrumentation extends Instrumentation {
             java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     }
 
+    /** Redirect this process's stderr into the app-private file so a fatal
+     * error that exits without a signal still leaves evidence behind. */
+    private static void captureStderr(Context app) {
+        try {
+            File target = new File(app.getFilesDir(), "ts-node-probe-stderr.txt");
+            java.io.FileDescriptor fd = android.system.Os.open(target.getAbsolutePath(),
+                android.system.OsConstants.O_CREAT | android.system.OsConstants.O_WRONLY
+                | android.system.OsConstants.O_TRUNC | android.system.OsConstants.O_APPEND,
+                0600);
+            android.system.Os.dup2(fd, 2);
+        } catch (Throwable ignored) { }
+    }
+
     @Override public void onStart() {
         Context app = getTargetContext().getApplicationContext();
         long scope = 0;
@@ -63,9 +79,25 @@ public final class ProbeInstrumentation extends Instrumentation {
         AndroidTailscaleStateStore store = null;
         AndroidTailscaleStateStore.Result identity = null;
         try {
+            captureStderr(app);
             report.put("schemaVersion", 1).put("loginInvoked", false).put("dialInvoked", false);
+            // Record this process' pid before anything can die: after the
+            // crash the process is gone, so the host can only attribute a
+            // tombstone to this variant through this file.
+            try {
+                java.nio.file.Files.write(new File(app.getFilesDir(), "ts-node-probe-pid.txt").toPath(),
+                    String.valueOf(android.os.Process.myPid()).getBytes(StandardCharsets.UTF_8));
+            } catch (Exception ignored) { }
+            // Previous process crash: visible only from this later process.
+            try { report.put("previousExit", DirectoryProbe.exitInfo(app)); }
+            catch (Exception ignored) { }
             checkpoint(app, "private-config");
             JSONObject config = new JSONObject(new String(Files.readAllBytes(new File(app.getFilesDir(), "ts-node-probe-config.json").toPath()), StandardCharsets.UTF_8));
+            // A/B leg switch: the host runs each variant twice, once with the
+            // diagnostics opt-in marker and once without; the config bit is
+            // the single variable that differs between the legs.
+            boolean diagnosticsEnabled = config.optBoolean("netmonDiagnose", false);
+            report.put("diagnosticsLeg", diagnosticsEnabled ? "optin" : "plain");
             String control = config.getString("controlUrl"), hostname = "android-synthetic-probe";
             if (!control.matches("https://127\\.0\\.0\\.1:[0-9]+")) throw new IllegalStateException();
             checkpoint(app, "load-libraries");
@@ -96,9 +128,30 @@ public final class ProbeInstrumentation extends Instrumentation {
             checkpoint(app, "native-available");
             JSONObject available = call(scope, "available", new JSONObject().put("provider", "tailscale"), "available");
             report.put("providerAvailable", available.optBoolean("available", false));
+            try {
+                int interfaceCount = 0, addressCount = 0;
+                for (Enumeration<NetworkInterface> list = NetworkInterface.getNetworkInterfaces(); list != null && list.hasMoreElements(); ) {
+                    NetworkInterface networkInterface = list.nextElement();
+                    interfaceCount++;
+                    for (Enumeration<InetAddress> addresses = networkInterface.getInetAddresses(); addresses != null && addresses.hasMoreElements(); addresses.nextElement())
+                        addressCount++;
+                }
+                report.put("javaInterfaces", new JSONObject().put("ok", true).put("interfaces", interfaceCount)
+                    .put("addresses", addressCount).put("errClass", ""));
+            } catch (Exception error) {
+                report.put("javaInterfaces", new JSONObject().put("ok", false).put("interfaces", 0)
+                    .put("addresses", 0).put("errClass", error.getClass().getSimpleName()));
+            }
+            try { report.put("netmonOptIn", diagnosticsEnabled ? DirectoryProbe.enableNetmonDiagnose(app, profile, identity.handle) : false); }
+            catch (Exception ignored) { }
             checkpoint(app, "native-start");
+            long startAt = android.os.SystemClock.elapsedRealtime();
             call(scope, "nodeStart", new JSONObject().put("binding", binding).put("settings",
                 new JSONObject().put("controlUrl", control).put("hostname", hostname)), "start");
+            // A crash inside nodeStart never reaches this checkpoint; a crash
+            // after it does. The elapsed time bounds the window.
+            report.put("startReturnedAfterMs", android.os.SystemClock.elapsedRealtime() - startAt);
+            checkpoint(app, "native-start-returned");
             checkpoint(app, "native-status");
             JSONArray states = new JSONArray();
             boolean needsLogin = false;
@@ -113,6 +166,9 @@ public final class ProbeInstrumentation extends Instrumentation {
                 android.os.SystemClock.sleep(100);
             }
             report.put("states", states).put("needsLoginReached", needsLogin);
+            checkpoint(app, "netmon-diagnose");
+            try { report.put("netmonDiagnose", DirectoryProbe.readNetmonDiagnose(app, profile, identity.handle)); }
+            catch (Exception ignored) { }
             report.put("passed", needsLogin && report.optBoolean("startOk"));
         } catch (Throwable error) {
             try { report.put("passed", false).put("failureStage", stage)

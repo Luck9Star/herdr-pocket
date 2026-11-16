@@ -1,7 +1,7 @@
 name: Android fixed product TS JNI start status probe
 on:
   push:
-    branches: ['codex/acceptance-android-ts-node/**']
+    branches: ['codex/acceptance-android-ts-node/**', 'codex/acceptance-android-ts-node-plain', 'codex/acceptance-android-ts-node-plain/**']
 permissions:
   contents: read
   actions: read
@@ -9,9 +9,16 @@ jobs:
   probe:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    # The -plain branch runs only the plain leg (still both normal/qa APKs);
+    # the historical branch keeps the full optin+plain matrix.
+    strategy:
+      fail-fast: false
+      matrix:
+        diagnostics: ${{ fromJSON(startsWith(github.ref_name, 'codex/acceptance-android-ts-node-plain') && '["plain"]' || '["optin", "plain"]') }}
     env:
-      NATIVE_SOURCE: 93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
+      NATIVE_SOURCE: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
+      PROBE_DIAGNOSTICS: ${{ matrix.diagnostics }}
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -19,7 +26,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
+          ref: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
           path: native-source
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -37,18 +44,19 @@ jobs:
           sudo apt-get install -y --no-install-recommends acl libpulse0 iproute2 openssh-server binutils
           python3 -m venv "$RUNNER_TEMP/probe-python"
           "$RUNNER_TEMP/probe-python/bin/pip" install -r validation/pairing/requirements.txt
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
           "$RUNNER_TEMP/probe-python/bin/python" -m unittest discover -s validation/remote-harness -p test_android_ts_node_probe.py -v
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
       - name: Download exact fixed normal QA and host binaries
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14169009804/zip" > "$RUNNER_TEMP/normal.zip"
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14169129213/zip" > "$RUNNER_TEMP/qa.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14231686859/zip" > "$RUNNER_TEMP/normal.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14232500264/zip" > "$RUNNER_TEMP/qa.zip"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14171011473/zip" > "$RUNNER_TEMP/host.zip"
-          echo 'dce6f35956ce1b7d9325a60c27bcf528e8e9e413677c4a550f54f521a50aeb6b  '"$RUNNER_TEMP/normal.zip" | sha256sum -c -
-          echo '5e2e657056dd397882ac2d6b58ca24ef383929672fde9fb96f1ef2d7b5f7d94a  '"$RUNNER_TEMP/qa.zip" | sha256sum -c -
+          echo '39aca341528806fbc7948d8a5cb02c00096afb4102a87d10ff0cde0d6370807a  '"$RUNNER_TEMP/normal.zip" | sha256sum -c -
+          echo '78a0a4457c5209e67507cc32121ba8377120caaab4d4edbe9c3115307f7eefcb  '"$RUNNER_TEMP/qa.zip" | sha256sum -c -
           echo '4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698  '"$RUNNER_TEMP/host.zip" | sha256sum -c -
           mkdir "$RUNNER_TEMP/normal" "$RUNNER_TEMP/qa" "$RUNNER_TEMP/host"
           unzip -q "$RUNNER_TEMP/normal.zip" -d "$RUNNER_TEMP/normal"
@@ -94,7 +102,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: android-ts-node-probe-${{ github.sha }}
+          name: android-ts-node-probe-${{ matrix.diagnostics }}-${{ github.sha }}
           path: ${{ runner.temp }}/probe-evidence/result.json
           if-no-files-found: error
           retention-days: 7

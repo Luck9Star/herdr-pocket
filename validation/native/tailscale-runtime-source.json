@@ -16,7 +16,7 @@
   },
   "patch": {
     "path": "patches/0002-tsnet-explicit-auth.patch",
-    "sha256": "0758c6bc6f89d3f242477729d680832cf920483184ef4dd61a504662f1ed6dd6"
+    "sha256": "cecf821e638bee054b7595de3dac7cb1f7fc60a3e19cc9e8abb74e7707044e36"
   },
   "context7": {
     "library": "/tailscale/tailscale/v1.104.4",
@@ -34,12 +34,6 @@
       "gitBlobSha": "8c07d11a28be76706deee1cbf4a372fc547a39a5",
       "sha256": "99607c415cd3659e72d73ccfd18b15f3b89da72a6c4a07b9810c22a27fed7c70",
       "patchedSha256": "395430ad487b527932b82e3306c9fdeb470448492a9c036827b68134f6dff3fa"
-    },
-    {
-      "path": "ipn/ipnlocal/local.go",
-      "gitBlobSha": "d869979655142d6b2f85c397fff259ce031465f5",
-      "sha256": "a7d012ab96e412c6bced3dee5b7be3650dc050b5c33052722627b4778dd27f25",
-      "patchedSha256": "213e06558877bea75ff76bacde1f0f825b9a7b1170f5eb45ef9f9882d65fa66e"
     }
   ],
   "dialPlanTests": {

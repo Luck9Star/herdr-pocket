@@ -614,27 +614,6 @@ def run_direction(apk, auth_apk, session, stopped, report):
         except Exception:report['packagesRemoved']=False
 
 
-DUAL_ENVIRONMENT_CLEANUP_KEYS=frozenset({'reverseRemoved','relayStopped','controllerStopped','namespaceRemoved',
-                                         'hostPrivateDirectoryRemoved','controlReaderStopped','privateFilesRemoved'})
-KNOWN_SESSION_ERRORS={'host_control_unavailable','host_controller_readiness_invalid','host_material_reachability_claim_invalid',
-                      'owned_namespace_collision','controlled_session_command_failed','owned_private_material_required',
-                      'bounded_private_material_required','shared_overlay_session_cleanup_incomplete'}
-
-
-def failure_code(error):
-    from android_dual_overlay_session import SessionError
-    text=str(error)
-    return text if re.fullmatch(r'dual_[a-z0-9_]{1,80}',text) or isinstance(error,SessionError) and text in KNOWN_SESSION_ERRORS else 'dual_driver_failed'
-
-
-def direction_cleanup_proven(current):
-    cleanup=current.get('environmentCleanup')
-    return (isinstance(cleanup,dict) and DUAL_ENVIRONMENT_CLEANUP_KEYS <= cleanup.keys() and
-            all(cleanup[key] is True for key in DUAL_ENVIRONMENT_CLEANUP_KEYS) and
-            current.get('packagesRemoved') is True and current.get('privateDirectoryRemoved') is True and
-            current.get('browserClosed',True) is True and current.get('forwardRemoved',True) is True)
-
-
 def main():
     import argparse
     import hashlib
@@ -664,41 +643,41 @@ def main():
     try:
         for role in ('ts','et'):
             current={'stage':'setup'};result['directions'][role]=current
+            private=Path(tempfile.mkdtemp(prefix='hp-dual-host-',dir=root));private.chmod(0o700)
+            session=AndroidDualOverlaySession(paths[2], private, host_source=args.host_source_sha,
+                source_checkout=args.host_source_checkout, device=SERIAL, lifetime=1800)
             try:
-                private=Path(tempfile.mkdtemp(prefix='hp-dual-host-',dir=root));private.chmod(0o700)
-                session=AndroidDualOverlaySession(paths[2], private, host_source=args.host_source_sha,
-                    source_checkout=args.host_source_checkout, device=SERIAL, lifetime=1800)
-                try:
-                    with session:
-                        run_direction(paths[0],paths[1],session,role,current)
-                finally:
-                    state=session.report
-                    stage=state.get('stage')
-                    if stage in ('device-and-bundle','namespace','host-controller','relay-and-reverse','ready'):
-                        current['environmentStage']=stage
-                    for key in ('deviceApi35Verified','hostReady','deviceUserspaceReachabilityVerified'):
-                        if type(state.get(key)) is bool:current[key]=state[key]
-                    for key in ('relayRoles','reverseMappings'):
-                        if type(state.get(key)) is int and 0<=state[key]<=3:current[key]=state[key]
-                    current['environmentCleanup']=state.get('cleanup', {})
-                    shutil.rmtree(private)
-                    current['privateDirectoryRemoved']=not private.exists()
-                    (output/'result.json').write_text(json.dumps(result,indent=2)+'\n')
-                required=('tsExplicitAuthorization','pairingApprovedBoth','bindingBoth','bothInputAndDistinctTargets',
-                          'survivorSameAuthenticatedSession','stoppedInputUnavailableAndUnchanged','survivorExplicitlyStoppedAndClosed',
-                          'browserClosed','forwardRemoved','packagesRemoved','privateDirectoryRemoved','startObserverInstalled','startObserverRestored')
-                cleanup=current['environmentCleanup']
-                if (current.get('stage')!='complete' or any(current.get(key) is not True for key in required) or
-                        current.get('staleInputGuard') not in ('retained_tab_disabled_keyboard_tested','removed_tab_unreachable') or
-                        not isinstance(cleanup,dict) or not cleanup or any(value is not True for value in cleanup.values())):
-                    raise GuiFailure('dual_evidence_incomplete')
-            except Exception as error:
-                current['directionErrorCode']=failure_code(error)
-                result.setdefault('errorCode',current['directionErrorCode'])
-                if not direction_cleanup_proven(current):raise
-        if 'errorCode' not in result:result['status']='passed'
+                with session:
+                    run_direction(paths[0],paths[1],session,role,current)
+            finally:
+                state=session.report
+                stage=state.get('stage')
+                if stage in ('device-and-bundle','namespace','host-controller','relay-and-reverse','ready'):
+                    current['environmentStage']=stage
+                for key in ('deviceApi35Verified','hostReady','deviceUserspaceReachabilityVerified'):
+                    if type(state.get(key)) is bool:current[key]=state[key]
+                for key in ('relayRoles','reverseMappings'):
+                    if type(state.get(key)) is int and 0<=state[key]<=3:current[key]=state[key]
+                current['environmentCleanup']=state.get('cleanup', {})
+                shutil.rmtree(private)
+                current['privateDirectoryRemoved']=not private.exists()
+                (output/'result.json').write_text(json.dumps(result,indent=2)+'\n')
+            required=('tsExplicitAuthorization','pairingApprovedBoth','bindingBoth','bothInputAndDistinctTargets',
+                      'survivorSameAuthenticatedSession','stoppedInputUnavailableAndUnchanged','survivorExplicitlyStoppedAndClosed',
+                      'browserClosed','forwardRemoved','packagesRemoved','privateDirectoryRemoved','startObserverInstalled','startObserverRestored')
+            cleanup=current['environmentCleanup']
+            if (current.get('stage')!='complete' or any(current.get(key) is not True for key in required) or
+                    current.get('staleInputGuard') not in ('retained_tab_disabled_keyboard_tested','removed_tab_unreachable') or
+                    not isinstance(cleanup,dict) or not cleanup or any(value is not True for value in cleanup.values())):
+                raise GuiFailure('dual_evidence_incomplete')
+        result['status']='passed'
     except Exception as error:
-        result.setdefault('errorCode',failure_code(error))
+        text=str(error)
+        from android_dual_overlay_session import SessionError
+        known={'host_control_unavailable','host_controller_readiness_invalid','host_material_reachability_claim_invalid',
+               'owned_namespace_collision','controlled_session_command_failed','owned_private_material_required',
+               'bounded_private_material_required','shared_overlay_session_cleanup_incomplete'}
+        result['errorCode']=text if re.fullmatch(r'dual_[a-z0-9_]{1,80}',text) or isinstance(error,SessionError) and text in known else 'dual_driver_failed'
     finally:
         (output/'result.json').write_text(json.dumps(result,indent=2)+'\n')
     if result['status']!='passed':raise SystemExit(1)

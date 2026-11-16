@@ -39,4 +39,58 @@ public final class DirectoryProbe {
         out.put("productDirectoryCallbackSucceeded", callback);
         return out;
     }
+    private static Path netmonFile(Context app, String profile, String handle, String name) throws Exception {
+        return java.nio.file.Paths.get(new AndroidTailscaleStateStore(app).runtimeDirectory(profile, handle))
+            .resolve(name);
+    }
+
+    /** Reason/status of this package's most recent exit, if the platform has it.
+     * Read at instrumentation start: the previous crash is only visible to a
+     * later process, a crashed process cannot report on itself. */
+    public static JSONObject exitInfo(Context app) {
+        JSONObject out = new JSONObject();
+        try {
+            if (android.os.Build.VERSION.SDK_INT < 30) { out.put("available", false); return out; }
+            android.app.ActivityManager manager =
+                (android.app.ActivityManager) app.getSystemService(Context.ACTIVITY_SERVICE);
+            java.util.List<android.app.ApplicationExitInfo> infos =
+                manager.getHistoricalProcessExitReasons(app.getPackageName(), 0, 4);
+            if (infos == null || infos.isEmpty()) { out.put("available", false); return out; }
+            android.app.ApplicationExitInfo latest = infos.get(0);
+            out.put("available", true);
+            out.put("reason", latest.getReason());
+            out.put("status", latest.getStatus());
+            out.put("timestamp", latest.getTimestamp());
+            out.put("importance", latest.getImportance());
+        } catch (Throwable error) {
+            try { out.put("available", false).put("errClass", error.getClass().getSimpleName()); }
+            catch (Exception ignored) { }
+        }
+        return out;
+    }
+    public static boolean enableNetmonDiagnose(Context app, String profile, String handle) {
+        try {
+            Path marker = netmonFile(app, profile, handle, "netmon-diagnose.optin");
+            java.nio.file.Files.write(marker, new byte[0]);
+            try {
+                java.nio.file.Files.setPosixFilePermissions(marker,
+                    java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+            } catch (Exception permissionFailure) { }
+            return java.nio.file.Files.exists(marker);
+        } catch (Exception markerFailure) {
+            return false;
+        }
+    }
+    public static JSONObject readNetmonDiagnose(Context app, String profile, String handle) {
+        try {
+            Path file = netmonFile(app, profile, handle, "netmon-diagnose.json");
+            if (!java.nio.file.Files.isRegularFile(file))
+                return new JSONObject().put("fileMissing", true);
+            return new JSONObject(new String(java.nio.file.Files.readAllBytes(file),
+                java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception readableFailure) {
+            try { return new JSONObject().put("parseError", true); }
+            catch (Exception ignored) { return new JSONObject(); }
+        }
+    }
 }

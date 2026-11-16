@@ -156,8 +156,6 @@ pub struct ShellEvent {
     pub data: Option<Vec<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_status: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub presented_fingerprint: Option<String>,
 }
 type Reply = oneshot::Sender<Result<()>>;
 enum Command {
@@ -282,8 +280,7 @@ async fn shell_connection(
     let cancel = commands.cancel.clone();
     let expected = config.validate()?;
     let audit = Arc::new(Audit::default());
-    let observed = audit.clone();
-    let (mut ssh, _) = match connect_pinned_endpoint(
+    let (mut ssh, _) = connect_pinned_endpoint(
         &config.host,
         config.port,
         &cancel,
@@ -292,25 +289,7 @@ async fn shell_connection(
         None,
         &transport::SystemDialer,
     )
-    .await
-    {
-        Ok(connected) => connected,
-        Err(code) => {
-            // The rejected handshake still knows which key the server presented.
-            if code == "host_key_mismatch" {
-                if let Some(fingerprint) = observed.presented_host_key_fingerprint() {
-                    emit(ShellEvent {
-                        seq: 1,
-                        kind: "host_key_change",
-                        data: None,
-                        exit_status: None,
-                        presented_fingerprint: Some(fingerprint),
-                    })?;
-                }
-            }
-            return Err(code);
-        }
-    };
+    .await?;
     let authenticated = if let Some(password) = &config.password {
         bounded(
             &cancel,
@@ -388,7 +367,6 @@ async fn shell_connection(
         kind: "ready",
         data: None,
         exit_status: None,
-        presented_fingerprint: None,
     })?;
     let mut exit_status = None;
     loop {
@@ -413,7 +391,7 @@ async fn shell_connection(
                     seq += 1;
                     let (tx, rx) = oneshot::channel();
                     *commands.ack.lock().map_err(|_| "state_unavailable")? = Some((seq, tx));
-                    emit(ShellEvent { seq, kind: "data", data: Some(data.to_vec()), exit_status: None, presented_fingerprint: None })?;
+                    emit(ShellEvent { seq, kind: "data", data: Some(data.to_vec()), exit_status: None })?;
                     // One packet at a time reaches the UI. SSH's bounded window
                     // then provides backpressure all the way to the remote PTY.
                     bounded(&cancel, 30, "output_ack_failed", rx).await
@@ -438,7 +416,6 @@ async fn shell_connection(
         kind: "exit",
         data: None,
         exit_status,
-        presented_fingerprint: None,
     })
 }
 

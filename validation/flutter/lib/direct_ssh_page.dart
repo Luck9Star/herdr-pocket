@@ -30,15 +30,13 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   bool pastingKey = false;
   String? pasteStatus;
   String? fingerprint, algorithm, checkedTarget;
-  bool hostKeyReviewRequired = false;
-  ({String oldAlgorithm, String oldFingerprint, String newAlgorithm, String newFingerprint, String target})? hostKeyChange;
   String status = '填写连接信息后先探测主机密钥。';
   bool busy = false, connected = false, keyAuth = false, foreground = true;
   String get target => '${user.text.trim()}@${host.text.trim()}:${port.text.trim()}';
   bool get valid => host.text.trim().isNotEmpty && user.text.trim().isNotEmpty &&
       (int.tryParse(port.text.trim()) ?? 0) > 0 && (int.tryParse(port.text.trim()) ?? 65536) <= 65535;
 
-  bool get canConnect => valid && !busy && !hostKeyReviewRequired && fingerprint != null && checkedTarget == target && secret.text.isNotEmpty;
+  bool get canConnect => valid && !busy && fingerprint != null && checkedTarget == target && secret.text.isNotEmpty;
   void cancelKeyPaste() { pasteRevision++; pastingKey = false; pasteStatus = null; }
   void credentialsChanged() { cancelKeyPaste(); if (mounted) setState(() {}); }
 
@@ -87,7 +85,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   }
   void changed() {
     cancelKeyPaste();
-    if (checkedTarget != target) { fingerprint = null; algorithm = null; checkedTarget = null; hostKeyReviewRequired = false; hostKeyChange = null; secret.clear(); passphrase.clear(); }
+    if (checkedTarget != target) { fingerprint = null; algorithm = null; checkedTarget = null; secret.clear(); passphrase.clear(); }
     if (mounted) setState(() {});
   }
   void stop({String? message, bool notify = true}) {
@@ -125,7 +123,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   Future<void> probe() async {
     if (!valid || busy || !foreground) return;
     stop(); final generation = ++epoch; final originalTarget = target;
-    setState(() { busy = true; status = '正在探测主机密钥，尚未发送认证信息。'; if (!hostKeyReviewRequired) fingerprint = null; });
+    setState(() { busy = true; status = '正在探测主机密钥，尚未发送认证信息。'; fingerprint = null; });
     SSHSocket? localSocket; SSHClient? localClient;
     try {
       localSocket = await SSHSocket.connect(host.text.trim(), int.parse(port.text.trim()), timeout: const Duration(seconds: 8));
@@ -150,26 +148,24 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       final approved = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
         title: const Text('核对主机密钥'),
         content: SelectableText('目标 $originalTarget\n算法 ${result.$1}\n${result.$2}\n\n请通过可信的独立渠道核对完整指纹。确认后仅对本次页面有效。'),
-        actions: [TextButton(key: const ValueKey('direct-trust-cancel'), onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+        actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
           FilledButton(key: const ValueKey('direct-trust-key'), onPressed: () => Navigator.pop(context, true), child: const Text('已核对并确认'))]));
       if (generation != epoch || originalTarget != target || !mounted) return;
-      setState(() { busy = false; if (approved == true) { algorithm = result.$1; fingerprint = result.$2; checkedTarget = originalTarget; hostKeyReviewRequired = false; hostKeyChange = null; status = '已确认本次主机密钥；连接时将重新核对。'; } else { status = '未确认主机密钥，未发送认证。'; } });
+      setState(() { busy = false; if (approved == true) { algorithm = result.$1; fingerprint = result.$2; checkedTarget = originalTarget; status = '已确认本次主机密钥；连接时将重新核对。'; } else { status = '未确认主机密钥，未发送认证。'; } });
     } catch (_) {
       if (generation == epoch && mounted) { stop(message: '探测失败或超时；未发送认证，请检查目标后重试。'); }
     } finally { if (generation != epoch) { localClient?.close(); localSocket?.destroy(); } }
   }
   Future<void> connect() async {
-    if (!valid || busy || !foreground || hostKeyReviewRequired || fingerprint == null || checkedTarget != target || secret.text.isEmpty) return;
+    if (!valid || busy || !foreground || fingerprint == null || checkedTarget != target || secret.text.isEmpty) return;
     cancelKeyPaste();
     final generation = ++epoch, expected = fingerprint!, expectedAlgorithm = algorithm!;
-    final originalTarget = target;
     final password = keyAuth ? null : secret.text;
     final keyText = keyAuth ? secret.text : null, phrase = passphrase.text;
     secret.clear(); passphrase.clear();
     retireTerminal(); final sessionTerminal = createTerminal(generation); terminal = sessionTerminal;
     setState(() { busy = true; status = '正在重新核对主机密钥并连接…'; });
     var keyMismatch = false;
-    String? presentedAlgorithm, presentedFingerprint;
     var parsingKey = keyText != null;
     try {
       final identities = keyText == null ? null : SSHKeyPair.fromPem(keyText, phrase.isEmpty ? null : phrase);
@@ -182,7 +178,6 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
         onVerifyHostKey: (type, bytes) {
           verified = generation == epoch && type == expectedAlgorithm && utf8.decode(bytes) == expected;
           keyMismatch = generation == epoch && !verified;
-          if (keyMismatch) { presentedAlgorithm = type; presentedFingerprint = utf8.decode(bytes); }
           return verified;
         },
         keepAliveInterval: null, handshakeTimeout: const Duration(seconds: 8), authTimeout: const Duration(seconds: 8));
@@ -199,67 +194,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       stderr = localShell.stderr.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch && identical(sessionTerminal, terminal)) sessionTerminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
       unawaited(localShell.done.then((_) { if (generation == epoch) stop(message: '远端 shell 已结束（退出码 ${localShell.exitCode ?? '未知'}）。'); }, onError: (Object _, StackTrace __) { if (generation == epoch) stop(message: '连接中断，输入已停止。'); }));
       setState(() { busy = false; connected = true; status = '已连接 · 输入直接发送到远端 shell'; });
-    } catch (error) {
-      if (generation == epoch) {
-        if (keyMismatch && presentedFingerprint != null) {
-          showHostKeyChange(expectedAlgorithm, expected, presentedAlgorithm!, presentedFingerprint!, originalTarget);
-        } else {
-          stop(message: parsingKey ? '私钥无法解析或解密；请检查完整 PEM 和私钥口令。尚未连接远端。' : keyMismatch ? '主机密钥不符，已阻止认证；请重新核对。' : error is SSHAuthFailError ? '认证失败，请检查凭据。' : '连接失败或超时，请检查网络、密钥与目标。');
-        }
-      }
-    }
-  }
-  void showHostKeyChange(String oldAlgorithm, String oldFingerprint, String newAlgorithm, String newFingerprint, String originalTarget) {
-    stop(notify: false);
-    hostKeyReviewRequired = true;
-    hostKeyChange = (oldAlgorithm: oldAlgorithm, oldFingerprint: oldFingerprint, newAlgorithm: newAlgorithm, newFingerprint: newFingerprint, target: originalTarget);
-    status = '主机指纹发生变化，已阻止连接与输入；未发送认证。';
-    if (mounted) setState(() {});
-  }
-  void reviewHostKeyChange() {
-    setState(() { hostKeyChange = null; status = '重新探测并核对本目标的主机指纹；旧信任在重新批准前保留。'; });
-    unawaited(probe());
-  }
-  void cancelHostKeyChange() {
-    setState(() { hostKeyChange = null; status = '已保留旧信任；凭据与认证入口已锁定，重新探测并独立核验后才可连接。'; });
-  }
-  Widget hostKeyChangeView() {
-    final change = hostKeyChange!, theme = Theme.of(context), tokens = widget.tokens;
-    final brand = tokens.color('brand'), dangerText = tokens.color('dangerText');
-    return ListView(key: const ValueKey('direct-host-key-change'), padding: const EdgeInsets.all(16), children: [
-      Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560), child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('主机指纹发生变化', style: theme.textTheme.titleLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.bold, color: tokens.color('textPrimary'))),
-          const SizedBox(height: 16),
-          Container(padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: tokens.color('dangerSoft'), borderRadius: BorderRadius.circular(12), border: Border.all(color: tokens.color('dangerBorder'))),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('已阻止连接与输入', style: TextStyle(color: dangerText, fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 4),
-              Text('实际 SSH host key 与已保存身份不同。不会自动接受新指纹，也不会继续认证或补发输入。', style: TextStyle(color: dangerText, fontSize: 13, height: 1.5)),
-            ])),
-          const SizedBox(height: 20),
-          Container(padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: tokens.color('card'), borderRadius: BorderRadius.circular(16), border: Border.all(color: tokens.color('borderStrong'))),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('通过独立可信渠道核验', style: theme.textTheme.titleSmall?.copyWith(fontSize: 15, fontWeight: FontWeight.w600, color: tokens.color('textPrimary'))),
-              const SizedBox(height: 12),
-              SelectableText('旧：${change.oldAlgorithm}\n${change.oldFingerprint}', key: const ValueKey('direct-host-key-old'), style: TextStyle(fontSize: 13, height: 1.6, color: tokens.color('textPrimary'))),
-              const SizedBox(height: 10),
-              SelectableText('新：${change.newAlgorithm}\n${change.newFingerprint}', key: const ValueKey('direct-host-key-new'), style: TextStyle(fontSize: 13, height: 1.6, color: tokens.color('textPrimary'))),
-              const SizedBox(height: 10),
-              SelectableText('目标：${change.target}', style: TextStyle(fontSize: 13, height: 1.6, color: tokens.color('textPrimary'))),
-              const SizedBox(height: 4),
-              Text('联系主机操作者确认变更原因。', style: TextStyle(fontSize: 13, height: 1.5, color: tokens.color('textSecondary'))),
-            ])),
-          const SizedBox(height: 20),
-          FilledButton(key: const ValueKey('direct-host-key-review'), style: FilledButton.styleFrom(backgroundColor: brand, foregroundColor: tokens.color('textInverse')), onPressed: reviewHostKeyChange, child: const Text('重新核对主机指纹')),
-          const SizedBox(height: 8),
-          OutlinedButton(key: const ValueKey('direct-host-key-cancel'), style: OutlinedButton.styleFrom(backgroundColor: tokens.color('card'), foregroundColor: tokens.color('textPrimary'), side: BorderSide(color: tokens.color('borderStrong'))), onPressed: cancelHostKeyChange, child: const Text('取消连接，保留旧信任')),
-          const SizedBox(height: 12),
-          Text('本页没有“忽略变化继续”出口。', style: TextStyle(fontSize: 12, color: tokens.color('textSecondary'))),
-        ]))),
-    ]);
+    } catch (error) { if (generation == epoch) stop(message: parsingKey ? '私钥无法解析或解密；请检查完整 PEM 和私钥口令。尚未连接远端。' : keyMismatch ? '主机密钥不符，已阻止认证；请重新核对。' : error is SSHAuthFailError ? '认证失败，请检查凭据。' : '连接失败或超时，请检查网络、密钥与目标。'); }
   }
   Widget terminalKeys(Terminal current) => SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
     for (final item in {'Esc':'\u001b', 'Tab':'\t'}.entries)
@@ -275,7 +210,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       leading: (ModalRoute.of(context)?.impliesAppBarDismissal ?? false)
         ? MergeSemantics(child: Semantics(identifier: 'direct-back', label: '返回主机列表', child: const BackButton())) : null,
       actions: [if (busy || connected) TextButton(onPressed: () => stop(message: '已断开；未重放输入。'), child: const Text('断开'))]),
-    body: SafeArea(child: hostKeyChange != null ? hostKeyChangeView() : connected ? Column(children: [
+    body: SafeArea(child: connected ? Column(children: [
       Padding(padding: const EdgeInsets.all(8), child: Text(status)),
       Expanded(child: TerminalView(terminal!, theme: widget.tokens.terminalTheme, autoResize: true,
         textStyle: const TerminalStyle(fontFamily: 'ProbeNerd', fontSize: 14))),
@@ -306,25 +241,25 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
           ],
           const SizedBox(height: 16),
           SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('使用私钥认证'), value: keyAuth,
-            onChanged: busy || hostKeyReviewRequired ? null : (value) => setState(() { cancelKeyPaste(); keyAuth = value; secret.clear(); passphrase.clear(); })),
+            onChanged: busy ? null : (value) => setState(() { cancelKeyPaste(); keyAuth = value; secret.clear(); passphrase.clear(); })),
           const SizedBox(height: 12),
           Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）',
             child: !keyAuth && !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS
-              ? MacosSecureCredentialField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy && !hostKeyReviewRequired,
+              ? MacosSecureCredentialField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy,
                   label: '密码（仅本次使用）', identifier: 'direct-secret')
-              : TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy && !hostKeyReviewRequired, obscureText: !keyAuth,
+              : TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,
               minLines: keyAuth ? 2 : 1, maxLines: keyAuth ? 2 : 1, decoration: InputDecoration(label: ExcludeSemantics(child: Text(keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）'))))),
           if (keyAuth) ...[
-            TextButton(key: const ValueKey('direct-paste-key'), onPressed: busy || pastingKey || !foreground || hostKeyReviewRequired ? null : pastePrivateKey,
+            TextButton(key: const ValueKey('direct-paste-key'), onPressed: busy || pastingKey || !foreground ? null : pastePrivateKey,
               child: const Text('粘贴私钥')),
             if (pasteStatus != null) Semantics(liveRegion: true, child: Text(pasteStatus!, key: const ValueKey('direct-paste-status'))),
             const SizedBox(height: 16),
             Semantics(container: true, explicitChildNodes: true, label: '私钥口令（可选）',
               child: !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS
-                ? MacosSecureCredentialField(key: const ValueKey('direct-passphrase'), controller: passphrase, enabled: !busy && !hostKeyReviewRequired,
+                ? MacosSecureCredentialField(key: const ValueKey('direct-passphrase'), controller: passphrase, enabled: !busy,
                     label: '私钥口令（可选）', identifier: 'direct-passphrase')
                 : TextField(key: const ValueKey('direct-passphrase'), controller: passphrase,
-                    enabled: !busy && !hostKeyReviewRequired, obscureText: true, decoration: const InputDecoration(label: ExcludeSemantics(child: Text('私钥口令（可选）'))))),
+                    enabled: !busy, obscureText: true, decoration: const InputDecoration(label: ExcludeSemantics(child: Text('私钥口令（可选）'))))),
           ],
           const SizedBox(height: 20),
           FilledButton(key: const ValueKey('direct-connect'), onPressed: canConnect ? connect : null, child: const Text('连接 SSH')),

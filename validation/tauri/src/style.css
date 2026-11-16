@@ -177,18 +177,6 @@ h1 { font-size:18px; margin:0}
 #ssh-key { display:block; width:100%; box-sizing:border-box; }
 #home-ssh label:not(.review-check) { display:block; margin:12px 0; }
 .ssh-fingerprint { padding:12px; border:1px solid var(--hp-border); border-radius:10px; overflow-wrap:anywhere; background:var(--hp-card); }
-.ssh-key-change { margin-top:12px; padding:16px; border-radius:14px; overflow-wrap:anywhere; background:var(--hp-cardSubtle); }
-.ssh-key-change-heading { margin:0 0 12px; font-size:20px; font-weight:700; color:var(--hp-textPrimary); }
-.ssh-key-change-warning { padding:12px; border-radius:12px; border:1px solid var(--hp-dangerBorder); background:var(--hp-dangerSoft); }
-.ssh-key-change-warning-title { margin:0; font-weight:700; font-size:14px; color:var(--hp-dangerText); }
-.ssh-key-change-warning-detail { margin:6px 0 0; font-size:13px; line-height:1.6; color:var(--hp-dangerText); }
-.ssh-key-change-card { margin-top:12px; padding:16px; border:1px solid var(--hp-border); border-radius:16px; background:var(--hp-card); }
-.ssh-key-change-title { margin:0 0 8px; font-weight:600; font-size:15px; color:var(--hp-textPrimary); }
-.ssh-key-change p { margin:4px 0; font-size:13px; line-height:1.6; color:var(--hp-textPrimary); }
-.ssh-key-change #ssh-key-change-note { color:var(--hp-textSecondary); }
-.ssh-key-change-actions { display:grid; grid-template-columns:1fr; gap:8px; margin-top:16px; }
-.ssh-key-change-actions button { width:100%; min-height:44px; }
-.ssh-key-change-actions .secondary { background:var(--hp-card); color:var(--hp-textPrimary); border-color:var(--hp-borderStrong); }
 .ssh-scroll { border-radius:12px; height:min(380px, 50dvh); }
 .host-session {
   background:var(--hp-cardSubtle);

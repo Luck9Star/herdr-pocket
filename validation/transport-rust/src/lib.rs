@@ -224,7 +224,6 @@ fn observe_command_with_canvas(config: &RemoteConfig, terminal_id: &str, canvas:
 pub struct Audit {
     host_key_checked: AtomicBool,
     host_key_matched: AtomicBool,
-    presented_host_key_fingerprint: Mutex<Option<String>>,
     auth_started: AtomicBool,
     snapshot_received: AtomicBool,
     full_frame_received: AtomicBool,
@@ -247,13 +246,6 @@ impl Audit {
             snapshot_received: self.snapshot_received.load(Ordering::SeqCst),
             full_frame_received: self.full_frame_received.load(Ordering::SeqCst),
         }
-    }
-    /// The fingerprint a refused handshake presented. Direct-shell only, never audited.
-    pub fn presented_host_key_fingerprint(&self) -> Option<String> {
-        self.presented_host_key_fingerprint
-            .lock()
-            .ok()
-            .and_then(|slot| slot.clone())
     }
 }
 
@@ -399,16 +391,6 @@ impl client::Handler for Pinned {
         // A pinned raw public key is not authorization for a certificate signed by it.
         let matches = key.certificate().is_none() && key.public_key() == self.expected;
         self.audit.host_key_matched.store(matches, Ordering::SeqCst);
-        if !matches && key.certificate().is_none() {
-            // Keep the fingerprint the rejected handshake actually presented.
-            let fingerprint = key
-                .public_key()
-                .fingerprint(russh::keys::HashAlg::Sha256)
-                .to_string();
-            if let Ok(mut slot) = self.audit.presented_host_key_fingerprint.lock() {
-                *slot = Some(fingerprint);
-            }
-        }
         Ok(matches)
     }
     async fn server_channel_open_session(

@@ -24,7 +24,7 @@ class ScaffoldTests(unittest.TestCase):
         (root / 'macos/RunnerTests').mkdir(parents=True)
         (root / 'macos/Runner').mkdir(parents=True)
         (root / 'lib').mkdir()
-        (root / 'lib/direct_ssh_page.dart').write_text("  Future<void> connect() async {\n      final localSocket = await SSHSocket.connect(\n          Semantics(container: true, explicitChildNodes: true, label: '地址'\n          Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）'\nTextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy && !hostKeyReviewRequired, obscureText: !keyAuth,\n          OutlinedButton(key: const ValueKey('direct-probe')\n")
+        (root / 'lib/direct_ssh_page.dart').write_text("  Future<void> connect() async {\n      final localSocket = await SSHSocket.connect(\n          Semantics(container: true, explicitChildNodes: true, label: '地址'\n          Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）'\nTextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy, obscureText: !keyAuth,\n          OutlinedButton(key: const ValueKey('direct-probe')\n")
         (root / '.herdr-generated-probe.json').write_text(json.dumps({'kind':'herdr-flutter-validation'}))
         (root / 'macos/Runner.xcodeproj/project.pbxproj').write_text(PROJECT)
         (root / 'macos/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme').write_text('<Scheme><TestAction><Testables><Testable parallelizable = "YES"/></Testables></TestAction></Scheme>')

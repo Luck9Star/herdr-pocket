@@ -471,8 +471,10 @@ def _go_log_evidence(adb, pid):
     if not pid:
         return {'available': False}
     try:
-        result = adb('shell', 'logcat', '-d', '-b', 'main', '--pid', str(pid),
-                     '-s', 'Go:E', timeout=30)
+        # -v threadtime pins the format: the default brief format prints
+        # "E/Go( 4242):", which the classifier does not read.
+        result = adb('shell', 'logcat', '-d', '-v', 'threadtime', '-b', 'main',
+                     '--pid', str(pid), '-s', 'Go:E', timeout=30)
     except Exception:
         return {'available': False}
     if result.returncode != 0:
@@ -499,13 +501,16 @@ def safe_go_log(value):
     upstream = value.get('upstreamFrames') or []
     if panic_class not in GO_PANIC_CLASSES or reason not in GO_REASONS:
         return {'available': False}
-    if not _safe_symbol(app) or not _safe_symbol(first):
-        return {'available': False}
-    if len(upstream) > 3 or not all(_safe_symbol(name) and name.startswith('tailscale.com/')
-                                    for name in upstream):
-        return {'available': False}
+    # A symbol that fails the syntax check is dropped; the rest of the
+    # evidence stays, because one odd frame must not hide the panic kind.
+    if not _safe_symbol(app):
+        app = 'none'
+    if not _safe_symbol(first):
+        first = 'none'
+    kept = [name for name in upstream[:3]
+            if _safe_symbol(name) and name.startswith('tailscale.com/')]
     return {'available': True, 'panicClass': panic_class, 'reason': reason,
-            'appFunction': app, 'firstFrame': first, 'upstreamFrames': upstream}
+            'appFunction': app, 'firstFrame': first, 'upstreamFrames': kept}
 
 
 SYMBOL_OK = re.compile(r'[A-Za-z_][A-Za-z0-9_-]*(?:[./][A-Za-z0-9_][A-Za-z0-9_-]*)+')
@@ -673,6 +678,20 @@ def run(args):
                         stage.reach('main-probe')
                         result = adb('shell', 'am', 'instrument', '-w', '-r', PACKAGE + '/dev.herdr.tsnodeprobe.ProbeInstrumentation', timeout=100)
                         row['instrumentation'] = instrument_summary(result)
+                        def variant_pid():
+                            try:
+                                listing = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-pid.txt')
+                                text = listing.stdout.decode('ascii', 'replace').strip()
+                                # Remove it: the next variant writes its own;
+                                # a stale pid would misattribute its record.
+                                adb('shell', 'run-as', PACKAGE, 'rm', '-f', 'files/ts-node-probe-pid.txt', timeout=15)
+                                return int(text) if text.isdigit() else 0
+                            except Exception:
+                                return 0
+                        PID = variant_pid()
+                        # Read the Go panic lines now: the main buffer can
+                        # roll over during the tombstone window below.
+                        row['goLog'] = _go_log_evidence(adb, PID)
                         # Tombstone records are attributed whole: Cmdline
                         # binds the record to this run's package while
                         # signal/frame lines carry debuggerd's own PID, so
@@ -692,17 +711,6 @@ def run(args):
                                     return False
                             return (PACKAGE.encode() in block or b'>>> dev.herdr' in block
                                     or b'>>> ' in block or b'libhp_tailscale' in block)
-                        def variant_pid():
-                            try:
-                                listing = adb('exec-out', 'run-as', PACKAGE, 'cat', 'files/ts-node-probe-pid.txt')
-                                text = listing.stdout.decode('ascii', 'replace').strip()
-                                # Remove it: the next variant writes its own;
-                                # a stale pid would misattribute its record.
-                                adb('shell', 'run-as', PACKAGE, 'rm', '-f', 'files/ts-node-probe-pid.txt', timeout=15)
-                                return int(text) if text.isdigit() else 0
-                            except Exception:
-                                return 0
-                        PID = variant_pid()
                         deadline = time.monotonic() + 45
                         while True:
                             crash_log = adb('shell', 'logcat', '-d', '-b', 'crash', timeout=30)
@@ -762,10 +770,6 @@ def run(args):
                                                  (b'Fatal signal', 'libc-fatal')):
                                 if marker in mine:
                                     row['instrumentation'].setdefault('abortClass', name)
-                        # The Go runtime writes its panic to logd under the
-                        # tag "Go", which carries no package name: read this
-                        # process's own lines by pid.
-                        row['goLog'] = _go_log_evidence(adb, PID)
                     except subprocess.TimeoutExpired:
                         row['instrumentation'] = {'commandSucceeded': False, 'timedOut': True}
                     row['currentExit'] = _current_exit_info()

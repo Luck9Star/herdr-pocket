@@ -157,18 +157,25 @@ class SafeGoLogTests(unittest.TestCase):
         self.assertTrue(result['available'])
         self.assertEqual(result['firstFrame'], 'tailscale.com/net/dns.Manager.Set')
 
-    def test_symbol_with_arguments_is_rejected(self):
+    def test_symbol_with_arguments_is_dropped_not_fatal(self):
         value = {'available': True, 'panicClass': 'go-panic', 'reason': 'nil-pointer',
                  'appFunction': 'main.foo(0x1)', 'firstFrame': 'none', 'upstreamFrames': []}
-        self.assertEqual(safe_go_log(value), {'available': False})
+        result = safe_go_log(value)
+        self.assertTrue(result['available'])
+        self.assertEqual(result['appFunction'], 'none')
 
-    def test_non_upstream_in_upstream_list_is_rejected(self):
+    def test_one_bad_symbol_does_not_void_the_record(self):
         value = {'available': True, 'panicClass': 'go-panic', 'reason': 'nil-pointer',
-                 'appFunction': 'none', 'firstFrame': 'none',
-                 'upstreamFrames': ['main.foo']}
-        self.assertEqual(safe_go_log(value), {'available': False})
+                 'appFunction': 'main.foo(0x1)', 'firstFrame': 'not a symbol',
+                 'upstreamFrames': ['main.foo', 'tailscale.com/net/dns.Manager.Set']}
+        result = safe_go_log(value)
+        self.assertTrue(result['available'])
+        self.assertEqual(result['panicClass'], 'go-panic')
+        self.assertEqual(result['appFunction'], 'none')
+        self.assertEqual(result['firstFrame'], 'none')
+        self.assertEqual(result['upstreamFrames'], ['tailscale.com/net/dns.Manager.Set'])
 
-    def test_capture_asks_for_this_pid_go_tag_only(self):
+    def test_capture_asks_for_this_pid_go_tag_in_threadtime(self):
         seen = []
 
         def adb(*parts, timeout=30):
@@ -179,8 +186,8 @@ class SafeGoLogTests(unittest.TestCase):
             return reply
 
         result = _go_log_evidence(adb, 4242)
-        self.assertEqual(seen, [('shell', 'logcat', '-d', '-b', 'main',
-                                 '--pid', '4242', '-s', 'Go:E')])
+        self.assertEqual(seen, [('shell', 'logcat', '-d', '-v', 'threadtime',
+                                 '-b', 'main', '--pid', '4242', '-s', 'Go:E')])
         self.assertEqual(result['reason'], 'nil-pointer')
         self.assertEqual(result['appFunction'],
                          'herdr.local/tailscale-runtime.manager.start')

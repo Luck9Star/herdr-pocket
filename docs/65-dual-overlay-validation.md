@@ -1,5 +1,7 @@
 # 双网络隔离验收进展
 
+> 后续进展（2026-11-16）：[第 67 页](67-android-dual-network-startup.md)记录 Android normal/QA 原生启动控制点通过、两壳 UI 复验及当前边界。下文保留 2026-11-15 的历史证据，不能将当时的 SIGABRT 未定位状态当作当前启动结论。
+
 更新：2026-11-15。本文记录 [M2 的 Tailscale + EasyTier 前台并发要求](04-roadmap.md#m2--按-provider--平台集成三网络)的分层证据。当前已验证 **Mac 本机单 Tailscale 产品链路**与 **Linux 测试用隔离 relay**；Linux 封闭测试网络中的双网双方向受保护会话已通过；默认 EasyTier 配置对照及 Android 应用尚未通过验收。
 
 ## 已通过的单 TS 原生链路

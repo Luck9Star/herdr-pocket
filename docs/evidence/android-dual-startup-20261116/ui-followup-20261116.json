@@ -1,0 +1,49 @@
+{
+  "scope": "API 35 x86_64 emulator UI follow-up; no dual-session acceptance",
+  "nativeSource": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+  "flutter": [
+    {
+      "run": 43884776566,
+      "uiSource": "a741d673ef0c83d6a0d68297e5fd6b5c314a6af7",
+      "status": "failed",
+      "firstStopDirections": ["et", "ts"],
+      "failureStageForBoth": "et_pair_review",
+      "hostAuditsForBoth": [],
+      "checkedCleanupPassedForBoth": true
+    },
+    {
+      "run": 43887559248,
+      "uiSource": "38ae7154eb94dc591eaed2f6afea25dcdbdefb8a",
+      "status": "failed",
+      "firstStopDirections": ["et", "ts"],
+      "failureStageForBoth": "et_response_preview",
+      "responseReceivedForBoth": true,
+      "firstFailureFrameForBoth": {"file": "dual_overlay_ui_steps.dart", "line": 324},
+      "hostAuditsForBoth": [],
+      "checkedCleanupPassedForBoth": true,
+      "clockCauseEstablished": false
+    }
+  ],
+  "tauri": {
+    "run": 43884776658,
+    "uiSource": "a741d673ef0c83d6a0d68297e5fd6b5c314a6af7",
+    "apkSource": "a741d673ef0c83d6a0d68297e5fd6b5c314a6af7",
+    "status": "failed",
+    "ordinaryWebViewHomeVerifiedForBoth": true,
+    "ownedNativeWebViewTreeParsedForBoth": true,
+    "profileCountAtFailureForBoth": 1,
+    "directions": {
+      "ts": {
+        "failureStage": "network_ts_start",
+        "startObservation": {"sent": 1, "resolved": 0, "rejected": 1, "errorCode": "other"},
+        "errorCode": "dual_action_unavailable"
+      },
+      "et": {
+        "failureStage": "network_et_save",
+        "startObservation": {"sent": 1, "resolved": 1, "rejected": 0, "errorCode": null},
+        "errorCode": "dual_profile_missing"
+      }
+    },
+    "checkedCleanupPassedForBoth": true
+  }
+}

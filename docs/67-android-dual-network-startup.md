@@ -31,7 +31,16 @@
 
 后续本地检查发现两个具体风险：Flutter 的主机绑定保存是异步的，原测试未等待绑定持久化和下一按钮启用；身份入口也可能在按钮尚未启用时点击。针对性修复等待真实绑定与控件就绪、只点击一次，并清除跨阶段旧状态快照；本机 Flutter 定向测试 2 项和 Python 检查 16 项通过。两次设备失败是否全部由这些竞态造成，仍需设备复验。
 
-Tauri 另有可独立复现的产品缺陷：同源码真实 Chromium 中，`needs-login` 触发 `NetworkLoginPoll` 默认定时器时出现 `Illegal invocation`。完整真实产品面板对照使用**模拟节点读数**：旧版 `cards=0`、`loginVisible=false`、`readFailed=true`；修复后 `cards=1`、`loginVisible=true`、`readFailed=false`；两版均 `statusReads=1`。这是浏览器产品面板对照，不是 Android 设备验收；修后设备复验结果尚待返回。
+Tauri 另有可独立复现的产品缺陷：同源码真实 Chromium 中，`needs-login` 触发 `NetworkLoginPoll` 默认定时器时出现 `Illegal invocation`。完整真实产品面板对照使用**模拟节点读数**：旧版 `cards=0`、`loginVisible=false`、`readFailed=true`；修复后 `cards=1`、`loginVisible=true`、`readFailed=false`；两版均 `statusReads=1`。这是浏览器产品面板对照，不是 Android 设备验收；后续设备复验见下节。
+
+## 后续 UI 设备复验与本机修复
+
+下列运行均使用修复后的原生 `a9be92d`，保留[脱敏短摘要](evidence/android-dual-startup-20261116/ui-followup-20261116.json)。这些运行仍未到达双会话、停网与另一网续传验收点。
+
+- **Flutter**：[run 43884776566](https://github.com/Luck9Star/herdr-pocket/actions/runs/43884776566)（UI `a741d67`）的先停 ET、先停 TS 两例均到 `et_pair_review`；[run 43887559248](https://github.com/Luck9Star/herdr-pocket/actions/runs/43887559248)（UI `38ae715`）两例均到 `et_response_preview`，且 `responseReceived=true`。后者脱敏栈指向 `dual_overlay_ui_steps.dart:324` 的预览存在性断言。响应已经收到，设备摘要没有证明设备时钟导致失败。两轮 `hostAudits=[]`，不能据此写成 SSH 或双网会话通过；两方向的受检清理均成功。
+- **Tauri**：[run 43884776658](https://github.com/Luck9Star/herdr-pocket/actions/runs/43884776658)（源码与 APK 均为 `a741d67`）两个方向均实际解析到本应用原生 WebView 树，并完成普通 WebView 首页核验；失败时均保留一张网络卡片。先停 TS 案例在 `network_ts_start` 的 start 为 sent 1、resolved 0、rejected 1；先停 ET 案例的 TS start 为 sent 1、resolved 1、rejected 0，但随后在 `network_et_save` 返回 `dual_profile_missing`。因此不能把卡片保留、原生树可见或单次 start 成功写成双网启动与编辑全流程通过；两个方向的受检清理均成功。
+
+后续本机真实 Chromium 使用隔离后端，独立重现 Tauri 状态轮询重建面板、摧毁 EasyTier 未保存草稿，以及后台身份读取与人工启动并发竞争。修复后继续读取状态，草稿输入框保持同一个 DOM 节点，人工启动只发出一次写操作；本机前端全套 **614/614 通过**。这是本机产品界面与隔离后端证据，不是 Android 双会话证据。发布候选固定于 [`372430f`](https://github.com/Luck9Star/herdr-pocket/commit/372430fe94459ad2cd7fd1e04eb61c2c45d9d99c)，其设备验收须以独立结果为准。
 
 ## 后续验收范围
 

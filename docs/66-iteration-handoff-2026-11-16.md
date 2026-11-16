@@ -1,5 +1,7 @@
 # 2026-11-16 迭代收口与交接
 
+> 后续进展（2026-11-16）：Android normal/QA 已在独立 API 35 x86_64 启动探针到达预登录并完成关闭；两壳双网 UI 仍须单独验收。诊断、修复、UI 复验与范围见[第 67 页](67-android-dual-network-startup.md)。下文保留本次交接时的固定点与历史失败记录。
+
 本页汇总本轮普通 SSH / UI、终端内核评估、Linux 双网与 Android 设备分层结果。它只记录已固定源码、已验证工件及可复跑入口；**普通 SSH 两壳（Flutter / Tauri Android 与 macOS 真 XCUITest）均通过；Android 双网原生启动未通过（SIGABRT，根因未确证）**，也不把桌面 Widget 截图写成 Android 真机证据。
 
 ## 三个会话的交付

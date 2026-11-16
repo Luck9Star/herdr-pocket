@@ -553,6 +553,11 @@ def authorize_ts(browser, host, scope, port, report):
     authorization['stage']='product_system_open'
     confirm_click(browser, scope, '打开授权页面', '通过系统打开')
     authorization['productOpenConfirmed']=True
+    if report.get('authForegroundDiagnosticOnly') is True:
+        authorization['stage']='foreground_diagnostic_only'
+        try:authorization['foregroundDiagnostic']=capture_auth_foreground(port)
+        except Exception:authorization['foregroundDiagnostic']={'scope':'diagnostic-only','readUnavailable':True}
+        raise GuiFailure('dual_auth_foreground_diagnostic_only')
     authorization['stage']='system_choice'
     choose_auth_receiver(report)
     approve_auth_receiver(port,report)
@@ -573,6 +578,12 @@ def authorize_ts(browser, host, scope, port, report):
     wait_for(lambda:browser.evaluate('!document.hidden') is True,'dual_authorization_return_missing',timeout=45)
     authorization['stage']='product_resumed'
     return True
+
+
+def capture_auth_foreground(port):
+    from tauri_auth_foreground_diagnostic import capture
+    assert_owned_avd()
+    return capture(adb,native_ui_nodes,foreground_component,{PACKAGE,AUTH_PACKAGE},port)
 
 
 def pair_host(browser, host, role, profile):
@@ -936,6 +947,7 @@ def main():
     parser.add_argument('--host-source-sha', required=True)
     parser.add_argument('--native-source-sha', required=True)
     parser.add_argument('--apk-source-sha', required=True)
+    parser.add_argument('--auth-foreground-diagnostic', action='store_true')
     args=parser.parse_args()
     for name,value in (('native-source-sha',args.native_source_sha),('apk-source-sha',args.apk_source_sha),
                        ('host-source-sha',args.host_source_sha)):
@@ -953,9 +965,13 @@ def main():
             'apkSha256':hashlib.sha256(paths[0].read_bytes()).hexdigest(),'directions':{}}
     from android_dual_overlay_session import AndroidDualOverlaySession
     result['hostSourceSHA']=args.host_source_sha
+    if args.auth_foreground_diagnostic:
+        result['scope']='single owned API35 product system-open diagnostic; no chooser/consent click or dual-direction acceptance'
+        result['authForegroundDiagnosticOnly']=True
     try:
-        for role in ('ts','et'):
+        for role in (('ts',) if args.auth_foreground_diagnostic else ('ts','et')):
             current={'stage':'setup'};result['directions'][role]=current
+            if args.auth_foreground_diagnostic:current['authForegroundDiagnosticOnly']=True
             try:
                 private=Path(tempfile.mkdtemp(prefix='hp-dual-host-',dir=root));private.chmod(0o700)
                 session=AndroidDualOverlaySession(paths[2], private, host_source=args.host_source_sha,

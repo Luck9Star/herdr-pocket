@@ -294,7 +294,7 @@ jobs:
               --apk "$RUNNER_TEMP/dual-apks/tauri-dual-qa.apk" --auth-apk "$RUNNER_TEMP/dual-apks/dual-auth-receiver.apk" \
               --bundle "$RUNNER_TEMP/dual-host-fixtures" --output "$RUNNER_TEMP/tauri-dual-result" \
               --host-source-checkout "$GITHUB_WORKSPACE/host-source" --host-source-sha "$HOST_SOURCE" \
-              --native-source-sha "$NATIVE_SOURCE" --apk-source-sha "$APK_SOURCE"
+              --native-source-sha "$NATIVE_SOURCE" --apk-source-sha "$APK_SOURCE" --auth-foreground-diagnostic
       - name: Record missing device report as failed preparation
         if: always()
         run: |

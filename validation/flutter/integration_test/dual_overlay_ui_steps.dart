@@ -3,12 +3,18 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:herdr_flutter_probe/host_catalog.dart';
+import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/network_profiles_page.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/pairing_public_key.dart';
 import 'package:terminal_view/terminal_view.dart';
 
 import 'android_pairing_observe_test.dart' as existing;
+
+bool hostBindingReady(HostCatalog catalog, String hostId, String networkId, bool addEnabled) =>
+    catalog.ready && !catalog.writing && addEnabled &&
+    catalog.profiles.any((host) => host.id == hostId && host.networkProfileId == networkId);
 
 /// Real UI actions shared by the two independently paired overlay targets.
 /// Requests, responses and credentials stay in the app's private exchange.
@@ -24,6 +30,9 @@ class DualOverlayUiSteps {
       throw StateError('dual_stage_invalid');
     }
     currentStage = value;
+    if (!(value.endsWith('_node_wait') || value == 'ts_node_ready_refresh')) {
+      nodeDiagnostic = null;
+    }
     existing.publish(exchange, 'stage', value);
     await tester.pump();
   }
@@ -127,7 +136,11 @@ class DualOverlayUiSteps {
     expect(profile.provider, role == 'et' ? 'easytier' : 'tailscale');
     await existing.tap(tester, find.byKey(PageStorageKey('network-details-${profile.id}')));
     await stage('${role}_identity_open');
-    await existing.tapKey(tester, 'network-identity-${profile.id}');
+    final identity = find.byKey(ValueKey('network-identity-${profile.id}'));
+    await existing.until(tester, () => identity.evaluate().length == 1 &&
+      tester.widget<TextButton>(identity).onPressed != null);
+    await existing.tapStablePointer(tester, identity);
+    await stage('${role}_identity_load');
     await existing.until(tester, () => find.byKey(const ValueKey('network-identity-absent')).evaluate().length == 1);
     if (role == 'et') {
       await enter('network-identity-secret', networkSecret);
@@ -223,6 +236,15 @@ class DualOverlayUiSteps {
     expect(tester.state<FormFieldState<String>>(find.byKey(const ValueKey('host-network-choice'))).value, networkId);
     await existing.tapKey(tester, 'host-network-preview');
     await existing.tapKey(tester, 'host-network-confirm');
+    await existing.until(tester, () {
+      final home = find.byType(HostCatalogPage);
+      if (home.evaluate().length != 1) return false;
+      final dynamic state = tester.state(home);
+      final catalog = state.catalog as HostCatalog;
+      final add = find.byKey(const ValueKey('hosts-add'));
+      final addEnabled = add.evaluate().length == 1 && tester.widget<FilledButton>(add).onPressed != null;
+      return hostBindingReady(catalog, hostId, networkId, addEnabled);
+    });
   }
 
   Future<String> openAndObserve(String role, String hostId) async {
@@ -294,26 +316,37 @@ class DualOverlayUiSteps {
   Future<String> pairHost(String role, String profileJson) async {
     if (!{'et', 'ts'}.contains(role)) throw StateError('dual_role_invalid');
     await stage('${role}_pair_profile');
-    await existing.tapKey(tester, 'hosts-add');
+    final add = find.byKey(const ValueKey('hosts-add'));
+    await existing.until(tester, () => add.evaluate().length == 1 &&
+      tester.widget<FilledButton>(add).onPressed != null);
+    await existing.tapStablePointer(tester, add);
+    await stage('${role}_pair_page');
+    await existing.until(tester, () => find.byType(PairingPage).evaluate().length == 1);
     final page = tester.widget<PairingPage>(find.byType(PairingPage));
     expect(page.keys, isNull); expect(page.adapter, isNull);
     final before = page.catalog!.profiles.map((profile) => profile.id).toSet();
     final profile = jsonDecode(profileJson) as Map<String, dynamic>;
     final expectedFingerprint = pairingFingerprint(profile['expectedHostKey'] as String);
     expect(profile['provider'], role == 'et' ? 'easytier' : 'tailscale');
+    await stage('${role}_pair_input');
     await enter('profile-input', profileJson);
     await existing.until(tester, () => find.byKey(const ValueKey('profile-preview')).evaluate().length == 1);
+    await stage('${role}_pair_preview');
     final preview = tester.widget<SelectableText>(find.byKey(const ValueKey('profile-preview'))).data!;
     expect(preview, contains(expectedFingerprint));
     for (final field in ['host', 'port', 'username', 'session', 'socketPath', 'herdrPath']) {
       expect(preview, contains(profile[field].toString()));
     }
+    await stage('${role}_pair_fill');
     await existing.tapKey(tester, 'profile-fill');
     expect(tester.widget<SelectableText>(find.byKey(const ValueKey('pair-target-fingerprint'))).data, expectedFingerprint);
     await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
+    await stage('${role}_pair_target_review');
     final review = await existing.stableReviewCheckbox(tester, 'pair-target-review');
     await tester.tap(review); await tester.pump();
+    await stage('${role}_pair_create');
     await existing.tapStablePointer(tester, find.byKey(const ValueKey('pair-create')));
+    await stage('${role}_pair_request');
     final request = find.byKey(const ValueKey('pair-request'));
     await existing.until(tester, () => request.evaluate().length == 1);
     final requestWire = tester.widget<SelectableText>(request).data!;

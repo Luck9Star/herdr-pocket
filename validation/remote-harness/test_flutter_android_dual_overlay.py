@@ -194,6 +194,15 @@ class SafeTsControlTest(unittest.TestCase):
 
 
 class SafeUiFailureTest(unittest.TestCase):
+    def test_new_specific_stages_are_allowlisted_without_accepting_raw_details(self):
+        import json
+        for stage in ('ts_identity_load', 'ts_pair_page', 'ts_pair_input', 'ts_pair_preview',
+                      'ts_pair_fill', 'ts_pair_target_review', 'ts_pair_create', 'ts_pair_request'):
+            payload = {'stage': stage, 'kind': 'test_failure'}
+            self.assertEqual(safe_ui_failure(json.dumps(payload).encode()), payload)
+            payload['raw'] = 'secret'
+            self.assertIsNone(safe_ui_failure(json.dumps(payload).encode()))
+
     def test_only_fixed_stage_and_class_are_published(self):
         self.assertEqual(safe_ui_failure(b'{"stage":"et_identity_create","kind":"test_failure"}'),
                          {'stage': 'et_identity_create', 'kind': 'test_failure'})

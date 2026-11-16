@@ -224,6 +224,11 @@ UI_STAGES = frozenset({'host_board', 'et_network_create', 'ts_network_create', '
     'et_open_host', 'ts_open_host', 'et_input', 'ts_input', 'et_baseline', 'ts_baseline',
     'et_resume', 'ts_resume', 'et_stop_network', 'ts_stop_network', 'stopped_audit', 'final_audit',
     'et_network_save', 'ts_network_save', 'et_identity_open', 'ts_identity_open',
+    'et_identity_load', 'ts_identity_load',
+    'et_pair_page', 'ts_pair_page', 'et_pair_input', 'ts_pair_input',
+    'et_pair_preview', 'ts_pair_preview', 'et_pair_fill', 'ts_pair_fill',
+    'et_pair_target_review', 'ts_pair_target_review', 'et_pair_create', 'ts_pair_create',
+    'et_pair_request', 'ts_pair_request',
     'et_identity_review', 'ts_identity_review', 'et_identity_create', 'ts_identity_create',
     'et_node_refresh', 'ts_node_refresh', 'et_node_start', 'ts_node_start',
     'et_node_wait', 'ts_node_wait', 'ts_node_ready_refresh'})

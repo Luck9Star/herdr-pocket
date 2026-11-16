@@ -391,9 +391,22 @@ void main() {
     await tester.pump();
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNotNull);
     await tester.tap(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
-    await waitFor(tester, find.textContaining('主机密钥不符'));
+    await waitFor(tester, find.byKey(const ValueKey('direct-host-key-change')));
+    expect(find.text('主机指纹发生变化'), findsOneWidget);
+    expect(find.text('已阻止连接与输入'), findsOneWidget);
     expect(find.byType(TerminalView), findsNothing);
-    expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-secret'))).controller!.text, isEmpty);
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    expect(state.secret.text, isEmpty);
+    final String oldFingerprint = state.fingerprint;
+    expect(state.hostKeyReviewRequired, isTrue);
+    expect(state.hostKeyChange.oldFingerprint, oldFingerprint);
+    expect(state.hostKeyChange.newFingerprint, isNot(oldFingerprint));
+    await tester.tap(find.byKey(const ValueKey('direct-host-key-cancel'))); await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('direct-form')), findsOneWidget);
+    expect(state.fingerprint, oldFingerprint);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-secret'))).enabled, isFalse);
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged, isNull);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNull);
   }, skip: Platform.environment['HERDR_DIRECT_SSH_ROTATE_PORT'] == null);
 
   portableTestWidgets('encrypted private key authenticates to the isolated shell', (tester) async {

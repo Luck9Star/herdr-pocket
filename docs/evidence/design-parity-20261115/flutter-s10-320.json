@@ -1,0 +1,22 @@
+{
+  "width": 320,
+  "target": "fixture@127.0.0.1:62773",
+  "source": "real onVerifyHostKey values from independently spawned rotation peers; no synthetic fingerprints",
+  "firstChange": {
+    "oldAlgorithm": "rsa-sha2-512",
+    "oldFingerprint": "SHA256:BZI0poTpYknH9D6pMj6dYww3BRyLvsFBKzjSxlVcKuM",
+    "newAlgorithm": "rsa-sha2-512",
+    "newFingerprint": "SHA256:IHeJnQ+/gCK1hjZFbrcCtG4xNaolHqODo/yRRn5PnX8"
+  },
+  "secretClearedAtChange": true,
+  "reviewEntersProbeWithoutPop": true,
+  "refusedReprobeKeepsOldTrust": true,
+  "credentialsLockedWhileReviewPending": true,
+  "independentReviewReconnects": true,
+  "secondChange": {
+    "oldFingerprint": "SHA256:IHeJnQ+/gCK1hjZFbrcCtG4xNaolHqODo/yRRn5PnX8",
+    "newFingerprint": "SHA256:EKO6v2ldNZI8Zk5AoqJ2rRu4Rjqa8L2YVDgDhcAf+4w"
+  },
+  "cancelAfterSecondChangeKeepsOldTrust": true,
+  "secondChangeSentNoAuthentication": true
+}

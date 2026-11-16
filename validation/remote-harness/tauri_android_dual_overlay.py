@@ -387,6 +387,21 @@ def loopback_user_selection(raw):
     return {'linkHandlingAllowed':allowed,'onlyLoopbackSelected':hosts=={'127.0.0.1'}}
 
 
+def loopback_app_link_approved(raw):
+    domains={};collect=False
+    for line in raw.splitlines():
+        text=line.strip()
+        if text=='Domain verification state:':collect=True;continue
+        if collect:
+            if not line.startswith(' ') or re.fullmatch(r'User [0-9]+:',text):break
+            match=re.fullmatch(r'([^\s:]+): ([a-z_]+|[0-9]+)',text)
+            if match:
+                host,status=match.groups()
+                if host in domains:return False
+                domains[host]=status
+    return domains=={'127.0.0.1':'approved'}
+
+
 TRUSTED_RESOLVERS={
     'android/com.android.internal.app.ResolverActivity':'android',
     'com.android.intentresolver/com.android.intentresolver.ResolverActivity':'com.android.intentresolver',
@@ -485,14 +500,16 @@ def prepare_auth_receiver(port, report):
     # Only a freshly installed fixture on the disposable owned AVD is selected.
     assert_owned_avd()
     if type(port) is not int or not 1<=port<=65535:raise GuiFailure('dual_auth_port_invalid')
-    state={'scope':'owned_avd_receiver_loopback_only'};report['authHandler']=state
+    state={'scope':'owned_avd_receiver_loopback_only','linkMode':'force_approved_app_link'};report['authHandler']=state
     if adb('shell','am','get-current-user')!='0':raise GuiFailure('dual_auth_test_user_required')
     probe='https://127.0.0.1:'+str(port)+'/'
     state['beforeHandler']=component_kind(resolve_view_component(probe))
-    adb('shell','pm','set-app-links-user-selection','--user','0','--package',AUTH_PACKAGE,'true','127.0.0.1')
-    state.update(loopback_user_selection(adb('shell','pm','get-app-links','--user','0',AUTH_PACKAGE)))
-    if not state['linkHandlingAllowed'] or not state['onlyLoopbackSelected']:
-        raise GuiFailure('dual_auth_selection_unconfirmed')
+    # This disposable receiver declares only the loopback host as autoVerify.
+    adb('shell','pm','set-app-links','--package',AUTH_PACKAGE,'2','127.0.0.1')
+    links=adb('shell','pm','get-app-links','--user','0',AUTH_PACKAGE)
+    state.update(loopback_user_selection(links),onlyLoopbackApproved=loopback_app_link_approved(links))
+    if not state['linkHandlingAllowed'] or not state['onlyLoopbackApproved']:
+        raise GuiFailure('dual_auth_app_link_unconfirmed')
     state['afterHandler']=component_kind(resolve_view_component(probe))
     state['unrelatedHandler']=component_kind(resolve_view_component('https://example.invalid/'))
     candidates=query_view_components(probe);unrelated=query_view_components('https://example.invalid/')
@@ -500,7 +517,7 @@ def prepare_auth_receiver(port, report):
     state.update(candidateCount=min(len(candidates),9),receiverCandidate=receiver in candidates,
                  unrelatedCandidateCount=min(len(unrelated),9),unrelatedReceiverCandidate=receiver in unrelated)
     # Pre-query ranking can differ from the app's launch; actual foreground decides next.
-    if not state['receiverCandidate'] or state['unrelatedReceiverCandidate'] or state['unrelatedHandler']=='test_receiver':
+    if state['afterHandler']!='test_receiver' or not state['receiverCandidate'] or state['unrelatedReceiverCandidate'] or state['unrelatedHandler']=='test_receiver':
         raise GuiFailure('dual_auth_handler_scope_mismatch')
 
 

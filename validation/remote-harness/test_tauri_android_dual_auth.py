@@ -11,7 +11,7 @@ LINKS=f'''{dual.AUTH_PACKAGE}:
   ID: private-id
   Signatures: [private-signature]
   Domain verification state:
-    127.0.0.1: none
+    127.0.0.1: approved
   User 0:
     Verification link handling allowed: true
     Selection state:
@@ -52,13 +52,13 @@ class AuthRoutingTests(unittest.TestCase):
             if args[:4]==('shell','cmd','package','query-activities'):
                 return 'com.android.chrome/com.google.android.apps.chrome.Main'+('\n'+COMPONENT if args[-1]!='https://example.invalid/' else '')
             if args[:3]==('shell','pm','get-app-links'):return LINKS
-            if args[:3]==('shell','pm','set-app-links-user-selection'):return ''
+            if args[:3]==('shell','pm','set-app-links'):return ''
             raise AssertionError(args)
         with patch.object(dual,'assert_owned_avd') as owned,patch.object(dual,'adb',side_effect=adb):
             dual.prepare_auth_receiver(PORT,report)
         owned.assert_called_once()
-        selection=next(call for call in calls if 'set-app-links-user-selection' in call)
-        self.assertEqual(selection,('shell','pm','set-app-links-user-selection','--user','0','--package',dual.AUTH_PACKAGE,'true','127.0.0.1'))
+        selection=next(call for call in calls if 'set-app-links' in call)
+        self.assertEqual(selection,('shell','pm','set-app-links','--package',dual.AUTH_PACKAGE,'2','127.0.0.1'))
         self.assertFalse(any('start' in call or 'all' in call for call in calls))
         self.assertEqual(report['authHandler']['afterHandler'],'test_receiver')
         self.assertEqual(report['authHandler']['unrelatedHandler'],'browser')
@@ -67,7 +67,7 @@ class AuthRoutingTests(unittest.TestCase):
     def test_shell_success_without_confirmed_selection_is_not_accepted(self):
         with patch.object(dual,'assert_owned_avd'),patch.object(dual,'resolve_view_component',return_value=None), \
                 patch.object(dual,'adb',side_effect=['0','',LINKS.replace('User 0:','User 10:')]):
-            with self.assertRaisesRegex(dual.GuiFailure,'^dual_auth_selection_unconfirmed$'):
+            with self.assertRaisesRegex(dual.GuiFailure,'^dual_auth_app_link_unconfirmed$'):
                 dual.prepare_auth_receiver(PORT,{})
 
     def test_unowned_device_is_rejected_before_selection(self):
@@ -149,17 +149,37 @@ def bounded(probe,code,**kwargs):
         if probe():return True
     raise dual.GuiFailure(code)
 class ResolverTests(unittest.TestCase):
-    def test_api35_direct_and_resolver_queries_both_preserve_candidate_scope(self):
+    def test_app_link_state_requires_exact_declared_host_and_approved_state(self):
+        self.assertTrue(dual.loopback_app_link_approved(LINKS))
+        invalid=[LINKS.replace(': approved',': none'),LINKS.replace(': approved',': verified'),
+                 LINKS.replace('127.0.0.1: approved','example.invalid: approved'),
+                 LINKS.replace('127.0.0.1: approved','127.0.0.1: approved\n    example.invalid: approved'),
+                 LINKS.replace('127.0.0.1: approved','127.0.0.1: approved\n    127.0.0.1: approved')]
+        for raw in invalid:
+            self.assertFalse(dual.loopback_app_link_approved(raw))
+            with patch.object(dual,'assert_owned_avd'),patch.object(dual,'resolve_view_component',return_value=RESOLVER), \
+                    patch.object(dual,'adb',side_effect=['0','',raw]):
+                with self.assertRaisesRegex(dual.GuiFailure,'^dual_auth_app_link_unconfirmed$'):dual.prepare_auth_receiver(PORT,{})
+    def test_receiver_manifest_has_only_exact_loopback_autoverify_filter(self):
+        from pathlib import Path
+        manifest=ET.parse(Path(dual.__file__).parent/'tauri-dual-auth-receiver/AndroidManifest.xml').getroot()
+        android='{http://schemas.android.com/apk/res/android}'
+        filters=manifest.findall('./application/activity/intent-filter')
+        self.assertEqual(len(filters),1);self.assertEqual(filters[0].get(android+'autoVerify'),'true')
+        self.assertEqual([x.attrib for x in filters[0].findall('data')],[{android+'scheme':'https',android+'host':'127.0.0.1'}])
+
+    def test_api35_app_link_requires_exact_post_selection_resolution_and_candidate_scope(self):
         for resolved in (COMPONENT,RESOLVER):
             report={}
-            with patch.object(dual,'assert_owned_avd'),patch.object(dual,'resolve_view_component',side_effect=[resolved,resolved,'com.android.chrome/.Main']), \
+            with patch.object(dual,'assert_owned_avd'),patch.object(dual,'resolve_view_component',side_effect=[resolved,COMPONENT,'com.android.chrome/.Main']), \
                     patch.object(dual,'adb',side_effect=['0','',LINKS]), \
                     patch.object(dual,'query_view_components',side_effect=[{COMPONENT,'com.android.chrome/.Main'}, {'com.android.chrome/.Main'}]):
                 dual.prepare_auth_receiver(PORT,report)
             self.assertTrue(report['authHandler']['receiverCandidate'])
             self.assertFalse(report['authHandler']['unrelatedReceiverCandidate'])
-        for candidates in ((set(),set()),({COMPONENT},{COMPONENT})):
-            with patch.object(dual,'assert_owned_avd'),patch.object(dual,'resolve_view_component',return_value=RESOLVER), \
+        for resolved,candidates in ((COMPONENT,(set(),set())),(COMPONENT,({COMPONENT},{COMPONENT})),
+                                    (RESOLVER,({COMPONENT},set()))):
+            with patch.object(dual,'assert_owned_avd'),patch.object(dual,'resolve_view_component',side_effect=[RESOLVER,resolved,'com.android.chrome/.Main']), \
                     patch.object(dual,'adb',side_effect=['0','',LINKS]),patch.object(dual,'query_view_components',side_effect=candidates):
                 with self.assertRaisesRegex(dual.GuiFailure,'^dual_auth_handler_scope_mismatch$'):dual.prepare_auth_receiver(PORT,{})
     def test_exact_resolver_rows_then_once_and_already_selected_default(self):

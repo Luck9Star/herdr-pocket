@@ -194,6 +194,17 @@ class SafeTsControlTest(unittest.TestCase):
 
 
 class SafeUiFailureTest(unittest.TestCase):
+    def test_response_diagnostic_is_bounded_and_redacted(self):
+        import json
+        check = {'inputMatches': True, 'fieldPresent': True, 'pagePresent': True,
+                 'foreground': True, 'category': 'future', 'futureSeconds': 3}
+        payload = {'stage': 'et_response_preview', 'kind': 'test_failure', 'responseCheck': check}
+        self.assertEqual(safe_ui_failure(json.dumps(payload).encode()), payload)
+        for changed in ({**check, 'futureSeconds': 601}, {**check, 'category': 'secret'},
+                        {**check, 'raw': 'secret'}, {**check, 'inputMatches': 'secret'},
+                        {**check, 'category': 'valid'}):
+            self.assertIsNone(safe_ui_failure(json.dumps(dict(payload, responseCheck=changed)).encode()))
+
     def test_safe_source_frames_reject_paths_and_invalid_values(self):
         import json
         payload = {'stage': 'et_response_preview', 'kind': 'test_failure',

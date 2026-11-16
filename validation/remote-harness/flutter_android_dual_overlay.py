@@ -243,13 +243,21 @@ def safe_ui_failure(raw):
         detail = json.loads(raw)
         basic = {'stage', 'kind'}
         diagnostic = {'nodeState', 'statusPresent', 'editPresent', 'editEnabled', 'addPresent', 'addEnabled', 'notice'}
-        optional = {'responseReceived', 'stackFrames'}
+        optional = {'responseReceived', 'stackFrames', 'responseCheck'}
         if (isinstance(detail, dict) and set(detail) - optional in (basic, basic | diagnostic)
                 and isinstance(detail['stage'], str) and detail['stage'] in UI_STAGES
                 and isinstance(detail['kind'], str)
                 and detail['kind'] in {'test_failure', 'flutter_error', 'state_error', 'assertion_error', 'other'}):
             if 'responseReceived' in detail and type(detail['responseReceived']) is not bool:
                 return None
+            if 'responseCheck' in detail:
+                check = detail['responseCheck']
+                if (not isinstance(check, dict) or set(check) != {'inputMatches', 'fieldPresent', 'pagePresent', 'foreground', 'category', 'futureSeconds'}
+                        or any(type(check[k]) is not bool for k in ('inputMatches', 'fieldPresent', 'pagePresent', 'foreground'))
+                        or check['category'] not in {'valid', 'future', 'expired', 'invalid', 'oversize'}
+                        or type(check['futureSeconds']) is not int or not 0 <= check['futureSeconds'] <= 600
+                        or ((check['category'] == 'future') != (check['futureSeconds'] > 0))):
+                    return None
             if 'stackFrames' in detail:
                 frames = detail['stackFrames']
                 if (not isinstance(frames, list) or len(frames) > 6 or any(

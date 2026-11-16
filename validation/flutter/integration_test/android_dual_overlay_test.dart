@@ -115,6 +115,7 @@ void main() {
       await steps.captureFailureNotice();
       existing.publish(exchange, 'failure.json', jsonEncode({'stage': steps.currentStage, 'kind': kind,
         'responseReceived': steps.responseReceived, 'stackFrames': safeFailureFrames(stack),
+        if (steps.responseCheck != null) 'responseCheck': steps.responseCheck!,
         if (steps.nodeDiagnostic != null) ...steps.nodeDiagnostic!}));
       rethrow;
     }

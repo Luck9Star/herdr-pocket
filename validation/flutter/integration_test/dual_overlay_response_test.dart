@@ -7,6 +7,7 @@ import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/pairing_public_key.dart';
 import '../test/host_catalog_test.dart' show MemoryCatalogStorage;
 import '../test/pairing_accept_test.dart' show openPending;
+import '../test/pairing_gui_test.dart' show authorizedResponse;
 import '../test/remote_test_data.dart' show fixtureConfig;
 import 'dual_overlay_ui_steps.dart';
 import 'android_dual_overlay_test.dart' show safeFailureFrames;
@@ -19,6 +20,22 @@ void main() {
       '#2 secret (package:herdr_flutter_probe/android_dual_overlay_test.dart:44:1)'));
     expect(frames, [{'file': 'dual_overlay_ui_steps.dart', 'line': 123},
                     {'file': 'android_dual_overlay_test.dart', 'line': 44}]);
+  });
+  testWidgets('response diagnostic distinguishes unchanged input and strict future window', (tester) async {
+    final root = Directory.systemTemp.createTempSync('response-check-');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final catalog = HostCatalog(storage: MemoryCatalogStorage(), clock: () => 1000); await catalog.load();
+    final fixture = await openPending(tester, catalog);
+    final issued = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 3;
+    final raw = jsonEncode({...authorizedResponse(fixture.request), 'issued_at': issued, 'expires_at': issued + 30});
+    final field = find.byKey(const ValueKey('pair-response'));
+    await tester.ensureVisible(field); await tester.enterText(field, raw); await tester.pump();
+    final check = DualOverlayUiSteps(tester, root).inspectResponse(raw);
+    expect(check['inputMatches'], isTrue); expect(check['fieldPresent'], isTrue);
+    expect(check['pagePresent'], isTrue); expect(check['category'], 'future');
+    expect(check['futureSeconds'], inInclusiveRange(1, 3));
+    expect(DualOverlayUiSteps(tester, root).inspectResponse('$raw ')['inputMatches'], isFalse);
+    await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
   for (final width in [320.0, 390.0]) {
     testWidgets('host-produced response is reviewed and persisted at $width', (tester) async {

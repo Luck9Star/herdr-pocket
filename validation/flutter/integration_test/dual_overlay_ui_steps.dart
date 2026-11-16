@@ -8,6 +8,8 @@ import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/network_profiles_page.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/pairing_public_key.dart';
+import 'package:herdr_flutter_probe/pairing.dart' show decodePairing;
+import 'dart:typed_data';
 import 'package:terminal_view/terminal_view.dart';
 
 import 'android_pairing_observe_test.dart' as existing;
@@ -25,12 +27,14 @@ class DualOverlayUiSteps {
   String currentStage = 'fixture_validation';
   Map<String, Object>? nodeDiagnostic;
   bool responseReceived = false;
+  Map<String, Object>? responseCheck;
 
   Future<void> stage(String value) async {
     if (!RegExp(r'^[a-z][a-z0-9_]{0,50}$').hasMatch(value)) {
       throw StateError('dual_stage_invalid');
     }
     currentStage = value;
+    if (!value.contains('_response_')) responseCheck = null;
     if (!(value.endsWith('_node_wait') || value == 'ts_node_ready_refresh')) {
       nodeDiagnostic = null;
     }
@@ -314,6 +318,38 @@ class DualOverlayUiSteps {
       existing.screenHasMarker(activeTerminal, expectedAck));
   }
 
+  Map<String, Object> inspectResponse(String response) {
+    final field = find.byKey(const ValueKey('pair-response'));
+    final present = field.evaluate().length == 1;
+    final bytes = Uint8List.fromList(utf8.encode(response));
+    var category = bytes.length > 2048 ? 'oversize' : 'invalid';
+    var skew = 0;
+    if (bytes.length <= 2048) {
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      try {
+        if (decodePairing(bytes, now)['type'] == 'pairing-binding-response') category = 'valid';
+      } catch (_) {
+        try {
+          final value = jsonDecode(response);
+          if (value is Map && value['issued_at'] is int && value['expires_at'] is int) {
+            final int issued = value['issued_at'], expires = value['expires_at'];
+            if (issued > now && issued - now <= 600) {
+              if (decodePairing(bytes, issued)['type'] == 'pairing-binding-response') {
+                category = 'future'; skew = issued - now;
+              }
+            } else if (expires <= now && expires > 0) {
+              if (decodePairing(bytes, expires - 1)['type'] == 'pairing-binding-response') category = 'expired';
+            }
+          }
+        } catch (_) { /* Never publish untrusted input or parser errors. */ }
+      }
+    }
+    return {'inputMatches': present && tester.widget<TextField>(field).controller?.text == response,
+      'fieldPresent': present, 'pagePresent': find.byType(PairingPage).evaluate().length == 1,
+      'foreground': WidgetsBinding.instance.lifecycleState == null || WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+      'category': category, 'futureSeconds': skew};
+  }
+
   Future<void> acceptPairResponse(String role, String response, Map<String, dynamic> requestData, String expectedFingerprint) async {
     await stage('${role}_response_enter');
     await enter('pair-response', response);
@@ -321,6 +357,18 @@ class DualOverlayUiSteps {
     await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
     await stage('${role}_response_preview');
     final responsePreview = find.byKey(const ValueKey('pair-response-preview'));
+    responseCheck = inspectResponse(response);
+    expect(responseCheck!['inputMatches'], isTrue);
+    final deadline = DateTime.now().add(const Duration(seconds: 6));
+    while (responsePreview.evaluate().isEmpty && responseCheck!['category'] == 'future' &&
+        (responseCheck!['futureSeconds'] as int) <= 5 && DateTime.now().isBefore(deadline)) {
+      await tester.pump(const Duration(milliseconds: 500));
+      final retry = find.byKey(const ValueKey('pair-response-recheck'));
+      if (retry.evaluate().length == 1 && tester.widget<TextButton>(retry).onPressed != null) {
+        await existing.tapStablePointer(tester, retry);
+      }
+      responseCheck = inspectResponse(response);
+    }
     expect(responsePreview, findsOneWidget);
     final responseText = tester.widget<Text>(responsePreview).data!;
     for (final field in [requestData['request_id'], requestData['account'], expectedFingerprint,
@@ -339,6 +387,7 @@ class DualOverlayUiSteps {
   Future<String> pairHost(String role, String profileJson) async {
     if (!{'et', 'ts'}.contains(role)) throw StateError('dual_role_invalid');
     responseReceived = false;
+    responseCheck = null;
     await stage('${role}_pair_profile');
     final add = find.byKey(const ValueKey('hosts-add'));
     await existing.until(tester, () => add.evaluate().length == 1 &&

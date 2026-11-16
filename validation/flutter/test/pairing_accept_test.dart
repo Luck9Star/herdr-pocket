@@ -74,6 +74,35 @@ void main() {
     expect(fixture.keys.signCalls,0); expect(disk.writes,writes+1);
     await tester.pumpWidget(const SizedBox()); catalog.dispose(); visibility.dispose();
   });
+  for (final offset in [1,2,3]) {
+  testWidgets('future response $offset seconds remains unreviewable until explicit recheck', (tester) async {
+    var clock = 1000;
+    final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => clock); await catalog.load();
+    final fixture = await openPending(tester,catalog);
+    final response = jsonEncode({...authorizedResponse(fixture.request),'issued_at':1000 + offset});
+    final field = find.byKey(const ValueKey('pair-response'));
+    await tester.ensureVisible(field); await tester.enterText(field,response); await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done); await tester.pump();
+    expect(tester.widget<TextField>(field).controller!.text,response);
+    expect(find.byKey(const ValueKey('pair-response-preview')),findsNothing);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('pair-accept'))).onPressed,isNull);
+    await tapVisible(tester,'pair-response-recheck');
+    expect(find.byKey(const ValueKey('pair-response-preview')),findsNothing);
+    clock = 1000 + offset;
+    await tapVisible(tester,'pair-response-recheck');
+    expect(find.byKey(const ValueKey('pair-response-preview')),findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('pair-source-review'))).value,isFalse);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('pair-accept'))).onPressed,isNull);
+    clock = 1600;
+    await tester.pump(const Duration(seconds:1));
+    expect(find.byKey(const ValueKey('pair-response-preview')),findsNothing);
+    await tapVisible(tester,'pair-response-recheck');
+    expect(find.byKey(const ValueKey('pair-response-preview')),findsNothing);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('pair-accept'))).onPressed,isNull);
+    expect(fixture.keys.signCalls,0);
+    await tester.pumpWidget(const SizedBox()); catalog.dispose();
+  });
+  }
   testWidgets('finishing the narrow-screen response editor preserves text and requires the actual source checkbox before acceptance', (tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetViewInsets);

@@ -133,7 +133,12 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     timer = Timer.periodic(const Duration(seconds:1),(_) {
       final p = pairing; if (p == null) return;
       final previous = p.state; p.tick(now);
-      if (mounted && p.state != previous) setState(() { status = '请求已到期 · 授权结果仍未知，不会重放请求'; });
+      final previewExpired = responsePreview != null &&
+        (now < (responsePreview!['issued_at'] as int) || now >= (responsePreview!['expires_at'] as int));
+      if (mounted && (p.state != previous || previewExpired)) setState(() {
+        if (previewExpired) { responsePreview = null; sourceReviewed = false; }
+        if (p.state != previous) status = '请求已到期 · 授权结果仍未知，不会重放请求';
+      });
     });
   }
   void cancelWaiting() {
@@ -354,7 +359,10 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   void previewResponse({bool edited = true}) {
     if (edited) invalidateScan();
     Map<String,dynamic>? preview;
-    try { preview = decodePairing(Uint8List.fromList(utf8.encode(response.text)),now); } catch (_) { /* invalid is not trusted */ }
+    try {
+      final decoded = decodePairing(Uint8List.fromList(utf8.encode(response.text)),now);
+      if (decoded['type'] == 'pairing-binding-response') preview = decoded;
+    } catch (_) { /* invalid is not trusted */ }
     setState(() { sourceReviewed = false; responsePreview = preview; });
   }
   @override
@@ -559,6 +567,10 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
           if (scanAvailable) TextButton.icon(key:const ValueKey('pair-scan'),onPressed:busy || scanning || profileBlocked || !pageVisible || !appResumed || p.state == 'revoked' ? null : scanResponse,icon:const Icon(Icons.qr_code_scanner),label:const Text('扫描主机响应')),
           TextField(key:const ValueKey('pair-response'),controller:response,enabled:!busy,maxLength:2048,minLines:3,maxLines:6,
             decoration:const InputDecoration(labelText:'公开授权／撤销响应 JSON'),onChanged:(_) => previewResponse()),
+          if (responsePreview == null && response.text.isNotEmpty) TextButton(
+            key:const ValueKey('pair-response-recheck'),
+            onPressed:busy || scanning || !pageVisible || !appResumed || profileBlocked ? null : () => previewResponse(edited:false),
+            child:const Text('重新核验响应')),
           if (responsePreview != null) Text('待审查响应\n请求编号 ${responsePreview!['request_id']}\n账号 ${responsePreview!['account']}\n主机 ${responsePreview!['host_key']}\n设备 ${responsePreview!['fingerprint']}\n状态 ${responsePreview!['status']} · 新增授权 ${responsePreview!['authorization_added']}\n期限 ${responsePreview!['issued_at']} → ${responsePreview!['expires_at']}',key:const ValueKey('pair-response-preview')),
           CheckboxListTile(key:const ValueKey('pair-source-review'),value:sourceReviewed,
             onChanged:busy || scanning || !appResumed ? null : (v) => setState(() { sourceReviewed = v == true; }),title:const Text('我已独立核验响应来源、账号与两端指纹')),

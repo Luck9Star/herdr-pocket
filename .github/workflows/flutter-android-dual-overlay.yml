@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
-      NATIVE_SOURCE: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
+      NATIVE_SOURCE: 547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
+          ref: 547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8
           path: native-source
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -47,11 +47,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14231686859/zip" > "$RUNNER_TEMP/normal.zip"
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14232500264/zip" > "$RUNNER_TEMP/qa.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14261768985/zip" > "$RUNNER_TEMP/normal.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14261004231/zip" > "$RUNNER_TEMP/qa.zip"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14171011473/zip" > "$RUNNER_TEMP/host.zip"
-          echo '39aca341528806fbc7948d8a5cb02c00096afb4102a87d10ff0cde0d6370807a  '"$RUNNER_TEMP/normal.zip" | sha256sum -c -
-          echo '78a0a4457c5209e67507cc32121ba8377120caaab4d4edbe9c3115307f7eefcb  '"$RUNNER_TEMP/qa.zip" | sha256sum -c -
+          echo '23bdd1d79ded537d64fec25e9926f56a75c7ac3bf0f6f1b71e517bf67e8e0f3d  '"$RUNNER_TEMP/normal.zip" | sha256sum -c -
+          echo 'ac4fbf7c5c5de8d6aa1c0f695fdf0e5f43a1e7a9afa98a1b3a57e47695f1c769  '"$RUNNER_TEMP/qa.zip" | sha256sum -c -
           echo '4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698  '"$RUNNER_TEMP/host.zip" | sha256sum -c -
           mkdir "$RUNNER_TEMP/normal" "$RUNNER_TEMP/qa" "$RUNNER_TEMP/host"
           unzip -q "$RUNNER_TEMP/normal.zip" -d "$RUNNER_TEMP/normal"

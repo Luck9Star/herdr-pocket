@@ -23,12 +23,12 @@ jobs:
       manifest_sha256: ${{ steps.build-manifest.outputs.manifest_sha256 }}
     env:
       PYTHONDONTWRITEBYTECODE: '1'
-      NATIVE_SOURCE: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
-      NATIVE_RUN: '43877918495'
-      NATIVE_NORMAL_ARTIFACT: '14231686859'
-      NATIVE_NORMAL_ZIP_SHA256: 39aca341528806fbc7948d8a5cb02c00096afb4102a87d10ff0cde0d6370807a
-      NATIVE_QA_ARTIFACT: '14232500264'
-      NATIVE_QA_ZIP_SHA256: 78a0a4457c5209e67507cc32121ba8377120caaab4d4edbe9c3115307f7eefcb
+      NATIVE_SOURCE: 547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8
+      NATIVE_RUN: '43939326685'
+      NATIVE_NORMAL_ARTIFACT: '14261768985'
+      NATIVE_NORMAL_ZIP_SHA256: 23bdd1d79ded537d64fec25e9926f56a75c7ac3bf0f6f1b71e517bf67e8e0f3d
+      NATIVE_QA_ARTIFACT: '14261004231'
+      NATIVE_QA_ZIP_SHA256: ac4fbf7c5c5de8d6aa1c0f695fdf0e5f43a1e7a9afa98a1b3a57e47695f1c769
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -212,6 +212,8 @@ jobs:
         run: |
           git diff --exit-code "$FIXED_APP_SOURCE" "$APK_SOURCE" -- validation/tauri validation/transport-rust validation/network-profiles validation/pairing/native/android validation/shared validation/vendor
           git diff --exit-code "$APK_SOURCE" HEAD -- validation/tauri validation/transport-rust validation/network-profiles validation/pairing/native/android validation/shared validation/vendor
+          git diff --exit-code "$NATIVE_SOURCE" HEAD -- validation/native
+          git diff --exit-code "$APK_SOURCE" HEAD -- validation/remote-harness/tauri-dual-auth-receiver
       - name: Download and verify exact repaired APK artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -381,7 +383,7 @@ jobs:
     timeout-minutes: 60
     env:
       PYTHONDONTWRITEBYTECODE: '1'
-      NATIVE_SOURCE: a9be92d98b8c26b15ccbc7f6faa240ed3d674929
+      NATIVE_SOURCE: 547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8
       APK_SOURCE: ${{ github.sha }}
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
     steps:

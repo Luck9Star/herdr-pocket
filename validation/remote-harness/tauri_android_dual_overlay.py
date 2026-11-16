@@ -76,11 +76,31 @@ class ConfirmingWebView(AndroidWebView):
         except Exception:raise GuiFailure('android_cdp_transport_failed') from None
 
 
+def host_control_quarantined(control):
+    return (getattr(control,'_dual_control_quarantined',False) is True or
+            getattr(control,'reader_failed',False) is True)
+
+
+def quarantine_host_control(control):
+    control._dual_control_quarantined=True
+    # The existing control class checks reader_failed before stdin.write or
+    # queue reads, including direct calls from resource cleanup. Namespace and
+    # process cleanup remain available without trusting this protocol channel.
+    control.reader_failed=True
+
+
 def host_request(control, request, expected):
-    value = control.call(request)
-    if not isinstance(value, dict) or value.get('event') != expected:
-        raise GuiFailure('dual_host_event_unexpected')
-    return value
+    if host_control_quarantined(control):raise GuiFailure('dual_host_control_quarantined')
+    try:
+        value=control.call(request)
+        if not isinstance(value,dict) or value.get('event')!=expected:
+            raise GuiFailure('dual_host_event_unexpected')
+        if request.get('op')=='audit' and (request.get('role') not in ('ts','et') or value.get('role')!=request['role']):
+            raise GuiFailure('dual_host_role_mismatch')
+        return value
+    except Exception:
+        quarantine_host_control(control)
+        raise
 
 
 def checked_audit(value, expected_length, *, ordinal, sessions_count, active, new_sessions=0):
@@ -503,7 +523,8 @@ def public_transport_sample(session):
 
 
 def public_host_failure_counts(host):
-    result={}
+    result={'ts':{'available':False},'et':{'available':False}}
+    if host_control_quarantined(host):return result
     for role in ('ts','et'):
         try:
             value=host_request(host,{'op':'audit','role':role,'expectedBase64':''},'host_audit')
@@ -516,15 +537,17 @@ def public_host_failure_counts(host):
             result[role]={'available':True,'acceptedSessions':value['acceptedSessions'],'capturedBytes':value['capturedBytes'],
                           'approvedSessionObserved':any(item['approvedDevice'] for item in sessions),
                           'activeSessions':min(sum(item['active'] for item in sessions),1000000)}
-        except Exception:result[role]={'available':False}
+        except Exception:
+            quarantine_host_control(host)
+            break
     return result
 
 
 def record_stop_checkpoint(host,timeline,phase,baselines,expected,started):
-    """One passive snapshot per host; never wait for success or change verdicts.
+    """One passive snapshot per host; untrusted replies permanently fence I/O.
 
-    Audit advances its delta cursor, so all comparisons retain the original
-    absolute count and ordinal. A later strict audit still rejects any reconnect.
+    Keep original absolute counts/ordinals. An untrusted read must stop this
+    run: a late uncorrelated reply may never qualify a later strict audit.
     """
     if phase not in ('before_navigation','before_stop','after_stop_return','after_stopped_ui','after_second_ack','failure'):
         raise GuiFailure('dual_stop_checkpoint_invalid')
@@ -552,7 +575,13 @@ def record_stop_checkpoint(host,timeline,phase,baselines,expected,started):
                 originalSessionFound=len(original)==1,originalActive=original[0]['active'] if len(original)==1 else None,
                 originalApproved=original[0]['approvedDevice'] if len(original)==1 else None,
                 activeSessions=sum(item['active'] for item in sessions))
-        except Exception:pass  # Diagnostic failure never replaces the original first failure.
+        except Exception:
+            quarantine_host_control(host)
+            timeline['controlChannelQuarantined']=True
+            entry['roles'][role]=public
+            entry['completedElapsedMilliseconds']=min(3600000,max(entry['elapsedMilliseconds'],round((time.monotonic()-started)*1000)))
+            timeline.setdefault('samples',[]).append(entry)
+            raise GuiFailure('dual_host_control_quarantined') from None
         entry['roles'][role]=public
     entry['completedElapsedMilliseconds']=min(3600000,max(entry['elapsedMilliseconds'],round((time.monotonic()-started)*1000)))
     timeline.setdefault('samples',[]).append(entry)
@@ -1408,8 +1437,9 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['survivorExplicitlyStoppedAndClosed']=True
         report['stage']='complete'
     except Exception as error:
-        if stop_context is not None:
-            checkpoint('failure')
+        if stop_context is not None and not host_control_quarantined(control):
+            try:checkpoint('failure')
+            except Exception:pass  # Preserve the already captured original failure.
         try:
             from tauri_auth_failure_diagnostic import capture
             report['androidFailureDiagnostic']=capture(adb,native_ui_nodes,foreground_component,{PACKAGE,AUTH_PACKAGE},parsed.port)
@@ -1418,6 +1448,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
         except Exception:report['foregroundAtFailure']='unavailable'
         if report.get('stage') in {'pairing','connect_and_input','stop_first','post_stop','stop_survivor','complete'}:
             report['hostCountsAtFailure']=public_host_failure_counts(control)
+        if host_control_quarantined(control):report['hostControlChannelQuarantined']=True
         try:report['transportAtFailure']=public_transport_sample(session)
         except Exception:report['transportAtFailureUnavailable']=True
         if browser:

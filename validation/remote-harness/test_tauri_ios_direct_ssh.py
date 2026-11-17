@@ -5,6 +5,9 @@ import hashlib
 import io
 import json
 import logging
+import shutil
+import subprocess
+import time
 from pathlib import Path
 import plistlib
 import sys
@@ -124,7 +127,6 @@ class InputAndPrivacyTests(unittest.TestCase):
             self.assertNotIn('PRIVATE-CREDENTIAL', source)
             self.assertNotIn('__HP_CONFIG_BASE64__', source)
             self.assertNotIn('NSStringFromCGRect', source)
-            self.assertIn('matches.allSatisfy { $0.frame == first.frame }', source)
             self.assertEqual(source, (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text())
             resource = Path(directory) / 'UITests/Fixture.json'
             self.assertEqual(json.loads(resource.read_text()), config)
@@ -279,7 +281,9 @@ class ScreenshotContractTests(unittest.TestCase):
         return data, {'screenSize': [440, 956], 'safeFrame': [0, 60, 440, 850],
                       'terminalFrame': [20, 200, 400, 300], 'targetFrame': [20, 160, 400, 30],
                       'identityVerified': True, 'noCredentialsVisible': True,
-                      'pngBase64': base64.b64encode(data).decode()}
+                      'pngBase64': base64.b64encode(data).decode(),
+                      'nativeOwner': {'windowFrame': [0,0,440,956], 'webFrames': [[0,0,440,956]] * 3,
+                                      'webWrapperCount': 3, 'uniqueWebBoundsCount': 1}}
 
     def test_same_exact_original_hash_binds_manifest_case_and_unchanged_gate_json(self):
         data, payload = self.screenshot()
@@ -362,34 +366,104 @@ class HomeDiagnosticsTests(unittest.TestCase):
             with self.assertRaises(ios.Failure):
                 ios.public_home_diagnostic(value)
 
-    def test_native_home_entry_keeps_original_other_role_and_requires_page_confirmation(self):
+    def navigation_state(self, page):
+        return {'page': page, 'appForeground': True, 'inputCount': 3 if page == 'sshForm' else 0,
+                'windowCount': 1, 'webViewCount': 3, 'noAlerts': True, 'noKnownErrors': True,
+                'emptyHomeIdentity': page == 'emptyHome', 'formByStructure': page == 'sshForm',
+                'sshTitleSeen': page == 'sshForm', 'addTitleSeen': page == 'addChoice', 'credentialsEmpty': True}
+
+    def navigation(self, member, before, after, performed=True):
+        return {'stage':'native_navigation', 'nativeCheckpoint':'ordinary_open_add', 'member':member,
+                'selection':'uniqueIdentifier', 'method':'elementCenter', 'performed':performed,
+                'targetPresentAfter':False, 'afterGeometry':None, 'elapsedMs':200,
+                'geometry': {'frame':[20,100,200,44], 'visibleFrame':[0,62,440,850], 'screenFrame':[0,0,440,956],
+                             'statusBarFrames':[[0,0,440,62]], 'role':'other', 'enabled':True, 'hittable':True,
+                             'ownerResolved':True, 'centerVisible':True, 'fullyVisible':True},
+                'before':self.navigation_state(before), 'after':self.navigation_state(after),
+                'outcome':('blocked' if not performed else {'emptyHome':'noProgress','addChoice':'addChoice','sshForm':'sshForm','unexpected':'unexpected'}[after])}
+
+    def test_navigation_retries_only_after_proven_empty_home_and_records_original_role(self):
         with tempfile.TemporaryDirectory() as directory:
             result = {'artifacts': {}}
-            state = ios.Checkpoints(None, None, directory, result)
-            state.index = ios.STAGES.index('ordinary_probe')
-            state.accept({'stage': 'native_home', 'nativeCheckpoint': 'ordinary_open_add', 'home': self.value()})
-            state.accept({'stage': 'native_home_entry', 'nativeCheckpoint': 'ordinary_open_add',
-                          'member': 'headerAdd', 'selection': 'uniqueIdentifier', 'role': 'other', 'enteredAddPage': True})
-            self.assertEqual(result['homeEntry']['ordinary']['role'], 'other')
-            self.assertEqual(result['artifacts'], {})
-            self.assertEqual(list(Path(directory).iterdir()), [])
-            self.assertEqual(state.index, ios.STAGES.index('ordinary_probe'))
-            for mutation in ({'enteredAddPage': False}, {'role': 'PRIVATE'}, {'selection': 'guessedCoordinate'},
-                             {'member': 'PRIVATE'}):
-                with self.assertRaises(ios.Failure):
-                    state.accept({'stage': 'native_home_entry', 'nativeCheckpoint': 'ordinary_open_add',
-                                  'member': 'emptyAdd', 'selection': 'uniqueLabel', 'role': 'button',
-                                  'enteredAddPage': True, **mutation})
-            state.index = ios.STAGES.index('ordinary_password')
-            with self.assertRaises(ios.Failure):
-                state.accept({'stage': 'native_home', 'nativeCheckpoint': 'ordinary_open_add', 'home': self.value()})
+            state = ios.Checkpoints(None,None,directory,result);state.index=ios.STAGES.index('ordinary_probe')
+            state.accept(self.navigation('headerAdd','emptyHome','emptyHome'))
+            state.accept(self.navigation('emptyAdd','emptyHome','addChoice'))
+            state.accept(self.navigation('sshChoice','addChoice','sshForm'))
+            state.accept({'stage':'native_home_entry','nativeCheckpoint':'ordinary_open_ssh','member':'emptyAdd',
+                          'selection':'uniqueIdentifier','role':'other','enteredAddPage':True,'enteredSSHForm':True,'route':'viaAdd'})
+            self.assertEqual(result['homeEntry']['ordinary']['role'],'other')
+            self.assertEqual(len(result['navigationTrace']['ordinary']),3)
+            self.assertEqual(list(Path(directory).iterdir()),[])
+            self.assertEqual(state.index,ios.STAGES.index('ordinary_probe'))
+
+    def test_real_home_ssh_shortcut_needs_structural_form_and_no_title_assumption(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state=ios.Checkpoints(None,None,directory,{'artifacts':{}});state.index=ios.STAGES.index('ordinary_probe')
+            value=self.navigation('ordinaryShortcut','emptyHome','sshForm');value['after']['sshTitleSeen']=False
+            state.accept(value)
+            state.accept({'stage':'native_home_entry','nativeCheckpoint':'ordinary_open_add','member':'ordinaryShortcut',
+                          'selection':'buttonRole','role':'button','enteredAddPage':False,'enteredSSHForm':True,'route':'directSSH'})
+            self.assertEqual(state.result['homeEntry']['ordinary']['route'],'directSSH')
+
+    def test_navigation_rejects_replayed_target_unknown_page_unsafe_center_and_raw_data(self):
+        changes=[{'method':'guessedCoordinate'}, {'after':{**self.navigation_state('emptyHome'),'credentialsEmpty':False}},
+                 {'geometry':{**self.navigation('headerAdd','emptyHome','emptyHome')['geometry'],'centerVisible':False}},
+                 {'before':{**self.navigation_state('emptyHome'),'rawTree':'PRIVATE'}}]
+        for change in changes:
+            with tempfile.TemporaryDirectory() as directory:
+                state=ios.Checkpoints(None,None,directory,{'artifacts':{}});state.index=ios.STAGES.index('ordinary_probe')
+                with self.assertRaises(ios.Failure):state.accept({**self.navigation('headerAdd','emptyHome','emptyHome'),**change})
+                self.assertNotIn('PRIVATE',json.dumps(state.result))
+        with tempfile.TemporaryDirectory() as directory:
+            state=ios.Checkpoints(None,None,directory,{'artifacts':{}});state.index=ios.STAGES.index('ordinary_probe')
+            state.accept(self.navigation('headerAdd','emptyHome','emptyHome'))
+            with self.assertRaisesRegex(ios.Failure,'replay'):state.accept(self.navigation('headerAdd','emptyHome','emptyHome'))
+            state.accept(self.navigation('emptyAdd','emptyHome','unexpected'))
+            with self.assertRaises(ios.Failure):state.accept(self.navigation('ordinaryShortcut','emptyHome','sshForm'))
+
+
+@unittest.skipUnless(sys.platform == 'darwin' and shutil.which('swiftc'), 'real Foundation/CoreGraphics Swift precheck requires macOS swiftc')
+class NativeFramePolicyTests(unittest.TestCase):
+    def test_real_production_geometry_handles_nested_wrappers_leaf_text_and_conflicts(self):
+        source=(ios.HERE/'tauri_ios_direct_ssh.swift').read_text()
+        policy=source[source.index('enum NativeFramePolicy {'):source.index('// END NATIVE FRAME POLICY')]
+        program = r'''import Foundation
+import CoreGraphics
+func check(_ value: Bool) { if !value { fatalError("native geometry regression") } }
+let screen = CGRect(x:0,y:0,width:440,height:956)
+let inner = CGRect(x:0,y:59,width:440,height:897)
+let visible = NativeFramePolicy.visible(window:screen,screen:screen,webAncestors:[screen,screen,inner],
+    occlusions:[CGRect(x:0,y:0,width:440,height:62),CGRect(x:0,y:656,width:440,height:300)])!
+check(visible == CGRect(x:0,y:62,width:440,height:594))
+check(NativeFramePolicy.unique([screen,screen,inner]).count == 2)
+check(NativeFramePolicy.visible(window:screen,screen:screen,webAncestors:[],occlusions:[]) == nil)
+let parent=CGRect(x:10,y:100,width:420,height:100), leaf=CGRect(x:20,y:120,width:400,height:40)
+check(NativeFramePolicy.semanticIndex(frames:[parent,leaf],preferred:[1],visible:visible,clippedControl:false) == 1)
+check(NativeFramePolicy.semanticIndex(frames:[leaf,leaf],preferred:[1],visible:visible,clippedControl:false) == 1)
+check(NativeFramePolicy.semanticIndex(frames:[leaf,CGRect(x:220,y:150,width:180,height:40)],preferred:[0],visible:visible,clippedControl:false) == nil)
+check(NativeFramePolicy.semanticIndex(frames:[CGRect(x:20,y:40,width:400,height:40)],preferred:[0],visible:visible,clippedControl:false) == nil)
+check(NativeFramePolicy.semanticIndex(frames:[CGRect(x:20,y:180,width:400,height:600)],preferred:[0],visible:visible,clippedControl:true) == 0)
+check(NativeFramePolicy.sameOwner(windowPaths:[[0],[0]],webPaths:[[0,1,2],[0,1,2]]))
+check(!NativeFramePolicy.sameOwner(windowPaths:[[0],[1]],webPaths:[[0,1],[1,1]]))
+check(!NativeFramePolicy.sameOwner(windowPaths:[[0],[0]],webPaths:[[0,1],[0,2]]))
+print("native geometry cases passed")
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'Policy.swift').write_text('import Foundation\nimport CoreGraphics\n'+policy)
+            (root/'main.swift').write_text(program)
+            build=subprocess.run(['swiftc','-swift-version','5',str(root/'Policy.swift'),str(root/'main.swift'),'-o',str(root/'geometry')],capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            run=subprocess.run([str(root/'geometry')],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stderr)
+            self.assertIn('native geometry cases passed',run.stdout)
 
 
 class RealLoopbackCheckpointsTests(unittest.TestCase):
     def setUp(self):
         logging.getLogger('paramiko').setLevel(logging.CRITICAL)
-        self.ordinary = ios.SingleCommandFixture(screen_proof=True).__enter__()
-        self.rotation = ios.SingleCommandFixture(rotate_after_probe=True, screen_proof=True).__enter__()
+        deadline = time.monotonic() + 60
+        self.ordinary = ios.SingleCommandFixture(screen_proof=True, channel_deadline=deadline).__enter__()
+        self.rotation = ios.SingleCommandFixture(rotate_after_probe=True, screen_proof=True, channel_deadline=deadline).__enter__()
         self.addCleanup(self.ordinary.close)
         self.addCleanup(self.rotation.close)
         self.directory = tempfile.TemporaryDirectory()

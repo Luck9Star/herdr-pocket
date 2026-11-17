@@ -7,6 +7,7 @@ keys, herdr, sockets, or pairing helpers are accessed. Raw input is not logged.
 import base64
 import hashlib
 import importlib.util
+import math
 from pathlib import Path
 import re
 import secrets
@@ -39,7 +40,15 @@ class DirectSshFixture:
     echo_marker = 'POCKET-ANDROID-SSH-OK'
     username = 'fixture'
 
-    def __init__(self, *, observe_helper_keys=False, rotate_after_probe=False, screen_proof=False):
+    def __init__(self, *, observe_helper_keys=False, rotate_after_probe=False, screen_proof=False,
+                 channel_deadline=None):
+        if channel_deadline is not None and (type(channel_deadline) not in (int, float) or
+                not 0 < channel_deadline <= time.monotonic() + 1800 or not math.isfinite(channel_deadline)):
+            raise ValueError('invalid_fixture_channel_deadline')
+        # Only the iOS runner opts into a batch deadline and lifecycle facts.
+        # Existing Android callers retain their ten-second channel/shell waits
+        # and their public event schema.
+        self._channel_deadline = channel_deadline
         self._observe_helper_keys = observe_helper_keys
         self._rotate_after_probe = rotate_after_probe
         # Public, per-peer freshness proof, emitted only by this SSH server.
@@ -68,6 +77,7 @@ class DirectSshFixture:
         self._dimensions = []
         self._connection_events = []
         self._events_by_transport = {}
+        self._accepted_at = {}
 
     def _connection_record(self, transport, field, value=True):
         with self._lock:
@@ -75,7 +85,12 @@ class DirectSshFixture:
 
     def _connection_increment(self, transport, field, amount=1):
         with self._lock:
-            self._events_by_transport[transport][field] += amount
+            event = self._events_by_transport[transport]
+            event[field] += amount
+            if field == 'authAttempts' and self._channel_deadline is not None:
+                event['phase'] = 'authentication'
+                if event['firstAuthMs'] is None:
+                    event['firstAuthMs'] = round((time.monotonic() - self._accepted_at[transport]) * 1000)
 
     def _record(self, key):
         with self._lock:
@@ -187,6 +202,11 @@ class DirectSshFixture:
                          'closed': False}
                 self._connection_events.append(event)
                 self._events_by_transport[transport] = event
+                self._accepted_at[transport] = time.monotonic()
+                if self._channel_deadline is not None:
+                    event.update(phase='handshake', closeReason=None, handshakeMs=None,
+                                 firstAuthMs=None, closedMs=None, hostKeyAlgorithm='unknown',
+                                 clientCipher='unknown', serverCipher='unknown')
                 self._transports.add(transport)
             transport.add_server_key(self._rotated_key if rotated else self._key)
             thread = threading.Thread(target=self._connection_worker, args=(transport,), daemon=True)
@@ -199,7 +219,10 @@ class DirectSshFixture:
         finally:
             transport.close()
             with self._lock:
-                self._events_by_transport[transport]['closed'] = True
+                event = self._events_by_transport[transport]
+                event['closed'] = True
+                if self._channel_deadline is not None:
+                    event['closedMs'] = round((time.monotonic() - self._accepted_at[transport]) * 1000)
                 self._transports.discard(transport)
 
     def _handle(self, transport):
@@ -248,12 +271,42 @@ class DirectSshFixture:
 
         server = Server()
         shell_open = False
+        close_reason = 'transport_closed'
         try:
             transport.start_server(server=server)
             self._connection_record(transport, 'handshakeCompleted')
-            channel = transport.accept(10)
-            if channel is None or not server.shell.wait(10):
-                return
+            if self._channel_deadline is None:
+                channel = transport.accept(10)
+                if channel is None or not server.shell.wait(10):
+                    return
+            else:
+                self._connection_record(transport, 'phase', 'await_channel')
+                self._connection_record(transport, 'handshakeMs', round(
+                    (time.monotonic() - self._accepted_at[transport]) * 1000))
+                for field, value, allowed in (
+                    ('hostKeyAlgorithm', transport.host_key_type, {'rsa-sha2-512', 'rsa-sha2-256', 'ssh-rsa'}),
+                    ('clientCipher', transport.remote_cipher, {'aes128-ctr', 'aes192-ctr', 'aes256-ctr',
+                        'aes128-gcm@openssh.com', 'aes256-gcm@openssh.com'}),
+                    ('serverCipher', transport.local_cipher, {'aes128-ctr', 'aes192-ctr', 'aes256-ctr',
+                        'aes128-gcm@openssh.com', 'aes256-gcm@openssh.com'})):
+                    self._connection_record(transport, field, value if value in allowed else 'other')
+                channel = None
+                while not self._stop.is_set() and transport.is_active() and time.monotonic() < self._channel_deadline:
+                    channel = transport.accept(min(.2, max(0, self._channel_deadline - time.monotonic())))
+                    if channel is not None:
+                        break
+                if channel is None:
+                    close_reason = ('fixture_stopped' if self._stop.is_set() else
+                                    'batch_deadline' if time.monotonic() >= self._channel_deadline else 'transport_closed')
+                    return
+                self._connection_record(transport, 'phase', 'await_shell')
+                while not server.shell.is_set() and not self._stop.is_set() and transport.is_active() and time.monotonic() < self._channel_deadline:
+                    server.shell.wait(.2)
+                if not server.shell.is_set():
+                    close_reason = ('fixture_stopped' if self._stop.is_set() else
+                                    'batch_deadline' if time.monotonic() >= self._channel_deadline else 'transport_closed')
+                    return
+                self._connection_record(transport, 'phase', 'shell')
             shell_open = True
             channel.settimeout(.2)
             ready = b'POCKET-ANDROID-READY\r\n$ '
@@ -261,11 +314,15 @@ class DirectSshFixture:
             self._connection_increment(transport, 'outputBytes', len(ready))
             pending = b''
             while not self._stop.is_set() and transport.is_active():
+                if self._channel_deadline is not None and time.monotonic() >= self._channel_deadline:
+                    close_reason = 'batch_deadline'
+                    break
                 try:
                     data = channel.recv(1024)
                 except socket.timeout:
                     continue
                 if not data:
+                    close_reason = 'peer_eof'
                     break
                 self._connection_increment(transport, 'inputBytes', len(data))
                 if self._observe_helper_keys and self.snapshot()['markerReceived']:
@@ -285,10 +342,19 @@ class DirectSshFixture:
                     channel.sendall(reply)
                     self._connection_increment(transport, 'outputBytes', len(reply))
                     pending = b''
-        except (EOFError, OSError, paramiko.SSHException):
-            pass
+        except EOFError:
+            close_reason = 'peer_eof'
+        except OSError:
+            close_reason = 'socket_error'
+        except paramiko.SSHException:
+            close_reason = 'ssh_error'
         finally:
-            if shell_open and not self._stop.is_set():
+            if self._stop.is_set():
+                close_reason = 'fixture_stopped'
+            if self._channel_deadline is not None:
+                self._connection_record(transport, 'closeReason', close_reason)
+            if shell_open and not self._stop.is_set() and (self._channel_deadline is None or
+                    close_reason in {'peer_eof', 'transport_closed'}):
                 self._record('sessionClosed')
                 self._connection_record(transport, 'sessionClosed')
             transport.close()

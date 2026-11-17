@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 import {observeAndroidSshHeader, observeMobileViewport} from '../src/mobile-viewport.js';
 import {readFileSync} from 'node:fs';
 
+test('header and SSH target union native and CSS safe-area insets without adding them',()=>{
+  const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+  const union='max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px))';
+  assert.ok(css.includes(`padding-top:calc(20px + ${union})`));
+  assert.ok(css.includes(`padding-top:calc(16px + ${union})`));
+  assert.ok(css.includes(`top:var(--hp-ssh-sticky-top,${union})`));
+  assert.doesNotMatch(css,/var\(--hp-system-top-inset,0px\)\s*\+\s*env\(safe-area-inset-top/);
+});
+
 function fixture() {
   const callbacks=new Map(),props=new Map(),classes=new Set();
   const viewport={height:800,offsetTop:0,addEventListener:(name,fn)=>callbacks.set('v:'+name,fn),removeEventListener:name=>callbacks.delete('v:'+name)};

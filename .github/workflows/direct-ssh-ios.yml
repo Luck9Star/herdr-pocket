@@ -36,6 +36,7 @@ jobs:
           "$RUNNER_TEMP/direct-ssh-python/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0' 'pillow==12.2.0'
           HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_ios.py' -v
           HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_rotation_fixture.py' -v
+          HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_fixture_deadline.py' -v
           "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_ios_direct_ssh_batch.py' -v
       - name: Prepare terminal screenshot OCR
         run: |
@@ -60,7 +61,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/direct-ssh-app"
           flutter analyze lib integration_test
           cp integration_test/direct_ssh_tap_test.dart test/direct_ssh_tap_test.dart
-          flutter test test/direct_ssh_tap_test.dart test/direct_ssh_keyboard_viewport_test.dart --reporter expanded
+          flutter test test/direct_ssh_tap_test.dart test/direct_ssh_keyboard_viewport_test.dart test/direct_ssh_pre_auth_failure_test.dart --reporter expanded
           cp integration_test/ios_semantics_fixture.dart test/ios_semantics_fixture_test.dart
           flutter test test/ios_semantics_fixture_test.dart --plain-name 'stable semantics baseline is preserved' --reporter expanded
           if flutter test test/ios_semantics_fixture_test.dart --plain-name 'additional leaked handle remains detectable' --reporter expanded > "$RUNNER_TEMP/semantics-negative.log" 2>&1; then

@@ -60,7 +60,9 @@ NATIVE_FAILURES = frozenset((
     'native_home_add_missing', 'native_home_not_foreground', 'native_home_alert_present',
     'native_home_webview_missing', 'native_home_known_loading_error', 'native_home_brand_missing',
     'native_home_add_role_mismatch', 'native_home_add_disabled', 'native_home_add_not_hittable_or_wrong_page',
-    'native_home_add_did_not_open_page'))
+    'native_home_add_did_not_open_page', 'native_owner_ambiguous', 'native_target_control_missing',
+    'native_home_identity_unproven', 'native_home_retry_unsafe', 'native_ssh_form_unproven',
+    'native_home_navigation_failed'))
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 HOME_ERRORS = frozenset(('connectionError', 'dnsError', 'webProcessError', 'devURL',
@@ -90,6 +92,39 @@ def public_home_diagnostic(value):
                 and all(type(role) is str and role in HOME_ROLES for role in member['roles']),
                 'tauri_ios_home_diagnostic_invalid')
     return json.loads(json.dumps({k: value[k] for k in keys}))
+
+
+def public_navigation_state(value):
+    flags = {'appForeground', 'noAlerts', 'noKnownErrors', 'emptyHomeIdentity', 'formByStructure',
+             'sshTitleSeen', 'addTitleSeen', 'credentialsEmpty'}
+    counts = {'inputCount', 'windowCount', 'webViewCount'}
+    require(isinstance(value, dict) and set(value) == flags | counts | {'page'}
+            and value['page'] in ('emptyHome', 'addChoice', 'sshForm', 'unexpected')
+            and all(type(value[k]) is bool for k in flags)
+            and all(type(value[k]) is int and 0 <= value[k] <= 10000 for k in counts),
+            'tauri_ios_navigation_diagnostic_invalid')
+    if value['page'] == 'emptyHome':
+        require(value['emptyHomeIdentity'] and value['inputCount'] == 0 and value['credentialsEmpty'],
+                'tauri_ios_home_retry_unsafe')
+    if value['page'] == 'sshForm':
+        require(value['formByStructure'], 'tauri_ios_ssh_form_unproven')
+    return dict(value)
+
+
+def public_navigation_geometry(value):
+    flags = {'enabled', 'hittable', 'ownerResolved', 'centerVisible', 'fullyVisible'}
+    frames = {'frame', 'visibleFrame', 'screenFrame'}
+    require(isinstance(value, dict) and set(value) == flags | frames | {'role', 'statusBarFrames'}
+            and value['role'] in HOME_ROLES and all(type(value[k]) is bool for k in flags),
+            'tauri_ios_navigation_diagnostic_invalid')
+    def rectangle(rect):
+        return (isinstance(rect, list) and len(rect) == 4 and
+                all(type(n) in (int, float) and math.isfinite(n) and abs(n) <= 20000 for n in rect)
+                and rect[2] >= 0 and rect[3] >= 0)
+    require(all(rectangle(value[k]) for k in frames) and isinstance(value['statusBarFrames'], list)
+            and len(value['statusBarFrames']) <= 8 and all(rectangle(r) for r in value['statusBarFrames']),
+            'tauri_ios_navigation_diagnostic_invalid')
+    return json.loads(json.dumps(value))
 
 
 class SingleCommandFixture(DirectSshFixture):
@@ -221,7 +256,7 @@ def build_diagnostics(log_path, private, *, phase):
                         else 'xcode_build_failed'}]
 
 
-def build_driver(private, build, result):
+def build_driver(private, build, result, *, deadline=None):
     """Separate generator and compiler failures; both logs remain private."""
     phases = (
         ('xcodegen_generate', ['xcodegen', 'generate', '--spec', 'project.json'], 180,
@@ -232,7 +267,9 @@ def build_driver(private, build, result):
         path = Path(private) / (phase + '-private.log')
         try:
             with path.open('wb') as log:
-                command(arguments, cwd=private, log=log, timeout=timeout)
+                remaining = timeout if deadline is None else min(timeout, deadline - time.monotonic())
+                require(remaining > 0, 'tauri_ios_batch_deadline')
+                command(arguments, cwd=private, log=log, timeout=remaining)
         except Failure:
             result['buildDiagnostics'] = build_diagnostics(path, private, phase=phase)
             raise Failure(failure) from None
@@ -308,6 +345,20 @@ def measured_bounds(payload, image_size):
         a, b, c, d = outer
         return w > 0 and h > 0 and x >= a and y >= b and x + w <= a + c and y + h <= b + d
     require(inside(safe, [0, 0, *screen]), 'tauri_ios_native_visible_frame_invalid')
+    ownership = {}
+    if 'nativeOwner' in payload:
+        owner = payload['nativeOwner']
+        require(isinstance(owner, dict) and set(owner) == {'windowFrame', 'webFrames', 'webWrapperCount', 'uniqueWebBoundsCount'}
+                and isinstance(owner['webFrames'], list) and 1 <= len(owner['webFrames']) <= 16
+                and type(owner['webWrapperCount']) is int and owner['webWrapperCount'] == len(owner['webFrames'])
+                and type(owner['uniqueWebBoundsCount']) is int, 'tauri_ios_native_owner_invalid')
+        frames = [owner['windowFrame'], *owner['webFrames']]
+        require(all(isinstance(r, list) and len(r) == 4
+                    and all(type(n) in (float, int) and math.isfinite(n) for n in r)
+                    and inside(safe, r) for r in frames), 'tauri_ios_native_owner_invalid')
+        require(owner['uniqueWebBoundsCount'] == len({tuple(r) for r in owner['webFrames']}),
+                'tauri_ios_native_owner_invalid')
+        ownership['nativeOwner'] = json.loads(json.dumps(owner))
     def pixels(rect):
         # Round inward: only actual, measured terminal pixels reach OCR.
         x, y, w, h = rect
@@ -320,7 +371,7 @@ def measured_bounds(payload, image_size):
             require(isinstance(frame, list) and len(frame) == 4
                     and all(type(n) in (float, int) and math.isfinite(n) for n in frame)
                     and inside(frame, safe), 'tauri_ios_review_geometry_invalid')
-        return {'reviewBounds': [pixels(f) for f in frames], 'nativeScale': sx}
+        return {'reviewBounds': [pixels(f) for f in frames], 'nativeScale': sx, **ownership}
     terminal, target = numbers('terminalFrame', 4), numbers('targetFrame', 4)
     require(inside(terminal, safe) and inside(target, safe), 'tauri_ios_terminal_or_target_clipped')
     tx, ty, tw, th = terminal
@@ -329,7 +380,7 @@ def measured_bounds(payload, image_size):
             'tauri_ios_terminal_target_overlap')
     bounds = pixels(terminal)
     require(bounds[2] > 0 and bounds[3] > 0, 'tauri_ios_native_geometry_invalid')
-    return {'terminalBounds': bounds, 'targetBounds': pixels(target), 'nativeScale': sx}
+    return {'terminalBounds': bounds, 'targetBounds': pixels(target), 'nativeScale': sx, **ownership}
 
 
 def wait_peer(fixture, predicate, code, timeout=30):
@@ -389,6 +440,7 @@ class Checkpoints:
         case = self.result['cases']['keyChange' if stage.startswith('key_change') else 'ordinary']
         require(payload.get('identityVerified') is True and payload.get('noCredentialsVisible') is True,
                 'tauri_ios_capture_identity_unverified')
+        require('nativeOwner' in payload, 'tauri_ios_native_owner_missing')
         try:
             from PIL import Image
             data = base64.b64decode(payload.get('pngBase64', ''), validate=True)
@@ -435,22 +487,75 @@ class Checkpoints:
 
     def accept(self, payload):
         stage = payload.get('stage')
-        if stage in ('native_home', 'native_home_entry'):
+        if stage in ('native_home', 'native_home_entry', 'native_navigation'):
             phase = payload.get('nativeCheckpoint')
-            require(self.failure is None and phase in ('ordinary_open_add', 'key_change_open_add'),
+            require(self.failure is None and phase in ('ordinary_open_add', 'key_change_open_add', 'ordinary_open_ssh', 'key_change_open_ssh'),
                     'tauri_ios_home_diagnostic_phase_invalid')
-            key = 'ordinary' if phase == 'ordinary_open_add' else 'keyChange'
+            key = 'ordinary' if phase.startswith('ordinary_') else 'keyChange'
             next_stage = 'ordinary_probe' if key == 'ordinary' else 'key_change_probe_a'
             require(self.index == STAGES.index(next_stage), 'tauri_ios_home_diagnostic_phase_invalid')
+            fixture = self.ordinary if key == 'ordinary' else self.rotation
+            require(fixture is None or fixture.snapshot()['connections'] == 0, 'tauri_ios_navigation_after_ssh')
             if stage == 'native_home':
                 self.result.setdefault('homeDiagnostics', {})[key] = public_home_diagnostic(payload.get('home'))
+            elif stage == 'native_navigation':
+                members = ('headerAdd', 'emptyAdd', 'ordinaryShortcut', 'sshChoice')
+                require(payload.get('member') in members and payload.get('selection') in
+                        ('buttonRole', 'uniqueIdentifier', 'uniqueLabel') and payload.get('method') == 'elementCenter'
+                        and type(payload.get('performed')) is bool and payload.get('outcome') in
+                        ('blocked', 'noProgress', 'addChoice', 'sshForm', 'unexpected'),
+                        'tauri_ios_navigation_diagnostic_invalid')
+                before = public_navigation_state(payload.get('before'))
+                after = public_navigation_state(payload.get('after'))
+                geometry = public_navigation_geometry(payload.get('geometry'))
+                require(type(payload.get('targetPresentAfter')) is bool
+                        and type(payload.get('elapsedMs')) is int and 0 <= payload['elapsedMs'] <= 60000,
+                        'tauri_ios_navigation_diagnostic_invalid')
+                after_geometry = public_navigation_geometry(payload.get('afterGeometry')) if payload['targetPresentAfter'] else None
+                require(payload['targetPresentAfter'] or payload.get('afterGeometry') is None,
+                        'tauri_ios_navigation_diagnostic_invalid')
+                require(before['appForeground'] and before['noAlerts'] and before['noKnownErrors']
+                        and before['credentialsEmpty'] and before['windowCount'] == 1,
+                        'tauri_ios_home_retry_unsafe')
+                trace = self.result.setdefault('navigationTrace', {}).setdefault(key, [])
+                require(len(trace) < 4 and payload['member'] not in [r['member'] for r in trace],
+                        'tauri_ios_navigation_replay_rejected')
+                expected = 'addChoice' if payload['member'] == 'sshChoice' else 'emptyHome'
+                require(before['page'] == expected, 'tauri_ios_home_retry_unsafe')
+                if trace:
+                    require(trace[-1]['after']['page'] == expected and
+                            trace[-1]['geometry']['screenFrame'] == geometry['screenFrame'],
+                            'tauri_ios_home_retry_unsafe')
+                if payload['performed']:
+                    require(all(geometry[k] for k in ('enabled', 'hittable', 'ownerResolved', 'centerVisible')),
+                            'tauri_ios_navigation_unsafe_center')
+                    x, y, w, h = geometry['frame']; a, b, c, d = geometry['visibleFrame']
+                    require(w > 0 and h > 0 and a <= x + w / 2 <= a + c and b <= y + h / 2 <= b + d,
+                            'tauri_ios_navigation_unsafe_center')
+                else:
+                    require(payload['outcome'] == 'blocked', 'tauri_ios_navigation_diagnostic_invalid')
+                expected_outcome = {'emptyHome': 'noProgress', 'addChoice': 'addChoice',
+                                    'sshForm': 'sshForm', 'unexpected': 'unexpected'}[after['page']]
+                require(not payload['performed'] or payload['outcome'] == expected_outcome,
+                        'tauri_ios_navigation_diagnostic_invalid')
+                trace.append({'member': payload['member'], 'selection': payload['selection'],
+                    'method': 'elementCenter', 'performed': payload['performed'], 'geometry': geometry,
+                    'targetPresentAfter': payload['targetPresentAfter'], 'afterGeometry': after_geometry,
+                    'elapsedMs': payload['elapsedMs'],
+                    'before': before, 'after': after, 'outcome': payload['outcome']})
             else:
-                require(payload.get('member') in ('headerAdd', 'emptyAdd')
+                require(payload.get('member') in ('headerAdd', 'emptyAdd', 'ordinaryShortcut')
                         and payload.get('selection') in ('buttonRole', 'uniqueIdentifier', 'uniqueLabel')
-                        and payload.get('role') in HOME_ROLES and payload.get('enteredAddPage') is True,
-                        'tauri_ios_home_entry_invalid')
+                        and payload.get('role') in HOME_ROLES and payload.get('enteredSSHForm') is True
+                        and type(payload.get('enteredAddPage')) is bool
+                        and payload.get('route') in ('viaAdd', 'directSSH'), 'tauri_ios_home_entry_invalid')
+                trace = self.result.get('navigationTrace', {}).get(key, [])
+                require(trace and trace[-1]['after']['page'] == 'sshForm' and
+                        trace[-1]['after']['credentialsEmpty'] and trace[-1]['after']['formByStructure'],
+                        'tauri_ios_ssh_form_unproven')
+                require((payload['route'] == 'viaAdd') == payload['enteredAddPage'], 'tauri_ios_home_entry_invalid')
                 self.result.setdefault('homeEntry', {})[key] = {k: payload[k] for k in
-                    ('member', 'selection', 'role', 'enteredAddPage')}
+                    ('member', 'selection', 'role', 'enteredAddPage', 'enteredSSHForm', 'route')}
             return
         if stage in ('native_progress', 'native_failure'):
             phase = payload.get('nativeCheckpoint')
@@ -591,6 +696,7 @@ def prepare_driver(private, config):
 
 
 def run(project, app, output, *, source_sha=None, env=None):
+    batch_deadline = time.monotonic() + 1800
     env = os.environ if env is None else env
     output = Path(output).resolve()
     require(not output.exists() or not any(output.iterdir()), 'tauri_ios_output_not_empty')
@@ -627,8 +733,8 @@ def run(project, app, output, *, source_sha=None, env=None):
         result['stage'] = 'app_install'
         command(['xcrun', 'simctl', 'install', device, str(Path(app).resolve())])
         result['stage'] = 'fixture_start'
-        ordinary = SingleCommandFixture(screen_proof=True).__enter__()
-        rotation = SingleCommandFixture(rotate_after_probe=True, screen_proof=True).__enter__()
+        ordinary = SingleCommandFixture(screen_proof=True, channel_deadline=batch_deadline).__enter__()
+        rotation = SingleCommandFixture(rotate_after_probe=True, screen_proof=True, channel_deadline=batch_deadline).__enter__()
         result['cases']['ordinary']['fingerprint'] = ordinary.fingerprint
         result['cases']['keyChange']['fingerprints'] = {'A': rotation.fingerprint, 'B': rotation.rotated_fingerprint}
         state = Checkpoints(ordinary, rotation, output, result)
@@ -648,13 +754,13 @@ def run(project, app, output, *, source_sha=None, env=None):
                  '-configuration', 'Debug', '-sdk', 'iphonesimulator', '-destination', 'id=' + device,
                  '-derivedDataPath', str(private / 'derived'), 'CODE_SIGNING_ALLOWED=NO',
                  '-parallel-testing-enabled', 'NO', '-maximum-concurrent-test-simulator-destinations', '1']
-        build_driver(private, build, result)
+        build_driver(private, build, result, deadline=batch_deadline)
         with (private / 'xctest-private.log').open('wb') as log:
             result['stage'] = 'xctest_launch'
             try:
                 command([*build, 'test-without-building', '-resultBundlePath', str(private / 'run.xcresult'),
                          '-only-testing:PocketUITests/TauriDirectSSHUITests/testOrdinaryAndKeyChange'],
-                        log=log, timeout=900)
+                        log=log, timeout=max(.1, min(900, batch_deadline - time.monotonic())))
             except Failure:
                 raise Failure(state.failure or 'tauri_ios_xctest_failed') from None
         require(state.index == len(STAGES) and state.failure is None, 'tauri_ios_checkpoints_incomplete')

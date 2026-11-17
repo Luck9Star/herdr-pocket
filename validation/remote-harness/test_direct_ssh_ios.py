@@ -18,6 +18,15 @@ import ios_xctest_scaffold
 
 
 class IosDirectSshTests(unittest.TestCase):
+    def test_connect_failure_exports_only_fixed_phase_enum_and_boolean_control_facts(self):
+        value = {'phase': 'hostKeyVerified', 'failureCode': 'authAborted',
+                 'hostKeyMatched': True, 'credentialCaptured': True, 'passwordRequested': False}
+        self.assertEqual(runner.connection_diagnostic(value), value)
+        for invalid in ({**value, 'message': 'raw-secret'}, {**value, 'failureCode': 'raw-secret'},
+                        {**value, 'phase': 'raw-secret'}, {**value, 'credentialCaptured': 1},
+                        {**value, 'failureCode': []}, None):
+            self.assertEqual(runner.connection_diagnostic(invalid), {})
+
     def test_overflow_projection_keeps_only_whitelisted_geometry_stage_and_project_location(self):
         event = {'direction': 'bottom', 'pixels': 58.0, 'stage': 'input',
                  'owner': 'DirectSshPage', 'file': 'direct_ssh_page.dart', 'line': 302, 'column': 16,

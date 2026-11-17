@@ -452,6 +452,19 @@ def ui_diagnostic(failure):
     return diagnostic
 
 
+def connection_diagnostic(value):
+    keys = {'phase', 'failureCode', 'hostKeyMatched', 'credentialCaptured', 'passwordRequested'}
+    phases = {'idle', 'keyParse', 'socket', 'handshake', 'hostKeyVerified', 'passwordRequest', 'shellRequest', 'connected'}
+    failures = {'keyParse', 'socket', 'handshake', 'handshakeTimeout', 'authRejected', 'authAborted',
+                'authTimeout', 'timeout', 'hostKeyChanged', 'transport', 'cancelled', 'other'}
+    if (not isinstance(value, dict) or set(value) != keys or type(value['phase']) is not str or
+            value['phase'] not in phases or
+            (value['failureCode'] is not None and (type(value['failureCode']) is not str or value['failureCode'] not in failures)) or
+            any(type(value[key]) is not bool for key in keys - {'phase', 'failureCode'})):
+        return {}
+    return dict(value)
+
+
 def framework_diagnostic(value, private_values):
     if not isinstance(value, dict):
         return None
@@ -539,9 +552,10 @@ def run(app, output, env):
                'appRemoved': False, 'privateRemoved': False, 'rawLogsUploaded': False}
     report = {'schemaVersion': 1, 'sourceSHA': env['GITHUB_SHA'], 'kind': 'flutter-ios-simulator-ordinary-ssh',
               'status': 'failed', 'cleanup': cleanup, 'physicalImeVerified': False}
+    overall_deadline = time.monotonic() + 1800
     from direct_ssh_fixture import DirectSshFixture
-    fixture = DirectSshFixture(screen_proof=True)
-    rotation_fixture = DirectSshFixture(rotate_after_probe=True, screen_proof=True)
+    fixture = DirectSshFixture(screen_proof=True, channel_deadline=overall_deadline)
+    rotation_fixture = DirectSshFixture(rotate_after_probe=True, screen_proof=True, channel_deadline=overall_deadline)
     device, process, private, phase, primary = None, None, None, 'runtime_selection', None
     screens = {}
     rotation = {'checkpoints': {}}
@@ -552,7 +566,6 @@ def run(app, output, env):
     device_name = 'herdr-direct-' + env['GITHUB_RUN_ID'] + '-' + uuid.uuid4().hex
     create_attempted = False
     create_timed_out = False
-    overall_deadline = time.monotonic() + 1800
     def remaining(limit):
         left = overall_deadline - time.monotonic()
         if left <= 0:
@@ -735,6 +748,7 @@ def run(app, output, env):
                         if failure.get('kind') in {'timeout', 'not_hit_testable', 'control_not_ready', 'other'}:
                             report['failureKind'] = failure['kind']
                         report['uiDiagnostic'] = ui_diagnostic(failure)
+                        report['connectionDiagnostic'] = connection_diagnostic(failure.get('connection'))
                     raise Failure('ios_device_test_failed' if code else 'ios_peer_confirmation_missing')
                 if report.get('deviceStage') != 'report_data_set' or report.get('frameworkDiagnostic') is not None:
                     raise Failure('ios_final_test_state_incomplete')

@@ -392,6 +392,11 @@ void main() {
               .firstMatch(stack.toString());
           publish('failure.json', {
             'stage': stage,
+            'connection': find.byType(DirectSshPage).evaluate().length == 1
+                ? (tester.state(
+                    find.byType(DirectSshPage),
+                  ) as dynamic).connectionDiagnostic
+                : null,
             'code': 'direct_ssh_ios_ui_failed',
             'kind': detail.contains('control_not_ready')
                 ? 'control_not_ready'

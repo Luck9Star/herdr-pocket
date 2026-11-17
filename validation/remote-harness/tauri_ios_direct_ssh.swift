@@ -3,6 +3,52 @@ import Foundation
 import CoreGraphics
 import UIKit
 
+// BEGIN NATIVE FRAME POLICY -- real Foundation/CoreGraphics, no UI substitutes.
+enum NativeFramePolicy {
+    static func valid(_ value: CGRect) -> Bool {
+        [value.minX, value.minY, value.width, value.height].allSatisfy { $0.isFinite } && !value.isEmpty && !value.isNull
+    }
+    static func unique(_ values: [CGRect]) -> [CGRect] {
+        values.reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+    }
+    static func sameOwner(windowPaths: [[Int]], webPaths: [[Int]]) -> Bool {
+        guard let window = windowPaths.first, let web = webPaths.first,
+              windowPaths.count == webPaths.count else { return false }
+        return windowPaths.allSatisfy { $0 == window } && webPaths.allSatisfy { $0 == web }
+    }
+    static func visible(window: CGRect, screen: CGRect, webAncestors: [CGRect], occlusions: [CGRect]) -> CGRect? {
+        let ancestors = unique(webAncestors)
+        guard valid(window), valid(screen), !ancestors.isEmpty, ancestors.allSatisfy(valid) else { return nil }
+        var frame = window.intersection(screen)
+        for ancestor in ancestors { frame = frame.intersection(ancestor) }
+        guard valid(frame) else { return nil }
+        for blocker in unique(occlusions) where valid(blocker) && frame.intersects(blocker) {
+            if blocker.minY <= frame.minY {
+                let top = max(frame.minY, blocker.maxY)
+                frame = CGRect(x: frame.minX, y: top, width: frame.width, height: frame.maxY - top)
+            } else if blocker.maxY >= frame.maxY {
+                frame.size.height = blocker.minY - frame.minY
+            } else { return nil }
+            guard valid(frame) else { return nil }
+        }
+        return frame
+    }
+    static func semanticIndex(frames: [CGRect], preferred: [Int], visible: CGRect, clippedControl: Bool) -> Int? {
+        guard !frames.isEmpty, frames.allSatisfy(valid), valid(visible) else { return nil }
+        // Normal parent/leaf semantics may have distinct containing bounds.
+        // Two independent occurrences, even partly overlapping, remain ambiguous.
+        for first in frames { for second in frames {
+            guard first.contains(second) || second.contains(first) else { return nil }
+        }}
+        let order = preferred + frames.indices.filter { !preferred.contains($0) }.sorted {
+            frames[$0].width * frames[$0].height < frames[$1].width * frames[$1].height
+        }
+        return order.first { frames.indices.contains($0) &&
+            (clippedControl ? valid(frames[$0].intersection(visible)) : visible.contains(frames[$0])) }
+    }
+}
+// END NATIVE FRAME POLICY
+
 // URLSession completion runs off the main actor. Synchronize its tiny reply
 // explicitly; no callback captures a UI object or actor-isolated local state.
 private final class CheckpointReply: @unchecked Sendable {
@@ -15,6 +61,14 @@ private final class CheckpointReply: @unchecked Sendable {
 // The fixture configuration is read from a private test-bundle resource at run time.
 // The installed product receives normal taps/keystrokes and real SSH traffic.
 final class TauriDirectSSHUITests: XCTestCase {
+    private struct Observed {
+        let snapshot: any XCUIElementSnapshot
+        let path: [Int]
+        let window: CGRect?
+        let windowPath: [Int]
+        let webs: [CGRect]
+        let webPath: [Int]
+    }
     private var config: [String: Any] = [:]
     private var app: XCUIApplication!
     private var scenario = "ordinary"
@@ -70,12 +124,25 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func nodes() throws -> [any XCUIElementSnapshot] {
-        var pending: [any XCUIElementSnapshot] = [try app.snapshot()]
-        var result: [any XCUIElementSnapshot] = []
-        while let node = pending.popLast() {
-            result.append(node)
+        try observedNodes().map { $0.snapshot }
+    }
+
+    @MainActor
+    private func observedNodes() throws -> [Observed] {
+        var pending: [(any XCUIElementSnapshot, [Int], CGRect?, [Int], [CGRect], [Int])] = [(try app.snapshot(), [], nil, [], [], [])]
+        var result: [Observed] = []
+        while let (node, path, inheritedWindow, inheritedWindowPath, inheritedWebs, inheritedWebPath) = pending.popLast() {
+            let isWindow = node.elementType == .window && NativeFramePolicy.valid(node.frame)
+            let isWeb = node.elementType == .webView && NativeFramePolicy.valid(node.frame)
+            let window = isWindow ? node.frame : inheritedWindow
+            let windowPath = isWindow ? path : inheritedWindowPath
+            let webs = isWeb ? inheritedWebs + [node.frame] : inheritedWebs
+            let webPath = isWeb ? path : inheritedWebPath
+            result.append(Observed(snapshot: node, path: path, window: window, windowPath: windowPath, webs: webs, webPath: webPath))
             try require(result.count < 10000, "native_tree_limit")
-            pending.append(contentsOf: node.children)
+            for (index, child) in node.children.enumerated().reversed() {
+                pending.append((child, path + [index], window, windowPath, webs, webPath))
+            }
         }
         return result
     }
@@ -189,7 +256,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     private func tap(_ item: XCUIElement) throws {
         try reveal(item)
         try require(item.isEnabled, "native_control_disabled")
-        item.tap()
+        item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     @MainActor
@@ -241,81 +308,104 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func exactNode(_ rows: [any XCUIElementSnapshot], _ text: String,
-                           contains: Bool = false) throws -> any XCUIElementSnapshot {
-        let matches = rows.filter { node in
-            texts(node).contains { contains ? $0.contains(text) : $0 == text }
-        }
-        // Parent containers can repeat child labels: require one distinct frame.
-        guard let first = matches.first else {
-            try require(false, "native_geometry_ambiguous")
-            throw NSError(domain: "native_geometry_ambiguous", code: 1)
-        }
-        try require(matches.allSatisfy { $0.frame == first.frame }, "native_geometry_ambiguous")
-        return first
+    private func nativeOcclusions() -> [CGRect] {
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        return NativeFramePolicy.unique((app.statusBars.allElementsBoundByIndex + system.statusBars.allElementsBoundByIndex +
+            app.keyboards.allElementsBoundByIndex).filter { $0.exists && NativeFramePolicy.valid($0.frame) }.map { $0.frame })
     }
 
     @MainActor
-    private func safeFrame(_ rows: [any XCUIElementSnapshot]) throws -> CGRect {
-        let windows = app.windows.allElementsBoundByIndex.filter { $0.exists && !$0.frame.isEmpty }
-        try require(!windows.isEmpty, "native_window_missing")
-        var frame = windows[0].frame
-        let webs = rows.filter { $0.elementType == .webView && !$0.frame.isEmpty }
-        try require(webs.count == 1, "native_webview_ambiguous")
-        frame = frame.intersection(webs[0].frame)
-        for bar in app.statusBars.allElementsBoundByIndex where bar.exists && bar.frame.intersects(frame) {
-            let bottom = max(frame.minY, bar.frame.maxY)
-            frame = CGRect(x: frame.minX, y: bottom, width: frame.width, height: frame.maxY - bottom)
+    private func safeFrame(_ anchors: [Observed]) throws -> CGRect {
+        guard let first = anchors.first, let window = first.window else {
+            try require(false, "native_window_missing")
+            throw NSError(domain: "native_window_missing", code: 1)
         }
-        for keyboard in app.keyboards.allElementsBoundByIndex where keyboard.exists && keyboard.frame.intersects(frame) {
-            frame.size.height = keyboard.frame.minY - frame.minY
+        try require(!first.webs.isEmpty && first.webs.count <= 16, "native_webview_ambiguous")
+        try require(NativeFramePolicy.sameOwner(windowPaths: anchors.map { $0.windowPath }, webPaths: anchors.map { $0.webPath }) &&
+                    anchors.allSatisfy { $0.window == window },
+                    "native_owner_ambiguous")
+        var common = window
+        for anchor in anchors {
+            guard let visible = NativeFramePolicy.visible(window: window, screen: app.frame,
+                    webAncestors: anchor.webs, occlusions: nativeOcclusions()) else {
+                try require(false, "native_visible_frame_invalid")
+                throw NSError(domain: "native_visible_frame_invalid", code: 1)
+            }
+            common = common.intersection(visible)
         }
-        try require(!frame.isEmpty && !frame.isNull, "native_visible_frame_invalid")
-        return frame
+        try require(NativeFramePolicy.valid(common), "native_visible_frame_invalid")
+        return common
+    }
+
+    @MainActor
+    private func exactObserved(_ rows: [Observed], _ text: String, identifiers: [String] = [], control: Bool = false) throws -> Observed {
+        let matches = rows.filter { NativeFramePolicy.valid($0.snapshot.frame) &&
+            (identifiers.contains($0.snapshot.identifier) || texts($0.snapshot).contains(text)) }
+        let preferred = matches.indices.sorted {
+            let left = control ? identifiers.contains(matches[$0].snapshot.identifier) : matches[$0].snapshot.elementType == .staticText
+            let right = control ? identifiers.contains(matches[$1].snapshot.identifier) : matches[$1].snapshot.elementType == .staticText
+            return left != right ? left : matches[$0].path.count > matches[$1].path.count
+        }
+        for candidate in preferred where matches[candidate].window != nil && !matches[candidate].webs.isEmpty {
+            let owner = matches[candidate]
+            let compatible = matches.allSatisfy { item in
+                item.windowPath == owner.windowPath && (item.webPath == owner.webPath ||
+                    (item.path.count < owner.path.count && Array(owner.path.prefix(item.path.count)) == item.path))
+            }
+            try require(compatible, "native_owner_ambiguous")
+            let visible = try safeFrame([owner])
+            if let index = NativeFramePolicy.semanticIndex(frames: matches.map { $0.snapshot.frame }, preferred: [candidate],
+                    visible: visible, clippedControl: control), index == candidate { return owner }
+        }
+        try require(false, "native_geometry_ambiguous")
+        throw NSError(domain: "native_geometry_ambiguous", code: 1)
     }
 
     @MainActor
     private func screenshot(_ stage: String, port: Int, reviewPage: Bool = false) throws {
-        let rows = try nodes()
+        let tree = try observedNodes()
+        let rows = tree.map { $0.snapshot }
         try assertNoSecret(rows)
-        try require(!rows.contains { [.textField, .secureTextField].contains($0.elementType) },
-                    "native_form_visible_in_capture")
-        let safe = try safeFrame(rows)
-        var extra: [String: Any] = ["safeFrame": rect(safe),
-                                    "identityVerified": true, "noCredentialsVisible": true]
+        try require(!rows.contains { [.textField, .secureTextField].contains($0.elementType) }, "native_form_visible_in_capture")
+        let labels = reviewPage ? ["主机指纹发生变化", "已阻止连接与输入",
+            "旧：" + (config["fingerprintA"] as! String), "新：" + (config["fingerprintB"] as! String),
+            "目标：" + target(port), "重新核对主机指纹", "取消连接，保留旧信任"] :
+            [target(port) + " · SSH 已连接", "SSH 终端输出"]
+        func anchors(_ source: [Observed]) throws -> [Observed] {
+            try labels.enumerated().map { index, label in
+                try exactObserved(source, label, identifiers: !reviewPage && index == 1 ? ["ssh-terminal-output"] : [],
+                                  control: !reviewPage && index == 1)
+            }
+        }
+        let selected = try anchors(tree)
+        let safe = try safeFrame(selected)
+        let owner = selected[0]
+        var extra: [String: Any] = ["safeFrame": rect(safe), "identityVerified": true, "noCredentialsVisible": true,
+            "nativeOwner": ["windowFrame": rect(owner.window!), "webFrames": owner.webs.map(rect),
+                            "webWrapperCount": owner.webs.count, "uniqueWebBoundsCount": NativeFramePolicy.unique(owner.webs).count]]
+        let frames = selected.map { $0.snapshot.frame }
         if reviewPage {
-            let labels = ["主机指纹发生变化", "已阻止连接与输入",
-                          "旧：" + (config["fingerprintA"] as! String),
-                          "新：" + (config["fingerprintB"] as! String), "目标：" + target(port),
-                          "重新核对主机指纹", "取消连接，保留旧信任"]
-            let frames = try labels.map { try exactNode(rows, $0).frame }
             try require(frames.allSatisfy { safe.contains($0) && !$0.isEmpty }, "native_review_clipped")
+            let allowed = Set(labels.suffix(2))
             let actions = rows.filter { $0.elementType == .button }
-            try require(actions.count == 2 && Set(actions.map { $0.label }) == Set(labels.suffix(2)),
-                        "native_review_exits_invalid")
+            try require(Set(actions.map { $0.label }) == allowed && actions.allSatisfy { allowed.contains($0.label) }, "native_review_exits_invalid")
+            for label in allowed {
+                let duplicates = actions.filter { $0.label == label }.map { $0.frame }
+                try require(NativeFramePolicy.unique(duplicates).count == 1, "native_review_exits_invalid")
+            }
             extra["reviewFrames"] = frames.map(rect)
         } else {
-            let heading = try exactNode(rows, target(port) + " · SSH 已连接")
-            let terminal = try exactNode(rows, "SSH 终端输出")
-            try require(safe.contains(heading.frame) && !heading.frame.isEmpty,
-                        "native_target_clipped")
-            let crop = terminal.frame.intersection(safe)
-            try require(!crop.isEmpty && !crop.intersects(heading.frame), "native_terminal_frame_invalid")
-            extra["terminalFrame"] = rect(crop)
-            extra["targetFrame"] = rect(heading.frame)
+            try require(safe.contains(frames[0]) && !frames[0].isEmpty, "native_target_clipped")
+            let crop = frames[1].intersection(safe)
+            try require(NativeFramePolicy.valid(crop) && !crop.intersects(frames[0]), "native_terminal_frame_invalid")
+            extra["terminalFrame"] = rect(crop); extra["targetFrame"] = rect(frames[0])
         }
         let screenFrame = app.frame
-        try require(screenFrame.minX == 0 && screenFrame.minY == 0 && !screenFrame.isEmpty,
-                    "native_screen_frame_invalid")
+        try require(screenFrame.minX == 0 && screenFrame.minY == 0 && !screenFrame.isEmpty, "native_screen_frame_invalid")
         let shot = XCUIScreen.main.screenshot()
-        // Re-read the system tree to refuse layout movement across the capture.
-        let after = try nodes()
-        try require(try safeFrame(after) == safe && app.frame == screenFrame, "native_capture_geometry_changed")
-        if !reviewPage {
-            let before = try exactNode(rows, "SSH 终端输出").frame
-            try require(try exactNode(after, "SSH 终端输出").frame == before,
-                        "native_capture_geometry_changed")
-        }
+        let after = try anchors(observedNodes())
+        try require(try safeFrame(after) == safe && app.frame == screenFrame && after.map { $0.snapshot.frame } == frames,
+                    "native_capture_geometry_changed")
         extra["screenSize"] = [Double(screenFrame.width), Double(screenFrame.height)]
         extra["pngBase64"] = shot.pngRepresentation.base64EncodedString()
         try post(stage, extra)
@@ -405,8 +495,8 @@ final class TauriDirectSSHUITests: XCTestCase {
         let member = { (key: String) -> Int in (members[key] as? [String: Any])?["count"] as? Int ?? 0 }
         let foreground = app.state == .runningForeground
         let webCount = app.webViews.count
-        let safe = foreground && webCount == 1 && member("brand") > 0 && member("homeHeading") > 0 &&
-            member("zeroHosts") > 0 && member("emptyHeading") > 0 && inputCount == 0 && unknownTextCount == 0 &&
+        let safe = foreground && webCount > 0 && member("brand") > 0 && member("homeHeading") > 0 &&
+            member("zeroHosts") > 0 && member("emptyHeading") > 0 && inputCount == 0 &&
             appAlerts.isEmpty && systemAlerts.isEmpty && !alertSnapshotFailed && errors.values.allSatisfy { !$0 }
         let result: [String: Any] = ["appForeground": foreground, "webViewCount": min(webCount, 10000),
             "windowCount": min(app.windows.count, 10000), "members": members, "knownErrors": errors,
@@ -418,72 +508,127 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func openHomeAdd() throws {
-        let candidates = app.buttons.matching(NSPredicate(format:
-            "identifier IN %@ OR label IN %@", ["host-open-remote", "host-empty-add"], ["＋ 添加主机", "添加主机"]))
+    private func navigationState() throws -> [String: Any] {
+        let home = try homeDiagnostics()
+        let members = home["members"] as! [String: [String: Any]]
+        let seen = { (key: String) in (members[key]?["count"] as? Int ?? 0) > 0 }
+        let host = field("主机地址").exists, port = field("端口").exists, user = field("用户名").exists
+        let probe = button("探测主机指纹").exists
+        let choice = button("普通 SSH 终端").exists && button("herdr 配对 / 手动连接").exists
+        let noErrors = !(home["knownErrors"] as! [String: Bool]).values.contains(true)
+        let noAlerts = (home["appAlertCount"] as! Int) == 0 && (home["systemAlertCount"] as! Int) == 0 && home["alertSnapshotFailed"] as? Bool == false
+        let empty = seen("brand") && seen("homeHeading") && seen("emptyHeading") && seen("zeroHosts") &&
+            home["inputCount"] as? Int == 0 && noErrors && noAlerts && !host && !port && !user
+        let form = host && port && user && probe
+        let page = form ? "sshForm" : choice ? "addChoice" : empty ? "emptyHome" : "unexpected"
+        let title = try contains("普通 SSH 终端")
+        return ["page": page, "appForeground": home["appForeground"]!, "inputCount": home["inputCount"]!,
+            "windowCount": home["windowCount"]!, "webViewCount": home["webViewCount"]!,
+            "noAlerts": noAlerts, "noKnownErrors": noErrors,
+            "emptyHomeIdentity": empty, "formByStructure": form, "sshTitleSeen": title,
+            "addTitleSeen": seen("addHeading"), "credentialsEmpty": !password().exists || (password().value as? String ?? "").isEmpty]
+    }
+
+    @MainActor
+    private func navigationGeometry(_ item: XCUIElement) throws -> [String: Any] {
+        let all = try observedNodes()
+        let matches = all.filter { $0.snapshot.frame == item.frame &&
+            ((!item.identifier.isEmpty && $0.snapshot.identifier == item.identifier) || $0.snapshot.label == item.label) &&
+            $0.window != nil && !$0.webs.isEmpty }
+        let owner = matches.max { $0.path.count < $1.path.count }
+        var visible = CGRect.zero
+        var resolved = false
+        if let owner = owner, matches.allSatisfy({ $0.windowPath == owner.windowPath && $0.webPath == owner.webPath }),
+           let window = owner.window,
+           let measured = NativeFramePolicy.visible(window: window, screen: app.frame, webAncestors: owner.webs, occlusions: nativeOcclusions()) {
+            visible = measured; resolved = true
+        }
+        let center = CGPoint(x: item.frame.midX, y: item.frame.midY)
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let bars = NativeFramePolicy.unique((app.statusBars.allElementsBoundByIndex + system.statusBars.allElementsBoundByIndex)
+            .filter { $0.exists && NativeFramePolicy.valid($0.frame) }.map { $0.frame })
+        return ["frame": rect(item.frame), "visibleFrame": rect(visible), "screenFrame": rect(app.frame),
+            "statusBarFrames": bars.map(rect), "role": role(item.elementType), "enabled": item.isEnabled,
+            "hittable": item.isHittable, "ownerResolved": resolved,
+            "centerVisible": resolved && visible.contains(center), "fullyVisible": resolved && visible.contains(item.frame)]
+    }
+
+    @MainActor
+    private func navigationElement(_ member: String) -> (XCUIElement, String)? {
+        let targets = ["headerAdd": ("host-open-remote", "＋ 添加主机"), "emptyAdd": ("host-empty-add", "添加主机"),
+            "ordinaryShortcut": ("home-open-ssh", "普通 SSH"), "sshChoice": ("add-ssh", "普通 SSH 终端")]
+        guard let (identifier, label) = targets[member] else { return nil }
+        let byID = app.descendants(matching: .any).matching(identifier: identifier)
+        if byID.count == 1 { return (byID.firstMatch, "uniqueIdentifier") }
+        let buttons = app.buttons.matching(NSPredicate(format: "label == %@", label))
+        if buttons.count == 1 { return (buttons.firstMatch, "buttonRole") }
+        let exact = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label))
+        return exact.count == 1 ? (exact.firstMatch, "uniqueLabel") : nil
+    }
+
+    @MainActor
+    private func navigate(_ member: String) throws -> (String, String, String) {
+        guard let (item, selection) = navigationElement(member) else { return ("missing", "uniqueLabel", "otherNative") }
+        let before = try navigationState()
+        let geometry = try navigationGeometry(item)
+        let allowed = geometry["ownerResolved"] as? Bool == true && geometry["centerVisible"] as? Bool == true &&
+            geometry["enabled"] as? Bool == true && geometry["hittable"] as? Bool == true
+        let started = ProcessInfo.processInfo.systemUptime
+        if allowed { item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        var after = try navigationState()
+        if allowed {
+            let deadline = Date().addingTimeInterval(6)
+            repeat {
+                after = try navigationState()
+                if after["page"] as? String == "addChoice" || after["page"] as? String == "sshForm" { break }
+                Thread.sleep(forTimeInterval: 0.2)
+            } while Date() < deadline
+        }
+        let page = after["page"] as! String
+        let outcome = !allowed ? "blocked" : page == "sshForm" ? "sshForm" : page == "addChoice" ? "addChoice" :
+            page == "emptyHome" ? "noProgress" : "unexpected"
+        let presentAfter = item.exists
+        let afterGeometry: Any = presentAfter ? try navigationGeometry(item) : NSNull()
+        try post("native_navigation", ["nativeCheckpoint": nativePhase, "member": member, "selection": selection,
+            "method": "elementCenter", "performed": allowed, "geometry": geometry,
+            "targetPresentAfter": presentAfter, "afterGeometry": afterGeometry,
+            "elapsedMs": min(60000, max(0, Int((ProcessInfo.processInfo.systemUptime - started) * 1000))),
+            "before": before, "after": after, "outcome": outcome])
+        return (page, selection, geometry["role"] as! String)
+    }
+
+    @MainActor
+    private func openHomeSSH() throws {
         try post("native_home", ["nativeCheckpoint": nativePhase, "home": try homeDiagnostics()])
-        let deadline = Date().addingTimeInterval(40)
-        repeat {
-            let visible = visibleFrame()
-            var selected = candidates.allElementsBoundByIndex.first(where: {
-                $0.exists && $0.isEnabled && $0.isHittable && !$0.frame.isEmpty && visible.contains($0.frame)
-            })
-            var selection = "buttonRole"
-            var kind = selected?.identifier == "host-empty-add" || selected?.label == "添加主机" ? "emptyAdd" : "headerAdd"
-            if selected == nil {
-                // Some WKWebView versions expose HTML buttons as Other/StaticText.
-                // A unique exact product id or label plus a real hittable frame
-                // permits a native element tap; coordinates are never invented.
-                for (identifier, label, member) in [("host-open-remote", "＋ 添加主机", "headerAdd"),
-                                                      ("host-empty-add", "添加主机", "emptyAdd")] {
-                    let byID = app.descendants(matching: .any).matching(identifier: identifier)
-                    let byLabel = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label))
-                    for (query, method) in [(byID, "uniqueIdentifier"), (byLabel, "uniqueLabel")] {
-                        if query.count == 1 {
-                            let item = query.firstMatch
-                            if item.exists && item.isEnabled && item.isHittable && !item.frame.isEmpty && visible.contains(item.frame) {
-                                selected = item; selection = method; kind = member; break
-                            }
-                        }
-                    }
-                    if selected != nil { break }
-                }
+        let deadline = Date().addingTimeInterval(20)
+        var initial = try navigationState()
+        while initial["page"] as? String != "emptyHome" && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.2); initial = try navigationState()
+        }
+        try require(initial["page"] as? String == "emptyHome", "native_home_identity_unproven")
+        for member in ["headerAdd", "emptyAdd", "ordinaryShortcut"] {
+            let before = try navigationState()
+            try require(before["page"] as? String == "emptyHome" && before["credentialsEmpty"] as? Bool == true,
+                        "native_home_retry_unsafe")
+            let (page, selection, originalRole) = try navigate(member)
+            if page == "missing" { continue }
+            if page == "sshForm" {
+                try post("native_home_entry", ["nativeCheckpoint": nativePhase, "member": member, "selection": selection,
+                    "role": originalRole, "enteredAddPage": false, "enteredSSHForm": true, "route": "directSSH"])
+                return
             }
-            if let item = selected {
-                let originalRole = role(item.elementType)
-                try tap(item)
-                let pageDeadline = Date().addingTimeInterval(10)
-                repeat {
-                    let heading = try contains("添加连接")
-                    let instruction = try contains("选择连接方式。")
-                    let option = try contains("普通 SSH 终端")
-                    if heading && instruction && option {
-                        try post("native_home_entry", ["nativeCheckpoint": nativePhase, "member": kind,
-                            "selection": selection, "role": originalRole, "enteredAddPage": true])
-                        return
-                    }
-                    Thread.sleep(forTimeInterval: 0.25)
-                } while Date() < pageDeadline
-                try post("native_home", ["nativeCheckpoint": nativePhase, "home": try homeDiagnostics()])
-                try require(false, "native_home_add_did_not_open_page")
+            if page == "addChoice" {
+                try phase("open_ssh")
+                let (form, _, _) = try navigate("sshChoice")
+                try require(form == "sshForm", "native_ssh_form_unproven")
+                try post("native_home_entry", ["nativeCheckpoint": nativePhase, "member": member, "selection": selection,
+                    "role": originalRole, "enteredAddPage": true, "enteredSSHForm": true, "route": "viaAdd"])
+                return
             }
-            Thread.sleep(forTimeInterval: 0.25)
-        } while Date() < deadline
-        let diagnostic = try homeDiagnostics()
-        try post("native_home", ["nativeCheckpoint": nativePhase, "home": diagnostic])
-        let members = diagnostic["members"] as! [String: [String: Any]]
-        let errors = diagnostic["knownErrors"] as! [String: Bool]
-        let anyAdd = (members["headerAdd"]?["count"] as? Int ?? 0) + (members["emptyAdd"]?["count"] as? Int ?? 0)
-        var code = "native_home_add_missing"
-        if diagnostic["appForeground"] as? Bool != true { code = "native_home_not_foreground" }
-        else if (diagnostic["appAlertCount"] as? Int ?? 0) + (diagnostic["systemAlertCount"] as? Int ?? 0) > 0 { code = "native_home_alert_present" }
-        else if diagnostic["webViewCount"] as? Int == 0 { code = "native_home_webview_missing" }
-        else if errors.values.contains(true) { code = "native_home_known_loading_error" }
-        else if members["brand"]?["count"] as? Int == 0 { code = "native_home_brand_missing" }
-        else if candidates.count == 0 && anyAdd > 0 { code = "native_home_add_role_mismatch" }
-        else if candidates.count > 0 && !candidates.allElementsBoundByIndex.contains(where: { $0.isEnabled }) { code = "native_home_add_disabled" }
-        else if candidates.count > 0 { code = "native_home_add_not_hittable_or_wrong_page" }
-        try require(false, code)
+            try require(page == "emptyHome", "native_home_retry_unsafe")
+        }
+        try post("native_home", ["nativeCheckpoint": nativePhase, "home": try homeDiagnostics()])
+        try require(false, "native_home_navigation_failed")
     }
 
     @MainActor
@@ -492,9 +637,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         app.launch()
         try require(app.wait(for: .runningForeground, timeout: 30), "native_app_launch_failed")
         try phase("open_add")
-        try openHomeAdd()
-        try phase("open_ssh")
-        try tap(button("普通 SSH 终端"))
+        try openHomeSSH()
         try phase("host")
         try fill(field("主机地址"), "127.0.0.1")
         try phase("port")
@@ -527,8 +670,10 @@ final class TauriDirectSSHUITests: XCTestCase {
         try post(stage + "_input")
         // Only wait for server output to render; no client buffers are used as proof.
         Thread.sleep(forTimeInterval: 2)
-        let heading = app.staticTexts[target(port) + " · SSH 已连接"].firstMatch
-        try tap(heading)
+        let heading = app.descendants(matching: .any).matching(identifier: "ssh-target")
+        let text = app.staticTexts[target(port) + " · SSH 已连接"]
+        try require(heading.count == 1 || text.exists, "native_target_control_missing")
+        try tap(heading.count == 1 ? heading.firstMatch : text)
         try phase("terminal_capture")
         try screenshot(stage + "_terminal", port: port)
         try phase("disconnect")

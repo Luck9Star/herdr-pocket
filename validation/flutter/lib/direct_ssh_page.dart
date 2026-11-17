@@ -14,6 +14,9 @@ String formatDirectSshTarget(String username, String host, int port) {
   return '$username@$displayHost:$port';
 }
 
+enum DirectSshConnectPhase { idle, keyParse, socket, handshake, hostKeyVerified, passwordRequest, shellRequest, connected }
+enum DirectSshConnectFailure { keyParse, socket, handshake, handshakeTimeout, authRejected, authAborted, authTimeout, timeout, hostKeyChanged, transport, cancelled, other }
+
 /// Standalone SSH shell. Host key verification precedes every authentication.
 class DirectSshPage extends StatefulWidget {
   const DirectSshPage({super.key, required this.tokens});
@@ -41,6 +44,14 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   ({String oldAlgorithm, String oldFingerprint, String newAlgorithm, String newFingerprint, String target})? hostKeyChange;
   String status = '填写连接信息后先探测主机密钥。';
   bool busy = false, connected = false, keyAuth = false, foreground = true;
+  DirectSshConnectPhase connectPhase = DirectSshConnectPhase.idle;
+  DirectSshConnectFailure? connectFailure;
+  bool connectHostKeyMatched = false, connectCredentialCaptured = false, connectPasswordRequested = false;
+  Map<String, Object?> get connectionDiagnostic => {
+    'phase': connectPhase.name, 'failureCode': connectFailure?.name,
+    'hostKeyMatched': connectHostKeyMatched, 'credentialCaptured': connectCredentialCaptured,
+    'passwordRequested': connectPasswordRequested,
+  };
   String get target => '${user.text.trim()}@${host.text.trim()}:${port.text.trim()}';
   bool get valid => host.text.trim().isNotEmpty && user.text.trim().isNotEmpty &&
       (int.tryParse(port.text.trim()) ?? 0) > 0 && (int.tryParse(port.text.trim()) ?? 65536) <= 65535;
@@ -100,6 +111,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   }
   void stop({String? message, bool notify = true}) {
     cancelKeyPaste();
+    if (busy && connectPhase != DirectSshConnectPhase.idle && connectFailure == null) connectFailure = DirectSshConnectFailure.cancelled;
     epoch++; connected = false; busy = false; pendingTarget = null; activeTarget = null;
     if (targetScroll.hasClients) targetScroll.jumpTo(0);
     retireTerminal();
@@ -134,7 +146,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   }
   Future<void> probe() async {
     if (!valid || busy || !foreground) return;
-    stop(); final generation = ++epoch; final originalTarget = target;
+    stop(); connectPhase = DirectSshConnectPhase.idle; connectFailure = null;
+    connectHostKeyMatched = false; connectCredentialCaptured = false; connectPasswordRequested = false;
+    final generation = ++epoch; final originalTarget = target;
     final originalHost = host.text.trim(), originalPort = int.parse(port.text.trim()), originalUser = user.text.trim();
     pendingTarget = originalTarget;
     setState(() { busy = true; status = '正在探测主机密钥，尚未发送认证信息。'; if (!hostKeyReviewRequired) fingerprint = null; });
@@ -180,6 +194,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     pendingTarget = originalTarget; activeTarget = null;
     final password = keyAuth ? null : secret.text;
     final keyText = keyAuth ? secret.text : null, phrase = passphrase.text;
+    connectPhase = keyText == null ? DirectSshConnectPhase.socket : DirectSshConnectPhase.keyParse; connectFailure = null;
+    connectHostKeyMatched = false; connectPasswordRequested = false;
+    connectCredentialCaptured = (password ?? keyText)?.isNotEmpty ?? false;
     secret.clear(); passphrase.clear();
     retireTerminal(); final sessionTerminal = createTerminal(generation); terminal = sessionTerminal;
     setState(() { busy = true; status = '正在重新核对主机密钥并连接…'; });
@@ -189,13 +206,23 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     try {
       final identities = keyText == null ? null : SSHKeyPair.fromPem(keyText, phrase.isEmpty ? null : phrase);
       parsingKey = false;
+      connectPhase = DirectSshConnectPhase.socket;
       final localSocket = await SSHSocket.connect(originalHost, originalPort, timeout: const Duration(seconds: 8));
       if (generation != epoch) { localSocket.destroy(); return; }
       socket = localSocket; bool verified = false;
+      connectPhase = DirectSshConnectPhase.handshake;
       final localClient = SSHClient(localSocket, username: originalUser, identities: identities,
-        onPasswordRequest: password == null ? null : () => verified && generation == epoch ? password : null,
+        onPasswordRequest: password == null ? null : () {
+          if (!verified || generation != epoch) return null;
+          connectPasswordRequested = true; connectPhase = DirectSshConnectPhase.passwordRequest;
+          return password;
+        },
         onVerifyHostKey: (type, bytes) {
           verified = generation == epoch && type == expectedAlgorithm && utf8.decode(bytes) == expected;
+          if (generation == epoch) {
+            connectHostKeyMatched = verified;
+            if (verified) connectPhase = DirectSshConnectPhase.hostKeyVerified;
+          }
           keyMismatch = generation == epoch && !verified;
           if (keyMismatch) { presentedAlgorithm = type; presentedFingerprint = utf8.decode(bytes); }
           return verified;
@@ -205,10 +232,12 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       unawaited(localClient.done.then<void>((_) {}, onError: (Object _, StackTrace __) {}));
       await localClient.authenticated.timeout(const Duration(seconds: 12));
       if (generation != epoch || !verified) return;
+      connectPhase = DirectSshConnectPhase.shellRequest;
       final pendingShell = localClient.shell(pty: SSHPtyConfig(width: sessionTerminal.viewWidth, height: sessionTerminal.viewHeight));
       unawaited(pendingShell.then<void>((value) { if (generation != epoch) value.close(); }, onError: (Object _, StackTrace __) {}));
       final localShell = await pendingShell.timeout(const Duration(seconds: 12));
       if (generation != epoch) { localShell.close(); return; }
+      connectPhase = DirectSshConnectPhase.connected;
       shell = localShell;
       stdout = localShell.stdout.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch && identical(sessionTerminal, terminal)) sessionTerminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
       stderr = localShell.stderr.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch && identical(sessionTerminal, terminal)) sessionTerminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
@@ -216,6 +245,16 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       setState(() { busy = false; pendingTarget = null; activeTarget = displayTarget; connected = true; status = '已连接 · 输入直接发送到远端 shell'; });
     } catch (error) {
       if (generation == epoch) {
+        connectFailure = parsingKey ? DirectSshConnectFailure.keyParse
+          : keyMismatch ? DirectSshConnectFailure.hostKeyChanged
+          : error is TimeoutException ? DirectSshConnectFailure.timeout
+          : error is SSHHandshakeError ? (error.message == 'Handshake timed out'
+              ? DirectSshConnectFailure.handshakeTimeout : DirectSshConnectFailure.handshake)
+          : error is SSHAuthFailError ? DirectSshConnectFailure.authRejected
+          : error is SSHAuthAbortError ? (error.message == 'Authentication timed out'
+              ? DirectSshConnectFailure.authTimeout : DirectSshConnectFailure.authAborted)
+          : connectPhase == DirectSshConnectPhase.socket ? DirectSshConnectFailure.socket
+          : error is SSHError ? DirectSshConnectFailure.transport : DirectSshConnectFailure.other;
         if (keyMismatch && presentedFingerprint != null) {
           showHostKeyChange(expectedAlgorithm, expected, presentedAlgorithm!, presentedFingerprint!, originalTarget);
         } else {

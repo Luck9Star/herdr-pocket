@@ -15,6 +15,7 @@ import threading
 import time
 
 import paramiko
+from screen_proof_token import new_screen_token, token_lines
 
 _SOURCE = Path(__file__).resolve().parents[1] / 'flutter/test/direct_ssh_fixture.py'
 _spec = importlib.util.spec_from_file_location('herdr_existing_plain_ssh_fixture', _SOURCE)
@@ -43,8 +44,7 @@ class DirectSshFixture:
         self._rotate_after_probe = rotate_after_probe
         # Public, per-peer freshness proof, emitted only by this SSH server.
         # Keep the default protocol byte-for-byte compatible with other probes.
-        self.screen_token = (''.join(secrets.choice('ACDEFHJKMNPQRTUVWXY34679') for _ in range(12))
-                             if screen_proof else None)
+        self.screen_token = new_screen_token() if screen_proof else None
         self._helper_bytes = b''
         self.password = secrets.token_hex(16)
         self._key = paramiko.RSAKey.generate(2048)
@@ -279,7 +279,8 @@ class DirectSshFixture:
                 if re.search(rb'(?:^|[\r\n])hp-check[\r\n]', pending):
                     self._record('markerReceived')
                     self._connection_record(transport, 'markerReceived')
-                    proof = self.screen_token + '\r\n' if self.screen_token is not None else ''
+                    proof = ('\r\n'.join(token_lines(self.screen_token)) + '\r\n'
+                             if self.screen_token is not None else '')
                     reply = ('\r\n\x1b[32m' + self.echo_marker + '\x1b[0m\r\n' + proof + '$ ').encode()
                     channel.sendall(reply)
                     self._connection_increment(transport, 'outputBytes', len(reply))

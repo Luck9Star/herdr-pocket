@@ -8,7 +8,7 @@ import sys
 import types
 import struct
 from subprocess import CompletedProcess
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 import unittest
 
 HERE = Path(__file__).resolve().parent
@@ -100,14 +100,83 @@ class GuardTests(unittest.TestCase):
             return CompletedProcess([], 0, integration if args[1] == 'run-as' else device, b'')
         with tempfile.TemporaryDirectory() as temp, patch.object(runner, 'adb', side_effect=adb):
             output = Path(temp)
+            screens = {}
             with self.assertRaisesRegex(runner.Failure, 'geometry_mismatch'):
                 runner.screen_checkpoint({'tag': 'key-rotation', 'attempt': 1,
-                    'bounds': [0, 20, 400, 500], 'viewSize': [400, 600], 'observedTarget': 'fixture@127.0.0.1:40002'}, {}, Mock(), Mock(username='fixture', port=40002),
+                    'bounds': [0, 20, 400, 500], 'viewSize': [400, 600], 'observedTarget': 'fixture@127.0.0.1:40002'}, screens, Mock(), Mock(username='fixture', port=40002),
                     'cache/herdr-direct-ssh-123', output)
+            self.assertEqual(screens, {})
             self.assertEqual((output / 'key-rotation-geometry-device.png').read_bytes(), device)
             self.assertEqual((output / 'key-rotation-geometry-integration.png').read_bytes(), integration)
             sizes = json.loads((output / 'key-rotation-geometry.json').read_text())['imageSizes']
             self.assertEqual(sizes, {'integration': [400, 600], 'device': [400, 650]})
+
+    def test_screen_adb_failure_keeps_last_completed_observation(self):
+        rotation = {'attempt': 1, 'accepted': True, 'expectedTarget': 'fixture@127.0.0.1:40002'}
+        ordinary = {'attempt': 3, 'accepted': False, 'expectedTarget': 'fixture@127.0.0.1:40001'}
+        completed = {'key-rotation': rotation, 'ordinary': ordinary}
+        request = {'tag': 'ordinary', 'attempt': 4, 'bounds': [0, 20, 400, 500],
+                   'viewSize': [400, 600], 'observedTarget': 'fixture@127.0.0.1:40001'}
+        with tempfile.TemporaryDirectory() as temp, patch.object(runner, 'adb', side_effect=runner.Failure('adb_failed')):
+            with self.assertRaisesRegex(runner.Failure, 'adb_failed'):
+                runner.screen_checkpoint(request, completed, Mock(username='fixture', port=40001),
+                    Mock(username='fixture', port=40002), 'cache/herdr-direct-ssh-123', Path(temp))
+        self.assertEqual(completed, {'key-rotation': rotation, 'ordinary': ordinary})
+
+    def test_failed_run_exports_only_observed_screenshot_checkpoints(self):
+        rotation = {'attempt': 1, 'accepted': True, 'expectedTarget': 'fixture@127.0.0.1:40002'}
+        ordinary = {'attempt': 12, 'accepted': False, 'expectedTarget': 'fixture@127.0.0.1:40001'}
+        partial = {**ordinary, 'attempt': 3}
+        for observed in ({}, {'key-rotation': rotation},
+                         {'key-rotation': rotation, 'ordinary': partial},
+                         {'key-rotation': rotation, 'ordinary': ordinary}):
+            with self.subTest(observed=observed), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                app = root / 'app'
+                app.mkdir()
+                output = root / 'public'
+                peers = []
+                for port in (40001, 40002):
+                    peer = MagicMock(port=port, username='fixture', password='secret',
+                                     fingerprint='SHA256:private', rotated_fingerprint='SHA256:private2')
+                    peer.__enter__.return_value = peer
+                    peer.snapshot.return_value = {'connectionsClosed': True}
+                    peers.append(peer)
+                fixture_module = types.SimpleNamespace(DirectSshFixture=Mock(side_effect=peers))
+                process = Mock()
+                process.poll.side_effect = [None, 1, 1]
+                def checkpoint(request, screens, *unused):
+                    screens.update({tag: {**value, 'private': 'secret'} for tag, value in observed.items()})
+                    screens['unknown'] = {'attempt': 1, 'accepted': False, 'expectedTarget': 'secret'}
+                    raise runner.Failure('simulated_device_failure')
+                def device_text(*args):
+                    if args == ('devices',):
+                        return 'List of devices attached\nemulator-5554 device'
+                    if args == ('shell', 'getprop', 'ro.kernel.qemu'):
+                        return '1'
+                    if args == ('shell', 'getprop', 'ro.build.version.sdk'):
+                        return '35'
+                    if args == ('shell', 'am', 'get-current-user'):
+                        return '0'
+                    return ''
+                env = {'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
+                args = types.SimpleNamespace(project=app, output=output)
+                with patch.dict(sys.modules, {'direct_ssh_fixture': fixture_module}), \
+                     patch.object(runner, 'checked_paths', return_value=(app, output)), \
+                     patch.object(runner, 'verify_prepared'), \
+                     patch.object(runner, 'text', side_effect=device_text), \
+                     patch.object(runner, 'package_present', return_value=False), \
+                     patch.object(runner, 'forward_set', return_value=set()), \
+                     patch.object(runner, 'adb'), \
+                     patch.object(runner, 'read_public_json', return_value={'request': True}), \
+                     patch.object(runner, 'screen_checkpoint', side_effect=checkpoint), \
+                     patch.object(runner.subprocess, 'Popen', return_value=process):
+                    with self.assertRaisesRegex(runner.Failure, 'simulated_device_failure'):
+                        runner.run(args, env)
+                report = json.loads((output / 'result.json').read_text())
+                self.assertEqual(report['status'], 'failed')
+                self.assertEqual(report['screenProof'], observed)
+                self.assertNotIn('secret', json.dumps(report))
 
     def test_protocol_dependency_is_present_when_required(self):
         if os.environ.get('HERDR_REQUIRE_PARAMIKO') == '1':

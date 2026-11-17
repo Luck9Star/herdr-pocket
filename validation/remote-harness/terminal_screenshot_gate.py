@@ -10,14 +10,15 @@ import argparse
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+from screen_proof_token import token_lines
 
 
 ECHO_MARKER = 'POCKET-ANDROID-SSH-OK'
-TOKEN_PATTERN = r'[ACDEFHJKMNPQRTUVWXY34679]{12}'
 
 
 class ScreenshotGateError(RuntimeError):
@@ -28,14 +29,22 @@ class ScreenshotGateError(RuntimeError):
         self.evidence = evidence or {}
 
 
-def _contains_line(text, expected):
+def _normalized_line(line):
     # OCR can separate a monospace word or use a Unicode dash. Do not accept
     # fuzzy characters, prefixes/suffixes, or concatenate separate lines.
-    for line in text.upper().splitlines():
-        compact = re.sub(r'[\s\-\u2010-\u2015\u2212]', '', line).strip('$> ')
-        if compact == expected.replace('-', ''):
-            return True
-    return False
+    return re.sub(r'[\s\-\u2010-\u2015\u2212]', '', line.upper()).strip('$> ')
+
+
+def _contains_line(text, expected):
+    return any(_normalized_line(line) == _normalized_line(expected) for line in text.splitlines())
+
+
+def _contains_adjacent_lines(text, expected):
+    # Empty OCR spacing is harmless; a visible prompt or other content still
+    # occupies a row and cannot be skipped to manufacture adjacency.
+    rows = [_normalized_line(line) for line in text.splitlines() if line.strip()]
+    wanted = [_normalized_line(line) for line in expected]
+    return any(rows[index:index + len(wanted)] == wanted for index in range(len(rows) - len(wanted) + 1))
 
 
 def verify_terminal_screenshot(png, *, expected_token, bounds):
@@ -46,7 +55,9 @@ def verify_terminal_screenshot(png, *, expected_token, bounds):
     The crop must be measured from the displayed terminal, excluding app chrome
     and input fields. Cropping never changes the retained original screenshot.
     """
-    if not isinstance(expected_token, str) or re.fullmatch(TOKEN_PATTERN, expected_token) is None:
+    try:
+        proof_lines = token_lines(expected_token)
+    except ValueError:
         raise ScreenshotGateError('terminal_screenshot_token_invalid')
     if (not isinstance(bounds, (tuple, list)) or len(bounds) != 4 or
             any(type(value) is not int for value in bounds)):
@@ -86,8 +97,9 @@ def verify_terminal_screenshot(png, *, expected_token, bounds):
     gray = ImageOps.expand(gray.resize((width * 2, height * 2)), border=20, fill=255)
     encoded = io.BytesIO()
     gray.save(encoded, format='PNG')
+    ocr_env = dict(os.environ, OMP_THREAD_LIMIT='1')
     try:
-        version = subprocess.run([executable, '--version'], capture_output=True, timeout=10, check=True)
+        version = subprocess.run([executable, '--version'], capture_output=True, timeout=10, check=True, env=ocr_env)
         match = re.match(rb'tesseract ([0-9.]+)', version.stdout)
         if match is None:
             raise ValueError()
@@ -99,14 +111,15 @@ def verify_terminal_screenshot(png, *, expected_token, bounds):
             evidence['ocrAttempts'] = attempt
             result = subprocess.run([executable, 'stdin', 'stdout', '-l', 'eng', '--psm', str(psm),
                                      '-c', 'load_system_dawg=0', '-c', 'load_freq_dawg=0'],
-                                    input=encoded.getvalue(), capture_output=True, timeout=30, check=True)
+                                    input=encoded.getvalue(), capture_output=True, timeout=30, check=True, env=ocr_env)
             text = result.stdout.decode('utf-8', errors='strict')
             marker_visible = _contains_line(text, ECHO_MARKER)
-            token_visible = _contains_line(text, expected_token)
+            token_visible = _contains_adjacent_lines(text, proof_lines)
+            sequence_visible = _contains_adjacent_lines(text, (ECHO_MARKER, *proof_lines))
             if int(marker_visible) + int(token_visible) >= int(evidence['markerVisible']) + int(evidence['tokenVisible']):
                 evidence.update(markerVisible=marker_visible, tokenVisible=token_visible,
-                                ocrPageSegmentationMode=psm)
-            if marker_visible and token_visible:
+                                ocrPageSegmentationMode=psm, proofSequenceVisible=sequence_visible)
+            if marker_visible and token_visible and sequence_visible:
                 return evidence
     except (OSError, subprocess.SubprocessError, UnicodeError, ValueError):
         raise ScreenshotGateError('terminal_screenshot_ocr_failed', evidence) from None
@@ -114,6 +127,8 @@ def verify_terminal_screenshot(png, *, expected_token, bounds):
         raise ScreenshotGateError('terminal_screenshot_echo_not_visible', evidence)
     if not evidence['tokenVisible']:
         raise ScreenshotGateError('terminal_screenshot_token_not_visible', evidence)
+    if not evidence.get('proofSequenceVisible'):
+        raise ScreenshotGateError('terminal_screenshot_proof_not_adjacent', evidence)
     return evidence
 
 

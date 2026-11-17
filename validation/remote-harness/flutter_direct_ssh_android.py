@@ -380,7 +380,6 @@ def run(args, env):
                         safe_result(json.dumps(public))
                         if set(screens) != {'ordinary', 'key-rotation'} or not all(x['accepted'] for x in screens.values()):
                             raise Failure('direct_android_screen_proof_missing')
-                        report['screenProof'] = screens
                         if 'device' not in rotation or set(rotation['checkpoints']) != set(ROTATION_PHASES):
                             raise Failure('direct_android_rotation_confirmation_missing')
                         phase = 'peer_close_confirmation'
@@ -485,6 +484,10 @@ def run(args, env):
             shutil.rmtree(private)
         if PACKAGE_QUERY_RETRIES:
             report['packageQueryRetries'] = PACKAGE_QUERY_RETRIES[-8:]
+        # Only completed gate observations are known; missing tags are not zero.
+        report['screenProof'] = {tag: {field: screens[tag][field] for field in
+            ('attempt', 'accepted', 'expectedTarget')}
+            for tag in ('key-rotation', 'ordinary') if tag in screens}
         (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
     if report['status'] != 'passed':
         raise Failure(primary or 'direct_android_cleanup_incomplete')

@@ -140,6 +140,7 @@
 }
 /* S01 board and primary navigation */
 .app-header { max-width:1000px; margin:auto; background:transparent; border:0; padding:20px; padding-top:calc(20px + var(--hp-system-top-inset,0px)); gap:8px}
+.android-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-key-change[hidden]) .app-header { position:sticky; top:0; z-index:10; background:var(--hp-canvas); }
 .brand-mark { width:40px; height:40px; font:700 13px ui-monospace,monospace; border-radius:12px}
 .brand-lockup { gap:10px}
 h1 { font-size:18px; margin:0}
@@ -211,7 +212,7 @@ h1 { font-size:18px; margin:0}
 #ssh-live { margin-top:12px; }
 .ssh-helper-keys { display:flex; gap:4px; overflow-x:auto; overscroll-behavior-inline:contain; margin-top:8px; }
 .ssh-helper-keys button { flex:none; min-width:44px; min-height:44px; padding:6px 10px; }
-.ssh-target { position:sticky; top:var(--hp-system-top-inset,0px); z-index:2; background:var(--hp-canvas); font-weight:700; white-space:nowrap; overflow-x:auto; }
+.ssh-target { position:sticky; top:var(--hp-ssh-sticky-top,var(--hp-system-top-inset,0px)); z-index:2; background:var(--hp-canvas); font-weight:700; white-space:nowrap; overflow-x:auto; }
 #home-ssh .ssh-scroll { height:min(55dvh, 520px); }
 @media (max-width:599px) {
   #home-ssh .ssh-scroll { height:45dvh; }
@@ -482,6 +483,7 @@ h1 { font-size:18px; margin:0}
 #ssh-terminal { width:max-content; min-height:0; }
 @media (max-width:599px) {
   #home-ssh .ssh-scroll { height:min(45dvh, calc(var(--hp-visual-height,100dvh) - 180px)); }
+  .android-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-key-change[hidden]) #home-ssh .ssh-scroll { height:min(45dvh, calc(var(--hp-visual-height,100dvh) - var(--hp-ssh-sticky-top,0px) - 146px)); }
 }
 /* Tabs sit on the dark terminal surface at every viewport width. */
 #tab-workspace #view-tabs button[aria-pressed=false] { color:var(--hp-termText); }

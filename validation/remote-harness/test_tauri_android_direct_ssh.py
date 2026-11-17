@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import tauri_android_direct_ssh as driver
 
@@ -147,6 +147,97 @@ class DirectSshAndroidTests(unittest.TestCase):
         self._wait_patcher=patch.object(driver,'wait_for',_fast_wait_for)
         self._wait_patcher.start()
         self.addCleanup(self._wait_patcher.stop)
+
+    def test_ready_probe_closes_failed_view_and_recovers_without_replaying_input(self):
+        broken = Mock()
+        broken.evaluate.side_effect = driver.GuiFailure('android_cdp_transport_failed')
+        pending = Mock()
+        pending.evaluate.return_value = False
+        ready = Mock()
+        ready.evaluate.return_value = True
+        with patch.object(driver, 'AndroidWebView', side_effect=[broken, pending, ready]) as constructor:
+            self.assertFalse(driver._connect_ready(1234))
+            self.assertFalse(driver._connect_ready(1234))
+            self.assertIs(driver._connect_ready(1234), ready)
+        broken.close.assert_called_once_with()
+        pending.close.assert_called_once_with()
+        ready.close.assert_not_called()
+        self.assertEqual(constructor.call_count, 3)
+        self.assertFalse(broken.method_calls and any(call[0] in ('click', 'fill') for call in broken.method_calls))
+
+    def test_preprobe_failure_stage_and_error_are_fixed_and_do_not_export_secrets(self):
+        class FailedBrowser(Browser):
+            def __init__(self, failed_selector, code):
+                super().__init__(); self.failed_selector=failed_selector; self.code=code
+            def click(self, selector):
+                if selector == self.failed_selector: raise driver.GuiFailure(self.code)
+                super().click(selector)
+            def fill(self, selector, value):
+                if selector == self.failed_selector: raise driver.GuiFailure(self.code)
+                super().fill(selector, value)
+        for selector, code, expected_stage, expected_code in (
+            ('#host-open-remote','android_control_missing_host-open-remote','open_remote','direct_android_control_missing'),
+            ('#add-ssh','android_cdp_transport_failed','open_ssh_form','direct_android_cdp_transport_failed'),
+            ('#ssh-port','android_text_control_missing_ssh-port','enter_port','direct_android_text_control_missing'),
+            ('#ssh-probe','secret-key-or-password','probe_host','direct_driver_failed'),
+        ):
+            progress={}
+            with self.subTest(selector=selector), self.assertRaises(driver.GuiFailure) as caught:
+                driver.exercise_ui(FailedBrowser(selector,code),Fixture(),encrypted_key=True,progress=progress)
+            public={'failureStage':progress['stage'], 'errorCode':driver.public_driver_error(caught.exception)}
+            self.assertEqual(public,{'failureStage':expected_stage,'errorCode':expected_code})
+            self.assertNotIn('secret',json.dumps(public))
+        self.assertEqual(driver.public_driver_error(driver.GuiFailure('direct_fingerprint_missing')),
+                         'direct_fingerprint_missing')
+        self.assertEqual(driver.public_driver_error(driver.GuiFailure('direct_private_key_secret')),
+                         'direct_driver_failed')
+
+    def test_manifest_retains_safe_failure_stage_after_two_completed_scenarios(self):
+        import sys
+        import direct_ssh_fixture
+        import tauri_encrypted_key_fixture
+        ordinary = MagicMock(); rotation = MagicMock(); encrypted = MagicMock()
+        for peer in (ordinary, rotation, encrypted):
+            peer.__enter__ = Mock(return_value=peer)
+            peer.__exit__ = Mock(return_value=False)
+            peer.snapshot.return_value = {'connectionsClosed': True, 'connections': 0, 'authAccepted': False}
+        def run_device(apk, fixture, *, progress, **kwargs):
+            if fixture is encrypted:
+                progress['stage'] = 'enter_port'
+                raise driver.GuiFailure('android_text_control_missing_sensitive-selector')
+            progress['stage'] = 'disconnect'
+            return {'cleanup': {}}
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve(); apk=root/'fixture.apk'; apk.write_bytes(b'APK fixture')
+            output=root/'output'
+            with patch.dict(driver.os.environ, {'RUNNER_TEMP':str(root)}, clear=True), \
+                 patch.object(sys,'argv',['driver','--apk',str(apk),'--output',str(output)]), \
+                 patch.object(direct_ssh_fixture,'DirectSshFixture',side_effect=[ordinary, rotation]), \
+                 patch.object(tauri_encrypted_key_fixture,'EncryptedKeyFixture',return_value=encrypted), \
+                 patch.object(driver,'run_device',side_effect=run_device):
+                with self.assertRaises(SystemExit): driver.main()
+            report=json.loads((output/'manifest.json').read_text())
+            self.assertEqual((report['phase'], report['failureStage'], report['errorCode']),
+                             ('encrypted_key', 'enter_port', 'direct_android_text_control_missing'))
+            self.assertEqual(report['probeEvidence'], {'connectionObserved':False, 'authenticationAccepted':False})
+            self.assertNotIn('sensitive-selector', json.dumps(report))
+            self.assertIn('rotation',report)
+
+    def test_actual_android_webview_control_failure_is_classified_at_real_entry(self):
+        import android_gui
+        view=driver.AndroidWebView.__new__(driver.AndroidWebView)
+        view.evaluate=Mock(return_value=None)
+        def immediate(probe, code, **kwargs):
+            value=probe()
+            if not value: raise driver.GuiFailure(code)
+            return value
+        progress={}
+        with patch.object(android_gui,'wait_for',side_effect=immediate):
+            with self.assertRaises(driver.GuiFailure) as caught:
+                driver.exercise_ui(view,Fixture(),encrypted_key=True,progress=progress)
+        self.assertEqual(progress['stage'],'open_remote')
+        self.assertEqual(driver.public_driver_error(caught.exception),'direct_android_control_missing')
+        self.assertEqual(view.evaluate.call_count,2)
 
     def test_real_ui_order_and_independent_peer_evidence(self):
         browser=Browser()
@@ -336,12 +427,94 @@ class DirectSshAndroidTests(unittest.TestCase):
             driver.exercise_key_change_ui(Opaque(state),RotationFixture(state))
 
 
+
+class HeaderGeometryTests(unittest.TestCase):
+    def setUp(self):
+        self.geometry={'viewport':[400,700],'visualViewport':[0,0,1],'dpr':2.0,
+            'scrollY':0,'appliedTopCss':28,
+            'native':{'overlapPx':56,'systemBottomPx':104,'viewY':48,'windowTopPx':0,
+                'statusPx':104,'stableStatusPx':104,'cutoutPx':0,'captionPx':0,'stableCaptionPx':0},
+            'header':{'rect':[0,0,400,85],'visible':True},
+            'title':{'rect':[20,30,120,20],'visible':True},
+            'button':{'rect':[260,32,120,44],'visible':True},
+            'sshTitle':{'rect':[20,90,120,20],'visible':True},
+            'target':{'rect':[8,120,300,20],'visible':True},
+            'terminal':{'rect':[8,150,300,400],'visible':True},
+            'xterm':{'rect':[8,150,300,400],'visible':True}}
+
+    def test_header_uses_unpanned_window_inset_and_physical_registered_origin(self):
+        evidence=driver._header_evidence(self.geometry,origin=(10,48),image_size=(850,1500))
+        self.assertEqual(evidence['nativePx']['systemBottomPx'],104)
+        self.assertEqual(evidence['title']['boundsPx'],[50,108,240,40])
+        self.assertEqual(evidence['button']['boundsPx'],[530,112,240,88])
+        # WindowMetrics bounds remain fixed as the WebView pans upward.
+        native={**self.geometry['native'],'viewY':-10,'overlapPx':114}
+        values={**self.geometry,'native':native,
+            'header':{'rect':[0,0,400,100],'visible':True},
+            'title':{'rect':[20,60,120,20],'visible':True},
+            'button':{'rect':[260,60,120,35],'visible':True},
+            'sshTitle':{'rect':[20,105,120,20],'visible':True},
+            'target':{'rect':[8,130,300,20],'visible':True}}
+        panned=driver._header_evidence(values,origin=(10,-10),image_size=(850,1500))
+        self.assertEqual(panned['nativePx']['systemBottomPx'],104)
+        self.assertEqual(panned['title']['boundsPx'][1],110)
+
+    def test_header_overlap_and_unknown_geometry_fail_closed(self):
+        bad_title={**self.geometry,'title':{'rect':[20,27,120,20],'visible':True}}
+        with self.assertRaisesRegex(driver.GuiFailure,'direct_header_system_overlap'):
+            driver._header_evidence(bad_title,origin=(10,48),image_size=(850,1500))
+        for change in ({'native':{**self.geometry['native'],'overlapPx':None}}, {'dpr':0},
+                       {'visualViewport':[0,1,1]}, {'button':{'rect':[260,32,120,44],'visible':False}},
+                       {'button':{'rect':[390,32,120,44],'visible':True}}):
+            with self.subTest(change=change), self.assertRaisesRegex(driver.GuiFailure,'direct_header_measurement_invalid'):
+                driver._header_evidence({**self.geometry,**change},origin=(10,48),image_size=(850,1500))
+        for native in ({**self.geometry['native'],'windowTopPx':None},
+                       {**self.geometry['native'],'viewY':49}):
+            with self.subTest(native=native), self.assertRaisesRegex(driver.GuiFailure,'direct_header_measurement_invalid'):
+                driver._header_evidence({**self.geometry,'native':native},origin=(10,48),image_size=(850,1500))
+        overlap={**self.geometry,'target':{'rect':[8,70,300,20],'visible':True}}
+        with self.assertRaisesRegex(driver.GuiFailure,'direct_header_content_overlap'):
+            driver._header_evidence(overlap,origin=(10,48),image_size=(850,1500))
+        wrong={**self.geometry,'native':{**self.geometry['native'],'windowTopPx':10}}
+        with self.assertRaisesRegex(driver.GuiFailure,'direct_header_measurement_invalid'):
+            driver._header_evidence(wrong,origin=(10,48),image_size=(850,1500))
+        hidden_title={**self.geometry,'sshTitle':{'rect':[20,-30,120,20],'visible':False}}
+        self.assertFalse(driver._header_evidence(hidden_title,origin=(10,48),image_size=(850,1500))['sshTitle']['visible'])
+
+    def test_partly_visible_ssh_title_is_diagnostic_only(self):
+        partial={**self.geometry,'sshTitle':{'rect':[20,-5,120,20],'visible':True}}
+        evidence=driver._header_evidence(partial,origin=(10,48),image_size=(850,1500))
+        self.assertTrue(evidence['sshTitle']['visible'])
+        self.assertTrue(evidence['sshTitle']['inViewport'])
+        self.assertNotIn('boundsPx',evidence['sshTitle'])
+
+    def test_header_reads_only_native_inset_and_dom_geometry(self):
+        browser=Mock();browser.call.return_value={'result':{'value':self.geometry}}
+        self.assertEqual(driver._header_geometry(browser),self.geometry)
+        args=browser.call.call_args.args
+        self.assertEqual(args[0],'Runtime.evaluate')
+        self.assertTrue(args[1]['awaitPromise'])
+        self.assertIn("invoke('mobile_system_top_inset')",args[1]['expression'])
+        self.assertNotIn('__herdrPocketInsetGeometry',args[1]['expression'])
+        browser.call.return_value={'exceptionDetails':{}}
+        with self.assertRaisesRegex(driver.GuiFailure,'direct_header_measurement_invalid'):
+            driver._header_geometry(browser)
+
 class TerminalScreenshotProofTests(unittest.TestCase):
     def setUp(self):
         self.fixture=Fixture();self.fixture.screen_token='ACDEFHJKMNPQ'
         self.geometry={'targetMatched':True,'targetVisible':True,'terminalVisible':True,
             'targetRect':[8,20,300,20],'viewport':[400,700],'dpr':2,
             'visualViewport':[0,0,1],'terminal':[10.25,150.25,379.5,500.5]}
+        self.header={'viewport':[400,700],'visualViewport':[0,0,1],'dpr':2,'scrollY':0,'appliedTopCss':0,
+            'native':{'overlapPx':0,'systemBottomPx':48,'viewY':48,'windowTopPx':0,'statusPx':48,
+                'stableStatusPx':48,'cutoutPx':0,'captionPx':0,'stableCaptionPx':0},
+            'header':{'rect':[0,0,400,15],'visible':True},'title':{'rect':[5,2,30,10],'visible':True},
+            'button':{'rect':[300,2,90,10],'visible':True},'sshTitle':{'rect':[8,-30,120,20],'visible':False},
+            'target':{'rect':[8,20,300,20],'visible':True},'terminal':{'rect':[10,150,379,500],'visible':True},
+            'xterm':{'rect':[10,150,379,500],'visible':True}}
+        self.header_patch=patch.object(driver,'_header_geometry',return_value=self.header)
+        self.header_patch.start();self.addCleanup(self.header_patch.stop)
         self.hierarchy=self.xml('[0,48][800,1448]')
         self.png=b'\x89PNG\r\n\x1a\n'+b'\x00\x00\x00\x0dIHDR'+struct.pack('>II',800,1500)+b'opaque-test-pixels'
 
@@ -393,6 +566,19 @@ class TerminalScreenshotProofTests(unittest.TestCase):
         self.assertEqual(result['expectedTarget'],'fixture@127.0.0.1:2222')
         self.assertEqual(result['imageSha256'],hashlib.sha256(self.png).hexdigest())
         self.assertEqual(result['status'],'passed')
+
+    def test_header_overlap_retains_real_frame_and_blocks_ocr(self):
+        invalid={**self.header,'native':{**self.header['native'],'windowTopPx':40,
+            'statusPx':48,'stableStatusPx':48,'systemBottomPx':88,'overlapPx':40}}
+        gate=Mock()
+        with tempfile.TemporaryDirectory() as folder, patch.object(driver,'_header_geometry',return_value=invalid):
+            with self.assertRaisesRegex(driver.GuiFailure,'direct_header_system_overlap'):
+                self.capture(folder,gate=gate)
+            report=json.loads(Path(folder,'terminal.json').read_text())
+            self.assertEqual(Path(folder,'terminal.png').read_bytes(),self.png)
+            self.assertEqual(report['headerGeometry']['nativePx']['systemBottomPx'],88)
+            self.assertEqual(report['errorCode'],'direct_header_system_overlap')
+        gate.assert_not_called()
 
     def test_physical_webview_change_preserves_raw_png_and_rejects_before_ocr(self):
         changed=self.xml('[0,50][800,1450]')
@@ -579,6 +765,15 @@ class PixelRegistrationTests(unittest.TestCase):
             'viewport':[160,240],'dpr':1,'visualViewport':[0,0,1],
             'targetRect':[8,12,140,24],'terminal':[8,60,140,130]}
         self.visible=(17,23,177,225)
+        header={'viewport':[160,240],'visualViewport':[0,0,1],'dpr':1,'scrollY':0,'appliedTopCss':0,
+            'native':{'overlapPx':0,'systemBottomPx':23,'viewY':23,'windowTopPx':0,'statusPx':23,
+                'stableStatusPx':23,'cutoutPx':0,'captionPx':0,'stableCaptionPx':0},
+            'header':{'rect':[0,0,160,8],'visible':True},'title':{'rect':[5,1,30,5],'visible':True},
+            'button':{'rect':[100,1,40,5],'visible':True},'sshTitle':{'rect':[8,-30,100,10],'visible':False},
+            'target':{'rect':[8,12,140,24],'visible':True},'terminal':{'rect':[8,60,140,130],'visible':True},
+            'xterm':{'rect':[8,60,140,130],'visible':True}}
+        self.header_patch=patch.object(driver,'_header_geometry',return_value=header)
+        self.header_patch.start();self.addCleanup(self.header_patch.stop)
 
     def test_exact_pixels_derive_nonzero_origin_despite_keyboard_clipped_native_frame(self):
         bounds,evidence=driver._registered_terminal_bounds(self.geometry,self.png(self.reference),self.png(self.frame),visible_bounds=self.visible)

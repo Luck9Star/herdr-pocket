@@ -35,6 +35,22 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       };
     }
   }
+  function revealFocusedTerminal() {
+    if (!document.documentElement.classList.contains('android-edge-to-edge') || !controller.isReady() || document.activeElement !== terminal?.textarea) return;
+    requestAnimationFrame(() => {
+      if (document.activeElement !== terminal?.textarea || !controller.isReady()) return;
+      const targetBox = $('ssh-target').getBoundingClientRect();
+      const terminalBox = $('ssh-terminal').parentElement.getBoundingClientRect();
+      const obscured = targetBox.bottom - terminalBox.top;
+      if (obscured > 0) { window.scrollBy(0, -obscured); return; }
+      const headerBottom = document.querySelector('.app-header')?.getBoundingClientRect().bottom || 0;
+      const nav = document.querySelector('.route-tabs');
+      const visibleBottom = nav && !nav.hidden ? nav.getBoundingClientRect().top : window.innerHeight;
+      const needed = $('ssh-helper-keys').getBoundingClientRect().bottom - visibleBottom;
+      const room = terminalBox.top - headerBottom - targetBox.height;
+      if (needed > 0 && room > 0) window.scrollBy(0, Math.min(needed, room));
+    });
+  }
   const resizer = createDirectSshResizer({
     measure: () => measureDirectSshViewport($('ssh-terminal').parentElement, terminal),
     send: (cols, rows) => controller.resize(cols, rows),
@@ -54,8 +70,9 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
         const t = details.target;
         const host = t.host.includes(':') && !t.host.startsWith('[') ? `[${t.host}]` : t.host;
         $('ssh-target').textContent = `${t.username}@${host}:${t.port} · SSH 已连接`;
+        globalThis.window?.visualViewport?.addEventListener('resize', revealFocusedTerminal);
         resizer.start(); requestAnimationFrame(resizer.request);
-      } else { $('ssh-target').textContent = ''; resizer.stop(); }
+      } else { globalThis.window?.visualViewport?.removeEventListener('resize', revealFocusedTerminal); $('ssh-target').textContent = ''; resizer.stop(); }
     },
     onData: (bytes, acknowledge) => terminal?.write(bytes, acknowledge),
   });
@@ -150,6 +167,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     terminal = terminalFactory({cols:80, rows:24, fontSize:14, cursorBlink:true, theme:{background:'#0B0F17',foreground:'#E6EDF3'}});
     terminal.open($('ssh-terminal'));
     bindTerminal(terminal);
+    terminal.textarea?.addEventListener('focus', revealFocusedTerminal);
     // observe() returns void; keep the observer itself so reconnections don't
     // stack a new watcher on the same container.
     if (typeof ResizeObserver === 'function' && !resizeWatch) {

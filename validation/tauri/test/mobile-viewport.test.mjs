@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {observeMobileViewport} from '../src/mobile-viewport.js';
+import {observeAndroidSshHeader, observeMobileViewport} from '../src/mobile-viewport.js';
 import {readFileSync} from 'node:fs';
 
 function fixture() {
   const callbacks=new Map(),props=new Map(),classes=new Set();
   const viewport={height:800,offsetTop:0,addEventListener:(name,fn)=>callbacks.set('v:'+name,fn),removeEventListener:name=>callbacks.delete('v:'+name)};
-  const view={innerWidth:390,innerHeight:800,visualViewport:viewport,addEventListener:(name,fn)=>callbacks.set('w:'+name,fn),removeEventListener:name=>callbacks.delete('w:'+name)};
+  const view={innerWidth:390,innerHeight:800,devicePixelRatio:2.75,visualViewport:viewport,addEventListener:(name,fn)=>callbacks.set('w:'+name,fn),removeEventListener:name=>callbacks.delete('w:'+name)};
   const root={style:{setProperty:(key,value)=>props.set(key,value),removeProperty:key=>props.delete(key)}};
   const body={classList:{toggle:(key,on)=>on?classes.add(key):classes.delete(key),remove:key=>classes.delete(key)}};
   return {viewport,view,root,body,callbacks,props,classes};
@@ -33,21 +33,43 @@ test('native top inset follows the newest measurement and is removed on teardown
   assert.equal(pending.length,1);
   assert.equal(f.props.get('--hp-visual-inset'),'300px');
   f.callbacks.get('w:resize')(); await Promise.resolve();
-  pending[1](28); await new Promise(resolve=>setImmediate(resolve));
-  pending[0](12); await new Promise(resolve=>setImmediate(resolve));
+  pending[1]({overlapPx:77,density:2}); await new Promise(resolve=>setImmediate(resolve));
+  pending[0]({overlapPx:33}); await new Promise(resolve=>setImmediate(resolve));
   assert.equal(f.props.get('--hp-system-top-inset'),'28px');
   f.callbacks.get('w:focus')(); await Promise.resolve();
   f.callbacks.get('v:resize')(); await Promise.resolve();
   f.callbacks.get('w:orientationchange')(); await Promise.resolve();
   assert.equal(pending.length,5);
-  stop(); pending[2](42); pending[3](42); pending[4](42); await new Promise(resolve=>setImmediate(resolve));
+  stop(); pending[2]({overlapPx:42}); pending[3]({overlapPx:42}); pending[4]({overlapPx:42}); await new Promise(resolve=>setImmediate(resolve));
   assert.equal(f.props.has('--hp-system-top-inset'),false);
 });
-test('Android overlap uses root and WebView positions in screen coordinates',()=>{
+test('Android overlap uses window bounds and WebView screen position',()=>{
   const source=readFileSync(new URL('../android/TerminalKeyboardPlugin.kt',import.meta.url),'utf8');
-  assert.match(source, /view\.rootView\.getLocationOnScreen\(rootLocation\)/);
-  assert.match(source, /\(rootLocation\[1\] \+ top - location\[1\]\)\.coerceAtLeast\(0\)/);
+  assert.match(source, /currentWindowMetrics\.bounds\.top/);
+  assert.match(source, /windowTop \+ top/);
+  assert.match(source, /\(safeTop - location\[1\]\)\.coerceAtLeast\(0\)/);
   const overlap=(root,top,view)=>Math.max(0,root+top-view);
   assert.equal(overlap(100,28,100),28);
   assert.equal(overlap(100,28,128),0);
+});
+test('Android SSH header scroll tracking stops during review and outside the route',()=>{
+  const f=fixture(), nodes={'host-home':{hidden:false},'home-ssh':{hidden:false},'ssh-key-change':{hidden:true}};
+  const previous={ResizeObserver:globalThis.ResizeObserver,MutationObserver:globalThis.MutationObserver};
+  let mutation, resizeCallback, writes=0;
+  globalThis.ResizeObserver=class {constructor(fn){resizeCallback=fn;} observe(){} disconnect(){}};
+  globalThis.MutationObserver=class {constructor(fn){mutation=fn;} observe(){} disconnect(){}};
+  const original=f.root.style.setProperty;
+  f.root.style.setProperty=(...args)=>{writes++;original(...args);};
+  const doc={documentElement:f.root,querySelector:()=>({getBoundingClientRect:()=>({bottom:94})}),getElementById:id=>nodes[id]};
+  try {
+    const stop=observeAndroidSshHeader(f.view,doc);
+    assert.equal(f.props.get('--hp-ssh-sticky-top'),'94px');
+    const oldScroll=f.callbacks.get('w:scroll');
+    nodes['ssh-key-change'].hidden=false; mutation();
+    assert.equal(f.callbacks.has('w:scroll'),false);
+    const count=writes; oldScroll(); resizeCallback(); assert.equal(writes,count);
+    nodes['ssh-key-change'].hidden=true; mutation(); assert.equal(f.callbacks.has('w:scroll'),true);
+    nodes['home-ssh'].hidden=true; mutation(); assert.equal(f.callbacks.has('w:scroll'),false);
+    stop();
+  } finally { Object.assign(globalThis,previous); }
 });

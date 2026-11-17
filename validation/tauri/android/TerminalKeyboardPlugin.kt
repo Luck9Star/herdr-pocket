@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.os.SystemClock
 import android.os.Build
+import android.graphics.Rect
 import android.view.WindowInsets
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
@@ -53,15 +54,25 @@ class TerminalKeyboardPlugin(private val activity: Activity) : Plugin(activity) 
                 return@runOnUiThread
             }
             @Suppress("DEPRECATION")
-            val top = if (Build.VERSION.SDK_INT >= 30) {
-                insets.getInsets(WindowInsets.Type.statusBars() or WindowInsets.Type.displayCutout()).top
-            } else insets.systemWindowInsetTop
+            val status = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(WindowInsets.Type.statusBars()).top else insets.systemWindowInsetTop
+            val stableStatus = if (Build.VERSION.SDK_INT >= 30) insets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top else insets.stableInsetTop
+            val cutout = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(WindowInsets.Type.displayCutout()).top else 0
+            val caption = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(WindowInsets.Type.captionBar()).top else 0
+            val stableCaption = if (Build.VERSION.SDK_INT >= 30) insets.getInsetsIgnoringVisibility(WindowInsets.Type.captionBar()).top else 0
+            val top = maxOf(status, stableStatus, cutout, caption, stableCaption)
             val location = IntArray(2)
-            val rootLocation = IntArray(2)
             view.getLocationOnScreen(location)
-            view.rootView.getLocationOnScreen(rootLocation)
-            val overlap = (rootLocation[1] + top - location[1]).coerceAtLeast(0)
-            invoke.resolve(JSObject().apply { put("top", overlap.toDouble() / view.resources.displayMetrics.density) })
+            val windowTop = if (Build.VERSION.SDK_INT >= 30) activity.windowManager.currentWindowMetrics.bounds.top else null
+            val safeTop = if (windowTop != null) windowTop + top else Rect().also { view.getWindowVisibleDisplayFrame(it) }.top
+            val overlap = (safeTop - location[1]).coerceAtLeast(0)
+            invoke.resolve(JSObject().apply {
+                put("overlapPx", overlap); put("systemBottomPx", safeTop); put("viewY", location[1])
+                put("statusPx", status); put("stableStatusPx", stableStatus)
+                if (windowTop != null) {
+                    put("windowTopPx", windowTop); put("cutoutPx", cutout)
+                    put("captionPx", caption); put("stableCaptionPx", stableCaption)
+                }
+            })
         }
     }
 

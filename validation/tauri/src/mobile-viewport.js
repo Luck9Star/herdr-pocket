@@ -15,8 +15,9 @@ export function observeMobileViewport(view = globalThis.window, root = globalThi
     update();
     if (readTopInset) {
       const current = ++generation;
-      Promise.resolve().then(readTopInset).then(top => {
-        if (current === generation && Number.isFinite(top) && top >= 0) root.style.setProperty('--hp-system-top-inset', `${top}px`);
+      Promise.resolve().then(readTopInset).then(insets => {
+        const pixels = insets?.overlapPx, dpr = view.devicePixelRatio;
+        if (current === generation && Number.isFinite(pixels) && pixels >= 0 && Number.isFinite(dpr) && dpr > 0) root.style.setProperty('--hp-system-top-inset', `${pixels / dpr}px`);
       }).catch(() => {});
     }
   };
@@ -38,4 +39,24 @@ export function observeMobileViewport(view = globalThis.window, root = globalThi
     root.style.removeProperty('--hp-system-top-inset');
     body.classList.remove('keyboard-visible');
   };
+}
+
+// Only ordinary SSH owns this sticky header; the host-key review and other routes do not.
+export function observeAndroidSshHeader(view = window, doc = document) {
+  const root=doc.documentElement, header=doc.querySelector('.app-header');
+  const nodes=['host-home','home-ssh','ssh-key-change'].map(id=>doc.getElementById(id));
+  let active=false;
+  const update=()=>{ if (active) root.style.setProperty('--hp-ssh-sticky-top', `${Math.max(0, header.getBoundingClientRect().bottom)}px`); };
+  const resize=new ResizeObserver(update);
+  const sync=()=>{
+    const next=!nodes[0].hidden && !nodes[1].hidden && nodes[2].hidden;
+    if (next===active) return;
+    active=next;
+    if (active) { resize.observe(header); view.addEventListener('scroll',update,{passive:true}); update(); }
+    else { resize.disconnect(); view.removeEventListener('scroll',update); root.style.removeProperty('--hp-ssh-sticky-top'); }
+  };
+  const visibility=new MutationObserver(sync);
+  for (const node of nodes) visibility.observe(node,{attributes:true,attributeFilter:['hidden']});
+  sync();
+  return ()=>{ active=false; resize.disconnect(); visibility.disconnect(); view.removeEventListener('scroll',update); root.style.removeProperty('--hp-ssh-sticky-top'); };
 }

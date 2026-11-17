@@ -571,11 +571,26 @@ class HomeDiagnosticsTests(unittest.TestCase):
                 ios.public_home_diagnostic(value)
 
     def navigation_state(self, page):
-        return {'page': page, 'appForeground': True, 'inputCount': 3 if page == 'sshForm' else 0,
-                'windowCount': 1, 'webViewCount': 3, 'noAlerts': True, 'noKnownErrors': True,
-                'emptyHomeIdentity': page == 'emptyHome', 'formByStructure': page == 'sshForm',
-                'formOwnerResolved': page == 'sshForm',
-                'sshTitleSeen': page == 'sshForm', 'addTitleSeen': page == 'addChoice', 'credentialsEmpty': True}
+        state = {'page': page, 'appForeground': True, 'inputCount': 3 if page == 'sshForm' else 0,
+                 'windowCount': 1, 'webViewCount': 3, 'noAlerts': True, 'noKnownErrors': True,
+                 'emptyHomeIdentity': page == 'emptyHome', 'formByStructure': page == 'sshForm',
+                 'formOwnerResolved': page == 'sshForm',
+                 'sshTitleSeen': page == 'sshForm', 'addTitleSeen': page == 'addChoice', 'credentialsEmpty': True}
+        if page == 'sshForm':
+            state['formControls'] = self.form_controls()
+        else:
+            state['formControls'] = {name: {'role': 'none', 'matches': 0, 'owner': False,
+                                            'reason': 'missing'}
+                                     for name in ios.FORM_CONTROL_NAMES}
+        return state
+
+    def form_controls(self, **overrides):
+        controls = {'host': {'role': 'textField', 'matches': 1, 'owner': True, 'reason': 'matched'},
+                    'port': {'role': 'textField', 'matches': 1, 'owner': True, 'reason': 'matched'},
+                    'user': {'role': 'textField', 'matches': 1, 'owner': True, 'reason': 'matched'},
+                    'probe': {'role': 'button', 'matches': 1, 'owner': True, 'reason': 'matched'}}
+        controls.update(overrides)
+        return controls
 
     def navigation(self, member, before, after, performed=True):
         return {'stage':'native_navigation', 'nativeCheckpoint':'ordinary_open_add', 'member':member,
@@ -619,6 +634,141 @@ class HomeDiagnosticsTests(unittest.TestCase):
                 state=ios.Checkpoints(None,None,directory,{'artifacts':{}});state.index=ios.STAGES.index('ordinary_probe')
                 with self.assertRaises(ios.Failure):state.accept({**self.navigation('headerAdd','emptyHome','emptyHome'),**change})
                 self.assertNotIn('PRIVATE',json.dumps(state.result))
+
+    def test_form_controls_whitelist_accepts_current_diagnostics_and_old_records(self):
+        # Current driver record: sshForm proven with per-control evidence.
+        state = self.navigation_state('sshForm')
+        self.assertEqual(set(state['formControls']), set(ios.FORM_CONTROL_NAMES))
+        self.assertEqual(state['formControls']['host'],
+                         {'role': 'textField', 'matches': 1, 'owner': True, 'reason': 'matched'})
+        # Ambiguity is reportable without claiming a target.
+        off_form = self.navigation_state('unexpected')
+        ambiguous = {name: {'role': 'none', 'matches': 0, 'owner': False, 'reason': 'missing'}
+                     for name in ios.FORM_CONTROL_NAMES}
+        ambiguous['port'] = {'role': 'none', 'matches': 2, 'owner': False, 'reason': 'ambiguous'}
+        ios.public_navigation_state({**off_form, 'formControls': ambiguous})
+        # One identity with several editable descendants keeps its role.
+        wrong = dict(ambiguous)
+        wrong['user'] = {'role': 'other', 'matches': 1, 'owner': False, 'reason': 'wrongRole'}
+        ios.public_navigation_state({**off_form, 'formControls': wrong})
+        # A matched control whose owner could not be resolved.
+        unproven = dict(ambiguous)
+        unproven['host'] = {'role': 'textField', 'matches': 1, 'owner': False, 'reason': 'ownerUnproven'}
+        ios.public_navigation_state({**off_form, 'formControls': unproven})
+        # Legacy R6 records carry no formControls at all and still replay.
+        legacy = {k: v for k, v in state.items() if k != 'formControls'}
+        self.assertEqual(ios.public_navigation_state(legacy)['page'], 'sshForm')
+
+    def test_form_controls_keep_partial_and_uncommon_owner_evidence(self):
+        # Three controls resolved, the port identity failed: the page is not
+        # the proven form, so the partial evidence must survive verbatim.
+        partial = self.navigation_state('unexpected')
+        partial['formControls'] = self.form_controls(
+            port={'role': 'none', 'matches': 0, 'owner': False, 'reason': 'missing'})
+        saved = ios.public_navigation_state(partial)
+        self.assertEqual(saved['formControls']['host']['reason'], 'matched')
+        self.assertEqual(saved['formControls']['port']['reason'], 'missing')
+        # All four controls own an owner but the common window is not proven:
+        # formOwnerResolved is false, so the page stays unproven while the
+        # per-control owners are still reported.
+        split = self.navigation_state('unexpected')
+        split['formByStructure'] = False
+        split['formOwnerResolved'] = False
+        split['formControls'] = self.form_controls()
+        saved = ios.public_navigation_state(split)
+        self.assertFalse(saved['formOwnerResolved'])
+        self.assertTrue(all(item['owner'] for item in saved['formControls'].values()))
+
+    def test_form_controls_reject_structural_and_privacy_violations(self):
+        base = self.navigation_state('sshForm')
+        bad_records = [
+            # Extra key carrying a raw label or URL must not survive.
+            {**base, 'formControls': {**self.form_controls(),
+                                      'host': {'role': 'textField', 'matches': 1, 'owner': True,
+                                               'reason': 'matched', 'label': 'PRIVATE ssh-host'}}},
+            # Unknown name smuggles another control into the public record.
+            {**base, 'formControls': {**self.form_controls(),
+                                      'extra': {'role': 'button', 'matches': 1, 'owner': True, 'reason': 'matched'}}},
+            # matched without a proven owner is fabrication.
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'textField', 'matches': 1, 'owner': False, 'reason': 'matched'})},
+            # ownerUnproven that still claims an owner.
+            {**base, 'formControls': self.form_controls(
+                port={'role': 'textField', 'matches': 1, 'owner': True, 'reason': 'ownerUnproven'})},
+            # role none cannot be matched or wrongRole.
+            {**base, 'formControls': self.form_controls(
+                user={'role': 'none', 'matches': 1, 'owner': True, 'reason': 'matched'})},
+            {**base, 'formControls': self.form_controls(
+                user={'role': 'none', 'matches': 1, 'owner': False, 'reason': 'wrongRole'})},
+            # Static text is not an editable target on the sshForm page.
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'other', 'matches': 1, 'owner': True, 'reason': 'matched'})},
+            # A plain-text probe button claim.
+            {**base, 'formControls': self.form_controls(
+                probe={'role': 'other', 'matches': 1, 'owner': True, 'reason': 'matched'})},
+            # Unbounded / non-integer match counts.
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'textField', 'matches': 10001, 'owner': True, 'reason': 'matched'})},
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'textField', 'matches': -1, 'owner': True, 'reason': 'matched'})},
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'textField', 'matches': '1', 'owner': True, 'reason': 'matched'})},
+            # A matched control must have found at least one identity.
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'textField', 'matches': 0, 'owner': True, 'reason': 'matched'})},
+            # A missing control must not carry a match count or a role.
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'none', 'matches': 1, 'owner': False, 'reason': 'missing'})},
+            # An ambiguous identity needs at least one candidate.
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'none', 'matches': 0, 'owner': False, 'reason': 'ambiguous'})},
+            # Ambiguity always collapses to no role.
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'textField', 'matches': 2, 'owner': False, 'reason': 'ambiguous'})},
+            # The three inputs are never a button and the probe is never an input.
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'button', 'matches': 1, 'owner': True, 'reason': 'matched'})},
+            {**base, 'formControls': self.form_controls(
+                probe={'role': 'textField', 'matches': 1, 'owner': True, 'reason': 'matched'})},
+            # The host and user are never a wrapper; only the port can be.
+            {**base, 'formControls': self.form_controls(
+                user={'role': 'inputWrapper', 'matches': 1, 'owner': True, 'reason': 'matched'})},
+            # Unknown enums and a raw value string must all fail.
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'secureTextField', 'matches': 1, 'owner': True, 'reason': 'matched'})},
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'textField', 'matches': 1, 'owner': True, 'reason': 'guessed'})},
+            # Non-string enum members must fail with the fixed diagnostic code.
+            {**base, 'formControls': self.form_controls(
+                host={'role': ['textField'], 'matches': 1, 'owner': True, 'reason': 'matched'})},
+            {**base, 'formControls': self.form_controls(
+                host={'role': 'textField', 'matches': 1, 'owner': True, 'reason': {'matched': True}})},
+            # The sshForm page needs all four controls matched.
+            {**base, 'formControls': self.form_controls(
+                port={'role': 'none', 'matches': 0, 'owner': False, 'reason': 'missing'})},
+            {**base, 'formControls': {name: {'role': 'none', 'matches': 0, 'owner': False, 'reason': 'missing'}
+                                      for name in ios.FORM_CONTROL_NAMES}},
+        ]
+        for record in bad_records:
+            with self.assertRaises(ios.Failure):
+                ios.public_navigation_state(record)
+
+    def test_form_controls_checkpoint_flow_saves_diagnostics_and_keeps_privacy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = {'artifacts': {}}
+            state = ios.Checkpoints(None, None, directory, result)
+            state.index = ios.STAGES.index('ordinary_probe')
+            state.accept(self.navigation('headerAdd', 'emptyHome', 'emptyHome'))
+            state.accept(self.navigation('emptyAdd', 'emptyHome', 'addChoice'))
+            state.accept(self.navigation('sshChoice', 'addChoice', 'sshForm'))
+            state.accept({'stage': 'native_home_entry', 'nativeCheckpoint': 'ordinary_open_ssh',
+                          'member': 'emptyAdd', 'selection': 'uniqueIdentifier', 'role': 'other',
+                          'enteredAddPage': True, 'enteredSSHForm': True, 'route': 'viaAdd'})
+            saved = result['navigationTrace']['ordinary'][-1]['after']['formControls']
+            self.assertEqual(set(saved), set(ios.FORM_CONTROL_NAMES))
+            self.assertTrue(all(item['reason'] == 'matched' and item['owner'] for item in saved.values()))
+            # The raw tree never reaches the persisted record.
+            self.assertNotIn('PRIVATE', json.dumps(result))
         with tempfile.TemporaryDirectory() as directory:
             state=ios.Checkpoints(None,None,directory,{'artifacts':{}});state.index=ios.STAGES.index('ordinary_probe')
             state.accept(self.navigation('headerAdd','emptyHome','emptyHome'))

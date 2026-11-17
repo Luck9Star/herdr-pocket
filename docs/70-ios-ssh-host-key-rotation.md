@@ -59,6 +59,28 @@ Tauri 的首个 `homeDiagnostics` 仅记录前台应用、1 个窗口、3 个 We
 
 上述本机验证不使用个人 SSH 身份，不保存实际密码或私钥。独立应用已退出，两个 peer 已停止，临时应用副本及该唯一标识的 Application Support／Caches／WebKit 数据目录已删除；只保留脱敏复核记录。本机图片未重复归档；本轮最终归档见上文 R6，只有 Flutter 三张官方场景图，尚无 Tauri 三图。
 
+## 本机源码绑定复核：普通 SSH 表单四项控件
+
+本节只补足上节缺的两点：宿主与源码／构建的绑定，以及四项控件在本机真实 WKWebView 中的确切形态。R6 的 iOS 原结论（Flutter 完整通过、Tauri 表单身份与同窗归属仍未全部证实）不变；本节是本机 macOS 观察，不补足也不替代 iOS 缺项。
+
+绑定方式为从当前工作树重建：分支 `codex/tauri-ios-form-identity`，提交 `a803a3ad1af3`；`validation/tauri` 源码按 SHA256 核对后复制到独立临时目录，`npm ci && npm run build` 生成前端，`npm run tauri -- icon icon.svg` 生成图标，`cargo build --offline --features tauri/custom-protocol` 生成 arm64 原生二进制（未启用 `tauri/custom-protocol` 时宿主走 devUrl、窗口空白，不能用作核验宿主）。本次加载的前端即由当前源码新构建；工作树内既有的本机 `dist` 产物字节与之不同，未被本次运行加载。宿主以独立标识与隔离 HOME 启动；核验以 AX 只读读取为主，另对主机地址、端口、用户名三项做合成值的实写与独立读回，未接触真实主机、SSH 密钥或个人身份。
+
+| 控件 | 本机真实 AX 形态 | 可编辑／可用 |
+| --- | --- | --- |
+| 主机地址 | `AXTextField`，无 subrole；可访问名来自 `<label>` 包裹产生的 `AXTitle` | 可编辑；改值后独立 AX 读回一致 |
+| 端口 | `AXTextField`（非 AXNumberField／AXComboBox／AXSlider），无 subrole | 可编辑；改值后独立 AX 读回一致 |
+| 端口 stepper | `AXIncrementor` 是该端口 `AXTextField` 的**子节点**，两个 `AXIncrementorArrow`（subrole 分别为 `AXIncrementArrow`／`AXDecrementArrow`）又是 stepper 的子节点 | stepper 自身的 `AXValue` 恒为 `0`，与输入框实际值不同步，不能据其判断端口值 |
+| 用户名 | `AXTextField`，无 subrole | 可编辑；改值后独立 AX 读回一致 |
+| 探测主机指纹 | `AXButton`，无 subrole，`AXEnabled=1`，可用动作 `AXPress` | 启用且可按；点击后落到原生探测分支并给出失败反馈 |
+
+四项控件的 `AXIdentifier` 均为 nil：本机 WebKit 未把 HTML `id` 映射为 AX 标识，控件只能靠标签文本与结构识别。标签文字以独立 `AXStaticText` 呈现并与输入框同窗；四项控件同属一个 `AXWindow`（`AXStandardWindow`，标题「Herdr Pocket」），父链一致：`AXWindow → AXScrollArea → AXWebArea(desc=herdr-pocket · 远端终端原型) → AXGroup(AXLandmarkMain) → AXGroup(AXLandmarkForm) → 字段容器 → 控件`。
+
+端口改写走普通用户输入途径，改值后由独立的 AX 属性读取复核；另经 stepper 上箭头 `AXPress` 改值，同样复核一致。探测按钮的点击落到 `src/direct-ssh-ui.js:138` 之后的原生探测分支（`$('ssh-probe').disabled = !native`，浏览器预览下该按钮为禁用），点击后得到失败反馈。本轮表单写入使用合成占位值并已清除，未建立 SSH 会话、未使用任何密钥；只取得失败反馈，未验证指纹成功路径、主机密钥轮换，也未做任何 iOS 复核。
+
+最终驱动的选中口径：按 XCTest 控件角色与名称匹配控件，并要求与目标表单同窗、同 WebView；以真实表单标题证明归属时，允许窗口列表中另存在无关 Web 窗；命中错窗，或仅匹配到标签文字／按钮文字而无对应控件时，判为拒绝。失败时四项控件各自保留独立结果，不因单项失败整体弃置。主控随后在本机重跑：iOS 相关 93 项通过（`python3 -m unittest discover -s validation/remote-harness -p 'test_*ios*.py'`），另有 17 项 SSH 夹具通过（`test_direct_ssh_fixture_deadline.py` 与 `test_direct_ssh_rotation_fixture.py`）；本轮未新增 iOS 端到端验证。
+
+逐项字段、角色、父子关系、哈希绑定与步骤见 [本机表单身份 JSON](evidence/ios-ssh-20261117/local-macos-form-identity.json)。核验后应用已退出，临时构建树、target 目录、应用封装与日志全部删除；既有 `dist` 未改动。
+
 ## R4：夹具守卫与导航报告门槛受阻
 
 统一源码为 [`80acd9af3477702852543d71033ec9e609ef9a15`](https://github.com/Luck9Star/herdr-pocket/commit/80acd9af3477702852543d71033ec9e609ef9a15)，[同批运行 44025958192](https://github.com/Luck9Star/herdr-pocket/actions/runs/44025958192)。两项作业均失败，须分别判断停止层级：

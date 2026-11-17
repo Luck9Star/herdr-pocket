@@ -69,6 +69,9 @@ HOME_ERRORS = frozenset(('connectionError', 'dnsError', 'webProcessError', 'devU
                         'browserPreview', 'hostStorageError', 'loading'))
 HOME_ALERT_MEMBERS = frozenset(('localNetwork', 'allow', 'deny', 'ok', 'automation'))
 HOME_ROLES = frozenset(('button', 'staticText', 'webView', 'textField', 'secureTextField', 'other', 'otherNative'))
+FORM_CONTROL_NAMES = frozenset(('host', 'port', 'user', 'probe'))
+FORM_CONTROL_ROLES = frozenset(('textField', 'textView', 'inputWrapper', 'button', 'other', 'none'))
+FORM_CONTROL_REASONS = frozenset(('matched', 'missing', 'ambiguous', 'wrongRole', 'ownerUnproven'))
 
 
 def public_home_diagnostic(value):
@@ -94,13 +97,61 @@ def public_home_diagnostic(value):
     return json.loads(json.dumps({k: value[k] for k in keys}))
 
 
+def public_form_controls(value):
+    """Fixed four control names, closed role/reason enums, bounded match counts
+    and the owner/reason coupling. The closed key set is the privacy boundary:
+    no label, identifier, live value, URL or path can travel in this structure.
+
+    The accepted combinations are exactly the ones the native driver can
+    produce (NativeControlPolicy.formVerdict / formSelection):
+      missing       -> no identity found, role 'none', no match
+      ambiguous     -> several candidates, role 'none', at least one match
+      wrongRole     -> one identity that is not an editable target
+      ownerUnproven -> the target was found but its window could not be proven
+      matched       -> the target was found and its owner was proven
+    Partial evidence is kept: a page that resolves three of four controls
+    must not lose the three."""
+    require(isinstance(value, dict) and set(value) == FORM_CONTROL_NAMES,
+            'tauri_ios_navigation_diagnostic_invalid')
+    for item in value.values():
+        require(isinstance(item, dict) and set(item) == {'role', 'matches', 'owner', 'reason'},
+                'tauri_ios_navigation_diagnostic_invalid')
+        role, reason = item['role'], item['reason']
+        # Enum members are checked as strings first: a list or dict must fail
+        # with the fixed diagnostic code, never with a TypeError.
+        require(type(role) is str and role in FORM_CONTROL_ROLES
+                and type(reason) is str and reason in FORM_CONTROL_REASONS
+                and type(item['matches']) is int and 0 <= item['matches'] <= 10000
+                and type(item['owner']) is bool,
+                'tauri_ios_navigation_diagnostic_invalid')
+        # Only a matched control carries a proven owner.
+        require(item['owner'] is (reason == 'matched'),
+                'tauri_ios_navigation_diagnostic_invalid')
+        if reason == 'missing':
+            require(role == 'none' and item['matches'] == 0,
+                    'tauri_ios_navigation_diagnostic_invalid')
+        elif reason == 'ambiguous':
+            require(role == 'none' and item['matches'] >= 1,
+                    'tauri_ios_navigation_diagnostic_invalid')
+        elif reason in ('matched', 'ownerUnproven'):
+            # A found target always carries a concrete role; 'other' and 'none'
+            # are only reported for identities that were not eligible.
+            require(role in ('textField', 'textView', 'inputWrapper', 'button')
+                    and item['matches'] >= 1,
+                    'tauri_ios_navigation_diagnostic_invalid')
+        else:
+            require(role != 'none' and item['matches'] >= 1,
+                    'tauri_ios_navigation_diagnostic_invalid')
+    return json.loads(json.dumps(value))
+
+
 def public_navigation_state(value):
     flags = {'appForeground', 'noAlerts', 'noKnownErrors', 'emptyHomeIdentity', 'formByStructure',
              'sshTitleSeen', 'addTitleSeen', 'credentialsEmpty'}
     counts = {'inputCount', 'windowCount', 'webViewCount'}
     base_keys = flags | counts | {'page'}
     require(isinstance(value, dict) and base_keys <= set(value)
-            and set(value) <= base_keys | {'formOwnerResolved'}
+            and set(value) <= base_keys | {'formOwnerResolved', 'formControls'}
             and value['page'] in ('emptyHome', 'addChoice', 'sshForm', 'unexpected')
             and all(type(value[k]) is bool for k in flags)
             and all(type(value[k]) is int and 0 <= value[k] <= 10000 for k in counts),
@@ -115,6 +166,26 @@ def public_navigation_state(value):
         require(type(value['formOwnerResolved']) is bool
                 and (value['page'] != 'sshForm' or value['formOwnerResolved']),
                 'tauri_ios_ssh_form_owner_unproven')
+    if 'formControls' in value:
+        controls = public_form_controls(value['formControls'])
+        if value['page'] == 'sshForm':
+            # The proven form needs all four controls matched with an owner and
+            # the exact role each control must carry: host and user on a real
+            # editable control, port on an editable control or on the wrapper
+            # that owns one, and the probe on a real button.
+            require(value['formByStructure']
+                    and all(item['reason'] == 'matched' and item['owner']
+                            for item in controls.values())
+                    and controls['host']['role'] in ('textField', 'textView')
+                    and controls['user']['role'] in ('textField', 'textView')
+                    and controls['port']['role'] in ('textField', 'textView', 'inputWrapper')
+                    and controls['probe']['role'] == 'button',
+                    'tauri_ios_ssh_form_owner_unproven')
+        # Any other page keeps the partial result as it is: three resolved
+        # controls and one failed identity, or four controls that each have an
+        # owner but no common window, are exactly the evidence that explains
+        # why the form was not proven.
+        value = {**value, 'formControls': controls}
     return dict(value)
 
 

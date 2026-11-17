@@ -94,6 +94,125 @@ enum NativeControlPolicy {
         let role: String
         let value: String?
     }
+    struct RoleTypes {
+        let textField: UInt
+        let textView: UInt
+        let searchField: UInt
+        let button: UInt
+        let stepper: UInt
+        let staticText: UInt
+    }
+    static func projectRole(_ raw: UInt, types: RoleTypes) -> String {
+        if raw == types.textField || raw == types.searchField { return "textField" }
+        if raw == types.textView { return "textView" }
+        if raw == types.button { return "button" }
+        if raw == types.stepper { return "stepper" }
+        if raw == types.staticText { return "staticText" }
+        return "other"
+    }
+    struct Verdict {
+        let index: Int?
+        let role: String
+        let reason: String
+        let matches: Int
+        let owner: Bool
+    }
+    struct Selection {
+        let controls: [String: Verdict]
+        let ownerResolved: Bool
+    }
+    static func formVerdict(facts: [Fact], paths: [[Int]], identifier: String?, label: String,
+                            editableRoles: Set<String>) -> (index: Int?, role: String, reason: String, matches: Int) {
+        guard facts.count == paths.count else { return (nil, "none", "missing", 0) }
+        let identified = facts.indices.filter { identifier?.isEmpty == false && facts[$0].identifier == identifier! }
+        let identity = identified.isEmpty ? facts.indices.filter { facts[$0].label == label } : identified
+        let matches = min(identity.count, 10000)
+        if !identified.isEmpty && identified.count != 1 { return (nil, "none", "ambiguous", matches) }
+        var eligible = identity.filter { editableRoles.contains(facts[$0].role) }
+        var wrapped: Set<Int> = []
+        // Only an explicitly numeric/stepper port wrapper may authorize its
+        // editor. Static labels and arbitrary containers never do so.
+        if identifier == "ssh-port" || label == "端口" {
+            for index in identity where ["stepper", "inputWrapper"].contains(facts[index].role) {
+                let prefix = paths[index]
+                let descendants = facts.indices.filter { candidate in
+                    paths[candidate].count > prefix.count && Array(paths[candidate].prefix(prefix.count)) == prefix &&
+                        editableRoles.contains(facts[candidate].role)
+                }
+                if descendants.count > 1 { return (nil, "none", "ambiguous", matches) }
+                eligible.append(contentsOf: descendants)
+                wrapped.formUnion(descendants)
+            }
+        }
+        eligible = Array(Set(eligible)).sorted()
+        if eligible.count == 1 {
+            let index = eligible[0]
+            return (index, wrapped.contains(index) ? "inputWrapper" : publicRole(facts[index].role), "matched", matches)
+        }
+        if eligible.count > 1 { return (nil, "none", "ambiguous", matches) }
+        return (nil, identity.count == 1 ? publicRole(facts[identity[0]].role) : "none",
+                identity.isEmpty ? "missing" : identity.count == 1 ? "wrongRole" : "ambiguous", matches)
+    }
+    static func formSelection(facts: [Fact], paths: [[Int]], windowPaths: [[Int]], webPaths: [[Int]],
+                              ownerEligible: [Bool]) -> Selection {
+        let definitions = [("host", "ssh-host", "主机地址"), ("port", "ssh-port", "端口"),
+                           ("user", "ssh-user", "用户名"), ("probe", "ssh-probe", "探测主机指纹")]
+        func owned(_ index: Int) -> Bool {
+            guard paths.indices.contains(index), windowPaths.indices.contains(index), webPaths.indices.contains(index),
+                  ownerEligible.indices.contains(index), ownerEligible[index],
+                  !windowPaths[index].isEmpty, !webPaths[index].isEmpty else { return false }
+            return webPaths[index].count > windowPaths[index].count &&
+                Array(webPaths[index].prefix(windowPaths[index].count)) == windowPaths[index] &&
+                paths[index].count > webPaths[index].count && Array(paths[index].prefix(webPaths[index].count)) == webPaths[index]
+        }
+        var controls: [String: Verdict] = [:]
+        for (name, identifier, label) in definitions {
+            let roles: Set<String> = name == "probe" ? ["button"] : ["textField", "textView", "searchField"]
+            let result = formVerdict(facts: facts, paths: paths, identifier: identifier, label: label, editableRoles: roles)
+            let owner = result.index.map(owned) ?? false
+            controls[name] = Verdict(index: result.index, role: result.role,
+                reason: result.reason == "matched" && !owner ? "ownerUnproven" : result.reason,
+                matches: result.matches, owner: owner)
+        }
+        let selected = definitions.compactMap { controls[$0.0] }
+        let indices = selected.compactMap { $0.index }
+        let eligibleWindows = Set(windowPaths.indices.filter { ownerEligible.indices.contains($0) && ownerEligible[$0] &&
+            !windowPaths[$0].isEmpty }.map { windowPaths[$0] })
+        // A page heading proves the product owner even when another Web
+        // window is present. The add-choice button's text is not a heading.
+        let interactive: Set<String> = ["button", "textField", "textView", "searchField", "inputWrapper", "stepper"]
+        let titles = facts.indices.filter { index in
+            guard owned(index), (facts[index].role == "staticText" && facts[index].label == "普通 SSH 终端") ||
+                (facts[index].identifier == "ssh-page-heading" && !interactive.contains(facts[index].role)) else { return false }
+            return !facts.indices.contains { ancestor in
+                paths.indices.contains(ancestor) && interactive.contains(facts[ancestor].role) && paths[ancestor].count < paths[index].count &&
+                    Array(paths[index].prefix(paths[ancestor].count)) == paths[ancestor]
+            }
+        }
+        // WebKit may expose both a heading node and its text leaf. They are
+        // one ownership witness, rather than two independent product windows.
+        let titleOwners = titles.reduce(into: [Int]()) { result, index in
+            if !result.contains(where: { windowPaths[$0] == windowPaths[index] && webPaths[$0] == webPaths[index] }) {
+                result.append(index)
+            }
+        }
+        let trustedOwner: Bool
+        if let title = titleOwners.first, titleOwners.count == 1, let selected = indices.first, owned(selected) {
+            trustedOwner = windowPaths[title] == windowPaths[selected] && webPaths[title] == webPaths[selected]
+        } else {
+            trustedOwner = titleOwners.isEmpty && eligibleWindows.count == 1
+        }
+        let ownerResolved = trustedOwner && selected.allSatisfy { $0.owner } && indices.count == 4 && Set(indices).count == 4 &&
+            NativeFramePolicy.sameOwner(windowPaths: indices.map { windowPaths[$0] }, webPaths: indices.map { webPaths[$0] })
+        return Selection(controls: controls, ownerResolved: ownerResolved)
+    }
+    static func publicRole(_ role: String) -> String {
+        switch role {
+        case "textField", "textView", "inputWrapper", "button": return role
+        case "searchField": return "textField"
+        default: return "other"
+        }
+    }
     static func select(_ facts: [Fact], identifier: String?, label: String, roles: Set<String>, value: String? = nil) -> Int? {
         let allowed = { (index: Int) in roles.contains(facts[index].role) && (value == nil || facts[index].value == value!) }
         if let id = identifier, !id.isEmpty {
@@ -294,48 +413,110 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func button(_ label: String) -> XCUIElement {
-        let ids = ["普通 SSH 终端": "add-ssh", "herdr 配对 / 手动连接": "add-herdr", "探测主机指纹": "ssh-probe",
+        if label == "探测主机指纹" {
+            return (try? formControl("probe"))?.element ?? app.descendants(matching: .any).matching(NSPredicate(value: false)).firstMatch
+        }
+        let ids = ["普通 SSH 终端": "add-ssh", "herdr 配对 / 手动连接": "add-herdr",
             "打开键盘": "ssh-focus", "断开连接": "ssh-disconnect", "重新核对主机指纹": "ssh-key-recheck",
             "取消连接，保留旧信任": "ssh-key-cancel"]
         return resolveControl(app.buttons, app.descendants(matching: .any), identifier: ids[label], label: label)
     }
 
     @MainActor
-    private func field(_ label: String) -> XCUIElement {
-        let id = ["主机地址": "ssh-host", "端口": "ssh-port", "用户名": "ssh-user"][label]
-        let editable = app.descendants(matching: .any).matching(NSPredicate(format:
-            "elementType == %d OR elementType == %d",
-            XCUIElement.ElementType.textView.rawValue, XCUIElement.ElementType.other.rawValue))
-        return resolveControl(app.textFields, editable, identifier: id, label: label)
+    private func formTargets(_ tree: [Observed]) -> [NativeControlPolicy.Fact] {
+        let types = NativeControlPolicy.RoleTypes(textField: XCUIElement.ElementType.textField.rawValue,
+            textView: XCUIElement.ElementType.textView.rawValue, searchField: XCUIElement.ElementType.searchField.rawValue,
+            button: XCUIElement.ElementType.button.rawValue, stepper: XCUIElement.ElementType.stepper.rawValue,
+            staticText: XCUIElement.ElementType.staticText.rawValue)
+        return tree.map { NativeControlPolicy.Fact(identifier: $0.snapshot.identifier, label: $0.snapshot.label,
+            role: NativeControlPolicy.projectRole($0.snapshot.elementType.rawValue, types: types), value: nil) }
     }
 
     @MainActor
-    private func portControl() -> XCUIElement {
-        let item = resolveControl(app.textFields, app.descendants(matching: .any), identifier: "ssh-port", label: "端口")
-        if let current = liveControl(item) {
-            let type = current.snapshot.elementType
-            if NativeControlPolicy.isPortEditingCandidate(role: type.rawValue,
-                    stepper: XCUIElement.ElementType.stepper.rawValue, button: XCUIElement.ElementType.button.rawValue,
-                    value: current.snapshot.value) { return item }
-            if type == .stepper && item.textFields.count == 1 {
-                let child = item.textFields.firstMatch
-                if let current = liveControl(child), NativeControlPolicy.valueText(current.snapshot.value) == "22" { return child }
-            }
+    private func formSelection(_ tree: [Observed]) -> NativeControlPolicy.Selection {
+        let excluded = tree.filter { [.keyboard, .alert].contains($0.snapshot.elementType) }.map { $0.path }
+        return NativeControlPolicy.formSelection(facts: formTargets(tree), paths: tree.map { $0.path },
+            windowPaths: tree.map { $0.windowPath }, webPaths: tree.map { $0.webPath }, ownerEligible: tree.map { row in
+                row.window != nil && !row.webs.isEmpty && NativeFramePolicy.valid(row.snapshot.frame) &&
+                    !excluded.contains { prefix in Array(row.path.prefix(prefix.count)) == prefix }
+            })
+    }
+
+    @MainActor
+    private func resolveByPath(_ observed: Observed) -> XCUIElement {
+        var element: XCUIElement = app
+        for step in observed.path { element = element.children(matching: .any).element(boundBy: step) }
+        return element
+    }
+
+    @MainActor
+    private func formControl(_ name: String) throws -> LiveControl {
+        let tree = try observedNodes()
+        let selection = formSelection(tree)
+        guard selection.ownerResolved, let verdict = selection.controls[name], verdict.reason == "matched",
+              let index = verdict.index, let current = liveControl(resolveByPath(tree[index])) else {
+            try require(false, "native_form_control_unproven")
+            throw NSError(domain: "native_form_control_unproven", code: 1)
         }
+        let selected = tree[index]
+        try require(current.snapshot.elementType == selected.snapshot.elementType &&
+            current.snapshot.identifier == selected.snapshot.identifier && current.snapshot.label == selected.snapshot.label &&
+            current.snapshot.frame == selected.snapshot.frame, "native_form_control_changed")
+        // Re-read the tree after resolving the live object; a path alone cannot
+        // prove identity when a WebView has reordered its accessible children.
+        let fresh = try observedNodes()
+        let checked = formSelection(fresh)
+        guard checked.ownerResolved, let latest = checked.controls[name], latest.reason == "matched", let next = latest.index else {
+            try require(false, "native_form_control_changed")
+            throw NSError(domain: "native_form_control_changed", code: 1)
+        }
+        let row = fresh[next]
+        try require(row.path == selected.path && row.windowPath == selected.windowPath && row.webPath == selected.webPath &&
+            row.snapshot.elementType == current.snapshot.elementType && row.snapshot.identifier == current.snapshot.identifier &&
+            row.snapshot.label == current.snapshot.label && row.snapshot.frame == current.snapshot.frame,
+            "native_form_control_changed")
+        return current
+    }
+
+    @MainActor
+    private func field(_ label: String) -> XCUIElement {
+        let names = ["主机地址": "host", "端口": "port", "用户名": "user"]
+        if let name = names[label], let current = try? formControl(name) { return current.element }
         return app.descendants(matching: .any).matching(NSPredicate(value: false)).firstMatch
     }
 
     @MainActor
-    private func portField() throws -> XCUIElement {
-        let item = portControl()
-        guard let current = liveControl(item) else {
-            try require(false, "native_port_control_ambiguous")
-            throw NSError(domain: "native_port_control_ambiguous", code: 1)
-        }
-        try post("native_progress", ["nativeCheckpoint": nativePhase,
-            "nativePortType": current.snapshot.elementType == .textField ? "textField" : "other"])
-        return item
+    private func tapForm(_ name: String) throws {
+        let initial = try formControl(name)
+        _ = try reveal(initial.element)
+        let current = try formControl(name)
+        let visible = try controlVisibleFrame(current.snapshot, observedNodes())
+        try require(current.snapshot.isEnabled && current.hittable && visible.contains(current.snapshot.frame), "native_control_not_visible")
+        current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
+
+    @MainActor
+    private func fillForm(_ name: String, _ text: String) throws {
+        try tapForm(name)
+        try require(app.keyboards.firstMatch.waitForExistence(timeout: 10), "native_input_keyboard_missing")
+        let current = try formControl(name)
+        try require(current.snapshot.isEnabled, "native_control_disabled")
+        try post("native_progress", ["nativeCheckpoint": nativePhase, "nativeInputRole": role(current.snapshot.elementType)])
+        if name == "port" {
+            try post("native_progress", ["nativeCheckpoint": nativePhase,
+                "nativePortType": current.snapshot.elementType == .textField ? "textField" : "other"])
+        }
+        let ready = try formControl(name)
+        guard let clearCount = NativeControlPolicy.clearCount(ready.snapshot.value, placeholder: ready.snapshot.placeholderValue, secure: false) else {
+            try require(false, "native_unexpected_existing_input")
+            throw NSError(domain: "native_unexpected_existing_input", code: 1)
+        }
+        try require(ready.snapshot.isEnabled, "native_control_disabled")
+        ready.element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: clearCount) + text)
+        let after = try formControl(name)
+        try require(NativeControlPolicy.valueText(after.snapshot.value) == text, "native_input_value_invalid")
+    }
+
     @MainActor
     private func password() -> XCUIElement {
         resolveControl(app.secureTextFields, app.secureTextFields, identifier: "ssh-password", label: "密码", requireTypedID: true)
@@ -734,31 +915,24 @@ final class TauriDirectSSHUITests: XCTestCase {
         try post("native_home", ["nativeCheckpoint": nativePhase, "home": home])
         let members = home["members"] as! [String: [String: Any]]
         let seen = { (key: String) in (members[key]?["count"] as? Int ?? 0) > 0 }
-        let facts = tree.map { NativeControlPolicy.Fact(identifier: $0.snapshot.identifier, label: $0.snapshot.label,
-            role: String($0.snapshot.elementType.rawValue), value: NativeControlPolicy.valueText($0.snapshot.value)) }
-        func select(_ id: String, _ label: String, _ roles: Set<String>) -> Observed? {
-            guard let index = NativeControlPolicy.select(facts, identifier: id, label: label, roles: roles) else { return nil }
-            return tree[index]
+        let selection = formSelection(tree)
+        let facts = formTargets(tree)
+        let paths = tree.map { $0.path }
+        let choice = NativeControlPolicy.formVerdict(facts: facts, paths: paths, identifier: "add-ssh",
+            label: "普通 SSH 终端", editableRoles: ["button"]).index != nil &&
+            NativeControlPolicy.formVerdict(facts: facts, paths: paths, identifier: "add-herdr",
+                label: "herdr 配对 / 手动连接", editableRoles: ["button"]).index != nil
+        var formControls: [String: Any] = [:]
+        for name in ["host", "port", "user", "probe"] {
+            let item = selection.controls[name]!
+            formControls[name] = ["role": item.role, "matches": item.matches, "owner": item.owner, "reason": item.reason]
         }
-        let editable = Set([XCUIElement.ElementType.textField, .textView, .other].map { String($0.rawValue) })
-        let buttons = Set([XCUIElement.ElementType.button, .other].map { String($0.rawValue) })
-        let portRoles = Set(tree.filter { $0.snapshot.elementType != .stepper && $0.snapshot.elementType != .button }
-            .map { String($0.snapshot.elementType.rawValue) })
-        let host = select("ssh-host", "主机地址", editable)
-        let port = select("ssh-port", "端口", portRoles)
-        let user = select("ssh-user", "用户名", editable)
-        let probe = select("ssh-probe", "探测主机指纹", buttons)
-        let choice = select("add-ssh", "普通 SSH 终端", buttons) != nil &&
-            select("add-herdr", "herdr 配对 / 手动连接", buttons) != nil
         let noErrors = !(home["knownErrors"] as! [String: Bool]).values.contains(true)
         let noAlerts = (home["appAlertCount"] as! Int) == 0 && (home["systemAlertCount"] as! Int) == 0 && home["alertSnapshotFailed"] as? Bool == false
         let empty = seen("brand") && seen("homeHeading") && seen("emptyHeading") && seen("zeroHosts") &&
-            home["inputCount"] as? Int == 0 && noErrors && noAlerts && host == nil && port == nil && user == nil
-        let formControls = [host, port, user, probe].compactMap { $0 }
-        let formOwners = formControls.compactMap { controlOwner($0.snapshot, tree) }
-        let formOwnerResolved = formOwners.count == 4 && NativeFramePolicy.sameOwner(
-            windowPaths: formOwners.map { $0.windowPath }, webPaths: formOwners.map { $0.webPath })
-        let form = formControls.count == 4 && formOwnerResolved
+            home["inputCount"] as? Int == 0 && noErrors && noAlerts && ["host", "port", "user"].allSatisfy { selection.controls[$0]?.index == nil }
+        let formOwnerResolved = selection.ownerResolved
+        let form = formOwnerResolved
         let page = form ? "sshForm" : choice ? "addChoice" : empty ? "emptyHome" : "unexpected"
         let title = tree.contains { texts($0.snapshot).contains { $0.contains("普通 SSH 终端") } }
         let passwords = tree.filter { $0.snapshot.elementType == .secureTextField &&
@@ -768,7 +942,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             "windowCount": home["windowCount"]!, "webViewCount": home["webViewCount"]!,
             "noAlerts": noAlerts, "noKnownErrors": noErrors,
             "emptyHomeIdentity": empty, "formByStructure": form, "formOwnerResolved": formOwnerResolved, "sshTitleSeen": title,
-            "addTitleSeen": seen("addHeading"), "credentialsEmpty": credentialsEmpty]
+            "addTitleSeen": seen("addHeading"), "credentialsEmpty": credentialsEmpty, "formControls": formControls]
     }
 
     @MainActor
@@ -890,13 +1064,13 @@ final class TauriDirectSSHUITests: XCTestCase {
         try phase("open_add")
         try openHomeSSH()
         try phase("host")
-        try fill(field("主机地址"), "127.0.0.1")
+        try fillForm("host", "127.0.0.1")
         try phase("port")
-        try fill(try portField(), String(port))
+        try fillForm("port", String(port))
         try phase("username")
-        try fill(field("用户名"), "fixture")
+        try fillForm("user", "fixture")
         try phase("probe")
-        try tap(button("探测主机指纹"))
+        try tapForm("probe")
     }
 
     @MainActor
@@ -991,7 +1165,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         try require(cancelledSubmit != nil && cancelledSubmit?.snapshot.isEnabled == false, "native_cancel_submit_live")
         try post("key_change_cancelled")
         try phase("reprobe")
-        try tap(button("探测主机指纹"))
+        try tapForm("probe")
         try waitText(config["fingerprintB"] as! String)
         try require(try !contains(config["fingerprintA"] as! String), "native_reprobe_old_key_stale")
         try check(false, enabled: true)

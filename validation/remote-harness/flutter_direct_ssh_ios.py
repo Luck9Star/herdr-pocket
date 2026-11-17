@@ -2,6 +2,8 @@
 """CI-only disposable iOS Simulator ordinary SSH acceptance; exports no raw logs."""
 import argparse
 import base64
+import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -9,12 +11,14 @@ import re
 import shutil
 import signal
 import subprocess
+import struct
 import sys
 import tempfile
 import time
 import uuid
 
-from flutter_direct_ssh_android import safe_failure, verify_prepared
+from flutter_direct_ssh_android import (safe_failure, verify_prepared, ROTATION_PUBLIC_FIELDS,
+                                       ROTATION_PHASES, checked_rotation_stage, rotation_checkpoint)
 
 PACKAGE = 'dev.herdr.herdrFlutterProbe'
 TARGET = 'integration_test/ios_direct_ssh_test.dart'
@@ -25,6 +29,8 @@ STAGES = {'home', 'target', 'probe', 'authenticate', 'secret_entry', 'screenshot
           'await_terminal', 'await_welcome', 'input', 'disconnect', 'disconnect_tap', 'disconnect_wait',
           'disconnect_secret', 'disconnect_status', 'disconnect_exception', 'disconnect_complete',
           'peer_confirmed', 'report_data_set'}
+STAGES.update({'rotation_' + name for name in ('home', 'initial_probe', 'rejected', 'cancelled',
+                                              'fresh_probe', 'authenticate', 'input', 'disconnect', 'complete')})
 LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
                'buildError': 'Failed to build iOS app',
                'launchError': 'Error launching application on',
@@ -278,11 +284,151 @@ def xctest_result_markers(path, private_values=()):
 
 
 def check_result(value):
-    if (set(value) != FIELDS or value['schemaVersion'] != 1 or value['platform'] != 'ios-simulator' or
+    if (not isinstance(value, dict) or set(value) != FIELDS or type(value['schemaVersion']) is not int or
+            value['schemaVersion'] != 1 or value['platform'] != 'ios-simulator' or
             value['physicalImeVerified'] is not False or
             any(value[key] is not True for key in FIELDS - {'schemaVersion', 'platform', 'physicalImeVerified'})):
         raise Failure('ios_result_incomplete')
     return value
+
+
+def check_rotation_result(value):
+    if (not isinstance(value, dict) or set(value) != ROTATION_PUBLIC_FIELDS or
+            type(value['schemaVersion']) is not int or value['schemaVersion'] != 1 or
+            value['platform'] != 'ios-simulator' or value['physicalImeVerified'] is not False or
+            any(value[key] is not True for key in ROTATION_PUBLIC_FIELDS -
+                {'schemaVersion', 'platform', 'physicalImeVerified'})):
+        raise Failure('ios_rotation_result_incomplete')
+    return value
+
+
+def capture_system_screen(device, path):
+    command('xcrun', 'simctl', 'io', device, 'screenshot', str(path), timeout=45)
+    png = path.read_bytes()
+    if (not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png) > 8_000_000 or
+            len(png) < 24 or png[12:16] != b'IHDR'):
+        raise Failure('ios_screenshot_invalid')
+    return png
+
+
+def target_pixel_proof(png, expected_target, bounds):
+    # The measured target widget is a crop locator, never proof of its pixels.
+    # Require the full exact target in one OCR row; no fuzzy substitutions.
+    from PIL import Image, ImageOps
+    from terminal_screenshot_gate import ScreenshotGateError
+    image = Image.open(io.BytesIO(png)).convert('RGB')
+    x, y, width, height = bounds
+    crop = image.crop((x, y, x + width, y + height))
+    gray = ImageOps.expand(ImageOps.autocontrast(ImageOps.grayscale(crop)).resize(
+        (width * 2, height * 2)), border=20, fill=255)
+    encoded = io.BytesIO()
+    gray.save(encoded, format='PNG')
+    for psm in (7, 6):
+        try:
+            result = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', 'eng', '--psm', str(psm),
+                                     '-c', 'load_system_dawg=0', '-c', 'load_freq_dawg=0'],
+                                    input=encoded.getvalue(), capture_output=True, check=True, timeout=30,
+                                    env=dict(os.environ, OMP_THREAD_LIMIT='1'))
+            rows = result.stdout.decode('utf-8', errors='strict').splitlines()
+        except (OSError, subprocess.SubprocessError, UnicodeError):
+            raise ScreenshotGateError('ios_target_ocr_failed') from None
+        if any(re.sub(r'\s', '', row) == expected_target for row in rows):
+            return {'targetVisible': True, 'targetBounds': list(bounds), 'ocrPageSegmentationMode': psm}
+    raise ScreenshotGateError('ios_target_not_visible')
+
+
+def screen_checkpoint(request, completed, fixture, rotation_fixture, device, exchange, private, output):
+    keys = {'tag', 'attempt', 'bounds', 'targetBounds', 'viewSize', 'observedTarget'}
+    if (not isinstance(request, dict) or set(request) != keys or request['tag'] not in ('ordinary', 'key-rotation') or
+            type(request['attempt']) is not int or not 1 <= request['attempt'] <= 12 or
+            not isinstance(request['viewSize'], list) or len(request['viewSize']) != 2 or
+            any(type(n) is not int or n <= 0 for n in request['viewSize'])):
+        raise Failure('ios_screen_request_invalid')
+    for field in ('bounds', 'targetBounds'):
+        rect = request[field]
+        if (not isinstance(rect, list) or len(rect) != 4 or any(type(n) is not int for n in rect) or
+                rect[0] < 0 or rect[1] < 0 or rect[2] <= 0 or rect[3] <= 0 or
+                rect[0] + rect[2] > request['viewSize'][0] or rect[1] + rect[3] > request['viewSize'][1]):
+            raise Failure('ios_screen_bounds_invalid')
+    tag, attempt = request['tag'], request['attempt']
+    peer = fixture if tag == 'ordinary' else rotation_fixture
+    expected_target = f'{peer.username}@127.0.0.1:{peer.port}'
+    if request['observedTarget'] != expected_target:
+        raise Failure('ios_active_target_mismatch')
+    if tag in completed and attempt <= completed[tag]['attempt']:
+        return
+    if ((tag in completed and completed[tag]['accepted']) or
+            attempt != (completed[tag]['attempt'] + 1 if tag in completed else 1) or
+            (tag == 'ordinary' and not completed.get('key-rotation', {}).get('accepted'))):
+        raise Failure('ios_screen_request_out_of_order')
+    events = peer.snapshot()['connectionEvents']
+    # A screen cannot be admitted before this peer received the sole input.
+    if not events or not events[-1]['markerReceived'] or events[-1]['inputBytes'] != 9:
+        raise Failure('ios_screen_peer_input_missing')
+    name = 'ordinary-terminal' if tag == 'ordinary' else 'key-change-terminal'
+    png = capture_system_screen(device, private / (name + '.png'))
+    if list(struct.unpack('>II', png[16:24])) != request['viewSize']:
+        raise Failure('ios_screenshot_geometry_mismatch')
+    from terminal_screenshot_gate import ScreenshotGateError, verify_terminal_screenshot
+    target_evidence, evidence, code = None, None, None
+    try:
+        target_evidence = target_pixel_proof(png, expected_target, request['targetBounds'])
+        evidence = verify_terminal_screenshot(png, expected_token=peer.screen_token, bounds=tuple(request['bounds']))
+    except ScreenshotGateError as error:
+        code = str(error)
+        evidence = error.evidence
+    accepted = code is None
+    # Export only a credential-free active frame with its full target proven
+    # from pixels. Keep the shared gate dictionary unchanged in the OCR file.
+    if target_evidence is not None:
+        (output / (name + '.png')).write_bytes(png)
+        (output / (name + '-ocr.json')).write_text(json.dumps(evidence, indent=2) + '\n')
+    completed[tag] = {'attempt': attempt, 'accepted': accepted,
+                      'expectedTarget': expected_target, 'targetEvidence': target_evidence}
+    if code is not None:
+        completed[tag]['failureCode'] = code
+    pending = exchange / ('screen-' + tag + '-' + str(attempt) + '.new')
+    pending.write_text(json.dumps({'tag': tag, 'attempt': attempt, 'accepted': accepted}))
+    pending.replace(pending.with_suffix('.json'))
+
+
+def review_checkpoint(request, fixture, device, exchange, private, output):
+    if request != {'tag': 'key-rotation', 'formAbsent': True, 'secretAbsent': True} or any(
+            type(request[key]) is not bool for key in ('formAbsent', 'secretAbsent')):
+        raise Failure('ios_review_request_invalid')
+    if not fixture.wait_for_connections_closed(2):
+        raise Failure('ios_review_peer_not_closed')
+    fixture.rotation_evidence(2)
+    png = capture_system_screen(device, private / 'rotation-rejected.png')
+    (output / 'key-change-review.png').write_bytes(png)
+    pending = exchange / 'review-done.new'
+    pending.write_text(json.dumps({'captured': True}))
+    pending.replace(exchange / 'review-done.json')
+
+
+def public_artifacts(output, *, masked_preconnect=False):
+    cases, artifacts = {}, {}
+    for tag, name in (('ordinary', 'ordinary-terminal'), ('keyChange', 'key-change-terminal')):
+        png, proof = name + '.png', name + '-ocr.json'
+        if (output / png).is_file() and (output / proof).is_file():
+            digest = hashlib.sha256((output / png).read_bytes()).hexdigest()
+            criteria = json.loads((output / proof).read_text())
+            if criteria.get('imageSha256') != digest:
+                raise Failure('ios_artifact_criteria_hash_mismatch')
+            artifacts[png] = digest
+            cases[tag] = {'terminalScreenshot': {'imageFile': png, 'imageSha256': digest,
+                'criteriaFile': proof, 'criteriaSha256': hashlib.sha256((output / proof).read_bytes()).hexdigest()},
+                'protocolRef': 'protocol' if tag == 'ordinary' else 'rotation.protocol'}
+    review = output / 'key-change-review.png'
+    if review.is_file():
+        digest = hashlib.sha256(review.read_bytes()).hexdigest()
+        artifacts[review.name] = digest
+        cases.setdefault('keyChange', {})['reviewScreenshot'] = {
+            'imageFile': review.name, 'imageSha256': digest, 'purpose': 'design-review-no-ocr'}
+    preconnect = output / 'preconnect.png'
+    if masked_preconnect is True and preconnect.is_file():
+        artifacts[preconnect.name] = hashlib.sha256(preconnect.read_bytes()).hexdigest()
+    return {'cases': cases, 'artifacts': artifacts}
 
 
 def ui_diagnostic(failure):
@@ -359,7 +505,15 @@ def run(app, output, env):
     report = {'schemaVersion': 1, 'sourceSHA': env['GITHUB_SHA'], 'kind': 'flutter-ios-simulator-ordinary-ssh',
               'status': 'failed', 'cleanup': cleanup, 'physicalImeVerified': False}
     from direct_ssh_fixture import DirectSshFixture
-    fixture, device, process, private, phase, primary = DirectSshFixture(), None, None, None, 'runtime_selection', None
+    fixture = DirectSshFixture(screen_proof=True)
+    rotation_fixture = DirectSshFixture(rotate_after_probe=True, screen_proof=True)
+    device, process, private, phase, primary = None, None, None, 'runtime_selection', None
+    screens = {}
+    rotation = {'checkpoints': {}}
+    report['rotation'] = rotation
+    private_values = (fixture.password, fixture.username, fixture.fingerprint, rotation_fixture.password,
+                      rotation_fixture.fingerprint, rotation_fixture.rotated_fingerprint, '127.0.0.1',
+                      str(app), str(base))
     device_name = 'herdr-direct-' + env['GITHUB_RUN_ID'] + '-' + uuid.uuid4().hex
     create_attempted = False
     create_timed_out = False
@@ -403,12 +557,15 @@ def run(app, output, env):
         phase = 'simulator_boot_ready'
         command('xcrun', 'simctl', 'bootstatus', device, '-b', timeout=remaining(360))
         phase = 'fixture_start'
-        with fixture:
+        with fixture, rotation_fixture:
             private = Path(tempfile.mkdtemp(prefix='herdr-direct-ios-private-', dir=base))
             defines = private / 'defines.json'
             defines.write_text(json.dumps({'HERDR_IOS_DIRECT_SSH': '1', 'HERDR_IOS_RUN_ID': env['GITHUB_RUN_ID'],
                 'HERDR_IOS_DIRECT_TARGET': json.dumps({'host': '127.0.0.1', 'port': fixture.port,
-                    'username': fixture.username, 'password': fixture.password, 'fingerprint': fixture.fingerprint})}))
+                    'username': fixture.username, 'password': fixture.password, 'fingerprint': fixture.fingerprint}),
+                'HERDR_IOS_ROTATION_TARGET': json.dumps({'host': '127.0.0.1', 'port': rotation_fixture.port,
+                    'username': rotation_fixture.username, 'password': rotation_fixture.password,
+                    'fingerprint': rotation_fixture.fingerprint, 'rotatedFingerprint': rotation_fixture.rotated_fingerprint})}))
             defines.chmod(0o600)
             phase = 'xctest_scaffold'
             prepare_xctest(app)
@@ -440,6 +597,7 @@ def run(app, output, env):
                 deadline, exchange, confirmed = min(overall_deadline, time.monotonic() + 1200), None, False
                 locator = ContainerLocator(device)
                 screenshot_attempted = False
+                review_captured = False
                 while process.poll() is None and time.monotonic() < deadline:
                     phase = 'await_device_result'
                     if exchange is None:
@@ -450,6 +608,30 @@ def run(app, output, env):
                         stage = read_json(exchange / 'stage.json')
                         if stage and stage.get('stage') in STAGES:
                             report['deviceStage'] = stage['stage']
+                        review = read_json(exchange / 'review-request.json')
+                        if review is not None and not review_captured:
+                            if stage != {'stage': 'rotation_rejected'}:
+                                raise Failure('ios_review_stage_invalid')
+                            review_checkpoint(review, rotation_fixture, device, exchange, private, output)
+                            review_captured = True
+                        screen = read_json(exchange / 'screen-request.json')
+                        if screen is not None:
+                            screen_checkpoint(screen, screens, fixture, rotation_fixture, device, exchange, private, output)
+                        checkpoint = read_json(exchange / 'rotation-stage.json')
+                        if checkpoint is not None:
+                            evidence = rotation_checkpoint(rotation_fixture, checkpoint, rotation['checkpoints'])
+                            if evidence is not None:
+                                phase_name, count = checked_rotation_stage(checkpoint, rotation['checkpoints'])
+                                if fixture.snapshot()['connections'] != 0 or process.poll() is not None:
+                                    raise Failure('ios_rotation_independence_missing')
+                                if phase_name == 'complete':
+                                    rotation['device'] = check_rotation_result(read_json(exchange / 'rotation-result.json'))
+                                    rotation['peerClosedBeforeDriverExit'] = True
+                                rotation['checkpoints'][phase_name] = evidence
+                                pending = exchange / ('rotation-' + phase_name + '-confirmed.new')
+                                pending.write_text(json.dumps({'phase': phase_name, 'stage': count,
+                                                               'serverEvidenceAccepted': True}))
+                                pending.replace(pending.with_suffix('.json'))
                         request = read_json(exchange / 'screenshot-request.json')
                         if (not screenshot_attempted and safe_screenshot_request(request, stage)
                                 and process.poll() is None):
@@ -469,6 +651,11 @@ def run(app, output, env):
                     public = read_json(exchange / 'result.json') if exchange else None
                     if public is not None:
                         report['device'] = check_result(public)
+                        if (set(screens) != {'ordinary', 'key-rotation'} or
+                                not all(value['accepted'] for value in screens.values()) or not review_captured):
+                            raise Failure('ios_screen_proof_missing')
+                        if 'device' not in rotation or set(rotation['checkpoints']) != set(ROTATION_PHASES):
+                            raise Failure('ios_rotation_confirmation_missing')
                         phase = 'peer_close_confirmation'
                         if not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed') or process.poll() is not None:
                             raise Failure('ios_peer_input_or_ui_close_missing')
@@ -491,7 +678,7 @@ def run(app, output, env):
                     framework = read_json(exchange / 'framework-error.json')
                     if framework:
                         report['frameworkDiagnostic'] = framework_diagnostic(framework,
-                            (fixture.password, fixture.username, fixture.fingerprint, str(private), str(app), str(base)))
+                            (*private_values, str(private)))
                     probes = {}
                     for name in ('baseline', 'home', 'report_data_set'):
                         probe = semantics_probe(read_json(exchange / ('semantics-' + name + '.json')))
@@ -507,7 +694,7 @@ def run(app, output, env):
                     if post:
                         report['connectPostDiagnostic'] = ui_diagnostic(post)
                     failure = read_json(exchange / 'failure.json') if exchange else None
-                    if failure and re.fullmatch(r'[a-z_]{1,40}', failure.get('stage', '')):
+                    if failure and failure.get('stage') in STAGES | {'fixture_validation'}:
                         report['failureStage'] = failure['stage']
                         if failure.get('kind') in {'timeout', 'not_hit_testable', 'control_not_ready', 'other'}:
                             report['failureKind'] = failure['kind']
@@ -519,6 +706,16 @@ def run(app, output, env):
                 report['protocol'] = fixture.snapshot()
                 if not all(report['protocol'][name] for name in ('authAccepted', 'ptyRequested', 'shellRequested', 'markerReceived', 'sessionClosed')):
                     raise Failure('ios_protocol_evidence_incomplete')
+                ordinary_events = report['protocol']['connectionEvents']
+                if (len(ordinary_events) != 2 or ordinary_events[0]['authAttempts'] != 0 or
+                        ordinary_events[0]['inputBytes'] != 0 or ordinary_events[1]['authAttempts'] != 1 or
+                        ordinary_events[1]['inputBytes'] != 9):
+                    raise Failure('ios_ordinary_replayed_input_or_auth')
+                rotation['protocol'] = rotation_fixture.snapshot()
+                rotation['finalEvidence'] = rotation_fixture.rotation_evidence(4)
+                accepted = rotation['finalEvidence']['acceptedSession']
+                if accepted['inputBytes'] != 9 or accepted['authAttempts'] != 1:
+                    raise Failure('ios_rotation_replayed_input_or_auth')
                 report['status'] = 'passed'
     except Exception as error:
         primary = str(error) if isinstance(error, Failure) else 'ios_runner_failed'
@@ -533,10 +730,23 @@ def run(app, output, env):
             report['flutterLogMarkers'] = log_diagnostics(private / 'flutter-private.log')
             try:
                 report['xctestResult'] = xctest_result_markers(private / 'test-result.xcresult',
-                    (fixture.password, fixture.username, fixture.fingerprint, str(private), str(app), str(base)))
+                    (*private_values, str(private)))
             except (OSError, subprocess.TimeoutExpired):
                 report['xctestResult'] = {'resultBundlePresent': True, 'summaryReadable': False}
         report['protocol'] = fixture.snapshot()
+        rotation['protocol'] = rotation_fixture.snapshot()
+        report['screens'] = screens
+        try:
+            report.update(public_artifacts(output, masked_preconnect=report.get('maskedPreconnectScreenshot') is True))
+            if report['status'] == 'passed' and not {
+                    'ordinary-terminal.png', 'key-change-review.png', 'key-change-terminal.png'} <= set(report['artifacts']):
+                raise Failure('ios_artifact_set_incomplete')
+        except (Failure, OSError, ValueError):
+            report['status'] = 'failed'
+            report['artifactCode'] = 'ios_artifact_criteria_hash_mismatch'
+            report['artifacts'] = {}
+            primary = primary or 'ios_artifact_manifest_invalid'
+            report['failureCode'] = primary
         if process is not None and process.poll() is None:
             try:
                 os.killpg(process.pid, signal.SIGTERM)
@@ -546,7 +756,9 @@ def run(app, output, env):
                 process.wait(timeout=10)
         cleanup['flutterToolStopped'] = process is None or process.poll() is not None
         fixture.close()
-        cleanup['fixtureClosed'] = fixture.snapshot()['connectionsClosed']
+        rotation_fixture.close()
+        cleanup['fixtureClosed'] = (fixture.snapshot()['connectionsClosed'] and
+                                    rotation_fixture.snapshot()['connectionsClosed'])
         report['simulatorCreateAttempted'] = create_attempted
         if not create_attempted:
             cleanup['simulatorDeleted'] = True

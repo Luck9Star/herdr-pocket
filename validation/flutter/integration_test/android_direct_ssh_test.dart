@@ -158,6 +158,7 @@ void main() {
           tester,
           config: rotation,
           directory: directory,
+          platform: 'android-api35-emulator',
           step: step,
           publish: publish,
           capture: capture,

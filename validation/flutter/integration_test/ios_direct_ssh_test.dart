@@ -1,28 +1,42 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
+import 'package:terminal_view/terminal_view.dart';
+
 import 'ios_exchange.dart';
 import 'direct_ssh_ui_steps.dart';
 
 const enabled = String.fromEnvironment('HERDR_IOS_DIRECT_SSH');
 const runId = String.fromEnvironment('HERDR_IOS_RUN_ID');
 const targetJson = String.fromEnvironment('HERDR_IOS_DIRECT_TARGET');
+const rotationTargetJson = String.fromEnvironment('HERDR_IOS_ROTATION_TARGET');
 final directory = '${Directory.systemTemp.path}/herdr-direct-ssh-$runId';
 
-Map<String, dynamic> target() {
+Map<String, dynamic> target({
+  String encoded = targetJson,
+  bool rotating = false,
+}) {
   if (!Platform.isIOS ||
       !kDebugMode ||
       enabled != '1' ||
       !RegExp(r'^\d+$').hasMatch(runId)) {
     throw StateError('direct_ssh_ios_isolated_fixture_required');
   }
-  final value = jsonDecode(targetJson);
-  const keys = {'host', 'port', 'username', 'password', 'fingerprint'};
+  final value = jsonDecode(encoded);
+  final keys = {
+    'host',
+    'port',
+    'username',
+    'password',
+    'fingerprint',
+    if (rotating) 'rotatedFingerprint',
+  };
   if (value is! Map<String, dynamic> ||
       value.keys.toSet().difference(keys).isNotEmpty ||
       value.length != keys.length ||
@@ -34,7 +48,12 @@ Map<String, dynamic> target() {
       value['password'] is! String ||
       !RegExp(r'^[0-9a-f]{32}$').hasMatch(value['password']) ||
       value['fingerprint'] is! String ||
-      !RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$').hasMatch(value['fingerprint'])) {
+      !RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$').hasMatch(value['fingerprint']) ||
+      (rotating &&
+          (value['rotatedFingerprint'] is! String ||
+              !RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$')
+                  .hasMatch(value['rotatedFingerprint']) ||
+              value['rotatedFingerprint'] == value['fingerprint']))) {
     throw StateError('direct_ssh_ios_invalid_target');
   }
   return value;
@@ -96,9 +115,8 @@ void main() {
         }
 
         final type = details.exception.runtimeType.toString();
-        final source = RegExp(
-          r'direct_ssh_ui_steps\.dart:(\d+)',
-        ).firstMatch(details.stack?.toString() ?? '');
+        final source = RegExp(r'direct_ssh_ui_steps\.dart:(\d+)')
+            .firstMatch(details.stack?.toString() ?? '');
         final excerpt = details
             .exceptionAsString()
             .split('\n')
@@ -135,6 +153,10 @@ void main() {
       var fixtureValidated = false;
       try {
         final config = target();
+        final rotation = target(encoded: rotationTargetJson, rotating: true);
+        if (rotation['port'] == config['port']) {
+          throw StateError('direct_ssh_ios_peers_not_independent');
+        }
         fixtureValidated = true;
         activeFixture = true;
         privateValues = [
@@ -142,6 +164,9 @@ void main() {
           config['username'] as String,
           config['host'] as String,
           config['fingerprint'] as String,
+          rotation['password'] as String,
+          rotation['fingerprint'] as String,
+          rotation['rotatedFingerprint'] as String,
           directory,
         ];
         expect(tester.testTextInput.isRegistered, isFalse);
@@ -154,7 +179,113 @@ void main() {
           }
         }
 
+        Future<Map<String, dynamic>> screenshotReply(String filename) async {
+          final file = File('$directory/$filename');
+          final deadline = DateTime.now().add(const Duration(seconds: 120));
+          while (!file.existsSync()) {
+            if (DateTime.now().isAfter(deadline)) {
+              throw StateError('direct_ssh_ios_screenshot_reply_timeout');
+            }
+            await tester.pump(const Duration(milliseconds: 100));
+          }
+          return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+        }
+
+        List<int> physicalBounds(Finder finder) {
+          final rect = tester.getRect(finder);
+          final ratio = tester.view.devicePixelRatio;
+          final left = (rect.left * ratio).floor();
+          final top = (rect.top * ratio).floor();
+          return [
+            left,
+            top,
+            (rect.right * ratio).ceil() - left,
+            (rect.bottom * ratio).ceil() - top,
+          ];
+        }
+
         Future<void> capture(String name) async {
+          if (name == 'rotation-rejected') {
+            expect(
+              find.byKey(const ValueKey('direct-host-key-change')),
+              findsOneWidget,
+            );
+            expect(find.byKey(const ValueKey('direct-form')), findsNothing);
+            expect(find.byKey(const ValueKey('direct-secret')), findsNothing);
+            expect(
+              find.byKey(const ValueKey('direct-host-key-cancel')),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(const ValueKey('direct-host-key-review')),
+              findsOneWidget,
+            );
+            await tester.pump(const Duration(milliseconds: 100));
+            for (final control in [
+              find.text('已阻止连接与输入'),
+              find.byKey(const ValueKey('direct-host-key-old')),
+              find.byKey(const ValueKey('direct-host-key-new')),
+              find.byKey(const ValueKey('direct-host-key-cancel')),
+              find.byKey(const ValueKey('direct-host-key-review')),
+              find.text('目标：fixture@127.0.0.1:${rotation['port']}'),
+            ]) {
+              expect(control, findsOneWidget);
+              final rect = physicalBounds(control);
+              expect(rect[0], greaterThanOrEqualTo(0));
+              expect(rect[1], greaterThanOrEqualTo(0));
+              expect(
+                rect[0] + rect[2],
+                lessThanOrEqualTo(tester.view.physicalSize.width),
+              );
+              expect(
+                rect[1] + rect[3],
+                lessThanOrEqualTo(tester.view.physicalSize.height),
+              );
+            }
+            publish('review-request.json', {
+              'tag': 'key-rotation',
+              'formAbsent': true,
+              'secretAbsent': true,
+            });
+            expect(await screenshotReply('review-done.json'), {
+              'captured': true,
+            });
+            return;
+          }
+          if (name == 'connected' || name == 'rotation-connected') {
+            final tag = name == 'connected' ? 'ordinary' : 'key-rotation';
+            final peer = name == 'connected' ? config : rotation;
+            final expectedTarget =
+                '${peer['username']}@${peer['host']}:${peer['port']}';
+            for (var attempt = 1; attempt <= 12; attempt++) {
+              // Only pump/capture here: the single input commit already happened.
+              await tester.pump(const Duration(milliseconds: 100));
+              final active = find.byKey(const ValueKey('direct-active-target'));
+              expect(active, findsOneWidget);
+              expect(tester.widget<Text>(active).data, expectedTarget);
+              expect(find.byKey(const ValueKey('direct-secret')), findsNothing);
+              publish('screen-request.json', {
+                'tag': tag,
+                'attempt': attempt,
+                'observedTarget': expectedTarget,
+                'bounds': physicalBounds(find.byType(TerminalView)),
+                'targetBounds': physicalBounds(active),
+                'viewSize': [
+                  tester.view.physicalSize.width.round(),
+                  tester.view.physicalSize.height.round(),
+                ],
+              });
+              final reply = await screenshotReply('screen-$tag-$attempt.json');
+              if (reply.length != 3 ||
+                  reply['tag'] != tag ||
+                  reply['attempt'] != attempt ||
+                  reply['accepted'] is! bool) {
+                throw StateError('direct_ssh_ios_screenshot_reply_invalid');
+              }
+              if (reply['accepted'] == true) return;
+            }
+            throw StateError('direct_ssh_ios_screen_pixels_not_verified');
+          }
           if (name != 'preconnect') return;
           final secret = find.byKey(const ValueKey('direct-secret'));
           final method = find.byType(SwitchListTile);
@@ -178,6 +309,15 @@ void main() {
           }
         }
 
+        await runDirectSshRotationUi(
+          tester,
+          config: rotation,
+          directory: directory,
+          platform: 'ios-simulator',
+          step: step,
+          publish: publish,
+          capture: capture,
+        );
         await runDirectSshUi(
           tester,
           binding: binding,
@@ -226,9 +366,8 @@ void main() {
           final exists = connect.evaluate().length == 1;
           final probe = find.byKey(const ValueKey('direct-probe'));
           final type = error.runtimeType.toString();
-          final line = RegExp(
-            r'direct_ssh_ui_steps\.dart:(\d+)',
-          ).firstMatch(stack.toString());
+          final line = RegExp(r'direct_ssh_ui_steps\.dart:(\d+)')
+              .firstMatch(stack.toString());
           publish('failure.json', {
             'stage': stage,
             'code': 'direct_ssh_ios_ui_failed',
@@ -249,7 +388,10 @@ void main() {
             'probeEnabled': probe.evaluate().length == 1
                 ? tester.widget<OutlinedButton>(probe).onPressed != null
                 : null,
-            'trustDialogVisible': find.byKey(const ValueKey('direct-trust-key')).evaluate().isNotEmpty,
+            'trustDialogVisible': find
+                .byKey(const ValueKey('direct-trust-key'))
+                .evaluate()
+                .isNotEmpty,
             'connectExists': exists,
             'connectEnabled': exists
                 ? tester.widget<FilledButton>(connect).onPressed != null

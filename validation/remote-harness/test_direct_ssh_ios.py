@@ -6,6 +6,10 @@ import json
 import os
 import subprocess
 import sys
+import struct
+import hashlib
+import io
+from types import SimpleNamespace
 from unittest.mock import patch
 from pathlib import Path
 
@@ -14,6 +18,148 @@ import ios_xctest_scaffold
 
 
 class IosDirectSshTests(unittest.TestCase):
+    def test_preconnect_hash_is_optional_and_requires_the_existing_masked_admission(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            self.assertEqual(runner.public_artifacts(output, masked_preconnect=True)['artifacts'], {})
+            png = b'owned-current-run-masked-image'
+            (output / 'preconnect.png').write_bytes(png)
+            self.assertEqual(runner.public_artifacts(output)['artifacts'], {})
+            self.assertEqual(runner.public_artifacts(output, masked_preconnect=True)['artifacts'],
+                             {'preconnect.png': hashlib.sha256(png).hexdigest()})
+            for name in ('ordinary-terminal', 'key-change-terminal'):
+                (output / (name + '.png')).write_bytes(png)
+                (output / (name + '-ocr.json')).write_text(json.dumps({'imageSha256': hashlib.sha256(png).hexdigest()}))
+            (output / 'key-change-review.png').write_bytes(png)
+            artifacts = runner.public_artifacts(output, masked_preconnect=True)['artifacts']
+            self.assertEqual(set(artifacts), {'ordinary-terminal.png', 'key-change-review.png',
+                                            'key-change-terminal.png', 'preconnect.png'})
+
+    @unittest.skipUnless(importlib.util.find_spec('PIL'), 'Pillow is optional outside screenshot CI')
+    def test_target_ocr_requires_full_exact_single_row_and_uses_only_measured_crop(self):
+        from PIL import Image
+        from terminal_screenshot_gate import ScreenshotGateError
+        png = io.BytesIO()
+        Image.new('RGB', (300, 600), 'white').save(png, format='PNG')
+        target = 'fixture@127.0.0.1:2222'
+        for text in ('fixture@127.0.0.1:2223', 'fixture@127.0.0.1:\n2222', 'prefix' + target):
+            with patch.object(runner.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, text.encode(), b'')):
+                with self.assertRaisesRegex(ScreenshotGateError, 'ios_target_not_visible'):
+                    runner.target_pixel_proof(png.getvalue(), target, [0, 10, 200, 20])
+        with patch.object(runner.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, (target + '\n').encode(), b'')) as ocr:
+            evidence = runner.target_pixel_proof(png.getvalue(), target, [0, 10, 200, 20])
+            self.assertTrue(evidence['targetVisible'])
+            self.assertEqual(evidence['targetBounds'], [0, 10, 200, 20])
+            with Image.open(io.BytesIO(ocr.call_args.kwargs['input'])) as cropped:
+                self.assertEqual(cropped.size, (440, 80))
+
+    def test_rotation_result_requires_actual_ios_host_and_all_predicates(self):
+        value = {key: True for key in runner.ROTATION_PUBLIC_FIELDS}
+        value.update(schemaVersion=1, platform='ios-simulator', physicalImeVerified=False)
+        self.assertEqual(runner.check_rotation_result(value), value)
+        for changed in (None, {**value, 'platform': 'android-api35-emulator'},
+                        {**value, 'cancelKeepsOldTrust': False}, {**value, 'schemaVersion': True},
+                        {**value, 'password': 'private'}):
+            with self.assertRaises(runner.Failure):
+                runner.check_rotation_result(changed)
+
+    def screen_request(self, **changes):
+        return dict({'tag': 'key-rotation', 'attempt': 1, 'bounds': [0, 30, 300, 570],
+                     'targetBounds': [0, 10, 200, 20], 'viewSize': [300, 600],
+                     'observedTarget': 'fixture@127.0.0.1:2222'}, **changes)
+
+    def peer(self, input_bytes=9):
+        return SimpleNamespace(username='fixture', port=2222, screen_token='fixture-token',
+            snapshot=lambda: {'connectionEvents': [{'markerReceived': True, 'inputBytes': input_bytes}]})
+
+    def test_screen_rejects_unmeasured_geometry_wrong_identity_and_skipped_attempt(self):
+        variants = [self.screen_request(bounds=[True, 0, 300, 600]),
+                    self.screen_request(bounds=[0, 31, 300, 570]),
+                    self.screen_request(targetBounds=[0, 10, 301, 20]),
+                    self.screen_request(observedTarget='another@127.0.0.1:2222'),
+                    self.screen_request(attempt=2), self.screen_request(tag='ordinary')]
+        for request in variants:
+            with self.subTest(request=request), patch.object(runner, 'capture_system_screen') as capture:
+                with self.assertRaises(runner.Failure):
+                    runner.screen_checkpoint(request, {}, self.peer(), self.peer(), 'device', None, None, None)
+                capture.assert_not_called()
+
+    def test_screen_requires_single_real_peer_input_before_any_capture(self):
+        for amount in (0, 8, 18):
+            with patch.object(runner, 'capture_system_screen') as capture:
+                with self.assertRaisesRegex(runner.Failure, 'ios_screen_peer_input_missing'):
+                    runner.screen_checkpoint(self.screen_request(), {}, self.peer(amount), self.peer(amount),
+                                             'device', None, None, None)
+                capture.assert_not_called()
+
+    def test_system_capture_uses_simctl_io_and_preserves_original_bytes(self):
+        png = b'\x89PNG\r\n\x1a\n' + b'\0\0\0\rIHDR' + struct.pack('>II', 300, 600)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'capture.png'
+            path.write_bytes(png)
+            with patch.object(runner, 'command') as command:
+                self.assertEqual(runner.capture_system_screen('owned', path), png)
+            command.assert_called_once_with('xcrun', 'simctl', 'io', 'owned', 'screenshot', str(path), timeout=45)
+
+    def test_screen_requires_system_dimensions_and_does_not_call_ocr_on_wrong_size(self):
+        png = b'\x89PNG\r\n\x1a\n' + b'\0\0\0\rIHDR' + struct.pack('>II', 301, 600)
+        with patch.object(runner, 'capture_system_screen', return_value=png), patch.object(runner, 'target_pixel_proof') as ocr:
+            with self.assertRaisesRegex(runner.Failure, 'ios_screenshot_geometry_mismatch'):
+                runner.screen_checkpoint(self.screen_request(), {}, self.peer(), self.peer(), 'device', None, Path('/private'), None)
+            ocr.assert_not_called()
+
+    def test_screen_publishes_original_gate_schema_and_same_image_manifest_hash(self):
+        png = b'\x89PNG\r\n\x1a\n' + b'\0\0\0\rIHDR' + struct.pack('>II', 300, 600)
+        evidence = {'schemaVersion': 1, 'imageSha256': hashlib.sha256(png).hexdigest(),
+                    'markerVisible': True, 'tokenVisible': True, 'proofSequenceVisible': True,
+                    'terminalBounds': [0, 30, 300, 570]}
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp); completed = {}
+            with patch.object(runner, 'capture_system_screen', return_value=png) as capture, \
+                 patch.object(runner, 'target_pixel_proof', return_value={'targetVisible': True}), \
+                 patch('terminal_screenshot_gate.verify_terminal_screenshot', return_value=evidence) as gate:
+                runner.screen_checkpoint(self.screen_request(), completed, self.peer(), self.peer(), 'owned', path, path, path)
+                runner.screen_checkpoint(self.screen_request(), completed, self.peer(), self.peer(), 'owned', path, path, path)
+            capture.assert_called_once(); gate.assert_called_once_with(png, expected_token='fixture-token', bounds=(0, 30, 300, 570))
+            self.assertEqual(json.loads((path / 'key-change-terminal-ocr.json').read_text()), evidence)
+            self.assertEqual(json.loads((path / 'screen-key-rotation-1.json').read_text())['accepted'], True)
+            manifest = runner.public_artifacts(path)
+            item = manifest['cases']['keyChange']['terminalScreenshot']
+            self.assertEqual(manifest['artifacts'][item['imageFile']], evidence['imageSha256'])
+            self.assertEqual(item['imageSha256'], evidence['imageSha256'])
+            (path / item['imageFile']).write_bytes(png + b'tampered')
+            with self.assertRaisesRegex(runner.Failure, 'ios_artifact_criteria_hash_mismatch'):
+                runner.public_artifacts(path)
+
+    def test_target_ocr_failure_never_exports_unapproved_terminal_frame(self):
+        from terminal_screenshot_gate import ScreenshotGateError
+        png = b'\x89PNG\r\n\x1a\n' + b'\0\0\0\rIHDR' + struct.pack('>II', 300, 600)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp); completed = {}
+            with patch.object(runner, 'capture_system_screen', return_value=png), \
+                 patch.object(runner, 'target_pixel_proof', side_effect=ScreenshotGateError('ios_target_not_visible')):
+                runner.screen_checkpoint(self.screen_request(), completed, self.peer(), self.peer(), 'owned', path, path, path)
+            self.assertFalse(completed['key-rotation']['accepted'])
+            self.assertEqual(runner.public_artifacts(path)['artifacts'], {})
+            self.assertFalse((path / 'key-change-terminal.png').exists())
+
+    def test_review_requires_closed_rejected_transport_and_never_uses_terminal_ocr(self):
+        peer = SimpleNamespace(wait_for_connections_closed=lambda count: True,
+                               rotation_evidence=lambda count: {'stage': count})
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp)
+            with patch.object(runner, 'capture_system_screen', return_value=b'original-system-image'), \
+                 patch('terminal_screenshot_gate.verify_terminal_screenshot') as gate:
+                runner.review_checkpoint({'tag': 'key-rotation', 'formAbsent': True, 'secretAbsent': True},
+                                         peer, 'owned', path, path, path)
+                gate.assert_not_called()
+            self.assertEqual((path / 'key-change-review.png').read_bytes(), b'original-system-image')
+            self.assertEqual(json.loads((path / 'review-done.json').read_text()), {'captured': True})
+            self.assertIn('key-change-review.png', runner.public_artifacts(path)['artifacts'])
+        for bad in (None, {'tag': 'key-rotation', 'formAbsent': 1, 'secretAbsent': True}):
+            with self.assertRaises(runner.Failure):
+                runner.review_checkpoint(bad, peer, 'owned', None, None, None)
+
     def test_protocol_dependency_is_present_when_required(self):
         if os.environ.get('HERDR_REQUIRE_PARAMIKO') == '1':
             self.assertIsNotNone(importlib.util.find_spec('paramiko'), 'Paramiko is required for direct SSH acceptance')

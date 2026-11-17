@@ -244,6 +244,7 @@ Future<void> runDirectSshRotationUi(
   WidgetTester tester, {
   required Map<String, dynamic> config,
   required String directory,
+  required String platform,
   required void Function(String) step,
   required void Function(String, Object) publish,
   required Future<void> Function(String) capture,
@@ -410,7 +411,7 @@ Future<void> runDirectSshRotationUi(
   expect(tester.takeException(), isNull);
   publish('rotation-result.json', {
     'schemaVersion': 1,
-    'platform': 'android-api35-emulator',
+    'platform': platform,
     'homepageEntry': true,
     'sameTarget': true,
     'oldFingerprintMatchedIndependentA': true,

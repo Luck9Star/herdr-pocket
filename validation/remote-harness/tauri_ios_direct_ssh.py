@@ -263,6 +263,53 @@ def build_diagnostics(log_path, private, *, phase):
                         else 'xcode_build_failed'}]
 
 
+def runtime_diagnostics(log_path, private):
+    """Inspect a private XCTest log; export only fixed codes and owned locations."""
+    owned = {str((Path(private) / relative).resolve()): Path(relative).name
+             for relative in ('UITests/Driver.swift', 'Host/Host.swift')}
+    records = []
+    patterns = (
+        ('xctest_ambiguous_match', r'multiple matching elements found|ambiguous match'),
+        ('xctest_element_absent_or_query_unresolved',
+         r'failed to get matching snapshots?:\s*no matches found|failed to resolve query|no matches found for'),
+        ('xctest_timeout', r'timed out waiting|exceeded timeout|asynchronous wait failed'),
+        ('xctest_native_assertion', r'\bxctassert\w*\b.*\bfailed\b|\bxctfail\b'),
+        ('xctest_actor_isolation', r'incorrect actor executor assumption|main actor isolation violation'),
+        ('xctest_process_failure', r'failed to launch (?:the )?app|lost connection to the test process|'
+         r'early unexpected exit|test runner exited with (?:code|signal)'),
+    )
+    try:
+        with Path(log_path).open('rb') as source:
+            for raw in source:
+                line = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', raw[:8192].decode('utf-8', errors='replace')).strip()
+                # Ordinary application output is not evidence of an XCTest failure.
+                match = re.match(r'(.+\.swift):([0-9]{1,6}):(?:[0-9]{1,5}:)?\s*error:\s*(.*)', line)
+                failure = match[3] if match else line
+                if match is None and not re.search(r'\berror:|\*\* TEST (?:EXECUTE )?FAILED \*\*|'
+                                                   r'test runner exited with|early unexpected exit|'
+                                                   r'lost connection to the test process|'
+                                                   r'incorrect actor executor assumption', line, re.I):
+                    continue
+                for code, pattern in patterns:
+                    if not re.search(pattern, failure, re.I):
+                        continue
+                    value = {'classification': code}
+                    if match and 1 <= int(match[2]) <= 100000:
+                        path = Path(match[1])
+                        try:
+                            resolved = str((path if path.is_absolute() else Path(private) / path).resolve())
+                        except (OSError, ValueError):
+                            resolved = None
+                        if resolved in owned:
+                            value.update(file=owned[resolved], line=int(match[2]))
+                    if value not in records and len(records) < 12:
+                        records.append(value)
+                    break
+    except OSError:
+        pass
+    return records or [{'classification': 'xctest_failed'}]
+
+
 def build_driver(private, build, result, *, deadline=None):
     """Separate generator and compiler failures; both logs remain private."""
     phases = (
@@ -781,14 +828,20 @@ def run(project, app, output, *, source_sha=None, env=None):
                  '-derivedDataPath', str(private / 'derived'), 'CODE_SIGNING_ALLOWED=NO',
                  '-parallel-testing-enabled', 'NO', '-maximum-concurrent-test-simulator-destinations', '1']
         build_driver(private, build, result, deadline=batch_deadline)
-        with (private / 'xctest-private.log').open('wb') as log:
-            result['stage'] = 'xctest_launch'
-            try:
+        runtime_log = private / 'xctest-private.log'
+        result['stage'] = 'xctest_launch'
+        try:
+            with runtime_log.open('wb') as log:
+                runtime_log.chmod(0o600)
                 command([*build, 'test-without-building', '-resultBundlePath', str(private / 'run.xcresult'),
                          '-only-testing:PocketUITests/TauriDirectSSHUITests/testOrdinaryAndKeyChange'],
                         log=log, timeout=max(.1, min(900, batch_deadline - time.monotonic())))
-            except Failure:
-                raise Failure(state.failure or 'tauri_ios_xctest_failed') from None
+        except Failure:
+            result['runtimeDiagnostics'] = runtime_diagnostics(runtime_log, private)
+            raise Failure(state.failure or 'tauri_ios_xctest_failed') from None
+        if state.failure is not None:
+            result['runtimeDiagnostics'] = runtime_diagnostics(runtime_log, private)
+            raise Failure(state.failure)
         require(state.index == len(STAGES) and state.failure is None, 'tauri_ios_checkpoints_incomplete')
         require(set(result.get('homeEntry', {})) == {'ordinary', 'keyChange'}, 'tauri_ios_home_entry_incomplete')
         require(set(result['artifacts']) == set(PNG_FILES), 'tauri_ios_artifacts_incomplete')

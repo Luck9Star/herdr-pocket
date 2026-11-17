@@ -87,6 +87,48 @@ enum NativeViewPolicy {
         }
     }
 }
+enum NativeControlPolicy {
+    struct Fact {
+        let identifier: String
+        let label: String
+        let role: String
+        let value: String?
+    }
+    static func select(_ facts: [Fact], identifier: String?, label: String, roles: Set<String>, value: String? = nil) -> Int? {
+        let allowed = { (index: Int) in roles.contains(facts[index].role) && (value == nil || facts[index].value == value!) }
+        if let id = identifier, !id.isEmpty {
+            let exact = facts.indices.filter { facts[$0].identifier == id }
+            if !exact.isEmpty { return exact.count == 1 && allowed(exact[0]) ? exact[0] : nil }
+        }
+        let exact = facts.indices.filter { allowed($0) && facts[$0].label == label }
+        return exact.count == 1 ? exact[0] : nil
+    }
+    static func valueText(_ value: Any?) -> String? {
+        if value == nil { return "" }
+        if let text = value as? String { return text }
+        if let number = value as? NSNumber { return number.stringValue }
+        return nil
+    }
+    static func credentialEmpty(_ value: Any?, placeholder: String?) -> Bool {
+        guard let text = valueText(value) else { return false }
+        return text.isEmpty || (placeholder?.isEmpty == false && text == placeholder)
+    }
+    static func clearCount(_ value: Any?, placeholder: String?, secure: Bool) -> Int? {
+        guard let text = valueText(value) else { return nil }
+        if credentialEmpty(value, placeholder: placeholder) { return 0 }
+        if secure { return nil }
+        return text.count <= 5 ? text.count : nil
+    }
+    static func isPortEditingCandidate(role: UInt, stepper: UInt, button: UInt, value: Any?) -> Bool {
+        role != stepper && role != button && valueText(value) == "22"
+    }
+    enum QueryChoice { case identifier, label, none, ambiguous }
+    static func queryChoice(identifierCount: Int, labelCount: Int) -> QueryChoice {
+        if identifierCount > 0 { return identifierCount == 1 ? .identifier : .ambiguous }
+        if labelCount > 0 { return labelCount == 1 ? .label : .ambiguous }
+        return .none
+    }
+}
 // END NATIVE FRAME POLICY
 
 // URLSession completion runs off the main actor. Synchronize its tiny reply
@@ -113,6 +155,12 @@ final class TauriDirectSSHUITests: XCTestCase {
     private var app: XCUIApplication!
     private var scenario = "ordinary"
     private var nativePhase = "ordinary_launch"
+    private var lastHomeSample: [String: Any]?
+    private struct LiveControl {
+        let element: XCUIElement
+        let snapshot: any XCUIElementSnapshot
+        let hittable: Bool
+    }
 
     @MainActor
     private func require(_ condition: Bool, _ code: String) throws {
@@ -208,66 +256,115 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func button(_ label: String) -> XCUIElement {
-        let identifiers = ["普通 SSH 终端": "add-ssh", "探测主机指纹": "ssh-probe",
-            "打开键盘": "ssh-focus", "断开连接": "ssh-disconnect",
-            "重新核对主机指纹": "ssh-key-recheck", "取消连接，保留旧信任": "ssh-key-cancel"]
-        let query = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", identifiers[label] ?? "", label))
-        if query.count > 0 { return query.firstMatch }
-        if let identifier = identifiers[label] {
-            let byID = app.descendants(matching: .any).matching(identifier: identifier)
-            if byID.count == 1 { return byID.firstMatch }
-        }
-        let byLabel = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label))
-        return byLabel.count == 1 ? byLabel.firstMatch : query.firstMatch
+    private func uniqueElement(_ query: XCUIElementQuery) -> XCUIElement {
+        // An absent/ambiguous query stays nonmatching. Its metadata is never read.
+        query.count == 1 ? query.firstMatch : query.matching(NSPredicate(value: false)).firstMatch
     }
+
+    @MainActor
+    private func resolveControl(_ typed: XCUIElementQuery, _ fallback: XCUIElementQuery,
+                                identifier: String?, label: String, requireTypedID: Bool = false) -> XCUIElement {
+        let absent = app.descendants(matching: .any).matching(NSPredicate(value: false)).firstMatch
+        if let id = identifier, !id.isEmpty {
+            let identified = app.descendants(matching: .any).matching(identifier: id)
+            switch NativeControlPolicy.queryChoice(identifierCount: identified.count, labelCount: 0) {
+            case .identifier:
+                if requireTypedID && typed.matching(identifier: id).count != 1 { return absent }
+                return identified.firstMatch
+            case .ambiguous: return absent
+            case .none, .label: break
+            }
+        }
+        let predicate = NSPredicate(format: "label == %@", label)
+        let preferred = typed.matching(predicate)
+        switch NativeControlPolicy.queryChoice(identifierCount: 0, labelCount: preferred.count) {
+        case .label: return preferred.firstMatch
+        case .ambiguous: return absent
+        case .none, .identifier: break
+        }
+        let remaining = fallback.matching(predicate)
+        return NativeControlPolicy.queryChoice(identifierCount: 0, labelCount: remaining.count) == .label ? remaining.firstMatch : absent
+    }
+
+    @MainActor
+    private func liveControl(_ item: XCUIElement) -> LiveControl? {
+        guard item.exists, let snapshot = try? item.snapshot() else { return nil }
+        return LiveControl(element: item, snapshot: snapshot, hittable: item.isHittable)
+    }
+
+    @MainActor
+    private func button(_ label: String) -> XCUIElement {
+        let ids = ["普通 SSH 终端": "add-ssh", "herdr 配对 / 手动连接": "add-herdr", "探测主机指纹": "ssh-probe",
+            "打开键盘": "ssh-focus", "断开连接": "ssh-disconnect", "重新核对主机指纹": "ssh-key-recheck",
+            "取消连接，保留旧信任": "ssh-key-cancel"]
+        return resolveControl(app.buttons, app.descendants(matching: .any), identifier: ids[label], label: label)
+    }
+
     @MainActor
     private func field(_ label: String) -> XCUIElement {
-        let identifier = ["主机地址": "ssh-host", "端口": "ssh-port", "用户名": "ssh-user"][label] ?? ""
-        let typed = app.textFields.matching(NSPredicate(format: "identifier == %@ OR label == %@", identifier, label))
-        if typed.count > 0 { return typed.firstMatch }
-        let byID = app.descendants(matching: .any).matching(identifier: identifier)
-        if byID.count == 1 && [.textField, .textView, .other].contains(byID.firstMatch.elementType) { return byID.firstMatch }
+        let id = ["主机地址": "ssh-host", "端口": "ssh-port", "用户名": "ssh-user"][label]
         let editable = app.descendants(matching: .any).matching(NSPredicate(format:
-            "label == %@ AND (elementType == %d OR elementType == %d)", label,
+            "elementType == %d OR elementType == %d",
             XCUIElement.ElementType.textView.rawValue, XCUIElement.ElementType.other.rawValue))
-        return editable.count == 1 ? editable.firstMatch : typed.firstMatch
+        return resolveControl(app.textFields, editable, identifier: id, label: label)
     }
+
     @MainActor
     private func portControl() -> XCUIElement {
-        let text = field("端口")
-        if text.exists && text.elementType == .textField { return text }
-        let stepper = app.steppers["端口"].firstMatch
-        if stepper.exists && stepper.textFields.count == 1 { return stepper.textFields.firstMatch }
-        let candidates = app.descendants(matching: .other).matching(NSPredicate(format:
-            "(identifier == %@ OR label == %@) AND value == %@", "ssh-port", "端口", "22"))
-        return candidates.count == 1 ? candidates.firstMatch : app.textFields["端口"]
+        let item = resolveControl(app.textFields, app.descendants(matching: .any), identifier: "ssh-port", label: "端口")
+        if let current = liveControl(item) {
+            let type = current.snapshot.elementType
+            if NativeControlPolicy.isPortEditingCandidate(role: type.rawValue,
+                    stepper: XCUIElement.ElementType.stepper.rawValue, button: XCUIElement.ElementType.button.rawValue,
+                    value: current.snapshot.value) { return item }
+            if type == .stepper && item.textFields.count == 1 {
+                let child = item.textFields.firstMatch
+                if let current = liveControl(child), NativeControlPolicy.valueText(current.snapshot.value) == "22" { return child }
+            }
+        }
+        return app.descendants(matching: .any).matching(NSPredicate(value: false)).firstMatch
     }
 
     @MainActor
     private func portField() throws -> XCUIElement {
         let item = portControl()
-        try require(item.exists, "native_port_control_ambiguous")
+        guard let current = liveControl(item) else {
+            try require(false, "native_port_control_ambiguous")
+            throw NSError(domain: "native_port_control_ambiguous", code: 1)
+        }
         try post("native_progress", ["nativeCheckpoint": nativePhase,
-            "nativePortType": item.elementType == .textField ? "textField" : "other"])
+            "nativePortType": current.snapshot.elementType == .textField ? "textField" : "other"])
         return item
     }
     @MainActor
     private func password() -> XCUIElement {
-        app.secureTextFields.matching(NSPredicate(format: "identifier == %@ OR label == %@", "ssh-password", "密码")).firstMatch
+        resolveControl(app.secureTextFields, app.secureTextFields, identifier: "ssh-password", label: "密码", requireTypedID: true)
     }
     @MainActor
     private func review() -> XCUIElement {
-        app.descendants(matching: .any).matching(NSPredicate(format:
-            "(elementType == %d OR elementType == %d) AND (label CONTAINS %@)",
+        let identified = app.descendants(matching: .any).matching(identifier: "ssh-review")
+        if identified.count > 0 { return uniqueElement(identified) }
+        return uniqueElement(app.descendants(matching: .any).matching(NSPredicate(format:
+            "(elementType == %d OR elementType == %d) AND label == %@",
             XCUIElement.ElementType.checkBox.rawValue, XCUIElement.ElementType.switch.rawValue,
-            "我已通过可信渠道独立核对以上指纹")).firstMatch
+            "我已通过可信渠道独立核对以上指纹。")))
     }
 
     @MainActor
-    private func controlOwner(_ item: XCUIElement, _ rows: [Observed]) -> Observed? {
-        let matches = rows.filter { $0.snapshot.frame == item.frame &&
-            ((!item.identifier.isEmpty && $0.snapshot.identifier == item.identifier) || $0.snapshot.label == item.label) &&
+    private func controlIdentityRows(_ current: any XCUIElementSnapshot, _ rows: [Observed]) -> [Observed] {
+        if !current.identifier.isEmpty {
+            let identified = rows.filter { $0.snapshot.identifier == current.identifier }
+            if !identified.isEmpty { return identified }
+        }
+        guard !current.label.isEmpty else { return [] }
+        return rows.filter { $0.snapshot.label == current.label }
+    }
+
+    @MainActor
+    private func controlOwner(_ current: any XCUIElementSnapshot, _ rows: [Observed]) -> Observed? {
+        let identity = controlIdentityRows(current, rows)
+        if !current.identifier.isEmpty && identity.contains(where: { $0.snapshot.identifier == current.identifier }) && identity.count != 1 { return nil }
+        let matches = identity.filter { $0.snapshot.frame == current.frame &&
             $0.window != nil && !$0.webs.isEmpty }
         guard let index = matches.indices.max(by: { matches[$0].path.count < matches[$1].path.count }),
               NativeFramePolicy.compatibleOwner(windowPaths: matches.map { $0.windowPath }, webPaths: matches.map { $0.webPath },
@@ -277,8 +374,8 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func controlVisibleFrame(_ item: XCUIElement) throws -> CGRect {
-        guard let owner = controlOwner(item, try observedNodes()), let window = owner.window,
+    private func controlVisibleFrame(_ current: any XCUIElementSnapshot, _ rows: [Observed]) throws -> CGRect {
+        guard let owner = controlOwner(current, rows), let window = owner.window,
               let visible = NativeFramePolicy.visible(window: window, screen: app.frame,
                   webAncestors: owner.webs, occlusions: nativeOcclusions()) else {
             try require(false, "native_control_owner_unproven")
@@ -288,53 +385,70 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func reveal(_ item: XCUIElement) throws {
+    private func reveal(_ item: XCUIElement) throws -> LiveControl {
         try require(item.waitForExistence(timeout: 20), "native_control_missing")
         for _ in 0..<10 {
-            let visible = try controlVisibleFrame(item)
-            if item.isHittable && visible.contains(item.frame) { return }
-            guard let owner = controlOwner(item, try observedNodes()), let webFrame = owner.webs.last,
-                  let surface = app.webViews.allElementsBoundByIndex.first(where: { $0.exists && $0.frame == webFrame && $0.isHittable }) else {
+            guard let current = liveControl(item) else {
+                try require(false, "native_control_missing")
+                throw NSError(domain: "native_control_missing", code: 1)
+            }
+            let rows = try observedNodes()
+            let visible = try controlVisibleFrame(current.snapshot, rows)
+            if current.hittable && visible.contains(current.snapshot.frame) { return current }
+            guard let owner = controlOwner(current.snapshot, rows), let webFrame = owner.webs.last,
+                  let surface = app.webViews.allElementsBoundByIndex.compactMap({ liveControl($0) })
+                    .first(where: { $0.snapshot.frame == webFrame && $0.hittable }) else {
                 try require(false, "native_scroll_owner_unproven")
                 throw NSError(domain: "native_scroll_owner_unproven", code: 1)
             }
-            // Repeated AX wrappers with the same physical frame are equivalent
-            // scroll surfaces. No unrelated application window is selected.
-            if item.frame.minY < visible.minY { surface.swipeDown() }
-            else { surface.swipeUp() }
+            if current.snapshot.frame.minY < visible.minY { surface.element.swipeDown() }
+            else { surface.element.swipeUp() }
         }
         try require(false, "native_control_not_visible")
+        throw NSError(domain: "native_control_not_visible", code: 1)
     }
 
     @MainActor
     private func tap(_ item: XCUIElement) throws {
-        try reveal(item)
-        try require(item.isEnabled, "native_control_disabled")
-        item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let current = try reveal(item)
+        try require(current.snapshot.isEnabled, "native_control_disabled")
+        current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     @MainActor
     private func fill(_ item: XCUIElement, _ text: String) throws {
-        try post("native_progress", ["nativeCheckpoint": nativePhase, "nativeInputRole": role(item.elementType)])
         try tap(item)
-        let old = item.value as? String ?? ""
-        // The only populated field is the initial two-character port. Native
-        // delete keys replace it; no web script or clipboard is involved.
-        try require(old.count <= 5, "native_unexpected_existing_input")
+        guard let current = liveControl(item) else {
+            try require(false, "native_control_missing")
+            throw NSError(domain: "native_control_missing", code: 1)
+        }
+        try post("native_progress", ["nativeCheckpoint": nativePhase, "nativeInputRole": role(current.snapshot.elementType)])
+        guard let clearCount = NativeControlPolicy.clearCount(current.snapshot.value, placeholder: current.snapshot.placeholderValue,
+                secure: current.snapshot.elementType == .secureTextField) else {
+            try require(false, "native_unexpected_existing_input")
+            throw NSError(domain: "native_unexpected_existing_input", code: 1)
+        }
         try require(app.keyboards.firstMatch.waitForExistence(timeout: 10), "native_input_keyboard_missing")
-        app.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + text)
-        if item.elementType != .secureTextField {
-            try require(item.value as? String == text, "native_input_value_invalid")
+        app.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: clearCount) + text)
+        if current.snapshot.elementType != .secureTextField {
+            guard let after = liveControl(item) else {
+                try require(false, "native_control_missing")
+                throw NSError(domain: "native_control_missing", code: 1)
+            }
+            try require(NativeControlPolicy.valueText(after.snapshot.value) == text, "native_input_value_invalid")
         }
     }
 
     @MainActor
     private func check(_ expected: Bool, enabled: Bool) throws {
         let item = review()
-        try require(item.waitForExistence(timeout: 10) && item.isEnabled == enabled,
-                    "native_review_lock_invalid")
-        let value = item.value as? String ?? ""
-        try require(value == (expected ? "1" : "0"), "native_review_value_invalid")
+        try require(item.waitForExistence(timeout: 10), "native_review_lock_invalid")
+        guard let current = liveControl(item) else {
+            try require(false, "native_review_lock_invalid")
+            throw NSError(domain: "native_review_lock_invalid", code: 1)
+        }
+        try require(current.snapshot.isEnabled == enabled, "native_review_lock_invalid")
+        try require(NativeControlPolicy.valueText(current.snapshot.value) == (expected ? "1" : "0"), "native_review_value_invalid")
     }
 
     @MainActor
@@ -355,15 +469,14 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func pageScope(_ item: XCUIElement, _ rows: [Observed], _ page: Observed) throws -> NativeViewPolicy.Scope {
+    private func pageScope(_ item: any XCUIElementSnapshot, _ rows: [Observed], _ page: Observed) throws -> NativeViewPolicy.Scope {
         if let owner = controlOwner(item, rows) {
             return NativeViewPolicy.scope(window: owner.windowPath, web: owner.webPath,
                 currentWindow: page.windowPath, currentWeb: page.webPath)
         }
         // Native keyboard and auxiliary windows have no WebView owner. Do not
         // turn their controls into product fields or S10 escape routes.
-        let candidates = rows.filter { $0.snapshot.frame == item.frame &&
-            ((!item.identifier.isEmpty && $0.snapshot.identifier == item.identifier) || $0.snapshot.label == item.label) }
+        let candidates = controlIdentityRows(item, rows)
         if candidates.contains(where: { $0.windowPath == page.windowPath && !$0.webs.isEmpty }) {
             try require(false, "native_owner_ambiguous")
         }
@@ -378,20 +491,24 @@ final class TauriDirectSSHUITests: XCTestCase {
                 "identifier == %@ OR label == %@", identifier, label))
             var visibleLabel = false
             for text in app.staticTexts.matching(NSPredicate(format: "label == %@", label)).allElementsBoundByIndex
-                where text.exists && text.isHittable && text.frame.intersects(visible) {
-                if try pageScope(text, rows, page) == .current { visibleLabel = true }
+            {
+                guard let current = liveControl(text), current.hittable,
+                      current.snapshot.frame.intersects(visible) else { continue }
+                if try pageScope(current.snapshot, rows, page) == .current { visibleLabel = true }
             }
-            for field in query.allElementsBoundByIndex where field.exists &&
-                [.textField, .secureTextField, .textView, .other].contains(field.elementType) {
-                let nonempty = !(field.value as? String ?? "").isEmpty
+            for field in query.allElementsBoundByIndex {
+                guard let current = liveControl(field),
+                      [.textField, .secureTextField, .textView, .other].contains(current.snapshot.elementType) else { continue }
+                let snapshot = current.snapshot
+                let nonempty = !NativeControlPolicy.credentialEmpty(snapshot.value, placeholder: snapshot.placeholderValue)
                 // A retained AX node alone is not visibility or interactivity.
-                if !nonempty && !field.isEnabled && !field.isHittable && !visibleLabel { continue }
-                let scope = try pageScope(field, rows, page)
+                if !nonempty && !snapshot.isEnabled && !current.hittable && !visibleLabel { continue }
+                let scope = try pageScope(snapshot, rows, page)
                 try require(scope != .ambiguous, "native_owner_ambiguous")
                 if scope != .current { continue }
-                let painted = visibleLabel || (field.isHittable && NativeFramePolicy.valid(field.frame) && field.frame.intersects(visible))
-                try require(!NativeViewPolicy.unsafeCredential(nonempty: nonempty, enabled: field.isEnabled,
-                    hittable: field.isHittable, visible: painted), "native_credentials_visible_after_connect")
+                let painted = visibleLabel || (current.hittable && NativeFramePolicy.valid(snapshot.frame) && snapshot.frame.intersects(visible))
+                try require(!NativeViewPolicy.unsafeCredential(nonempty: nonempty, enabled: snapshot.isEnabled,
+                    hittable: current.hittable, visible: painted), "native_credentials_visible_after_connect")
             }
         }
     }
@@ -400,12 +517,13 @@ final class TauriDirectSSHUITests: XCTestCase {
     private func assertReviewActions(_ page: Observed, _ rows: [Observed], _ labels: Set<String>) throws {
         let visible = try safeFrame([page])
         var actions: [NativeViewPolicy.Action] = []
-        for item in app.buttons.allElementsBoundByIndex where item.exists && item.isHittable &&
-            NativeFramePolicy.valid(item.frame) && item.frame.intersects(visible) {
-            let scope = try pageScope(item, rows, page)
+        for item in app.buttons.allElementsBoundByIndex {
+            guard let current = liveControl(item), current.hittable,
+                  NativeFramePolicy.valid(current.snapshot.frame), current.snapshot.frame.intersects(visible) else { continue }
+            let scope = try pageScope(current.snapshot, rows, page)
             try require(scope != .ambiguous, "native_owner_ambiguous")
-            actions.append(NativeViewPolicy.Action(scope: scope, label: item.label, frame: item.frame,
-                enabled: item.isEnabled, hittable: item.isHittable))
+            actions.append(NativeViewPolicy.Action(scope: scope, label: current.snapshot.label, frame: current.snapshot.frame,
+                enabled: current.snapshot.isEnabled, hittable: current.hittable))
         }
         try require(NativeViewPolicy.reviewValid(actions, expected: labels, visible: visible), "native_review_exits_invalid")
     }
@@ -421,7 +539,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     private func nativeOcclusions() -> [CGRect] {
         let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         return NativeFramePolicy.unique((app.statusBars.allElementsBoundByIndex + system.statusBars.allElementsBoundByIndex +
-            app.keyboards.allElementsBoundByIndex).filter { $0.exists && NativeFramePolicy.valid($0.frame) }.map { $0.frame })
+            app.keyboards.allElementsBoundByIndex).compactMap { liveControl($0)?.snapshot.frame }.filter(NativeFramePolicy.valid))
     }
 
     @MainActor
@@ -527,8 +645,8 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func homeDiagnostics() throws -> [String: Any] {
-        let rows = try nodes()
+    private func homeDiagnostics(_ tree: [Observed]) throws -> [String: Any] {
+        let rows = tree.map { $0.snapshot }
         let definitions: [(String, [String], [String])] = [
             ("brand", ["Herdr Pocket"], []),
             ("headerAdd", ["＋ 添加主机"], ["host-open-remote"]),
@@ -558,7 +676,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         var alertMembers = Dictionary(uniqueKeysWithValues: alertTerms.map { ($0.0, false) })
         var alertSnapshotFailed = false
         for alert in appAlerts + systemAlerts {
-            guard let snapshot = try? alert.snapshot() else { alertSnapshotFailed = true; continue }
+            guard alert.exists, let snapshot = try? alert.snapshot() else { alertSnapshotFailed = true; continue }
             var pending: [any XCUIElementSnapshot] = [snapshot]
             var count = 0
             while let node = pending.popLast(), count < 1000 {
@@ -595,12 +713,12 @@ final class TauriDirectSSHUITests: XCTestCase {
         }.count
         let member = { (key: String) -> Int in (members[key] as? [String: Any])?["count"] as? Int ?? 0 }
         let foreground = app.state == .runningForeground
-        let webCount = app.webViews.count
+        let webCount = rows.filter { $0.elementType == .webView }.count
         let safe = foreground && webCount > 0 && member("brand") > 0 && member("homeHeading") > 0 &&
             member("zeroHosts") > 0 && member("emptyHeading") > 0 && inputCount == 0 &&
             appAlerts.isEmpty && systemAlerts.isEmpty && !alertSnapshotFailed && errors.values.allSatisfy { !$0 }
         let result: [String: Any] = ["appForeground": foreground, "webViewCount": min(webCount, 10000),
-            "windowCount": min(app.windows.count, 10000), "members": members, "knownErrors": errors,
+            "windowCount": min(rows.filter { $0.elementType == .window }.count, 10000), "members": members, "knownErrors": errors,
             "appAlertCount": min(appAlerts.count, 10000), "systemAlertCount": min(systemAlerts.count, 10000),
             "alertMembers": alertMembers, "alertSnapshotFailed": alertSnapshotFailed,
             "inputCount": min(inputCount, 10000), "unknownVisibleTextCount": min(unknownTextCount, 10000),
@@ -610,48 +728,71 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func navigationState() throws -> [String: Any] {
-        let home = try homeDiagnostics()
+        let tree = try observedNodes()
+        let home = try homeDiagnostics(tree)
+        lastHomeSample = home
+        try post("native_home", ["nativeCheckpoint": nativePhase, "home": home])
         let members = home["members"] as! [String: [String: Any]]
         let seen = { (key: String) in (members[key]?["count"] as? Int ?? 0) > 0 }
-        let host = field("主机地址").exists, port = portControl().exists, user = field("用户名").exists
-        let probe = button("探测主机指纹").exists
-        let choice = button("普通 SSH 终端").exists && button("herdr 配对 / 手动连接").exists
+        let facts = tree.map { NativeControlPolicy.Fact(identifier: $0.snapshot.identifier, label: $0.snapshot.label,
+            role: String($0.snapshot.elementType.rawValue), value: NativeControlPolicy.valueText($0.snapshot.value)) }
+        func select(_ id: String, _ label: String, _ roles: Set<String>) -> Observed? {
+            guard let index = NativeControlPolicy.select(facts, identifier: id, label: label, roles: roles) else { return nil }
+            return tree[index]
+        }
+        let editable = Set([XCUIElement.ElementType.textField, .textView, .other].map { String($0.rawValue) })
+        let buttons = Set([XCUIElement.ElementType.button, .other].map { String($0.rawValue) })
+        let portRoles = Set(tree.filter { $0.snapshot.elementType != .stepper && $0.snapshot.elementType != .button }
+            .map { String($0.snapshot.elementType.rawValue) })
+        let host = select("ssh-host", "主机地址", editable)
+        let port = select("ssh-port", "端口", portRoles)
+        let user = select("ssh-user", "用户名", editable)
+        let probe = select("ssh-probe", "探测主机指纹", buttons)
+        let choice = select("add-ssh", "普通 SSH 终端", buttons) != nil &&
+            select("add-herdr", "herdr 配对 / 手动连接", buttons) != nil
         let noErrors = !(home["knownErrors"] as! [String: Bool]).values.contains(true)
         let noAlerts = (home["appAlertCount"] as! Int) == 0 && (home["systemAlertCount"] as! Int) == 0 && home["alertSnapshotFailed"] as? Bool == false
         let empty = seen("brand") && seen("homeHeading") && seen("emptyHeading") && seen("zeroHosts") &&
-            home["inputCount"] as? Int == 0 && noErrors && noAlerts && !host && !port && !user
-        let formControls = [field("主机地址"), portControl(), field("用户名"), button("探测主机指纹")]
-        let tree = try observedNodes()
-        let formOwners = formControls.compactMap { controlOwner($0, tree) }
+            home["inputCount"] as? Int == 0 && noErrors && noAlerts && host == nil && port == nil && user == nil
+        let formControls = [host, port, user, probe].compactMap { $0 }
+        let formOwners = formControls.compactMap { controlOwner($0.snapshot, tree) }
         let formOwnerResolved = formOwners.count == 4 && NativeFramePolicy.sameOwner(
             windowPaths: formOwners.map { $0.windowPath }, webPaths: formOwners.map { $0.webPath })
-        let form = host && port && user && probe && formOwnerResolved
+        let form = formControls.count == 4 && formOwnerResolved
         let page = form ? "sshForm" : choice ? "addChoice" : empty ? "emptyHome" : "unexpected"
-        let title = try contains("普通 SSH 终端")
+        let title = tree.contains { texts($0.snapshot).contains { $0.contains("普通 SSH 终端") } }
+        let passwords = tree.filter { $0.snapshot.elementType == .secureTextField &&
+            ($0.snapshot.identifier == "ssh-password" || $0.snapshot.label == "密码") }
+        let credentialsEmpty = passwords.allSatisfy { NativeControlPolicy.credentialEmpty($0.snapshot.value, placeholder: $0.snapshot.placeholderValue) }
         return ["page": page, "appForeground": home["appForeground"]!, "inputCount": home["inputCount"]!,
             "windowCount": home["windowCount"]!, "webViewCount": home["webViewCount"]!,
             "noAlerts": noAlerts, "noKnownErrors": noErrors,
             "emptyHomeIdentity": empty, "formByStructure": form, "formOwnerResolved": formOwnerResolved, "sshTitleSeen": title,
-            "addTitleSeen": seen("addHeading"), "credentialsEmpty": !password().exists || (password().value as? String ?? "").isEmpty]
+            "addTitleSeen": seen("addHeading"), "credentialsEmpty": credentialsEmpty]
     }
 
     @MainActor
     private func navigationGeometry(_ item: XCUIElement) throws -> [String: Any] {
-        let owner = controlOwner(item, try observedNodes())
+        guard let current = liveControl(item) else {
+            try require(false, "native_control_missing")
+            throw NSError(domain: "native_control_missing", code: 1)
+        }
+        let snapshot = current.snapshot
+        let owner = controlOwner(snapshot, try observedNodes())
         var visible = CGRect.zero
         var resolved = false
         if let owner = owner, let window = owner.window,
            let measured = NativeFramePolicy.visible(window: window, screen: app.frame, webAncestors: owner.webs, occlusions: nativeOcclusions()) {
             visible = measured; resolved = true
         }
-        let center = CGPoint(x: item.frame.midX, y: item.frame.midY)
+        let center = CGPoint(x: snapshot.frame.midX, y: snapshot.frame.midY)
         let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let bars = NativeFramePolicy.unique((app.statusBars.allElementsBoundByIndex + system.statusBars.allElementsBoundByIndex)
-            .filter { $0.exists && NativeFramePolicy.valid($0.frame) }.map { $0.frame })
-        return ["frame": rect(item.frame), "visibleFrame": rect(visible), "screenFrame": rect(app.frame),
-            "statusBarFrames": bars.map(rect), "role": role(item.elementType), "enabled": item.isEnabled,
-            "hittable": item.isHittable, "ownerResolved": resolved,
-            "centerVisible": resolved && visible.contains(center), "fullyVisible": resolved && visible.contains(item.frame)]
+            .compactMap { liveControl($0)?.snapshot.frame }.filter(NativeFramePolicy.valid))
+        return ["frame": rect(snapshot.frame), "visibleFrame": rect(visible), "screenFrame": rect(app.frame),
+            "statusBarFrames": bars.map(rect), "role": role(snapshot.elementType), "enabled": snapshot.isEnabled,
+            "hittable": current.hittable, "ownerResolved": resolved,
+            "centerVisible": resolved && visible.contains(center), "fullyVisible": resolved && visible.contains(snapshot.frame)]
     }
 
     @MainActor
@@ -660,9 +801,9 @@ final class TauriDirectSSHUITests: XCTestCase {
             "ordinaryShortcut": ("home-open-ssh", "普通 SSH"), "sshChoice": ("add-ssh", "普通 SSH 终端")]
         guard let (identifier, label) = targets[member] else { return nil }
         let byID = app.descendants(matching: .any).matching(identifier: identifier)
-        if byID.count == 1 { return (byID.firstMatch, "uniqueIdentifier") }
+        if byID.count > 0 { return byID.count == 1 ? (byID.firstMatch, "uniqueIdentifier") : nil }
         let buttons = app.buttons.matching(NSPredicate(format: "label == %@", label))
-        if buttons.count == 1 { return (buttons.firstMatch, "buttonRole") }
+        if buttons.count > 0 { return buttons.count == 1 ? (buttons.firstMatch, "buttonRole") : nil }
         let exact = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label))
         return exact.count == 1 ? (exact.firstMatch, "uniqueLabel") : nil
     }
@@ -677,7 +818,8 @@ final class TauriDirectSSHUITests: XCTestCase {
             let host = field("主机地址")
             try post("native_navigation_arrival", ["nativeCheckpoint": nativePhase, "state": before,
                 "geometry": try navigationGeometry(host), "source": "currentFormObservation", "performed": false])
-            return ("sshForm", "uniqueIdentifier", role(host.elementType))
+            guard let current = liveControl(host) else { throw NSError(domain: "native_control_missing", code: 1) }
+            return ("sshForm", "uniqueIdentifier", role(current.snapshot.elementType))
         }
         guard let (item, selection) = navigationElement(member) else { return ("missing", "uniqueLabel", "otherNative") }
         let geometry = try navigationGeometry(item)
@@ -709,7 +851,6 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func openHomeSSH() throws {
-        try post("native_home", ["nativeCheckpoint": nativePhase, "home": try homeDiagnostics()])
         let deadline = Date().addingTimeInterval(20)
         var initial = try navigationState()
         while initial["page"] as? String != "emptyHome" && Date() < deadline {
@@ -737,7 +878,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             }
             try require(page == "emptyHome", "native_home_retry_unsafe")
         }
-        try post("native_home", ["nativeCheckpoint": nativePhase, "home": try homeDiagnostics()])
+        if let home = lastHomeSample { try post("native_home", ["nativeCheckpoint": nativePhase, "home": home]) }
         try require(false, "native_home_navigation_failed")
     }
 
@@ -842,16 +983,23 @@ final class TauriDirectSSHUITests: XCTestCase {
         try require(try contains(config["fingerprintA"] as! String), "native_cancel_lost_old_trust")
         try require(try !contains(config["fingerprintB"] as! String), "native_cancel_accepted_new_trust")
         try check(false, enabled: false)
-        try require(password().exists && !password().isEnabled && (password().value as? String ?? "").isEmpty,
+        let cancelledPassword = liveControl(password())
+        try require(cancelledPassword != nil && cancelledPassword?.snapshot.isEnabled == false &&
+                    NativeControlPolicy.credentialEmpty(cancelledPassword?.snapshot.value, placeholder: cancelledPassword?.snapshot.placeholderValue),
                     "native_cancel_credentials_live")
-        try require(!button("连接 / 重新连接").isEnabled, "native_cancel_submit_live")
+        let cancelledSubmit = liveControl(button("连接 / 重新连接"))
+        try require(cancelledSubmit != nil && cancelledSubmit?.snapshot.isEnabled == false, "native_cancel_submit_live")
         try post("key_change_cancelled")
         try phase("reprobe")
         try tap(button("探测主机指纹"))
         try waitText(config["fingerprintB"] as! String)
         try require(try !contains(config["fingerprintA"] as! String), "native_reprobe_old_key_stale")
         try check(false, enabled: true)
-        try require((password().value as? String ?? "").isEmpty, "native_reprobe_secret_stale")
+        guard let reprobedPassword = liveControl(password()) else {
+            try require(false, "native_reprobe_secret_stale")
+            throw NSError(domain: "native_reprobe_secret_stale", code: 1)
+        }
+        try require(NativeControlPolicy.credentialEmpty(reprobedPassword.snapshot.value, placeholder: reprobedPassword.snapshot.placeholderValue), "native_reprobe_secret_stale")
         try post("key_change_probe_b")
         try phase("new_fingerprint")
         try approve(config["fingerprintB"] as! String, excluding: config["fingerprintA"] as? String)

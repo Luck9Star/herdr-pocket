@@ -267,6 +267,113 @@ class BuildDiagnosticsTests(unittest.TestCase):
                 self.assertTrue((Path(directory) / (stage + '-private.log')).is_file())
 
 
+class RuntimeDiagnosticsTests(unittest.TestCase):
+    def test_failure_categories_export_only_owned_basename_and_line(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / 'private.log'
+            messages = [
+                ('Failed to get matching snapshots: No matches found for PRIVATE-CREDENTIAL',
+                 'xctest_element_absent_or_query_unresolved'),
+                ('Failed to resolve query: PRIVATE-CREDENTIAL', 'xctest_element_absent_or_query_unresolved'),
+                ('Failed to get matching snapshots: Multiple matching elements found for PRIVATE-CREDENTIAL',
+                 'xctest_ambiguous_match'),
+                ('Timed out waiting for PRIVATE-CREDENTIAL', 'xctest_timeout'),
+                ('XCTAssertTrue failed: PRIVATE-CREDENTIAL', 'xctest_native_assertion'),
+                ('Incorrect actor executor assumption PRIVATE-CREDENTIAL', 'xctest_actor_isolation'),
+                ('Failed to launch app PRIVATE-CREDENTIAL', 'xctest_process_failure')]
+            path.write_text('\n'.join(f'{root}/UITests/Driver.swift:{100 + i}:9: error: {message}'
+                                      for i, (message, _) in enumerate(messages)))
+            records = ios.runtime_diagnostics(path, root)
+            self.assertEqual(records, [{'classification': code, 'file': 'Driver.swift', 'line': 100 + i}
+                                       for i, (_, code) in enumerate(messages)])
+            encoded = json.dumps(records)
+            for private in ('PRIVATE-CREDENTIAL', str(root), 'column', 'Failed to'):
+                self.assertNotIn(private, encoded)
+
+    def test_unknown_paths_messages_application_output_and_large_logs_remain_bounded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / 'private.log'
+            path.write_text('\n'.join([
+                '/unknown/Driver.swift:42: error: XCTAssertTrue failed PRIVATE-CREDENTIAL',
+                '/invalid\x00/Driver.swift:42: error: XCTAssertTrue failed PRIVATE-CREDENTIAL',
+                '../Host/Host.swift:43: error: Timed out waiting PRIVATE-CREDENTIAL',
+                f'{root}/Host/Host.swift:44: error: XCTAssertEqual failed PRIVATE-CREDENTIAL',
+                'No matches found for ordinary successful application output',
+                'PRIVATE-CREDENTIAL ' + 'x' * 8192 + ': error: Timed out waiting',
+                *[f'{root}/UITests/Driver.swift:{i}: error: XCTAssertTrue failed PRIVATE-CREDENTIAL'
+                  for i in range(50, 80)]]))
+            records = ios.runtime_diagnostics(path, root)
+            self.assertEqual(records[:3], [{'classification': 'xctest_native_assertion'},
+                {'classification': 'xctest_timeout'},
+                {'classification': 'xctest_native_assertion', 'file': 'Host.swift', 'line': 44}])
+            self.assertEqual(len(records), 12)
+            self.assertNotIn('PRIVATE-CREDENTIAL', json.dumps(records))
+            for content in ('** TEST EXECUTE FAILED **', 'error: PRIVATE-CREDENTIAL',
+                            'No matches found for an ordinary app log', ''):
+                path.write_text(content)
+                self.assertEqual(ios.runtime_diagnostics(path, root), [{'classification': 'xctest_failed'}])
+            self.assertEqual(ios.runtime_diagnostics(root / 'missing', root), [{'classification': 'xctest_failed'}])
+
+    def test_runtime_failure_preserves_checkpoint_error_and_cleans_all_private_files(self):
+        for checkpoint_failure, command_failed in ((None, True), ('tauri_ios_native_check_failed', True),
+                                                   ('tauri_ios_native_check_failed', False)):
+            with self.subTest(checkpoint_failure=checkpoint_failure, command_failed=command_failed), \
+                    tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                project, app = InputAndPrivacyTests().build_inputs(root)
+                private_paths, states, secrets = [], [], []
+                original_checkpoints = ios.Checkpoints
+                def checkpoints(*args):
+                    state = original_checkpoints(*args)
+                    states.append(state)
+                    return state
+                def command(arguments, *, log=None, **kwargs):
+                    if arguments == ['xcodebuild', '-version']:
+                        return b'Xcode 16.4\nBuild version 16F6\n'
+                    if arguments == ['xcodebuild', '-version', '-sdk', 'iphonesimulator', 'SDKVersion']:
+                        return b'18.5\n'
+                    if arguments[:4] == ['xcrun', 'simctl', 'list', 'runtimes']:
+                        return json.dumps({'runtimes': [{'isAvailable': True, 'version': '26.2',
+                            'identifier': 'com.apple.CoreSimulator.SimRuntime.iOS-26-2'}]}).encode()
+                    if arguments[:4] == ['xcrun', 'simctl', 'list', 'devicetypes']:
+                        return json.dumps({'devicetypes': [{'name': 'iPhone 17 Pro Max',
+                            'identifier': 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max'}]}).encode()
+                    if arguments[:3] == ['xcrun', 'simctl', 'create']:
+                        return b'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'
+                    if 'test-without-building' in arguments:
+                        private = Path(arguments[2]).parent
+                        private_paths.append(private)
+                        self.assertEqual(private.stat().st_mode & 0o777, 0o700)
+                        self.assertEqual(Path(log.name).stat().st_mode & 0o777, 0o600)
+                        result_bundle = Path(arguments[arguments.index('-resultBundlePath') + 1])
+                        self.assertEqual(result_bundle.parent, private)
+                        result_bundle.mkdir()
+                        config = json.loads((private / 'UITests/Fixture.json').read_text())
+                        secrets.extend([config['ordinaryPassword'], config['rotationPassword'], config['checkpointSecret']])
+                        (result_bundle / 'private-data').write_text(json.dumps(config))
+                        states[0].failure = checkpoint_failure
+                        log.write(f'{private}/UITests/Driver.swift:123: error: No matches found for {config["ordinaryPassword"]}\n'.encode())
+                        if command_failed:
+                            raise ios.Failure('tauri_ios_command_failed')
+                    return b''
+                with patch.object(ios, 'command', side_effect=command), \
+                        patch.object(ios, 'Checkpoints', side_effect=checkpoints), \
+                        patch.object(ios.shutil, 'which', return_value='/tools/present'):
+                    result = ios.run(project, app, root / 'public', source_sha='a' * 40,
+                                     env={'GITHUB_ACTIONS': 'true', 'RUNNER_OS': 'macOS'})
+                self.assertEqual(result['error'], checkpoint_failure or 'tauri_ios_xctest_failed')
+                self.assertEqual(result['runtimeDiagnostics'], [{'classification': 'xctest_element_absent_or_query_unresolved',
+                                                                'file': 'Driver.swift', 'line': 123}])
+                self.assertTrue(all(result['cleanup'].values()))
+                self.assertTrue(private_paths and all(not p.exists() for p in private_paths))
+                encoded = (root / 'public/result.json').read_text()
+                for private in [*secrets, *map(str, private_paths)]:
+                    self.assertNotIn(private, encoded)
+                self.assertEqual(sorted(p.name for p in (root / 'public').iterdir()), ['result.json'])
+
+
 class ScreenshotContractTests(unittest.TestCase):
     def setUp(self):
         from types import SimpleNamespace
@@ -341,6 +448,25 @@ class ScreenshotContractTests(unittest.TestCase):
 
 
 class HomeDiagnosticsTests(unittest.TestCase):
+    def test_repeated_home_sampling_retains_latest_without_navigation_or_ssh_replay(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = self.state_for_navigation(directory)
+            initial = self.value()
+            state.accept({'stage': 'native_home', 'nativeCheckpoint': 'ordinary_open_add', 'home': initial})
+            latest = self.value()
+            latest.update(windowCount=2, webViewCount=3, unknownVisibleTextCount=4)
+            latest['members']['headerAdd'] = {'count': 0, 'roles': []}
+            for _ in range(2):
+                state.accept({'stage': 'native_home', 'nativeCheckpoint': 'ordinary_open_add', 'home': latest})
+            self.assertEqual(state.result['homeDiagnostics']['ordinary'], latest)
+            self.assertNotIn('navigationTrace', state.result)
+            self.assertEqual(state.index, ios.STAGES.index('ordinary_probe'))
+            self.assertIsNone(state.failure)
+            self.assertEqual(list(Path(directory).iterdir()), [])
+            state.index += 1
+            with self.assertRaisesRegex(ios.Failure, 'home_diagnostic_phase_invalid'):
+                state.accept({'stage': 'native_home', 'nativeCheckpoint': 'ordinary_open_add', 'home': latest})
+
     def official_r4_record(self):
         return json.loads((ios.HERE / 'testdata/tauri-ios-r4-header-add.json').read_text())['record']
 

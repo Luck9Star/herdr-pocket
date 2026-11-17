@@ -1,0 +1,50 @@
+[
+  [
+    "direct-ssh-public/rotation-connected.png",
+    "direct-ssh-public/key-rotation-screen-proof.json",
+    "95381586b23aec917c2e27cbacd9e6cb35530ee793a8c46d23db4dcb5ba7e051",
+    [
+      0,
+      468,
+      1080,
+      907
+    ],
+    "tesseract 5.5.4"
+  ],
+  [
+    "direct-ssh-public/rotation-connected-device.png",
+    "direct-ssh-public/key-rotation-screen-proof.json",
+    "2a7fed947c6baf5b15b73220c07a3fb51d04d12a5ed03a79a4313faf841a5e51",
+    [
+      0,
+      468,
+      1080,
+      907
+    ],
+    "tesseract 5.5.4"
+  ],
+  [
+    "direct-ssh-public/connected.png",
+    "direct-ssh-public/ordinary-screen-proof.json",
+    "5cfca55311c2a5031aba11e7ff374573df542f3ad3041443583a090472e3d145",
+    [
+      0,
+      468,
+      1080,
+      907
+    ],
+    "tesseract 5.5.4"
+  ],
+  [
+    "direct-ssh-public/connected-device.png",
+    "direct-ssh-public/ordinary-screen-proof.json",
+    "a20ab2099a68165a5368dd087cf85551aa3c6eccb9e879bfdf9ae86b84ab9451",
+    [
+      0,
+      468,
+      1080,
+      907
+    ],
+    "tesseract 5.5.4"
+  ]
+]

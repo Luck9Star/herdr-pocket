@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "expectedTarget": "fixture@127.0.0.1:47161",
+  "expectedToken": "DUSK PATH FADE FAST EAST PART LAST PATH",
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "captureEngine": "adb exec-out screencap -p",
+  "coordinateEngine": "measured WebView frame or exact CDP/framebuffer pixel registration",
+  "captureAttempts": 1,
+  "geometryBefore": {
+    "viewport": [
+      393,
+      851
+    ],
+    "targetRect": [
+      16,
+      206.9204559326172,
+      361.0909118652344,
+      23.272727966308594
+    ],
+    "terminal": [
+      24,
+      258.19317626953125,
+      344,
+      352
+    ],
+    "visualViewport": [
+      0,
+      0,
+      1
+    ],
+    "dpr": 2.75,
+    "targetVisible": true,
+    "targetMatched": true,
+    "terminalVisible": true,
+    "webViewCandidateBounds": [
+      [
+        0,
+        0,
+        1080,
+        2340
+      ]
+    ],
+    "webViewCandidateCount": 1
+  },
+  "webViewBeforeSha256": "ef19ee40ac8bc7d5d016465b0f2b027266293102b749998ce39c719df957e99f",
+  "imageSha256": "d31d276905a5ae8ac03129bcc75bb00a91e83e7c25d5ab0c30762a76a5787ec4",
+  "imageSize": [
+    1080,
+    2340
+  ],
+  "image": "ssh-terminal-android.png",
+  "imageCaptureAttempt": 1,
+  "geometryAfter": {
+    "viewport": [
+      393,
+      851
+    ],
+    "targetRect": [
+      16,
+      206.9204559326172,
+      361.0909118652344,
+      23.272727966308594
+    ],
+    "terminal": [
+      24,
+      258.19317626953125,
+      344,
+      352
+    ],
+    "visualViewport": [
+      0,
+      0,
+      1
+    ],
+    "dpr": 2.75,
+    "targetVisible": true,
+    "targetMatched": true,
+    "terminalVisible": true,
+    "webViewCandidateBounds": [
+      [
+        0,
+        0,
+        1080,
+        2340
+      ]
+    ],
+    "webViewCandidateCount": 1
+  },
+  "coordinateMethod": "uiautomator_full_frame",
+  "terminalBounds": [
+    66,
+    710,
+    945,
+    967
+  ],
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.3.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

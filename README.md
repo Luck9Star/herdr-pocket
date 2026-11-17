@@ -1,5 +1,9 @@
 # herdr-pocket
 
+**活动终端专项 · 2026-11-17**　[R4 同源最终通过与证据](docs/69-mobile-ssh-active-terminal.md)：Flutter／Tauri 普通／换钥、Tauri 加密私钥回归及受检清理通过，范围为 API 35 x86_64 模拟器。
+
+最终原屏：[Flutter 普通](docs/evidence/mobile-ssh-terminal-20261117/r4-flutter-44003412691-connected-device.png) · [Flutter 换钥](docs/evidence/mobile-ssh-terminal-20261117/r4-flutter-44003412691-rotation-connected-device.png) · [Tauri 普通](docs/evidence/mobile-ssh-terminal-20261117/r4-tauri-44003412623-ssh-terminal-android.png) · [Tauri 换钥](docs/evidence/mobile-ssh-terminal-20261117/r4-tauri-44003412623-ssh-rotation-terminal-android.png)。系统软键盘呈现不等于手工输入法或实体机验收。
+
 > 面向 SSH / herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
 **普通 SSH 换钥专项 · 2026-11-17**　[两壳 S10 基线复现、同目标 A→B 验收约定与设备证据](docs/68-android-ssh-host-key-rotation.md)：统一源码 `7705241` 的 Flutter／Tauri Android API 35 模拟器验收均通过，完整 ABBB、取消保留旧信任、新指纹确认后输入回显及清理已核验；与下方历史普通 SSH 验收分开。

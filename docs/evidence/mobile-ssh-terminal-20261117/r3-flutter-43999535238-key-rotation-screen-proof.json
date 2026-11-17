@@ -1,0 +1,67 @@
+{
+  "tag": "key-rotation",
+  "attempt": 1,
+  "bounds": [
+    0,
+    468,
+    1080,
+    907
+  ],
+  "viewSize": [
+    1080,
+    2340
+  ],
+  "expectedTarget": "fixture@127.0.0.1:46721",
+  "checks": {
+    "integration": {
+      "status": "passed",
+      "evidence": {
+        "schemaVersion": 1,
+        "imageSha256": "6a9eafd1312131b95a236b9bf6334abb77e9027e8401ccce3c0d6447c89dfda7",
+        "imageSize": [
+          1080,
+          2340
+        ],
+        "terminalBounds": [
+          0,
+          468,
+          1080,
+          907
+        ],
+        "expectedMarker": "POCKET-ANDROID-SSH-OK",
+        "expectedToken": "LAMP HEAT TASK FAST LAND PART PAST EAST",
+        "markerVisible": true,
+        "tokenVisible": true,
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrAttempts": 2,
+        "ocrPageSegmentationMode": 11,
+        "proofSequenceVisible": true
+      }
+    },
+    "device": {
+      "status": "passed",
+      "evidence": {
+        "schemaVersion": 1,
+        "imageSha256": "3790a79626672c490a1b09899a2e33c7b5aae3ab1d57967bef7393855ca4a285",
+        "imageSize": [
+          1080,
+          2340
+        ],
+        "terminalBounds": [
+          0,
+          468,
+          1080,
+          907
+        ],
+        "expectedMarker": "POCKET-ANDROID-SSH-OK",
+        "expectedToken": "LAMP HEAT TASK FAST LAND PART PAST EAST",
+        "markerVisible": true,
+        "tokenVisible": true,
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrAttempts": 2,
+        "ocrPageSegmentationMode": 11,
+        "proofSequenceVisible": true
+      }
+    }
+  }
+}

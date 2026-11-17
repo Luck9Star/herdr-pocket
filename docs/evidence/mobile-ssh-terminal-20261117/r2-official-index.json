@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "batch": "R2",
+  "sourceSHA": "5f588efde42c66472c8b909500a1d8cadc11d829",
+  "reviewDate": "2026-11-17",
+  "batchVerdict": "Flutter passed; Tauri failed coordinate certification before rotation; not a dual-client pass",
+  "officialArchives": [
+    {
+      "shell": "flutter",
+      "run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43996793904",
+      "artifact": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43996793904/artifacts/14290377942",
+      "officialZipBytes": 826666,
+      "officialZipSha256": "6d79735d85dcb22045928459c3398050f0bd6f74baed412d5dfb42c6b565c5b0"
+    },
+    {
+      "shell": "tauri",
+      "run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43996793907",
+      "artifact": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43996793907/artifacts/14289969072",
+      "officialZipBytes": 170659,
+      "officialZipSha256": "284264efff4f3df9c8b2c2f9690ef162ca1eb3603e1bd7eeee39a16decd9bb0f"
+    }
+  ],
+  "byteExactArchivedFiles": [
+    {
+      "source": "r2-flutter-official/direct-ssh-public/result.json",
+      "archive": "r2-flutter-43996793904-result.json",
+      "bytes": 11448,
+      "sha256": "ad49d6b91082d97d17cf99a43577ceee123243f504cf67069411588870e55640"
+    },
+    {
+      "source": "r2-flutter-official/direct-ssh-public/ordinary-screen-proof.json",
+      "archive": "r2-flutter-43996793904-ordinary-screen-proof.json",
+      "bytes": 1563,
+      "sha256": "08bacf8ebba6ed26436c3731842cc08199d69990b24d95fb05eae0b80b5076a8"
+    },
+    {
+      "source": "r2-flutter-official/direct-ssh-public/key-rotation-screen-proof.json",
+      "archive": "r2-flutter-43996793904-key-rotation-screen-proof.json",
+      "bytes": 1567,
+      "sha256": "bd3d2dbff2b22080b800c8f80327c6ab1a13c1d52ef2e7ff5ce4515253d9a628"
+    },
+    {
+      "source": "r2-flutter-independent.json",
+      "archive": "r2-flutter-43996793904-independent.json",
+      "bytes": 1039,
+      "sha256": "a92238fa3aca7a648a6a2cf5c9544b92e9c5faa9c62466789c2ee98bedbb058e"
+    },
+    {
+      "source": "r2-tauri-official/tauri-direct-evidence/manifest.json",
+      "archive": "r2-tauri-43996793907-manifest.json",
+      "bytes": 452,
+      "sha256": "50a6c6111ec321a7312a9a822da8089d7ff6925bdee5d3924e51ec8c8c5225e1"
+    },
+    {
+      "source": "r2-tauri-official/tauri-direct-evidence/ssh-terminal-android.json",
+      "archive": "r2-tauri-43996793907-ordinary-screen-proof-failed.json",
+      "bytes": 1506,
+      "sha256": "8350a14a53732661af1b23a817859e3a9ea001677aadbb3fd5ff41e52f920d6f"
+    },
+    {
+      "source": "r2-tauri-independent-manual.json",
+      "archive": "r2-tauri-43996793907-manual-ocr.json",
+      "bytes": 486,
+      "sha256": "cbcf63f6f79920124abe187c09dfce8ab888ebdaf3750486ce917a586949d967"
+    },
+    {
+      "source": "r2-tauri-official/tauri-direct-evidence/ssh-terminal-android.png",
+      "archive": "r2-tauri-43996793907-ordinary-overlap.png",
+      "bytes": 181640,
+      "sha256": "18f223d4fa3391b57544b5178aa842210bb6ed34b29f4e7ccb13def220cc8f31"
+    }
+  ],
+  "flutterImagesReferencedFromOfficialArtifact": [
+    {
+      "officialPath": "direct-ssh-public/connected.png",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "bytes": 87725,
+      "sha256": "e8c7aa51870566eb97b7f76c1b3ad71fa5b00269fb0061da15f3999442e6d780",
+      "localCopy": false
+    },
+    {
+      "officialPath": "direct-ssh-public/connected-device.png",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "bytes": 158884,
+      "sha256": "a03befd0e346cd8c79376e50e74d7972b393ccfc4a4a9c01cff8559412ce41ba",
+      "localCopy": false
+    },
+    {
+      "officialPath": "direct-ssh-public/rotation-connected.png",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "bytes": 85739,
+      "sha256": "ff9be12e1dbc786544cbbc796cd3b1f5e3c6600e9ba098245f61d0ac2783bc83",
+      "localCopy": false
+    },
+    {
+      "officialPath": "direct-ssh-public/rotation-connected-device.png",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "bytes": 157338,
+      "sha256": "0a8ac08446bfddee9aedfd7e797600f3fc17bed8281111ba93ee934165853ff4",
+      "localCopy": false
+    }
+  ],
+  "tauriManualOcrBoundary": "Manually measured crop on the original device image; does not replace missing automated WebView-to-framebuffer coordinate certification",
+  "primaryFinalImages": "Final accepted device evidence is R4; see r4-official-index.json. This batch remains a historical partial/failed result."
+}

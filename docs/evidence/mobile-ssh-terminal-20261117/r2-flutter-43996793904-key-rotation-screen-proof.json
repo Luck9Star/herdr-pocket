@@ -1,0 +1,67 @@
+{
+  "tag": "key-rotation",
+  "attempt": 1,
+  "bounds": [
+    0,
+    468,
+    1080,
+    907
+  ],
+  "viewSize": [
+    1080,
+    2340
+  ],
+  "expectedTarget": "fixture@127.0.0.1:36167",
+  "checks": {
+    "integration": {
+      "status": "passed",
+      "evidence": {
+        "schemaVersion": 1,
+        "imageSha256": "ff9be12e1dbc786544cbbc796cd3b1f5e3c6600e9ba098245f61d0ac2783bc83",
+        "imageSize": [
+          1080,
+          2340
+        ],
+        "terminalBounds": [
+          0,
+          468,
+          1080,
+          907
+        ],
+        "expectedMarker": "POCKET-ANDROID-SSH-OK",
+        "expectedToken": "CAVE PATH HEAT ARCH SAND HEAD FACT LAND",
+        "markerVisible": true,
+        "tokenVisible": true,
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrAttempts": 2,
+        "ocrPageSegmentationMode": 11,
+        "proofSequenceVisible": true
+      }
+    },
+    "device": {
+      "status": "passed",
+      "evidence": {
+        "schemaVersion": 1,
+        "imageSha256": "0a8ac08446bfddee9aedfd7e797600f3fc17bed8281111ba93ee934165853ff4",
+        "imageSize": [
+          1080,
+          2340
+        ],
+        "terminalBounds": [
+          0,
+          468,
+          1080,
+          907
+        ],
+        "expectedMarker": "POCKET-ANDROID-SSH-OK",
+        "expectedToken": "CAVE PATH HEAT ARCH SAND HEAD FACT LAND",
+        "markerVisible": true,
+        "tokenVisible": true,
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrAttempts": 2,
+        "ocrPageSegmentationMode": 11,
+        "proofSequenceVisible": true
+      }
+    }
+  }
+}

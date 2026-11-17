@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-11-17",
+  "finalJointAcceptance": "passed R4",
+  "batches": [
+    {
+      "batch": "R1",
+      "sourceSHA": "80aab97fc78fa11a115d4fe47b69c374aba80011",
+      "verdict": "Flutter ordinary OCR false negative; no joint success",
+      "provenance": "../../../validation/remote-harness/testdata/screen-token-samples.json"
+    },
+    {
+      "batch": "R2",
+      "index": "r2-official-index.json",
+      "verdict": "Flutter passed; Tauri coordinate certification failed before rotation"
+    },
+    {
+      "batch": "R3",
+      "index": "r3-official-index.json",
+      "verdict": "Ordinary and rotation screen proofs passed on both clients; Flutter workflow passed; Tauri workflow failed at encrypted_key before peer connection and still has system-overlay pixels on the Add Host button"
+    },
+    {
+      "batch": "R4",
+      "index": "r4-official-index.json",
+      "sourceSHA": "f25cbdce9f933ae6ce5aeb9a7ce849e95f590f57",
+      "verdict": "Both full official workflows passed; final primary images archived"
+    }
+  ],
+  "finalIndex": "r4-official-index.json",
+  "finalSourceSHA": "f25cbdce9f933ae6ce5aeb9a7ce849e95f590f57"
+}

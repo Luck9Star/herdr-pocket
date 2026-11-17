@@ -1,0 +1,67 @@
+{
+  "tag": "key-rotation",
+  "attempt": 1,
+  "bounds": [
+    0,
+    468,
+    1080,
+    907
+  ],
+  "viewSize": [
+    1080,
+    2340
+  ],
+  "expectedTarget": "fixture@127.0.0.1:57169",
+  "checks": {
+    "integration": {
+      "status": "passed",
+      "evidence": {
+        "schemaVersion": 1,
+        "imageSha256": "95381586b23aec917c2e27cbacd9e6cb35530ee793a8c46d23db4dcb5ba7e051",
+        "imageSize": [
+          1080,
+          2340
+        ],
+        "terminalBounds": [
+          0,
+          468,
+          1080,
+          907
+        ],
+        "expectedMarker": "POCKET-ANDROID-SSH-OK",
+        "expectedToken": "CAVE LAND HAVE LEFT LEFT LAMP RATE HAVE",
+        "markerVisible": true,
+        "tokenVisible": true,
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrAttempts": 2,
+        "ocrPageSegmentationMode": 11,
+        "proofSequenceVisible": true
+      }
+    },
+    "device": {
+      "status": "passed",
+      "evidence": {
+        "schemaVersion": 1,
+        "imageSha256": "2a7fed947c6baf5b15b73220c07a3fb51d04d12a5ed03a79a4313faf841a5e51",
+        "imageSize": [
+          1080,
+          2340
+        ],
+        "terminalBounds": [
+          0,
+          468,
+          1080,
+          907
+        ],
+        "expectedMarker": "POCKET-ANDROID-SSH-OK",
+        "expectedToken": "CAVE LAND HAVE LEFT LEFT LAMP RATE HAVE",
+        "markerVisible": true,
+        "tokenVisible": true,
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrAttempts": 2,
+        "ocrPageSegmentationMode": 11,
+        "proofSequenceVisible": true
+      }
+    }
+  }
+}

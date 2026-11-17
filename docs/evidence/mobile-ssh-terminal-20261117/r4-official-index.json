@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "batch": "R4",
+  "sourceSHA": "f25cbdce9f933ae6ce5aeb9a7ce849e95f590f57",
+  "sourceCommit": "https://github.com/Luck9Star/herdr-pocket/commit/f25cbdce9f933ae6ce5aeb9a7ce849e95f590f57",
+  "reviewDate": "2026-11-17",
+  "batchVerdict": "Both official workflows passed, including ordinary SSH, host-key rotation, strict screen proofs and Tauri encrypted-key regression",
+  "scope": "Owned API35 x86_64 Android emulators; visible software keyboard does not prove physical-device operation or manual IME composition",
+  "officialArchives": [
+    {
+      "shell": "flutter",
+      "run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44003412691",
+      "artifact": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44003412691/artifacts/14294041431",
+      "officialZipBytes": 815881,
+      "officialZipSha256": "4faf809beea8eb52e125c89ff3205a0beb0c8f3cc2eefd6f8f5c8ea1864f1e8d"
+    },
+    {
+      "shell": "tauri",
+      "run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44003412623",
+      "artifact": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44003412623/artifacts/14293762403",
+      "officialZipBytes": 820387,
+      "officialZipSha256": "a703a7d238e472ab328f1f9c04f348a11f4428845ed82d6d388e79268ee23a56"
+    }
+  ],
+  "byteExactArchivedFiles": [
+    {
+      "source": "r4-flutter-official/direct-ssh-public/result.json",
+      "archive": "r4-flutter-44003412691-result.json",
+      "bytes": 11360,
+      "sha256": "722fe392ec2a9d0cf091a6cc9a6f19054ed4e98eebf736d5a95cfd5daa783a71"
+    },
+    {
+      "source": "r4-flutter-official/direct-ssh-public/ordinary-screen-proof.json",
+      "archive": "r4-flutter-44003412691-ordinary-screen-proof.json",
+      "bytes": 1563,
+      "sha256": "07391df1c099f722c51c987df01e75cfbb4695c790b8c364c847d28092cac30f"
+    },
+    {
+      "source": "r4-flutter-official/direct-ssh-public/key-rotation-screen-proof.json",
+      "archive": "r4-flutter-44003412691-key-rotation-screen-proof.json",
+      "bytes": 1567,
+      "sha256": "7c24636e5418af503c0f5464b564c9054db092f7657e34681765e7bd92e68433"
+    },
+    {
+      "source": "r4-flutter-independent.json",
+      "archive": "r4-flutter-44003412691-independent.json",
+      "bytes": 1039,
+      "sha256": "cc6c61913201f9138deb64b2c17887c189eb7298eadcdd720fd2df41c18a0ada"
+    },
+    {
+      "source": "r4-flutter-official/direct-ssh-public/connected-device.png",
+      "archive": "r4-flutter-44003412691-connected-device.png",
+      "bytes": 157766,
+      "sha256": "a20ab2099a68165a5368dd087cf85551aa3c6eccb9e879bfdf9ae86b84ab9451"
+    },
+    {
+      "source": "r4-flutter-official/direct-ssh-public/rotation-connected-device.png",
+      "archive": "r4-flutter-44003412691-rotation-connected-device.png",
+      "bytes": 154321,
+      "sha256": "2a7fed947c6baf5b15b73220c07a3fb51d04d12a5ed03a79a4313faf841a5e51"
+    },
+    {
+      "source": "r4-tauri-official/tauri-direct-evidence/manifest.json",
+      "archive": "r4-tauri-44003412623-manifest.json",
+      "bytes": 15347,
+      "sha256": "25bd921a051457d772a4e891774326c61115518298dcae780a0f5a6a763a0483"
+    },
+    {
+      "source": "r4-tauri-official/tauri-direct-evidence/ssh-terminal-android.json",
+      "archive": "r4-tauri-44003412623-ordinary-screen-proof.json",
+      "bytes": 4146,
+      "sha256": "7ff5c8721b1a98a940f5ac8db67239f951c83a3e26f5dc71830f2337c9072d71"
+    },
+    {
+      "source": "r4-tauri-official/tauri-direct-evidence/ssh-rotation-terminal-android.json",
+      "archive": "r4-tauri-44003412623-rotation-screen-proof.json",
+      "bytes": 4155,
+      "sha256": "49916a81c2665d03759aa1458d6fe8ba3463472e94eb5b29f4754ba4f4da5a83"
+    },
+    {
+      "source": "r4-tauri-independent.json",
+      "archive": "r4-tauri-44003412623-independent.json",
+      "bytes": 555,
+      "sha256": "ac040858f464422eb6fc6483c0107951d64909f048fcb1e973b1c98917af60f6"
+    },
+    {
+      "source": "r4-tauri-official/tauri-direct-evidence/ssh-terminal-android.png",
+      "archive": "r4-tauri-44003412623-ssh-terminal-android.png",
+      "bytes": 181756,
+      "sha256": "601f16bdd7cfa95031217302be337d4cb5e4d6fafa46447ed33d63b2d7b08eeb"
+    },
+    {
+      "source": "r4-tauri-official/tauri-direct-evidence/ssh-rotation-terminal-android.png",
+      "archive": "r4-tauri-44003412623-ssh-rotation-terminal-android.png",
+      "bytes": 181378,
+      "sha256": "fdb2e886b21484045b75905579e56fd2103d8b46d9406e6bbc1da02ce54fd57b"
+    }
+  ],
+  "primaryDeviceCases": [
+    {
+      "client": "flutter",
+      "case": "ordinary",
+      "image": "r4-flutter-44003412691-connected-device.png",
+      "proof": "r4-flutter-44003412691-ordinary-screen-proof.json",
+      "sha256": "a20ab2099a68165a5368dd087cf85551aa3c6eccb9e879bfdf9ae86b84ab9451",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "expectedTarget": "fixture@127.0.0.1:52133",
+      "terminalBounds": [
+        0,
+        468,
+        1080,
+        907
+      ],
+      "captureAttempt": 1,
+      "coordinateMethod": "integration boundary and independent ADB"
+    },
+    {
+      "client": "flutter",
+      "case": "rotation",
+      "image": "r4-flutter-44003412691-rotation-connected-device.png",
+      "proof": "r4-flutter-44003412691-key-rotation-screen-proof.json",
+      "sha256": "2a7fed947c6baf5b15b73220c07a3fb51d04d12a5ed03a79a4313faf841a5e51",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "expectedTarget": "fixture@127.0.0.1:57169",
+      "terminalBounds": [
+        0,
+        468,
+        1080,
+        907
+      ],
+      "captureAttempt": 1,
+      "coordinateMethod": "integration boundary and independent ADB"
+    },
+    {
+      "client": "tauri",
+      "case": "ordinary",
+      "image": "r4-tauri-44003412623-ssh-terminal-android.png",
+      "proof": "r4-tauri-44003412623-ordinary-screen-proof.json",
+      "sha256": "601f16bdd7cfa95031217302be337d4cb5e4d6fafa46447ed33d63b2d7b08eeb",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "expectedTarget": "fixture@127.0.0.1:44429",
+      "terminalBounds": [
+        66,
+        710,
+        945,
+        967
+      ],
+      "captureAttempt": 1,
+      "coordinateMethod": "uiautomator_full_frame"
+    },
+    {
+      "client": "tauri",
+      "case": "rotation",
+      "image": "r4-tauri-44003412623-ssh-rotation-terminal-android.png",
+      "proof": "r4-tauri-44003412623-rotation-screen-proof.json",
+      "sha256": "fdb2e886b21484045b75905579e56fd2103d8b46d9406e6bbc1da02ce54fd57b",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "expectedTarget": "fixture@127.0.0.1:57545",
+      "terminalBounds": [
+        66,
+        710,
+        945,
+        967
+      ],
+      "captureAttempt": 1,
+      "coordinateMethod": "uiautomator_full_frame"
+    }
+  ],
+  "independentReplay": {
+    "flutterImages": 4,
+    "tauriImages": 2,
+    "engine": "tesseract 5.5.4",
+    "crossTokenOtherSessionRejected": [
+      "flutter rotation-connected-device.png rejects other session",
+      "flutter connected-device.png rejects other session",
+      "tauri ssh-rotation-terminal-android.png rejects other session",
+      "tauri ssh-terminal-android.png rejects other session"
+    ]
+  },
+  "rotationSummary": {
+    "hostKeyOrder": [
+      "A",
+      "B",
+      "B",
+      "B"
+    ],
+    "rejectedCancelledReprobedCompleteConnections": [
+      2,
+      2,
+      3,
+      4
+    ],
+    "firstThreeAuthPtyShellInputOutputZero": true,
+    "acceptedSession": {
+      "authAttempts": 1,
+      "authSuccesses": 1,
+      "inputBytes": 9,
+      "outputBytes": 102
+    }
+  },
+  "tauriEncryptedKey": {
+    "authentication": true,
+    "pty": true,
+    "input": true,
+    "activeDisconnect": true,
+    "cleanup": true,
+    "priorR3FailureCause": "Not recoverable from its generic failure evidence; do not infer a historical cause from R4 success"
+  },
+  "tauriVisibleInsets": {
+    "coordinateUnit": "original framebuffer pixels",
+    "systemBarBottom": 136,
+    "addHostButtonTop": 187,
+    "targetRectTop": 569,
+    "overlapResolvedOnBothR4CaseImages": true
+  },
+  "finalLocalVerification": {
+    "flutter": {
+      "passed": 596,
+      "conditionalSkipped": 5,
+      "staticAnalysis": "no issues",
+      "source": "coordinator independent verification"
+    },
+    "tauriFrontend": {
+      "passed": 641,
+      "total": 641
+    },
+    "tauriDriver": {
+      "passed": 53,
+      "total": 53
+    },
+    "remoteHarness": {
+      "total": 510,
+      "skipped": 4,
+      "passed": 506
+    },
+    "kotlinProbe": {
+      "version": "2.2.21",
+      "passed": true,
+      "scope": "synthetic-stub compile/probe; not device clipboard validation"
+    },
+    "sourceLogs": {
+      "driver": {
+        "sourceFile": "r4-driver-final.log",
+        "bytes": 152,
+        "sha256": "e0dea4f68ea8cae12a72d61dba548e13f3d76681d9076571c0c689cf5dba0f41"
+      },
+      "node": {
+        "sourceFile": "r4-node-final.log",
+        "bytes": 57479,
+        "sha256": "bd4ed0032e8d391cf2afa8810d076552a19090af8cb99cd0a9d14cf06e7670e1"
+      },
+      "kotlin": {
+        "sourceFile": "r4-kotlin-final.log",
+        "bytes": 1278,
+        "sha256": "de20ec0b22377c93c2002c5e52683a294715984107e66a7aff62aa1481b36fb9"
+      },
+      "harness": {
+        "sourceFile": "r4-harness-final.log",
+        "bytes": 2410,
+        "sha256": "52a55b2545c9874768aa7d33bdb87a7d3cc71eb303a1c53c209862a36625b4f2"
+      },
+      "crossToken": {
+        "sourceFile": "r4-cross-token.log",
+        "bytes": 226,
+        "sha256": "7581cb7672db9ead0efc1eead782e3bf58796752993300a3c2ee2b1bbfd8ba12"
+      }
+    }
+  },
+  "collaboration": "Existing Herdr sessions delivered Flutter/device-driver and Tauri interaction changes; the coordinator independently checked official artifacts, original pixels and SSH protocol evidence."
+}

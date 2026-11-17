@@ -1,0 +1,67 @@
+{
+  "tag": "ordinary",
+  "attempt": 1,
+  "bounds": [
+    0,
+    468,
+    1080,
+    907
+  ],
+  "viewSize": [
+    1080,
+    2340
+  ],
+  "expectedTarget": "fixture@127.0.0.1:49333",
+  "checks": {
+    "integration": {
+      "status": "passed",
+      "evidence": {
+        "schemaVersion": 1,
+        "imageSha256": "e8c7aa51870566eb97b7f76c1b3ad71fa5b00269fb0061da15f3999442e6d780",
+        "imageSize": [
+          1080,
+          2340
+        ],
+        "terminalBounds": [
+          0,
+          468,
+          1080,
+          907
+        ],
+        "expectedMarker": "POCKET-ANDROID-SSH-OK",
+        "expectedToken": "SEAT DUSK KEPT TASK BARN SALT ARCH TASK",
+        "markerVisible": true,
+        "tokenVisible": true,
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrAttempts": 2,
+        "ocrPageSegmentationMode": 11,
+        "proofSequenceVisible": true
+      }
+    },
+    "device": {
+      "status": "passed",
+      "evidence": {
+        "schemaVersion": 1,
+        "imageSha256": "a03befd0e346cd8c79376e50e74d7972b393ccfc4a4a9c01cff8559412ce41ba",
+        "imageSize": [
+          1080,
+          2340
+        ],
+        "terminalBounds": [
+          0,
+          468,
+          1080,
+          907
+        ],
+        "expectedMarker": "POCKET-ANDROID-SSH-OK",
+        "expectedToken": "SEAT DUSK KEPT TASK BARN SALT ARCH TASK",
+        "markerVisible": true,
+        "tokenVisible": true,
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrAttempts": 2,
+        "ocrPageSegmentationMode": 11,
+        "proofSequenceVisible": true
+      }
+    }
+  }
+}

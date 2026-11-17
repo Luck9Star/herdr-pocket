@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "reviewDate": "2026-11-17",
+  "scope": "Historical Flutter Android screenshots; local pixel review only",
+  "sourceCommit": "77052412af63cff61392e1fc412e7d2fe35552fd",
+  "sourceRun": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43981097578",
+  "sourceArtifact": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43981097578/artifacts/14283905471",
+  "controlTokenNote": "Nonmatching public control value; historical fixture had no per-instance screen token. Missing marker is the decisive failure.",
+  "checks": [
+    {
+      "artifactFile": "connected.png",
+      "status": "rejected",
+      "error": "terminal_screenshot_echo_not_visible",
+      "schemaVersion": 1,
+      "imageSha256": "c2b572a520ffbd96375b89873fbeb8ace93ab962b985a2c9151f3570cfd4aea7",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "terminalBounds": [
+        0,
+        392,
+        1080,
+        1748
+      ],
+      "expectedMarker": "POCKET-ANDROID-SSH-OK",
+      "expectedToken": "ACDEFHJKMN34",
+      "markerVisible": false,
+      "tokenVisible": false,
+      "ocrEngine": "tesseract 5.5.4"
+    },
+    {
+      "artifactFile": "rotation-connected.png",
+      "status": "rejected",
+      "error": "terminal_screenshot_echo_not_visible",
+      "schemaVersion": 1,
+      "imageSha256": "fd16ce10bc76d1fc78ce11e5853ce4d0f7c2a2fd6c0afb27b61c19caf67349bf",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "terminalBounds": [
+        0,
+        392,
+        1080,
+        1748
+      ],
+      "expectedMarker": "POCKET-ANDROID-SSH-OK",
+      "expectedToken": "ACDEFHJKMN34",
+      "markerVisible": false,
+      "tokenVisible": false,
+      "ocrEngine": "tesseract 5.5.4"
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 # Android 普通 SSH 主机换钥专项
 
+> 2026-11-17 事后画面复核：本页旧批的服务端收发、客户端缓冲／DOM 回显与设备像素可见性分开。Flutter 官方工件内 `connected.png`、`rotation-connected.png` 实际仅见 READY，未见回显或当前目标，不能据此认定活动终端已显示回显；已核验的 ABBB、拒绝页及清理结论保留。新增像素门禁、目标显示与后续设备结果见[活动终端专项](69-mobile-ssh-active-terminal.md)。
+
 状态：2026-11-17，**Flutter／Tauri Android API 35 模拟器验收均通过，官方工件及独立服务端证据已核验**。本页单独记录普通 SSH 的 S10「主机指纹发生变化」，不更改[上一轮普通 SSH 验收](63-design-parity-and-direct-ssh.md)或[Android 双网验收](67-android-dual-network-startup.md)的来源与结论。
 
 ## 已复现的修改前基线

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "18f223d4fa3391b57544b5178aa842210bb6ed34b29f4e7ccb13def220cc8f31",
+  "imageSize": [
+    1080,
+    2340
+  ],
+  "terminalBounds": [
+    66,
+    684,
+    484,
+    820
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "HEAD FACT SEAT HAVE BARN DECK PATH PART",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

@@ -1,0 +1,664 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "f25cbdce9f933ae6ce5aeb9a7ce849e95f590f57",
+  "status": "passed",
+  "scope": "synthetic loopback SSH and owned API35 Android WebView; CDP input is not real IME composition",
+  "apkSha256": "cd5eb3b62b2bc4dc46f84a332d87b9fd829c840e47c3dffc85c193df142f1951",
+  "fingerprintReviewed": true,
+  "credentialReviewPreserved": true,
+  "connected": true,
+  "terminalInputReceived": true,
+  "terminalEchoRendered": true,
+  "disconnected": true,
+  "passwordCleared": true,
+  "helperKeysExact": true,
+  "terminalScreenshot": {
+    "schemaVersion": 1,
+    "status": "passed",
+    "expectedTarget": "fixture@127.0.0.1:44429",
+    "expectedToken": "RACE SAND HUNT HEAT EAST RACE TASK HEAT",
+    "expectedMarker": "POCKET-ANDROID-SSH-OK",
+    "captureEngine": "adb exec-out screencap -p",
+    "coordinateEngine": "measured WebView frame or exact CDP/framebuffer pixel registration",
+    "captureAttempts": 1,
+    "geometryBefore": {
+      "viewport": [
+        393,
+        851
+      ],
+      "targetRect": [
+        16,
+        206.9204559326172,
+        361.0909118652344,
+        23.272727966308594
+      ],
+      "terminal": [
+        24,
+        258.19317626953125,
+        344,
+        352
+      ],
+      "visualViewport": [
+        0,
+        0,
+        1
+      ],
+      "dpr": 2.75,
+      "targetVisible": true,
+      "targetMatched": true,
+      "terminalVisible": true,
+      "webViewCandidateBounds": [
+        [
+          0,
+          0,
+          1080,
+          2340
+        ]
+      ],
+      "webViewCandidateCount": 1
+    },
+    "webViewBeforeSha256": "4188a66fece73e44ae6e4172deeeb22b6243e9aae65938ca29bb29ad5acca27c",
+    "imageSha256": "601f16bdd7cfa95031217302be337d4cb5e4d6fafa46447ed33d63b2d7b08eeb",
+    "imageSize": [
+      1080,
+      2340
+    ],
+    "image": "ssh-terminal-android.png",
+    "imageCaptureAttempt": 1,
+    "geometryAfter": {
+      "viewport": [
+        393,
+        851
+      ],
+      "targetRect": [
+        16,
+        206.9204559326172,
+        361.0909118652344,
+        23.272727966308594
+      ],
+      "terminal": [
+        24,
+        258.19317626953125,
+        344,
+        352
+      ],
+      "visualViewport": [
+        0,
+        0,
+        1
+      ],
+      "dpr": 2.75,
+      "targetVisible": true,
+      "targetMatched": true,
+      "terminalVisible": true,
+      "webViewCandidateBounds": [
+        [
+          0,
+          0,
+          1080,
+          2340
+        ]
+      ],
+      "webViewCandidateCount": 1
+    },
+    "coordinateMethod": "uiautomator_full_frame",
+    "terminalBounds": [
+      66,
+      710,
+      945,
+      967
+    ],
+    "headerGeometry": {
+      "nativePx": {
+        "overlapPx": 136,
+        "systemBottomPx": 136,
+        "viewY": 0,
+        "statusPx": 136,
+        "stableStatusPx": 136,
+        "windowTopPx": 0,
+        "cutoutPx": 136,
+        "captionPx": 0,
+        "stableCaptionPx": 0
+      },
+      "viewportCss": [
+        393,
+        851
+      ],
+      "visualViewport": [
+        0,
+        0,
+        1
+      ],
+      "devicePixelRatio": 2.75,
+      "scrollYCss": 39.6363639831543,
+      "appliedTopCss": 49.45454545454545,
+      "webViewOriginPx": [
+        0,
+        0
+      ],
+      "imageSizePx": [
+        1080,
+        2340
+      ],
+      "header": {
+        "rectCss": [
+          0,
+          0,
+          393.0909118652344,
+          120.54545593261719
+        ],
+        "visible": true,
+        "inViewport": true
+      },
+      "title": {
+        "rectCss": [
+          62,
+          65.45454406738281,
+          109.7727279663086,
+          25.81818199157715
+        ],
+        "visible": true,
+        "inViewport": true,
+        "boundsPx": [
+          170,
+          179,
+          303,
+          72
+        ]
+      },
+      "button": {
+        "rectCss": [
+          287.69317626953125,
+          68,
+          89.3977279663086,
+          44
+        ],
+        "visible": true,
+        "inViewport": true,
+        "boundsPx": [
+          791,
+          187,
+          246,
+          121
+        ]
+      },
+      "sshTitle": {
+        "rectCss": [
+          16,
+          112.82386779785156,
+          361.0909118652344,
+          34.90909194946289
+        ],
+        "visible": true,
+        "inViewport": true
+      },
+      "target": {
+        "rectCss": [
+          16,
+          206.9204559326172,
+          361.0909118652344,
+          23.272727966308594
+        ],
+        "visible": true,
+        "inViewport": true,
+        "boundsPx": [
+          44,
+          569,
+          994,
+          65
+        ]
+      },
+      "terminal": {
+        "rectCss": [
+          16,
+          246.1931915283203,
+          361.0909118652344,
+          383.0682067871094
+        ],
+        "visible": true,
+        "inViewport": true
+      },
+      "xterm": {
+        "rectCss": [
+          24,
+          258.19317626953125,
+          344,
+          352
+        ],
+        "visible": true,
+        "inViewport": true
+      }
+    },
+    "markerVisible": true,
+    "tokenVisible": true,
+    "ocrEngine": "tesseract 5.3.4",
+    "ocrAttempts": 1,
+    "ocrPageSegmentationMode": 6,
+    "proofSequenceVisible": true
+  },
+  "peer": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true
+  },
+  "cleanup": {
+    "browser": true,
+    "application": true,
+    "forward": true,
+    "reverse": true,
+    "fixtureConnections": true
+  },
+  "phase": "complete",
+  "rotation": {
+    "probeReviewed": true,
+    "refusalBlocked": true,
+    "reviewNoExits": true,
+    "cancelKeptTrust": true,
+    "reprobePresented": true,
+    "connected": true,
+    "terminalInputReceived": true,
+    "terminalEchoRendered": true,
+    "disconnected": true,
+    "passwordCleared": true,
+    "rotationEvidence": [
+      {
+        "stage": 2,
+        "connections": 2,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      {
+        "stage": 3,
+        "connections": 3,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "freshProbe": {
+          "id": 3,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      {
+        "stage": 4,
+        "connections": 4,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "freshProbe": {
+          "id": 3,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "acceptedSession": {
+          "id": 4,
+          "hostKey": "B",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 102,
+          "authAccepted": true,
+          "markerReceived": true,
+          "sessionClosed": true,
+          "closed": true
+        }
+      }
+    ],
+    "terminalScreenshot": {
+      "schemaVersion": 1,
+      "status": "passed",
+      "expectedTarget": "fixture@127.0.0.1:57545",
+      "expectedToken": "SEAT STAR LEFT HEAD FARM HAVE LAST CAVE",
+      "expectedMarker": "POCKET-ANDROID-SSH-OK",
+      "captureEngine": "adb exec-out screencap -p",
+      "coordinateEngine": "measured WebView frame or exact CDP/framebuffer pixel registration",
+      "captureAttempts": 1,
+      "geometryBefore": {
+        "viewport": [
+          393,
+          851
+        ],
+        "targetRect": [
+          16,
+          206.9204559326172,
+          361.0909118652344,
+          23.272727966308594
+        ],
+        "terminal": [
+          24,
+          258.19317626953125,
+          344,
+          352
+        ],
+        "visualViewport": [
+          0,
+          0,
+          1
+        ],
+        "dpr": 2.75,
+        "targetVisible": true,
+        "targetMatched": true,
+        "terminalVisible": true,
+        "webViewCandidateBounds": [
+          [
+            0,
+            0,
+            1080,
+            2340
+          ]
+        ],
+        "webViewCandidateCount": 1
+      },
+      "webViewBeforeSha256": "ec325940eff1233b5733e981e6f265def491d6ebbd7d5d153a716b0a32bbfc17",
+      "imageSha256": "fdb2e886b21484045b75905579e56fd2103d8b46d9406e6bbc1da02ce54fd57b",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "image": "ssh-rotation-terminal-android.png",
+      "imageCaptureAttempt": 1,
+      "geometryAfter": {
+        "viewport": [
+          393,
+          851
+        ],
+        "targetRect": [
+          16,
+          206.9204559326172,
+          361.0909118652344,
+          23.272727966308594
+        ],
+        "terminal": [
+          24,
+          258.19317626953125,
+          344,
+          352
+        ],
+        "visualViewport": [
+          0,
+          0,
+          1
+        ],
+        "dpr": 2.75,
+        "targetVisible": true,
+        "targetMatched": true,
+        "terminalVisible": true,
+        "webViewCandidateBounds": [
+          [
+            0,
+            0,
+            1080,
+            2340
+          ]
+        ],
+        "webViewCandidateCount": 1
+      },
+      "coordinateMethod": "uiautomator_full_frame",
+      "terminalBounds": [
+        66,
+        710,
+        945,
+        967
+      ],
+      "headerGeometry": {
+        "nativePx": {
+          "overlapPx": 136,
+          "systemBottomPx": 136,
+          "viewY": 0,
+          "statusPx": 136,
+          "stableStatusPx": 136,
+          "windowTopPx": 0,
+          "cutoutPx": 136,
+          "captionPx": 0,
+          "stableCaptionPx": 0
+        },
+        "viewportCss": [
+          393,
+          851
+        ],
+        "visualViewport": [
+          0,
+          0,
+          1
+        ],
+        "devicePixelRatio": 2.75,
+        "scrollYCss": 39.6363639831543,
+        "appliedTopCss": 49.45454545454545,
+        "webViewOriginPx": [
+          0,
+          0
+        ],
+        "imageSizePx": [
+          1080,
+          2340
+        ],
+        "header": {
+          "rectCss": [
+            0,
+            0,
+            393.0909118652344,
+            120.54545593261719
+          ],
+          "visible": true,
+          "inViewport": true
+        },
+        "title": {
+          "rectCss": [
+            62,
+            65.45454406738281,
+            109.7727279663086,
+            25.81818199157715
+          ],
+          "visible": true,
+          "inViewport": true,
+          "boundsPx": [
+            170,
+            179,
+            303,
+            72
+          ]
+        },
+        "button": {
+          "rectCss": [
+            287.69317626953125,
+            68,
+            89.3977279663086,
+            44
+          ],
+          "visible": true,
+          "inViewport": true,
+          "boundsPx": [
+            791,
+            187,
+            246,
+            121
+          ]
+        },
+        "sshTitle": {
+          "rectCss": [
+            16,
+            112.82386779785156,
+            361.0909118652344,
+            34.90909194946289
+          ],
+          "visible": true,
+          "inViewport": true
+        },
+        "target": {
+          "rectCss": [
+            16,
+            206.9204559326172,
+            361.0909118652344,
+            23.272727966308594
+          ],
+          "visible": true,
+          "inViewport": true,
+          "boundsPx": [
+            44,
+            569,
+            994,
+            65
+          ]
+        },
+        "terminal": {
+          "rectCss": [
+            16,
+            246.1931915283203,
+            361.0909118652344,
+            383.0682067871094
+          ],
+          "visible": true,
+          "inViewport": true
+        },
+        "xterm": {
+          "rectCss": [
+            24,
+            258.19317626953125,
+            344,
+            352
+          ],
+          "visible": true,
+          "inViewport": true
+        }
+      },
+      "markerVisible": true,
+      "tokenVisible": true,
+      "ocrEngine": "tesseract 5.3.4",
+      "ocrAttempts": 1,
+      "ocrPageSegmentationMode": 6,
+      "proofSequenceVisible": true
+    },
+    "cleanup": {
+      "browser": true,
+      "application": true,
+      "forward": true,
+      "reverse": true,
+      "fixtureConnections": true
+    },
+    "s10Screenshot": true
+  },
+  "encryptedKey": {
+    "fingerprintReviewed": true,
+    "credentialReviewPreserved": true,
+    "connected": true,
+    "terminalInputReceived": true,
+    "terminalEchoRendered": true,
+    "disconnected": true,
+    "passwordCleared": true,
+    "peer": {
+      "authAccepted": true,
+      "ptyRequested": true,
+      "shellRequested": true,
+      "markerReceived": true,
+      "sessionClosed": true
+    },
+    "cleanup": {
+      "browser": true,
+      "application": true,
+      "forward": true,
+      "reverse": true,
+      "fixtureConnections": true
+    }
+  }
+}

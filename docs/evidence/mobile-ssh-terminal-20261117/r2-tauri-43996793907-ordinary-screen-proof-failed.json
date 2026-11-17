@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "status": "failed",
+  "expectedTarget": "fixture@127.0.0.1:46781",
+  "expectedToken": "HEAD FACT SEAT HAVE BARN DECK PATH PART",
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "captureEngine": "adb exec-out screencap -p",
+  "coordinateEngine": "UIAutomator WebView bounds + visible DOM xterm-screen",
+  "imageSha256": "18f223d4fa3391b57544b5178aa842210bb6ed34b29f4e7ccb13def220cc8f31",
+  "imageSize": [
+    1080,
+    2340
+  ],
+  "image": "ssh-terminal-android.png",
+  "imageCaptureAttempt": 3,
+  "captureAttempts": 3,
+  "geometryBefore": {
+    "viewport": [
+      393,
+      851
+    ],
+    "targetRect": [
+      16,
+      197.10227966308594,
+      361.0909118652344,
+      23.272727966308594
+    ],
+    "terminal": [
+      24,
+      248.375,
+      176,
+      320
+    ],
+    "visualViewport": [
+      0,
+      0,
+      1
+    ],
+    "dpr": 2.75,
+    "targetVisible": true,
+    "targetMatched": true,
+    "terminalVisible": true,
+    "webViewHierarchyParsed": false
+  },
+  "geometryAfter": {
+    "viewport": [
+      393,
+      851
+    ],
+    "targetRect": [
+      16,
+      197.10227966308594,
+      361.0909118652344,
+      23.272727966308594
+    ],
+    "terminal": [
+      24,
+      248.375,
+      176,
+      320
+    ],
+    "visualViewport": [
+      0,
+      0,
+      1
+    ],
+    "dpr": 2.75,
+    "targetVisible": true,
+    "targetMatched": true,
+    "terminalVisible": true,
+    "webViewHierarchyParsed": false
+  },
+  "errorCode": "direct_terminal_framebuffer_mapping_invalid"
+}

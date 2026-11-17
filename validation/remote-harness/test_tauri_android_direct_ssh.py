@@ -1,6 +1,7 @@
 """No AVD or SSH: verify that the device driver cannot claim unobserved UI/peer evidence."""
 import types
 import hashlib
+import io
 import json
 from pathlib import Path
 import struct
@@ -351,7 +352,7 @@ class TerminalScreenshotProofTests(unittest.TestCase):
 
     def capture(self, output, *, geometry=None, hierarchy=None, gate=None, capture=None):
         with patch.object(driver,'_terminal_geometry',side_effect=geometry or [self.geometry]*6), \
-             patch.object(driver,'adb',side_effect=hierarchy or [self.hierarchy]*6), \
+             patch.object(driver,'_read_window_hierarchy',side_effect=hierarchy or [self.hierarchy]*6), \
              patch.object(driver,'_framebuffer_png',side_effect=capture or [(self.png,(800,1500))]*3), \
              patch.object(driver,'verify_terminal_screenshot',side_effect=gate), \
              patch.object(driver.time,'sleep'):
@@ -483,10 +484,10 @@ class TerminalScreenshotProofTests(unittest.TestCase):
 
     def test_failed_uiautomator_measurement_still_saves_raw_png_and_public_diagnostics(self):
         gate=Mock()
-        failure=driver.GuiFailure('android_adb_command_failed')
+        failure=driver.GuiFailure('direct_terminal_hierarchy_invalid')
         with tempfile.TemporaryDirectory() as folder:
-            with self.assertRaisesRegex(driver.GuiFailure,'direct_terminal_capture_failed'):
-                self.capture(folder,geometry=[self.geometry]*3,hierarchy=[failure]*3,gate=gate)
+            with self.assertRaisesRegex(driver.GuiFailure,'direct_terminal_framebuffer_mapping_invalid'):
+                self.capture(folder,geometry=[self.geometry]*6,hierarchy=[failure]*6,gate=gate)
             result=json.loads(Path(folder,'terminal.json').read_text())
             self.assertEqual(Path(folder,'terminal.png').read_bytes(),self.png)
             self.assertEqual(result['imageSize'],[800,1500])
@@ -516,6 +517,132 @@ class TerminalScreenshotProofTests(unittest.TestCase):
         with patch.object(driver,'capture_terminal_proof') as capture:
             driver.exercise_ui(Browser(),self.fixture,encrypted_key=True)
         capture.assert_not_called()
+
+    def test_hierarchy_uses_unique_device_file_exec_out_cat_and_finally_cleanup(self):
+        paths=[]
+        def adb(*args):
+            paths.append(args)
+            return self.hierarchy if args[:2]==('exec-out','cat') else 'dumped'
+        with patch.object(driver,'adb',side_effect=adb):
+            self.assertEqual(driver._read_window_hierarchy(),self.hierarchy)
+            self.assertEqual(driver._read_window_hierarchy(),self.hierarchy)
+        first=paths[0][-1];second=paths[3][-1]
+        self.assertNotEqual(first,second)
+        self.assertRegex(first,r'^/data/local/tmp/pocket-ssh-hierarchy-[0-9a-f]{32}\.xml$')
+        self.assertEqual(paths[1],('exec-out','cat',first))
+        self.assertEqual(paths[2],('shell','rm','-f',first))
+
+    def test_hierarchy_dump_or_invalid_xml_failure_still_removes_device_file(self):
+        for failure in (driver.GuiFailure('android_adb_command_failed'),'UI hierarchy dumped to /dev/tty'):
+            with self.subTest(failure=type(failure).__name__):
+                reply=[failure] if isinstance(failure,Exception) else ['dumped',failure]
+                reply.append('')
+                with patch.object(driver,'adb',side_effect=reply) as adb,self.assertRaises(driver.GuiFailure):
+                    driver._read_window_hierarchy()
+                self.assertEqual(adb.call_args.args[:3],('shell','rm','-f'))
+
+    def test_hierarchy_cleanup_failure_blocks_capture_instead_of_allowing_pixel_fallback(self):
+        failure=driver.GuiFailure('android_adb_command_failed')
+        with patch.object(driver,'adb',side_effect=['dumped',self.hierarchy,failure]), \
+             self.assertRaisesRegex(driver.GuiFailure,'direct_terminal_hierarchy_cleanup_failed'):
+            driver._read_window_hierarchy()
+        gate=Mock()
+        with tempfile.TemporaryDirectory() as folder, \
+             patch.object(driver,'_terminal_geometry',return_value=self.geometry), \
+             patch.object(driver,'_read_window_hierarchy',side_effect=driver.GuiFailure('direct_terminal_hierarchy_cleanup_failed')), \
+             patch.object(driver,'_webview_png',return_value=self.png), \
+             patch.object(driver,'_framebuffer_png',return_value=(self.png,(800,1500))), \
+             patch.object(driver,'_registered_terminal_bounds') as register, \
+             patch.object(driver,'verify_terminal_screenshot',gate):
+            with self.assertRaisesRegex(driver.GuiFailure,'direct_terminal_hierarchy_cleanup_failed'):
+                driver.capture_terminal_proof(Mock(),self.fixture,folder,stem='terminal')
+            result=json.loads(Path(folder,'terminal.json').read_text())
+            self.assertEqual(result['captureAttempts'],1)
+            self.assertEqual(Path(folder,'terminal.png').read_bytes(),self.png)
+        register.assert_not_called();gate.assert_not_called()
+
+
+class PixelRegistrationTests(unittest.TestCase):
+    @staticmethod
+    def png(image):
+        result=io.BytesIO();image.save(result,format='PNG');return result.getvalue()
+
+    def setUp(self):
+        from PIL import Image
+        import random
+        randomizer=random.Random(405)
+        self.reference=Image.frombytes('RGB',(160,240),randomizer.randbytes(160*240*3))
+        self.frame=Image.new('RGB',(210,300),(0,0,0));self.frame.paste(self.reference,(17,23))
+        # A native IME covers the lower WebView; layoutViewport remains unchanged.
+        self.frame.paste((70,80,90),(0,225,210,300))
+        self.geometry={'targetMatched':True,'targetVisible':True,'terminalVisible':True,
+            'viewport':[160,240],'dpr':1,'visualViewport':[0,0,1],
+            'targetRect':[8,12,140,24],'terminal':[8,60,140,130]}
+        self.visible=(17,23,177,225)
+
+    def test_exact_pixels_derive_nonzero_origin_despite_keyboard_clipped_native_frame(self):
+        bounds,evidence=driver._registered_terminal_bounds(self.geometry,self.png(self.reference),self.png(self.frame),visible_bounds=self.visible)
+        self.assertEqual(bounds,(25,83,140,130));self.assertEqual(evidence['origin'],[17,23])
+        self.assertEqual(len(evidence['anchors']),3)
+        self.assertEqual(evidence['anchors'][0]['sourceBounds'][:2],[8,12])
+
+    def test_registration_rejects_same_size_unrelated_frame_and_repeated_ambiguous_content(self):
+        from PIL import Image
+        unrelated=Image.new('RGB',self.frame.size,(20,30,40))
+        repeated=Image.new('RGB',(370,300));repeated.paste(self.reference,(0,0));repeated.paste(self.reference,(190,0))
+        for frame in (unrelated,repeated):
+            with self.subTest(size=frame.size),self.assertRaisesRegex(driver.GuiFailure,'pixel_registration_failed'):
+                driver._registered_terminal_bounds(self.geometry,self.png(self.reference),self.png(frame),visible_bounds=self.visible)
+
+    def test_registration_requires_target_and_terminal_to_agree_on_origin(self):
+        target=self.reference.crop((8,12,148,36));self.frame.paste((0,0,0),(25,35,165,59))
+        self.frame.paste(target,(30,35))
+        with self.assertRaisesRegex(driver.GuiFailure,'pixel_registration_failed'):
+            driver._registered_terminal_bounds(self.geometry,self.png(self.reference),self.png(self.frame),visible_bounds=self.visible)
+
+    def test_clipped_cdp_height_uses_dpr_without_stretching_and_intersects_visible_terminal(self):
+        clipped=self.reference.crop((0,0,160,155))
+        bounds,evidence=driver._registered_terminal_bounds(self.geometry,self.png(clipped),self.png(self.frame),visible_bounds=self.visible)
+        self.assertEqual(evidence['origin'],[17,23]);self.assertEqual(bounds,(25,83,140,95))
+        self.assertEqual(evidence['webViewImageSize'],[160,155])
+
+    def test_registration_rejects_wrong_width_oversize_height_and_target_outside_source(self):
+        for source in (self.reference.resize((100,240)),self.reference.resize((160,300)),
+                       self.reference.crop((0,0,160,24))):
+            with self.subTest(size=source.size),self.assertRaisesRegex(driver.GuiFailure,'pixel_registration_failed'):
+                driver._registered_terminal_bounds(self.geometry,self.png(source),self.png(self.frame),visible_bounds=self.visible)
+
+    def test_wrong_target_zoom_or_out_of_frame_terminal_cannot_use_registration(self):
+        for update in ({'targetMatched':False},{'visualViewport':[0,0,2]},
+                       {'terminal':[8,60,200,130]}):
+            with self.subTest(update=update),self.assertRaises(driver.GuiFailure):
+                driver._registered_terminal_bounds({**self.geometry,**update},self.png(self.reference),self.png(self.frame),visible_bounds=self.visible)
+
+    def test_native_visible_frame_intersection_excludes_keyboard_and_missing_frame_rejects(self):
+        bounds,_=driver._registered_terminal_bounds(self.geometry,self.png(self.reference),self.png(self.frame),
+            visible_bounds=(17,23,177,160))
+        self.assertEqual(bounds,(25,83,140,77))
+        with self.assertRaisesRegex(driver.GuiFailure,'pixel_registration_failed'):
+            driver._registered_terminal_bounds(self.geometry,self.png(self.reference),self.png(self.frame))
+
+    def test_capture_fallback_uses_actual_adb_png_and_archives_independent_cdp_pngs(self):
+        fixture=Fixture();fixture.screen_token='HEAD FACT SEAT HAVE BARN DECK PATH PART'
+        hierarchy=TerminalScreenshotProofTests.xml('[17,23][177,225]')
+        source=self.png(self.reference);actual=self.png(self.frame)
+        gate=Mock(return_value={'markerVisible':True,'tokenVisible':True,'proofSequenceVisible':True})
+        with tempfile.TemporaryDirectory() as folder, \
+             patch.object(driver,'_terminal_geometry',return_value=self.geometry), \
+             patch.object(driver,'_read_window_hierarchy',return_value=hierarchy), \
+             patch.object(driver,'_webview_png',return_value=source), \
+             patch.object(driver,'_framebuffer_png',return_value=(actual,self.frame.size)), \
+             patch.object(driver,'verify_terminal_screenshot',gate):
+            result=driver.capture_terminal_proof(Mock(),fixture,folder,stem='terminal')
+            self.assertEqual(Path(folder,'terminal.png').read_bytes(),actual)
+            for suffix in ('before','after'):
+                self.assertEqual(Path(folder,f'terminal-webview-{suffix}.png').read_bytes(),source)
+        self.assertEqual(result['coordinateMethod'],'exact_pixel_registration')
+        self.assertEqual(result['pixelRegistrationBefore']['origin'],[17,23])
+        gate.assert_called_once_with(actual,expected_token=fixture.screen_token,bounds=(25,83,140,130))
 
 
 if __name__=='__main__': unittest.main()

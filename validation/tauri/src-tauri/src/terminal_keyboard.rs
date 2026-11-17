@@ -9,6 +9,18 @@ use tauri::{
 #[cfg(target_os = "android")]
 struct TerminalKeyboard<R: Runtime>(PluginHandle<R>);
 
+#[tauri::command]
+pub async fn mobile_system_top_inset<R: Runtime>(app: AppHandle<R>) -> Result<f64, String> {
+    #[cfg(target_os = "android")]
+    {
+        let plugin = app.try_state::<TerminalKeyboard<R>>().ok_or("insets_unavailable")?;
+        let result = plugin.0.run_mobile_plugin_async::<serde_json::Value>("topInset", serde_json::json!({})).await.map_err(|_| "insets_unavailable")?;
+        result.get("top").and_then(|value| value.as_f64()).ok_or_else(|| "insets_unavailable".into())
+    }
+    #[cfg(not(target_os = "android"))]
+    { let _ = app; Ok(0.0) }
+}
+
 #[cfg(target_os = "android")]
 pub fn android_plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("pocketterminalkeyboard")

@@ -139,7 +139,7 @@
   .workbench-panel .panel-head{margin:0 0 10px}
 }
 /* S01 board and primary navigation */
-.app-header { max-width:1000px; margin:auto; background:transparent; border:0; padding:20px; gap:8px}
+.app-header { max-width:1000px; margin:auto; background:transparent; border:0; padding:20px; padding-top:calc(20px + var(--hp-system-top-inset,0px)); gap:8px}
 .brand-mark { width:40px; height:40px; font:700 13px ui-monospace,monospace; border-radius:12px}
 .brand-lockup { gap:10px}
 h1 { font-size:18px; margin:0}
@@ -160,7 +160,7 @@ h1 { font-size:18px; margin:0}
 #home-terminal p,#home-network p { color:var(--hp-textSecondary); line-height:1.6}
 
 @media(max-width:599px) { body { padding-bottom:calc(74px + env(safe-area-inset-bottom))}
-.app-header { padding:16px 16px 6px}
+.app-header { padding:16px 16px 6px; padding-top:calc(16px + var(--hp-system-top-inset,0px))}
 .brand-mark { width:36px; height:36px; font-size:12px}
 #host-open-remote { min-height:44px; padding:8px 10px}
 .route-tabs { position:fixed; z-index:50; bottom:0; left:0; right:0; max-width:none; margin:0; padding:4px 8px env(safe-area-inset-bottom); background:var(--hp-card); border-top:1px solid var(--hp-border); box-shadow:0 -4px 20px #0f172a0a}
@@ -211,7 +211,7 @@ h1 { font-size:18px; margin:0}
 #ssh-live { margin-top:12px; }
 .ssh-helper-keys { display:flex; gap:4px; overflow-x:auto; overscroll-behavior-inline:contain; margin-top:8px; }
 .ssh-helper-keys button { flex:none; min-width:44px; min-height:44px; padding:6px 10px; }
-.ssh-target { position:sticky; top:0; z-index:2; background:var(--hp-canvas); font-weight:700; white-space:nowrap; overflow-x:auto; }
+.ssh-target { position:sticky; top:var(--hp-system-top-inset,0px); z-index:2; background:var(--hp-canvas); font-weight:700; white-space:nowrap; overflow-x:auto; }
 #home-ssh .ssh-scroll { height:min(55dvh, 520px); }
 @media (max-width:599px) {
   #home-ssh .ssh-scroll { height:45dvh; }

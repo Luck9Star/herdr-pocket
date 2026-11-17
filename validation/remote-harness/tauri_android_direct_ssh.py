@@ -7,6 +7,7 @@ bounded boolean evidence is written; credentials and terminal output stay local.
 import argparse
 import base64
 import hashlib
+import io
 import json
 import math
 import os
@@ -16,6 +17,7 @@ import struct
 import subprocess
 import sys
 import time
+import uuid
 import xml.etree.ElementTree as ET
 
 from android_gui import AndroidWebView, PACKAGE, SERIAL, adb
@@ -73,6 +75,22 @@ def _webview_frames(hierarchy):
     return frames
 
 
+def _read_window_hierarchy():
+    """Non-PTY adb has no /dev/tty; read a unique device file and always remove it."""
+    device_path=f'/data/local/tmp/pocket-ssh-hierarchy-{uuid.uuid4().hex}.xml'
+    try:
+        adb('shell','uiautomator','dump',device_path)
+        hierarchy=adb('exec-out','cat',device_path)
+        _webview_frames(hierarchy)  # Require actual XML, never the dump status line.
+        return hierarchy
+    except (AttributeError,TypeError,ValueError,ET.ParseError):
+        raise GuiFailure('direct_terminal_hierarchy_invalid') from None
+    finally:
+        try: adb('shell','rm','-f',device_path)
+        except GuiFailure:
+            raise GuiFailure('direct_terminal_hierarchy_cleanup_failed') from None
+
+
 def _geometry_diagnostic(geometry, hierarchy):
     """Allow only bounded numbers/booleans; never XML, node text or credentials."""
     result={}
@@ -122,7 +140,7 @@ def _terminal_framebuffer_bounds(geometry, hierarchy, image_size):
         x1=math.floor(left+(x+w)*sx);y1=math.floor(top+(y+h)*sy)
         if x1<=x0 or y1<=y0: raise ValueError()
         return (x0,y0,x1-x0,y1-y0)
-    except (KeyError,TypeError,ValueError,ET.ParseError):
+    except (AttributeError,KeyError,TypeError,ValueError,ET.ParseError):
         raise GuiFailure('direct_terminal_framebuffer_mapping_invalid') from None
 
 
@@ -142,6 +160,102 @@ def _framebuffer_png():
         raise GuiFailure('direct_terminal_framebuffer_capture_failed') from None
 
 
+def _webview_png(browser):
+    try:
+        result=browser.call('Page.captureScreenshot',{'format':'png','fromSurface':True,'captureBeyondViewport':False})
+        png=base64.b64decode(result['data'],validate=True)
+        if not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png)>8_000_000: raise ValueError()
+        return png
+    except (KeyError,TypeError,ValueError):
+        raise GuiFailure('direct_terminal_webview_capture_failed') from None
+
+
+def _registered_terminal_bounds(geometry, reference_png, framebuffer_png, *, visible_bounds=None):
+    """Prove translation with unique exact RGB patches from target and terminal.
+
+    A keyboard may clip the XML WebView bounds while CSS keeps its full height.
+    No origin is assumed: three spatially separate, nonuniform patches must each
+    occur exactly once in the framebuffer and agree on the same translation.
+    """
+    if not isinstance(geometry,dict) or any(geometry.get(k) is not True
+            for k in ('targetMatched','targetVisible','terminalVisible')):
+        raise GuiFailure('direct_terminal_target_missing')
+    try:
+        from PIL import Image
+        with Image.open(io.BytesIO(reference_png)) as source,Image.open(io.BytesIO(framebuffer_png)) as frame:
+            if any(image.format!='PNG' or image.width*image.height>16_000_000 for image in (source,frame)):
+                raise ValueError()
+            reference=source.convert('RGB');framebuffer=frame.convert('RGB')
+        if not isinstance(visible_bounds,tuple) or len(visible_bounds)!=4 or any(type(v) is not int for v in visible_bounds):
+            raise ValueError()
+        vl,vt,vr,vb=visible_bounds
+        if not (0<=vl<vr<=framebuffer.width and 0<=vt<vb<=framebuffer.height): raise ValueError()
+        vw,vh=geometry['viewport'];dpr=geometry['dpr']
+        # innerWidth/innerHeight are integer CSS values. A native IME may clip
+        # capture height, so use measured DPR for BOTH axes, never stretch height.
+        sx=sy=dpr
+        if (geometry['visualViewport']!=[0,0,1] or dpr<=0 or
+                abs(reference.width-vw*dpr)>max(2,dpr) or
+                not 0<reference.height<=vh*dpr+max(2,dpr)):
+            raise ValueError()
+        raw=framebuffer.tobytes();anchors=[];origin=None
+        for region,needed in (('targetRect',1),('terminal',2)):
+            x,y,w,h=geometry[region]
+            if x<0 or y<0 or w<=0 or h<=0 or x+w>vw or y+h>vh: raise ValueError()
+            left=math.ceil(x*sx);top=math.ceil(y*sy)
+            right=min(reference.width,math.floor((x+w)*sx))
+            bottom=min(reference.height,math.floor((y+h)*sy))
+            if region=='targetRect' and (x+w>reference.width/sx or y+h>reference.height/sy): raise ValueError()
+            if not (0<=left<right<=reference.width and 0<=top<bottom<=reference.height): raise ValueError()
+            found=0;examined=0;chosen=[]
+            for py in range(top,bottom-15,8):
+                for px in range(left,right-31,16):
+                    examined+=1
+                    if examined>192: break
+                    if any(abs(px-ax)<32 and abs(py-ay)<16 for ax,ay in chosen): continue
+                    patch=reference.crop((px,py,px+32,py+16))
+                    if len(set(patch.tobytes()[j:j+3] for j in range(0,32*16*3,3)))<12: continue
+                    rows=[patch.crop((0,row,32,row+1)).tobytes() for row in range(16)]
+                    row=max(range(16),key=lambda i:len(set(rows[i][j:j+3] for j in range(0,96,3))))
+                    positions=set();start=0
+                    for _ in range(32):
+                        index=raw.find(rows[row],start)
+                        if index<0: break
+                        start=index+1
+                        if index%3: continue
+                        fy,fx=divmod(index//3,framebuffer.width);fy-=row
+                        if fx+32>framebuffer.width or fy<0 or fy+16>framebuffer.height: continue
+                        if framebuffer.crop((fx,fy,fx+32,fy+16)).tobytes()==patch.tobytes():
+                            positions.add((fx-px,fy-py))
+                    else:
+                        continue  # Too many row matches cannot establish uniqueness.
+                    if len(positions)!=1: continue
+                    translation=positions.pop()
+                    fx=px+translation[0];fy=py+translation[1]
+                    if not (vl<=fx and vt<=fy and fx+32<=vr and fy+16<=vb): continue
+                    if origin is not None and translation!=origin: raise ValueError()
+                    origin=translation;chosen.append((px,py));found+=1
+                    anchors.append({'sourceBounds':[px,py,32,16],
+                        'framebufferBounds':[px+origin[0],py+origin[1],32,16],
+                        'patchSha256':hashlib.sha256(patch.tobytes()).hexdigest()})
+                    if found==needed: break
+                if found==needed or examined>192: break
+            if found!=needed: raise ValueError()
+        tx,ty,tw,th=geometry['targetRect']
+        if not (vl<=origin[0]+tx*sx and vt<=origin[1]+ty*sy and
+                origin[0]+(tx+tw)*sx<=vr and origin[1]+(ty+th)*sy<=vb): raise ValueError()
+        x,y,w,h=geometry['terminal']
+        left=max(vl,math.ceil(origin[0]+x*sx));top=max(vt,math.ceil(origin[1]+y*sy))
+        right=min(vr,origin[0]+reference.width,math.floor(origin[0]+(x+w)*sx))
+        bottom=min(vb,origin[1]+reference.height,math.floor(origin[1]+(y+h)*sy))
+        if not (0<=left<right<=framebuffer.width and 0<=top<bottom<=framebuffer.height): raise ValueError()
+        return (left,top,right-left,bottom-top),{'engine':'unique exact RGB patches',
+            'origin':list(origin),'webViewImageSize':list(reference.size),
+            'visibleWebViewBounds':list(visible_bounds),'anchors':anchors}
+    except (ImportError,KeyError,TypeError,ValueError,OSError,ZeroDivisionError):
+        raise GuiFailure('direct_terminal_pixel_registration_failed') from None
+
+
 def capture_terminal_proof(browser, fixture, evidence_dir, *, stem):
     """Read at most three frames after the one original hp-check, never resend input."""
     if evidence_dir is None: raise GuiFailure('direct_terminal_evidence_directory_missing')
@@ -149,18 +263,25 @@ def capture_terminal_proof(browser, fixture, evidence_dir, *, stem):
     expected=f'{fixture.username}@127.0.0.1:{fixture.port}'
     base={'schemaVersion':1,'status':'failed','expectedTarget':expected,
         'expectedToken':fixture.screen_token,'expectedMarker':ECHO_MARKER,
-        'captureEngine':'adb exec-out screencap -p','coordinateEngine':'UIAutomator WebView bounds + visible DOM xterm-screen'}
+        'captureEngine':'adb exec-out screencap -p','coordinateEngine':'measured WebView frame or exact CDP/framebuffer pixel registration'}
     last_capture={}
     for attempt in range(1,4):
         evidence={**base,**last_capture,'captureAttempts':attempt}
         try:
-            before=hierarchy=None;measurement_error=None
+            before=hierarchy=None;measurement_error=None;webview_before=None
             try:
                 before=_terminal_geometry(browser,expected)
-                hierarchy=adb('shell','uiautomator','dump','/dev/tty')
             except GuiFailure as error:
                 measurement_error=error
+            try: hierarchy=_read_window_hierarchy()
+            except GuiFailure as error:
+                if str(error)=='direct_terminal_hierarchy_cleanup_failed': measurement_error=error
             evidence['geometryBefore']=_geometry_diagnostic(before,hierarchy)
+            try:
+                webview_before=_webview_png(browser)
+                (output/f'{stem}-webview-before.png').write_bytes(webview_before)
+                evidence['webViewBeforeSha256']=hashlib.sha256(webview_before).hexdigest()
+            except GuiFailure: pass
             png,size=_framebuffer_png()
             (output/f'{stem}.png').write_bytes(png)
             last_capture={'imageSha256':hashlib.sha256(png).hexdigest(),'imageSize':list(size),
@@ -168,12 +289,36 @@ def capture_terminal_proof(browser, fixture, evidence_dir, *, stem):
             evidence.update(last_capture)
             if measurement_error: raise measurement_error
             after=_terminal_geometry(browser,expected)
-            hierarchy_after=adb('shell','uiautomator','dump','/dev/tty')
+            hierarchy_after=None
+            try: hierarchy_after=_read_window_hierarchy()
+            except GuiFailure as error:
+                if str(error)=='direct_terminal_hierarchy_cleanup_failed': raise
             evidence['geometryAfter']=_geometry_diagnostic(after,hierarchy_after)
-            bounds=_terminal_framebuffer_bounds(before,hierarchy,size)
-            bounds_after=_terminal_framebuffer_bounds(after,hierarchy_after,size)
-            if before!=after or bounds!=bounds_after or _webview_frames(hierarchy)!=_webview_frames(hierarchy_after):
-                raise GuiFailure('direct_terminal_geometry_changed')
+            if before!=after: raise GuiFailure('direct_terminal_geometry_changed')
+            try:
+                bounds=_terminal_framebuffer_bounds(before,hierarchy,size)
+                bounds_after=_terminal_framebuffer_bounds(after,hierarchy_after,size)
+                if bounds!=bounds_after or _webview_frames(hierarchy)!=_webview_frames(hierarchy_after):
+                    raise GuiFailure('direct_terminal_geometry_changed')
+                evidence['coordinateMethod']='uiautomator_full_frame'
+            except GuiFailure as error:
+                if str(error) in ('direct_terminal_geometry_changed','direct_terminal_target_missing') or webview_before is None:
+                    raise
+                try:
+                    frames=_webview_frames(hierarchy);frames_after=_webview_frames(hierarchy_after)
+                    if len(frames)!=1 or frames!=frames_after: raise ValueError()
+                    visible_frame=next(iter(frames))
+                except (AttributeError,TypeError,ValueError,ET.ParseError):
+                    raise GuiFailure('direct_terminal_framebuffer_mapping_invalid') from None
+                webview_after=_webview_png(browser)
+                (output/f'{stem}-webview-after.png').write_bytes(webview_after)
+                evidence['webViewAfterSha256']=hashlib.sha256(webview_after).hexdigest()
+                bounds,registration=_registered_terminal_bounds(before,webview_before,png,visible_bounds=visible_frame)
+                bounds_after,registration_after=_registered_terminal_bounds(after,webview_after,png,visible_bounds=visible_frame)
+                evidence.update(pixelRegistrationBefore=registration,pixelRegistrationAfter=registration_after)
+                if bounds!=bounds_after or registration['origin']!=registration_after['origin']:
+                    raise GuiFailure('direct_terminal_geometry_changed')
+                evidence['coordinateMethod']='exact_pixel_registration'
             evidence['terminalBounds']=list(bounds)
             evidence.update(verify_terminal_screenshot(png,expected_token=fixture.screen_token,bounds=bounds))
             evidence['status']='passed';evidence.pop('errorCode',None)
@@ -186,6 +331,7 @@ def capture_terminal_proof(browser, fixture, evidence_dir, *, stem):
             evidence['errorCode']=code if re.fullmatch(r'direct_[a-z0-9_]{1,80}',code) else 'direct_terminal_capture_failed'
         finally:
             (output/f'{stem}.json').write_text(json.dumps(evidence,indent=2)+'\n',encoding='utf-8')
+        if evidence.get('errorCode')=='direct_terminal_hierarchy_cleanup_failed': break
         if attempt<3: time.sleep(0.25)
     if evidence['status']!='passed': raise GuiFailure(evidence['errorCode'])
     return evidence

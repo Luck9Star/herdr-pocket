@@ -1,4 +1,4 @@
-import { isTauri } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import '@xterm/xterm/css/xterm.css';
 import xtermLicense from '../node_modules/@xterm/xterm/LICENSE?raw';
 import graphemesLicense from '../node_modules/@xterm/addon-unicode-graphemes/LICENSE?raw';
@@ -8,6 +8,7 @@ import { observeMobileViewport } from './mobile-viewport.js';
 import { initRemote } from './remote.js';
 import { initKeyRouter } from './key-router.js';
 import { initializePasteClipboard } from './mobile-clipboard.js';
+import { shellPlatform } from './shell-platform.js';
 
 document.getElementById('xterm-license').textContent = xtermLicense;
 document.getElementById('xterm-graphemes-license').textContent = graphemesLicense;
@@ -32,9 +33,12 @@ async function openFixture() {
     document.getElementById('status').textContent = '离线实验室初始化失败，可返回主机看板';
   }
 }
-observeMobileViewport();
 const native = isTauri();
-void initializePasteClipboard(native);
+const platformReady = initializePasteClipboard(native);
+observeMobileViewport(undefined, undefined, undefined, native ? async () => {
+  await platformReady;
+  return shellPlatform.current() === 'android' ? invoke('mobile_system_top_inset') : 0;
+} : undefined);
 initRemote({native,theme,onFixture:openFixture,onLeaveFixture:() => workbench?.pause()});
 // 桌面键盘层（切片 3）：事件期自查页面状态与既有按钮挂钩，不依赖装配顺序（键位表见 key-router.js）。
 initKeyRouter();

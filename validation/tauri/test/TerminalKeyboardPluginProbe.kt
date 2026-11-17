@@ -16,6 +16,22 @@ fun main() {
     activity.service = ime
     activity.lifecycle.currentState = Lifecycle.State.RESUMED
     plugin.load(view)
+    val root = android.view.View().also { it.y = 100 }
+    view.root = root
+    view.y = 100
+    view.insets.top = 56
+    fun topInset(): Double {
+        val request = Invoke()
+        plugin.topInset(request)
+        return request.result["top"] as Double
+    }
+    check(topInset() == 28.0)
+    view.y = 156
+    check(topInset() == 0.0)
+    android.os.Build.VERSION.SDK_INT = 29
+    view.y = 120
+    check(topInset() == 18.0)
+    android.os.Build.VERSION.SDK_INT = 35
     fun send(action: String, ticket: String = token): Invoke {
         val request = Invoke()
         request.args = TerminalKeyboardArgs().also { it.action = action; it.ticket = ticket }

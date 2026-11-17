@@ -3,6 +3,8 @@ package org.herdr.pocket
 import android.app.Activity
 import android.content.Context
 import android.os.SystemClock
+import android.os.Build
+import android.view.WindowInsets
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
 import androidx.appcompat.app.AppCompatActivity
@@ -40,6 +42,28 @@ class TerminalKeyboardPlugin(private val activity: Activity) : Plugin(activity) 
         webView === view && !activity.isFinishing && !activity.isDestroyed &&
             (activity as? AppCompatActivity)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true &&
             activity.hasWindowFocus() && view.hasWindowFocus() && view.isAttachedToWindow && view.hasFocus()
+
+    @Command
+    fun topInset(invoke: Invoke) {
+        activity.runOnUiThread {
+            val view = webView
+            val insets = view?.rootWindowInsets
+            if (view == null || insets == null) {
+                invoke.reject("insets_unavailable")
+                return@runOnUiThread
+            }
+            @Suppress("DEPRECATION")
+            val top = if (Build.VERSION.SDK_INT >= 30) {
+                insets.getInsets(WindowInsets.Type.statusBars() or WindowInsets.Type.displayCutout()).top
+            } else insets.systemWindowInsetTop
+            val location = IntArray(2)
+            val rootLocation = IntArray(2)
+            view.getLocationOnScreen(location)
+            view.rootView.getLocationOnScreen(rootLocation)
+            val overlap = (rootLocation[1] + top - location[1]).coerceAtLeast(0)
+            invoke.resolve(JSObject().apply { put("top", overlap.toDouble() / view.resources.displayMetrics.density) })
+        }
+    }
 
     @Command
     fun request(invoke: Invoke) {

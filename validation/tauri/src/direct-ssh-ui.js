@@ -50,8 +50,12 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       else renderKeyChange(null);
       applyView(ready, freshRefusal);
       applyLock(ready, freshRefusal);
-      if (ready) { const t = target(); $('ssh-target').textContent = `${t.username}@${t.host}:${t.port} · SSH 已连接`; resizer.start(); requestAnimationFrame(resizer.request); }
-      else resizer.stop();
+      if (ready) {
+        const t = details.target;
+        const host = t.host.includes(':') && !t.host.startsWith('[') ? `[${t.host}]` : t.host;
+        $('ssh-target').textContent = `${t.username}@${host}:${t.port} · SSH 已连接`;
+        resizer.start(); requestAnimationFrame(resizer.request);
+      } else { $('ssh-target').textContent = ''; resizer.stop(); }
     },
     onData: (bytes, acknowledge) => terminal?.write(bytes, acknowledge),
   });

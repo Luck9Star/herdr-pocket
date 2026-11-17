@@ -31,10 +31,10 @@ jobs:
       - name: Prepare isolated device and SSH dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
+          sudo apt-get install -y acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0 tesseract-ocr=5.3.4-1build5 tesseract-ocr-eng=1:4.1.0-2
           python3 -m venv "$RUNNER_TEMP/direct-ssh-venv"
-          "$RUNNER_TEMP/direct-ssh-venv/bin/pip" install -r validation/pairing/requirements.txt websocket-client==1.8.0 paramiko==4.0.0
-          HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_*.py' -v
+          "$RUNNER_TEMP/direct-ssh-venv/bin/pip" install -r validation/pairing/requirements.txt websocket-client==1.8.0 paramiko==4.0.0 pillow==12.2.0
+          HERDR_REQUIRE_PARAMIKO=1 HERDR_REQUIRE_SCREENSHOT_OCR=1 "$RUNNER_TEMP/direct-ssh-venv/bin/python" -m unittest discover -s validation/remote-harness -p 'test_*.py' -v
       - name: Build the current x86_64 Android application
         working-directory: validation/tauri
         run: |

@@ -1,5 +1,12 @@
 """No AVD or SSH: verify that the device driver cannot claim unobserved UI/peer evidence."""
 import types
+import hashlib
+import json
+from pathlib import Path
+import struct
+import shutil
+import subprocess
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
@@ -326,6 +333,189 @@ class DirectSshAndroidTests(unittest.TestCase):
         state=RotationState()
         with self.assertRaisesRegex(driver.GuiFailure,'direct_rotation_review_content_missing'):
             driver.exercise_key_change_ui(Opaque(state),RotationFixture(state))
+
+
+class TerminalScreenshotProofTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture=Fixture();self.fixture.screen_token='ACDEFHJKMNPQ'
+        self.geometry={'targetMatched':True,'targetVisible':True,'terminalVisible':True,
+            'targetRect':[8,20,300,20],'viewport':[400,700],'dpr':2,
+            'visualViewport':[0,0,1],'terminal':[10.25,150.25,379.5,500.5]}
+        self.hierarchy=self.xml('[0,48][800,1448]')
+        self.png=b'\x89PNG\r\n\x1a\n'+b'\x00\x00\x00\x0dIHDR'+struct.pack('>II',800,1500)+b'opaque-test-pixels'
+
+    @staticmethod
+    def xml(bounds, extra=''):
+        return ('UI hierarchy dumped to: /dev/tty\n<hierarchy><node class="android.webkit.WebView" '
+            f'package="{driver.PACKAGE}" bounds="{bounds}" text="do-not-export"/>{extra}</hierarchy>')
+
+    def capture(self, output, *, geometry=None, hierarchy=None, gate=None, capture=None):
+        with patch.object(driver,'_terminal_geometry',side_effect=geometry or [self.geometry]*6), \
+             patch.object(driver,'adb',side_effect=hierarchy or [self.hierarchy]*6), \
+             patch.object(driver,'_framebuffer_png',side_effect=capture or [(self.png,(800,1500))]*3), \
+             patch.object(driver,'verify_terminal_screenshot',side_effect=gate), \
+             patch.object(driver.time,'sleep'):
+            return driver.capture_terminal_proof(Mock(),self.fixture,output,stem='terminal')
+
+    def test_framebuffer_mapping_includes_android_insets_and_rounds_inside_terminal(self):
+        self.assertEqual(driver._terminal_framebuffer_bounds(self.geometry,self.hierarchy,(800,1500)),
+            (21,349,758,1000))
+
+    def test_mapping_rejects_hidden_wrong_target_zoom_and_inconsistent_webview_scale(self):
+        for update in ({'targetVisible':False},{'targetMatched':False},{'terminalVisible':False},
+                       {'visualViewport':[0,0,2]},{'dpr':3},{'terminal':[0,0,401,10]}):
+            with self.subTest(update=update), self.assertRaises(driver.GuiFailure):
+                driver._terminal_framebuffer_bounds({**self.geometry,**update},self.hierarchy,(800,1500))
+
+    def test_mapping_requires_unique_owned_webview_frame(self):
+        foreign='<node class="android.webkit.WebView" package="other.package" bounds="[0,0][800,1500]"/>'
+        self.assertEqual(driver._terminal_framebuffer_bounds(self.geometry,
+            self.xml('[0,48][800,1448]',foreign),(800,1500)),(21,349,758,1000))
+        duplicate=f'<node class="android.webkit.WebView" package="{driver.PACKAGE}" bounds="[0,0][800,1500]"/>'
+        with self.assertRaisesRegex(driver.GuiFailure,'mapping_invalid'):
+            driver._terminal_framebuffer_bounds(self.geometry,self.xml('[0,48][800,1448]',duplicate),(800,1500))
+
+    def test_binary_capture_keeps_bytes_and_never_uses_text_adb(self):
+        reply=types.SimpleNamespace(returncode=0,stdout=self.png,stderr=b'')
+        with patch.object(driver.subprocess,'run',return_value=reply) as run,patch.object(driver,'adb') as adb:
+            self.assertEqual(driver._framebuffer_png(),(self.png,(800,1500)))
+        self.assertEqual(run.call_args.args[0],['adb','-s',driver.SERIAL,'exec-out','screencap','-p'])
+        adb.assert_not_called()
+
+    def test_capture_passes_exact_png_and_physical_bounds_to_shared_gate(self):
+        gate=Mock(return_value={'markerVisible':True,'tokenVisible':True,'ocrEngine':'test engine'})
+        with tempfile.TemporaryDirectory() as folder:
+            result=self.capture(folder,gate=gate)
+            self.assertEqual(Path(folder,'terminal.png').read_bytes(),self.png)
+            self.assertEqual(json.loads(Path(folder,'terminal.json').read_text()),result)
+        gate.assert_called_once_with(self.png,expected_token=self.fixture.screen_token,bounds=(21,349,758,1000))
+        self.assertEqual(result['expectedTarget'],'fixture@127.0.0.1:2222')
+        self.assertEqual(result['imageSha256'],hashlib.sha256(self.png).hexdigest())
+        self.assertEqual(result['status'],'passed')
+
+    def test_physical_webview_change_preserves_raw_png_and_rejects_before_ocr(self):
+        changed=self.xml('[0,50][800,1450]')
+        gate=Mock()
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(driver.GuiFailure,'geometry_changed'):
+                self.capture(folder,hierarchy=[self.hierarchy,changed]*3,gate=gate)
+            result=json.loads(Path(folder,'terminal.json').read_text())
+            self.assertEqual(Path(folder,'terminal.png').read_bytes(),self.png)
+            self.assertEqual(result['captureAttempts'],3)
+            self.assertNotEqual(result['geometryBefore'],result['geometryAfter'])
+        gate.assert_not_called()
+
+    def test_new_png_mapping_failure_does_not_keep_earlier_ocr_or_crop(self):
+        second=self.png+b'new-frame'
+        gate=Mock(side_effect=driver.ScreenshotGateError('terminal_screenshot_token_not_visible',
+            {'markerVisible':True,'tokenVisible':False,'ocrEngine':'old engine','terminalBounds':[1,2,3,4]}))
+        wrong={**self.geometry,'targetMatched':False}
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(driver.GuiFailure,'target_missing'):
+                self.capture(folder,geometry=[self.geometry]*2+[wrong]*4,gate=gate,
+                    capture=[(self.png,(800,1500)),(second,(800,1500)),(second,(800,1500))])
+            result=json.loads(Path(folder,'terminal.json').read_text())
+            for key in ('markerVisible','tokenVisible','ocrEngine','terminalBounds'):
+                self.assertNotIn(key,result)
+            self.assertEqual(result['imageSha256'],hashlib.sha256(second).hexdigest())
+            self.assertEqual(Path(folder,'terminal.png').read_bytes(),second)
+
+    def test_capture_failure_identifies_last_retained_frame_without_stale_ocr(self):
+        failure=driver.GuiFailure('direct_terminal_framebuffer_capture_failed')
+        gate=Mock(side_effect=driver.ScreenshotGateError('terminal_screenshot_token_not_visible',
+            {'markerVisible':True,'ocrEngine':'old engine'}))
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(driver.GuiFailure,'capture_failed'):
+                self.capture(folder,gate=gate,capture=[(self.png,(800,1500)),failure,failure])
+            result=json.loads(Path(folder,'terminal.json').read_text())
+            self.assertEqual(result['captureAttempts'],3)
+            self.assertEqual(result['imageCaptureAttempt'],1)
+            self.assertEqual(Path(folder,'terminal.png').read_bytes(),self.png)
+            self.assertNotIn('ocrEngine',result);self.assertNotIn('markerVisible',result)
+
+    def test_hidden_target_exports_only_bounded_geometry_without_xml_or_secrets(self):
+        hidden={**self.geometry,'targetVisible':False,'password':self.fixture.password,'rawText':'private transcript',
+            'unbounded':[float('nan')],'dpr':float('inf')}
+        diagnostic=driver._geometry_diagnostic(hidden,self.hierarchy)
+        self.assertEqual(diagnostic['viewport'],[400,700]);self.assertFalse(diagnostic['targetVisible'])
+        self.assertEqual(diagnostic['webViewCandidateBounds'],[[0,48,800,1448]])
+        for value in (self.fixture.password,'private transcript','do-not-export','Infinity'):
+            self.assertNotIn(value,json.dumps(diagnostic))
+        self.assertNotIn('dpr',diagnostic)
+
+    @unittest.skipUnless(shutil.which('node'),'Node is needed to execute the read-only DOM geometry probe')
+    def test_dom_probe_rejects_clipped_occluded_hidden_and_stale_target_with_numeric_diagnostics(self):
+        expression=driver._terminal_geometry(types.SimpleNamespace(evaluate=lambda text:text),
+            'fixture@127.0.0.1:2222')
+        script="""
+        const expression=EXPRESSION;
+        const box=(left,top,width,height)=>({left,top,width,height,right:left+width,bottom:top+height});
+        let clip=false,occluded=false,shown=true,missing=false;
+        globalThis.innerWidth=400;globalThis.innerHeight=700;globalThis.devicePixelRatio=2;
+        globalThis.window={visualViewport:{offsetLeft:0,offsetTop:0,scale:1}};
+        const parent={parentElement:null,style:{overflowX:'visible',overflowY:'hidden'},
+          getBoundingClientRect:()=>box(0,0,400,clip?0:700)};
+        const target={parentElement:parent,textContent:'fixture@127.0.0.1:2222 · SSH 已连接',
+          checkVisibility:()=>shown,getBoundingClientRect:()=>box(8,20,300,20),contains:()=>false};
+        const screen={parentElement:null,checkVisibility:()=>true,
+          getBoundingClientRect:()=>box(10,150,380,500)};
+        globalThis.getComputedStyle=e=>e.style;
+        globalThis.document={querySelector:s=>s==='#ssh-target'?(missing?null:target):screen,
+          createRange:()=>({selectNodeContents:()=>{},getClientRects:()=>[target.getBoundingClientRect()]}),
+          elementFromPoint:()=>occluded?{}:target};
+        const values=[eval(expression)];
+        clip=true;values.push(eval(expression));clip=false;
+        occluded=true;values.push(eval(expression));occluded=false;
+        shown=false;values.push(eval(expression));shown=true;
+        target.textContent='fixture@127.0.0.1:9999 · SSH 已连接';values.push(eval(expression));
+        missing=true;values.push(eval(expression));
+        process.stdout.write(JSON.stringify(values));
+        """.replace('EXPRESSION',json.dumps(expression))
+        result=subprocess.run([shutil.which('node'),'-e',script],capture_output=True,text=True,timeout=10,check=True)
+        values=json.loads(result.stdout)
+        self.assertTrue(values[0]['targetVisible']);self.assertTrue(values[0]['targetMatched'])
+        for value in values[1:4]:
+            self.assertFalse(value['targetVisible'])
+            self.assertEqual(value['viewport'],[400,700]);self.assertEqual(value['targetRect'],[8,20,300,20])
+            self.assertEqual(value['terminal'],[10,150,380,500])
+        self.assertFalse(values[4]['targetMatched'])
+        self.assertFalse(values[5]['targetVisible']);self.assertEqual(values[5]['viewport'],[400,700])
+
+    def test_failed_uiautomator_measurement_still_saves_raw_png_and_public_diagnostics(self):
+        gate=Mock()
+        failure=driver.GuiFailure('android_adb_command_failed')
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(driver.GuiFailure,'direct_terminal_capture_failed'):
+                self.capture(folder,geometry=[self.geometry]*3,hierarchy=[failure]*3,gate=gate)
+            result=json.loads(Path(folder,'terminal.json').read_text())
+            self.assertEqual(Path(folder,'terminal.png').read_bytes(),self.png)
+            self.assertEqual(result['imageSize'],[800,1500])
+            self.assertEqual(result['geometryBefore']['viewport'],[400,700])
+            self.assertFalse(result['geometryBefore']['webViewHierarchyParsed'])
+        gate.assert_not_called()
+
+    def test_ui_ordinary_and_rotation_capture_after_one_input_before_disconnect(self):
+        for rotation in (False,True):
+            with self.subTest(rotation=rotation):
+                state=RotationState();fixture=RotationFixture(state) if rotation else Fixture()
+                fixture.screen_token=self.fixture.screen_token
+                browser=RotationBrowser(state) if rotation else Browser()
+                def proof(*args,**kwargs):
+                    self.assertEqual(sum(a[0]=='Input.insertText' for a in browser.actions),1)
+                    self.assertNotIn(('click','#ssh-disconnect'),browser.actions)
+                    return {'status':'passed'}
+                with patch.object(driver,'capture_terminal_proof',side_effect=proof) as capture:
+                    result=(driver.exercise_key_change_ui(browser,fixture,evidence_dir='/tmp') if rotation
+                        else driver.exercise_ui(browser,fixture,evidence_dir='/tmp'))
+                capture.assert_called_once()
+                self.assertEqual(result['terminalScreenshot'],{'status':'passed'})
+                self.assertEqual(sum(a[0]=='Input.insertText' for a in browser.actions),1)
+
+    def test_encrypted_path_does_not_capture_even_if_fixture_has_screen_token(self):
+        self.fixture.private_key='synthetic key';self.fixture.passphrase='synthetic passphrase'
+        with patch.object(driver,'capture_terminal_proof') as capture:
+            driver.exercise_ui(Browser(),self.fixture,encrypted_key=True)
+        capture.assert_not_called()
 
 
 if __name__=='__main__': unittest.main()

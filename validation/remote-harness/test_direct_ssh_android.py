@@ -4,6 +4,9 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import sys
+import types
+import struct
 from subprocess import CompletedProcess
 from unittest.mock import Mock, patch
 import unittest
@@ -15,6 +18,97 @@ _spec.loader.exec_module(runner)
 
 
 class GuardTests(unittest.TestCase):
+    def test_screen_checkpoint_compares_actual_device_pixels_and_keeps_failure_evidence(self):
+        class GateError(RuntimeError):
+            def __init__(self):
+                super().__init__('terminal_screenshot_echo_not_visible')
+                self.evidence = {'markerVisible': False, 'tokenVisible': False}
+
+        calls = []
+        def gate(png, *, expected_token, bounds):
+            calls.append((png, expected_token, bounds))
+            if png.endswith(b'old'):
+                raise GateError()
+            return {'markerVisible': True, 'tokenVisible': True}
+
+        gate_module = types.SimpleNamespace(ScreenshotGateError=GateError, verify_terminal_screenshot=gate)
+        fixture = Mock(screen_token='ACDEFHJKMNPQ', username='fixture', port=40001)
+        rotation_fixture = Mock(screen_token='RTUVWXY34679', username='fixture', port=40002)
+        header = b'\x89PNG\r\n\x1a\n' + b'\x00\x00\x00\x0dIHDR' + struct.pack('>II', 400, 600)
+        png_old = header + b'old'
+        png_new = header + b'new'
+        replies = []
+        def adb(*args, **kwargs):
+            if args[0] == 'exec-out':
+                return CompletedProcess([], 0, png_old if args[1] == 'run-as' else replies.pop(0), b'')
+            return CompletedProcess([], 0, b'', b'')
+        with tempfile.TemporaryDirectory() as temp, patch.dict(sys.modules, {'terminal_screenshot_gate': gate_module}), patch.object(runner, 'adb', side_effect=adb):
+            output = Path(temp)
+            completed = {}
+            request = {'tag': 'key-rotation', 'attempt': 1, 'bounds': [0, 20, 400, 500], 'viewSize': [400, 600], 'observedTarget': 'fixture@127.0.0.1:40002'}
+            replies.append(png_old)
+            runner.screen_checkpoint(request, completed, fixture, rotation_fixture, 'cache/herdr-direct-ssh-123', output)
+            self.assertFalse(completed['key-rotation']['accepted'])
+            failure = json.loads((output / 'key-rotation-first-failed.json').read_text())
+            self.assertFalse(failure['checks']['device']['evidence']['markerVisible'])
+            self.assertEqual((output / 'key-rotation-first-failed-device.png').read_bytes(), png_old)
+            runner.screen_checkpoint(request, completed, fixture, rotation_fixture, 'cache/herdr-direct-ssh-123', output)
+            self.assertEqual(len(calls), 2)
+            replies.append(png_new)
+            runner.screen_checkpoint({**request, 'attempt': 2}, completed, fixture, rotation_fixture, 'cache/herdr-direct-ssh-123', output)
+            self.assertTrue(completed['key-rotation']['accepted'])
+            self.assertEqual(completed['key-rotation']['expectedTarget'], 'fixture@127.0.0.1:40002')
+            proof = json.loads((output / 'key-rotation-screen-proof.json').read_text())
+            self.assertEqual(proof['expectedTarget'], 'fixture@127.0.0.1:40002')
+            self.assertEqual(proof['checks']['integration']['status'], 'failed')
+            self.assertEqual(proof['checks']['device']['status'], 'passed')
+            self.assertEqual((output / 'rotation-connected-device.png').read_bytes(), png_new)
+            self.assertTrue(all(call[1:] == ('RTUVWXY34679', (0, 20, 400, 500)) for call in calls))
+            replies.append(png_new)
+            runner.screen_checkpoint({**request, 'tag': 'ordinary', 'attempt': 1,
+                'observedTarget': 'fixture@127.0.0.1:40001'}, completed, fixture, rotation_fixture,
+                'cache/herdr-direct-ssh-123', output)
+            ordinary = json.loads((output / 'ordinary-screen-proof.json').read_text())
+            self.assertEqual(ordinary['expectedTarget'], 'fixture@127.0.0.1:40001')
+            self.assertEqual(completed['ordinary']['expectedTarget'], 'fixture@127.0.0.1:40001')
+            self.assertEqual(calls[-1][1], 'ACDEFHJKMNPQ')
+            with self.assertRaises(runner.Failure):
+                runner.screen_checkpoint({**request, 'attempt': 4}, completed, fixture, rotation_fixture, 'cache/herdr-direct-ssh-123', output)
+            with self.assertRaises(runner.Failure):
+                runner.screen_checkpoint({**request, 'tag': 'ordinary', 'attempt': True}, completed, fixture, rotation_fixture, 'cache/herdr-direct-ssh-123', output)
+
+    def test_screen_rejects_target_mismatch_independently_for_each_peer(self):
+        fixture = Mock(username='fixture', port=40001)
+        rotation_fixture = Mock(username='fixture', port=40002)
+        request = {'tag': 'ordinary', 'attempt': 1, 'bounds': [0, 20, 400, 500],
+                   'viewSize': [400, 600], 'observedTarget': 'fixture@127.0.0.1:40002'}
+        with tempfile.TemporaryDirectory() as temp, patch.object(runner, 'adb') as adb:
+            for tag, observed in (('ordinary', 'fixture@127.0.0.1:40002'),
+                                  ('key-rotation', 'fixture@127.0.0.1:40001'),
+                                  ('ordinary', None)):
+                with self.subTest(tag=tag, observed=observed), self.assertRaisesRegex(
+                        runner.Failure, 'active_target_mismatch'):
+                    runner.screen_checkpoint({**request, 'tag': tag, 'observedTarget': observed},
+                        {}, fixture, rotation_fixture, 'cache/herdr-direct-ssh-123', Path(temp))
+            adb.assert_not_called()
+
+    def test_screen_geometry_mismatch_saves_both_originals_and_sizes(self):
+        header = b'\x89PNG\r\n\x1a\n' + b'\x00\x00\x00\x0dIHDR'
+        integration = header + struct.pack('>II', 400, 600)
+        device = header + struct.pack('>II', 400, 650)
+        def adb(*args, **kwargs):
+            return CompletedProcess([], 0, integration if args[1] == 'run-as' else device, b'')
+        with tempfile.TemporaryDirectory() as temp, patch.object(runner, 'adb', side_effect=adb):
+            output = Path(temp)
+            with self.assertRaisesRegex(runner.Failure, 'geometry_mismatch'):
+                runner.screen_checkpoint({'tag': 'key-rotation', 'attempt': 1,
+                    'bounds': [0, 20, 400, 500], 'viewSize': [400, 600], 'observedTarget': 'fixture@127.0.0.1:40002'}, {}, Mock(), Mock(username='fixture', port=40002),
+                    'cache/herdr-direct-ssh-123', output)
+            self.assertEqual((output / 'key-rotation-geometry-device.png').read_bytes(), device)
+            self.assertEqual((output / 'key-rotation-geometry-integration.png').read_bytes(), integration)
+            sizes = json.loads((output / 'key-rotation-geometry.json').read_text())['imageSizes']
+            self.assertEqual(sizes, {'integration': [400, 600], 'device': [400, 650]})
+
     def test_protocol_dependency_is_present_when_required(self):
         if os.environ.get('HERDR_REQUIRE_PARAMIKO') == '1':
             self.assertIsNotNone(importlib.util.find_spec('paramiko'), 'Paramiko is required for direct SSH acceptance')

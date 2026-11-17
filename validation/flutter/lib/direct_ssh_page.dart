@@ -9,6 +9,11 @@ import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
 import 'macos_secure_credential_field.dart';
 
+String formatDirectSshTarget(String username, String host, int port) {
+  final displayHost = host.contains(':') && !(host.startsWith('[') && host.endsWith(']')) ? '[$host]' : host;
+  return '$username@$displayHost:$port';
+}
+
 /// Standalone SSH shell. Host key verification precedes every authentication.
 class DirectSshPage extends StatefulWidget {
   const DirectSshPage({super.key, required this.tokens});
@@ -20,6 +25,7 @@ class DirectSshPage extends StatefulWidget {
 class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserver {
   final host = TextEditingController(), port = TextEditingController(text: '22'), user = TextEditingController();
   final secret = TextEditingController(), passphrase = TextEditingController();
+  final targetScroll = ScrollController();
   Terminal? terminal;
   SSHSocket? socket;
   SSHClient? client;
@@ -30,6 +36,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   bool pastingKey = false;
   String? pasteStatus;
   String? fingerprint, algorithm, checkedTarget;
+  String? pendingTarget, activeTarget;
   bool hostKeyReviewRequired = false;
   ({String oldAlgorithm, String oldFingerprint, String newAlgorithm, String newFingerprint, String target})? hostKeyChange;
   String status = '填写连接信息后先探测主机密钥。';
@@ -87,12 +94,14 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   }
   void changed() {
     cancelKeyPaste();
+    if (busy && pendingTarget != target) stop(message: '连接目标已更改；本次操作已取消。', notify: false);
     if (checkedTarget != target) { fingerprint = null; algorithm = null; checkedTarget = null; hostKeyReviewRequired = false; hostKeyChange = null; secret.clear(); passphrase.clear(); }
     if (mounted) setState(() {});
   }
   void stop({String? message, bool notify = true}) {
     cancelKeyPaste();
-    epoch++; connected = false; busy = false;
+    epoch++; connected = false; busy = false; pendingTarget = null; activeTarget = null;
+    if (targetScroll.hasClients) targetScroll.jumpTo(0);
     retireTerminal();
     secret.clear(); passphrase.clear();
     unawaited(stdout?.cancel()); unawaited(stderr?.cancel()); stdout = null; stderr = null;
@@ -119,20 +128,23 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     WidgetsBinding.instance.removeObserver(this);
     secret.removeListener(credentialsChanged); passphrase.removeListener(credentialsChanged);
     stop(notify: false);
+    targetScroll.dispose();
     for (final field in [host, port, user, secret, passphrase]) { field.dispose(); }
     super.dispose();
   }
   Future<void> probe() async {
     if (!valid || busy || !foreground) return;
     stop(); final generation = ++epoch; final originalTarget = target;
+    final originalHost = host.text.trim(), originalPort = int.parse(port.text.trim()), originalUser = user.text.trim();
+    pendingTarget = originalTarget;
     setState(() { busy = true; status = '正在探测主机密钥，尚未发送认证信息。'; if (!hostKeyReviewRequired) fingerprint = null; });
     SSHSocket? localSocket; SSHClient? localClient;
     try {
-      localSocket = await SSHSocket.connect(host.text.trim(), int.parse(port.text.trim()), timeout: const Duration(seconds: 8));
+      localSocket = await SSHSocket.connect(originalHost, originalPort, timeout: const Duration(seconds: 8));
       if (generation != epoch) { localSocket.destroy(); return; }
       socket = localSocket;
       final found = Completer<(String, String)>();
-      localClient = SSHClient(localSocket, username: user.text.trim(), keepAliveInterval: null,
+      localClient = SSHClient(localSocket, username: originalUser, keepAliveInterval: null,
         handshakeTimeout: const Duration(seconds: 8), authTimeout: const Duration(seconds: 8),
         onVerifyHostKey: (type, bytes) {
           if (generation == epoch && !found.isCompleted) found.complete((type, utf8.decode(bytes)));
@@ -153,7 +165,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
         actions: [TextButton(key: const ValueKey('direct-trust-cancel'), onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
           FilledButton(key: const ValueKey('direct-trust-key'), onPressed: () => Navigator.pop(context, true), child: const Text('已核对并确认'))]));
       if (generation != epoch || originalTarget != target || !mounted) return;
-      setState(() { busy = false; if (approved == true) { algorithm = result.$1; fingerprint = result.$2; checkedTarget = originalTarget; hostKeyReviewRequired = false; hostKeyChange = null; status = '已确认本次主机密钥；连接时将重新核对。'; } else { status = '未确认主机密钥，未发送认证。'; } });
+      setState(() { busy = false; pendingTarget = null; if (approved == true) { algorithm = result.$1; fingerprint = result.$2; checkedTarget = originalTarget; hostKeyReviewRequired = false; hostKeyChange = null; status = '已确认本次主机密钥；连接时将重新核对。'; } else { status = '未确认主机密钥，未发送认证。'; } });
     } catch (_) {
       if (generation == epoch && mounted) { stop(message: '探测失败或超时；未发送认证，请检查目标后重试。'); }
     } finally { if (generation != epoch) { localClient?.close(); localSocket?.destroy(); } }
@@ -163,6 +175,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     cancelKeyPaste();
     final generation = ++epoch, expected = fingerprint!, expectedAlgorithm = algorithm!;
     final originalTarget = target;
+    final originalHost = host.text.trim(), originalPort = int.parse(port.text.trim()), originalUser = user.text.trim();
+    final displayTarget = formatDirectSshTarget(originalUser, originalHost, originalPort);
+    pendingTarget = originalTarget; activeTarget = null;
     final password = keyAuth ? null : secret.text;
     final keyText = keyAuth ? secret.text : null, phrase = passphrase.text;
     secret.clear(); passphrase.clear();
@@ -174,10 +189,10 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     try {
       final identities = keyText == null ? null : SSHKeyPair.fromPem(keyText, phrase.isEmpty ? null : phrase);
       parsingKey = false;
-      final localSocket = await SSHSocket.connect(host.text.trim(), int.parse(port.text.trim()), timeout: const Duration(seconds: 8));
+      final localSocket = await SSHSocket.connect(originalHost, originalPort, timeout: const Duration(seconds: 8));
       if (generation != epoch) { localSocket.destroy(); return; }
       socket = localSocket; bool verified = false;
-      final localClient = SSHClient(localSocket, username: user.text.trim(), identities: identities,
+      final localClient = SSHClient(localSocket, username: originalUser, identities: identities,
         onPasswordRequest: password == null ? null : () => verified && generation == epoch ? password : null,
         onVerifyHostKey: (type, bytes) {
           verified = generation == epoch && type == expectedAlgorithm && utf8.decode(bytes) == expected;
@@ -198,7 +213,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       stdout = localShell.stdout.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch && identical(sessionTerminal, terminal)) sessionTerminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
       stderr = localShell.stderr.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch && identical(sessionTerminal, terminal)) sessionTerminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
       unawaited(localShell.done.then((_) { if (generation == epoch) stop(message: '远端 shell 已结束（退出码 ${localShell.exitCode ?? '未知'}）。'); }, onError: (Object _, StackTrace __) { if (generation == epoch) stop(message: '连接中断，输入已停止。'); }));
-      setState(() { busy = false; connected = true; status = '已连接 · 输入直接发送到远端 shell'; });
+      setState(() { busy = false; pendingTarget = null; activeTarget = displayTarget; connected = true; status = '已连接 · 输入直接发送到远端 shell'; });
     } catch (error) {
       if (generation == epoch) {
         if (keyMismatch && presentedFingerprint != null) {
@@ -280,6 +295,20 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       actions: [if (busy || connected) TextButton(onPressed: () => stop(message: '已断开；未重放输入。'), child: const Text('断开'))]),
     body: SafeArea(child: hostKeyChange != null ? hostKeyChangeView() : connected ? Column(children: [
       Padding(padding: const EdgeInsets.all(8), child: Text(status)),
+      if (activeTarget != null) Padding(padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final painter = TextPainter(text: TextSpan(text: activeTarget!, style: DefaultTextStyle.of(context).style),
+            textDirection: Directionality.of(context), textScaler: MediaQuery.textScalerOf(context), maxLines: 1)..layout();
+          final scrollable = painter.width > constraints.maxWidth;
+          painter.dispose();
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (scrollable) const Text('连接目标 · 左右滑动查看'),
+            Scrollbar(controller: targetScroll, thumbVisibility: scrollable,
+              child: SingleChildScrollView(key: const ValueKey('direct-target-scroll'), controller: targetScroll,
+                scrollDirection: Axis.horizontal, padding: EdgeInsets.only(bottom: scrollable ? 8 : 0),
+                child: Text(activeTarget!, key: const ValueKey('direct-active-target'), maxLines: 1, softWrap: false))),
+          ]);
+        })),
       Expanded(child: TerminalView(terminal!, theme: widget.tokens.terminalTheme, autoResize: true,
         textStyle: const TerminalStyle(fontFamily: 'ProbeNerd', fontSize: 14))),
       terminalKeys(terminal!),

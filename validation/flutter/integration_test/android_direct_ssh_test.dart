@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/widgets.dart' show Text, ValueKey;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:terminal_view/terminal_view.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'direct_ssh_ui_steps.dart';
@@ -94,8 +96,62 @@ void main() {
             await tester.pump();
             surfaceConverted = true;
           }
-          final bytes = await binding.takeScreenshot(name);
-          File('$directory/$name.png').writeAsBytesSync(bytes, flush: true);
+          final needsProof =
+              name == 'connected' || name == 'rotation-connected';
+          final tag = name == 'connected' ? 'ordinary' : 'key-rotation';
+          for (var attempt = 1; attempt <= (needsProof ? 12 : 1); attempt++) {
+            // A new frame must be submitted before every actual surface capture;
+            // the independent host pixel check decides whether it is sufficient.
+            await tester.pump(const Duration(milliseconds: 100));
+            final bytes = await binding.takeScreenshot(name);
+            final pending = File('$directory/$name.png.pending')
+              ..writeAsBytesSync(bytes, flush: true);
+            pending.renameSync('$directory/$name.png');
+            if (!needsProof) return;
+            final active = find.byKey(const ValueKey('direct-active-target'));
+            expect(active, findsOneWidget);
+            final observedTarget = tester.widget<Text>(active).data;
+            final peer = name == 'connected' ? config : rotation;
+            final expectedTarget =
+                '${peer['username']}@${peer['host']}:${peer['port']}';
+            expect(observedTarget, expectedTarget);
+            final view = find.byType(TerminalView);
+            expect(view, findsOneWidget);
+            final rect = tester.getRect(view);
+            final ratio = tester.view.devicePixelRatio;
+            final left = (rect.left * ratio).floor();
+            final top = (rect.top * ratio).floor();
+            final right = (rect.right * ratio).ceil();
+            final bottom = (rect.bottom * ratio).ceil();
+            publish('screen-request.json', {
+              'tag': tag,
+              'attempt': attempt,
+              'observedTarget': observedTarget,
+              'bounds': [left, top, right - left, bottom - top],
+              'viewSize': [
+                tester.view.physicalSize.width.round(),
+                tester.view.physicalSize.height.round(),
+              ],
+            });
+            final reply = File('$directory/screen-$tag-$attempt.json');
+            final deadline = DateTime.now().add(const Duration(seconds: 120));
+            while (!reply.existsSync()) {
+              if (DateTime.now().isAfter(deadline)) {
+                throw StateError('direct_ssh_screen_reply_timeout');
+              }
+              await tester.pump(const Duration(milliseconds: 100));
+            }
+            final value = jsonDecode(reply.readAsStringSync());
+            if (value is! Map<String, dynamic> ||
+                value.length != 3 ||
+                value['tag'] != tag ||
+                value['attempt'] != attempt ||
+                value['accepted'] is! bool) {
+              throw StateError('direct_ssh_screen_reply_invalid');
+            }
+            if (value['accepted'] == true) return;
+          }
+          throw StateError('direct_ssh_screen_pixels_not_verified');
         }
 
         await runDirectSshRotationUi(

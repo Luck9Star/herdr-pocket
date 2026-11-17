@@ -72,6 +72,11 @@ class CapturingShell extends Fake implements SSHSession {
 
 void main() {
   const clipboardPem = '-----BEGIN OPENSSH PRIVATE KEY-----\nsynthetic-body\n-----END OPENSSH PRIVATE KEY-----\n';
+  test('authenticated target formats parsed port and disambiguates IPv6', () {
+    expect(formatDirectSshTarget('alice', '2001:db8::1', 2222), 'alice@[2001:db8::1]:2222');
+    expect(formatDirectSshTarget('alice', '[2001:db8::1]', 22), 'alice@[2001:db8::1]:22');
+    expect(formatDirectSshTarget('alice', 'host.example', 22), 'alice@host.example:22');
+  });
   testWidgets('explicit private key paste preserves multiline text and exposes an accessible button', (tester) async {
     mockSecureFields(tester);
     final semantics = tester.ensureSemantics();
@@ -265,6 +270,88 @@ void main() {
     await tester.tap(find.text('↑')); expect(nextShell.writes, ['\x1b[A']);
     state.stop(); await tester.pump(); expect(tester.takeException(), isNull);
   });
+
+  portableTestWidgets('changing a pending target cancels the attempt and clears its identity', (tester) async {
+    final server = (await tester.runAsync(() => ServerSocket.bind(InternetAddress.loopbackIPv4, 0)))!;
+    final sockets = <Socket>[];
+    final listener = server.listen(sockets.add);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    try {
+      await tester.enterText(find.byKey(const ValueKey('direct-host')), '127.0.0.1');
+      await tester.enterText(find.byKey(const ValueKey('direct-port')), '${server.port}');
+      await tester.enterText(find.byKey(const ValueKey('direct-user')), 'fixture');
+      state.fingerprint = 'SHA256:synthetic'; state.algorithm = 'ssh-ed25519'; state.checkedTarget = state.target;
+      await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'synthetic-password');
+      await tester.ensureVisible(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
+      expect(state.busy, isTrue); expect(state.activeTarget, isNull);
+      final oldEpoch = state.epoch as int;
+      state.user.text = 'different-user'; await tester.pump();
+      expect(state.epoch, greaterThan(oldEpoch)); expect(state.busy, isFalse);
+      expect(state.pendingTarget, isNull); expect(state.activeTarget, isNull);
+      expect(state.terminal, isNull); expect(state.fingerprint, isNull);
+      expect(find.byKey(const ValueKey('direct-active-target')), findsNothing);
+    } finally {
+      state.stop(); await tester.pump();
+      for (final socket in sockets) { socket.destroy(); }
+      await tester.runAsync(() async { await listener.cancel(); await server.close(); });
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final (width, scale) in [(320.0, 2.0), (390.0, 1.3)]) {
+    portableTestWidgets('active long target and terminal controls fit width $width at scale $scale', (tester) async {
+      tester.view.physicalSize = Size(width, 844); tester.view.devicePixelRatio = 1;
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetViewInsets);
+      final semantics = tester.ensureSemantics();
+      final tokens = (await tester.runAsync(DesignTokens.load))!;
+      await tester.pumpWidget(MaterialApp(theme: tokens.theme, builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)), child: child!),
+        home: DirectSshPage(tokens: tokens)));
+      final dynamic state = tester.state(find.byType(DirectSshPage));
+      const target = 'long-user@very-long-host-name-with-many-labels.example.internal:65535';
+      state.setState(() { state.terminal = state.createTerminal(state.epoch); state.shell = CapturingShell(); state.activeTarget = target; state.connected = true; });
+      await tester.pump();
+      final label = find.byKey(const ValueKey('direct-active-target'));
+      expect(find.text(target), findsOneWidget);
+      expect(find.text('连接目标 · 左右滑动查看'), findsOneWidget);
+      expect(tester.getSemantics(label).label, contains(target));
+      final targetScroll = find.byKey(const ValueKey('direct-target-scroll'));
+      final controller = tester.widget<SingleChildScrollView>(targetScroll).controller!;
+      expect(controller.position.maxScrollExtent, greaterThan(0));
+      for (var i = 0; i < 10 && controller.offset < controller.position.maxScrollExtent; i++) {
+        await tester.drag(targetScroll, const Offset(-300, 0)); await tester.pumpAndSettle();
+      }
+      expect(controller.offset, controller.position.maxScrollExtent,
+        reason: 'the end of the full target, including its port, is reachable');
+      expect(tester.getRect(label).right, lessThanOrEqualTo(width));
+      expect(find.text('断开').hitTestable(), findsOneWidget);
+      expect(find.text('Esc').hitTestable(), findsOneWidget);
+      final keys = find.ancestor(of: find.text('Esc'), matching: find.byType(SingleChildScrollView));
+      await tester.drag(keys.first, const Offset(-600, 0)); await tester.pump();
+      expect(find.text('Enter').hitTestable(), findsOneWidget);
+      expect(tester.getSize(find.byType(TerminalView)).height, greaterThan(0));
+      await tester.tap(find.text('断开')); await tester.pump();
+      expect(state.activeTarget, isNull); expect(state.terminal, isNull);
+      expect(find.byKey(const ValueKey('direct-active-target')), findsNothing);
+      expect(tester.takeException(), isNull); semantics.dispose();
+    });
+  }
+
+  portableTestWidgets('short active target needs no scroll instruction', (tester) async {
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    state.setState(() { state.terminal = state.createTerminal(state.epoch); state.shell = CapturingShell(); state.activeTarget = 'u@host:22'; state.connected = true; });
+    await tester.pump();
+    expect(find.text('u@host:22'), findsOneWidget);
+    expect(find.text('连接目标 · 左右滑动查看'), findsNothing);
+    state.stop(); await tester.pump(); expect(tester.takeException(), isNull);
+  });
   // Portable EditableText path; native macOS has separate view/channel and AX tests.
   portableTestWidgets('portable passphrase remains obscured in Flutter semantics while focused and unfocused', (tester) async {
     final semantics = tester.ensureSemantics();
@@ -344,7 +431,7 @@ void main() {
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
     await tester.enterText(find.byKey(const ValueKey('direct-host')), '127.0.0.1');
-    await tester.enterText(find.byKey(const ValueKey('direct-port')), fixturePort!);
+    await tester.enterText(find.byKey(const ValueKey('direct-port')), '0$fixturePort');
     await tester.enterText(find.byKey(const ValueKey('direct-user')), 'fixture');
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('direct-probe'))); await tester.pump();
@@ -367,14 +454,27 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('direct-connect')));
     await tester.tap(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
     await waitFor(tester, find.byType(TerminalView));
+    expect(find.text('fixture@127.0.0.1:$fixturePort'), findsOneWidget);
     final terminal = tester.widget<TerminalView>(find.byType(TerminalView)).terminal;
-    terminal.textInput('你好\n');
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 150)));
+    terminal.textInput('你好 old-session-marker\n');
+    for (var i = 0; i < 120 && !terminal.buffer.getText().contains('old-session-marker'); i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); await tester.pump();
+    }
+    expect(terminal.buffer.getText(), contains('old-session-marker'));
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive); await tester.pump();
     expect(find.textContaining('应用进入后台'), findsOneWidget);
     expect(find.byType(TerminalView), findsNothing);
+    expect(find.byKey(const ValueKey('direct-active-target')), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pump();
+    await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'temporary'); await tester.pump();
+    await tester.ensureVisible(connect); await tester.pumpAndSettle();
+    expect(connect.hitTestable(), findsOneWidget);
+    await tester.tap(connect); await tester.pump();
+    await waitFor(tester, find.byType(TerminalView));
+    expect(find.text('fixture@127.0.0.1:$fixturePort'), findsOneWidget);
+    final nextTerminal = tester.widget<TerminalView>(find.byType(TerminalView)).terminal;
+    expect(nextTerminal.buffer.getText(), isNot(contains('old-session-marker')));
     await tester.pumpWidget(const SizedBox());
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
   }, skip: Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT'] == null);
   portableTestWidgets('changed host key blocks the second connection before authentication', (tester) async {
     final fixturePort = Platform.environment['HERDR_DIRECT_SSH_ROTATE_PORT']!;

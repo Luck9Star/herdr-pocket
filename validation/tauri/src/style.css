@@ -211,7 +211,7 @@ h1 { font-size:18px; margin:0}
 #ssh-live { margin-top:12px; }
 .ssh-helper-keys { display:flex; gap:4px; overflow-x:auto; overscroll-behavior-inline:contain; margin-top:8px; }
 .ssh-helper-keys button { flex:none; min-width:44px; min-height:44px; padding:6px 10px; }
-.ssh-target { font-weight:700; overflow-wrap:anywhere; }
+.ssh-target { position:sticky; top:0; z-index:2; background:var(--hp-canvas); font-weight:700; white-space:nowrap; overflow-x:auto; }
 #home-ssh .ssh-scroll { height:min(55dvh, 520px); }
 @media (max-width:599px) {
   #home-ssh .ssh-scroll { height:45dvh; }

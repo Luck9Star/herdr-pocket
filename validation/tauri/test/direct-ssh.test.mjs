@@ -10,6 +10,30 @@ function harness() {
   return {ssh,calls,statuses,data,get channel(){return channel;},resolveOpen:id=>resolveOpen(id)};
 }
 async function opening(h) { await h.ssh.probe(target); const pending=h.ssh.open(target,{password:'secret'},true); await new Promise(resolve=>setImmediate(resolve)); return {pending}; }
+test('ready metadata is a captured public identity and excludes credentials',async()=>{
+  const h=harness(), selected={...target};
+  await h.ssh.probe(selected);
+  const pending=h.ssh.open(selected,{privateKeyPem:'private-secret',privateKeyPassphrase:'passphrase-secret',host:'evil',username:'evil',expectedHostKey:'evil'},true);
+  selected.username='changed';
+  await new Promise(resolve=>setImmediate(resolve));
+  h.resolveOpen('s1');await pending;
+  h.channel.onmessage({sessionId:'s1',seq:1,kind:'ready'});
+  assert.deepEqual(h.statuses.at(-1)[3],{target});
+  assert.equal(Object.isFrozen(h.statuses.at(-1)[3].target),true);
+  assert.doesNotMatch(JSON.stringify(h.statuses),/private-secret|passphrase-secret/);
+  assert.equal(h.calls.find(c=>c.command==='ssh_shell_open').args.config.username,'alice');
+  assert.equal(h.calls.find(c=>c.command==='ssh_shell_open').args.config.host,'example.test');
+  assert.equal(h.calls.find(c=>c.command==='ssh_shell_open').args.config.expectedHostKey,key.publicKey);
+});
+test('ready pins the key captured for that connection even after another probe',async()=>{
+  let channel, nextKey=key;
+  const ssh=createDirectSsh({invoke:async cmd=>cmd==='ssh_host_key_probe'?nextKey:'s1',channelFactory:()=>channel={},onStatus:()=>{},onData:()=>{}});
+  await ssh.probe(target);await ssh.open(target,{password:'x'},true);
+  nextKey={...key, fingerprint:'SHA256:new',publicKey:'ssh-ed25519 NEW'};
+  await ssh.probe(target);
+  channel.onmessage({sessionId:'s1',seq:1,kind:'ready'});
+  assert.equal(ssh.pinnedFingerprint(),'SHA256:test');
+});
 test('early events bind to returned identity, input waits for ready and preserves ANSI bytes',async()=>{
   const h=harness(); const {pending}=await opening(h);
   h.channel.onmessage({sessionId:'other',seq:1,kind:'ready'}); h.channel.onmessage({sessionId:'s1',seq:1,kind:'ready'}); h.channel.onmessage({sessionId:'s1',seq:2,kind:'data',data:[27,91,51,49,109]});

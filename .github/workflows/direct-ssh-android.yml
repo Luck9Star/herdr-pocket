@@ -31,7 +31,7 @@ jobs:
       - name: Install isolated protocol test dependencies and verify local guards
         run: |
           python3 -m venv "$RUNNER_TEMP/direct-ssh-python"
-          "$RUNNER_TEMP/direct-ssh-python/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0'
+          "$RUNNER_TEMP/direct-ssh-python/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0' 'pillow==12.2.0'
           HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_android.py' -v
           HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_rotation_fixture.py' -v
       - name: Prepare pinned Flutter and Android build tools
@@ -41,7 +41,8 @@ jobs:
           flutter precache --android
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
           sudo apt-get update
-          sudo apt-get install -y acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
+          sudo apt-get install -y acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0 tesseract-ocr=5.3.4-1build5 tesseract-ocr-eng=1:4.1.0-2
+          HERDR_REQUIRE_SCREENSHOT_OCR=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_terminal_screenshot_gate.py' -v
       - name: Prepare the actual production application with SDK-only integration tests
         run: |
           export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"

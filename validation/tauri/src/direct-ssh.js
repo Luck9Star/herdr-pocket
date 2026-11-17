@@ -42,12 +42,13 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
   async function open(target, credentials, confirmed) {
     if (!confirmed || !sameTarget(target, reviewed)) throw Error('review_required');
     if (!!credentials.password === !!credentials.privateKeyPem) throw Error('credential_required');
+    const connectionTarget = Object.freeze({host: target.host, port: Number(target.port), username: target.username});
     const closing = close();
     const guard = generation;
     await closing;
-    if (guard !== generation || !confirmed || !sameTarget(target, reviewed)) return false;
+    if (guard !== generation || !confirmed || !sameTarget(connectionTarget, reviewed)) return false;
     const current = ++generation;
-    const key = reviewed;
+    const key = {publicKey: reviewed.publicKey, fingerprint: reviewed.fingerprint};
     const early = [];
     let assigned = null;
     sequence = 0;
@@ -59,8 +60,8 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
         connecting = false; ready = true;
         // A reviewed connection that actually succeeds is the only thing that
         // replaces the trust in effect; seeing a probed key never is.
-        pinnedFingerprint = (reviewed && reviewed.fingerprint) || pinnedFingerprint;
-        onStatus('已连接，可以输入。', true);
+        pinnedFingerprint = key.fingerprint || pinnedFingerprint;
+        onStatus('已连接，可以输入。', true, undefined, {target: connectionTarget});
       }
       else if (event.kind === 'data' && Array.isArray(event.data)) {
         const seq = event.seq;
@@ -92,8 +93,11 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
       }
     }
     channel.onmessage = event => { if (!assigned) early.push(event); else deliver(event); };
-    const config = {host: target.host, port: Number(target.port), username: target.username,
-      expectedHostKey: key.publicKey, reviewConfirmed: true, cols: 80, rows: 24, ...credentials};
+    const authentication = credentials.password
+      ? {password: credentials.password}
+      : {privateKeyPem: credentials.privateKeyPem, ...(credentials.privateKeyPassphrase ? {privateKeyPassphrase: credentials.privateKeyPassphrase} : {})};
+    const config = {...connectionTarget,
+      expectedHostKey: key.publicKey, reviewConfirmed: true, cols: 80, rows: 24, ...authentication};
     connecting = true;
     onStatus('正在连接…', false, 'connecting');
     let id;

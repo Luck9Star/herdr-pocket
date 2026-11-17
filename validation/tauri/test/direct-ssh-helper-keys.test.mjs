@@ -97,8 +97,8 @@ function setup() {
     calls.push({ cmd, args });
     if (cmd === "ssh_host_key_probe")
       return {
-        host: "example.test",
-        port: 22,
+        host: args.host,
+        port: args.port,
         publicKey: "ssh-ed25519 key",
         fingerprint: "SHA256:test",
       };
@@ -149,6 +149,7 @@ function setup() {
     terminals,
     ui,
     connect,
+    get channel() { return channel; },
     click,
     block(p) {
       block = p;
@@ -158,6 +159,39 @@ function setup() {
     },
   };
 }
+
+test("ready shows the connected identity even if form values change without events", async () => {
+  const h = setup();
+  try {
+    await h.nodes["ssh-probe"].onclick();
+    h.nodes["ssh-review"].checked = true;
+    h.nodes["ssh-password"].value = "secret-password";
+    await h.nodes["ssh-form"].onsubmit({ preventDefault() {} });
+    const oldChannel = h.channel;
+    h.nodes["ssh-host"].value = "changed.test";
+    h.nodes["ssh-user"].value = "changed";
+    oldChannel.onmessage({ sessionId: "s1", seq: 1, kind: "ready" });
+    assert.equal(h.nodes["ssh-target"].textContent, "user@example.test:22 · SSH 已连接");
+    h.nodes["ssh-disconnect"].onclick();
+    await flush();
+    assert.equal(h.nodes["ssh-target"].textContent, "");
+    h.nodes["ssh-host"].value = "example.test";
+    h.nodes["ssh-user"].value = "next";
+    await h.connect();
+    oldChannel.onmessage({ sessionId: "s1", seq: 2, kind: "ready" });
+    assert.equal(h.nodes["ssh-target"].textContent, "next@example.test:22 · SSH 已连接");
+  } finally { h.restore(); }
+});
+
+test("IPv6 and a long username remain fully represented in the connected label", async () => {
+  const h = setup();
+  try {
+    h.nodes["ssh-host"].value = "2001:db8::1234";
+    h.nodes["ssh-user"].value = "a".repeat(120);
+    await h.connect();
+    assert.equal(h.nodes["ssh-target"].textContent, `${"a".repeat(120)}@[2001:db8::1234]:22 · SSH 已连接`);
+  } finally { h.restore(); }
+});
 
 test("ordinary SSH helper keys send ordered bytes and preserve terminal focus", async () => {
   const h = setup();

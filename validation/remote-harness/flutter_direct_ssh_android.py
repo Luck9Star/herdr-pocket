@@ -13,6 +13,7 @@ import re
 import signal
 import shutil
 import subprocess
+import struct
 import sys
 import tempfile
 import time
@@ -169,7 +170,7 @@ def checked_public_reply(reply, relative, limit):
 
 
 def read_public_json(relative, limit=4096):
-    if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:(?:rotation-)?(?:result|stage)|failure)\.json', relative):
+    if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:(?:rotation-)?(?:result|stage)|failure|screen-request)\.json', relative):
         raise Failure('direct_android_public_path_invalid')
     if not package_present():
         return None
@@ -183,6 +184,83 @@ def read_public_json(relative, limit=4096):
         raise Failure('direct_android_public_file_probe_failed')
     reply = adb('shell', '-T', 'run-as', PACKAGE, 'head', '-c', str(limit + 1), relative, check=False)
     return checked_public_reply(reply, relative, limit)
+
+
+def screen_checkpoint(request, completed, fixture, rotation_fixture, relative, output):
+    # Device writes the actual surface first and publishes this fixed-shape
+    # request atomically. Each acknowledgement refers to exactly one frame.
+    if (not isinstance(request, dict) or set(request) != {'tag', 'attempt', 'bounds', 'viewSize', 'observedTarget'}
+            or request['tag'] not in ('ordinary', 'key-rotation')
+            or type(request['attempt']) is not int or not 1 <= request['attempt'] <= 12
+            or not isinstance(request['viewSize'], list) or len(request['viewSize']) != 2
+            or any(type(n) is not int or n <= 0 for n in request['viewSize'])
+            or not isinstance(request['bounds'], list) or len(request['bounds']) != 4
+            or any(type(n) is not int for n in request['bounds'])
+            or request['bounds'][0] < 0 or request['bounds'][1] < 0
+            or request['bounds'][2] <= 0 or request['bounds'][3] <= 0):
+        raise Failure('direct_android_screen_request_invalid')
+    tag, attempt = request['tag'], request['attempt']
+    peer = fixture if tag == 'ordinary' else rotation_fixture
+    expected_target = f'{peer.username}@127.0.0.1:{peer.port}'
+    if type(request['observedTarget']) is not str or request['observedTarget'] != expected_target:
+        raise Failure('direct_android_active_target_mismatch')
+    if tag in completed and attempt <= completed[tag]['attempt']:
+        return
+    expected = 1 if tag not in completed else completed[tag]['attempt'] + 1
+    if attempt != expected or (tag == 'ordinary' and not completed.get('key-rotation', {}).get('accepted')):
+        raise Failure('direct_android_screen_request_out_of_order')
+    if tag in completed and completed[tag]['accepted']:
+        raise Failure('direct_android_screen_already_accepted')
+    name = 'connected' if tag == 'ordinary' else 'rotation-connected'
+    png = adb('exec-out', 'run-as', PACKAGE, 'cat', relative + '/' + name + '.png').stdout
+    if not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png) > 8_000_000:
+        raise Failure('direct_android_screenshot_invalid')
+    # Capture Android's displayed framebuffer while the SSH screen remains
+    # active; this is independent of integration_test's surface conversion.
+    device_png = adb('exec-out', 'screencap', '-p').stdout
+    if not device_png.startswith(b'\x89PNG\r\n\x1a\n') or len(device_png) > 8_000_000:
+        raise Failure('direct_android_screenshot_invalid')
+    # Both screenshots must use the Flutter view's full physical dimensions.
+    # Preserve originals and geometry for diagnosing a cropped surface or inset.
+    sizes = {}
+    for source, image in (('integration', png), ('device', device_png)):
+        sizes[source] = (list(struct.unpack('>II', image[16:24]))
+                         if len(image) >= 24 and image[12:16] == b'IHDR' else None)
+    if any(size != request['viewSize'] for size in sizes.values()):
+        (output / (tag + '-geometry-integration.png')).write_bytes(png)
+        (output / (tag + '-geometry-device.png')).write_bytes(device_png)
+        (output / (tag + '-geometry.json')).write_text(json.dumps({
+            'tag': tag, 'attempt': attempt, 'bounds': request['bounds'],
+            'viewSize': request['viewSize'], 'expectedTarget': expected_target, 'imageSizes': sizes,
+        }, indent=2) + '\n')
+        raise Failure('direct_android_screenshot_geometry_mismatch')
+    from terminal_screenshot_gate import ScreenshotGateError, verify_terminal_screenshot
+    checks = {}
+    for source, image in (('integration', png), ('device', device_png)):
+        try:
+            checks[source] = {'status': 'passed', 'evidence': verify_terminal_screenshot(
+                image, expected_token=peer.screen_token, bounds=tuple(request['bounds']))}
+        except ScreenshotGateError as error:
+            checks[source] = {'status': 'failed', 'code': str(error), 'evidence': error.evidence}
+    accepted = checks['device']['status'] == 'passed'
+    if attempt == 1 and any(check['status'] == 'failed' for check in checks.values()):
+        (output / (tag + '-first-failed-integration.png')).write_bytes(png)
+        (output / (tag + '-first-failed-device.png')).write_bytes(device_png)
+        (output / (tag + '-first-failed.json')).write_text(json.dumps({
+            'tag': tag, 'attempt': attempt, 'expectedTarget': expected_target, 'checks': checks,
+        }, indent=2) + '\n')
+    if accepted:
+        (output / (name + '.png')).write_bytes(png)
+        (output / (name + '-device.png')).write_bytes(device_png)
+        (output / (tag + '-screen-proof.json')).write_text(json.dumps({
+            'tag': tag, 'attempt': attempt, 'bounds': request['bounds'],
+            'viewSize': request['viewSize'], 'expectedTarget': expected_target, 'checks': checks,
+        }, indent=2) + '\n')
+    completed[tag] = {'attempt': attempt, 'accepted': accepted, 'expectedTarget': expected_target}
+    reply = json.dumps({'tag': tag, 'attempt': attempt, 'accepted': accepted}).encode()
+    pending = relative + '/screen-' + tag + '-' + str(attempt) + '.new'
+    adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=reply)
+    adb('shell', 'run-as', PACKAGE, 'mv', pending, pending[:-4] + '.json')
 
 
 def safe_failure(error, phase):
@@ -233,8 +311,9 @@ def run(args, env):
     primary = None
     phase = 'fixture_start'
     from direct_ssh_fixture import DirectSshFixture
-    fixture = DirectSshFixture()
-    rotation_fixture = DirectSshFixture(rotate_after_probe=True)
+    fixture = DirectSshFixture(screen_proof=True)
+    rotation_fixture = DirectSshFixture(rotate_after_probe=True, screen_proof=True)
+    screens = {}
     rotation = {'checkpoints': {}}
     report['rotation'] = rotation
     reverses = []
@@ -270,6 +349,9 @@ def run(args, env):
                 peer_confirmed = False
                 while process.poll() is None and time.monotonic() < deadline:
                     phase = 'await_device_result'
+                    screen = read_public_json(relative + '/screen-request.json')
+                    if screen is not None:
+                        screen_checkpoint(screen, screens, fixture, rotation_fixture, relative, output)
                     checkpoint = read_public_json(relative + '/rotation-stage.json')
                     if checkpoint is not None:
                         evidence = rotation_checkpoint(rotation_fixture, checkpoint, rotation['checkpoints'])
@@ -296,6 +378,9 @@ def run(args, env):
                     public = read_public_json(relative + '/result.json')
                     if public is not None:
                         safe_result(json.dumps(public))
+                        if set(screens) != {'ordinary', 'key-rotation'} or not all(x['accepted'] for x in screens.values()):
+                            raise Failure('direct_android_screen_proof_missing')
+                        report['screenProof'] = screens
                         if 'device' not in rotation or set(rotation['checkpoints']) != set(ROTATION_PHASES):
                             raise Failure('direct_android_rotation_confirmation_missing')
                         phase = 'peer_close_confirmation'

@@ -38,9 +38,13 @@ class DirectSshFixture:
     echo_marker = 'POCKET-ANDROID-SSH-OK'
     username = 'fixture'
 
-    def __init__(self, *, observe_helper_keys=False, rotate_after_probe=False):
+    def __init__(self, *, observe_helper_keys=False, rotate_after_probe=False, screen_proof=False):
         self._observe_helper_keys = observe_helper_keys
         self._rotate_after_probe = rotate_after_probe
+        # Public, per-peer freshness proof, emitted only by this SSH server.
+        # Keep the default protocol byte-for-byte compatible with other probes.
+        self.screen_token = (''.join(secrets.choice('ACDEFHJKMNPQRTUVWXY34679') for _ in range(12))
+                             if screen_proof else None)
         self._helper_bytes = b''
         self.password = secrets.token_hex(16)
         self._key = paramiko.RSAKey.generate(2048)
@@ -275,7 +279,8 @@ class DirectSshFixture:
                 if re.search(rb'(?:^|[\r\n])hp-check[\r\n]', pending):
                     self._record('markerReceived')
                     self._connection_record(transport, 'markerReceived')
-                    reply = ('\r\n\x1b[32m' + self.echo_marker + '\x1b[0m\r\n$ ').encode()
+                    proof = self.screen_token + '\r\n' if self.screen_token is not None else ''
+                    reply = ('\r\n\x1b[32m' + self.echo_marker + '\x1b[0m\r\n' + proof + '$ ').encode()
                     channel.sendall(reply)
                     self._connection_increment(transport, 'outputBytes', len(reply))
                     pending = b''

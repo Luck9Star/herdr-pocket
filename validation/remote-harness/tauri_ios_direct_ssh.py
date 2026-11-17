@@ -56,7 +56,40 @@ NATIVE_FAILURES = frozenset((
     'native_app_launch_failed', 'native_credentials_visible_after_connect',
     'native_terminal_keyboard_missing', 'native_cancel_lost_old_trust',
     'native_cancel_accepted_new_trust', 'native_cancel_credentials_live', 'native_cancel_submit_live',
-    'native_reprobe_old_key_stale', 'native_reprobe_secret_stale'))
+    'native_reprobe_old_key_stale', 'native_reprobe_secret_stale',
+    'native_home_add_missing', 'native_home_not_foreground', 'native_home_alert_present',
+    'native_home_webview_missing', 'native_home_known_loading_error', 'native_home_brand_missing',
+    'native_home_add_role_mismatch', 'native_home_add_disabled', 'native_home_add_not_hittable_or_wrong_page',
+    'native_home_add_did_not_open_page'))
+HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
+                         'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
+HOME_ERRORS = frozenset(('connectionError', 'dnsError', 'webProcessError', 'devURL',
+                        'browserPreview', 'hostStorageError', 'loading'))
+HOME_ALERT_MEMBERS = frozenset(('localNetwork', 'allow', 'deny', 'ok', 'automation'))
+HOME_ROLES = frozenset(('button', 'staticText', 'webView', 'textField', 'secureTextField', 'other', 'otherNative'))
+
+
+def public_home_diagnostic(value):
+    """Only fixed members, finite roles, bounded counts and booleans may escape."""
+    counts = {'webViewCount', 'windowCount', 'appAlertCount', 'systemAlertCount',
+              'inputCount', 'unknownVisibleTextCount'}
+    booleans = {'appForeground', 'alertSnapshotFailed', 'knownEmptyHome'}
+    keys = counts | booleans | {'members', 'knownErrors', 'alertMembers'}
+    require(isinstance(value, dict) and set(value) == keys, 'tauri_ios_home_diagnostic_invalid')
+    require(all(type(value[k]) is int and 0 <= value[k] <= 10000 for k in counts)
+            and all(type(value[k]) is bool for k in booleans), 'tauri_ios_home_diagnostic_invalid')
+    for key, members in (('knownErrors', HOME_ERRORS), ('alertMembers', HOME_ALERT_MEMBERS)):
+        require(isinstance(value[key], dict) and set(value[key]) == members
+                and all(type(v) is bool for v in value[key].values()), 'tauri_ios_home_diagnostic_invalid')
+    require(isinstance(value['members'], dict) and set(value['members']) == HOME_MEMBERS,
+            'tauri_ios_home_diagnostic_invalid')
+    for member in value['members'].values():
+        require(isinstance(member, dict) and set(member) == {'count', 'roles'}
+                and type(member['count']) is int and 0 <= member['count'] <= 10000
+                and isinstance(member['roles'], list) and len(member['roles']) <= len(HOME_ROLES)
+                and all(type(role) is str and role in HOME_ROLES for role in member['roles']),
+                'tauri_ios_home_diagnostic_invalid')
+    return json.loads(json.dumps({k: value[k] for k in keys}))
 
 
 class SingleCommandFixture(DirectSshFixture):
@@ -402,6 +435,23 @@ class Checkpoints:
 
     def accept(self, payload):
         stage = payload.get('stage')
+        if stage in ('native_home', 'native_home_entry'):
+            phase = payload.get('nativeCheckpoint')
+            require(self.failure is None and phase in ('ordinary_open_add', 'key_change_open_add'),
+                    'tauri_ios_home_diagnostic_phase_invalid')
+            key = 'ordinary' if phase == 'ordinary_open_add' else 'keyChange'
+            next_stage = 'ordinary_probe' if key == 'ordinary' else 'key_change_probe_a'
+            require(self.index == STAGES.index(next_stage), 'tauri_ios_home_diagnostic_phase_invalid')
+            if stage == 'native_home':
+                self.result.setdefault('homeDiagnostics', {})[key] = public_home_diagnostic(payload.get('home'))
+            else:
+                require(payload.get('member') in ('headerAdd', 'emptyAdd')
+                        and payload.get('selection') in ('buttonRole', 'uniqueIdentifier', 'uniqueLabel')
+                        and payload.get('role') in HOME_ROLES and payload.get('enteredAddPage') is True,
+                        'tauri_ios_home_entry_invalid')
+                self.result.setdefault('homeEntry', {})[key] = {k: payload[k] for k in
+                    ('member', 'selection', 'role', 'enteredAddPage')}
+            return
         if stage in ('native_progress', 'native_failure'):
             phase = payload.get('nativeCheckpoint')
             require(self.failure is None and phase in NATIVE_PHASES, 'tauri_ios_native_diagnostic_invalid')
@@ -410,6 +460,10 @@ class Checkpoints:
                 require(phase.endswith('_port') and payload['nativePortType'] in ('textField', 'stepperTextField', 'other'),
                         'tauri_ios_native_diagnostic_invalid')
                 self.result['nativePortType'] = payload['nativePortType']
+            if 'nativeInputRole' in payload:
+                require(phase.rsplit('_', 1)[-1] in ('host', 'port', 'username', 'password')
+                        and payload['nativeInputRole'] in HOME_ROLES, 'tauri_ios_native_diagnostic_invalid')
+                self.result.setdefault('nativeInputRoles', {})[phase] = payload['nativeInputRole']
             if stage == 'native_failure':
                 code = payload.get('nativeFailureCode')
                 require(code in NATIVE_FAILURES, 'tauri_ios_native_diagnostic_invalid')
@@ -604,6 +658,7 @@ def run(project, app, output, *, source_sha=None, env=None):
             except Failure:
                 raise Failure(state.failure or 'tauri_ios_xctest_failed') from None
         require(state.index == len(STAGES) and state.failure is None, 'tauri_ios_checkpoints_incomplete')
+        require(set(result.get('homeEntry', {})) == {'ordinary', 'keyChange'}, 'tauri_ios_home_entry_incomplete')
         require(set(result['artifacts']) == set(PNG_FILES), 'tauri_ios_artifacts_incomplete')
         result['status'] = 'passed'
     except Failure as error:

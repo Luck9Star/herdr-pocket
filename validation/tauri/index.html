@@ -33,9 +33,9 @@
   <div id="ssh-setup"><p>连接普通远程 shell；无需 herdr。先探测指纹并通过可信渠道独立核对，再填写认证方式。</p>
   <form id="ssh-form" autocomplete="off">
     <div class="remote-fields-grid">
-      <label>主机地址<input id="ssh-host" required autocomplete="off"></label>
+      <label>主机地址<input id="ssh-host" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
       <label>端口<input id="ssh-port" type="number" min="1" max="65535" value="22" required></label>
-      <label>用户名<input id="ssh-user" required autocomplete="off"></label>
+      <label>用户名<input id="ssh-user" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
     </div>
     <button id="ssh-probe" type="button">探测主机指纹</button>
     <p id="ssh-fingerprint" class="ssh-fingerprint">请先探测并独立核对主机指纹。</p>

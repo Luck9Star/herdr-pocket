@@ -101,15 +101,37 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func button(_ label: String) -> XCUIElement { app.buttons[label].firstMatch }
+    private func button(_ label: String) -> XCUIElement {
+        let identifiers = ["普通 SSH 终端": "add-ssh", "探测主机指纹": "ssh-probe",
+            "打开键盘": "ssh-focus", "断开连接": "ssh-disconnect",
+            "重新核对主机指纹": "ssh-key-recheck", "取消连接，保留旧信任": "ssh-key-cancel"]
+        let query = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", identifiers[label] ?? "", label))
+        if query.count > 0 { return query.firstMatch }
+        if let identifier = identifiers[label] {
+            let byID = app.descendants(matching: .any).matching(identifier: identifier)
+            if byID.count == 1 { return byID.firstMatch }
+        }
+        let byLabel = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label))
+        return byLabel.count == 1 ? byLabel.firstMatch : query.firstMatch
+    }
     @MainActor
-    private func field(_ label: String) -> XCUIElement { app.textFields[label].firstMatch }
+    private func field(_ label: String) -> XCUIElement {
+        let identifier = ["主机地址": "ssh-host", "端口": "ssh-port", "用户名": "ssh-user"][label] ?? ""
+        let typed = app.textFields.matching(NSPredicate(format: "identifier == %@ OR label == %@", identifier, label))
+        if typed.count > 0 { return typed.firstMatch }
+        let byID = app.descendants(matching: .any).matching(identifier: identifier)
+        if byID.count == 1 && [.textField, .textView, .other].contains(byID.firstMatch.elementType) { return byID.firstMatch }
+        let editable = app.descendants(matching: .any).matching(NSPredicate(format:
+            "label == %@ AND (elementType == %d OR elementType == %d)", label,
+            XCUIElement.ElementType.textView.rawValue, XCUIElement.ElementType.other.rawValue))
+        return editable.count == 1 ? editable.firstMatch : typed.firstMatch
+    }
     @MainActor
     private func portField() throws -> XCUIElement {
         // WKWebView can expose input[type=number] as a text field, a spin
         // control containing one, or an editable Other. Never select its label.
         let text = field("端口")
-        if text.exists {
+        if text.exists && text.elementType == .textField {
             try post("native_progress", ["nativeCheckpoint": nativePhase, "nativePortType": "textField"])
             return text
         }
@@ -125,7 +147,9 @@ final class TauriDirectSSHUITests: XCTestCase {
         return candidates.firstMatch
     }
     @MainActor
-    private func password() -> XCUIElement { app.secureTextFields["密码"].firstMatch }
+    private func password() -> XCUIElement {
+        app.secureTextFields.matching(NSPredicate(format: "identifier == %@ OR label == %@", "ssh-password", "密码")).firstMatch
+    }
     @MainActor
     private func review() -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format:
@@ -135,14 +159,23 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func visibleFrame() -> CGRect {
+        var visible = app.windows.firstMatch.frame.insetBy(dx: 8, dy: 8)
+        for bar in app.statusBars.allElementsBoundByIndex where bar.exists && bar.frame.intersects(visible) {
+            let top = max(visible.minY, bar.frame.maxY)
+            visible = CGRect(x: visible.minX, y: top, width: visible.width, height: visible.maxY - top)
+        }
+        if app.keyboards.firstMatch.exists {
+            visible.size.height = min(visible.maxY, app.keyboards.firstMatch.frame.minY) - visible.minY
+        }
+        return visible
+    }
+
+    @MainActor
     private func reveal(_ item: XCUIElement) throws {
         try require(item.waitForExistence(timeout: 20), "native_control_missing")
         for _ in 0..<10 {
-            let window = app.windows.firstMatch.frame
-            var visible = window.insetBy(dx: 8, dy: 60)
-            if app.keyboards.firstMatch.exists {
-                visible.size.height = min(visible.maxY, app.keyboards.firstMatch.frame.minY) - visible.minY
-            }
+            let visible = visibleFrame()
             if item.isHittable && visible.contains(item.frame) { return }
             let web = app.webViews.firstMatch
             let surface = web.exists ? web : app.windows.firstMatch
@@ -161,6 +194,7 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func fill(_ item: XCUIElement, _ text: String) throws {
+        try post("native_progress", ["nativeCheckpoint": nativePhase, "nativeInputRole": role(item.elementType)])
         try tap(item)
         let old = item.value as? String ?? ""
         // The only populated field is the initial two-character port. Native
@@ -288,12 +322,177 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func role(_ type: XCUIElement.ElementType) -> String {
+        switch type {
+        case .button: return "button"
+        case .staticText: return "staticText"
+        case .webView: return "webView"
+        case .textField: return "textField"
+        case .secureTextField: return "secureTextField"
+        case .other: return "other"
+        default: return "otherNative"
+        }
+    }
+
+    @MainActor
+    private func homeDiagnostics() throws -> [String: Any] {
+        let rows = try nodes()
+        let definitions: [(String, [String], [String])] = [
+            ("brand", ["Herdr Pocket"], []),
+            ("headerAdd", ["＋ 添加主机"], ["host-open-remote"]),
+            ("emptyAdd", ["添加主机"], ["host-empty-add"]),
+            ("homeHeading", ["主机与会话"], []),
+            ("emptyHeading", ["还没有主机"], []),
+            ("zeroHosts", ["0 台已存主机"], []),
+            ("ordinaryShortcut", ["普通 SSH"], ["home-open-ssh"]),
+            ("addHeading", ["添加连接"], []),
+            ("sshOption", ["普通 SSH 终端"], ["add-ssh"])
+        ]
+        var members: [String: Any] = [:]
+        for (key, labels, identifiers) in definitions {
+            let matching = rows.filter { node in
+                identifiers.contains(node.identifier) || texts(node).contains { labels.contains($0) }
+            }
+            members[key] = ["count": min(matching.count, 10000),
+                            "roles": Array(Set(matching.map { role($0.elementType) })).sorted()]
+        }
+        let appAlerts = app.alerts.allElementsBoundByIndex
+        let systemAlerts = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.allElementsBoundByIndex
+        let alertTerms: [(String, [String])] = [
+            ("localNetwork", ["本地网络", "Local Network"]),
+            ("allow", ["允许", "Allow"]), ("deny", ["不允许", "Don’t Allow", "Don't Allow"]),
+            ("ok", ["好", "OK"]), ("automation", ["自动化", "Automation"])
+        ]
+        var alertMembers = Dictionary(uniqueKeysWithValues: alertTerms.map { ($0.0, false) })
+        var alertSnapshotFailed = false
+        for alert in appAlerts + systemAlerts {
+            guard let snapshot = try? alert.snapshot() else { alertSnapshotFailed = true; continue }
+            var pending: [any XCUIElementSnapshot] = [snapshot]
+            var count = 0
+            while let node = pending.popLast(), count < 1000 {
+                count += 1; pending.append(contentsOf: node.children)
+                for (key, terms) in alertTerms {
+                    if texts(node).contains(where: { value in terms.contains { value.contains($0) } }) { alertMembers[key] = true }
+                }
+            }
+        }
+        let flags: [(String, [String])] = [
+            ("connectionError", ["Could not connect to the server", "Could not connect to server", "无法连接到服务器"]),
+            ("dnsError", ["hostname could not be found", "找不到服务器"]),
+            ("webProcessError", ["WebKitErrorDomain", "NSURLErrorDomain"]),
+            ("devURL", ["http://localhost:1420"]),
+            ("browserPreview", ["浏览器预览"]),
+            ("hostStorageError", ["本机主机资料不可用", "host_storage_unavailable", "host_path_bridge_unavailable"]),
+            ("loading", ["正在读取主机资料…"])
+        ]
+        var errors: [String: Bool] = [:]
+        for (key, terms) in flags {
+            errors[key] = rows.contains { node in texts(node).contains { value in terms.contains { value.contains($0) } } }
+        }
+        let publicHomeText: Set<String> = [
+            "Herdr Pocket", "HP", "herdr-pocket-tauri-probe", "herdr-pocket · 远端终端原型",
+            "主导航", "看板", "终端", "网络", "设置", "主机与会话", "普通 SSH",
+            "＋ 添加主机", "添加主机", "还没有主机", "添加主机后，在这里查看会话和任务状态。",
+            "0 台已存主机", "正在读取主机资料…", "已存主机", "tauri://localhost", "tauri://localhost/",
+            "0", "1", "2"
+        ]
+        let window = app.windows.firstMatch.frame
+        let visible = rows.filter { !$0.frame.isEmpty && $0.frame.intersects(window) }
+        let inputCount = rows.filter { [.textField, .secureTextField, .textView, .searchField].contains($0.elementType) }.count
+        let unknownTextCount = visible.filter { node in
+            texts(node).contains { !$0.isEmpty && !publicHomeText.contains($0) }
+        }.count
+        let member = { (key: String) -> Int in (members[key] as? [String: Any])?["count"] as? Int ?? 0 }
+        let foreground = app.state == .runningForeground
+        let webCount = app.webViews.count
+        let safe = foreground && webCount == 1 && member("brand") > 0 && member("homeHeading") > 0 &&
+            member("zeroHosts") > 0 && member("emptyHeading") > 0 && inputCount == 0 && unknownTextCount == 0 &&
+            appAlerts.isEmpty && systemAlerts.isEmpty && !alertSnapshotFailed && errors.values.allSatisfy { !$0 }
+        let result: [String: Any] = ["appForeground": foreground, "webViewCount": min(webCount, 10000),
+            "windowCount": min(app.windows.count, 10000), "members": members, "knownErrors": errors,
+            "appAlertCount": min(appAlerts.count, 10000), "systemAlertCount": min(systemAlerts.count, 10000),
+            "alertMembers": alertMembers, "alertSnapshotFailed": alertSnapshotFailed,
+            "inputCount": min(inputCount, 10000), "unknownVisibleTextCount": min(unknownTextCount, 10000),
+            "knownEmptyHome": safe]
+        return result
+    }
+
+    @MainActor
+    private func openHomeAdd() throws {
+        let candidates = app.buttons.matching(NSPredicate(format:
+            "identifier IN %@ OR label IN %@", ["host-open-remote", "host-empty-add"], ["＋ 添加主机", "添加主机"]))
+        try post("native_home", ["nativeCheckpoint": nativePhase, "home": try homeDiagnostics()])
+        let deadline = Date().addingTimeInterval(40)
+        repeat {
+            let visible = visibleFrame()
+            var selected = candidates.allElementsBoundByIndex.first(where: {
+                $0.exists && $0.isEnabled && $0.isHittable && !$0.frame.isEmpty && visible.contains($0.frame)
+            })
+            var selection = "buttonRole"
+            var kind = selected?.identifier == "host-empty-add" || selected?.label == "添加主机" ? "emptyAdd" : "headerAdd"
+            if selected == nil {
+                // Some WKWebView versions expose HTML buttons as Other/StaticText.
+                // A unique exact product id or label plus a real hittable frame
+                // permits a native element tap; coordinates are never invented.
+                for (identifier, label, member) in [("host-open-remote", "＋ 添加主机", "headerAdd"),
+                                                      ("host-empty-add", "添加主机", "emptyAdd")] {
+                    let byID = app.descendants(matching: .any).matching(identifier: identifier)
+                    let byLabel = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label))
+                    for (query, method) in [(byID, "uniqueIdentifier"), (byLabel, "uniqueLabel")] {
+                        if query.count == 1 {
+                            let item = query.firstMatch
+                            if item.exists && item.isEnabled && item.isHittable && !item.frame.isEmpty && visible.contains(item.frame) {
+                                selected = item; selection = method; kind = member; break
+                            }
+                        }
+                    }
+                    if selected != nil { break }
+                }
+            }
+            if let item = selected {
+                let originalRole = role(item.elementType)
+                try tap(item)
+                let pageDeadline = Date().addingTimeInterval(10)
+                repeat {
+                    let heading = try contains("添加连接")
+                    let instruction = try contains("选择连接方式。")
+                    let option = try contains("普通 SSH 终端")
+                    if heading && instruction && option {
+                        try post("native_home_entry", ["nativeCheckpoint": nativePhase, "member": kind,
+                            "selection": selection, "role": originalRole, "enteredAddPage": true])
+                        return
+                    }
+                    Thread.sleep(forTimeInterval: 0.25)
+                } while Date() < pageDeadline
+                try post("native_home", ["nativeCheckpoint": nativePhase, "home": try homeDiagnostics()])
+                try require(false, "native_home_add_did_not_open_page")
+            }
+            Thread.sleep(forTimeInterval: 0.25)
+        } while Date() < deadline
+        let diagnostic = try homeDiagnostics()
+        try post("native_home", ["nativeCheckpoint": nativePhase, "home": diagnostic])
+        let members = diagnostic["members"] as! [String: [String: Any]]
+        let errors = diagnostic["knownErrors"] as! [String: Bool]
+        let anyAdd = (members["headerAdd"]?["count"] as? Int ?? 0) + (members["emptyAdd"]?["count"] as? Int ?? 0)
+        var code = "native_home_add_missing"
+        if diagnostic["appForeground"] as? Bool != true { code = "native_home_not_foreground" }
+        else if (diagnostic["appAlertCount"] as? Int ?? 0) + (diagnostic["systemAlertCount"] as? Int ?? 0) > 0 { code = "native_home_alert_present" }
+        else if diagnostic["webViewCount"] as? Int == 0 { code = "native_home_webview_missing" }
+        else if errors.values.contains(true) { code = "native_home_known_loading_error" }
+        else if members["brand"]?["count"] as? Int == 0 { code = "native_home_brand_missing" }
+        else if candidates.count == 0 && anyAdd > 0 { code = "native_home_add_role_mismatch" }
+        else if candidates.count > 0 && !candidates.allElementsBoundByIndex.contains(where: { $0.isEnabled }) { code = "native_home_add_disabled" }
+        else if candidates.count > 0 { code = "native_home_add_not_hittable_or_wrong_page" }
+        try require(false, code)
+    }
+
+    @MainActor
     private func launchForm(port: Int) throws {
         try phase("launch")
         app.launch()
         try require(app.wait(for: .runningForeground, timeout: 30), "native_app_launch_failed")
         try phase("open_add")
-        try tap(button("＋ 添加主机"))
+        try openHomeAdd()
         try phase("open_ssh")
         try tap(button("普通 SSH 终端"))
         try phase("host")

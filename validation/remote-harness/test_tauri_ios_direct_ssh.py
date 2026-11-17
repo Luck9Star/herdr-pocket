@@ -52,6 +52,20 @@ class NativeGeometryTests(unittest.TestCase):
 
 
 class InputAndPrivacyTests(unittest.TestCase):
+    def test_case_sensitive_ssh_identifiers_disable_native_autocorrection(self):
+        from html.parser import HTMLParser
+        class Inputs(HTMLParser):
+            def __init__(self):
+                super().__init__(); self.inputs = {}
+            def handle_starttag(self, tag, attrs):
+                if tag == 'input':
+                    value = dict(attrs)
+                    self.inputs[value.get('id')] = value
+        parser = Inputs()
+        parser.feed((ios.HERE.parent / 'tauri/index.html').read_text())
+        for name in ('ssh-host', 'ssh-user'):
+            self.assertEqual({k: parser.inputs[name].get(k) for k in ('autocapitalize', 'autocorrect', 'spellcheck')},
+                             {'autocapitalize': 'none', 'autocorrect': 'off', 'spellcheck': 'false'})
     def build_inputs(self, root):
         project = root / 'generated/Product.xcodeproj'
         project.mkdir(parents=True)
@@ -320,6 +334,55 @@ class ScreenshotContractTests(unittest.TestCase):
             gate.assert_not_called()
             self.assertEqual((Path(directory) / 'key-change-review.png').read_bytes(), data)
             self.assertIn('reviewScreenshot', self.result['cases']['keyChange'])
+
+
+class HomeDiagnosticsTests(unittest.TestCase):
+    def value(self):
+        return {'appForeground': True, 'webViewCount': 1, 'windowCount': 1,
+                'members': {k: {'count': 1, 'roles': ['button' if k in ('headerAdd', 'emptyAdd') else 'staticText']}
+                            for k in ios.HOME_MEMBERS},
+                'knownErrors': {k: False for k in ios.HOME_ERRORS},
+                'appAlertCount': 0, 'systemAlertCount': 0,
+                'alertMembers': {k: False for k in ios.HOME_ALERT_MEMBERS},
+                'alertSnapshotFailed': False, 'inputCount': 0, 'unknownVisibleTextCount': 0,
+                'knownEmptyHome': True}
+
+    def test_only_fixed_members_roles_counts_and_flags_are_public(self):
+        value = self.value()
+        public = ios.public_home_diagnostic(value)
+        self.assertEqual(public, value)
+        value['members']['brand']['count'] = 200
+        self.assertEqual(public['members']['brand']['count'], 1)
+        for mutation in ({'rawTree': 'PRIVATE'}, {'pngBase64': 'PRIVATE'}, {'appForeground': 'PRIVATE'},
+                         {'webViewCount': -1}, {'knownErrors': {'PRIVATE': True}}):
+            with self.assertRaises(ios.Failure):
+                ios.public_home_diagnostic({**self.value(), **mutation})
+        for mutation in ({'count': 1, 'roles': ['PRIVATE']}, {'count': 1, 'roles': ['button'], 'label': 'PRIVATE'}):
+            value = self.value(); value['members']['headerAdd'] = mutation
+            with self.assertRaises(ios.Failure):
+                ios.public_home_diagnostic(value)
+
+    def test_native_home_entry_keeps_original_other_role_and_requires_page_confirmation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = {'artifacts': {}}
+            state = ios.Checkpoints(None, None, directory, result)
+            state.index = ios.STAGES.index('ordinary_probe')
+            state.accept({'stage': 'native_home', 'nativeCheckpoint': 'ordinary_open_add', 'home': self.value()})
+            state.accept({'stage': 'native_home_entry', 'nativeCheckpoint': 'ordinary_open_add',
+                          'member': 'headerAdd', 'selection': 'uniqueIdentifier', 'role': 'other', 'enteredAddPage': True})
+            self.assertEqual(result['homeEntry']['ordinary']['role'], 'other')
+            self.assertEqual(result['artifacts'], {})
+            self.assertEqual(list(Path(directory).iterdir()), [])
+            self.assertEqual(state.index, ios.STAGES.index('ordinary_probe'))
+            for mutation in ({'enteredAddPage': False}, {'role': 'PRIVATE'}, {'selection': 'guessedCoordinate'},
+                             {'member': 'PRIVATE'}):
+                with self.assertRaises(ios.Failure):
+                    state.accept({'stage': 'native_home_entry', 'nativeCheckpoint': 'ordinary_open_add',
+                                  'member': 'emptyAdd', 'selection': 'uniqueLabel', 'role': 'button',
+                                  'enteredAddPage': True, **mutation})
+            state.index = ios.STAGES.index('ordinary_password')
+            with self.assertRaises(ios.Failure):
+                state.accept({'stage': 'native_home', 'nativeCheckpoint': 'ordinary_open_add', 'home': self.value()})
 
 
 class RealLoopbackCheckpointsTests(unittest.TestCase):

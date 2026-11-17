@@ -293,7 +293,12 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       leading: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false)
         ? MergeSemantics(child: Semantics(identifier: 'direct-back', label: '返回主机列表', child: const BackButton())) : null,
       actions: [if (busy || connected) TextButton(onPressed: () => stop(message: '已断开；未重放输入。'), child: const Text('断开'))]),
-    body: SafeArea(child: hostKeyChange != null ? hostKeyChangeView() : connected ? Column(children: [
+    body: SafeArea(child: hostKeyChange != null ? hostKeyChangeView() : connected ? LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(primary: false, child: SizedBox(
+        // Keyboard transitions can leave less room than the status and keys.
+        // Keep a usable terminal and let the connected workspace scroll.
+        height: constraints.maxHeight < 240 ? 240.0 : constraints.maxHeight,
+        child: Column(children: [
       Padding(padding: const EdgeInsets.all(8), child: Text(status)),
       if (activeTarget != null) Padding(padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
         child: LayoutBuilder(builder: (context, constraints) {
@@ -312,7 +317,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       Expanded(child: TerminalView(terminal!, theme: widget.tokens.terminalTheme, autoResize: true,
         textStyle: const TerminalStyle(fontFamily: 'ProbeNerd', fontSize: 14))),
       terminalKeys(terminal!),
-    ]) : ListView(key: const ValueKey('direct-form'), padding: const EdgeInsets.all(16), children: [
+    ])))) : ListView(key: const ValueKey('direct-form'), padding: const EdgeInsets.all(16), children: [
       Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560), child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Container(

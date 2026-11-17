@@ -18,6 +18,21 @@ import ios_xctest_scaffold
 
 
 class IosDirectSshTests(unittest.TestCase):
+    def test_overflow_projection_keeps_only_whitelisted_geometry_stage_and_project_location(self):
+        event = {'direction': 'bottom', 'pixels': 58.0, 'stage': 'input',
+                 'owner': 'DirectSshPage', 'file': 'direct_ssh_page.dart', 'line': 302, 'column': 16,
+                 'routeCurrent': True, 'viewSize': [828, 1792], 'viewInsets': [0, 0, 0, 672],
+                 'devicePixelRatio': 2.0, 'flexSize': [414, 88]}
+        self.assertEqual(runner.layout_diagnostics({'events': [event]}), [event])
+        for invalid in ({**event, 'stack': 'private raw text'}, {**event, 'pixels': float('inf')},
+                        {**event, 'pixels': True}, {**event, 'direction': 'secret'},
+                        {**event, 'stage': 'secret'}, {**event, 'file': '/private/account/main.dart'},
+                        {**event, 'routeCurrent': 1}, {**event, 'line': True},
+                        {**event, 'viewInsets': [0, 0, 0, float('nan')]}):
+            self.assertEqual(runner.layout_diagnostics({'events': [invalid]}), [])
+        self.assertEqual(len(runner.layout_diagnostics({'events': [event] * 6})), 4)
+        self.assertEqual(runner.layout_diagnostics(None), [])
+
     def test_preconnect_hash_is_optional_and_requires_the_existing_masked_admission(self):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp)

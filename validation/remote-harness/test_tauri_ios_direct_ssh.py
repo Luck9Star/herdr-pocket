@@ -102,13 +102,20 @@ class InputAndPrivacyTests(unittest.TestCase):
             self.assertIsNone(result['sourceSHA'])
             self.assertNotIn('PRIVATE-SYNTHETIC-VALUE', json.dumps(result))
 
-    def test_private_driver_not_product_contains_config_and_no_auto_retry(self):
+    def test_only_private_runtime_resource_contains_config_and_no_auto_retry(self):
         with tempfile.TemporaryDirectory() as directory:
             config = {'syntheticPassword': 'PRIVATE-CREDENTIAL'}
             ios.prepare_driver(directory, config)
             source = (Path(directory) / 'UITests/Driver.swift').read_text()
             self.assertNotIn('PRIVATE-CREDENTIAL', source)
             self.assertNotIn('__HP_CONFIG_BASE64__', source)
+            self.assertNotIn('NSStringFromCGRect', source)
+            self.assertIn('matches.allSatisfy { $0.frame == first.frame }', source)
+            self.assertEqual(source, (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text())
+            resource = Path(directory) / 'UITests/Fixture.json'
+            self.assertEqual(json.loads(resource.read_text()), config)
+            self.assertEqual(resource.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(resource.parent.stat().st_mode & 0o777, 0o700)
             self.assertIn('XCUIApplication(bundleIdentifier:', source)
             self.assertEqual(source.count('app.typeText("hp-check\\n")'), 1)
             self.assertNotIn('evaluateJavaScript', source)
@@ -116,6 +123,9 @@ class InputAndPrivacyTests(unittest.TestCase):
             self.assertNotIn('screen_token', source)
             spec = json.loads((Path(directory) / 'project.json').read_text())
             self.assertFalse(spec['schemes']['PocketUI']['test']['targets'][0]['parallelizable'])
+            self.assertIn({'path': 'UITests/Fixture.json', 'buildPhase': 'resources'}, spec['targets']['PocketUITests']['sources'])
+            self.assertNotIn('PRIVATE-CREDENTIAL', json.dumps(spec))
+            self.assertNotIn(base64.b64encode(json.dumps(config).encode()).decode(), source)
 
     def test_runtime_selection_checks_encoded_minor_version_and_chooses_large_phone(self):
         runtime = {'identifier': 'com.apple.CoreSimulator.SimRuntime.iOS-18-6',
@@ -124,6 +134,121 @@ class InputAndPrivacyTests(unittest.TestCase):
                   'minRuntimeVersion': (18 << 16) + (1 << 8)},
                  {'name': 'iPhone 17 Pro Max', 'identifier': 'phone17', 'minRuntimeVersion': 26 << 16}]
         self.assertEqual(ios.select_simulator([runtime], types), (runtime['identifier'], 'phone16'))
+
+    def test_public_model_and_runtime_are_distinct_from_xcode_sdk(self):
+        runtime = 'com.apple.CoreSimulator.SimRuntime.iOS-26-2'
+        device = 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max'
+        self.assertEqual(ios.simulator_evidence(runtime, device), {'runtime': runtime, 'deviceType': device})
+        with patch.object(ios, 'command', side_effect=[b'Xcode 16.4\nBuild version 16F6\n', b'18.5\n']):
+            self.assertEqual(ios.toolchain_evidence(), {'xcodeVersion': '16.4', 'xcodeBuild': '16F6', 'simulatorSDKVersion': '18.5'})
+        for value in ('/private/runtime/secret', 'UUID-123', runtime + '\nPRIVATE'):
+            with self.assertRaises(ios.Failure):
+                ios.simulator_evidence(value, device)
+
+
+class BuildDiagnosticsTests(unittest.TestCase):
+    def test_runner_publishes_clean_build_location_and_environment_then_cleans_private_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project, app = InputAndPrivacyTests().build_inputs(root)
+            runtime = 'com.apple.CoreSimulator.SimRuntime.iOS-26-2'
+            device_type = 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max'
+            device_uuid = 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'
+            fixture_secrets, private_paths = [], []
+            def command(arguments, *, log=None, **kwargs):
+                if arguments == ['xcodebuild', '-version']:
+                    return b'Xcode 16.4\nBuild version 16F6\n'
+                if arguments == ['xcodebuild', '-version', '-sdk', 'iphonesimulator', 'SDKVersion']:
+                    return b'18.5\n'
+                if arguments[:4] == ['xcrun', 'simctl', 'list', 'runtimes']:
+                    return json.dumps({'runtimes': [{'isAvailable': True, 'identifier': runtime, 'version': '26.2'}]}).encode()
+                if arguments[:4] == ['xcrun', 'simctl', 'list', 'devicetypes']:
+                    return json.dumps({'devicetypes': [{'name': 'iPhone 17 Pro Max', 'identifier': device_type}]}).encode()
+                if arguments[:3] == ['xcrun', 'simctl', 'create']:
+                    return device_uuid.encode()
+                if arguments[-1] == 'build-for-testing':
+                    private = Path(arguments[2]).parent
+                    private_paths.append(private)
+                    config = json.loads((private / 'UITests/Fixture.json').read_text())
+                    fixture_secrets.extend([config['ordinaryPassword'], config['rotationPassword'], config['checkpointSecret']])
+                    source = (private / 'UITests/Driver.swift').read_text()
+                    self.assertEqual(source, (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text())
+                    log.write(f"{private}/UITests/Driver.swift:211:40: error: cannot find '{config['ordinaryPassword']}' in scope\n".encode())
+                    raise ios.Failure('tauri_ios_command_failed')
+                return b''
+            with patch.object(ios, 'command', side_effect=command), patch.object(ios.shutil, 'which', return_value='/tools/present'):
+                result = ios.run(project, app, root / 'public', source_sha='a' * 40,
+                                 env={'GITHUB_ACTIONS': 'true', 'RUNNER_OS': 'macOS'})
+            self.assertEqual(result['stage'], 'xctest_build')
+            self.assertEqual(result['error'], 'tauri_ios_xctest_build_failed')
+            self.assertEqual(result['buildDiagnostics'], [
+                {'classification': 'swift_name_lookup', 'file': 'Driver.swift', 'line': 211, 'column': 40}])
+            self.assertEqual(result['simulator'], {'runtime': runtime, 'deviceType': device_type})
+            self.assertEqual(result['toolchain']['simulatorSDKVersion'], '18.5')
+            self.assertTrue(all(result['cleanup'].values()))
+            self.assertTrue(private_paths and all(not p.exists() for p in private_paths))
+            encoded = (root / 'public/result.json').read_text()
+            for private in [*fixture_secrets, device_uuid, *map(str, private_paths)]:
+                self.assertNotIn(private, encoded)
+            self.assertEqual(sorted(p.name for p in (root / 'public').iterdir()), ['result.json'])
+
+    def test_compile_diagnostics_allow_only_categories_known_basenames_and_locations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / 'build-private.log'
+            path.write_text('\n'.join([
+                f"{root}/UITests/Driver.swift:211:40: error: cannot find 'PRIVATE-PASSWORD' in scope",
+                "211 | let secret = PRIVATE-PASSWORD", "    |     ^ PRIVATE-PASSWORD",
+                f"{root}/Host/Host.swift:2:1: error: 'main' attribute cannot apply without static main()",
+                f"{root}/UITests/Driver.swift:250:13: error: operator can throw but expression is not marked with 'try'",
+                f"{root}/UITests/Driver.swift:260:13: error: call to main actor-isolated method in nonisolated context",
+                '/private/account/PRIVATE-PASSWORD.swift:12:2: error: cannot convert value of type PRIVATE-PASSWORD',
+            ]))
+            result = ios.build_diagnostics(path, root, phase='xctest_build')
+            self.assertEqual(result[:4], [
+                {'classification': 'swift_name_lookup', 'file': 'Driver.swift', 'line': 211, 'column': 40},
+                {'classification': 'swift_entry_point', 'file': 'Host.swift', 'line': 2, 'column': 1},
+                {'classification': 'swift_throwing_expression', 'file': 'Driver.swift', 'line': 250, 'column': 13},
+                {'classification': 'swift_actor_isolation', 'file': 'Driver.swift', 'line': 260, 'column': 13}])
+            self.assertEqual(result[-1], {'classification': 'swift_type_mismatch'})
+            encoded = json.dumps(result)
+            for private in ('PRIVATE-PASSWORD', directory, 'let secret', 'source', '/private/account'):
+                self.assertNotIn(private, encoded)
+
+    def test_bounded_diagnostics_drop_unknown_file_coordinates_and_template_messages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / 'private.log'
+            path.write_text('\n'.join(f"{root}/UITests/Driver.swift:{line}:1: error: cannot find 'PRIVATE' in scope"
+                                      for line in range(1, 40)))
+            self.assertEqual(len(ios.build_diagnostics(path, root, phase='xctest_build')), 12)
+            for text, phase, expected in [
+                ('Spec validation error: PRIVATE-SECRET\n', 'xcodegen_generate', 'xcodegen_invalid_spec'),
+                ('xcodebuild: error: Unable to find destination PRIVATE-UUID', 'xctest_build', 'xcode_destination_unavailable'),
+                ('xcodebuild: error: SDK PRIVATE-SDK cannot be located', 'xctest_build', 'xcode_sdk_unavailable'),
+                ('private arbitrary text', 'xctest_build', 'xcode_build_failed')]:
+                path.write_text(text)
+                self.assertEqual(ios.build_diagnostics(path, root, phase=phase), [{'classification': expected}])
+
+    def test_generation_and_compilation_failures_have_separate_stages_and_private_logs(self):
+        for failing_call, stage, code in [(1, 'xcodegen_generate', 'tauri_ios_xcodegen_failed'),
+                                           (2, 'xctest_build', 'tauri_ios_xctest_build_failed')]:
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as directory:
+                count = 0
+                def fail(arguments, *, log, **kwargs):
+                    nonlocal count
+                    count += 1
+                    if count == failing_call:
+                        log.write(b'error: PRIVATE-COMPILE-DIAGNOSTIC\n')
+                        raise ios.Failure('tauri_ios_command_failed')
+                result = {}
+                with patch.object(ios, 'command', side_effect=fail):
+                    with self.assertRaisesRegex(ios.Failure, code):
+                        ios.build_driver(directory, ['xcodebuild'], result)
+                self.assertEqual(result['stage'], stage)
+                self.assertEqual(count, failing_call)
+                self.assertNotIn('PRIVATE-COMPILE-DIAGNOSTIC', json.dumps(result))
+                self.assertTrue((Path(directory) / (stage + '-private.log')).is_file())
 
 
 class ScreenshotContractTests(unittest.TestCase):

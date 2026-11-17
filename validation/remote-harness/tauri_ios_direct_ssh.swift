@@ -1,5 +1,6 @@
 import XCTest
 import Foundation
+import CoreGraphics
 import UIKit
 
 // URLSession completion runs off the main actor. Synchronize its tiny reply
@@ -11,7 +12,7 @@ private final class CheckpointReply: @unchecked Sendable {
     func get() -> Bool { lock.lock(); defer { lock.unlock() }; return accepted }
 }
 
-// The fixture configuration is compiled only into the disposable UI-test driver.
+// The fixture configuration is read from a private test-bundle resource at run time.
 // The installed product receives normal taps/keystrokes and real SSH traffic.
 final class TauriDirectSSHUITests: XCTestCase {
     private var config: [String: Any] = [:]
@@ -45,9 +46,13 @@ final class TauriDirectSSHUITests: XCTestCase {
         // The callback never accesses XCTest or the product application.
         let reply = CheckpointReply()
         let queue = OperationQueue()
-        queue.underlyingQueue = DispatchQueue(label: "dev.herdrpocket.ui-checkpoint")
+        let callbackQueue = DispatchQueue(label: "dev.herdrpocket.ui-checkpoint")
+        queue.underlyingQueue = callbackQueue
         let session = URLSession(configuration: .ephemeral, delegate: nil, delegateQueue: queue)
-        defer { session.invalidateAndCancel() }
+        defer {
+            session.invalidateAndCancel()
+            withExtendedLifetime(callbackQueue) {}
+        }
         let task = session.dataTask(with: request) { data, response, _ in
             if let http = response as? HTTPURLResponse, http.statusCode == 200,
                let data = data, let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -208,9 +213,12 @@ final class TauriDirectSSHUITests: XCTestCase {
             texts(node).contains { contains ? $0.contains(text) : $0 == text }
         }
         // Parent containers can repeat child labels: require one distinct frame.
-        let frames = Set(matches.map { NSStringFromCGRect($0.frame) })
-        try require(!matches.isEmpty && frames.count == 1, "native_geometry_ambiguous")
-        return matches[0]
+        guard let first = matches.first else {
+            try require(false, "native_geometry_ambiguous")
+            throw NSError(domain: "native_geometry_ambiguous", code: 1)
+        }
+        try require(matches.allSatisfy { $0.frame == first.frame }, "native_geometry_ambiguous")
+        return first
     }
 
     @MainActor
@@ -248,7 +256,7 @@ final class TauriDirectSSHUITests: XCTestCase {
                           "重新核对主机指纹", "取消连接，保留旧信任"]
             let frames = try labels.map { try exactNode(rows, $0).frame }
             try require(frames.allSatisfy { safe.contains($0) && !$0.isEmpty }, "native_review_clipped")
-            let actions = rows.filter { $0.elementType == .button && !$0.frame.intersection(safe).isEmpty }
+            let actions = rows.filter { $0.elementType == .button }
             try require(actions.count == 2 && Set(actions.map { $0.label }) == Set(labels.suffix(2)),
                         "native_review_exits_invalid")
             extra["reviewFrames"] = frames.map(rect)
@@ -334,8 +342,9 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     func testOrdinaryAndKeyChange() throws {
         continueAfterFailure = false
-        guard let data = Data(base64Encoded: "__HP_CONFIG_BASE64__"),
-              let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard let url = Bundle(for: TauriDirectSSHUITests.self).url(forResource: "Fixture", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw NSError(domain: "driver_config_invalid", code: 1)
         }
         config = parsed

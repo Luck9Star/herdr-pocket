@@ -10,6 +10,7 @@ import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'package:terminal_view/terminal_view.dart';
 
 import 'ios_exchange.dart';
+import '../test/ios_layout_diagnostics.dart';
 import 'direct_ssh_ui_steps.dart';
 
 const enabled = String.fromEnvironment('HERDR_IOS_DIRECT_SSH');
@@ -151,6 +152,8 @@ void main() {
     (tester) async {
       var stage = 'fixture_validation';
       var fixtureValidated = false;
+      final previousLayoutReporter = FlutterError.onError;
+      final overflows = <Map<String, Object?>>[];
       try {
         final config = target();
         final rotation = target(encoded: rotationTargetJson, rotating: true);
@@ -171,6 +174,25 @@ void main() {
         ];
         expect(tester.testTextInput.isRegistered, isFalse);
         initializeIosExchange(Directory(directory), semanticsBaseline);
+        FlutterError.onError = (details) {
+          try {
+            if (overflows.length < 4) {
+              final value = iosOverflowDiagnostic(
+                details,
+                stage: stage,
+                view: tester.view,
+              );
+              if (value != null) {
+                overflows.add(value);
+                publish('overflow-diagnostic.json', {'events': overflows});
+              }
+            }
+          } catch (_) {
+            // Diagnostics cannot replace the original framework error.
+          } finally {
+            previousLayoutReporter?.call(details);
+          }
+        };
         void step(String next) {
           stage = next;
           publish('stage.json', {'stage': next});
@@ -402,6 +424,8 @@ void main() {
           });
         }
         rethrow;
+      } finally {
+        FlutterError.onError = previousLayoutReporter;
       }
     },
   );

@@ -124,6 +124,96 @@ def command(args, *, log=None, timeout=180, cwd=None):
     return result.stdout if log is None else b''
 
 
+def build_diagnostics(log_path, private, *, phase):
+    """Reduce private diagnostics to fixed categories and owned file locations.
+
+    Never return message text, unknown paths, source excerpts, serialized test
+    configuration or an xcresult. Even a diagnostic that quotes a credential
+    can contribute only a category, an allowlisted basename and numeric bounds.
+    """
+    owned = {str((Path(private) / relative).resolve()): Path(relative).name
+             for relative in ('UITests/Driver.swift', 'Host/Host.swift')}
+    records = []
+    def category(message):
+        lower = message.lower()
+        if 'main actor' in lower or 'actor-isolated' in lower or 'actor isolated' in lower:
+            return 'swift_actor_isolation'
+        if 'throw' in lower and ('try' in lower or 'autoclosure' in lower):
+            return 'swift_throwing_expression'
+        if 'main' in lower and ('attribute' in lower or 'entry point' in lower or 'static' in lower):
+            return 'swift_entry_point'
+        if 'cannot find' in lower or 'no member' in lower or 'unavailable' in lower:
+            return 'swift_name_lookup'
+        if 'cannot convert' in lower or 'type of expression' in lower or 'ambiguous' in lower:
+            return 'swift_type_mismatch'
+        return 'swift_compile_error'
+    def add(value):
+        if value not in records and len(records) < 12:
+            records.append(value)
+    try:
+        with Path(log_path).open('rb') as source:
+            for raw in source:
+                # A bounded line is inspected privately, never echoed or retained.
+                line = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', raw[:8192].decode('utf-8', errors='replace')).strip()
+                match = re.match(r'(.+\.swift):([0-9]{1,6}):(?:([0-9]{1,5}):)?\s*(?:fatal )?error:\s*(.*)', line)
+                if match:
+                    value = {'classification': category(match[4])}
+                    path = Path(match[1])
+                    resolved = str((path if path.is_absolute() else Path(private) / path).resolve())
+                    if resolved in owned and 1 <= int(match[2]) <= 100000:
+                        value.update(file=owned[resolved], line=int(match[2]))
+                        if match[3] is not None and 1 <= int(match[3]) <= 10000:
+                            value['column'] = int(match[3])
+                    add(value)
+                elif 'error:' in line.lower() or 'error' in line.lower() and phase == 'xcodegen_generate':
+                    lower = line.lower()
+                    if phase == 'xcodegen_generate':
+                        code = 'xcodegen_invalid_spec'
+                    elif 'destination' in lower:
+                        code = 'xcode_destination_unavailable'
+                    elif 'sdk' in lower:
+                        code = 'xcode_sdk_unavailable'
+                    elif 'scheme' in lower:
+                        code = 'xcode_scheme_invalid'
+                    elif 'sign' in lower or 'provision' in lower:
+                        code = 'xcode_signing_error'
+                    elif 'link' in lower or 'undefined symbol' in lower:
+                        code = 'xcode_linker_error'
+                    else:
+                        code = 'xcode_build_error'
+                    add({'classification': code})
+    except OSError:
+        pass
+    return records or [{'classification': 'xcodegen_generation_failed' if phase == 'xcodegen_generate'
+                        else 'xcode_build_failed'}]
+
+
+def build_driver(private, build, result):
+    """Separate generator and compiler failures; both logs remain private."""
+    phases = (
+        ('xcodegen_generate', ['xcodegen', 'generate', '--spec', 'project.json'], 180,
+         'tauri_ios_xcodegen_failed'),
+        ('xctest_build', [*build, 'build-for-testing'], 600, 'tauri_ios_xctest_build_failed'))
+    for phase, arguments, timeout, failure in phases:
+        result['stage'] = phase
+        path = Path(private) / (phase + '-private.log')
+        try:
+            with path.open('wb') as log:
+                command(arguments, cwd=private, log=log, timeout=timeout)
+        except Failure:
+            result['buildDiagnostics'] = build_diagnostics(path, private, phase=phase)
+            raise Failure(failure) from None
+
+
+def toolchain_evidence():
+    text = command(['xcodebuild', '-version'], timeout=30).decode('ascii', errors='replace')
+    version = re.fullmatch(r'Xcode ([0-9]+(?:\.[0-9]+){0,2})\s+Build version ([A-Za-z0-9]{3,20})\s*', text)
+    sdk = command(['xcodebuild', '-version', '-sdk', 'iphonesimulator', 'SDKVersion'], timeout=30).decode('ascii', errors='replace').strip()
+    require(version is not None and re.fullmatch(r'[0-9]+(?:\.[0-9]+){0,2}', sdk),
+            'tauri_ios_toolchain_metadata_invalid')
+    return {'xcodeVersion': version[1], 'xcodeBuild': version[2], 'simulatorSDKVersion': sdk}
+
+
 def validate_inputs(project, app, source_sha):
     require(bool(re.fullmatch(r'[0-9a-fA-F]{40}', source_sha or '')), 'tauri_ios_source_sha_invalid')
     project, app = Path(project).resolve(), Path(app).resolve()
@@ -159,6 +249,13 @@ def select_simulator(runtimes, device_types):
     require(bool(compatible), 'tauri_ios_compatible_device_missing')
     device = max(compatible, key=lambda d: tuple(int(n) for n in re.findall(r'\d+', d['name'])))
     return runtime['identifier'], device['identifier']
+
+
+def simulator_evidence(runtime, device_type):
+    require(re.fullmatch(r'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9]+(?:-[0-9]+){0,2}', runtime)
+            and re.fullmatch(r'com\.apple\.CoreSimulator\.SimDeviceType\.iPhone-[A-Za-z0-9-]{1,64}', device_type),
+            'tauri_ios_simulator_metadata_invalid')
+    return {'deviceType': device_type, 'runtime': runtime}
 
 
 def measured_bounds(payload, image_size):
@@ -285,7 +382,7 @@ class Checkpoints:
             case['reviewScreenshot'] = reference
             return
         criteria_name = name.replace('.png', '-ocr.json')
-        case['terminalScreenshot'] = {**reference, 'criteriaFile': criteria_name}
+        case['terminalScreenshot'] = reference
         try:
             criteria = verify_terminal_screenshot(data, expected_token=fixture.screen_token,
                                                   bounds=geometry['terminalBounds'])
@@ -293,11 +390,14 @@ class Checkpoints:
             if error.evidence:
                 write_json(self.output / criteria_name, error.evidence)
                 case['terminalScreenshot'].update(error.evidence)
+                case['terminalScreenshot'].update(criteriaFile=criteria_name,
+                    criteriaSha256=hashlib.sha256((self.output / criteria_name).read_bytes()).hexdigest())
             raise Failure('tauri_ios_terminal_ocr_failed') from None
         require(criteria['imageSha256'] == digest, 'tauri_ios_capture_hash_mismatch')
         # Preserve shared gate schema verbatim in its standalone criteria file.
         write_json(self.output / criteria_name, criteria)
         case['terminalScreenshot'].update(criteria)
+        case['terminalScreenshot']['criteriaFile'] = criteria_name
         case['terminalScreenshot']['criteriaSha256'] = hashlib.sha256((self.output / criteria_name).read_bytes()).hexdigest()
 
     def accept(self, payload):
@@ -407,11 +507,14 @@ def start_checkpoints(state):
 
 def prepare_driver(private, config):
     private = Path(private)
-    encoded = base64.b64encode(json.dumps(config).encode()).decode()
     source = (HERE / 'tauri_ios_direct_ssh.swift').read_text()
-    require(source.count('__HP_CONFIG_BASE64__') == 1, 'tauri_ios_driver_template_invalid')
-    (private / 'UITests').mkdir()
-    (private / 'UITests/Driver.swift').write_text(source.replace('__HP_CONFIG_BASE64__', encoded))
+    (private / 'UITests').mkdir(mode=0o700)
+    (private / 'UITests/Driver.swift').write_text(source)
+    config_path = private / 'UITests/Fixture.json'
+    # This file is copied as a resource, never expanded into compiled Swift or
+    # a command line. Its parent, derived data and xcresult stay under mode 700.
+    with open(config_path, 'x', opener=lambda path, flags: os.open(path, flags, 0o600)) as target:
+        json.dump(config, target)
     # Xcode UI tests need a target application. This inert, separate test host
     # is not the tested product; the driver explicitly launches the installed app.
     (private / 'Host').mkdir()
@@ -422,7 +525,8 @@ def prepare_driver(private, config):
             'targets': {
                 'DriverHost': {'type': 'application', 'platform': 'iOS', 'sources': ['Host'],
                                'settings': {'base': {'PRODUCT_BUNDLE_IDENTIFIER': 'dev.herdrpocket.uidriver.host'}}},
-                'PocketUITests': {'type': 'bundle.ui-testing', 'platform': 'iOS', 'sources': ['UITests'],
+                'PocketUITests': {'type': 'bundle.ui-testing', 'platform': 'iOS',
+                                  'sources': ['UITests/Driver.swift', {'path': 'UITests/Fixture.json', 'buildPhase': 'resources'}],
                                   'dependencies': [{'target': 'DriverHost'}],
                                   'settings': {'base': {'TEST_TARGET_NAME': 'DriverHost',
                                                        'PRODUCT_BUNDLE_IDENTIFIER': 'dev.herdrpocket.uidriver.tests'}}}},
@@ -454,9 +558,11 @@ def run(project, app, output, *, source_sha=None, env=None):
         require(all(shutil.which(t) for t in ('xcrun', 'xcodebuild', 'xcodegen', 'tesseract')),
                 'tauri_ios_dependencies_missing')
         result['stage'] = 'simulator_selection'
+        result['toolchain'] = toolchain_evidence()
         runtimes = json.loads(command(['xcrun', 'simctl', 'list', 'runtimes', '--json']))['runtimes']
         types = json.loads(command(['xcrun', 'simctl', 'list', 'devicetypes', '--json']))['devicetypes']
         runtime, kind = select_simulator(runtimes, types)
+        result['simulator'] = simulator_evidence(runtime, kind)
         result['stage'] = 'simulator_create'
         create_attempted = True
         device = command(['xcrun', 'simctl', 'create', device_name, kind, runtime]).decode().strip()
@@ -469,6 +575,8 @@ def run(project, app, output, *, source_sha=None, env=None):
         result['stage'] = 'fixture_start'
         ordinary = SingleCommandFixture(screen_proof=True).__enter__()
         rotation = SingleCommandFixture(rotate_after_probe=True, screen_proof=True).__enter__()
+        result['cases']['ordinary']['fingerprint'] = ordinary.fingerprint
+        result['cases']['keyChange']['fingerprints'] = {'A': rotation.fingerprint, 'B': rotation.rotated_fingerprint}
         state = Checkpoints(ordinary, rotation, output, result)
         server, server_thread = start_checkpoints(state)
         private = Path(tempfile.mkdtemp(prefix='herdr-tauri-ios-private-'))
@@ -480,15 +588,14 @@ def run(project, app, output, *, source_sha=None, env=None):
                   'ordinaryFingerprint': ordinary.fingerprint,
                   'rotationPort': rotation.port, 'rotationPassword': rotation.password,
                   'fingerprintA': rotation.fingerprint, 'fingerprintB': rotation.rotated_fingerprint}
+        result['stage'] = 'driver_prepare'
         prepare_driver(private, config)
-        result['stage'] = 'xctest_build'
+        build = ['xcodebuild', '-project', str(private / 'PocketUI.xcodeproj'), '-scheme', 'PocketUI',
+                 '-configuration', 'Debug', '-sdk', 'iphonesimulator', '-destination', 'id=' + device,
+                 '-derivedDataPath', str(private / 'derived'), 'CODE_SIGNING_ALLOWED=NO',
+                 '-parallel-testing-enabled', 'NO', '-maximum-concurrent-test-simulator-destinations', '1']
+        build_driver(private, build, result)
         with (private / 'xctest-private.log').open('wb') as log:
-            command(['xcodegen', 'generate', '--spec', 'project.json'], cwd=private, log=log)
-            build = ['xcodebuild', '-project', str(private / 'PocketUI.xcodeproj'), '-scheme', 'PocketUI',
-                     '-configuration', 'Debug', '-sdk', 'iphonesimulator', '-destination', 'id=' + device,
-                     '-derivedDataPath', str(private / 'derived'), 'CODE_SIGNING_ALLOWED=NO',
-                     '-parallel-testing-enabled', 'NO', '-maximum-concurrent-test-simulator-destinations', '1']
-            command([*build, 'build-for-testing'], log=log, timeout=600)
             result['stage'] = 'xctest_launch'
             try:
                 command([*build, 'test-without-building', '-resultBundlePath', str(private / 'run.xcresult'),

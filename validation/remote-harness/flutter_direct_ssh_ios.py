@@ -5,6 +5,7 @@ import base64
 import hashlib
 import io
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -482,6 +483,39 @@ def semantics_probe(value):
     return value
 
 
+def layout_diagnostics(value):
+    if not isinstance(value, dict) or set(value) != {'events'} or not isinstance(value['events'], list):
+        return []
+    required = {'direction', 'pixels', 'stage', 'owner', 'file', 'viewSize', 'viewInsets', 'devicePixelRatio'}
+    allowed = required | {'line', 'column', 'routeCurrent', 'flexSize'}
+    def number(n, maximum):
+        return type(n) in (int, float) and 0 <= n <= maximum and math.isfinite(n)
+    result = []
+    for event in value['events'][:4]:
+        if (not isinstance(event, dict) or not required <= set(event) or not set(event) <= allowed or
+                any(type(event[key]) is not str for key in ('direction', 'stage', 'owner', 'file')) or
+                event['direction'] not in {'left', 'right', 'top', 'bottom'} or
+                not number(event['pixels'], 100000) or event['pixels'] <= 0 or
+                event['stage'] not in STAGES | {'fixture_validation'} or
+                event['owner'] not in {'DirectSshPage', 'HostCatalogPage', 'ProbePage', 'unknown'} or
+                event['file'] not in {'direct_ssh_page.dart', 'host_catalog_page.dart', 'main.dart', 'unknown'} or
+                not number(event['devicePixelRatio'], 10) or event['devicePixelRatio'] <= 0):
+            continue
+        valid = True
+        for key, length in (('viewSize', 2), ('viewInsets', 4), ('flexSize', 2)):
+            if key in event and (not isinstance(event[key], list) or len(event[key]) != length or
+                                 any(not number(n, 100000) for n in event[key])):
+                valid = False
+        for key in ('line', 'column'):
+            if key in event and (type(event[key]) is not int or not 1 <= event[key] <= 10000):
+                valid = False
+        if 'routeCurrent' in event and event['routeCurrent'] is not None and type(event['routeCurrent']) is not bool:
+            valid = False
+        if valid:
+            result.append(dict(event))
+    return result
+
+
 def run(app, output, env):
     if (env.get('GITHUB_ACTIONS') != 'true' or
             not env.get('GITHUB_REF', '').startswith('refs/heads/codex/acceptance/direct-ssh-ios-') or
@@ -496,7 +530,8 @@ def run(app, output, env):
     verify_prepared(app, env)
     from ios_xctest_scaffold import prepare as prepare_xctest
     source_root = Path(__file__).resolve().parents[1] / 'flutter'
-    for relative in (TARGET, 'integration_test/direct_ssh_ui_steps.dart', 'integration_test/ios_exchange.dart'):
+    for relative in (TARGET, 'integration_test/direct_ssh_ui_steps.dart', 'integration_test/ios_exchange.dart',
+                     'test/ios_layout_diagnostics.dart'):
         if (app / relative).is_symlink() or (app / relative).read_bytes() != (source_root / relative).read_bytes():
             raise Failure('ios_test_source_mismatch')
     output.mkdir(mode=0o700)
@@ -672,6 +707,7 @@ def run(app, output, env):
                 except subprocess.TimeoutExpired:
                     raise Failure('ios_flutter_timeout') from None
                 if exchange:
+                    report['layoutOverflows'] = layout_diagnostics(read_json(exchange / 'overflow-diagnostic.json'))
                     final_stage = read_json(exchange / 'stage.json')
                     if final_stage and final_stage.get('stage') in STAGES:
                         report['deviceStage'] = final_stage['stage']
@@ -723,6 +759,11 @@ def run(app, output, env):
         report['diagnostic'] = safe_failure(error, phase)
     finally:
         report['lastPhase'] = phase
+        if 'exchange' in locals() and exchange:
+            try:
+                report['layoutOverflows'] = layout_diagnostics(read_json(exchange / 'overflow-diagnostic.json'))
+            except (Failure, OSError, ValueError):
+                report['layoutDiagnosticCode'] = 'ios_layout_diagnostic_invalid'
         if 'locator' in locals():
             report['containerQueryTimeouts'] = locator.timeouts
             report['containerQueryAttempts'] = locator.attempts

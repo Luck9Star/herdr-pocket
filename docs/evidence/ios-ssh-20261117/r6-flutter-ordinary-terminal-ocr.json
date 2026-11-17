@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "8b9c47a952eac37695e251f32d523f627ad81a16bbaeb0c419b3c3b8d1b59a9a",
+  "imageSize": [
+    828,
+    1792
+  ],
+  "terminalBounds": [
+    0,
+    336,
+    828,
+    758
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "FADE PAST LEAF DECK STAR LEAF DUSK PART",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 2,
+  "ocrPageSegmentationMode": 11,
+  "proofSequenceVisible": true
+}

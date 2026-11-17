@@ -62,7 +62,7 @@ NATIVE_FAILURES = frozenset((
     'native_home_add_role_mismatch', 'native_home_add_disabled', 'native_home_add_not_hittable_or_wrong_page',
     'native_home_add_did_not_open_page', 'native_owner_ambiguous', 'native_target_control_missing',
     'native_home_identity_unproven', 'native_home_retry_unsafe', 'native_ssh_form_unproven',
-    'native_home_navigation_failed'))
+    'native_home_navigation_failed', 'native_control_owner_unproven', 'native_scroll_owner_unproven'))
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 HOME_ERRORS = frozenset(('connectionError', 'dnsError', 'webProcessError', 'devURL',
@@ -98,7 +98,9 @@ def public_navigation_state(value):
     flags = {'appForeground', 'noAlerts', 'noKnownErrors', 'emptyHomeIdentity', 'formByStructure',
              'sshTitleSeen', 'addTitleSeen', 'credentialsEmpty'}
     counts = {'inputCount', 'windowCount', 'webViewCount'}
-    require(isinstance(value, dict) and set(value) == flags | counts | {'page'}
+    base_keys = flags | counts | {'page'}
+    require(isinstance(value, dict) and base_keys <= set(value)
+            and set(value) <= base_keys | {'formOwnerResolved'}
             and value['page'] in ('emptyHome', 'addChoice', 'sshForm', 'unexpected')
             and all(type(value[k]) is bool for k in flags)
             and all(type(value[k]) is int and 0 <= value[k] <= 10000 for k in counts),
@@ -107,7 +109,12 @@ def public_navigation_state(value):
         require(value['emptyHomeIdentity'] and value['inputCount'] == 0 and value['credentialsEmpty'],
                 'tauri_ios_home_retry_unsafe')
     if value['page'] == 'sshForm':
-        require(value['formByStructure'], 'tauri_ios_ssh_form_unproven')
+        require(value['formByStructure'] and value.get('formOwnerResolved') is True,
+                'tauri_ios_ssh_form_owner_unproven')
+    if 'formOwnerResolved' in value:
+        require(type(value['formOwnerResolved']) is bool
+                and (value['page'] != 'sshForm' or value['formOwnerResolved']),
+                'tauri_ios_ssh_form_owner_unproven')
     return dict(value)
 
 
@@ -487,7 +494,7 @@ class Checkpoints:
 
     def accept(self, payload):
         stage = payload.get('stage')
-        if stage in ('native_home', 'native_home_entry', 'native_navigation'):
+        if stage in ('native_home', 'native_home_entry', 'native_navigation', 'native_navigation_arrival'):
             phase = payload.get('nativeCheckpoint')
             require(self.failure is None and phase in ('ordinary_open_add', 'key_change_open_add', 'ordinary_open_ssh', 'key_change_open_ssh'),
                     'tauri_ios_home_diagnostic_phase_invalid')
@@ -498,6 +505,21 @@ class Checkpoints:
             require(fixture is None or fixture.snapshot()['connections'] == 0, 'tauri_ios_navigation_after_ssh')
             if stage == 'native_home':
                 self.result.setdefault('homeDiagnostics', {})[key] = public_home_diagnostic(payload.get('home'))
+            elif stage == 'native_navigation_arrival':
+                current = public_navigation_state(payload.get('state'))
+                geometry = public_navigation_geometry(payload.get('geometry'))
+                trace = self.result.get('navigationTrace', {}).get(key, [])
+                require(phase.endswith('_open_ssh') and payload.get('source') == 'currentFormObservation'
+                        and payload.get('performed') is False and trace
+                        and trace[-1]['performed'] and trace[-1]['after']['page'] in ('addChoice', 'sshForm')
+                        and current['page'] == 'sshForm' and current.get('formOwnerResolved') is True
+                        and current['appForeground'] and current['noAlerts'] and current['noKnownErrors']
+                        and current['credentialsEmpty'] and current['windowCount'] >= 1
+                        and geometry['ownerResolved'], 'tauri_ios_ssh_form_unproven')
+                arrivals = self.result.setdefault('navigationArrivals', {})
+                require(key not in arrivals, 'tauri_ios_navigation_replay_rejected')
+                arrivals[key] = {'source': 'currentFormObservation', 'performed': False,
+                                 'state': current, 'geometry': geometry}
             elif stage == 'native_navigation':
                 members = ('headerAdd', 'emptyAdd', 'ordinaryShortcut', 'sshChoice')
                 require(payload.get('member') in members and payload.get('selection') in
@@ -515,7 +537,7 @@ class Checkpoints:
                 require(payload['targetPresentAfter'] or payload.get('afterGeometry') is None,
                         'tauri_ios_navigation_diagnostic_invalid')
                 require(before['appForeground'] and before['noAlerts'] and before['noKnownErrors']
-                        and before['credentialsEmpty'] and before['windowCount'] == 1,
+                        and before['credentialsEmpty'] and before['windowCount'] >= 1,
                         'tauri_ios_home_retry_unsafe')
                 trace = self.result.setdefault('navigationTrace', {}).setdefault(key, [])
                 require(len(trace) < 4 and payload['member'] not in [r['member'] for r in trace],
@@ -550,8 +572,12 @@ class Checkpoints:
                         and type(payload.get('enteredAddPage')) is bool
                         and payload.get('route') in ('viaAdd', 'directSSH'), 'tauri_ios_home_entry_invalid')
                 trace = self.result.get('navigationTrace', {}).get(key, [])
-                require(trace and trace[-1]['after']['page'] == 'sshForm' and
-                        trace[-1]['after']['credentialsEmpty'] and trace[-1]['after']['formByStructure'],
+                arrival = self.result.get('navigationArrivals', {}).get(key)
+                final_state = arrival['state'] if arrival else (trace[-1]['after'] if trace else {})
+                require(final_state.get('page') == 'sshForm' and
+                        final_state['credentialsEmpty'] and final_state['formByStructure']
+                        and final_state['appForeground'] and final_state['noAlerts']
+                        and final_state['noKnownErrors'] and final_state['windowCount'] >= 1,
                         'tauri_ios_ssh_form_unproven')
                 require((payload['route'] == 'viaAdd') == payload['enteredAddPage'], 'tauri_ios_home_entry_invalid')
                 self.result.setdefault('homeEntry', {})[key] = {k: payload[k] for k in

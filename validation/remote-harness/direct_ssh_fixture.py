@@ -5,6 +5,7 @@ The existing Paramiko Server is reused. No host authorization, accounts, user
 keys, herdr, sockets, or pairing helpers are accessed. Raw input is not logged.
 """
 import base64
+import errno
 import hashlib
 import importlib.util
 import math
@@ -95,6 +96,27 @@ class DirectSshFixture:
     def _record(self, key):
         with self._lock:
             self._facts[key] = True
+
+    def _socket_close_reason(self, transport, error):
+        # An EOF-shaped channel result can conceal the transport thread's
+        # actual reset. Keep errno facts separate from any claim of UI intent.
+        code = error.errno
+        kind = {errno.ECONNRESET: 'connection_reset', errno.ECONNABORTED: 'connection_aborted',
+                errno.EPIPE: 'broken_pipe'}.get(code, 'other')
+        with self._lock:
+            event = self._events_by_transport[transport]
+            event['socketErrorKind'] = kind
+            event['socketErrno'] = code if type(code) is int and 0 <= code <= 65535 else None
+            preauth = all(type(event[field]) is int and event[field] == 0 for field in (
+                'authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes'))
+            preauth = preauth and all(event[field] is False for field in ('authAccepted', 'markerReceived', 'sessionClosed'))
+            authenticated = event['authAccepted']
+        if kind == 'other':
+            return 'socket_error'
+        if preauth:
+            return {'connection_reset': 'preauth_peer_reset', 'connection_aborted': 'preauth_peer_abort',
+                    'broken_pipe': 'preauth_peer_broken_pipe'}[kind]
+        return 'session_socket_error' if authenticated else 'authentication_socket_error'
 
     def snapshot(self):
         with self._lock:
@@ -207,6 +229,7 @@ class DirectSshFixture:
                     event.update(phase='handshake', closeReason=None, handshakeMs=None,
                                  firstAuthMs=None, closedMs=None, hostKeyAlgorithm='unknown',
                                  clientCipher='unknown', serverCipher='unknown')
+                    event.update(socketErrorKind=None, socketErrno=None)
                 self._transports.add(transport)
             transport.add_server_key(self._rotated_key if rotated else self._key)
             thread = threading.Thread(target=self._connection_worker, args=(transport,), daemon=True)
@@ -272,6 +295,7 @@ class DirectSshFixture:
         server = Server()
         shell_open = False
         close_reason = 'transport_closed'
+        socket_error = None
         try:
             transport.start_server(server=server)
             self._connection_record(transport, 'handshakeCompleted')
@@ -344,7 +368,8 @@ class DirectSshFixture:
                     pending = b''
         except EOFError:
             close_reason = 'peer_eof'
-        except OSError:
+        except OSError as error:
+            socket_error = error
             close_reason = 'socket_error'
         except paramiko.SSHException:
             close_reason = 'ssh_error'
@@ -352,6 +377,15 @@ class DirectSshFixture:
             if self._stop.is_set():
                 close_reason = 'fixture_stopped'
             if self._channel_deadline is not None:
+                # start_server may raise and consume get_exception(); accept
+                # and channel.recv can instead return normally after a reset.
+                # Inspect either route before crediting a normal session close.
+                background_error = transport.get_exception()
+                observed_error = socket_error or (background_error if isinstance(background_error, OSError) else None)
+                if observed_error is not None and close_reason not in {'fixture_stopped', 'batch_deadline'}:
+                    close_reason = self._socket_close_reason(transport, observed_error)
+                elif background_error is not None and not isinstance(background_error, EOFError) and close_reason in {'peer_eof', 'transport_closed'}:
+                    close_reason = 'ssh_error'
                 self._connection_record(transport, 'closeReason', close_reason)
             if shell_open and not self._stop.is_set() and (self._channel_deadline is None or
                     close_reason in {'peer_eof', 'transport_closed'}):

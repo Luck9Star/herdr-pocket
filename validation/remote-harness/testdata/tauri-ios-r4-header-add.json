@@ -1,0 +1,113 @@
+{
+  "source": {
+    "runID": 44025958192,
+    "artifactID": 14304077315,
+    "sourceSHA": "80acd9af3477702852543d71033ec9e609ef9a15",
+    "resultSha256": "43a68e55f315b9f41cb6b67a746ba383b29be6ca4650e29841c28f98e26b039a"
+  },
+  "record": {
+    "member": "headerAdd",
+    "selection": "buttonRole",
+    "method": "elementCenter",
+    "performed": true,
+    "geometry": {
+      "enabled": true,
+      "fullyVisible": true,
+      "ownerResolved": true,
+      "screenFrame": [
+        0,
+        0,
+        440,
+        956
+      ],
+      "hittable": true,
+      "frame": [
+        334,
+        78,
+        91,
+        44
+      ],
+      "visibleFrame": [
+        0,
+        54,
+        440,
+        902
+      ],
+      "role": "button",
+      "statusBarFrames": [
+        [
+          0,
+          0,
+          440,
+          54
+        ]
+      ],
+      "centerVisible": true
+    },
+    "targetPresentAfter": true,
+    "afterGeometry": {
+      "frame": [
+        334,
+        78,
+        91,
+        44
+      ],
+      "screenFrame": [
+        0,
+        0,
+        440,
+        956
+      ],
+      "role": "button",
+      "centerVisible": true,
+      "hittable": true,
+      "visibleFrame": [
+        0,
+        54,
+        440,
+        902
+      ],
+      "fullyVisible": true,
+      "statusBarFrames": [
+        [
+          0,
+          0,
+          440,
+          54
+        ]
+      ],
+      "ownerResolved": true,
+      "enabled": true
+    },
+    "elapsedMs": 11621,
+    "before": {
+      "appForeground": true,
+      "noAlerts": true,
+      "formByStructure": false,
+      "emptyHomeIdentity": true,
+      "credentialsEmpty": true,
+      "windowCount": 1,
+      "page": "emptyHome",
+      "inputCount": 0,
+      "noKnownErrors": true,
+      "sshTitleSeen": false,
+      "addTitleSeen": false,
+      "webViewCount": 3
+    },
+    "after": {
+      "sshTitleSeen": true,
+      "page": "addChoice",
+      "appForeground": true,
+      "noAlerts": true,
+      "addTitleSeen": true,
+      "emptyHomeIdentity": false,
+      "webViewCount": 3,
+      "noKnownErrors": true,
+      "credentialsEmpty": true,
+      "inputCount": 0,
+      "formByStructure": false,
+      "windowCount": 2
+    },
+    "outcome": "addChoice"
+  }
+}

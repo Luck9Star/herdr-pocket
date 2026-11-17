@@ -16,6 +16,15 @@ enum NativeFramePolicy {
               windowPaths.count == webPaths.count else { return false }
         return windowPaths.allSatisfy { $0 == window } && webPaths.allSatisfy { $0 == web }
     }
+    static func compatibleOwner(windowPaths: [[Int]], webPaths: [[Int]], nodePaths: [[Int]], selected: Int) -> Bool {
+        guard windowPaths.count == webPaths.count, webPaths.count == nodePaths.count,
+              nodePaths.indices.contains(selected) else { return false }
+        return nodePaths.indices.allSatisfy { index in
+            windowPaths[index] == windowPaths[selected] && (webPaths[index] == webPaths[selected] ||
+                (nodePaths[index].count < nodePaths[selected].count &&
+                 Array(nodePaths[selected].prefix(nodePaths[index].count)) == nodePaths[index]))
+        }
+    }
     static func visible(window: CGRect, screen: CGRect, webAncestors: [CGRect], occlusions: [CGRect]) -> CGRect? {
         let ancestors = unique(webAncestors)
         guard valid(window), valid(screen), !ancestors.isEmpty, ancestors.allSatisfy(valid) else { return nil }
@@ -45,6 +54,37 @@ enum NativeFramePolicy {
         }
         return order.first { frames.indices.contains($0) &&
             (clippedControl ? valid(frames[$0].intersection(visible)) : visible.contains(frames[$0])) }
+    }
+}
+enum NativeViewPolicy {
+    enum Scope: Equatable { case current, otherWindow, nativeSystem, ambiguous }
+    struct Action {
+        let scope: Scope
+        let label: String
+        let frame: CGRect
+        let enabled: Bool
+        let hittable: Bool
+    }
+    static func scope(window: [Int], web: [Int], currentWindow: [Int], currentWeb: [Int]) -> Scope {
+        if window != currentWindow { return .otherWindow }
+        if web.isEmpty { return .nativeSystem }
+        if Array(web.prefix(currentWeb.count)) == currentWeb || Array(currentWeb.prefix(web.count)) == web { return .current }
+        return .ambiguous
+    }
+    static func reached(member: String, page: String) -> Bool {
+        page == "sshForm" || (member != "sshChoice" && page == "addChoice")
+    }
+    static func unsafeCredential(nonempty: Bool, enabled: Bool, hittable: Bool, visible: Bool) -> Bool {
+        nonempty || visible || (enabled && hittable)
+    }
+    static func reviewValid(_ actions: [Action], expected: Set<String>, visible: CGRect) -> Bool {
+        let current = actions.filter { $0.scope == .current && $0.hittable &&
+            NativeFramePolicy.valid($0.frame) && $0.frame.intersects(visible) }
+        guard Set(current.map { $0.label }) == expected else { return false }
+        return expected.allSatisfy { label in
+            let matches = current.filter { $0.label == label }
+            return !matches.isEmpty && matches.allSatisfy { $0.enabled } && NativeFramePolicy.unique(matches.map { $0.frame }).count == 1
+        }
     }
 }
 // END NATIVE FRAME POLICY
@@ -194,24 +234,23 @@ final class TauriDirectSSHUITests: XCTestCase {
         return editable.count == 1 ? editable.firstMatch : typed.firstMatch
     }
     @MainActor
-    private func portField() throws -> XCUIElement {
-        // WKWebView can expose input[type=number] as a text field, a spin
-        // control containing one, or an editable Other. Never select its label.
+    private func portControl() -> XCUIElement {
         let text = field("端口")
-        if text.exists && text.elementType == .textField {
-            try post("native_progress", ["nativeCheckpoint": nativePhase, "nativePortType": "textField"])
-            return text
-        }
+        if text.exists && text.elementType == .textField { return text }
         let stepper = app.steppers["端口"].firstMatch
-        if stepper.exists && stepper.textFields.count == 1 {
-            try post("native_progress", ["nativeCheckpoint": nativePhase, "nativePortType": "stepperTextField"])
-            return stepper.textFields.firstMatch
-        }
+        if stepper.exists && stepper.textFields.count == 1 { return stepper.textFields.firstMatch }
         let candidates = app.descendants(matching: .other).matching(NSPredicate(format:
             "(identifier == %@ OR label == %@) AND value == %@", "ssh-port", "端口", "22"))
-        try require(candidates.count == 1, "native_port_control_ambiguous")
-        try post("native_progress", ["nativeCheckpoint": nativePhase, "nativePortType": "other"])
-        return candidates.firstMatch
+        return candidates.count == 1 ? candidates.firstMatch : app.textFields["端口"]
+    }
+
+    @MainActor
+    private func portField() throws -> XCUIElement {
+        let item = portControl()
+        try require(item.exists, "native_port_control_ambiguous")
+        try post("native_progress", ["nativeCheckpoint": nativePhase,
+            "nativePortType": item.elementType == .textField ? "textField" : "other"])
+        return item
     }
     @MainActor
     private func password() -> XCUIElement {
@@ -226,14 +265,24 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func visibleFrame() -> CGRect {
-        var visible = app.windows.firstMatch.frame.insetBy(dx: 8, dy: 8)
-        for bar in app.statusBars.allElementsBoundByIndex where bar.exists && bar.frame.intersects(visible) {
-            let top = max(visible.minY, bar.frame.maxY)
-            visible = CGRect(x: visible.minX, y: top, width: visible.width, height: visible.maxY - top)
-        }
-        if app.keyboards.firstMatch.exists {
-            visible.size.height = min(visible.maxY, app.keyboards.firstMatch.frame.minY) - visible.minY
+    private func controlOwner(_ item: XCUIElement, _ rows: [Observed]) -> Observed? {
+        let matches = rows.filter { $0.snapshot.frame == item.frame &&
+            ((!item.identifier.isEmpty && $0.snapshot.identifier == item.identifier) || $0.snapshot.label == item.label) &&
+            $0.window != nil && !$0.webs.isEmpty }
+        guard let index = matches.indices.max(by: { matches[$0].path.count < matches[$1].path.count }),
+              NativeFramePolicy.compatibleOwner(windowPaths: matches.map { $0.windowPath }, webPaths: matches.map { $0.webPath },
+                  nodePaths: matches.map { $0.path }, selected: index)
+        else { return nil }
+        return matches[index]
+    }
+
+    @MainActor
+    private func controlVisibleFrame(_ item: XCUIElement) throws -> CGRect {
+        guard let owner = controlOwner(item, try observedNodes()), let window = owner.window,
+              let visible = NativeFramePolicy.visible(window: window, screen: app.frame,
+                  webAncestors: owner.webs, occlusions: nativeOcclusions()) else {
+            try require(false, "native_control_owner_unproven")
+            throw NSError(domain: "native_control_owner_unproven", code: 1)
         }
         return visible
     }
@@ -242,10 +291,15 @@ final class TauriDirectSSHUITests: XCTestCase {
     private func reveal(_ item: XCUIElement) throws {
         try require(item.waitForExistence(timeout: 20), "native_control_missing")
         for _ in 0..<10 {
-            let visible = visibleFrame()
+            let visible = try controlVisibleFrame(item)
             if item.isHittable && visible.contains(item.frame) { return }
-            let web = app.webViews.firstMatch
-            let surface = web.exists ? web : app.windows.firstMatch
+            guard let owner = controlOwner(item, try observedNodes()), let webFrame = owner.webs.last,
+                  let surface = app.webViews.allElementsBoundByIndex.first(where: { $0.exists && $0.frame == webFrame && $0.isHittable }) else {
+                try require(false, "native_scroll_owner_unproven")
+                throw NSError(domain: "native_scroll_owner_unproven", code: 1)
+            }
+            // Repeated AX wrappers with the same physical frame are equivalent
+            // scroll surfaces. No unrelated application window is selected.
             if item.frame.minY < visible.minY { surface.swipeDown() }
             else { surface.swipeUp() }
         }
@@ -301,6 +355,62 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func pageScope(_ item: XCUIElement, _ rows: [Observed], _ page: Observed) throws -> NativeViewPolicy.Scope {
+        if let owner = controlOwner(item, rows) {
+            return NativeViewPolicy.scope(window: owner.windowPath, web: owner.webPath,
+                currentWindow: page.windowPath, currentWeb: page.webPath)
+        }
+        // Native keyboard and auxiliary windows have no WebView owner. Do not
+        // turn their controls into product fields or S10 escape routes.
+        let candidates = rows.filter { $0.snapshot.frame == item.frame &&
+            ((!item.identifier.isEmpty && $0.snapshot.identifier == item.identifier) || $0.snapshot.label == item.label) }
+        if candidates.contains(where: { $0.windowPath == page.windowPath && !$0.webs.isEmpty }) {
+            try require(false, "native_owner_ambiguous")
+        }
+        return .nativeSystem
+    }
+
+    @MainActor
+    private func assertCredentialsInactive(_ page: Observed, _ rows: [Observed]) throws {
+        let visible = try safeFrame([page])
+        for (identifier, label) in [("ssh-password", "密码"), ("ssh-key", "私钥"), ("ssh-passphrase", "私钥口令（可选）")] {
+            let query = app.descendants(matching: .any).matching(NSPredicate(format:
+                "identifier == %@ OR label == %@", identifier, label))
+            var visibleLabel = false
+            for text in app.staticTexts.matching(NSPredicate(format: "label == %@", label)).allElementsBoundByIndex
+                where text.exists && text.isHittable && text.frame.intersects(visible) {
+                if try pageScope(text, rows, page) == .current { visibleLabel = true }
+            }
+            for field in query.allElementsBoundByIndex where field.exists &&
+                [.textField, .secureTextField, .textView, .other].contains(field.elementType) {
+                let nonempty = !(field.value as? String ?? "").isEmpty
+                // A retained AX node alone is not visibility or interactivity.
+                if !nonempty && !field.isEnabled && !field.isHittable && !visibleLabel { continue }
+                let scope = try pageScope(field, rows, page)
+                try require(scope != .ambiguous, "native_owner_ambiguous")
+                if scope != .current { continue }
+                let painted = visibleLabel || (field.isHittable && NativeFramePolicy.valid(field.frame) && field.frame.intersects(visible))
+                try require(!NativeViewPolicy.unsafeCredential(nonempty: nonempty, enabled: field.isEnabled,
+                    hittable: field.isHittable, visible: painted), "native_credentials_visible_after_connect")
+            }
+        }
+    }
+
+    @MainActor
+    private func assertReviewActions(_ page: Observed, _ rows: [Observed], _ labels: Set<String>) throws {
+        let visible = try safeFrame([page])
+        var actions: [NativeViewPolicy.Action] = []
+        for item in app.buttons.allElementsBoundByIndex where item.exists && item.isHittable &&
+            NativeFramePolicy.valid(item.frame) && item.frame.intersects(visible) {
+            let scope = try pageScope(item, rows, page)
+            try require(scope != .ambiguous, "native_owner_ambiguous")
+            actions.append(NativeViewPolicy.Action(scope: scope, label: item.label, frame: item.frame,
+                enabled: item.isEnabled, hittable: item.isHittable))
+        }
+        try require(NativeViewPolicy.reviewValid(actions, expected: labels, visible: visible), "native_review_exits_invalid")
+    }
+
+    @MainActor
     private func target(_ port: Int) -> String { "fixture@127.0.0.1:\(port)" }
     @MainActor
     private func rect(_ value: CGRect) -> [Double] {
@@ -348,10 +458,8 @@ final class TauriDirectSSHUITests: XCTestCase {
         }
         for candidate in preferred where matches[candidate].window != nil && !matches[candidate].webs.isEmpty {
             let owner = matches[candidate]
-            let compatible = matches.allSatisfy { item in
-                item.windowPath == owner.windowPath && (item.webPath == owner.webPath ||
-                    (item.path.count < owner.path.count && Array(owner.path.prefix(item.path.count)) == item.path))
-            }
+            let compatible = NativeFramePolicy.compatibleOwner(windowPaths: matches.map { $0.windowPath },
+                webPaths: matches.map { $0.webPath }, nodePaths: matches.map { $0.path }, selected: candidate)
             try require(compatible, "native_owner_ambiguous")
             let visible = try safeFrame([owner])
             if let index = NativeFramePolicy.semanticIndex(frames: matches.map { $0.snapshot.frame }, preferred: [candidate],
@@ -366,7 +474,6 @@ final class TauriDirectSSHUITests: XCTestCase {
         let tree = try observedNodes()
         let rows = tree.map { $0.snapshot }
         try assertNoSecret(rows)
-        try require(!rows.contains { [.textField, .secureTextField].contains($0.elementType) }, "native_form_visible_in_capture")
         let labels = reviewPage ? ["主机指纹发生变化", "已阻止连接与输入",
             "旧：" + (config["fingerprintA"] as! String), "新：" + (config["fingerprintB"] as! String),
             "目标：" + target(port), "重新核对主机指纹", "取消连接，保留旧信任"] :
@@ -380,19 +487,14 @@ final class TauriDirectSSHUITests: XCTestCase {
         let selected = try anchors(tree)
         let safe = try safeFrame(selected)
         let owner = selected[0]
+        try assertCredentialsInactive(owner, tree)
         var extra: [String: Any] = ["safeFrame": rect(safe), "identityVerified": true, "noCredentialsVisible": true,
             "nativeOwner": ["windowFrame": rect(owner.window!), "webFrames": owner.webs.map(rect),
                             "webWrapperCount": owner.webs.count, "uniqueWebBoundsCount": NativeFramePolicy.unique(owner.webs).count]]
         let frames = selected.map { $0.snapshot.frame }
         if reviewPage {
             try require(frames.allSatisfy { safe.contains($0) && !$0.isEmpty }, "native_review_clipped")
-            let allowed = Set(labels.suffix(2))
-            let actions = rows.filter { $0.elementType == .button }
-            try require(Set(actions.map { $0.label }) == allowed && actions.allSatisfy { allowed.contains($0.label) }, "native_review_exits_invalid")
-            for label in allowed {
-                let duplicates = actions.filter { $0.label == label }.map { $0.frame }
-                try require(NativeFramePolicy.unique(duplicates).count == 1, "native_review_exits_invalid")
-            }
+            try assertReviewActions(owner, tree, Set(labels.suffix(2)))
             extra["reviewFrames"] = frames.map(rect)
         } else {
             try require(safe.contains(frames[0]) && !frames[0].isEmpty, "native_target_clipped")
@@ -486,8 +588,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             "0 台已存主机", "正在读取主机资料…", "已存主机", "tauri://localhost", "tauri://localhost/",
             "0", "1", "2"
         ]
-        let window = app.windows.firstMatch.frame
-        let visible = rows.filter { !$0.frame.isEmpty && $0.frame.intersects(window) }
+        let visible = rows.filter { !$0.frame.isEmpty && $0.frame.intersects(app.frame) }
         let inputCount = rows.filter { [.textField, .secureTextField, .textView, .searchField].contains($0.elementType) }.count
         let unknownTextCount = visible.filter { node in
             texts(node).contains { !$0.isEmpty && !publicHomeText.contains($0) }
@@ -512,34 +613,34 @@ final class TauriDirectSSHUITests: XCTestCase {
         let home = try homeDiagnostics()
         let members = home["members"] as! [String: [String: Any]]
         let seen = { (key: String) in (members[key]?["count"] as? Int ?? 0) > 0 }
-        let host = field("主机地址").exists, port = field("端口").exists, user = field("用户名").exists
+        let host = field("主机地址").exists, port = portControl().exists, user = field("用户名").exists
         let probe = button("探测主机指纹").exists
         let choice = button("普通 SSH 终端").exists && button("herdr 配对 / 手动连接").exists
         let noErrors = !(home["knownErrors"] as! [String: Bool]).values.contains(true)
         let noAlerts = (home["appAlertCount"] as! Int) == 0 && (home["systemAlertCount"] as! Int) == 0 && home["alertSnapshotFailed"] as? Bool == false
         let empty = seen("brand") && seen("homeHeading") && seen("emptyHeading") && seen("zeroHosts") &&
             home["inputCount"] as? Int == 0 && noErrors && noAlerts && !host && !port && !user
-        let form = host && port && user && probe
+        let formControls = [field("主机地址"), portControl(), field("用户名"), button("探测主机指纹")]
+        let tree = try observedNodes()
+        let formOwners = formControls.compactMap { controlOwner($0, tree) }
+        let formOwnerResolved = formOwners.count == 4 && NativeFramePolicy.sameOwner(
+            windowPaths: formOwners.map { $0.windowPath }, webPaths: formOwners.map { $0.webPath })
+        let form = host && port && user && probe && formOwnerResolved
         let page = form ? "sshForm" : choice ? "addChoice" : empty ? "emptyHome" : "unexpected"
         let title = try contains("普通 SSH 终端")
         return ["page": page, "appForeground": home["appForeground"]!, "inputCount": home["inputCount"]!,
             "windowCount": home["windowCount"]!, "webViewCount": home["webViewCount"]!,
             "noAlerts": noAlerts, "noKnownErrors": noErrors,
-            "emptyHomeIdentity": empty, "formByStructure": form, "sshTitleSeen": title,
+            "emptyHomeIdentity": empty, "formByStructure": form, "formOwnerResolved": formOwnerResolved, "sshTitleSeen": title,
             "addTitleSeen": seen("addHeading"), "credentialsEmpty": !password().exists || (password().value as? String ?? "").isEmpty]
     }
 
     @MainActor
     private func navigationGeometry(_ item: XCUIElement) throws -> [String: Any] {
-        let all = try observedNodes()
-        let matches = all.filter { $0.snapshot.frame == item.frame &&
-            ((!item.identifier.isEmpty && $0.snapshot.identifier == item.identifier) || $0.snapshot.label == item.label) &&
-            $0.window != nil && !$0.webs.isEmpty }
-        let owner = matches.max { $0.path.count < $1.path.count }
+        let owner = controlOwner(item, try observedNodes())
         var visible = CGRect.zero
         var resolved = false
-        if let owner = owner, matches.allSatisfy({ $0.windowPath == owner.windowPath && $0.webPath == owner.webPath }),
-           let window = owner.window,
+        if let owner = owner, let window = owner.window,
            let measured = NativeFramePolicy.visible(window: window, screen: app.frame, webAncestors: owner.webs, occlusions: nativeOcclusions()) {
             visible = measured; resolved = true
         }
@@ -568,8 +669,17 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func navigate(_ member: String) throws -> (String, String, String) {
-        guard let (item, selection) = navigationElement(member) else { return ("missing", "uniqueLabel", "otherNative") }
         let before = try navigationState()
+        // A delayed view transition may already have produced the real form.
+        // Preserve this newly sampled source state; never rewrite it as addChoice
+        // or synthesize an unperformed click to make a historical row fit.
+        if member == "sshChoice" && before["page"] as? String == "sshForm" {
+            let host = field("主机地址")
+            try post("native_navigation_arrival", ["nativeCheckpoint": nativePhase, "state": before,
+                "geometry": try navigationGeometry(host), "source": "currentFormObservation", "performed": false])
+            return ("sshForm", "uniqueIdentifier", role(host.elementType))
+        }
+        guard let (item, selection) = navigationElement(member) else { return ("missing", "uniqueLabel", "otherNative") }
         let geometry = try navigationGeometry(item)
         let allowed = geometry["ownerResolved"] as? Bool == true && geometry["centerVisible"] as? Bool == true &&
             geometry["enabled"] as? Bool == true && geometry["hittable"] as? Bool == true
@@ -580,7 +690,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             let deadline = Date().addingTimeInterval(6)
             repeat {
                 after = try navigationState()
-                if after["page"] as? String == "addChoice" || after["page"] as? String == "sshForm" { break }
+                if NativeViewPolicy.reached(member: member, page: after["page"] as! String) { break }
                 Thread.sleep(forTimeInterval: 0.2)
             } while Date() < deadline
         }
@@ -655,8 +765,11 @@ final class TauriDirectSSHUITests: XCTestCase {
         try check(true, enabled: true)
         try phase("connect")
         try tap(button("连接 / 重新连接"))
-        try waitText("已连接")
-        try require(!password().exists, "native_credentials_visible_after_connect")
+        let port = config[scenario == "ordinary" ? "ordinaryPort" : "rotationPort"] as! Int
+        try waitText(target(port) + " · SSH 已连接")
+        let rows = try observedNodes()
+        let page = try exactObserved(rows, target(port) + " · SSH 已连接")
+        try assertCredentialsInactive(page, rows)
     }
 
     @MainActor

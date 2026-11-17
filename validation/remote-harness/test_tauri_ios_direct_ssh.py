@@ -341,6 +341,84 @@ class ScreenshotContractTests(unittest.TestCase):
 
 
 class HomeDiagnosticsTests(unittest.TestCase):
+    def official_r4_record(self):
+        return json.loads((ios.HERE / 'testdata/tauri-ios-r4-header-add.json').read_text())['record']
+
+    def state_for_navigation(self, directory, ordinary=None):
+        state = ios.Checkpoints(ordinary, None, directory, {'artifacts': {}})
+        state.index = ios.STAGES.index('ordinary_probe')
+        return state
+
+    def replay_official_header(self, state):
+        # Only this row is official evidence. Subsequent synthetic unit states
+        # are explicitly separate and are never appended to the evidence file.
+        record = self.official_r4_record()
+        state.accept({'stage': 'native_navigation', 'nativeCheckpoint': 'ordinary_open_add', **record})
+        return record
+
+    def test_official_r4_one_to_two_window_record_is_preserved_without_rewriting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = self.state_for_navigation(directory)
+            record = self.replay_official_header(state)
+            self.assertEqual(state.result['navigationTrace']['ordinary'], [record])
+            self.assertEqual(record['before']['windowCount'], 1)
+            self.assertEqual(record['after']['windowCount'], 2)
+            self.assertEqual(record['after']['page'], 'addChoice')
+            self.assertEqual(record['geometry']['frame'], [334,78,91,44])
+
+    def test_synthetic_one_two_three_window_layers_allow_owned_form_but_reject_replay(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = self.state_for_navigation(directory)
+            first = self.navigation('headerAdd', 'emptyHome', 'addChoice')
+            first['after']['windowCount'] = 2
+            state.accept(first)
+            second = self.navigation('sshChoice', 'addChoice', 'sshForm')
+            second['nativeCheckpoint'] = 'ordinary_open_ssh'
+            second['before']['windowCount'] = 2
+            second['after'].update(windowCount=3, formOwnerResolved=True)
+            state.accept(second)
+            state.accept({'stage':'native_home_entry', 'nativeCheckpoint':'ordinary_open_ssh', 'member':'headerAdd',
+                          'selection':'buttonRole', 'role':'button', 'enteredAddPage':True,
+                          'enteredSSHForm':True, 'route':'viaAdd'})
+            self.assertEqual(state.result['navigationTrace']['ordinary'][-1]['after']['windowCount'], 3)
+            with self.assertRaisesRegex(ios.Failure, 'replay'):
+                state.accept(second)
+
+    def test_current_form_observation_does_not_fabricate_a_click_or_historical_source_page(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = self.state_for_navigation(directory)
+            official = self.replay_official_header(state)
+            # This is a synthetic new observation, not an inferred official R4
+            # second row. It preserves the sampled sshForm page verbatim.
+            current = self.navigation_state('sshForm')
+            current.update(windowCount=2, formOwnerResolved=True)
+            state.accept({'stage':'native_navigation_arrival', 'nativeCheckpoint':'ordinary_open_ssh',
+                          'source':'currentFormObservation', 'performed':False, 'state':current,
+                          'geometry':self.navigation('sshChoice','addChoice','sshForm')['geometry']})
+            self.assertEqual(state.result['navigationTrace']['ordinary'], [official])
+            arrival = state.result['navigationArrivals']['ordinary']
+            self.assertEqual(arrival['state'], current)
+            self.assertFalse(arrival['performed'])
+            state.accept({'stage':'native_home_entry', 'nativeCheckpoint':'ordinary_open_ssh', 'member':'headerAdd',
+                          'selection':'buttonRole', 'role':'button', 'enteredAddPage':True,
+                          'enteredSSHForm':True, 'route':'viaAdd'})
+
+    def test_multi_window_does_not_allow_unknown_owner_alerts_or_navigation_after_ssh(self):
+        for changed in ({'formOwnerResolved':False}, {'noAlerts':False}, {'appForeground':False}):
+            with tempfile.TemporaryDirectory() as directory:
+                state = self.state_for_navigation(directory)
+                self.replay_official_header(state)
+                current = self.navigation_state('sshForm')
+                current.update({'windowCount':3, 'formOwnerResolved':True, **changed})
+                with self.assertRaises(ios.Failure):
+                    state.accept({'stage':'native_navigation_arrival','nativeCheckpoint':'ordinary_open_ssh',
+                                  'source':'currentFormObservation','performed':False,'state':current,
+                                  'geometry':self.navigation('sshChoice','addChoice','sshForm')['geometry']})
+        with tempfile.TemporaryDirectory() as directory:
+            from types import SimpleNamespace
+            state = self.state_for_navigation(directory, SimpleNamespace(snapshot=lambda:{'connections':1}))
+            with self.assertRaisesRegex(ios.Failure, 'navigation_after_ssh'):
+                self.replay_official_header(state)
     def value(self):
         return {'appForeground': True, 'webViewCount': 1, 'windowCount': 1,
                 'members': {k: {'count': 1, 'roles': ['button' if k in ('headerAdd', 'emptyAdd') else 'staticText']}
@@ -370,6 +448,7 @@ class HomeDiagnosticsTests(unittest.TestCase):
         return {'page': page, 'appForeground': True, 'inputCount': 3 if page == 'sshForm' else 0,
                 'windowCount': 1, 'webViewCount': 3, 'noAlerts': True, 'noKnownErrors': True,
                 'emptyHomeIdentity': page == 'emptyHome', 'formByStructure': page == 'sshForm',
+                'formOwnerResolved': page == 'sshForm',
                 'sshTitleSeen': page == 'sshForm', 'addTitleSeen': page == 'addChoice', 'credentialsEmpty': True}
 
     def navigation(self, member, before, after, performed=True):
@@ -446,6 +525,31 @@ check(NativeFramePolicy.semanticIndex(frames:[CGRect(x:20,y:180,width:400,height
 check(NativeFramePolicy.sameOwner(windowPaths:[[0],[0]],webPaths:[[0,1,2],[0,1,2]]))
 check(!NativeFramePolicy.sameOwner(windowPaths:[[0],[1]],webPaths:[[0,1],[1,1]]))
 check(!NativeFramePolicy.sameOwner(windowPaths:[[0],[0]],webPaths:[[0,1],[0,2]]))
+// An active owner may be under the second or third window; total count is not identity.
+check(NativeFramePolicy.sameOwner(windowPaths:[[2],[2],[2],[2]],webPaths:[[2,0,0],[2,0,0],[2,0,0],[2,0,0]]))
+check(NativeFramePolicy.compatibleOwner(windowPaths:[[2],[2]],webPaths:[[],[2,0,0]],nodePaths:[[2,0],[2,0,0,1]],selected:1))
+check(!NativeFramePolicy.compatibleOwner(windowPaths:[[0],[2]],webPaths:[[0,0],[2,0]],nodePaths:[[0,0,1],[2,0,1]],selected:1))
+check(!NativeFramePolicy.compatibleOwner(windowPaths:[[2],[2]],webPaths:[[2,0],[2,1]],nodePaths:[[2,0,1],[2,1,1]],selected:1))
+check(!NativeViewPolicy.reached(member:"sshChoice",page:"addChoice"))
+check(["addChoice","addChoice","sshForm"].firstIndex { NativeViewPolicy.reached(member:"sshChoice",page:$0) } == 2)
+check(NativeViewPolicy.reached(member:"headerAdd",page:"addChoice"))
+check(!NativeViewPolicy.unsafeCredential(nonempty:false,enabled:false,hittable:false,visible:false))
+check(NativeViewPolicy.unsafeCredential(nonempty:false,enabled:false,hittable:true,visible:true))
+check(NativeViewPolicy.unsafeCredential(nonempty:true,enabled:false,hittable:false,visible:false))
+check(NativeViewPolicy.unsafeCredential(nonempty:false,enabled:true,hittable:true,visible:false))
+check(NativeViewPolicy.scope(window:[2],web:[2,0],currentWindow:[2],currentWeb:[2,0,1]) == .current)
+check(NativeViewPolicy.scope(window:[0],web:[0,0],currentWindow:[2],currentWeb:[2,0]) == .otherWindow)
+check(NativeViewPolicy.scope(window:[2],web:[],currentWindow:[2],currentWeb:[2,0]) == .nativeSystem)
+check(NativeViewPolicy.scope(window:[2],web:[2,1],currentWindow:[2],currentWeb:[2,0]) == .ambiguous)
+let decisions: Set<String> = ["recheck","cancel"]
+let actionFrame = CGRect(x:20,y:200,width:200,height:44)
+let currentActions = [NativeViewPolicy.Action(scope:.current,label:"recheck",frame:actionFrame,enabled:true,hittable:true),
+                     NativeViewPolicy.Action(scope:.current,label:"cancel",frame:actionFrame.offsetBy(dx:0,dy:60),enabled:true,hittable:true)]
+let unrelated = [NativeViewPolicy.Action(scope:.nativeSystem,label:"keyboard",frame:actionFrame,enabled:true,hittable:true),
+                 NativeViewPolicy.Action(scope:.otherWindow,label:"other",frame:actionFrame,enabled:true,hittable:true),
+                 NativeViewPolicy.Action(scope:.current,label:"hidden",frame:actionFrame,enabled:false,hittable:false)]
+check(NativeViewPolicy.reviewValid(currentActions + unrelated,expected:decisions,visible:visible))
+check(!NativeViewPolicy.reviewValid(currentActions + [NativeViewPolicy.Action(scope:.current,label:"escape",frame:actionFrame,enabled:true,hittable:true)],expected:decisions,visible:visible))
 print("native geometry cases passed")
 '''
         with tempfile.TemporaryDirectory() as directory:

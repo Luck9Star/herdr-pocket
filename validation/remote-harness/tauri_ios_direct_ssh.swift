@@ -5,6 +5,21 @@ import UIKit
 
 // BEGIN NATIVE FRAME POLICY -- real Foundation/CoreGraphics, no UI substitutes.
 enum NativeFramePolicy {
+    enum FormGeometryFailure: String, Error {
+        case windowInvalid = "window_invalid"
+        case screenInvalid = "screen_invalid"
+        case webAncestorInvalid = "web_ancestor_invalid"
+        case viewportEmpty = "viewport_empty"
+        case fieldInvalid = "field_invalid"
+        case fieldOutside = "field_outside"
+        case fieldOccluded = "field_occluded"
+        case fieldUnhittable = "field_unhittable"
+
+        var canRetryTap: Bool {
+            self == .fieldOutside || self == .fieldOccluded || self == .fieldUnhittable
+        }
+    }
+
     static func valid(_ value: CGRect) -> Bool {
         [value.minX, value.minY, value.width, value.height].allSatisfy { $0.isFinite } && !value.isEmpty && !value.isNull
     }
@@ -25,12 +40,44 @@ enum NativeFramePolicy {
                  Array(nodePaths[selected].prefix(nodePaths[index].count)) == nodePaths[index]))
         }
     }
-    static func visible(window: CGRect, screen: CGRect, webAncestors: [CGRect], occlusions: [CGRect]) -> CGRect? {
+    static func viewport(window: CGRect?, screen: CGRect, webAncestors: [CGRect]) -> Result<CGRect, FormGeometryFailure> {
         let ancestors = unique(webAncestors)
-        guard valid(window), valid(screen), !ancestors.isEmpty, ancestors.allSatisfy(valid) else { return nil }
+        guard let window = window, valid(window) else { return .failure(.windowInvalid) }
+        guard valid(screen) else { return .failure(.screenInvalid) }
+        guard !ancestors.isEmpty, ancestors.allSatisfy(valid) else { return .failure(.webAncestorInvalid) }
         var frame = window.intersection(screen)
         for ancestor in ancestors { frame = frame.intersection(ancestor) }
-        guard valid(frame) else { return nil }
+        return valid(frame) ? .success(frame) : .failure(.viewportEmpty)
+    }
+    static func formFieldFailure(_ frames: [CGRect], in viewport: CGRect,
+                                 occlusions: [CGRect], hittable: Bool) -> FormGeometryFailure? {
+        guard frames.allSatisfy(valid) else { return .fieldInvalid }
+        guard frames.allSatisfy(viewport.contains) else { return .fieldOutside }
+        for blocker in occlusions where valid(blocker) {
+            if frames.contains(where: { valid($0.intersection(blocker)) }) { return .fieldOccluded }
+        }
+        return hittable ? nil : .fieldUnhittable
+    }
+    static func scrollBand(in viewport: CGRect, occlusions: [CGRect]) -> CGRect? {
+        // A vertical gesture stays in one full-width unobscured band, even
+        // when an occlusion lies inside the viewport or covers only part of it.
+        let blockers = occlusions.filter(valid).map { viewport.intersection($0) }
+            .filter(valid).sorted { $0.minY < $1.minY }
+        var top = viewport.minY
+        var bands: [CGRect] = []
+        for blocker in blockers {
+            if blocker.minY > top {
+                bands.append(CGRect(x: viewport.minX, y: top, width: viewport.width, height: blocker.minY - top))
+            }
+            top = max(top, blocker.maxY)
+        }
+        if top < viewport.maxY {
+            bands.append(CGRect(x: viewport.minX, y: top, width: viewport.width, height: viewport.maxY - top))
+        }
+        return bands.max { $0.height < $1.height }
+    }
+    static func visible(window: CGRect, screen: CGRect, webAncestors: [CGRect], occlusions: [CGRect]) -> CGRect? {
+        guard case .success(var frame) = viewport(window: window, screen: screen, webAncestors: webAncestors) else { return nil }
         for blocker in unique(occlusions) where valid(blocker) && frame.intersects(blocker) {
             if blocker.minY <= frame.minY {
                 let top = max(frame.minY, blocker.maxY)
@@ -517,26 +564,57 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func formGeometry(_ form: FormControl, scrolling: Bool = false)
+        -> (failure: NativeFramePolicy.FormGeometryFailure?, scrollFrame: CGRect?) {
+        let (owner, current) = (form.owner, form.live)
+        let viewport: CGRect
+        switch NativeFramePolicy.viewport(window: owner.window, screen: app.frame, webAncestors: owner.webs) {
+        case .failure(let failure): return (failure, nil)
+        case .success(let frame): viewport = frame
+        }
+        let occlusions = nativeOcclusions()
+        let failure = NativeFramePolicy.formFieldFailure([owner.snapshot.frame, current.snapshot.frame], in: viewport,
+            occlusions: occlusions, hittable: current.hittable)
+        let scrollFrame = scrolling && failure?.canRetryTap == true
+            ? NativeFramePolicy.scrollBand(in: viewport, occlusions: occlusions) : nil
+        return (failure, scrollFrame)
+    }
+
+    @MainActor
+    private func reportFormGeometry(_ failure: NativeFramePolicy.FormGeometryFailure) throws {
+        try post("native_progress", ["nativeCheckpoint": nativePhase, "geometryReason": failure.rawValue])
+    }
+
+    @MainActor
+    private func failFormGeometry(_ failure: NativeFramePolicy.FormGeometryFailure) throws -> Never {
+        let code = failure.canRetryTap ? "native_control_not_visible" : "native_visible_frame_invalid"
+        try require(false, code)
+        throw NSError(domain: code, code: 1)
+    }
+
+    @MainActor
     @discardableResult
     private func tapForm(_ name: String) throws -> FormControl {
         var expected: FormControl?
+        var lastFailure: NativeFramePolicy.FormGeometryFailure = .fieldUnhittable
         for _ in 0..<10 {
             let form = try formControl(name, matching: expected)
             expected = form
             let (current, owner) = (form.live, form.owner)
             try require(current.snapshot.isEnabled && owner.snapshot.isEnabled, "native_control_disabled")
-            guard let visible = controlVisibleFrame(owner, current) else {
-                try require(false, "native_visible_frame_invalid")
-                throw NSError(domain: "native_visible_frame_invalid", code: 1)
-            }
-            if canInteract(current, owner, visible) {
+            let geometry = formGeometry(form, scrolling: true)
+            guard let failure = geometry.failure else {
                 current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
                 return form
             }
-            if needsScroll(owner, current, visible) { try scrollToControl(owner, form.window, form.web, visible) }
+            if let visible = geometry.scrollFrame, needsScroll(owner, current, visible) {
+                try scrollToControl(owner, form.window, form.web, visible, formFailure: failure)
+            }
+            try reportFormGeometry(failure)
+            guard failure.canRetryTap else { try failFormGeometry(failure) }
+            lastFailure = failure
         }
-        try require(false, "native_control_not_visible")
-        throw NSError(domain: "native_control_not_visible", code: 1)
+        try failFormGeometry(lastFailure)
     }
 
     @MainActor
@@ -550,15 +628,16 @@ final class TauriDirectSSHUITests: XCTestCase {
             try post("native_progress", ["nativeCheckpoint": nativePhase,
                 "nativePortType": current.snapshot.elementType == .textField ? "textField" : "other"])
         }
-        var visibilityFailure = "native_visible_frame_invalid"
+        var lastFailure: NativeFramePolicy.FormGeometryFailure = .fieldInvalid
         for _ in 0..<3 {
             let form = try formControl(name, matching: tapped)
             let (ready, selected) = (form.live, form.owner)
             try require(ready.snapshot.isEnabled && selected.snapshot.isEnabled, "native_control_disabled")
-            visibilityFailure = "native_visible_frame_invalid"
-            guard let visible = controlVisibleFrame(selected, ready) else { continue }
-            visibilityFailure = "native_control_not_visible"
-            guard canInteract(ready, selected, visible) else { continue }
+            if let failure = formGeometry(form).failure {
+                try reportFormGeometry(failure)
+                lastFailure = failure
+                continue
+            }
             guard let clearCount = NativeControlPolicy.clearCount(ready.snapshot.value, placeholder: ready.snapshot.placeholderValue, secure: false) else {
                 try require(false, "native_unexpected_existing_input")
                 throw NSError(domain: "native_unexpected_existing_input", code: 1)
@@ -568,7 +647,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             try require(NativeControlPolicy.valueText(after.snapshot.value) == text, "native_input_value_invalid")
             return
         }
-        try require(false, visibilityFailure)
+        try failFormGeometry(lastFailure)
     }
 
     @MainActor
@@ -629,13 +708,24 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func scrollToControl(_ owner: Observed, _ window: Observed, _ web: Observed, _ visible: CGRect) throws {
+    private func scrollToControl(_ owner: Observed, _ window: Observed, _ web: Observed, _ visible: CGRect,
+                                 formFailure: NativeFramePolicy.FormGeometryFailure? = nil) throws {
         guard liveOnPath(window) != nil, let surface = liveOnPath(web) else {
+            if let failure = formFailure { try reportFormGeometry(failure) }
             try require(false, "native_scroll_owner_unproven")
             throw NSError(domain: "native_scroll_owner_unproven", code: 1)
         }
         let frame = surface.snapshot.frame
-        try require(NativeFramePolicy.valid(frame) && frame.contains(visible), "native_visible_frame_invalid")
+        let frameValid = NativeFramePolicy.valid(frame) && frame.contains(visible)
+        if let failure = formFailure, !frameValid || !surface.hittable {
+            try reportFormGeometry(failure)
+            if !frameValid {
+                try reportFormGeometry(.webAncestorInvalid)
+                try failFormGeometry(.webAncestorInvalid)
+            }
+            try failFormGeometry(failure)
+        }
+        try require(frameValid, "native_visible_frame_invalid")
         try require(surface.hittable, "native_control_not_visible")
         let down = owner.snapshot.frame.minY < visible.minY
         func point(_ fraction: CGFloat) -> XCUICoordinate {

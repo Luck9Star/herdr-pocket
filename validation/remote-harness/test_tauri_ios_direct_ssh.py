@@ -448,6 +448,45 @@ class ScreenshotContractTests(unittest.TestCase):
             self.assertIn('reviewScreenshot', self.result['cases']['keyChange'])
 
 
+class GeometryReasonTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.result = {}
+        self.state = ios.Checkpoints(None, None, self.directory.name, self.result)
+
+    def test_geometry_reason_trace_is_bounded_scoped_and_compatible(self):
+        self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_host'})
+        self.assertNotIn('geometryReasonTrace', self.result)
+        for phase in sorted(ios.GEOMETRY_PHASES):
+            for reason in sorted(ios.GEOMETRY_REASONS):
+                self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': phase, 'geometryReason': reason})
+            self.assertEqual(self.result['geometryReasonTrace'][phase], sorted(ios.GEOMETRY_REASONS))
+        phase = 'ordinary_host'
+        for _ in range(ios.MAX_GEOMETRY_REASONS_PER_CHECKPOINT - len(ios.GEOMETRY_REASONS)):
+            self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': phase, 'geometryReason': 'field_outside'})
+        before = copy.deepcopy(self.result)
+        with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+            self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': phase, 'geometryReason': 'field_outside'})
+        self.assertEqual(self.result, before)
+
+    def test_geometry_reason_rejects_secrets_invalid_types_phases_and_failure_events(self):
+        for stage, phase, reason in [
+            ('native_progress', 'ordinary_host', 'fixture-secret-must-not-escape'),
+            ('native_progress', 'ordinary_host', None),
+            ('native_progress', 'ordinary_host', ['field_invalid']),
+            ('native_progress', 'ordinary_password', 'field_invalid'),
+            ('native_progress', 'ordinary_reprobe', 'field_invalid'),
+            ('native_failure', 'ordinary_host', 'field_invalid'),
+        ]:
+            with self.subTest(stage=stage, phase=phase, reason=reason):
+                state = ios.Checkpoints(None, None, self.directory.name, {})
+                with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                    state.accept({'stage': stage, 'nativeCheckpoint': phase, 'geometryReason': reason})
+                self.assertNotIn('fixture-secret-must-not-escape', json.dumps(state.result))
+                self.assertNotIn('geometryReasonTrace', state.result)
+
+
 class HomeDiagnosticsTests(unittest.TestCase):
     def test_repeated_home_sampling_retains_latest_without_navigation_or_ssh_replay(self):
         with tempfile.TemporaryDirectory() as directory:

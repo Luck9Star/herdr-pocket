@@ -44,6 +44,14 @@ NATIVE_PHASES = frozenset(prefix + '_' + phase for prefix in ('ordinary', 'key_c
     'launch', 'open_add', 'open_ssh', 'host', 'port', 'username', 'probe', 'fingerprint',
     'password', 'connect', 'terminal_focus', 'terminal_input', 'terminal_capture', 'disconnect',
     'review_capture', 'cancel', 'cancel_check', 'reprobe', 'new_fingerprint'))
+GEOMETRY_PHASES = frozenset(
+    prefix + '_' + phase for prefix in ('ordinary', 'key_change')
+    for phase in ('host', 'port', 'username', 'probe')
+) | {'key_change_reprobe'}
+GEOMETRY_REASONS = frozenset((
+    'window_invalid', 'screen_invalid', 'web_ancestor_invalid', 'viewport_empty',
+    'field_invalid', 'field_outside', 'field_occluded', 'field_unhittable'))
+MAX_GEOMETRY_REASONS_PER_CHECKPOINT = 16
 NATIVE_FAILURES = frozenset((
     'native_tree_limit', 'native_expected_text_missing', 'native_control_missing',
     'native_control_not_visible', 'native_control_disabled', 'native_unexpected_existing_input',
@@ -705,6 +713,15 @@ class Checkpoints:
         if stage in ('native_progress', 'native_failure'):
             phase = payload.get('nativeCheckpoint')
             require(self.failure is None and phase in NATIVE_PHASES, 'tauri_ios_native_diagnostic_invalid')
+            if 'geometryReason' in payload:
+                reason = payload['geometryReason']
+                require(stage == 'native_progress' and phase in GEOMETRY_PHASES
+                        and type(reason) is str and reason in GEOMETRY_REASONS,
+                        'tauri_ios_native_diagnostic_invalid')
+                trace = self.result.get('geometryReasonTrace', {}).get(phase, [])
+                require(len(trace) < MAX_GEOMETRY_REASONS_PER_CHECKPOINT,
+                        'tauri_ios_native_diagnostic_invalid')
+                self.result.setdefault('geometryReasonTrace', {}).setdefault(phase, []).append(reason)
             self.result['nativeCheckpoint'] = phase
             if 'nativePortType' in payload:
                 require(phase.endswith('_port') and payload['nativePortType'] in ('textField', 'stepperTextField', 'other'),

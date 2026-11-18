@@ -170,10 +170,13 @@ final class XCUIElement {
         case window = 3, webView = 4
     }
     var taps = 0
+    var drags: [(CGVector, CGVector)] = []
     var inputs: [String] = []
     var inputValue: String?
     var forcedReadback: String?
-    func coordinate(withNormalizedOffset: CGVector) -> XCUICoordinate { XCUICoordinate(element: self) }
+    func coordinate(withNormalizedOffset: CGVector) -> XCUICoordinate {
+        XCUICoordinate(element: self, offset: withNormalizedOffset)
+    }
     func tap() { taps += 1 }
     func waitForExistence(timeout: Double) -> Bool { true }
     func swipeDown() { }
@@ -186,8 +189,9 @@ final class XCUIElement {
 enum XCUIKeyboardKey: String { case delete = "\u{8}" }
 struct XCUICoordinate {
     let element: XCUIElement
+    let offset: CGVector
     func tap() { element.tap() }
-    func press(forDuration: Double, thenDragTo: XCUICoordinate) { }
+    func press(forDuration: Double, thenDragTo: XCUICoordinate) { element.drags.append((offset, thenDragTo.offset)) }
 }
 protocol XCUIElementSnapshot {
     var identifier: String { get }
@@ -239,11 +243,15 @@ struct Rejected: Error { let reason: String }
 final class Observations {
     var trees: [[Observed]]
     var liveSnapshots: [Snapshot]
+    var occlusionSamples: [[CGRect]]
     var liveReads = 0
     var resolved: [Observed] = []
-    init(_ trees: [[Observed]], liveSnapshots: [Snapshot] = []) {
+    var checkpoints: [(String, [String: Any])] = []
+    let webSurface = Element()
+    init(_ trees: [[Observed]], liveSnapshots: [Snapshot] = [], occlusionSamples: [[CGRect]] = []) {
         self.trees = trees
         self.liveSnapshots = liveSnapshots
+        self.occlusionSamples = occlusionSamples
     }
     func next(_ fallback: [Observed]) -> [Observed] {
         trees.isEmpty ? fallback : trees.removeFirst()
@@ -260,12 +268,16 @@ struct Adapter {
     let rows: [Observed]
     let blockers: [CGRect]
     var observations: Observations? = nil
-    var nativePhase: String { "fixture" }
+    var formControls: [String: LiveControl] = [:]
+    var nativePhase = "ordinary_port"
     func require(_ condition: Bool, _ reason: String) throws {
         if !condition { throw Rejected(reason: reason) }
     }
-    func nativeOcclusions() -> [CGRect] { blockers }
-    func post(_ topic: String, _ payload: [String: Any]) throws { }
+    func nativeOcclusions() -> [CGRect] {
+        guard let observations = observations, !observations.occlusionSamples.isEmpty else { return blockers }
+        return observations.occlusionSamples.removeFirst()
+    }
+    func post(_ topic: String, _ payload: [String: Any]) throws { observations?.checkpoints.append((topic, payload)) }
     func role(_ type: XCUIElement.ElementType) -> String { type == .textField ? "textField" : "other" }
     func observedNodes() throws -> [Observed] { observations?.next(rows) ?? rows }
     func resolveByPath(_ row: Observed) -> Observed {
@@ -274,9 +286,11 @@ struct Adapter {
     }
     func liveControl(_ row: Observed) -> LiveControl? {
         if [.window, .webView].contains(row.snapshot.elementType) {
-            return LiveControl(snapshot: row.snapshot, hittable: true, element: Element())
+            let element = row.snapshot.elementType == .webView ? observations?.webSurface ?? Element() : Element()
+            return LiveControl(snapshot: row.snapshot, hittable: true, element: element)
         }
-        let live = observations?.live(current) ?? current
+        let fallback = formControls[row.snapshot.label] ?? current
+        let live = observations?.live(fallback) ?? fallback
         guard let value = live.element.inputValue else { return live }
         let snapshot = Snapshot(identifier: live.snapshot.identifier, label: live.snapshot.label,
                                 elementType: live.snapshot.elementType, frame: live.snapshot.frame,
@@ -297,6 +311,8 @@ struct Adapter {
     func port() throws -> LiveControl { try formControl("port").live }
     func revealCurrent() throws -> LiveControl { try reveal(current.element) }
     func fillPort(_ text: String) throws { try fillForm("port", text) }
+    func fillField(_ name: String, _ text: String) throws { try fillForm(name, text) }
+    func tapProbe() throws { _ = try tapForm("probe") }
     func scope(_ item: Snapshot, _ rows: [Observed], _ page: Observed) throws -> NativeViewPolicy.Scope {
         try pageScope(item, rows, page)
     }
@@ -306,6 +322,7 @@ struct Adapter {
             "func canInteract(_ current:", "func needsScroll(_ owner:", "func scrollToControl(_ owner:",
             "func controlIdentityRows(_ current:", "func controlOwner(_ current:",
             "func controlVisibleFrame(_ owner:", "func reveal(_ item:", "func tapForm(_ name:",
+            "func formGeometry(_ form:", "func reportFormGeometry(_ failure:", "func failFormGeometry(_ failure:",
             "func fillForm(_ name:", "func pageScope(_ item:")) + r'''
 }
 let screen = CGRect(x: 0, y: 0, width: 390, height: 844)
@@ -320,10 +337,9 @@ func row(_ snapshot: Snapshot, path: [Int] = [0, 0, 1], window: [Int] = [0],
     Observed(snapshot: snapshot, path: path, windowPath: window, webPath: web,
              window: eligible ? screen : nil, webs: eligible ? [screen] : [])
 }
-func formRows(_ port: Snapshot, portPath: [Int] = [0, 0, 1]) -> [Observed] {
-    [row(snapshot(label: "主机地址"), path: [0, 0, 0]), row(port, path: portPath),
-     row(snapshot(label: "用户名"), path: [0, 0, 2]),
-     row(snapshot(.button, label: "探测主机指纹"), path: [0, 0, 3]),
+func formRows(_ port: Snapshot, portPath: [Int] = [0, 0, 1], host: Snapshot = snapshot(label: "主机地址"),
+              user: Snapshot = snapshot(label: "用户名"), probe: Snapshot = snapshot(.button, label: "探测主机指纹")) -> [Observed] {
+    [row(host, path: [0, 0, 0]), row(port, path: portPath), row(user, path: [0, 0, 2]), row(probe, path: [0, 0, 3]),
      row(snapshot(.window, frame: screen, label: ""), path: [0]),
      row(snapshot(.webView, frame: screen, label: ""), path: [0, 0])]
 }
@@ -365,32 +381,128 @@ check(adapter.owner(snapshot(label: ""), [row(snapshot(label: ""))]) == nil,
 check(adapter.owner(snapshot(), [row(snapshot(), eligible: false)]) == nil,
       "a typed identity without WebView ownership cannot authorize a control")
 func expectTap(_ frame: CGRect, treeFrame: CGRect? = nil, blockers: [CGRect],
-               hittable: Bool = true, allowed: Bool, reason: String) {
+               appFrame: CGRect = screen, windowFrame: CGRect = screen, webAncestors: [CGRect] = [screen],
+               hittable: Bool = true, diagnostic: String? = nil, samples: Int = 1, reason: String) {
     let current = snapshot(frame: frame)
     let element = Element()
-    let candidate = Adapter(app: App(frame: screen), current: LiveControl(snapshot: current, hittable: hittable, element: element),
-                            rows: formRows(snapshot(frame: treeFrame ?? frame)), blockers: blockers)
+    let observations = Observations([])
+    let rows = formRows(snapshot(frame: treeFrame ?? frame)).map {
+        Observed(snapshot: $0.snapshot, path: $0.path, windowPath: $0.windowPath, webPath: $0.webPath,
+                 window: windowFrame, webs: webAncestors)
+    }
+    let candidate = Adapter(app: App(frame: appFrame), current: LiveControl(snapshot: current, hittable: hittable, element: element),
+                            rows: rows, blockers: blockers, observations: observations)
     var rejected = false
     do { try candidate.tapPort() } catch { rejected = true }
-    check((element.taps == 1) == allowed && rejected != allowed, reason)
+    let published = observations.checkpoints.filter { $0.0 == "native_progress" && $0.1["geometryReason"] != nil }
+    check(element.taps == (diagnostic == nil ? 1 : 0) && rejected == (diagnostic != nil), reason)
+    if let diagnostic = diagnostic {
+        check(published.count == samples && published.allSatisfy {
+            $0.1["geometryReason"] as? String == diagnostic &&
+                $0.1["nativeCheckpoint"] as? String == "ordinary_port" &&
+                Set($0.1.keys) == ["geometryReason", "nativeCheckpoint"]
+        }, "expected bounded diagnostic \(diagnostic) for each of \(samples) failed attempts")
+    } else {
+        check(published.isEmpty, "successful interaction must not publish a geometry failure")
+    }
 }
-expectTap(movedFrame, treeFrame: oldFrame, blockers: [], allowed: true,
+expectTap(movedFrame, treeFrame: oldFrame, blockers: [],
           reason: "fresh unique geometry after keyboard movement permits the actual tap adapter")
 let keyboard = CGRect(x: 0, y: 400, width: 390, height: 444)
-expectTap(movedFrame, treeFrame: oldFrame, blockers: [keyboard], allowed: false,
+let statusBar = CGRect(x: 0, y: 0, width: 390, height: 47)
+let insetKeyboards: [CGRect] = [CGFloat(1), 34].map { gap in
+    CGRect(x: keyboard.minX, y: keyboard.minY, width: keyboard.width, height: keyboard.height - gap)
+}
+expectTap(movedFrame, treeFrame: oldFrame, blockers: [keyboard], diagnostic: "field_occluded", samples: 10,
           reason: "a later tree moving the control behind the keyboard must invalidate an older visible live frame")
-expectTap(oldFrame, treeFrame: movedFrame, blockers: [keyboard], allowed: false,
+expectTap(oldFrame, treeFrame: movedFrame, blockers: [keyboard], diagnostic: "field_occluded", samples: 10,
           reason: "a later visible tree cannot authorize a tap until live geometry is refreshed")
-expectTap(oldFrame, blockers: [keyboard], allowed: false,
+expectTap(oldFrame, blockers: [keyboard], diagnostic: "field_occluded", samples: 10,
           reason: "a keyboard-covered control must never be tapped")
-expectTap(CGRect(x: 24, y: 380, width: 342, height: 42), blockers: [keyboard], allowed: false,
+expectTap(CGRect(x: 24, y: 370, width: 342, height: 42), blockers: [keyboard], diagnostic: "field_occluded", samples: 10,
           reason: "a partly keyboard-covered control must never be tapped")
-expectTap(CGRect(x: 24, y: -5, width: 342, height: 42), blockers: [], allowed: false,
+expectTap(CGRect(x: 24, y: -5, width: 342, height: 42), blockers: [], diagnostic: "field_outside", samples: 10,
           reason: "a partly offscreen control must never be tapped")
-expectTap(movedFrame, blockers: [], hittable: false, allowed: false,
+expectTap(movedFrame, blockers: [], hittable: false, diagnostic: "field_unhittable", samples: 10,
           reason: "a non-hittable control must never be tapped")
-expectTap(.zero, blockers: [], allowed: false,
+expectTap(.zero, blockers: [], diagnostic: "field_invalid",
           reason: "a structurally owned control with invalid geometry must never be tapped")
+expectTap(movedFrame, blockers: [], appFrame: .zero, diagnostic: "screen_invalid",
+          reason: "the form must reject an invalid screen")
+expectTap(movedFrame, blockers: [], windowFrame: .zero, diagnostic: "window_invalid",
+          reason: "the form must reject an invalid window")
+expectTap(movedFrame, blockers: [statusBar] + insetKeyboards, webAncestors: [screen, .zero, screen],
+          diagnostic: "web_ancestor_invalid", reason: "an invalid nested WebView frame must fail closed")
+expectTap(movedFrame, blockers: [], webAncestors: [screen.offsetBy(dx: screen.width, dy: 0)],
+          diagnostic: "viewport_empty", reason: "nonoverlapping ancestors do not produce a usable viewport")
+expectTap(CGRect(x: 24, y: 40, width: 342, height: 42), blockers: [statusBar, insetKeyboards[0]],
+          diagnostic: "field_occluded", samples: 10, reason: "even partial status bar occlusion makes the field unsafe")
+let sideKeyboard = CGRect(x: 260, y: 250, width: 125, height: 420)
+expectTap(CGRect(x: 24, y: 300, width: 220, height: 42), blockers: [statusBar, sideKeyboard],
+          reason: "a keyboard alongside a field does not occlude it")
+for insetKeyboard in insetKeyboards {
+    expectTap(movedFrame, blockers: [statusBar, insetKeyboard],
+              reason: "an interior keyboard must not block a wholly visible field above it")
+    expectTap(CGRect(x: 24, y: 370, width: 342, height: 42), blockers: [statusBar, insetKeyboard],
+              diagnostic: "field_occluded", samples: 10,
+              reason: "actual partial overlap with an interior keyboard remains unsafe even with an uncovered center")
+    expectTap(CGRect(x: 24, y: 358, width: 342, height: 42), blockers: [statusBar, insetKeyboard],
+              reason: "touching a keyboard boundary without an overlap does not occlude the field")
+
+    let host = snapshot(frame: movedFrame.offsetBy(dx: 0, dy: -100), label: "主机地址")
+    let user = snapshot(frame: movedFrame.offsetBy(dx: 0, dy: 48), label: "用户名")
+    let probe = snapshot(.button, frame: movedFrame.offsetBy(dx: 0, dy: 96), label: "探测主机指纹")
+    let controls = Dictionary(uniqueKeysWithValues: [host, moved, user, probe].map { field in
+        (field.label, LiveControl(snapshot: field, hittable: true, element: Element()))
+    })
+    let samples = Observations([], occlusionSamples: [[statusBar]])
+    var candidate = Adapter(app: App(frame: screen), current: controls[host.label]!,
+                            rows: formRows(moved, host: host, user: user, probe: probe),
+                            blockers: [statusBar, insetKeyboard], observations: samples, formControls: controls)
+    var succeeded = true
+    do {
+        candidate.nativePhase = "ordinary_host"
+        try candidate.fillField("host", "127.0.0.1")
+        candidate.nativePhase = "ordinary_port"
+        try candidate.fillPort("2222")
+        candidate.nativePhase = "ordinary_username"
+        try candidate.fillField("user", "fixture")
+        candidate.nativePhase = "ordinary_probe"
+        try candidate.tapProbe()
+    } catch { succeeded = false }
+    check(succeeded && controls[host.label]?.element.inputs == ["127.0.0.1"] &&
+          controls[moved.label]?.element.inputs == ["2222"] && controls[user.label]?.element.inputs == ["fixture"] &&
+          controls[probe.label]?.element.taps == 1 && samples.checkpoints.allSatisfy { $0.1["geometryReason"] == nil },
+          "host input and subsequent port, username and probe must proceed with an inset keyboard")
+
+    let hiddenHost = snapshot(frame: oldFrame, label: host.label)
+    let hiddenElement = Element()
+    let blockedSamples = Observations([], occlusionSamples: [[statusBar]])
+    let blocked = Adapter(app: App(frame: screen), current: LiveControl(snapshot: hiddenHost, hittable: true, element: hiddenElement),
+                          rows: formRows(moved, host: hiddenHost), blockers: [statusBar, insetKeyboard],
+                          observations: blockedSamples, nativePhase: "key_change_host")
+    var rejected = false
+    do { try blocked.fillField("host", "127.0.0.1") } catch { rejected = true }
+    let diagnostics = blockedSamples.checkpoints.filter { $0.1["geometryReason"] != nil }
+    check(rejected && hiddenElement.taps == 1 && hiddenElement.inputs.isEmpty && diagnostics.count == 3 &&
+          diagnostics.allSatisfy { $0.1["nativeCheckpoint"] as? String == "key_change_host" &&
+              $0.1["geometryReason"] as? String == "field_occluded" },
+          "a keyboard covering the focused field must prevent typeText and publish each failed sample")
+
+    let scrollElement = Element()
+    let scroll = Observations([formRows(snapshot()), formRows(snapshot())], liveSnapshots: [snapshot(), moved])
+    let scrolling = Adapter(app: App(frame: screen),
+                            current: LiveControl(snapshot: moved, hittable: true, element: scrollElement),
+                            rows: formRows(moved), blockers: [statusBar, insetKeyboard], observations: scroll)
+    var scrolled = true
+    do { try scrolling.tapPort() } catch { scrolled = false }
+    let drag = scroll.webSurface.drags.first
+    check(scrolled && scrollElement.taps == 1 && scroll.webSurface.drags.count == 1 &&
+          drag.map { from, to in
+            from.dx == 0.5 && to.dx == 0.5 && statusBar.maxY < to.dy * screen.height &&
+                to.dy < from.dy && from.dy * screen.height < insetKeyboard.minY
+          } == true, "the actual scroll path must keep the entire drag between the status bar and keyboard")
+}
 func expectReselection(_ live: Snapshot, allowed: Bool, reason: String) {
     let observed = Observations([formRows(snapshot()), formRows(moved, portPath: [0, 0, 4])])
     let candidate = Adapter(app: App(frame: screen), current: LiveControl(snapshot: live, hittable: true, element: Element()),
@@ -427,6 +539,8 @@ var refreshedSucceeded = true
 do { try refreshing.tapPort() } catch { refreshedSucceeded = false }
 check(refreshedSucceeded && refreshedElement.taps == 1 && refreshed.liveReads >= 2,
       "the actual tap path must reacquire the unique port's latest visible live geometry before clicking")
+check(refreshed.checkpoints.compactMap { $0.1["geometryReason"] as? String } == ["field_occluded"],
+      "one rejected tap sample must be published even when a later sample allows tapping")
 let revealSnapshots = Observations([], liveSnapshots: [snapshot(), moved, moved, moved])
 let revealing = Adapter(app: App(frame: screen),
                         current: LiveControl(snapshot: moved, hittable: true, element: Element()),
@@ -436,14 +550,17 @@ do { revealed = try revealing.revealCurrent() } catch { }
 check(revealed?.snapshot.frame == movedFrame && revealSnapshots.liveReads >= 4,
       "the actual generic reveal path must refresh both its queried and path-bound live geometry")
 let writeElement = Element()
-let writeSnapshots = Observations([], liveSnapshots: [moved, moved, snapshot(), moved, moved])
+let offscreen = snapshot(frame: movedFrame.offsetBy(dx: 0, dy: -300))
+let writeSnapshots = Observations([], liveSnapshots: [moved, moved, snapshot(), offscreen, moved, moved])
 let writing = Adapter(app: App(frame: screen),
                       current: LiveControl(snapshot: moved, hittable: true, element: writeElement),
                       rows: formRows(moved), blockers: [keyboard], observations: writeSnapshots)
 var writeSucceeded = true
 do { try writing.fillPort("2222") } catch { writeSucceeded = false }
-check(writeSucceeded && writeElement.inputs == ["2222"] && writeSnapshots.liveReads >= 5,
+check(writeSucceeded && writeElement.inputs == ["2222"] && writeSnapshots.liveReads >= 6,
       "the actual fill entry must wait for keyboard geometry to stabilize and type exactly once")
+check(writeSnapshots.checkpoints.compactMap { $0.1["geometryReason"] as? String } == ["field_occluded", "field_outside"],
+      "the fill adapter must preserve distinct rejection reasons in sample order before recovering")
 let failedReadback = Element()
 failedReadback.forcedReadback = "wrong"
 let unread = Adapter(app: App(frame: screen),

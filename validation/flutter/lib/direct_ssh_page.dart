@@ -19,8 +19,9 @@ enum DirectSshConnectFailure { keyParse, socket, handshake, handshakeTimeout, au
 
 /// Standalone SSH shell. Host key verification precedes every authentication.
 class DirectSshPage extends StatefulWidget {
-  const DirectSshPage({super.key, required this.tokens});
+  const DirectSshPage({super.key, required this.tokens, this.onReturnAfterDisconnect});
   final DesignTokens tokens;
+  final VoidCallback? onReturnAfterDisconnect;
   @override
   State<DirectSshPage> createState() => _DirectSshPageState();
 }
@@ -44,7 +45,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   ({String oldAlgorithm, String oldFingerprint, String newAlgorithm, String newFingerprint, String target})? hostKeyChange;
   String status = '填写连接信息后先探测主机密钥。';
   bool busy = false, connected = false, keyAuth = false, foreground = true;
-  bool mobileAuth = false;
+  bool mobileAuth = false, userDisconnected = false;
   DirectSshConnectPhase connectPhase = DirectSshConnectPhase.idle;
   DirectSshConnectFailure? connectFailure;
   bool connectHostKeyMatched = false, connectCredentialCaptured = false, connectPasswordRequested = false;
@@ -128,6 +129,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     current.onOutput = null; current.onResize = null; current.dispose();
   }
   void changed() {
+    userDisconnected = false;
     cancelKeyPaste();
     if (busy && pendingTarget != target) stop(message: '连接目标已更改；本次操作已取消。', notify: false);
     if (checkedTarget != target) { mobileAuth = false; fingerprint = null; algorithm = null; checkedTarget = null; hostKeyReviewRequired = false; hostKeyChange = null; secret.clear(); passphrase.clear(); }
@@ -170,6 +172,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   }
   Future<void> probe() async {
     if (!valid || busy || !foreground) return;
+    userDisconnected = false;
     stop(); connectPhase = DirectSshConnectPhase.idle; connectFailure = null;
     connectHostKeyMatched = false; connectCredentialCaptured = false; connectPasswordRequested = false;
     final generation = ++epoch; final originalTarget = target;
@@ -212,6 +215,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   }
   Future<void> connect() async {
     if (!valid || busy || !foreground || hostKeyReviewRequired || fingerprint == null || checkedTarget != target || secret.text.isEmpty) return;
+    userDisconnected = false;
     cancelKeyPaste();
     final generation = ++epoch, expected = fingerprint!, expectedAlgorithm = algorithm!;
     final originalTarget = target;
@@ -407,8 +411,21 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
           style: mobileSecondaryButton, onPressed: () => Navigator.pop(context, false), child: Text(hostKeyReviewRequired ? '取消核对，保留旧信任' : '取消核对'))),
       ])));
   }
+  void returnAfterDisconnect() {
+    if (userDisconnected) { userDisconnected = false; widget.onReturnAfterDisconnect?.call(); }
+    Navigator.pop(context);
+  }
   Widget mobileTargetForm() => ListView(key: const ValueKey('direct-form'), padding: EdgeInsets.fromLTRB(mobileMargin, 20, mobileMargin, 24), children: [
-    if (hostKeyReviewRequired && !busy) ...[
+    if (userDisconnected && !busy) ...[
+      Container(key: const ValueKey('direct-closed-feedback'), constraints: const BoxConstraints(minHeight: 66),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(color: widget.tokens.color('brandSoft'), borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: widget.tokens.color('brandBorder'))),
+        child: Semantics(liveRegion: true, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('已断开连接', key: const ValueKey('direct-status'), style: TextStyle(color: widget.tokens.color('brand'), fontWeight: FontWeight.bold)),
+          Text('本次凭据已清空。重新连接时请重新填写。', style: TextStyle(fontSize: 13, color: widget.tokens.color('textSecondary'))),
+        ]))), const SizedBox(height: 16),
+    ] else if (hostKeyReviewRequired && !busy) ...[
       Container(key: const ValueKey('direct-trust-preserved'), constraints: const BoxConstraints(minHeight: 66),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(color: widget.tokens.color('brandSoft'), borderRadius: BorderRadius.circular(10),
@@ -436,6 +453,8 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       onPressed: valid && !busy ? probe : null, child: const Text('探测并核对主机密钥'))),
     const SizedBox(height: 9), Text('探测时仅获取主机密钥，认证在核对之后进行。',
       style: TextStyle(fontSize: 12, color: widget.tokens.color('textMutedReadable'))),
+    if (userDisconnected) ...[const SizedBox(height: 10), SizedBox(height: mobileButtonHeight, child: OutlinedButton(
+      key: const ValueKey('direct-return-home'), style: mobileSecondaryButton, onPressed: returnAfterDisconnect, child: const Text('返回首页')))],
     if (busy) TextButton(onPressed: () => stop(message: '已取消，未重放操作。'), child: const Text('取消')),
   ]);
   Widget mobileAuthForm() {
@@ -522,16 +541,18 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   ]));
   @override
   Widget build(BuildContext context) => PopScope<void>(
-    canPop: hostKeyChange == null,
+    canPop: hostKeyChange == null && !userDisconnected,
+    onPopInvokedWithResult: (didPop, result) { if (!didPop && userDisconnected && hostKeyChange == null) returnAfterDisconnect(); },
     child: Scaffold(
       appBar: mobileLayout && !connected ? mobileHeader(hostKeyChange != null ? '主机指纹发生变化' : mobileAuth && !hostKeyReviewRequired ? 'SSH 账号认证' : '普通 SSH',
-        canGoBack: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false), showStop: busy, onBack: mobileAuth && !hostKeyReviewRequired ? () { setState(() { mobileAuth = false; secret.clear(); passphrase.clear(); }); } : null)
+        canGoBack: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false), showStop: busy, onBack: mobileAuth && !hostKeyReviewRequired ? () { setState(() { mobileAuth = false; secret.clear(); passphrase.clear(); }); }
+          : userDisconnected ? returnAfterDisconnect : null)
         : AppBar(title: const Text('普通 SSH'),
       automaticallyImplyLeading: hostKeyChange == null,
       leading: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false)
         ? MergeSemantics(child: Semantics(identifier: 'direct-back', label: '返回主机列表', child: BackButton(onPressed: mobileLayout && mobileAuth && !connected
           ? () { setState(() { mobileAuth = false; secret.clear(); passphrase.clear(); }); } : null))) : null,
-      actions: [if (busy || connected) TextButton(onPressed: () { mobileAuth = false; stop(message: '已断开；未重放输入。'); }, child: const Text('断开'))]),
+      actions: [if (busy || connected) TextButton(onPressed: () { userDisconnected = mobileLayout && connected; mobileAuth = false; stop(message: '已断开；未重放输入。'); }, child: const Text('断开'))]),
     body: SafeArea(child: hostKeyChange != null ? (mobileLayout ? mobileHostKeyChangeView() : hostKeyChangeView()) : connected ? LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(primary: false, child: SizedBox(
         // Keyboard transitions can leave less room than the status and keys.

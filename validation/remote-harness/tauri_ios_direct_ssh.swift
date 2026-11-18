@@ -441,6 +441,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     private struct TerminalHeader {
         let nodes: [Observed]
         let statusBars: [CGRect]
+        let bottom: CGFloat
     }
     @MainActor
     private struct CaptureAnchors {
@@ -1243,13 +1244,13 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     private func exactObserved(_ rows: [Observed], _ text: String, identifiers: [String] = [], control: Bool = false,
                                captureAnchor: String? = nil, requireVisible: Bool = true, reviewSample: String? = nil,
-                               occlusions: [CGRect]? = nil) throws -> Observed {
+                               occlusions: [CGRect]? = nil, requireExactText: Bool = false) throws -> Observed {
         let allMatches = rows.filter { identifiers.contains($0.snapshot.identifier) || texts($0.snapshot).contains(text) }
-        // An ID helps diagnose a missing label, but cannot witness the full
-        // displayed fingerprint, target or action text on the review page.
-        let exact = reviewSample == nil ? allMatches : allMatches.filter { texts($0.snapshot).contains(text) }
+        // The identifier alone cannot prove displayed text.
+        let checkText = reviewSample != nil || requireExactText
+        let exact = checkText ? allMatches.filter { texts($0.snapshot).contains(text) } : allMatches
         let matches = exact.filter { NativeFramePolicy.valid($0.snapshot.frame) }
-        let preferIdentifier = control || (reviewSample != nil && !identifiers.isEmpty)
+        let preferIdentifier = control || (checkText && !identifiers.isEmpty)
         let preferred = matches.indices.sorted {
             let left = preferIdentifier ? identifiers.contains(matches[$0].snapshot.identifier) :
                 matches[$0].snapshot.elementType == .staticText
@@ -1275,7 +1276,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             let related = captureAnchor == nil || matches.allSatisfy { row in
                 row.path.starts(with: owner.path) || owner.path.starts(with: row.path)
             }
-            let identifiersAgree = reviewSample == nil || allMatches.filter {
+            let identifiersAgree = !checkText || allMatches.filter {
                 identifiers.contains($0.snapshot.identifier)
             }.allSatisfy { row in
                 row.windowPath == owner.windowPath && row.webPath == owner.webPath &&
@@ -1404,7 +1405,35 @@ final class TauriDirectSSHUITests: XCTestCase {
                 try require(false, "native_terminal_header_unproven")
             }
         }
-        return TerminalHeader(nodes: [brand, add], statusBars: bars)
+        let heading = try exactObserved(rows, "普通 SSH 终端", identifiers: ["ssh-page-heading"],
+            captureAnchor: "terminal_heading", requireVisible: false, requireExactText: true)
+        let actionLabel = rows.contains { row in
+            row.snapshot.elementType == .button && heading.path.starts(with: row.path)
+        }
+        if heading.windowPath != title.windowPath || heading.webPath != title.webPath || actionLabel {
+            try captureDiagnostic("terminal_heading", "owner_unproven", [heading], rows, visible: safe)
+            try require(false, "native_terminal_header_unproven")
+        }
+        let brandFrame = brand.snapshot.frame, addFrame = add.snapshot.frame
+        // A WebKit snapshot can flatten the banner. Its two controls then
+        // still bound the content edge, plus the phone header's 6pt padding.
+        let measuredBottom = rows.filter { row in
+            row.windowPath == title.windowPath && row.webPath == title.webPath &&
+                row.path.count > title.webPath.count && row.path.count < min(brand.path.count, add.path.count) &&
+                brand.path.starts(with: row.path) && add.path.starts(with: row.path) &&
+                !title.path.starts(with: row.path) && [.group, .other].contains(row.snapshot.elementType) &&
+                NativeFramePolicy.valid(row.snapshot.frame) && row.snapshot.frame.contains(brandFrame) &&
+                row.snapshot.frame.contains(addFrame)
+        }.max { $0.path.count < $1.path.count }?.snapshot.frame.maxY
+        let minimumBottom = max(brandFrame.maxY, addFrame.maxY) + 6
+        let bottom = max(minimumBottom, measuredBottom ?? minimumBottom)
+        let headingFrame = heading.snapshot.frame
+        if !NativeFramePolicy.headerFrameClear(headingFrame, safe: safe, statusBars: bars) ||
+            headingFrame.minY < bottom || headingFrame.maxY > title.snapshot.frame.minY {
+            try captureDiagnostic("terminal_heading", "outside_safe_frame", [heading], rows, visible: safe)
+            try require(false, "native_terminal_header_unproven")
+        }
+        return TerminalHeader(nodes: [brand, add, heading], statusBars: bars, bottom: bottom)
     }
 
     @MainActor
@@ -1500,7 +1529,8 @@ final class TauriDirectSSHUITests: XCTestCase {
             let verified = try terminalHeader(owner, tree, safe: safe)
             header = verified
             extra["headerBounds"] = ["brandFrame": rect(verified.nodes[0].snapshot.frame),
-                "addFrame": rect(verified.nodes[1].snapshot.frame), "statusBarFrames": verified.statusBars.map(rect), "sameOwner": true]
+                "addFrame": rect(verified.nodes[1].snapshot.frame), "headingFrame": rect(verified.nodes[2].snapshot.frame),
+                "headerBottom": Double(verified.bottom), "statusBarFrames": verified.statusBars.map(rect), "sameOwner": true]
             try require(safe.contains(frames[0]) && !frames[0].isEmpty, "native_target_clipped")
             guard let crop = selected.visibleOutput(in: safe) else {
                 try require(false, "native_terminal_frame_invalid")
@@ -1549,11 +1579,11 @@ final class TauriDirectSSHUITests: XCTestCase {
                 try captureDiagnostic("status_bar", "layout_unstable", [], afterTree, visible: afterSafe)
                 try require(false, "native_capture_geometry_changed")
             }
-            if !stableCaptureLayout(header.nodes, rechecked.nodes) {
+            if header.bottom != rechecked.bottom || !stableCaptureLayout(header.nodes, rechecked.nodes) {
                 let index = rechecked.nodes.indices.first {
                     !stableCaptureLayout([header.nodes[$0]], [rechecked.nodes[$0]])
-                } ?? 0
-                try captureDiagnostic(index == 0 ? "header_brand" : "header_add", "layout_unstable",
+                } ?? 2
+                try captureDiagnostic(["header_brand", "header_add", "terminal_heading"][index], "layout_unstable",
                     [rechecked.nodes[index]], afterTree, visible: afterSafe)
                 try require(false, "native_capture_geometry_changed")
             }

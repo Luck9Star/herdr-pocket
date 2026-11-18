@@ -115,7 +115,8 @@ def public_capture_diagnostic(value, *, review=False):
         keys.add('sample')
     require(isinstance(value, dict) and set(value) == keys, 'tauri_ios_capture_diagnostic_invalid')
     anchors = (('review_title', 'review_blocked', 'review_old_fingerprint', 'review_new_fingerprint',
-                'review_target', 'review_recheck', 'review_cancel') if review else ('target', 'terminal', 'keyboard', 'header_brand', 'header_add', 'status_bar'))
+                'review_target', 'review_recheck', 'review_cancel') if review else
+               ('target', 'terminal', 'keyboard', 'header_brand', 'header_add', 'terminal_heading', 'status_bar'))
     require((not review or (type(value['sample']) is str and value['sample'] in ('before', 'after')))
             and type(value['anchor']) is str and value['anchor'] in anchors
             and type(value['reason']) is str and value['reason'] in (
@@ -548,7 +549,7 @@ def simulator_evidence(runtime, device_type):
     return {'deviceType': device_type, 'runtime': runtime}
 
 
-def measured_bounds(payload, image_size):
+def measured_bounds(payload, image_size, *, require_terminal_heading=False):
     def numbers(name, length):
         value = payload.get(name)
         require(isinstance(value, list) and len(value) == length
@@ -585,6 +586,7 @@ def measured_bounds(payload, image_size):
         left, top = math.ceil(x * sx), math.ceil(y * sy)
         return [left, top, math.floor((x + w) * sx) - left, math.floor((y + h) * sy) - top]
     if 'reviewFrames' in payload:
+        require(not require_terminal_heading, 'tauri_ios_capture_header_invalid')
         frames = payload['reviewFrames']
         require(isinstance(frames, list) and len(frames) == 7, 'tauri_ios_review_geometry_invalid')
         for frame in frames:
@@ -593,8 +595,14 @@ def measured_bounds(payload, image_size):
                     and inside(frame, safe), 'tauri_ios_review_geometry_invalid')
         return {'reviewBounds': [pixels(f) for f in frames], 'nativeScale': sx, **ownership}
     header = payload.get('headerBounds')
+    heading = None
+    if require_terminal_heading:
+        require(isinstance(header, dict) and {'headingFrame', 'headerBottom'} <= header.keys(),
+                'tauri_ios_capture_header_invalid')
     if header is not None:
-        require(isinstance(header, dict) and set(header) == {'brandFrame', 'addFrame', 'statusBarFrames', 'sameOwner'}
+        original_fields = {'brandFrame', 'addFrame', 'statusBarFrames', 'sameOwner'}
+        heading_fields = {'headingFrame', 'headerBottom'}
+        require(isinstance(header, dict) and set(header) in (original_fields, original_fields | heading_fields)
                 and header['sameOwner'] is True and isinstance(header['statusBarFrames'], list)
                 and 1 <= len(header['statusBarFrames']) <= 4, 'tauri_ios_capture_header_invalid')
         frames = [header['brandFrame'], header['addFrame'], *header['statusBarFrames']]
@@ -606,8 +614,16 @@ def measured_bounds(payload, image_size):
                 len({tuple(f) for f in bars}) == len(bars) and
                 all(bar[1] + bar[3] <= min(brand[1], add[1]) for bar in bars),
                 'tauri_ios_capture_header_invalid')
+        if heading_fields <= header.keys():
+            heading, bottom = header['headingFrame'], header['headerBottom']
+            require(isinstance(heading, list) and len(heading) == 4
+                    and all(type(n) in (float, int) and math.isfinite(n) for n in heading)
+                    and type(bottom) in (float, int) and math.isfinite(bottom)
+                    and inside(heading, safe) and max(brand[1] + brand[3], add[1] + add[3]) + 6 <= bottom <= heading[1],
+                    'tauri_ios_capture_header_invalid')
         ownership['headerBounds'] = json.loads(json.dumps(header))
     terminal, target = numbers('terminalFrame', 4), numbers('targetFrame', 4)
+    require(heading is None or heading[1] + heading[3] <= target[1], 'tauri_ios_capture_header_invalid')
     require(inside(terminal, safe) and inside(target, safe), 'tauri_ios_terminal_or_target_clipped')
     tx, ty, tw, th = terminal
     x, y, w, h = target
@@ -774,9 +790,6 @@ class Checkpoints:
         require(payload.get('identityVerified') is True and payload.get('noCredentialsVisible') is True,
                 'tauri_ios_capture_identity_unverified')
         require('nativeOwner' in payload, 'tauri_ios_native_owner_missing')
-        if not review:
-            require('headerBounds' in payload and payload['headerBounds'] is not None,
-                    'tauri_ios_capture_header_invalid')
         try:
             from PIL import Image
             data = base64.b64decode(payload.get('pngBase64', ''), validate=True)
@@ -786,7 +799,7 @@ class Checkpoints:
                 require(image.format == 'PNG' and image.width * image.height <= 16_000_000,
                         'tauri_ios_capture_png_invalid')
                 image.load()
-                geometry = measured_bounds(payload, image.size)
+                geometry = measured_bounds(payload, image.size, require_terminal_heading=not review)
                 if geometry.get('boundSource') == 'terminal_control_bounds':
                     candidate = geometry['terminalBounds']
                     geometry['terminalBounds'] = terminal_background_bounds(image, candidate, geometry['nativeScale'])

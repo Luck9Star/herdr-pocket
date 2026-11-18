@@ -396,6 +396,7 @@ class ScreenshotContractTests(unittest.TestCase):
                       'terminalFrame': [20, 200, 400, 300], 'targetFrame': [20, 160, 400, 30],
                       'identityVerified': True, 'noCredentialsVisible': True,
                       'headerBounds': {'brandFrame':[16,60,100,40], 'addFrame':[300,60,100,40],
+                                       'headingFrame':[16,112,200,28], 'headerBottom':106,
                                        'statusBarFrames':[[0,0,440,54]], 'sameOwner':True},
                       'pngBase64': base64.b64encode(data).decode(),
                       'nativeOwner': {'windowFrame': [0,0,440,956], 'webFrames': [[0,0,440,956]] * 3,
@@ -433,21 +434,33 @@ class ScreenshotContractTests(unittest.TestCase):
 
     def test_terminal_header_required_and_occluded_or_unowned_rejected(self):
         _, payload = self.screenshot()
-        for change in ('missing', 'occluded_brand', 'occluded_add', 'duplicate_bar', 'outside', 'unowned'):
+        for change in ('missing', 'missing_heading', 'missing_bottom', 'occluded_brand', 'occluded_add', 'duplicate_bar',
+                       'outside', 'unowned', 'heading_under_header', 'heading_past_target', 'short_header', 'invalid_bottom'):
             candidate = copy.deepcopy(payload)
             header = candidate['headerBounds']
             if change == 'missing': candidate.pop('headerBounds')
+            elif change == 'missing_heading': header.pop('headingFrame')
+            elif change == 'missing_bottom': header.pop('headerBottom')
             elif change == 'occluded_brand': header['brandFrame'][1] = 40
             elif change == 'occluded_add': header['addFrame'][1] = 40
             elif change == 'duplicate_bar': header['statusBarFrames'].append([0,0,440,54])
             elif change == 'outside': header['addFrame'][0] = 400
+            elif change == 'heading_under_header': header['headingFrame'][1] = 105
+            elif change == 'heading_past_target': header['headingFrame'][3] = 50
+            elif change == 'short_header': header['headerBottom'] = 105
+            elif change == 'invalid_bottom': header['headerBottom'] = float('inf')
             else: header['sameOwner'] = False
-            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
-                state = ios.Checkpoints(None, None, directory, copy.deepcopy(self.result))
-                with self.assertRaisesRegex(ios.Failure, 'capture_header_invalid'):
-                    state.capture('ordinary_terminal', candidate, self.fixture)
-                self.assertEqual(list(Path(directory).iterdir()), [])
+            for stage in ('ordinary_terminal', 'key_change_terminal'):
+                with self.subTest(change=change, stage=stage), tempfile.TemporaryDirectory() as directory:
+                    state = ios.Checkpoints(None, None, directory, copy.deepcopy(self.result))
+                    with self.assertRaisesRegex(ios.Failure, 'capture_header_invalid'):
+                        state.capture(stage, candidate, self.fixture)
+                    self.assertEqual(list(Path(directory).iterdir()), [])
         # The standalone geometry reader remains compatible with older artifacts.
+        legacy = payload['headerBounds']
+        legacy.pop('headingFrame')
+        legacy.pop('headerBottom')
+        self.assertEqual(ios.measured_bounds(payload, (440,956))['headerBounds'], legacy)
         payload.pop('headerBounds')
         self.assertNotIn('headerBounds', ios.measured_bounds(payload, (440,956)))
 
@@ -565,10 +578,11 @@ class TerminalFallbackTests(unittest.TestCase):
     def payload(self, image):
         stream = io.BytesIO()
         image.save(stream, format='PNG')
-        return {'screenSize':[440,956], 'safeFrame':[0,54,440,850], 'targetFrame':[20,70,400,30],
+        return {'screenSize':[440,956], 'safeFrame':[0,54,440,850], 'targetFrame':[20,106,400,12],
                 'terminalFrame':[0,170,440,430], 'identityVerified':True, 'noCredentialsVisible':True,
                 'boundSource':'terminal_control_bounds',
-                'headerBounds':{'brandFrame':[16,60,100,40], 'addFrame':[300,60,100,40],
+                'headerBounds':{'brandFrame':[16,54,100,20], 'addFrame':[300,54,100,20],
+                                'headingFrame':[16,82,200,20], 'headerBottom':80,
                                 'statusBarFrames':[[0,0,440,54]], 'sameOwner':True},
                 'controlBounds':{'dismissFrame':[20,120,100,50], 'helperFrames':[[20+i*55,600,50,44] for i in range(4)], 'sameOwner':True},
                 'nativeOwner':{'windowFrame':[0,0,440,956], 'webFrames':[[0,0,440,956]],
@@ -793,7 +807,7 @@ class CaptureDiagnosticsTests(unittest.TestCase):
 
     def test_header_diagnostics_are_accepted_at_both_terminal_stages(self):
         for phase in ('ordinary_terminal_capture','key_change_terminal_capture'):
-            for anchor in ('header_brand','header_add','status_bar'):
+            for anchor in ('header_brand','header_add','terminal_heading','status_bar'):
                 for reason in ('not_found','frame_invalid','owner_unproven','outside_safe_frame','layout_unstable'):
                     state=ios.Checkpoints(None,None,'/tmp',{})
                     detail={'anchor':anchor,'matchCount':0,'reason':reason,'candidates':[],'truncated':False}

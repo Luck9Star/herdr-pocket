@@ -873,23 +873,34 @@ func terminalControlRows(offset: CGFloat = 0, helperOffset: CGFloat = 0) -> [Obs
     }
     return Array(terminalRows(title).dropLast()) + [row(dismiss, path: [0, 0, 3])] + helpers
 }
-func terminalHeaderRows(_ brandY: CGFloat, addWeb: [Int] = [0, 0]) -> [Observed] {
+func terminalHeaderRows(_ brandY: CGFloat, headingY: CGFloat, addWeb: [Int] = [0, 0],
+                        bannerBottom: CGFloat?, headingLabel: String) -> [Observed] {
     let brandFrame = CGRect(x: 20, y: brandY, width: 130, height: 24)
     let brand = snapshot(.staticText, frame: brandFrame, label: "Herdr Pocket")
     let brandWrapper = snapshot(.other, frame: brandFrame, label: "Herdr Pocket")
     let add = snapshot(.button, frame: CGRect(x: 282, y: 72, width: 88, height: 44),
                        identifier: "host-open-remote", label: "＋ 添加主机")
+    let heading = snapshot(.staticText, frame: CGRect(x: 20, y: headingY, width: 190, height: 27),
+                           identifier: "ssh-page-heading", label: headingLabel)
     let otherWeb = addWeb == [0, 0] ? [] : [row(snapshot(.webView, frame: screen, label: ""), path: addWeb, web: addWeb)]
+    if let bottom = bannerBottom, addWeb == [0, 0] {
+        let banner = snapshot(.group, frame: CGRect(x: 0, y: 0, width: screen.width, height: bottom), label: "")
+        return [row(banner, path: [0, 0, 9]), row(brandWrapper, path: [0, 0, 9, 0]), row(brand, path: [0, 0, 9, 0, 0]),
+                row(add, path: [0, 0, 9, 1]), row(heading, path: [0, 0, 11])]
+    }
     return [row(brandWrapper, path: [0, 0, 9]), row(brand, path: [0, 0, 9, 0]),
-            row(add, path: addWeb + [10], web: addWeb)] + otherWeb
+            row(add, path: addWeb + [10], web: addWeb), row(heading, path: [0, 0, 11])] + otherWeb
 }
 func exerciseCapture(_ distinctSamples: [[Observed]], _ rows: [Observed] = terminalRows(),
                      error: String? = nil, hittable: Bool = true, headerY: CGFloat = 80,
-                     afterHeaderY: CGFloat? = nil, addWeb: [Int] = [0, 0],
+                     afterHeaderY: CGFloat? = nil, addWeb: [Int] = [0, 0], headingY: CGFloat = 150,
+                     afterHeadingY: CGFloat? = nil, bannerBottom: CGFloat? = nil, headingLabel: String = "普通 SSH 终端",
                      message: String, validate: (Observations) -> Void) {
-    let tree = rows + terminalHeaderRows(headerY, addWeb: addWeb)
+    let tree = rows + terminalHeaderRows(headerY, headingY: headingY, addWeb: addWeb, bannerBottom: bannerBottom, headingLabel: headingLabel)
     let samples = distinctSamples.enumerated().map { index, sample in
-        sample + terminalHeaderRows(index == distinctSamples.count - 1 ? afterHeaderY ?? headerY : headerY, addWeb: addWeb)
+        let final = index == distinctSamples.count - 1
+        return sample + terminalHeaderRows(final ? afterHeaderY ?? headerY : headerY,
+            headingY: final ? afterHeadingY ?? headingY : headingY, addWeb: addWeb, bannerBottom: bannerBottom, headingLabel: headingLabel)
     }
     let timeline = Observations(samples)
     let element = Element()
@@ -914,6 +925,7 @@ exerciseCapture([scrolledTerminal, exposedTerminal, exposedTerminal],
     check(timeline.webSurface.drags.count == 1 && capture?["terminalFrame"] as? [Double] == [20, 280, 350, 400] &&
           capture?["targetFrame"] as? [Double] == [20, 220, 250, 30] && capture?["noCredentialsVisible"] as? Bool == true &&
           header?["brandFrame"] as? [Double] == [20, 80, 130, 24] && header?["addFrame"] as? [Double] == [282, 72, 88, 44] &&
+          header?["headingFrame"] as? [Double] == [20, 150, 190, 27] && header?["headerBottom"] as? Double == 122 &&
           header?["statusBarFrames"] as? [[Double]] == [[Double(statusBar.minX), Double(statusBar.minY), Double(statusBar.width), Double(statusBar.height)]] &&
           header?["sameOwner"] as? Bool == true &&
           capture?["boundSource"] as? String == "native_region" && capture?["controlBounds"] == nil,
@@ -945,6 +957,34 @@ exerciseCapture([], error: "native_terminal_header_unproven", addWeb: [0, 1],
     let detail = timeline.checkpoints.first?.1["detail"] as? [String: Any]
     check(timeline.checkpoints.count == 1 && detail?["anchor"] as? String == "header_add" &&
           detail?["reason"] as? String == "owner_unproven", "foreign header geometry must not publish a screenshot")
+}
+exerciseCapture([], error: "native_terminal_header_unproven", headingY: 121,
+                message: "the flattened banner's trailing padding can cover a heading that clears its controls") { timeline in
+    let detail = timeline.checkpoints.first?.1["detail"] as? [String: Any]
+    check(timeline.checkpoints.count == 1 && detail?["anchor"] as? String == "terminal_heading" &&
+          detail?["reason"] as? String == "outside_safe_frame", "the clipped terminal H2 must not publish an image")
+}
+exerciseCapture([], error: "native_terminal_header_unproven", headingY: 129, bannerBottom: 130,
+                message: "a measured banner overrides the control and padding estimate") { timeline in
+    let detail = timeline.checkpoints.first?.1["detail"] as? [String: Any]
+    check(timeline.checkpoints.count == 1 && detail?["anchor"] as? String == "terminal_heading",
+          "the measured container may cover content below the fallback edge")
+}
+exerciseCapture([], bannerBottom: 130, message: "an unobscured heading and measured banner can publish") { timeline in
+    let header = timeline.checkpoints.first?.1["headerBounds"] as? [String: Any]
+    check(header?["headerBottom"] as? Double == 130, "actual banner geometry is sent with the original image")
+}
+exerciseCapture([exposedTerminal, exposedTerminal, exposedTerminal], error: "native_capture_geometry_changed", afterHeadingY: 152,
+                message: "an unobscured H2 that moves while taking the screenshot must still block publication") { timeline in
+    let detail = timeline.checkpoints.first?.1["detail"] as? [String: Any]
+    check(timeline.checkpoints.count == 1 && detail?["anchor"] as? String == "terminal_heading" &&
+          detail?["reason"] as? String == "layout_unstable", "the actual heading must stay still across the screenshot")
+}
+exerciseCapture([], error: "native_geometry_ambiguous", headingLabel: "普通 SSH",
+                message: "the H2 ID alone must not stand in for the whole label") { timeline in
+    let detail = timeline.checkpoints.first?.1["detail"] as? [String: Any]
+    check(timeline.checkpoints.count == 1 && detail?["anchor"] as? String == "terminal_heading" &&
+          detail?["reason"] as? String == "not_found", "a partial label is not a displayed heading witness")
 }
 exerciseCapture([], terminalRows(outputRole: .staticText), error: "native_geometry_ambiguous",
                 message: "a text leaf must never be used as terminal pixel bounds") { timeline in

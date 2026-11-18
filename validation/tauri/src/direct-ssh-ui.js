@@ -14,6 +14,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   let pasteRevision = 0;
   let retainedTrust = false;
   let disconnected = false;
+  let disconnectRequested = false;
 
   let terminal = null;
   let resizeWatch = null;
@@ -71,7 +72,16 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   });
   const controller = createDirectSsh({invoke, channelFactory,
     onStatus: (message, ready, reason, details) => {
+      if (disconnectRequested) {
+        disconnectRequested = false;
+        disconnected = details?.closed === true;
+        if (!disconnected) {
+          message = '已结束本地会话；无法确认远端连接已关闭。';
+          reason = 'close_unconfirmed';
+        }
+      }
       $('ssh-status').textContent = message;
+      $('ssh-disconnect').disabled = !ready;
       $('ssh-focus').disabled = !ready;
       if (hideKeyboard) hideKeyboard.disabled = !ready;
       renderKeys(ready);
@@ -81,7 +91,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
         resetReview();
         retainedTrust = true;
       }
-      showSetupNotice(!ready && (!!reason || disconnected));
+      showSetupNotice(!ready && !!reason);
       applyView(ready, freshRefusal);
       if (freshRefusal) scrollToStep();
       applyLock(ready, freshRefusal);
@@ -134,6 +144,8 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     mobileSection.dataset.sshStep = step;
     $('ssh-step-title').textContent = confirmed ? 'SSH 账号认证' : evidence ? '核对主机密钥' : '普通 SSH';
     $('ssh-target-fields').hidden = step !== 'target';
+    $('ssh-closed-feedback').hidden = !disconnected;
+    $('ssh-return-home').hidden = !disconnected;
     $('ssh-credentials').hidden = step !== 'auth';
     $('ssh-reviewed-target').hidden = step === 'target';
     $('ssh-trust-review').hidden = step !== 'trust';
@@ -247,6 +259,16 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       scrollToStep();
     };
     $('ssh-trust-cancel').onclick = cancelTrust;
+    const leaveTarget = () => {
+      const afterDisconnect = disconnected;
+      clearSecrets();
+      resetReview();
+      disconnected = false;
+      showSetupNotice(false);
+      refreshStep();
+      onBack?.(afterDisconnect);
+    };
+    $('ssh-return-home').onclick = () => { if (disconnected) leaveTarget(); };
     $('ssh-step-back').onclick = () => {
       if (controller.isActive() || submitting) {
         resetReview();
@@ -259,10 +281,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       } else if (evidence || probing) {
         cancelTrust();
       } else {
-        clearSecrets();
-        resetReview();
-        onBack?.(disconnected);
-        disconnected = false;
+        leaveTarget();
       }
       scrollToStep();
     };
@@ -431,14 +450,14 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   // Cancelling keeps the pin that was in effect and leaves the target blocked:
   // the same target must be probed and confirmed again before anything is used.
   const disconnect = (requested = false) => {
-    disconnected = compact() && requested;
     clearSecrets();
+    if (requested && !controller.isReady()) return;
+    disconnectRequested = compact() && requested;
+    disconnected = false;
+    $('ssh-disconnect').disabled = true;
     if (compact()) resetReview();
     void controller.close();
-    if (compact()) {
-      showSetupNotice(true);
-      scrollToStep();
-    }
+    scrollToStep();
   };
   $('ssh-disconnect').onclick = () => disconnect(true);
   $('ssh-cancel').onclick = () => disconnect();
@@ -474,7 +493,11 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     hide: () => {
       visibilityEpoch++;
       clearSecrets();
-      if (compact() && !controller.isActive()) resetReview();
+      if (compact() && !controller.isActive()) {
+        disconnectRequested = false;
+        disconnected = false;
+        resetReview();
+      }
       refreshStep();
       applyLock();
     }, show:()=>{ if(terminal) bindTerminal(terminal); if(controller.isReady()) requestAnimationFrame(resizer.request); }};

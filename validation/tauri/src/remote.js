@@ -867,9 +867,14 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       pairStatus('公开连接资料已填入；请独立核对用户名和主机公钥，再创建设备公开请求。');render();
     }});
   let sshBackSection = 'dashboard';
-  const ssh = initDirectSshUI({native, invoke, clipboardRead, onBack:disconnected=>navigateHome(disconnected ? 'dashboard' : sshBackSection),
+  const ssh = initDirectSshUI({native, invoke, clipboardRead,
+    onBack: disconnected => {
+      navigateHome(disconnected ? 'dashboard' : sshBackSection);
+      if (disconnected) $('host-ssh-disconnected').hidden = false;
+    },
     channelFactory:()=>new Channel(), terminalFactory:options=>createUnicodeTerminal(Terminal,options)});
   function setHomeSection(section) {
+    if (section !== 'dashboard') $('host-ssh-disconnected').hidden = true;
     const wasHidden = $('home-ssh').hidden;
     if (section !== 'ssh' && !$('home-ssh').hidden) ssh.hide();
     for (const name of ['dashboard','terminal','network','settings','add','ssh']) $('home-'+name).hidden=name!==section;

@@ -26,6 +26,7 @@
   <p id="host-filter-status" role="status" aria-live="polite" hidden></p>
   <button id="host-filter-reset" type="button" hidden>清除全部筛选</button>
 </section>
+<p id="host-ssh-disconnected" class="ssh-mobile-only" role="status" hidden>普通 SSH 已断开</p>
 <div id="host-list" class="host-list" aria-label="已存主机"></div><section id="host-empty" class="host-empty" hidden><span class="empty-terminal-icon" aria-hidden="true"><svg class="connection-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17"/></svg></span><h3>还没有主机</h3><p>添加主机后，在这里查看会话和任务状态。</p><button id="host-empty-add" type="button" class="primary">添加主机</button></section></div>
 <section id="home-add" hidden>
   <header class="connection-choice-header"><button type="button" id="add-back" aria-label="返回看板"><svg class="connection-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M14 4 L6 12 L14 20 M6 12 H20"/></svg></button><span>添加主机</span></header>
@@ -63,6 +64,9 @@
     <p class="ssh-desktop-only">连接普通远程 shell；无需 herdr。先探测指纹并通过可信渠道独立核对，再填写认证方式。</p>
     <form id="ssh-form" autocomplete="off">
       <div id="ssh-target-fields">
+        <section id="ssh-closed-feedback" class="ssh-mobile-only" aria-label="已断开连接" hidden>
+          <p>已断开连接</p><p>本次凭据已清空。重新连接时请重新填写。</p>
+        </section>
         <section id="ssh-prior-trust" class="ssh-mobile-only" aria-label="已保留旧信任" hidden>
           <p>已保留旧信任</p><p>请重新探测并独立核对主机指纹。</p>
         </section>
@@ -75,6 +79,7 @@
         <button id="ssh-probe" type="button">探测主机指纹</button>
         <p class="ssh-step-note ssh-mobile-only">探测时仅获取主机密钥，认证在核对之后进行。</p>
         <p id="ssh-prior-fingerprint" class="ssh-step-note ssh-mobile-only" hidden></p>
+        <button id="ssh-return-home" class="ssh-mobile-only" type="button" hidden>返回首页</button>
       </div>
       <p id="ssh-fingerprint" class="ssh-fingerprint ssh-desktop-only">请先探测并独立核对主机指纹。</p>
       <label class="review-check ssh-desktop-only"><input id="ssh-review" type="checkbox"><span>我已通过可信渠道独立核对以上指纹。</span></label>
@@ -84,7 +89,7 @@
       <section id="ssh-trust-review" class="ssh-mobile-only" hidden aria-label="核对主机密钥">
         <div id="ssh-reviewed-key">
           <p>主机密钥算法</p><p id="ssh-reviewed-algorithm"></p>
-          <p class="ssh-fingerprint-label">完整 SHA256 指纹</p><p id="ssh-reviewed-fingerprint"></p>
+          <p class="ssh-fingerprint-label">完整 SHA256 指纹</p><p id="ssh-fingerprint-frame"><span id="ssh-reviewed-fingerprint"></span></p>
         </div>
         <div id="ssh-independent-verification">
           <p>请通过服务器控制台或向管理员独立核对。</p>

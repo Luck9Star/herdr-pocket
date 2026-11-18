@@ -43,7 +43,7 @@ class Element {
   blur() {}
 }
 
-function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBottom = 130, compact = false, clipboardRead } = {}) {
+function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBottom = 130, compact = false, clipboardRead, onBack, failClose = false } = {}) {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const ids = [...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]);
   const nodes = Object.fromEntries(ids.map((id) => [id, new Element()]));
@@ -121,7 +121,10 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
       });
       return id;
     }
-    if (cmd === "ssh_shell_close") return {};
+    if (cmd === "ssh_shell_close") {
+      if (failClose) throw Error("fixture_close_failed");
+      return {};
+    }
     return {};
   };
   const terminalFactory = () => ({
@@ -133,7 +136,7 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
     focus() {},
     resize() {},
   });
-  initDirectSshUI({ native: true, invoke, channelFactory: () => (channel = {}), terminalFactory, clipboardRead });
+  initDirectSshUI({ native: true, invoke, channelFactory: () => (channel = {}), terminalFactory, clipboardRead, onBack });
   async function probe() {
     await nodes["ssh-probe"].onclick();
   }
@@ -767,4 +770,52 @@ test("mobile private key gate checks a complete envelope and recognized encrypte
   assert.equal(privateKeyReady(openSSH("none"),""),true);
   assert.equal(privateKeyReady(openSSH("aes256-ctr"),""),false);
   assert.equal(privateKeyReady(openSSH("aes256-ctr"),"passphrase"),true);
+});
+
+test("an acknowledged explicit close announces once and preserves the mobile target", async () => {
+  const announced = [];
+  const h = setup({compact:true,onBack:closed=>announced.push(closed)});
+  const n = h.nodes;
+  try {
+    assert.equal(n["ssh-closed-feedback"].hidden,true);
+    n["ssh-step-back"].onclick();
+    assert.deepEqual(announced,[false]);
+    h.setAccept(true);
+    await h.probe();
+    n["ssh-trust-confirm"].onclick();
+    await h.connect();
+    assert.equal(n["ssh-live"].hidden,false);
+    n["ssh-disconnect"].onclick();
+    n["ssh-disconnect"].onclick();
+    await flush();
+    assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_close").length,1);
+    assert.equal(n["ssh-closed-feedback"].hidden,false);
+    assert.equal(n["ssh-password"].value,"");
+    assert.equal(n["ssh-host"].value,"127.0.0.1");
+    assert.equal(n["ssh-user"].value,"tester");
+    assert.equal(n["ssh-port"].value,"2222");
+    n["ssh-return-home"].onclick();
+    n["ssh-return-home"].onclick();
+    assert.equal(n["ssh-closed-feedback"].hidden,true);
+    assert.deepEqual(announced,[false,true]);
+  } finally { h.restore(); }
+});
+
+test("an unconfirmed close is reported without creating a home disconnect notice", async () => {
+  const announced = [];
+  const h = setup({compact:true,failClose:true,onBack:closed=>announced.push(closed)});
+  const n = h.nodes;
+  try {
+    h.setAccept(true);
+    await h.probe();
+    n["ssh-trust-confirm"].onclick();
+    await h.connect();
+    n["ssh-disconnect"].onclick();
+    await flush();
+    assert.match(n["ssh-status"].textContent,/无法确认/);
+    assert.equal(n["ssh-closed-feedback"].hidden,true);
+    assert.equal(n["ssh-return-home"].hidden,true);
+    n["ssh-step-back"].onclick();
+    assert.deepEqual(announced,[false]);
+  } finally { h.restore(); }
 });

@@ -1883,7 +1883,7 @@ test('SSH authentication selection clears abandoned secrets and sends only the c
     n['ssh-password'].value='cancel secret';n['ssh-cancel'].click();assert.equal(n['ssh-password'].value,'');
     n['ssh-key'].value='disconnect secret';n['ssh-passphrase'].value='disconnect phrase';n['ssh-disconnect'].click();
     assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
-  } finally { h.finish(); h.restore(); }
+  } finally { h.finish(); await flush(); h.restore(); }
 });
 
 test('mobile mode controls retain editor focus until intentional mode transition', async () => {

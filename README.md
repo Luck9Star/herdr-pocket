@@ -6,7 +6,7 @@
 
 > 面向 SSH / herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
 
-**iOS 普通 SSH 与换钥 · 2026-11-18**　[R17 两壳同源模拟器结果](docs/70-ios-ssh-host-key-rotation.md#r17-同源结果两壳通过活动顶栏已分离)：Flutter 与 Tauri 的普通连接、换钥拒绝与取消保留 A、确认 B 后回显和主动断开均通过；Tauri 两张活动终端图的顶栏已与系统状态栏分离。页面已有滚动时通用 H2 标题仍可能被固定栏部分遮挡，需单独修复验证。范围为 iOS Simulator 和受控回环密码认证，非 iPhone 真机或手工输入法验收。
+**iOS 普通 SSH 与换钥 · 2026-11-18**　[R19 两壳同源模拟器结果](docs/70-ios-ssh-host-key-rotation.md#r19-同源结果两壳通过活动标题与顶栏分离)：Flutter 与 Tauri 普通连接、换钥拒绝及取消保留 A、确认 B 后回显和主动断开均通过；Tauri 活动页标题、顶栏与系统状态栏分离。自然截图中底部两个按钮边框末约 8 点被导航栏遮挡，文字和实际点击通过，可滚动查看。范围为 iOS Simulator 和受控回环密码认证，非 iPhone 真机或手工输入法验收。
 
 **普通 SSH 换钥专项 · 2026-11-17**　[两壳 S10 基线复现、同目标 A→B 验收约定与设备证据](docs/68-android-ssh-host-key-rotation.md)：统一源码 `7705241` 的 Flutter／Tauri Android API 35 模拟器验收均通过，完整 ABBB、取消保留旧信任、新指纹确认后输入回显及清理已核验；与下方历史普通 SSH 验收分开。
 
@@ -18,7 +18,7 @@
 
 **终端内核评估**　[libghostty-vt 两壳适配与风险](docs/64-libghostty-terminal-core-evaluation.md)：建议先做受控原型，暂不替换生产终端。
 
-**本分支入口 · 2026-11-15**　首页提供「普通 SSH」和「配对添加」：普通服务器核验指纹后，可用账号密码（仅本次连接在内存使用）或已有私钥打开真实远端 PTY；herdr 路线继续提供配对、会话看板与观察／逐键／草稿。新版看板分行呈现真实会话和受阻目标，并保留搜索与复核；[320/390/桌面界面及验收证据](docs/63-design-parity-and-direct-ssh.md#s01s05-设计与可达性)注明合成截图和设备证据的区别。S06 两条真实 SSH/herdr 的只读与受保护输入，已分别完成 Flutter Widget 回环与 Tauri 原生 Linux GTK 验收；普通 SSH 两壳在同源码 `a9afe9c` 的各自 debug 构建中通过 API35 Android 模拟器验收，Flutter 相同产品代码的独立验收构建另有 [iOS Simulator 密码连接实测](docs/63-design-parity-and-direct-ssh.md#flutter-普通-ssh-ios-simulator)。另见 [iOS 普通 SSH／换钥 R17 结果与历史证据](docs/70-ios-ssh-host-key-rotation.md)。同源码不等于同一二进制；CI 调试包与公开 Release 分开，具体功能须按 artifact 对应源码 SHA 核对，不能外推手机真机或五平台运行验收。
+**本分支入口 · 2026-11-15**　首页提供「普通 SSH」和「配对添加」：普通服务器核验指纹后，可用账号密码（仅本次连接在内存使用）或已有私钥打开真实远端 PTY；herdr 路线继续提供配对、会话看板与观察／逐键／草稿。新版看板分行呈现真实会话和受阻目标，并保留搜索与复核；[320/390/桌面界面及验收证据](docs/63-design-parity-and-direct-ssh.md#s01s05-设计与可达性)注明合成截图和设备证据的区别。S06 两条真实 SSH/herdr 的只读与受保护输入，已分别完成 Flutter Widget 回环与 Tauri 原生 Linux GTK 验收；普通 SSH 两壳在同源码 `a9afe9c` 的各自 debug 构建中通过 API35 Android 模拟器验收，Flutter 相同产品代码的独立验收构建另有 [iOS Simulator 密码连接实测](docs/63-design-parity-and-direct-ssh.md#flutter-普通-ssh-ios-simulator)。另见 [iOS 普通 SSH／换钥 R19 结果与历史证据](docs/70-ios-ssh-host-key-rotation.md)。同源码不等于同一二进制；CI 调试包与公开 Release 分开，具体功能须按 artifact 对应源码 SHA 核对，不能外推手机真机或五平台运行验收。
 
 **从这里开始**　[阶段交接：已完成、未完成与恢复顺序](https://github.com/Luck9Star/herdr-pocket/blob/85c150b24dca14412cf01075b832c1014547a3aa/docs/56-project-status-and-handoff.md) · [原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [历史下载、验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)
 

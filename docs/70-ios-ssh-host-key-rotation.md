@@ -1,8 +1,24 @@
 # iOS 普通 SSH 与主机换钥验收
 
-状态：2026-11-18，**R17 同源批次两壳普通 SSH 和换钥流程均通过；Tauri 两张活动终端图首次提供顶栏与系统状态栏明确分离的几何证明**。页面已滚动时通用二级标题仍可能被固定栏部分遮挡，需单独修复验证。R15、R16、R6 及更早结果均保留为历史。
+状态：2026-11-18，**R19 同源批次两壳普通 SSH 与换钥均通过；Tauri 两张活动终端图中标题、顶栏与系统状态栏分离**。Tauri 自然截图底部按钮边框仍有局部遮挡，见下述范围；R18、R17、R15 及更早结果保留为历史。
 
 范围为 GitHub 托管 macOS 上的受控 iOS Simulator、临时 loopback SSH 和密码认证。模拟器安装、应用界面、服务端协议、完整测试通过及最终画面复核分别记录；本页不证明 iPhone 真机、手工／中文 IME、外部网络、生产主机或五平台支持。
+
+## R19 同源结果：两壳通过，活动标题与顶栏分离
+
+同一源码 [`58fe474384fe7aa644f41b1662d2919100cb0842`](https://github.com/Luck9Star/herdr-pocket/commit/58fe474384fe7aa644f41b1662d2919100cb0842) 的 [Actions 运行 44278328784](https://github.com/Luck9Star/herdr-pocket/actions/runs/44278328784) 完成：[Flutter 作业 134712097532](https://github.com/Luck9Star/herdr-pocket/actions/runs/44278328784/job/134712097532) 与 [Tauri 作业 134712098125](https://github.com/Luck9Star/herdr-pocket/actions/runs/44278328784/job/134712098125) 均通过。两份结果均为 `passed`；Flutter 为 iPhone 11、Tauri 为 iPhone 17 Pro Max，均为 iOS 26.2 Simulator。此前本机检查分别为 Node 658 项、Python 73 项和 Swift 5 项通过，不替代官方设备作业。
+
+两壳服务端均记录普通 AA 与换钥 ABBB：探测、拒绝和重新探测阶段零认证、PTY、shell 与输入输出；取消保留 A，重新探测并明确确认 B 后，最后一条 B 才认证、取得 PTY／shell 并回显，最终主动断开且连接关闭。两壳各两张终端原图的标记、八词及连续顺序 OCR 均通过，原图与判据哈希相符；审查图不运行终端 OCR。[R19 官方证据归档索引](evidence/ios-ssh-20261118/r19-official-index.json)提供两壳结果、原图与判据的映射。
+
+Tauri 普通和换钥终端原图均记录：系统栏下缘 `y=54` 点，品牌与添加按钮上缘 `y=80`，相距 26 点；固定顶栏下缘 `y=130`，页面 H2 上缘 `y=161`，相距 31 点；目标上缘为 `y=246`。普通与换钥两次首页就绪观察分别为 25.822 秒和 1.444 秒，这只是本批采样，不代表性能保证。
+
+Tauri 两张自然终端截图底部的「打开键盘」和「断开连接」按钮边框末约 8 点被底部导航遮挡；文字可见、实际点击通过，也可滚动查看。这一剩余视觉问题与本批 SSH、OCR 及顶栏几何结果分别记录，不称为界面完全无缺陷。
+
+本批仅覆盖受控 iOS 模拟器、loopback 与密码认证，不证明实体 iPhone、手工／中文输入法、外网生产主机或五平台就绪；Flutter 记录 `physicalImeVerified=false`。两壳受检清理通过。
+
+## R18 历史结果：Tauri 冷启动首页未进入 SSH
+
+[运行 44271043975](https://github.com/Luck9Star/herdr-pocket/actions/runs/44271043975) 的 Flutter 通过；Tauri 在 `ordinary_form / ordinary_open_add` 报 `native_home_identity_unproven`，普通案例失败、换钥未运行，未进入 SSH。该观察不足以归因为某条原生命令；R19 是独立后续批次。
 
 ## R17 同源结果：两壳通过，活动顶栏已分离
 
@@ -10,7 +26,7 @@
 
 普通连接的 AA 与换钥 ABBB 均由服务端记录：探测与拒绝阶段无认证、PTY、shell 或输入输出；用户确认后连接的末条会话认证成功、输入及回显，最后主动断开。换钥拒绝后取消保留 A，重新探测并明确确认 B 后才连接。两壳各两张终端图的 OCR 均通过标记、八词和连续顺序检查，原图与判据 SHA256 相符；审查图不作终端 OCR。
 
-Tauri 的普通与换钥终端原图均记录同一窗口／WebView 的品牌、添加按钮与系统栏：系统栏下缘为 `y=54` 点，品牌和添加按钮上缘均为 `y=80` 点；两个控件完整位于安全区内。三张 Tauri 原图：[普通终端](evidence/ios-ssh-20261118/r17-tauri-ordinary-terminal.png) · [换钥审查](evidence/ios-ssh-20261118/r17-tauri-key-change-review.png) · [确认 B 后终端](evidence/ios-ssh-20261118/r17-tauri-key-change-terminal.png)。该证明覆盖这两张活动终端图的顶栏与系统状态栏分离；页面已有滚动时，通用 H2 标题仍可能被固定栏部分遮挡。该剩余问题需另行修复和验证，R17 不证明其已解决。
+Tauri 的普通与换钥终端原图均记录同一窗口／WebView 的品牌、添加按钮与系统栏：系统栏下缘为 `y=54` 点，品牌和添加按钮上缘均为 `y=80` 点；两个控件完整位于安全区内。三张 Tauri 原图：[普通终端](evidence/ios-ssh-20261118/r17-tauri-ordinary-terminal.png) · [换钥审查](evidence/ios-ssh-20261118/r17-tauri-key-change-review.png) · [确认 B 后终端](evidence/ios-ssh-20261118/r17-tauri-key-change-terminal.png)。该证明覆盖这两张活动终端图的顶栏与系统状态栏分离；页面已有滚动时，通用 H2 标题仍可能被固定栏部分遮挡。R17 不证明其已解决；后续 R19 的活动页面几何见本页开头。
 
 两壳结果、原图与 OCR 文件的来源、映射及哈希见 [R17 官方证据归档索引](evidence/ios-ssh-20261118/r17-official-index.json)。
 

@@ -411,10 +411,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
           style: mobileSecondaryButton, onPressed: () => Navigator.pop(context, false), child: Text(hostKeyReviewRequired ? '取消核对，保留旧信任' : '取消核对'))),
       ])));
   }
-  void returnAfterDisconnect() {
-    if (userDisconnected) { userDisconnected = false; widget.onReturnAfterDisconnect?.call(); }
-    Navigator.pop(context);
-  }
+  void returnAfterDisconnect() => Navigator.pop(context);
   Widget mobileTargetForm() => ListView(key: const ValueKey('direct-form'), padding: EdgeInsets.fromLTRB(mobileMargin, 20, mobileMargin, 24), children: [
     if (userDisconnected && !busy) ...[
       Container(key: const ValueKey('direct-closed-feedback'), constraints: const BoxConstraints(minHeight: 66),
@@ -541,8 +538,10 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   ]));
   @override
   Widget build(BuildContext context) => PopScope<void>(
-    canPop: hostKeyChange == null && !userDisconnected,
-    onPopInvokedWithResult: (didPop, result) { if (!didPop && userDisconnected && hostKeyChange == null) returnAfterDisconnect(); },
+    canPop: hostKeyChange == null,
+    onPopInvokedWithResult: (didPop, result) {
+      if (didPop && userDisconnected) { userDisconnected = false; widget.onReturnAfterDisconnect?.call(); }
+    },
     child: Scaffold(
       appBar: mobileLayout && !connected ? mobileHeader(hostKeyChange != null ? '主机指纹发生变化' : mobileAuth && !hostKeyReviewRequired ? 'SSH 账号认证' : '普通 SSH',
         canGoBack: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false), showStop: busy, onBack: mobileAuth && !hostKeyReviewRequired ? () { setState(() { mobileAuth = false; secret.clear(); passphrase.clear(); }); }

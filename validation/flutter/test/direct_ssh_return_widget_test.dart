@@ -97,7 +97,72 @@ void main() {
       }
       expect(key('home-ssh-closed'), findsNothing);
       expect(tester.takeException(), isNull); await tester.pumpWidget(const SizedBox()); catalog.dispose();
+    }, variant: TargetPlatformVariant({TargetPlatform.iOS, TargetPlatform.android}),
+      skip: Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT'] == null);
+  }
+  for (final saved in [false, true]) {
+    testWidgets('iOS edge swipe commits disconnect only when completed from ${saved ? 'saved board' : 'connection chooser'}', (tester) async {
+      final port = Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT']!;
+      tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390, 844);
+      tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
+      tester.view.viewPadding = const FakeViewPadding(top: 47, bottom: 34);
+      addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetPadding); addTearDown(tester.view.resetViewPadding);
+      final tokens = (await tester.runAsync(DesignTokens.load))!;
+      final catalog = HostCatalog(storage: MemoryCatalogStorage(), clock: () => 1000);
+      await catalog.load();
+      if (saved) await catalog.add(tabProfile('Saved host', 'session', '127.0.0.1', 'direct', 'fixture'));
+      await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: HostCatalogPage(
+        tokens: tokens, catalog: catalog, offlineBuilder: (_) => const SizedBox())));
+      await tester.pumpAndSettle();
+      Finder key(String id) => find.byKey(ValueKey(id));
+      Future<void> open() async {
+        if (saved) {
+          await tester.ensureVisible(key('hosts-direct-ssh')); await tester.pumpAndSettle();
+          await tester.tap(key('hosts-direct-ssh'));
+        } else {
+          await tester.tap(key('hosts-add')); await tester.pumpAndSettle();
+          await tester.tap(key('choose-ssh'));
+        }
+        await tester.pumpAndSettle();
+      }
+      Future<void> edgeDrag(double distance) async {
+        final gesture = await tester.startGesture(const Offset(1, 350));
+        await tester.pump(); await gesture.moveBy(const Offset(20, 0)); await tester.pump();
+        expect(Navigator.of(tester.element(key('direct-form'))).userGestureInProgress, isTrue);
+        await gesture.moveBy(Offset(distance - 20, 0));
+        await tester.pump(const Duration(milliseconds: 300));
+        await gesture.up(); await tester.pumpAndSettle();
+      }
+      final dynamic homeState = tester.state(find.byType(HostCatalogPage, skipOffstage: false));
+      // A completed edge swipe before connecting must not report a disconnect.
+      await open(); await edgeDrag(320);
+      expect(key('direct-form'), findsNothing); expect(key('home-ssh-closed'), findsNothing);
+      expect(homeState.sshClosedNotice, isFalse);
+      await open();
+      await tester.enterText(key('direct-host'), '127.0.0.1'); await tester.enterText(key('direct-port'), port);
+      await tester.enterText(key('direct-user'), 'fixture'); await tester.pump();
+      await tester.tap(key('direct-probe')); await tester.pump(); await waitFor(tester, key('direct-trust-key')); await tester.pumpAndSettle();
+      await tester.tap(key('direct-trust-key')); await tester.pumpAndSettle();
+      await tester.enterText(key('direct-secret'), 'temporary'); await tester.pump();
+      await tester.ensureVisible(key('direct-connect')); await tester.tap(key('direct-connect')); await tester.pump();
+      await waitFor(tester, find.byType(TerminalView));
+      await tester.tap(find.text('断开')); await tester.pumpAndSettle();
+      expect(key('direct-closed-feedback'), findsOneWidget);
+      // A short drag is cancelled: the route remains and the home notice is not emitted.
+      await edgeDrag(35);
+      expect(key('direct-closed-feedback'), findsOneWidget);
+      expect(key('home-ssh-closed'), findsNothing); expect(homeState.sshClosedNotice, isFalse);
+      await edgeDrag(320);
+      expect(key('direct-form'), findsNothing); expect(key('home-ssh-closed'), findsOneWidget);
+      expect(homeState.sshClosedNotice, isTrue);
+      if (saved) expect(find.text('Saved host'), findsOneWidget);
+      await tester.tap(find.text('设置').last); await tester.pumpAndSettle();
+      await tester.tap(find.text('看板').last); await tester.pumpAndSettle();
+      expect(key('home-ssh-closed'), findsNothing);
+      expect(tester.takeException(), isNull); await tester.pumpWidget(const SizedBox()); catalog.dispose();
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS),
       skip: Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT'] == null);
   }
+
 }

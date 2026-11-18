@@ -77,13 +77,13 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       renderKeys(ready);
       const freshRefusal = reason === 'host_key_mismatch' || details?.blocked === true;
       if (freshRefusal) {
+        renderKeyChange(details, evidence);
         resetReview();
         retainedTrust = true;
-        renderKeyChange(details);
       }
-      else renderKeyChange(null);
       showSetupNotice(!ready && (!!reason || disconnected));
       applyView(ready, freshRefusal);
+      if (freshRefusal) scrollToStep();
       applyLock(ready, freshRefusal);
       if (ready) {
         retainedTrust = false;
@@ -269,14 +269,16 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   }
   // The blocked view keeps the pin that was in effect and, only when the refused handshake
   // carried one, the public key fingerprint that handshake actually presented.
-  function renderKeyChange(details) {
-    if (!details) return;
-    const t = target();
+  function renderKeyChange(details, reviewed) {
+    const endpoint = targetText(reviewed?.target ?? target());
     $('ssh-key-change-old').textContent = `旧：${details.pinnedFingerprint || '见上方指纹显示'}`;
     $('ssh-key-change-new').textContent = details.presentedFingerprint
       ? `新：${details.presentedFingerprint}`
       : '新：待重新探测';
-    $('ssh-key-change-target').textContent = `目标：${t.username}@${t.host}:${t.port}`;
+    $('ssh-key-change-target').textContent = `目标：${endpoint}`;
+    $('ssh-key-change-endpoint').textContent = endpoint;
+    $('ssh-key-change-algorithms').textContent = reviewed?.algorithm
+      ? `旧密钥算法 · ${reviewed.algorithm}` : '密钥算法待重新探测';
   }
   function changeMethod(key) {
     clearSecrets();
@@ -348,7 +350,6 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     resetReview();
     const revision = probeRevision;
     probing = true;
-    renderKeyChange(null);
     showSetupNotice(false);
     applyView(false, false);
     applyLock(false, false);
@@ -356,11 +357,12 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       const key = await controller.probe(selected);
       if (revision !== probeRevision) return;
       if (typeof key?.publicKey !== 'string' || typeof key?.fingerprint !== 'string') throw Error('probe_unavailable');
-      evidence = {target:selected, rechecking};
+      const algorithm = key.publicKey.trim().split(/\s+/,1)[0];
+      evidence = {target:selected, rechecking, algorithm};
       $('ssh-fingerprint').textContent = `主机 ${key.host}:${key.port} · ${key.fingerprint} · ${key.publicKey}`;
       if ($('ssh-reviewed-endpoint')) {
         $('ssh-reviewed-endpoint').textContent = targetText(selected);
-        $('ssh-reviewed-algorithm').textContent = key.publicKey.trim().split(/\s+/,1)[0];
+        $('ssh-reviewed-algorithm').textContent = algorithm;
         $('ssh-reviewed-fingerprint').textContent = key.fingerprint;
         $('ssh-reviewed-public-key').textContent = key.publicKey;
       }
@@ -447,7 +449,6 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     retainedTrust = true;
     const pinned = controller.pinnedFingerprint();
     if (pinned) $('ssh-fingerprint').textContent = `主机 ${target().host}:${target().port} · ${pinned} · 已保留的旧信任`;
-    renderKeyChange(null);
     // Back to the setup form for the same target with the old trust on display;
     // review, authentication and connect stay locked until the next re-probe and
     // the user's own confirmation of that fingerprint.

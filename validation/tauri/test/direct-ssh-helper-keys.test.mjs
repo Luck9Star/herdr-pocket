@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { initDirectSshUI } from "../src/direct-ssh-ui.js";
@@ -25,39 +26,8 @@ class Element {
   }
 }
 function setup() {
-  const ids = [
-    "ssh-host",
-    "ssh-port",
-    "ssh-user",
-    "ssh-password",
-    "ssh-key",
-    "ssh-passphrase",
-    "ssh-auth-method",
-    "ssh-review",
-    "ssh-probe",
-    "ssh-form",
-    "ssh-status",
-    "ssh-focus",
-    "ssh-hide-keyboard",
-    "ssh-setup",
-    "ssh-live",
-    "ssh-fingerprint",
-      "ssh-key-change",
-      "ssh-key-change-old",
-      "ssh-key-change-new",
-      "ssh-key-change-target",
-      "ssh-key-change-note",
-      "ssh-key-recheck",
-      "ssh-key-cancel",
-    "ssh-target",
-    "ssh-disconnect",
-    "ssh-cancel",
-    "ssh-terminal",
-    "ssh-page-heading",
-    "ssh-helper-keys",
-    "home-ssh",
-    "host-home",
-  ];
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const ids = [...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]);
   const nodes = Object.fromEntries(ids.map((id) => [id, new Element()]));
   nodes["ssh-host"].value = "example.test";
   nodes["ssh-port"].value = "22";

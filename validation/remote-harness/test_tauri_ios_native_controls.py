@@ -370,6 +370,7 @@ struct Adapter {
             "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
             "func tap(_ item:", "func fillPassword(_ item:",
             "func safeFrame(_ anchors:", "func captureDiagnostic(_ anchor:", "func exactObserved(_ rows:",
+            "struct CaptureAnchors {", "func terminalBoundaryControls(_ title:", "func verifyCaptureControls(_ selected:",
             "func waitForTerminalKeyboardToHide()", "func stableCaptureLayout(_ before:",
             "func terminalCaptureFrame(_ anchors:", "func screenshot(_ stage:",
             "func fillForm(_ name:", "func pageScope(_ item:")) + r'''
@@ -779,13 +780,27 @@ func terminalRows(_ title: CGRect = titleFrame, _ output: CGRect = outputFrame, 
      row(snapshot(.staticText, frame: title, label: terminalTitle), path: [0, 0, 1]),
      row(snapshot(outputRole, frame: output, identifier: "ssh-terminal-output", label: terminalLabel), path: [0, 0, 2])]
 }
+func terminalControlRows(offset: CGFloat = 0, helperOffset: CGFloat = 0) -> [Observed] {
+    let title = titleFrame.offsetBy(dx: 0, dy: offset)
+    let dismiss = snapshot(.button, frame: CGRect(x: 20, y: 260 + offset, width: 82, height: 44),
+                           identifier: "ssh-hide-keyboard", label: "收起键盘")
+    let helpers = ["Esc", "Tab", "上方向键", "↓"].enumerated().map { index, label in
+        let frame = CGRect(x: 20 + CGFloat(index) * 48, y: 710 + offset + (index == 3 ? helperOffset : 0), width: 44, height: 44)
+        return row(snapshot(.button, frame: frame, label: label), path: [0, 0, 4, index])
+    }
+    return Array(terminalRows(title).dropLast()) + [row(dismiss, path: [0, 0, 3])] + helpers
+}
 func exerciseCapture(_ distinctSamples: [[Observed]], _ rows: [Observed] = terminalRows(),
-                     error: String? = nil, message: String, validate: (Observations) -> Void) {
+                     error: String? = nil, hittable: Bool = true, message: String, validate: (Observations) -> Void) {
     let timeline = Observations(distinctSamples)
     let element = Element()
     let app = App(frame: screen)
+    let controls = Dictionary(uniqueKeysWithValues: rows.filter { $0.snapshot.elementType == .button }.map {
+        ($0.path, LiveControl(snapshot: $0.snapshot, hittable: hittable, element: Element()))
+    })
     let candidate = Adapter(app: app, current: LiveControl(snapshot: snapshot(), hittable: true, element: element),
-                            rows: rows, blockers: [statusBar], observations: timeline, nativePhase: "ordinary_terminal_capture")
+                            rows: rows, blockers: [statusBar], observations: timeline, nativePhase: "ordinary_terminal_capture",
+                            pathControls: controls)
     var failure: String?
     do { try candidate.terminalScreenshot() } catch let rejected as Rejected { failure = rejected.reason } catch { failure = "unexpected" }
     check(failure == error && app.input.inputs.isEmpty && element.inputs.isEmpty, message)
@@ -797,7 +812,8 @@ exerciseCapture([scrolledTerminal, exposedTerminal, exposedTerminal],
                 message: "capture must settle after the safely scrolled terminal returns to the viewport") { timeline in
     let capture = timeline.checkpoints.first { $0.0 == "ordinary_terminal" }?.1
     check(timeline.webSurface.drags.count == 1 && capture?["terminalFrame"] as? [Double] == [20, 280, 350, 400] &&
-          capture?["targetFrame"] as? [Double] == [20, 220, 250, 30] && capture?["noCredentialsVisible"] as? Bool == true,
+          capture?["targetFrame"] as? [Double] == [20, 220, 250, 30] && capture?["noCredentialsVisible"] as? Bool == true &&
+          capture?["boundSource"] as? String == "native_region" && capture?["controlBounds"] == nil,
           "capture must reveal both anchors with a bounded scroll and post only the real output container's measured bounds")
 }
 let stickyTitleLayout = terminalRows(titleFrame, outputFrame.offsetBy(dx: 0, dy: -50))
@@ -826,6 +842,39 @@ let shiftedOutput = terminalRows(titleFrame, outputFrame.offsetBy(dx: 0, dy: 12)
 exerciseCapture([exposedTerminal, exposedTerminal, shiftedOutput], error: "native_capture_geometry_changed",
                 message: "layout changes between stable observation and post-shot observation block publication") { timeline in
     check(timeline.checkpoints.allSatisfy { $0.0 == "native_capture_diagnostic" }, "changed geometry must not publish an image")
+}
+let controlRows = terminalControlRows()
+exerciseCapture([terminalControlRows(offset: 180), controlRows, controlRows], controlRows,
+                message: "the real helper row can bound a capture after one evidenced page scroll") { timeline in
+    let capture = timeline.checkpoints.first { $0.0 == "ordinary_terminal" }?.1
+    let bounds = capture?["controlBounds"] as? [String: Any]
+    let helpers = [[20.0, 710, 44, 44], [68, 710, 44, 44], [116, 710, 44, 44], [164, 710, 44, 44]]
+    check(timeline.webSurface.drags.count == 1 && capture?["boundSource"] as? String == "terminal_control_bounds" &&
+          capture?["terminalFrame"] as? [Double] == [0, 304, 390, 406] && capture?["targetFrame"] as? [Double] == [20, 220, 250, 30] &&
+          bounds?["dismissFrame"] as? [Double] == [20, 260, 82, 44] && bounds?["helperFrames"] as? [[Double]] == helpers &&
+          bounds?["sameOwner"] as? Bool == true, "the candidate band must carry the real upper and lower control measurements")
+}
+exerciseCapture([], controlRows, error: "native_capture_geometry_changed", hittable: false,
+                message: "non-hittable boundary controls must not validate a fallback capture") { timeline in
+    check(timeline.checkpoints.allSatisfy { $0.0 == "native_capture_diagnostic" }, "unchecked controls must not publish an image")
+}
+exerciseCapture([], terminalControlRows(helperOffset: 4), error: "native_terminal_frame_invalid",
+                message: "a split or misaligned set of helper keys is not a single bound row") { timeline in
+    check(timeline.webSurface.drags.isEmpty && timeline.checkpoints.allSatisfy { $0.0 == "native_capture_diagnostic" },
+          "misaligned helpers authorize neither a page scroll nor a screenshot")
+}
+exerciseCapture([], controlRows + [row(snapshot(.button, frame: CGRect(x: 20, y: 770, width: 44, height: 44), label: "Esc"),
+                                       path: [0, 0, 7])], error: "native_owner_ambiguous",
+                message: "a second Esc cannot be ignored to make a unique lower boundary") { timeline in
+    check(timeline.checkpoints.allSatisfy { $0.0 == "native_capture_diagnostic" }, "ambiguous helpers must not export a screenshot")
+}
+exerciseCapture([controlRows, controlRows, terminalControlRows(helperOffset: 1)], controlRows,
+                error: "native_capture_geometry_changed", message: "changed helper bounds after a captured image must block publication") { timeline in
+    check(timeline.checkpoints.allSatisfy { $0.0 == "native_capture_diagnostic" }, "a moved boundary cannot publish an image")
+}
+exerciseCapture([], controlRows + [terminalRows(outputRole: .staticText)[3]], error: "native_geometry_ambiguous",
+                message: "an invalid named region must not be bypassed by the boundary fallback") { timeline in
+    check(timeline.checkpoints.allSatisfy { $0.0 == "native_capture_diagnostic" }, "invalid named geometry still rejects capture")
 }
 let writeElement = Element()
 let offscreen = snapshot(frame: movedFrame.offsetBy(dx: 0, dy: -300))

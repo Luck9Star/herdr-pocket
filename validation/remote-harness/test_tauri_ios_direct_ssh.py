@@ -533,6 +533,79 @@ class GeometryReasonTests(unittest.TestCase):
                 self.assertNotIn('geometryReasonTrace', state.result)
 
 
+class TerminalFallbackTests(unittest.TestCase):
+    def payload(self, image):
+        stream = io.BytesIO()
+        image.save(stream, format='PNG')
+        return {'screenSize':[440,956], 'safeFrame':[0,54,440,850], 'targetFrame':[20,70,400,30],
+                'terminalFrame':[0,170,440,430], 'identityVerified':True, 'noCredentialsVisible':True,
+                'boundSource':'terminal_control_bounds',
+                'controlBounds':{'dismissFrame':[20,120,100,50], 'helperFrames':[[20+i*55,600,50,44] for i in range(4)], 'sameOwner':True},
+                'nativeOwner':{'windowFrame':[0,0,440,956], 'webFrames':[[0,0,440,956]],
+                               'webWrapperCount':1, 'uniqueWebBoundsCount':1},
+                'pngBase64':base64.b64encode(stream.getvalue()).decode()}
+
+    def image(self, boxes):
+        from PIL import Image, ImageDraw
+        image = Image.new('RGB', (440,956), 'white')
+        draw = ImageDraw.Draw(image)
+        for box in boxes: draw.rectangle(box, fill=(11,15,23))
+        return image
+
+    def test_unique_terminal_background_is_inward_and_same_png_reaches_ocr(self):
+        image = self.image([(20,190,419,549)])
+        payload = self.payload(image)
+        data = base64.b64decode(payload['pngBase64'])
+        class Fixture:
+            username='fixture'; port=1234; screen_token='synthetic'
+        result={'cases':{'ordinary':{}},'artifacts':{}}
+        criteria={'imageSha256':hashlib.sha256(data).hexdigest(), 'markerVisible':True,
+                  'tokenVisible':True, 'proofSequenceVisible':True}
+        with tempfile.TemporaryDirectory() as directory, patch.object(ios, 'verify_terminal_screenshot', return_value=criteria) as gate:
+            ios.Checkpoints(None,None,directory,result).capture('ordinary_terminal',payload,Fixture())
+            bounds=result['cases']['ordinary']['terminalScreenshot']['terminalBounds']
+            self.assertEqual(bounds,[20,190,400,360])
+            gate.assert_called_once_with(data,expected_token='synthetic',bounds=bounds)
+            self.assertEqual(result['cases']['ordinary']['terminalScreenshot']['candidateTerminalBounds'],[0,170,440,430])
+
+    def test_scaled_narrow_background_tolerates_text_and_antialiasing(self):
+        from PIL import Image, ImageDraw
+        image=Image.new('RGB',(960,1200),'white')
+        draw=ImageDraw.Draw(image)
+        draw.rectangle((30,0,929,999),fill=(14,17,26))
+        for y in range(40,800,60):
+            draw.rectangle((60,y,450,y+9),fill=(220,220,220))
+            draw.rectangle((60,y+10,450,y+12),fill=(25,28,37))
+        bounds=ios.terminal_background_bounds(image,[0,0,960,1100],3)
+        self.assertEqual(bounds,[30,3,900,997])
+        with self.assertRaisesRegex(ios.Failure,'terminal_background_invalid'):
+            ios.terminal_background_bounds(image,[0,0,200,1100],3)
+
+    def test_reject_missing_multiple_wrong_color_and_unbounded_background(self):
+        cases = [[], [(20,190,419,299),(20,380,419,499)], [(0,170,439,599)]]
+        for boxes in cases:
+            with self.subTest(boxes=boxes), self.assertRaisesRegex(ios.Failure,'terminal_background_invalid'):
+                ios.terminal_background_bounds(self.image(boxes),[0,170,440,430],1)
+        image=self.image([])
+        from PIL import ImageDraw
+        ImageDraw.Draw(image).rectangle((20,190,419,549),fill=(80,80,80))
+        with self.assertRaisesRegex(ios.Failure,'terminal_background_invalid'):
+            ios.terminal_background_bounds(image,[0,170,440,430],1)
+
+    def test_reject_false_or_overlapping_control_proofs(self):
+        base=self.payload(self.image([(20,190,419,549)]))
+        cases=[]
+        for change in ('owner','order','candidate','target'):
+            payload=copy.deepcopy(base)
+            if change == 'owner': payload['controlBounds']['sameOwner']=False
+            elif change == 'order': payload['controlBounds']['helperFrames'][1][0]=25
+            elif change == 'candidate': payload['terminalFrame']=[0,171,440,429]
+            else: payload['targetFrame']=[20,180,400,30]
+            cases.append(payload)
+        for payload in cases:
+            with self.subTest(payload=payload), self.assertRaises(ios.Failure): ios.measured_bounds(payload,(440,956))
+
+
 class CaseLifecycleTests(unittest.TestCase):
     def setUp(self):
         self.ordinary, self.rotation = object(), object()

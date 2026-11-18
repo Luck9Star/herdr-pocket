@@ -563,9 +563,68 @@ def measured_bounds(payload, image_size):
     x, y, w, h = target
     require(tx + tw <= x or x + w <= tx or ty + th <= y or y + h <= ty,
             'tauri_ios_terminal_target_overlap')
+    source = payload.get('boundSource', 'native_region')
+    require(source in ('native_region', 'terminal_control_bounds'), 'tauri_ios_capture_bounds_source_invalid')
+    if source == 'terminal_control_bounds':
+        controls = payload.get('controlBounds')
+        require(isinstance(controls, dict) and set(controls) == {'dismissFrame', 'helperFrames', 'sameOwner'}
+                and controls['sameOwner'] is True and isinstance(controls['helperFrames'], list)
+                and len(controls['helperFrames']) == 4, 'tauri_ios_capture_controls_invalid')
+        frames = [controls['dismissFrame'], *controls['helperFrames']]
+        require(all(isinstance(f, list) and len(f) == 4 and
+                    all(type(n) in (float, int) and math.isfinite(n) for n in f) and inside(f, safe)
+                    for f in frames), 'tauri_ios_capture_controls_invalid')
+        dismiss, *helpers = frames
+        require(all(a[0] + a[2] <= b[0] for a, b in zip(helpers, helpers[1:]))
+                and max(f[1] for f in helpers) < min(f[1] + f[3] for f in helpers)
+                and all(abs(f[1]-helpers[0][1]) <= 1 and abs(f[1]+f[3]-helpers[0][1]-helpers[0][3]) <= 1 for f in helpers)
+                and dismiss[1] + dismiss[3] < min(f[1] for f in helpers), 'tauri_ios_capture_controls_invalid')
+        expected = [safe[0], dismiss[1] + dismiss[3], safe[2],
+                    min(f[1] for f in helpers) - dismiss[1] - dismiss[3]]
+        require(all(abs(a-b) <= .01 for a,b in zip(terminal, expected)), 'tauri_ios_capture_controls_invalid')
+    else:
+        require('controlBounds' not in payload, 'tauri_ios_capture_controls_invalid')
     bounds = pixels(terminal)
     require(bounds[2] > 0 and bounds[3] > 0, 'tauri_ios_native_geometry_invalid')
-    return {'terminalBounds': bounds, 'targetBounds': pixels(target), 'nativeScale': sx, **ownership}
+    result = {'terminalBounds': bounds, 'targetBounds': pixels(target), 'nativeScale': sx, **ownership}
+    if 'boundSource' in payload:
+        result['boundSource'] = source
+    if source == 'terminal_control_bounds':
+        result['controlBounds'] = json.loads(json.dumps(controls))
+    return result
+
+
+def terminal_background_bounds(image, candidate, scale):
+    """Select one bounded xterm background region from the original PNG or fail closed."""
+    x, y, width, height = candidate
+    require(width >= 100 * scale and height >= 40 * scale, 'tauri_ios_terminal_background_invalid')
+    rgb = image.convert('RGB').crop((x, y, x + width, y + height))
+    pixels = rgb.load()
+    def background(pixel):
+        return all(abs(a-b) <= 6 for a,b in zip(pixel, (11, 15, 23)))
+    def runs(flags):
+        found, start = [], None
+        for i, yes in enumerate([*flags, False]):
+            if yes and start is None: start = i
+            elif not yes and start is not None:
+                found.append((start, i)); start = None
+        return found
+    rows = [sum(background(pixels[col, row]) for col in range(width)) >= width * .45
+            for row in range(height)]
+    bands = [(a,b) for a,b in runs(rows) if b-a >= 35 * scale]
+    require(len(bands) == 1, 'tauri_ios_terminal_background_invalid')
+    top, bottom = bands[0]
+    cols = [sum(background(pixels[col, row]) for row in range(top, bottom)) >= (bottom-top) * .75
+            for col in range(width)]
+    regions = [(a,b) for a,b in runs(cols) if b-a >= max(80 * scale, width * .4)]
+    require(len(regions) == 1, 'tauri_ios_terminal_background_invalid')
+    left, right = regions[0]
+    # Background touching the broad control-derived band is not bounded visual proof.
+    require(left > 0 and right < width and bottom < height, 'tauri_ios_terminal_background_invalid')
+    if top == 0:
+        top += math.ceil(scale)
+    require(bottom > top, 'tauri_ios_terminal_background_invalid')
+    return [x + left, y + top, right - left, bottom - top]
 
 
 def wait_peer(fixture, predicate, code, timeout=30):
@@ -643,6 +702,10 @@ class Checkpoints:
                         'tauri_ios_capture_png_invalid')
                 image.load()
                 geometry = measured_bounds(payload, image.size)
+                if geometry.get('boundSource') == 'terminal_control_bounds':
+                    candidate = geometry['terminalBounds']
+                    geometry['terminalBounds'] = terminal_background_bounds(image, candidate, geometry['nativeScale'])
+                    geometry['candidateTerminalBounds'] = candidate
         except (ValueError, OSError):
             raise Failure('tauri_ios_capture_png_invalid') from None
         name = ('key-change-review.png' if review else

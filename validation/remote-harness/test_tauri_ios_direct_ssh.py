@@ -8,6 +8,7 @@ import logging
 import re
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 import plistlib
@@ -1504,15 +1505,14 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
     def accept(self, stage):
         self.state.accept({'stage': stage})
 
-    @staticmethod
-    def close_protocol(peer, channel):
-        # The real fixture may close after receiving channel EOF before Paramiko
-        # sends its final CHANNEL_CLOSE. Only teardown EOF is idempotent; the
-        # production gate still checked the session alive before the UI action.
+    def close_protocol(self, fixture, peer, channel):
+        count = fixture.snapshot()['connections']
         try:
-            channel.close()
-        except EOFError:
-            pass
+            # The fixture ends the session on SSH EOF. Keep the client's
+            # transport open until the fixture has published the peer close.
+            channel.shutdown_write()
+            self.assertTrue(fixture.wait_for_connections_closed(count, timeout=5),
+                            'test SSH peer did not finish closing after channel EOF')
         finally:
             peer.close()
 
@@ -1533,6 +1533,45 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.assertNotIn(self.ordinary.password,json.dumps({'before':before,'after':after}))
         peer.close()
 
+    def test_protocol_teardown_waits_for_peer_after_sending_channel_eof(self):
+        self.probe(self.ordinary)
+        peer, channel = self.session(self.ordinary)
+        finishing = threading.Event()
+        release = threading.Event()
+        record = self.ordinary._connection_record
+        wait_closed = self.ordinary.wait_for_connections_closed
+        close_peer = peer.close
+
+        def pause_before_close(transport, field, value=True):
+            if field == 'closeReason':
+                finishing.set()
+                release.wait(5)
+            record(transport, field, value)
+
+        def release_after_channel_eof(minimum, timeout):
+            self.assertTrue(finishing.wait(5), 'server did not observe channel EOF')
+            release.set()
+            return wait_closed(minimum, timeout)
+
+        def check_final_cleanup():
+            try:
+                self.assertTrue(self.ordinary.snapshot()['connectionsClosed'],
+                                'client closed its transport before the server could finish')
+            finally:
+                close_peer()
+
+        with patch.object(self.ordinary, '_connection_record', side_effect=pause_before_close), \
+                patch.object(self.ordinary, 'wait_for_connections_closed', side_effect=release_after_channel_eof), \
+                patch.object(peer, 'close', side_effect=check_final_cleanup) as close:
+            try:
+                self.close_protocol(self.ordinary, peer, channel)
+            finally:
+                release.set()
+            close.assert_called_once()
+        self.assertTrue(self.ordinary.wait_for_connections_closed(2, timeout=5))
+        ios.ordinary_evidence(self.ordinary, closed=True)
+        self.assertEqual(self.ordinary.snapshot()['connectionEvents'][-1]['closeReason'], 'peer_eof')
+
     def test_complete_native_checkpoint_order_against_real_aabb_and_abbb_peers(self):
         self.accept('ordinary_form')
         self.probe(self.ordinary)
@@ -1545,7 +1584,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         with patch.object(self.state, 'capture'):
             self.accept('ordinary_terminal')
         self.accept('ordinary_disconnect_attempt')
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
         self.accept('ordinary_disconnected')
         self.assertNotEqual(self.result['cases']['ordinary'].get('status'), 'passed')
         with self.assertRaisesRegex(ios.Failure, 'checkpoint_order_invalid'):
@@ -1571,7 +1610,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         with patch.object(self.state, 'capture'):
             self.accept('key_change_terminal')
         self.accept('key_change_disconnect_attempt')
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.rotation, peer, channel)
         self.accept('key_change_disconnected')
         self.accept('complete')
         self.assertEqual(self.state.index, len(ios.STAGES))
@@ -1592,7 +1631,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.state.index = ios.STAGES.index('key_change_review')
         self.probe(self.rotation)
         peer, channel = self.session(self.rotation, marker=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.rotation, peer, channel)
         with self.assertRaisesRegex(ios.Failure, 'rotation_evidence_invalid'):
             self.accept('key_change_review')
 
@@ -1602,7 +1641,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.accept('ordinary_probe')
         self.accept('ordinary_password')
         peer, channel = self.session(self.ordinary, marker=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
         with self.assertRaisesRegex(ios.Failure, 'probe_not_empty'):
             self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_connect'})
 
@@ -1611,10 +1650,10 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         peer, channel = self.session(self.ordinary)
         self.state.index = ios.STAGES.index('ordinary_disconnect_attempt')
         self.accept('ordinary_disconnect_attempt')
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
         self.accept('ordinary_disconnected')
         peer, channel = self.session(self.ordinary)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
         with self.assertRaisesRegex(ios.Failure, 'ordinary_connection_count_invalid'):
             self.accept('ordinary_returned_home')
         self.assertNotEqual(self.result['cases']['ordinary'].get('status'), 'passed')
@@ -1628,7 +1667,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         ios.wait_peer(self.ordinary, lambda f: f['connectionEvents'][-1]['inputBytes'] > 10, 'missing', timeout=5)
         with self.assertRaises(ios.Failure):
             ios.ordinary_evidence(self.ordinary, closed=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
 
     def test_http_secret_and_stage_order_are_enforced_without_raw_failure_export(self):
         server, thread = ios.start_checkpoints(self.state)
@@ -1658,7 +1697,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.assertFalse(event['singleMarkerLineExact'])
         with self.assertRaisesRegex(ios.Failure, 'ordinary_session_incomplete'):
             ios.ordinary_evidence(self.ordinary, closed=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
 
     def test_second_authentication_attempt_cannot_pass_final_rotation_gate(self):
         import paramiko
@@ -1681,7 +1720,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.wait_for_reply(self.rotation, channel, before)
         with self.assertRaisesRegex(ios.Failure, 'single_command_or_auth_invalid'):
             ios.rotation_session_evidence(self.rotation, closed=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.rotation, peer, channel)
         self.assertTrue(self.rotation.wait_for_connections_closed(4, timeout=5))
         # Shared gate accepts >=1 attempts; the Tauri-specific gate must still fail.
         self.rotation.rotation_evidence(4)
@@ -1693,7 +1732,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         peer, channel = self.session(self.ordinary)
         ios.wait_peer(self.ordinary, lambda f: f['markerReceived'], 'missing', timeout=5)
         ios.ordinary_evidence(self.ordinary, closed=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
         self.assertTrue(self.ordinary.wait_for_connections_closed(2, timeout=5))
         self.state.index = ios.STAGES.index('ordinary_disconnect_attempt')
         with self.assertRaisesRegex(ios.Failure, 'close_order_invalid'):
@@ -1705,7 +1744,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         peer, channel = self.session(self.rotation)
         ios.wait_peer(self.rotation, lambda f: f['markerReceived'], 'missing', timeout=5)
         ios.rotation_session_evidence(self.rotation, closed=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.rotation, peer, channel)
         self.assertTrue(self.rotation.wait_for_connections_closed(4, timeout=5))
         self.state.index = ios.STAGES.index('key_change_disconnect_attempt')
         with self.assertRaisesRegex(ios.Failure, 'close_order_invalid'):
@@ -1721,7 +1760,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         before = self.rotation.snapshot()['connectionEvents'][-1]['outputBytes']
         channel.sendall((self.rotation.marker + '\r').encode())
         self.wait_for_reply(self.rotation, channel, before)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.rotation, peer, channel)
         self.assertTrue(self.rotation.wait_for_connections_closed(4, timeout=5))
         self.rotation.rotation_evidence(4)
         with self.assertRaisesRegex(ios.Failure, 'single_command_or_auth_invalid'):

@@ -21,6 +21,7 @@ from urllib.request import Request, urlopen
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tauri_ios_direct_ssh as ios
 from terminal_screenshot_gate import ScreenshotGateError
+from screen_proof_token import token_lines
 
 
 class NativeGeometryTests(unittest.TestCase):
@@ -1112,6 +1113,25 @@ class NativeDiagnosticPublishingTests(unittest.TestCase):
                     self.assertNotIn(private, json.dumps(state.result))
 
 
+class FixtureReplyHandshakeTests(unittest.TestCase):
+    def test_repeated_last_word_and_fragmented_reply_require_whole_sequence_and_new_output(self):
+        from types import SimpleNamespace
+        fixture = SimpleNamespace(screen_token='ARCH ARCH ARCH ARCH ARCH ARCH ARCH ARCH', echo_marker='ECHO')
+        expected = b'\r\n\x1b[32mECHO\x1b[0m\r\nARCH ARCH ARCH ARCH\r\nARCH ARCH ARCH ARCH\r\n$ '
+        class FragmentedChannel:
+            chunks = [expected[:20], expected[20:40], expected[40:-2], expected[-2:]]
+            def recv(self, _): return self.chunks.pop(0)
+        channel = FragmentedChannel()
+        def check_counter(_fixture, predicate, _code, timeout):
+            self.assertFalse(predicate({'connectionEvents':[{'outputBytes': 100 + len(expected) - 1}]}))
+            self.assertTrue(predicate({'connectionEvents':[{'outputBytes': 100 + len(expected)}]}))
+        with patch.object(ios, 'wait_peer', side_effect=check_counter):
+            RealLoopbackCheckpointsTests.wait_for_reply(self, fixture, channel, 100)
+        self.assertFalse(channel.chunks)
+
+    read_until = lambda self, channel, expected: RealLoopbackCheckpointsTests.read_until(self, channel, expected)
+
+
 class RealLoopbackCheckpointsTests(unittest.TestCase):
     def setUp(self):
         logging.getLogger('paramiko').setLevel(logging.CRITICAL)
@@ -1143,13 +1163,34 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         channel.get_pty(term='xterm-256color', width=40, height=10)
         channel.invoke_shell()
         channel.settimeout(5)
+        self.wait_for_initial_prompt(fixture, channel)
         if marker:
+            before = fixture.snapshot()['connectionEvents'][-1]['outputBytes']
             channel.sendall((fixture.marker + '\r').encode())
-            received = b''
-            while fixture.screen_token.split()[7].encode() not in received:
-                received += channel.recv(4096)
-            self.assertIn(fixture.echo_marker.encode(), received)
+            self.wait_for_reply(fixture, channel, before)
         return peer, channel
+
+    def read_until(self, channel, expected):
+        received = b''
+        while expected not in received:
+            chunk = channel.recv(4096)
+            self.assertTrue(chunk, 'fixture closed before completing its reply')
+            received += chunk
+            self.assertLessEqual(len(received), 65536, 'unexpectedly long fixture reply')
+        return received
+
+    def wait_for_initial_prompt(self, fixture, channel):
+        received = self.read_until(channel, b'$ ')
+        ios.wait_peer(fixture, lambda f: f['connectionEvents'][-1]['outputBytes'] >= len(received),
+                      'fixture_prompt_not_recorded', timeout=5)
+
+    def wait_for_reply(self, fixture, channel, output_before):
+        # Match all proof lines and the final prompt even when bytes are fragmented.
+        proof = '\r\n'.join(token_lines(fixture.screen_token))
+        expected = ('\r\n\x1b[32m' + fixture.echo_marker + '\x1b[0m\r\n' + proof + '\r\n$ ').encode()
+        self.read_until(channel, expected)
+        ios.wait_peer(fixture, lambda f: f['connectionEvents'][-1]['outputBytes'] >= output_before + len(expected),
+                      'fixture_reply_not_recorded', timeout=5)
 
     def accept(self, stage):
         self.state.accept({'stage': stage})
@@ -1277,8 +1318,11 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         channel = peer.open_session(timeout=5)
         channel.get_pty()
         channel.invoke_shell()
+        channel.settimeout(5)
+        self.wait_for_initial_prompt(self.rotation, channel)
+        before = self.rotation.snapshot()['connectionEvents'][-1]['outputBytes']
         channel.sendall((self.rotation.marker + '\r').encode())
-        ios.wait_peer(self.rotation, lambda f: f['markerReceived'], 'missing', timeout=5)
+        self.wait_for_reply(self.rotation, channel, before)
         with self.assertRaisesRegex(ios.Failure, 'single_command_or_auth_invalid'):
             ios.rotation_session_evidence(self.rotation, closed=False)
         self.close_protocol(peer, channel)
@@ -1318,8 +1362,9 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.assertTrue(self.rotation.wait_for_connections_closed(3, timeout=5))
         peer, channel = self.session(self.rotation)
         ios.wait_peer(self.rotation, lambda f: f['markerReceived'], 'missing', timeout=5)
+        before = self.rotation.snapshot()['connectionEvents'][-1]['outputBytes']
         channel.sendall((self.rotation.marker + '\r').encode())
-        ios.wait_peer(self.rotation, lambda f: f['connectionEvents'][-1]['inputBytes'] > 10, 'missing', timeout=5)
+        self.wait_for_reply(self.rotation, channel, before)
         self.close_protocol(peer, channel)
         self.assertTrue(self.rotation.wait_for_connections_closed(4, timeout=5))
         self.rotation.rotation_evidence(4)

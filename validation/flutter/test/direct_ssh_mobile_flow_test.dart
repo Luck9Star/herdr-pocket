@@ -113,4 +113,30 @@ void main() {
       skip: Platform.environment['HERDR_MOBILE_${mode}_PORT'] == null || Platform.environment['HERDR_MOBILE_${mode}_KEY'] == null);
   }
 
+  testWidgets('mobile changed-key view keeps distinct algorithms and locks credentials', (tester) async {
+    tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    const oldKey = 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+    const newKey = 'SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+    state.setState(() { state.host.text = 'example.test'; state.user.text = 'demo';
+      state.fingerprint = oldKey; state.algorithm = 'ssh-rsa'; state.checkedTarget = state.target; });
+    state.showHostKeyChange('ssh-rsa', oldKey, 'ssh-ed25519', newKey, state.target);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('ssh-rsa'), findsOneWidget);
+    expect(find.textContaining('ssh-ed25519'), findsOneWidget);
+    expect(tester.widget<SelectableText>(find.byKey(const ValueKey('direct-host-key-old'))).data, oldKey);
+    expect(tester.widget<SelectableText>(find.byKey(const ValueKey('direct-host-key-new'))).data, newKey);
+    expect(find.byType(BackButton), findsNothing);
+    await tester.ensureVisible(find.byKey(const ValueKey('direct-host-key-cancel')));
+    await tester.tap(find.byKey(const ValueKey('direct-host-key-cancel'))); await tester.pumpAndSettle();
+    expect(state.fingerprint, oldKey); expect(state.hostKeyReviewRequired, isTrue);
+    expect(find.byKey(const ValueKey('direct-secret')), findsNothing);
+    expect(find.byKey(const ValueKey('direct-connect')), findsNothing);
+    expect(find.byKey(const ValueKey('direct-probe')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
 }

@@ -250,7 +250,7 @@ void main() {
               find.byKey(const ValueKey('direct-host-key-new')),
               find.byKey(const ValueKey('direct-host-key-cancel')),
               find.byKey(const ValueKey('direct-host-key-review')),
-              find.text('目标：fixture@127.0.0.1:${rotation['port']}'),
+              find.byKey(const ValueKey('direct-target-value')),
             ]) {
               expect(control, findsOneWidget);
               final rect = physicalBounds(control);

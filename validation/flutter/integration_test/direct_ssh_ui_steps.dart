@@ -336,7 +336,7 @@ Future<void> runDirectSshRotationUi(
         .data,
     contains(config['rotatedFingerprint']),
   );
-  expect(find.text('目标：fixture@127.0.0.1:${config['port']}'), findsOneWidget);
+  expect(tester.widget<SelectableText>(find.byKey(const ValueKey('direct-target-value'))).data, 'fixture@127.0.0.1:${config['port']}');
   expect(state.fingerprint, config['fingerprint']);
   expect(state.hostKeyReviewRequired, isTrue);
   expect(state.secret.text, isEmpty);

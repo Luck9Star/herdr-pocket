@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "round": "R21",
+  "sourceSHA": "cdbb41ac5878ff93a88cbf0fcdb5088f9dc0473b",
+  "sourceLabel": "cdbb41a（公开验收测试代码；在 d11b32d 工作树核验）",
+  "run": 44326045427,
+  "runURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44326045427",
+  "artifact": "tauri.zip（563121 B）",
+  "artifactSha256": "c17aa0ece51fca78ed839726a1e4c58986029fe61f581f2a06f9fb748c8d8f5c",
+  "artifactShaMatched": true,
+  "scope": "owned_loopback_ordinary_ssh",
+  "platform": "ios-simulator",
+  "client": "tauri",
+  "simulator": { "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max", "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2" },
+  "toolchain": { "xcode": "16.4 (16F6)", "simulatorSDKVersion": "18.5" },
+  "application": { "bundleIdentifier": "dev.herdrpocket.tauriprobe", "executableSha256": "6d4360c1d22025353ee3aa24cb2ce07b82bcbb5b7c428d3bb34b4cbae850dbd7" },
+  "batchStatus": "passed（stage=complete，lastCompletedStage=complete，nativeCheckpoint=key_change_disconnect）",
+  "files": [
+    { "path": "r21-tauri-result.json", "bytes": 38845, "sha256": "4346a8dff3e0716af04a3cc3e56fb58fcaea663371f90c2b858dea3dc5310a27" },
+    { "path": "r21-tauri-ordinary-terminal.png", "bytes": 217699, "sha256": "70a7fc92e988a498321a07f3a2f90e71826e408f6f2fe972c717217dfa6678cc" },
+    { "path": "r21-tauri-ordinary-terminal-ocr.json", "bytes": 488, "sha256": "7e3bb49ced56c7ae847c8bc2244fa3b06aaa911758213444ef9c1ca10a6e97c5" },
+    { "path": "r21-tauri-key-change-terminal.png", "bytes": 218079, "sha256": "ede9801429d14effd93722b2e58f501bdb87c5c7f26e5735348d8259cb541d70" },
+    { "path": "r21-tauri-key-change-terminal-ocr.json", "bytes": 488, "sha256": "12a3052cae8c42b7bd05e0b1ae1126a18fba51ddbd81ed7e43a55b89b1313060" },
+    { "path": "r21-tauri-key-change-review.png", "bytes": 258238, "sha256": "1ce75b5c635e2263d3650c3711234816aca5c8b25f3b505eb51938c766898935" }
+  ],
+  "verification": {
+    "zipShaMatched": true,
+    "resultSourceSHA": "cdbb41ac5878ff93a88cbf0fcdb5088f9dc0473b（用户给定，与 result.json 一致）",
+    "artifactShaInResultMatchedFiles": "result.json artifacts 三个 PNG SHA256 与解压实测一致",
+    "ordinary": {
+      "status": "passed",
+      "fingerprintReviewed": true,
+      "peer": "2 连接 AA：conn1 A 探测 0 认证、conn2 A auth 1/1、PTY/shell 各 1、in 9B/out 102B、全部 closed；authAccepted/ptyRequested/shellRequested/markerReceived/sessionClosed 均 true",
+      "ocr": "markerVisible/tokenVisible/proofSequenceVisible 全 true（tesseract 5.5.4，PSM 6，1 次尝试）",
+      "coldStartHomeEntry": "homeReadiness.ordinary=ready（冷启进入 SSH 前：shell 715ms→ready 12498ms，strictSamples 4）；homeEntry.ordinary 经 headerAdd buttonRole 进入 add 页与 SSH 表单（viaAdd）",
+      "ordinaryReturnHome": "普通场景断开后：phase return_home 点击「看板」、waitText『还没有主机』、navigationState classify ready，经 ordinary_returned_home 放行（Swift 2059-2065）",
+      "disconnected": true
+    },
+    "keyChange": {
+      "status": "passed",
+      "fingerprints": { "A": "SHA256:/rC8cEffvY/0kvjJHhXMkV51cNXIEpx1aG3YPBfpVbw", "B": "SHA256:EkFHnw4WNr0wSA+yYy634AjZvteAcML6mDIaR2s5aBw" },
+      "cancelKeptTrust": true,
+      "freshFingerprintConfirmed": true,
+      "peer": "4 连接 ABBB 可数：conn1 A 探测 0 认证、conn2 B 拒绝 0 认证、conn3 B 重探 0 认证、conn4 B 确认后 auth 1/1、PTY/shell 各 1、in 9B/out 102B、全部 closed",
+      "rotationEvidenceStages": "stage2（2 连接，取消保留 A）、stage3（3 连接，重探 B）、stage4（4 连接，确认 B 后认证）",
+      "ocr": "terminal 与 review 两图 SHA 与 result 一致；terminal OCR 三判据全 true（token HAVE HEAT HARP HUNT CAVE FARM PATH LEAF）",
+      "coldStartHomeEntry": "homeReadiness.keyChange=ready（冷启进入 SSH 前：shell 1464ms→ready 2773ms）；homeEntry.keyChange 经 headerAdd 进入表单（viaAdd）",
+      "returnHome": "换钥场景无 return_home 步骤，仅证主动断开（key_change_disconnect）",
+      "disconnected": true
+    },
+    "cleanup": "simulatorDeleted/fixturesClosed/privateFilesRemoved 全 true（收尾阶段）",
+    "credentialsEmptyScope": "navigationTrace 的 credentialsEmpty 是冷启导航（open_add/open_ssh）时点断言；活动终端截图未见凭据，取消／重探时相应字段为空；断开后未单独检查凭据字段",
+    "physicalIME": "result 未含 physicalImeVerified 字段；本批不声称物理 IME"
+  },
+  "buttonGeometryNoKeyboard": {
+    "method": "独立像素测量（本机解码官方 PNG 原图，标准库），与 R19/R20 同法",
+    "navTopEdgeRow": { "r19": 2571, "r20": 2571, "r21": 2571, "note": "三批导航上缘边框行相同（颜色 226,232,240，逻辑点 2571/3≈857）" },
+    "r21": {
+      "sources": ["r21-tauri-ordinary-terminal.png", "r21-tauri-key-change-terminal.png"],
+      "buttonBottomBorderRows": "两张图左按钮下边框行均为 2543–2545（x 约 67–630），与 R20 相同",
+      "clearance": "2571 − 2545 = 26px ≈ 8.7 逻辑点净空（与 R20 一致）",
+      "topBorderRows": "2414–2416（x 约 67–630）",
+      "note": "R21 与 R20 同尺寸布局一致，未见回归"
+    }
+  },
+  "relationToPriorRounds": {
+    "r19": "两壳通过；Tauri 底部按钮边框约 8 点被导航遮挡",
+    "r20": "Flutter 通过（returned_home 仅普通场景）；Tauri 普通过、换钥 native_home_identity_unproven 失败、按钮遮挡已消除",
+    "r21": "Tauri 定向复验：普通+换钥均通过；换钥场景仅证主动断开、无 return_home；R20 换钥冷启失败未复现（样本一次，驱动 cdbb41a 含未识别启动屏重采样修订；两次冷启 shell→ready 不证明曾触发 R20 未识别首帧分支）；按钮几何与 R20 一致"
+  },
+  "openGaps": [
+    "本批仅 Tauri；Flutter 无 R21 批次（R20 Flutter 已通过并返回首页，返回首页验证仅普通场景）",
+    "iOS 仍限 Simulator、loopback、密码认证；两壳私钥认证未验证，真机/物理 IME 未验证"
+  ]
+}

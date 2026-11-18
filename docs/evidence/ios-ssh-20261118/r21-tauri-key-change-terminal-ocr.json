@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "ede9801429d14effd93722b2e58f501bdb87c5c7f26e5735348d8259cb541d70",
+  "imageSize": [
+    1320,
+    2868
+  ],
+  "terminalBounds": [
+    48,
+    984,
+    1224,
+    1238
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "HAVE HEAT HARP HUNT CAVE FARM PATH LEAF",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

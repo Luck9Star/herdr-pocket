@@ -77,6 +77,7 @@ NATIVE_FAILURES = frozenset((
     'native_terminal_header_unproven'))
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
+COMPACT_HOME_MEMBERS = {'emptyDescription', 'compactShortcut'}
 HOME_ERRORS = frozenset(('connectionError', 'dnsError', 'webProcessError', 'devURL',
                         'browserPreview', 'hostStorageError', 'loading'))
 HOME_ALERT_MEMBERS = frozenset(('localNetwork', 'allow', 'deny', 'ok', 'automation'))
@@ -176,13 +177,19 @@ def public_home_diagnostic(value):
               'inputCount', 'unknownVisibleTextCount'}
     booleans = {'appForeground', 'alertSnapshotFailed', 'knownEmptyHome'}
     keys = counts | booleans | {'members', 'knownErrors', 'alertMembers'}
-    require(isinstance(value, dict) and set(value) == keys, 'tauri_ios_home_diagnostic_invalid')
+    code = 'tauri_ios_home_diagnostic_invalid'
+    require(isinstance(value, dict) and set(value) in (keys, keys | {'compactEmptyHome'}), code)
+    compact_report = 'compactEmptyHome' in value
+    if compact_report:
+        keys.add('compactEmptyHome')
+        booleans.add('compactEmptyHome')
     require(all(type(value[k]) is int and 0 <= value[k] <= 10000 for k in counts)
             and all(type(value[k]) is bool for k in booleans), 'tauri_ios_home_diagnostic_invalid')
     for key, members in (('knownErrors', HOME_ERRORS), ('alertMembers', HOME_ALERT_MEMBERS)):
         require(isinstance(value[key], dict) and set(value[key]) == members
                 and all(type(v) is bool for v in value[key].values()), 'tauri_ios_home_diagnostic_invalid')
-    require(isinstance(value['members'], dict) and set(value['members']) == HOME_MEMBERS,
+    members = HOME_MEMBERS | COMPACT_HOME_MEMBERS if compact_report else HOME_MEMBERS
+    require(isinstance(value['members'], dict) and set(value['members']) == members,
             'tauri_ios_home_diagnostic_invalid')
     for member in value['members'].values():
         require(isinstance(member, dict) and set(member) == {'count', 'roles'}
@@ -190,7 +197,18 @@ def public_home_diagnostic(value):
                 and isinstance(member['roles'], list) and len(member['roles']) <= len(HOME_ROLES)
                 and all(type(role) is str and role in HOME_ROLES for role in member['roles']),
                 'tauri_ios_home_diagnostic_invalid')
+    if value.get('compactEmptyHome'):
+        require(compact_home_identity(value) and value['knownEmptyHome'], code)
     return json.loads(json.dumps({k: value[k] for k in keys}))
+
+
+def compact_home_identity(home):
+    members = home['members']
+    required = {'brand': 'staticText', 'emptyHeading': 'staticText', 'emptyDescription': 'staticText',
+                'compactShortcut': 'button', 'emptyAdd': 'button'}
+    return (all(members.get(key, {}).get('count', 0) > 0 and role in members[key]['roles']
+                for key, role in required.items())
+            and all(members[key]['count'] == 0 for key in ('homeHeading', 'zeroHosts', 'headerAdd')))
 
 
 def public_home_readiness(value, home):
@@ -218,8 +236,9 @@ def public_home_readiness(value, home):
     foreground = home['appForeground']
     error = any(enabled for name, enabled in flags.items() if name != 'loading')
     safe = foreground and not (alert or error) and home['inputCount'] == 0
-    empty = (home['knownEmptyHome'] and home['windowCount'] > 0 and home['webViewCount'] > 0
-             and all(home['members'][name]['count'] > 0 for name in ('brand', 'homeHeading', 'emptyHeading', 'zeroHosts')))
+    legacy = all(home['members'][name]['count'] > 0 for name in ('brand', 'homeHeading', 'emptyHeading', 'zeroHosts'))
+    identity = compact_home_identity(home) if home.get('compactEmptyHome') else legacy
+    empty = home['knownEmptyHome'] and home['windowCount'] > 0 and home['webViewCount'] > 0 and identity
     expected = {'ready': safe and not flags['loading'] and empty, 'loading': safe and flags['loading'],
                 'shell': safe and not flags['loading'] and not empty,
                 'error': foreground and not alert and error, 'alert': foreground and alert,
@@ -282,13 +301,21 @@ def public_navigation_state(value):
     counts = {'inputCount', 'windowCount', 'webViewCount'}
     base_keys = flags | counts | {'page'}
     require(isinstance(value, dict) and base_keys <= set(value)
-            and set(value) <= base_keys | {'formOwnerResolved', 'formControls'}
+            and set(value) <= base_keys | {'formOwnerResolved', 'formControls', 'compactEmptyHome', 'mobileAddChoice'}
             and value['page'] in ('emptyHome', 'addChoice', 'sshForm', 'unexpected')
             and all(type(value[k]) is bool for k in flags)
             and all(type(value[k]) is int and 0 <= value[k] <= 10000 for k in counts),
             'tauri_ios_navigation_diagnostic_invalid')
+    for key, page in (('compactEmptyHome', 'emptyHome'), ('mobileAddChoice', 'addChoice')):
+        if key in value:
+            require(type(value[key]) is bool and (not value[key] or value['page'] == page),
+                    'tauri_ios_navigation_diagnostic_invalid')
     if value['page'] == 'emptyHome':
         require(value['emptyHomeIdentity'] and value['inputCount'] == 0 and value['credentialsEmpty'],
+                'tauri_ios_home_retry_unsafe')
+    if value.get('mobileAddChoice'):
+        require(value['addTitleSeen'] and value['inputCount'] == 0 and value['credentialsEmpty']
+                and not value['emptyHomeIdentity'] and not value['formByStructure'],
                 'tauri_ios_home_retry_unsafe')
     if value['page'] == 'sshForm':
         require(value['formByStructure'] and value.get('formOwnerResolved') is True,
@@ -900,6 +927,7 @@ class Checkpoints:
                 trace = self.result.get('navigationTrace', {}).get(key, [])
                 require(phase.endswith('_open_ssh') and payload.get('source') == 'currentFormObservation'
                         and payload.get('performed') is False and trace
+                        and not trace[0]['before'].get('compactEmptyHome')
                         and trace[-1]['performed'] and trace[-1]['after']['page'] in ('addChoice', 'sshForm')
                         and current['page'] == 'sshForm' and current.get('formOwnerResolved') is True
                         and current['appForeground'] and current['noAlerts'] and current['noKnownErrors']
@@ -933,6 +961,12 @@ class Checkpoints:
                         'tauri_ios_navigation_replay_rejected')
                 expected = 'addChoice' if payload['member'] == 'sshChoice' else 'emptyHome'
                 require(before['page'] == expected, 'tauri_ios_home_retry_unsafe')
+                if before.get('compactEmptyHome'):
+                    require(payload['member'] == 'emptyAdd' and geometry['role'] == 'button',
+                            'tauri_ios_home_retry_unsafe')
+                if trace and trace[0]['before'].get('compactEmptyHome'):
+                    require(payload['member'] == 'sshChoice' and before.get('mobileAddChoice') is True
+                            and geometry['role'] == 'button', 'tauri_ios_home_retry_unsafe')
                 if trace:
                     require(trace[-1]['after']['page'] == expected and
                             trace[-1]['geometry']['screenFrame'] == geometry['screenFrame'],
@@ -963,6 +997,10 @@ class Checkpoints:
                 trace = self.result.get('navigationTrace', {}).get(key, [])
                 arrival = self.result.get('navigationArrivals', {}).get(key)
                 final_state = arrival['state'] if arrival else (trace[-1]['after'] if trace else {})
+                if trace and trace[0]['before'].get('compactEmptyHome'):
+                    require([row['member'] for row in trace if row['performed']] == ['emptyAdd', 'sshChoice']
+                            and payload['member'] == 'emptyAdd' and payload.get('route') == 'viaAdd',
+                            'tauri_ios_home_entry_invalid')
                 require(final_state.get('page') == 'sshForm' and
                         final_state['credentialsEmpty'] and final_state['formByStructure']
                         and final_state['appForeground'] and final_state['noAlerts']

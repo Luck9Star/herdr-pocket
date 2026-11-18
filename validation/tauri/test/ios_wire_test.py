@@ -16,7 +16,7 @@ class IOSWireTests(unittest.TestCase):
         self.assertTrue(info['NSCameraUsageDescription'])
         build = (ROOT / 'src-tauri/build.rs').read_text()
         for item in ('DEP_TAURI_IOS_LIBRARY_PATH', 'DeviceKeys.swift', 'PairScanner.swift',
-                     'PocketKeyBridge.swift', 'PocketPlugin.swift', 'ConfigDocument.swift', 'link_apple_library'):
+                     'PocketKeyBridge.swift', 'PocketPlugin.swift', 'PocketWebViewInsets.swift', 'ConfigDocument.swift', 'link_apple_library'):
             self.assertIn(item, build)
         rust = (ROOT / 'src-tauri/src/ios_keys.rs').read_text()
         swift = (ROOT / 'ios/PocketPlugin.swift').read_text()
@@ -25,9 +25,18 @@ class IOSWireTests(unittest.TestCase):
         for method in ('create', 'publicKey', 'sign', 'delete', 'privateConfigRoot', 'scan'):
             self.assertIn(f'func {method}(', swift)
             self.assertIn(f'"{method}"', rust)
-        for method in ('openDocument', 'saveDocument'):
+        for method in ('openDocument', 'saveDocument', 'topInset'):
             self.assertIn(f'func {method}(', swift)
             self.assertIn(f'"{method}"', rust)
+
+    def test_native_webview_reports_only_unconsumed_top_inset(self):
+        with tempfile.TemporaryDirectory(prefix='herdr-ios-inset-') as tmp:
+            env = dict(os.environ, CLANG_MODULE_CACHE_PATH=tmp + '/clang')
+            subprocess.run(['swiftc', '-module-cache-path', tmp + '/modules',
+                            str(ROOT / 'ios/PocketWebViewInsets.swift'),
+                            str(ROOT / 'test/PocketWebViewInsetsProbe.swift'), '-o', tmp + '/inset'],
+                           env=env, check=True)
+            subprocess.run([tmp + '/inset'], env=env, check=True)
 
     def test_key_contract_against_memory_backend(self):
         with tempfile.TemporaryDirectory(prefix='herdr-ios-wire-') as tmp:
@@ -44,8 +53,19 @@ class IOSWireTests(unittest.TestCase):
             env = dict(os.environ, CLANG_MODULE_CACHE_PATH=str(tmp / 'clang'))
             cache = ['-module-cache-path', str(tmp / 'modules')]
             (tmp / 'UIKit.swift').write_text('''import Foundation
+@_exported import CoreGraphics
 public enum UIModalPresentationStyle { case fullScreen }
-open class UIView: NSObject { public var window: NSObject? }
+open class UIView: NSObject {
+  public var window: UIWindow?
+  public var bounds: CGRect = .zero
+  public func convert(_ rect: CGRect, to view: UIView?) -> CGRect { rect }
+}
+public class UILayoutGuide { public var layoutFrame: CGRect = .zero }
+public class UIScreen { public var scale: CGFloat = 1 }
+open class UIWindow: UIView {
+  public var safeAreaLayoutGuide = UILayoutGuide()
+  public var screen = UIScreen()
+}
 open class UIViewController: NSObject {
   public var presentedViewController: UIViewController?
   public var modalPresentationStyle: UIModalPresentationStyle = .fullScreen
@@ -53,15 +73,25 @@ open class UIViewController: NSObject {
   public func present(_ controller: UIViewController, animated: Bool) {}
 }
 ''')
+            (tmp / 'WebKit.swift').write_text('''import Foundation
+import UIKit
+public struct UIEdgeInsets { public var top: CGFloat = 0 }
+public class UIScrollView: UIView { public var adjustedContentInset = UIEdgeInsets() }
+open class WKWebView: UIView { public var scrollView = UIScrollView() }
+''')
             (tmp / 'Tauri.swift').write_text('''import Foundation
 import UIKit
+import WebKit
 @objc public class Invoke: NSObject {
   public func parseArgs<T: Decodable>(_ type: T.Type) throws -> T { fatalError() }
   public func resolve<T: Encodable>(_ value: T) {}
   public func reject(_ message: String) {}
 }
 public class PluginManager { public var viewController: UIViewController? }
-open class Plugin: NSObject { public let manager = PluginManager() }
+open class Plugin: NSObject {
+  public let manager = PluginManager()
+  open func load(webview: WKWebView) {}
+}
 ''')
             (tmp / 'Scanner.swift').write_text('''import UIKit
 final class PairScanner: UIViewController { var onFinish: ((String?, String?) -> Void)? }
@@ -74,13 +104,14 @@ final class PocketDocumentPicker {
   func save(_ bytes: Data, presenter: UIViewController, completion: @escaping (Result<Data?, Error>) -> Void) {}
 }
 ''')
-            for module in ('UIKit', 'Tauri'):
+            for module in ('UIKit', 'WebKit', 'Tauri'):
                 subprocess.run(['swiftc', *cache, '-emit-module', '-module-name', module,
                                 '-I', str(tmp), str(tmp / (module + '.swift')),
                                 '-emit-module-path', str(tmp / (module + '.swiftmodule'))],
                                env=env, check=True)
             subprocess.run(['swiftc', *cache, '-typecheck', '-I', str(tmp), str(SHARED),
                             str(ROOT / 'ios/PocketKeyBridge.swift'), str(ROOT / 'ios/PocketPlugin.swift'),
+                            str(ROOT / 'ios/PocketWebViewInsets.swift'),
                             str(tmp / 'Scanner.swift'), str(tmp / 'Documents.swift')], env=env, check=True)
 
 

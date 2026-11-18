@@ -1,6 +1,7 @@
 import Foundation
 import Tauri
 import UIKit
+import WebKit
 
 private struct KeyArgs: Decodable {
     let handle: String
@@ -14,6 +15,29 @@ final class PocketPlugin: Plugin {
     private let keys = PocketKeyBridge(backend: AppleKeychainSeedBackend())
     private var scanning = false // main queue only
     private let documents = PocketDocumentPicker()
+    private weak var webView: WKWebView?
+
+    public override func load(webview: WKWebView) {
+        self.webView = webview
+    }
+
+    @objc public func topInset(_ invoke: Invoke) {
+        DispatchQueue.main.async { [self] in
+            guard let webView = self.webView, let window = webView.window else {
+                invoke.reject("insets_unavailable"); return
+            }
+            let safe = window.safeAreaLayoutGuide.layoutFrame
+            let view = webView.convert(webView.bounds, to: window)
+            guard !safe.isEmpty, !view.isEmpty,
+                  let overlap = PocketWebViewInsets.topOverlapPixels(
+                    safeTop: safe.minY, webViewTop: view.minY,
+                    contentInset: webView.scrollView.adjustedContentInset.top, scale: window.screen.scale
+                  ) else {
+                invoke.reject("insets_unavailable"); return
+            }
+            invoke.resolve(["overlapPx": overlap])
+        }
+    }
 
     @objc public func openDocument(_ invoke: Invoke) {
         DispatchQueue.main.async { [self] in

@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>herdr-pocket · 远端终端原型</title></head><body>
 <header class="app-header"><div class="brand-lockup"><span class="brand-mark" aria-hidden="true">HP</span><div><h1>Herdr Pocket</h1><span id="brand-caption" class="brand-caption">正在读取主机资料…</span></div></div><button id="host-open-remote" disabled class="primary" type="button">＋ 添加主机</button></header>
-<nav class="route-tabs" aria-label="主导航"><button id="show-remote" aria-pressed="true"><span aria-hidden="true">⌂</span>看板</button><button id="nav-terminal" aria-pressed="false"><span aria-hidden="true">⌨</span>终端</button><button id="nav-network" aria-pressed="false"><span aria-hidden="true">◎</span>网络</button><button id="nav-settings" aria-pressed="false"><span aria-hidden="true">⚙</span>设置</button></nav>
+<nav class="route-tabs" aria-label="主导航"><button id="show-remote" aria-pressed="true"><span aria-hidden="true">⌂</span><svg class="empty-route-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 3 H10 V10 H3 Z M14 3 H21 V10 H14 Z M3 14 H10 V21 H3 Z M14 14 H21 V21 H14 Z"/></svg>看板</button><button id="nav-terminal" aria-pressed="false"><span aria-hidden="true">⌨</span><svg class="empty-route-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17"/></svg>终端</button><button id="nav-network" aria-pressed="false"><span aria-hidden="true">◎</span><svg class="empty-route-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M3 12 H21 M12 3 C6 7 6 17 12 21 C18 17 18 7 12 3"/></svg>网络</button><button id="nav-settings" aria-pressed="false"><span aria-hidden="true">⚙</span><svg class="empty-route-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6 H21 M3 12 H21 M3 18 H21 M8 3 V9 M16 9 V15 M10 15 V21"/></svg>设置</button></nav>
 <div id="remote-unsent-notices" class="remote-status unsent-notices" role="alert" hidden></div>
 <main id="host-home" class="remote-page">
-<div id="home-dashboard"><section class="board-intro"><h2>主机与会话</h2><button id="home-open-ssh" type="button">普通 SSH</button></section><p id="host-home-status" class="remote-status" role="status" aria-live="polite">正在读取本机资料…</p>
+<div id="home-dashboard"><section id="host-board-intro" class="board-intro"><h2>主机与会话</h2><button id="home-open-ssh" type="button">普通 SSH</button></section><p id="host-home-status" class="remote-status" role="status" aria-live="polite">正在读取本机资料…</p>
 <section id="host-filters" class="host-filters" aria-label="筛选已存主机" hidden>
   <div class="host-filter-chips" role="group" aria-label="任务状态快捷筛选">
     <button id="host-filter-all" type="button" aria-pressed="true">全部主机</button>
@@ -26,8 +26,33 @@
   <p id="host-filter-status" role="status" aria-live="polite" hidden></p>
   <button id="host-filter-reset" type="button" hidden>清除全部筛选</button>
 </section>
-<div id="host-list" class="host-list" aria-label="已存主机"></div><section id="host-empty" class="host-empty" hidden><h3>还没有主机</h3><p>添加主机后，在这里查看会话和任务状态。</p><button id="host-empty-add" type="button" class="primary">添加主机</button></section></div>
-<section id="home-add" hidden><h2>添加连接</h2><p>选择连接方式。</p><div class="ssh-options"><button id="add-herdr" type="button">herdr 配对 / 手动连接</button><button id="add-ssh" type="button">普通 SSH 终端</button></div></section>
+<div id="host-list" class="host-list" aria-label="已存主机"></div><section id="host-empty" class="host-empty" hidden><span class="empty-terminal-icon" aria-hidden="true"><svg class="connection-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17"/></svg></span><h3>还没有主机</h3><p>添加主机后，在这里查看会话和任务状态。</p><button id="host-empty-add" type="button" class="primary">添加主机</button></section></div>
+<section id="home-add" hidden>
+  <header class="connection-choice-header"><button type="button" id="add-back" aria-label="返回看板"><svg class="connection-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M14 4 L6 12 L14 20 M6 12 H20"/></svg></button><span>添加主机</span></header>
+  <div class="connection-choice-body">
+    <h2 class="connection-choice-desktop">添加连接</h2>
+    <p class="connection-choice-desktop">选择连接方式。</p>
+    <h2 id="add-choice-heading">选择连接方式</h2>
+    <div class="ssh-options">
+      <button id="add-ssh" class="connection-choice" type="button" aria-labelledby="add-ssh-label" aria-describedby="add-ssh-detail">
+        <span class="connection-choice-row">
+          <span class="connection-choice-icon" aria-hidden="true"><svg class="connection-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17"/></svg></span>
+          <span id="add-ssh-label">普通 SSH 终端</span>
+          <svg class="connection-icon connection-choice-arrow" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 5 L15 12 L8 19"/></svg>
+        </span>
+        <span id="add-ssh-detail" class="connection-choice-detail">使用服务器密码或已有私钥打开远程 Shell。</span>
+      </button>
+      <button id="add-herdr" class="connection-choice" type="button" aria-labelledby="add-herdr-label" aria-describedby="add-herdr-detail">
+        <span class="connection-choice-row">
+          <span class="connection-choice-icon" aria-hidden="true"><svg class="connection-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6 H20 V18 H4 Z M4 10 H20 M9 10 V18"/></svg></span>
+          <span id="add-herdr-label">herdr 配对 / 手动连接</span>
+          <svg class="connection-icon connection-choice-arrow" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 5 L15 12 L8 19"/></svg>
+        </span>
+        <span id="add-herdr-detail" class="connection-choice-detail">接入 herdr 工作台，查看会话和任务。</span>
+      </button>
+    </div>
+  </div>
+</section>
 <section id="home-ssh" hidden>
   <h2 id="ssh-page-heading">普通 SSH 终端</h2>
   <div id="ssh-setup"><p>连接普通远程 shell；无需 herdr。先探测指纹并通过可信渠道独立核对，再填写认证方式。</p>

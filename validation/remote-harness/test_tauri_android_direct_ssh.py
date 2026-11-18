@@ -24,11 +24,13 @@ class Fixture:
     def __init__(self): self.reads=0
     def snapshot(self):
         self.reads+=1
-        return {**{key:True for key in ('authAccepted','ptyRequested','shellRequested','markerReceived')}, 'helperKeysExact':True, 'sessionClosed':self.reads>3}
+        return {**{key:True for key in ('authAccepted','ptyRequested','shellRequested','markerReceived')},
+                'helperKeysExact':True, 'sessionClosed':self.reads>3,
+                'connectionsClosed':self.reads>3, 'connectionEvents': [{'authAttempts': 1, 'inputBytes': 9}]}
 
 
 class Browser:
-    def __init__(self): self.actions=[];self.expressions=[];self.review=True;self.echo=True
+    def __init__(self): self.actions=[];self.expressions=[];self.review=True;self.echo=True;self.entry='#host-open-remote'
     def click(self,selector): self.actions.append(('click',selector))
     def fill(self,selector,value): self.actions.append(('fill',selector,value))
     def select_option(self,selector,value): self.actions.append(('select',selector,value))
@@ -36,6 +38,7 @@ class Browser:
         return {'#ssh-fingerprint':Fixture.fingerprint,'#ssh-status':'已连接，已断开'}.get(selector,'')
     def evaluate(self,expression):
         self.expressions.append(expression)
+        if 'dashboardAddEntry' in expression: return self.entry
         if "#ssh-review" in expression: return self.review
         if "#ssh-password" in expression: return ''
         if "#ssh-setup" in expression: return False
@@ -115,6 +118,7 @@ class RotationBrowser:
         return ''
     def evaluate(self,expression):
         self.expressions.append(expression);state=self.state
+        if 'dashboardAddEntry' in expression: return '#host-open-remote'
         negated=expression.lstrip().startswith('!')
         if "'#ssh-review').checked" in expression: return state.review
         if "'#ssh-review').disabled" in expression: return not state.review_disabled
@@ -147,6 +151,66 @@ class DirectSshAndroidTests(unittest.TestCase):
         self._wait_patcher=patch.object(driver,'wait_for',_fast_wait_for)
         self._wait_patcher.start()
         self.addCleanup(self._wait_patcher.stop)
+
+    def test_compact_home_uses_the_card_and_returns_after_peer_close(self):
+        browser = Browser()
+        browser.entry = '#host-empty-add'
+        result = driver.exercise_ui(browser, Fixture())
+        self.assertEqual(browser.actions[:2], [('click', '#host-empty-add'), ('click', '#add-ssh')])
+        self.assertEqual(browser.actions[-2:], [('click', '#ssh-disconnect'), ('click', '#show-remote')])
+        self.assertTrue(result['returnedHome'])
+        class ReplaysAfterReturn(Browser):
+            def click(self, selector):
+                super().click(selector)
+                if selector == '#show-remote':
+                    fixture.snapshot = lambda: {'connectionsClosed': False, 'connectionEvents': []}
+        fixture = Fixture()
+        with self.assertRaisesRegex(driver.GuiFailure, 'direct_return_home_peer_changed'):
+            driver.exercise_ui(ReplaysAfterReturn(), fixture)
+
+    @unittest.skipUnless(shutil.which('node'), 'requires Node.js to run the real dashboard selector')
+    def test_dashboard_selector_prefers_real_actions_and_rejects_mismatched_pages(self):
+        browser = Mock()
+        browser.evaluate.return_value = '#host-empty-add'
+        self.assertEqual(driver.dashboard_add_selector(browser), '#host-empty-add')
+        expression = browser.evaluate.call_args.args[0]
+        js = '''const assert = require('node:assert/strict');
+const select = () => %s;
+const row = (textContent, tagName='DIV', props={}) => ({textContent, tagName,
+  hidden:false, getClientRects(){return this.visible ? [0] : [];},
+  matches(){return this.disabled===true;}, hasAttribute(){return this.compact===true;},
+  visible:true, ...props});
+const entries = {
+  '#host-home #home-dashboard': [row('')],
+  '#host-home-status': [row('', 'P', {hidden:true})],
+  '#home-dashboard #host-empty': [row('', 'SECTION', {compact:true})],
+  '#host-open-remote': [row('＋ 添加主机','BUTTON',{visible:false})],
+  '#host-empty h3': [row('还没有主机')],
+  '#host-empty p': [row('添加主机后，在这里查看会话和任务状态。')],
+  '#host-empty #host-empty-add': [row('添加主机','BUTTON')],
+  '#host-empty #home-open-ssh': [row('普通 SSH 终端','BUTTON')],
+};
+global.document = {hidden:false, querySelectorAll: selector => entries[selector] || []};
+global.getComputedStyle = () => ({visibility:'visible', opacity:'1'});
+assert.equal(select(), '#host-empty-add');
+const status = entries['#host-home-status'][0];
+status.hidden = false; status.textContent = '正在读取本机资料…'; assert.equal(select(), null);
+status.textContent = '本机资料不可用；仍可打开手动连接表单。'; assert.equal(select(), null);
+status.textContent = '还没有已存主机；网络配置暂不可读。'; assert.equal(select(), '#host-empty-add');
+status.hidden = true;
+const add = entries['#host-empty #host-empty-add'];
+add.push(row('添加主机','BUTTON')); assert.equal(select(), null); add.pop();
+add[0].tagName = 'DIV'; assert.equal(select(), null); add[0].tagName = 'BUTTON';
+add[0].disabled = true; assert.equal(select(), null); add[0].disabled = false;
+const header = entries['#host-open-remote'][0];
+header.visible = true; assert.equal(select(), null);
+const card = entries['#home-dashboard #host-empty'][0];
+card.compact = false; assert.equal(select(), '#host-open-remote');
+card.hidden = true; assert.equal(select(), '#host-open-remote');
+entries['#host-home #home-dashboard'][0].hidden = true; assert.equal(select(), null);
+''' % expression
+        result = subprocess.run(['node', '-e', js], capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_ready_probe_closes_failed_view_and_recovers_without_replaying_input(self):
         broken = Mock()
@@ -226,7 +290,7 @@ class DirectSshAndroidTests(unittest.TestCase):
     def test_actual_android_webview_control_failure_is_classified_at_real_entry(self):
         import android_gui
         view=driver.AndroidWebView.__new__(driver.AndroidWebView)
-        view.evaluate=Mock(return_value=None)
+        view.evaluate=Mock(side_effect=['#host-open-remote', None, None])
         def immediate(probe, code, **kwargs):
             value=probe()
             if not value: raise driver.GuiFailure(code)
@@ -237,7 +301,7 @@ class DirectSshAndroidTests(unittest.TestCase):
                 driver.exercise_ui(view,Fixture(),encrypted_key=True,progress=progress)
         self.assertEqual(progress['stage'],'open_remote')
         self.assertEqual(driver.public_driver_error(caught.exception),'direct_android_control_missing')
-        self.assertEqual(view.evaluate.call_count,2)
+        self.assertEqual(view.evaluate.call_count,3)
 
     def test_real_ui_order_and_independent_peer_evidence(self):
         browser=Browser()

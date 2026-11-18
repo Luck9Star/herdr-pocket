@@ -43,6 +43,18 @@ struct DocumentOpen { data: Option<String> }
 #[derive(Deserialize)]
 struct DocumentSave { saved: bool }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemTopInset {
+    overlap_px: f64,
+}
+
+pub async fn system_top_inset<R: Runtime>(app: &tauri::AppHandle<R>) -> std::result::Result<SystemTopInset, String> {
+    let plugin = app.try_state::<IOSPlugin<R>>().ok_or("insets_unavailable")?;
+    plugin.0.run_mobile_plugin_async("topInset", ()).await.map_err(|_| "insets_unavailable".into())
+}
+
+
 pub async fn open_document<R: Runtime>(app: &tauri::AppHandle<R>) -> std::result::Result<Option<Vec<u8>>, String> {
     let plugin=app.try_state::<IOSPlugin<R>>().ok_or("document_unavailable")?;
     let reply:DocumentOpen=plugin.0.run_mobile_plugin_async("openDocument", serde_json::json!({})).await.map_err(|_|"document_unavailable")?;

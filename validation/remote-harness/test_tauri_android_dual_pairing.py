@@ -32,6 +32,8 @@ class Browser:
         self.previews=0;self.activation_polls=[]
     def evaluate(self,expression):
         self.probes.append(expression)
+        if expression.startswith('(function dashboardAddEntry()'):
+            return '#host-open-remote' if ('click','#host-return-home') in self.calls else '#host-empty-add'
         spec=json.loads(re.search(r'const spec=(.*?),\$=id=>',expression).group(1))
         step=spec['step'];self.polls[step]=self.polls.get(step,0)+1
         if step=='response_material':
@@ -86,6 +88,10 @@ class PairingReadinessTests(unittest.TestCase):
                                             'response_reviewed','source_checked','accepted','saved','returned')})
         calls,report,error=self.run_pair(b)
         self.assertIsNone(error);self.assertEqual(calls,['review_pairing','approve_pairing'])
+        self.assertEqual(b.calls[:2],[('click','#host-empty-add'),('click','#add-herdr')])
+        self.assertNotIn(('click','#host-open-remote'),b.calls)
+        last=report['pairingAttempts'][0]
+        self.assertEqual((last['step'],last['action'],last['control']),('returned','read','host_open_remote'))
         for selector in ('#pair-target-review','#pair-create','#pair-source-review','#pair-accept','#host-save'):
             self.assertEqual(b.calls.count(('click',selector)),1)
         self.assertEqual(b.calls.count(('enter','#pair-preview')),1)

@@ -13,7 +13,7 @@ import time
 import xml.etree.ElementTree as ET
 from urllib.parse import urlsplit
 
-from android_gui import AndroidWebView, PACKAGE, SERIAL, adb
+from android_gui import AndroidWebView, PACKAGE, SERIAL, adb, dashboard_add_selector
 from android_dual_overlay_reverse import assert_owned_avd
 from paired_gui import GuiFailure, wait_for
 
@@ -1057,7 +1057,7 @@ def pair_host(browser, host, role, profile, report=None):
     quiet="!$('remote-fields')?.matches(':disabled')"
     target_ready="$('pair-mode')?.checked===true&&$('pair-status')?.textContent==='公开连接资料已填入；请独立核对用户名和主机公钥，再创建设备公开请求。'&&!$('pair-request')?.value"
     try:
-        click('open','#host-open-remote')
+        click('open',dashboard_add_selector(browser, failure='dual_pair_step_timeout'))
         done('add_ready','#add-herdr',"visible($('home-add'))",False)
         click('add','#add-herdr')
         done('new_form','#connection-profile-raw',"visible($('remote-page'))&&!$('pair-request')?.value&&!$('host-save-name')?.value&&!$('pair-mode')?.checked&&$('remote-status')?.textContent==='填写并审查新目标；不会自动连接。'",False)
@@ -1173,7 +1173,8 @@ def pair_host(browser, host, role, profile, report=None):
         done('saved','#host-return-home',"$('host-save-status')?.textContent==='已保存本机公开资料；不代表主机已验证或仍授权。'&&$('host-save-name')?.value==="+json.dumps(name))
         host_card(browser,role)  # Renamed catalog readback, not an earlier save status.
         click('return','#host-return-home',accepted,True)
-        done('returned','#host-open-remote',"visible($('host-home'))&&!visible($('remote-page'))",False)
+        done('returned',dashboard_add_selector(browser, failure='dual_pair_step_timeout'),
+             "visible($('host-home'))&&visible($('home-dashboard'))&&!visible($('remote-page'))",False)
         diagnostic['state']='complete'
     except Exception as error:
         diagnostic['state']='timeout' if str(error)=='dual_pair_step_timeout' else 'mismatch' if str(error) in ('dual_pair_review_mismatch','dual_pair_value_mismatch') else 'failed'

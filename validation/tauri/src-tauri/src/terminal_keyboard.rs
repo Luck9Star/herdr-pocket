@@ -9,6 +9,10 @@ use tauri::{
 #[cfg(target_os = "android")]
 struct TerminalKeyboard<R: Runtime>(PluginHandle<R>);
 
+#[cfg(target_os = "ios")]
+pub use super::ios_keys::SystemTopInset;
+
+#[cfg(not(target_os = "ios"))]
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemTopInset {
@@ -31,7 +35,9 @@ pub async fn mobile_system_top_inset<R: Runtime>(app: AppHandle<R>) -> Result<Sy
         let result = plugin.0.run_mobile_plugin_async::<SystemTopInset>("topInset", serde_json::json!({})).await.map_err(|_| "insets_unavailable")?;
         Ok(result)
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_os = "ios")]
+    { super::ios_keys::system_top_inset(&app).await }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     { let _ = app; Err("insets_unavailable".into()) }
 }
 

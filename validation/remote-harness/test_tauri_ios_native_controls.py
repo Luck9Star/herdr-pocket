@@ -62,6 +62,7 @@ final class Launch {
     var snapshots: [(NativeHomeReadiness.State, TimeInterval)]
     var wakes: [(Bool, TimeInterval)]
     var unidentifiedOverrides: [String: Any] = [:]
+    var compact = false
     var waits: [TimeInterval] = []
     var clicks: [String] = []
     var posts: [(String, [String: Any])] = []
@@ -112,7 +113,7 @@ final class Adapter {
             return observation.merging(launch.unidentifiedOverrides) { _, current in current }
         }
         lastHomeSample = ["knownErrors": ["loading": state == .loading, "hostStorageError": state == .error],
-                          "knownEmptyHome": state == .ready]
+                          "knownEmptyHome": state == .ready, "compactEmptyHome": launch.compact && state == .ready]
         return ["page": state == .ready ? "emptyHome" : state == .unexpected ? "addChoice" : "unexpected",
                 "appForeground": state != .notForeground, "noAlerts": state != .alert,
                 "noKnownErrors": state != .loading && state != .error, "credentialsEmpty": true,
@@ -122,9 +123,11 @@ final class Adapter {
         if !condition { throw Rejected(code: code) }
     }
     func post(_ name: String, _ value: [String: Any]) throws { launch.posts.append((name, value)) }
-    func navigate(_ member: String) throws -> (String, String, String) {
+    func navigate(_ member: String, compactRoute: Bool) throws -> (String, String, String) {
         precondition(lastHomeSample?["knownEmptyHome"] as? Bool == true)
+        precondition(compactRoute == launch.compact)
         launch.clicks.append(member)
+        if compactRoute && member == "emptyAdd" { return ("addChoice", "buttonRole", "button") }
         return ("sshForm", "buttonRole", "button")
     }
     func phase(_ name: String) throws { nativePhase = "ordinary_" + name }
@@ -137,7 +140,7 @@ func verify(_ launch: Launch, _ outcome: String, _ failure: String? = nil, state
     var caught: String?
     do { try Adapter(launch).run() } catch let rejection as Rejected { caught = rejection.code } catch { fatalError() }
     precondition(caught == failure)
-    precondition(launch.clicks == (failure == nil ? ["headerAdd"] : []))
+    precondition(launch.clicks == (failure == nil ? (launch.compact ? ["emptyAdd", "sshChoice"] : ["headerAdd"]) : []))
     precondition(launch.posts.map { $0.0 } == (failure == nil ? ["native_home", "native_home_entry"] : ["native_home"]))
     let trace = launch.posts[0].1["readiness"] as! [String: Any]
     precondition(trace["outcome"] as? String == outcome && trace["strictSamples"] as? Int == launch.sampled)
@@ -166,6 +169,9 @@ precondition(wrongPage.waits.isEmpty)
 let recovers = Launch([(.unidentifiedStartup, 0.317), (.ready, 0.1)], wakes: [(true, 1.2)])
 let recovered = verify(recovers, "ready", states: ["unidentified_startup", "ready"])
 precondition(recovers.sampled == 2 && recovers.waits == [4] && (recovered["elapsedMs"] as! Int) >= 1616)
+let compact = Launch([(.ready, 0.25)])
+compact.compact = true
+_ = verify(compact, "ready", states: ["ready"])
 let persistent = Launch([(.unidentifiedStartup, 0.317)])
 _ = verify(persistent, "unexpected", "native_home_identity_unproven", states: ["unidentified_startup", "unexpected"])
 precondition(persistent.sampled == 2 && persistent.waits == [4])
@@ -191,6 +197,44 @@ for change: [String: Any] in [["appForeground": false], ["noAlerts": false], ["n
 }
 '''
         self.compile_and_run(program)
+
+    def test_page_witness_requires_real_controls_unique_roles_and_common_webview(self):
+        self.compile_and_run(r'''
+import Foundation
+typealias Fact = NativeControlPolicy.Fact
+func fact(_ id: String, _ label: String, _ role: String) -> Fact {
+    Fact(identifier: id, label: label, role: role, value: nil)
+}
+func verify(_ facts: [Fact], _ targets: [(String?, String, Bool)], separate: Int? = nil,
+            paths: [[Int]]? = nil) -> [Int]? {
+    let webs = facts.indices.map { $0 == separate ? [1, 0] : [0, 0] }
+    return NativeControlPolicy.pageWitness(facts, paths: paths ?? facts.indices.map { webs[$0] + [$0] },
+        windows: webs.map { [$0[0]] }, webs: webs, targets: targets)
+}
+let compact: [(String?, String, Bool)] = [(nil, "Herdr Pocket", false), (nil, "还没有主机", false),
+    (nil, "添加主机后，在这里查看会话和任务状态。", false), ("home-open-ssh", "普通 SSH 终端", true),
+    ("host-empty-add", "添加主机", true)]
+let home = [fact("", "Herdr Pocket", "staticText"), fact("", "还没有主机", "staticText"),
+    fact("", "添加主机后，在这里查看会话和任务状态。", "staticText"), fact("home-open-ssh", "普通 SSH 终端", "button"),
+    fact("host-empty-add", "添加主机", "button")]
+precondition(verify(home, compact) == [0, 1, 2, 3, 4])
+precondition(verify(home, compact, separate: 4) == nil)
+precondition(verify(home + [home[4]], compact) == nil)
+precondition(verify(home.dropLast() + [fact("host-empty-add", "添加主机", "staticText")], compact) == nil)
+precondition(verify(home.dropLast() + [fact("host-empty-add", "选择连接方式", "button")], compact) == nil)
+let choices: [(String?, String, Bool)] = [("add-herdr", "herdr 配对 / 手动连接", true), ("add-ssh", "普通 SSH 终端", true)]
+let compactChoice: [(String?, String, Bool)] = [(nil, "添加主机", false), ("add-choice-heading", "选择连接方式", false),
+    ("add-back", "返回看板", true)] + choices
+let choice = [fact("", "添加主机", "staticText"), fact("add-choice-heading", "选择连接方式", "other"),
+    fact("add-back", "返回看板", "button"), fact("", "herdr 配对 / 手动连接", "button"), fact("", "普通 SSH 终端", "button")]
+precondition(verify(choice, compactChoice) == [0, 1, 2, 3, 4])
+precondition(verify(home, compactChoice) == nil)
+precondition(verify(choice, compactChoice, separate: 3) == nil)
+precondition(verify([fact("", "添加连接", "staticText")] + Array(choice.suffix(2)), [(nil, "添加连接", false)] + choices) == [0, 1, 2])
+let heading: [(String?, String, Bool)] = [("ssh-page-heading", "普通 SSH 终端", false)]
+precondition(verify([home[3], fact("", "普通 SSH 终端", "staticText")], heading,
+    paths: [[0, 0, 0], [0, 0, 0, 1]]) == nil)
+''')
 
     def test_production_adapter_roles_and_owner_boundaries(self):
         # Compile the real adapter bodies, using only snapshot/XCTest boundary

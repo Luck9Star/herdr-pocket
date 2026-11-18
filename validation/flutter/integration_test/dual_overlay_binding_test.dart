@@ -42,6 +42,9 @@ void main() {
      for (final name in ['host','port','username','session','socketPath','herdrPath','expectedHostKey']) name:raw[name]};
    await steps.showCatalogAdd();
    await existing.tapStablePointer(tester,find.byKey(const ValueKey('hosts-add')));
+    if (find.byKey(const ValueKey('choose-herdr')).evaluate().isNotEmpty) {
+      await existing.tapStablePointer(tester, find.byKey(const ValueKey('choose-herdr')));
+    }
    await existing.until(tester,()=>find.byType(PairingPage).evaluate().length==1);
    final page=tester.widget<PairingPage>(find.byType(PairingPage)); expect(page.keys,isNull); expect(page.adapter,isNull);
    final before=catalog.profiles.map((p)=>p.id).toSet(); final fingerprint=pairingFingerprint(profile['expectedHostKey'] as String);
@@ -77,6 +80,9 @@ h=Host(root,r['account'],pathlib.Path(sys.argv[3]).read_text());sys.stdout.write
    await steps.showCatalogAdd();
    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('hosts-add'))).onPressed,isNotNull);
    await existing.tapStablePointer(tester,find.byKey(const ValueKey('hosts-add')));
+    if (find.byKey(const ValueKey('choose-herdr')).evaluate().isNotEmpty) {
+      await existing.tapStablePointer(tester, find.byKey(const ValueKey('choose-herdr')));
+    }
    await existing.until(tester,()=>find.byType(PairingPage).evaluate().length==1);
    await tester.pageBack(); await tester.pumpAndSettle();
    }

@@ -237,7 +237,7 @@ enum NativeHomeReadiness {
               state["windowCount"] as? Int == 1, state["webViewCount"] as? Int == 1,
               state["inputCount"] as? Int == 1, state["credentialsEmpty"] as? Bool == true,
               state["sshTitleSeen"] as? Bool == false, state["addTitleSeen"] as? Bool == false,
-              let members = home["members"] as? [String: [String: Any]], members.count == 9,
+              let members = home["members"] as? [String: [String: Any]], !members.isEmpty,
               let controls = state["formControls"] as? [String: [String: Any]], controls.count == 4 else { return false }
         return members.values.allSatisfy { $0["count"] as? Int == 0 } &&
             controls.values.allSatisfy { $0["reason"] as? String == "missing" }
@@ -412,6 +412,38 @@ enum NativeControlPolicy {
         let exact = facts.indices.filter { allowed($0) && facts[$0].label == label }
         return exact.count == 1 ? exact[0] : nil
     }
+    static func pageWitness(_ facts: [Fact], paths: [[Int]], windows: [[Int]], webs: [[Int]],
+                            targets: [(String?, String, Bool)]) -> [Int]? {
+        guard facts.count == paths.count, facts.count == windows.count, facts.count == webs.count else { return nil }
+        var selected: [Int] = []
+        for (identifier, label, button) in targets {
+            let ids = facts.indices.filter { identifier != nil && facts[$0].identifier == identifier }
+            let candidates = (ids.isEmpty ? Array(facts.indices) : ids).filter { index in
+                let fact = facts[index]
+                if identifier != nil && ids.isEmpty && !fact.identifier.isEmpty && fact.identifier != fact.label { return false }
+                if button { return fact.role == "button" && fact.label == label }
+                let heading = fact.role == "staticText" && fact.label == label
+                let wrapper = !ids.isEmpty && fact.role == "other" && (fact.label == label ||
+                    facts.indices.filter { child in
+                        facts[child].role == "staticText" && facts[child].label == label &&
+                            paths[child].count > paths[index].count && paths[child].starts(with: paths[index])
+                    }.count == 1)
+                guard heading || wrapper else { return false }
+                // A choice/shortcut button's text leaf is not a heading.
+                return !facts.indices.contains { other in
+                    facts[other].role == "button" && paths[other].count < paths[index].count && paths[index].starts(with: paths[other])
+                }
+            }
+            guard ids.count <= 1, candidates.count == 1, let index = candidates.first,
+                  !windows[index].isEmpty, webs[index].count > windows[index].count,
+                  webs[index].starts(with: windows[index]), paths[index].count > webs[index].count,
+                  paths[index].starts(with: webs[index]) else { return nil }
+            selected.append(index)
+        }
+        guard Set(selected).count == selected.count,
+              NativeFramePolicy.sameOwner(windowPaths: selected.map { windows[$0] }, webPaths: selected.map { webs[$0] }) else { return nil }
+        return selected
+    }
     static func valueText(_ value: Any?) -> String? {
         if value == nil { return "" }
         if let text = value as? String { return text }
@@ -465,6 +497,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     private var scenario = "ordinary"
     private var nativePhase = "ordinary_launch"
     private var lastHomeSample: [String: Any]?
+    private var pageButtons: [String: Observed] = [:]
     private struct LiveControl {
         let element: XCUIElement
         let snapshot: any XCUIElementSnapshot
@@ -1655,7 +1688,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func homeDiagnostics(_ tree: [Observed]) throws -> [String: Any] {
+    private func homeDiagnostics(_ tree: [Observed], compact: Bool, noOtherPage: Bool) throws -> [String: Any] {
         let rows = tree.map { $0.snapshot }
         let definitions: [(String, [String], [String])] = [
             ("brand", ["Herdr Pocket"], []),
@@ -1665,13 +1698,18 @@ final class TauriDirectSSHUITests: XCTestCase {
             ("emptyHeading", ["还没有主机"], []),
             ("zeroHosts", ["0 台已存主机"], []),
             ("ordinaryShortcut", ["普通 SSH"], ["home-open-ssh"]),
+            ("emptyDescription", ["添加主机后，在这里查看会话和任务状态。"], []),
+            ("compactShortcut", ["普通 SSH 终端"], ["home-open-ssh"]),
             ("addHeading", ["添加连接"], []),
             ("sshOption", ["普通 SSH 终端"], ["add-ssh"])
         ]
         var members: [String: Any] = [:]
         for (key, labels, identifiers) in definitions {
             let matching = rows.filter { node in
-                identifiers.contains(node.identifier) || texts(node).contains { labels.contains($0) }
+                if key == "compactShortcut" {
+                    return node.elementType == .button && node.identifier != "add-ssh" && texts(node).contains { labels.contains($0) }
+                }
+                return identifiers.contains(node.identifier) || texts(node).contains { labels.contains($0) }
             }
             members[key] = ["count": min(matching.count, 10000),
                             "roles": Array(Set(matching.map { role($0.elementType) })).sorted()]
@@ -1717,33 +1755,47 @@ final class TauriDirectSSHUITests: XCTestCase {
         let member = { (key: String) -> Int in (members[key] as? [String: Any])?["count"] as? Int ?? 0 }
         let foreground = app.state == .runningForeground
         let webCount = rows.filter { $0.elementType == .webView }.count
-        let safe = foreground && webCount > 0 && member("brand") > 0 && member("homeHeading") > 0 &&
-            member("zeroHosts") > 0 && member("emptyHeading") > 0 && inputCount == 0 &&
+        let legacy = member("brand") > 0 && member("homeHeading") > 0 && member("zeroHosts") > 0 && member("emptyHeading") > 0
+        let compactHome = compact && member("homeHeading") == 0 && member("zeroHosts") == 0 && member("headerAdd") == 0
+        let safe = foreground && webCount > 0 && (compactHome || legacy) && inputCount == 0 && noOtherPage &&
             appAlerts.isEmpty && systemAlerts.isEmpty && !alertSnapshotFailed && errors.values.allSatisfy { !$0 }
         let result: [String: Any] = ["appForeground": foreground, "webViewCount": min(webCount, 10000),
             "windowCount": min(rows.filter { $0.elementType == .window }.count, 10000), "members": members, "knownErrors": errors,
             "appAlertCount": min(appAlerts.count, 10000), "systemAlertCount": min(systemAlerts.count, 10000),
             "alertMembers": alertMembers, "alertSnapshotFailed": alertSnapshotFailed,
             "inputCount": min(inputCount, 10000), "unknownVisibleTextCount": min(unknownTextCount, 10000),
-            "knownEmptyHome": safe]
+            "knownEmptyHome": safe, "compactEmptyHome": safe && compactHome]
         return result
     }
 
     @MainActor
     private func navigationState(publish: Bool = true) throws -> [String: Any] {
         let tree = try observedNodes()
-        let home = try homeDiagnostics(tree)
+        let screen = app.frame
+        let visible = tree.filter { NativeFramePolicy.valid($0.snapshot.frame) && $0.snapshot.frame.intersects(screen) }
+        let facts = visible.map { node in
+            NativeControlPolicy.Fact(identifier: node.snapshot.identifier,
+                label: texts(node.snapshot).first(where: { !$0.isEmpty }) ?? "", role: role(node.snapshot.elementType), value: nil)
+        }
+        let paths = visible.map(\.path), windows = visible.map(\.windowPath), webs = visible.map(\.webPath)
+        func witness(_ targets: [(String?, String, Bool)]) -> [Observed]? {
+            NativeControlPolicy.pageWitness(facts, paths: paths, windows: windows, webs: webs, targets: targets)?.map { visible[$0] }
+        }
+        let homeCard = witness([(nil, "Herdr Pocket", false), (nil, "还没有主机", false),
+            (nil, "添加主机后，在这里查看会话和任务状态。", false), ("home-open-ssh", "普通 SSH 终端", true),
+            ("host-empty-add", "添加主机", true)])
+        let choices = [("add-herdr" as String?, "herdr 配对 / 手动连接", true), ("add-ssh" as String?, "普通 SSH 终端", true)]
+        let mobileChoice = witness([(nil, "添加主机", false), ("add-choice-heading", "选择连接方式", false),
+            ("add-back", "返回看板", true)] + choices)
+        let legacyChoice = witness([(nil, "添加连接", false)] + choices)
+        let selection = formSelection(tree)
+        let noForm = selection.controls.values.allSatisfy { $0.reason == "missing" }
+        let home = try homeDiagnostics(tree, compact: homeCard != nil,
+            noOtherPage: noForm && mobileChoice == nil && legacyChoice == nil)
         lastHomeSample = home
         if publish { try post("native_home", ["nativeCheckpoint": nativePhase, "home": home]) }
         let members = home["members"] as! [String: [String: Any]]
         let seen = { (key: String) in (members[key]?["count"] as? Int ?? 0) > 0 }
-        let selection = formSelection(tree)
-        let facts = formTargets(tree)
-        let paths = tree.map { $0.path }
-        let choice = NativeControlPolicy.formVerdict(facts: facts, paths: paths, identifier: "add-ssh",
-            label: "普通 SSH 终端", editableRoles: ["button"]).index != nil &&
-            NativeControlPolicy.formVerdict(facts: facts, paths: paths, identifier: "add-herdr",
-                label: "herdr 配对 / 手动连接", editableRoles: ["button"]).index != nil
         var formControls: [String: Any] = [:]
         for name in ["host", "port", "user", "probe"] {
             let item = selection.controls[name]!
@@ -1751,20 +1803,25 @@ final class TauriDirectSSHUITests: XCTestCase {
         }
         let noErrors = !(home["knownErrors"] as! [String: Bool]).values.contains(true)
         let noAlerts = (home["appAlertCount"] as! Int) == 0 && (home["systemAlertCount"] as! Int) == 0 && home["alertSnapshotFailed"] as? Bool == false
-        let empty = seen("brand") && seen("homeHeading") && seen("emptyHeading") && seen("zeroHosts") &&
-            home["inputCount"] as? Int == 0 && noErrors && noAlerts && ["host", "port", "user"].allSatisfy { selection.controls[$0]?.index == nil }
+        let empty = home["knownEmptyHome"] as? Bool == true
+        let choice = homeCard == nil && noForm && home["inputCount"] as? Int == 0 && ((mobileChoice != nil) != (legacyChoice != nil))
         let formOwnerResolved = selection.ownerResolved
         let form = formOwnerResolved
         let page = form ? "sshForm" : choice ? "addChoice" : empty ? "emptyHome" : "unexpected"
-        let title = tree.contains { texts($0.snapshot).contains { $0.contains("普通 SSH 终端") } }
+        let compact = empty && home["compactEmptyHome"] as? Bool == true
+        pageButtons.removeAll()
+        if compact, let entry = homeCard?.last { pageButtons["emptyAdd"] = entry }
+        if choice, let ssh = (mobileChoice ?? legacyChoice)?.last { pageButtons["sshChoice"] = ssh }
+        let title = witness([("ssh-page-heading", "普通 SSH 终端", false)]) != nil
         let passwords = tree.filter { $0.snapshot.elementType == .secureTextField &&
             ($0.snapshot.identifier == "ssh-password" || $0.snapshot.label == "密码") }
         let credentialsEmpty = passwords.allSatisfy { NativeControlPolicy.credentialEmpty($0.snapshot.value, placeholder: $0.snapshot.placeholderValue) }
         return ["page": page, "appForeground": home["appForeground"]!, "inputCount": home["inputCount"]!,
             "windowCount": home["windowCount"]!, "webViewCount": home["webViewCount"]!,
             "noAlerts": noAlerts, "noKnownErrors": noErrors,
-            "emptyHomeIdentity": empty, "formByStructure": form, "formOwnerResolved": formOwnerResolved, "sshTitleSeen": title,
-            "addTitleSeen": seen("addHeading"), "credentialsEmpty": credentialsEmpty, "formControls": formControls]
+            "emptyHomeIdentity": empty, "compactEmptyHome": compact, "mobileAddChoice": choice && mobileChoice != nil,
+            "formByStructure": form, "formOwnerResolved": formOwnerResolved, "sshTitleSeen": title,
+            "addTitleSeen": mobileChoice != nil || seen("addHeading"), "credentialsEmpty": credentialsEmpty, "formControls": formControls]
     }
 
     @MainActor
@@ -1792,6 +1849,10 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func navigationElement(_ member: String) -> (XCUIElement, String)? {
+        if let button = pageButtons[member] {
+            guard let live = liveOnPath(button), live.snapshot.elementType == .button else { return nil }
+            return (live.element, button.snapshot.identifier.isEmpty ? "buttonRole" : "uniqueIdentifier")
+        }
         let targets = ["headerAdd": ("host-open-remote", "＋ 添加主机"), "emptyAdd": ("host-empty-add", "添加主机"),
             "ordinaryShortcut": ("home-open-ssh", "普通 SSH"), "sshChoice": ("add-ssh", "普通 SSH 终端")]
         guard let (identifier, label) = targets[member] else { return nil }
@@ -1804,12 +1865,12 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func navigate(_ member: String) throws -> (String, String, String) {
+    private func navigate(_ member: String, compactRoute: Bool = false) throws -> (String, String, String) {
         let before = try navigationState()
         // A delayed view transition may already have produced the real form.
         // Preserve this newly sampled source state; never rewrite it as addChoice
         // or synthesize an unperformed click to make a historical row fit.
-        if member == "sshChoice" && before["page"] as? String == "sshForm" {
+        if !compactRoute && member == "sshChoice" && before["page"] as? String == "sshForm" {
             try require(NativeHomeReadiness.permitsNavigation(before, from: "sshForm"), "native_home_retry_unsafe")
             let host = field("主机地址")
             try post("native_navigation_arrival", ["nativeCheckpoint": nativePhase, "state": before,
@@ -1819,6 +1880,11 @@ final class TauriDirectSSHUITests: XCTestCase {
         }
         try require(NativeHomeReadiness.permitsNavigation(before, from: member == "sshChoice" ? "addChoice" : "emptyHome"),
                     "native_home_retry_unsafe")
+        if compactRoute {
+            let witness = member == "sshChoice" ? "mobileAddChoice" : "compactEmptyHome"
+            try require(pageButtons[member] != nil && before[witness] as? Bool == true,
+                        "native_home_retry_unsafe")
+        }
         guard let (item, selection) = navigationElement(member) else { return ("missing", "uniqueLabel", "otherNative") }
         let geometry = try navigationGeometry(item)
         let allowed = geometry["ownerResolved"] as? Bool == true && geometry["centerVisible"] as? Bool == true &&
@@ -1907,17 +1973,19 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     private func openHomeSSH() throws {
         try awaitEmptyHome()
-        for member in ["headerAdd", "emptyAdd", "ordinaryShortcut"] {
-            let (page, selection, originalRole) = try navigate(member)
+        let compact = lastHomeSample?["compactEmptyHome"] as? Bool == true
+        for member in compact ? ["emptyAdd"] : ["headerAdd", "emptyAdd", "ordinaryShortcut"] {
+            let (page, selection, originalRole) = try navigate(member, compactRoute: compact)
             if page == "missing" { continue }
             if page == "sshForm" {
+                try require(!compact, "native_home_retry_unsafe")
                 try post("native_home_entry", ["nativeCheckpoint": nativePhase, "member": member, "selection": selection,
                     "role": originalRole, "enteredAddPage": false, "enteredSSHForm": true, "route": "directSSH"])
                 return
             }
             if page == "addChoice" {
                 try phase("open_ssh")
-                let (form, _, _) = try navigate("sshChoice")
+                let (form, _, _) = try navigate("sshChoice", compactRoute: compact)
                 try require(form == "sshForm", "native_ssh_form_unproven")
                 try post("native_home_entry", ["nativeCheckpoint": nativePhase, "member": member, "selection": selection,
                     "role": originalRole, "enteredAddPage": true, "enteredSSHForm": true, "route": "viaAdd"])

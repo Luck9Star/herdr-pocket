@@ -201,6 +201,7 @@ void main() {
     final tabs=HostTabs(),keys=TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String),tokens=(await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,tabs:tabs,keys:keys,offlineBuilder:(_) => const SizedBox())));
     await tester.pumpAndSettle(); await tapVisible(tester,'hosts-add'); await tester.pumpAndSettle();
+    if (find.byKey(const ValueKey('choose-herdr')).evaluate().isNotEmpty) { await tapVisible(tester,'choose-herdr'); await tester.pumpAndSettle(); }
     await fillPairTarget(tester,fixtureConfig()); await tapVisible(tester,'pair-target-review'); await tapVisible(tester,'pair-create'); await tester.pumpAndSettle();
     final request=jsonDecode(tester.widget<SelectableText>(find.byKey(const ValueKey('pair-request'))).data!) as Map<String,dynamic>;
     await acceptResponse(tester,authorizedResponse(request)); await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle();

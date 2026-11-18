@@ -79,7 +79,7 @@ async function importedRemote() {
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry, read = null } = {}) {
+async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry, read = null, compactEntry = null } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
@@ -115,6 +115,14 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
     addEventListener(name,fn) { (documentEvents[name] ??= []).push(fn); },
   };
   globalThis.window = { addEventListener(name,fn) { (windowEvents[name] ??= []).push(fn); }, confirm: () => true };
+  if (compactEntry) {
+    window.matchMedia = () => compactEntry;
+    nodes['home-open-ssh'].parentElement = nodes['host-board-intro'];
+    nodes['host-empty'].toggleAttribute = (name, on) => {
+      if (on) nodes['host-empty'].setAttribute(name, '');
+      else delete nodes['host-empty'].attrs[name];
+    };
+  }
   globalThis.confirm = () => true;
 
   const target = {
@@ -1949,6 +1957,28 @@ test('a known-empty catalog publishes the home and ordinary SSH entry before net
     await flush();
     assert.equal(n['brand-caption'].textContent, '0 台已存主机');
   } finally { releaseNetwork(emptyCatalog); await flush(); h.restore(); }
+});
+
+test('compact empty home uses the same direct SSH action and can return from the chooser', async () => {
+  let resize;
+  const compactEntry = { matches: true, addEventListener: (_event, callback) => { resize = callback; } };
+  const h = await setup({ compactEntry });
+  const n = h.nodes;
+  try {
+    assert.equal(n['home-open-ssh'].parentElement, n['host-empty']);
+    assert.equal(n['home-open-ssh'].textContent, '普通 SSH 终端');
+    n['host-empty-add'].click();
+    assert.equal(n['home-add'].hidden, false);
+    n['add-back'].click();
+    assert.equal(n['home-dashboard'].hidden, false);
+    n['home-open-ssh'].click();
+    assert.equal(n['home-ssh'].hidden, false);
+    compactEntry.matches = false;
+    resize();
+    assert.equal(n['home-open-ssh'].parentElement, n['host-board-intro']);
+    assert.equal(n['home-open-ssh'].textContent, '普通 SSH');
+    assert.equal(Object.hasOwn(n['host-empty'].attrs, 'data-compact'), false);
+  } finally { h.restore(); }
 });
 
 test('an empty home keeps its identity when only network preferences are unavailable', async () => {

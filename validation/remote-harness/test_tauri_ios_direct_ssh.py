@@ -871,6 +871,49 @@ class CaptureDiagnosticsTests(unittest.TestCase):
 
 
 class HomeDiagnosticsTests(unittest.TestCase):
+    def test_compact_home_requires_owned_roles_and_two_real_navigation_actions(self):
+        home = {**self.value(), 'compactEmptyHome': True}
+        members = home['members']
+        for name in ('homeHeading', 'zeroHosts', 'headerAdd'):
+            members[name] = {'count': 0, 'roles': []}
+        members['emptyDescription'] = {'count': 1, 'roles': ['staticText']}
+        members['compactShortcut'] = {'count': 1, 'roles': ['button']}
+        self.assertEqual(ios.public_home_diagnostic(home), home)
+        for name in ('emptyDescription', 'compactShortcut', 'emptyAdd'):
+            bad = {**home, 'members': {**members, name: {'count': 0, 'roles': []}}}
+            with self.subTest(name=name), self.assertRaises(ios.Failure):
+                ios.public_home_diagnostic(bad)
+        readiness = {'outcome': 'ready', 'elapsedMs': 200, 'strictSampleMs': 200, 'strictSamples': 1,
+                     'waitCalls': 0, 'samples': [{'state': 'ready', 'elapsedMs': 200}]}
+        with tempfile.TemporaryDirectory() as directory:
+            state = self.state_for_navigation(directory)
+            state.accept({'stage': 'native_home', 'nativeCheckpoint': 'ordinary_open_add',
+                          'home': home, 'readiness': readiness})
+            first = self.navigation('emptyAdd', 'emptyHome', 'addChoice')
+            first['geometry']['role'] = 'button'
+            first['before']['compactEmptyHome'] = True
+            first['after']['mobileAddChoice'] = True
+            with self.assertRaisesRegex(ios.Failure, 'home_retry_unsafe'):
+                state.accept({**first, 'member': 'headerAdd'})
+            state.accept(first)
+            second = self.navigation('sshChoice', 'addChoice', 'sshForm')
+            second['geometry']['role'] = 'button'
+            second['nativeCheckpoint'] = 'ordinary_open_ssh'
+            with self.assertRaisesRegex(ios.Failure, 'home_retry_unsafe'):
+                state.accept(second)
+            with self.assertRaisesRegex(ios.Failure, 'ssh_form_unproven'):
+                state.accept({'stage': 'native_navigation_arrival', 'nativeCheckpoint': 'ordinary_open_ssh',
+                              'source': 'currentFormObservation', 'performed': False, 'state': second['after'],
+                              'geometry': second['geometry']})
+            second['before']['mobileAddChoice'] = True
+            with self.assertRaisesRegex(ios.Failure, 'home_retry_unsafe'):
+                state.accept({**second, 'before': {**second['before'], 'inputCount': 1}})
+            state.accept(second)
+            state.accept({'stage': 'native_home_entry', 'nativeCheckpoint': 'ordinary_open_ssh', 'member': 'emptyAdd',
+                          'selection': 'buttonRole', 'role': 'button', 'enteredAddPage': True,
+                          'enteredSSHForm': True, 'route': 'viaAdd'})
+            self.assertEqual(state.result['homeEntry']['ordinary']['member'], 'emptyAdd')
+
     def test_unknown_initial_observation_never_authorizes_navigation(self):
         initial = {'state': 'unidentified_startup', 'elapsedMs': 317}
         trace = {'outcome': 'ready', 'elapsedMs': 1500, 'strictSampleMs': 500, 'strictSamples': 2,
@@ -1410,10 +1453,13 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
 
     def probe(self, fixture):
         import paramiko
-        peer = paramiko.Transport(('127.0.0.1', fixture.port))
-        peer.start_client(timeout=5)
-        key = peer.get_remote_server_key()
-        peer.close()
+        count = fixture.snapshot()['connections'] + 1
+        with paramiko.Transport(('127.0.0.1', fixture.port)) as peer:
+            peer.start_client(timeout=5)
+            key = peer.get_remote_server_key()
+        # The client can close before the fixture publishes its server-side close.
+        self.assertTrue(fixture.wait_for_connections_closed(count, timeout=5))
+        self.assertEqual(fixture.snapshot()['connections'], count)
         return key
 
     def session(self, fixture, *, marker=True):

@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "android": [
+    {
+      "shell": "flutter",
+      "run": 44340477284,
+      "job": 134928738200,
+      "artifact": 14445171169,
+      "sourceSha": "543ecc8ae0651df92b386dfa7d2c72692ccb229a",
+      "zipSha256": "391451a82be30baefcb182721fbf106b0ee4ac45e64e0418cc14731b6335f1ab",
+      "zipBytes": 813000,
+      "resultMember": "direct-ssh-public/result.json",
+      "resultSha256": "5bedef73fbcbee1c4890b7bf4efa942feb176197b8762046e00f88032bc2499b",
+      "status": "passed",
+      "scope": "API 35 x86_64 owned emulator and loopback",
+      "findings": {
+        "ordinaryPtyEchoAndClose": true,
+        "rotationBlockedBeforeAuth": true,
+        "rotationAcceptedAndClosed": true,
+        "screenProofAccepted": true,
+        "credentialsCleared": true,
+        "isolatedCleanup": true
+      }
+    },
+    {
+      "shell": "tauri",
+      "run": 44343883721,
+      "job": 134940944341,
+      "artifact": 14446570463,
+      "sourceSha": "3c3105f93fba702530adf4a038939b651205a7e1",
+      "zipSha256": "6846507ee0e0dfdc4372bba7306bce3917aeba7910276d958d7a0247931fa02b",
+      "zipBytes": 810658,
+      "resultMember": "tauri-direct-evidence/manifest.json",
+      "resultSha256": "637b7003b632593568728c4a421835d6115979f00783fc38a6b5367ee24b07e8",
+      "status": "passed",
+      "scope": "API 35 x86_64 owned emulator and loopback",
+      "findings": {
+        "ordinaryEchoAndClose": true,
+        "rotationRefusedAndKeptTrust": true,
+        "rotationEchoAndClose": true,
+        "encryptedKeyEchoAndClose": true,
+        "screenProofAccepted": true,
+        "credentialsCleared": true,
+        "isolatedCleanup": true
+      }
+    }
+  ],
+  "ios": {
+    "run": 44340477261,
+    "sourceSha": "543ecc8ae0651df92b386dfa7d2c72692ccb229a",
+    "workflowConclusion": "failure",
+    "artifactCount": 0,
+    "runner": "GitHub-hosted macOS arm64",
+    "attempts": [
+      {
+        "attempt": 1,
+        "jobs": [
+          {
+            "shell": "flutter",
+            "job": 134928738066,
+            "conclusion": "cancelled",
+            "steps": 0,
+            "runnerAssigned": false
+          },
+          {
+            "shell": "tauri",
+            "job": 134928738621,
+            "conclusion": "cancelled",
+            "steps": 0,
+            "runnerAssigned": false
+          }
+        ]
+      },
+      {
+        "attempt": 2,
+        "jobs": [
+          {
+            "shell": "flutter",
+            "job": 134941304995,
+            "conclusion": "cancelled",
+            "steps": 0,
+            "runnerAssigned": false
+          },
+          {
+            "shell": "tauri",
+            "job": 134941302143,
+            "conclusion": "cancelled",
+            "steps": 0,
+            "runnerAssigned": false
+          }
+        ]
+      }
+    ],
+    "annotations": {
+      "hostedRunnerNotAcquired": [
+        134928738066,
+        134928738621,
+        134941302143
+      ],
+      "noAnnotation": [
+        134941304995
+      ]
+    }
+  }
+}

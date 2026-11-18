@@ -662,6 +662,9 @@ class DualOverlayUiSteps {
     await stage('${role}_pair_profile');
     await showCatalogAdd();
     await existing.tapStablePointer(tester, find.byKey(const ValueKey('hosts-add')));
+    if (find.byKey(const ValueKey('choose-herdr')).evaluate().isNotEmpty) {
+      await existing.tapStablePointer(tester, find.byKey(const ValueKey('choose-herdr')));
+    }
     await stage('${role}_pair_page');
     await existing.until(tester, () => find.byType(PairingPage).evaluate().length == 1);
     final page = tester.widget<PairingPage>(find.byType(PairingPage));

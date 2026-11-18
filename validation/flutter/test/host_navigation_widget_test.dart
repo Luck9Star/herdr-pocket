@@ -49,7 +49,7 @@ void main() {
         image.dispose();
       });
     }
-    expect(find.textContaining('暂无已保存主机'), findsOneWidget);
+    expect(find.text('还没有主机'), findsOneWidget);
     await capture('empty');
     await tester.tap(find.text('终端').last); await tester.pumpAndSettle();
     expect(find.textContaining('暂无打开的本地视图'), findsOneWidget);

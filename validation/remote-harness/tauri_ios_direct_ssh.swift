@@ -201,6 +201,7 @@ enum NativeConnectPolicy {
 enum NativeHomeReadiness {
     enum State: String {
         case ready, loading, shell, error, alert, unexpected, notForeground = "not_foreground"
+        case unidentifiedStartup = "unidentified_startup"
     }
 
     static let errors: [(String, [String])] = [
@@ -229,6 +230,17 @@ enum NativeHomeReadiness {
         if flags["loading"] == true { return .loading }
         if home["knownEmptyHome"] as? Bool == true && permitsNavigation(state, from: "emptyHome") { return .ready }
         return .shell
+    }
+
+    static func canResampleUnidentifiedStartup(_ state: [String: Any], home: [String: Any]) -> Bool {
+        guard state["page"] as? String == "unexpected", state["noKnownErrors"] as? Bool == true,
+              state["windowCount"] as? Int == 1, state["webViewCount"] as? Int == 1,
+              state["inputCount"] as? Int == 1, state["credentialsEmpty"] as? Bool == true,
+              state["sshTitleSeen"] as? Bool == false, state["addTitleSeen"] as? Bool == false,
+              let members = home["members"] as? [String: [String: Any]], members.count == 9,
+              let controls = state["formControls"] as? [String: [String: Any]], controls.count == 4 else { return false }
+        return members.values.allSatisfy { $0["count"] as? Int == 0 } &&
+            controls.values.allSatisfy { $0["reason"] as? String == "missing" }
     }
 }
 enum NativeViewPolicy {
@@ -1860,10 +1872,15 @@ final class TauriDirectSSHUITests: XCTestCase {
             // Give an unfinished app time to advance and take a fresh sample.
             if strictSamples == 1 { deadline = checkedAt + 35 }
             outcome = NativeHomeReadiness.classify(state, home: lastHomeSample!)
+            if strictSamples == 1 && outcome == .unexpected &&
+                NativeHomeReadiness.canResampleUnidentifiedStartup(state, home: lastHomeSample!) {
+                outcome = .unidentifiedStartup
+            }
             if transitions.last?["state"] as? String != outcome.rawValue {
                 transitions.append(["state": outcome.rawValue, "elapsedMs": milliseconds(checkedAt - start)])
             }
-            guard outcome == .loading || outcome == .shell else { break }
+            // The unidentified first observation gets only one passive resample.
+            guard outcome == .loading || outcome == .shell || outcome == .unidentifiedStartup else { break }
             let slice = min(4, deadline - clock())
             if slice <= 0 { break }
             if markerSeen { Thread.sleep(forTimeInterval: slice) }

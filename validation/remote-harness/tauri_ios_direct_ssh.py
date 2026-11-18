@@ -205,11 +205,13 @@ def public_home_readiness(value, home):
     require(isinstance(samples, list) and 1 <= len(samples) <= value['strictSamples'], code)
     previous, elapsed = None, 0
     for sample in samples:
-        require(isinstance(sample, dict) and set(sample) == {'state', 'elapsedMs'}
-                and sample['state'] in states and sample['state'] != previous
-                and previous in (None, 'loading', 'shell') and type(sample['elapsedMs']) is int
+        require(isinstance(sample, dict) and set(sample) == {'state', 'elapsedMs'}, code)
+        state = sample['state']
+        require((state in states or (state == 'unidentified_startup' and previous is None))
+                and state != previous and previous in (None, 'loading', 'shell', 'unidentified_startup')
+                and type(sample['elapsedMs']) is int
                 and elapsed <= sample['elapsedMs'] <= value['elapsedMs'], code)
-        previous, elapsed = sample['state'], sample['elapsedMs']
+        previous, elapsed = state, sample['elapsedMs']
     require(previous == value['outcome'], code)
     flags = home['knownErrors']
     alert = bool(home['appAlertCount'] or home['systemAlertCount'] or home['alertSnapshotFailed'])

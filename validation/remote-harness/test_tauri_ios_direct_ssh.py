@@ -871,6 +871,25 @@ class CaptureDiagnosticsTests(unittest.TestCase):
 
 
 class HomeDiagnosticsTests(unittest.TestCase):
+    def test_unknown_initial_observation_never_authorizes_navigation(self):
+        initial = {'state': 'unidentified_startup', 'elapsedMs': 317}
+        trace = {'outcome': 'ready', 'elapsedMs': 1500, 'strictSampleMs': 500, 'strictSamples': 2,
+                 'waitCalls': 1, 'samples': [initial, {'state': 'ready', 'elapsedMs': 1500}]}
+        self.assertEqual(ios.public_home_readiness(trace, self.value()), trace)
+        unresolved = {**trace, 'outcome': 'unexpected',
+                      'samples': [initial, {'state': 'unexpected', 'elapsedMs': 1500}]}
+        unknown = {**self.value(), 'knownEmptyHome': False, 'inputCount': 1}
+        with tempfile.TemporaryDirectory() as directory:
+            state = self.state_for_navigation(directory)
+            state.accept({'stage': 'native_home', 'nativeCheckpoint': 'ordinary_open_add',
+                          'home': unknown, 'readiness': unresolved})
+            with self.assertRaisesRegex(ios.Failure, 'home_retry_unsafe'):
+                self.replay_official_header(state)
+            self.assertNotIn('navigationTrace', state.result)
+        for samples in ([initial], [initial, initial], [{'state': 'shell', 'elapsedMs': 1}, initial]):
+            with self.subTest(samples=samples), self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
+                ios.public_home_readiness({**trace, 'samples': samples}, self.value())
+
     def test_cold_start_observations_do_not_open_pages_or_advance_the_fixture(self):
         ready = {'outcome': 'ready', 'elapsedMs': 44250, 'strictSampleMs': 42250, 'strictSamples': 2,
                  'waitCalls': 1, 'samples': [{'state': 'loading', 'elapsedMs': 42000}, {'state':'ready', 'elapsedMs':44250}]}

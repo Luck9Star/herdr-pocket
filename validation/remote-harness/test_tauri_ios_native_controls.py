@@ -61,6 +61,7 @@ struct Rejected: Error { let code: String }
 final class Launch {
     var snapshots: [(NativeHomeReadiness.State, TimeInterval)]
     var wakes: [(Bool, TimeInterval)]
+    var unidentifiedOverrides: [String: Any] = [:]
     var waits: [TimeInterval] = []
     var clicks: [String] = []
     var posts: [(String, [String: Any])] = []
@@ -98,6 +99,18 @@ final class Adapter {
         launch.sampled += 1
         let (state, delay) = launch.snapshots.count == 1 ? launch.snapshots[0] : launch.snapshots.removeFirst()
         Clock.time += delay
+        if state == .unidentifiedStartup {
+            let members = ["brand", "headerAdd", "emptyAdd", "homeHeading", "emptyHeading", "zeroHosts",
+                           "ordinaryShortcut", "addHeading", "sshOption"]
+            let controls = ["host", "port", "user", "probe"]
+            lastHomeSample = ["knownErrors": ["loading": false], "knownEmptyHome": false,
+                              "members": Dictionary(uniqueKeysWithValues: members.map { ($0, ["count": 0]) })]
+            let observation: [String: Any] = ["page": "unexpected", "appForeground": true, "noAlerts": true,
+                "noKnownErrors": true, "credentialsEmpty": true, "windowCount": 1, "webViewCount": 1,
+                "inputCount": 1, "sshTitleSeen": false, "addTitleSeen": false,
+                "formControls": Dictionary(uniqueKeysWithValues: controls.map { ($0, ["reason": "missing"]) })]
+            return observation.merging(launch.unidentifiedOverrides) { _, current in current }
+        }
         lastHomeSample = ["knownErrors": ["loading": state == .loading, "hostStorageError": state == .error],
                           "knownEmptyHome": state == .ready]
         return ["page": state == .ready ? "emptyHome" : state == .unexpected ? "addChoice" : "unexpected",
@@ -110,6 +123,7 @@ final class Adapter {
     }
     func post(_ name: String, _ value: [String: Any]) throws { launch.posts.append((name, value)) }
     func navigate(_ member: String) throws -> (String, String, String) {
+        precondition(lastHomeSample?["knownEmptyHome"] as? Bool == true)
         launch.clicks.append(member)
         return ("sshForm", "buttonRole", "button")
     }
@@ -149,6 +163,26 @@ precondition(alert.waits.isEmpty && alert.sampled == 1)
 let wrongPage = Launch([(.unexpected, 0)])
 _ = verify(wrongPage, "unexpected", "native_home_identity_unproven", states: ["unexpected"])
 precondition(wrongPage.waits.isEmpty)
+let recovers = Launch([(.unidentifiedStartup, 0.317), (.ready, 0.1)], wakes: [(true, 1.2)])
+let recovered = verify(recovers, "ready", states: ["unidentified_startup", "ready"])
+precondition(recovers.sampled == 2 && recovers.waits == [4] && (recovered["elapsedMs"] as! Int) >= 1616)
+let persistent = Launch([(.unidentifiedStartup, 0.317)])
+_ = verify(persistent, "unexpected", "native_home_identity_unproven", states: ["unidentified_startup", "unexpected"])
+precondition(persistent.sampled == 2 && persistent.waits == [4])
+let becomesError = Launch([(.unidentifiedStartup, 0.317), (.error, 0.1)], wakes: [(true, 0.2)])
+_ = verify(becomesError, "error", "native_home_known_loading_error", states: ["unidentified_startup", "error"])
+precondition(becomesError.sampled == 2 && becomesError.waits == [4])
+for changed: [String: Any] in [["page": "sshForm"], ["webViewCount": 2], ["credentialsEmpty": false],
+                             ["sshTitleSeen": true], ["formControls": ["host": ["reason": "ambiguous"],
+                                 "port": ["reason": "missing"], "user": ["reason": "missing"], "probe": ["reason": "missing"]]]] {
+    let rejected = Launch([(.unidentifiedStartup, 0.317), (.ready, 0.1)])
+    rejected.unidentifiedOverrides = changed
+    _ = verify(rejected, "unexpected", "native_home_identity_unproven", states: ["unexpected"])
+    precondition(rejected.sampled == 1 && rejected.waits.isEmpty)
+}
+let background = Launch([(.notForeground, 0), (.ready, 0)])
+_ = verify(background, "not_foreground", "native_home_not_foreground", states: ["not_foreground"])
+precondition(background.sampled == 1 && background.waits.isEmpty)
 let ready = try Adapter(Launch([(.ready, 0)])).navigationState(publish: false)
 precondition(NativeHomeReadiness.permitsNavigation(ready, from: "emptyHome"))
 for change: [String: Any] in [["appForeground": false], ["noAlerts": false], ["noKnownErrors": false],

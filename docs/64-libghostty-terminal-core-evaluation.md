@@ -86,3 +86,98 @@ python3 -m http.server 18753 --bind 127.0.0.1 --directory "$probe_dir"
 | Windows | GNU DLL 的分发/ABI 装载与 FFI、输入和屏幕阅读 | WebView2 WASM、输入与辅助技术 |
 
 官方稳定发布清单未列 Android AAR/so 或 Linux 预编译包，需自行构建；上游 [Android CI](https://github.com/ghostty-org/ghostty/blob/108cacb17ed8990840cd14abfce43d8ed8503ca1/.github/workflows/test.yml#L1309)以 NDK r29 交叉构建 aarch64/x86_64/armv7；[上游运行 43094066360](https://github.com/ghostty-org/ghostty/actions/runs/43094066360)三目标均成功，不能算本项目实机验证。上游 Ghostty 代码遵循其[固定版本许可证](https://github.com/ghostty-org/ghostty/blob/108cacb17ed8990840cd14abfce43d8ed8503ca1/LICENSE)；二进制的依赖与字体许可、静态链接义务须按最终构建清单复核。
+
+## 2026-11-18 R20 三项迁移条件核查
+
+基线 `f378e9a`（`main`）按门禁逐项核对。**结论：条件一、二不满足；条件三回退方式已明确，隔离原型分支待创建，暂未验证；维持不迁移。**
+
+### 条件一：关键能力优于现实现（同条件实测）
+
+同一批用例分别运行官方 libghostty-vt 1.0.1（固定 tag `vt-1.0.1` / commit `108cacb`；用 2026-11-15 已核验哈希的 XCFramework 静态库以仓库 `probe.c` 重编译执行，19 项必过全过、两项 reset 观察否定；ReleaseSmall WASM 由 `probe-wasm.mjs` 现场下载过固定 SHA256 后复跑，9 项全过）与生产 Tauri 壳同款 `@xterm/xterm` 6.0.0 + `@xterm/addon-unicode-graphemes` 0.4.0（Node 24.22.2，无 DOM；读数均在 `write` 回调排空后取 buffer）。
+
+| 用例 | libghostty-vt 1.0.1 | xterm 6.0.0 | 判定 |
+| --- | --- | --- | --- |
+| `a中😀é!` 全切点逐块跨写 | 通过（`utf8_every_two_chunk_boundary`、`utf8_one_byte_chunks` 等） | 全部切点还原 | 平手 |
+| 组合重音 `e`+U+0301 | 1 列 `é` | cursorX=1，`é` | 平手 |
+| ZWJ 家庭 emoji+`!`（mode 2027） | 2 列+1，cursor 3 | cursor 3，cell0 完整 | 平手 |
+| 备用屏 1049 进入/退出 | `ALT`/`MAIN` | `ALT`/`MAIN` | 平手 |
+| 半截 UTF-8 + reset + 尾字节 | `😀Z`（reset 不隔离） | `😀Z`（同为 U+1F600+`Z`） | 平手（同缺陷） |
+| 孤立尾字节 `98 80 5a` 新实例 | `??Z` | `Z` | 显示策略差异，非产品优势判定项 |
+| resize 6×3 `abcdefg`→4×4（光标行内悬挂，`probe.c` 同款） | `abcdefg` | 默认 `abcd`/`g`（光标行 reflow 丢 `ef`）；`reflowCursorLine:true` 时 `abcd`/`efg` | 见下 |
+| 同输入后接 `\n`（光标移出行）再 resize | 无对应官方用例 | 默认配置即 `abcd`/`efg` | 见下 |
+
+resize 差异限定在**光标所在悬挂行**：xterm 6.0.0 公开布尔选项 `reflowCursorLine`（typings 注明默认 false、"shells usually handle this themselves"）设为 `true` 后，6×3→4×4 与 8×3→4×4（`abcdefgh`）均保留全部字符；光标移出测试行后默认配置也不丢字。生产 Tauri 壳未设置该选项（`validation/tauri/src/` 全量无 `reflowCursorLine`），但远端观察路径 full 帧重建时先 `reset()` 再按帧尺寸重建（`remote.js`），不存在“已写内容上直接缩列”的裸探针场景。即该差异是默认配置对光标行的策略，可用公开选项或 shell 自行重绘消除，不构成核心能力差距，也不外推为生产缺陷。孤立无效字节两核策略不同（libghostty 显示替换符、xterm 丢弃）；本对照无 DOM/renderer，屏幕上最终呈现未测，不作优势定性。**判定：未测得构成迁移依据的关键能力优势。**
+
+xterm 侧对照脚本（完整可执行，Node ≥22）：
+
+```sh
+npm install --prefix /tmp/r20cmp --no-save --no-package-lock \
+  @xterm/xterm@6.0.0 @xterm/addon-unicode-graphemes@0.4.0
+```
+
+```js
+// /tmp/r20cmp/cmp.mjs — node cmp.mjs
+import {createRequire} from 'node:module';
+const R = createRequire(import.meta.url);
+const D = '/tmp/r20cmp/node_modules';
+const {Terminal} = R(D + '/@xterm/xterm/lib/xterm.js');
+const {UnicodeGraphemesAddon} = R(D + '/@xterm/addon-unicode-graphemes/lib/addon-unicode-graphemes.js');
+const enc = new TextEncoder();
+const mk = o => {const t = new Terminal({cols:80, rows:24, allowProposedApi:true, ...o});
+  t.loadAddon(new UnicodeGraphemesAddon()); return t;};
+const rows = t => {const b = t.buffer.active, a = [];
+  for (let r = 0; r < b.length; r++) a.push(b.getLine(r).translateToString(true).replace(/\s+$/, ''));
+  return a;};
+// 1) UTF-8 全切点
+const bytes = enc.encode('a中😀é!'); const bad = [];
+for (let s = 0; s <= bytes.length; s++) await new Promise(res => {
+  const t = mk(); t.write(bytes.slice(0, s));
+  t.write(bytes.slice(s), () => { if (rows(t).join('') !== 'a中😀é!') bad.push(s); res(); });
+});
+console.log('utf8_all_splits:', bad.length ? 'FAIL ' + bad : 'PASS');
+// 2) 组合 / ZWJ
+const c = mk(); await new Promise(r => c.write('e\u0301', r));
+console.log('combining:', c.buffer.active.cursorX, rows(c)[0]);
+const z = mk(); await new Promise(r => z.write('👨‍👩‍👧‍👦!', r));
+console.log('zwj:', z.buffer.active.cursorX, z.buffer.active.getLine(0).getCell(0).getChars());
+// 3) 半截 UTF-8 + reset() + 尾字节（生产 full 重建路径同款 reset）
+const h = mk({cols:20, rows:5});
+await new Promise(r => h.write(new Uint8Array([0xf0, 0x9f]), r));
+h.reset();
+await new Promise(r => h.write(new Uint8Array([0x98, 0x80, 0x5a]), r));
+console.log('half_reset_tail:', [...rows(h).join('')].map(x => x.codePointAt(0).toString(16)).join(' '));
+// 4) 孤立尾字节新实例
+const n = mk({cols:20, rows:5});
+await new Promise(r => n.write(new Uint8Array([0x98, 0x80, 0x5a]), r));
+console.log('isolated_tail:', [...rows(n).join('')].map(x => x.codePointAt(0).toString(16)).join(' '));
+// 5) resize：光标行内悬挂 vs reflowCursorLine:true vs 光标已移出
+for (const [label, opts, input] of [
+  ['cursor_inline_default', {cols:6, rows:3, scrollback:1000}, 'abcdefg'],
+  ['cursor_inline_reflowTrue', {cols:6, rows:3, scrollback:1000, reflowCursorLine:true}, 'abcdefg'],
+  ['cursor_moved_default', {cols:6, rows:3, scrollback:1000}, 'abcdefg\n']]) {
+  const t = new Terminal(opts);
+  await new Promise(r => t.write(input, r));
+  t.resize(4, 4);
+  console.log('resize_6to4_' + label + ':', JSON.stringify(rows(t)));
+}
+```
+
+libghostty 侧复跑即仓库既有命令：`python3 validation/ghostty-vt/run_native.py --cache <dir> --output <json>`（固定哈希校验、19 项必过）与 `node validation/ghostty-vt/probe-wasm.mjs`。
+
+### 条件二：双壳中文输入/Unicode/resize/滚动/五端构建分发
+
+**判定：不满足。** 现有证据止步于 VT 核心对照与两壳授权门控回归：
+
+- 中文输入：两壳真机 IME 均未验证（Flutter 壳有输入法 shim 与候选 IME 观察补丁，README 明确真机未验；Tauri 壳逐键/IME 仅本地隔离测试）。libghostty-vt 不提供 IME。
+- Unicode：核心层平手（上表）；Flutter 壳组合重音渲染缺陷的修复是候选补丁，默认依赖未切换。
+- resize：两壳远端观察均不发远端 PTY resize（Tauri 80×24 固定、Flutter 布局收窄不发）；核心层 reflow 差异能否进入两壳取决于桥接与远端尺寸协商，均未实现。
+- 滚动：已核实的 herdr 远端观察路径不保留滚动历史（Flutter 观察入口不累计 scrollback；Tauri full 恢复销毁重建实例，`scrollback:0`）；普通 SSH 会话的用户滚动行为本页未测，不外推。libghostty-vt 1.0.1 的 scrollback 语义本页未评估。
+- 五端构建分发：官方制品无 Android AAR/Linux 预编译（见上节表）；libghostty 路线的五端绑定、打包、签名均未开展，两壳现有五端构建证据只覆盖 xterm/terminal_view 路线。
+
+### 条件三：隔离分支与可操作回退
+
+**判定：回退方式已明确，隔离原型分支待创建，暂未验证。** 当前尚无 libghostty 迁移原型分支。对未来原型的回滚方式明确：原型在独立分支开发，不触碰生产依赖与主干；未合入时回退即丢弃该分支/工作树或回到既有提交（基线 `f378e9a`/`main`）；若已合入，回退即 revert 该合入提交。原要求为“隔离分支 + 明确回滚方式”，未含实装开关或回退演练；隔离分支的隔离效果在原型分支创建前未经实际验证。
+
+### 门禁结论
+
+条件一未测得关键能力优势（Unicode 类全平手、resize 差异可用公开选项消除、无效字节为显示策略差异），条件二缺口横跨 IME/resize/滚动/五端分发，条件三回退方式已明确但隔离原型分支待创建、暂未验证。**不迁移。** 若继续：先在 Tauri 受控试验页接官方 1.0.1 WASM 复核浏览器内有 DOM 场景，再评估 Flutter FFI 与 IME/绘制门槛；原型一律独立分支。

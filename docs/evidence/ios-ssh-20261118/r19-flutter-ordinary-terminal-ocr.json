@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "a08cca3d263110e851d0f3a8c5f85c6301acc6cfc96851d3fed85dd5ef3ea056",
+  "imageSize": [
+    828,
+    1792
+  ],
+  "terminalBounds": [
+    0,
+    336,
+    828,
+    758
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "SALT HAVE PATH HEAD STAR FACT LAST HARD",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 2,
+  "ocrPageSegmentationMode": 11,
+  "proofSequenceVisible": true
+}

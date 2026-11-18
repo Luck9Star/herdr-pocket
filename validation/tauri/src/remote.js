@@ -590,6 +590,18 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       if(revision!==hostRefreshRevision)return;
       const nextHosts=await invoke('host_list');
       if(revision!==hostRefreshRevision)return;
+      if(!nextHosts.length){
+        // 已知空目录不依赖网络配置即可展示主页；独立普通 SSH 不应等待辅助偏好读取。
+        hostRecords=[];networkRevisions=new Map();networkProviders.clear();hostSummaries.reconcile([]);
+        $('host-empty').hidden=false;renderHosts();render();if(refreshNetwork)networks?.refresh();
+        hostMessage('还没有已存主机。');$('host-home-status').hidden=true;workbench.clearUnavailable();
+        void invoke('network_list').then(catalog=>{
+          if(revision!==hostRefreshRevision)return;
+          terminalFontSize=catalog.preferences.terminalFontSize;workspace?.setFont(terminalFontSize);
+          $('terminal-font-size').value=terminalFontSize;if(terminal)terminal.options.fontSize=terminalFontSize;
+        },()=>{if(revision===hostRefreshRevision)hostMessage('还没有已存主机；网络配置暂不可读。');});
+        return;
+      }
       const catalog=await invoke('network_list');
       if(revision!==hostRefreshRevision)return;
       const nextNetworkRevisions=new Map(catalog.profiles.map(p=>[p.id,p.revision]));

@@ -78,7 +78,7 @@ async function importedRemote() {
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry } = {}) {
+async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry, read = null } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
@@ -126,7 +126,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
   let channel = null;
   let resolveObserve;
   let rejectObserve;
-  let readOverride = null;
+  let readOverride = read;
   let sendResult = null;
   const calls = [];
 
@@ -1927,4 +1927,56 @@ test('main recovery waits for a rendered full and explicit user confirmation',as
     assert.equal(h.calls.filter(c=>c.name==='remote_input_recover').length,1);
     assert.equal(n['remote-input-recover'].hidden,true);
   } finally {h.finish();await flush();h.restore();}
+});
+
+const emptyCatalog = { revision: 'r1', profiles: [], bindings: [], preferences: { terminalFontSize: 14 } };
+
+test('a known-empty catalog publishes the home and ordinary SSH entry before network preferences resolve', async () => {
+  let releaseNetwork;
+  const pending = new Promise(resolve => { releaseNetwork = resolve; });
+  const h = await setup({ read: (name, value) => name === 'network_list' ? pending : value });
+  const n = h.nodes;
+  try {
+    assert.equal(n['brand-caption'].textContent, '0 台已存主机');
+    assert.equal(n['host-empty'].hidden, false);
+    assert.equal(n['host-home-status'].hidden, true);
+    assert.equal(n['host-list'].children.length, 0);
+    n['home-open-ssh'].click();
+    assert.equal(n['home-ssh'].hidden, false);
+    assert.equal(n['ssh-probe'].disabled, false);
+    releaseNetwork(emptyCatalog);
+    await flush();
+    assert.equal(n['brand-caption'].textContent, '0 台已存主机');
+  } finally { releaseNetwork(emptyCatalog); await flush(); h.restore(); }
+});
+
+test('an empty home keeps its identity when only network preferences are unavailable', async () => {
+  const h = await setup({ read: (name, value) => {
+    if (name === 'network_list') throw Error('network_preferences_unavailable');
+    return value;
+  } });
+  const n = h.nodes;
+  try {
+    assert.equal(n['brand-caption'].textContent, '0 台已存主机');
+    assert.equal(n['host-empty'].hidden, false);
+    assert.equal(n['host-list'].children.length, 0);
+    assert.doesNotMatch(n['host-home-status'].textContent, /本机资料不可用/);
+    assert.match(n['host-home-status'].textContent, /网络配置暂不可读/);
+    n['home-open-ssh'].click();
+    assert.equal(n['home-ssh'].hidden, false);
+    assert.equal(n['ssh-probe'].disabled, false);
+  } finally { h.restore(); }
+});
+
+test('a host_list error never fakes a known-empty home', async () => {
+  const h = await setup({ read: (name, value) => {
+    if (name === 'host_list') throw Error('storage unavailable');
+    return value;
+  } });
+  const n = h.nodes;
+  try {
+    assert.equal(n['brand-caption'].textContent, '本机主机资料不可用');
+    assert.equal(n['host-empty'].hidden, true);
+    assert.match(n['host-home-status'].textContent, /不可用/);
+  } finally { h.restore(); }
 });

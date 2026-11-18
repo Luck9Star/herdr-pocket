@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
+import 'package:herdr_flutter_probe/network_profiles_page.dart';
 import 'host_catalog_test.dart' show MemoryCatalogStorage;
 
 void main() {
@@ -37,9 +38,13 @@ void main() {
       rect('hosts-direct-ssh', Rect.fromLTWH(margin + 16, top + 292, span - 32, 48));
       rect('home-tabs', Rect.fromLTWH(0, size.height - inset.bottom - 56, size.width, 56));
       for (var i = 0; i < 4; i++) {
-        rect('home-tab-$i', Rect.fromLTWH(i * size.width / 4, size.height - inset.bottom - 56, size.width / 4, 56));
-        expect(key('home-tab-$i').hitTestable(), findsOneWidget);
+        final id = i == 2 ? 'hosts-networks' : 'home-tab-$i';
+        rect(id, Rect.fromLTWH(i * size.width / 4, size.height - inset.bottom - 56, size.width / 4, 56));
+        expect(key(id).hitTestable(), findsOneWidget);
       }
+      await tester.tap(key('hosts-networks')); await tester.pumpAndSettle();
+      expect(find.byType(NetworkProfilesPage), findsOneWidget);
+      await tester.tap(find.widgetWithText(NavigationDestination, '看板')); await tester.pumpAndSettle();
       expect(key('hosts-add').hitTestable(), findsOneWidget);
       expect(key('hosts-direct-ssh').hitTestable(), findsOneWidget);
       await tester.tap(key('hosts-add')); await tester.pumpAndSettle();
@@ -82,6 +87,13 @@ void main() {
     expect(tester.widget<Text>(find.text('添加主机后，在这里查看会话和任务状态。')).maxLines, isNull);
     await tester.ensureVisible(key('hosts-direct-ssh')); await tester.pumpAndSettle();
     expect(key('hosts-direct-ssh').hitTestable(), findsOneWidget);
+    await tester.tap(key('hosts-direct-ssh')); await tester.pumpAndSettle();
+    expect(key('direct-host'), findsOneWidget);
+    await tester.pageBack(); await tester.pumpAndSettle();
+    expect(tester.widget(key('hosts-networks')), isA<NavigationDestination>());
+    await tester.tap(key('hosts-networks')); await tester.pumpAndSettle();
+    expect(find.byType(NetworkProfilesPage), findsOneWidget);
+    await tester.tap(find.widgetWithText(NavigationDestination, '看板')); await tester.pumpAndSettle();
     await tester.ensureVisible(key('hosts-add')); await tester.pumpAndSettle();
     expect(key('hosts-add').hitTestable(), findsOneWidget);
     await tester.tap(key('hosts-add')); await tester.pumpAndSettle();

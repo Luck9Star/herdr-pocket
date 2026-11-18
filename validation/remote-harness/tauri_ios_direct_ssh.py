@@ -74,7 +74,7 @@ NATIVE_FAILURES = frozenset((
     'native_home_identity_unproven', 'native_home_retry_unsafe', 'native_ssh_form_unproven',
     'native_home_navigation_failed', 'native_control_owner_unproven', 'native_scroll_owner_unproven',
     'native_form_control_unproven', 'native_form_control_changed', 'native_terminal_keyboard_visible',
-    'native_terminal_header_unproven'))
+    'native_terminal_header_unproven', 'native_mobile_setup_unproven'))
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 COMPACT_HOME_MEMBERS = {'emptyDescription', 'compactShortcut'}
@@ -816,6 +816,16 @@ def ordinary_evidence(fixture, *, closed):
     return facts
 
 
+def initial_probe_evidence(fixture):
+    require(fixture.wait_for_connections_closed(1, timeout=30), 'tauri_ios_probe_not_closed')
+    facts = fixture.snapshot()
+    events = facts['connectionEvents']
+    require(facts['connections'] == 1 and len(events) == 1 and events[0]['hostKey'] == 'A'
+            and events[0]['closed'] is True and all(events[0][key] == 0 for key in
+                ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes')),
+            'tauri_ios_probe_not_empty')
+
+
 def rotation_session_evidence(fixture, *, closed):
     facts = fixture.snapshot()
     require(facts['connections'] == 4 and len(facts['connectionEvents']) == 4,
@@ -1075,6 +1085,18 @@ class Checkpoints:
                 require(code in NATIVE_FAILURES, 'tauri_ios_native_diagnostic_invalid')
                 self.result['nativeFailureCode'] = code
                 self.failure = 'tauri_ios_native_check_failed'
+            elif phase == 'ordinary_connect':
+                require(self.index == STAGES.index('ordinary_input'), 'tauri_ios_checkpoint_order_invalid')
+                initial_probe_evidence(self.ordinary)
+            elif phase == 'key_change_connect':
+                if self.index == STAGES.index('key_change_review'):
+                    initial_probe_evidence(self.rotation)
+                else:
+                    require(self.index == STAGES.index('key_change_input'), 'tauri_ios_checkpoint_order_invalid')
+                    try:
+                        self.rotation.rotation_evidence(3)
+                    except ValueError:
+                        raise Failure('tauri_ios_rotation_evidence_invalid') from None
             return
         require(self.failure is None and self.index < len(STAGES) and stage == STAGES[self.index],
                 'tauri_ios_checkpoint_order_invalid')
@@ -1083,12 +1105,8 @@ class Checkpoints:
             self.started_cases.add('ordinary' if stage == 'ordinary_form' else 'keyChange')
         ordinary, rotation = self.ordinary, self.rotation
         fixture = rotation if stage.startswith('key_change') else ordinary
-        if stage == 'ordinary_probe':
-            require(ordinary.wait_for_connections_closed(1, timeout=30), 'tauri_ios_probe_not_closed')
-            events = ordinary.snapshot()['connectionEvents']
-            require(len(events) == 1 and events[0]['hostKey'] == 'A'
-                    and all(events[0][k] == 0 for k in ('authAttempts', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes')),
-                    'tauri_ios_probe_not_empty')
+        if stage in ('ordinary_probe', 'key_change_probe_a'):
+            initial_probe_evidence(fixture)
         if stage == 'ordinary_password':
             self.result['cases']['ordinary']['fingerprintReviewed'] = True
         if stage == 'key_change_password_b':
@@ -1261,8 +1279,11 @@ def run(project, app, output, *, source_sha=None, env=None):
                   'checkpointSecret': state.secret,
                   'ordinaryPort': ordinary.port, 'ordinaryPassword': ordinary.password,
                   'ordinaryFingerprint': ordinary.fingerprint,
+                  'ordinaryAlgorithm': ordinary.public_key.split()[0],
                   'rotationPort': rotation.port, 'rotationPassword': rotation.password,
-                  'fingerprintA': rotation.fingerprint, 'fingerprintB': rotation.rotated_fingerprint}
+                  'fingerprintA': rotation.fingerprint, 'fingerprintB': rotation.rotated_fingerprint,
+                  'rotationAlgorithm': rotation.public_key.split()[0],
+                  'rotatedAlgorithm': rotation.rotated_public_key.split()[0]}
         result['stage'] = 'driver_prepare'
         prepare_driver(private, config)
         build = ['xcodebuild', '-project', str(private / 'PocketUI.xcodeproj'), '-scheme', 'PocketUI',

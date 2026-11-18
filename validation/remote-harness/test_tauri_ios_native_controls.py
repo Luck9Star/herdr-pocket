@@ -236,6 +236,38 @@ precondition(verify([home[3], fact("", "普通 SSH 终端", "staticText")], head
     paths: [[0, 0, 0], [0, 0, 0, 1]]) == nil)
 ''')
 
+    def test_mobile_trust_uses_full_target_algorithm_and_fingerprint_in_one_owner(self):
+        self.compile_and_run(r'''
+import Foundation
+typealias Fact = NativeControlPolicy.Fact
+let fingerprint = "SHA256:" + String(repeating: "A", count: 43)
+let labels = ["核对主机密钥", "fixture@127.0.0.1:2222", "ssh-rsa", fingerprint, "取消核对", "指纹一致，确认继续"]
+let ids = ["ssh-step-title", "ssh-reviewed-endpoint", "ssh-reviewed-algorithm", "ssh-reviewed-fingerprint",
+           "ssh-trust-cancel", "ssh-trust-confirm"]
+let targets: [(String?, String, Bool)] = ids.indices.map { (ids[$0], labels[$0], $0 >= 4) }
+let wrap = "SHA256:" + String(repeating: "A", count: 21) + "\n" + String(repeating: "A", count: 22)
+func verify(_ candidate: [String], otherOwner: Int? = nil, extra: Bool = false) -> [Int]? {
+    var fields = ids.indices.map { Fact(identifier: ids[$0], label: NativeControlPolicy.fingerprintText(candidate[$0]),
+        role: $0 >= 4 ? "button" : "staticText", value: nil) }
+    if extra { fields.append(fields[5]) }
+    let windows = fields.indices.map { $0 == otherOwner ? [1] : [0] }
+    let webs = windows.map { $0 + [0] }
+    return NativeControlPolicy.pageWitness(fields, paths: fields.indices.map { webs[$0] + [$0] },
+        windows: windows, webs: webs, targets: targets)
+}
+var candidate = labels
+candidate[3] = wrap
+precondition(verify(candidate) == Array(0..<6))
+precondition(verify(candidate, otherOwner: 3) == nil)
+precondition(verify(candidate, extra: true) == nil)
+for (index, wrong) in [(1, "fixture@127.0.0.1:22220"), (2, "ssh-ed25519"), (3, fingerprint + "A"),
+                       (4, "取消核对，保留旧信任")] {
+    var invalid = candidate
+    invalid[index] = wrong
+    precondition(verify(invalid) == nil)
+}
+''')
+
     def test_production_adapter_roles_and_owner_boundaries(self):
         # Compile the real adapter bodies, using only snapshot/XCTest boundary
         # fixtures. The numeric roles deliberately differ from their names/order.
@@ -497,6 +529,7 @@ struct Adapter {
     var nativePhase = "ordinary_port"
     var pathControls: [[Int]: LiveControl] = [:]
     let config: [String: Any] = ["fingerprintA": "SHA256:fixture-complete-old", "fingerprintB": "SHA256:fixture-complete-new"]
+    var mobileFlow = false
     func require(_ condition: Bool, _ reason: String) throws {
         if !condition { throw Rejected(reason: reason) }
     }

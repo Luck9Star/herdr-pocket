@@ -50,6 +50,7 @@ DIRECT_ERROR_CODES = frozenset('''
     direct_terminal_screenshot_token_invalid direct_terminal_screenshot_token_not_visible direct_terminal_target_missing
     direct_terminal_webview_capture_failed direct_header_measurement_invalid direct_header_system_overlap direct_header_content_overlap direct_header_geometry_changed
     direct_unowned_or_invalid_device direct_unsafe_fixture direct_return_home_missing direct_return_home_peer_changed
+    direct_setup_layout_unproven direct_mobile_setup_unproven direct_probe_peer_unproven
     direct_webview_not_ready direct_webview_socket_missing
 '''.split())
 ANDROID_ERROR_CODES = {
@@ -509,6 +510,83 @@ def capture_terminal_proof(browser, fixture, evidence_dir, *, stem):
     return evidence
 
 
+def staged_setup(browser):
+    # The mobile route and the desktop checkbox are mutually exclusive UI witnesses.
+    expression = """(function sshSetupLayout(){
+      const one=id=>{const a=document.querySelectorAll('#'+id);return a.length===1?a[0]:null;};
+      const shown=e=>!!e&&!e.hidden&&e.getClientRects().length>0&&getComputedStyle(e).visibility==='visible';
+      const route=one('home-ssh'), title=one('ssh-step-title'), review=one('ssh-review');
+      if (!shown(route)) return null;
+      if (matchMedia('(max-width:599px)').matches) return route.dataset.sshStep==='target'&&shown(title)&&
+        title.innerText.trim()==='普通 SSH'&&!shown(review)?'staged':null;
+      return !route.hasAttribute('data-ssh-step')&&!shown(title)&&shown(review)&&review.type==='checkbox'?'legacy':null;
+    })()"""
+    layout = wait_for(lambda: browser.evaluate(expression), 'direct_setup_layout_unproven')
+    if layout not in ('staged', 'legacy'):
+        raise GuiFailure('direct_setup_layout_unproven')
+    return layout == 'staged'
+
+
+def mobile_setup(browser, fixture, step, *, fingerprint=None, prior=None, method='password', input_state='empty'):
+    key = (fixture.rotated_public_key if fingerprint is not None and
+           fingerprint == getattr(fixture, 'rotated_fingerprint', None) else fixture.public_key)
+    expectation = {'step': step, 'target': f'{fixture.username}@127.0.0.1:{fixture.port}',
+                   'algorithm': key.split()[0], 'fingerprint': fingerprint,
+                   'prior': prior, 'priorAlgorithm': fixture.public_key.split()[0], 'method': method, 'input': input_state}
+    expression = r"""(function sshMobileSetup(){
+      const spec=%s,one=id=>{const a=document.querySelectorAll('#'+id);return a.length===1?a[0]:null;};
+      const shown=e=>!!e&&!e.hidden&&e.getClientRects().length>0&&getComputedStyle(e).visibility==='visible';
+      const text=id=>{const e=one(id);return shown(e)?e.innerText.trim():null;};
+      const button=(id,label,on=true)=>{const e=one(id);return shown(e)&&e.tagName==='BUTTON'&&
+        text(id)===label&&e.disabled===!on;};
+      const route=one('home-ssh'), target=one('ssh-target-fields'), trust=one('ssh-trust-review'), auth=one('ssh-credentials');
+      const password=one('ssh-password'), key=one('ssh-key'), phrase=one('ssh-passphrase'), submit=one('ssh-connect');
+      const secrets=[password,key,phrase];
+      if (!shown(route) || !target || !trust || !auth || !submit || secrets.some(e=>!e) ||
+          password.type!=='password' || key.tagName!=='TEXTAREA' || phrase.type!=='password') return false;
+      const closedSecrets=()=>secrets.every(e=>!shown(e)&&e.disabled&&e.value==='')&&!shown(submit)&&submit.disabled;
+      if (spec.step==='refused') return !shown(one('ssh-setup'))&&shown(one('ssh-key-change'))&&closedSecrets()&&
+        text('ssh-key-change-endpoint')===spec.target&&text('ssh-key-change-algorithms')==='旧密钥算法 · '+spec.priorAlgorithm&&
+        text('ssh-key-change-old')?.replace(/\s/g,'')==='旧：'+spec.prior&&
+        text('ssh-key-change-new')?.replace(/\s/g,'')==='新：'+spec.fingerprint;
+      if (route.dataset.sshStep!==(spec.step==='closed'?'target':spec.step) || shown(one('ssh-review'))) return false;
+      if (spec.step==='target'||spec.step==='closed') return shown(target)&&!shown(trust)&&!shown(auth)&&closedSecrets()&&
+        text('ssh-step-title')==='普通 SSH'&&shown(one('ssh-step-back'))&&
+        button('ssh-probe','探测并核对主机密钥')&&
+        (spec.step!=='closed'||(text('ssh-closed-feedback')?.replace(/\s/g,'')===
+          '已断开连接本次凭据已清空。重新连接时请重新填写。'&&button('ssh-return-home','返回首页')))&&
+        (spec.prior===null || text('ssh-prior-fingerprint')?.replace(/\s/g,'')==='保留的旧指纹：'+spec.prior);
+      if (text('ssh-reviewed-endpoint')!==spec.target || shown(target)) return false;
+      if (spec.step==='trust') return shown(trust)&&!shown(auth)&&closedSecrets()&&
+        text('ssh-step-title')==='核对主机密钥'&&text('ssh-reviewed-algorithm')===spec.algorithm&&
+        text('ssh-reviewed-fingerprint')?.replace(/\s/g,'')===spec.fingerprint&&
+        button('ssh-trust-confirm','指纹一致，确认继续')&&
+        button('ssh-trust-cancel',spec.prior===null?'取消核对':'取消核对，保留旧信任');
+      if (!shown(auth) || shown(trust) || text('ssh-step-title')!=='SSH 账号认证' ||
+          text('ssh-approved-note')!=='本次主机密钥已确认' || !button('ssh-auth-password','密码') ||
+          !button('ssh-auth-key','已有私钥') || !button('ssh-connect','连接 SSH',spec.input==='ready')) return false;
+      const active=spec.method==='password'?password:key, selected=spec.method==='password'?'ssh-auth-password':'ssh-auth-key';
+      const inactive=spec.method==='password'?'ssh-auth-key':'ssh-auth-password';
+      if (one(selected).getAttribute('aria-pressed')!=='true'||one(inactive).getAttribute('aria-pressed')!=='false' ||
+          !shown(active)||active.disabled||Boolean(active.value)!==(spec.input!=='empty')) return false;
+      return spec.method==='password'
+        ? !shown(key)&&!shown(phrase)&&key.value===''&&phrase.value===''
+        : !shown(password)&&password.value===''&&shown(phrase)&&!phrase.disabled&&Boolean(phrase.value)===(spec.input==='ready');
+    })()""" % json.dumps(expectation)
+    wait_for(lambda: browser.evaluate(expression) is True, 'direct_mobile_setup_unproven', timeout=60)
+
+
+def require_first_probe(fixture):
+    if not fixture.wait_for_connections_closed(1, timeout=30):
+        raise GuiFailure('direct_probe_peer_unproven')
+    snapshot = fixture.snapshot()
+    events = snapshot.get('connectionEvents', [])
+    if (snapshot.get('connections') != 1 or len(events) != 1 or events[0].get('closed') is not True
+            or events[0].get('hostKey') != 'A' or any(events[0].get(key) != 0 for key in
+                ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes'))):
+        raise GuiFailure('direct_probe_peer_unproven')
+
+
 def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, progress=None):
     """Use actual CDP click/keyboard events and independently check the peer."""
     if progress is not None: progress['stage']='open_remote'
@@ -516,6 +594,9 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     browser.click(entry)
     if progress is not None: progress['stage']='open_ssh_form'
     browser.click('#add-ssh')
+    staged = staged_setup(browser)
+    if staged:
+        mobile_setup(browser, fixture, 'target')
     if progress is not None: progress['stage']='enter_host'
     browser.fill('#ssh-host', '127.0.0.1')
     if progress is not None: progress['stage']='enter_port'
@@ -525,24 +606,39 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     if progress is not None: progress['stage']='probe_host'
     browser.click('#ssh-probe')
     if progress is not None: progress['stage']='await_fingerprint'
-    wait_for(lambda: fixture.fingerprint in (browser.read('#ssh-fingerprint') or ''),
-             'direct_fingerprint_missing', timeout=60)
+    if staged:
+        mobile_setup(browser, fixture, 'trust', fingerprint=fixture.fingerprint)
+        require_first_probe(fixture)
+    else:
+        wait_for(lambda: fixture.fingerprint in (browser.read('#ssh-fingerprint') or ''),
+                 'direct_fingerprint_missing', timeout=60)
     if progress is not None: progress['stage']='review_fingerprint'
-    browser.click('#ssh-review')
+    browser.click('#ssh-trust-confirm' if staged else '#ssh-review')
+    if staged:
+        mobile_setup(browser, fixture, 'auth')
     if encrypted_key:
         if progress is not None: progress['stage']='select_key_auth'
-        browser.select_option('#ssh-auth-method', 'key')
+        if staged:
+            browser.click('#ssh-auth-key')
+            mobile_setup(browser, fixture, 'auth', method='key')
+        else:
+            browser.select_option('#ssh-auth-method', 'key')
         if progress is not None: progress['stage']='enter_private_key'
         browser.fill('#ssh-key', fixture.private_key)
+        if staged:
+            mobile_setup(browser, fixture, 'auth', method='key', input_state='pem')
         if progress is not None: progress['stage']='enter_passphrase'
         browser.fill('#ssh-passphrase', fixture.passphrase)
     else:
         if progress is not None: progress['stage']='enter_password'
         browser.fill('#ssh-password', fixture.password)
-    if browser.evaluate("document.querySelector('#ssh-review').checked") is not True:
+    if staged:
+        mobile_setup(browser, fixture, 'auth', method='key' if encrypted_key else 'password', input_state='ready')
+        require_first_probe(fixture)
+    elif browser.evaluate("document.querySelector('#ssh-review').checked") is not True:
         raise GuiFailure('direct_credential_invalidated_host_review')
     if progress is not None: progress['stage']='connect'
-    browser.click('#ssh-form button[type=submit]')
+    browser.click('#ssh-connect' if staged else '#ssh-form button[type=submit]')
     wait_for(lambda: browser.evaluate("!document.querySelector('#ssh-live').hidden") and
              '已连接' in (browser.read('#ssh-status') or ''), 'direct_ready_missing', timeout=60)
     if browser.evaluate("!!document.querySelector('#ssh-password').value || !!document.querySelector('#ssh-key').value || !!document.querySelector('#ssh-passphrase').value"):
@@ -569,8 +665,11 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
         raise GuiFailure('direct_session_ended_before_disconnect')
     if progress is not None: progress['stage']='disconnect'
     browser.click('#ssh-disconnect')
-    wait_for(lambda: not browser.evaluate("document.querySelector('#ssh-setup').hidden") and
-             '已断开' in (browser.read('#ssh-status') or ''), 'direct_disconnect_ui_missing', timeout=60)
+    if staged:
+        mobile_setup(browser, fixture, 'closed')
+    else:
+        wait_for(lambda: not browser.evaluate("document.querySelector('#ssh-setup').hidden") and
+                 '已断开' in (browser.read('#ssh-status') or ''), 'direct_disconnect_ui_missing', timeout=60)
     wait_for(lambda: fixture.snapshot().get('sessionClosed') is True,
              'direct_peer_close_missing', timeout=60)
     peer = fixture.snapshot()
@@ -580,12 +679,19 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     wait_for(lambda: fixture.snapshot().get('connectionsClosed') is True,
              'direct_peer_close_missing', timeout=60)
     closed = fixture.snapshot()['connectionEvents']
-    browser.click('#show-remote')
+    browser.click('#ssh-return-home' if staged else '#show-remote')
     if dashboard_add_selector(browser, failure='direct_return_home_missing') != entry:
         raise GuiFailure('direct_return_home_missing')
+    if staged:
+        wait_for(lambda: browser.evaluate("""(()=>{const m=document.querySelectorAll('#host-ssh-disconnected'),e=m[0];
+          return m.length===1&&!e.hidden&&e.getClientRects().length>0&&e.innerText.trim()==='普通 SSH 已断开';})()""") is True,
+                 'direct_return_home_missing')
     after_return = fixture.snapshot()
     if after_return.get('connectionsClosed') is not True or after_return.get('connectionEvents') != closed:
         raise GuiFailure('direct_return_home_peer_changed')
+    if staged and (after_return.get('connections') != 2 or len(closed) != 2 or
+                   any(event['hostKey'] != 'A' for event in closed) or not closed[1]['authAccepted']):
+        raise GuiFailure('direct_peer_evidence_incomplete')
     return {'fingerprintReviewed':True,'credentialReviewPreserved':True,'connected':True,
             'terminalInputReceived':True,'terminalEchoRendered':True,'disconnected':True,
             'passwordCleared':True, 'returnedHome':True, **({'helperKeysExact':True} if not encrypted_key else {}),
@@ -597,24 +703,39 @@ def exercise_key_change_ui(browser, fixture, *, evidence_dir=None):
     """Same host:port A→B: refuse, review with no exits, cancel, re-probe, approve."""
     browser.click(dashboard_add_selector(browser))
     browser.click('#add-ssh')
+    staged = staged_setup(browser)
+    if staged:
+        mobile_setup(browser, fixture, 'target')
     browser.fill('#ssh-host', '127.0.0.1')
     browser.fill('#ssh-port', str(fixture.port))
     browser.fill('#ssh-user', fixture.username)
     browser.click('#ssh-probe')
-    wait_for(lambda: fixture.fingerprint in (browser.read('#ssh-fingerprint') or ''),
-             'direct_rotation_probe_missing', timeout=60)
-    browser.click('#ssh-review')
+    if staged:
+        mobile_setup(browser, fixture, 'trust', fingerprint=fixture.fingerprint)
+        require_first_probe(fixture)
+    else:
+        wait_for(lambda: fixture.fingerprint in (browser.read('#ssh-fingerprint') or ''),
+                 'direct_rotation_probe_missing', timeout=60)
+    browser.click('#ssh-trust-confirm' if staged else '#ssh-review')
+    if staged:
+        mobile_setup(browser, fixture, 'auth')
     browser.fill('#ssh-password', fixture.password)
-    if browser.evaluate("document.querySelector('#ssh-review').checked") is not True:
+    if staged:
+        mobile_setup(browser, fixture, 'auth', input_state='ready')
+        require_first_probe(fixture)
+    elif browser.evaluate("document.querySelector('#ssh-review').checked") is not True:
         raise GuiFailure('direct_rotation_review_invalidated')
-    browser.click('#ssh-form button[type=submit]')
+    browser.click('#ssh-connect' if staged else '#ssh-form button[type=submit]')
     wait_for(lambda: browser.evaluate("!document.querySelector('#ssh-key-change').hidden"),
              'direct_rotation_review_missing', timeout=60)
-    review_text = (browser.read('#ssh-key-change') or '')
-    if (fixture.fingerprint not in review_text or fixture.rotated_fingerprint not in review_text):
-        raise GuiFailure('direct_rotation_review_content_missing')
-    if f'{fixture.username}@127.0.0.1:{fixture.port}' not in (browser.read('#ssh-key-change-target') or ''):
-        raise GuiFailure('direct_rotation_review_target_missing')
+    if staged:
+        mobile_setup(browser, fixture, 'refused', fingerprint=fixture.rotated_fingerprint, prior=fixture.fingerprint)
+    else:
+        review_text = (browser.read('#ssh-key-change') or '')
+        if (fixture.fingerprint not in review_text or fixture.rotated_fingerprint not in review_text):
+            raise GuiFailure('direct_rotation_review_content_missing')
+        if f'{fixture.username}@127.0.0.1:{fixture.port}' not in (browser.read('#ssh-key-change-target') or ''):
+            raise GuiFailure('direct_rotation_review_target_missing')
     actions = browser.evaluate("[...document.querySelectorAll('#ssh-key-change button')].filter(b=>!b.hidden).map(b=>b.id)")
     if sorted(actions or []) != ['ssh-key-cancel', 'ssh-key-recheck']:
         raise GuiFailure('direct_rotation_actions_invalid')
@@ -629,41 +750,50 @@ def exercise_key_change_ui(browser, fixture, *, evidence_dir=None):
     # Cancelling keeps the old trust: the review closes, navigation returns and
     # no new connection is attempted.
     browser.click('#ssh-key-cancel')
-    wait_for(lambda: browser.evaluate("document.querySelector('#ssh-key-change').hidden && !document.querySelector('.app-header').hidden && !document.querySelector('.route-tabs').hidden"),
-             'direct_rotation_cancel_navigation_missing', timeout=60)
-    cancelled = (browser.read('#ssh-fingerprint') or '')
-    if fixture.fingerprint not in cancelled or fixture.rotated_fingerprint in cancelled:
-        raise GuiFailure('direct_rotation_cancel_old_key_missing')
-    if browser.evaluate("document.querySelector('#ssh-review').checked") is not False:
-        raise GuiFailure('direct_rotation_cancel_review_stale')
-    if browser.evaluate("!document.querySelector('#ssh-review').disabled") is not False:
-        raise GuiFailure('direct_rotation_cancel_entries_live')
-    if browser.evaluate("!!document.querySelector('#ssh-password').value || !document.querySelector('#ssh-password').disabled"):
-        raise GuiFailure('direct_rotation_cancel_credentials_live')
-    if browser.evaluate("!document.querySelector('#ssh-form button[type=submit]').disabled") is not False:
-        raise GuiFailure('direct_rotation_cancel_submit_live')
+    if staged:
+        mobile_setup(browser, fixture, 'target', prior=fixture.fingerprint)
+    else:
+        wait_for(lambda: browser.evaluate("document.querySelector('#ssh-key-change').hidden && !document.querySelector('.app-header').hidden && !document.querySelector('.route-tabs').hidden"),
+                 'direct_rotation_cancel_navigation_missing', timeout=60)
+        cancelled = (browser.read('#ssh-fingerprint') or '')
+        if fixture.fingerprint not in cancelled or fixture.rotated_fingerprint in cancelled:
+            raise GuiFailure('direct_rotation_cancel_old_key_missing')
+        if browser.evaluate("document.querySelector('#ssh-review').checked") is not False:
+            raise GuiFailure('direct_rotation_cancel_review_stale')
+        if browser.evaluate("!document.querySelector('#ssh-review').disabled") is not False:
+            raise GuiFailure('direct_rotation_cancel_entries_live')
+        if browser.evaluate("!!document.querySelector('#ssh-password').value || !document.querySelector('#ssh-password').disabled"):
+            raise GuiFailure('direct_rotation_cancel_credentials_live')
+        if browser.evaluate("!document.querySelector('#ssh-form button[type=submit]').disabled") is not False:
+            raise GuiFailure('direct_rotation_cancel_submit_live')
     if fixture.snapshot().get('connections') != 2:
         raise GuiFailure('direct_rotation_cancel_reconnected')
     # The explicit re-probe from the visible form presents the changed key for
     # fresh human review; the hidden review buttons are never driven.
     browser.click('#ssh-probe')
-    wait_for(lambda: fixture.rotated_fingerprint in (browser.read('#ssh-fingerprint') or ''),
-             'direct_rotation_reprobe_missing', timeout=60)
-    if fixture.fingerprint in (browser.read('#ssh-fingerprint') or ''):
-        raise GuiFailure('direct_rotation_reprobe_old_key_stale')
-    # Nothing is pre-approved: the confirmation box and credentials start
-    # unlocked-but-empty at best, and no stale review may survive the probe.
-    if browser.evaluate("document.querySelector('#ssh-review').checked") is not False:
-        raise GuiFailure('direct_rotation_reprobe_review_stale')
-    if browser.evaluate("!!document.querySelector('#ssh-password').value"):
-        raise GuiFailure('direct_rotation_reprobe_credentials_stale')
+    if staged:
+        mobile_setup(browser, fixture, 'trust', fingerprint=fixture.rotated_fingerprint, prior=fixture.fingerprint)
+    else:
+        wait_for(lambda: fixture.rotated_fingerprint in (browser.read('#ssh-fingerprint') or ''),
+                 'direct_rotation_reprobe_missing', timeout=60)
+        if fixture.fingerprint in (browser.read('#ssh-fingerprint') or ''):
+            raise GuiFailure('direct_rotation_reprobe_old_key_stale')
+        if browser.evaluate("document.querySelector('#ssh-review').checked") is not False:
+            raise GuiFailure('direct_rotation_reprobe_review_stale')
+        if browser.evaluate("!!document.querySelector('#ssh-password').value"):
+            raise GuiFailure('direct_rotation_reprobe_credentials_stale')
     fixture.wait_for_connections_closed(minimum=3, timeout=30)
     evidence_3 = _rotation_stage(fixture, 3)
-    browser.click('#ssh-review')
+    browser.click('#ssh-trust-confirm' if staged else '#ssh-review')
+    if staged:
+        mobile_setup(browser, fixture, 'auth')
     browser.fill('#ssh-password', fixture.password)
-    if browser.evaluate("document.querySelector('#ssh-review').checked") is not True:
+    if staged:
+        mobile_setup(browser, fixture, 'auth', input_state='ready')
+        _rotation_stage(fixture, 3)
+    elif browser.evaluate("document.querySelector('#ssh-review').checked") is not True:
         raise GuiFailure('direct_rotation_review_invalidated')
-    browser.click('#ssh-form button[type=submit]')
+    browser.click('#ssh-connect' if staged else '#ssh-form button[type=submit]')
     wait_for(lambda: browser.evaluate("!document.querySelector('#ssh-live').hidden") and
              '已连接' in (browser.read('#ssh-status') or ''), 'direct_rotation_ready_missing', timeout=60)
     if browser.evaluate("!!document.querySelector('#ssh-password').value"):
@@ -681,7 +811,10 @@ def exercise_key_change_ui(browser, fixture, *, evidence_dir=None):
     terminal_proof=(capture_terminal_proof(browser,fixture,evidence_dir,stem='ssh-rotation-terminal-android')
                     if getattr(fixture,'screen_token',None) else None)
     browser.click('#ssh-disconnect')
-    wait_for(lambda: '已断开' in (browser.read('#ssh-status') or ''), 'direct_rotation_disconnect_ui_missing', timeout=60)
+    if staged:
+        mobile_setup(browser, fixture, 'closed')
+    else:
+        wait_for(lambda: '已断开' in (browser.read('#ssh-status') or ''), 'direct_rotation_disconnect_ui_missing', timeout=60)
     fixture.wait_for_connections_closed(minimum=4, timeout=30)
     evidence_4 = _rotation_stage(fixture, 4)
     return {'probeReviewed':True,'refusalBlocked':True,'reviewNoExits':True,'cancelKeptTrust':True,

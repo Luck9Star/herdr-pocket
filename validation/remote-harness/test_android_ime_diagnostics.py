@@ -113,7 +113,13 @@ class ImeReplayTests(unittest.TestCase):
 class ProgressTests(unittest.TestCase):
     def test_normal_stock_entry_failure_keeps_prior_evidence_and_cleanup(self):
         view=Mock()
-        view.evaluate.side_effect=lambda expression: 'fresh' if 'dataset.dashboardPhase' in expression else (3 if 'Frames' in expression else True)
+        def evaluate(expression):
+            if expression.startswith('(function dashboardAddEntry()'):
+                return '#host-empty-add'
+            if 'dataset.dashboardPhase' in expression:
+                return 'fresh'
+            return 3 if 'Frames' in expression else True
+        view.evaluate.side_effect=evaluate
         approval=Mock();approval.approve.return_value=b'synthetic response'
         def adb(*parts,**_):
             return {('devices',):'List of devices attached\nemulator-5554\tdevice',
@@ -161,6 +167,7 @@ class ProgressTests(unittest.TestCase):
             self.assertEqual(report['stage'],'keyboard_observe_hidden')
             self.assertEqual(report['status'],'failed')
             self.assertEqual(report['errorCode'],'android_system_ime_target_mismatch')
+            self.assertEqual(view.click.call_args_list[0].args, ('#host-empty-add',))
             for key in ('publicProfileReviewed','publicRequestCopyReported','authorizationReviewed','paneChosen','fullRendered','deltaRendered','fontDiagnosticsCompleted','canvasSelectionVerified','canvasGeometryVerified','canvasMarkerVisible','canvasViewportRestored'):
                 self.assertTrue(report['completed'][key])
             self.assertFalse(report['completed']['stoppedStale'])

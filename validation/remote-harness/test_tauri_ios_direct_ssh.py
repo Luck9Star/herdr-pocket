@@ -1453,10 +1453,13 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
 
     def probe(self, fixture):
         import paramiko
-        peer = paramiko.Transport(('127.0.0.1', fixture.port))
-        peer.start_client(timeout=5)
-        key = peer.get_remote_server_key()
-        peer.close()
+        count = fixture.snapshot()['connections'] + 1
+        with paramiko.Transport(('127.0.0.1', fixture.port)) as peer:
+            peer.start_client(timeout=5)
+            key = peer.get_remote_server_key()
+        # The client can close before the fixture publishes its server-side close.
+        self.assertTrue(fixture.wait_for_connections_closed(count, timeout=5))
+        self.assertEqual(fixture.snapshot()['connections'], count)
         return key
 
     def session(self, fixture, *, marker=True):

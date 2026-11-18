@@ -634,7 +634,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         if label == "探测主机指纹" {
             return (try? formControl("probe"))?.live.element ?? app.descendants(matching: .any).matching(NSPredicate(value: false)).firstMatch
         }
-        let ids = ["普通 SSH 终端": "add-ssh", "herdr 配对 / 手动连接": "add-herdr",
+        let ids = ["看板": "show-remote", "普通 SSH 终端": "add-ssh", "herdr 配对 / 手动连接": "add-herdr",
             "打开键盘": "ssh-focus", "收起键盘": "ssh-hide-keyboard", "断开连接": "ssh-disconnect", "重新核对主机指纹": "ssh-key-recheck",
             "取消连接，保留旧信任": "ssh-key-cancel"]
         return resolveControl(app.buttons, app.descendants(matching: .any), identifier: ids[label], label: label)
@@ -2039,6 +2039,13 @@ final class TauriDirectSSHUITests: XCTestCase {
         try post("ordinary_password")
         try connect(password: config["ordinaryPassword"] as! String)
         try terminal("ordinary", port: ordinaryPort)
+        try phase("return_home")
+        try tap(button("看板"))
+        try waitText("还没有主机")
+        let returnedHome = try navigationState(publish: false)
+        try require(NativeHomeReadiness.classify(returnedHome, home: lastHomeSample!) == .ready,
+                    "native_home_identity_unproven")
+        try post("ordinary_returned_home")
         app.terminate()
 
         let port = config["rotationPort"] as! Int

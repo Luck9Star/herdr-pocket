@@ -1481,6 +1481,10 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.accept('ordinary_disconnect_attempt')
         self.close_protocol(peer, channel)
         self.accept('ordinary_disconnected')
+        self.assertNotEqual(self.result['cases']['ordinary'].get('status'), 'passed')
+        with self.assertRaisesRegex(ios.Failure, 'checkpoint_order_invalid'):
+            self.accept('key_change_form')
+        self.accept('ordinary_returned_home')
         self.accept('key_change_form')
         key_a = self.probe(self.rotation)
         self.accept('key_change_probe_a')
@@ -1523,6 +1527,19 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.close_protocol(peer, channel)
         with self.assertRaisesRegex(ios.Failure, 'rotation_evidence_invalid'):
             self.accept('key_change_review')
+
+    def test_ordinary_return_rejects_reauthentication_and_replayed_input(self):
+        self.probe(self.ordinary)
+        peer, channel = self.session(self.ordinary)
+        self.state.index = ios.STAGES.index('ordinary_disconnect_attempt')
+        self.accept('ordinary_disconnect_attempt')
+        self.close_protocol(peer, channel)
+        self.accept('ordinary_disconnected')
+        peer, channel = self.session(self.ordinary)
+        self.close_protocol(peer, channel)
+        with self.assertRaisesRegex(ios.Failure, 'ordinary_connection_count_invalid'):
+            self.accept('ordinary_returned_home')
+        self.assertNotEqual(self.result['cases']['ordinary'].get('status'), 'passed')
 
     def test_duplicate_terminal_input_and_peer_close_before_ui_disconnect_reject(self):
         self.probe(self.ordinary)

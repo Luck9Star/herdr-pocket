@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "round": "R20",
+  "sourceSHA": "d28ed2603677147907e24bf392b6ab9aa25aeef7",
+  "sourceLabel": "d28ed26 test(ios): require both SSH clients to return home after disconnect（与本地 20aeb16 同 patch-id 7e2ad6e4）；产品布局修复 19f867e（与本地 ba8fcb7 同 patch-id 6905fea4）",
+  "productChangeSHA": "19f867e",
+  "baselineSHA": "f378e9a08085eb67487ce66aa339af58edac5016",
+  "run": 44320783638,
+  "runURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44320783638",
+  "scope": "owned_loopback_ordinary_ssh",
+  "batchPassed": false,
+  "outcome": {
+    "flutter": "passed（普通 AA 与换钥 ABBB 均通过；deviceStage=returned_home 与返回首页验证仅属普通场景，换钥场景未验证返回首页）",
+    "tauri": "failed（普通 AA 通过；换钥在 key_change_form 阶段失败：重新冷启后 native_home_identity_unproven，317ms 时首页身份未证实，未进入表单；nativeFailureCode=native_home_identity_unproven，error=tauri_ios_native_check_failed）"
+  },
+  "officialArtifacts": [
+    { "client": "flutter", "jobId": 134858825151, "zip": "flutter.zip（657.2K，7 成员）" },
+    { "client": "tauri", "jobId": 134858825773, "zip": "tauri.zip（175.4K，3 成员）" }
+  ],
+  "files": [
+    { "path": "r20-flutter-result.json", "bytes": 17304, "sha256": "3365c833aad28edd50d51f2d5b1f3f0d37606196693a0b19137ab4654e09cb5a" },
+    { "path": "r20-flutter-ordinary-terminal.png", "bytes": 222224, "sha256": "8e3d4173dab17504af5329980a73b27a9da5f64038b55408836b64ebffdae837" },
+    { "path": "r20-flutter-ordinary-terminal-ocr.json", "bytes": 485, "sha256": "61f7aa3de3f8d2c03713fb6dbc34932f09c647c4a7783e71ba964b3dafe8c95f" },
+    { "path": "r20-flutter-key-change-terminal.png", "bytes": 223062, "sha256": "96dfc2c6a9a708b6ebed066b57445dfa674042857b78f2bd7def5ae17e4f60e7" },
+    { "path": "r20-flutter-key-change-terminal-ocr.json", "bytes": 485, "sha256": "1399dfed25372d031ded1aabbc892ff716e9c70c36c3177017ad46a347aba1c8" },
+    { "path": "r20-flutter-key-change-review.png", "bytes": 178652, "sha256": "47b28e010c8d83d56d3661941f041c90a929ff64462fbef30cb542b11f4d2be4" },
+    { "path": "r20-tauri-result.json", "bytes": 21655, "sha256": "483599c3452d4fc4ca1e6c35c03d2c3a314ba300460010aecc7f57dc527f0f51" },
+    { "path": "r20-tauri-ordinary-terminal.png", "bytes": 219828, "sha256": "6b8df22be6521e2d0b54ea779108aa872dc26d13522d6a9bb68b495b4a50fc12" },
+    { "path": "r20-tauri-ordinary-terminal-ocr.json", "bytes": 488, "sha256": "77372699cc57ed9a10b94cf2fa8a10e3adaa1b81b85a37e61d5e01bb8848f4d3" }
+  ],
+  "excludedZipMembers": [
+    "flutter/preconnect.png（26973e6e…，遵循 R19 惯例不保留预连接截图）"
+  ],
+  "verification": {
+    "zipMembersMatched": true,
+    "zipBytesAndSHAMatched": true,
+    "resultSourceSHA": "两份 result.json 均为 d28ed2603677147907e24bf392b6ab9aa25aeef7",
+    "artifactShaMatchedResult": true,
+    "ocrCriteriaMatched": "三份 OCR 判据的 imageSha256 与对应 PNG 一致；markerVisible/tokenVisible/proofSequenceVisible 均 true（tesseract 5.5.4）",
+    "flutterRotation": "4 连接 ABBB 可数：conn1 A 探测 0 认证、conn2 B 拒绝 0 认证、conn3 B 重探 0 认证、conn4 B 确认后 auth 1/1、PTY/shell 各 1、全部关闭；cancelKeptTrust 与 freshFingerprintConfirmed 见 result",
+    "flutterCleanup": "simulatorDeleted/fixtureClosed/flutterToolStopped/appRemoved/privateRemoved 全 true；peerClosedBeforeDriverExit=true；physicalImeVerified=false；returned_home 仅普通场景，见 outcome",
+    "tauriOrdinary": "2 连接 AA：conn1 A 探测 0 认证、conn2 A auth 1/1、PTY/shell 各 1、in 9B/out 102B、关闭；terminalInputReceived=true；disconnected=true",
+    "tauriKeyChangeFailure": "fingerprints A/B 记录在案；failurePeerObservations 显示 before/afterCleanup connections=0、connectionsClosed=true（服务端无残留）；阶段 key_change_form，nativeCheckpoint=key_change_open_add，homeReadiness.keyChange 内 317ms 采样未证实首页身份"
+  },
+  "buttonGeometryNoKeyboard": {
+    "method": "独立像素测量（本机解码两张官方 PNG 原图），非控件几何推算",
+    "navTopEdgeRow": { "r19": 2571, "r20": 2571, "note": "两批底部导航上缘边框行相同（颜色 226,232,240，逻辑点 2571/3≈857）" },
+    "r19": {
+      "source": "r19-tauri-ordinary-terminal.png（R19 官方原图）",
+      "leftButtonBottomBorderRow": "未检出完整边框；按钮底部被导航遮挡",
+      "lastVisibleButtonTextRow": 2545,
+      "note": "R19 记录的『边框末约 8 点被遮挡』与本测量一致：按钮文字行延伸至 2545，边框行不可见（被导航上缘 2571 之前的阴影带截断）"
+    },
+    "r20": {
+      "source": "r20-tauri-ordinary-terminal.png（R20 官方原图）",
+      "leftButtonBox": "x 66–630，下边框行 2543–2545",
+      "rightButtonBox": "x 690–1254，下边框行 2543–2545",
+      "clearance": "导航上缘 2571 − 按钮下边框 2545 = 26 px ≈ 8.7 逻辑点净空",
+      "note": "两按钮完整边框均可见且高于导航上缘；R19→R20 改善约为 8 点遮挡 → 约 8.7 点净空"
+    },
+    "terminalRows": { "r19HelperTop": 2295, "r20HelperTop": 2235, "note": "R20 辅助键行整体上移约 60px（约 20 逻辑点）；R19 最后可见按钮文字行 2545 与 R20 按钮下边框行 2543–2545 相当" }
+  },
+  "localWebKitEvidence": {
+    "index": "r20-local-webkit-index.json（含两张入库前后图 r20-webkit-before/after-ios-r19.png、8 场景精简数值、完整 JSON SHA256）",
+    "sourceFiles": ["before-webkit-ios-r19.png（sha256 ea87bc50…62b56）", "after-webkit-ios-r19.png（sha256 e539a813…da80b4）", "before-webkit.json（263d9ec3…）", "after-webkit.json（dcf04055…）"],
+    "location": "/tmp/herdr-pocket-r20-tauri/（本机会话临时目录，未入库）",
+    "scope": "同尺寸本地模拟 IPC WebKit 布局夹具（Playwright 1.62.1、xterm.js 6.0.0、440×956@3x），SSH 为模拟传输，不是 iOS Simulator/真机系统证据",
+    "before": "f378e9a：#ssh-disconnect bottom=861 bottomHit=false（被 .route-tabs y=857 遮挡）；需滚动（scrollY=53）后 bottomHit=true；geometryRequiresScroll=true",
+    "after": "19f867e 同 patch：自然态 bottom=848.8 bottomHit=true；geometryRequiresScroll=false；PTY 25×46→24×46"
+  },
+  "status": {
+    "iosOfficial": "R20 官方：Flutter 通过；Tauri 普通通过、换钥 native_home_identity_unproven 失败待定向复验",
+    "layoutFix": "Tauri 底部按钮边框遮挡在 R20 官方原图中已消除（约 8.7 逻辑点净空，独立像素测量）",
+    "next": "仅 Tauri 换钥阶段定向复验待做；不改设计或 docs/63"
+  }
+}

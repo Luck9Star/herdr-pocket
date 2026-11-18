@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
+import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:terminal_view/terminal_view.dart';
 
 import 'ios_exchange.dart';
@@ -148,7 +149,7 @@ void main() {
     }
   };
   testWidgets(
-    'iOS Simulator normal homepage to ordinary SSH fingerprint, actual input, echo and disconnect',
+    'iOS Simulator normal homepage to ordinary SSH fingerprint, actual input, echo, disconnect and return home',
     (tester) async {
       var stage = 'fixture_validation';
       var fixtureValidated = false;
@@ -350,6 +351,26 @@ void main() {
           publish: publish,
           capture: capture,
         );
+        step('return_home');
+        final back = find.bySemanticsIdentifier('direct-back').hitTestable();
+        expect(back, findsOneWidget);
+        await tester.tap(back);
+        final home = find.byType(HostCatalogPage);
+        final shortcut = find.descendant(
+          of: home,
+          matching: find.byKey(const ValueKey('hosts-direct-ssh')),
+        );
+        final ssh = find.byType(DirectSshPage, skipOffstage: false);
+        await until(
+          tester,
+          () =>
+              ssh.evaluate().isEmpty &&
+              home.evaluate().length == 1 &&
+              shortcut.hitTestable().evaluate().length == 1,
+          timeoutReason: 'direct_ssh_ios_return_home_timeout',
+        );
+        expect(tester.takeException(), isNull);
+        step('returned_home');
       } catch (error, stack) {
         if (fixtureValidated) {
           final detail = error.toString();

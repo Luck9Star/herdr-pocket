@@ -60,3 +60,41 @@ export function observeAndroidSshHeader(view = window, doc = document) {
   sync();
   return ()=>{ active=false; resize.disconnect(); visibility.disconnect(); view.removeEventListener('scroll',update); root.style.removeProperty('--hp-ssh-sticky-top'); };
 }
+
+// Fit the connected SSH actions above the actual fixed navigation at scroll top.
+export function observeIosSshActions(view = window, doc = document) {
+  const home = doc.getElementById('host-home');
+  const terminal = doc.getElementById('ssh-terminal-output');
+  const actions = doc.getElementById('ssh-disconnect').parentElement;
+  const header = doc.querySelector('.app-header');
+  const nav = doc.querySelector('.route-tabs');
+  const property = '--hp-ssh-terminal-max-height';
+  let frame = 0, previous = '';
+  const update = () => {
+    frame = 0;
+    const terminalHeight = terminal.getBoundingClientRect().height;
+    const navHeight = nav.getBoundingClientRect().height;
+    let next = '';
+    if (terminalHeight && navHeight && view.getComputedStyle(nav).position === 'fixed') {
+      // Subtract the actual non-terminal content height. A user's scroll
+      // position and the previous terminal height must not affect the budget.
+      const actionsEnd = actions.getBoundingClientRect().bottom + view.scrollY;
+      next = `${Math.floor(view.innerHeight - navHeight - (actionsEnd - terminalHeight) - 8)}px`;
+    }
+    if (next === previous) return;
+    previous = next;
+    if (next) terminal.style.setProperty(property, next);
+    else terminal.style.removeProperty(property);
+  };
+  const schedule = () => { if (!frame) frame = view.requestAnimationFrame(update); };
+  const resize = new ResizeObserver(schedule);
+  for (const element of [header, home, actions, nav]) resize.observe(element);
+  view.addEventListener('resize', schedule);
+  schedule();
+  return () => {
+    resize.disconnect();
+    view.removeEventListener('resize', schedule);
+    view.cancelAnimationFrame(frame);
+    terminal.style.removeProperty(property);
+  };
+}

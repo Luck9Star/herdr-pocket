@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "70a7fc92e988a498321a07f3a2f90e71826e408f6f2fe972c717217dfa6678cc",
+  "imageSize": [
+    1320,
+    2868
+  ],
+  "terminalBounds": [
+    48,
+    984,
+    1224,
+    1238
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "PATH LEFT HUNT FAST SAND LAMP LEAF TASK",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

@@ -15,7 +15,9 @@ concurrency:
 
 jobs:
   flutter-ordinary-ssh-ios:
-    if: startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-')
+    if: >-
+      startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-') &&
+      !startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-tauri-only-')
     runs-on: macos-15
     timeout-minutes: 60
     env:

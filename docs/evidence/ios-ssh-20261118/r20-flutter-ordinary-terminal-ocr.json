@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "8e3d4173dab17504af5329980a73b27a9da5f64038b55408836b64ebffdae837",
+  "imageSize": [
+    828,
+    1792
+  ],
+  "terminalBounds": [
+    0,
+    336,
+    828,
+    759
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "HARD EAST PART PAST KEPT STAR HUNT SEAT",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 2,
+  "ocrPageSegmentationMode": 11,
+  "proofSequenceVisible": true
+}

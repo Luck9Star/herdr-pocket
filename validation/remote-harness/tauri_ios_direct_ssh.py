@@ -35,7 +35,7 @@ HERE = Path(__file__).resolve().parent
 BUNDLE_ID = 'dev.herdrpocket.tauriprobe'
 PNG_FILES = ('ordinary-terminal.png', 'key-change-review.png', 'key-change-terminal.png')
 STAGES = ('ordinary_form', 'ordinary_probe', 'ordinary_password', 'ordinary_input',
-          'ordinary_terminal', 'ordinary_disconnect_attempt', 'ordinary_disconnected',
+          'ordinary_terminal', 'ordinary_disconnect_attempt', 'ordinary_disconnected', 'ordinary_returned_home',
           'key_change_form', 'key_change_probe_a', 'key_change_password_a',
           'key_change_review', 'key_change_cancelled', 'key_change_probe_b',
           'key_change_password_b', 'key_change_input', 'key_change_terminal',
@@ -43,7 +43,7 @@ STAGES = ('ordinary_form', 'ordinary_probe', 'ordinary_password', 'ordinary_inpu
 NATIVE_PHASES = frozenset(prefix + '_' + phase for prefix in ('ordinary', 'key_change') for phase in (
     'launch', 'open_add', 'open_ssh', 'host', 'port', 'username', 'probe', 'fingerprint',
     'password', 'connect', 'terminal_focus', 'terminal_input', 'terminal_capture', 'disconnect',
-    'review_capture', 'cancel', 'cancel_check', 'reprobe', 'new_fingerprint'))
+    'review_capture', 'cancel', 'cancel_check', 'reprobe', 'new_fingerprint')) | {'ordinary_return_home'}
 GEOMETRY_PHASES = frozenset(
     prefix + '_' + phase for prefix in ('ordinary', 'key_change')
     for phase in ('host', 'port', 'username', 'probe', 'password')
@@ -205,11 +205,13 @@ def public_home_readiness(value, home):
     require(isinstance(samples, list) and 1 <= len(samples) <= value['strictSamples'], code)
     previous, elapsed = None, 0
     for sample in samples:
-        require(isinstance(sample, dict) and set(sample) == {'state', 'elapsedMs'}
-                and sample['state'] in states and sample['state'] != previous
-                and previous in (None, 'loading', 'shell') and type(sample['elapsedMs']) is int
+        require(isinstance(sample, dict) and set(sample) == {'state', 'elapsedMs'}, code)
+        state = sample['state']
+        require((state in states or (state == 'unidentified_startup' and previous is None))
+                and state != previous and previous in (None, 'loading', 'shell', 'unidentified_startup')
+                and type(sample['elapsedMs']) is int
                 and elapsed <= sample['elapsedMs'] <= value['elapsedMs'], code)
-        previous, elapsed = sample['state'], sample['elapsedMs']
+        previous, elapsed = state, sample['elapsedMs']
     require(previous == value['outcome'], code)
     flags = home['knownErrors']
     alert = bool(home['appAlertCount'] or home['systemAlertCount'] or home['alertSnapshotFailed'])
@@ -1091,9 +1093,16 @@ class Checkpoints:
                 except ValueError:
                     raise Failure('tauri_ios_rotation_evidence_invalid') from None
                 case['peer'] = rotation_session_evidence(fixture, closed=True)
+                case['status'] = 'passed'
             else:
                 case['peer'] = ordinary_evidence(fixture, closed=True)
-            case.update(status='passed', disconnected=True, terminalInputReceived=True)
+            case.update(disconnected=True, terminalInputReceived=True)
+        if stage == 'ordinary_returned_home':
+            case = self.result['cases']['ordinary']
+            case['peer'] = ordinary_evidence(ordinary, closed=True)
+            case['status'] = 'passed'
+        if stage == 'complete':
+            ordinary_evidence(ordinary, closed=True)
         self.index += 1
         self.result['lastCompletedStage'] = stage
 

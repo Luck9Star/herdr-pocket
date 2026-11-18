@@ -29,7 +29,7 @@ FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched', 'e
 STAGES = {'home', 'target', 'probe', 'authenticate', 'secret_entry', 'screenshot_wait', 'connect_tap', 'connect_preflight',
           'await_terminal', 'await_welcome', 'input', 'disconnect', 'disconnect_tap', 'disconnect_wait',
           'disconnect_secret', 'disconnect_status', 'disconnect_exception', 'disconnect_complete',
-          'peer_confirmed', 'report_data_set'}
+          'peer_confirmed', 'report_data_set', 'return_home', 'returned_home'}
 STAGES.update({'rotation_' + name for name in ('home', 'initial_probe', 'rejected', 'cancelled',
                                               'fresh_probe', 'authenticate', 'input', 'disconnect', 'complete')})
 LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
@@ -705,7 +705,8 @@ def run(app, output, env):
                         if 'device' not in rotation or set(rotation['checkpoints']) != set(ROTATION_PHASES):
                             raise Failure('ios_rotation_confirmation_missing')
                         phase = 'peer_close_confirmation'
-                        if not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed') or process.poll() is not None:
+                        if (not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed') or
+                                not fixture.wait_for_connections_closed(2) or process.poll() is not None):
                             raise Failure('ios_peer_input_or_ui_close_missing')
                         pending = exchange / 'peer-confirmed.new'
                         pending.write_text(json.dumps({'protocolAccepted': True, 'peerClosedBeforeDriverExit': True}))
@@ -750,7 +751,7 @@ def run(app, output, env):
                         report['uiDiagnostic'] = ui_diagnostic(failure)
                         report['connectionDiagnostic'] = connection_diagnostic(failure.get('connection'))
                     raise Failure('ios_device_test_failed' if code else 'ios_peer_confirmation_missing')
-                if report.get('deviceStage') != 'report_data_set' or report.get('frameworkDiagnostic') is not None:
+                if report.get('deviceStage') != 'returned_home' or report.get('frameworkDiagnostic') is not None:
                     raise Failure('ios_final_test_state_incomplete')
                 report['device'] = check_result(read_json(exchange / 'result.json'))
                 report['protocol'] = fixture.snapshot()

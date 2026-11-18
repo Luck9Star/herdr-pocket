@@ -143,7 +143,7 @@ precondition(!accepted(changed).ownerResolved, "claimed ownership must contain t
 changed[3] = row(labels[3], .button, [0, 0, 3], eligible: false)
 precondition(!accepted(changed).ownerResolved)
 changed[3] = row(labels[3], .button, [0, 0, 3], frame: .zero)
-precondition(!accepted(changed).ownerResolved, "an invalid frame cannot authorize a click")
+precondition(accepted(changed).ownerResolved, "structural identity is independent of the later geometry guard")
 for excluded in [XCUIElement.ElementType.keyboard, .alert] {
     let overlay = row("", excluded, [0, 0])
     precondition(!accepted(fields + [overlay]).ownerResolved,
@@ -154,6 +154,326 @@ for excluded in [XCUIElement.ElementType.keyboard, .alert] {
 let reordered = accepted(Array(fields.reversed()))
 precondition(reordered.ownerResolved && reordered.controls["host"]?.index == 3 && reordered.controls["probe"]?.index == 0,
              "diagnosis and a fresh action selection must use the same production adapter")
+'''
+        self.compile_and_run(program)
+
+    def test_production_control_owner_ignores_layout_but_rejects_identity_ambiguity(self):
+        # The real owner and tap adapters run against synthetic snapshots. This
+        # models a keyboard-induced layout change, never a device observation.
+        program = r'''
+import Foundation
+import CoreGraphics
+final class XCUIElement {
+    enum ElementType: UInt {
+        case textField = 91, textView = 17, searchField = 42, button = 6
+        case stepper = 73, staticText = 12, other = 99, keyboard = 24, alert = 33
+        case window = 3, webView = 4
+    }
+    var taps = 0
+    var inputs: [String] = []
+    var inputValue: String?
+    var forcedReadback: String?
+    func coordinate(withNormalizedOffset: CGVector) -> XCUICoordinate { XCUICoordinate(element: self) }
+    func tap() { taps += 1 }
+    func waitForExistence(timeout: Double) -> Bool { true }
+    func swipeDown() { }
+    func swipeUp() { }
+    func typeText(_ text: String) {
+        inputs.append(text)
+        inputValue = forcedReadback ?? text.replacingOccurrences(of: "\u{8}", with: "")
+    }
+}
+enum XCUIKeyboardKey: String { case delete = "\u{8}" }
+struct XCUICoordinate {
+    let element: XCUIElement
+    func tap() { element.tap() }
+    func press(forDuration: Double, thenDragTo: XCUICoordinate) { }
+}
+protocol XCUIElementSnapshot {
+    var identifier: String { get }
+    var label: String { get }
+    var elementType: XCUIElement.ElementType { get }
+    var frame: CGRect { get }
+    var isEnabled: Bool { get }
+}
+struct Snapshot: XCUIElementSnapshot {
+    let identifier: String
+    let label: String
+    let elementType: XCUIElement.ElementType
+    let frame: CGRect
+    var isEnabled: Bool = true
+    var value: String? = nil
+    var placeholderValue: String? = nil
+}
+struct Observed {
+    let snapshot: Snapshot
+    let path: [Int]
+    let windowPath: [Int]
+    let webPath: [Int]
+    let window: CGRect?
+    let webs: [CGRect]
+}
+typealias Element = XCUIElement
+struct LiveControl {
+    let snapshot: Snapshot
+    let hittable: Bool
+    let element: Element
+}
+struct FormControl {
+    let live: LiveControl
+    let owner: Observed
+    let window: Observed
+    let web: Observed
+    let identified: Bool
+}
+struct Query {
+    let allElementsBoundByIndex: [XCUIElement] = []
+    var firstMatch: XCUIElement { XCUIElement() }
+}
+struct App {
+    let frame: CGRect
+    var webViews: Query { Query() }
+    var keyboards: Query { Query() }
+}
+struct Rejected: Error { let reason: String }
+final class Observations {
+    var trees: [[Observed]]
+    var liveSnapshots: [Snapshot]
+    var liveReads = 0
+    var resolved: [Observed] = []
+    init(_ trees: [[Observed]], liveSnapshots: [Snapshot] = []) {
+        self.trees = trees
+        self.liveSnapshots = liveSnapshots
+    }
+    func next(_ fallback: [Observed]) -> [Observed] {
+        trees.isEmpty ? fallback : trees.removeFirst()
+    }
+    func live(_ fallback: LiveControl) -> LiveControl {
+        liveReads += 1
+        return LiveControl(snapshot: liveSnapshots.isEmpty ? fallback.snapshot : liveSnapshots.removeFirst(),
+                           hittable: fallback.hittable, element: fallback.element)
+    }
+}
+struct Adapter {
+    let app: App
+    let current: LiveControl
+    let rows: [Observed]
+    let blockers: [CGRect]
+    var observations: Observations? = nil
+    var nativePhase: String { "fixture" }
+    func require(_ condition: Bool, _ reason: String) throws {
+        if !condition { throw Rejected(reason: reason) }
+    }
+    func nativeOcclusions() -> [CGRect] { blockers }
+    func post(_ topic: String, _ payload: [String: Any]) throws { }
+    func role(_ type: XCUIElement.ElementType) -> String { type == .textField ? "textField" : "other" }
+    func observedNodes() throws -> [Observed] { observations?.next(rows) ?? rows }
+    func resolveByPath(_ row: Observed) -> Observed {
+        observations?.resolved.append(row)
+        return row
+    }
+    func liveControl(_ row: Observed) -> LiveControl? {
+        if [.window, .webView].contains(row.snapshot.elementType) {
+            return LiveControl(snapshot: row.snapshot, hittable: true, element: Element())
+        }
+        let live = observations?.live(current) ?? current
+        guard let value = live.element.inputValue else { return live }
+        let snapshot = Snapshot(identifier: live.snapshot.identifier, label: live.snapshot.label,
+                                elementType: live.snapshot.elementType, frame: live.snapshot.frame,
+                                isEnabled: live.snapshot.isEnabled, value: value)
+        return LiveControl(snapshot: snapshot, hittable: live.hittable, element: live.element)
+    }
+    func liveControl(_ element: XCUIElement) -> LiveControl? { observations?.live(current) ?? current }
+    func owner(_ snapshot: Snapshot, _ rows: [Observed]) -> Observed? {
+        let scopes = rows.filter { $0.window != nil && !$0.webs.isEmpty }.flatMap { row in
+            [Observed(snapshot: Snapshot(identifier: "", label: "", elementType: .window, frame: row.window!),
+                      path: row.windowPath, windowPath: row.windowPath, webPath: [], window: row.window, webs: []),
+             Observed(snapshot: Snapshot(identifier: "", label: "", elementType: .webView, frame: row.webs.last!),
+                      path: row.webPath, windowPath: row.windowPath, webPath: row.webPath, window: row.window, webs: row.webs)]
+        }
+        return controlOwner(snapshot, rows + scopes)
+    }
+    func tapPort() throws { _ = try tapForm("port") }
+    func port() throws -> LiveControl { try formControl("port").live }
+    func revealCurrent() throws -> LiveControl { try reveal(current.element) }
+    func fillPort(_ text: String) throws { try fillForm("port", text) }
+    func scope(_ item: Snapshot, _ rows: [Observed], _ page: Observed) throws -> NativeViewPolicy.Scope {
+        try pageScope(item, rows, page)
+    }
+''' + "\n".join(self.production_method(signature) for signature in (
+            "func formTargets(_ tree:", "func formSelection(_ tree:", "func formControl(_ name:",
+            "func sameIdentity(_ lhs:", "func liveOnPath(_ row:", "func controlScope(_ row:",
+            "func canInteract(_ current:", "func needsScroll(_ owner:", "func scrollToControl(_ owner:",
+            "func controlIdentityRows(_ current:", "func controlOwner(_ current:",
+            "func controlVisibleFrame(_ owner:", "func reveal(_ item:", "func tapForm(_ name:",
+            "func fillForm(_ name:", "func pageScope(_ item:")) + r'''
+}
+let screen = CGRect(x: 0, y: 0, width: 390, height: 844)
+let oldFrame = CGRect(x: 24, y: 430, width: 342, height: 42)
+let movedFrame = CGRect(x: 24, y: 260, width: 342, height: 42)
+func snapshot(_ role: XCUIElement.ElementType = .textField, frame: CGRect = oldFrame,
+              identifier: String = "", label: String = "端口") -> Snapshot {
+    Snapshot(identifier: identifier, label: label, elementType: role, frame: frame)
+}
+func row(_ snapshot: Snapshot, path: [Int] = [0, 0, 1], window: [Int] = [0],
+         web: [Int] = [0, 0], eligible: Bool = true) -> Observed {
+    Observed(snapshot: snapshot, path: path, windowPath: window, webPath: web,
+             window: eligible ? screen : nil, webs: eligible ? [screen] : [])
+}
+func formRows(_ port: Snapshot, portPath: [Int] = [0, 0, 1]) -> [Observed] {
+    [row(snapshot(label: "主机地址"), path: [0, 0, 0]), row(port, path: portPath),
+     row(snapshot(label: "用户名"), path: [0, 0, 2]),
+     row(snapshot(.button, label: "探测主机指纹"), path: [0, 0, 3]),
+     row(snapshot(.window, frame: screen, label: ""), path: [0]),
+     row(snapshot(.webView, frame: screen, label: ""), path: [0, 0])]
+}
+let element = Element()
+let adapter = Adapter(app: App(frame: screen), current: LiveControl(snapshot: snapshot(), hittable: true, element: element),
+                      rows: [row(snapshot())], blockers: [])
+var failures: [String] = []
+func check(_ condition: Bool, _ message: String) { if !condition { failures.append(message) } }
+let moved = snapshot(frame: movedFrame)
+check(adapter.owner(moved, [row(snapshot())])?.path == [0, 0, 1],
+      "frame-only keyboard movement must preserve a unique typed owner")
+let decoration = row(snapshot(.staticText), path: [1, 0, 1], window: [1], web: [1, 0])
+check(adapter.owner(snapshot(), [row(snapshot()), decoration])?.path == [0, 0, 1],
+      "same-label decoration in another window must not obscure the editable owner")
+let button = row(snapshot(.button), path: [0, 0, 2])
+check(adapter.owner(snapshot(), [row(snapshot()), button])?.path == [0, 0, 1],
+      "same-label different-role sibling must not replace the editable owner")
+let otherWindow = row(snapshot(frame: movedFrame), path: [1, 0, 1], window: [1], web: [1, 0])
+check(adapter.owner(snapshot(), [row(snapshot()), otherWindow]) == nil,
+      "same typed identity across windows stays ambiguous despite different frames")
+let sibling = row(snapshot(frame: movedFrame), path: [0, 0, 2])
+check(adapter.owner(snapshot(), [row(snapshot()), sibling]) == nil,
+      "parallel same-window controls stay ambiguous despite different frames")
+check(adapter.owner(snapshot(), [row(snapshot()), row(snapshot(), path: [0, 0, 2])]) == nil,
+      "parallel same-window controls stay ambiguous even with equal frames")
+let nested = row(snapshot(frame: movedFrame), path: [0, 0, 1, 0])
+check(adapter.owner(snapshot(), [row(snapshot()), nested]) == nil,
+      "different-frame typed identities stay ambiguous even along one branch")
+check(adapter.owner(snapshot(), [row(snapshot()), row(snapshot(), path: [0, 0, 1, 0])])?.path == [0, 0, 1, 0],
+      "equal-frame parent/leaf representations preserve their deepest owned node")
+let identified = snapshot(identifier: "ssh-port")
+let conflictingID = row(snapshot(.button, frame: movedFrame, identifier: "ssh-port"), path: [1, 0, 1], window: [1], web: [1, 0])
+check(adapter.owner(identified, [row(identified), conflictingID]) == nil,
+      "a duplicate identifier cannot be rescued by role or geometry filtering")
+check(adapter.owner(identified, [row(snapshot(.button, identifier: "ssh-port"))]) == nil,
+      "a unique identifier on the wrong role cannot authorize an editable control")
+check(adapter.owner(snapshot(label: ""), [row(snapshot(label: ""))]) == nil,
+      "an empty identity cannot authorize a control")
+check(adapter.owner(snapshot(), [row(snapshot(), eligible: false)]) == nil,
+      "a typed identity without WebView ownership cannot authorize a control")
+func expectTap(_ frame: CGRect, treeFrame: CGRect? = nil, blockers: [CGRect],
+               hittable: Bool = true, allowed: Bool, reason: String) {
+    let current = snapshot(frame: frame)
+    let element = Element()
+    let candidate = Adapter(app: App(frame: screen), current: LiveControl(snapshot: current, hittable: hittable, element: element),
+                            rows: formRows(snapshot(frame: treeFrame ?? frame)), blockers: blockers)
+    var rejected = false
+    do { try candidate.tapPort() } catch { rejected = true }
+    check((element.taps == 1) == allowed && rejected != allowed, reason)
+}
+expectTap(movedFrame, treeFrame: oldFrame, blockers: [], allowed: true,
+          reason: "fresh unique geometry after keyboard movement permits the actual tap adapter")
+let keyboard = CGRect(x: 0, y: 400, width: 390, height: 444)
+expectTap(movedFrame, treeFrame: oldFrame, blockers: [keyboard], allowed: false,
+          reason: "a later tree moving the control behind the keyboard must invalidate an older visible live frame")
+expectTap(oldFrame, treeFrame: movedFrame, blockers: [keyboard], allowed: false,
+          reason: "a later visible tree cannot authorize a tap until live geometry is refreshed")
+expectTap(oldFrame, blockers: [keyboard], allowed: false,
+          reason: "a keyboard-covered control must never be tapped")
+expectTap(CGRect(x: 24, y: 380, width: 342, height: 42), blockers: [keyboard], allowed: false,
+          reason: "a partly keyboard-covered control must never be tapped")
+expectTap(CGRect(x: 24, y: -5, width: 342, height: 42), blockers: [], allowed: false,
+          reason: "a partly offscreen control must never be tapped")
+expectTap(movedFrame, blockers: [], hittable: false, allowed: false,
+          reason: "a non-hittable control must never be tapped")
+expectTap(.zero, blockers: [], allowed: false,
+          reason: "a structurally owned control with invalid geometry must never be tapped")
+func expectReselection(_ live: Snapshot, allowed: Bool, reason: String) {
+    let observed = Observations([formRows(snapshot()), formRows(moved, portPath: [0, 0, 4])])
+    let candidate = Adapter(app: App(frame: screen), current: LiveControl(snapshot: live, hittable: true, element: Element()),
+                            rows: formRows(moved, portPath: [0, 0, 4]), blockers: [], observations: observed)
+    var accepted = false
+    do { _ = try candidate.port(); accepted = true } catch { }
+    check(accepted == allowed, reason)
+    if allowed {
+        check(observed.resolved.last?.path == [0, 0, 4],
+              "the actual form adapter must resolve the newly selected path after layout changes")
+    }
+}
+expectReselection(moved, allowed: true,
+                  reason: "fresh structural selection accepts a uniquely reselected port after frame and path changes")
+expectReselection(snapshot(.button, frame: movedFrame), allowed: false,
+                  reason: "a final live role change after path resolution must not return a form control")
+expectReselection(snapshot(frame: movedFrame, identifier: "changed"), allowed: false,
+                  reason: "a final live identifier change after path resolution must not return a form control")
+expectReselection(snapshot(frame: movedFrame, label: "用户名"), allowed: false,
+                  reason: "a final live label change after path resolution must not return a form control")
+let raceElement = Element()
+let raceTrees = [formRows(moved)] + Array(repeating: formRows(snapshot()), count: 19)
+let race = Adapter(app: App(frame: screen), current: LiveControl(snapshot: moved, hittable: true, element: raceElement),
+                   rows: formRows(snapshot()), blockers: [keyboard], observations: Observations(raceTrees))
+do { try race.tapPort() } catch { }
+check(raceElement.taps == 0,
+      "the actual tap entry must reject a final tree moving the previously visible port behind the keyboard")
+let refreshedElement = Element()
+let refreshed = Observations([], liveSnapshots: [snapshot(), moved, moved, moved])
+let refreshing = Adapter(app: App(frame: screen),
+                         current: LiveControl(snapshot: moved, hittable: true, element: refreshedElement),
+                         rows: formRows(moved), blockers: [keyboard], observations: refreshed)
+var refreshedSucceeded = true
+do { try refreshing.tapPort() } catch { refreshedSucceeded = false }
+check(refreshedSucceeded && refreshedElement.taps == 1 && refreshed.liveReads >= 2,
+      "the actual tap path must reacquire the unique port's latest visible live geometry before clicking")
+let revealSnapshots = Observations([], liveSnapshots: [snapshot(), moved, moved, moved])
+let revealing = Adapter(app: App(frame: screen),
+                        current: LiveControl(snapshot: moved, hittable: true, element: Element()),
+                        rows: formRows(moved), blockers: [keyboard], observations: revealSnapshots)
+var revealed: LiveControl?
+do { revealed = try revealing.revealCurrent() } catch { }
+check(revealed?.snapshot.frame == movedFrame && revealSnapshots.liveReads >= 4,
+      "the actual generic reveal path must refresh both its queried and path-bound live geometry")
+let writeElement = Element()
+let writeSnapshots = Observations([], liveSnapshots: [moved, moved, snapshot(), moved, moved])
+let writing = Adapter(app: App(frame: screen),
+                      current: LiveControl(snapshot: moved, hittable: true, element: writeElement),
+                      rows: formRows(moved), blockers: [keyboard], observations: writeSnapshots)
+var writeSucceeded = true
+do { try writing.fillPort("2222") } catch { writeSucceeded = false }
+check(writeSucceeded && writeElement.inputs == ["2222"] && writeSnapshots.liveReads >= 5,
+      "the actual fill entry must wait for keyboard geometry to stabilize and type exactly once")
+let failedReadback = Element()
+failedReadback.forcedReadback = "wrong"
+let unread = Adapter(app: App(frame: screen),
+                    current: LiveControl(snapshot: moved, hittable: true, element: failedReadback),
+                    rows: formRows(moved), blockers: [keyboard])
+var readbackRejected = false
+do { try unread.fillPort("2222") } catch { readbackRejected = true }
+check(readbackRejected && failedReadback.inputs == ["2222"],
+      "the actual fill entry must fail a wrong readback without replaying typeText")
+let page = formRows(moved)[1]
+for (live, stored) in [(snapshot(identifier: "ssh-password", label: "密码"), snapshot(label: "密码")),
+                       (snapshot(identifier: "ssh-password", label: "密码"), snapshot(identifier: "changed", label: "密码")),
+                       (snapshot(label: "密码"), snapshot(identifier: "ssh-password", label: "密码"))] {
+    var rejected = false
+    do { _ = try adapter.scope(live, formRows(stored), page) } catch { rejected = true }
+    check(rejected, "page scope must reject lost or changed product identifiers rather than infer nativeSystem")
+}
+let systemSnapshot = snapshot(.button, identifier: "native-keyboard-action", label: "系统按键")
+let system = Observed(snapshot: systemSnapshot, path: [0, 1, 0], windowPath: [0], webPath: [],
+                      window: screen, webs: [])
+let keyboardAncestor = Observed(snapshot: snapshot(.keyboard, frame: keyboard, label: ""),
+                                path: [0, 1], windowPath: [0], webPath: [], window: screen, webs: [])
+var nativeScope: NativeViewPolicy.Scope?
+do { nativeScope = try adapter.scope(systemSnapshot, formRows(moved) + [keyboardAncestor, system], page) } catch { }
+check(nativeScope == .nativeSystem,
+      "a same-identity observed control with proven native keyboard ancestry keeps its nativeSystem scope")
+if !failures.isEmpty {
+    FileHandle.standardError.write(Data((failures.joined(separator: "\n") + "\n").utf8))
+    exit(1)
+}
 '''
         self.compile_and_run(program)
 

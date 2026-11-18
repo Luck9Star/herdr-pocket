@@ -62,7 +62,8 @@ NATIVE_FAILURES = frozenset((
     'native_home_add_role_mismatch', 'native_home_add_disabled', 'native_home_add_not_hittable_or_wrong_page',
     'native_home_add_did_not_open_page', 'native_owner_ambiguous', 'native_target_control_missing',
     'native_home_identity_unproven', 'native_home_retry_unsafe', 'native_ssh_form_unproven',
-    'native_home_navigation_failed', 'native_control_owner_unproven', 'native_scroll_owner_unproven'))
+    'native_home_navigation_failed', 'native_control_owner_unproven', 'native_scroll_owner_unproven',
+    'native_form_control_unproven', 'native_form_control_changed'))
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 HOME_ERRORS = frozenset(('connectionError', 'dnsError', 'webProcessError', 'devURL',

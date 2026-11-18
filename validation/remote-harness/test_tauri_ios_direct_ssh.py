@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import logging
+import re
 import shutil
 import subprocess
 import time
@@ -836,6 +837,48 @@ print("native geometry cases passed")
             run=subprocess.run([str(root/'geometry')],capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stderr)
             self.assertIn('native geometry cases passed',run.stdout)
+
+
+class NativeDiagnosticPublishingTests(unittest.TestCase):
+    def test_swift_form_owner_and_geometry_failures_publish_through_real_http(self):
+        source = (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text()
+        emitted = set(re.findall(r'\btry require\([\s\S]*?,\s*"(native_[a-z_]+)"\)', source))
+        prefixes = ('native_form_', 'native_control_', 'native_scroll_', 'native_owner_',
+                    'native_geometry_', 'native_window_', 'native_webview_', 'native_visible_',
+                    'native_target_', 'native_screen_', 'native_capture_')
+        codes = sorted(code for code in emitted if code.startswith(prefixes))
+        self.assertTrue({'native_form_control_changed', 'native_form_control_unproven',
+                         'native_control_owner_unproven'} <= set(codes))
+        with tempfile.TemporaryDirectory() as directory:
+            state = ios.Checkpoints(None, None, directory, {})
+            server, thread = ios.start_checkpoints(state)
+            self.addCleanup(thread.join, 2)
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+            url = f'http://127.0.0.1:{server.server_port}/checkpoint'
+            private = 'synthetic-user-data'
+            for code in codes + ['native_control_unknown', private, codes[0] + ':' + private]:
+                with self.subTest(code=code):
+                    state.failure = None
+                    state.result.clear()
+                    payload = {'stage': 'native_failure', 'nativeCheckpoint': 'ordinary_port',
+                               'nativeFailureCode': code}
+                    request = Request(url, data=json.dumps(payload).encode(),
+                                      headers={'Authorization': state.secret})
+                    try:
+                        response = urlopen(request, timeout=2)
+                    except HTTPError as error:
+                        response = error
+                    with response:
+                        self.assertEqual(response.code, 200 if code in codes else 409)
+                        self.assertEqual(json.load(response), {'ok': code in codes})
+                    if code in codes:
+                        self.assertEqual(state.result, {'nativeCheckpoint': 'ordinary_port', 'nativeFailureCode': code})
+                        self.assertEqual(state.failure, 'tauri_ios_native_check_failed')
+                    else:
+                        self.assertEqual(state.failure, 'tauri_ios_native_diagnostic_invalid')
+                        self.assertNotIn('nativeFailureCode', state.result)
+                    self.assertNotIn(private, json.dumps(state.result))
 
 
 class RealLoopbackCheckpointsTests(unittest.TestCase):

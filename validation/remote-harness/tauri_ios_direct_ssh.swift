@@ -116,6 +116,7 @@ enum NativeControlPolicy {
         let reason: String
         let matches: Int
         let owner: Bool
+        let identified: Bool
     }
     struct Selection {
         let controls: [String: Verdict]
@@ -125,7 +126,9 @@ enum NativeControlPolicy {
                             editableRoles: Set<String>) -> (index: Int?, role: String, reason: String, matches: Int) {
         guard facts.count == paths.count else { return (nil, "none", "missing", 0) }
         let identified = facts.indices.filter { identifier?.isEmpty == false && facts[$0].identifier == identifier! }
-        let identity = identified.isEmpty ? facts.indices.filter { facts[$0].label == label } : identified
+        let identity = identified.isEmpty ? facts.indices.filter {
+            facts[$0].label == label && (identifier?.isEmpty != false || facts[$0].identifier.isEmpty)
+        } : identified
         let matches = min(identity.count, 10000)
         if !identified.isEmpty && identified.count != 1 { return (nil, "none", "ambiguous", matches) }
         var eligible = identity.filter { editableRoles.contains(facts[$0].role) }
@@ -172,7 +175,7 @@ enum NativeControlPolicy {
             let owner = result.index.map(owned) ?? false
             controls[name] = Verdict(index: result.index, role: result.role,
                 reason: result.reason == "matched" && !owner ? "ownerUnproven" : result.reason,
-                matches: result.matches, owner: owner)
+                matches: result.matches, owner: owner, identified: facts.contains { $0.identifier == identifier })
         }
         let selected = definitions.compactMap { controls[$0.0] }
         let indices = selected.compactMap { $0.index }
@@ -280,6 +283,13 @@ final class TauriDirectSSHUITests: XCTestCase {
         let snapshot: any XCUIElementSnapshot
         let hittable: Bool
     }
+    private struct FormControl {
+        let live: LiveControl
+        let owner: Observed
+        let window: Observed
+        let web: Observed
+        let identified: Bool
+    }
 
     @MainActor
     private func require(_ condition: Bool, _ code: String) throws {
@@ -339,8 +349,8 @@ final class TauriDirectSSHUITests: XCTestCase {
         var pending: [(any XCUIElementSnapshot, [Int], CGRect?, [Int], [CGRect], [Int])] = [(try app.snapshot(), [], nil, [], [], [])]
         var result: [Observed] = []
         while let (node, path, inheritedWindow, inheritedWindowPath, inheritedWebs, inheritedWebPath) = pending.popLast() {
-            let isWindow = node.elementType == .window && NativeFramePolicy.valid(node.frame)
-            let isWeb = node.elementType == .webView && NativeFramePolicy.valid(node.frame)
+            let isWindow = node.elementType == .window
+            let isWeb = node.elementType == .webView
             let window = isWindow ? node.frame : inheritedWindow
             let windowPath = isWindow ? path : inheritedWindowPath
             let webs = isWeb ? inheritedWebs + [node.frame] : inheritedWebs
@@ -414,7 +424,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     private func button(_ label: String) -> XCUIElement {
         if label == "探测主机指纹" {
-            return (try? formControl("probe"))?.element ?? app.descendants(matching: .any).matching(NSPredicate(value: false)).firstMatch
+            return (try? formControl("probe"))?.live.element ?? app.descendants(matching: .any).matching(NSPredicate(value: false)).firstMatch
         }
         let ids = ["普通 SSH 终端": "add-ssh", "herdr 配对 / 手动连接": "add-herdr",
             "打开键盘": "ssh-focus", "断开连接": "ssh-disconnect", "重新核对主机指纹": "ssh-key-recheck",
@@ -437,7 +447,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         let excluded = tree.filter { [.keyboard, .alert].contains($0.snapshot.elementType) }.map { $0.path }
         return NativeControlPolicy.formSelection(facts: formTargets(tree), paths: tree.map { $0.path },
             windowPaths: tree.map { $0.windowPath }, webPaths: tree.map { $0.webPath }, ownerEligible: tree.map { row in
-                row.window != nil && !row.webs.isEmpty && NativeFramePolicy.valid(row.snapshot.frame) &&
+                row.window != nil && !row.webs.isEmpty &&
                     !excluded.contains { prefix in Array(row.path.prefix(prefix.count)) == prefix }
             })
     }
@@ -450,71 +460,115 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func formControl(_ name: String) throws -> LiveControl {
-        let tree = try observedNodes()
-        let selection = formSelection(tree)
-        guard selection.ownerResolved, let verdict = selection.controls[name], verdict.reason == "matched",
-              let index = verdict.index, let current = liveControl(resolveByPath(tree[index])) else {
+    private func sameIdentity(_ lhs: any XCUIElementSnapshot, _ rhs: any XCUIElementSnapshot) -> Bool {
+        lhs.elementType == rhs.elementType && lhs.identifier == rhs.identifier && lhs.label == rhs.label
+    }
+
+    @MainActor
+    private func liveOnPath(_ row: Observed) -> LiveControl? {
+        guard let live = liveControl(resolveByPath(row)), sameIdentity(row.snapshot, live.snapshot) else { return nil }
+        return live
+    }
+
+    @MainActor
+    private func controlScope(_ row: Observed, _ rows: [Observed]) -> (window: Observed, web: Observed)? {
+        guard !row.windowPath.isEmpty, row.webPath.count > row.windowPath.count, row.path.count > row.webPath.count,
+              row.webPath.starts(with: row.windowPath), row.path.starts(with: row.webPath),
+              let window = rows.first(where: { $0.path == row.windowPath && $0.snapshot.elementType == .window }),
+              let web = rows.first(where: { $0.path == row.webPath && $0.snapshot.elementType == .webView }) else { return nil }
+        return (window, web)
+    }
+
+    @MainActor
+    private func formControl(_ name: String, matching expected: FormControl? = nil) throws -> FormControl {
+        func select(_ rows: [Observed]) -> (owner: Observed, window: Observed, web: Observed, identified: Bool)? {
+            let selection = formSelection(rows)
+            guard selection.ownerResolved, let verdict = selection.controls[name], verdict.reason == "matched",
+                  let index = verdict.index, let scope = controlScope(rows[index], rows) else { return nil }
+            return (rows[index], scope.window, scope.web, verdict.identified)
+        }
+        guard let original = try select(observedNodes()) else {
             try require(false, "native_form_control_unproven")
             throw NSError(domain: "native_form_control_unproven", code: 1)
         }
-        let selected = tree[index]
-        try require(current.snapshot.elementType == selected.snapshot.elementType &&
-            current.snapshot.identifier == selected.snapshot.identifier && current.snapshot.label == selected.snapshot.label &&
-            current.snapshot.frame == selected.snapshot.frame, "native_form_control_changed")
-        // Re-read the tree after resolving the live object; a path alone cannot
-        // prove identity when a WebView has reordered its accessible children.
-        let fresh = try observedNodes()
-        let checked = formSelection(fresh)
-        guard checked.ownerResolved, let latest = checked.controls[name], latest.reason == "matched", let next = latest.index else {
+        if let expected = expected {
+            try require(original.window.path == expected.window.path && original.web.path == expected.web.path &&
+                sameIdentity(original.window.snapshot, expected.window.snapshot) && sameIdentity(original.web.snapshot, expected.web.snapshot) &&
+                sameIdentity(original.owner.snapshot, expected.owner.snapshot) && (!expected.identified || original.identified),
+                "native_form_control_changed")
+        }
+        // The keyboard may move the field or reorder siblings. Re-select
+        // within the same form and resolve the current path before acting.
+        guard let fresh = try select(observedNodes()), fresh.window.path == original.window.path, fresh.web.path == original.web.path,
+              sameIdentity(fresh.window.snapshot, original.window.snapshot), sameIdentity(fresh.web.snapshot, original.web.snapshot),
+              sameIdentity(fresh.owner.snapshot, original.owner.snapshot), !original.identified || fresh.identified,
+              liveOnPath(fresh.window) != nil, liveOnPath(fresh.web) != nil, let current = liveOnPath(fresh.owner) else {
             try require(false, "native_form_control_changed")
             throw NSError(domain: "native_form_control_changed", code: 1)
         }
-        let row = fresh[next]
-        try require(row.path == selected.path && row.windowPath == selected.windowPath && row.webPath == selected.webPath &&
-            row.snapshot.elementType == current.snapshot.elementType && row.snapshot.identifier == current.snapshot.identifier &&
-            row.snapshot.label == current.snapshot.label && row.snapshot.frame == current.snapshot.frame,
-            "native_form_control_changed")
-        return current
+        return FormControl(live: current, owner: fresh.owner, window: fresh.window, web: fresh.web, identified: fresh.identified)
     }
 
     @MainActor
     private func field(_ label: String) -> XCUIElement {
         let names = ["主机地址": "host", "端口": "port", "用户名": "user"]
-        if let name = names[label], let current = try? formControl(name) { return current.element }
+        if let name = names[label], let current = try? formControl(name) { return current.live.element }
         return app.descendants(matching: .any).matching(NSPredicate(value: false)).firstMatch
     }
 
     @MainActor
-    private func tapForm(_ name: String) throws {
-        let initial = try formControl(name)
-        _ = try reveal(initial.element)
-        let current = try formControl(name)
-        let visible = try controlVisibleFrame(current.snapshot, observedNodes())
-        try require(current.snapshot.isEnabled && current.hittable && visible.contains(current.snapshot.frame), "native_control_not_visible")
-        current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    @discardableResult
+    private func tapForm(_ name: String) throws -> FormControl {
+        var expected: FormControl?
+        for _ in 0..<10 {
+            let form = try formControl(name, matching: expected)
+            expected = form
+            let (current, owner) = (form.live, form.owner)
+            try require(current.snapshot.isEnabled && owner.snapshot.isEnabled, "native_control_disabled")
+            guard let visible = controlVisibleFrame(owner, current) else {
+                try require(false, "native_visible_frame_invalid")
+                throw NSError(domain: "native_visible_frame_invalid", code: 1)
+            }
+            if canInteract(current, owner, visible) {
+                current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                return form
+            }
+            if needsScroll(owner, current, visible) { try scrollToControl(owner, form.window, form.web, visible) }
+        }
+        try require(false, "native_control_not_visible")
+        throw NSError(domain: "native_control_not_visible", code: 1)
     }
 
     @MainActor
     private func fillForm(_ name: String, _ text: String) throws {
-        try tapForm(name)
+        let tapped = try tapForm(name)
         try require(app.keyboards.firstMatch.waitForExistence(timeout: 10), "native_input_keyboard_missing")
-        let current = try formControl(name)
+        let current = try formControl(name, matching: tapped).live
         try require(current.snapshot.isEnabled, "native_control_disabled")
         try post("native_progress", ["nativeCheckpoint": nativePhase, "nativeInputRole": role(current.snapshot.elementType)])
         if name == "port" {
             try post("native_progress", ["nativeCheckpoint": nativePhase,
                 "nativePortType": current.snapshot.elementType == .textField ? "textField" : "other"])
         }
-        let ready = try formControl(name)
-        guard let clearCount = NativeControlPolicy.clearCount(ready.snapshot.value, placeholder: ready.snapshot.placeholderValue, secure: false) else {
-            try require(false, "native_unexpected_existing_input")
-            throw NSError(domain: "native_unexpected_existing_input", code: 1)
+        var visibilityFailure = "native_visible_frame_invalid"
+        for _ in 0..<3 {
+            let form = try formControl(name, matching: tapped)
+            let (ready, selected) = (form.live, form.owner)
+            try require(ready.snapshot.isEnabled && selected.snapshot.isEnabled, "native_control_disabled")
+            visibilityFailure = "native_visible_frame_invalid"
+            guard let visible = controlVisibleFrame(selected, ready) else { continue }
+            visibilityFailure = "native_control_not_visible"
+            guard canInteract(ready, selected, visible) else { continue }
+            guard let clearCount = NativeControlPolicy.clearCount(ready.snapshot.value, placeholder: ready.snapshot.placeholderValue, secure: false) else {
+                try require(false, "native_unexpected_existing_input")
+                throw NSError(domain: "native_unexpected_existing_input", code: 1)
+            }
+            ready.element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: clearCount) + text)
+            let after = try formControl(name, matching: tapped).live
+            try require(NativeControlPolicy.valueText(after.snapshot.value) == text, "native_input_value_invalid")
+            return
         }
-        try require(ready.snapshot.isEnabled, "native_control_disabled")
-        ready.element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: clearCount) + text)
-        let after = try formControl(name)
-        try require(NativeControlPolicy.valueText(after.snapshot.value) == text, "native_input_value_invalid")
+        try require(false, visibilityFailure)
     }
 
     @MainActor
@@ -534,56 +588,93 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     private func controlIdentityRows(_ current: any XCUIElementSnapshot, _ rows: [Observed]) -> [Observed] {
         if !current.identifier.isEmpty {
-            let identified = rows.filter { $0.snapshot.identifier == current.identifier }
-            if !identified.isEmpty { return identified }
+            return rows.filter { $0.snapshot.identifier == current.identifier }
         }
         guard !current.label.isEmpty else { return [] }
-        return rows.filter { $0.snapshot.label == current.label }
+        return rows.filter { $0.snapshot.identifier.isEmpty && $0.snapshot.label == current.label }
     }
 
     @MainActor
     private func controlOwner(_ current: any XCUIElementSnapshot, _ rows: [Observed]) -> Observed? {
         let identity = controlIdentityRows(current, rows)
-        if !current.identifier.isEmpty && identity.contains(where: { $0.snapshot.identifier == current.identifier }) && identity.count != 1 { return nil }
-        let matches = identity.filter { $0.snapshot.frame == current.frame &&
-            $0.window != nil && !$0.webs.isEmpty }
-        guard let index = matches.indices.max(by: { matches[$0].path.count < matches[$1].path.count }),
-              NativeFramePolicy.compatibleOwner(windowPaths: matches.map { $0.windowPath }, webPaths: matches.map { $0.webPath },
-                  nodePaths: matches.map { $0.path }, selected: index)
-        else { return nil }
-        return matches[index]
+        if !current.identifier.isEmpty && identity.count != 1 { return nil }
+        let typed = identity.filter { sameIdentity($0.snapshot, current) }
+        // Permit parent/leaf representations of one control in the same
+        // branch when the tree gives them the same frame. Siblings and
+        // rows in other windows remain ambiguous even at equal frames.
+        guard let match = typed.max(by: { $0.path.count < $1.path.count }),
+              typed.allSatisfy({ $0.windowPath == match.windowPath && match.path.starts(with: $0.path) &&
+                  $0.snapshot.frame == match.snapshot.frame }),
+              controlScope(match, rows) != nil else { return nil }
+        return match
     }
 
     @MainActor
-    private func controlVisibleFrame(_ current: any XCUIElementSnapshot, _ rows: [Observed]) throws -> CGRect {
-        guard let owner = controlOwner(current, rows), let window = owner.window,
-              let visible = NativeFramePolicy.visible(window: window, screen: app.frame,
-                  webAncestors: owner.webs, occlusions: nativeOcclusions()) else {
-            try require(false, "native_control_owner_unproven")
-            throw NSError(domain: "native_control_owner_unproven", code: 1)
+    private func controlVisibleFrame(_ owner: Observed, _ current: LiveControl) -> CGRect? {
+        guard let window = owner.window, NativeFramePolicy.valid(owner.snapshot.frame),
+              NativeFramePolicy.valid(current.snapshot.frame) else { return nil }
+        return NativeFramePolicy.visible(window: window, screen: app.frame, webAncestors: owner.webs, occlusions: nativeOcclusions())
+    }
+
+    @MainActor
+    private func canInteract(_ current: LiveControl, _ owner: Observed, _ visible: CGRect) -> Bool {
+        current.hittable && visible.contains(owner.snapshot.frame) && visible.contains(current.snapshot.frame)
+    }
+
+    @MainActor
+    private func needsScroll(_ owner: Observed, _ current: LiveControl, _ visible: CGRect) -> Bool {
+        let frames = [owner.snapshot.frame, current.snapshot.frame]
+        return frames.allSatisfy { $0.minX >= visible.minX && $0.maxX <= visible.maxX } &&
+            (frames.allSatisfy { $0.minY < visible.minY } || frames.allSatisfy { $0.maxY > visible.maxY })
+    }
+
+    @MainActor
+    private func scrollToControl(_ owner: Observed, _ window: Observed, _ web: Observed, _ visible: CGRect) throws {
+        guard liveOnPath(window) != nil, let surface = liveOnPath(web) else {
+            try require(false, "native_scroll_owner_unproven")
+            throw NSError(domain: "native_scroll_owner_unproven", code: 1)
         }
-        return visible
+        let frame = surface.snapshot.frame
+        try require(NativeFramePolicy.valid(frame) && frame.contains(visible), "native_visible_frame_invalid")
+        try require(surface.hittable, "native_control_not_visible")
+        let down = owner.snapshot.frame.minY < visible.minY
+        func point(_ fraction: CGFloat) -> XCUICoordinate {
+            surface.element.coordinate(withNormalizedOffset: CGVector(
+                dx: (visible.midX - frame.minX) / frame.width,
+                dy: (visible.minY + fraction * visible.height - frame.minY) / frame.height))
+        }
+        // Keep the entire gesture in the proven WebView's unobscured area.
+        point(down ? 0.25 : 0.75).press(forDuration: 0.05, thenDragTo: point(down ? 0.75 : 0.25))
     }
 
     @MainActor
     private func reveal(_ item: XCUIElement) throws -> LiveControl {
         try require(item.waitForExistence(timeout: 20), "native_control_missing")
+        var priorOwner: Observed?
         for _ in 0..<10 {
             guard let current = liveControl(item) else {
                 try require(false, "native_control_missing")
                 throw NSError(domain: "native_control_missing", code: 1)
             }
             let rows = try observedNodes()
-            let visible = try controlVisibleFrame(current.snapshot, rows)
-            if current.hittable && visible.contains(current.snapshot.frame) { return current }
-            guard let owner = controlOwner(current.snapshot, rows), let webFrame = owner.webs.last,
-                  let surface = app.webViews.allElementsBoundByIndex.compactMap({ liveControl($0) })
-                    .first(where: { $0.snapshot.frame == webFrame && $0.hittable }) else {
-                try require(false, "native_scroll_owner_unproven")
-                throw NSError(domain: "native_scroll_owner_unproven", code: 1)
+            guard let owner = controlOwner(current.snapshot, rows), let scope = controlScope(owner, rows),
+                  liveOnPath(scope.window) != nil, liveOnPath(scope.web) != nil, let bound = liveOnPath(owner) else {
+                try require(false, "native_control_owner_unproven")
+                throw NSError(domain: "native_control_owner_unproven", code: 1)
             }
-            if current.snapshot.frame.minY < visible.minY { surface.element.swipeDown() }
-            else { surface.element.swipeUp() }
+            if let priorOwner = priorOwner {
+                try require(owner.windowPath == priorOwner.windowPath && owner.webPath == priorOwner.webPath &&
+                    sameIdentity(owner.snapshot, priorOwner.snapshot), "native_control_owner_unproven")
+            }
+            priorOwner = owner
+            guard let visible = controlVisibleFrame(owner, current), NativeFramePolicy.valid(bound.snapshot.frame) else {
+                try require(false, "native_visible_frame_invalid")
+                throw NSError(domain: "native_visible_frame_invalid", code: 1)
+            }
+            if canInteract(current, owner, visible) && canInteract(bound, owner, visible) { return bound }
+            if needsScroll(owner, current, visible) && needsScroll(owner, bound, visible) {
+                try scrollToControl(owner, scope.window, scope.web, visible)
+            }
         }
         try require(false, "native_control_not_visible")
         throw NSError(domain: "native_control_not_visible", code: 1)
@@ -651,17 +742,23 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func pageScope(_ item: any XCUIElementSnapshot, _ rows: [Observed], _ page: Observed) throws -> NativeViewPolicy.Scope {
-        if let owner = controlOwner(item, rows) {
-            return NativeViewPolicy.scope(window: owner.windowPath, web: owner.webPath,
+        func scope(_ row: Observed) -> NativeViewPolicy.Scope {
+            NativeViewPolicy.scope(window: row.windowPath, web: row.webPath,
                 currentWindow: page.windowPath, currentWeb: page.webPath)
         }
-        // Native keyboard and auxiliary windows have no WebView owner. Do not
-        // turn their controls into product fields or S10 escape routes.
+        if let owner = controlOwner(item, rows) { return scope(owner) }
+        // A native or auxiliary control needs a positive snapshot match.
+        // A missing or changed ID could still be a product control.
         let candidates = controlIdentityRows(item, rows)
-        if candidates.contains(where: { $0.windowPath == page.windowPath && !$0.webs.isEmpty }) {
-            try require(false, "native_owner_ambiguous")
+        if let match = candidates.first {
+            let classification = scope(match)
+            if (classification == .nativeSystem || classification == .otherWindow) &&
+                candidates.allSatisfy({ sameIdentity($0.snapshot, item) && scope($0) == classification }) {
+                return classification
+            }
         }
-        return .nativeSystem
+        try require(false, "native_owner_ambiguous")
+        throw NSError(domain: "native_owner_ambiguous", code: 1)
     }
 
     @MainActor
@@ -953,20 +1050,19 @@ final class TauriDirectSSHUITests: XCTestCase {
         }
         let snapshot = current.snapshot
         let owner = controlOwner(snapshot, try observedNodes())
-        var visible = CGRect.zero
-        var resolved = false
-        if let owner = owner, let window = owner.window,
-           let measured = NativeFramePolicy.visible(window: window, screen: app.frame, webAncestors: owner.webs, occlusions: nativeOcclusions()) {
-            visible = measured; resolved = true
-        }
+        let measured = owner.flatMap { controlVisibleFrame($0, current) }
+        let visible = measured ?? .zero
         let center = CGPoint(x: snapshot.frame.midX, y: snapshot.frame.midY)
+        let selectedFrame = owner?.snapshot.frame ?? .null
+        let selectedCenter = CGPoint(x: selectedFrame.midX, y: selectedFrame.midY)
         let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let bars = NativeFramePolicy.unique((app.statusBars.allElementsBoundByIndex + system.statusBars.allElementsBoundByIndex)
             .compactMap { liveControl($0)?.snapshot.frame }.filter(NativeFramePolicy.valid))
         return ["frame": rect(snapshot.frame), "visibleFrame": rect(visible), "screenFrame": rect(app.frame),
             "statusBarFrames": bars.map(rect), "role": role(snapshot.elementType), "enabled": snapshot.isEnabled,
-            "hittable": current.hittable, "ownerResolved": resolved,
-            "centerVisible": resolved && visible.contains(center), "fullyVisible": resolved && visible.contains(snapshot.frame)]
+            "hittable": current.hittable, "ownerResolved": owner != nil,
+            "centerVisible": measured != nil && visible.contains(center) && visible.contains(selectedCenter),
+            "fullyVisible": measured != nil && visible.contains(snapshot.frame) && visible.contains(selectedFrame)]
     }
 
     @MainActor

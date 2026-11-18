@@ -16,6 +16,11 @@
 
 本轮在独立 Flutter 双网 APK 构建和 Android 真实启动验收中，将 normal / QA 的原生输入由 `93ca6cd` 更新为 `547106e`，与 [Android 双网设备验收](67-android-dual-network-startup.md) 使用的源码对齐。构建和启动验收均检查下载摘要、原生来源和包内容。原生工件来自 [构建 43939326685](https://github.com/Luck9Star/herdr-pocket/actions/runs/43939326685)。
 
+两项 CI 均使用源码 `0ad9734` 并通过。
+
+- Android API 35 模拟器上的 normal 和 QA 变体均从 `needs-login` 到 `stopped`。清理通过，SSH 认证、新增授权和注册均为零。[真实启动验收 44290964257](https://github.com/Luck9Star/herdr-pocket/actions/runs/44290964257)
+- Flutter 独立构建产出 normal 和 private-ca-qa 两份 x86_64 debug APK。本次验收范围为打包及清单校验，Flutter UI 设备测试另有独立记录。[Flutter APK 验收 44290964970](https://github.com/Luck9Star/herdr-pocket/actions/runs/44290964970)
+
 ## 恢复一个历史分支
 
 在有 GitHub 仓库访问权限的终端运行以下命令，将 `b086299` 恢复到新的本地分支。

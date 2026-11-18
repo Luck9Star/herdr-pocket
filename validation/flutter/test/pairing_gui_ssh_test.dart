@@ -110,6 +110,7 @@ void main() {
       catalog:catalog,keys:keys,tabs:tabs,adapterFactory:(_) => adapter,offlineBuilder:(_) => const SizedBox())));
     await tester.pumpAndSettle();
     await tapControl('hosts-add'); await tester.pumpAndSettle();
+    if (find.byKey(const ValueKey('choose-herdr')).evaluate().isNotEmpty) { await tapControl('choose-herdr'); await tester.pumpAndSettle(); }
     stage('public_request');
     await helpers.fillPairTarget(tester,config);
     await tapControl('pair-target-review'); await tapControl('pair-create');

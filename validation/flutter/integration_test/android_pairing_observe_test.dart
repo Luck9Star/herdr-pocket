@@ -944,6 +944,7 @@ void main() {
     expect(home.catalog,isNull); expect(home.keys,isNull); expect(home.adapterFactory,isNull);
     expect(hostOpen(),findsNothing); // The runner requires a fresh package install.
     await tapKey(tester,'hosts-add');
+    if (find.byKey(const ValueKey('choose-herdr')).evaluate().isNotEmpty) await tapKey(tester,'choose-herdr');
     final pairingPage = tester.widget<PairingPage>(find.byType(PairingPage));
     expect(pairingPage.keys,isNull); expect(pairingPage.adapter,isNull); expect(pairingPage.catalog,isNotNull);
     stage('public_request');

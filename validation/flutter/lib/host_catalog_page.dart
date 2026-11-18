@@ -294,7 +294,119 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           crossAxisAlignment:CrossAxisAlignment.stretch,children:[Text(host.label,style:Theme.of(context).textTheme.titleSmall),hostSummary(host,compact:true)])),
       ]))]);
   }
+  bool get ordinaryCatalogStatus => catalog.ready &&
+    (catalog.status.startsWith('已恢复 ') || catalog.status == '本机资料已保存 · 不代表主机授权或当前在线');
+  bool get largeMobileText => MediaQuery.textScalerOf(context).scale(1) > 1;
+  bool get mobileEmptyBoard => MediaQuery.sizeOf(context).width < 960 && catalog.ready &&
+    catalog.profiles.isEmpty && catalog.pendingCreation == null && tabs.tabs.isEmpty && notice == null &&
+    (catalog.status == '没有本机主机资料 · 请明确新增配对' || ordinaryCatalogStatus);
+
+  void openDirectSsh() {
+    tabs.select(null);
+    Navigator.push<void>(context, MaterialPageRoute(builder: (_) => DirectSshPage(tokens: widget.tokens)));
+  }
+
+  Future<void> chooseConnection() async {
+    final choice = await Navigator.push<String>(context, MaterialPageRoute(builder: (context) {
+      final margin = MediaQuery.sizeOf(context).width < 360 ? 16.0 : 24.0;
+      final large = MediaQuery.textScalerOf(context).scale(1) > 1;
+      Widget option(String key, String title, String detail, IconData icon, bool primary, String value) =>
+        ConstrainedBox(constraints: const BoxConstraints(minHeight: 100), child: SizedBox(height: large ? null : 100, child: Material(
+          color: widget.tokens.color('card'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardRadius),
+            side: BorderSide(color: widget.tokens.color(primary ? 'brandBorder' : 'border'))),
+          child: InkWell(key: ValueKey(key), borderRadius: BorderRadius.circular(cardRadius),
+            onTap: () => Navigator.pop(context, value), child: Padding(
+              padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [Container(width: 40, height: 40,
+                  decoration: BoxDecoration(color: widget.tokens.color(primary ? 'brandSoft' : 'cardSubtle'), borderRadius: BorderRadius.circular(10)),
+                  child: Icon(icon, color: widget.tokens.color(primary ? 'brand' : 'textSecondary'), size: 24)),
+                  const SizedBox(width: 12), Expanded(child: Text(title, maxLines: large ? null : 1, overflow: large ? TextOverflow.visible : TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
+                  Icon(Icons.chevron_right, color: widget.tokens.color('textSecondary'))]),
+                const SizedBox(height: 8), if (large) Text(detail, style: TextStyle(fontSize: 13, letterSpacing: 0, color: widget.tokens.color('textSecondary')))
+                else FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(detail,
+                  style: TextStyle(fontSize: 13, letterSpacing: 0, color: widget.tokens.color('textSecondary')))),
+              ]))))));
+      return Scaffold(body: SafeArea(child: Column(children: [
+        Container(key: const ValueKey('choose-header'), height: large ? 72 : 56,
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: widget.tokens.color('border')))),
+          child: Row(children: [SizedBox(width: margin - 8), SizedBox(width: 44, height: 44,
+            child: IconButton(key: const ValueKey('choose-back'), padding: EdgeInsets.zero, tooltip: '返回',
+              onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back))),
+            const SizedBox(width: 8), const Text('添加主机', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))])),
+        Expanded(child: ListView(padding: EdgeInsets.fromLTRB(margin, 24, margin, 24), children: [
+          SizedBox(height: large ? null : 28, child: Transform.translate(offset: Offset(0, large ? 0 : -4),
+            child: const Text('选择连接方式', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 0)))),
+          const SizedBox(height: 16),
+          option('choose-ssh', '普通 SSH 终端', '使用服务器密码或已有私钥打开远程 Shell。', Icons.terminal, true, 'ssh'),
+          const SizedBox(height: 12),
+          option('choose-herdr', 'herdr 配对 / 手动连接', '接入 herdr 工作台，查看会话和任务。', Icons.web_asset_outlined, false, 'herdr'),
+        ])),
+      ])));
+    }));
+    if (!mounted) return;
+    if (choice == 'ssh') openDirectSsh();
+    if (choice == 'herdr') await open();
+  }
+
+  double get cardRadius => ((widget.tokens.data['radii'] as Map)['card'] as num).toDouble();
+
+  Widget emptyMobileNavigation() {
+    final entries = [(Icons.dashboard_outlined, '看板'), (Icons.terminal, '终端'),
+      (Icons.language, '网络'), (Icons.settings_outlined, '设置')];
+    return Material(color: widget.tokens.color('card'), child: SafeArea(top: false, child: Container(
+      key: const ValueKey('home-tabs'), height: 56,
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: widget.tokens.color('border')))),
+      child: Row(children: [for (var i = 0; i < entries.length; i++) Expanded(child: InkWell(
+        key: ValueKey('home-tab-$i'), onTap: () { setState(() => destination = i); if (i != 1) tabs.select(null); },
+        child: Semantics(label: entries[i].$2, button: true, selected: i == 0, child: Stack(alignment: Alignment.topCenter, children: [
+          Positioned(top: 4, child: Container(width: 40, height: 28,
+            decoration: BoxDecoration(color: i == 0 ? widget.tokens.color('brandSoft') : Colors.transparent,
+              borderRadius: BorderRadius.circular(10)),
+            child: Icon(entries[i].$1, size: 24, color: widget.tokens.color(i == 0 ? 'brand' : 'textSecondary')))),
+          Positioned(top: 36, child: Text(entries[i].$2, textScaler: TextScaler.noScaling,
+            style: TextStyle(fontSize: 12, height: 1, color: widget.tokens.color(i == 0 ? 'brand' : 'textSecondary')))),
+        ]))))]))));
+  }
+
+  Widget emptyMobileBoard() {
+    final margin = MediaQuery.sizeOf(context).width < 360 ? 16.0 : 24.0;
+    final large = largeMobileText;
+    final canAdd = !busy && !catalog.writing && catalog.profiles.length < maxHostProfiles;
+    return ListView(key: const ValueKey('host-catalog-list'), padding: EdgeInsets.fromLTRB(margin, 16, margin, 16), children: [
+      SizedBox(key: const ValueKey('home-brand'), height: large ? null : 44, child: Row(children: [
+        Container(width: 34, height: 34, alignment: Alignment.center,
+          decoration: BoxDecoration(color: widget.tokens.color('brand'), borderRadius: BorderRadius.circular(10)),
+          child: Text('HP', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.tokens.color('textInverse')))),
+        const SizedBox(width: 10), Expanded(child: Text('Herdr Pocket', maxLines: large ? null : 1,
+          overflow: large ? TextOverflow.visible : TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold))),
+      ])),
+      const SizedBox(height: 28),
+      Container(key: const ValueKey('home-empty-card'), height: large ? null : 268,
+        constraints: const BoxConstraints(minHeight: 268), padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: widget.tokens.color('card'), borderRadius: BorderRadius.circular(cardRadius),
+          border: Border.all(color: widget.tokens.color('border'))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Align(alignment: Alignment.centerLeft, child: Container(width: 44, height: 44,
+            decoration: BoxDecoration(color: widget.tokens.color('brandSoft'), borderRadius: BorderRadius.circular(10)),
+            child: Icon(Icons.terminal, color: widget.tokens.color('brand')))),
+          const SizedBox(height: 8), const Text('还没有主机', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, height: 1.4)),
+          const SizedBox(height: 8), Text('添加主机后，在这里查看会话和任务状态。', maxLines: large ? null : 1,
+            overflow: large ? TextOverflow.visible : TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, letterSpacing: 0, color: widget.tokens.color('textSecondary'), height: 1.5)),
+          if (large) const SizedBox(height: 24) else const Spacer(), SizedBox(height: large ? null : 48, child: FilledButton(key: const ValueKey('hosts-add'),
+            onPressed: canAdd ? chooseConnection : null, child: const Text('添加主机'))),
+          const SizedBox(height: 12), SizedBox(height: large ? null : 48, child: OutlinedButton(key: const ValueKey('hosts-direct-ssh'),
+            onPressed: openDirectSsh, style: OutlinedButton.styleFrom(foregroundColor: widget.tokens.color('textPrimary'),
+              side: BorderSide(color: widget.tokens.color('borderStrong')),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text('普通 SSH 终端'))),
+        ])),
+    ]);
+  }
   Widget board() {
+    if (mobileEmptyBoard) return emptyMobileBoard();
     final ordered = orderedHosts;
     // Derived only from existing reports; filtering never opens or retires a lease.
     final categories = {
@@ -316,8 +428,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       current: (host) => pendingIds.contains(host.id),
       history: (host) => historicalIds.contains(host.id),
     );
-    final ordinaryStatus = catalog.ready &&
-      (catalog.status.startsWith('已恢复 ') || catalog.status == '本机资料已保存 · 不代表主机授权或当前在线');
+    final ordinaryStatus = ordinaryCatalogStatus;
     return ListView(
       key: const ValueKey('host-catalog-list'),
       padding: const EdgeInsets.all(16),
@@ -374,7 +485,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           ],
         ),
         Align(alignment: Alignment.centerRight, child: TextButton.icon(
-          key: const ValueKey('hosts-direct-ssh'), onPressed: () { tabs.select(null); Navigator.push<void>(context, MaterialPageRoute(builder: (_) => DirectSshPage(tokens: widget.tokens))); },
+          key: const ValueKey('hosts-direct-ssh'), onPressed: openDirectSsh,
           icon: const Icon(Icons.terminal), label: const Text('普通 SSH'))),
         const SizedBox(height: 4),
         if (!ordinaryStatus) Text(
@@ -812,7 +923,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       }
     },
     child: Scaffold(
-      bottomNavigationBar: MediaQuery.sizeOf(context).width < 960 ? NavigationBar(
+      bottomNavigationBar: MediaQuery.sizeOf(context).width < 960 ?
+        (mobileEmptyBoard && destination == 0 && !largeMobileText ? emptyMobileNavigation() : NavigationBar(
         backgroundColor: widget.tokens.color('card'),
         indicatorColor: widget.tokens.color('brandSoft'),
         selectedIndex: destination,
@@ -834,7 +946,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             label: '设置',
           ),
         ],
-      ) : null,
+      )) : null,
       body: SafeArea(
         child: Row(children: [
           if (MediaQuery.sizeOf(context).width >= 960) desktopSidebar(),

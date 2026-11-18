@@ -150,32 +150,102 @@
     "tauriOrdinaryAAAndRotationABBBVerified": true,
     "pngEXIFReviewed": "PNG 原字节逐字节复制自解压成员，shasum 与 zip 成员一致；sips 核对 Flutter 三图为 828x1792 RGB、Tauri 三图为 1320x2868 RGB，与 OCR imageSize 一致",
     "jsonPrivacyReviewed": "result.json 与 OCR JSON 无凭据值或原始日志；仅出现控件角色标签（ordinary_username/ordinary_password/key_change_password 指向 textField/secureTextField）与 fixture 目标 fixture@127.0.0.1",
-    "pngPrivacyReviewed": "像素截图经 sips 抽取元数据核验，归档仅含界面截图，无凭据或日志文件；两份 review 截图的 purpose 字段为 design-review-no-ocr（Flutter）与 S10 design review after refusal and before cancellation; no terminal OCR（Tauri）"
+    "pngPrivacyReviewed": "像素截图经 sips 抽取元数据核验，归档仅含界面截图，无凭据或日志文件；两份 review 截图的 purpose 字段为 design-review-no-ocr（Flutter）与 S10 design review after refusal and before cancellation; no terminal OCR（Tauri）",
+    "pngOrientationDescriptionReviewed": true,
+    "pngOrientationDescription": "sips -g orientation -g description: all six PNGs orientation <nil>; Tauri three description=Screenshot, Flutter three description absent; all space=RGB"
   },
   "sequenceEvidence": {
-    "flutterOrdinaryHostKeys": ["A", "A"],
-    "flutterOrdinaryAuthAttempts": [0, 1],
-    "flutterRotationHostKeys": ["A", "B", "B", "B"],
-    "flutterRotationAuthAttempts": [0, 0, 0, 1],
-    "tauriOrdinaryHostKeys": ["A", "A"],
-    "tauriOrdinaryAuthAttempts": [0, 1],
-    "tauriRotationHostKeys": ["A", "B", "B", "B"],
-    "tauriRotationAuthAttempts": [0, 0, 0, 1]
+    "flutterOrdinaryHostKeys": [
+      "A",
+      "A"
+    ],
+    "flutterOrdinaryAuthAttempts": [
+      0,
+      1
+    ],
+    "flutterRotationHostKeys": [
+      "A",
+      "B",
+      "B",
+      "B"
+    ],
+    "flutterRotationAuthAttempts": [
+      0,
+      0,
+      0,
+      1
+    ],
+    "tauriOrdinaryHostKeys": [
+      "A",
+      "A"
+    ],
+    "tauriOrdinaryAuthAttempts": [
+      0,
+      1
+    ],
+    "tauriRotationHostKeys": [
+      "A",
+      "B",
+      "B",
+      "B"
+    ],
+    "tauriRotationAuthAttempts": [
+      0,
+      0,
+      0,
+      1
+    ]
   },
   "headerBounds": {
     "note": "Tauri 两份 terminalScreenshot 携带相同 headerBounds；Flutter result.json 无 headerBounds 字段",
     "tauriOrdinary": {
       "sameOwner": true,
-      "addFrame": [334, 80, 91, 44],
-      "statusBarFrames": [[0, 0, 440, 54]],
-      "brandFrame": [62, 80, 107, 24]
+      "addFrame": [
+        334,
+        80,
+        91,
+        44
+      ],
+      "statusBarFrames": [
+        [
+          0,
+          0,
+          440,
+          54
+        ]
+      ],
+      "brandFrame": [
+        62,
+        80,
+        107,
+        24
+      ]
     },
     "tauriKeyChange": {
       "sameOwner": true,
-      "addFrame": [334, 80, 91, 44],
-      "statusBarFrames": [[0, 0, 440, 54]],
-      "brandFrame": [62, 80, 107, 24]
+      "addFrame": [
+        334,
+        80,
+        91,
+        44
+      ],
+      "statusBarFrames": [
+        [
+          0,
+          0,
+          440,
+          54
+        ]
+      ],
+      "brandFrame": [
+        62,
+        80,
+        107,
+        24
+      ]
     }
   },
-  "excludedZipMembers": ["flutter/preconnect.png"]
+  "excludedZipMembers": [
+    "flutter/preconnect.png"
+  ]
 }

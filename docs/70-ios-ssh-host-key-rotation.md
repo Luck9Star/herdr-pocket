@@ -1,10 +1,26 @@
 # iOS 普通 SSH 与主机换钥验收
 
-状态：2026-11-18，**R15 同源批次 Flutter 与 Tauri 的普通 SSH 和主机换钥流程均在 iOS Simulator 通过**。本页保留 R6 及更早结果作为历史记录；R6 的 Tauri 失败是当时的事实，不代表 R15。
+状态：2026-11-18，**R17 同源批次两壳普通 SSH 和换钥流程均通过；Tauri 两张活动终端图首次提供顶栏与系统状态栏明确分离的几何证明**。页面已滚动时通用二级标题仍可能被固定栏部分遮挡，需单独修复验证。R15、R16、R6 及更早结果均保留为历史。
 
 范围为 GitHub 托管 macOS 上的受控 iOS Simulator、临时 loopback SSH 和密码认证。模拟器安装、应用界面、服务端协议、完整测试通过及最终画面复核分别记录；本页不证明 iPhone 真机、手工／中文 IME、外部网络、生产主机或五平台支持。
 
-## R15 同源结果：两壳均通过
+## R17 同源结果：两壳通过，活动顶栏已分离
+
+源码 [`023124f907554807b6a781f44569f05f7ea1ac51`](https://github.com/Luck9Star/herdr-pocket/commit/023124f907554807b6a781f44569f05f7ea1ac51) 的 [Actions 运行 44256953094](https://github.com/Luck9Star/herdr-pocket/actions/runs/44256953094) 中，[Flutter 作业 134640823640](https://github.com/Luck9Star/herdr-pocket/actions/runs/44256953094/job/134640823640) 与 [Tauri 作业 134640824084](https://github.com/Luck9Star/herdr-pocket/actions/runs/44256953094/job/134640824084) 均成功。两份 `result.json` 同为 `status=passed`，分别运行于 iOS 26.2 的 iPhone 11 和 iPhone 17 Pro Max Simulator。
+
+普通连接的 AA 与换钥 ABBB 均由服务端记录：探测与拒绝阶段无认证、PTY、shell 或输入输出；用户确认后连接的末条会话认证成功、输入及回显，最后主动断开。换钥拒绝后取消保留 A，重新探测并明确确认 B 后才连接。两壳各两张终端图的 OCR 均通过标记、八词和连续顺序检查，原图与判据 SHA256 相符；审查图不作终端 OCR。
+
+Tauri 的普通与换钥终端原图均记录同一窗口／WebView 的品牌、添加按钮与系统栏：系统栏下缘为 `y=54` 点，品牌和添加按钮上缘均为 `y=80` 点；两个控件完整位于安全区内。三张 Tauri 原图：[普通终端](evidence/ios-ssh-20261118/r17-tauri-ordinary-terminal.png) · [换钥审查](evidence/ios-ssh-20261118/r17-tauri-key-change-review.png) · [确认 B 后终端](evidence/ios-ssh-20261118/r17-tauri-key-change-terminal.png)。该证明覆盖这两张活动终端图的顶栏与系统状态栏分离；页面已有滚动时，通用 H2 标题仍可能被固定栏部分遮挡。该剩余问题需另行修复和验证，R17 不证明其已解决。
+
+两壳结果、原图与 OCR 文件的来源、映射及哈希见 [R17 官方证据归档索引](evidence/ios-ssh-20261118/r17-official-index.json)。
+
+本批限于模拟器、受控 loopback 和密码认证，不代表 iPhone 真机、手工／中文输入法、外网生产环境或五平台验收。Flutter 记录 `physicalImeVerified=false`；两壳受检清理通过。
+
+## R16 历史结果：换钥重连未完成
+
+[运行 44252632619](https://github.com/Luck9Star/herdr-pocket/actions/runs/44252632619) 中 Tauri 最后完成 `key_change_password_b`，随后在 `key_change_connect` 等待目标文本时报告 `native_expected_text_missing`；普通案例通过，换钥案例失败。已有审查截图、取消保留 A 与重新探测 B 的证据，但该结果没有最终第四连接的公开服务端快照，不能据此确定重连失败原因。R17 是独立后续同源批次。
+
+## R15 历史同源结果：两壳均通过
 
 同一源码 [`4c0ec6554538b00001224694734d2dd73892b967`](https://github.com/Luck9Star/herdr-pocket/commit/4c0ec6554538b00001224694734d2dd73892b967) 的 [Actions 运行 44248995630](https://github.com/Luck9Star/herdr-pocket/actions/runs/44248995630) 完成。以下是受控模拟器上的该次结果；两作业各自构建，不是同一个二进制。
 
@@ -28,7 +44,7 @@
 
 两份 `result.json` 的 SHA256 分别为 Flutter `e21e0bf668fe5f38ce6fe634d5eec2e05e1cb85b7f7d86aac9702adc1bb2783a`、Tauri `181b70b11c85e85f5afe262f38ac2982766b5224c6eefc8b712821bba509bac6`。两壳报告的模拟器、fixture 和私密文件清理均成功；Flutter 还报告工具退出、临时应用删除及未上传原始日志。R15 两壳原文件的来源、文件名映射与 SHA256 见[官方证据归档索引](evidence/ios-ssh-20261118/r15-official-index.json)。Actions 工件有到期时间（当前元数据为 2027-02-16），作业链接不保证工件永久可下载。
 
-原图目检确认两壳核心场景可见：Tauri 的 S10 审查页标题、指纹和两个操作按钮完整；普通连接及换钥后的终端目标、键盘操作与回显完整。另发现独立的 Tauri iOS 显示缺陷：这两个活动终端画面的通用顶栏中，系统时钟遮挡品牌，Wi-Fi／电池区域遮挡「添加主机」按钮上缘。该缺陷不改变本批 SSH 协议和 OCR 结果，界面仍需修复与另批验证。
+原图目检确认两壳核心场景可见：Tauri 的 S10 审查页标题、指纹和两个操作按钮完整；普通连接及换钥后的终端目标、键盘操作与回显完整。另发现独立的 Tauri iOS 显示缺陷：这两个活动终端画面的通用顶栏中，系统时钟遮挡品牌，Wi-Fi／电池区域遮挡「添加主机」按钮上缘。该缺陷不改变本批 SSH 协议和 OCR 结果；后续 R17 活动终端顶栏复验见本页开头。
 
 本批仅证明指定 iOS 模拟器、loopback 夹具和密码认证下的自动化场景；不证明真实 iPhone、物理键盘或手工／中文输入法、外网及生产主机，也不证明五平台生产就绪。Flutter 明确记录 `physicalImeVerified=false`。
 

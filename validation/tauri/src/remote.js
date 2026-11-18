@@ -590,28 +590,34 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       if(revision!==hostRefreshRevision)return;
       const nextHosts=await invoke('host_list');
       if(revision!==hostRefreshRevision)return;
+      const applyCatalog = catalog => {
+        networkRevisions=new Map(catalog.profiles.map(p=>[p.id,p.revision]));
+        networkProviders=new Map(catalog.profiles.map(p=>[p.id,p.provider]));
+        terminalFontSize=catalog.preferences.terminalFontSize;workspace?.setFont(terminalFontSize);
+        $('terminal-font-size').value=terminalFontSize;if(terminal)terminal.options.fontSize=terminalFontSize;
+      };
+      const publishHosts = catalog => {
+        if(catalog)applyCatalog(catalog);
+        else {networkRevisions=new Map();networkProviders.clear();}
+        hostRecords=nextHosts;$('host-empty').hidden=hostRecords.length>0;
+        hostSummaries.reconcile(hostRecords.map(summaryHost));
+        renderHosts();render();if(refreshNetwork)networks?.refresh();
+        hostMessage(hostRecords.length?'选择主机、管理资料，或新增主机。':'还没有已存主机。');
+        $('host-home-status').hidden=true;workbench.clearUnavailable();
+      };
       if(!nextHosts.length){
         // 已知空目录不依赖网络配置即可展示主页；独立普通 SSH 不应等待辅助偏好读取。
-        hostRecords=[];networkRevisions=new Map();networkProviders.clear();hostSummaries.reconcile([]);
-        $('host-empty').hidden=false;renderHosts();render();if(refreshNetwork)networks?.refresh();
-        hostMessage('还没有已存主机。');$('host-home-status').hidden=true;workbench.clearUnavailable();
+        publishHosts(null);
         void invoke('network_list').then(catalog=>{
-          if(revision!==hostRefreshRevision)return;
-          terminalFontSize=catalog.preferences.terminalFontSize;workspace?.setFont(terminalFontSize);
-          $('terminal-font-size').value=terminalFontSize;if(terminal)terminal.options.fontSize=terminalFontSize;
-        },()=>{if(revision===hostRefreshRevision)hostMessage('还没有已存主机；网络配置暂不可读。');});
+          if(revision===hostRefreshRevision)applyCatalog(catalog);
+        }).catch(()=>{
+          if(revision===hostRefreshRevision)hostMessage('还没有已存主机；网络配置暂不可读。');
+        });
         return;
       }
       const catalog=await invoke('network_list');
       if(revision!==hostRefreshRevision)return;
-      const nextNetworkRevisions=new Map(catalog.profiles.map(p=>[p.id,p.revision]));
-      const nextFont=catalog.preferences.terminalFontSize;
-      hostRecords=nextHosts;$('host-empty').hidden=hostRecords.length>0;networkRevisions=nextNetworkRevisions;terminalFontSize=nextFont;
-      networkProviders=new Map(catalog.profiles.map(profile=>[profile.id,profile.provider]));
-      hostSummaries.reconcile(hostRecords.map(summaryHost));workspace?.setFont(terminalFontSize);
-      $('terminal-font-size').value=terminalFontSize;if(terminal)terminal.options.fontSize=terminalFontSize;
-      renderHosts();render();if(refreshNetwork)networks?.refresh();hostMessage(hostRecords.length?'选择主机、管理资料，或新增主机。':'还没有已存主机。');$('host-home-status').hidden=true;
-      workbench.clearUnavailable();
+      publishHosts(catalog);
     } catch(error) {
       if(revision!==hostRefreshRevision)return;
       hostSummaries.suspendAll();hostRecords=[];$('host-empty').hidden=true;networkRevisions=new Map();networkProviders.clear();renderHosts();

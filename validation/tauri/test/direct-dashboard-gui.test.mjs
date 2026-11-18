@@ -73,6 +73,7 @@ async function importedRemote() {
     .replace("import {createUnicodeTerminal} from './terminal-unicode.js';", 'const createUnicodeTerminal=(Terminal,options)=>new Terminal(options);')
     .replace("import { Terminal } from '@xterm/xterm';", 'const {Terminal}=globalThis.__directGuiDeps;')
     .replace("import { invoke, Channel } from '@tauri-apps/api/core';", 'const {invoke,Channel}=globalThis.__directGuiDeps;')
+    .replace('  let networkProviders=new Map();', "  let networkProviders=new Map();globalThis.__remoteCatalogState=()=>({revisions:[...networkRevisions],providers:[...networkProviders],font:terminalFontSize});")
     .replace(/from '(\.\/[^']+)'/g, (_match, path) => `from '${new URL(path, url).href}'`);
   const source = Buffer.from(code + `\n// fixture ${++moduleNonce}`).toString('base64');
   return import(`data:text/javascript;base64,${source}`);
@@ -1979,4 +1980,43 @@ test('a host_list error never fakes a known-empty home', async () => {
     assert.equal(n['host-empty'].hidden, true);
     assert.match(n['host-home-status'].textContent, /不可用/);
   } finally { h.restore(); }
+});
+
+test('a known-empty catalog still applies network profiles and the font after the deferred read', async () => {
+  const h = await setup({ read: (name, value) => name === 'network_list'
+    ? { revision: 'r7', profiles: [{ id: 'net1', revision: 7, provider: 'easytier' }], bindings: [], preferences: { terminalFontSize: 18 } }
+    : value });
+  const n = h.nodes;
+  try {
+    assert.equal(n['brand-caption'].textContent, '0 台已存主机');
+    assert.equal(n['host-empty'].hidden, false);
+    assert.equal(n['terminal-font-size'].value, 18);
+    assert.deepEqual(globalThis.__remoteCatalogState(), { revisions: [['net1', 7]], providers: [['net1', 'easytier']], font: 18 });
+    // 一次目录读取 + 既有网络页刷新，不产生第三次网络刷新。
+    assert.equal(h.calls.filter(c => c.name === 'network_list').length, 2);
+  } finally { h.restore(); }
+});
+
+test('a stale network catalog cannot overwrite a newer empty-home refresh', async () => {
+  let releaseStale;
+  const staleRead = new Promise(resolve => { releaseStale = resolve; });
+  let phase = 'stale';
+  const staleCatalog = { revision: 'r0', profiles: [{ id: 'old', revision: 1, provider: 'tailscale' }], bindings: [], preferences: { terminalFontSize: 22 } };
+  const h = await setup({ read: (name, value) => {
+    if (name !== 'network_list') return value;
+    if (phase === 'stale') return staleRead;
+    return { revision: 'r2', profiles: [{ id: 'net2', revision: 9, provider: 'zerotier' }], bindings: [], preferences: { terminalFontSize: 16 } };
+  } });
+  const n = h.nodes;
+  try {
+    assert.equal(n['brand-caption'].textContent, '0 台已存主机');
+    phase = 'current';
+    n['host-return-home'].click();await flush();await flush();
+    const current = { revisions: [['net2', 9]], providers: [['net2', 'zerotier']], font: 16 };
+    assert.equal(n['terminal-font-size'].value, 16);
+    assert.deepEqual(globalThis.__remoteCatalogState(), current);
+    releaseStale(staleCatalog);await flush();
+    assert.equal(n['terminal-font-size'].value, 16);
+    assert.deepEqual(globalThis.__remoteCatalogState(), current);
+  } finally { releaseStale(staleCatalog);await flush();h.restore(); }
 });

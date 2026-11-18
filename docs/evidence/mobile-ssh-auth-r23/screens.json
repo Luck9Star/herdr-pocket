@@ -1,0 +1,72 @@
+{
+  "images": [
+    {
+      "shell": "flutter",
+      "state": "key-changed",
+      "width": 320,
+      "before": {
+        "name": "screens/flutter-key-changed-320-before.png",
+        "sourceName": "flutter-before-320-key-changed.png",
+        "sourceSha256": "710a7eb397d486746078f8ea3e858a8cd9afeb998a6855c14624910025d69a2a",
+        "archiveSha256": "710a7eb397d486746078f8ea3e858a8cd9afeb998a6855c14624910025d69a2a"
+      },
+      "after": {
+        "name": "screens/flutter-key-changed-320-after.png",
+        "sourceName": "flutter-after-320-key-changed.png",
+        "sourceSha256": "9c4fd7ab2f6d4932cefcb9a29a509160154027f819ba44593f5def7ad93eb2a1",
+        "archiveSha256": "9c4fd7ab2f6d4932cefcb9a29a509160154027f819ba44593f5def7ad93eb2a1"
+      }
+    },
+    {
+      "shell": "flutter",
+      "state": "disconnected",
+      "width": 390,
+      "before": {
+        "name": "screens/flutter-disconnected-390-before.png",
+        "sourceName": "flutter-before-390-disconnected.png",
+        "sourceSha256": "80e91c35adcb382626c9edf0f04c2530b31d60e64f31738efa5e3302b738ddd1",
+        "archiveSha256": "80e91c35adcb382626c9edf0f04c2530b31d60e64f31738efa5e3302b738ddd1"
+      },
+      "after": {
+        "name": "screens/flutter-disconnected-390-after.png",
+        "sourceName": "flutter-after-390-disconnected.png",
+        "sourceSha256": "060de014846ca12e3a24f5c915f6aa3bb4dcfbc7de34ca668cb1eb49643cfb2d",
+        "archiveSha256": "060de014846ca12e3a24f5c915f6aa3bb4dcfbc7de34ca668cb1eb49643cfb2d"
+      }
+    },
+    {
+      "shell": "tauri",
+      "state": "trust",
+      "width": 320,
+      "before": {
+        "name": "screens/tauri-trust-320-before.png",
+        "sourceName": "before-trust-scrolled-320.png",
+        "sourceSha256": "a0cd58f6e961729d3dc45af55c05aa4572d28a6b02bd0669180ef3de8fbd5d44",
+        "archiveSha256": "ff0fac6db7d4f1da6fe158bdeea83987f655a1cb3a986e140df3465d8c65f5a2"
+      },
+      "after": {
+        "name": "screens/tauri-trust-320-after.png",
+        "sourceName": "after-trust-320.png",
+        "sourceSha256": "6903479a4beef2acfd20ee506ac5d4c17aa046d055fbcf5268db829b750c416b",
+        "archiveSha256": "496ff40c67f0a89fbbf1553259c315939cd9ee083111f6372a50a353947fbd29"
+      }
+    },
+    {
+      "shell": "tauri",
+      "state": "disconnected",
+      "width": 390,
+      "before": {
+        "name": "screens/tauri-disconnected-390-before.png",
+        "sourceName": "before-disconnected-390.png",
+        "sourceSha256": "2ce4081b76122ec74b2a06f170b6ea53c3a70831bf2503f1d706235228186cdd",
+        "archiveSha256": "42dc86ff60ea096d5188a5b6d60dd733f945732e66a35b13e6f986aedc826e3c"
+      },
+      "after": {
+        "name": "screens/tauri-disconnected-390-after.png",
+        "sourceName": "after-disconnected-390.png",
+        "sourceSha256": "85ee1ca3472f7c20dd098eb82386f793232a623ccd71cd65b53622de3a5c74a1",
+        "archiveSha256": "793ec85ddd79b4e6d394d0e54d3e32ab7f768f5087ffc9f2f74a42618cd19013"
+      }
+    }
+  ]
+}

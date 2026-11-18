@@ -234,6 +234,8 @@ Flutter Android 普通 SSH 的 d925 [首轮 43715213819](evidence/design-parity-
 
 ## 尚待独立补证
 
+[R22/R23 手机普通 SSH 验收快照](72-mobile-ssh-auth-snapshot.md)记录 R22 Android 模拟器通过和 iOS 托管容量阻断，以及 R23 两壳本地目标、核验、认证、换钥与断开返回的对照。R23 新版原生设备、终端键盘和设置状态仍待验。
+
 ### 普通 SSH 验收矩阵（2026-11-18 汇总）
 
 下表汇总本页及 [66](66-iteration-handoff-2026-11-16.md)、[68](68-android-ssh-host-key-rotation.md)、[69](69-mobile-ssh-active-terminal.md)、[70](70-ios-ssh-host-key-rotation.md) 各专项截至基线 `f378e9a` 的普通 SSH 验收结论，链接均为仓库内相对路径。矩阵只覆盖普通 SSH（密码或既有 SSH 私钥认证）；herdr 配对设备密钥是独立通道，不计入本表。检查列说明：普通认证/首次指纹＝首次探测、明确确认后才认证；换钥 ABBB＝B 被拒、取消保留旧 A、重新探测、明确确认 B 后才认证（仅当原始证据可数出四次传输时标通过）；PTY 回显＝终端提交用户输入且界面呈现远端输出（像素/OCR、驱动级 UI 断言或目检分别注明，服务端写入不单独作为 UI 回显证据）；断开与清理＝主动断开与连接关闭、凭据/临时资源清理，分别注明。全部通过项均为受控 loopback、模拟器或桌面自动化/CDP 注入输入（`physicalImeVerified=false`），不等同真机、物理 IME/中文组字或生产主机。

@@ -12,6 +12,8 @@
 
 **2026-11-16 迭代收口**　[本轮交接、三个会话交付、两壳普通 SSH 与 macOS 原生窗口验收、Linux 双网与 Android 双网结果](docs/66-iteration-handoff-2026-11-16.md)（[PR #1](https://github.com/Luck9Star/herdr-pocket/pull/1)）。上轮状态：**普通 SSH 通过**（Flutter / Tauri Android 与 macOS 真 XCUITest）。**2026-11-17 Android 双网**：[两壳 × 两种停网顺序 4/4 实测通过（API 35 模拟器、双受控 SSH 服务）](docs/67-android-dual-network-startup.md)。历史验收与下载入口见下文。
 
+**验证分支归档 · 2026-11-18**　[九个分支的源码标签、整合说明与恢复命令](docs/71-validation-branch-archive.md)。
+
 **同源 QA 调试包 · 2026-11-15**　源码 `d925bd0`：[Flutter Android APK（多架构）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162282781) · [Tauri Android APK（仅 arm64-v8a）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162296306)。[本批运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398)完成：27 项成功、7 项按条件跳过；[macOS/Linux 下载、包名、架构与 SHA256](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。这是 CI 调试快照，与公开 Release 和设备验收分开。
 
 **双网隔离验收**　[Linux 双向受保护会话与清理记录](docs/65-dual-overlay-validation.md)：`93ca6cd` 在封闭测试网络、EasyTier 客户端指定测试配置下，分别验证停一网后另一网继续输入；默认配置对照未通过；该 Linux 轮次未测 Android，当前 Android 模拟器已有[独立验收](docs/67-android-dual-network-startup.md)，物理真机、真实物理网络及五平台仍未验证。

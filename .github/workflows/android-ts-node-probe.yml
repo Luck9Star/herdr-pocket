@@ -10,7 +10,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      NATIVE_SOURCE: 93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
+      NATIVE_SOURCE: 547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8
+      NATIVE_NORMAL_ARTIFACT: '14261768985'
+      NATIVE_NORMAL_ZIP_SHA256: 23bdd1d79ded537d64fec25e9926f56a75c7ac3bf0f6f1b71e517bf67e8e0f3d
+      NATIVE_QA_ARTIFACT: '14261004231'
+      NATIVE_QA_ZIP_SHA256: ac4fbf7c5c5de8d6aa1c0f695fdf0e5f43a1e7a9afa98a1b3a57e47695f1c769
       HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
@@ -19,12 +23,12 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc
+          ref: ${{ env.NATIVE_SOURCE }}
           path: native-source
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
+          ref: ${{ env.HOST_SOURCE }}
           path: host-source
           persist-credentials: false
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
@@ -38,24 +42,25 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/probe-python"
           "$RUNNER_TEMP/probe-python/bin/pip" install -r validation/pairing/requirements.txt
           "$RUNNER_TEMP/probe-python/bin/python" -m unittest discover -s validation/remote-harness -p test_android_ts_node_probe.py -v
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358'
       - name: Download exact fixed normal QA and host binaries
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14169009804/zip" > "$RUNNER_TEMP/normal.zip"
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14169129213/zip" > "$RUNNER_TEMP/qa.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$NATIVE_NORMAL_ARTIFACT/zip" > "$RUNNER_TEMP/normal.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$NATIVE_QA_ARTIFACT/zip" > "$RUNNER_TEMP/qa.zip"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14171011473/zip" > "$RUNNER_TEMP/host.zip"
-          echo 'dce6f35956ce1b7d9325a60c27bcf528e8e9e413677c4a550f54f521a50aeb6b  '"$RUNNER_TEMP/normal.zip" | sha256sum -c -
-          echo '5e2e657056dd397882ac2d6b58ca24ef383929672fde9fb96f1ef2d7b5f7d94a  '"$RUNNER_TEMP/qa.zip" | sha256sum -c -
+          echo "$NATIVE_NORMAL_ZIP_SHA256  $RUNNER_TEMP/normal.zip" | sha256sum -c -
+          echo "$NATIVE_QA_ZIP_SHA256  $RUNNER_TEMP/qa.zip" | sha256sum -c -
           echo '4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698  '"$RUNNER_TEMP/host.zip" | sha256sum -c -
           mkdir "$RUNNER_TEMP/normal" "$RUNNER_TEMP/qa" "$RUNNER_TEMP/host"
           unzip -q "$RUNNER_TEMP/normal.zip" -d "$RUNNER_TEMP/normal"
           unzip -q "$RUNNER_TEMP/qa.zip" -d "$RUNNER_TEMP/qa"
           unzip -q "$RUNNER_TEMP/host.zip" -d "$RUNNER_TEMP/host"
-          python3 native-source/validation/native/tool/android_bundle.py verify "$RUNNER_TEMP/normal" --abi x86_64 --commit "$NATIVE_SOURCE" --readelf /usr/bin/readelf
-          python3 native-source/validation/native/tool/android_dual_qa_bundle.py verify --normal "$RUNNER_TEMP/normal" --qa "$RUNNER_TEMP/qa" --commit "$NATIVE_SOURCE" --readelf /usr/bin/readelf
+          readelf="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          python3 native-source/validation/native/tool/android_bundle.py verify "$RUNNER_TEMP/normal" --abi x86_64 --commit "$NATIVE_SOURCE" --readelf "$readelf"
+          python3 native-source/validation/native/tool/android_dual_qa_bundle.py verify --normal "$RUNNER_TEMP/normal" --qa "$RUNNER_TEMP/qa" --commit "$NATIVE_SOURCE" --readelf "$readelf"
           python3 host-source/validation/remote-harness/dual_overlay_shared_bundle.py verify --bundle "$RUNNER_TEMP/host" --source-sha "$HOST_SOURCE" --restore-executable
       - name: Build two small APKs with the unchanged product native libraries
         run: |

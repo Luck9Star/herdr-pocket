@@ -62,5 +62,33 @@ class ProbeGuardsTests(unittest.TestCase):
         self.assertIn('"nodeStart"', source)
         self.assertIn('"nodeStop"', source)
 
+    def test_variant_requires_clean_instrumentation_and_complete_lifecycle(self):
+        from types import SimpleNamespace
+        row = {
+            'probeReport': 'valid',
+            'instrumentation': probe.instrument_summary(SimpleNamespace(
+                returncode=0, stdout=b'INSTRUMENTATION_CODE: -1\n')),
+            'probe': {
+                'passed': True, 'startOk': True, 'statusOk': True, 'needsLoginReached': True,
+                'states': ['needs-login'], 'stopOk': True, 'stopState': 'stopped',
+                'nativeScopeClosed': True, 'identityDeleted': True,
+            },
+            'session': {'cleanup': {'namespaceRemoved': True}},
+            'packageRemoved': True, 'noSshAuthentication': True, 'noNewAuthorizationOrRegistration': True,
+        }
+        self.assertTrue(probe.variant_passed(row))
+        for change in (
+            {'instrumentation': {'commandSucceeded': False, 'timedOut': True}},
+            {'instrumentation': {**row['instrumentation'], 'processCrash': True}},
+            {'probe': {**row['probe'], 'startOk': False}},
+            {'probe': {**row['probe'], 'needsLoginReached': False}},
+            {'probe': {**row['probe'], 'states': ['starting']}},
+            {'probe': {**row['probe'], 'stopState': 'error'}},
+            {'session': {'cleanup': {'namespaceRemoved': False}}},
+            {'packageRemoved': False},
+        ):
+            with self.subTest(change=change):
+                self.assertFalse(probe.variant_passed({**row, **change}))
+
 
 if __name__ == '__main__': unittest.main()

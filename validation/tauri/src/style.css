@@ -497,6 +497,12 @@ h1 { font-size:18px; margin:0}
   #home-ssh .ssh-scroll { height:min(45dvh, calc(var(--hp-visual-height,100dvh) - 180px)); }
   .android-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-key-change[hidden]) #home-ssh .ssh-scroll { height:min(45dvh, calc(var(--hp-visual-height,100dvh) - var(--hp-ssh-sticky-top,0px) - 146px)); }
 }
+@media (max-width:599px) and (orientation:portrait) {
+  .ios-edge-to-edge body:not(.keyboard-visible) #home-ssh .ssh-scroll {
+    /* Keep a usable canvas on short screens and let the page scroll to its actions. */
+    height:min(45dvh, calc(var(--hp-visual-height,100dvh) - 180px), max(192px, var(--hp-ssh-terminal-max-height,100dvh)));
+  }
+}
 /* Tabs sit on the dark terminal surface at every viewport width. */
 #tab-workspace #view-tabs button[aria-pressed=false] { color:var(--hp-termText); }
 #tab-workspace #view-tabs button[aria-pressed=false]:hover:not(:disabled) {

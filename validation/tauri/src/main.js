@@ -4,7 +4,7 @@ import xtermLicense from '../node_modules/@xterm/xterm/LICENSE?raw';
 import graphemesLicense from '../node_modules/@xterm/addon-unicode-graphemes/LICENSE?raw';
 import './style.css';
 import { readTheme } from './theme.js';
-import { observeAndroidSshHeader, observeMobileViewport } from './mobile-viewport.js';
+import { observeAndroidSshHeader, observeIosSshActions, observeMobileViewport } from './mobile-viewport.js';
 import { initRemote } from './remote.js';
 import { initKeyRouter } from './key-router.js';
 import { initializePasteClipboard } from './mobile-clipboard.js';
@@ -38,6 +38,7 @@ const platformReady = initializePasteClipboard(native);
 void platformReady?.then(() => {
   if (shellPlatform.current() === 'ios') {
     document.documentElement.classList.add('ios-edge-to-edge');
+    observeIosSshActions();
   }
   if (shellPlatform.current() !== 'android') return;
   document.documentElement.classList.add('android-edge-to-edge');

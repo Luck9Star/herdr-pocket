@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {observeAndroidSshHeader, observeMobileViewport} from '../src/mobile-viewport.js';
+import {observeAndroidSshHeader, observeIosSshActions, observeMobileViewport} from '../src/mobile-viewport.js';
 import {readFileSync} from 'node:fs';
 
 test('header and SSH target union native and CSS safe-area insets without adding them',()=>{
@@ -100,4 +100,56 @@ test('Android SSH header scroll tracking stops during review and outside the rou
     nodes['home-ssh'].hidden=true; mutation(); assert.equal(f.callbacks.has('w:scroll'),false);
     stop();
   } finally { Object.assign(globalThis,previous); }
+});
+
+test('iOS SSH viewport leaves space for fixed navigation and the entire action row', () => {
+  const f = fixture();
+  const property = '--hp-ssh-terminal-max-height';
+  let terminalHeight = 430, actionsEnd = 865, navHeight = 98, position = 'fixed';
+  let resize, frame;
+  const actions = {getBoundingClientRect: () => ({bottom:actionsEnd})};
+  const nav = {getBoundingClientRect: () => ({height:navHeight})};
+  const terminal = {getBoundingClientRect: () => ({height:terminalHeight}), style:f.root.style};
+  const doc = {
+    getElementById: id => ({'host-home':{}, 'ssh-terminal-output':terminal, 'ssh-disconnect':{parentElement:actions}})[id],
+    querySelector: selector => selector === '.route-tabs' ? nav : {},
+  };
+  Object.assign(f.view, {
+    innerHeight:956, scrollY:0,
+    getComputedStyle: () => ({position}),
+    requestAnimationFrame: update => { frame = update; return 1; },
+    cancelAnimationFrame: () => { frame = undefined; },
+  });
+  const oldResizeObserver = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = class {
+    constructor(callback) { resize = callback; }
+    observe() {}
+    disconnect() {}
+  };
+  try {
+    const stop = observeIosSshActions(f.view, doc);
+    frame();
+    assert.equal(f.props.get(property), '415px');
+    // Shrinking the terminal and scrolling the document don't change the available budget.
+    f.view.scrollY = 28;
+    terminalHeight -= 15;
+    actionsEnd -= 15 + f.view.scrollY;
+    resize(); frame();
+    assert.equal(f.props.get(property), '415px');
+    navHeight -= 10;
+    resize(); frame();
+    assert.equal(f.props.get(property), '425px');
+    position = 'static';
+    resize(); frame();
+    assert.equal(f.props.has(property), false);
+    position = 'fixed';
+    resize(); frame();
+    terminalHeight = 0;
+    resize(); frame();
+    assert.equal(f.props.has(property), false);
+    stop();
+    assert.equal(f.callbacks.size, 0);
+  } finally {
+    globalThis.ResizeObserver = oldResizeObserver;
+  }
 });

@@ -127,12 +127,8 @@ Future<void> runDirectSshUi(
     await tester.enterText(field, entry.value);
     await tester.pump();
   }
-  expect(
-    tester
-        .widget<FilledButton>(find.byKey(const ValueKey('direct-connect')))
-        .onPressed,
-    isNull,
-  );
+  expect(find.byKey(const ValueKey('direct-secret')), findsNothing);
+  expect(find.byKey(const ValueKey('direct-connect')), findsNothing);
   step('probe');
   await tap(tester, 'direct-probe');
   await until(
@@ -222,10 +218,10 @@ Future<void> runDirectSshUi(
   await until(tester, () => find.byType(TerminalView).evaluate().isEmpty);
   step('disconnect_secret');
   final clearedSecret = find.byKey(const ValueKey('direct-secret'));
-  await until(tester, () => clearedSecret.evaluate().length == 1);
-  await tester.ensureVisible(clearedSecret);
-  await tester.pump(const Duration(milliseconds: 200));
-  expect(tester.widget<TextField>(clearedSecret).controller!.text, isEmpty);
+  await until(tester, () => find.byKey(const ValueKey('direct-form')).evaluate().length == 1);
+  expect(clearedSecret, findsNothing);
+  final dynamic state = tester.state(find.byType(DirectSshPage));
+  expect(state.secret.text, isEmpty); expect(state.passphrase.text, isEmpty);
   step('disconnect_status');
   final disconnectedStatus = find.textContaining('已断开');
   await until(tester, () => disconnectedStatus.evaluate().length == 1);
@@ -360,18 +356,10 @@ Future<void> runDirectSshRotationUi(
   expect(find.byKey(const ValueKey('direct-form')), findsOneWidget);
   expect(state.fingerprint, config['fingerprint']);
   expect(state.hostKeyReviewRequired, isTrue);
-  expect(tester.widget<TextField>(secret).controller!.text, isEmpty);
-  expect(tester.widget<TextField>(secret).enabled, isFalse);
-  expect(
-    tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged,
-    isNull,
-  );
-  expect(
-    tester
-        .widget<FilledButton>(find.byKey(const ValueKey('direct-connect')))
-        .onPressed,
-    isNull,
-  );
+  expect(state.secret.text, isEmpty); expect(state.passphrase.text, isEmpty);
+  expect(secret, findsNothing);
+  expect(find.byKey(const ValueKey('direct-auth-key')), findsNothing);
+  expect(find.byKey(const ValueKey('direct-connect')), findsNothing);
   expect(find.byType(TerminalView), findsNothing);
   expect(find.byType(BackButton), findsOneWidget);
   expect(state.fingerprint, config['fingerprint']);

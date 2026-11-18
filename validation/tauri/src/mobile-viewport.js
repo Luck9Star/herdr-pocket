@@ -16,8 +16,11 @@ export function observeMobileViewport(view = globalThis.window, root = globalThi
     if (readTopInset) {
       const current = ++generation;
       Promise.resolve().then(readTopInset).then(insets => {
+        if (current !== generation) return;
         const pixels = insets?.overlapPx, dpr = view.devicePixelRatio;
-        if (current === generation && Number.isFinite(pixels) && pixels >= 0 && Number.isFinite(dpr) && dpr > 0) root.style.setProperty('--hp-system-top-inset', `${pixels / dpr}px`);
+        const property = insets?.connectionEntry ? '--hp-connection-native-top' : '--hp-system-top-inset';
+        if (Number.isFinite(pixels) && pixels >= 0 && Number.isFinite(dpr) && dpr > 0) root.style.setProperty(property, `${pixels / dpr}px`);
+        else if (insets?.connectionEntry) root.style.removeProperty(property);
       }).catch(() => {});
     }
   };
@@ -37,6 +40,7 @@ export function observeMobileViewport(view = globalThis.window, root = globalThi
     root.style.removeProperty('--hp-visual-inset');
     root.style.removeProperty('--hp-visual-height');
     root.style.removeProperty('--hp-system-top-inset');
+    root.style.removeProperty('--hp-connection-native-top');
     body.classList.remove('keyboard-visible');
   };
 }

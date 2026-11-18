@@ -80,6 +80,7 @@ fn build_ios_plugin() {
     fs::create_dir_all(&sources).expect("create iOS plugin build directory");
     for (source, name) in [
         (root.join("../ios/PocketPlugin.swift"), "PocketPlugin.swift"),
+        (root.join("../ios/PocketWebViewInsets.swift"), "PocketWebViewInsets.swift"),
         (
             root.join("../ios/PocketKeyBridge.swift"),
             "PocketKeyBridge.swift",

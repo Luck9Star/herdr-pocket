@@ -3,6 +3,7 @@ import '@xterm/xterm/css/xterm.css';
 import xtermLicense from '../node_modules/@xterm/xterm/LICENSE?raw';
 import graphemesLicense from '../node_modules/@xterm/addon-unicode-graphemes/LICENSE?raw';
 import './style.css';
+import './connection-entry.css';
 import { readTheme } from './theme.js';
 import { observeAndroidSshHeader, observeIosSshActions, observeMobileViewport } from './mobile-viewport.js';
 import { initRemote } from './remote.js';
@@ -46,7 +47,12 @@ void platformReady?.then(() => {
 });
 observeMobileViewport(undefined, undefined, undefined, native ? async () => {
   await platformReady;
-  return shellPlatform.current() === 'android' ? invoke('mobile_system_top_inset') : {overlapPx: 0};
+  const platform = shellPlatform.current();
+  if (platform === 'ios') {
+    const inset = await invoke('mobile_system_top_inset').catch(() => null);
+    return {overlapPx: inset?.overlapPx, connectionEntry: true};
+  }
+  return platform === 'android' ? invoke('mobile_system_top_inset') : {overlapPx: 0};
 } : undefined);
 initRemote({native,theme,onFixture:openFixture,onLeaveFixture:() => workbench?.pause()});
 // 桌面键盘层（切片 3）：事件期自查页面状态与既有按钮挂钩，不依赖装配顺序（键位表见 key-router.js）。

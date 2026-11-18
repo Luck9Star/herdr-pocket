@@ -470,12 +470,20 @@ class GeometryReasonTests(unittest.TestCase):
             self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': phase, 'geometryReason': 'field_outside'})
         self.assertEqual(self.result, before)
 
+    def test_key_change_password_preserves_both_attempts(self):
+        phase = 'key_change_password'
+        first = ['field_outside'] * 9
+        second = ['field_unhittable'] * 10 + ['scroll_surface_unhittable']
+        for reason in first + second:
+            self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': phase, 'geometryReason': reason})
+        self.assertEqual(self.result['geometryReasonTrace'][phase], first + second)
+
     def test_geometry_reason_rejects_secrets_invalid_types_phases_and_failure_events(self):
         for stage, phase, reason in [
             ('native_progress', 'ordinary_host', 'fixture-secret-must-not-escape'),
             ('native_progress', 'ordinary_host', None),
             ('native_progress', 'ordinary_host', ['field_invalid']),
-            ('native_progress', 'ordinary_password', 'field_invalid'),
+            ('native_progress', 'ordinary_fingerprint', 'field_invalid'),
             ('native_progress', 'ordinary_reprobe', 'field_invalid'),
             ('native_failure', 'ordinary_host', 'field_invalid'),
         ]:

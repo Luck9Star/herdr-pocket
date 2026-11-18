@@ -46,12 +46,13 @@ NATIVE_PHASES = frozenset(prefix + '_' + phase for prefix in ('ordinary', 'key_c
     'review_capture', 'cancel', 'cancel_check', 'reprobe', 'new_fingerprint'))
 GEOMETRY_PHASES = frozenset(
     prefix + '_' + phase for prefix in ('ordinary', 'key_change')
-    for phase in ('host', 'port', 'username', 'probe')
+    for phase in ('host', 'port', 'username', 'probe', 'password')
 ) | {'key_change_reprobe'}
 GEOMETRY_REASONS = frozenset((
     'window_invalid', 'screen_invalid', 'web_ancestor_invalid', 'viewport_empty',
-    'field_invalid', 'field_outside', 'field_occluded', 'field_unhittable'))
-MAX_GEOMETRY_REASONS_PER_CHECKPOINT = 16
+    'field_invalid', 'field_outside', 'field_occluded', 'field_unhittable',
+    'scroll_direction_unproven', 'scroll_surface_unhittable'))
+MAX_GEOMETRY_REASONS_PER_CHECKPOINT = 24
 NATIVE_FAILURES = frozenset((
     'native_tree_limit', 'native_expected_text_missing', 'native_control_missing',
     'native_control_not_visible', 'native_control_disabled', 'native_unexpected_existing_input',

@@ -5,7 +5,9 @@ import UIKit
 
 // BEGIN NATIVE FRAME POLICY -- real Foundation/CoreGraphics, no UI substitutes.
 enum NativeFramePolicy {
-    enum FormGeometryFailure: String, Error {
+    enum ScrollDirection { case swipeUp, swipeDown }
+
+    enum GeometryFailure: String, Error {
         case windowInvalid = "window_invalid"
         case screenInvalid = "screen_invalid"
         case webAncestorInvalid = "web_ancestor_invalid"
@@ -14,6 +16,8 @@ enum NativeFramePolicy {
         case fieldOutside = "field_outside"
         case fieldOccluded = "field_occluded"
         case fieldUnhittable = "field_unhittable"
+        case scrollDirectionUnproven = "scroll_direction_unproven"
+        case scrollSurfaceUnhittable = "scroll_surface_unhittable"
 
         var canRetryTap: Bool {
             self == .fieldOutside || self == .fieldOccluded || self == .fieldUnhittable
@@ -40,7 +44,7 @@ enum NativeFramePolicy {
                  Array(nodePaths[selected].prefix(nodePaths[index].count)) == nodePaths[index]))
         }
     }
-    static func viewport(window: CGRect?, screen: CGRect, webAncestors: [CGRect]) -> Result<CGRect, FormGeometryFailure> {
+    static func viewport(window: CGRect?, screen: CGRect, webAncestors: [CGRect]) -> Result<CGRect, GeometryFailure> {
         let ancestors = unique(webAncestors)
         guard let window = window, valid(window) else { return .failure(.windowInvalid) }
         guard valid(screen) else { return .failure(.screenInvalid) }
@@ -49,8 +53,8 @@ enum NativeFramePolicy {
         for ancestor in ancestors { frame = frame.intersection(ancestor) }
         return valid(frame) ? .success(frame) : .failure(.viewportEmpty)
     }
-    static func formFieldFailure(_ frames: [CGRect], in viewport: CGRect,
-                                 occlusions: [CGRect], hittable: Bool) -> FormGeometryFailure? {
+    static func interactionFailure(_ frames: [CGRect], in viewport: CGRect,
+                                   occlusions: [CGRect], hittable: Bool) -> GeometryFailure? {
         guard frames.allSatisfy(valid) else { return .fieldInvalid }
         guard frames.allSatisfy(viewport.contains) else { return .fieldOutside }
         for blocker in occlusions where valid(blocker) {
@@ -337,6 +341,12 @@ final class TauriDirectSSHUITests: XCTestCase {
         let web: Observed
         let identified: Bool
     }
+    private struct RevealedControl {
+        let live: LiveControl
+        let owner: Observed
+        let window: Observed
+        let web: Observed
+    }
 
     @MainActor
     private func require(_ condition: Bool, _ code: String) throws {
@@ -564,29 +574,71 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func formGeometry(_ form: FormControl, scrolling: Bool = false)
-        -> (failure: NativeFramePolicy.FormGeometryFailure?, scrollFrame: CGRect?) {
-        let (owner, current) = (form.owner, form.live)
+    private func controlGeometry(_ owner: Observed, _ controls: [LiveControl], scrolling: Bool = false,
+                                 scrollOcclusion: ((CGRect, Bool) -> CGRect?)? = nil)
+        -> (failure: NativeFramePolicy.GeometryFailure?, scrollFrame: CGRect?) {
         let viewport: CGRect
         switch NativeFramePolicy.viewport(window: owner.window, screen: app.frame, webAncestors: owner.webs) {
         case .failure(let failure): return (failure, nil)
         case .success(let frame): viewport = frame
         }
-        let occlusions = nativeOcclusions()
-        let failure = NativeFramePolicy.formFieldFailure([owner.snapshot.frame, current.snapshot.frame], in: viewport,
-            occlusions: occlusions, hittable: current.hittable)
+        var occlusions = nativeOcclusions()
+        let frames = [owner.snapshot.frame] + controls.map { $0.snapshot.frame }
+        let hittable = controls.allSatisfy { $0.hittable }
+        var failure = NativeFramePolicy.interactionFailure(frames, in: viewport, occlusions: occlusions, hittable: hittable)
+        if failure == nil || failure?.canRetryTap == true,
+           let blocker = scrollOcclusion?(viewport, failure != nil) {
+            occlusions.append(blocker)
+            failure = NativeFramePolicy.interactionFailure(frames, in: viewport, occlusions: occlusions, hittable: hittable)
+        }
         let scrollFrame = scrolling && failure?.canRetryTap == true
             ? NativeFramePolicy.scrollBand(in: viewport, occlusions: occlusions) : nil
         return (failure, scrollFrame)
     }
 
     @MainActor
-    private func reportFormGeometry(_ failure: NativeFramePolicy.FormGeometryFailure) throws {
+    private func routeTabsOcclusion(_ owner: Observed, _ rows: [Observed], _ viewport: CGRect,
+                                    _ controls: [CGRect], scrolling: Bool) -> CGRect? {
+        // The product's route navigation is a fixed overlay in the narrow layout.
+        guard viewport.width <= 599 else { return nil }
+        let sameWeb = rows.filter { $0.windowPath == owner.windowPath && $0.webPath == owner.webPath }
+        let definitions = [("show-remote", "看板"), ("nav-terminal", "终端"), ("nav-network", "网络"), ("nav-settings", "设置")]
+        var tabs: [Observed] = []
+        for (id, label) in definitions {
+            let identified = sameWeb.filter { $0.snapshot.identifier == id }
+            let matches = identified.isEmpty ? sameWeb.filter { $0.snapshot.identifier.isEmpty && $0.snapshot.label == label &&
+                $0.snapshot.elementType == .button } : identified
+            guard matches.count == 1, let tab = matches.first, tab.snapshot.elementType == .button,
+                  NativeFramePolicy.valid(tab.snapshot.frame) else { return nil }
+            tabs.append(tab)
+        }
+        let landmarks = sameWeb.filter { row in
+            row.snapshot.label == "主导航" && tabs.allSatisfy { $0.path.count > row.path.count && $0.path.starts(with: row.path) }
+        }
+        let observedButtons = tabs.reduce(CGRect.null) { $0.union($1.snapshot.frame) }
+        let observedBar = landmarks.count == 1 && landmarks[0].snapshot.frame.contains(observedButtons)
+            ? landmarks[0].snapshot.frame : observedButtons
+        guard scrolling || controls.contains(where: { NativeFramePolicy.valid($0.intersection(observedBar)) }) else { return nil }
+        let live = tabs.compactMap(liveOnPath)
+        guard live.count == tabs.count, live.allSatisfy({ $0.hittable && NativeFramePolicy.valid($0.snapshot.frame) }) else { return nil }
+        let frames = live.map { $0.snapshot.frame }
+        guard zip(frames, frames.dropFirst()).allSatisfy({ $0.0.maxX <= $0.1.minX }),
+              let upper = frames.map(\.minY).max(), let lower = frames.map(\.maxY).min(), upper < lower else { return nil }
+        let buttons = frames.reduce(CGRect.null) { $0.union($1) }
+        if landmarks.count == 1, let landmark = landmarks.first.flatMap(liveOnPath),
+           NativeFramePolicy.valid(landmark.snapshot.frame), landmark.snapshot.frame.contains(buttons) {
+            return landmark.snapshot.frame
+        }
+        return buttons
+    }
+
+    @MainActor
+    private func reportFormGeometry(_ failure: NativeFramePolicy.GeometryFailure) throws {
         try post("native_progress", ["nativeCheckpoint": nativePhase, "geometryReason": failure.rawValue])
     }
 
     @MainActor
-    private func failFormGeometry(_ failure: NativeFramePolicy.FormGeometryFailure) throws -> Never {
+    private func failControlGeometry(_ failure: NativeFramePolicy.GeometryFailure) throws -> Never {
         let code = failure.canRetryTap ? "native_control_not_visible" : "native_visible_frame_invalid"
         try require(false, code)
         throw NSError(domain: code, code: 1)
@@ -596,25 +648,25 @@ final class TauriDirectSSHUITests: XCTestCase {
     @discardableResult
     private func tapForm(_ name: String) throws -> FormControl {
         var expected: FormControl?
-        var lastFailure: NativeFramePolicy.FormGeometryFailure = .fieldUnhittable
+        var lastFailure: NativeFramePolicy.GeometryFailure = .fieldUnhittable
         for _ in 0..<10 {
             let form = try formControl(name, matching: expected)
             expected = form
             let (current, owner) = (form.live, form.owner)
             try require(current.snapshot.isEnabled && owner.snapshot.isEnabled, "native_control_disabled")
-            let geometry = formGeometry(form, scrolling: true)
+            let geometry = controlGeometry(owner, [current], scrolling: true)
             guard let failure = geometry.failure else {
                 current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
                 return form
             }
-            if let visible = geometry.scrollFrame, needsScroll(owner, current, visible) {
-                try scrollToControl(owner, form.window, form.web, visible, formFailure: failure)
+            if let visible = geometry.scrollFrame, let direction = scrollDirection([owner.snapshot.frame, current.snapshot.frame], visible) {
+                try scrollToControl(owner, form.window, form.web, visible, direction, formFailure: failure)
             }
             try reportFormGeometry(failure)
-            guard failure.canRetryTap else { try failFormGeometry(failure) }
+            guard failure.canRetryTap else { try failControlGeometry(failure) }
             lastFailure = failure
         }
-        try failFormGeometry(lastFailure)
+        try failControlGeometry(lastFailure)
     }
 
     @MainActor
@@ -628,12 +680,12 @@ final class TauriDirectSSHUITests: XCTestCase {
             try post("native_progress", ["nativeCheckpoint": nativePhase,
                 "nativePortType": current.snapshot.elementType == .textField ? "textField" : "other"])
         }
-        var lastFailure: NativeFramePolicy.FormGeometryFailure = .fieldInvalid
+        var lastFailure: NativeFramePolicy.GeometryFailure = .fieldInvalid
         for _ in 0..<3 {
             let form = try formControl(name, matching: tapped)
             let (ready, selected) = (form.live, form.owner)
             try require(ready.snapshot.isEnabled && selected.snapshot.isEnabled, "native_control_disabled")
-            if let failure = formGeometry(form).failure {
+            if let failure = controlGeometry(selected, [ready]).failure {
                 try reportFormGeometry(failure)
                 lastFailure = failure
                 continue
@@ -647,7 +699,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             try require(NativeControlPolicy.valueText(after.snapshot.value) == text, "native_input_value_invalid")
             return
         }
-        try failFormGeometry(lastFailure)
+        try failControlGeometry(lastFailure)
     }
 
     @MainActor
@@ -696,52 +748,76 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func canInteract(_ current: LiveControl, _ owner: Observed, _ visible: CGRect) -> Bool {
-        current.hittable && visible.contains(owner.snapshot.frame) && visible.contains(current.snapshot.frame)
-    }
-
-    @MainActor
-    private func needsScroll(_ owner: Observed, _ current: LiveControl, _ visible: CGRect) -> Bool {
-        let frames = [owner.snapshot.frame, current.snapshot.frame]
-        return frames.allSatisfy { $0.minX >= visible.minX && $0.maxX <= visible.maxX } &&
-            (frames.allSatisfy { $0.minY < visible.minY } || frames.allSatisfy { $0.maxY > visible.maxY })
+    private func scrollDirection(_ frames: [CGRect], _ visible: CGRect) -> NativeFramePolicy.ScrollDirection? {
+        guard frames.allSatisfy({ $0.minX >= visible.minX && $0.maxX <= visible.maxX }) else { return nil }
+        let above = frames.allSatisfy { $0.minY < visible.minY }
+        let below = frames.allSatisfy { $0.maxY > visible.maxY }
+        guard above != below else { return nil }
+        return above ? .swipeDown : .swipeUp
     }
 
     @MainActor
     private func scrollToControl(_ owner: Observed, _ window: Observed, _ web: Observed, _ visible: CGRect,
-                                 formFailure: NativeFramePolicy.FormGeometryFailure? = nil) throws {
+                                 _ direction: NativeFramePolicy.ScrollDirection, rows: [Observed] = [],
+                                 formFailure: NativeFramePolicy.GeometryFailure? = nil, passwordDiagnostics: Bool = false) throws {
         guard liveOnPath(window) != nil, let surface = liveOnPath(web) else {
             if let failure = formFailure { try reportFormGeometry(failure) }
             try require(false, "native_scroll_owner_unproven")
             throw NSError(domain: "native_scroll_owner_unproven", code: 1)
         }
-        let frame = surface.snapshot.frame
-        let frameValid = NativeFramePolicy.valid(frame) && frame.contains(visible)
-        if let failure = formFailure, !frameValid || !surface.hittable {
-            try reportFormGeometry(failure)
-            if !frameValid {
+        let webFrame = surface.snapshot.frame
+        let frameValid = NativeFramePolicy.valid(webFrame) && webFrame.contains(visible)
+        if !frameValid {
+            if let failure = formFailure {
+                try reportFormGeometry(failure)
                 try reportFormGeometry(.webAncestorInvalid)
-                try failFormGeometry(.webAncestorInvalid)
             }
-            try failFormGeometry(failure)
+            try failControlGeometry(.webAncestorInvalid)
         }
-        try require(frameValid, "native_visible_frame_invalid")
-        try require(surface.hittable, "native_control_not_visible")
-        let down = owner.snapshot.frame.minY < visible.minY
+        var target = surface
+        var band = visible
+        if !surface.hittable {
+            // A visible scroll container on the same bound path can supply
+            // the gesture's origin when the WebView itself has no hit point.
+            let ancestors = rows.filter { row in
+                row.snapshot.elementType == .scrollView && row.windowPath == window.path &&
+                    row.path.count > window.path.count && row.path.count < owner.path.count &&
+                    owner.path.starts(with: row.path) && (row.webPath == web.path || web.path.starts(with: row.path))
+            }.sorted { $0.path.count > $1.path.count }
+            for ancestor in ancestors {
+                guard let live = liveOnPath(ancestor), live.hittable, NativeFramePolicy.valid(live.snapshot.frame) else { continue }
+                let clipped = visible.intersection(live.snapshot.frame)
+                guard NativeFramePolicy.valid(clipped),
+                      let current = NativeFramePolicy.scrollBand(in: clipped, occlusions: nativeOcclusions()) else { continue }
+                target = live
+                band = current
+                break
+            }
+        }
+        if !target.hittable, let failure = formFailure {
+            try reportFormGeometry(failure)
+            if passwordDiagnostics { try reportFormGeometry(.scrollSurfaceUnhittable) }
+            try failControlGeometry(failure)
+        }
+        try require(target.hittable, "native_control_not_visible")
+        let frame = target.snapshot.frame
         func point(_ fraction: CGFloat) -> XCUICoordinate {
-            surface.element.coordinate(withNormalizedOffset: CGVector(
-                dx: (visible.midX - frame.minX) / frame.width,
-                dy: (visible.minY + fraction * visible.height - frame.minY) / frame.height))
+            target.element.coordinate(withNormalizedOffset: CGVector(
+                dx: (band.midX - frame.minX) / frame.width,
+                dy: (band.minY + fraction * band.height - frame.minY) / frame.height))
         }
         // Keep the entire gesture in the proven WebView's unobscured area.
-        point(down ? 0.25 : 0.75).press(forDuration: 0.05, thenDragTo: point(down ? 0.75 : 0.25))
+        let start: CGFloat = direction == .swipeDown ? 0.25 : 0.75
+        point(start).press(forDuration: 0.05, thenDragTo: point(1 - start))
     }
 
     @MainActor
-    private func reveal(_ item: XCUIElement) throws -> LiveControl {
+    private func reveal(_ item: XCUIElement, matching expected: RevealedControl? = nil, scrolling: Bool = true) throws -> RevealedControl {
         try require(item.waitForExistence(timeout: 20), "native_control_missing")
-        var priorOwner: Observed?
-        for _ in 0..<10 {
+        let passwordDiagnostics = nativePhase == "ordinary_password" || nativePhase == "key_change_password"
+        let attempts = scrolling ? 10 : 3
+        var prior = expected
+        for attempt in 0..<attempts {
             guard let current = liveControl(item) else {
                 try require(false, "native_control_missing")
                 throw NSError(domain: "native_control_missing", code: 1)
@@ -752,19 +828,29 @@ final class TauriDirectSSHUITests: XCTestCase {
                 try require(false, "native_control_owner_unproven")
                 throw NSError(domain: "native_control_owner_unproven", code: 1)
             }
-            if let priorOwner = priorOwner {
-                try require(owner.windowPath == priorOwner.windowPath && owner.webPath == priorOwner.webPath &&
-                    sameIdentity(owner.snapshot, priorOwner.snapshot), "native_control_owner_unproven")
+            if let prior = prior {
+                try require(scope.window.path == prior.window.path && scope.web.path == prior.web.path &&
+                    sameIdentity(scope.window.snapshot, prior.window.snapshot) && sameIdentity(scope.web.snapshot, prior.web.snapshot) &&
+                    sameIdentity(owner.snapshot, prior.owner.snapshot), "native_control_owner_unproven")
             }
-            priorOwner = owner
-            guard let visible = controlVisibleFrame(owner, current), NativeFramePolicy.valid(bound.snapshot.frame) else {
-                try require(false, "native_visible_frame_invalid")
-                throw NSError(domain: "native_visible_frame_invalid", code: 1)
+            let resolved = RevealedControl(live: bound, owner: owner, window: scope.window, web: scope.web)
+            prior = resolved
+            let frames = [owner.snapshot.frame, current.snapshot.frame, bound.snapshot.frame]
+            let geometry = controlGeometry(owner, [current, bound], scrolling: scrolling) { viewport, failed in
+                guard failed || passwordDiagnostics else { return nil }
+                return self.routeTabsOcclusion(owner, rows, viewport, frames, scrolling: scrolling && failed)
             }
-            if canInteract(current, owner, visible) && canInteract(bound, owner, visible) { return bound }
-            if needsScroll(owner, current, visible) && needsScroll(owner, bound, visible) {
-                try scrollToControl(owner, scope.window, scope.web, visible)
+            guard let failure = geometry.failure else { return resolved }
+            if let visible = geometry.scrollFrame, let direction = scrollDirection(frames, visible) {
+                try scrollToControl(owner, scope.window, scope.web, visible, direction, rows: rows,
+                    formFailure: passwordDiagnostics ? failure : nil, passwordDiagnostics: passwordDiagnostics)
+            } else if passwordDiagnostics && scrolling && attempt == attempts - 1 && (failure == .fieldOutside || failure == .fieldOccluded) {
+                try reportFormGeometry(failure)
+                try reportFormGeometry(.scrollDirectionUnproven)
+                break
             }
+            if passwordDiagnostics { try reportFormGeometry(failure) }
+            guard failure.canRetryTap else { try failControlGeometry(failure) }
         }
         try require(false, "native_control_not_visible")
         throw NSError(domain: "native_control_not_visible", code: 1)
@@ -772,33 +858,25 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func tap(_ item: XCUIElement) throws {
-        let current = try reveal(item)
+        let current = try reveal(item).live
         try require(current.snapshot.isEnabled, "native_control_disabled")
         current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     @MainActor
-    private func fill(_ item: XCUIElement, _ text: String) throws {
-        try tap(item)
-        guard let current = liveControl(item) else {
-            try require(false, "native_control_missing")
-            throw NSError(domain: "native_control_missing", code: 1)
-        }
+    private func fillPassword(_ item: XCUIElement, _ text: String) throws {
+        let initial = try reveal(item)
+        let current = initial.live
+        try require(current.snapshot.elementType == .secureTextField, "native_control_owner_unproven")
+        try require(current.snapshot.isEnabled, "native_control_disabled")
+        current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         try post("native_progress", ["nativeCheckpoint": nativePhase, "nativeInputRole": role(current.snapshot.elementType)])
-        guard let clearCount = NativeControlPolicy.clearCount(current.snapshot.value, placeholder: current.snapshot.placeholderValue,
-                secure: current.snapshot.elementType == .secureTextField) else {
-            try require(false, "native_unexpected_existing_input")
-            throw NSError(domain: "native_unexpected_existing_input", code: 1)
-        }
         try require(app.keyboards.firstMatch.waitForExistence(timeout: 10), "native_input_keyboard_missing")
-        app.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: clearCount) + text)
-        if current.snapshot.elementType != .secureTextField {
-            guard let after = liveControl(item) else {
-                try require(false, "native_control_missing")
-                throw NSError(domain: "native_control_missing", code: 1)
-            }
-            try require(NativeControlPolicy.valueText(after.snapshot.value) == text, "native_input_value_invalid")
-        }
+        let ready = try reveal(item, matching: initial, scrolling: false).live
+        try require(ready.snapshot.isEnabled, "native_control_disabled")
+        try require(NativeControlPolicy.credentialEmpty(ready.snapshot.value, placeholder: ready.snapshot.placeholderValue),
+                    "native_unexpected_existing_input")
+        ready.element.typeText(text)
     }
 
     @MainActor
@@ -1262,7 +1340,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     private func connect(password secret: String) throws {
         try phase("password")
-        try fill(password(), secret)
+        try fillPassword(password(), secret)
         try check(true, enabled: true)
         try phase("connect")
         try tap(button("连接 / 重新连接"))
@@ -1329,7 +1407,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         try approve(config["fingerprintA"] as! String)
         try post("key_change_password_a")
         try phase("password")
-        try fill(password(), config["rotationPassword"] as! String)
+        try fillPassword(password(), config["rotationPassword"] as! String)
         try check(true, enabled: true)
         try phase("connect")
         try tap(button("连接 / 重新连接"))

@@ -167,7 +167,7 @@ final class XCUIElement {
     enum ElementType: UInt {
         case textField = 91, textView = 17, searchField = 42, button = 6
         case stepper = 73, staticText = 12, other = 99, keyboard = 24, alert = 33
-        case window = 3, webView = 4
+        case window = 3, webView = 4, scrollView = 5, secureTextField = 87
     }
     var taps = 0
     var drags: [(CGVector, CGVector)] = []
@@ -230,28 +230,39 @@ struct FormControl {
     let web: Observed
     let identified: Bool
 }
+struct RevealedControl {
+    let live: LiveControl
+    let owner: Observed
+    let window: Observed
+    let web: Observed
+}
 struct Query {
     let allElementsBoundByIndex: [XCUIElement] = []
     var firstMatch: XCUIElement { XCUIElement() }
 }
 struct App {
     let frame: CGRect
+    let input = Element()
     var webViews: Query { Query() }
     var keyboards: Query { Query() }
+    func typeText(_ text: String) { input.typeText(text) }
 }
 struct Rejected: Error { let reason: String }
 final class Observations {
     var trees: [[Observed]]
     var liveSnapshots: [Snapshot]
     var occlusionSamples: [[CGRect]]
+    var hittableSamples: [Bool]
     var liveReads = 0
     var resolved: [Observed] = []
     var checkpoints: [(String, [String: Any])] = []
     let webSurface = Element()
-    init(_ trees: [[Observed]], liveSnapshots: [Snapshot] = [], occlusionSamples: [[CGRect]] = []) {
+    init(_ trees: [[Observed]], liveSnapshots: [Snapshot] = [], occlusionSamples: [[CGRect]] = [],
+         hittableSamples: [Bool] = []) {
         self.trees = trees
         self.liveSnapshots = liveSnapshots
         self.occlusionSamples = occlusionSamples
+        self.hittableSamples = hittableSamples
     }
     func next(_ fallback: [Observed]) -> [Observed] {
         trees.isEmpty ? fallback : trees.removeFirst()
@@ -259,7 +270,8 @@ final class Observations {
     func live(_ fallback: LiveControl) -> LiveControl {
         liveReads += 1
         return LiveControl(snapshot: liveSnapshots.isEmpty ? fallback.snapshot : liveSnapshots.removeFirst(),
-                           hittable: fallback.hittable, element: fallback.element)
+                           hittable: hittableSamples.isEmpty ? fallback.hittable : hittableSamples.removeFirst(),
+                           element: fallback.element)
     }
 }
 struct Adapter {
@@ -270,6 +282,7 @@ struct Adapter {
     var observations: Observations? = nil
     var formControls: [String: LiveControl] = [:]
     var nativePhase = "ordinary_port"
+    var pathControls: [[Int]: LiveControl] = [:]
     func require(_ condition: Bool, _ reason: String) throws {
         if !condition { throw Rejected(reason: reason) }
     }
@@ -278,13 +291,17 @@ struct Adapter {
         return observations.occlusionSamples.removeFirst()
     }
     func post(_ topic: String, _ payload: [String: Any]) throws { observations?.checkpoints.append((topic, payload)) }
-    func role(_ type: XCUIElement.ElementType) -> String { type == .textField ? "textField" : "other" }
+    func role(_ type: XCUIElement.ElementType) -> String {
+        if type == .secureTextField { return "secureTextField" }
+        return type == .textField ? "textField" : "other"
+    }
     func observedNodes() throws -> [Observed] { observations?.next(rows) ?? rows }
     func resolveByPath(_ row: Observed) -> Observed {
         observations?.resolved.append(row)
         return row
     }
     func liveControl(_ row: Observed) -> LiveControl? {
+        if let control = pathControls[row.path] { return control }
         if [.window, .webView].contains(row.snapshot.elementType) {
             let element = row.snapshot.elementType == .webView ? observations?.webSurface ?? Element() : Element()
             return LiveControl(snapshot: row.snapshot, hittable: true, element: element)
@@ -309,7 +326,8 @@ struct Adapter {
     }
     func tapPort() throws { _ = try tapForm("port") }
     func port() throws -> LiveControl { try formControl("port").live }
-    func revealCurrent() throws -> LiveControl { try reveal(current.element) }
+    func revealCurrent() throws -> LiveControl { try reveal(current.element).live }
+    func fillCurrent(_ text: String) throws { try fillPassword(current.element, text) }
     func fillPort(_ text: String) throws { try fillForm("port", text) }
     func fillField(_ name: String, _ text: String) throws { try fillForm(name, text) }
     func tapProbe() throws { _ = try tapForm("probe") }
@@ -319,10 +337,12 @@ struct Adapter {
 ''' + "\n".join(self.production_method(signature) for signature in (
             "func formTargets(_ tree:", "func formSelection(_ tree:", "func formControl(_ name:",
             "func sameIdentity(_ lhs:", "func liveOnPath(_ row:", "func controlScope(_ row:",
-            "func canInteract(_ current:", "func needsScroll(_ owner:", "func scrollToControl(_ owner:",
+            "func scrollDirection(_ frames:", "func scrollToControl(_ owner:",
             "func controlIdentityRows(_ current:", "func controlOwner(_ current:",
-            "func controlVisibleFrame(_ owner:", "func reveal(_ item:", "func tapForm(_ name:",
-            "func formGeometry(_ form:", "func reportFormGeometry(_ failure:", "func failFormGeometry(_ failure:",
+            "func reveal(_ item:", "func tapForm(_ name:",
+            "func controlGeometry(_ owner:", "func routeTabsOcclusion(_ owner:",
+            "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
+            "func tap(_ item:", "func fillPassword(_ item:",
             "func fillForm(_ name:", "func pageScope(_ item:")) + r'''
 }
 let screen = CGRect(x: 0, y: 0, width: 390, height: 844)
@@ -549,6 +569,137 @@ var revealed: LiveControl?
 do { revealed = try revealing.revealCurrent() } catch { }
 check(revealed?.snapshot.frame == movedFrame && revealSnapshots.liveReads >= 4,
       "the actual generic reveal path must refresh both its queried and path-bound live geometry")
+func expectReveal(tree: CGRect = movedFrame, queried: CGRect = movedFrame, bound: CGRect = movedFrame,
+                  queriedHittable: Bool = true, boundHittable: Bool = true, blockers: [CGRect],
+                  error: String? = nil, reason: String) {
+    func connect(_ frame: CGRect) -> Snapshot { snapshot(.button, frame: frame, label: "连接") }
+    let samples = Observations([], liveSnapshots: Array(repeating: [connect(queried), connect(bound)], count: 10).flatMap { $0 },
+                               hittableSamples: Array(repeating: [queriedHittable, boundHittable], count: 10).flatMap { $0 })
+    let control = LiveControl(snapshot: connect(queried), hittable: queriedHittable, element: Element())
+    let candidate = Adapter(app: App(frame: screen), current: control, rows: formRows(connect(tree)),
+                            blockers: blockers, observations: samples, nativePhase: "ordinary_connect")
+    do {
+        let revealed = try candidate.revealCurrent()
+        check(error == nil && revealed.snapshot.frame == bound, reason)
+    } catch let failure as Rejected {
+        check(failure.reason == error, reason)
+    } catch { check(false, reason) }
+    check(samples.checkpoints.isEmpty, "the generic reveal path must not publish form geometry samples")
+}
+for insetKeyboard in insetKeyboards {
+    let blockers = [statusBar, insetKeyboard]
+    expectReveal(blockers: blockers, reason: "an uncovered generic control must resolve while an interior keyboard is visible")
+    check(NativeFramePolicy.visible(window: screen, screen: screen, webAncestors: [screen], occlusions: blockers) == nil,
+          "the frame used to bound captures must still reject an interior occlusion")
+    let partial = CGRect(x: 24, y: 370, width: 342, height: 42)
+    expectReveal(tree: partial, blockers: blockers, error: "native_control_not_visible",
+                 reason: "the tree frame must not be partly occluded")
+    expectReveal(queried: partial, blockers: blockers, error: "native_control_not_visible",
+                 reason: "the queried live frame must not be partly occluded")
+    expectReveal(bound: partial, blockers: blockers, error: "native_control_not_visible",
+                 reason: "the path-bound live frame must not be partly occluded")
+    expectReveal(bound: .zero, blockers: blockers, error: "native_visible_frame_invalid",
+                 reason: "invalid live geometry keeps the generic frame error")
+    expectReveal(queriedHittable: false, blockers: blockers, error: "native_control_not_visible",
+                 reason: "a hittable bound control does not authorize an unhittable queried match")
+    expectReveal(boundHittable: false, blockers: blockers, error: "native_control_not_visible",
+                 reason: "a hittable queried match does not authorize an unhittable bound control")
+}
+
+let passwordScreen = CGRect(x: 0, y: 0, width: 440, height: 956)
+let routeFrame = CGRect(x: 0, y: 891, width: 440, height: 65)
+let passwordBehindTabs = snapshot(.secureTextField, frame: CGRect(x: 16, y: 890, width: 408, height: 46),
+                                 identifier: "ssh-password", label: "密码")
+let revealedPassword = snapshot(.secureTextField, frame: passwordBehindTabs.frame.offsetBy(dx: 0, dy: -188),
+                                identifier: "ssh-password", label: "密码")
+let passwordStatusBar = CGRect(x: 0, y: 0, width: 440, height: 62)
+func passwordRow(_ item: Snapshot, _ path: [Int], web: [Int] = [0, 0]) -> Observed {
+    Observed(snapshot: item, path: path, windowPath: [0], webPath: web,
+             window: passwordScreen, webs: [passwordScreen])
+}
+let passwordWindow = passwordRow(snapshot(.window, frame: passwordScreen, label: ""), [0])
+let passwordWeb = passwordRow(snapshot(.webView, frame: passwordScreen, label: ""), [0, 0])
+let formScroller = passwordRow(snapshot(.scrollView, frame: CGRect(x: 12, y: 100, width: 416, height: 748), label: ""), [0, 0, 2])
+let otherScroller = passwordRow(snapshot(.scrollView, frame: passwordScreen, label: ""), [0, 0, 3])
+let tabDefinitions = [("show-remote", "看板"), ("nav-terminal", "终端"), ("nav-network", "网络"), ("nav-settings", "设置")]
+let routeButtons = tabDefinitions.enumerated().map { index, definition in
+    let frame = CGRect(x: CGFloat(8 + index * 108), y: 896, width: 100, height: 60)
+    return passwordRow(snapshot(.button, frame: frame, identifier: definition.0, label: definition.1), [0, 0, 8, index])
+}
+let routeLandmark = passwordRow(snapshot(.other, frame: routeFrame, label: "主导航"), [0, 0, 8])
+func exercisePassword(webHittable: Bool, provenScroller: Bool, routeVisible: Bool = true, initiallyHittable: Bool = false,
+                      phase: String, expected: [String], succeeds: Bool) {
+    let typed = "fixture-input"
+    let element = Element()
+    let webElement = Element()
+    let scrollElement = Element()
+    let unrelatedElement = Element()
+    var scopes = [passwordWindow, passwordWeb, otherScroller]
+    if routeVisible { scopes += [routeLandmark] + routeButtons }
+    if provenScroller { scopes.append(formScroller) }
+    let controls = Dictionary(uniqueKeysWithValues: (routeButtons + [routeLandmark]).map {
+        ($0.path, LiveControl(snapshot: $0.snapshot, hittable: true, element: Element()))
+    }).merging([
+        passwordWeb.path: LiveControl(snapshot: passwordWeb.snapshot, hittable: webHittable, element: webElement),
+        formScroller.path: LiveControl(snapshot: formScroller.snapshot, hittable: true, element: scrollElement),
+        otherScroller.path: LiveControl(snapshot: otherScroller.snapshot, hittable: true, element: unrelatedElement),
+    ]) { _, new in new }
+    let hidden = scopes + [passwordRow(passwordBehindTabs, [0, 0, 2, 1])]
+    let visible = scopes + [passwordRow(revealedPassword, [0, 0, 2, 1])]
+    let samples = succeeds ? Observations([hidden], liveSnapshots: [passwordBehindTabs, passwordBehindTabs, revealedPassword, revealedPassword],
+                                          hittableSamples: [initiallyHittable, initiallyHittable, true, true]) : Observations([])
+    let fallback = LiveControl(snapshot: succeeds ? revealedPassword : passwordBehindTabs,
+                               hittable: succeeds, element: element)
+    let app = App(frame: passwordScreen)
+    let candidate = Adapter(app: app, current: fallback, rows: succeeds ? visible : hidden,
+                            blockers: [passwordStatusBar], observations: samples, nativePhase: phase, pathControls: controls)
+    var error: String?
+    do { try candidate.fillCurrent(typed) } catch let rejected as Rejected { error = rejected.reason } catch { }
+    let diagnostics = samples.checkpoints.compactMap { $0.1["geometryReason"] as? String }
+    let roles = samples.checkpoints.compactMap { $0.1["nativeInputRole"] as? String }
+    check(diagnostics == expected && samples.checkpoints.allSatisfy { topic, payload in
+        topic == "native_progress" && payload["nativeCheckpoint"] as? String == phase &&
+            (Set(payload.keys) == ["nativeCheckpoint", "geometryReason"] || Set(payload.keys) == ["nativeCheckpoint", "nativeInputRole"])
+    }, "password progress must include only phase and bounded geometry or role data")
+    if succeeds {
+        let target = webHittable ? webElement : scrollElement
+        let targetFrame = webHittable ? passwordScreen : formScroller.snapshot.frame
+        check(error == nil && element.inputs == [typed] && app.input.inputs.isEmpty && samples.liveReads == 6 &&
+              element.taps == 1 && roles == ["secureTextField"],
+              "after scrolling, the bound password field receives one input with no app-wide typing or secret readback")
+        check(target.drags.count == 1 && target.drags.first.map { from, to in
+            let start = targetFrame.minY + from.dy * targetFrame.height
+            let end = targetFrame.minY + to.dy * targetFrame.height
+            return passwordStatusBar.maxY < end && end < start && start < routeFrame.minY
+        } == true, "the upward drag must keep both endpoints away from the fixed tabs and status bar")
+    } else {
+        check(error == "native_control_not_visible" && roles.isEmpty && app.input.inputs.isEmpty && element.inputs.isEmpty && element.taps == 0 &&
+              webElement.drags.isEmpty && scrollElement.drags.isEmpty,
+              "unproven password geometry or a missing scroll target must never tap or type")
+    }
+    check(unrelatedElement.drags.isEmpty, "a visible sibling ScrollView must never authorize the password drag")
+}
+exercisePassword(webHittable: true, provenScroller: false, phase: "ordinary_password", expected: ["field_occluded"], succeeds: true)
+exercisePassword(webHittable: true, provenScroller: false, initiallyHittable: true,
+                 phase: "ordinary_password", expected: ["field_occluded"], succeeds: true)
+exercisePassword(webHittable: false, provenScroller: true, phase: "ordinary_password", expected: ["field_occluded"], succeeds: true)
+exercisePassword(webHittable: false, provenScroller: false, phase: "key_change_password",
+                 expected: ["field_occluded", "scroll_surface_unhittable"], succeeds: false)
+exercisePassword(webHittable: true, provenScroller: false, routeVisible: false, phase: "ordinary_password",
+                 expected: Array(repeating: "field_unhittable", count: 10), succeeds: false)
+let changedPassword = snapshot(.secureTextField, frame: revealedPassword.frame, identifier: "ssh-replacement", label: "密码")
+let focused = Observations([[passwordWindow, passwordWeb, passwordRow(revealedPassword, [0, 0, 1])]],
+                           liveSnapshots: [revealedPassword, revealedPassword, changedPassword, changedPassword])
+let changedElement = Element()
+let changedApp = App(frame: passwordScreen)
+let replaced = Adapter(app: changedApp,
+                       current: LiveControl(snapshot: changedPassword, hittable: true, element: changedElement),
+                       rows: [passwordWindow, passwordWeb, passwordRow(changedPassword, [0, 0, 1])],
+                       blockers: [passwordStatusBar], observations: focused, nativePhase: "key_change_password")
+var replacementError: String?
+do { try replaced.fillCurrent("fixture-input") } catch let rejected as Rejected { replacementError = rejected.reason } catch { }
+check(replacementError == "native_control_owner_unproven" && changedElement.taps == 1 && changedElement.inputs.isEmpty &&
+      changedApp.input.inputs.isEmpty, "a secure field replaced after focus must never receive the password")
 let writeElement = Element()
 let offscreen = snapshot(frame: movedFrame.offsetBy(dx: 0, dy: -300))
 let writeSnapshots = Observations([], liveSnapshots: [moved, moved, snapshot(), offscreen, moved, moved])

@@ -53,8 +53,14 @@ void mockClipboard(WidgetTester tester, Future<Object?> Function() read) {
 }
 
 Future<void> enableKeyMode(WidgetTester tester) async {
-  await tester.ensureVisible(find.byType(SwitchListTile));
-  await tester.tap(find.byType(SwitchListTile)); await tester.pumpAndSettle();
+  if (find.byKey(const ValueKey('direct-auth-key')).evaluate().isNotEmpty) {
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    final option = find.byKey(ValueKey(state.keyAuth ? 'direct-auth-password' : 'direct-auth-key'));
+    await tester.ensureVisible(option); await tester.tap(option); await tester.pumpAndSettle();
+  } else {
+    await tester.ensureVisible(find.byType(SwitchListTile));
+    await tester.tap(find.byType(SwitchListTile)); await tester.pumpAndSettle();
+  }
 }
 
 Future<void> tapPasteKey(WidgetTester tester) async {
@@ -112,7 +118,7 @@ void main() {
       // Include the normal pin/status layout without opening a network connection.
       state.setState(() {
         state.algorithm = 'ssh-ed25519'; state.fingerprint = 'SHA256:${List.filled(43, 'A').join()}';
-        state.checkedTarget = state.target; state.status = '已确认本次主机密钥；连接时将重新核对。';
+        state.checkedTarget = state.target; state.mobileAuth = true; state.status = '已确认本次主机密钥；连接时将重新核对。';
       });
       await tester.pumpAndSettle(); await enableKeyMode(tester);
       final key = find.byKey(const ValueKey('direct-secret'));
@@ -601,16 +607,23 @@ void main() {
       addTearDown(tester.view.resetViewInsets);
       final tokens = (await tester.runAsync(DesignTokens.load))!;
       await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
-      for (final id in ['direct-host','direct-port','direct-user','direct-probe','direct-secret','direct-connect']) {
+      for (final id in ['direct-host','direct-port','direct-user','direct-probe']) {
         final field=find.byKey(ValueKey(id));
         await tester.ensureVisible(field);await tester.pumpAndSettle();
         expect(tester.getRect(field).intersect(Rect.fromLTWH(0, 0, width, 544)).height, greaterThan(0));
       }
-      await tester.ensureVisible(find.byType(SwitchListTile));await tester.pumpAndSettle();
-      await tester.tap(find.byType(SwitchListTile));await tester.pumpAndSettle();
+      // This is a layout-only test; a separate loopback flow verifies the actual probe and approval.
+      final dynamic state = tester.state(find.byType(DirectSshPage));
+      state.setState(() { state.mobileAuth = true; }); await tester.pumpAndSettle();
+      for (final id in ['direct-secret','direct-connect']) {
+        final field=find.byKey(ValueKey(id));
+        await tester.ensureVisible(field);await tester.pumpAndSettle();
+        expect(tester.getRect(field).intersect(Rect.fromLTWH(0, 0, width, 544)).height, greaterThan(0));
+      }
+      await enableKeyMode(tester);
       final phrase=find.byKey(const ValueKey('direct-passphrase'));
       await tester.ensureVisible(phrase);await tester.pumpAndSettle();
-      expect(find.bySemanticsLabel('私钥口令（可选）'), findsWidgets);
+      expect(find.bySemanticsLabel('私钥口令（加密私钥需要）'), findsWidgets);
       expect(tester.takeException(), isNull);
       semantics.dispose();
     });

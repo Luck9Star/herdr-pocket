@@ -250,7 +250,7 @@ void main() {
               find.byKey(const ValueKey('direct-host-key-new')),
               find.byKey(const ValueKey('direct-host-key-cancel')),
               find.byKey(const ValueKey('direct-host-key-review')),
-              find.text('目标：fixture@127.0.0.1:${rotation['port']}'),
+              find.byKey(const ValueKey('direct-target-value')),
             ]) {
               expect(control, findsOneWidget);
               final rect = physicalBounds(control);
@@ -311,11 +311,9 @@ void main() {
           }
           if (name != 'preconnect') return;
           final secret = find.byKey(const ValueKey('direct-secret'));
-          final method = find.byType(SwitchListTile);
+          final state = tester.state(find.byType(DirectSshPage)) as dynamic;
           if (secret.evaluate().length != 1 ||
-              method.evaluate().length != 1 ||
-              !tester.widget<TextField>(secret).obscureText ||
-              tester.widget<SwitchListTile>(method).value)
+              !tester.widget<TextField>(secret).obscureText || state.keyAuth == true)
             return;
           // Allow Flutter's brief last-character reveal to expire before any
           // screenshot; the runner only sees the approved synthetic fixture.
@@ -434,7 +432,7 @@ void main() {
             'statusCode': statusCode,
             'appLifecycle': binding.lifecycleState?.name ?? 'unknown',
             'probeEnabled': probe.evaluate().length == 1
-                ? tester.widget<OutlinedButton>(probe).onPressed != null
+                ? tester.widget<FilledButton>(probe).onPressed != null
                 : null,
             'trustDialogVisible': find
                 .byKey(const ValueKey('direct-trust-key'))

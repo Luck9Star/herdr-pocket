@@ -45,9 +45,13 @@ void main() {
           );
           // Synthetic pin: this deliberately silent TCP peer cannot establish
           // SSH identity. It must never reach the password callback or a PTY.
-          state.fingerprint = 'SHA256:synthetic';
-          state.algorithm = 'ssh-rsa';
-          state.checkedTarget = state.target;
+          state.setState(() {
+            state.fingerprint = 'SHA256:synthetic';
+            state.algorithm = 'ssh-rsa';
+            state.checkedTarget = state.target;
+            state.mobileAuth = true;
+          });
+          await tester.pump();
           const credential = 'synthetic-ui-credential';
           final secret = find.byKey(const ValueKey('direct-secret'));
           await tester.enterText(secret, credential);

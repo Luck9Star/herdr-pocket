@@ -364,7 +364,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       key: const ValueKey('home-tabs'), height: 56,
       decoration: BoxDecoration(border: Border(top: BorderSide(color: widget.tokens.color('border')))),
       child: Row(children: [for (var i = 0; i < entries.length; i++) Expanded(child: InkWell(
-        key: ValueKey('home-tab-$i'), onTap: () { setState(() { destination = i; sshClosedNotice = false; }); if (i != 1) tabs.select(null); },
+        key: i == 2 ? const ValueKey('hosts-networks') : ValueKey('home-tab-$i'),
+        onTap: () { setState(() { destination = i; sshClosedNotice = false; }); if (i != 1) tabs.select(null); },
         child: Semantics(label: entries[i].$2, button: true, selected: i == 0, child: Stack(alignment: Alignment.topCenter, children: [
           Positioned(top: 4, child: Container(width: 40, height: 28,
             decoration: BoxDecoration(color: i == 0 ? widget.tokens.color('brandSoft') : Colors.transparent,

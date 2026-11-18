@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "d58b5388eb4e8aecac56e6d0884c6d148dee8e6eb62e4550fcb33bb872a4534c",
+  "imageSize": [
+    1320,
+    2868
+  ],
+  "terminalBounds": [
+    48,
+    813,
+    1224,
+    1287
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "SEAT SALT BARN HARP LEFT PART LEAF EAST",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

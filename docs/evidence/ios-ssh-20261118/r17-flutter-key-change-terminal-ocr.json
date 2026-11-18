@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "1f2a1810e5ecedc93337891ed5fe3aa167aa17c7ff41987726b8456c68001fc2",
+  "imageSize": [
+    828,
+    1792
+  ],
+  "terminalBounds": [
+    0,
+    336,
+    828,
+    758
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "HEAD FADE KEPT PART LAMP SALT ARCH EAST",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 2,
+  "ocrPageSegmentationMode": 11,
+  "proofSequenceVisible": true
+}

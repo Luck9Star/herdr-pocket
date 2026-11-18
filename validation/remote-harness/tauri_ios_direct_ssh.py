@@ -193,6 +193,39 @@ def public_home_diagnostic(value):
     return json.loads(json.dumps({k: value[k] for k in keys}))
 
 
+def public_home_readiness(value, home):
+    states = ('ready', 'loading', 'shell', 'error', 'alert', 'unexpected', 'not_foreground')
+    keys = {'outcome', 'elapsedMs', 'strictSampleMs', 'strictSamples', 'waitCalls', 'samples'}
+    code = 'tauri_ios_home_diagnostic_invalid'
+    require(isinstance(value, dict) and set(value) == keys and value['outcome'] in states, code)
+    require(all(type(value[k]) is int for k in ('elapsedMs', 'strictSampleMs', 'strictSamples', 'waitCalls'))
+            and 0 <= value['strictSampleMs'] <= value['elapsedMs'] <= 900_000
+            and 1 <= value['strictSamples'] <= 12 and 0 <= value['waitCalls'] < value['strictSamples'], code)
+    samples = value['samples']
+    require(isinstance(samples, list) and 1 <= len(samples) <= value['strictSamples'], code)
+    previous, elapsed = None, 0
+    for sample in samples:
+        require(isinstance(sample, dict) and set(sample) == {'state', 'elapsedMs'}
+                and sample['state'] in states and sample['state'] != previous
+                and previous in (None, 'loading', 'shell') and type(sample['elapsedMs']) is int
+                and elapsed <= sample['elapsedMs'] <= value['elapsedMs'], code)
+        previous, elapsed = sample['state'], sample['elapsedMs']
+    require(previous == value['outcome'], code)
+    flags = home['knownErrors']
+    alert = bool(home['appAlertCount'] or home['systemAlertCount'] or home['alertSnapshotFailed'])
+    foreground = home['appForeground']
+    error = any(enabled for name, enabled in flags.items() if name != 'loading')
+    safe = foreground and not (alert or error) and home['inputCount'] == 0
+    empty = (home['knownEmptyHome'] and home['windowCount'] > 0 and home['webViewCount'] > 0
+             and all(home['members'][name]['count'] > 0 for name in ('brand', 'homeHeading', 'emptyHeading', 'zeroHosts')))
+    expected = {'ready': safe and not flags['loading'] and empty, 'loading': safe and flags['loading'],
+                'shell': safe and not flags['loading'] and not empty,
+                'error': foreground and not alert and error, 'alert': foreground and alert,
+                'unexpected': foreground and not (alert or error), 'not_foreground': not foreground}
+    require(expected.get(previous, True), code)
+    return json.loads(json.dumps(value))
+
+
 def public_form_controls(value):
     """Fixed four control names, closed role/reason enums, bounded match counts
     and the owner/reason coupling. The closed key set is the privacy boundary:
@@ -849,8 +882,16 @@ class Checkpoints:
             require(self.index == STAGES.index(next_stage), 'tauri_ios_home_diagnostic_phase_invalid')
             fixture = self.ordinary if key == 'ordinary' else self.rotation
             require(fixture is None or fixture.snapshot()['connections'] == 0, 'tauri_ios_navigation_after_ssh')
+            readiness = self.result.get('homeReadiness', {})
+            if stage != 'native_home' and key in readiness:
+                require(readiness[key]['outcome'] == 'ready', 'tauri_ios_home_retry_unsafe')
             if stage == 'native_home':
-                self.result.setdefault('homeDiagnostics', {})[key] = public_home_diagnostic(payload.get('home'))
+                home = public_home_diagnostic(payload.get('home'))
+                if 'readiness' in payload:
+                    require(phase.endswith('_open_add') and key not in readiness
+                            and not self.result.get('navigationTrace', {}).get(key), 'tauri_ios_home_diagnostic_phase_invalid')
+                    self.result.setdefault('homeReadiness', {})[key] = public_home_readiness(payload['readiness'], home)
+                self.result.setdefault('homeDiagnostics', {})[key] = home
             elif stage == 'native_navigation_arrival':
                 current = public_navigation_state(payload.get('state'))
                 geometry = public_navigation_geometry(payload.get('geometry'))

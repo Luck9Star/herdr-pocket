@@ -198,6 +198,39 @@ enum NativeConnectPolicy {
          "submitEnabled": submitEnabled, "submitHittable": submitHittable]
     }
 }
+enum NativeHomeReadiness {
+    enum State: String {
+        case ready, loading, shell, error, alert, unexpected, notForeground = "not_foreground"
+    }
+
+    static let errors: [(String, [String])] = [
+        ("connectionError", ["Could not connect to the server", "Could not connect to server", "无法连接到服务器"]),
+        ("dnsError", ["hostname could not be found", "找不到服务器"]),
+        ("webProcessError", ["WebKitErrorDomain", "NSURLErrorDomain"]),
+        ("devURL", ["http://localhost:1420"]),
+        ("browserPreview", ["浏览器预览"]),
+        ("hostStorageError", ["本机主机资料不可用", "host_storage_unavailable", "host_path_bridge_unavailable"])
+    ]
+
+    static func permitsNavigation(_ state: [String: Any], from page: String) -> Bool {
+        state["page"] as? String == page && state["appForeground"] as? Bool == true &&
+            state["noAlerts"] as? Bool == true && state["noKnownErrors"] as? Bool == true &&
+            state["credentialsEmpty"] as? Bool == true && (state["windowCount"] as? Int ?? 0) > 0 &&
+            (state["webViewCount"] as? Int ?? 0) > 0
+    }
+
+    static func classify(_ state: [String: Any], home: [String: Any]) -> State {
+        if state["appForeground"] as? Bool != true { return .notForeground }
+        if state["noAlerts"] as? Bool != true { return .alert }
+        let flags = home["knownErrors"] as? [String: Bool] ?? [:]
+        if flags.contains(where: { $0.key != "loading" && $0.value }) { return .error }
+        if state["page"] as? String == "sshForm" || state["page"] as? String == "addChoice" ||
+            (state["inputCount"] as? Int ?? 0) > 0 { return .unexpected }
+        if flags["loading"] == true { return .loading }
+        if home["knownEmptyHome"] as? Bool == true && permitsNavigation(state, from: "emptyHome") { return .ready }
+        return .shell
+    }
+}
 enum NativeViewPolicy {
     enum Scope: Equatable { case current, otherWindow, nativeSystem, ambiguous }
     struct Action {
@@ -1651,15 +1684,7 @@ final class TauriDirectSSHUITests: XCTestCase {
                 }
             }
         }
-        let flags: [(String, [String])] = [
-            ("connectionError", ["Could not connect to the server", "Could not connect to server", "无法连接到服务器"]),
-            ("dnsError", ["hostname could not be found", "找不到服务器"]),
-            ("webProcessError", ["WebKitErrorDomain", "NSURLErrorDomain"]),
-            ("devURL", ["http://localhost:1420"]),
-            ("browserPreview", ["浏览器预览"]),
-            ("hostStorageError", ["本机主机资料不可用", "host_storage_unavailable", "host_path_bridge_unavailable"]),
-            ("loading", ["正在读取主机资料…"])
-        ]
+        let flags = NativeHomeReadiness.errors + [("loading", ["正在读取主机资料…"])]
         var errors: [String: Bool] = [:]
         for (key, terms) in flags {
             errors[key] = rows.contains { node in texts(node).contains { value in terms.contains { value.contains($0) } } }
@@ -1671,7 +1696,8 @@ final class TauriDirectSSHUITests: XCTestCase {
             "0 台已存主机", "正在读取主机资料…", "已存主机", "tauri://localhost", "tauri://localhost/",
             "0", "1", "2"
         ]
-        let visible = rows.filter { !$0.frame.isEmpty && $0.frame.intersects(app.frame) }
+        let screen = app.frame
+        let visible = rows.filter { !$0.frame.isEmpty && $0.frame.intersects(screen) }
         let inputCount = rows.filter { [.textField, .secureTextField, .textView, .searchField].contains($0.elementType) }.count
         let unknownTextCount = visible.filter { node in
             texts(node).contains { !$0.isEmpty && !publicHomeText.contains($0) }
@@ -1692,11 +1718,11 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func navigationState() throws -> [String: Any] {
+    private func navigationState(publish: Bool = true) throws -> [String: Any] {
         let tree = try observedNodes()
         let home = try homeDiagnostics(tree)
         lastHomeSample = home
-        try post("native_home", ["nativeCheckpoint": nativePhase, "home": home])
+        if publish { try post("native_home", ["nativeCheckpoint": nativePhase, "home": home]) }
         let members = home["members"] as! [String: [String: Any]]
         let seen = { (key: String) in (members[key]?["count"] as? Int ?? 0) > 0 }
         let selection = formSelection(tree)
@@ -1772,12 +1798,15 @@ final class TauriDirectSSHUITests: XCTestCase {
         // Preserve this newly sampled source state; never rewrite it as addChoice
         // or synthesize an unperformed click to make a historical row fit.
         if member == "sshChoice" && before["page"] as? String == "sshForm" {
+            try require(NativeHomeReadiness.permitsNavigation(before, from: "sshForm"), "native_home_retry_unsafe")
             let host = field("主机地址")
             try post("native_navigation_arrival", ["nativeCheckpoint": nativePhase, "state": before,
                 "geometry": try navigationGeometry(host), "source": "currentFormObservation", "performed": false])
             guard let current = liveControl(host) else { throw NSError(domain: "native_control_missing", code: 1) }
             return ("sshForm", "uniqueIdentifier", role(current.snapshot.elementType))
         }
+        try require(NativeHomeReadiness.permitsNavigation(before, from: member == "sshChoice" ? "addChoice" : "emptyHome"),
+                    "native_home_retry_unsafe")
         guard let (item, selection) = navigationElement(member) else { return ("missing", "uniqueLabel", "otherNative") }
         let geometry = try navigationGeometry(item)
         let allowed = geometry["ownerResolved"] as? Bool == true && geometry["centerVisible"] as? Bool == true &&
@@ -1807,17 +1836,61 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func openHomeSSH() throws {
-        let deadline = Date().addingTimeInterval(20)
-        var initial = try navigationState()
-        while initial["page"] as? String != "emptyHome" && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.2); initial = try navigationState()
+    private func awaitEmptyHome() throws {
+        let clock = { ProcessInfo.processInfo.systemUptime }
+        let start = clock()
+        var deadline = start
+        var sampleSeconds = 0.0
+        var strictSamples = 0
+        var waitCalls = 0
+        var markerSeen = false
+        var transitions: [[String: Any]] = []
+        var outcome: NativeHomeReadiness.State
+        let markers = [NSPredicate(format: "label == %@", "还没有主机")] +
+            NativeHomeReadiness.errors.flatMap { $0.1 }.map { NSPredicate(format: "label CONTAINS %@", $0) }
+        let wake = app.staticTexts.matching(NSCompoundPredicate(orPredicateWithSubpredicates: markers)).firstMatch
+        let milliseconds = { (seconds: TimeInterval) in min(900_000, max(0, Int(seconds * 1000))) }
+        repeat {
+            let sampledAt = clock()
+            let state = try navigationState(publish: false)
+            let checkedAt = clock()
+            sampleSeconds += checkedAt - sampledAt
+            strictSamples += 1
+            // The first snapshot may be slow and represent an earlier layout.
+            // Give an unfinished app time to advance and take a fresh sample.
+            if strictSamples == 1 { deadline = checkedAt + 35 }
+            outcome = NativeHomeReadiness.classify(state, home: lastHomeSample!)
+            if transitions.last?["state"] as? String != outcome.rawValue {
+                transitions.append(["state": outcome.rawValue, "elapsedMs": milliseconds(checkedAt - start)])
+            }
+            guard outcome == .loading || outcome == .shell else { break }
+            let slice = min(4, deadline - clock())
+            if slice <= 0 { break }
+            if markerSeen { Thread.sleep(forTimeInterval: slice) }
+            else {
+                waitCalls += 1
+                let waitStarted = clock()
+                markerSeen = wake.waitForExistence(timeout: slice)
+                let unused = slice - (clock() - waitStarted)
+                if !markerSeen && unused > 0 { Thread.sleep(forTimeInterval: unused) }
+            }
+        } while true
+        let readiness: [String: Any] = ["outcome": outcome.rawValue, "elapsedMs": milliseconds(clock() - start),
+            "strictSampleMs": milliseconds(sampleSeconds), "strictSamples": strictSamples, "waitCalls": waitCalls, "samples": transitions]
+        try post("native_home", ["nativeCheckpoint": nativePhase, "home": lastHomeSample!, "readiness": readiness])
+        switch outcome {
+        case .ready: return
+        case .error: try require(false, "native_home_known_loading_error")
+        case .alert: try require(false, "native_home_alert_present")
+        case .notForeground: try require(false, "native_home_not_foreground")
+        default: try require(false, "native_home_identity_unproven")
         }
-        try require(initial["page"] as? String == "emptyHome", "native_home_identity_unproven")
+    }
+
+    @MainActor
+    private func openHomeSSH() throws {
+        try awaitEmptyHome()
         for member in ["headerAdd", "emptyAdd", "ordinaryShortcut"] {
-            let before = try navigationState()
-            try require(before["page"] as? String == "emptyHome" && before["credentialsEmpty"] as? Bool == true,
-                        "native_home_retry_unsafe")
             let (page, selection, originalRole) = try navigate(member)
             if page == "missing" { continue }
             if page == "sshForm" {

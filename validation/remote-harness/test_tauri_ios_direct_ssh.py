@@ -871,6 +871,60 @@ class CaptureDiagnosticsTests(unittest.TestCase):
 
 
 class HomeDiagnosticsTests(unittest.TestCase):
+    def test_cold_start_observations_do_not_open_pages_or_advance_the_fixture(self):
+        ready = {'outcome': 'ready', 'elapsedMs': 44250, 'strictSampleMs': 42250, 'strictSamples': 2,
+                 'waitCalls': 1, 'samples': [{'state': 'loading', 'elapsedMs': 42000}, {'state':'ready', 'elapsedMs':44250}]}
+        for phase, scenario, next_stage in (('ordinary_open_add', 'ordinary', 'ordinary_probe'),
+                                              ('key_change_open_add', 'keyChange', 'key_change_probe_a')):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as directory:
+                state = ios.Checkpoints(None, None, directory, {})
+                state.index = ios.STAGES.index(next_stage)
+                event = {'stage':'native_home', 'nativeCheckpoint':phase, 'home':self.value(), 'readiness':ready}
+                state.accept(event)
+                self.assertEqual(state.result['homeReadiness'], {scenario: ready})
+                self.assertEqual(state.index, ios.STAGES.index(next_stage))
+                self.assertNotIn('navigationTrace', state.result)
+                with self.assertRaisesRegex(ios.Failure, 'home_diagnostic_phase_invalid'):
+                    state.accept(event)
+        loading = self.value()
+        loading['knownEmptyHome'] = False
+        loading['knownErrors']['loading'] = True
+        for name in ('emptyHeading', 'zeroHosts'):
+            loading['members'][name] = {'count':0, 'roles':[]}
+        timed_out = {'outcome': 'loading', 'elapsedMs': 35100, 'strictSampleMs': 100, 'strictSamples': 10,
+                     'waitCalls': 9, 'samples': [{'state':'loading', 'elapsedMs': 10}]}
+        with tempfile.TemporaryDirectory() as directory:
+            state = self.state_for_navigation(directory)
+            state.accept({'stage':'native_home', 'nativeCheckpoint':'ordinary_open_add', 'home': loading, 'readiness': timed_out})
+            self.assertEqual(state.result['homeReadiness']['ordinary'], timed_out)
+            with self.assertRaisesRegex(ios.Failure, 'home_retry_unsafe'):
+                self.replay_official_header(state)
+            self.assertNotIn('navigationTrace', state.result)
+
+    def test_cold_start_rejects_impossible_or_private_evidence(self):
+        base = {'outcome':'ready', 'elapsedMs':4200, 'strictSampleMs':400, 'strictSamples':2, 'waitCalls':1,
+                'samples':[{'state':'loading', 'elapsedMs':200}, {'state':'ready', 'elapsedMs':4200}]}
+        invalid_samples = [[], [{'state':'unknown','elapsedMs':100}],
+                           [{'state':'ready','elapsedMs':100}, {'state':'ready','elapsedMs':200}],
+                           [{'state':'loading','elapsedMs':4000}, {'state':'ready','elapsedMs':10}],
+                           [{'state':'ready','elapsedMs':100, 'label':'PRIVATE'}]]
+        changes = [{'samples':samples} for samples in invalid_samples]
+        changes += [{'strictSamples':13}, {'elapsedMs':-1}, {'waitCalls':2}, {'strictSampleMs':4201},
+                    {'outcome':'error'}, {'credentials':'PRIVATE'}]
+        for change in changes:
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
+                state = self.state_for_navigation(directory)
+                with self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
+                    state.accept({'stage':'native_home', 'nativeCheckpoint':'ordinary_open_add', 'home':self.value(),
+                                  'readiness':{**base, **change}})
+                self.assertNotIn('PRIVATE', json.dumps(state.result))
+                self.assertFalse(state.result.get('homeReadiness'))
+        for home_change in ({'knownEmptyHome':False}, {'webViewCount':0}, {'appAlertCount':1},
+                            {'knownErrors':{key:key == 'loading' for key in ios.HOME_ERRORS}}):
+            home = {**self.value(), **home_change}
+            with self.subTest(home_change=home_change), self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
+                ios.public_home_readiness(base, home)
+
     def test_repeated_home_sampling_retains_latest_without_navigation_or_ssh_replay(self):
         with tempfile.TemporaryDirectory() as directory:
             state = self.state_for_navigation(directory)

@@ -44,6 +44,120 @@ class NativeControlPolicyTests(unittest.TestCase):
                 return self.source[start:index + 1]
         self.fail("unterminated production method: " + signature)
 
+    def test_production_home_wait_separates_slow_initialization_from_unsafe_navigation(self):
+        # Exercise the production launch methods with deterministic XCTest
+        # observations and an injectable clock for the cold-start deadline.
+        program = r'''
+import Foundation
+enum Clock { static var time: TimeInterval = 0 }
+struct ProcessInfo {
+    static let processInfo = Self()
+    var systemUptime: TimeInterval { Clock.time }
+}
+enum Thread {
+    static func sleep(forTimeInterval duration: TimeInterval) { Clock.time += duration }
+}
+struct Rejected: Error { let code: String }
+final class Launch {
+    var snapshots: [(NativeHomeReadiness.State, TimeInterval)]
+    var wakes: [(Bool, TimeInterval)]
+    var waits: [TimeInterval] = []
+    var clicks: [String] = []
+    var posts: [(String, [String: Any])] = []
+    var sampled = 0
+    init(_ snapshots: [(NativeHomeReadiness.State, TimeInterval)], wakes: [(Bool, TimeInterval)] = []) {
+        self.snapshots = snapshots; self.wakes = wakes
+    }
+}
+struct Query {
+    let launch: Launch
+    func matching(_ predicate: NSPredicate) -> Self {
+        precondition(predicate.evaluate(with: ["label": "还没有主机"]))
+        precondition(predicate.evaluate(with: ["label": "本机主机资料不可用，请检查设置"]))
+        precondition(!predicate.evaluate(with: ["label": "正在读取主机资料…"]))
+        return self
+    }
+    var firstMatch: Self { self }
+    func waitForExistence(timeout: TimeInterval) -> Bool {
+        precondition(timeout > 0 && timeout <= 4)
+        launch.waits.append(timeout)
+        let event = launch.wakes.isEmpty ? (false, timeout) : launch.wakes.removeFirst()
+        Clock.time += event.1
+        return event.0
+    }
+}
+struct App { let staticTexts: Query }
+final class Adapter {
+    let launch: Launch
+    var app: App { App(staticTexts: Query(launch: launch)) }
+    var lastHomeSample: [String: Any]?
+    var nativePhase = "ordinary_open_add"
+    init(_ launch: Launch) { self.launch = launch }
+    func navigationState(publish: Bool = true) throws -> [String: Any] {
+        precondition(!publish, "cold-start polling must not make a network request per sample")
+        launch.sampled += 1
+        let (state, delay) = launch.snapshots.count == 1 ? launch.snapshots[0] : launch.snapshots.removeFirst()
+        Clock.time += delay
+        lastHomeSample = ["knownErrors": ["loading": state == .loading, "hostStorageError": state == .error],
+                          "knownEmptyHome": state == .ready]
+        return ["page": state == .ready ? "emptyHome" : state == .unexpected ? "addChoice" : "unexpected",
+                "appForeground": state != .notForeground, "noAlerts": state != .alert,
+                "noKnownErrors": state != .loading && state != .error, "credentialsEmpty": true,
+                "windowCount": 1, "webViewCount": 3, "inputCount": 0]
+    }
+    func require(_ condition: Bool, _ code: String) throws {
+        if !condition { throw Rejected(code: code) }
+    }
+    func post(_ name: String, _ value: [String: Any]) throws { launch.posts.append((name, value)) }
+    func navigate(_ member: String) throws -> (String, String, String) {
+        launch.clicks.append(member)
+        return ("sshForm", "buttonRole", "button")
+    }
+    func phase(_ name: String) throws { nativePhase = "ordinary_" + name }
+    func run() throws { try openHomeSSH() }
+''' + "\n".join(self.production_method(signature) for signature in (
+            "func awaitEmptyHome()", "func openHomeSSH()")) + r'''
+}
+func verify(_ launch: Launch, _ outcome: String, _ failure: String? = nil, states: [String]) -> [String: Any] {
+    Clock.time = 0
+    var caught: String?
+    do { try Adapter(launch).run() } catch let rejection as Rejected { caught = rejection.code } catch { fatalError() }
+    precondition(caught == failure)
+    precondition(launch.clicks == (failure == nil ? ["headerAdd"] : []))
+    precondition(launch.posts.map { $0.0 } == (failure == nil ? ["native_home", "native_home_entry"] : ["native_home"]))
+    let trace = launch.posts[0].1["readiness"] as! [String: Any]
+    precondition(trace["outcome"] as? String == outcome && trace["strictSamples"] as? Int == launch.sampled)
+    precondition(trace["waitCalls"] as? Int == launch.waits.count)
+    precondition((trace["samples"] as! [[String: Any]]).map { $0["state"] as! String } == states)
+    return trace
+}
+let slow = Launch([(.loading, 42), (.ready, 0.25)], wakes: [(true, 2)])
+let trace = verify(slow, "ready", states: ["loading", "ready"])
+precondition(slow.sampled == 2 && trace["elapsedMs"] as? Int == 44250 && trace["strictSampleMs"] as? Int == 42250)
+let neverReady = Launch([(.loading, 0)])
+let timeout = verify(neverReady, "loading", "native_home_identity_unproven", states: ["loading"])
+precondition(timeout["elapsedMs"] as? Int == 35000 && neverReady.sampled == 10 && neverReady.waits.count == 9)
+let emptyShell = Launch([(.shell, 0)], wakes: [(true, 0)])
+_ = verify(emptyShell, "shell", "native_home_identity_unproven", states: ["shell"])
+precondition(emptyShell.waits.count == 1 && emptyShell.sampled == 11)
+let lateError = Launch([(.loading, 0), (.error, 0)], wakes: [(true, 1)])
+_ = verify(lateError, "error", "native_home_known_loading_error", states: ["loading", "error"])
+precondition(lateError.waits.count == 1 && lateError.sampled == 2)
+let alert = Launch([(.alert, 0)])
+_ = verify(alert, "alert", "native_home_alert_present", states: ["alert"])
+precondition(alert.waits.isEmpty && alert.sampled == 1)
+let wrongPage = Launch([(.unexpected, 0)])
+_ = verify(wrongPage, "unexpected", "native_home_identity_unproven", states: ["unexpected"])
+precondition(wrongPage.waits.isEmpty)
+let ready = try Adapter(Launch([(.ready, 0)])).navigationState(publish: false)
+precondition(NativeHomeReadiness.permitsNavigation(ready, from: "emptyHome"))
+for change: [String: Any] in [["appForeground": false], ["noAlerts": false], ["noKnownErrors": false],
+                             ["credentialsEmpty": false], ["windowCount": 0], ["webViewCount": 0], ["page": "addChoice"]] {
+    precondition(!NativeHomeReadiness.permitsNavigation(ready.merging(change) { _, current in current }, from: "emptyHome"))
+}
+'''
+        self.compile_and_run(program)
+
     def test_production_adapter_roles_and_owner_boundaries(self):
         # Compile the real adapter bodies, using only snapshot/XCTest boundary
         # fixtures. The numeric roles deliberately differ from their names/order.

@@ -1,8 +1,20 @@
 import { createDirectSsh } from './direct-ssh.js';
 
-export function initDirectSshUI({native, invoke, channelFactory, terminalFactory}) {
+export function initDirectSshUI({native, invoke, channelFactory, terminalFactory, clipboardRead, onBack}) {
   const $ = id => document.getElementById(id);
   const hideKeyboard = $('ssh-hide-keyboard');
+  const compactLayout = globalThis.window?.matchMedia?.('(max-width:599px)');
+  const compact = () => compactLayout?.matches === true;
+  const setup = $('ssh-setup');
+  const mobileSection = $('home-ssh');
+  let evidence = null;
+  let probeRevision = 0;
+  let probing = false;
+  let submitting = false;
+  let pasteRevision = 0;
+  let retainedTrust = false;
+  let disconnected = false;
+
   let terminal = null;
   let resizeWatch = null;
   let outputSubscription = null;
@@ -64,14 +76,20 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       if (hideKeyboard) hideKeyboard.disabled = !ready;
       renderKeys(ready);
       const freshRefusal = reason === 'host_key_mismatch' || details?.blocked === true;
-      if (freshRefusal) { $('ssh-review').checked = false; renderKeyChange(details); }
+      if (freshRefusal) {
+        resetReview();
+        retainedTrust = true;
+        renderKeyChange(details);
+      }
       else renderKeyChange(null);
+      showSetupNotice(!ready && (!!reason || disconnected));
       applyView(ready, freshRefusal);
       applyLock(ready, freshRefusal);
       if (ready) {
+        retainedTrust = false;
+        disconnected = false;
         const t = details.target;
-        const host = t.host.includes(':') && !t.host.startsWith('[') ? `[${t.host}]` : t.host;
-        $('ssh-target').textContent = `${t.username}@${host}:${t.port} · SSH 已连接`;
+        $('ssh-target').textContent = `${targetText(t)} · SSH 已连接`;
         globalThis.window?.visualViewport?.addEventListener('resize', revealFocusedTerminal);
         resizer.start(); requestAnimationFrame(resizer.request);
         alignHeadingBelowHeader();
@@ -80,7 +98,56 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     onData: (bytes, acknowledge) => terminal?.write(bytes, acknowledge),
   });
   const target = () => ({host: $('ssh-host').value.trim(), port: Number($('ssh-port').value), username: $('ssh-user').value.trim()});
-  function clearSecrets() { for (const id of ['ssh-password','ssh-key','ssh-passphrase']) $(id).value = ''; }
+  function targetText(t) {
+    const host = t.host.includes(':') && !t.host.startsWith('[') ? `[${t.host}]` : t.host;
+    return `${t.username}@${host}:${t.port}`;
+  }
+  function clearSecrets() {
+    pasteRevision++;
+    for (const id of ['ssh-password','ssh-key','ssh-passphrase']) $(id).value = '';
+  }
+  function resetReview() {
+    probeRevision++;
+    probing = false;
+    evidence = null;
+    controller.invalidateReview();
+    $('ssh-review').checked = false;
+    if ($('ssh-public-key-details')) $('ssh-public-key-details').open = false;
+  }
+  function showSetupNotice(visible) {
+    $('ssh-status').toggleAttribute?.('data-setup-notice', visible);
+  }
+  function refreshStep() {
+    if (!mobileSection?.dataset) return;
+    if (!compact()) {
+      delete mobileSection.dataset.sshStep;
+      $('ssh-target-fields').hidden = false;
+      $('ssh-credentials').hidden = false;
+      $('ssh-reviewed-target').hidden = true;
+      $('ssh-trust-review').hidden = true;
+      $('ssh-probe').textContent = '探测主机指纹';
+      $('ssh-connect').textContent = '连接 / 重新连接';
+      return;
+    }
+    const confirmed = evidence && $('ssh-review').checked;
+    const step = confirmed ? 'auth' : evidence ? 'trust' : 'target';
+    mobileSection.dataset.sshStep = step;
+    $('ssh-step-title').textContent = confirmed ? 'SSH 账号认证' : evidence ? '核对主机密钥' : '普通 SSH';
+    $('ssh-target-fields').hidden = step !== 'target';
+    $('ssh-credentials').hidden = step !== 'auth';
+    $('ssh-reviewed-target').hidden = step === 'target';
+    $('ssh-trust-review').hidden = step !== 'trust';
+    $('ssh-probe').textContent = probing ? '正在探测…' : '探测并核对主机密钥';
+    $('ssh-connect').textContent = '连接 SSH';
+    $('ssh-trust-cancel').textContent = evidence?.rechecking ? '取消核对，保留旧信任' : '取消核对';
+    const pinned = retainedTrust ? controller.pinnedFingerprint() : null;
+    $('ssh-prior-trust').hidden = !pinned;
+    $('ssh-prior-fingerprint').hidden = !pinned;
+    $('ssh-prior-fingerprint').textContent = pinned ? `保留的旧指纹：${pinned}` : '';
+  }
+  function scrollToStep() {
+    if (compact()) globalThis.window?.scrollTo?.(0,0);
+  }
   // After the form→live swap or a keyboard collapse, the retained form scroll can
   // park the page heading under the sticky header (iOS). One event-point
   // realignment to the top; manual scrolling afterwards is never corrected.
@@ -100,7 +167,6 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   }
   // One place decides what the user sees: the terminal, the blocked review or the setup form.
   function applyView(ready, blocked) {
-    const setup = $('ssh-setup');
     const focused = document.activeElement;
     if (blocked && focused && setup.contains(focused)) focused.blur();
     setup.hidden = ready || blocked;
@@ -118,17 +184,29 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     const routeTabs = document.querySelector && document.querySelector('.route-tabs');
     if (header) header.hidden = blocked;
     if (routeTabs) routeTabs.hidden = blocked;
+    refreshStep();
   }
-  // While a refused handshake is unresolved every credential entry stays locked.
-  // After the same target is probed again, the user's own confirmation of the
-  // probed fingerprint releases them; nothing else does.
-  function applyLock(ready, blockedView) {
-    setEntryLock(ready || blockedView || controller.isBlocked() || !$('ssh-review').checked);
-    $('ssh-review').disabled = ready || controller.isBlocked();
+  // A probe and an explicit confirmation must still belong to the same target.
+  function reviewMatches() {
+    const now = target();
+    return evidence && now.host === evidence.target.host && now.port === evidence.target.port &&
+      now.username === evidence.target.username;
   }
-  function setEntryLock(locked) {
-    for (const id of ['ssh-password','ssh-key','ssh-passphrase','ssh-auth-method']) $(id).disabled = locked;
-    $('ssh-form').querySelectorAll('button[type=submit]').forEach(button => { button.disabled = locked; });
+  function usableCredentials() {
+    if ($('ssh-auth-method').value !== 'key') return !!$('ssh-password').value;
+    const pem = $('ssh-key').value.trim();
+    return compact() ? privateKeyReady(pem, $('ssh-passphrase').value) : !!pem;
+  }
+  function applyLock(ready = controller.isReady(), blockedView = !$('ssh-key-change').hidden) {
+    const unavailable = !native || ready || blockedView || controller.isActive() || submitting;
+    const locked = unavailable || probing || controller.isBlocked() || !reviewMatches() || !$('ssh-review').checked;
+    for (const id of ['ssh-password','ssh-key','ssh-passphrase','ssh-auth-method','ssh-auth-password','ssh-auth-key','ssh-paste-key']) {
+      const field = $(id);
+      if (field) field.disabled = locked;
+    }
+    $('ssh-review').disabled = unavailable || controller.isBlocked() || !reviewMatches();
+    $('ssh-probe').disabled = unavailable || probing;
+    $('ssh-form').querySelectorAll('button[type=submit]').forEach(button => { button.disabled = locked || !usableCredentials(); });
   }
   function revealAuthField() {
     const view = globalThis.window;
@@ -148,13 +226,47 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       view.scrollBy(0, (box.top + box.bottom - top - bottom) / 2);
     }
   }
-  // The review checkbox is the user's own confirmation of the probed fingerprint;
-  // only then may the credential entries be used again.
   $('ssh-review').addEventListener('change', () => {
-    if (controller.isReady() || controller.isBlocked()) return;
-    setEntryLock(!$('ssh-review').checked);
+    applyLock();
     revealAuthField();
   });
+  if (compactLayout) {
+    compactLayout.addEventListener('change', () => { refreshStep(); applyLock(); });
+    $('ssh-trust-confirm').onclick = () => {
+      if (!reviewMatches() || controller.isBlocked() || probing || submitting) return;
+      $('ssh-review').checked = true;
+      refreshStep();
+      applyLock();
+      scrollToStep();
+    };
+    const cancelTrust = () => {
+      clearSecrets();
+      resetReview();
+      refreshStep();
+      applyLock();
+      scrollToStep();
+    };
+    $('ssh-trust-cancel').onclick = cancelTrust;
+    $('ssh-step-back').onclick = () => {
+      if (controller.isActive() || submitting) {
+        resetReview();
+        disconnect();
+      } else if (evidence && $('ssh-review').checked) {
+        clearSecrets();
+        $('ssh-review').checked = false;
+        refreshStep();
+        applyLock();
+      } else if (evidence || probing) {
+        cancelTrust();
+      } else {
+        clearSecrets();
+        resetReview();
+        onBack?.(disconnected);
+        disconnected = false;
+      }
+      scrollToStep();
+    };
+  }
   // The blocked view keeps the pin that was in effect and, only when the refused handshake
   // carried one, the public key fingerprint that handshake actually presented.
   function renderKeyChange(details) {
@@ -166,37 +278,124 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       : '新：待重新探测';
     $('ssh-key-change-target').textContent = `目标：${t.username}@${t.host}:${t.port}`;
   }
-  $('ssh-auth-method').value = 'password';
-  $('ssh-auth-method').addEventListener('change', () => {
+  function changeMethod(key) {
     clearSecrets();
-    const key = $('ssh-auth-method').value === 'key';
+    $('ssh-auth-method').value = key ? 'key' : 'password';
     $('ssh-password-fields').hidden = key;
     $('ssh-key-fields').hidden = !key;
-    revealAuthField();
+    $('ssh-auth-password')?.setAttribute('aria-pressed', String(!key));
+    $('ssh-auth-key')?.setAttribute('aria-pressed', String(key));
+    if ($('ssh-credential-note')) $('ssh-credential-note').textContent = key
+      ? '填写完整私钥后才能连接。' : '断开或取消后，本次密码会清空。';
+    applyLock();
+    if (!compact()) revealAuthField();
+  }
+  $('ssh-auth-method').addEventListener('change', () => changeMethod($('ssh-auth-method').value === 'key'));
+  if ($('ssh-auth-password')) $('ssh-auth-password').onclick = () => {
+    if ($('ssh-auth-method').value !== 'password') changeMethod(false);
+  };
+  if ($('ssh-auth-key')) $('ssh-auth-key').onclick = () => {
+    if ($('ssh-auth-method').value !== 'key') changeMethod(true);
+  };
+  for (const id of ['ssh-password','ssh-key','ssh-passphrase']) $(id).addEventListener('input', () => {
+    pasteRevision++;
+    applyLock();
   });
-  for (const id of ['ssh-host','ssh-port']) $(id).addEventListener('input', () => {
-    controller.resetTargetBlock(); void controller.close(); $('ssh-review').checked = false; $('ssh-fingerprint').textContent = '请先探测并独立核对主机指纹。';
+  if ($('ssh-paste-key')) $('ssh-paste-key').onclick = async () => {
+    if ($('ssh-paste-key').disabled || !clipboardRead) return;
+    const revision = ++pasteRevision;
+    const current = () => revision === pasteRevision && !document.hidden && !mobileSection.hidden &&
+      !$('host-home').hidden && compact() && !$('ssh-key-fields').hidden && !$('ssh-paste-key').disabled;
+    try {
+      const text = await clipboardRead();
+      if (!current()) return;
+      $('ssh-key').value = text;
+      $('ssh-credential-note').textContent = '填写完整私钥后才能连接。';
+      applyLock();
+    } catch {
+      if (current()) $('ssh-credential-note').textContent = '无法读取剪贴板，可在私钥框用系统粘贴。';
+    }
+  };
+  for (const id of ['ssh-host','ssh-port','ssh-user']) $(id).addEventListener('input', () => {
+    disconnected = false;
+    clearSecrets();
+    resetReview();
+    if (id !== 'ssh-user') {
+      controller.resetTargetBlock();
+      retainedTrust = false;
+      $('ssh-fingerprint').textContent = '请先探测并独立核对主机指纹。';
+    }
+    void controller.close();
+    applyLock();
   });
-  $('ssh-user').addEventListener('input', () => { controller.invalidateReview(); void controller.close(); $('ssh-review').checked = false; });
-  $('ssh-probe').disabled = !native;
-  if (!native) $('ssh-status').textContent = '浏览器预览无法使用原生 SSH，请使用测试安装包。';
+  applyView(false, false);
+  changeMethod(false);
+  if (!native) {
+    $('ssh-status').textContent = '浏览器预览无法使用原生 SSH，请使用测试安装包。';
+    showSetupNotice(true);
+  }
   $('ssh-probe').onclick = async () => {
-    $('ssh-review').checked = false;
-    renderKeyChange(null);
-    applyView(controller.isReady(), false);
+    if (!native || probing || controller.isActive() || submitting) return;
     const selected = target();
+    if (!selected.host || !selected.username || !Number.isInteger(selected.port) || selected.port < 1 || selected.port > 65535) {
+      $('ssh-status').textContent = '请输入主机地址、用户名和有效端口（1–65535）。';
+      showSetupNotice(true);
+      return;
+    }
+    const rechecking = retainedTrust || controller.isBlocked();
+    disconnected = false;
+    clearSecrets();
+    resetReview();
+    const revision = probeRevision;
+    probing = true;
+    renderKeyChange(null);
+    showSetupNotice(false);
+    applyView(false, false);
+    applyLock(false, false);
     try {
       const key = await controller.probe(selected);
-      if (key) $('ssh-fingerprint').textContent = `主机 ${key.host}:${key.port} · ${key.fingerprint} · ${key.publicKey}`;
-    } catch { $('ssh-fingerprint').textContent = '探测失败；请检查地址和端口后重试。'; }
-    // The same target was probed again; the user must confirm the fingerprint
-    // before any credential entry is usable again.
-    applyLock(false, controller.isBlocked());
+      if (revision !== probeRevision) return;
+      if (typeof key?.publicKey !== 'string' || typeof key?.fingerprint !== 'string') throw Error('probe_unavailable');
+      evidence = {target:selected, rechecking};
+      $('ssh-fingerprint').textContent = `主机 ${key.host}:${key.port} · ${key.fingerprint} · ${key.publicKey}`;
+      if ($('ssh-reviewed-endpoint')) {
+        $('ssh-reviewed-endpoint').textContent = targetText(selected);
+        $('ssh-reviewed-algorithm').textContent = key.publicKey.trim().split(/\s+/,1)[0];
+        $('ssh-reviewed-fingerprint').textContent = key.fingerprint;
+        $('ssh-reviewed-public-key').textContent = key.publicKey;
+      }
+      if (compact()) changeMethod(false);
+      scrollToStep();
+    } catch {
+      if (revision !== probeRevision) return;
+      $('ssh-fingerprint').textContent = '探测失败；请检查地址和端口后重试。';
+      $('ssh-status').textContent = $('ssh-fingerprint').textContent;
+      showSetupNotice(true);
+    } finally {
+      if (revision === probeRevision) {
+        probing = false;
+        refreshStep();
+        applyLock(false, false);
+      }
+    }
   };
   $('ssh-form').onsubmit = async event => {
     event.preventDefault();
     if (!native) { $('ssh-status').textContent = '浏览器预览不支持原生 SSH。'; return; }
-    if (controller.isBlocked()) { $('ssh-status').textContent = '主机指纹变化尚未重新核对；请先探测并独立核对本目标的主机指纹。'; return; }
+    if (controller.isBlocked()) {
+      $('ssh-status').textContent = '主机指纹变化尚未重新核对；请先探测并独立核对本目标的主机指纹。';
+      showSetupNotice(true);
+      return;
+    }
+    if (submitting || controller.isActive()) return;
+    if (!reviewMatches() || !$('ssh-review').checked || !usableCredentials()) {
+      $('ssh-status').textContent = '请先核对指纹并选择一种认证方式。';
+      showSetupNotice(true);
+      return;
+    }
+    submitting = true;
+    disconnected = false;
+    applyLock();
     const password = $('ssh-password').value, privateKeyPem = $('ssh-key').value, passphrase = $('ssh-passphrase').value;
     const credentials = $('ssh-auth-method').value === 'key'
       ? (privateKeyPem ? {privateKeyPem, ...(passphrase ? {privateKeyPassphrase:passphrase} : {})} : {})
@@ -219,16 +418,33 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     }
     clearSecrets();
     try { await controller.open(target(), credentials, $('ssh-review').checked); }
-    catch { $('ssh-status').textContent = '请先核对指纹并选择一种认证方式。'; }
+    catch {
+      $('ssh-status').textContent = '请先核对指纹并选择一种认证方式。';
+      showSetupNotice(true);
+    } finally {
+      submitting = false;
+      applyLock();
+    }
   };
   // Cancelling keeps the pin that was in effect and leaves the target blocked:
   // the same target must be probed and confirmed again before anything is used.
-  const disconnect = () => { clearSecrets(); void controller.close(); };
-  $('ssh-disconnect').onclick = disconnect;
-  $('ssh-cancel').onclick = disconnect;
+  const disconnect = (requested = false) => {
+    disconnected = compact() && requested;
+    clearSecrets();
+    if (compact()) resetReview();
+    void controller.close();
+    if (compact()) {
+      showSetupNotice(true);
+      scrollToStep();
+    }
+  };
+  $('ssh-disconnect').onclick = () => disconnect(true);
+  $('ssh-cancel').onclick = () => disconnect();
   $('ssh-key-recheck').onclick = () => { $('ssh-probe').onclick(); };
   $('ssh-key-cancel').onclick = () => {
     clearSecrets();
+    resetReview();
+    retainedTrust = true;
     const pinned = controller.pinnedFingerprint();
     if (pinned) $('ssh-fingerprint').textContent = `主机 ${target().host}:${target().port} · ${pinned} · 已保留的旧信任`;
     renderKeyChange(null);
@@ -239,14 +455,49 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     applyLock(false, false);
     $('ssh-status').hidden = false;
     $('ssh-status').textContent = '已保留旧信任；请重新探测并独立核对本目标的主机指纹后再连接。';
+    showSetupNotice(!compact());
+    scrollToStep();
   };
   $('ssh-focus').onclick = () => terminal?.focus();
   if (hideKeyboard) hideKeyboard.onclick = () => {
     if (controller.isReady()) { terminal?.textarea?.blur(); alignHeadingBelowHeader(); }
   };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { clearSecrets(); void controller.close(); } });
-  return {close: () => {clearSecrets(); void controller.close();}, isReady:controller.isReady, isActive:controller.isActive,
-    hide: () => { visibilityEpoch++; }, show:()=>{ if(terminal) bindTerminal(terminal); if(controller.isReady()) requestAnimationFrame(resizer.request); }};
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearSecrets();
+      if (compact()) resetReview();
+      void controller.close();
+    }
+  });
+  return {close:disconnect, isReady:controller.isReady, isActive:controller.isActive,
+    hide: () => {
+      visibilityEpoch++;
+      clearSecrets();
+      if (compact() && !controller.isActive()) resetReview();
+      refreshStep();
+      applyLock();
+    }, show:()=>{ if(terminal) bindTerminal(terminal); if(controller.isReady()) requestAnimationFrame(resizer.request); }};
+}
+
+
+// Leave cryptographic key parsing and passphrase verification to the existing transport.
+export function privateKeyReady(pem, passphrase) {
+  const envelope = /^-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----\r?\n([\s\S]+)\r?\n-----END \1-----$/.exec(pem.trim());
+  if (!envelope) return false;
+  const [,format,body] = envelope;
+  const legacyEncrypted = /^Proc-Type:\s*4,ENCRYPTED\s*$/m.test(body);
+  const payload = body.replace(/^(?:Proc-Type|DEK-Info):[^\r\n]*$/gm, '').replace(/\s/g, '');
+  if (payload.length < 16 || payload.length % 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(payload)) return false;
+  if (format === 'ENCRYPTED PRIVATE KEY' || legacyEncrypted) return !!passphrase;
+  if (format !== 'OPENSSH PRIVATE KEY') return true;
+  const header = atob(payload.slice(0, 100));
+  const magic = 'openssh-key-v1\0';
+  if (!header.startsWith(magic) || header.length < magic.length + 5) return false;
+  const cipherLength = header.charCodeAt(magic.length + 3);
+  if (header.slice(magic.length, magic.length + 3) !== '\0\0\0' ||
+      !cipherLength || cipherLength > header.length - magic.length - 4) return false;
+  const cipher = header.slice(magic.length + 4, magic.length + 4 + cipherLength);
+  return cipher === 'none' || !!passphrase;
 }
 
 // Serialize PTY updates and remeasure after each completion. A new session gets

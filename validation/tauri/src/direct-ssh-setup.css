@@ -1,0 +1,162 @@
+.ssh-mobile-only { display:none; }
+
+@media (max-width:599px) {
+  body:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden])) {
+    padding-bottom:calc(env(safe-area-inset-bottom,0px) + var(--hp-visual-inset,0px));
+    .app-header, .route-tabs, #ssh-page-heading, .ssh-desktop-only { display:none; }
+    #host-home { padding:var(--hp-connection-top) 0 24px; }
+    #ssh-status:not([data-setup-notice]) { display:none; }
+    #ssh-status { margin:12px var(--hp-connection-margin); }
+  }
+
+  #home-ssh[data-ssh-step] #ssh-setup {
+    .ssh-mobile-only { display:revert; }
+    .ssh-desktop-only { display:none; }
+    .ssh-step-header {
+      min-height:56px;
+      padding:0 calc(var(--hp-connection-margin) - 8px) 1px;
+      border-bottom:1px solid var(--hp-border);
+      position:sticky;
+      top:var(--hp-connection-top);
+      z-index:3;
+      background:var(--hp-canvas);
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    #ssh-step-title { font-size:1.125rem; font-weight:600; margin:0; }
+    #ssh-step-back {
+      display:grid;
+      place-items:center;
+      width:44px;
+      height:44px;
+      padding:0;
+      border:0;
+      background:transparent;
+    }
+
+    #ssh-form { padding:20px var(--hp-connection-margin) 0; }
+    #ssh-form label { display:block; margin:0; font-size:0.8125rem; font-weight:600; line-height:1.125rem; }
+    #ssh-form input, #ssh-form textarea {
+      display:block;
+      width:100%;
+      min-height:48px;
+      margin:4px 0 0;
+      padding:10px 12px;
+      color:var(--hp-textPrimary);
+      background:var(--hp-card);
+      border:1px solid var(--hp-borderStrong);
+      border-radius:var(--hp-radius-button);
+      font-family:inherit;
+      font-size:1rem;
+      font-weight:400;
+      line-height:1.25rem;
+      scroll-margin-top:calc(var(--hp-connection-top) + 64px);
+    }
+    #ssh-form input:focus, #ssh-form textarea:focus {
+      border-color:var(--hp-brand);
+      outline:1px solid var(--hp-brand);
+      outline-offset:-2px;
+    }
+    #ssh-port { appearance:textfield; }
+    #ssh-port::-webkit-outer-spin-button, #ssh-port::-webkit-inner-spin-button { appearance:none; margin:0; }
+    #ssh-prior-trust {
+      min-height:66px;
+      padding:8px 11px;
+      margin-bottom:16px;
+      border:1px solid var(--hp-brandBorder);
+      border-radius:10px;
+      background:var(--hp-brandSoft);
+    }
+    #ssh-prior-trust p { margin:0; line-height:1.375rem; font-size:0.8125rem; }
+    #ssh-prior-trust p:first-child { color:var(--hp-brand); font-weight:600; font-size:0.875rem; }
+    #ssh-prior-fingerprint { overflow-wrap:anywhere; }
+    #ssh-target-fields h3 { font-size:1.375rem; font-weight:600; line-height:1.625rem; margin:0 0 10px; }
+    #ssh-target-fields .remote-fields-grid {
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 84px;
+      gap:14px 12px;
+      margin:0;
+    }
+    .ssh-host-field { grid-row:1; grid-column:1 / -1; }
+    .ssh-user-field { grid-row:2; grid-column:1; }
+    .ssh-port-field { grid-row:2; grid-column:2; }
+    #ssh-probe { margin-top:20px; }
+    #ssh-probe:not(:disabled) { background:var(--hp-brand); color:var(--hp-textInverse); border-color:var(--hp-brand); }
+    #ssh-probe, .ssh-step-actions button, #ssh-paste-key {
+      display:block;
+      width:100%;
+      min-height:48px;
+      font-size:0.875rem;
+    }
+    .ssh-step-note { color:var(--hp-textMutedReadable); margin:8px 0 0; font-size:0.75rem; line-height:1.125rem; }
+    #ssh-target-fields .ssh-step-note { margin-top:9px; }
+    .ssh-step-actions { display:grid; gap:12px; margin:0; }
+
+    #ssh-reviewed-target, #ssh-reviewed-key {
+      border:1px solid var(--hp-border);
+      background:var(--hp-card);
+      padding-inline:11px;
+      min-width:0;
+    }
+    #ssh-reviewed-target { min-height:52px; padding-block:4px; border-radius:10px; }
+    #ssh-reviewed-target p, #ssh-reviewed-key p,
+    #ssh-independent-verification p, #ssh-auth-heading { margin:0; }
+    #ssh-reviewed-target p:first-child, #ssh-reviewed-key p:nth-of-type(odd) {
+      color:var(--hp-textSecondary);
+      font-size:0.75rem;
+      line-height:1.125rem;
+    }
+    #ssh-reviewed-endpoint, #ssh-reviewed-algorithm, #ssh-reviewed-fingerprint, #ssh-reviewed-public-key {
+      font-family:ProbeNerd, ui-monospace, monospace;
+      overflow-wrap:anywhere;
+    }
+    #ssh-reviewed-endpoint { font-size:0.875rem; line-height:1.125rem; margin-top:1px; }
+    #ssh-trust-review { margin-top:12px; }
+    #ssh-reviewed-key { min-height:122px; padding-block:4px 8px; border-radius:var(--hp-radius-card); }
+    #ssh-reviewed-algorithm { font-size:0.875rem; line-height:1.25rem; padding-top:5px; }
+    #ssh-reviewed-key .ssh-fingerprint-label {
+      border-top:1px solid var(--hp-border);
+      margin-top:6px;
+      padding-top:5px;
+    }
+    #ssh-reviewed-fingerprint { min-height:34px; font-size:0.8125rem; line-height:1.0625rem; padding-top:1px; white-space:pre-wrap; }
+    #ssh-independent-verification { min-height:52px; margin:16px 0 6px; color:var(--hp-textSecondary); font-size:0.875rem; line-height:1.3125rem; }
+    #ssh-public-key-details { margin-top:12px; color:var(--hp-textSecondary); font-size:0.8125rem; }
+    #ssh-public-key-details summary { display:list-item; min-height:44px; padding-block:12px; cursor:pointer; }
+    #ssh-reviewed-public-key { margin:0; }
+
+    #ssh-approved-note {
+      min-height:44px;
+      margin:10px 0 20px;
+      padding:10px 11px;
+      border:1px solid var(--hp-successBorder);
+      border-radius:10px;
+      background:var(--hp-successSoft);
+      color:var(--hp-successText);
+      font-size:0.875rem;
+      font-weight:600;
+      line-height:1.375rem;
+    }
+    #ssh-auth-heading { font-size:0.8125rem; font-weight:600; line-height:1.125rem; }
+    #ssh-auth-options { margin-bottom:14px; }
+    #ssh-auth-options > div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:4px; }
+    #ssh-auth-options button { font-size:0.875rem; color:var(--hp-textSecondary); font-weight:400; }
+    #ssh-auth-options button[aria-pressed="true"] { border-color:var(--hp-brand); background:var(--hp-brandSoft); color:var(--hp-brand); font-weight:600; }
+    #ssh-key { height:84px; resize:vertical; }
+    #ssh-paste-key { margin:10px 0 12px; }
+    #ssh-credentials .ssh-step-actions { margin-top:14px; }
+    #ssh-credentials #ssh-cancel { display:none; }
+    #ssh-connect:disabled {
+      color:var(--hp-textSecondary);
+      background:var(--hp-cardSubtle);
+      border-color:var(--hp-border);
+      opacity:1;
+    }
+  }
+
+  @media (max-width:359px) {
+    #home-ssh[data-ssh-step] #ssh-setup #ssh-approved-note { margin-bottom:12px; }
+    #home-ssh[data-ssh-step] #ssh-setup #ssh-key { height:68px; }
+  }
+}

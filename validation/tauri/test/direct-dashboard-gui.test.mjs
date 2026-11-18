@@ -1873,6 +1873,7 @@ test('SSH authentication selection clears abandoned secrets and sends only the c
     const keyConfig=h.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
     assert.match(keyConfig.privateKeyPem,/\nfixture\n/);assert.equal(keyConfig.privateKeyPassphrase,'passphrase fixture');assert.equal('password' in keyConfig,false);
     assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
+    n['ssh-cancel'].click();await flush();
     n['ssh-key'].value='unused key';n['ssh-passphrase'].value='unused phrase';
     n['ssh-auth-method'].value='password';n['ssh-auth-method'].dispatch('change');
     assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');assert.equal(n['ssh-key-fields'].hidden,true);
@@ -1960,8 +1961,8 @@ test('a known-empty catalog publishes the home and ordinary SSH entry before net
 });
 
 test('compact empty home uses the same direct SSH action and can return from the chooser', async () => {
-  let resize;
-  const compactEntry = { matches: true, addEventListener: (_event, callback) => { resize = callback; } };
+  const listeners = [];
+  const compactEntry = { matches: true, addEventListener: (_event, callback) => { listeners.push(callback); } };
   const h = await setup({ compactEntry });
   const n = h.nodes;
   try {
@@ -1974,7 +1975,7 @@ test('compact empty home uses the same direct SSH action and can return from the
     n['home-open-ssh'].click();
     assert.equal(n['home-ssh'].hidden, false);
     compactEntry.matches = false;
-    resize();
+    listeners.forEach(resize=>resize());
     assert.equal(n['home-open-ssh'].parentElement, n['host-board-intro']);
     assert.equal(n['home-open-ssh'].textContent, '普通 SSH');
     assert.equal(Object.hasOwn(n['host-empty'].attrs, 'data-compact'), false);

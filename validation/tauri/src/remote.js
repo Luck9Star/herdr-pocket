@@ -866,7 +866,9 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       $('pair-request').value='';$('pair-response').value='';previewResponse='';$('pair-response-preview').hidden=true;
       pairStatus('公开连接资料已填入；请独立核对用户名和主机公钥，再创建设备公开请求。');render();
     }});
-  const ssh = initDirectSshUI({native, invoke, channelFactory:()=>new Channel(), terminalFactory:options=>createUnicodeTerminal(Terminal,options)});
+  let sshBackSection = 'dashboard';
+  const ssh = initDirectSshUI({native, invoke, clipboardRead, onBack:disconnected=>navigateHome(disconnected ? 'dashboard' : sshBackSection),
+    channelFactory:()=>new Channel(), terminalFactory:options=>createUnicodeTerminal(Terminal,options)});
   function setHomeSection(section) {
     const wasHidden = $('home-ssh').hidden;
     if (section !== 'ssh' && !$('home-ssh').hidden) ssh.hide();
@@ -891,8 +893,8 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('host-empty-add').onclick=()=>navigateHome('add');
   $('add-back').onclick=()=>navigateHome('dashboard');
   $('add-herdr').onclick=()=>void openNewHost();
-  $('add-ssh').onclick=()=>setHomeSection('ssh');
-  $('home-open-ssh').onclick=()=>setHomeSection('ssh');
+  $('add-ssh').onclick=()=>{ sshBackSection='add'; setHomeSection('ssh'); };
+  $('home-open-ssh').onclick=()=>{ sshBackSection='dashboard'; setHomeSection('ssh'); };
   const closeConfigTransfer=initConfigTransfer({native, invoke, getHosts:()=>hostRecords, refreshHosts, onAffected:ids=>{workspace.prepareAffected(ids);if(ids.includes(activeHostId))cancel('配置操作涉及此主机；观察已停止，请重新核对。');}, onSettled:ids=>workspace.affected(ids), onApplied:async result=>{
     const affected=[...result.removedIds,...result.retired.map(h=>h.id)];
     workspace.affected(affected);

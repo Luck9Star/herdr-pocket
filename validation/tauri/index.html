@@ -55,23 +55,72 @@
 </section>
 <section id="home-ssh" hidden>
   <h2 id="ssh-page-heading">普通 SSH 终端</h2>
-  <div id="ssh-setup"><p>连接普通远程 shell；无需 herdr。先探测指纹并通过可信渠道独立核对，再填写认证方式。</p>
-  <form id="ssh-form" autocomplete="off">
-    <div class="remote-fields-grid">
-      <label>主机地址<input id="ssh-host" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
-      <label>端口<input id="ssh-port" type="number" min="1" max="65535" value="22" required></label>
-      <label>用户名<input id="ssh-user" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
-    </div>
-    <button id="ssh-probe" type="button">探测主机指纹</button>
-    <p id="ssh-fingerprint" class="ssh-fingerprint">请先探测并独立核对主机指纹。</p>
-    <label class="review-check"><input id="ssh-review" type="checkbox"><span>我已通过可信渠道独立核对以上指纹。</span></label>
-    <label for="ssh-auth-method">认证方式</label>
-    <select id="ssh-auth-method"><option value="password">使用密码认证</option><option value="key">使用私钥认证</option></select>
-    <div id="ssh-password-fields"><label>密码<input id="ssh-password" type="password" autocomplete="new-password"></label></div>
-    <div id="ssh-key-fields" hidden><label>私钥<textarea id="ssh-key" rows="4" autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off"></textarea></label>
-    <label>私钥口令（可选）<input id="ssh-passphrase" type="password" autocomplete="new-password"></label></div>
-    <div class="ssh-options"><button type="submit" class="primary">连接 / 重新连接</button><button id="ssh-cancel" type="button">取消连接</button></div>
-  </form></div>
+  <div id="ssh-setup">
+    <header class="ssh-step-header ssh-mobile-only">
+      <button id="ssh-step-back" type="button" aria-label="返回"><svg class="connection-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M14 4 L6 12 L14 20 M6 12 H20"/></svg></button>
+      <h2 id="ssh-step-title">普通 SSH</h2>
+    </header>
+    <p class="ssh-desktop-only">连接普通远程 shell；无需 herdr。先探测指纹并通过可信渠道独立核对，再填写认证方式。</p>
+    <form id="ssh-form" autocomplete="off">
+      <div id="ssh-target-fields">
+        <section id="ssh-prior-trust" class="ssh-mobile-only" aria-label="已保留旧信任" hidden>
+          <p>已保留旧信任</p><p>请重新探测并独立核对主机指纹。</p>
+        </section>
+        <h3 class="ssh-mobile-only">填写连接目标</h3>
+        <div class="remote-fields-grid">
+          <label class="ssh-host-field">主机地址<input id="ssh-host" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
+          <label class="ssh-user-field">用户名<input id="ssh-user" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
+          <label class="ssh-port-field">端口<input id="ssh-port" type="number" min="1" max="65535" value="22" required></label>
+        </div>
+        <button id="ssh-probe" type="button">探测主机指纹</button>
+        <p class="ssh-step-note ssh-mobile-only">探测时仅获取主机密钥，认证在核对之后进行。</p>
+        <p id="ssh-prior-fingerprint" class="ssh-step-note ssh-mobile-only" hidden></p>
+      </div>
+      <p id="ssh-fingerprint" class="ssh-fingerprint ssh-desktop-only">请先探测并独立核对主机指纹。</p>
+      <label class="review-check ssh-desktop-only"><input id="ssh-review" type="checkbox"><span>我已通过可信渠道独立核对以上指纹。</span></label>
+      <section id="ssh-reviewed-target" class="ssh-mobile-only" hidden aria-label="本次连接目标">
+        <p>本次连接目标</p><p id="ssh-reviewed-endpoint"></p>
+      </section>
+      <section id="ssh-trust-review" class="ssh-mobile-only" hidden aria-label="核对主机密钥">
+        <div id="ssh-reviewed-key">
+          <p>主机密钥算法</p><p id="ssh-reviewed-algorithm"></p>
+          <p class="ssh-fingerprint-label">完整 SHA256 指纹</p><p id="ssh-reviewed-fingerprint"></p>
+        </div>
+        <div id="ssh-independent-verification">
+          <p>请通过服务器控制台或向管理员独立核对。</p>
+          <p>算法和完整指纹一致后，再确认继续。</p>
+        </div>
+        <div class="ssh-step-actions">
+          <button id="ssh-trust-confirm" type="button" class="primary">指纹一致，确认继续</button>
+          <button id="ssh-trust-cancel" type="button">取消核对</button>
+        </div>
+        <details id="ssh-public-key-details">
+          <summary>查看完整主机公钥</summary>
+          <p id="ssh-reviewed-public-key"></p>
+        </details>
+      </section>
+      <div id="ssh-credentials">
+        <p id="ssh-approved-note" class="ssh-mobile-only">本次主机密钥已确认</p>
+        <label for="ssh-auth-method" class="ssh-desktop-only">认证方式</label>
+        <select id="ssh-auth-method" class="ssh-desktop-only"><option value="password">使用密码认证</option><option value="key">使用私钥认证</option></select>
+        <div id="ssh-auth-options" class="ssh-mobile-only" role="group" aria-labelledby="ssh-auth-heading">
+          <p id="ssh-auth-heading">认证方式</p>
+          <div>
+            <button id="ssh-auth-password" type="button" aria-pressed="true">密码</button>
+            <button id="ssh-auth-key" type="button" aria-pressed="false">已有私钥</button>
+          </div>
+        </div>
+        <div id="ssh-password-fields"><label>密码<span class="ssh-mobile-only">（仅本次使用）</span><input id="ssh-password" type="password" autocomplete="new-password" disabled></label></div>
+        <div id="ssh-key-fields" hidden>
+          <label><span class="ssh-desktop-only">私钥</span><span class="ssh-mobile-only">私钥 PEM（仅本次使用）</span><textarea id="ssh-key" rows="4" placeholder="粘贴已有私钥的完整 PEM" autocomplete="off" spellcheck="false" autocapitalize="none" disabled></textarea></label>
+          <button id="ssh-paste-key" class="ssh-mobile-only" type="button">粘贴私钥</button>
+          <label>私钥口令<span class="ssh-desktop-only">（可选）</span><span class="ssh-mobile-only">（加密私钥需要）</span><input id="ssh-passphrase" type="password" placeholder="未填写" autocomplete="new-password" disabled></label>
+        </div>
+        <div class="ssh-options ssh-step-actions"><button id="ssh-connect" type="submit" class="primary" disabled>连接 / 重新连接</button><button id="ssh-cancel" class="ssh-desktop-only" type="button">取消连接</button></div>
+        <p id="ssh-credential-note" class="ssh-mobile-only ssh-step-note"></p>
+      </div>
+    </form>
+  </div>
   <p id="ssh-status" role="status" aria-live="polite">尚未连接。</p>
   <section id="ssh-key-change" hidden aria-label="主机指纹变化审查">
     <h2 class="ssh-key-change-heading">主机指纹发生变化</h2>

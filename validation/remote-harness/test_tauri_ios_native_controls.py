@@ -171,6 +171,7 @@ final class XCUIElement {
         case window = 3, webView = 4, scrollView = 5, group = 13, checkBox = 14, `switch` = 15, toggle = 16, secureTextField = 87
     }
     var taps = 0
+    var directTaps = 0
     var drags: [(CGVector, CGVector)] = []
     var inputs: [String] = []
     var inputValue: String?
@@ -179,7 +180,7 @@ final class XCUIElement {
     func coordinate(withNormalizedOffset: CGVector) -> XCUICoordinate {
         XCUICoordinate(element: self, offset: withNormalizedOffset)
     }
-    func tap() { taps += 1 }
+    func tap() { taps += 1; directTaps += 1 }
     func waitForExistence(timeout: Double) -> Bool { true }
     func swipeDown() { }
     func swipeUp() { }
@@ -192,7 +193,7 @@ enum XCUIKeyboardKey: String { case delete = "\u{8}" }
 struct XCUICoordinate {
     let element: XCUIElement
     let offset: CGVector
-    func tap() { element.tap() }
+    func tap() { element.taps += 1 }
     func press(forDuration: Double, thenDragTo: XCUICoordinate) { element.drags.append((offset, thenDragTo.offset)) }
 }
 protocol XCUIElementSnapshot {
@@ -259,6 +260,14 @@ final class XCUIScreen {
     }
 }
 struct Rejected: Error { let reason: String }
+struct Date: Comparable {
+    private static var clock: Double = 0
+    private let instant: Double
+    init() { Self.clock += 25; instant = Self.clock }
+    private init(_ instant: Double) { self.instant = instant }
+    func addingTimeInterval(_ seconds: Double) -> Self { Self(instant + seconds) }
+    static func < (lhs: Self, rhs: Self) -> Bool { lhs.instant < rhs.instant }
+}
 final class Observations {
     var trees: [[Observed]]
     var liveSnapshots: [Snapshot]
@@ -303,6 +312,7 @@ struct Adapter {
         guard let observations = observations, !observations.occlusionSamples.isEmpty else { return blockers }
         return observations.occlusionSamples.removeFirst()
     }
+    func statusBarFrames() -> [CGRect] { blockers.filter { $0.minY == app.frame.minY } }
     func post(_ topic: String, _ payload: [String: Any]) throws { observations?.checkpoints.append((topic, payload)) }
     func role(_ type: XCUIElement.ElementType) -> String {
         if type == .secureTextField { return "secureTextField" }
@@ -357,6 +367,8 @@ struct Adapter {
     func tapPort() throws { _ = try tapForm("port") }
     func port() throws -> LiveControl { try formControl("port").live }
     func revealCurrent() throws -> LiveControl { try reveal(current.element).live }
+    func button(_ label: String) -> XCUIElement { current.element }
+    func submit(_ attempt: NativeConnectPolicy.Attempt, expected: String) throws { try submitConnection(attempt, waitingFor: expected) }
     func fillCurrent(_ text: String) throws { try fillPassword(current.element, text) }
     func fillPort(_ text: String) throws { try fillForm("port", text) }
     func fillField(_ name: String, _ text: String) throws { try fillForm(name, text) }
@@ -379,7 +391,8 @@ struct Adapter {
             "func safeFrame(_ anchors:", "func captureDiagnostic(_ anchor:", "func exactObserved(_ rows:",
             "struct CaptureAnchors {", "func terminalBoundaryControls(_ title:", "func verifyCaptureControls(_ selected:",
             "func waitForCaptureKeyboardToHide(reviewSample:", "func stableCaptureLayout(_ before:",
-            "func terminalCaptureFrame(_ anchors:", "func screenshot(_ stage:",
+            "func terminalCaptureFrame(_ anchors:", "struct TerminalHeader {", "func terminalHeader(_ title:", "func screenshot(_ stage:",
+            "func connectionRows(_ rows:", "func connectionStatus(_ rows:", "func submitConnection(_ attempt:",
             "func fillForm(_ name:", "func pageScope(_ item:")) + r'''
 }
 let screen = CGRect(x: 0, y: 0, width: 390, height: 844)
@@ -665,6 +678,69 @@ let routeButtons = tabDefinitions.enumerated().map { index, definition in
     return passwordRow(snapshot(role, frame: frame, label: definition.1), [0, 0, 8, index])
 }
 let routeLandmark = passwordRow(snapshot(.group, frame: routeFrame, label: "主导航"), [0, 0, 8])
+let connectedText = "fixture-target · SSH 已连接"
+let submitBehindTabs = snapshot(.button, frame: CGRect(x: 16, y: 878, width: 132, height: 46), label: "连接 / 重新连接")
+let visibleSubmit = snapshot(.button, frame: submitBehindTabs.frame.offsetBy(dx: 0, dy: -184), label: "连接 / 重新连接")
+func submitRows(_ submit: Snapshot, status: String, includeUnownedTarget: Bool = false) -> [Observed] {
+    var rows = [passwordWindow, passwordWeb, routeLandmark, passwordRow(submit, [0, 0, 1]),
+        passwordRow(snapshot(.other, frame: movedFrame, identifier: "ssh-status", label: ""), [0, 0, 12]),
+        passwordRow(snapshot(.staticText, frame: movedFrame, label: status), [0, 0, 12, 0])]
+    if includeUnownedTarget {
+        rows.append(passwordRow(snapshot(.staticText, frame: movedFrame, label: connectedText), [0, 1, 4], web: [0, 1]))
+    }
+    return rows
+}
+let coveredSubmit = submitRows(submitBehindTabs, status: "尚未连接。")
+let readySubmit = submitRows(visibleSubmit, status: "尚未连接。")
+let connectedSubmit = readySubmit + [passwordRow(snapshot(.staticText, frame: movedFrame, label: connectedText), [0, 0, 13])]
+let submitElement = Element()
+let submitMotion = Observations([coveredSubmit, readySubmit, readySubmit, connectedSubmit],
+                                liveSnapshots: [submitBehindTabs, submitBehindTabs, visibleSubmit, visibleSubmit])
+let submitAdapter = Adapter(app: App(frame: passwordScreen),
+    current: LiveControl(snapshot: visibleSubmit, hittable: true, element: submitElement), rows: connectedSubmit,
+    blockers: [passwordStatusBar], observations: submitMotion, nativePhase: "key_change_connect",
+    pathControls: [routeLandmark.path: LiveControl(snapshot: routeLandmark.snapshot, hittable: true, element: Element())])
+var submitError: String?
+do { try submitAdapter.submit(.rotationApproved, expected: connectedText) }
+catch let rejected as Rejected { submitError = rejected.reason }
+catch { submitError = "unexpected" }
+check(submitError == nil && submitMotion.webSurface.drags.count == 1 && submitElement.taps == 1 &&
+      submitElement.directTaps == 1 && submitMotion.checkpoints.isEmpty,
+      "a hittable submit whose center is under the route tabs must scroll clear before one native hit-point tap")
+
+let triggeredStatus = submitRows(visibleSubmit, status: "请先核对指纹并选择一种认证方式。", includeUnownedTarget: true)
+let rejectedSubmit = Observations([readySubmit, readySubmit], liveSnapshots: [visibleSubmit, visibleSubmit])
+let singleTap = Element()
+let rejectedAdapter = Adapter(app: App(frame: passwordScreen),
+    current: LiveControl(snapshot: visibleSubmit, hittable: true, element: singleTap), rows: triggeredStatus,
+    blockers: [passwordStatusBar], observations: rejectedSubmit, nativePhase: "key_change_connect",
+    pathControls: [routeLandmark.path: LiveControl(snapshot: routeLandmark.snapshot, hittable: true, element: Element())])
+var terminalAbsent: String?
+do { try rejectedAdapter.submit(.rotationApproved, expected: connectedText) }
+catch let rejected as Rejected { terminalAbsent = rejected.reason }
+catch { terminalAbsent = "unexpected" }
+let diagnostic = rejectedSubmit.checkpoints.first?.1["detail"] as? [String: Any]
+let beforeSubmit = diagnostic?["before"] as? [String: Any]
+let afterSubmit = diagnostic?["after"] as? [String: Any]
+check(terminalAbsent == "native_expected_text_missing" && singleTap.taps == 1 && singleTap.directTaps == 1 &&
+      rejectedSubmit.checkpoints.count == 1 && rejectedSubmit.checkpoints.first?.0 == "native_connect_diagnostic" &&
+      diagnostic?["attempt"] as? String == "rotation_approved" && diagnostic?["statuses"] as? [String] == ["idle", "review_required"] &&
+      beforeSubmit?["status"] as? String == "idle" && afterSubmit?["status"] as? String == "review_required" &&
+      afterSubmit?["submitFrame"] as? [Int] == [16, 694, 132, 46] && singleTap.inputs.isEmpty,
+      "failed connection reports sanitized read-only state from its own web owner without replaying the submit")
+let reboundRows = readySubmit.filter { $0.path != [0, 0, 1] } + [passwordRow(visibleSubmit, [0, 0, 4])]
+let reboundSubmit = Observations([readySubmit, reboundRows], liveSnapshots: [visibleSubmit, visibleSubmit])
+let reboundElement = Element()
+let reboundAdapter = Adapter(app: App(frame: passwordScreen),
+    current: LiveControl(snapshot: visibleSubmit, hittable: true, element: reboundElement), rows: reboundRows,
+    blockers: [passwordStatusBar], observations: reboundSubmit, nativePhase: "key_change_connect")
+var movedSubmitError: String?
+do { try reboundAdapter.submit(.rotationApproved, expected: connectedText) }
+catch let rejected as Rejected { movedSubmitError = rejected.reason }
+catch { movedSubmitError = "unexpected" }
+check(movedSubmitError == "native_control_owner_unproven" && reboundElement.taps == 0,
+      "a different submit path before the tap must fail closed")
+
 func exercisePassword(webHittable: Bool, provenScroller: Bool, showLandmark: Bool = true, showTabs: Bool = true,
                       initialHits: (Bool, Bool) = (false, false), initialFrame: CGRect = passwordBehindTabs.frame,
                       initialEnabled: Bool = true, phase: String, expected: [String], succeeds: Bool,
@@ -797,16 +873,32 @@ func terminalControlRows(offset: CGFloat = 0, helperOffset: CGFloat = 0) -> [Obs
     }
     return Array(terminalRows(title).dropLast()) + [row(dismiss, path: [0, 0, 3])] + helpers
 }
+func terminalHeaderRows(_ brandY: CGFloat, addWeb: [Int] = [0, 0]) -> [Observed] {
+    let brandFrame = CGRect(x: 20, y: brandY, width: 130, height: 24)
+    let brand = snapshot(.staticText, frame: brandFrame, label: "Herdr Pocket")
+    let brandWrapper = snapshot(.other, frame: brandFrame, label: "Herdr Pocket")
+    let add = snapshot(.button, frame: CGRect(x: 282, y: 72, width: 88, height: 44),
+                       identifier: "host-open-remote", label: "＋ 添加主机")
+    let otherWeb = addWeb == [0, 0] ? [] : [row(snapshot(.webView, frame: screen, label: ""), path: addWeb, web: addWeb)]
+    return [row(brandWrapper, path: [0, 0, 9]), row(brand, path: [0, 0, 9, 0]),
+            row(add, path: addWeb + [10], web: addWeb)] + otherWeb
+}
 func exerciseCapture(_ distinctSamples: [[Observed]], _ rows: [Observed] = terminalRows(),
-                     error: String? = nil, hittable: Bool = true, message: String, validate: (Observations) -> Void) {
-    let timeline = Observations(distinctSamples)
+                     error: String? = nil, hittable: Bool = true, headerY: CGFloat = 80,
+                     afterHeaderY: CGFloat? = nil, addWeb: [Int] = [0, 0],
+                     message: String, validate: (Observations) -> Void) {
+    let tree = rows + terminalHeaderRows(headerY, addWeb: addWeb)
+    let samples = distinctSamples.enumerated().map { index, sample in
+        sample + terminalHeaderRows(index == distinctSamples.count - 1 ? afterHeaderY ?? headerY : headerY, addWeb: addWeb)
+    }
+    let timeline = Observations(samples)
     let element = Element()
     let app = App(frame: screen)
-    let controls = Dictionary(uniqueKeysWithValues: rows.filter { $0.snapshot.elementType == .button }.map {
+    let controls = Dictionary(uniqueKeysWithValues: tree.filter { $0.snapshot.elementType == .button }.map {
         ($0.path, LiveControl(snapshot: $0.snapshot, hittable: hittable, element: Element()))
     })
     let candidate = Adapter(app: app, current: LiveControl(snapshot: snapshot(), hittable: true, element: element),
-                            rows: rows, blockers: [statusBar], observations: timeline, nativePhase: "ordinary_terminal_capture",
+                            rows: tree, blockers: [statusBar], observations: timeline, nativePhase: "ordinary_terminal_capture",
                             pathControls: controls)
     var failure: String?
     do { try candidate.terminalScreenshot() } catch let rejected as Rejected { failure = rejected.reason } catch { failure = "unexpected" }
@@ -818,8 +910,12 @@ let scrolledTerminal = terminalRows(titleFrame.offsetBy(dx: 0, dy: 650), outputF
 exerciseCapture([scrolledTerminal, exposedTerminal, exposedTerminal],
                 message: "capture must settle after the safely scrolled terminal returns to the viewport") { timeline in
     let capture = timeline.checkpoints.first { $0.0 == "ordinary_terminal" }?.1
+    let header = capture?["headerBounds"] as? [String: Any]
     check(timeline.webSurface.drags.count == 1 && capture?["terminalFrame"] as? [Double] == [20, 280, 350, 400] &&
           capture?["targetFrame"] as? [Double] == [20, 220, 250, 30] && capture?["noCredentialsVisible"] as? Bool == true &&
+          header?["brandFrame"] as? [Double] == [20, 80, 130, 24] && header?["addFrame"] as? [Double] == [282, 72, 88, 44] &&
+          header?["statusBarFrames"] as? [[Double]] == [[Double(statusBar.minX), Double(statusBar.minY), Double(statusBar.width), Double(statusBar.height)]] &&
+          header?["sameOwner"] as? Bool == true &&
           capture?["boundSource"] as? String == "native_region" && capture?["controlBounds"] == nil,
           "capture must reveal both anchors with a bounded scroll and post only the real output container's measured bounds")
 }
@@ -831,6 +927,24 @@ exerciseCapture([stickyTitleLayout, exposedTerminal, exposedTerminal],
         let x = from.dx * screen.width
         return from.dx == to.dx && from.dy < to.dy && (x < outputFrame.minX || x > outputFrame.maxX)
     } == true, "revealing the page under a sticky title must drag outside xterm and leave scrollback alone")
+}
+exerciseCapture([], error: "native_terminal_header_unproven", headerY: statusBar.maxY - 1,
+                message: "even a one-point brand collision with the native status bar blocks publication") { timeline in
+    let detail = timeline.checkpoints.first?.1["detail"] as? [String: Any]
+    check(timeline.checkpoints.count == 1 && detail?["anchor"] as? String == "header_brand" &&
+          detail?["reason"] as? String == "outside_safe_frame", "the clipped brand gets a bounded diagnosis")
+}
+exerciseCapture([exposedTerminal, exposedTerminal, exposedTerminal], error: "native_capture_geometry_changed", afterHeaderY: 82,
+                message: "a header that moves after the original PNG was taken blocks publication") { timeline in
+    let detail = timeline.checkpoints.first?.1["detail"] as? [String: Any]
+    check(timeline.checkpoints.count == 1 && detail?["anchor"] as? String == "header_brand" &&
+          detail?["reason"] as? String == "layout_unstable", "the moved brand cannot publish an image")
+}
+exerciseCapture([], error: "native_terminal_header_unproven", addWeb: [0, 1],
+                message: "an add button in a different WebView cannot prove this terminal's header") { timeline in
+    let detail = timeline.checkpoints.first?.1["detail"] as? [String: Any]
+    check(timeline.checkpoints.count == 1 && detail?["anchor"] as? String == "header_add" &&
+          detail?["reason"] as? String == "owner_unproven", "foreign header geometry must not publish a screenshot")
 }
 exerciseCapture([], terminalRows(outputRole: .staticText), error: "native_geometry_ambiguous",
                 message: "a text leaf must never be used as terminal pixel bounds") { timeline in

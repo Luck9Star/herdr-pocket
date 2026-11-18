@@ -25,6 +25,7 @@ test('the active ordinary SSH header uses the shared status bar inset on compact
   /* A native iOS WebView can extend behind the status bar with a zero CSS top inset. */
   .ios-edge-to-edge { --hp-ios-status-bar-fallback:64px; }
   ${activeHeader} {
+    position:sticky; top:0; z-index:10; background:var(--hp-canvas);
     padding-top:calc(16px + ${inset});
   }
 }`));

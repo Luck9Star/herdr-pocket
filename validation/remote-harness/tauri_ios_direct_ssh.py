@@ -73,7 +73,8 @@ NATIVE_FAILURES = frozenset((
     'native_home_add_did_not_open_page', 'native_owner_ambiguous', 'native_target_control_missing',
     'native_home_identity_unproven', 'native_home_retry_unsafe', 'native_ssh_form_unproven',
     'native_home_navigation_failed', 'native_control_owner_unproven', 'native_scroll_owner_unproven',
-    'native_form_control_unproven', 'native_form_control_changed', 'native_terminal_keyboard_visible'))
+    'native_form_control_unproven', 'native_form_control_changed', 'native_terminal_keyboard_visible',
+    'native_terminal_header_unproven'))
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 HOME_ERRORS = frozenset(('connectionError', 'dnsError', 'webProcessError', 'devURL',
@@ -114,7 +115,7 @@ def public_capture_diagnostic(value, *, review=False):
         keys.add('sample')
     require(isinstance(value, dict) and set(value) == keys, 'tauri_ios_capture_diagnostic_invalid')
     anchors = (('review_title', 'review_blocked', 'review_old_fingerprint', 'review_new_fingerprint',
-                'review_target', 'review_recheck', 'review_cancel') if review else ('target', 'terminal', 'keyboard'))
+                'review_target', 'review_recheck', 'review_cancel') if review else ('target', 'terminal', 'keyboard', 'header_brand', 'header_add', 'status_bar'))
     require((not review or (type(value['sample']) is str and value['sample'] in ('before', 'after')))
             and type(value['anchor']) is str and value['anchor'] in anchors
             and type(value['reason']) is str and value['reason'] in (
@@ -139,6 +140,32 @@ def public_capture_diagnostic(value, *, review=False):
               'candidates': candidates, 'truncated': value['truncated']}
     if review:
         result['sample'] = value['sample']
+    return result
+
+
+def public_connect_diagnostic(value):
+    statuses = ('unknown', 'idle', 'disconnected', 'connecting', 'connected', 'review_blocked',
+                'review_required', 'authentication_failed', 'start_failed', 'connection_failed',
+                'session_ended', 'ambiguous')
+    require(isinstance(value, dict) and set(value) == {'attempt', 'before', 'after', 'statuses'}
+            and type(value['attempt']) is str and value['attempt'] in ('ordinary', 'rotation_refused', 'rotation_approved')
+            and isinstance(value['statuses'], list) and len(value['statuses']) <= 12
+            and all(type(x) is str and x in statuses for x in value['statuses'])
+            and len(value['statuses']) == len(set(value['statuses'])), 'tauri_ios_connect_diagnostic_invalid')
+    result = {'attempt': value['attempt'], 'statuses': list(value['statuses'])}
+    for key in ('before', 'after'):
+        sample = value[key]
+        require(isinstance(sample, dict) and set(sample) == {'status', 'keyboardVisible', 'submitFrame',
+                                                              'submitEnabled', 'submitHittable'}
+                and type(sample['status']) is str and sample['status'] in statuses
+                and all(type(sample[k]) is bool for k in ('keyboardVisible', 'submitEnabled', 'submitHittable')),
+                'tauri_ios_connect_diagnostic_invalid')
+        frame = sample['submitFrame']
+        require(frame is None or (isinstance(frame, list) and len(frame) == 4
+                and all(type(n) is int for n in frame)
+                and all(-10000 <= n <= 10000 for n in frame[:2])
+                and all(0 <= n <= 10000 for n in frame[2:])), 'tauri_ios_connect_diagnostic_invalid')
+        result[key] = {**sample, 'submitFrame': list(frame) if frame is not None else None}
     return result
 
 
@@ -565,6 +592,21 @@ def measured_bounds(payload, image_size):
                     and all(type(n) in (float, int) and math.isfinite(n) for n in frame)
                     and inside(frame, safe), 'tauri_ios_review_geometry_invalid')
         return {'reviewBounds': [pixels(f) for f in frames], 'nativeScale': sx, **ownership}
+    header = payload.get('headerBounds')
+    if header is not None:
+        require(isinstance(header, dict) and set(header) == {'brandFrame', 'addFrame', 'statusBarFrames', 'sameOwner'}
+                and header['sameOwner'] is True and isinstance(header['statusBarFrames'], list)
+                and 1 <= len(header['statusBarFrames']) <= 4, 'tauri_ios_capture_header_invalid')
+        frames = [header['brandFrame'], header['addFrame'], *header['statusBarFrames']]
+        require(all(isinstance(f, list) and len(f) == 4 and
+                    all(type(n) in (float, int) and math.isfinite(n) for n in f) and
+                    inside(f, [0, 0, *screen]) for f in frames), 'tauri_ios_capture_header_invalid')
+        brand, add, *bars = frames
+        require(inside(brand, safe) and inside(add, safe) and
+                len({tuple(f) for f in bars}) == len(bars) and
+                all(bar[1] + bar[3] <= min(brand[1], add[1]) for bar in bars),
+                'tauri_ios_capture_header_invalid')
+        ownership['headerBounds'] = json.loads(json.dumps(header))
     terminal, target = numbers('terminalFrame', 4), numbers('targetFrame', 4)
     require(inside(terminal, safe) and inside(target, safe), 'tauri_ios_terminal_or_target_clipped')
     tx, ty, tw, th = terminal
@@ -635,6 +677,38 @@ def terminal_background_bounds(image, candidate, scale):
     return [x + left, y + top, right - left, bottom - top]
 
 
+def failure_peer_snapshot(fixture):
+    """Bounded observed fixture facts, without names, data, or exception text."""
+    facts = fixture.snapshot()
+    require(isinstance(facts, dict) and type(facts.get('connections')) is int
+            and 0 <= facts['connections'] <= 10000 and type(facts.get('connectionsClosed')) is bool
+            and isinstance(facts.get('connectionEvents'), list), 'tauri_ios_failure_peer_snapshot_invalid')
+    counts = ('id', 'authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes',
+              'handshakeMs', 'firstAuthMs', 'closedMs')
+    flags = ('handshakeCompleted', 'authAccepted', 'markerReceived', 'sessionClosed', 'closed', 'singleMarkerLineExact')
+    enums = {'hostKey': ('A', 'B'), 'phase': ('handshake', 'await_channel', 'await_shell', 'shell'),
+             'closeReason': ('transport_closed', 'fixture_stopped', 'batch_deadline', 'peer_eof', 'socket_error',
+                             'ssh_error', 'preauth_peer_reset', 'preauth_peer_abort', 'preauth_peer_broken_pipe',
+                             'session_socket_error', 'authentication_socket_error'),
+             'socketErrorKind': ('connection_reset', 'connection_aborted', 'broken_pipe', 'other')}
+    events = []
+    for event in facts['connectionEvents'][:16]:
+        require(isinstance(event, dict), 'tauri_ios_failure_peer_snapshot_invalid')
+        public = {}
+        for key in counts:
+            if type(event.get(key)) is int and 0 <= event[key] <= 1000000000:
+                public[key] = event[key]
+        for key in flags:
+            if type(event.get(key)) is bool:
+                public[key] = event[key]
+        for key, allowed in enums.items():
+            if type(event.get(key)) is str and event[key] in allowed:
+                public[key] = event[key]
+        events.append(public)
+    return {'connections': facts['connections'], 'connectionsClosed': facts['connectionsClosed'],
+            'events': events, 'truncated': len(facts['connectionEvents']) > 16}
+
+
 def wait_peer(fixture, predicate, code, timeout=30):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -700,6 +774,9 @@ class Checkpoints:
         require(payload.get('identityVerified') is True and payload.get('noCredentialsVisible') is True,
                 'tauri_ios_capture_identity_unverified')
         require('nativeOwner' in payload, 'tauri_ios_native_owner_missing')
+        if not review:
+            require('headerBounds' in payload and payload['headerBounds'] is not None,
+                    'tauri_ios_capture_header_invalid')
         try:
             from PIL import Image
             data = base64.b64decode(payload.get('pngBase64', ''), validate=True)
@@ -838,6 +915,25 @@ class Checkpoints:
                 require((payload['route'] == 'viaAdd') == payload['enteredAddPage'], 'tauri_ios_home_entry_invalid')
                 self.result.setdefault('homeEntry', {})[key] = {k: payload[k] for k in
                     ('member', 'selection', 'role', 'enteredAddPage', 'enteredSSHForm', 'route')}
+            return
+        if stage == 'native_connect_diagnostic':
+            phase = payload.get('nativeCheckpoint')
+            detail = public_connect_diagnostic(payload.get('detail'))
+            attempt = detail['attempt']
+            expected = {'ordinary': ('ordinary_connect', 'ordinary_input'),
+                        'rotation_refused': ('key_change_connect', 'key_change_review'),
+                        'rotation_approved': ('key_change_connect', 'key_change_input')}
+            require(self.failure is None and phase == expected[attempt][0]
+                    and self.index == STAGES.index(expected[attempt][1])
+                    and attempt not in self.result.get('connectDiagnostics', {}),
+                    'tauri_ios_connect_diagnostic_invalid')
+            fixture = self.ordinary if attempt == 'ordinary' else self.rotation
+            if fixture is not None:
+                try:
+                    detail['peerAtDiagnostic'] = failure_peer_snapshot(fixture)
+                except Exception:
+                    pass
+            self.result.setdefault('connectDiagnostics', {})[attempt] = detail
             return
         if stage == 'native_capture_diagnostic':
             phase = payload.get('nativeCheckpoint')
@@ -1027,6 +1123,7 @@ def run(project, app, output, *, source_sha=None, env=None):
               'cleanup': {'simulatorDeleted': False, 'fixturesClosed': False, 'privateFilesRemoved': False}}
     device, server, server_thread, ordinary, rotation, private, state = None, None, None, None, None, None, None
     create_attempted = False
+    peer_before_cleanup = {}
     device_name = 'herdr-tauri-ssh-' + uuid.uuid4().hex
     try:
         result['application'] = validate_inputs(project, app, candidate_sha)
@@ -1102,6 +1199,12 @@ def run(project, app, output, *, source_sha=None, env=None):
             server_thread.join(timeout=5)
         if state is not None:
             state.finalize_cases()
+            for name, fixture in (('ordinary', ordinary), ('keyChange', rotation)):
+                if name in state.started_cases and fixture is not None:
+                    try:
+                        peer_before_cleanup[name] = failure_peer_snapshot(fixture)
+                    except Exception:
+                        pass
         for fixture in (ordinary, rotation):
             if fixture is not None:
                 fixture.close()
@@ -1135,6 +1238,15 @@ def run(project, app, output, *, source_sha=None, env=None):
             except OSError:
                 result['status'], result['error'] = 'failed', 'tauri_ios_private_cleanup_failed'
         result['cleanup']['privateFilesRemoved'] = private is None or not private.exists()
+        if result['status'] != 'passed':
+            for name, fixture in (('ordinary', ordinary), ('keyChange', rotation)):
+                if name in peer_before_cleanup and fixture is not None:
+                    report = {'beforeCleanup': peer_before_cleanup[name]}
+                    try:
+                        report['afterCleanup'] = failure_peer_snapshot(fixture)
+                    except Exception:
+                        pass
+                    result['cases'][name]['failurePeerObservations'] = report
         write_json(output / 'result.json', result)
     return result
 

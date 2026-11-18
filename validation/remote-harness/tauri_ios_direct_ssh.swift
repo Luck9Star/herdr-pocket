@@ -139,6 +139,12 @@ enum NativeFramePolicy {
                        CGRect(x: overlap.maxX, y: safe.minY, width: safe.maxX - overlap.maxX, height: safe.height)]
         return gutters.filter(valid).max { $0.width < $1.width } ?? scrollBand(in: safe, occlusions: [output])
     }
+    static func headerStatusBarsValid(_ bars: [CGRect], screen: CGRect) -> Bool {
+        (1...4).contains(bars.count) && bars.allSatisfy { valid($0) && screen.contains($0) }
+    }
+    static func headerFrameClear(_ frame: CGRect, safe: CGRect, statusBars: [CGRect]) -> Bool {
+        valid(frame) && safe.contains(frame) && statusBars.allSatisfy { frame.minY >= $0.maxY }
+    }
     static func terminalControlBand(dismiss: CGRect, helpers: [CGRect], safe: CGRect) -> CGRect? {
         guard valid(dismiss), valid(safe), helpers.count == 4, helpers.allSatisfy(valid), let first = helpers.first,
               helpers.allSatisfy({ abs($0.minY - first.minY) <= 1 && abs($0.maxY - first.maxY) <= 1 }),
@@ -157,6 +163,39 @@ enum NativeFramePolicy {
         let up = frame.maxY > safe.maxY
         guard down != up else { return nil }
         return down ? .swipeDown : .swipeUp
+    }
+}
+enum NativeConnectPolicy {
+    enum Attempt: String { case ordinary, rotationRefused = "rotation_refused", rotationApproved = "rotation_approved" }
+    enum Status: String {
+        case unknown, ambiguous, idle, disconnected, connecting, connected
+        case reviewBlocked = "review_blocked", reviewRequired = "review_required"
+        case authenticationFailed = "authentication_failed", startFailed = "start_failed"
+        case connectionFailed = "connection_failed", sessionEnded = "session_ended"
+    }
+
+    static func status(_ values: [String]) -> Status {
+        let messages: [String: Status] = [
+            "尚未连接。": .idle, "已断开；重新连接需要再次输入凭据。": .disconnected,
+            "正在连接…": .connecting, "已连接，可以输入。": .connected,
+            "主机指纹发生变化": .reviewBlocked,
+            "主机指纹变化尚未重新核对；请先探测并独立核对本目标的主机指纹。": .reviewBlocked,
+            "主机公钥与已核对的指纹不一致，连接已拒绝。请重新探测并核对。": .reviewBlocked,
+            "请先核对指纹并选择一种认证方式。": .reviewRequired,
+            "认证失败，请检查用户名和认证方式后重试。": .authenticationFailed,
+            "连接未能启动，请核查连接资料。": .startFailed,
+            "连接失败或已中断，请核查连接资料。": .connectionFailed,
+            "远端会话已结束。": .sessionEnded
+        ]
+        let found = Set(values.compactMap { messages[$0] })
+        return found.count > 1 ? .ambiguous : found.first ?? .unknown
+    }
+
+    static func sample(_ status: Status, keyboardVisible: Bool, submitFrame: CGRect?,
+                       submitEnabled: Bool, submitHittable: Bool) -> [String: Any] {
+        ["status": status.rawValue, "keyboardVisible": keyboardVisible,
+         "submitFrame": NativeFramePolicy.diagnosticRect(submitFrame),
+         "submitEnabled": submitEnabled, "submitHittable": submitHittable]
     }
 }
 enum NativeViewPolicy {
@@ -398,6 +437,10 @@ final class TauriDirectSSHUITests: XCTestCase {
         let owner: Observed
         let window: Observed
         let web: Observed
+    }
+    private struct TerminalHeader {
+        let nodes: [Observed]
+        let statusBars: [CGRect]
     }
     @MainActor
     private struct CaptureAnchors {
@@ -913,7 +956,8 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func reveal(_ item: XCUIElement, matching expected: RevealedControl? = nil, scrolling: Bool = true) throws -> RevealedControl {
+    private func reveal(_ item: XCUIElement, matching expected: RevealedControl? = nil, scrolling: Bool = true,
+                        protectRouteTabs: Bool = false) throws -> RevealedControl {
         try require(item.waitForExistence(timeout: 20), "native_control_missing")
         let passwordDiagnostics = nativePhase == "ordinary_password" || nativePhase == "key_change_password"
         let attempts = scrolling ? 10 : 3
@@ -941,7 +985,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             prior = resolved
             let frames = [owner.snapshot.frame, current.snapshot.frame, bound.snapshot.frame]
             let geometry = controlGeometry(owner, [current, bound], measureScrollBand: scrolling || passwordDiagnostics) { viewport, failed in
-                guard failed || passwordDiagnostics else { return nil }
+                guard failed || passwordDiagnostics || protectRouteTabs else { return nil }
                 return self.routeTabsOcclusion(owner, rows, viewport, frames, scrolling: scrolling && failed)
             }
             guard let failure = geometry.failure else { return resolved }
@@ -1138,10 +1182,16 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func nativeOcclusions() -> [CGRect] {
+    private func statusBarFrames() -> [CGRect] {
         let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        return NativeFramePolicy.unique((app.statusBars.allElementsBoundByIndex + system.statusBars.allElementsBoundByIndex +
-            app.keyboards.allElementsBoundByIndex).compactMap { liveControl($0)?.snapshot.frame }.filter(NativeFramePolicy.valid))
+        return NativeFramePolicy.unique((app.statusBars.allElementsBoundByIndex + system.statusBars.allElementsBoundByIndex)
+            .compactMap { liveControl($0)?.snapshot.frame }.filter(NativeFramePolicy.valid))
+    }
+
+    @MainActor
+    private func nativeOcclusions() -> [CGRect] {
+        NativeFramePolicy.unique(statusBarFrames() + app.keyboards.allElementsBoundByIndex
+            .compactMap { liveControl($0)?.snapshot.frame }.filter(NativeFramePolicy.valid))
     }
 
     @MainActor
@@ -1333,6 +1383,31 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func terminalHeader(_ title: Observed, _ rows: [Observed], safe: CGRect) throws -> TerminalHeader {
+        let bars = statusBarFrames()
+        if !NativeFramePolicy.headerStatusBarsValid(bars, screen: app.frame) {
+            try captureDiagnostic("status_bar", bars.isEmpty ? "not_found" : "frame_invalid", [], rows, visible: safe)
+            try require(false, "native_terminal_header_unproven")
+        }
+        let brand = try exactObserved(rows, "Herdr Pocket", captureAnchor: "header_brand", requireVisible: false)
+        let add = try exactObserved(rows, "＋ 添加主机", identifiers: ["host-open-remote"], control: true,
+            captureAnchor: "header_add", requireVisible: false)
+        for (index, node) in [brand, add].enumerated() {
+            let anchor = index == 0 ? "header_brand" : "header_add"
+            if node.windowPath != title.windowPath || node.webPath != title.webPath ||
+                (index == 1 && node.snapshot.elementType != .button) {
+                try captureDiagnostic(anchor, "owner_unproven", [node], rows, visible: safe)
+                try require(false, "native_terminal_header_unproven")
+            }
+            if !NativeFramePolicy.headerFrameClear(node.snapshot.frame, safe: safe, statusBars: bars) {
+                try captureDiagnostic(anchor, "outside_safe_frame", [node], rows, visible: safe)
+                try require(false, "native_terminal_header_unproven")
+            }
+        }
+        return TerminalHeader(nodes: [brand, add], statusBars: bars)
+    }
+
+    @MainActor
     private func screenshot(_ stage: String, port: Int, reviewPage: Bool = false) throws {
         let reviewMembers = [("review_title", []), ("review_blocked", []),
             ("review_old_fingerprint", ["ssh-key-change-old"]), ("review_new_fingerprint", ["ssh-key-change-new"]),
@@ -1416,11 +1491,16 @@ final class TauriDirectSSHUITests: XCTestCase {
             "nativeOwner": ["windowFrame": rect(owner.window!), "webFrames": owner.webs.map(rect),
                             "webWrapperCount": owner.webs.count, "uniqueWebBoundsCount": NativeFramePolicy.unique(owner.webs).count]]
         let frames = selected.frames
+        var header: TerminalHeader?
         if reviewPage {
             try require(frames.allSatisfy { safe.contains($0) && !$0.isEmpty }, "native_review_clipped")
             try assertReviewActions(owner, tree, Set(labels.suffix(2)), reviewSample: "before")
             extra["reviewFrames"] = frames.map(rect)
         } else {
+            let verified = try terminalHeader(owner, tree, safe: safe)
+            header = verified
+            extra["headerBounds"] = ["brandFrame": rect(verified.nodes[0].snapshot.frame),
+                "addFrame": rect(verified.nodes[1].snapshot.frame), "statusBarFrames": verified.statusBars.map(rect), "sameOwner": true]
             try require(safe.contains(frames[0]) && !frames[0].isEmpty, "native_target_clipped")
             guard let crop = selected.visibleOutput(in: safe) else {
                 try require(false, "native_terminal_frame_invalid")
@@ -1463,6 +1543,21 @@ final class TauriDirectSSHUITests: XCTestCase {
             } else { try captureDiagnostic("terminal", "layout_unstable", after.nodes, afterTree, visible: afterSafe) }
         }
         try require(unchanged, "native_capture_geometry_changed")
+        if let header = header {
+            let rechecked = try terminalHeader(after.nodes[0], afterTree, safe: afterSafe)
+            if Set(header.statusBars.map(rect)) != Set(rechecked.statusBars.map(rect)) {
+                try captureDiagnostic("status_bar", "layout_unstable", [], afterTree, visible: afterSafe)
+                try require(false, "native_capture_geometry_changed")
+            }
+            if !stableCaptureLayout(header.nodes, rechecked.nodes) {
+                let index = rechecked.nodes.indices.first {
+                    !stableCaptureLayout([header.nodes[$0]], [rechecked.nodes[$0]])
+                } ?? 0
+                try captureDiagnostic(index == 0 ? "header_brand" : "header_add", "layout_unstable",
+                    [rechecked.nodes[index]], afterTree, visible: afterSafe)
+                try require(false, "native_capture_geometry_changed")
+            }
+        }
         try verifyCaptureControls(after, afterTree, afterSafe)
         try assertCredentialsInactive(after.nodes[0], afterTree)
         if reviewPage { try assertReviewActions(after.nodes[0], afterTree, Set(labels.suffix(2)), reviewSample: "after") }
@@ -1732,14 +1827,67 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func connectionRows(_ rows: [Observed], in control: RevealedControl) -> [Observed] {
+        guard rows.contains(where: { $0.path == control.window.path && sameIdentity($0.snapshot, control.window.snapshot) }),
+              rows.contains(where: { $0.path == control.web.path && sameIdentity($0.snapshot, control.web.snapshot) }) else { return [] }
+        return rows.filter { $0.windowPath == control.window.path && $0.webPath == control.web.path }
+    }
+
+    @MainActor
+    private func connectionStatus(_ rows: [Observed]) -> NativeConnectPolicy.Status {
+        let visible = rows.filter { NativeFramePolicy.valid($0.snapshot.frame) }
+        let statusPaths = visible.filter { $0.snapshot.identifier == "ssh-status" }.map(\.path)
+        let reported = visible.filter { row in statusPaths.contains { row.path.starts(with: $0) } }
+        let status = NativeConnectPolicy.status(reported.flatMap { texts($0.snapshot) })
+        // A WebKit live region can appear as text without the DOM identifier.
+        return status == .unknown ? NativeConnectPolicy.status(visible.flatMap { texts($0.snapshot) }) : status
+    }
+
+    @MainActor
+    private func submitConnection(_ attempt: NativeConnectPolicy.Attempt, waitingFor expected: String) throws {
+        let submit = try reveal(button("连接 / 重新连接"), protectRouteTabs: true)
+        try require(submit.live.snapshot.elementType == .button, "native_control_owner_unproven")
+        try require(submit.live.snapshot.isEnabled, "native_control_disabled")
+        let beforeRows = connectionRows(try observedNodes(), in: submit)
+        let beforeSubmit = beforeRows.filter { sameIdentity($0.snapshot, submit.owner.snapshot) }
+        try require(beforeSubmit.count == 1 && beforeSubmit.first?.path == submit.owner.path,
+                    "native_control_owner_unproven")
+        try require(beforeSubmit.first?.snapshot.isEnabled == true, "native_control_disabled")
+        var status = connectionStatus(beforeRows)
+        let before = NativeConnectPolicy.sample(status, keyboardVisible: app.keyboards.firstMatch.exists,
+            submitFrame: beforeSubmit.first?.snapshot.frame, submitEnabled: submit.live.snapshot.isEnabled, submitHittable: submit.live.hittable)
+        var statuses = [status.rawValue]
+        // Ask XCTest for the actual hit point of the uniquely bound button.
+        // A geometric center can fall outside the hittable portion as the
+        // software keyboard moves. No retry may submit credentials again.
+        submit.live.element.tap()
+        let deadline = Date().addingTimeInterval(40)
+        var rows: [Observed]
+        repeat {
+            rows = connectionRows(try observedNodes(), in: submit)
+            if rows.contains(where: { texts($0.snapshot).contains { $0.contains(expected) } }) { return }
+            status = connectionStatus(rows)
+            if !statuses.contains(status.rawValue) { statuses.append(status.rawValue) }
+            Thread.sleep(forTimeInterval: 0.25)
+        } while Date() < deadline
+        let matches = rows.filter { sameIdentity($0.snapshot, submit.owner.snapshot) }
+        let afterSubmit = matches.count == 1 ? matches.first.flatMap(liveOnPath) : nil
+        let after = NativeConnectPolicy.sample(status, keyboardVisible: app.keyboards.firstMatch.exists,
+            submitFrame: afterSubmit?.snapshot.frame, submitEnabled: afterSubmit?.snapshot.isEnabled ?? false,
+            submitHittable: afterSubmit?.hittable ?? false)
+        try post("native_connect_diagnostic", ["nativeCheckpoint": nativePhase,
+            "detail": ["attempt": attempt.rawValue, "before": before, "after": after, "statuses": statuses]])
+        try require(false, "native_expected_text_missing")
+    }
+
+    @MainActor
     private func connect(password secret: String) throws {
         try phase("password")
         try fillPassword(password(), secret)
         try check(true, enabled: true)
         try phase("connect")
-        try tap(button("连接 / 重新连接"))
         let port = config[scenario == "ordinary" ? "ordinaryPort" : "rotationPort"] as! Int
-        try waitText(target(port) + " · SSH 已连接")
+        try submitConnection(scenario == "ordinary" ? .ordinary : .rotationApproved, waitingFor: target(port) + " · SSH 已连接")
         let rows = try observedNodes()
         let page = try exactObserved(rows, target(port) + " · SSH 已连接")
         try assertCredentialsInactive(page, rows)
@@ -1802,8 +1950,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         try fillPassword(password(), config["rotationPassword"] as! String)
         try check(true, enabled: true)
         try phase("connect")
-        try tap(button("连接 / 重新连接"))
-        try waitText("主机指纹发生变化")
+        try submitConnection(.rotationRefused, waitingFor: "主机指纹发生变化")
         try phase("review_capture")
         try screenshot("key_change_review", port: port, reviewPage: true)
         try phase("cancel")

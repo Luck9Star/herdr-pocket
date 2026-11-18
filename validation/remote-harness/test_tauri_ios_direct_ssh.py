@@ -355,6 +355,7 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
                         config = json.loads((private / 'UITests/Fixture.json').read_text())
                         secrets.extend([config['ordinaryPassword'], config['rotationPassword'], config['checkpointSecret']])
                         (result_bundle / 'private-data').write_text(json.dumps(config))
+                        states[0].accept({'stage':'ordinary_form'})
                         states[0].failure = checkpoint_failure
                         log.write(f'{private}/UITests/Driver.swift:123: error: No matches found for {config["ordinaryPassword"]}\n'.encode())
                         if command_failed:
@@ -371,6 +372,10 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
                 self.assertTrue(all(result['cleanup'].values()))
                 self.assertTrue(private_paths and all(not p.exists() for p in private_paths))
                 encoded = (root / 'public/result.json').read_text()
+                observations = json.loads(encoded)['cases']['ordinary']['failurePeerObservations']
+                self.assertEqual(observations['beforeCleanup']['connections'], 0)
+                self.assertEqual(observations['afterCleanup']['connections'], 0)
+                self.assertNotIn('failurePeerObservations', result['cases']['keyChange'])
                 for private in [*secrets, *map(str, private_paths)]:
                     self.assertNotIn(private, encoded)
                 self.assertEqual(sorted(p.name for p in (root / 'public').iterdir()), ['result.json'])
@@ -390,6 +395,8 @@ class ScreenshotContractTests(unittest.TestCase):
         return data, {'screenSize': [440, 956], 'safeFrame': [0, 60, 440, 850],
                       'terminalFrame': [20, 200, 400, 300], 'targetFrame': [20, 160, 400, 30],
                       'identityVerified': True, 'noCredentialsVisible': True,
+                      'headerBounds': {'brandFrame':[16,60,100,40], 'addFrame':[300,60,100,40],
+                                       'statusBarFrames':[[0,0,440,54]], 'sameOwner':True},
                       'pngBase64': base64.b64encode(data).decode(),
                       'nativeOwner': {'windowFrame': [0,0,440,956], 'webFrames': [[0,0,440,956]] * 3,
                                       'webWrapperCount': 3, 'uniqueWebBoundsCount': 1}}
@@ -423,6 +430,26 @@ class ScreenshotContractTests(unittest.TestCase):
                 with self.assertRaises(ios.Failure):
                     state.capture('ordinary_terminal', {**payload, **change}, self.fixture)
                 self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_terminal_header_required_and_occluded_or_unowned_rejected(self):
+        _, payload = self.screenshot()
+        for change in ('missing', 'occluded_brand', 'occluded_add', 'duplicate_bar', 'outside', 'unowned'):
+            candidate = copy.deepcopy(payload)
+            header = candidate['headerBounds']
+            if change == 'missing': candidate.pop('headerBounds')
+            elif change == 'occluded_brand': header['brandFrame'][1] = 40
+            elif change == 'occluded_add': header['addFrame'][1] = 40
+            elif change == 'duplicate_bar': header['statusBarFrames'].append([0,0,440,54])
+            elif change == 'outside': header['addFrame'][0] = 400
+            else: header['sameOwner'] = False
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
+                state = ios.Checkpoints(None, None, directory, copy.deepcopy(self.result))
+                with self.assertRaisesRegex(ios.Failure, 'capture_header_invalid'):
+                    state.capture('ordinary_terminal', candidate, self.fixture)
+                self.assertEqual(list(Path(directory).iterdir()), [])
+        # The standalone geometry reader remains compatible with older artifacts.
+        payload.pop('headerBounds')
+        self.assertNotIn('headerBounds', ios.measured_bounds(payload, (440,956)))
 
     def test_ocr_failure_keeps_safe_original_and_gate_diagnostics_without_text(self):
         data, payload = self.screenshot()
@@ -541,6 +568,8 @@ class TerminalFallbackTests(unittest.TestCase):
         return {'screenSize':[440,956], 'safeFrame':[0,54,440,850], 'targetFrame':[20,70,400,30],
                 'terminalFrame':[0,170,440,430], 'identityVerified':True, 'noCredentialsVisible':True,
                 'boundSource':'terminal_control_bounds',
+                'headerBounds':{'brandFrame':[16,60,100,40], 'addFrame':[300,60,100,40],
+                                'statusBarFrames':[[0,0,440,54]], 'sameOwner':True},
                 'controlBounds':{'dismissFrame':[20,120,100,50], 'helperFrames':[[20+i*55,600,50,44] for i in range(4)], 'sameOwner':True},
                 'nativeOwner':{'windowFrame':[0,0,440,956], 'webFrames':[[0,0,440,956]],
                                'webWrapperCount':1, 'uniqueWebBoundsCount':1},
@@ -647,7 +676,105 @@ class CaseLifecycleTests(unittest.TestCase):
                 self.assertNotIn('peer', result['cases'][name])
 
 
+class FailurePeerSnapshotTests(unittest.TestCase):
+    def test_fixed_observations_drop_sensitive_or_unknown_fields_and_bound_events(self):
+        from types import SimpleNamespace
+        event = {'id':4, 'hostKey':'B', 'phase':'await_channel', 'closeReason':'fixture_stopped',
+                 'authAttempts':1, 'authSuccesses':1, 'ptyRequests':0, 'shellRequests':0,
+                 'inputBytes':0, 'outputBytes':0, 'closed':True, 'sessionClosed':False,
+                 'socketErrorKind':'secret', 'username':'secret', 'password':'secret',
+                 'message':'secret', 'firstAuthMs':None}
+        fixture=SimpleNamespace(snapshot=lambda: {'connections':20, 'connectionsClosed':True,
+                                                    'connectionEvents':[event]*20, 'password':'secret'})
+        result=ios.failure_peer_snapshot(fixture)
+        self.assertEqual(result['connections'],20)
+        self.assertTrue(result['truncated'])
+        self.assertEqual(len(result['events']),16)
+        self.assertNotIn('secret',json.dumps(result))
+        self.assertNotIn('firstAuthMs',result['events'][0])
+        self.assertEqual(result['events'][0]['closeReason'],'fixture_stopped')
+        self.assertEqual(result['events'][0]['authAttempts'],1)
+
+    def test_unknown_values_not_invented_and_missing_snapshot_rejected(self):
+        from types import SimpleNamespace
+        fixture=SimpleNamespace(snapshot=lambda:{'connections':1,'connectionsClosed':False,
+                       'connectionEvents':[{'id':1,'phase':'private text','authAttempts':None}]})
+        result=ios.failure_peer_snapshot(fixture)
+        self.assertEqual(result['events'],[{'id':1}])
+        fixture.snapshot=lambda:{'connections':True,'connectionsClosed':False,'connectionEvents':[]}
+        with self.assertRaisesRegex(ios.Failure,'failure_peer_snapshot_invalid'):
+            ios.failure_peer_snapshot(fixture)
+
+
+class ConnectDiagnosticTests(unittest.TestCase):
+    def detail(self, attempt):
+        sample = {'status':'connecting', 'keyboardVisible':False, 'submitFrame':[5,6,100,44],
+                  'submitEnabled':True, 'submitHittable':True}
+        return {'attempt':attempt, 'before':copy.deepcopy(sample), 'after':copy.deepcopy(sample),
+                'statuses':['connecting','connection_failed']}
+
+    def test_all_fixed_swift_connection_statuses_are_accepted(self):
+        statuses=['unknown','ambiguous','idle','disconnected','connecting','connected','review_blocked',
+                  'review_required','authentication_failed','start_failed','connection_failed','session_ended']
+        detail=self.detail('ordinary')
+        detail['statuses']=statuses
+        for status in statuses:
+            detail['before']['status']=status
+            detail['after']['status']=status
+            self.assertEqual(ios.public_connect_diagnostic(detail)['before']['status'],status)
+
+    def test_exact_phase_attempt_and_peer_at_event_without_state_advancement(self):
+        from types import SimpleNamespace
+        fixture=SimpleNamespace(snapshot=lambda:{'connections':4, 'connectionsClosed':False,
+                    'connectionEvents':[{'id':4,'hostKey':'B','authAttempts':1,'authSuccesses':0,
+                                         'password':'never-export-this','phase':'await_channel'}]})
+        for attempt,phase,next_stage in [('ordinary','ordinary_connect','ordinary_input'),
+                                          ('rotation_refused','key_change_connect','key_change_review'),
+                                          ('rotation_approved','key_change_connect','key_change_input')]:
+            with self.subTest(attempt=attempt):
+                state=ios.Checkpoints(fixture,fixture,'/tmp',{})
+                state.index=ios.STAGES.index(next_stage)
+                event={'stage':'native_connect_diagnostic','nativeCheckpoint':phase,'detail':self.detail(attempt)}
+                state.accept(event)
+                report=state.result['connectDiagnostics'][attempt]
+                self.assertEqual(report['peerAtDiagnostic']['connections'],4)
+                self.assertEqual(report['peerAtDiagnostic']['events'][0]['authAttempts'],1)
+                self.assertNotIn('never-export-this',json.dumps(state.result))
+                self.assertEqual(state.index,ios.STAGES.index(next_stage))
+                with self.assertRaisesRegex(ios.Failure,'connect_diagnostic_invalid'): state.accept(event)
+
+    def test_reject_private_text_invalid_types_replays_and_wrong_phase(self):
+        good=self.detail('rotation_approved')
+        samples=[dict(good, statuses=['connecting','secret']),dict(good, statuses=['idle','idle']),
+                 dict(good, after=dict(good['after'], status='secret')),
+                 dict(good, after=dict(good['after'], submitFrame=[1,2,float('nan'),4])),
+                 dict(good, before=dict(good['before'], label='secret')),
+                 dict(good, before=dict(good['before'], submitEnabled=1)), dict(good, attempt='secret')]
+        for detail in samples:
+            with self.subTest(detail=detail):
+                state=ios.Checkpoints(None,None,'/tmp',{})
+                state.index=ios.STAGES.index('key_change_input')
+                with self.assertRaisesRegex(ios.Failure,'connect_diagnostic_invalid'):
+                    state.accept({'stage':'native_connect_diagnostic','nativeCheckpoint':'key_change_connect','detail':detail})
+                self.assertEqual(state.result,{})
+        state=ios.Checkpoints(None,None,'/tmp',{})
+        state.index=ios.STAGES.index('ordinary_input')
+        with self.assertRaisesRegex(ios.Failure,'connect_diagnostic_invalid'):
+            state.accept({'stage':'native_connect_diagnostic','nativeCheckpoint':'key_change_connect','detail':good})
+
+
 class CaptureDiagnosticsTests(unittest.TestCase):
+    def test_swift_failure_codes_are_all_allowlisted_and_header_failure_is_recorded(self):
+        source = (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text()
+        emitted = set(re.findall(r'\b(?:try require\([\s\S]*?,\s*|NSError\(domain:\s*)"(native_[a-z_]+)"', source))
+        self.assertIn('native_terminal_header_unproven', emitted)
+        self.assertEqual(emitted - ios.NATIVE_FAILURES, set())
+        state = ios.Checkpoints(None, None, '/tmp', {})
+        state.accept({'stage':'native_failure', 'nativeCheckpoint':'ordinary_terminal_capture',
+                      'nativeFailureCode':'native_terminal_header_unproven'})
+        self.assertEqual(state.result['nativeFailureCode'], 'native_terminal_header_unproven')
+        self.assertEqual(state.failure, 'tauri_ios_native_check_failed')
+
     def test_fixed_capture_diagnostics_export_and_bound(self):
         detail = {'anchor': 'terminal', 'matchCount': 2, 'reason': 'geometry_ambiguous',
                   'candidates': [{'role': 'other', 'frame': [10, 200, 400, 500],
@@ -663,6 +790,15 @@ class CaptureDiagnosticsTests(unittest.TestCase):
         state.accept({'stage': 'native_failure', 'nativeCheckpoint': 'ordinary_terminal_capture',
                       'nativeFailureCode': 'native_terminal_keyboard_visible'})
         self.assertEqual(state.result['nativeFailureCode'], 'native_terminal_keyboard_visible')
+
+    def test_header_diagnostics_are_accepted_at_both_terminal_stages(self):
+        for phase in ('ordinary_terminal_capture','key_change_terminal_capture'):
+            for anchor in ('header_brand','header_add','status_bar'):
+                for reason in ('not_found','frame_invalid','owner_unproven','outside_safe_frame','layout_unstable'):
+                    state=ios.Checkpoints(None,None,'/tmp',{})
+                    detail={'anchor':anchor,'matchCount':0,'reason':reason,'candidates':[],'truncated':False}
+                    state.accept({'stage':'native_capture_diagnostic','nativeCheckpoint':phase,'detail':detail})
+                    self.assertEqual(state.result['captureDiagnostics'][phase],[detail])
 
     def test_review_diagnostics_allow_only_seven_fixed_anchors_and_snapshot_phase(self):
         anchors = ('review_title', 'review_blocked', 'review_old_fingerprint', 'review_new_fingerprint',
@@ -1117,10 +1253,10 @@ class NativeDiagnosticPublishingTests(unittest.TestCase):
         emitted = set(re.findall(r'\btry require\([\s\S]*?,\s*"(native_[a-z_]+)"\)', source))
         prefixes = ('native_form_', 'native_control_', 'native_scroll_', 'native_owner_',
                     'native_geometry_', 'native_window_', 'native_webview_', 'native_visible_',
-                    'native_target_', 'native_screen_', 'native_capture_')
+                    'native_target_', 'native_screen_', 'native_capture_', 'native_terminal_')
         codes = sorted(code for code in emitted if code.startswith(prefixes))
         self.assertTrue({'native_form_control_changed', 'native_form_control_unproven',
-                         'native_control_owner_unproven'} <= set(codes))
+                         'native_control_owner_unproven', 'native_terminal_header_unproven'} <= set(codes))
         with tempfile.TemporaryDirectory() as directory:
             state = ios.Checkpoints(None, None, directory, {})
             server, thread = ios.start_checkpoints(state)
@@ -1246,6 +1382,23 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
             pass
         finally:
             peer.close()
+
+    def test_failure_peer_snapshot_distinguishes_open_from_fixture_cleanup(self):
+        self.probe(self.rotation)
+        self.assertTrue(self.rotation.wait_for_connections_closed(1,timeout=5))
+        peer, channel = self.session(self.rotation, marker=False)
+        before = ios.failure_peer_snapshot(self.rotation)
+        self.assertFalse(before['connectionsClosed'])
+        self.assertEqual(before['events'][-1]['authSuccesses'],1)
+        self.assertFalse(before['events'][-1]['closed'])
+        self.rotation.close()
+        after = ios.failure_peer_snapshot(self.rotation)
+        self.assertTrue(after['connectionsClosed'])
+        self.assertTrue(after['events'][-1]['closed'])
+        self.assertEqual(after['events'][-1]['closeReason'],'fixture_stopped')
+        self.assertFalse(after['events'][-1]['sessionClosed'])
+        self.assertNotIn(self.ordinary.password,json.dumps({'before':before,'after':after}))
+        peer.close()
 
     def test_complete_native_checkpoint_order_against_real_aabb_and_abbb_peers(self):
         self.accept('ordinary_form')

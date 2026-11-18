@@ -187,6 +187,7 @@ h1 { font-size:18px; margin:0}
   /* A native iOS WebView can extend behind the status bar with a zero CSS top inset. */
   .ios-edge-to-edge { --hp-ios-status-bar-fallback:64px; }
   .ios-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-live:not([hidden])) .app-header {
+    position:sticky; top:0; z-index:10; background:var(--hp-canvas);
     padding-top:calc(16px + max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px),var(--hp-ios-status-bar-fallback)));
   }
 }

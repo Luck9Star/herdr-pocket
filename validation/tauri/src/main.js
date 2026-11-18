@@ -3,6 +3,7 @@ import '@xterm/xterm/css/xterm.css';
 import xtermLicense from '../node_modules/@xterm/xterm/LICENSE?raw';
 import graphemesLicense from '../node_modules/@xterm/addon-unicode-graphemes/LICENSE?raw';
 import './style.css';
+import './connection-entry.css';
 import { readTheme } from './theme.js';
 import { observeAndroidSshHeader, observeIosSshActions, observeMobileViewport } from './mobile-viewport.js';
 import { initRemote } from './remote.js';

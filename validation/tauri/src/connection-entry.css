@@ -1,0 +1,177 @@
+.empty-route-icon,
+.empty-terminal-icon,
+.connection-choice-header,
+.connection-choice-icon,
+.connection-choice-arrow,
+.connection-choice-detail,
+#add-choice-heading { display:none; }
+
+@media (max-width:599px) {
+  :root {
+    --hp-connection-margin:24px;
+    --hp-connection-reported-top:max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px));
+    --hp-connection-top:var(--hp-connection-reported-top);
+  }
+  @supports (padding-top:calc(sign(1px) * 1px)) {
+    /* Match the existing iOS status bar fallback only when WebKit has no top inset. */
+    :root.ios-edge-to-edge {
+      --hp-connection-top:max(var(--hp-connection-reported-top),
+        calc(var(--hp-ios-status-bar-fallback,0px) * (1 - sign(var(--hp-connection-reported-top)))));
+    }
+  }
+  @media (max-width:359px) {
+    :root { --hp-connection-margin:16px; }
+  }
+
+  .connection-icon,
+  .empty-route-icon {
+    width:24px;
+    height:24px;
+    fill:none;
+    stroke:currentColor;
+    stroke-width:1.7;
+    stroke-linejoin:round;
+    stroke-linecap:round;
+  }
+
+  body:has(#host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty[data-compact]:not([hidden])) {
+    padding-bottom:calc(68px + env(safe-area-inset-bottom));
+    .app-header {
+      padding:calc(16px + var(--hp-connection-top)) var(--hp-connection-margin) 0;
+    }
+    .brand-lockup { width:100%; min-height:44px; }
+    .brand-mark { width:34px; height:34px; border-radius:10px; }
+    .brand-lockup h1 { font-size:22px; font-weight:600; letter-spacing:normal; }
+    #brand-caption, #host-open-remote, #host-board-intro { display:none; }
+    #host-home { padding:28px var(--hp-connection-margin); }
+
+    #host-empty {
+      min-height:268px;
+      padding:15px;
+      text-align:start;
+      border-radius:var(--hp-radius-card);
+    }
+    .empty-terminal-icon {
+      display:grid;
+      place-items:center;
+      width:44px;
+      height:44px;
+      border-radius:10px;
+      color:var(--hp-brand);
+      background:var(--hp-brandSoft);
+    }
+    #host-empty h3 { margin:11px 0 0; font-size:18px; line-height:22px; font-weight:600; }
+    #host-empty p { margin:9px 0 24px; font-size:13px; line-height:18px; }
+    #host-empty button { display:block; width:100%; min-height:48px; font-size:14px; }
+    #home-open-ssh { margin-top:12px; }
+
+    .route-tabs {
+      border:0;
+      gap:0;
+      padding:0 0 env(safe-area-inset-bottom);
+      box-shadow:inset 0 1px var(--hp-border);
+      background:var(--hp-canvas);
+    }
+    .route-tabs button {
+      flex:1 1 0;
+      position:relative;
+      min-height:56px;
+      padding:7px 0 4px;
+      justify-content:flex-start;
+      gap:3px;
+      background:var(--hp-card);
+      box-shadow:inset 0 1px var(--hp-border);
+      border-radius:0;
+      font-size:12px;
+      line-height:16px;
+      font-weight:400;
+    }
+    .route-tabs button[aria-pressed=true] { background:var(--hp-card); }
+    .route-tabs button[aria-pressed=true]::before {
+      content:'';
+      position:absolute;
+      top:5px;
+      width:40px;
+      height:28px;
+      border-radius:10px;
+      background:var(--hp-brandSoft);
+    }
+    .route-tabs button span { display:none; }
+    .empty-route-icon { display:block; position:relative; }
+  }
+
+  body:has(#host-home:not([hidden]) #home-add:not([hidden])) {
+    padding-bottom:env(safe-area-inset-bottom);
+    .app-header, .route-tabs, .connection-choice-desktop { display:none; }
+    #host-home { padding:var(--hp-connection-top) 0 24px; }
+
+    .connection-choice-header {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      min-height:56px;
+      padding:0 calc(var(--hp-connection-margin) - 8px) 1px;
+      border-bottom:1px solid var(--hp-border);
+      font-size:18px;
+      font-weight:600;
+    }
+    #add-back {
+      display:grid;
+      place-items:center;
+      width:44px;
+      height:44px;
+      border:0;
+      padding:0;
+      background:transparent;
+    }
+    .connection-choice-body { padding:24px var(--hp-connection-margin) 0; }
+    #add-choice-heading {
+      display:block;
+      font-size:22px;
+      line-height:26px;
+      font-weight:600;
+      margin:0 0 18px;
+    }
+    #home-add .ssh-options { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; margin:0; }
+    .connection-choice {
+      min-height:100px;
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      align-items:stretch;
+      padding:13px;
+      text-align:start;
+      border-radius:var(--hp-radius-card);
+      border-color:var(--hp-border);
+    }
+    #add-ssh { border-color:var(--hp-brandBorder); }
+    .connection-choice-row {
+      display:grid;
+      grid-template-columns:40px minmax(0,1fr) 24px;
+      align-items:center;
+      gap:12px;
+      color:var(--hp-textPrimary);
+      font-size:16px;
+      line-height:20px;
+    }
+    .connection-choice-icon {
+      display:grid;
+      place-items:center;
+      width:40px;
+      height:40px;
+      border-radius:10px;
+      color:var(--hp-textSecondary);
+      background:var(--hp-cardSubtle);
+    }
+    #add-ssh .connection-choice-icon { color:var(--hp-brand); background:var(--hp-brandSoft); }
+    .connection-choice-arrow { display:block; color:var(--hp-textSecondary); }
+    .connection-choice-detail {
+      display:block;
+      color:var(--hp-textSecondary);
+      font-size:13px;
+      line-height:18px;
+      font-weight:400;
+    }
+  }
+}

@@ -54,6 +54,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   let connectionProfiles=null,profileProviderHint=null,pairCamera=null,revocationReview=false,pairReviewIdentity=null,handoffRevision=0,handoffBusy=false;
   const directSummary=new DirectDashboardSummary(event=>onWorkspaceDashboard(event));
   let hostRecords=[], activeHostId=null, hostNavigation=0, hostRefreshRevision=0, unsavedHostOpen=false;
+  const compactConnectionEntry = window.matchMedia?.('(max-width:599px)');
   let draftKey=null, connectionDraftIdentity=null, connectionDraftLabel='', draftTargetLabel='', connectionDraftAuthenticated=false;
   let unknownReview=null;
   const unknownPanel=document.createElement('section');unknownPanel.className='unknown-input-review';unknownPanel.hidden=true;
@@ -687,7 +688,21 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     $('host-attention').value = 'all';
     clearHostQuery();
   };
+  function renderEmptyHomeShortcut() {
+    if (!compactConnectionEntry) return;
+    const empty = $('host-empty');
+    const compact = compactConnectionEntry.matches && !empty.hidden && !(unsavedHostOpen && !activeHostId);
+    const parent = compact ? empty : $('host-board-intro');
+    const shortcut = $('home-open-ssh');
+    if (shortcut.parentElement !== parent) {
+      parent.append(shortcut);
+      shortcut.textContent = compact ? '普通 SSH 终端' : '普通 SSH';
+    }
+    empty.toggleAttribute('data-compact', compact);
+  }
+  compactConnectionEntry?.addEventListener('change', renderEmptyHomeShortcut);
   function renderHosts() {
+    renderEmptyHomeShortcut();
     renderLiveSummary();
     $('brand-caption').textContent=`${new Set(hostRecords.map(host=>host.id)).size} 台已存主机` ;
     $('host-task-details').hidden=!activeHostId;
@@ -874,6 +889,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('host-return-home').addEventListener('click',()=>setHomeSection('dashboard'));
   $('host-open-remote').onclick=()=>navigateHome('add');
   $('host-empty-add').onclick=()=>navigateHome('add');
+  $('add-back').onclick=()=>navigateHome('dashboard');
   $('add-herdr').onclick=()=>void openNewHost();
   $('add-ssh').onclick=()=>setHomeSection('ssh');
   $('home-open-ssh').onclick=()=>setHomeSection('ssh');

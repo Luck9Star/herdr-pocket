@@ -39,9 +39,10 @@ class Element {
   closest() {
     return this;
   }
+  blur() {}
 }
 
-function setup() {
+function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBottom = 130 } = {}) {
   const ids = [
     "ssh-host",
     "ssh-port",
@@ -79,6 +80,8 @@ function setup() {
     "nav-terminal",
     "nav-network",
     "nav-settings",
+    "ssh-hide-keyboard",
+    "ssh-helper-keys",
   ];
   const nodes = Object.fromEntries(ids.map((id) => [id, new Element()]));
   nodes["ssh-host"].value = "127.0.0.1";
@@ -102,15 +105,26 @@ function setup() {
   };
   const navGroups = { ".app-header": new Element(), ".route-tabs": new Element() };
   document.querySelector = (selector) => navGroups[selector] || null;
+  // Real-WK geometry from the R17 screenshots: the sticky header band ends at
+  // y=130; the heading sits at y=161.906 once the page is scrolled to the top.
+  navGroups[".app-header"].rect = { top: 0, bottom: headerBottom, height: headerBottom };
+  const heading = nodes["ssh-page-heading"];
+  heading.rect = { top: headingTop, bottom: headingTop + 28, height: 28 };
+  document.documentElement = {
+    classList: { contains: (name) => ios && name === "ios-edge-to-edge" },
+  };
   const scrolls = [];
+  const tops = [];
+  const frames = [];
   const view = {
-    innerHeight: 956,
+    innerHeight,
     getComputedStyle: (element) => ({ position: element.position }),
     scrollBy: (x, y) => scrolls.push([x, y]),
+    scrollTo: (x, y) => tops.push([x, y]),
   };
   globalThis.document = document;
   globalThis.window = view;
-  globalThis.requestAnimationFrame = () => 1;
+  globalThis.requestAnimationFrame = (fn) => { frames.push(fn); return frames.length; };
   globalThis.cancelAnimationFrame = () => {};
   globalThis.ResizeObserver = undefined;
   let channel;
@@ -166,13 +180,18 @@ function setup() {
   function openCalls() {
     return calls.filter((call) => call.cmd === "ssh_shell_open");
   }
+  const runFrames = () => { for (const fn of frames.splice(0)) fn(); };
   return {
     nodes,
     calls,
     document,
     scrolls,
+    tops,
+    frames,
+    runFrames,
     view,
     navGroups,
+    heading,
     probe,
     connect,
     openCalls,
@@ -574,6 +593,120 @@ test("a failed re-probe of the same target keeps the pin that was in effect", as
     assert.ok(h.nodes["ssh-key-change-new"].textContent.includes("SHA256:presentedLocalOnly"));
     assert.equal(h.navGroups[".app-header"].hidden, true);
     assert.equal(h.navGroups[".route-tabs"].hidden, true);
+  } finally {
+    h.restore();
+  }
+});
+
+// R18: the retained form scroll parks the generic H2 under the sticky header
+// when the live terminal appears (or after the keyboard collapses). Real-WK
+// measurements: H2 y=108.906 vs header band bottom y=130 on 440x956; after a
+// scroll-to-top the H2 sits at y=161.906 on all three phone sizes.
+const HEADING_SIZES = [
+  { name: "375x667", innerHeight: 667, headingTop: -50.094 },
+  { name: "390x844", innerHeight: 844, headingTop: 46.906 },
+  { name: "440x956", innerHeight: 956, headingTop: 108.906 },
+];
+
+test("a natural entry into the live terminal realigns the heading below the sticky header on all three phone sizes", async () => {
+  for (const size of HEADING_SIZES) {
+    const h = setup({ innerHeight: size.innerHeight, ios: true, headingTop: size.headingTop });
+    try {
+      h.setAccept(true);
+      await h.probe();
+      await h.connect();
+      h.runFrames();
+      assert.deepEqual(h.tops, [[0, 0]], `${size.name}: exactly one scroll-to-top on entry`);
+      assert.equal(h.nodes["ssh-live"].hidden, false, `${size.name}: terminal is live`);
+      assert.equal(h.nodes["ssh-page-heading"].hidden, false);
+    } finally {
+      h.restore();
+    }
+  }
+});
+
+test("collapsing the keyboard realigns the heading below the sticky header", async () => {
+  const h = setup({ ios: true });
+  try {
+    h.setAccept(true);
+    await h.probe();
+    await h.connect();
+    assert.equal(h.nodes["ssh-live"].hidden, false);
+    h.runFrames();
+    assert.deepEqual(h.tops, [], "no alignment needed when the heading is already clear");
+    // The keyboard collapse leaves the old form scroll in place on iOS.
+    h.nodes["ssh-page-heading"].rect = { top: 46.906, bottom: 74.906, height: 28 };
+    h.nodes["ssh-hide-keyboard"].onclick();
+    h.runFrames();
+    assert.deepEqual(h.tops, [[0, 0]], "exactly one scroll-to-top on keyboard collapse");
+  } finally {
+    h.restore();
+  }
+});
+
+test("an already-clear heading and later manual scrolling are never corrected", async () => {
+  const h = setup({ ios: true, headingTop: 161.906 });
+  try {
+    h.setAccept(true);
+    await h.probe();
+    await h.connect();
+    assert.equal(h.nodes["ssh-live"].hidden, false);
+    h.runFrames();
+    assert.deepEqual(h.tops, []);
+    // The user scrolls manually afterwards; the heading goes back under the
+    // header band exactly like a normal document scroll.
+    h.nodes["ssh-page-heading"].rect = { top: 97.906, bottom: 125.906, height: 28 };
+    h.runFrames();
+    await flush();
+    h.runFrames();
+    assert.deepEqual(h.tops, [], "no product-triggered scroll after manual scrolling");
+  } finally {
+    h.restore();
+  }
+});
+
+test("a deferred alignment never scrolls a hidden parent view, a switched page or a refused key change", async () => {
+  for (const hide of ["home-ssh", "host-home", "geometry"]) {
+    const h = setup({ ios: true, headingTop: 108.906 });
+    try {
+      h.setAccept(true);
+      await h.probe();
+      await h.connect();
+      assert.equal(h.nodes["ssh-live"].hidden, false, `${hide}: terminal is live before the switch`);
+      if (hide === "geometry") h.nodes["ssh-page-heading"].rect = { top: 0, bottom: 0, height: 0 };
+      else h.nodes[hide].hidden = true;
+      h.runFrames();
+      assert.deepEqual(h.tops, [], `${hide}: no scroll after the parent view changed`);
+    } finally {
+      h.restore();
+    }
+  }
+  const refused = setup({ ios: true, headingTop: 108.906 });
+  try {
+    await refused.probe();
+    await refused.connect();
+    refused.runFrames();
+    assert.deepEqual(refused.tops, [], "a refused key change never scrolls");
+    assert.equal(refused.nodes["ssh-page-heading"].hidden, true);
+    assert.equal(refused.nodes["ssh-key-change"].hidden, false);
+    assert.equal(refused.nodes["ssh-review"].checked, false);
+  } finally {
+    refused.restore();
+  }
+});
+
+test("non-iOS roots keep the old behavior: no entry alignment at all", async () => {
+  const h = setup({ headingTop: 46.906 });
+  try {
+    h.setAccept(true);
+    await h.probe();
+    await h.connect();
+    assert.equal(h.nodes["ssh-live"].hidden, false);
+    h.runFrames();
+    assert.deepEqual(h.tops, []);
+    h.nodes["ssh-hide-keyboard"].onclick();
+    h.runFrames();
+    assert.deepEqual(h.tops, []);
   } finally {
     h.restore();
   }

@@ -74,12 +74,30 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
         $('ssh-target').textContent = `${t.username}@${host}:${t.port} · SSH 已连接`;
         globalThis.window?.visualViewport?.addEventListener('resize', revealFocusedTerminal);
         resizer.start(); requestAnimationFrame(resizer.request);
+        alignHeadingBelowHeader();
       } else { globalThis.window?.visualViewport?.removeEventListener('resize', revealFocusedTerminal); $('ssh-target').textContent = ''; resizer.stop(); }
     },
     onData: (bytes, acknowledge) => terminal?.write(bytes, acknowledge),
   });
   const target = () => ({host: $('ssh-host').value.trim(), port: Number($('ssh-port').value), username: $('ssh-user').value.trim()});
   function clearSecrets() { for (const id of ['ssh-password','ssh-key','ssh-passphrase']) $(id).value = ''; }
+  // After the form→live swap or a keyboard collapse, the retained form scroll can
+  // park the page heading under the sticky header (iOS). One event-point
+  // realignment to the top; manual scrolling afterwards is never corrected.
+  function alignHeadingBelowHeader() {
+    if (!document.documentElement?.classList?.contains('ios-edge-to-edge')) return;
+    const header = document.querySelector && document.querySelector('.app-header');
+    const heading = $('ssh-page-heading');
+    if (!header || !heading || heading.hidden) return;
+    requestAnimationFrame(() => {
+      if (!controller.isReady() || heading.hidden || $('home-ssh')?.hidden || $('host-home')?.hidden) return;
+      const headingBox = heading.getBoundingClientRect();
+      const headerBox = header.getBoundingClientRect();
+      // A hidden parent or a switched view has zero geometry; never scroll another page.
+      if (!headingBox.height || !headerBox.height) return;
+      if (headerBox.bottom > headingBox.top) globalThis.window?.scrollTo?.(0, 0);
+    });
+  }
   // One place decides what the user sees: the terminal, the blocked review or the setup form.
   function applyView(ready, blocked) {
     const setup = $('ssh-setup');
@@ -224,7 +242,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   };
   $('ssh-focus').onclick = () => terminal?.focus();
   if (hideKeyboard) hideKeyboard.onclick = () => {
-    if (controller.isReady()) terminal?.textarea?.blur();
+    if (controller.isReady()) { terminal?.textarea?.blur(); alignHeadingBelowHeader(); }
   };
   document.addEventListener('visibilitychange', () => { if (document.hidden) { clearSecrets(); void controller.close(); } });
   return {close: () => {clearSecrets(); void controller.close();}, isReady:controller.isReady, isActive:controller.isActive,

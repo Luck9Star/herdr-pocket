@@ -12,6 +12,12 @@ test('header and SSH target union native and CSS safe-area insets without adding
   assert.doesNotMatch(css,/var\(--hp-system-top-inset,0px\)\s*\+\s*env\(safe-area-inset-top/);
 });
 
+test('S10 keeps its top safe area when the header is hidden',()=>{
+  const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+  assert.match(css, /#host-home:has\(#home-ssh:not\(\[hidden\]\) #ssh-key-change:not\(\[hidden\]\)\)\s*\{\s*padding-top:calc\(12px \+ max\(var\(--hp-system-top-inset,0px\),env\(safe-area-inset-top,0px\),var\(--hp-ssh-review-top-fallback,0px\)\)\)/);
+  assert.match(css, /@media \(max-width:599px\) and \(orientation:portrait\) \{[^}]*\.ios-edge-to-edge \{ --hp-ssh-review-top-fallback:64px;/);
+});
+
 function fixture() {
   const callbacks=new Map(),props=new Map(),classes=new Set();
   const viewport={height:800,offsetTop:0,addEventListener:(name,fn)=>callbacks.set('v:'+name,fn),removeEventListener:name=>callbacks.delete('v:'+name)};

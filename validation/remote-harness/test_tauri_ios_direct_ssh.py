@@ -664,6 +664,46 @@ class CaptureDiagnosticsTests(unittest.TestCase):
                       'nativeFailureCode': 'native_terminal_keyboard_visible'})
         self.assertEqual(state.result['nativeFailureCode'], 'native_terminal_keyboard_visible')
 
+    def test_review_diagnostics_allow_only_seven_fixed_anchors_and_snapshot_phase(self):
+        anchors = ('review_title', 'review_blocked', 'review_old_fingerprint', 'review_new_fingerprint',
+                   'review_target', 'review_recheck', 'review_cancel')
+        for anchor in anchors:
+            for sample in ('before', 'after'):
+                with self.subTest(anchor=anchor, sample=sample):
+                    detail = {'anchor': anchor, 'sample': sample, 'matchCount': 1, 'reason': 'geometry_ambiguous',
+                              'candidates': [{'role':'staticText', 'frame':[1,2,100,44],
+                                              'ownerResolved':True, 'visible':False}], 'truncated':False}
+                    state = ios.Checkpoints(None,None,'/tmp',{})
+                    state.accept({'stage':'native_capture_diagnostic', 'nativeCheckpoint':'key_change_review_capture',
+                                  'detail':detail})
+                    self.assertEqual(state.result['captureDiagnostics']['key_change_review_capture'], [detail])
+
+    def test_review_diagnostics_reject_text_cross_phase_bad_sample_and_extra_fields(self):
+        detail = {'anchor':'review_old_fingerprint', 'sample':'before', 'matchCount':0,
+                  'reason':'not_found', 'candidates':[], 'truncated':False}
+        base = {'stage':'native_capture_diagnostic', 'nativeCheckpoint':'key_change_review_capture', 'detail':detail}
+        bad = [dict(base, detail=dict(detail, anchor='SHA256:secret')), dict(base, detail=dict(detail, sample='secret')),
+               dict(base, detail={k:v for k,v in detail.items() if k != 'sample'}),
+               dict(base, detail=dict(detail, text='secret')), dict(base, nativeCheckpoint='ordinary_terminal_capture'),
+               dict(base, detail=dict(detail, anchor='terminal'))]
+        for payload in bad:
+            state = ios.Checkpoints(None,None,'/tmp',{})
+            with self.subTest(payload=payload), self.assertRaisesRegex(ios.Failure,'capture_diagnostic_invalid'):
+                state.accept(payload)
+            self.assertEqual(state.result,{})
+
+    def test_failed_checkpoint_does_not_claim_completion(self):
+        class Fixture:
+            def wait_for_connections_closed(self, count, timeout): return False
+        result={'cases':{'ordinary':{'status':'not_run'},'keyChange':{'status':'not_run'}},'artifacts':{}}
+        state=ios.Checkpoints(Fixture(),None,'/tmp',result)
+        state.accept({'stage':'ordinary_form'})
+        with self.assertRaisesRegex(ios.Failure,'probe_not_closed'):
+            state.accept({'stage':'ordinary_probe'})
+        self.assertEqual(result['stage'],'ordinary_probe')
+        self.assertEqual(result['lastCompletedStage'],'ordinary_form')
+        self.assertEqual(state.index,ios.STAGES.index('ordinary_probe'))
+
     def test_capture_diagnostics_reject_unknown_text_bad_geometry_and_scope(self):
         detail = {'anchor': 'target', 'matchCount': 1, 'reason': 'not_found', 'candidates': [], 'truncated': False}
         event = {'stage': 'native_capture_diagnostic', 'nativeCheckpoint': 'key_change_terminal_capture', 'detail': detail}

@@ -267,6 +267,7 @@ final class Observations {
     var liveReads = 0
     var resolved: [Observed] = []
     var checkpoints: [(String, [String: Any])] = []
+    var reviewActionChecks = 0
     let webSurface = Element()
     init(_ trees: [[Observed]], liveSnapshots: [Snapshot] = [], occlusionSamples: [[CGRect]] = [],
          hittableSamples: [Bool] = []) {
@@ -294,7 +295,7 @@ struct Adapter {
     var formControls: [String: LiveControl] = [:]
     var nativePhase = "ordinary_port"
     var pathControls: [[Int]: LiveControl] = [:]
-    let config: [String: Any] = [:]
+    let config: [String: Any] = ["fingerprintA": "SHA256:fixture-complete-old", "fingerprintB": "SHA256:fixture-complete-new"]
     func require(_ condition: Bool, _ reason: String) throws {
         if !condition { throw Rejected(reason: reason) }
     }
@@ -318,7 +319,12 @@ struct Adapter {
         try require(!rows.contains { $0.snapshot.elementType == .secureTextField && $0.snapshot.isEnabled },
                     "native_credentials_visible_after_connect")
     }
-    func assertReviewActions(_ owner: Observed, _ rows: [Observed], _ labels: Set<String>) throws { }
+    func assertReviewActions(_ owner: Observed, _ rows: [Observed], _ labels: Set<String>, reviewSample: String) throws {
+        observations?.reviewActionChecks += 1
+        let actions = rows.filter { $0.snapshot.elementType == .button && $0.snapshot.isEnabled &&
+            $0.windowPath == owner.windowPath && $0.webPath == owner.webPath }
+        try require(actions.count == 2 && Set(actions.map { $0.snapshot.label }) == labels, "native_review_exits_invalid")
+    }
     func observedNodes() throws -> [Observed] { observations?.next(rows) ?? rows }
     func resolveByPath(_ row: Observed) -> Observed {
         observations?.resolved.append(row)
@@ -356,6 +362,7 @@ struct Adapter {
     func fillField(_ name: String, _ text: String) throws { try fillForm(name, text) }
     func tapProbe() throws { _ = try tapForm("probe") }
     func terminalScreenshot() throws { try screenshot("ordinary_terminal", port: 2222) }
+    func reviewScreenshot() throws { try screenshot("key_change_review", port: 2222, reviewPage: true) }
     func scope(_ item: Snapshot, _ rows: [Observed], _ page: Observed) throws -> NativeViewPolicy.Scope {
         try pageScope(item, rows, page)
     }
@@ -371,7 +378,7 @@ struct Adapter {
             "func tap(_ item:", "func fillPassword(_ item:",
             "func safeFrame(_ anchors:", "func captureDiagnostic(_ anchor:", "func exactObserved(_ rows:",
             "struct CaptureAnchors {", "func terminalBoundaryControls(_ title:", "func verifyCaptureControls(_ selected:",
-            "func waitForTerminalKeyboardToHide()", "func stableCaptureLayout(_ before:",
+            "func waitForCaptureKeyboardToHide(reviewSample:", "func stableCaptureLayout(_ before:",
             "func terminalCaptureFrame(_ anchors:", "func screenshot(_ stage:",
             "func fillForm(_ name:", "func pageScope(_ item:")) + r'''
 }
@@ -876,6 +883,67 @@ exerciseCapture([], controlRows + [terminalRows(outputRole: .staticText)[3]], er
                 message: "an invalid named region must not be bypassed by the boundary fallback") { timeline in
     check(timeline.checkpoints.allSatisfy { $0.0 == "native_capture_diagnostic" }, "invalid named geometry still rejects capture")
 }
+let reviewStatus = CGRect(x: 0, y: 0, width: 440, height: 54)
+let reviewLabels = ["主机指纹发生变化", "已阻止连接与输入", "旧：SHA256:fixture-complete-old",
+                    "新：SHA256:fixture-complete-new", "目标：fixture-target", "重新核对主机指纹", "取消连接，保留旧信任"]
+func reviewRows(titleY: CGFloat = 66, newFingerprint: String = reviewLabels[3], cancelRole: XCUIElement.ElementType = .button) -> [Observed] {
+    func descendant(_ item: Snapshot, _ path: [Int]) -> Observed {
+        Observed(snapshot: item, path: path, windowPath: [0], webPath: [0, 0], window: passwordScreen, webs: [passwordScreen])
+    }
+    var rows = [descendant(snapshot(.window, frame: passwordScreen, label: ""), [0]),
+                descendant(snapshot(.webView, frame: passwordScreen, label: ""), [0, 0])]
+    let identifiers = ["", "", "ssh-key-change-old", "ssh-key-change-new", "ssh-key-change-target", "ssh-key-recheck", "ssh-key-cancel"]
+    for (index, label) in reviewLabels.enumerated() {
+        let role: XCUIElement.ElementType = index == 6 ? cancelRole : index == 5 ? .button : .staticText
+        let y: CGFloat = index == 0 ? titleY : 110 + CGFloat(index) * 48
+        let frame = CGRect(x: 16, y: y, width: 400, height: index < 5 ? 23 : 44)
+        let item = snapshot(role, frame: frame, identifier: identifiers[index], label: index == 3 ? newFingerprint : label)
+        rows.append(descendant(item, [0, 0, index]))
+    }
+    return rows
+}
+func exerciseReview(_ before: [Observed], _ after: [Observed], anchor: String? = nil, sample: String? = nil,
+                    reason: String? = nil, expectedError: String? = nil) {
+    let timeline = Observations([before, after])
+    let app = App(frame: passwordScreen)
+    let candidate = Adapter(app: app, current: LiveControl(snapshot: snapshot(), hittable: true, element: Element()),
+                            rows: after, blockers: [reviewStatus], observations: timeline, nativePhase: "key_change_review_capture")
+    var observedError: String?
+    do { try candidate.reviewScreenshot() }
+    catch let rejected as Rejected { observedError = rejected.reason }
+    catch { observedError = "unexpected" }
+    check(observedError == expectedError && app.input.inputs.isEmpty && timeline.webSurface.drags.isEmpty,
+          "the review path must validate the actual screen without gestures or terminal input")
+    if let anchor = anchor {
+        let detail = timeline.checkpoints.first?.1["detail"] as? [String: Any]
+        let values = detail?["candidates"] as? [[String: Any]]
+        let encoded = (try? JSONSerialization.data(withJSONObject: detail ?? [:])).map { String(decoding: $0, as: UTF8.self) } ?? ""
+        check(timeline.checkpoints.count == 1 && timeline.checkpoints.first?.0 == "native_capture_diagnostic" &&
+              detail?["anchor"] as? String == anchor && detail?["sample"] as? String == sample &&
+              detail?["reason"] as? String == reason && detail?["matchCount"] as? Int == 1 &&
+              values?.count == 1 && Set(values?.first?.keys.map { $0 } ?? []) == ["role", "frame", "ownerResolved", "visible"] &&
+              !encoded.contains("SHA256") && !encoded.contains("fixture-target"),
+              "failed review anchors must identify the sample with only fixed roles and geometry")
+    } else {
+        let result = timeline.checkpoints.first?.1
+        let frames = result?["reviewFrames"] as? [[Double]]
+        check(timeline.reviewActionChecks == 2 && timeline.checkpoints.count == 1 && timeline.checkpoints.first?.0 == "key_change_review" &&
+              result?["safeFrame"] as? [Double] == [0, 54, 440, 902] && frames?.count == 7 &&
+              frames?.first == [16, 66, 400, 23] && result?["pngBase64"] != nil,
+              "both samples must preserve all seven visible review anchors and the original PNG")
+    }
+}
+let unobscuredReview = reviewRows()
+let statusClippedReview = reviewRows(titleY: 12)
+exerciseReview(statusClippedReview, unobscuredReview, anchor: "review_title", sample: "before", reason: "outside_safe_frame",
+               expectedError: "native_geometry_ambiguous")
+exerciseReview(unobscuredReview, statusClippedReview, anchor: "review_title", sample: "after", reason: "outside_safe_frame",
+               expectedError: "native_geometry_ambiguous")
+exerciseReview(unobscuredReview, reviewRows(newFingerprint: "新：SHA256:fixture-incomplete"), anchor: "review_new_fingerprint",
+               sample: "after", reason: "not_found", expectedError: "native_geometry_ambiguous")
+exerciseReview(reviewRows(cancelRole: .staticText), unobscuredReview, anchor: "review_cancel", sample: "before",
+               reason: "geometry_ambiguous", expectedError: "native_geometry_ambiguous")
+exerciseReview(unobscuredReview, unobscuredReview)
 let writeElement = Element()
 let offscreen = snapshot(frame: movedFrame.offsetBy(dx: 0, dy: -300))
 let writeSnapshots = Observations([], liveSnapshots: [moved, moved, snapshot(), offscreen, moved, moved])

@@ -1105,7 +1105,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func assertReviewActions(_ page: Observed, _ rows: [Observed], _ labels: Set<String>) throws {
+    private func assertReviewActions(_ page: Observed, _ rows: [Observed], _ labels: Set<String>, reviewSample: String) throws {
         let visible = try safeFrame([page])
         var actions: [NativeViewPolicy.Action] = []
         for item in app.buttons.allElementsBoundByIndex {
@@ -1116,7 +1116,18 @@ final class TauriDirectSSHUITests: XCTestCase {
             actions.append(NativeViewPolicy.Action(scope: scope, label: current.snapshot.label, frame: current.snapshot.frame,
                 enabled: current.snapshot.isEnabled, hittable: current.hittable))
         }
-        try require(NativeViewPolicy.reviewValid(actions, expected: labels, visible: visible), "native_review_exits_invalid")
+        let valid = NativeViewPolicy.reviewValid(actions, expected: labels, visible: visible)
+        if !valid {
+            let expected = [("重新核对主机指纹", "review_recheck"), ("取消连接，保留旧信任", "review_cancel")]
+            let failed = expected.first { label, _ in
+                !NativeViewPolicy.reviewValid(actions.filter { $0.label == label }, expected: [label], visible: visible)
+            }
+            let candidates = rows.filter { row in row.snapshot.elementType == .button &&
+                (failed == nil || row.snapshot.label == failed?.0) }
+            try captureDiagnostic(failed?.1 ?? "review_title", "geometry_ambiguous", candidates, rows,
+                visible: visible, reviewSample: reviewSample)
+        }
+        try require(valid, "native_review_exits_invalid")
     }
 
     @MainActor
@@ -1134,58 +1145,77 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func safeFrame(_ anchors: [Observed]) throws -> CGRect {
+    private func safeFrame(_ anchors: [Observed], occlusions: [CGRect]? = nil,
+                           onInvalid: ((String) throws -> Void)? = nil) throws -> CGRect {
         guard let first = anchors.first, let window = first.window else {
+            try onInvalid?("owner_unproven")
             try require(false, "native_window_missing")
             throw NSError(domain: "native_window_missing", code: 1)
         }
-        try require(!first.webs.isEmpty && first.webs.count <= 16, "native_webview_ambiguous")
-        try require(NativeFramePolicy.sameOwner(windowPaths: anchors.map { $0.windowPath }, webPaths: anchors.map { $0.webPath }) &&
-                    anchors.allSatisfy { $0.window == window },
-                    "native_owner_ambiguous")
-        let occlusions = nativeOcclusions()
+        let validWeb = !first.webs.isEmpty && first.webs.count <= 16
+        if !validWeb { try onInvalid?("owner_unproven") }
+        try require(validWeb, "native_webview_ambiguous")
+        let sameOwner = NativeFramePolicy.sameOwner(windowPaths: anchors.map { $0.windowPath }, webPaths: anchors.map { $0.webPath }) &&
+            anchors.allSatisfy { $0.window == window }
+        if !sameOwner { try onInvalid?("owner_ambiguous") }
+        try require(sameOwner, "native_owner_ambiguous")
+        let blockers = occlusions ?? nativeOcclusions()
         var common = window
         for anchor in anchors {
             guard let visible = NativeFramePolicy.visible(window: window, screen: app.frame,
-                    webAncestors: anchor.webs, occlusions: occlusions) else {
+                    webAncestors: anchor.webs, occlusions: blockers) else {
+                try onInvalid?("viewport_invalid")
                 try require(false, "native_visible_frame_invalid")
                 throw NSError(domain: "native_visible_frame_invalid", code: 1)
             }
             common = common.intersection(visible)
         }
+        if !NativeFramePolicy.valid(common) { try onInvalid?("viewport_invalid") }
         try require(NativeFramePolicy.valid(common), "native_visible_frame_invalid")
         return common
     }
 
     @MainActor
     private func captureDiagnostic(_ anchor: String, _ reason: String, _ candidates: [Observed],
-                                   _ rows: [Observed], visible: CGRect? = nil) throws {
-        let sample = candidates.prefix(8).map { item in
+                                   _ rows: [Observed], visible: CGRect? = nil, reviewSample: String? = nil) throws {
+        let items = candidates.prefix(8).map { item in
             let frame = item.snapshot.frame
             return ["role": role(item.snapshot.elementType), "frame": NativeFramePolicy.diagnosticRect(frame),
                 "ownerResolved": controlScope(item, rows) != nil,
                 "visible": visible.map { NativeFramePolicy.valid(frame.intersection($0)) } ?? false] as [String: Any]
         }
-        try post("native_capture_diagnostic", ["nativeCheckpoint": nativePhase,
-            "detail": ["anchor": anchor, "reason": reason, "matchCount": min(candidates.count, 10000),
-                       "candidates": sample, "truncated": candidates.count > sample.count]])
+        var detail: [String: Any] = ["anchor": anchor, "reason": reason, "matchCount": min(candidates.count, 10000),
+                                    "candidates": items, "truncated": candidates.count > items.count]
+        if let sample = reviewSample { detail["sample"] = sample }
+        try post("native_capture_diagnostic", ["nativeCheckpoint": nativePhase, "detail": detail])
     }
 
     @MainActor
     private func exactObserved(_ rows: [Observed], _ text: String, identifiers: [String] = [], control: Bool = false,
-                               captureAnchor: String? = nil, requireVisible: Bool = true) throws -> Observed {
+                               captureAnchor: String? = nil, requireVisible: Bool = true, reviewSample: String? = nil,
+                               occlusions: [CGRect]? = nil) throws -> Observed {
         let allMatches = rows.filter { identifiers.contains($0.snapshot.identifier) || texts($0.snapshot).contains(text) }
-        let matches = allMatches.filter { NativeFramePolicy.valid($0.snapshot.frame) }
+        // An ID helps diagnose a missing label, but cannot witness the full
+        // displayed fingerprint, target or action text on the review page.
+        let exact = reviewSample == nil ? allMatches : allMatches.filter { texts($0.snapshot).contains(text) }
+        let matches = exact.filter { NativeFramePolicy.valid($0.snapshot.frame) }
+        let preferIdentifier = control || (reviewSample != nil && !identifiers.isEmpty)
         let preferred = matches.indices.sorted {
-            let left = control ? identifiers.contains(matches[$0].snapshot.identifier) : matches[$0].snapshot.elementType == .staticText
-            let right = control ? identifiers.contains(matches[$1].snapshot.identifier) : matches[$1].snapshot.elementType == .staticText
+            let left = preferIdentifier ? identifiers.contains(matches[$0].snapshot.identifier) :
+                matches[$0].snapshot.elementType == .staticText
+            let right = preferIdentifier ? identifiers.contains(matches[$1].snapshot.identifier) :
+                matches[$1].snapshot.elementType == .staticText
             return left != right ? left : matches[$0].path.count > matches[$1].path.count
         }
-        var reason = allMatches.isEmpty ? "not_found" : matches.isEmpty ? "frame_invalid" : "owner_unproven"
+        var reason = exact.isEmpty ? "not_found" : matches.isEmpty ? "frame_invalid" : "owner_unproven"
         var lastVisible: CGRect?
         for candidate in preferred where matches[candidate].window != nil && !matches[candidate].webs.isEmpty {
             let owner = matches[candidate]
             if captureAnchor != nil && controlScope(owner, rows) == nil { continue }
+            if (captureAnchor == "review_recheck" || captureAnchor == "review_cancel") && owner.snapshot.elementType != .button {
+                reason = "geometry_ambiguous"
+                continue
+            }
             if captureAnchor == "terminal" && ![.other, .group, .scrollView].contains(owner.snapshot.elementType) {
                 reason = "geometry_ambiguous"
                 continue
@@ -1195,11 +1225,22 @@ final class TauriDirectSSHUITests: XCTestCase {
             let related = captureAnchor == nil || matches.allSatisfy { row in
                 row.path.starts(with: owner.path) || owner.path.starts(with: row.path)
             }
-            if !(compatible && related), let anchor = captureAnchor {
-                try captureDiagnostic(anchor, "owner_ambiguous", allMatches, rows)
+            let identifiersAgree = reviewSample == nil || allMatches.filter {
+                identifiers.contains($0.snapshot.identifier)
+            }.allSatisfy { row in
+                row.windowPath == owner.windowPath && row.webPath == owner.webPath &&
+                    (row.path.starts(with: owner.path) || owner.path.starts(with: row.path))
             }
-            try require(compatible && related, "native_owner_ambiguous")
-            let visible = requireVisible ? try safeFrame([owner]) : owner.snapshot.frame
+            if !(compatible && related && identifiersAgree), let anchor = captureAnchor {
+                try captureDiagnostic(anchor, "owner_ambiguous", allMatches, rows, reviewSample: reviewSample)
+            }
+            try require(compatible && related && identifiersAgree, "native_owner_ambiguous")
+            let visible: CGRect
+            if requireVisible {
+                visible = try safeFrame([owner], occlusions: occlusions) { reason in
+                    if let anchor = captureAnchor { try self.captureDiagnostic(anchor, reason, allMatches, rows, reviewSample: reviewSample) }
+                }
+            } else { visible = owner.snapshot.frame }
             lastVisible = requireVisible ? visible : nil
             reason = "geometry_ambiguous"
             if requireVisible && !(control ? NativeFramePolicy.valid(owner.snapshot.frame.intersection(visible)) :
@@ -1207,7 +1248,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             if let index = NativeFramePolicy.semanticIndex(frames: matches.map { $0.snapshot.frame }, preferred: [candidate],
                     visible: visible, clippedControl: control), index == candidate { return owner }
         }
-        if let anchor = captureAnchor { try captureDiagnostic(anchor, reason, allMatches, rows, visible: lastVisible) }
+        if let anchor = captureAnchor { try captureDiagnostic(anchor, reason, allMatches, rows, visible: lastVisible, reviewSample: reviewSample) }
         try require(false, "native_geometry_ambiguous")
         throw NSError(domain: "native_geometry_ambiguous", code: 1)
     }
@@ -1258,7 +1299,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func waitForTerminalKeyboardToHide() throws {
+    private func waitForCaptureKeyboardToHide(reviewSample: String? = nil) throws {
         let end = Date().addingTimeInterval(8)
         repeat {
             if !app.keyboards.firstMatch.exists {
@@ -1267,7 +1308,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             }
             Thread.sleep(forTimeInterval: 0.15)
         } while Date() < end
-        try captureDiagnostic("keyboard", "keyboard_visible", [], [])
+        try captureDiagnostic(reviewSample == nil ? "keyboard" : "review_title", "keyboard_visible", [], [], reviewSample: reviewSample)
         try require(false, "native_terminal_keyboard_visible")
     }
 
@@ -1293,12 +1334,21 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func screenshot(_ stage: String, port: Int, reviewPage: Bool = false) throws {
+        let reviewMembers = [("review_title", []), ("review_blocked", []),
+            ("review_old_fingerprint", ["ssh-key-change-old"]), ("review_new_fingerprint", ["ssh-key-change-new"]),
+            ("review_target", ["ssh-key-change-target"]), ("review_recheck", ["ssh-key-recheck"]),
+            ("review_cancel", ["ssh-key-cancel"])]
         let labels = reviewPage ? ["主机指纹发生变化", "已阻止连接与输入",
             "旧：" + (config["fingerprintA"] as! String), "新：" + (config["fingerprintB"] as! String),
             "目标：" + target(port), "重新核对主机指纹", "取消连接，保留旧信任"] :
             [target(port) + " · SSH 已连接", "SSH 终端输出"]
-        func anchors(_ source: [Observed]) throws -> CaptureAnchors {
-            if reviewPage { return CaptureAnchors(nodes: try labels.map { try exactObserved(source, $0) }, usesControls: false) }
+        func anchors(_ source: [Observed], reviewSample: String? = nil, occlusions: [CGRect]? = nil) throws -> CaptureAnchors {
+            if let sample = reviewSample {
+                let resolved = try zip(reviewMembers, labels).map { member, label in
+                    try exactObserved(source, label, identifiers: member.1, captureAnchor: member.0, reviewSample: sample, occlusions: occlusions)
+                }
+                return CaptureAnchors(nodes: resolved, usesControls: false)
+            }
             let title = try exactObserved(source, labels[0], captureAnchor: "target", requireVisible: false)
             if source.contains(where: { $0.snapshot.identifier == "ssh-terminal-output" || texts($0.snapshot).contains(labels[1]) }) {
                 let output = try exactObserved(source, labels[1], identifiers: ["ssh-terminal-output"], control: true,
@@ -1307,17 +1357,21 @@ final class TauriDirectSSHUITests: XCTestCase {
             }
             return CaptureAnchors(nodes: [title] + (try terminalBoundaryControls(title, source)), usesControls: true)
         }
+        if reviewPage { try waitForCaptureKeyboardToHide(reviewSample: "before") }
         var tree = try observedNodes()
         try assertNoSecret(tree.map { $0.snapshot })
-        var selected = try anchors(tree)
-        var safe = reviewPage ? try safeFrame(selected.nodes) : try terminalCaptureFrame(selected.nodes, tree)
+        let reviewOcclusions = reviewPage ? nativeOcclusions() : nil
+        var selected = try anchors(tree, reviewSample: reviewPage ? "before" : nil, occlusions: reviewOcclusions)
+        var safe = reviewPage ? try safeFrame(selected.nodes, occlusions: reviewOcclusions) { reason in
+            try self.captureDiagnostic("review_title", reason, selected.nodes, tree, reviewSample: "before")
+        } : try terminalCaptureFrame(selected.nodes, tree)
         if !reviewPage {
             var previous: (anchors: CaptureAnchors, safe: CGRect)?
             var lastScroll: (output: CGRect, direction: NativeFramePolicy.ScrollDirection)?
             var scrolls = 0
             var settled = false
             for sample in 0..<5 {
-                try waitForTerminalKeyboardToHide()
+                try waitForCaptureKeyboardToHide()
                 if selected.visibleOutput(in: safe) != nil {
                     if let prior = previous, prior.safe == safe, prior.anchors.usesControls == selected.usesControls,
                        stableCaptureLayout(prior.anchors.nodes, selected.nodes) {
@@ -1364,7 +1418,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         let frames = selected.frames
         if reviewPage {
             try require(frames.allSatisfy { safe.contains($0) && !$0.isEmpty }, "native_review_clipped")
-            try assertReviewActions(owner, tree, Set(labels.suffix(2)))
+            try assertReviewActions(owner, tree, Set(labels.suffix(2)), reviewSample: "before")
             extra["reviewFrames"] = frames.map(rect)
         } else {
             try require(safe.contains(frames[0]) && !frames[0].isEmpty, "native_target_clipped")
@@ -1381,18 +1435,37 @@ final class TauriDirectSSHUITests: XCTestCase {
         }
         let screenFrame = app.frame
         try require(screenFrame.minX == 0 && screenFrame.minY == 0 && !screenFrame.isEmpty, "native_screen_frame_invalid")
+        if reviewPage && app.keyboards.firstMatch.exists {
+            try captureDiagnostic("review_title", "keyboard_visible", [], [], reviewSample: "before")
+            try require(false, "native_terminal_keyboard_visible")
+        }
         let shot = XCUIScreen.main.screenshot()
         let afterTree = try observedNodes()
         try assertNoSecret(afterTree.map { $0.snapshot })
-        let after = try anchors(afterTree)
-        let afterSafe = reviewPage ? try safeFrame(after.nodes) : try terminalCaptureFrame(after.nodes, afterTree)
+        if reviewPage && app.keyboards.firstMatch.exists {
+            try captureDiagnostic("review_title", "keyboard_visible", [], [], reviewSample: "after")
+            try require(false, "native_terminal_keyboard_visible")
+        }
+        let afterOcclusions = reviewPage ? nativeOcclusions() : nil
+        let after = try anchors(afterTree, reviewSample: reviewPage ? "after" : nil, occlusions: afterOcclusions)
+        let afterSafe = reviewPage ? try safeFrame(after.nodes, occlusions: afterOcclusions) { reason in
+            try self.captureDiagnostic("review_title", reason, after.nodes, afterTree, reviewSample: "after")
+        } : try terminalCaptureFrame(after.nodes, afterTree)
         let unchanged = afterSafe == safe && app.frame == screenFrame && selected.usesControls == after.usesControls &&
-            stableCaptureLayout(selected.nodes, after.nodes) &&
-            (reviewPage || !app.keyboards.firstMatch.exists)
-        if !unchanged && !reviewPage { try captureDiagnostic("terminal", "layout_unstable", after.nodes, afterTree, visible: afterSafe) }
+            stableCaptureLayout(selected.nodes, after.nodes) && !app.keyboards.firstMatch.exists
+        if !unchanged {
+            if reviewPage {
+                let index = after.nodes.indices.first {
+                    !stableCaptureLayout([selected.nodes[$0]], [after.nodes[$0]])
+                } ?? 0
+                try captureDiagnostic(reviewMembers[index].0, "layout_unstable", [after.nodes[index]], afterTree,
+                    visible: afterSafe, reviewSample: "after")
+            } else { try captureDiagnostic("terminal", "layout_unstable", after.nodes, afterTree, visible: afterSafe) }
+        }
         try require(unchanged, "native_capture_geometry_changed")
         try verifyCaptureControls(after, afterTree, afterSafe)
         try assertCredentialsInactive(after.nodes[0], afterTree)
+        if reviewPage { try assertReviewActions(after.nodes[0], afterTree, Set(labels.suffix(2)), reviewSample: "after") }
         extra["screenSize"] = [Double(screenFrame.width), Double(screenFrame.height)]
         extra["pngBase64"] = shot.pngRepresentation.base64EncodedString()
         try post(stage, extra)
@@ -1685,7 +1758,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 2)
         try phase("terminal_capture")
         if app.keyboards.firstMatch.exists { try tap(button("收起键盘")) }
-        try waitForTerminalKeyboardToHide()
+        try waitForCaptureKeyboardToHide()
         try screenshot(stage + "_terminal", port: port)
         try phase("disconnect")
         try post(stage + "_disconnect_attempt")

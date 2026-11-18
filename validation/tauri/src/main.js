@@ -36,6 +36,9 @@ async function openFixture() {
 const native = isTauri();
 const platformReady = initializePasteClipboard(native);
 void platformReady?.then(() => {
+  if (shellPlatform.current() === 'ios') {
+    document.documentElement.classList.add('ios-edge-to-edge');
+  }
   if (shellPlatform.current() !== 'android') return;
   document.documentElement.classList.add('android-edge-to-edge');
   observeAndroidSshHeader();

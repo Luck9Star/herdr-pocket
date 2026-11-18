@@ -82,7 +82,10 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   function clearSecrets() { for (const id of ['ssh-password','ssh-key','ssh-passphrase']) $(id).value = ''; }
   // One place decides what the user sees: the terminal, the blocked review or the setup form.
   function applyView(ready, blocked) {
-    $('ssh-setup').hidden = ready || blocked;
+    const setup = $('ssh-setup');
+    const focused = document.activeElement;
+    if (blocked && focused && setup.contains(focused)) focused.blur();
+    setup.hidden = ready || blocked;
     $('ssh-live').hidden = !ready;
     $('ssh-key-change').hidden = !blocked;
     // While the change review is open, its own heading is the first heading and the

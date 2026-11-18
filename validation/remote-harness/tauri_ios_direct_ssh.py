@@ -107,11 +107,16 @@ def public_geometry_detail(value):
             for key in rectangles | flags | {'scrollDirection'}}
 
 
-def public_capture_diagnostic(value):
+def public_capture_diagnostic(value, *, review=False):
     """Only fixed categories and bounded, text-free candidate geometry escape."""
-    require(isinstance(value, dict) and set(value) == {'anchor', 'matchCount', 'reason', 'candidates', 'truncated'},
-            'tauri_ios_capture_diagnostic_invalid')
-    require(type(value['anchor']) is str and value['anchor'] in ('target', 'terminal', 'keyboard')
+    keys = {'anchor', 'matchCount', 'reason', 'candidates', 'truncated'}
+    if review:
+        keys.add('sample')
+    require(isinstance(value, dict) and set(value) == keys, 'tauri_ios_capture_diagnostic_invalid')
+    anchors = (('review_title', 'review_blocked', 'review_old_fingerprint', 'review_new_fingerprint',
+                'review_target', 'review_recheck', 'review_cancel') if review else ('target', 'terminal', 'keyboard'))
+    require((not review or (type(value['sample']) is str and value['sample'] in ('before', 'after')))
+            and type(value['anchor']) is str and value['anchor'] in anchors
             and type(value['reason']) is str and value['reason'] in (
                 'not_found', 'frame_invalid', 'owner_unproven', 'owner_ambiguous', 'viewport_invalid',
                 'outside_safe_frame', 'geometry_ambiguous', 'keyboard_visible', 'layout_unstable')
@@ -130,8 +135,11 @@ def public_capture_diagnostic(value):
                 and all(-10000 <= n <= 10000 for n in frame[:2])
                 and all(0 <= n <= 10000 for n in frame[2:])), 'tauri_ios_capture_diagnostic_invalid')
         candidates.append({**candidate, 'frame': list(frame) if frame is not None else None})
-    return {'anchor': value['anchor'], 'matchCount': value['matchCount'], 'reason': value['reason'],
-            'candidates': candidates, 'truncated': value['truncated']}
+    result = {'anchor': value['anchor'], 'matchCount': value['matchCount'], 'reason': value['reason'],
+              'candidates': candidates, 'truncated': value['truncated']}
+    if review:
+        result['sample'] = value['sample']
+    return result
 
 
 def public_home_diagnostic(value):
@@ -833,9 +841,10 @@ class Checkpoints:
             return
         if stage == 'native_capture_diagnostic':
             phase = payload.get('nativeCheckpoint')
-            require(self.failure is None and phase in ('ordinary_terminal_capture', 'key_change_terminal_capture'),
+            require(self.failure is None and phase in ('ordinary_terminal_capture', 'key_change_terminal_capture',
+                                                       'key_change_review_capture'),
                     'tauri_ios_capture_diagnostic_invalid')
-            detail = public_capture_diagnostic(payload.get('detail'))
+            detail = public_capture_diagnostic(payload.get('detail'), review=phase == 'key_change_review_capture')
             trace = self.result.get('captureDiagnostics', {}).get(phase, [])
             require(len(trace) < 4, 'tauri_ios_capture_diagnostic_invalid')
             self.result.setdefault('captureDiagnostics', {}).setdefault(phase, []).append(detail)
@@ -936,6 +945,7 @@ class Checkpoints:
                 case['peer'] = ordinary_evidence(fixture, closed=True)
             case.update(status='passed', disconnected=True, terminalInputReceived=True)
         self.index += 1
+        self.result['lastCompletedStage'] = stage
 
 
 def start_checkpoints(state):

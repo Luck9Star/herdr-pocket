@@ -29,6 +29,9 @@ class Element {
   querySelectorAll() {
     return this.children;
   }
+  contains(element) {
+    return this.children.includes(element);
+  }
   getBoundingClientRect() {
     return this.rect;
   }
@@ -285,6 +288,33 @@ test("a changed host key refuses the connection, blocks input and returns to the
     assert.ok(controls.every((id) => h.nodes[id]));
     const texts = Object.values(h.nodes).map((node) => node.textContent || "");
     assert.equal(texts.some((text) => /忽略|继续使用新指纹|强制接受/.test(text)), false);
+  } finally {
+    h.restore();
+  }
+});
+
+test("key refusal releases focus on a credential before hiding the form", async () => {
+  const h = setup();
+  try {
+    const form = h.nodes["ssh-setup"];
+    const field = h.nodes["ssh-password"];
+    form.children.push(field);
+    h.document.activeElement = field;
+    let blurs = 0;
+    field.blur = () => {
+      assert.equal(form.hidden, false);
+      blurs++;
+      h.document.activeElement = null;
+    };
+    await h.probe();
+    await h.connect();
+    assert.equal(blurs, 1);
+    assert.equal(h.document.activeElement, null);
+    assert.equal(h.nodes["ssh-key-change"].hidden, false);
+    assert.equal(form.hidden, true);
+    assert.equal(field.value, "");
+    assert.equal(field.disabled, true);
+    assert.equal(h.openCalls().length, 1);
   } finally {
     h.restore();
   }

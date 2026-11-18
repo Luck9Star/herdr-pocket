@@ -9,10 +9,14 @@ import 'package:herdr_flutter_probe/main.dart' as app;
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
 
-Future<void> until(WidgetTester tester, bool Function() ready) async {
+Future<void> until(
+  WidgetTester tester,
+  bool Function() ready, {
+  String timeoutReason = 'direct_ssh_android_ui_timeout',
+}) async {
   final deadline = DateTime.now().add(const Duration(seconds: 45));
   while (!ready()) {
-    if (DateTime.now().isAfter(deadline)) fail('direct_ssh_android_ui_timeout');
+    if (DateTime.now().isAfter(deadline)) fail(timeoutReason);
     await tester.pump(const Duration(milliseconds: 100));
   }
 }
@@ -51,6 +55,25 @@ Future<void> tap(
   expect(finder.hitTestable(), findsOneWidget);
   await tester.tap(finder);
   await tester.pump(const Duration(milliseconds: 200));
+}
+
+Future<void> openDirectSshFromHome(WidgetTester tester) async {
+  final page = find.byType(DirectSshPage);
+  final form = find.descendant(
+    of: page,
+    matching: find.byKey(const ValueKey('direct-form')),
+  );
+  await tap(tester, 'hosts-direct-ssh');
+  // The entry tap is performed once. Wait for the real route and form to
+  // finish appearing before interacting with any fields.
+  await until(tester, () {
+    if (page.evaluate().length != 1 || form.evaluate().length != 1) {
+      return false;
+    }
+    final route = ModalRoute.of(tester.element(page));
+    return route?.isCurrent == true &&
+        route?.animation?.status == AnimationStatus.completed;
+  }, timeoutReason: 'direct_ssh_home_route_timeout');
 }
 
 bool hasMarker(Terminal terminal, String marker) {
@@ -92,8 +115,7 @@ Future<void> runDirectSshUi(
   expect(home.adapterFactory, isNull);
   expect(home.keys, isNull);
   await capture('home');
-  await tap(tester, 'hosts-direct-ssh');
-  expect(find.byType(DirectSshPage), findsOneWidget);
+  await openDirectSshFromHome(tester);
   step('target');
   for (final entry in {
     'direct-host': '127.0.0.1',
@@ -267,8 +289,7 @@ Future<void> runDirectSshRotationUi(
     tester,
     () => find.byKey(const ValueKey('hosts-direct-ssh')).evaluate().length == 1,
   );
-  await tap(tester, 'hosts-direct-ssh');
-  expect(find.byType(DirectSshPage), findsOneWidget);
+  await openDirectSshFromHome(tester);
   final dynamic state = tester.state(find.byType(DirectSshPage));
   for (final entry in {
     'direct-host': '127.0.0.1',

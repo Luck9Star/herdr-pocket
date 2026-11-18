@@ -30,6 +30,14 @@ enum NativeFramePolicy {
     static func valid(_ value: CGRect) -> Bool {
         [value.minX, value.minY, value.width, value.height].allSatisfy { $0.isFinite } && !value.isEmpty && !value.isNull
     }
+    static func diagnosticRect(_ frame: CGRect?) -> Any {
+        guard let frame = frame else { return NSNull() }
+        let values = [frame.minX, frame.minY, frame.width, frame.height]
+        guard values.allSatisfy({ $0.isFinite && abs($0) <= 10000 }), frame.width >= 0, frame.height >= 0 else {
+            return NSNull()
+        }
+        return values.map { Int($0.rounded()) }
+    }
     static func unique(_ values: [CGRect]) -> [CGRect] {
         values.reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
     }
@@ -108,6 +116,28 @@ enum NativeFramePolicy {
         }
         return order.first { frames.indices.contains($0) &&
             (clippedControl ? valid(frames[$0].intersection(visible)) : visible.contains(frames[$0])) }
+    }
+    static func terminalCrop(target: CGRect, output: CGRect, safe: CGRect) -> CGRect? {
+        let crop = output.intersection(safe)
+        guard valid(target), safe.contains(target), valid(crop), target.maxY <= crop.minY else { return nil }
+        return crop
+    }
+    static func terminalScroll(target: CGRect, output: CGRect, safe: CGRect) -> ScrollDirection? {
+        guard valid(target), valid(output), valid(safe), target.minX >= safe.minX, target.maxX <= safe.maxX,
+              output.minX < safe.maxX, output.maxX > safe.minX else { return nil }
+        let down = target.minY < safe.minY || output.minY < target.maxY
+        let up = target.maxY > safe.maxY || output.minY >= safe.maxY
+        guard down != up else { return nil }
+        return down ? .swipeDown : .swipeUp
+    }
+    static func terminalPageScrollBand(safe: CGRect, output: CGRect) -> CGRect? {
+        let overlap = safe.intersection(output)
+        guard valid(overlap) else { return safe }
+        // Start in the page gutter, where the WebView can move the page
+        // without moving or selecting the xterm scrollback.
+        let gutters = [CGRect(x: safe.minX, y: safe.minY, width: overlap.minX - safe.minX, height: safe.height),
+                       CGRect(x: overlap.maxX, y: safe.minY, width: safe.maxX - overlap.maxX, height: safe.height)]
+        return gutters.filter(valid).max { $0.width < $1.width } ?? scrollBand(in: safe, occlusions: [output])
     }
 }
 enum NativeViewPolicy {
@@ -487,7 +517,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             return (try? formControl("probe"))?.live.element ?? app.descendants(matching: .any).matching(NSPredicate(value: false)).firstMatch
         }
         let ids = ["普通 SSH 终端": "add-ssh", "herdr 配对 / 手动连接": "add-herdr",
-            "打开键盘": "ssh-focus", "断开连接": "ssh-disconnect", "重新核对主机指纹": "ssh-key-recheck",
+            "打开键盘": "ssh-focus", "收起键盘": "ssh-hide-keyboard", "断开连接": "ssh-disconnect", "重新核对主机指纹": "ssh-key-recheck",
             "取消连接，保留旧信任": "ssh-key-cancel"]
         return resolveControl(app.buttons, app.descendants(matching: .any), identifier: ids[label], label: label)
     }
@@ -779,14 +809,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     private func passwordGeometryDetail(_ viewport: CGRect?, _ usable: CGRect?, _ owner: Observed,
                                         _ query: LiveControl, _ bound: LiveControl, scrollAttempted: Bool,
                                         direction: NativeFramePolicy.ScrollDirection?) -> [String: Any] {
-        func rounded(_ frame: CGRect?) -> Any {
-            guard let frame = frame else { return NSNull() }
-            let values = [frame.minX, frame.minY, frame.width, frame.height]
-            guard values.allSatisfy({ $0.isFinite && abs($0) <= 10000 }), frame.width >= 0, frame.height >= 0 else {
-                return NSNull()
-            }
-            return values.map { Int($0.rounded()) }
-        }
+        let rounded = NativeFramePolicy.diagnosticRect
         return ["viewport": rounded(viewport), "usable": rounded(usable), "owner": rounded(owner.snapshot.frame),
             "query": rounded(query.snapshot.frame), "bound": rounded(bound.snapshot.frame), "queryEnabled": query.snapshot.isEnabled,
             "boundEnabled": bound.snapshot.isEnabled, "queryHittable": query.hittable, "boundHittable": bound.hittable,
@@ -1079,10 +1102,11 @@ final class TauriDirectSSHUITests: XCTestCase {
         try require(NativeFramePolicy.sameOwner(windowPaths: anchors.map { $0.windowPath }, webPaths: anchors.map { $0.webPath }) &&
                     anchors.allSatisfy { $0.window == window },
                     "native_owner_ambiguous")
+        let occlusions = nativeOcclusions()
         var common = window
         for anchor in anchors {
             guard let visible = NativeFramePolicy.visible(window: window, screen: app.frame,
-                    webAncestors: anchor.webs, occlusions: nativeOcclusions()) else {
+                    webAncestors: anchor.webs, occlusions: occlusions) else {
                 try require(false, "native_visible_frame_invalid")
                 throw NSError(domain: "native_visible_frame_invalid", code: 1)
             }
@@ -1093,32 +1117,96 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func exactObserved(_ rows: [Observed], _ text: String, identifiers: [String] = [], control: Bool = false) throws -> Observed {
-        let matches = rows.filter { NativeFramePolicy.valid($0.snapshot.frame) &&
-            (identifiers.contains($0.snapshot.identifier) || texts($0.snapshot).contains(text)) }
+    private func captureDiagnostic(_ anchor: String, _ reason: String, _ candidates: [Observed],
+                                   _ rows: [Observed], visible: CGRect? = nil) throws {
+        let sample = candidates.prefix(8).map { item in
+            let frame = item.snapshot.frame
+            return ["role": role(item.snapshot.elementType), "frame": NativeFramePolicy.diagnosticRect(frame),
+                "ownerResolved": controlScope(item, rows) != nil,
+                "visible": visible.map { NativeFramePolicy.valid(frame.intersection($0)) } ?? false] as [String: Any]
+        }
+        try post("native_capture_diagnostic", ["nativeCheckpoint": nativePhase,
+            "detail": ["anchor": anchor, "reason": reason, "matchCount": min(candidates.count, 10000),
+                       "candidates": sample, "truncated": candidates.count > sample.count]])
+    }
+
+    @MainActor
+    private func exactObserved(_ rows: [Observed], _ text: String, identifiers: [String] = [], control: Bool = false,
+                               captureAnchor: String? = nil, requireVisible: Bool = true) throws -> Observed {
+        let allMatches = rows.filter { identifiers.contains($0.snapshot.identifier) || texts($0.snapshot).contains(text) }
+        let matches = allMatches.filter { NativeFramePolicy.valid($0.snapshot.frame) }
         let preferred = matches.indices.sorted {
             let left = control ? identifiers.contains(matches[$0].snapshot.identifier) : matches[$0].snapshot.elementType == .staticText
             let right = control ? identifiers.contains(matches[$1].snapshot.identifier) : matches[$1].snapshot.elementType == .staticText
             return left != right ? left : matches[$0].path.count > matches[$1].path.count
         }
+        var reason = allMatches.isEmpty ? "not_found" : matches.isEmpty ? "frame_invalid" : "owner_unproven"
+        var lastVisible: CGRect?
         for candidate in preferred where matches[candidate].window != nil && !matches[candidate].webs.isEmpty {
             let owner = matches[candidate]
+            if captureAnchor != nil && controlScope(owner, rows) == nil { continue }
+            if captureAnchor == "terminal" && ![.other, .group, .scrollView].contains(owner.snapshot.elementType) {
+                reason = "geometry_ambiguous"
+                continue
+            }
             let compatible = NativeFramePolicy.compatibleOwner(windowPaths: matches.map { $0.windowPath },
                 webPaths: matches.map { $0.webPath }, nodePaths: matches.map { $0.path }, selected: candidate)
-            try require(compatible, "native_owner_ambiguous")
-            let visible = try safeFrame([owner])
+            let related = captureAnchor == nil || matches.allSatisfy { row in
+                row.path.starts(with: owner.path) || owner.path.starts(with: row.path)
+            }
+            if !(compatible && related), let anchor = captureAnchor {
+                try captureDiagnostic(anchor, "owner_ambiguous", allMatches, rows)
+            }
+            try require(compatible && related, "native_owner_ambiguous")
+            let visible = requireVisible ? try safeFrame([owner]) : owner.snapshot.frame
+            lastVisible = requireVisible ? visible : nil
+            reason = "geometry_ambiguous"
+            if requireVisible && !(control ? NativeFramePolicy.valid(owner.snapshot.frame.intersection(visible)) :
+                                     visible.contains(owner.snapshot.frame)) { reason = "outside_safe_frame" }
             if let index = NativeFramePolicy.semanticIndex(frames: matches.map { $0.snapshot.frame }, preferred: [candidate],
                     visible: visible, clippedControl: control), index == candidate { return owner }
         }
+        if let anchor = captureAnchor { try captureDiagnostic(anchor, reason, allMatches, rows, visible: lastVisible) }
         try require(false, "native_geometry_ambiguous")
         throw NSError(domain: "native_geometry_ambiguous", code: 1)
     }
 
     @MainActor
+    private func waitForTerminalKeyboardToHide() throws {
+        let end = Date().addingTimeInterval(8)
+        repeat {
+            if !app.keyboards.firstMatch.exists {
+                Thread.sleep(forTimeInterval: 0.15)
+                if !app.keyboards.firstMatch.exists { return }
+            }
+            Thread.sleep(forTimeInterval: 0.15)
+        } while Date() < end
+        try captureDiagnostic("keyboard", "keyboard_visible", [], [])
+        try require(false, "native_terminal_keyboard_visible")
+    }
+
+    @MainActor
+    private func stableCaptureLayout(_ before: [Observed], _ after: [Observed]) -> Bool {
+        before.count == after.count && zip(before, after).allSatisfy { left, right in
+            left.windowPath == right.windowPath && left.webPath == right.webPath && left.path == right.path &&
+                left.window == right.window && left.webs == right.webs &&
+                sameIdentity(left.snapshot, right.snapshot) && left.snapshot.frame == right.snapshot.frame
+        }
+    }
+
+    @MainActor
+    private func terminalCaptureFrame(_ anchors: [Observed], _ rows: [Observed]) throws -> CGRect {
+        let safe = try safeFrame(anchors)
+        if let bar = routeTabsOcclusion(anchors[0], rows, safe, anchors.map { $0.snapshot.frame }, scrolling: true) {
+            if let unobscured = NativeFramePolicy.scrollBand(in: safe, occlusions: [bar]) { return unobscured }
+            try captureDiagnostic("terminal", "viewport_invalid", anchors, rows)
+            try require(false, "native_visible_frame_invalid")
+        }
+        return safe
+    }
+
+    @MainActor
     private func screenshot(_ stage: String, port: Int, reviewPage: Bool = false) throws {
-        let tree = try observedNodes()
-        let rows = tree.map { $0.snapshot }
-        try assertNoSecret(rows)
         let labels = reviewPage ? ["主机指纹发生变化", "已阻止连接与输入",
             "旧：" + (config["fingerprintA"] as! String), "新：" + (config["fingerprintB"] as! String),
             "目标：" + target(port), "重新核对主机指纹", "取消连接，保留旧信任"] :
@@ -1126,11 +1214,59 @@ final class TauriDirectSSHUITests: XCTestCase {
         func anchors(_ source: [Observed]) throws -> [Observed] {
             try labels.enumerated().map { index, label in
                 try exactObserved(source, label, identifiers: !reviewPage && index == 1 ? ["ssh-terminal-output"] : [],
-                                  control: !reviewPage && index == 1)
+                    control: !reviewPage && index == 1, captureAnchor: reviewPage ? nil : index == 0 ? "target" : "terminal",
+                    requireVisible: reviewPage)
             }
         }
-        let selected = try anchors(tree)
-        let safe = try safeFrame(selected)
+        var tree = try observedNodes()
+        try assertNoSecret(tree.map { $0.snapshot })
+        var selected = try anchors(tree)
+        var safe = reviewPage ? try safeFrame(selected) : try terminalCaptureFrame(selected, tree)
+        if !reviewPage {
+            var previous: (anchors: [Observed], safe: CGRect)?
+            var lastScroll: (output: CGRect, direction: NativeFramePolicy.ScrollDirection)?
+            var scrolls = 0
+            var settled = false
+            for sample in 0..<5 {
+                try waitForTerminalKeyboardToHide()
+                let title = selected[0].snapshot.frame
+                let output = selected[1].snapshot.frame
+                if NativeFramePolicy.terminalCrop(target: title, output: output, safe: safe) != nil {
+                    if let prior = previous, prior.safe == safe, stableCaptureLayout(prior.anchors, selected) {
+                        settled = true
+                        break
+                    }
+                    previous = (selected, safe)
+                } else {
+                    previous = nil
+                    let moved = lastScroll.map { prior in
+                        prior.direction == .swipeUp ? output.midY < prior.output.midY : output.midY > prior.output.midY
+                    } ?? true
+                    if sample < 4, scrolls < 2, moved, let direction = NativeFramePolicy.terminalScroll(target: title, output: output, safe: safe),
+                       let band = NativeFramePolicy.terminalPageScrollBand(safe: safe, output: output),
+                       let scope = controlScope(selected[0], tree) {
+                        try assertCredentialsInactive(selected[0], tree)
+                        try scrollToControl(selected[0], scope.window, scope.web, band, direction, rows: tree)
+                        lastScroll = (output, direction)
+                        scrolls += 1
+                    }
+                }
+                if sample < 4 {
+                    Thread.sleep(forTimeInterval: 0.2)
+                    tree = try observedNodes()
+                    try assertNoSecret(tree.map { $0.snapshot })
+                    selected = try anchors(tree)
+                    safe = try terminalCaptureFrame(selected, tree)
+                }
+            }
+            if !settled {
+                let index = safe.contains(selected[0].snapshot.frame) ? 1 : 0
+                let reason = previous == nil ? "outside_safe_frame" : "layout_unstable"
+                try captureDiagnostic(index == 0 ? "target" : "terminal", reason, [selected[index]], tree, visible: safe)
+                try require(false, previous == nil ? (index == 0 ? "native_target_clipped" : "native_terminal_frame_invalid") :
+                    "native_capture_geometry_changed")
+            }
+        }
         let owner = selected[0]
         try assertCredentialsInactive(owner, tree)
         var extra: [String: Any] = ["safeFrame": rect(safe), "identityVerified": true, "noCredentialsVisible": true,
@@ -1143,16 +1279,24 @@ final class TauriDirectSSHUITests: XCTestCase {
             extra["reviewFrames"] = frames.map(rect)
         } else {
             try require(safe.contains(frames[0]) && !frames[0].isEmpty, "native_target_clipped")
-            let crop = frames[1].intersection(safe)
-            try require(NativeFramePolicy.valid(crop) && !crop.intersects(frames[0]), "native_terminal_frame_invalid")
+            guard let crop = NativeFramePolicy.terminalCrop(target: frames[0], output: frames[1], safe: safe) else {
+                try require(false, "native_terminal_frame_invalid")
+                throw NSError(domain: "native_terminal_frame_invalid", code: 1)
+            }
             extra["terminalFrame"] = rect(crop); extra["targetFrame"] = rect(frames[0])
         }
         let screenFrame = app.frame
         try require(screenFrame.minX == 0 && screenFrame.minY == 0 && !screenFrame.isEmpty, "native_screen_frame_invalid")
         let shot = XCUIScreen.main.screenshot()
-        let after = try anchors(observedNodes())
-        try require(try safeFrame(after) == safe && app.frame == screenFrame && after.map { $0.snapshot.frame } == frames,
-                    "native_capture_geometry_changed")
+        let afterTree = try observedNodes()
+        try assertNoSecret(afterTree.map { $0.snapshot })
+        let after = try anchors(afterTree)
+        let afterSafe = reviewPage ? try safeFrame(after) : try terminalCaptureFrame(after, afterTree)
+        let unchanged = afterSafe == safe && app.frame == screenFrame && stableCaptureLayout(selected, after) &&
+            (reviewPage || !app.keyboards.firstMatch.exists)
+        if !unchanged && !reviewPage { try captureDiagnostic("terminal", "layout_unstable", after, afterTree, visible: afterSafe) }
+        try require(unchanged, "native_capture_geometry_changed")
+        try assertCredentialsInactive(after[0], afterTree)
         extra["screenSize"] = [Double(screenFrame.width), Double(screenFrame.height)]
         extra["pngBase64"] = shot.pngRepresentation.base64EncodedString()
         try post(stage, extra)
@@ -1443,11 +1587,9 @@ final class TauriDirectSSHUITests: XCTestCase {
         try post(stage + "_input")
         // Only wait for server output to render; no client buffers are used as proof.
         Thread.sleep(forTimeInterval: 2)
-        let heading = app.descendants(matching: .any).matching(identifier: "ssh-target")
-        let text = app.staticTexts[target(port) + " · SSH 已连接"]
-        try require(heading.count == 1 || text.exists, "native_target_control_missing")
-        try tap(heading.count == 1 ? heading.firstMatch : text)
         try phase("terminal_capture")
+        if app.keyboards.firstMatch.exists { try tap(button("收起键盘")) }
+        try waitForTerminalKeyboardToHide()
         try screenshot(stage + "_terminal", port: port)
         try phase("disconnect")
         try post(stage + "_disconnect_attempt")

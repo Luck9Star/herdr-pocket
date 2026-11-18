@@ -38,6 +38,7 @@ function setup() {
     "ssh-form",
     "ssh-status",
     "ssh-focus",
+    "ssh-hide-keyboard",
     "ssh-setup",
     "ssh-live",
     "ssh-fingerprint",
@@ -61,6 +62,7 @@ function setup() {
   nodes["ssh-host"].value = "example.test";
   nodes["ssh-port"].value = "22";
   nodes["ssh-user"].value = "user";
+  nodes["ssh-hide-keyboard"].disabled = true;
   nodes["ssh-terminal"].parentElement = new Element();
   const buttons = ["esc", "tab", "up", "down", "left", "right", "ctrl-c"].map(
     (key) => {
@@ -190,6 +192,46 @@ test("IPv6 and a long username remain fully represented in the connected label",
     h.nodes["ssh-user"].value = "a".repeat(120);
     await h.connect();
     assert.equal(h.nodes["ssh-target"].textContent, `${"a".repeat(120)}@[2001:db8::1234]:22 · SSH 已连接`);
+  } finally { h.restore(); }
+});
+
+test("hide keyboard blurs only the current connected terminal without invoking SSH", async () => {
+  const h = setup();
+  try {
+    const button = h.nodes["ssh-hide-keyboard"];
+    assert.equal(button.disabled, true);
+    button.onclick();
+    assert.deepEqual(h.calls, []);
+
+    await h.connect();
+    const previous = h.terminals[0].textarea;
+    const blurred = [];
+    previous.blur = () => blurred.push(previous);
+    h.nodes["ssh-disconnect"].onclick();
+    await flush();
+    assert.equal(button.disabled, true);
+    const disconnectedCalls = h.calls.slice();
+    button.onclick();
+    await flush();
+    assert.deepEqual(blurred, []);
+    assert.deepEqual(h.calls, disconnectedCalls);
+
+    await h.connect();
+    assert.equal(button.disabled, false);
+    const current = h.terminals[1].textarea;
+    current.blur = () => {
+      blurred.push(current);
+      h.document.activeElement = null;
+    };
+    h.nodes["ssh-focus"].onclick();
+    assert.equal(h.document.activeElement, current);
+    const connectedCalls = h.calls.slice();
+    button.onclick();
+    await flush();
+    assert.deepEqual(blurred, [current]);
+    assert.equal(h.document.activeElement, null);
+    assert.equal(h.ui.isReady(), true);
+    assert.deepEqual(h.calls, connectedCalls);
   } finally { h.restore(); }
 });
 

@@ -73,7 +73,7 @@ NATIVE_FAILURES = frozenset((
     'native_home_add_did_not_open_page', 'native_owner_ambiguous', 'native_target_control_missing',
     'native_home_identity_unproven', 'native_home_retry_unsafe', 'native_ssh_form_unproven',
     'native_home_navigation_failed', 'native_control_owner_unproven', 'native_scroll_owner_unproven',
-    'native_form_control_unproven', 'native_form_control_changed'))
+    'native_form_control_unproven', 'native_form_control_changed', 'native_terminal_keyboard_visible'))
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 HOME_ERRORS = frozenset(('connectionError', 'dnsError', 'webProcessError', 'devURL',
@@ -105,6 +105,33 @@ def public_geometry_detail(value):
             'tauri_ios_native_diagnostic_invalid')
     return {key: (list(value[key]) if key in rectangles and value[key] is not None else value[key])
             for key in rectangles | flags | {'scrollDirection'}}
+
+
+def public_capture_diagnostic(value):
+    """Only fixed categories and bounded, text-free candidate geometry escape."""
+    require(isinstance(value, dict) and set(value) == {'anchor', 'matchCount', 'reason', 'candidates', 'truncated'},
+            'tauri_ios_capture_diagnostic_invalid')
+    require(type(value['anchor']) is str and value['anchor'] in ('target', 'terminal', 'keyboard')
+            and type(value['reason']) is str and value['reason'] in (
+                'not_found', 'frame_invalid', 'owner_unproven', 'owner_ambiguous', 'viewport_invalid',
+                'outside_safe_frame', 'geometry_ambiguous', 'keyboard_visible', 'layout_unstable')
+            and type(value['matchCount']) is int and 0 <= value['matchCount'] <= 10000
+            and type(value['truncated']) is bool and isinstance(value['candidates'], list)
+            and len(value['candidates']) <= 8, 'tauri_ios_capture_diagnostic_invalid')
+    candidates = []
+    for candidate in value['candidates']:
+        require(isinstance(candidate, dict) and set(candidate) == {'role', 'frame', 'ownerResolved', 'visible'}
+                and type(candidate['role']) is str and candidate['role'] in HOME_ROLES
+                and type(candidate['ownerResolved']) is bool and type(candidate['visible']) is bool,
+                'tauri_ios_capture_diagnostic_invalid')
+        frame = candidate['frame']
+        require(frame is None or (isinstance(frame, list) and len(frame) == 4
+                and all(type(n) is int for n in frame)
+                and all(-10000 <= n <= 10000 for n in frame[:2])
+                and all(0 <= n <= 10000 for n in frame[2:])), 'tauri_ios_capture_diagnostic_invalid')
+        candidates.append({**candidate, 'frame': list(frame) if frame is not None else None})
+    return {'anchor': value['anchor'], 'matchCount': value['matchCount'], 'reason': value['reason'],
+            'candidates': candidates, 'truncated': value['truncated']}
 
 
 def public_home_diagnostic(value):
@@ -591,7 +618,14 @@ class Checkpoints:
         self.ordinary, self.rotation, self.output, self.result = ordinary, rotation, Path(output), result
         self.index, self.failure = 0, None
         self.disconnects = set()
+        self.started_cases = set()
         self.secret = secrets.token_hex(32)
+
+    def finalize_cases(self):
+        for name in self.started_cases:
+            case = self.result['cases'][name]
+            if case.get('status') != 'passed':
+                case['status'] = 'failed'
 
     def capture(self, stage, payload, fixture):
         review = stage == 'key_change_review'
@@ -734,6 +768,15 @@ class Checkpoints:
                 self.result.setdefault('homeEntry', {})[key] = {k: payload[k] for k in
                     ('member', 'selection', 'role', 'enteredAddPage', 'enteredSSHForm', 'route')}
             return
+        if stage == 'native_capture_diagnostic':
+            phase = payload.get('nativeCheckpoint')
+            require(self.failure is None and phase in ('ordinary_terminal_capture', 'key_change_terminal_capture'),
+                    'tauri_ios_capture_diagnostic_invalid')
+            detail = public_capture_diagnostic(payload.get('detail'))
+            trace = self.result.get('captureDiagnostics', {}).get(phase, [])
+            require(len(trace) < 4, 'tauri_ios_capture_diagnostic_invalid')
+            self.result.setdefault('captureDiagnostics', {}).setdefault(phase, []).append(detail)
+            return
         if stage in ('native_progress', 'native_failure'):
             phase = payload.get('nativeCheckpoint')
             require(self.failure is None and phase in NATIVE_PHASES, 'tauri_ios_native_diagnostic_invalid')
@@ -774,6 +817,8 @@ class Checkpoints:
         require(self.failure is None and self.index < len(STAGES) and stage == STAGES[self.index],
                 'tauri_ios_checkpoint_order_invalid')
         self.result['stage'] = stage
+        if stage in ('ordinary_form', 'key_change_form'):
+            self.started_cases.add('ordinary' if stage == 'ordinary_form' else 'keyChange')
         ordinary, rotation = self.ordinary, self.rotation
         fixture = rotation if stage.startswith('key_change') else ordinary
         if stage == 'ordinary_probe':
@@ -798,8 +843,11 @@ class Checkpoints:
             else:
                 self.result['cases']['keyChange']['cancelKeptTrust'] = True
         if stage.endswith('_input'):
-            wait_peer(fixture, lambda f: f['markerReceived'] is True,
+            count = 4 if fixture is rotation else 2
+            wait_peer(fixture, lambda f: f['connections'] == count and len(f['connectionEvents']) == count
+                      and f['connectionEvents'][-1]['markerReceived'] is True,
                       'tauri_ios_peer_input_missing')
+            self.result['cases']['keyChange' if fixture is rotation else 'ordinary']['terminalInputReceived'] = True
         if stage in ('ordinary_terminal', 'key_change_terminal') or stage.endswith('_disconnect_attempt'):
             if fixture is ordinary:
                 ordinary_evidence(fixture, closed=False)
@@ -979,6 +1027,8 @@ def run(project, app, output, *, source_sha=None, env=None):
             server.shutdown()
             server.server_close()
             server_thread.join(timeout=5)
+        if state is not None:
+            state.finalize_cases()
         for fixture in (ordinary, rotation):
             if fixture is not None:
                 fixture.close()

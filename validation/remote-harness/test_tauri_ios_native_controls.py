@@ -175,6 +175,7 @@ final class XCUIElement {
     var inputs: [String] = []
     var inputValue: String?
     var forcedReadback: String?
+    var exists = false
     func coordinate(withNormalizedOffset: CGVector) -> XCUICoordinate {
         XCUICoordinate(element: self, offset: withNormalizedOffset)
     }
@@ -248,6 +249,15 @@ struct App {
     var keyboards: Query { Query() }
     func typeText(_ text: String) { input.typeText(text) }
 }
+struct ScreenShot { let pngRepresentation = Data([1]) }
+final class XCUIScreen {
+    static let main = XCUIScreen()
+    var shots = 0
+    func screenshot() -> ScreenShot {
+        shots += 1
+        return ScreenShot()
+    }
+}
 struct Rejected: Error { let reason: String }
 final class Observations {
     var trees: [[Observed]]
@@ -284,6 +294,7 @@ struct Adapter {
     var formControls: [String: LiveControl] = [:]
     var nativePhase = "ordinary_port"
     var pathControls: [[Int]: LiveControl] = [:]
+    let config: [String: Any] = [:]
     func require(_ condition: Bool, _ reason: String) throws {
         if !condition { throw Rejected(reason: reason) }
     }
@@ -294,8 +305,20 @@ struct Adapter {
     func post(_ topic: String, _ payload: [String: Any]) throws { observations?.checkpoints.append((topic, payload)) }
     func role(_ type: XCUIElement.ElementType) -> String {
         if type == .secureTextField { return "secureTextField" }
+        if type == .staticText { return "staticText" }
         return type == .textField ? "textField" : "other"
     }
+    func texts(_ node: Snapshot) -> [String] { [node.label, node.value ?? ""] }
+    func target(_ port: Int) -> String { "fixture-target" }
+    func rect(_ value: CGRect) -> [Double] {
+        [Double(value.minX), Double(value.minY), Double(value.width), Double(value.height)]
+    }
+    func assertNoSecret(_ rows: [Snapshot]) throws { }
+    func assertCredentialsInactive(_ owner: Observed, _ rows: [Observed]) throws {
+        try require(!rows.contains { $0.snapshot.elementType == .secureTextField && $0.snapshot.isEnabled },
+                    "native_credentials_visible_after_connect")
+    }
+    func assertReviewActions(_ owner: Observed, _ rows: [Observed], _ labels: Set<String>) throws { }
     func observedNodes() throws -> [Observed] { observations?.next(rows) ?? rows }
     func resolveByPath(_ row: Observed) -> Observed {
         observations?.resolved.append(row)
@@ -332,6 +355,7 @@ struct Adapter {
     func fillPort(_ text: String) throws { try fillForm("port", text) }
     func fillField(_ name: String, _ text: String) throws { try fillForm(name, text) }
     func tapProbe() throws { _ = try tapForm("probe") }
+    func terminalScreenshot() throws { try screenshot("ordinary_terminal", port: 2222) }
     func scope(_ item: Snapshot, _ rows: [Observed], _ page: Observed) throws -> NativeViewPolicy.Scope {
         try pageScope(item, rows, page)
     }
@@ -345,6 +369,9 @@ struct Adapter {
             "func controlGeometry(_ owner:", "func routeTabsOcclusion(_ owner:",
             "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
             "func tap(_ item:", "func fillPassword(_ item:",
+            "func safeFrame(_ anchors:", "func captureDiagnostic(_ anchor:", "func exactObserved(_ rows:",
+            "func waitForTerminalKeyboardToHide()", "func stableCaptureLayout(_ before:",
+            "func terminalCaptureFrame(_ anchors:", "func screenshot(_ stage:",
             "func fillForm(_ name:", "func pageScope(_ item:")) + r'''
 }
 let screen = CGRect(x: 0, y: 0, width: 390, height: 844)
@@ -741,6 +768,65 @@ var replacementError: String?
 do { try replaced.fillCurrent("fixture-input") } catch let rejected as Rejected { replacementError = rejected.reason } catch { }
 check(replacementError == "native_control_owner_unproven" && changedElement.taps == 1 && changedElement.inputs.isEmpty &&
       changedApp.input.inputs.isEmpty, "a secure field replaced after focus must never receive the password")
+
+let terminalTitle = "fixture-target · SSH 已连接"
+let terminalLabel = "SSH 终端输出"
+let titleFrame = CGRect(x: 20, y: 220, width: 250, height: 30)
+let outputFrame = CGRect(x: 20, y: 280, width: 350, height: 400)
+func terminalRows(_ title: CGRect = titleFrame, _ output: CGRect = outputFrame, outputRole: XCUIElement.ElementType = .group) -> [Observed] {
+    [row(snapshot(.window, frame: screen, label: ""), path: [0]),
+     row(snapshot(.webView, frame: screen, label: ""), path: [0, 0]),
+     row(snapshot(.staticText, frame: title, label: terminalTitle), path: [0, 0, 1]),
+     row(snapshot(outputRole, frame: output, identifier: "ssh-terminal-output", label: terminalLabel), path: [0, 0, 2])]
+}
+func exerciseCapture(_ distinctSamples: [[Observed]], _ rows: [Observed] = terminalRows(),
+                     error: String? = nil, message: String, validate: (Observations) -> Void) {
+    let timeline = Observations(distinctSamples)
+    let element = Element()
+    let app = App(frame: screen)
+    let candidate = Adapter(app: app, current: LiveControl(snapshot: snapshot(), hittable: true, element: element),
+                            rows: rows, blockers: [statusBar], observations: timeline, nativePhase: "ordinary_terminal_capture")
+    var failure: String?
+    do { try candidate.terminalScreenshot() } catch let rejected as Rejected { failure = rejected.reason } catch { failure = "unexpected" }
+    check(failure == error && app.input.inputs.isEmpty && element.inputs.isEmpty, message)
+    validate(timeline)
+}
+let exposedTerminal = terminalRows()
+let scrolledTerminal = terminalRows(titleFrame.offsetBy(dx: 0, dy: 650), outputFrame.offsetBy(dx: 0, dy: 650))
+exerciseCapture([scrolledTerminal, exposedTerminal, exposedTerminal],
+                message: "capture must settle after the safely scrolled terminal returns to the viewport") { timeline in
+    let capture = timeline.checkpoints.first { $0.0 == "ordinary_terminal" }?.1
+    check(timeline.webSurface.drags.count == 1 && capture?["terminalFrame"] as? [Double] == [20, 280, 350, 400] &&
+          capture?["targetFrame"] as? [Double] == [20, 220, 250, 30] && capture?["noCredentialsVisible"] as? Bool == true,
+          "capture must reveal both anchors with a bounded scroll and post only the real output container's measured bounds")
+}
+let stickyTitleLayout = terminalRows(titleFrame, outputFrame.offsetBy(dx: 0, dy: -50))
+exerciseCapture([stickyTitleLayout, exposedTerminal, exposedTerminal],
+                message: "a sticky title must not overlap the captured terminal region") { timeline in
+    let drag = timeline.webSurface.drags.first
+    check(timeline.webSurface.drags.count == 1 && drag.map { from, to in
+        let x = from.dx * screen.width
+        return from.dx == to.dx && from.dy < to.dy && (x < outputFrame.minX || x > outputFrame.maxX)
+    } == true, "revealing the page under a sticky title must drag outside xterm and leave scrollback alone")
+}
+exerciseCapture([], terminalRows(outputRole: .staticText), error: "native_geometry_ambiguous",
+                message: "a text leaf must never be used as terminal pixel bounds") { timeline in
+    let diagnostic = timeline.checkpoints.first?.1["detail"] as? [String: Any]
+    check(timeline.checkpoints.count == 1 && timeline.checkpoints.first?.0 == "native_capture_diagnostic" &&
+          diagnostic?["anchor"] as? String == "terminal" && diagnostic?["matchCount"] as? Int == 1 &&
+          diagnostic?["reason"] as? String == "geometry_ambiguous", "unusable anchors get a bounded terminal diagnostic")
+}
+let unrelatedOutput = row(snapshot(.group, frame: outputFrame, identifier: "ssh-terminal-output", label: terminalLabel),
+                          path: [0, 0, 3])
+exerciseCapture([], exposedTerminal + [unrelatedOutput], error: "native_owner_ambiguous",
+                message: "an independent same-name region is insufficient evidence for the terminal") { timeline in
+    check(timeline.checkpoints.allSatisfy { $0.0 == "native_capture_diagnostic" }, "ambiguous regions must not export an image")
+}
+let shiftedOutput = terminalRows(titleFrame, outputFrame.offsetBy(dx: 0, dy: 12))
+exerciseCapture([exposedTerminal, exposedTerminal, shiftedOutput], error: "native_capture_geometry_changed",
+                message: "layout changes between stable observation and post-shot observation block publication") { timeline in
+    check(timeline.checkpoints.allSatisfy { $0.0 == "native_capture_diagnostic" }, "changed geometry must not publish an image")
+}
 let writeElement = Element()
 let offscreen = snapshot(frame: movedFrame.offsetBy(dx: 0, dy: -300))
 let writeSnapshots = Observations([], liveSnapshots: [moved, moved, snapshot(), offscreen, moved, moved])

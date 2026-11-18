@@ -2,6 +2,7 @@ import { createDirectSsh } from './direct-ssh.js';
 
 export function initDirectSshUI({native, invoke, channelFactory, terminalFactory}) {
   const $ = id => document.getElementById(id);
+  const hideKeyboard = $('ssh-hide-keyboard');
   let terminal = null;
   let resizeWatch = null;
   let outputSubscription = null;
@@ -60,6 +61,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     onStatus: (message, ready, reason, details) => {
       $('ssh-status').textContent = message;
       $('ssh-focus').disabled = !ready;
+      if (hideKeyboard) hideKeyboard.disabled = !ready;
       renderKeys(ready);
       const freshRefusal = reason === 'host_key_mismatch' || details?.blocked === true;
       if (freshRefusal) { $('ssh-review').checked = false; renderKeyChange(details); }
@@ -218,6 +220,9 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     $('ssh-status').textContent = '已保留旧信任；请重新探测并独立核对本目标的主机指纹后再连接。';
   };
   $('ssh-focus').onclick = () => terminal?.focus();
+  if (hideKeyboard) hideKeyboard.onclick = () => {
+    if (controller.isReady()) terminal?.textarea?.blur();
+  };
   document.addEventListener('visibilitychange', () => { if (document.hidden) { clearSecrets(); void controller.close(); } });
   return {close: () => {clearSecrets(); void controller.close();}, isReady:controller.isReady, isActive:controller.isActive,
     hide: () => { visibilityEpoch++; }, show:()=>{ if(terminal) bindTerminal(terminal); if(controller.isReady()) requestAnimationFrame(resizer.request); }};

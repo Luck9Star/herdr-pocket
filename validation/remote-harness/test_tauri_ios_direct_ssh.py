@@ -533,6 +533,79 @@ class GeometryReasonTests(unittest.TestCase):
                 self.assertNotIn('geometryReasonTrace', state.result)
 
 
+class CaseLifecycleTests(unittest.TestCase):
+    def setUp(self):
+        self.ordinary, self.rotation = object(), object()
+        self.result = {'cases': {'ordinary': {'status': 'not_run'}, 'keyChange': {'status': 'not_run'}}, 'artifacts': {}}
+        self.state = ios.Checkpoints(self.ordinary, self.rotation, '/tmp', self.result)
+
+    def test_unstarted_and_started_cases_finalize_without_inventing_success(self):
+        self.state.finalize_cases()
+        self.assertEqual([c['status'] for c in self.result['cases'].values()], ['not_run', 'not_run'])
+        self.state.accept({'stage': 'ordinary_form'})
+        self.state.finalize_cases()
+        self.assertEqual([c['status'] for c in self.result['cases'].values()], ['failed', 'not_run'])
+        self.result['cases']['ordinary']['status'] = 'passed'
+        self.state.index = ios.STAGES.index('key_change_form')
+        self.state.accept({'stage': 'key_change_form'})
+        self.state.finalize_cases()
+        self.assertEqual([c['status'] for c in self.result['cases'].values()], ['passed', 'failed'])
+
+    def test_input_then_capture_failure_keeps_only_confirmed_partial_evidence(self):
+        for name, stage, count in [('ordinary', 'ordinary_input', 2), ('keyChange', 'key_change_input', 4)]:
+            with self.subTest(name=name):
+                result = {'cases': {'ordinary': {'status': 'not_run'}, 'keyChange': {'status': 'not_run'}}, 'artifacts': {}}
+                state = ios.Checkpoints(self.ordinary, self.rotation, '/tmp', result)
+                state.index = ios.STAGES.index('ordinary_form' if name == 'ordinary' else 'key_change_form')
+                state.accept({'stage': ios.STAGES[state.index]})
+                state.index = ios.STAGES.index(stage)
+                facts = {'connections': count, 'connectionEvents': [{'markerReceived': False}] * (count-1) + [{'markerReceived': True}]}
+                def verify_peer(fixture, predicate, code):
+                    self.assertTrue(predicate(facts))
+                    self.assertFalse(predicate({**facts, 'connectionEvents': [{'markerReceived': True}] +
+                                                [{'markerReceived': False}] * (count-1)}))
+                    return facts
+                with patch.object(ios, 'wait_peer', side_effect=verify_peer): state.accept({'stage': stage})
+                state.accept({'stage': 'native_failure', 'nativeCheckpoint': stage.replace('_input', '_terminal_capture'),
+                              'nativeFailureCode': 'native_geometry_ambiguous'})
+                state.finalize_cases()
+                self.assertEqual(result['cases'][name], {'status': 'failed', 'terminalInputReceived': True})
+                self.assertNotIn('peer', result['cases'][name])
+
+
+class CaptureDiagnosticsTests(unittest.TestCase):
+    def test_fixed_capture_diagnostics_export_and_bound(self):
+        detail = {'anchor': 'terminal', 'matchCount': 2, 'reason': 'geometry_ambiguous',
+                  'candidates': [{'role': 'other', 'frame': [10, 200, 400, 500],
+                                  'ownerResolved': True, 'visible': True}], 'truncated': False}
+        state = ios.Checkpoints(None, None, '/tmp', {})
+        event = {'stage': 'native_capture_diagnostic', 'nativeCheckpoint': 'ordinary_terminal_capture', 'detail': detail}
+        for _ in range(4): state.accept(event)
+        detail['candidates'][0]['frame'][0] = 99
+        result = json.loads(json.dumps(state.result))
+        self.assertEqual(result['captureDiagnostics']['ordinary_terminal_capture'][0]['candidates'][0]['frame'][0], 10)
+        with self.assertRaisesRegex(ios.Failure, 'capture_diagnostic_invalid'): state.accept(event)
+        self.assertEqual(len(state.result['captureDiagnostics']['ordinary_terminal_capture']), 4)
+        state.accept({'stage': 'native_failure', 'nativeCheckpoint': 'ordinary_terminal_capture',
+                      'nativeFailureCode': 'native_terminal_keyboard_visible'})
+        self.assertEqual(state.result['nativeFailureCode'], 'native_terminal_keyboard_visible')
+
+    def test_capture_diagnostics_reject_unknown_text_bad_geometry_and_scope(self):
+        detail = {'anchor': 'target', 'matchCount': 1, 'reason': 'not_found', 'candidates': [], 'truncated': False}
+        event = {'stage': 'native_capture_diagnostic', 'nativeCheckpoint': 'key_change_terminal_capture', 'detail': detail}
+        bad_candidate = {'role': 'other', 'frame': [0, 0, 1, 1], 'ownerResolved': True, 'visible': True}
+        variants = [dict(detail, text='fixture-secret'), dict(detail, anchor='fixture-secret'),
+                    dict(detail, matchCount=True), dict(detail, candidates=[dict(bad_candidate, text='fixture-secret')]),
+                    dict(detail, candidates=[dict(bad_candidate, frame=[0, float('nan'), 1, 2])]),
+                    dict(detail, candidates=[dict(bad_candidate, frame=[0, 0, -1, 2])]),
+                    dict(detail, candidates=[bad_candidate]*9), dict(detail, reason='unknown')]
+        for payload in [dict(event, detail=x) for x in variants] + [dict(event, nativeCheckpoint='ordinary_password')]:
+            state = ios.Checkpoints(None, None, '/tmp', {})
+            with self.subTest(payload=payload), self.assertRaisesRegex(ios.Failure, 'capture_diagnostic_invalid'):
+                state.accept(payload)
+            self.assertEqual(state.result, {})
+
+
 class HomeDiagnosticsTests(unittest.TestCase):
     def test_repeated_home_sampling_retains_latest_without_navigation_or_ssh_replay(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1055,6 +1128,10 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.accept('key_change_disconnected')
         self.accept('complete')
         self.assertEqual(self.state.index, len(ios.STAGES))
+        self.state.finalize_cases()
+        for case_result in self.result['cases'].values():
+            self.assertEqual(case_result['status'], 'passed')
+            self.assertTrue(case_result['terminalInputReceived'])
         case = self.result['cases']['keyChange']
         self.assertEqual([e['stage'] for e in case['rotationEvidence']], [2, 3, 4])
         self.assertEqual([e['hostKey'] for e in case['peer']['connectionEvents']], ['A', 'B', 'B', 'B'])

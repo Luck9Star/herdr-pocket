@@ -398,6 +398,34 @@ def _public_counter_context(value):
     return safe
 
 
+def dashboard_add_selector(browser, *, failure='android_control_missing_dashboard_add'):
+    """Choose a mounted dashboard action without injecting a DOM click."""
+    expression = """(function dashboardAddEntry(){
+      const unique=selector=>{const matches=document.querySelectorAll(selector);return matches.length===1?matches[0]:null;};
+      const visible=e=>!!e&&!e.hidden&&e.getClientRects().length>0&&
+        getComputedStyle(e).visibility==='visible'&&getComputedStyle(e).opacity!=='0';
+      const enabled=e=>visible(e)&&e.tagName==='BUTTON'&&!e.matches(':disabled');
+      const text=e=>e?.textContent.trim();
+      const status=unique('#host-home-status');
+      if (document.hidden || !visible(unique('#host-home #home-dashboard')) || !status ||
+          (visible(status) && text(status)!=='还没有已存主机；网络配置暂不可读。')) return null;
+      const card=unique('#home-dashboard #host-empty');
+      const header=unique('#host-open-remote');
+      if (card?.hasAttribute('data-compact')) {
+        const heading=unique('#host-empty h3'), detail=unique('#host-empty p');
+        const add=unique('#host-empty #host-empty-add'), ssh=unique('#host-empty #home-open-ssh');
+        return visible(card)&&!visible(header)&&visible(heading)&&text(heading)==='还没有主机'&&
+          visible(detail)&&text(detail)==='添加主机后，在这里查看会话和任务状态。'&&enabled(add)&&text(add)==='添加主机'&&
+          enabled(ssh)&&text(ssh)==='普通 SSH 终端'?'#host-empty-add':null;
+      }
+      return enabled(header)?'#host-open-remote':null;
+    })()"""
+    def probe():
+        value = browser.evaluate(expression)
+        return value if value in ('#host-empty-add', '#host-open-remote') else None
+    return wait_for(probe, failure, timeout=60)
+
+
 class AndroidWebView:
     """CDP input on real rendered controls; no internal JS or native commands."""
     def __init__(self, port):
@@ -1635,7 +1663,7 @@ def run_android(args, root, env, config, approval):
             return False
         browser = wait_for(connect, 'android_webview_not_ready', timeout=60)
         progress.phase('pairing')
-        browser.click('#host-open-remote')
+        browser.click(dashboard_add_selector(browser))
         browser.click('#add-herdr')
         browser.fill('#connection-profile-raw', public_profile_json(config))
         browser.click('#connection-profile-preview')

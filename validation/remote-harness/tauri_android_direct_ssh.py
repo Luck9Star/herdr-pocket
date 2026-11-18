@@ -20,7 +20,7 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 
-from android_gui import AndroidWebView, PACKAGE, SERIAL, adb
+from android_gui import AndroidWebView, PACKAGE, SERIAL, adb, dashboard_add_selector
 from paired_gui import GuiFailure, wait_for
 from terminal_screenshot_gate import ECHO_MARKER, ScreenshotGateError, verify_terminal_screenshot
 
@@ -49,7 +49,7 @@ DIRECT_ERROR_CODES = frozenset('''
     direct_terminal_screenshot_pillow_missing direct_terminal_screenshot_png_invalid direct_terminal_screenshot_proof_not_adjacent
     direct_terminal_screenshot_token_invalid direct_terminal_screenshot_token_not_visible direct_terminal_target_missing
     direct_terminal_webview_capture_failed direct_header_measurement_invalid direct_header_system_overlap direct_header_content_overlap direct_header_geometry_changed
-    direct_unowned_or_invalid_device direct_unsafe_fixture
+    direct_unowned_or_invalid_device direct_unsafe_fixture direct_return_home_missing direct_return_home_peer_changed
     direct_webview_not_ready direct_webview_socket_missing
 '''.split())
 ANDROID_ERROR_CODES = {
@@ -86,7 +86,7 @@ DRIVER_STAGES = frozenset({'device_preflight', 'reverse_setup', 'install_app', '
     'webview_socket', 'webview_forward', 'webview_ready', 'rotation_ui', 'open_remote',
     'open_ssh_form', 'enter_host', 'enter_port', 'enter_user', 'probe_host',
     'await_fingerprint', 'review_fingerprint', 'select_key_auth', 'enter_private_key',
-    'enter_passphrase', 'enter_password', 'connect', 'terminal_input', 'disconnect', 'cleanup'})
+    'enter_passphrase', 'enter_password', 'connect', 'terminal_input', 'disconnect', 'return_home', 'cleanup'})
 
 
 
@@ -512,7 +512,8 @@ def capture_terminal_proof(browser, fixture, evidence_dir, *, stem):
 def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, progress=None):
     """Use actual CDP click/keyboard events and independently check the peer."""
     if progress is not None: progress['stage']='open_remote'
-    browser.click('#host-open-remote')
+    entry = dashboard_add_selector(browser)
+    browser.click(entry)
     if progress is not None: progress['stage']='open_ssh_form'
     browser.click('#add-ssh')
     if progress is not None: progress['stage']='enter_host'
@@ -575,16 +576,26 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     peer = fixture.snapshot()
     if (not encrypted_key and peer.get('helperKeysExact') is not True) or any(peer.get(k) is not True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')):
         raise GuiFailure('direct_peer_evidence_incomplete')
+    if progress is not None: progress['stage']='return_home'
+    wait_for(lambda: fixture.snapshot().get('connectionsClosed') is True,
+             'direct_peer_close_missing', timeout=60)
+    closed = fixture.snapshot()['connectionEvents']
+    browser.click('#show-remote')
+    if dashboard_add_selector(browser, failure='direct_return_home_missing') != entry:
+        raise GuiFailure('direct_return_home_missing')
+    after_return = fixture.snapshot()
+    if after_return.get('connectionsClosed') is not True or after_return.get('connectionEvents') != closed:
+        raise GuiFailure('direct_return_home_peer_changed')
     return {'fingerprintReviewed':True,'credentialReviewPreserved':True,'connected':True,
             'terminalInputReceived':True,'terminalEchoRendered':True,'disconnected':True,
-            'passwordCleared':True, **({'helperKeysExact':True} if not encrypted_key else {}),
+            'passwordCleared':True, 'returnedHome':True, **({'helperKeysExact':True} if not encrypted_key else {}),
             **({'terminalScreenshot':terminal_proof} if terminal_proof else {}),
             'peer':{k:True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')}}
 
 
 def exercise_key_change_ui(browser, fixture, *, evidence_dir=None):
     """Same host:port A→B: refuse, review with no exits, cancel, re-probe, approve."""
-    browser.click('#host-open-remote')
+    browser.click(dashboard_add_selector(browser))
     browser.click('#add-ssh')
     browser.fill('#ssh-host', '127.0.0.1')
     browser.fill('#ssh-port', str(fixture.port))

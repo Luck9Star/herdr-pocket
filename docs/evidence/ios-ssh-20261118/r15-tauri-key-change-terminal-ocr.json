@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "1943179d971615b8500e0b7ac525d13d7d2a418450696e412736da2fa97a2b52",
+  "imageSize": [
+    1320,
+    2868
+  ],
+  "terminalBounds": [
+    48,
+    813,
+    1224,
+    1287
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "HEAT PAST LEFT HAVE HEAT HAVE PATH SAND",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

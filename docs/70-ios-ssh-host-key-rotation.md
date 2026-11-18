@@ -1,10 +1,38 @@
 # iOS 普通 SSH 与主机换钥验收
 
-状态：2026-11-17，**本次唯一获准追加的 R6 同源批次已结束：Flutter 完整通过，Tauri 表单身份与同窗归属仍未全部证实，两壳同批未通过**。已归档该批 Flutter 三张场景原图、两份 OCR、两壳结果和来源哈希清单；本轮收尾不再追加 CI。独立 macOS Tauri／WKWebView 产品快照的闭环只作本机交叉复核，不补足 iOS 缺项；R1–R5 历史结果继续保留。
+状态：2026-11-18，**R15 同源批次 Flutter 与 Tauri 的普通 SSH 和主机换钥流程均在 iOS Simulator 通过**。本页保留 R6 及更早结果作为历史记录；R6 的 Tauri 失败是当时的事实，不代表 R15。
 
 范围为 GitHub 托管 macOS 上的受控 iOS Simulator、临时 loopback SSH 和密码认证。模拟器安装、应用界面、服务端协议、完整测试通过及最终画面复核分别记录；本页不证明 iPhone 真机、手工／中文 IME、外部网络、生产主机或五平台支持。
 
-## R6 最终同源结果：Flutter 通过，Tauri 表单仍未证实
+## R15 同源结果：两壳均通过
+
+同一源码 [`4c0ec6554538b00001224694734d2dd73892b967`](https://github.com/Luck9Star/herdr-pocket/commit/4c0ec6554538b00001224694734d2dd73892b967) 的 [Actions 运行 44248995630](https://github.com/Luck9Star/herdr-pocket/actions/runs/44248995630) 完成。以下是受控模拟器上的该次结果；两作业各自构建，不是同一个二进制。
+
+| 客户端 | 官方作业与工件 | 模拟器 | 结果 |
+| --- | --- | --- | --- |
+| Flutter | [作业 134614777786](https://github.com/Luck9Star/herdr-pocket/actions/runs/44248995630/job/134614777786) · [工件 14403298345](https://github.com/Luck9Star/herdr-pocket/actions/runs/44248995630/artifacts/14403298345) | iPhone 11，iOS 26.2 | `status=passed`；XCTest 1 项通过、0 项失败；`layoutOverflows` 为空。 |
+| Tauri | [作业 134614777774](https://github.com/Luck9Star/herdr-pocket/actions/runs/44248995630/job/134614777774) · [工件 14403502869](https://github.com/Luck9Star/herdr-pocket/actions/runs/44248995630/artifacts/14403502869) | iPhone 17 Pro Max，iOS 26.2 | `status=passed`，普通和换钥案例均 `passed`。 |
+
+两壳均通过普通 AA：第一次 A 探测无认证、PTY、shell 与输入输出；第二次 A 经用户确认后认证、打开 PTY 与 shell、输入并显示远端回显，最后由界面主动断开。换钥采用同一目标 ABBB：A 初次探测、B 拒绝和 B 重新探测三条均无认证、PTY、shell 与输入输出；拒绝后取消保留 A，再重新探测并明确核对 B，第四条 B 才认证、输入与回显，最后主动断开。成功会话各有认证尝试／成功 1 次、PTY／shell 各 1 次、输入 9 字节、输出 102 字节；各连接最终关闭。Flutter 记录的 UI 断开确认与 Tauri 的 `disconnected=true` 分别来自各自驱动；服务端闭合是独立证据。
+
+两壳各有普通终端、换钥审查、B 确认后终端三张系统原图，以及两份终端 OCR。已核对本次下载文件与各自结果中的 SHA256：四份 OCR 均绑定对应原图，`markerVisible`、`tokenVisible`、`proofSequenceVisible` 均为 `true`，引擎为 Tesseract 5.5.4。审查图用于设计画面复核，不运行终端 OCR；这些技术检查与下述原图目检分别记录。Tauri 的两张终端图以同窗控件限定候选带，再由原图内收实际终端背景用于 OCR。
+
+| 客户端／场景 | 系统原图 SHA256 |
+| --- | --- |
+| Flutter 普通 | `d2e58aab638b83c95eb5fb1392139a82f88176545fd5e74580ad02fc1fefb02c` |
+| Flutter 换钥审查 | `76cd3457b4224774d236afddc5ea98b9b9cfc71e3060224e4344b9f46ad6aaa5` |
+| Flutter 换钥终端 | `71030b9c9dd51a7b09a7c7747f3b34e1aaf6df0c90d54c111d7d2df4b810e4af` |
+| Tauri 普通 | `3186054bb898d15bf13f96613f6be08c7eeb419493725babcbf9c0529aef76bc` |
+| Tauri 换钥审查 | `5a20cf6e3c05c27161a90b7b0f9afb9561ffaa45f400ad4f886130b4cce322e3` |
+| Tauri 换钥终端 | `1943179d971615b8500e0b7ac525d13d7d2a418450696e412736da2fa97a2b52` |
+
+两份 `result.json` 的 SHA256 分别为 Flutter `e21e0bf668fe5f38ce6fe634d5eec2e05e1cb85b7f7d86aac9702adc1bb2783a`、Tauri `181b70b11c85e85f5afe262f38ac2982766b5224c6eefc8b712821bba509bac6`。两壳报告的模拟器、fixture 和私密文件清理均成功；Flutter 还报告工具退出、临时应用删除及未上传原始日志。R15 两壳原文件的来源、文件名映射与 SHA256 见[官方证据归档索引](evidence/ios-ssh-20261118/r15-official-index.json)。Actions 工件有到期时间（当前元数据为 2027-02-16），作业链接不保证工件永久可下载。
+
+原图目检确认两壳核心场景可见：Tauri 的 S10 审查页标题、指纹和两个操作按钮完整；普通连接及换钥后的终端目标、键盘操作与回显完整。另发现独立的 Tauri iOS 显示缺陷：这两个活动终端画面的通用顶栏中，系统时钟遮挡品牌，Wi-Fi／电池区域遮挡「添加主机」按钮上缘。该缺陷不改变本批 SSH 协议和 OCR 结果，界面仍需修复与另批验证。
+
+本批仅证明指定 iOS 模拟器、loopback 夹具和密码认证下的自动化场景；不证明真实 iPhone、物理键盘或手工／中文输入法、外网及生产主机，也不证明五平台生产就绪。Flutter 明确记录 `physicalImeVerified=false`。
+
+## R6 历史同源结果：Flutter 通过，Tauri 表单仍未证实
 
 本地修复提交为 [`9c9f93d37d503dc27ef4cf840fb39f554e59e64b`](https://github.com/Luck9Star/herdr-pocket/commit/9c9f93d37d503dc27ef4cf840fb39f554e59e64b)：真实驱动先确认控件存在并取得有效快照，再读取元数据；非空标识优先精确匹配，无命中才按标签，避免空 identifier 误选或正确标识与同名标签取并集导致歧义。端口、checkbox 与密码值按已知类型处理，兼容数值／placeholder，未知对象不再当作空值或已清空凭据。
 
@@ -57,7 +85,7 @@ Tauri 的首个 `homeDiagnostics` 仅记录前台应用、1 个窗口、3 个 We
 | 连接／断开 | “连接 / 重新连接”“断开连接”均为实际 button；点击断开后回表单，peer 记录正常关闭。 | 精确选中正确动作；未配置标识时不得用任意空 identifier 代替目标标签。 |
 | 终端／S10 | 终端为“SSH 终端输出”容器及“Terminal input”文本输入区；S10 标题有 heading 和文本叶节点，旧／新指纹、目标各为独立文本，两出口均为 button。 | 不把正常父／叶语义重复当作两份独立内容；macOS 无 iOS 软键盘，未验证 iOS 键盘窗口或遮挡规则。 |
 
-上述本机验证不使用个人 SSH 身份，不保存实际密码或私钥。独立应用已退出，两个 peer 已停止，临时应用副本及该唯一标识的 Application Support／Caches／WebKit 数据目录已删除；只保留脱敏复核记录。本机图片未重复归档；本轮最终归档见上文 R6，只有 Flutter 三张官方场景图，尚无 Tauri 三图。
+上述本机验证不使用个人 SSH 身份，不保存实际密码或私钥。独立应用已退出，两个 peer 已停止，临时应用副本及该唯一标识的 Application Support／Caches／WebKit 数据目录已删除；只保留脱敏复核记录。本机图片未重复归档；当时 R6 只归档 Flutter 三张官方场景图，R15 两壳原图另见本页开头的索引。
 
 ## 本机源码绑定复核：普通 SSH 表单四项控件
 
@@ -186,6 +214,6 @@ Flutter 结果确认模拟器删除、fixture 关闭、工具退出、临时应�
 
 R1 前的本机检查记录为：Flutter **594 项通过、7 项跳过**，独立点击测试 **2 项通过**；Tauri 前端 **641 项通过**；本轮 iOS 驱动／守卫 **65 项通过**，换钥 fixture **5 项通过**。跳过不计通过，这些检查不替代系统应用运行。
 
-R1 时的后续计划为同一新源码一次触发两壳，完整验证普通 SSH、S10 拒绝／取消／重新核对／确认 B 后重连及清理，再逐图核验各三张系统原图与两份终端判据。实际本轮止于上文 R6 的部分完成结果，未继续触发；R1 的局部完成事实与失败记录继续保留。
+R1 时的后续计划为同一新源码一次触发两壳，完整验证普通 SSH、S10 拒绝／取消／重新核对／确认 B 后重连及清理，再逐图核验各三张系统原图与两份终端判据。当时工作止于上文 R6 的部分完成结果；后续 R15 结果见本页开头，R1 的局部完成事实与失败记录继续保留。
 
 相关历史：[普通 SSH 与界面设计](63-design-parity-and-direct-ssh.md) · [Android 换钥专项](68-android-ssh-host-key-rotation.md) · [Android 活动终端像素验收](69-mobile-ssh-active-terminal.md)。这些历史结果不补足本次 iOS 的缺项。

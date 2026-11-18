@@ -1,0 +1,2835 @@
+{
+  "designRef": "79deef0e9c03425f368966e32ff1f1d399a3ac02",
+  "designGeometrySha256": "7577391ebeb70e1c50a388a478dacd4eb2834b1b1cee248361860c7ef3bec848",
+  "tolerancePt": 2,
+  "commits": {
+    "Flutter": {
+      "before": "7847b3438848202d25d06f6ad3daeafb0036eb97",
+      "after": "af408c398eecdf0d3c5a870687383b603982c6b1"
+    },
+    "Tauri": {
+      "before": "7fd481f0c99819170963414497be6ae1f00f99c5",
+      "ui": "57744fec10ed69e8b7b31de6774ee79762e9968f",
+      "after": "2043d76a0019a96ecb50a40d657385f7c1cfec0b"
+    }
+  },
+  "sourceGeometrySha256": {
+    "flutter/before-390.json": "e988abb28a08a976e5bb5d0c618bd3992621802c6329559211a14c384c601fea",
+    "flutter/before-320.json": "5270fa33b930c3a0b8966e56493529c84dbd0693ba916dfb4f1255a6b9e1d5ea",
+    "tauri/before.json": "d8dee6deb498f9c15c29c0b57fe0b1f6e692fbcf24627329010acd95aa4d92a0",
+    "flutter/after-390.json": "0f71621d3a2a67639155ccfe6f1e94081b430375f3c3ca6513f8263b85f94ccc",
+    "flutter/after-320.json": "50b98e7103a5df2d1dc46b7844bb3e4fa60748213f92238eb2aa53ac839f3081",
+    "tauri/after.json": "41856c19ab0bb9844c3ff8741664f890317e7defa280d570030b1180e93a8de2",
+    "flutter/after-320-200.json": "5b7442602a891900d6799971f98e5c4de33fa55e16170a361abf038a6bf97b98"
+  },
+  "views": [
+    {
+      "shell": "Flutter",
+      "phase": "before",
+      "state": "home",
+      "screenPt": [
+        390,
+        844
+      ],
+      "safeAreaPt": {
+        "top": 47,
+        "bottom": 34
+      },
+      "captureState": "home",
+      "capture": "screens/flutter-before-home-390.png",
+      "sourceGeometry": "flutter/before-390.json",
+      "anchors": {
+        "home-brand": {
+          "role": "geometry",
+          "expected": [
+            24,
+            63,
+            342,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "home-empty-card": {
+          "role": "geometry",
+          "expected": [
+            24,
+            135,
+            342,
+            268
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "home-add": {
+          "role": "hit",
+          "expected": [
+            40,
+            279,
+            310,
+            48
+          ],
+          "actual": [
+            251.5999984741211,
+            63.0,
+            122.4000015258789,
+            48.0
+          ],
+          "delta": [
+            211.599998,
+            -216.0,
+            -187.599998,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "home-direct-ssh": {
+          "role": "hit",
+          "expected": [
+            40,
+            339,
+            310,
+            48
+          ],
+          "actual": [
+            259.2300720214844,
+            111.0,
+            114.76992797851562,
+            48.0
+          ],
+          "delta": [
+            219.230072,
+            -228.0,
+            -195.230072,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "home-tabs": {
+          "role": "geometry",
+          "expected": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": [
+            0.0,
+            730.0,
+            390.0,
+            80.0
+          ],
+          "delta": [
+            0.0,
+            -24.0,
+            0.0,
+            24.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "expected": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            0.0,
+            730.0,
+            97.5,
+            80.0
+          ],
+          "delta": [
+            0.0,
+            -24.0,
+            0.0,
+            24.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "expected": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            97.5,
+            730.0,
+            97.5,
+            80.0
+          ],
+          "delta": [
+            0.0,
+            -24.0,
+            0.0,
+            24.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "expected": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            195.0,
+            730.0,
+            97.5,
+            80.0
+          ],
+          "delta": [
+            0.0,
+            -24.0,
+            0.0,
+            24.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "expected": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            292.5,
+            730.0,
+            97.5,
+            80.0
+          ],
+          "delta": [
+            0.0,
+            -24.0,
+            0.0,
+            24.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        }
+      }
+    },
+    {
+      "shell": "Flutter",
+      "phase": "before",
+      "state": "choose",
+      "screenPt": [
+        390,
+        844
+      ],
+      "safeAreaPt": {
+        "top": 47,
+        "bottom": 34
+      },
+      "captureState": "pairing",
+      "capture": "screens/flutter-before-pairing-390.png",
+      "sourceGeometry": "flutter/before-390.json",
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "expected": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "back": {
+          "role": "hit",
+          "expected": [
+            16,
+            53,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "choose-ssh": {
+          "role": "hit",
+          "expected": [
+            24,
+            171,
+            342,
+            100
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "choose-herdr": {
+          "role": "hit",
+          "expected": [
+            24,
+            283,
+            342,
+            100
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        }
+      },
+      "note": "旧版添加动作直接进入设备配对。附图记录实际去向，选择页锚点均缺失。"
+    },
+    {
+      "shell": "Flutter",
+      "phase": "before",
+      "state": "home",
+      "screenPt": [
+        320,
+        640
+      ],
+      "safeAreaPt": {
+        "top": 24,
+        "bottom": 24
+      },
+      "captureState": "home",
+      "capture": "screens/flutter-before-home-320.png",
+      "sourceGeometry": "flutter/before-320.json",
+      "anchors": {
+        "home-brand": {
+          "role": "geometry",
+          "expected": [
+            16,
+            40,
+            288,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "home-empty-card": {
+          "role": "geometry",
+          "expected": [
+            16,
+            112,
+            288,
+            268
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "home-add": {
+          "role": "hit",
+          "expected": [
+            32,
+            256,
+            256,
+            48
+          ],
+          "actual": [
+            181.5999984741211,
+            44.0,
+            122.4000015258789,
+            48.0
+          ],
+          "delta": [
+            149.599998,
+            -212.0,
+            -133.599998,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "home-direct-ssh": {
+          "role": "hit",
+          "expected": [
+            32,
+            316,
+            256,
+            48
+          ],
+          "actual": [
+            189.23007202148438,
+            96.0,
+            114.76992797851562,
+            48.0
+          ],
+          "delta": [
+            157.230072,
+            -220.0,
+            -141.230072,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "home-tabs": {
+          "role": "geometry",
+          "expected": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": [
+            0.0,
+            536.0,
+            320.0,
+            80.0
+          ],
+          "delta": [
+            0.0,
+            -24.0,
+            0.0,
+            24.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "expected": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            0.0,
+            536.0,
+            80.0,
+            80.0
+          ],
+          "delta": [
+            0.0,
+            -24.0,
+            0.0,
+            24.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "expected": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            80.0,
+            536.0,
+            80.0,
+            80.0
+          ],
+          "delta": [
+            0.0,
+            -24.0,
+            0.0,
+            24.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "expected": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            160.0,
+            536.0,
+            80.0,
+            80.0
+          ],
+          "delta": [
+            0.0,
+            -24.0,
+            0.0,
+            24.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "expected": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            240.0,
+            536.0,
+            80.0,
+            80.0
+          ],
+          "delta": [
+            0.0,
+            -24.0,
+            0.0,
+            24.0
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        }
+      }
+    },
+    {
+      "shell": "Flutter",
+      "phase": "before",
+      "state": "choose",
+      "screenPt": [
+        320,
+        640
+      ],
+      "safeAreaPt": {
+        "top": 24,
+        "bottom": 24
+      },
+      "captureState": "pairing",
+      "capture": "screens/flutter-before-pairing-320.png",
+      "sourceGeometry": "flutter/before-320.json",
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "expected": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "back": {
+          "role": "hit",
+          "expected": [
+            8,
+            30,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "choose-ssh": {
+          "role": "hit",
+          "expected": [
+            16,
+            148,
+            288,
+            100
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "choose-herdr": {
+          "role": "hit",
+          "expected": [
+            16,
+            260,
+            288,
+            100
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        }
+      },
+      "note": "旧版添加动作直接进入设备配对。附图记录实际去向，选择页锚点均缺失。"
+    },
+    {
+      "shell": "Tauri",
+      "phase": "before",
+      "state": "home",
+      "screenPt": [
+        390,
+        844
+      ],
+      "safeAreaPt": {
+        "top": 47,
+        "bottom": 34
+      },
+      "captureState": "home",
+      "capture": "screens/tauri-before-home-390.png",
+      "sourceGeometry": "tauri/before.json",
+      "anchors": {
+        "home-brand": {
+          "role": "geometry",
+          "expected": [
+            24,
+            63,
+            342,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "home-empty-card": {
+          "role": "geometry",
+          "expected": [
+            24,
+            135,
+            342,
+            268
+          ],
+          "actual": [
+            16,
+            169,
+            358,
+            156
+          ],
+          "delta": [
+            -8,
+            34,
+            16,
+            -112
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "home-add": {
+          "role": "hit",
+          "expected": [
+            40,
+            279,
+            310,
+            48
+          ],
+          "actual": [
+            154.1875,
+            256,
+            81.609375,
+            44
+          ],
+          "delta": [
+            114.1875,
+            -23,
+            -228.390625,
+            -4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "home-direct-ssh": {
+          "role": "hit",
+          "expected": [
+            40,
+            339,
+            310,
+            48
+          ],
+          "actual": [
+            287.8125,
+            125,
+            86.1875,
+            44
+          ],
+          "delta": [
+            247.8125,
+            -214,
+            -223.8125,
+            -4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "home-tabs": {
+          "role": "geometry",
+          "expected": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            745,
+            390,
+            65
+          ],
+          "delta": [
+            0,
+            -9,
+            0,
+            9
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "expected": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            8,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            8,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "expected": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            103,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            5.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "expected": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            198,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            3,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "expected": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            293,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            0.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        }
+      }
+    },
+    {
+      "shell": "Tauri",
+      "phase": "before",
+      "state": "choose",
+      "screenPt": [
+        390,
+        844
+      ],
+      "safeAreaPt": {
+        "top": 47,
+        "bottom": 34
+      },
+      "captureState": "choose",
+      "capture": "screens/tauri-before-choose-390.png",
+      "sourceGeometry": "tauri/before.json",
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "expected": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "back": {
+          "role": "hit",
+          "expected": [
+            16,
+            53,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": false,
+          "result": "未测／无同类锚点"
+        },
+        "choose-ssh": {
+          "role": "hit",
+          "expected": [
+            24,
+            171,
+            342,
+            100
+          ],
+          "actual": [
+            179.984375,
+            226.8125,
+            115.359375,
+            44
+          ],
+          "delta": [
+            155.984375,
+            55.8125,
+            -226.640625,
+            -56
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "choose-herdr": {
+          "role": "hit",
+          "expected": [
+            24,
+            283,
+            342,
+            100
+          ],
+          "actual": [
+            16,
+            226.8125,
+            155.984375,
+            44
+          ],
+          "delta": [
+            -8,
+            -56.1875,
+            -186.015625,
+            -56
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        }
+      },
+      "note": "旧版显示全局品牌栏，矩形仅作诊断，不作为选择页头。",
+      "unmatchedHeader": [
+        0,
+        0,
+        390,
+        113
+      ]
+    },
+    {
+      "shell": "Tauri",
+      "phase": "before",
+      "state": "home",
+      "screenPt": [
+        320,
+        640
+      ],
+      "safeAreaPt": {
+        "top": 24,
+        "bottom": 24
+      },
+      "captureState": "home",
+      "capture": "screens/tauri-before-home-320.png",
+      "sourceGeometry": "tauri/before.json",
+      "anchors": {
+        "home-brand": {
+          "role": "geometry",
+          "expected": [
+            16,
+            40,
+            288,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "home-empty-card": {
+          "role": "geometry",
+          "expected": [
+            16,
+            112,
+            288,
+            268
+          ],
+          "actual": [
+            16,
+            146,
+            288,
+            156
+          ],
+          "delta": [
+            0,
+            34,
+            0,
+            -112
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "home-add": {
+          "role": "hit",
+          "expected": [
+            32,
+            256,
+            256,
+            48
+          ],
+          "actual": [
+            119.1875,
+            233,
+            81.609375,
+            44
+          ],
+          "delta": [
+            87.1875,
+            -23,
+            -174.390625,
+            -4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "home-direct-ssh": {
+          "role": "hit",
+          "expected": [
+            32,
+            316,
+            256,
+            48
+          ],
+          "actual": [
+            217.8125,
+            102,
+            86.1875,
+            44
+          ],
+          "delta": [
+            185.8125,
+            -214,
+            -169.8125,
+            -4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "home-tabs": {
+          "role": "geometry",
+          "expected": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            551,
+            320,
+            65
+          ],
+          "delta": [
+            0,
+            -9,
+            0,
+            9
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "expected": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            8,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            8,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "expected": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            85.5,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            5.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "expected": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            163,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            3,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "expected": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            240.5,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            0.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        }
+      }
+    },
+    {
+      "shell": "Tauri",
+      "phase": "before",
+      "state": "choose",
+      "screenPt": [
+        320,
+        640
+      ],
+      "safeAreaPt": {
+        "top": 24,
+        "bottom": 24
+      },
+      "captureState": "choose",
+      "capture": "screens/tauri-before-choose-320.png",
+      "sourceGeometry": "tauri/before.json",
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "expected": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "未测／无同类锚点"
+        },
+        "back": {
+          "role": "hit",
+          "expected": [
+            8,
+            30,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": false,
+          "result": "未测／无同类锚点"
+        },
+        "choose-ssh": {
+          "role": "hit",
+          "expected": [
+            16,
+            148,
+            288,
+            100
+          ],
+          "actual": [
+            179.984375,
+            203.8125,
+            115.359375,
+            44
+          ],
+          "delta": [
+            163.984375,
+            55.8125,
+            -172.640625,
+            -56
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        },
+        "choose-herdr": {
+          "role": "hit",
+          "expected": [
+            16,
+            260,
+            288,
+            100
+          ],
+          "actual": [
+            16,
+            203.8125,
+            155.984375,
+            44
+          ],
+          "delta": [
+            0,
+            -56.1875,
+            -132.015625,
+            -56
+          ],
+          "centerHit": true,
+          "result": "超过 2pt"
+        }
+      },
+      "note": "旧版显示全局品牌栏，矩形仅作诊断，不作为选择页头。",
+      "unmatchedHeader": [
+        0,
+        0,
+        320,
+        90
+      ]
+    },
+    {
+      "shell": "Flutter",
+      "phase": "after",
+      "state": "home",
+      "screenPt": [
+        390,
+        844
+      ],
+      "safeAreaPt": {
+        "top": 47,
+        "bottom": 34
+      },
+      "captureState": "home",
+      "capture": "screens/flutter-after-home-390.png",
+      "sourceGeometry": "flutter/after-390.json",
+      "anchors": {
+        "home-brand": {
+          "role": "geometry",
+          "expected": [
+            24,
+            63,
+            342,
+            44
+          ],
+          "actual": [
+            24.0,
+            63.0,
+            342.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-empty-card": {
+          "role": "geometry",
+          "expected": [
+            24,
+            135,
+            342,
+            268
+          ],
+          "actual": [
+            24.0,
+            135.0,
+            342.0,
+            268.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-add": {
+          "role": "hit",
+          "expected": [
+            40,
+            279,
+            310,
+            48
+          ],
+          "actual": [
+            41.0,
+            278.0,
+            308.0,
+            48.0
+          ],
+          "delta": [
+            1.0,
+            -1.0,
+            -2.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-direct-ssh": {
+          "role": "hit",
+          "expected": [
+            40,
+            339,
+            310,
+            48
+          ],
+          "actual": [
+            41.0,
+            338.0,
+            308.0,
+            48.0
+          ],
+          "delta": [
+            1.0,
+            -1.0,
+            -2.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-tabs": {
+          "role": "geometry",
+          "expected": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": [
+            0.0,
+            754.0,
+            390.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "expected": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            0.0,
+            755.0,
+            97.5,
+            55.0
+          ],
+          "delta": [
+            0.0,
+            1.0,
+            0.0,
+            -1.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "expected": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            97.5,
+            755.0,
+            97.5,
+            55.0
+          ],
+          "delta": [
+            0.0,
+            1.0,
+            0.0,
+            -1.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "expected": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            195.0,
+            755.0,
+            97.5,
+            55.0
+          ],
+          "delta": [
+            0.0,
+            1.0,
+            0.0,
+            -1.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "expected": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            292.5,
+            755.0,
+            97.5,
+            55.0
+          ],
+          "delta": [
+            0.0,
+            1.0,
+            0.0,
+            -1.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        }
+      }
+    },
+    {
+      "shell": "Flutter",
+      "phase": "after",
+      "state": "choose",
+      "screenPt": [
+        390,
+        844
+      ],
+      "safeAreaPt": {
+        "top": 47,
+        "bottom": 34
+      },
+      "captureState": "choose",
+      "capture": "screens/flutter-after-choose-390.png",
+      "sourceGeometry": "flutter/after-390.json",
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "expected": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0.0,
+            47.0,
+            390.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "back": {
+          "role": "hit",
+          "expected": [
+            16,
+            53,
+            44,
+            44
+          ],
+          "actual": [
+            16.0,
+            52.5,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            -0.5,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "choose-ssh": {
+          "role": "hit",
+          "expected": [
+            24,
+            171,
+            342,
+            100
+          ],
+          "actual": [
+            24.0,
+            171.0,
+            342.0,
+            100.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "choose-herdr": {
+          "role": "hit",
+          "expected": [
+            24,
+            283,
+            342,
+            100
+          ],
+          "actual": [
+            24.0,
+            283.0,
+            342.0,
+            100.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        }
+      }
+    },
+    {
+      "shell": "Flutter",
+      "phase": "after",
+      "state": "home",
+      "screenPt": [
+        320,
+        640
+      ],
+      "safeAreaPt": {
+        "top": 24,
+        "bottom": 24
+      },
+      "captureState": "home",
+      "capture": "screens/flutter-after-home-320.png",
+      "sourceGeometry": "flutter/after-320.json",
+      "anchors": {
+        "home-brand": {
+          "role": "geometry",
+          "expected": [
+            16,
+            40,
+            288,
+            44
+          ],
+          "actual": [
+            16.0,
+            40.0,
+            288.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-empty-card": {
+          "role": "geometry",
+          "expected": [
+            16,
+            112,
+            288,
+            268
+          ],
+          "actual": [
+            16.0,
+            112.0,
+            288.0,
+            268.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-add": {
+          "role": "hit",
+          "expected": [
+            32,
+            256,
+            256,
+            48
+          ],
+          "actual": [
+            33.0,
+            255.0,
+            254.0,
+            48.0
+          ],
+          "delta": [
+            1.0,
+            -1.0,
+            -2.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-direct-ssh": {
+          "role": "hit",
+          "expected": [
+            32,
+            316,
+            256,
+            48
+          ],
+          "actual": [
+            33.0,
+            315.0,
+            254.0,
+            48.0
+          ],
+          "delta": [
+            1.0,
+            -1.0,
+            -2.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-tabs": {
+          "role": "geometry",
+          "expected": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": [
+            0.0,
+            560.0,
+            320.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "expected": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            0.0,
+            561.0,
+            80.0,
+            55.0
+          ],
+          "delta": [
+            0.0,
+            1.0,
+            0.0,
+            -1.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "expected": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            80.0,
+            561.0,
+            80.0,
+            55.0
+          ],
+          "delta": [
+            0.0,
+            1.0,
+            0.0,
+            -1.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "expected": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            160.0,
+            561.0,
+            80.0,
+            55.0
+          ],
+          "delta": [
+            0.0,
+            1.0,
+            0.0,
+            -1.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "expected": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            240.0,
+            561.0,
+            80.0,
+            55.0
+          ],
+          "delta": [
+            0.0,
+            1.0,
+            0.0,
+            -1.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        }
+      }
+    },
+    {
+      "shell": "Flutter",
+      "phase": "after",
+      "state": "choose",
+      "screenPt": [
+        320,
+        640
+      ],
+      "safeAreaPt": {
+        "top": 24,
+        "bottom": 24
+      },
+      "captureState": "choose",
+      "capture": "screens/flutter-after-choose-320.png",
+      "sourceGeometry": "flutter/after-320.json",
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "expected": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0.0,
+            24.0,
+            320.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "back": {
+          "role": "hit",
+          "expected": [
+            8,
+            30,
+            44,
+            44
+          ],
+          "actual": [
+            8.0,
+            29.5,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            -0.5,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "choose-ssh": {
+          "role": "hit",
+          "expected": [
+            16,
+            148,
+            288,
+            100
+          ],
+          "actual": [
+            16.0,
+            148.0,
+            288.0,
+            100.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "choose-herdr": {
+          "role": "hit",
+          "expected": [
+            16,
+            260,
+            288,
+            100
+          ],
+          "actual": [
+            16.0,
+            260.0,
+            288.0,
+            100.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        }
+      }
+    },
+    {
+      "shell": "Tauri",
+      "phase": "after",
+      "state": "home",
+      "screenPt": [
+        390,
+        844
+      ],
+      "safeAreaPt": {
+        "top": 47,
+        "bottom": 34
+      },
+      "captureState": "home",
+      "capture": "screens/tauri-after-home-390.png",
+      "sourceGeometry": "tauri/after.json",
+      "anchors": {
+        "home-brand": {
+          "role": "geometry",
+          "expected": [
+            24,
+            63,
+            342,
+            44
+          ],
+          "actual": [
+            24,
+            63,
+            342,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-empty-card": {
+          "role": "geometry",
+          "expected": [
+            24,
+            135,
+            342,
+            268
+          ],
+          "actual": [
+            24,
+            135,
+            342,
+            268
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-add": {
+          "role": "hit",
+          "expected": [
+            40,
+            279,
+            310,
+            48
+          ],
+          "actual": [
+            40,
+            279,
+            310,
+            48
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-direct-ssh": {
+          "role": "hit",
+          "expected": [
+            40,
+            339,
+            310,
+            48
+          ],
+          "actual": [
+            40,
+            339,
+            310,
+            48
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-tabs": {
+          "role": "geometry",
+          "expected": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "expected": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "expected": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0.0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "expected": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "expected": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0.0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        }
+      },
+      "visibleText": [
+        {
+          "text": "Herdr Pocket",
+          "fontSize": "22px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "还没有主机",
+          "fontSize": "18px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "添加主机后，在这里查看会话和任务状态。",
+          "fontSize": "13px",
+          "weight": "400",
+          "lines": 1
+        },
+        {
+          "text": "添加主机",
+          "fontSize": "14px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "普通 SSH 终端",
+          "fontSize": "14px",
+          "weight": "600",
+          "lines": 1
+        }
+      ]
+    },
+    {
+      "shell": "Tauri",
+      "phase": "after",
+      "state": "choose",
+      "screenPt": [
+        390,
+        844
+      ],
+      "safeAreaPt": {
+        "top": 47,
+        "bottom": 34
+      },
+      "captureState": "choose",
+      "capture": "screens/tauri-after-choose-390.png",
+      "sourceGeometry": "tauri/after.json",
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "expected": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "back": {
+          "role": "hit",
+          "expected": [
+            16,
+            53,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            52,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            -1,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "choose-ssh": {
+          "role": "hit",
+          "expected": [
+            24,
+            171,
+            342,
+            100
+          ],
+          "actual": [
+            24,
+            171,
+            342,
+            100
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "choose-herdr": {
+          "role": "hit",
+          "expected": [
+            24,
+            283,
+            342,
+            100
+          ],
+          "actual": [
+            24,
+            283,
+            342,
+            100
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        }
+      },
+      "visibleText": [
+        {
+          "text": "添加主机",
+          "fontSize": "18px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "选择连接方式",
+          "fontSize": "22px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "普通 SSH 终端",
+          "fontSize": "16px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "使用服务器密码或已有私钥打开远程 Shell。",
+          "fontSize": "13px",
+          "weight": "400",
+          "lines": 1
+        },
+        {
+          "text": "herdr 配对 / 手动连接",
+          "fontSize": "16px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "接入 herdr 工作台，查看会话和任务。",
+          "fontSize": "13px",
+          "weight": "400",
+          "lines": 1
+        }
+      ]
+    },
+    {
+      "shell": "Tauri",
+      "phase": "after",
+      "state": "home",
+      "screenPt": [
+        320,
+        640
+      ],
+      "safeAreaPt": {
+        "top": 24,
+        "bottom": 24
+      },
+      "captureState": "home",
+      "capture": "screens/tauri-after-home-320.png",
+      "sourceGeometry": "tauri/after.json",
+      "anchors": {
+        "home-brand": {
+          "role": "geometry",
+          "expected": [
+            16,
+            40,
+            288,
+            44
+          ],
+          "actual": [
+            16,
+            40,
+            288,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-empty-card": {
+          "role": "geometry",
+          "expected": [
+            16,
+            112,
+            288,
+            268
+          ],
+          "actual": [
+            16,
+            112,
+            288,
+            268
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-add": {
+          "role": "hit",
+          "expected": [
+            32,
+            256,
+            256,
+            48
+          ],
+          "actual": [
+            32,
+            256,
+            256,
+            48
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-direct-ssh": {
+          "role": "hit",
+          "expected": [
+            32,
+            316,
+            256,
+            48
+          ],
+          "actual": [
+            32,
+            316,
+            256,
+            48
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "home-tabs": {
+          "role": "geometry",
+          "expected": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "expected": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "expected": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "expected": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "expected": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        }
+      },
+      "visibleText": [
+        {
+          "text": "Herdr Pocket",
+          "fontSize": "22px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "还没有主机",
+          "fontSize": "18px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "添加主机后，在这里查看会话和任务状态。",
+          "fontSize": "13px",
+          "weight": "400",
+          "lines": 1
+        },
+        {
+          "text": "添加主机",
+          "fontSize": "14px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "普通 SSH 终端",
+          "fontSize": "14px",
+          "weight": "600",
+          "lines": 1
+        }
+      ]
+    },
+    {
+      "shell": "Tauri",
+      "phase": "after",
+      "state": "choose",
+      "screenPt": [
+        320,
+        640
+      ],
+      "safeAreaPt": {
+        "top": 24,
+        "bottom": 24
+      },
+      "captureState": "choose",
+      "capture": "screens/tauri-after-choose-320.png",
+      "sourceGeometry": "tauri/after.json",
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "expected": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "back": {
+          "role": "hit",
+          "expected": [
+            8,
+            30,
+            44,
+            44
+          ],
+          "actual": [
+            8,
+            29,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            -1,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "choose-ssh": {
+          "role": "hit",
+          "expected": [
+            16,
+            148,
+            288,
+            100
+          ],
+          "actual": [
+            16,
+            148,
+            288,
+            100
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        },
+        "choose-herdr": {
+          "role": "hit",
+          "expected": [
+            16,
+            260,
+            288,
+            100
+          ],
+          "actual": [
+            16,
+            260,
+            288,
+            100
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "≤2pt"
+        }
+      },
+      "visibleText": [
+        {
+          "text": "添加主机",
+          "fontSize": "18px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "选择连接方式",
+          "fontSize": "22px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "普通 SSH 终端",
+          "fontSize": "16px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "使用服务器密码或已有私钥打开远程 Shell。",
+          "fontSize": "13px",
+          "weight": "400",
+          "lines": 1
+        },
+        {
+          "text": "herdr 配对 / 手动连接",
+          "fontSize": "16px",
+          "weight": "600",
+          "lines": 1
+        },
+        {
+          "text": "接入 herdr 工作台，查看会话和任务。",
+          "fontSize": "13px",
+          "weight": "400",
+          "lines": 1
+        }
+      ]
+    }
+  ],
+  "supplement": {
+    "shell": "Flutter",
+    "textScale": 2,
+    "sourceGeometry": "flutter/after-320-200.json",
+    "captures": {
+      "after-home-320-200": {
+        "capture": "screens/flutter-after-home-320-200.png",
+        "measurement": {
+          "brand": [
+            60.0,
+            40.0,
+            244.0,
+            126.0
+          ],
+          "pairing": [
+            33.0,
+            462.0,
+            254.0,
+            48.0
+          ],
+          "ssh": [
+            33.0,
+            522.0,
+            254.0,
+            48.0
+          ],
+          "browse": [
+            23.899993896484375,
+            583.5,
+            32.20001220703125,
+            21.0
+          ],
+          "terminal": [
+            103.89999389648438,
+            583.5,
+            32.20001220703125,
+            21.0
+          ],
+          "network": [
+            183.89999389648438,
+            583.5,
+            32.20001220703125,
+            21.0
+          ],
+          "settings": [
+            263.8999938964844,
+            583.5,
+            32.20001220703125,
+            21.0
+          ],
+          "brandMark": [
+            16.220703125,
+            86.0,
+            33.55859375,
+            34.0
+          ],
+          "homeBrand": [
+            16.0,
+            40.0,
+            288.0,
+            126.0
+          ],
+          "homeCard": [
+            16.0,
+            194.0,
+            288.0,
+            393.0
+          ],
+          "safeArea": [
+            24.0,
+            24.0
+          ],
+          "hitAtCenter": {
+            "brand": true,
+            "pairing": true,
+            "ssh": false,
+            "browse": true,
+            "terminal": true,
+            "network": true,
+            "settings": true,
+            "brandMark": true,
+            "homeBrand": true,
+            "homeCard": true
+          }
+        }
+      },
+      "after-choose-320-200": {
+        "capture": "screens/flutter-after-choose-320-200.png",
+        "measurement": {
+          "header": [
+            0.0,
+            24.0,
+            320.0,
+            72.0
+          ],
+          "back": [
+            8.0,
+            37.5,
+            44.0,
+            44.0
+          ],
+          "ssh": [
+            16.0,
+            199.0,
+            288.0,
+            203.0
+          ],
+          "herdr": [
+            16.0,
+            414.0,
+            288.0,
+            203.0
+          ],
+          "safeArea": [
+            24.0,
+            24.0
+          ],
+          "hitAtCenter": {
+            "header": true,
+            "back": true,
+            "ssh": true,
+            "herdr": true
+          }
+        }
+      },
+      "after-choose-320-200-scrolled": {
+        "capture": "screens/flutter-after-choose-320-200-scrolled.png",
+        "measurement": {
+          "ssh": [
+            16.0,
+            174.0,
+            288.0,
+            203.0
+          ],
+          "herdr": [
+            16.0,
+            389.0,
+            288.0,
+            203.0
+          ],
+          "safeArea": [
+            24.0,
+            24.0
+          ],
+          "hitAtCenter": {
+            "ssh": true,
+            "herdr": true
+          }
+        }
+      }
+    }
+  }
+}

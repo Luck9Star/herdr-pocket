@@ -39,6 +39,7 @@ class Browser:
     def evaluate(self,expression):
         self.expressions.append(expression)
         if 'dashboardAddEntry' in expression: return self.entry
+        if 'sshSetupLayout' in expression: return 'legacy'
         if "#ssh-review" in expression: return self.review
         if "#ssh-password" in expression: return ''
         if "#ssh-setup" in expression: return False
@@ -119,6 +120,7 @@ class RotationBrowser:
     def evaluate(self,expression):
         self.expressions.append(expression);state=self.state
         if 'dashboardAddEntry' in expression: return '#host-open-remote'
+        if 'sshSetupLayout' in expression: return 'legacy'
         negated=expression.lstrip().startswith('!')
         if "'#ssh-review').checked" in expression: return state.review
         if "'#ssh-review').disabled" in expression: return not state.review_disabled
@@ -151,6 +153,134 @@ class DirectSshAndroidTests(unittest.TestCase):
         self._wait_patcher=patch.object(driver,'wait_for',_fast_wait_for)
         self._wait_patcher.start()
         self.addCleanup(self._wait_patcher.stop)
+
+    def test_staged_encrypted_key_only_uses_mobile_confirmation_auth_and_back_controls(self):
+        class KeyFixture(Fixture):
+            private_key='synthetic key'
+            passphrase='synthetic phrase'
+            def snapshot(self):
+                return {**super().snapshot(), 'connections':2,
+                        'connectionEvents':[{'hostKey':'A'}, {'hostKey':'A','authAccepted':True}]}
+        class MobileBrowser(Browser):
+            def evaluate(self, expression):
+                return 'staged' if 'sshSetupLayout' in expression else super().evaluate(expression)
+        browser=MobileBrowser()
+        fixture=KeyFixture()
+        with patch.object(driver, 'mobile_setup') as verify, patch.object(driver, 'require_first_probe') as probe:
+            result=driver.exercise_ui(browser, fixture, encrypted_key=True)
+        self.assertTrue(result['returnedHome'])
+        self.assertEqual(probe.call_count,2)
+        actions=browser.actions
+        self.assertNotIn(('click','#ssh-review'), actions)
+        self.assertNotIn(('select','#ssh-auth-method','key'), actions)
+        requested=[('click','#ssh-trust-confirm'),('click','#ssh-auth-key'),('fill','#ssh-key',fixture.private_key),
+                   ('fill','#ssh-passphrase',fixture.passphrase),('click','#ssh-connect'),('click','#ssh-return-home')]
+        self.assertEqual([a for a in actions if a in requested],requested)
+        self.assertEqual([('auth','key','empty'),('auth','key','pem'),('auth','key','ready')],
+                         [(call.args[2],call.kwargs['method'],call.kwargs.get('input_state','empty'))
+                          for call in verify.call_args_list if 'method' in call.kwargs])
+
+    def test_staged_rotation_rechecks_after_native_refusal_and_cancellation(self):
+        class MobileRotation(RotationBrowser):
+            def evaluate(self, expression):
+                return 'staged' if 'sshSetupLayout' in expression else super().evaluate(expression)
+            def click(self, selector):
+                super().click({'#ssh-trust-confirm':'#ssh-review','#ssh-connect':'#ssh-form button[type=submit]'}.get(selector,selector))
+                self.actions[-1]=('click',selector)
+        state=RotationState()
+        fixture=RotationFixture(state)
+        browser=MobileRotation(state)
+        with patch.object(driver,'mobile_setup') as verify, patch.object(driver,'require_first_probe'):
+            driver.exercise_key_change_ui(browser,fixture)
+        self.assertEqual([a[1] for a in browser.actions if a[0]=='click' and a[1] in
+                          ('#ssh-trust-confirm','#ssh-connect','#ssh-key-cancel')],
+                         ['#ssh-trust-confirm','#ssh-connect','#ssh-key-cancel','#ssh-trust-confirm','#ssh-connect'])
+        self.assertEqual([(call.args[2],call.kwargs) for call in verify.call_args_list if call.args[2] in ('trust','refused')],
+                         [('trust',{'fingerprint':fixture.fingerprint}),('refused',{'fingerprint':fixture.rotated_fingerprint,
+                          'prior':fixture.fingerprint}),('trust',{'fingerprint':fixture.rotated_fingerprint,
+                          'prior':fixture.fingerprint})])
+        self.assertEqual(fixture.stages,[2,3,3,4])
+
+    def test_initial_peer_gate_cannot_accept_an_early_authentication_attempt(self):
+        facts={'hostKey':'A','closed':True,
+               **{k:0 for k in ('authAttempts','authSuccesses','ptyRequests','shellRequests','inputBytes','outputBytes')}}
+        peer=Mock()
+        peer.wait_for_connections_closed.return_value=True
+        peer.snapshot.return_value={'connections':1,'connectionEvents':[facts]}
+        driver.require_first_probe(peer)
+        facts['authAttempts']=1
+        with self.assertRaisesRegex(driver.GuiFailure,'direct_probe_peer_unproven'):
+            driver.require_first_probe(peer)
+
+    @unittest.skipUnless(shutil.which('node'), 'requires Node.js to run the real mobile setup probe')
+    def test_mobile_trust_dom_requires_exact_endpoint_algorithm_and_locked_credentials(self):
+        browser=Mock()
+        browser.evaluate.return_value=True
+        fingerprint='SHA256:'+'A'*43
+        rotated='SHA256:'+'B'*43
+        fixture=types.SimpleNamespace(username='fixture',port=1234,public_key='ssh-rsa synthetic',
+                                      rotated_fingerprint=rotated,rotated_public_key='ssh-ed25519 synthetic')
+        driver.mobile_setup(browser,fixture,'trust',fingerprint=fingerprint)
+        expression=browser.evaluate.call_args.args[0]
+        driver.mobile_setup(browser,fixture,'refused',fingerprint=rotated,prior=fingerprint)
+        refused=browser.evaluate.call_args.args[0]
+        browser.evaluate.return_value='staged'
+        self.assertTrue(driver.staged_setup(browser))
+        layout=browser.evaluate.call_args.args[0]
+        script=r'''const assert=require('node:assert/strict');
+const check=()=>%s;
+const checkRefused=()=>%s;
+const choose=()=>%s;
+const element=(innerText='',options={})=>({innerText,hidden:false,value:'',disabled:false,
+  tagName:'DIV', getClientRects(){return this.hidden?[]:[0];}, ...options});
+const button=label=>element(label,{tagName:'BUTTON'});
+const nodes={
+ 'home-ssh':element('',{dataset:{sshStep:'trust'}}), 'ssh-step-title':element('核对主机密钥'),
+ 'ssh-target-fields':element('',{hidden:true}), 'ssh-trust-review':element(),
+ 'ssh-credentials':element('',{hidden:true}), 'ssh-review':element('',{hidden:true}),
+ 'ssh-reviewed-endpoint':element('fixture@127.0.0.1:1234'), 'ssh-reviewed-algorithm':element('ssh-rsa'),
+ 'ssh-reviewed-fingerprint':element('SHA256:'+'A'.repeat(21)+'\n'+'A'.repeat(22)),
+ 'ssh-trust-confirm':button('指纹一致，确认继续'), 'ssh-trust-cancel':button('取消核对'),
+ 'ssh-connect':element('',{tagName:'BUTTON',hidden:true,disabled:true}),
+ 'ssh-password':element('',{type:'password',hidden:true,disabled:true}),
+ 'ssh-passphrase':element('',{type:'password',hidden:true,disabled:true}),
+ 'ssh-key':element('',{tagName:'TEXTAREA',hidden:true,disabled:true})};
+let duplicate;
+global.document={querySelectorAll(selector){const id=selector.slice(1); return !nodes[id]?[]:id===duplicate?[nodes[id],nodes[id]]:[nodes[id]];}};
+global.getComputedStyle=()=>({visibility:'visible'});
+assert.equal(check(),true);
+const reject=(id,key,value)=>{const old=nodes[id][key];nodes[id][key]=value;assert.ok(!check());nodes[id][key]=old;};
+reject('ssh-reviewed-endpoint','innerText','fixture@127.0.0.1:12345');
+reject('ssh-reviewed-fingerprint','innerText','SHA256:'+'A'.repeat(44));
+reject('ssh-reviewed-algorithm','innerText','ssh-ed25519');
+reject('ssh-password','disabled',false);
+reject('ssh-password','value','stale');
+reject('ssh-key','hidden',false);
+reject('ssh-trust-cancel','disabled',true);
+duplicate='ssh-trust-confirm';assert.ok(!check());
+duplicate=null;
+Object.assign(nodes, {'ssh-setup':element('',{hidden:true}), 'ssh-key-change':element(),
+  'ssh-key-change-endpoint':element('fixture@127.0.0.1:1234'),
+  'ssh-key-change-algorithms':element('旧密钥算法 · ssh-rsa'),
+  'ssh-key-change-old':element('旧：SHA256:'+'A'.repeat(43)),
+  'ssh-key-change-new':element('新：SHA256:'+'B'.repeat(43)),
+  'ssh-key-change-target':element('目标：fixture@127.0.0.1:1234',{hidden:true})});
+assert.equal(checkRefused(),true);
+nodes['ssh-key-change-endpoint'].hidden=true;assert.ok(!checkRefused());
+nodes['ssh-key-change-endpoint'].hidden=false;
+nodes['ssh-key-change-algorithms'].innerText='旧密钥算法 · ssh-ed25519';assert.ok(!checkRefused());
+let narrow=true;
+global.matchMedia=()=>({matches:narrow});
+const route=nodes['home-ssh'], title=nodes['ssh-step-title'], review=nodes['ssh-review'];
+route.hasAttribute=()=>Object.hasOwn(route.dataset,'sshStep');
+route.dataset.sshStep='target';title.innerText='普通 SSH';
+assert.equal(choose(),'staged');
+delete route.dataset.sshStep;title.hidden=true;review.hidden=false;review.type='checkbox';
+assert.equal(choose(),null);
+narrow=false;assert.equal(choose(),'legacy');
+''' % (expression,refused,layout)
+        result=subprocess.run(['node','-e',script],capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stderr)
 
     def test_compact_home_uses_the_card_and_returns_after_peer_close(self):
         browser = Browser()

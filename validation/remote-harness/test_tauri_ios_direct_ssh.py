@@ -1535,6 +1535,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.probe(self.ordinary)
         self.accept('ordinary_probe')
         self.accept('ordinary_password')
+        self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_connect'})
         peer, channel = self.session(self.ordinary)
         self.accept('ordinary_input')
         # Images in this protocol test are deliberately mocked, not device proof.
@@ -1551,6 +1552,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         key_a = self.probe(self.rotation)
         self.accept('key_change_probe_a')
         self.accept('key_change_password_a')
+        self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'key_change_connect'})
         key_b = self.probe(self.rotation)
         self.assertNotEqual(key_a, key_b)
         with patch.object(self.state, 'capture'):
@@ -1560,6 +1562,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.assertEqual(self.probe(self.rotation), key_b)
         self.accept('key_change_probe_b')
         self.accept('key_change_password_b')
+        self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'key_change_connect'})
         peer, channel = self.session(self.rotation)
         self.accept('key_change_input')
         with patch.object(self.state, 'capture'):
@@ -1589,6 +1592,16 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.close_protocol(peer, channel)
         with self.assertRaisesRegex(ios.Failure, 'rotation_evidence_invalid'):
             self.accept('key_change_review')
+
+    def test_before_native_submit_rejects_an_early_authenticated_peer(self):
+        self.probe(self.ordinary)
+        self.accept('ordinary_form')
+        self.accept('ordinary_probe')
+        self.accept('ordinary_password')
+        peer, channel = self.session(self.ordinary, marker=False)
+        self.close_protocol(peer, channel)
+        with self.assertRaisesRegex(ios.Failure, 'probe_not_empty'):
+            self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_connect'})
 
     def test_ordinary_return_rejects_reauthentication_and_replayed_input(self):
         self.probe(self.ordinary)

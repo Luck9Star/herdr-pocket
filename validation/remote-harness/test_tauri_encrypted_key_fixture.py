@@ -8,6 +8,26 @@ import unittest
 
 @unittest.skipUnless(importlib.util.find_spec('paramiko') and shutil.which('ssh-keygen'), 'Paramiko and ssh-keygen required')
 class EncryptedKeyFixtureTests(unittest.TestCase):
+    def test_observes_probe_and_rejected_authentication_as_distinct_connections(self):
+        import paramiko
+        from tauri_encrypted_key_fixture import EncryptedKeyFixture
+        with EncryptedKeyFixture() as peer:
+            with paramiko.Transport(('127.0.0.1', peer.port)) as probe:
+                probe.start_client(timeout=5)
+                self.assertEqual(probe.get_remote_server_key(), peer._key)
+            self.assertTrue(peer.wait_for_connections_closed(1, timeout=5))
+            with paramiko.Transport(('127.0.0.1', peer.port)) as attempt:
+                attempt.start_client(timeout=5)
+                with self.assertRaises(paramiko.AuthenticationException):
+                    attempt.auth_password(peer.username, peer.password, fallback=False)
+            self.assertTrue(peer.wait_for_connections_closed(2, timeout=5))
+            first, second = peer.snapshot()['connectionEvents']
+            self.assertEqual((first['authAttempts'], second['authAttempts']), (0, 1))
+            for event in (first, second):
+                self.assertTrue(event['closed'])
+                self.assertEqual([event[name] for name in ('authSuccesses', 'ptyRequests', 'shellRequests',
+                                                         'inputBytes', 'outputBytes')], [0] * 5)
+
     def test_encrypted_key_reaches_owned_pty_and_closes(self):
         import paramiko
         from tauri_encrypted_key_fixture import EncryptedKeyFixture

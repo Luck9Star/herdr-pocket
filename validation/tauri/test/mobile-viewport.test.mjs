@@ -71,6 +71,28 @@ test('native top inset follows the newest measurement and is removed on teardown
   stop(); pending[2]({overlapPx:42}); pending[3]({overlapPx:42}); pending[4]({overlapPx:42}); await new Promise(resolve=>setImmediate(resolve));
   assert.equal(f.props.has('--hp-system-top-inset'),false);
 });
+test('iOS entry stores scoped CSS points and distinguishes measured zero from unavailable', async () => {
+  const f = fixture();
+  f.view.devicePixelRatio = 3;
+  const outcomes = [
+    {connectionEntry:true, overlapPx:141},
+    {connectionEntry:true, overlapPx:0},
+    {connectionEntry:true},
+  ];
+  const stop = observeMobileViewport(f.view,f.root,f.body,()=>outcomes.shift());
+  const settle = () => new Promise(resolve => setImmediate(resolve));
+  await settle();
+  assert.equal(f.props.get('--hp-connection-native-top'), '47px');
+  assert.equal(f.props.has('--hp-system-top-inset'), false);
+  f.callbacks.get('w:orientationchange')();
+  await settle();
+  assert.equal(f.props.get('--hp-connection-native-top'), '0px');
+  f.callbacks.get('w:resize')();
+  await settle();
+  assert.equal(f.props.has('--hp-connection-native-top'), false);
+  stop();
+});
+
 test('Android overlap uses window bounds and WebView screen position',()=>{
   const source=readFileSync(new URL('../android/TerminalKeyboardPlugin.kt',import.meta.url),'utf8');
   assert.match(source, /currentWindowMetrics\.bounds\.top/);

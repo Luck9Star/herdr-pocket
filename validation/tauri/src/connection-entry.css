@@ -10,12 +10,13 @@
   :root {
     --hp-connection-margin:24px;
     --hp-connection-reported-top:max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px));
-    --hp-connection-top:var(--hp-connection-reported-top);
+    --hp-connection-fallback-top:var(--hp-connection-reported-top);
+    --hp-connection-top:var(--hp-connection-native-top,var(--hp-connection-fallback-top));
   }
   @supports (padding-top:calc(sign(1px) * 1px)) {
-    /* Match the existing iOS status bar fallback only when WebKit has no top inset. */
+    /* A measured native zero wins. Use the status bar fallback only without a native or CSS measurement. */
     :root.ios-edge-to-edge {
-      --hp-connection-top:max(var(--hp-connection-reported-top),
+      --hp-connection-fallback-top:max(var(--hp-connection-reported-top),
         calc(var(--hp-ios-status-bar-fallback,0px) * (1 - sign(var(--hp-connection-reported-top)))));
     }
   }

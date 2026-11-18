@@ -108,6 +108,23 @@ def verify_apk(apk, libraries):
     return hashes
 
 
+def variant_passed(row):
+    probe = row.get('probe', {})
+    instrumentation = row.get('instrumentation', {})
+    cleanup = row.get('session', {}).get('cleanup', {})
+    return (
+        'errorCode' not in row and row.get('probeReport') == 'valid'
+        and instrumentation.get('commandSucceeded') is True and instrumentation.get('returnCode') == '-1'
+        and instrumentation.get('processCrash') is False and instrumentation.get('instrumentationFailed') is False
+        and all(probe.get(key) is True for key in ('passed', 'startOk', 'statusOk', 'needsLoginReached',
+            'stopOk', 'nativeScopeClosed', 'identityDeleted'))
+        and 'needs-login' in probe.get('states', ()) and probe.get('stopState') == 'stopped'
+        and all(row.get(key) is True for key in ('packageRemoved', 'noSshAuthentication',
+            'noNewAuthorizationOrRegistration'))
+        and bool(cleanup) and all(value is True for value in cleanup.values())
+    )
+
+
 def run(args):
     assert_owned_avd()
     output = {'schemaVersion': 1, 'status': 'failed', 'scope': 'owned API35 real AndroidKeyStore and fixed product JNI TS start/status/stop; no GUI, login or application dial',
@@ -179,12 +196,7 @@ def run(args):
                 if installed:
                     row['packageRemoved'] = adb('uninstall', PACKAGE).returncode == 0 and not adb('shell', 'pm', 'path', PACKAGE).stdout.strip()
                 row['session'] = session.report
-            probe = row.get('probe', {})
-            if (probe.get('passed') is True and probe.get('stopOk') is True and probe.get('stopState') == 'stopped'
-                    and probe.get('nativeScopeClosed') is True and probe.get('identityDeleted') is True
-                    and row.get('packageRemoved') is True and row.get('noSshAuthentication') is True
-                    and row.get('noNewAuthorizationOrRegistration') is True
-                    and row['session']['cleanup'] and all(row['session']['cleanup'].values())):
+            if variant_passed(row):
                 row['status'] = 'passed'
         if len(output['variants']) == 2 and all(row['status'] == 'passed' for row in output['variants']):
             output['status'] = 'passed'

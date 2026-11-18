@@ -1,0 +1,4849 @@
+{
+  "designRef": "79deef0e9c03425f368966e32ff1f1d399a3ac02",
+  "rows": [
+    {
+      "state": "target-focused",
+      "shell": "Flutter",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 47pt inset，无原生状态栏。"
+    },
+    {
+      "state": "target-focused",
+      "shell": "Tauri",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中顶部 env=47pt，内容留白并遮挡滚动区域，无原生状态栏。"
+    },
+    {
+      "state": "target-focused",
+      "shell": "Flutter",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": [
+        0.0,
+        47,
+        390.0,
+        56.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "≤2pt",
+      "note": ""
+    },
+    {
+      "state": "target-focused",
+      "shell": "Tauri",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "可见的是全局品牌栏加路由标题，缺画板所示的带返回键页头。"
+    },
+    {
+      "state": "target-focused",
+      "shell": "Flutter",
+      "anchor": "back",
+      "target": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        0.0,
+        47.0,
+        56.0,
+        56.0
+      ],
+      "delta": [
+        -16.0,
+        -6.0,
+        12.0,
+        12.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "target-focused",
+      "shell": "Tauri",
+      "anchor": "back",
+      "target": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "无当前页返回键，可通过全局「看板」回首页。"
+    },
+    {
+      "state": "target-focused",
+      "shell": "Flutter",
+      "anchor": "host",
+      "target": [
+        24.0,
+        181.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        183.0,
+        358.0,
+        56.0
+      ],
+      "delta": [
+        -8.0,
+        2.0,
+        16.0,
+        8.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "target-focused",
+      "shell": "Tauri",
+      "anchor": "host",
+      "target": [
+        24.0,
+        181.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        280.8125,
+        358,
+        46
+      ],
+      "delta": [
+        -8.0,
+        99.8125,
+        16.0,
+        -2.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "target-focused",
+      "shell": "Flutter",
+      "anchor": "username",
+      "target": [
+        24.0,
+        265.0,
+        246.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        327.0,
+        358.0,
+        56.0
+      ],
+      "delta": [
+        -8.0,
+        62.0,
+        112.0,
+        8.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "实测已获焦，字段仍然通栏。"
+    },
+    {
+      "state": "target-focused",
+      "shell": "Tauri",
+      "anchor": "username",
+      "target": [
+        24.0,
+        265.0,
+        246.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        496.8125,
+        358,
+        46
+      ],
+      "delta": [
+        -8.0,
+        231.8125,
+        112.0,
+        -2.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": "已获焦；顶部视图被固定导航覆盖，另有滚动图。"
+    },
+    {
+      "state": "target-focused",
+      "shell": "Flutter",
+      "anchor": "port",
+      "target": [
+        282.0,
+        265.0,
+        84.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        255.0,
+        358.0,
+        56.0
+      ],
+      "delta": [
+        -266.0,
+        -10.0,
+        274.0,
+        8.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "target-focused",
+      "shell": "Tauri",
+      "anchor": "port",
+      "target": [
+        282.0,
+        265.0,
+        84.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        388.8125,
+        358,
+        46
+      ],
+      "delta": [
+        -266.0,
+        123.8125,
+        274.0,
+        -2.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "target-focused",
+      "shell": "Flutter",
+      "anchor": "probe",
+      "target": [
+        24.0,
+        333.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        399.0,
+        358.0,
+        48.0
+      ],
+      "delta": [
+        -8.0,
+        66.0,
+        16.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "target-focused",
+      "shell": "Tauri",
+      "anchor": "probe",
+      "target": [
+        24.0,
+        333.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        554.8125,
+        107.40625,
+        44
+      ],
+      "delta": [
+        -8.0,
+        221.8125,
+        -234.59375,
+        -4.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "target-focused",
+      "shell": "Flutter",
+      "anchor": "system-keyboard",
+      "target": [
+        0.0,
+        553.0,
+        390.0,
+        291.0
+      ],
+      "actual": [
+        0,
+        553,
+        390,
+        291
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "Flutter 测试调整 viewInsets，实际 IME 未验证。"
+    },
+    {
+      "state": "target-focused",
+      "shell": "Tauri",
+      "anchor": "system-keyboard",
+      "target": [
+        0.0,
+        553.0,
+        390.0,
+        291.0
+      ],
+      "actual": [
+        0,
+        553,
+        390,
+        291
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "WebKit visualViewport 桩并遮罩，实际 IME 未验证。"
+    },
+    {
+      "state": "password",
+      "shell": "Flutter",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 47pt inset，无原生状态栏。"
+    },
+    {
+      "state": "password",
+      "shell": "Tauri",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中顶部 env=47pt，内容留白并遮挡滚动区域，无原生状态栏。"
+    },
+    {
+      "state": "password",
+      "shell": "Flutter",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 34pt inset，无 Home indicator。"
+    },
+    {
+      "state": "password",
+      "shell": "Tauri",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中底部 env=34pt，无 Home indicator。"
+    },
+    {
+      "state": "password",
+      "shell": "Flutter",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "沿用普通 SSH 页头，未进入独立认证页。"
+    },
+    {
+      "state": "password",
+      "shell": "Tauri",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "沿用普通 SSH 页头和品牌栏，未进入独立认证页。"
+    },
+    {
+      "state": "password",
+      "shell": "Flutter",
+      "anchor": "back",
+      "target": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "password",
+      "shell": "Tauri",
+      "anchor": "back",
+      "target": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "无当前页返回键，可通过全局「看板」回首页。"
+    },
+    {
+      "state": "password",
+      "shell": "Flutter",
+      "anchor": "target-card",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "password",
+      "shell": "Tauri",
+      "anchor": "target-card",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "password",
+      "shell": "Flutter",
+      "anchor": "trust-approved",
+      "target": [
+        24.0,
+        185.0,
+        342.0,
+        44.0
+      ],
+      "actual": [
+        16.0,
+        119.0,
+        358.0,
+        44.0
+      ],
+      "delta": [
+        -8.0,
+        -66.0,
+        16.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "password",
+      "shell": "Tauri",
+      "anchor": "trust-approved",
+      "target": [
+        24.0,
+        185.0,
+        342.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "password",
+      "shell": "Flutter",
+      "anchor": "auth-password",
+      "target": [
+        24.0,
+        271.0,
+        167.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "单一私钥开关切换两种认证。"
+    },
+    {
+      "state": "password",
+      "shell": "Tauri",
+      "anchor": "auth-password",
+      "target": [
+        24.0,
+        271.0,
+        167.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "单一下拉选择器。"
+    },
+    {
+      "state": "password",
+      "shell": "Flutter",
+      "anchor": "auth-key",
+      "target": [
+        199.0,
+        271.0,
+        167.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "单一私钥开关切换两种认证。"
+    },
+    {
+      "state": "password",
+      "shell": "Tauri",
+      "anchor": "auth-key",
+      "target": [
+        199.0,
+        271.0,
+        167.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "单一下拉选择器。"
+    },
+    {
+      "state": "password",
+      "shell": "Flutter",
+      "anchor": "password",
+      "target": [
+        24.0,
+        351.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        603.0,
+        358.0,
+        56.0
+      ],
+      "delta": [
+        -8.0,
+        252.0,
+        16.0,
+        8.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "password",
+      "shell": "Tauri",
+      "anchor": "password",
+      "target": [
+        24.0,
+        351.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        1080.8125,
+        358,
+        46
+      ],
+      "delta": [
+        -8.0,
+        729.8125,
+        16.0,
+        -2.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "password",
+      "shell": "Flutter",
+      "anchor": "connect",
+      "target": [
+        24.0,
+        413.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        679.0,
+        358.0,
+        48.0
+      ],
+      "delta": [
+        -8.0,
+        266.0,
+        16.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "password",
+      "shell": "Tauri",
+      "anchor": "connect",
+      "target": [
+        24.0,
+        413.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        1138.8125,
+        175,
+        44
+      ],
+      "delta": [
+        -8.0,
+        725.8125,
+        -167.0,
+        -4.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 47pt inset，无原生状态栏。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中顶部 env=47pt，内容留白并遮挡滚动区域，无原生状态栏。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 34pt inset，无 Home indicator。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中底部 env=34pt，无 Home indicator。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "沿用普通 SSH 页头，未进入独立认证页。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "沿用普通 SSH 页头和品牌栏，未进入独立认证页。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "back",
+      "target": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "back",
+      "target": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "无当前页返回键，可通过全局「看板」回首页。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "target-card",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "target-card",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "trust-approved",
+      "target": [
+        24.0,
+        185.0,
+        342.0,
+        44.0
+      ],
+      "actual": [
+        16.0,
+        119.0,
+        358.0,
+        44.0
+      ],
+      "delta": [
+        -8.0,
+        -66.0,
+        16.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "trust-approved",
+      "target": [
+        24.0,
+        185.0,
+        342.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "auth-password",
+      "target": [
+        24.0,
+        271.0,
+        167.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "单一私钥开关切换两种认证。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "auth-password",
+      "target": [
+        24.0,
+        271.0,
+        167.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "单一下拉选择器。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "auth-key",
+      "target": [
+        199.0,
+        271.0,
+        167.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "单一私钥开关切换两种认证。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "auth-key",
+      "target": [
+        199.0,
+        271.0,
+        167.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "单一下拉选择器。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "key-pem",
+      "target": [
+        24.0,
+        351.0,
+        342.0,
+        84.0
+      ],
+      "actual": [
+        16.0,
+        603.0,
+        358.0,
+        80.0
+      ],
+      "delta": [
+        -8.0,
+        252.0,
+        16.0,
+        -4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "key-pem",
+      "target": [
+        24.0,
+        351.0,
+        342.0,
+        84.0
+      ],
+      "actual": [
+        16,
+        1082.8125,
+        358,
+        122
+      ],
+      "delta": [
+        -8.0,
+        731.8125,
+        16.0,
+        38.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "paste-key",
+      "target": [
+        24.0,
+        445.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        683.0,
+        358.0,
+        48.0
+      ],
+      "delta": [
+        -8.0,
+        238.0,
+        16.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "有本机粘贴按钮。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "paste-key",
+      "target": [
+        24.0,
+        445.0,
+        342.0,
+        48.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "允许系统粘贴，缺独立粘贴按钮。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "passphrase",
+      "target": [
+        24.0,
+        527.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        747.0,
+        358.0,
+        56.0
+      ],
+      "delta": [
+        -8.0,
+        220.0,
+        16.0,
+        8.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "passphrase",
+      "target": [
+        24.0,
+        527.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        1239.8125,
+        358,
+        46
+      ],
+      "delta": [
+        -8.0,
+        712.8125,
+        16.0,
+        -2.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "private-key",
+      "shell": "Flutter",
+      "anchor": "connect",
+      "target": [
+        24.0,
+        589.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        823.0,
+        358.0,
+        48.0
+      ],
+      "delta": [
+        -8.0,
+        234.0,
+        16.0,
+        0.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": "空 PEM 时按钮禁用。"
+    },
+    {
+      "state": "private-key",
+      "shell": "Tauri",
+      "anchor": "connect",
+      "target": [
+        24.0,
+        589.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        1297.8125,
+        175,
+        44
+      ],
+      "delta": [
+        -8.0,
+        708.8125,
+        -167.0,
+        -4.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": "空 PEM 按钮视觉启用，实际命令未调用。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Flutter",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 47pt inset，无原生状态栏。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Tauri",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中顶部 env=47pt，内容留白并遮挡滚动区域，无原生状态栏。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Flutter",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 34pt inset，无 Home indicator。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Tauri",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中底部 env=34pt，无 Home indicator。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Flutter",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "保留普通 SSH 页头，阻断标题在正文。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Tauri",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "原全局页头隐藏，阻断标题在正文。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Flutter",
+      "anchor": "changed-warning",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        84.0
+      ],
+      "actual": [
+        16.0,
+        160.0,
+        358.0,
+        90.0
+      ],
+      "delta": [
+        -8.0,
+        37.0,
+        16.0,
+        6.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "key-changed",
+      "shell": "Tauri",
+      "anchor": "changed-warning",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        84.0
+      ],
+      "actual": [
+        16,
+        111,
+        358,
+        90.59375
+      ],
+      "delta": [
+        -8.0,
+        -12.0,
+        16.0,
+        6.59375
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "key-changed",
+      "shell": "Flutter",
+      "anchor": "target-card",
+      "target": [
+        24.0,
+        219.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "目标与新旧指纹同卡，独立边框缺失。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Tauri",
+      "anchor": "target-card",
+      "target": [
+        24.0,
+        219.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "目标与新旧指纹同卡，独立边框缺失。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Flutter",
+      "anchor": "changed-keys",
+      "target": [
+        24.0,
+        283.0,
+        342.0,
+        167.0
+      ],
+      "actual": [
+        16.0,
+        270.0,
+        358.0,
+        258.0
+      ],
+      "delta": [
+        -8.0,
+        -13.0,
+        16.0,
+        91.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "key-changed",
+      "shell": "Tauri",
+      "anchor": "changed-keys",
+      "target": [
+        24.0,
+        283.0,
+        342.0,
+        167.0
+      ],
+      "actual": [
+        16,
+        213.59375,
+        358,
+        276
+      ],
+      "delta": [
+        -8.0,
+        -69.40625,
+        16.0,
+        109.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "key-changed",
+      "shell": "Flutter",
+      "anchor": "previous-key-fingerprint",
+      "target": [
+        36.0,
+        336.0,
+        318.0,
+        34.0
+      ],
+      "actual": [
+        33.0,
+        320.0,
+        324.0,
+        63.0
+      ],
+      "delta": [
+        -3.0,
+        -16.0,
+        6.0,
+        29.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "包含算法及旧指纹。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Tauri",
+      "anchor": "previous-key-fingerprint",
+      "target": [
+        36.0,
+        336.0,
+        318.0,
+        34.0
+      ],
+      "actual": [
+        33,
+        264.59375,
+        324,
+        54
+      ],
+      "delta": [
+        -3.0,
+        -71.40625,
+        6.0,
+        20.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "包括标签及旧指纹，无算法。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Flutter",
+      "anchor": "presented-key-fingerprint",
+      "target": [
+        36.0,
+        408.0,
+        318.0,
+        34.0
+      ],
+      "actual": [
+        33.0,
+        393.0,
+        324.0,
+        63.0
+      ],
+      "delta": [
+        -3.0,
+        -15.0,
+        6.0,
+        29.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "包含算法及新指纹。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Tauri",
+      "anchor": "presented-key-fingerprint",
+      "target": [
+        36.0,
+        408.0,
+        318.0,
+        34.0
+      ],
+      "actual": [
+        33,
+        334.59375,
+        324,
+        54
+      ],
+      "delta": [
+        -3.0,
+        -73.40625,
+        6.0,
+        20.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "包括标签及新指纹，无算法。"
+    },
+    {
+      "state": "key-changed",
+      "shell": "Flutter",
+      "anchor": "recheck",
+      "target": [
+        24.0,
+        466.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        548.0,
+        358.0,
+        48.0
+      ],
+      "delta": [
+        -8.0,
+        82.0,
+        16.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "key-changed",
+      "shell": "Tauri",
+      "anchor": "recheck",
+      "target": [
+        24.0,
+        466.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        505.59375,
+        358,
+        44
+      ],
+      "delta": [
+        -8.0,
+        39.59375,
+        16.0,
+        -4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "key-changed",
+      "shell": "Flutter",
+      "anchor": "keep-previous-trust",
+      "target": [
+        24.0,
+        526.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        604.0,
+        358.0,
+        48.0
+      ],
+      "delta": [
+        -8.0,
+        78.0,
+        16.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "key-changed",
+      "shell": "Tauri",
+      "anchor": "keep-previous-trust",
+      "target": [
+        24.0,
+        526.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        557.59375,
+        358,
+        44
+      ],
+      "delta": [
+        -8.0,
+        31.59375,
+        16.0,
+        -4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Flutter",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 47pt inset，无原生状态栏。"
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Tauri",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中顶部 env=47pt，内容留白并遮挡滚动区域，无原生状态栏。"
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Flutter",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 34pt inset，无 Home indicator。"
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Tauri",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中底部 env=34pt，无 Home indicator。"
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Flutter",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": [
+        0.0,
+        47,
+        390.0,
+        56.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "≤2pt",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Tauri",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "可见的是全局品牌栏加路由标题，缺画板所示的带返回键页头。"
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Flutter",
+      "anchor": "back",
+      "target": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        0.0,
+        47.0,
+        56.0,
+        56.0
+      ],
+      "delta": [
+        -16.0,
+        -6.0,
+        12.0,
+        12.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Tauri",
+      "anchor": "back",
+      "target": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "无当前页返回键，可通过全局「看板」回首页。"
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Flutter",
+      "anchor": "trust-preserved",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        66.0
+      ],
+      "actual": [
+        16.0,
+        119.0,
+        358.0,
+        64.0
+      ],
+      "delta": [
+        -8.0,
+        -4.0,
+        16.0,
+        -2.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Tauri",
+      "anchor": "trust-preserved",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        66.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Flutter",
+      "anchor": "host",
+      "target": [
+        24.0,
+        263.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        203.0,
+        358.0,
+        56.0
+      ],
+      "delta": [
+        -8.0,
+        -60.0,
+        16.0,
+        8.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Tauri",
+      "anchor": "host",
+      "target": [
+        24.0,
+        263.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        280.8125,
+        358,
+        46
+      ],
+      "delta": [
+        -8.0,
+        17.8125,
+        16.0,
+        -2.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Flutter",
+      "anchor": "username",
+      "target": [
+        24.0,
+        347.0,
+        246.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        347.0,
+        358.0,
+        56.0
+      ],
+      "delta": [
+        -8.0,
+        0.0,
+        112.0,
+        8.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Tauri",
+      "anchor": "username",
+      "target": [
+        24.0,
+        347.0,
+        246.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        496.8125,
+        358,
+        46
+      ],
+      "delta": [
+        -8.0,
+        149.8125,
+        112.0,
+        -2.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Flutter",
+      "anchor": "port",
+      "target": [
+        282.0,
+        347.0,
+        84.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        275.0,
+        358.0,
+        56.0
+      ],
+      "delta": [
+        -266.0,
+        -72.0,
+        274.0,
+        8.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Tauri",
+      "anchor": "port",
+      "target": [
+        282.0,
+        347.0,
+        84.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        388.8125,
+        358,
+        46
+      ],
+      "delta": [
+        -266.0,
+        41.8125,
+        274.0,
+        -2.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Flutter",
+      "anchor": "probe",
+      "target": [
+        24.0,
+        415.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16.0,
+        419.0,
+        358.0,
+        48.0
+      ],
+      "delta": [
+        -8.0,
+        4.0,
+        16.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "previous-trust",
+      "shell": "Tauri",
+      "anchor": "probe",
+      "target": [
+        24.0,
+        415.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        554.8125,
+        107.40625,
+        44
+      ],
+      "delta": [
+        -8.0,
+        139.8125,
+        -234.59375,
+        -4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Flutter",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 47pt inset，无原生状态栏。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Tauri",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中顶部 env=47pt，内容留白并遮挡滚动区域，无原生状态栏。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Flutter",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 34pt inset，无 Home indicator。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Tauri",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中底部 env=34pt，无 Home indicator。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Flutter",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "底层普通 SSH 页头仍在，核验标题在弹窗中。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Tauri",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "沿用普通 SSH 标题，无独立核验页头。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Flutter",
+      "anchor": "back",
+      "target": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "弹窗提供独立取消，底层返回键不可用。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Tauri",
+      "anchor": "back",
+      "target": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "无核验页返回键。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Flutter",
+      "anchor": "target-card",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "核验内容的目标为弹窗内文字，未单独成卡。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Tauri",
+      "anchor": "target-card",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "指纹行包含主机和端口，用户名仍在表单上，缺独立完整目标卡。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Flutter",
+      "anchor": "key-evidence",
+      "target": [
+        24.0,
+        187.0,
+        342.0,
+        122.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "算法和指纹均在共享 SelectableText。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Tauri",
+      "anchor": "key-evidence",
+      "target": [
+        24.0,
+        187.0,
+        342.0,
+        122.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "指纹与原始公钥同一元素，实际完整内容块见诊断坐标。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Flutter",
+      "anchor": "key-fingerprint",
+      "target": [
+        36.0,
+        266.0,
+        318.0,
+        34.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "完整指纹可读，单独布局块缺失。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Tauri",
+      "anchor": "key-fingerprint",
+      "target": [
+        36.0,
+        266.0,
+        318.0,
+        34.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "完整指纹在原始公钥文本块，单独布局块缺失。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Flutter",
+      "anchor": "independent-verification",
+      "target": [
+        24.0,
+        325.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "有可信渠道提示，和目标/算法/指纹同一文字块。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Tauri",
+      "anchor": "independent-verification",
+      "target": [
+        24.0,
+        325.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "有独立核对的勾选说明，无画板所示说明块。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Flutter",
+      "anchor": "trust-confirm",
+      "target": [
+        24.0,
+        383.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        193.4000015258789,
+        510.5,
+        132.5999984741211,
+        48.0
+      ],
+      "delta": [
+        169.4000015258789,
+        127.5,
+        -209.4000015258789,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "弹窗确认按钮。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Tauri",
+      "anchor": "trust-confirm",
+      "target": [
+        24.0,
+        383.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        912.8125,
+        358,
+        48
+      ],
+      "delta": [
+        -8.0,
+        529.8125,
+        16.0,
+        0.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": "同类确认动作由勾选标签触发；在同一表单解锁认证，视口顶部不可命中。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Flutter",
+      "anchor": "trust-cancel",
+      "target": [
+        24.0,
+        443.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        133.20000076293945,
+        510.5,
+        52.20000076293945,
+        48.0
+      ],
+      "delta": [
+        109.20000076293945,
+        67.5,
+        -289.79999923706055,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "弹窗取消按钮。"
+    },
+    {
+      "state": "recheck-trust",
+      "shell": "Tauri",
+      "anchor": "trust-cancel",
+      "target": [
+        24.0,
+        443.0,
+        342.0,
+        48.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "「取消连接」是表单级动作，缺核验状态专属取消。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 47pt inset，无原生状态栏。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中顶部 env=47pt，内容留白并遮挡滚动区域，无原生状态栏。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": [
+        0.0,
+        47,
+        390.0,
+        56.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "≤2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "可见的是全局品牌栏加路由标题，缺画板所示的带返回键页头。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "disconnect",
+      "target": [
+        306.0,
+        53.0,
+        60.0,
+        44.0
+      ],
+      "actual": [
+        337.79999923706055,
+        51.0,
+        52.20000076293945,
+        48.0
+      ],
+      "delta": [
+        31.799999237060547,
+        -2.0,
+        -7.799999237060547,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "按钮位于页头。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "disconnect",
+      "target": [
+        306.0,
+        53.0,
+        60.0,
+        44.0
+      ],
+      "actual": [
+        199,
+        759.8125,
+        175,
+        44
+      ],
+      "delta": [
+        -107.0,
+        706.8125,
+        115.0,
+        0.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": "首屏 y>553，实际产品动作在终端下方。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "terminal-status",
+      "target": [
+        24.0,
+        115.0,
+        342.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "已连接状态与目标分两行，缺同排独立区块。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "terminal-status",
+      "target": [
+        24.0,
+        115.0,
+        342.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "已有状态与目标不同元素，缺合并状态块。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "keyboard-toggle",
+      "target": [
+        322.0,
+        115.0,
+        44.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "无应用内专用键盘收起键。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "keyboard-toggle",
+      "target": [
+        322.0,
+        115.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        16,
+        278.8125,
+        81.609375,
+        44
+      ],
+      "delta": [
+        -306.0,
+        163.8125,
+        37.609375,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "原「收起键盘」在终端上方。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "terminal-panel",
+      "target": [
+        24.0,
+        167.0,
+        342.0,
+        322.0
+      ],
+      "actual": [
+        0.0,
+        167.0,
+        390.0,
+        338.0
+      ],
+      "delta": [
+        -24.0,
+        0.0,
+        48.0,
+        16.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "terminal-panel",
+      "target": [
+        24.0,
+        167.0,
+        342.0,
+        322.0
+      ],
+      "actual": [
+        16,
+        322.8125,
+        358,
+        373
+      ],
+      "delta": [
+        -8.0,
+        155.8125,
+        16.0,
+        51.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "terminal-keys",
+      "target": [
+        24.0,
+        497.0,
+        342.0,
+        44.0
+      ],
+      "actual": [
+        0.0,
+        505.0,
+        390.0,
+        48.0
+      ],
+      "delta": [
+        -24.0,
+        8.0,
+        48.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "仍可在模拟键盘上方看到辅助键。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "terminal-keys",
+      "target": [
+        24.0,
+        497.0,
+        342.0,
+        44.0
+      ],
+      "actual": [
+        16,
+        703.8125,
+        358,
+        44
+      ],
+      "delta": [
+        -8.0,
+        206.8125,
+        16.0,
+        0.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": "首屏 y>553，模拟键盘遮挡。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "key-esc",
+      "target": [
+        24.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        0.0,
+        505.0,
+        48.0,
+        48.0
+      ],
+      "delta": [
+        -24.0,
+        8.0,
+        4.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "key-esc",
+      "target": [
+        24.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        16,
+        703.8125,
+        44.4375,
+        44
+      ],
+      "delta": [
+        -8.0,
+        206.8125,
+        0.4375,
+        0.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "key-tab",
+      "target": [
+        72.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        48.0,
+        505.0,
+        48.06171798706055,
+        48.0
+      ],
+      "delta": [
+        -24.0,
+        8.0,
+        4.061717987060547,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "key-tab",
+      "target": [
+        72.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        64.4375,
+        703.8125,
+        44.8125,
+        44
+      ],
+      "delta": [
+        -7.5625,
+        206.8125,
+        0.8125,
+        0.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "key-up",
+      "target": [
+        120.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        96.06171798706055,
+        505.0,
+        48.0,
+        48.0
+      ],
+      "delta": [
+        -23.938282012939453,
+        8.0,
+        4.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "key-up",
+      "target": [
+        120.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        113.25,
+        703.8125,
+        44,
+        44
+      ],
+      "delta": [
+        -6.75,
+        206.8125,
+        0.0,
+        0.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "key-down",
+      "target": [
+        168.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        144.06171798706055,
+        505.0,
+        48.0,
+        48.0
+      ],
+      "delta": [
+        -23.938282012939453,
+        8.0,
+        4.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "key-down",
+      "target": [
+        168.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        161.25,
+        703.8125,
+        44,
+        44
+      ],
+      "delta": [
+        -6.75,
+        206.8125,
+        0.0,
+        0.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "key-left",
+      "target": [
+        216.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        192.06171798706055,
+        505.0,
+        48.0,
+        48.0
+      ],
+      "delta": [
+        -23.938282012939453,
+        8.0,
+        4.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "key-left",
+      "target": [
+        216.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        209.25,
+        703.8125,
+        44,
+        44
+      ],
+      "delta": [
+        -6.75,
+        206.8125,
+        0.0,
+        0.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "key-right",
+      "target": [
+        264.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        240.06171798706055,
+        505.0,
+        48.0,
+        48.0
+      ],
+      "delta": [
+        -23.938282012939453,
+        8.0,
+        4.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "key-right",
+      "target": [
+        264.0,
+        497.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        257.25,
+        703.8125,
+        44,
+        44
+      ],
+      "delta": [
+        -6.75,
+        206.8125,
+        0.0,
+        0.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "key-ctrl-c",
+      "target": [
+        312.0,
+        497.0,
+        54.0,
+        44.0
+      ],
+      "actual": [
+        288.06171798706055,
+        505.0,
+        65.2054672241211,
+        48.0
+      ],
+      "delta": [
+        -23.938282012939453,
+        8.0,
+        11.205467224121094,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "key-ctrl-c",
+      "target": [
+        312.0,
+        497.0,
+        54.0,
+        44.0
+      ],
+      "actual": [
+        305.25,
+        703.8125,
+        61.0625,
+        44
+      ],
+      "delta": [
+        -6.75,
+        206.8125,
+        7.0625,
+        0.0
+      ],
+      "center_hit": false,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Flutter",
+      "anchor": "system-keyboard",
+      "target": [
+        0.0,
+        553.0,
+        390.0,
+        291.0
+      ],
+      "actual": [
+        0,
+        553,
+        390,
+        291
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "Flutter 测试调整 viewInsets，实际 IME 未验证。"
+    },
+    {
+      "state": "terminal-open",
+      "shell": "Tauri",
+      "anchor": "system-keyboard",
+      "target": [
+        0.0,
+        553.0,
+        390.0,
+        291.0
+      ],
+      "actual": [
+        0,
+        553,
+        390,
+        291
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "WebKit visualViewport 桩并遮罩，实际 IME 未验证。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 47pt inset，无原生状态栏。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中顶部 env=47pt，内容留白并遮挡滚动区域，无原生状态栏。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 34pt inset，无 Home indicator。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中底部 env=34pt，无 Home indicator。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": [
+        0.0,
+        47,
+        390.0,
+        56.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "≤2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "可见的是全局品牌栏加路由标题，缺画板所示的带返回键页头。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "disconnect",
+      "target": [
+        306.0,
+        53.0,
+        60.0,
+        44.0
+      ],
+      "actual": [
+        337.79999923706055,
+        51.0,
+        52.20000076293945,
+        48.0
+      ],
+      "delta": [
+        31.799999237060547,
+        -2.0,
+        -7.799999237060547,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "disconnect",
+      "target": [
+        306.0,
+        53.0,
+        60.0,
+        44.0
+      ],
+      "actual": [
+        199,
+        692.8125,
+        175,
+        44
+      ],
+      "delta": [
+        -107.0,
+        639.8125,
+        115.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "terminal-status",
+      "target": [
+        24.0,
+        115.0,
+        342.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "已连接状态与目标分两行，缺同排独立区块。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "terminal-status",
+      "target": [
+        24.0,
+        115.0,
+        342.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "已有状态与目标不同元素，缺合并状态块。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "keyboard-toggle",
+      "target": [
+        322.0,
+        115.0,
+        44.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "可点击终端聚焦，缺专门键盘操作。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "keyboard-toggle",
+      "target": [
+        322.0,
+        115.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        16,
+        692.8125,
+        175,
+        44
+      ],
+      "delta": [
+        -306.0,
+        577.8125,
+        131.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "原「打开键盘」在终端下方。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "terminal-panel",
+      "target": [
+        24.0,
+        167.0,
+        342.0,
+        523.0
+      ],
+      "actual": [
+        0.0,
+        167.0,
+        390.0,
+        595.0
+      ],
+      "delta": [
+        -24.0,
+        0.0,
+        48.0,
+        72.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "terminal-panel",
+      "target": [
+        24.0,
+        167.0,
+        342.0,
+        523.0
+      ],
+      "actual": [
+        16,
+        322.8125,
+        358,
+        306
+      ],
+      "delta": [
+        -8.0,
+        155.8125,
+        16.0,
+        -217.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "terminal-keys",
+      "target": [
+        24.0,
+        698.0,
+        342.0,
+        44.0
+      ],
+      "actual": [
+        0.0,
+        762.0,
+        390.0,
+        48.0
+      ],
+      "delta": [
+        -24.0,
+        64.0,
+        48.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "terminal-keys",
+      "target": [
+        24.0,
+        698.0,
+        342.0,
+        44.0
+      ],
+      "actual": [
+        16,
+        636.8125,
+        358,
+        44
+      ],
+      "delta": [
+        -8.0,
+        -61.1875,
+        16.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "key-esc",
+      "target": [
+        24.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        0.0,
+        762.0,
+        48.0,
+        48.0
+      ],
+      "delta": [
+        -24.0,
+        64.0,
+        4.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "key-esc",
+      "target": [
+        24.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        16,
+        636.8125,
+        44.4375,
+        44
+      ],
+      "delta": [
+        -8.0,
+        -61.1875,
+        0.4375,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "key-tab",
+      "target": [
+        72.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        48.0,
+        762.0,
+        48.06171798706055,
+        48.0
+      ],
+      "delta": [
+        -24.0,
+        64.0,
+        4.061717987060547,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "key-tab",
+      "target": [
+        72.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        64.4375,
+        636.8125,
+        44.8125,
+        44
+      ],
+      "delta": [
+        -7.5625,
+        -61.1875,
+        0.8125,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "key-up",
+      "target": [
+        120.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        96.06171798706055,
+        762.0,
+        48.0,
+        48.0
+      ],
+      "delta": [
+        -23.938282012939453,
+        64.0,
+        4.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "key-up",
+      "target": [
+        120.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        113.25,
+        636.8125,
+        44,
+        44
+      ],
+      "delta": [
+        -6.75,
+        -61.1875,
+        0.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "key-down",
+      "target": [
+        168.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        144.06171798706055,
+        762.0,
+        48.0,
+        48.0
+      ],
+      "delta": [
+        -23.938282012939453,
+        64.0,
+        4.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "key-down",
+      "target": [
+        168.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        161.25,
+        636.8125,
+        44,
+        44
+      ],
+      "delta": [
+        -6.75,
+        -61.1875,
+        0.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "key-left",
+      "target": [
+        216.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        192.06171798706055,
+        762.0,
+        48.0,
+        48.0
+      ],
+      "delta": [
+        -23.938282012939453,
+        64.0,
+        4.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "key-left",
+      "target": [
+        216.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        209.25,
+        636.8125,
+        44,
+        44
+      ],
+      "delta": [
+        -6.75,
+        -61.1875,
+        0.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "key-right",
+      "target": [
+        264.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        240.06171798706055,
+        762.0,
+        48.0,
+        48.0
+      ],
+      "delta": [
+        -23.938282012939453,
+        64.0,
+        4.0,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "key-right",
+      "target": [
+        264.0,
+        698.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        257.25,
+        636.8125,
+        44,
+        44
+      ],
+      "delta": [
+        -6.75,
+        -61.1875,
+        0.0,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "key-ctrl-c",
+      "target": [
+        312.0,
+        698.0,
+        54.0,
+        44.0
+      ],
+      "actual": [
+        288.06171798706055,
+        762.0,
+        65.2054672241211,
+        48.0
+      ],
+      "delta": [
+        -23.938282012939453,
+        64.0,
+        11.205467224121094,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "key-ctrl-c",
+      "target": [
+        312.0,
+        698.0,
+        54.0,
+        44.0
+      ],
+      "actual": [
+        305.25,
+        636.8125,
+        61.0625,
+        44
+      ],
+      "delta": [
+        -6.75,
+        -61.1875,
+        7.0625,
+        0.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "terminal-tabs",
+      "target": [
+        0.0,
+        754.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "当前路由没有底栏。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "terminal-tabs",
+      "target": [
+        0.0,
+        754.0,
+        390.0,
+        56.0
+      ],
+      "actual": [
+        0,
+        745,
+        390,
+        65
+      ],
+      "delta": [
+        0.0,
+        -9.0,
+        0.0,
+        9.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": "保留四入口固定底栏。"
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "tab-board",
+      "target": [
+        0.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "tab-board",
+      "target": [
+        0.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": [
+        8,
+        750,
+        89,
+        60
+      ],
+      "delta": [
+        8.0,
+        -4.0,
+        -8.5,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "tab-terminal",
+      "target": [
+        97.5,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "tab-terminal",
+      "target": [
+        97.5,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": [
+        103,
+        750,
+        89,
+        60
+      ],
+      "delta": [
+        5.5,
+        -4.0,
+        -8.5,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "tab-network",
+      "target": [
+        195.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "tab-network",
+      "target": [
+        195.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": [
+        198,
+        750,
+        89,
+        60
+      ],
+      "delta": [
+        3.0,
+        -4.0,
+        -8.5,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Flutter",
+      "anchor": "tab-settings",
+      "target": [
+        292.5,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "terminal-closed",
+      "shell": "Tauri",
+      "anchor": "tab-settings",
+      "target": [
+        292.5,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": [
+        293,
+        750,
+        89,
+        60
+      ],
+      "delta": [
+        0.5,
+        -4.0,
+        -8.5,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 47pt inset，无原生状态栏。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "system-status",
+      "target": [
+        0.0,
+        0.0,
+        390.0,
+        47.0
+      ],
+      "actual": [
+        0,
+        0,
+        390,
+        47
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中顶部 env=47pt，内容留白并遮挡滚动区域，无原生状态栏。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "模拟 34pt inset，无 Home indicator。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "system-bottom",
+      "target": [
+        0.0,
+        810.0,
+        390.0,
+        34.0
+      ],
+      "actual": [
+        0,
+        810,
+        390,
+        34
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "center_hit": null,
+      "result": "模拟区域",
+      "note": "临时 CSS 中底部 env=34pt，无 Home indicator。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": ""
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "app-header",
+      "target": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "可见的是全局品牌栏加路由标题，缺画板所示的带返回键页头。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "active-ssh",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "普通 SSH 活动页没有设置入口。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "active-ssh",
+      "target": [
+        24.0,
+        123.0,
+        342.0,
+        44.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "往返保持同一会话，设置页没有活动会话指示。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "target-card",
+      "target": [
+        24.0,
+        177.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "状态缺失。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "target-card",
+      "target": [
+        24.0,
+        177.0,
+        342.0,
+        52.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "设置页没有 SSH 目标卡。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "font-size",
+      "target": [
+        24.0,
+        267.0,
+        342.0,
+        48.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "普通 SSH 活动页没有设置入口，状态缺失。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "font-size",
+      "target": [
+        24.0,
+        267.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        31,
+        231.8125,
+        328,
+        46
+      ],
+      "delta": [
+        7.0,
+        -35.1875,
+        -14.0,
+        -2.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "save-font-size",
+      "target": [
+        24.0,
+        327.0,
+        342.0,
+        48.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "普通 SSH 活动页没有设置入口，状态缺失。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "save-font-size",
+      "target": [
+        24.0,
+        327.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        31,
+        277.8125,
+        81.609375,
+        44
+      ],
+      "delta": [
+        7.0,
+        -49.1875,
+        -260.390625,
+        -4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "transfer-settings",
+      "target": [
+        24.0,
+        391.0,
+        342.0,
+        48.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "普通 SSH 活动页没有设置入口，状态缺失。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "transfer-settings",
+      "target": [
+        24.0,
+        391.0,
+        342.0,
+        48.0
+      ],
+      "actual": [
+        16,
+        370.8125,
+        118.296875,
+        44
+      ],
+      "delta": [
+        -8.0,
+        -20.1875,
+        -223.703125,
+        -4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "settings-tabs",
+      "target": [
+        0.0,
+        754.0,
+        390.0,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "普通 SSH 活动页没有设置入口，状态缺失。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "settings-tabs",
+      "target": [
+        0.0,
+        754.0,
+        390.0,
+        56.0
+      ],
+      "actual": [
+        0,
+        745,
+        390,
+        65
+      ],
+      "delta": [
+        0.0,
+        -9.0,
+        0.0,
+        9.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "tab-board",
+      "target": [
+        0.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "普通 SSH 活动页没有设置入口，状态缺失。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "tab-board",
+      "target": [
+        0.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": [
+        8,
+        750,
+        89,
+        60
+      ],
+      "delta": [
+        8.0,
+        -4.0,
+        -8.5,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "tab-terminal",
+      "target": [
+        97.5,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "普通 SSH 活动页没有设置入口，状态缺失。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "tab-terminal",
+      "target": [
+        97.5,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": [
+        103,
+        750,
+        89,
+        60
+      ],
+      "delta": [
+        5.5,
+        -4.0,
+        -8.5,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "tab-network",
+      "target": [
+        195.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "普通 SSH 活动页没有设置入口，状态缺失。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "tab-network",
+      "target": [
+        195.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": [
+        198,
+        750,
+        89,
+        60
+      ],
+      "delta": [
+        3.0,
+        -4.0,
+        -8.5,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    },
+    {
+      "state": "settings-active",
+      "shell": "Flutter",
+      "anchor": "tab-settings",
+      "target": [
+        292.5,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": null,
+      "delta": null,
+      "center_hit": null,
+      "result": "未测／无同类锚点",
+      "note": "普通 SSH 活动页没有设置入口，状态缺失。"
+    },
+    {
+      "state": "settings-active",
+      "shell": "Tauri",
+      "anchor": "tab-settings",
+      "target": [
+        292.5,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "actual": [
+        293,
+        750,
+        89,
+        60
+      ],
+      "delta": [
+        0.5,
+        -4.0,
+        -8.5,
+        4.0
+      ],
+      "center_hit": true,
+      "result": "超过 2pt",
+      "note": ""
+    }
+  ]
+}

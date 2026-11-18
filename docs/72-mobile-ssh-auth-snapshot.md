@@ -35,47 +35,48 @@ Flutter 在 Widget Navigator 上复现旧版断开后边缘拖动无法开始，
 
 ## 恢复与回滚
 
-在已有检查点对象的干净工作树恢复 R23。若本地缺对象，先从发布的草稿分支 `codex/ssh-mobile-auth-integration` 取回，再核对固定 SHA。
+### 本地复跑
+
+从仓库根目录运行。产品检查点为 `4dc37dd`，本地复跑固定到 `21f010a`。两个提交在 `validation/` 下只有夹具运行器有差异。新克隆若缺固定对象，先从 `origin` 取交付分支，再按完整 SHA 校验。脚本把固定源码导出到临时目录，当前工作树保留在原位。
+
+准备已安装的 Flutter 3.47.9（framework `c197ca5199`）、Python 3.12 或更高版本及 `venv`、OpenSSH `ssh-keygen`、Node 和 npm。验证使用 Node 24.22.2、npm 12.2.1。依赖下载需可访问 pub.dev、PyPI 和 npm 注册表。Flutter 的 `ci.py prepare` 需要一个尚不存在的目标目录，它使用 SDK 生成隔离工程，校验并准备 `terminal_view` 参考渲染器和 IME 观测补丁。夹具运行器自行创建虚拟环境和临时回环身份。
+
+```sh
+(
+  set -e
+  replay=21f010af03705e5b272e78cc009e7a852381fcf0
+  if ! git cat-file -e "${replay}^{commit}" 2>/dev/null; then
+    git fetch origin refs/heads/codex/ssh-mobile-auth-integration
+  fi
+  git cat-file -e "${replay}^{commit}"
+
+  isolated="$(mktemp -d)"
+  src="$isolated/source"
+  project="$isolated/flutter-app"
+  mkdir "$src"
+  git archive "$replay" validation > "$isolated/source.tar"
+  tar -xf "$isolated/source.tar" -C "$src"
+  printf '复跑目录 %s\n' "$isolated"
+  flutter --version
+
+  (cd "$src/validation/tauri" && npm ci && npm test && npm run build)
+  python3 "$src/validation/flutter/tool/ci.py" prepare --destination "$project"
+  (cd "$project" && flutter pub get --enforce-lockfile)
+  python3 "$src/validation/flutter/tool/direct_ssh_fixture_runner.py" --project "$project"
+)
+```
+
+Flutter 四组依次通过 32 项普通 SSH、2 项换钥、5 项手机认证与 6 项断开和返回。运行器还独立检查服务端认证、PTY、输入和密钥变化时的认证门槛。
+
+### 原生 CI 复验
+
+原生作业在 GitHub Actions 内准备 Flutter SDK，并执行 `candidate.py apply` 与 `verify-lock`。候选依赖只允许在 CI 生成的工程中应用。本地 Widget 复跑使用上面的参考依赖。
+
+恢复原生批次时，从同一固定产品提交 `4dc37dd` 选择目标平台，推送一条尚未使用的验收分支。设置 `platform=ios` 触发同一 iOS 工作流的两壳作业。设置 `platform=android` 触发两个 Android 工作流。推送即调度一次。 [iOS 工作流](../.github/workflows/direct-ssh-ios.yml) · [Flutter Android 工作流](../.github/workflows/direct-ssh-android.yml) · [Tauri Android 工作流](../.github/workflows/tauri-android-direct-ssh.yml)
 
 ```sh
 checkpoint=4dc37dd3d9c1c2df75b82cc432d0e1c28956d689
 git cat-file -e "${checkpoint}^{commit}"
-git switch -c codex/replay/mobile-ssh-auth-r23 "$checkpoint"
-git rev-parse HEAD
-```
-
-本地先复跑 Tauri Node 和生产构建。Flutter 使用已安装的 3.47.9 SDK，Python 在独立环境准备回环夹具依赖。使用冻结源码准备隔离工程，从交付草稿分支取已更新的夹具运行器。运行前核对草稿里的运行器包含桌面普通 SSH、换钥、手机认证和断开返回四组测试，数量应为 32、2、5 和 6。复跑只使用隔离的环回身份。
-
-```sh
-(
-  cd validation/tauri
-  npm ci
-  npm test
-  npm run build
-)
-
-draft_ref=codex/ssh-mobile-auth-integration
-git merge-base --is-ancestor "$checkpoint" "$draft_ref"
-git diff --exit-code "$checkpoint" "$draft_ref" -- validation/flutter/lib validation/flutter/test validation/tauri/src validation/remote-harness
-git show "${draft_ref}:validation/flutter/tool/direct_ssh_fixture_runner.py"
-
-isolated="$(mktemp -d)"
-project="$isolated/flutter-app"
-runner_tree="$isolated/r23-draft"
-git worktree add --detach "$runner_tree" "$draft_ref"
-python3 validation/flutter/tool/ci.py prepare --destination "$project"
-python3 validation/flutter/tool/candidate.py apply --destination "$project"
-(
-  cd "$project"
-  flutter pub get
-)
-python3 "$runner_tree/validation/flutter/tool/direct_ssh_fixture_runner.py" --project "$project"
-git worktree remove "$runner_tree"
-```
-
-恢复原生批次时，从同一固定提交选择目标平台，推送一条尚未使用的验收分支。设置 `platform=ios` 触发同一 iOS 工作流的两壳作业。设置 `platform=android` 触发两个 Android 工作流。推送即调度一次。 [iOS 工作流](../.github/workflows/direct-ssh-ios.yml) · [Flutter Android 工作流](../.github/workflows/direct-ssh-android.yml) · [Tauri Android 工作流](../.github/workflows/tauri-android-direct-ssh.yml)
-
-```sh
 platform=ios
 attempt=r23-r1
 git push origin "${checkpoint}:refs/heads/codex/acceptance/direct-ssh-$platform-$attempt"

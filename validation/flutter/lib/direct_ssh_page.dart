@@ -412,6 +412,14 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       ])));
   }
   void returnAfterDisconnect() => Navigator.pop(context);
+  void backFromMobileAuth() {
+    if (busy) {
+      stop(message: '连接已取消；已发送的数据无法撤回。', notify: false);
+    } else {
+      cancelKeyPaste(); secret.clear(); passphrase.clear();
+    }
+    setState(() { mobileAuth = false; });
+  }
   Widget mobileTargetForm() => ListView(key: const ValueKey('direct-form'), padding: EdgeInsets.fromLTRB(mobileMargin, 20, mobileMargin, 24), children: [
     if (userDisconnected && !busy) ...[
       Container(key: const ValueKey('direct-closed-feedback'), constraints: const BoxConstraints(minHeight: 66),
@@ -540,17 +548,18 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   Widget build(BuildContext context) => PopScope<void>(
     canPop: hostKeyChange == null,
     onPopInvokedWithResult: (didPop, result) {
+      if (didPop && busy) stop(notify: false);
       if (didPop && userDisconnected) { userDisconnected = false; widget.onReturnAfterDisconnect?.call(); }
     },
     child: Scaffold(
       appBar: mobileLayout && !connected ? mobileHeader(hostKeyChange != null ? '主机指纹发生变化' : mobileAuth && !hostKeyReviewRequired ? 'SSH 账号认证' : '普通 SSH',
-        canGoBack: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false), showStop: busy, onBack: mobileAuth && !hostKeyReviewRequired ? () { setState(() { mobileAuth = false; secret.clear(); passphrase.clear(); }); }
+        canGoBack: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false), showStop: busy, onBack: mobileAuth && !hostKeyReviewRequired ? backFromMobileAuth
           : userDisconnected ? returnAfterDisconnect : null)
         : AppBar(title: const Text('普通 SSH'),
       automaticallyImplyLeading: hostKeyChange == null,
       leading: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false)
         ? MergeSemantics(child: Semantics(identifier: 'direct-back', label: '返回主机列表', child: BackButton(onPressed: mobileLayout && mobileAuth && !connected
-          ? () { setState(() { mobileAuth = false; secret.clear(); passphrase.clear(); }); } : null))) : null,
+          ? backFromMobileAuth : null))) : null,
       actions: [if (busy || connected) TextButton(onPressed: () { userDisconnected = mobileLayout && connected; mobileAuth = false; stop(message: '已断开；未重放输入。'); }, child: const Text('断开'))]),
     body: SafeArea(child: hostKeyChange != null ? (mobileLayout ? mobileHostKeyChangeView() : hostKeyChangeView()) : connected ? LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(primary: false, child: SizedBox(

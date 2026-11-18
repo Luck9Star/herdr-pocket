@@ -432,7 +432,7 @@ void main() {
             'statusCode': statusCode,
             'appLifecycle': binding.lifecycleState?.name ?? 'unknown',
             'probeEnabled': probe.evaluate().length == 1
-                ? tester.widget<FilledButton>(probe).onPressed != null
+                ? iosDiagnosticButtonEnabled(tester.widget<Widget>(probe))
                 : null,
             'trustDialogVisible': find
                 .byKey(const ValueKey('direct-trust-key'))

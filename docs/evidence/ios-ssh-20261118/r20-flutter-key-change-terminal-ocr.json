@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "96dfc2c6a9a708b6ebed066b57445dfa674042857b78f2bd7def5ae17e4f60e7",
+  "imageSize": [
+    828,
+    1792
+  ],
+  "terminalBounds": [
+    0,
+    336,
+    828,
+    758
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "PAST DUSK STAR HEAT DECK DECK LAMP SEAT",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 2,
+  "ocrPageSegmentationMode": 11,
+  "proofSequenceVisible": true
+}

@@ -1,8 +1,18 @@
 # iOS 普通 SSH 与主机换钥验收
 
-状态：2026-11-18，**R19 同源批次两壳普通 SSH 与换钥均通过；Tauri 两张活动终端图中标题、顶栏与系统状态栏分离**。Tauri 自然截图底部按钮边框仍有局部遮挡，见下述范围；R18、R17、R15 及更早结果保留为历史。
+状态：2026-11-18，**R20 官方批次（运行 44320783638，源码 `d28ed26`）：Flutter 普通 SSH 与换钥均通过（返回首页仅在普通场景验证）；Tauri 普通 SSH 通过、底部按钮遮挡已消除，换钥在重新冷启后 `native_home_identity_unproven` 失败，待定向复验**。R19 同源批次两壳普通 SSH 与换钥均通过，作为对照保留；R18、R17、R15 及更早结果保留为历史。
 
 范围为 GitHub 托管 macOS 上的受控 iOS Simulator、临时 loopback SSH 和密码认证。模拟器安装、应用界面、服务端协议、完整测试通过及最终画面复核分别记录；本页不证明 iPhone 真机、手工／中文 IME、外部网络、生产主机或五平台支持。
+
+## R20 官方结果：Flutter 通过；Tauri 换钥冷启失败待复验
+
+同一源码 [`d28ed2603677147907e24bf392b6ab9aa25aeef7`](https://github.com/Luck9Star/herdr-pocket/commit/d28ed2603677147907e24bf392b6ab9aa25aeef7)（与本地验收提交 `20aeb16` 同 patch；产品布局修复 [`19f867e`](https://github.com/Luck9Star/herdr-pocket/commit/19f867e) 与本地 `ba8fcb7` 同 patch，基线 `f378e9a`）的 [Actions 运行 44320783638](https://github.com/Luck9Star/herdr-pocket/actions/runs/44320783638)：[Flutter 作业 134858825151](https://github.com/Luck9Star/herdr-pocket/actions/runs/44320783638/job/134858825151) 通过至 `returned_home`；[Tauri 作业 134858825773](https://github.com/Luck9Star/herdr-pocket/actions/runs/44320783638/job/134858825773) 普通案例通过、换钥失败，整批 `failed`。完整映射见 [R20 官方证据归档索引](evidence/ios-ssh-20261118/r20-official-index.json)。
+
+Flutter 普通与换钥均通过：换钥 ABBB 四连接可数（探测、拒绝、重探均零认证；确认 B 后末条认证、PTY/shell、回显、关闭）；两张终端原图 OCR 三判据通过；清理五项全真、`peerClosedBeforeDriverExit=true`；`physicalImeVerified=false`。顶层 `deviceStage=returned_home` 与首页返回验证仅属普通场景，换钥场景未测试返回首页。
+
+Tauri 普通案例通过：AA 两连接可数（探测零认证；末条认证、PTY/shell、9 字节输入／102 字节回显、主动断开关闭）；OCR 三判据通过。换钥在 `key_change_form` 阶段失败：重新冷启后 317ms 首页身份未证实（`native_home_identity_unproven`、`error=tauri_ios_native_check_failed`），未进入表单；服务端 before/afterCleanup 均 0 连接无残留。失败阶段与 SSH 协议无关；仅 Tauri 换钥定向复验待做。
+
+R20 官方原图同时收口 R19 遗留的底部按钮遮挡：独立像素测量（非控件推算）R19 与 R20 两张 Tauri 普通终端原图底部导航上缘同为第 2571 行（约 857 逻辑点）；R19 按钮边框被导航截断不可见（文字行延至 2545，与 R19 记录的约 8 点遮挡一致），R20 两按钮下边框行 2543–2545 完整可见，距导航上缘净空约 26px（约 8.7 逻辑点）；辅助键行整体上移约 20 逻辑点，PTY 25×46→24×46。同尺寸本地模拟 IPC WebKit 前后图已入库（[r20-webkit-before-ios-r19.png](evidence/ios-ssh-20261118/r20-webkit-before-ios-r19.png)、[r20-webkit-after-ios-r19.png](evidence/ios-ssh-20261118/r20-webkit-after-ios-r19.png)，几何数值与完整 JSON SHA 见 [r20-local-webkit-index.json](evidence/ios-ssh-20261118/r20-local-webkit-index.json)）；该夹具为模拟传输，不代表 iOS 系统证据。Flutter 侧同批另有协作方交接报告的 37 件定向既有测试与 3 个几何探针随源运行（本审计未独立复算，仓库可数的集成 `testWidgets` 为 18 项，口径以协作方报告为准）；本机 Node 658／Python 73 项等见 R19 记录，不重复罗列。
 
 ## R19 同源结果：两壳通过，活动标题与顶栏分离
 

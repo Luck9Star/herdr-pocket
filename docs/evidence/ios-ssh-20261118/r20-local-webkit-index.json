@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "round": "R20",
+  "layer": "local-webkit-fixture",
+  "purpose": "同尺寸本地模拟 IPC WebKit 前后布局对照，佐证 19f867e 底部按钮修复；非 iOS Simulator/真机系统证据，SSH 为模拟传输（不建网络连接）",
+  "productChange": {
+    "before": "f378e9a08085eb67487ce66aa339af58edac5016",
+    "after": "19f867e（与本地 ba8fcb7 同 patch-id 6905fea4db24fdc145c1237de3140e2640570f67）",
+    "acceptanceCode": "d28ed2603677147907e24bf392b6ab9aa25aeef7（与本地 20aeb16 同 patch-id 7e2ad6e4a11341d4f4e51d1d6740f4d58bc25268）"
+  },
+  "environment": {
+    "host": "macOS 本机",
+    "playwright": "1.62.1",
+    "webkitEngine": "26.5",
+    "xterm": "6.0.0（完整 Vite 产品入口，真实字体排版）",
+    "viewport": "440×956 逻辑点 @3x（1320×2868 px），14px xterm 字号",
+    "sshTransport": "页面初始化脚本模拟 Tauri IPC：连接、探测、终端输出、关闭均为夹具；仅发送合成认证占位符与终端词串"
+  },
+  "files": [
+    { "path": "r20-webkit-before-ios-r19.png", "bytes": 232630, "sha256": "ea87bc505cb08b30d8bb048a010da429e87c5334a514ddba6bd6dbd5f0a62b56", "source": "/tmp/herdr-pocket-r20-tauri/before-webkit-ios-r19.png，基线 f378e9a 自然态截图" },
+    { "path": "r20-webkit-after-ios-r19.png", "bytes": 232204, "sha256": "e539a813ee6d724edb64e720172a0e9fb2663c146e0611299b483c1083da80b4", "source": "/tmp/herdr-pocket-r20-tauri/after-webkit-ios-r19.png，19f867e 同补丁自然态截图" }
+  ],
+  "sourceJsonSha256": {
+    "before-webkit.json": "263d9ec3138917384a9418ea9a75958ad6d5393dc69f28cfcd69f8ae057d7404",
+    "after-webkit.json": "dcf04055977b42a1436896ec49deadebb34c49e3e6ba56bfa2e1af591aaefeeb",
+    "note": "完整 8 场景 JSON 留在 /tmp/herdr-pocket-r20-tauri/，不入库；此处仅记 SHA 与精简数值"
+  },
+  "iosR19Scenario": {
+    "before": {
+      "natural": { "scrollY": 0, "pty": "25×46", "sshDisconnectBottom": 861, "bottomHit": false, "geometryRequiresScroll": true, "note": ".route-tabs 上缘 y=857，按钮下缘 861 压入导航约 4pt（本地 WebKit 排版；R19 iOS Simulator 官方约 8pt，两者排版不同不可逐点等同）" },
+      "scrolled": { "scrollY": 53, "sshDisconnectBottom": 808, "bottomHit": true },
+      "syntheticKeyboard": { "visualHeight": 556, "pty": "22×46", "sshDisconnectBottom": 806.8125, "bottomHit": true }
+    },
+    "after": {
+      "natural": { "scrollY": 0, "pty": "24×46", "sshDisconnectBottom": 848.8125, "bottomHit": true, "clearanceToNavTop": 8.1875, "geometryRequiresScroll": false },
+      "scrolled": { "scrollY": 41, "sshDisconnectBottom": 807.8125, "bottomHit": true },
+      "syntheticKeyboard": { "visualHeight": 556, "pty": "22×46", "sshDisconnectBottom": 806.8125, "bottomHit": true }
+    },
+    "bothStates": { "keyboardFocusedAndDismissed": true, "helperKeyRecorded": true, "helperInput": "mouse", "disconnected": true, "dashboard": true }
+  },
+  "otherScenariosCompact": [
+    { "scenario": "ios-smaller 390×844@3x", "pty": "22×40 → 17×40", "geometryRequiresScroll": "true → false", "scrollProbe": "115 → 41", "note": "AFTER 自然态 disconnect 距导航 y=745 约 8.2pt，命中 true" },
+    { "scenario": "ios-compact 375×667@2x", "pty": "17×38 → 10×38", "geometryRequiresScroll": "true → true", "scrollProbe": "178 → 70", "note": "AFTER 自然态仍重叠约 20.8pt 需滚动；滚动后命中 true" },
+    { "scenario": "ios-short 320×500@2x", "pty": "12×32 → 10×32", "geometryRequiresScroll": "true → true", "scrollProbe": "270 → 237", "note": "滚动后命中 true" },
+    { "scenario": "ios-landscape 500×375@2x", "pty": "8×52 前后不变", "geometryRequiresScroll": false, "note": "交互通过" },
+    { "scenario": "ios-wide 720×900@2x", "pty": "29×78 前后不变", "geometryRequiresScroll": false, "note": "route position=static，交互通过" },
+    { "scenario": "android 390×844@2x", "pty": "22×40 前后不变", "geometryRequiresScroll": false, "note": "交互通过" },
+    { "scenario": "native-other 440×956@3x", "pty": "25×46 前后不变", "geometryRequiresScroll": false, "note": "交互通过" }
+  ],
+  "localTests": {
+    "baselineMobileViewportTest": "8 pass / 0 fail（f378e9a）",
+    "fixedMobileViewportTest": "9 pass / 0 fail（19f867e 同补丁）",
+    "note": "node --test 单文件实跑；一次误跑 `node --test test/` 的泛化失败不作为产品结论"
+  },
+  "officialCrossRef": {
+    "r19BaselineImages": ["r19-tauri-ordinary-terminal.png", "r19-tauri-key-change-terminal.png"],
+    "r20OfficialIndex": "r20-official-index.json",
+    "flutterCollaboratorNote": "Flutter 协作方交接口径：37 件定向既有测试与 3 个几何探针随源运行；本审计未独立复算该计数，仓库可见为 integration_test 18 个 testWidgets 与 test/ 约 273 个 test()，与本口径不一致处以协作方报告为准"
+  },
+  "status": "R20 iOS 官方结果见 r20-official-index.json（Flutter 通过；Tauri 换钥定向复验待做）；本文件仅覆盖本地 WebKit 布局夹具层"
+}

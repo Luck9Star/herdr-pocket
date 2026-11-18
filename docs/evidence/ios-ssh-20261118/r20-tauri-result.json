@@ -1,0 +1,871 @@
+{
+  "schemaVersion": 1,
+  "status": "failed",
+  "platform": "ios-simulator",
+  "client": "tauri",
+  "sourceSHA": "d28ed2603677147907e24bf392b6ab9aa25aeef7",
+  "scope": "owned_loopback_ordinary_ssh",
+  "stage": "key_change_form",
+  "artifacts": {
+    "ordinary-terminal.png": "6b8df22be6521e2d0b54ea779108aa872dc26d13522d6a9bb68b495b4a50fc12"
+  },
+  "cases": {
+    "ordinary": {
+      "status": "passed",
+      "fingerprint": "SHA256:zz3TYYiG9qXe08BP2a1taA0rWg22OgStzmzQ1kZX0+Q",
+      "fingerprintReviewed": true,
+      "terminalInputReceived": true,
+      "terminalScreenshot": {
+        "imageFile": "ordinary-terminal.png",
+        "imageSha256": "6b8df22be6521e2d0b54ea779108aa872dc26d13522d6a9bb68b495b4a50fc12",
+        "terminalBounds": [
+          48,
+          984,
+          1224,
+          1238
+        ],
+        "targetBounds": [
+          48,
+          738,
+          864,
+          63
+        ],
+        "nativeScale": 3.0,
+        "nativeOwner": {
+          "webWrapperCount": 3,
+          "uniqueWebBoundsCount": 1,
+          "windowFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "webFrames": [
+            [
+              0,
+              0,
+              440,
+              956
+            ],
+            [
+              0,
+              0,
+              440,
+              956
+            ],
+            [
+              0,
+              0,
+              440,
+              956
+            ]
+          ]
+        },
+        "headerBounds": {
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "brandFrame": [
+            62,
+            80,
+            107,
+            24
+          ],
+          "addFrame": [
+            334,
+            80,
+            91,
+            44
+          ],
+          "headingFrame": [
+            16,
+            161,
+            154,
+            30
+          ],
+          "headerBottom": 130,
+          "sameOwner": true
+        },
+        "boundSource": "terminal_control_bounds",
+        "controlBounds": {
+          "dismissFrame": [
+            16,
+            282,
+            82,
+            45
+          ],
+          "sameOwner": true,
+          "helperFrames": [
+            [
+              16,
+              748,
+              45,
+              45
+            ],
+            [
+              64,
+              748,
+              46,
+              45
+            ],
+            [
+              113,
+              748,
+              45,
+              45
+            ],
+            [
+              161,
+              748,
+              45,
+              45
+            ]
+          ]
+        },
+        "candidateTerminalBounds": [
+          0,
+          981,
+          1320,
+          1263
+        ],
+        "targetVisible": true,
+        "expectedTarget": "fixture@127.0.0.1:49583",
+        "systemCapture": "XCUIScreen.main",
+        "noCredentialsVisible": true,
+        "schemaVersion": 1,
+        "imageSize": [
+          1320,
+          2868
+        ],
+        "expectedMarker": "POCKET-ANDROID-SSH-OK",
+        "expectedToken": "TASK DUSK KEPT HAVE LAND BARN FADE HAVE",
+        "markerVisible": true,
+        "tokenVisible": true,
+        "ocrEngine": "tesseract 5.5.4",
+        "ocrAttempts": 1,
+        "ocrPageSegmentationMode": 6,
+        "proofSequenceVisible": true,
+        "criteriaFile": "ordinary-terminal-ocr.json",
+        "criteriaSha256": "77372699cc57ed9a10b94cf2fa8a10e3adaa1b81b85a37e61d5e01bb8848f4d3"
+      },
+      "peer": {
+        "authAccepted": true,
+        "ptyRequested": true,
+        "shellRequested": true,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "connections": 2,
+        "connectionsClosed": true,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            46,
+            27
+          ],
+          [
+            46,
+            26
+          ],
+          [
+            46,
+            27
+          ],
+          [
+            46,
+            26
+          ]
+        ],
+        "connectionEvents": [
+          {
+            "id": 1,
+            "hostKey": "A",
+            "handshakeCompleted": false,
+            "authAttempts": 0,
+            "authAccepted": false,
+            "authSuccesses": 0,
+            "ptyRequests": 0,
+            "shellRequests": 0,
+            "inputBytes": 0,
+            "outputBytes": 0,
+            "markerReceived": false,
+            "sessionClosed": false,
+            "closed": true,
+            "phase": "handshake",
+            "closeReason": "preauth_peer_reset",
+            "handshakeMs": null,
+            "firstAuthMs": null,
+            "closedMs": 382,
+            "hostKeyAlgorithm": "unknown",
+            "clientCipher": "unknown",
+            "serverCipher": "unknown",
+            "socketErrorKind": "connection_reset",
+            "socketErrno": 54,
+            "singleMarkerLineExact": false
+          },
+          {
+            "id": 2,
+            "hostKey": "A",
+            "handshakeCompleted": true,
+            "authAttempts": 1,
+            "authAccepted": true,
+            "authSuccesses": 1,
+            "ptyRequests": 1,
+            "shellRequests": 1,
+            "inputBytes": 9,
+            "outputBytes": 102,
+            "markerReceived": true,
+            "sessionClosed": true,
+            "closed": true,
+            "phase": "shell",
+            "closeReason": "peer_eof",
+            "handshakeMs": 132,
+            "firstAuthMs": 135,
+            "closedMs": 31159,
+            "hostKeyAlgorithm": "rsa-sha2-512",
+            "clientCipher": "aes256-gcm@openssh.com",
+            "serverCipher": "aes256-gcm@openssh.com",
+            "socketErrorKind": null,
+            "socketErrno": null,
+            "singleMarkerLineExact": true
+          }
+        ]
+      },
+      "disconnected": true,
+      "failurePeerObservations": {
+        "beforeCleanup": {
+          "connections": 2,
+          "connectionsClosed": true,
+          "events": [
+            {
+              "id": 1,
+              "authAttempts": 0,
+              "authSuccesses": 0,
+              "ptyRequests": 0,
+              "shellRequests": 0,
+              "inputBytes": 0,
+              "outputBytes": 0,
+              "closedMs": 382,
+              "handshakeCompleted": false,
+              "authAccepted": false,
+              "markerReceived": false,
+              "sessionClosed": false,
+              "closed": true,
+              "singleMarkerLineExact": false,
+              "hostKey": "A",
+              "phase": "handshake",
+              "closeReason": "preauth_peer_reset",
+              "socketErrorKind": "connection_reset"
+            },
+            {
+              "id": 2,
+              "authAttempts": 1,
+              "authSuccesses": 1,
+              "ptyRequests": 1,
+              "shellRequests": 1,
+              "inputBytes": 9,
+              "outputBytes": 102,
+              "handshakeMs": 132,
+              "firstAuthMs": 135,
+              "closedMs": 31159,
+              "handshakeCompleted": true,
+              "authAccepted": true,
+              "markerReceived": true,
+              "sessionClosed": true,
+              "closed": true,
+              "singleMarkerLineExact": true,
+              "hostKey": "A",
+              "phase": "shell",
+              "closeReason": "peer_eof"
+            }
+          ],
+          "truncated": false
+        },
+        "afterCleanup": {
+          "connections": 2,
+          "connectionsClosed": true,
+          "events": [
+            {
+              "id": 1,
+              "authAttempts": 0,
+              "authSuccesses": 0,
+              "ptyRequests": 0,
+              "shellRequests": 0,
+              "inputBytes": 0,
+              "outputBytes": 0,
+              "closedMs": 382,
+              "handshakeCompleted": false,
+              "authAccepted": false,
+              "markerReceived": false,
+              "sessionClosed": false,
+              "closed": true,
+              "singleMarkerLineExact": false,
+              "hostKey": "A",
+              "phase": "handshake",
+              "closeReason": "preauth_peer_reset",
+              "socketErrorKind": "connection_reset"
+            },
+            {
+              "id": 2,
+              "authAttempts": 1,
+              "authSuccesses": 1,
+              "ptyRequests": 1,
+              "shellRequests": 1,
+              "inputBytes": 9,
+              "outputBytes": 102,
+              "handshakeMs": 132,
+              "firstAuthMs": 135,
+              "closedMs": 31159,
+              "handshakeCompleted": true,
+              "authAccepted": true,
+              "markerReceived": true,
+              "sessionClosed": true,
+              "closed": true,
+              "singleMarkerLineExact": true,
+              "hostKey": "A",
+              "phase": "shell",
+              "closeReason": "peer_eof"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    "keyChange": {
+      "status": "failed",
+      "fingerprints": {
+        "A": "SHA256:ERGqzILK8nwK/i+KCcEX/BXzuC049nXYT98mUWYXXBY",
+        "B": "SHA256:iNI/tBCsI6jQVxqgycmOOF9RI9xbGMHC4n+ja8Ef51k"
+      },
+      "failurePeerObservations": {
+        "beforeCleanup": {
+          "connections": 0,
+          "connectionsClosed": true,
+          "events": [],
+          "truncated": false
+        },
+        "afterCleanup": {
+          "connections": 0,
+          "connectionsClosed": true,
+          "events": [],
+          "truncated": false
+        }
+      }
+    }
+  },
+  "cleanup": {
+    "simulatorDeleted": true,
+    "fixturesClosed": true,
+    "privateFilesRemoved": true
+  },
+  "application": {
+    "bundleIdentifier": "dev.herdrpocket.tauriprobe",
+    "executableSha256": "a418ad37872497086ced35437898045ea467605ac5211f703b8450a5bd2097e5",
+    "projectSha256": "40e4f657d615a6bffbd31525c3c7e71223c082a2af0cd45f14f25eafd8611714"
+  },
+  "toolchain": {
+    "xcodeVersion": "16.4",
+    "xcodeBuild": "16F6",
+    "simulatorSDKVersion": "18.5"
+  },
+  "simulator": {
+    "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
+    "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+  },
+  "lastCompletedStage": "key_change_form",
+  "nativeCheckpoint": "key_change_open_add",
+  "homeReadiness": {
+    "ordinary": {
+      "samples": [
+        {
+          "elapsedMs": 239,
+          "state": "shell"
+        },
+        {
+          "state": "ready",
+          "elapsedMs": 3527
+        }
+      ],
+      "outcome": "ready",
+      "strictSampleMs": 401,
+      "waitCalls": 1,
+      "strictSamples": 2,
+      "elapsedMs": 3527
+    },
+    "keyChange": {
+      "strictSampleMs": 315,
+      "outcome": "unexpected",
+      "strictSamples": 1,
+      "waitCalls": 0,
+      "samples": [
+        {
+          "state": "unexpected",
+          "elapsedMs": 317
+        }
+      ],
+      "elapsedMs": 317
+    }
+  },
+  "homeDiagnostics": {
+    "ordinary": {
+      "webViewCount": 3,
+      "windowCount": 2,
+      "knownErrors": {
+        "webProcessError": false,
+        "hostStorageError": false,
+        "dnsError": false,
+        "devURL": false,
+        "loading": false,
+        "browserPreview": false,
+        "connectionError": false
+      },
+      "members": {
+        "brand": {
+          "count": 2,
+          "roles": [
+            "other",
+            "staticText"
+          ]
+        },
+        "emptyHeading": {
+          "count": 0,
+          "roles": []
+        },
+        "homeHeading": {
+          "roles": [],
+          "count": 0
+        },
+        "headerAdd": {
+          "roles": [
+            "button"
+          ],
+          "count": 1
+        },
+        "emptyAdd": {
+          "roles": [],
+          "count": 0
+        },
+        "ordinaryShortcut": {
+          "roles": [],
+          "count": 0
+        },
+        "sshOption": {
+          "count": 2,
+          "roles": [
+            "other",
+            "staticText"
+          ]
+        },
+        "zeroHosts": {
+          "roles": [
+            "staticText"
+          ],
+          "count": 1
+        },
+        "addHeading": {
+          "roles": [],
+          "count": 0
+        }
+      },
+      "unknownVisibleTextCount": 28,
+      "inputCount": 4,
+      "systemAlertCount": 0,
+      "appAlertCount": 0,
+      "appForeground": true,
+      "alertSnapshotFailed": false,
+      "alertMembers": {
+        "localNetwork": false,
+        "allow": false,
+        "ok": false,
+        "deny": false,
+        "automation": false
+      },
+      "knownEmptyHome": false
+    },
+    "keyChange": {
+      "webViewCount": 1,
+      "windowCount": 1,
+      "knownErrors": {
+        "browserPreview": false,
+        "connectionError": false,
+        "dnsError": false,
+        "webProcessError": false,
+        "hostStorageError": false,
+        "devURL": false,
+        "loading": false
+      },
+      "members": {
+        "headerAdd": {
+          "count": 0,
+          "roles": []
+        },
+        "homeHeading": {
+          "roles": [],
+          "count": 0
+        },
+        "brand": {
+          "roles": [],
+          "count": 0
+        },
+        "emptyAdd": {
+          "count": 0,
+          "roles": []
+        },
+        "addHeading": {
+          "roles": [],
+          "count": 0
+        },
+        "emptyHeading": {
+          "count": 0,
+          "roles": []
+        },
+        "ordinaryShortcut": {
+          "count": 0,
+          "roles": []
+        },
+        "sshOption": {
+          "count": 0,
+          "roles": []
+        },
+        "zeroHosts": {
+          "count": 0,
+          "roles": []
+        }
+      },
+      "unknownVisibleTextCount": 4,
+      "inputCount": 1,
+      "systemAlertCount": 0,
+      "appAlertCount": 0,
+      "appForeground": true,
+      "alertSnapshotFailed": false,
+      "alertMembers": {
+        "allow": false,
+        "localNetwork": false,
+        "deny": false,
+        "ok": false,
+        "automation": false
+      },
+      "knownEmptyHome": false
+    }
+  },
+  "navigationTrace": {
+    "ordinary": [
+      {
+        "member": "headerAdd",
+        "selection": "buttonRole",
+        "method": "elementCenter",
+        "performed": true,
+        "geometry": {
+          "fullyVisible": true,
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "enabled": true,
+          "hittable": true,
+          "frame": [
+            334,
+            78,
+            91,
+            44
+          ],
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "role": "button",
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "ownerResolved": true,
+          "centerVisible": true
+        },
+        "targetPresentAfter": true,
+        "afterGeometry": {
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "enabled": true,
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "frame": [
+            334,
+            78,
+            91,
+            44
+          ],
+          "hittable": true,
+          "ownerResolved": true,
+          "centerVisible": true,
+          "fullyVisible": true,
+          "role": "button"
+        },
+        "elapsedMs": 3416,
+        "before": {
+          "page": "emptyHome",
+          "appForeground": true,
+          "inputCount": 0,
+          "formByStructure": false,
+          "formOwnerResolved": false,
+          "sshTitleSeen": false,
+          "credentialsEmpty": true,
+          "windowCount": 1,
+          "webViewCount": 3,
+          "formControls": {
+            "user": {
+              "matches": 0,
+              "owner": false,
+              "reason": "missing",
+              "role": "none"
+            },
+            "probe": {
+              "role": "none",
+              "matches": 0,
+              "owner": false,
+              "reason": "missing"
+            },
+            "port": {
+              "reason": "missing",
+              "role": "none",
+              "owner": false,
+              "matches": 0
+            },
+            "host": {
+              "reason": "missing",
+              "owner": false,
+              "matches": 0,
+              "role": "none"
+            }
+          },
+          "emptyHomeIdentity": true,
+          "addTitleSeen": false,
+          "noKnownErrors": true,
+          "noAlerts": true
+        },
+        "after": {
+          "sshTitleSeen": true,
+          "formOwnerResolved": false,
+          "noKnownErrors": true,
+          "formControls": {
+            "probe": {
+              "role": "none",
+              "owner": false,
+              "reason": "missing",
+              "matches": 0
+            },
+            "user": {
+              "role": "none",
+              "owner": false,
+              "reason": "missing",
+              "matches": 0
+            },
+            "port": {
+              "role": "none",
+              "reason": "missing",
+              "owner": false,
+              "matches": 0
+            },
+            "host": {
+              "owner": false,
+              "reason": "missing",
+              "role": "none",
+              "matches": 0
+            }
+          },
+          "windowCount": 2,
+          "inputCount": 0,
+          "addTitleSeen": true,
+          "credentialsEmpty": true,
+          "appForeground": true,
+          "noAlerts": true,
+          "formByStructure": false,
+          "webViewCount": 3,
+          "emptyHomeIdentity": false,
+          "page": "addChoice"
+        },
+        "outcome": "addChoice"
+      },
+      {
+        "member": "sshChoice",
+        "selection": "buttonRole",
+        "method": "elementCenter",
+        "performed": true,
+        "geometry": {
+          "centerVisible": true,
+          "frame": [
+            179,
+            244,
+            117,
+            45
+          ],
+          "enabled": true,
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "hittable": true,
+          "ownerResolved": true,
+          "fullyVisible": true,
+          "role": "button",
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ]
+        },
+        "targetPresentAfter": false,
+        "afterGeometry": null,
+        "elapsedMs": 1227,
+        "before": {
+          "webViewCount": 3,
+          "formByStructure": false,
+          "noKnownErrors": true,
+          "page": "addChoice",
+          "sshTitleSeen": true,
+          "inputCount": 0,
+          "addTitleSeen": true,
+          "noAlerts": true,
+          "emptyHomeIdentity": false,
+          "appForeground": true,
+          "windowCount": 2,
+          "credentialsEmpty": true,
+          "formControls": {
+            "user": {
+              "role": "none",
+              "matches": 0,
+              "reason": "missing",
+              "owner": false
+            },
+            "host": {
+              "owner": false,
+              "matches": 0,
+              "reason": "missing",
+              "role": "none"
+            },
+            "port": {
+              "matches": 0,
+              "reason": "missing",
+              "role": "none",
+              "owner": false
+            },
+            "probe": {
+              "owner": false,
+              "matches": 0,
+              "role": "none",
+              "reason": "missing"
+            }
+          },
+          "formOwnerResolved": false
+        },
+        "after": {
+          "formOwnerResolved": true,
+          "page": "sshForm",
+          "inputCount": 4,
+          "appForeground": true,
+          "noAlerts": true,
+          "formControls": {
+            "host": {
+              "reason": "matched",
+              "matches": 2,
+              "owner": true,
+              "role": "textField"
+            },
+            "probe": {
+              "role": "button",
+              "reason": "matched",
+              "matches": 1,
+              "owner": true
+            },
+            "user": {
+              "matches": 2,
+              "role": "textField",
+              "owner": true,
+              "reason": "matched"
+            },
+            "port": {
+              "role": "textField",
+              "matches": 2,
+              "reason": "matched",
+              "owner": true
+            }
+          },
+          "noKnownErrors": true,
+          "addTitleSeen": false,
+          "formByStructure": true,
+          "sshTitleSeen": true,
+          "credentialsEmpty": true,
+          "windowCount": 2,
+          "webViewCount": 3,
+          "emptyHomeIdentity": false
+        },
+        "outcome": "sshForm"
+      }
+    ]
+  },
+  "homeEntry": {
+    "ordinary": {
+      "member": "headerAdd",
+      "selection": "buttonRole",
+      "role": "button",
+      "enteredAddPage": true,
+      "enteredSSHForm": true,
+      "route": "viaAdd"
+    }
+  },
+  "nativeInputRoles": {
+    "ordinary_host": "textField",
+    "ordinary_port": "textField",
+    "ordinary_username": "textField",
+    "ordinary_password": "secureTextField"
+  },
+  "nativePortType": "textField",
+  "nativeFailureCode": "native_home_identity_unproven",
+  "runtimeDiagnostics": [
+    {
+      "classification": "xctest_failed"
+    }
+  ],
+  "error": "tauri_ios_native_check_failed"
+}
